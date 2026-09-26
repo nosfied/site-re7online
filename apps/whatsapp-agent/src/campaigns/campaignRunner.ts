@@ -1147,6 +1147,7 @@ async function runCampaignInBackground(
 ) {
   if (!campaignOperationsAreOpen()) { params.operationallySuspended = true; return; }
   const prisma = getPrisma();
+  let pendingAcceptance = false;
   let lastLeaseRenewedAt = 0;
   const ensureLease = async () => {
     if (!params.executionJob) return true;
@@ -1653,6 +1654,7 @@ async function runCampaignInBackground(
             clientKey: params.clientKey,
           }), { clientId: params.clientId, campaignId: params.campaignId, messageId });
           const result = attempt.result;
+          pendingAcceptance = result.ok;
           let stopAfterCurrentProviderResult = false;
           if (params.executionJob) {
             const stillOwner = await assertCampaignExecutionLease({
@@ -1820,6 +1822,7 @@ async function runCampaignInBackground(
           });
 
           attempt.persisted();
+          pendingAcceptance = false;
           if (!result.ok) {
             await prisma.campaign.updateMany({
               where: { id: params.campaignId, status: { in: ["sending", "paused"] } },
@@ -1899,6 +1902,12 @@ async function runCampaignInBackground(
       });
     }
   ).catch(async (error) => {
+    if (pendingAcceptance) {
+      params.operationallySuspended = true;
+      logger.error({ event: "campaign.result.persistence_pending", campaignId: params.campaignId,
+        campaignRunId, clientId: params.clientId, providerAccepted: true, retryAllowed: false });
+      return; // Durable intent/task remains; never classify a known acceptance as rejected.
+    }
     if (error instanceof CampaignOperationsClosed) { params.operationallySuspended = true; return; }
     await prisma.campaign.updateMany({
       where: { id: params.campaignId, status: "sending" },

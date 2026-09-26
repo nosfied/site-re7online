@@ -309,3 +309,61 @@ for (const stop of ["paused", "cancelled"] as const) {
     await processDueScheduledCampaigns({ limit: 1 }); assert.equal(calls, 1);
   });
 }
+
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { holdCampaignLedgerLock } from "./campaignOperationsContentionTestSupport.js";
+for (const fault of ["writer-contention", "ledger-write", "ledger-and-sql"] as const) {
+  test(`known acceptance persists in SQL despite ${fault}, with no next recipient or blind retry`, async t => {
+    const f = await fixture(t);
+    const first = await f.child(1, ["5541941000701", "5541941000702"]);
+    const originalFile = process.env.CAMPAIGN_OPERATIONS_FILE;
+    process.env.CAMPAIGN_OPERATIONS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "receipt-sql-")), "state.json");
+    setCampaignOperations(true, 0, "synthetic-operator", "receipt persistence test");
+    t.after(() => { process.env.CAMPAIGN_OPERATIONS_FILE = originalFile; });
+    t.after(setCampaignRunnerSleepForTests(async () => undefined));
+    const originalFetch = globalThis.fetch, rename = fs.renameSync;
+    let writer: Awaited<ReturnType<typeof holdCampaignLedgerLock>> | undefined;
+    let calls = 0;
+    const originalCreate = prisma.event.create;
+    t.after(() => { prisma.event.create = originalCreate; });
+    t.after(async () => { globalThis.fetch = originalFetch; fs.renameSync = rename; if (writer) await writer.release(); });
+    globalThis.fetch = async () => {
+      calls++;
+      if (fault === "writer-contention") writer = await holdCampaignLedgerLock();
+      else fs.renameSync = ((from: fs.PathLike, to: fs.PathLike) => {
+        if (String(to) === process.env.CAMPAIGN_OPERATIONS_FILE) throw Object.assign(new Error("simulated ledger EIO"), { code: "EIO" });
+        return rename(from, to);
+      }) as typeof fs.renameSync;
+      if (fault === "ledger-and-sql") prisma.event.create = (async (args: any) => {
+        if (args.data.eventName === "campaign.message.provider_accepted") throw new Error("synthetic SQL receipt unavailable");
+        return originalCreate.call(prisma.event, args);
+      }) as typeof prisma.event.create;
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.receipt.${fault}` }] }), { status: 200 });
+    };
+    await processDueScheduledCampaigns({ now: f.now, limit: 1 });
+    const task = getRunningCampaignPromiseForTests(first.id); assert.ok(task); await task;
+    assert.equal(calls, 1);
+    if (fault === "ledger-and-sql") {
+      assert.equal((await prisma.campaign.findUniqueOrThrow({ where: { id: first.id } })).status, "sending");
+      assert.equal(await prisma.event.count({ where: { clientId: f.c.id, eventName: "campaign.message.failed" } }), 0);
+      assert.equal(await prisma.event.count({ where: { clientId: f.c.id, eventName: "campaign.message.submit_started" } }), 1);
+      assert.equal(campaignOperationsStatus().drained, false);
+      fs.renameSync = rename; prisma.event.create = originalCreate;
+      assert.equal((await processDueScheduledCampaigns()).claimed, 0); assert.equal(calls, 1);
+      return;
+    }
+    assert.equal(await prisma.event.count({ where: { clientId: f.c.id, eventName: "campaign.message.provider_accepted" } }), 1);
+    const accepted = await prisma.outboundMessage.findMany({ where: { clientId: f.c.id, metaMessageId: `wamid.receipt.${fault}` } });
+    assert.equal(accepted.length, 1); assert.equal(accepted[0].status, "SENT");
+    assert.equal(await prisma.event.count({ where: { clientId: f.c.id, eventName: "campaign.message.sent" } }), 1);
+    assert.equal(await prisma.event.count({ where: { clientId: f.c.id, eventName: "campaign.message.failed" } }), 0);
+    fs.renameSync = rename; if (writer) await writer.release();
+    assert.equal(campaignOperationsStatus().open, false); assert.equal(campaignOperationsStatus().drained, false);
+    assert.throws(() => setCampaignOperations(true, campaignOperationsStatus().generation!, "operator", "blind retry forbidden"));
+    assert.equal((await processDueScheduledCampaigns()).claimed, 0); assert.equal(calls, 1);
+    assert.equal((await prisma.campaign.findUniqueOrThrow({ where: { id: first.id } })).sentCount, 1);
+  });
+}

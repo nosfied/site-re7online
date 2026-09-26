@@ -144,3 +144,88 @@ test("topology invalidated during intent blocks provider and retains uncertain w
   assert.equal(calls, 0); assert.equal(campaignOperationsStatus().drained, false);
   assert.throws(() => change(true), /not_drained/);
 });
+
+
+import { holdCampaignLedgerLock } from "./campaignOperationsContentionTestSupport.js";
+test("accepted provider result survives real writer contention without drain or another admission", { timeout: 15000 }, async t => {
+  setup(); change(true);
+  let writer: Awaited<ReturnType<typeof holdCampaignLedgerLock>> | undefined;
+  t.after(async () => { if (writer) await writer.release(); });
+  const accepted = { ok: true, metaMessageId: "simulated-accepted-lock" };
+  const attempt = await campaignProviderAttempt(async () => {}, async () => {
+    writer = await holdCampaignLedgerLock(); return accepted;
+  });
+  assert.deepEqual(attempt.result, accepted);
+  assert.equal(campaignOperationsStatus().drained, false);
+  assert.throws(() => campaignTask("test-send", async () => {}), CampaignOperationsClosed);
+  assert.equal(campaignOperationsStatus().ledgerFault, "lock_busy_live");
+  assert.equal(attempt.persisted(), false);
+  await writer!.release();
+  const child = spawnSync(process.execPath, ["--import", new URL("../../node_modules/tsx/dist/loader.mjs", import.meta.url).href, "--input-type=module", "-e", `
+    import { campaignTask, campaignOperationsStatus } from ${JSON.stringify(new URL("./campaignOperations.ts", import.meta.url).href)};
+    if (campaignOperationsStatus().open || campaignOperationsStatus().drained) process.exit(2);
+    try { await campaignTask('retry', async () => {}); process.exit(3); } catch {}
+  `], { env: { ...process.env }, encoding: "utf8" });
+  assert.equal(child.status, 0, child.stderr);
+  assert.equal(campaignOperationsStatus().open, false);
+  assert.equal(campaignOperationsStatus().drained, false);
+  assert.throws(() => change(true));
+});
+test("accepted response survives ledger write failure and retains explicit pending task", async () => {
+  setup(); change(true);
+  const rename = fs.renameSync;
+  const accepted = { ok: true, metaMessageId: "simulated-accepted-io" };
+  try {
+    const attempt = await campaignProviderAttempt(async () => {}, async () => {
+      await new Promise(r => setImmediate(r));
+      fs.renameSync = () => { throw Object.assign(new Error("simulated disk EIO"), { code: "EIO" }); };
+      return accepted;
+    });
+    assert.deepEqual(attempt.result, accepted);
+    assert.equal(attempt.persisted(), false);
+  } finally { fs.renameSync = rename; }
+  assert.equal(campaignOperationsStatus().open, false);
+  assert.equal(campaignOperationsStatus().drained, false);
+  assert.ok(campaignOperationsStatus().tasks.some(task => task.kind === "provider"));
+  assert.throws(() => change(true));
+});
+
+
+test("abandoned and unverifiable locks stay closed and are never expired", () => {
+  setup(); change(true); const lock = `${process.env.CAMPAIGN_OPERATIONS_FILE}.lock`;
+  fs.mkdirSync(lock);
+  assert.equal(campaignOperationsStatus().ledgerFault, "lock_owner_unverifiable");
+  const moduleUrl = new URL("./campaignOperations.ts", import.meta.url).href;
+  const child = spawnSync(process.execPath, ["--import", new URL("../../node_modules/tsx/dist/loader.mjs", import.meta.url).href, "--input-type=module", "-e", `
+    import { campaignOperationsStatus } from ${JSON.stringify(moduleUrl)};
+    console.log(campaignOperationsStatus().instance);
+  `], { env: { ...process.env }, encoding: "utf8" });
+  assert.equal(child.status, 0, child.stderr);
+  fs.writeFileSync(path.join(lock, "owner.json"), JSON.stringify({ instance: child.stdout.trim() }));
+  assert.equal(campaignOperationsStatus().ledgerFault, "lock_abandoned");
+  assert.throws(() => change(true)); assert.ok(fs.existsSync(lock));
+});
+test("simultaneous SQL and filesystem failure keeps known response in memory and durable pre-submit intent pending", async () => {
+  setup(); change(true); const file = process.env.CAMPAIGN_OPERATIONS_FILE!;
+  const rename = fs.renameSync, mkdir = fs.mkdirSync;
+  let knownResponse: { ok: boolean; metaMessageId: string } | undefined;
+  try {
+    await assert.rejects(campaignTask("test-send", async () => {
+      const attempt = await campaignProviderAttempt(async () => {}, async () => {
+        fs.renameSync = () => { throw Object.assign(new Error("disk offline"), { code: "EIO" }); };
+        fs.mkdirSync = ((target: fs.PathLike, options?: unknown) => {
+          if (String(target).endsWith(".uncertain")) throw Object.assign(new Error("disk offline"), { code: "EIO" });
+          return (mkdir as Function)(target, options);
+        }) as typeof fs.mkdirSync;
+        return { ok: true, metaMessageId: "simulated-dual-outage" };
+      });
+      knownResponse = attempt.result;
+      throw new Error("SQL offline before result durability");
+    }), /SQL offline/);
+  } finally { fs.renameSync = rename; fs.mkdirSync = mkdir; }
+  assert.equal(knownResponse?.metaMessageId, "simulated-dual-outage");
+  assert.equal(campaignOperationsStatus().drained, false);
+  assert.equal(campaignOperationsStatus().open, false);
+  assert.ok(Object.values(JSON.parse(fs.readFileSync(file, "utf8")).tasks).some((task: any) => task.phase === "provider_or_uncertain"));
+  assert.throws(() => campaignTask("retry", async () => {}), CampaignOperationsClosed);
+});

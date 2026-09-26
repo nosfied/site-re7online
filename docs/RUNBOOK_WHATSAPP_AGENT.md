@@ -1120,3 +1120,81 @@ Para o probe de recuperação commitada, informar `CAMPAIGN_RECOVERY_EXPECTED_SH
 com SHA completo e `CAMPAIGN_RECOVERY_WORKTREE`; o script exige HEAD exato e
 ancestralidade em 5ee2de6b. Provider/rede externos continuam bloqueados pelo
 launcher sintético. Não repetir suítes completas sem alteração pertinente.
+
+
+## Correção dos achados de consentimento e aceite/ledger — 2026-09-26
+
+Revisão incremental sobre candidato `889a1c7c` e recuperação `e6a12bc9`, sem
+reabrir desenho/auditoria. NOT DEPLOYED / OWNER UI PENDING. Histórico acima e
+ensaios anteriores preservados. Sem alteração de schema/migration/infraestrutura.
+
+### Consentimento com campanhas suspensas
+
+Auditoria dos consumidores: `src/app/app/crm/page.tsx` chama
+`recordAppCrmContactOptOut`/`revokeAppCrmContactOptOut` em `src/lib/appClientApi.ts`,
+que usam POST/DELETE `/app/crm/contacts/:id/opt-out`. Essas rotas já não eram
+interceptadas pela guarda. As rotas de consentimento POST `/app/campaigns/opt-out`
+e POST `/app/campaigns/opt-out/revoke` também são legítimas; a classificação
+anterior as bloqueava genericamente. Ambos artefatos agora deixam SOMENTE esses
+pares exatos método/path alcançarem seus handlers existentes. Autenticação,
+tenant ativo, feature e escopo continuam intactos. Não há nova exceção por sufixo,
+liberação de envio ou alteração de RBAC. Não assumir que todo usuário CRM pode
+usar a rota legada: sua política existente de feature campaigns foi preservada.
+Subcaminhos send/test-send continuam fechados. Scheduler não é liberado por revoke.
+
+### Aceitação recebida não depende de atualização de fase do ledger
+
+Reprodução local confirmou que contenção e EIO após await do provider antes
+impediam retornar sua resposta. A fase anterior à submissão agora é fsyncada
+ANTES de invocar o provider, ainda sob o lock que serializa o fechamento. Uma
+falha ao liberar o lock depois da invocação também não descarta a promise iniciada.
+Depois do resultado, erro ao marcar persisting não impede o chamador de gravar
+os mecanismos existentes: `campaign.message.provider_accepted`, OutboundMessage
+SENT/metaMessageId, eventos sent/test_send.sent. Erro em `persisted()`/finalização
+não transforma esse resultado em rejeição. Se o SQL falha enquanto há aceitação
+conhecida, runner registra `campaign.result.persistence_pending`, preserva
+intenção/pendência e não marca rejeição de provider ou avança ao próximo destinatário.
+
+Na falha de escrituração, criar marcador permanente
+`${CAMPAIGN_OPERATIONS_FILE}.uncertain` (diretório privado 0700), independente do
+lock disputado, com fsync do diretório pai. Todos os processos do candidato que
+compartilham o caminho recusam novas admissões/provider/abertura; drain permanece
+falso, mesmo se o SQL já conservou o aceite. O artefato fechado de recuperação
+reconhece esse marcador no diagnóstico de drain; sua implementação de envio não
+foi alterada nem habilitada. Preservar o marcador junto ao ledger/locks em
+backup/restauração/troca de versão. Não há limpeza automática nem endpoint para
+apagar a pendência. Versões anteriores à correção não conhecem esse marcador:
+NÃO manter instâncias candidatas antigas em paralelo como se compartilhassem
+esse contrato. A recuperação é sempre fechada em código.
+
+O lock candidato contém owner.json com identidade de instância/boot/processo.
+Diagnóstico `lock_busy_live` significa escritor com identidade viva, não garante
+que vá progredir; `lock_abandoned` identifica proprietário morto/identidade
+divergente; `lock_owner_unverifiable` cobre dono ausente/ilegível e lock legado.
+Erro de ledger/JSON é separado de contenção (`ledger_io_or_corrupt`/`ledger_io`).
+Não remover locks/tarefas por idade ou timeout. Nos testes, o segundo processo
+segura o lock REAL do escritor em rename e só o libera por sinal explícito.
+Contenção após aceite é conservadora: liberação natural do lock não remove o
+marcador nem reabre campanhas. Conciliar o aceite SQL antes de qualquer recuperação.
+
+### Limite de indisponibilidade simultânea
+
+Se o filesystem não permite sequer criar/fsyncar o marcador, a instância conserva
+bloqueio em memória e emite `campaign_ledger_fault_fence_not_durable`. Intent/task
+anteriores continuam sendo a evidência já durável. Se SQL também não aceita a
+resposta, metaMessageId/aceite recebido podem existir somente em memória e podem
+ser perdidos no crash. Não há promessa de persistência impossível, nem dedução de
+rejeição a partir da ausência de OutboundMessage. Esse bloqueio só em memória NÃO
+é uma garantia de coordenação entre processos após recuperação do storage.
+Operador deve manter TODOS os executores de campanha sem admissão durante reparo,
+preservar evidências/estado e reconciliar chamadas antes de restaurar processamento;
+não basta reparar disco/DB e deixar schedulers retomarem automaticamente. Não
+apagar intent/lock/tarefa, não reenfileirar nem retransmitir cegamente. Falha de
+ambos os meios exige decisão/reconciliação explícita, não aceite automático de drain.
+Não foi realizado reparo operacional nem reconciliação nesta entrega.
+
+Resultados exatos no preflight único; evidências sanitizadas/local sintéticas em
+`local-evidence/recovery/guard-findings/`, fora do staging. Primeira transição,
+provisionamento/inventário do alvo, owner UI/CRA e tratamento de incerteza antiga
+continuam pendentes. Não há quiescência retroativa. 6683 CLOSED; divergência
+DELIVERED/READ → HUMAN/WAITING separada.

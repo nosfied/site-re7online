@@ -1995,3 +1995,20 @@ Backups e estado privado permanecem locais; branches excluídas de auto-deploy.
 Primeira transição, acessos operacionais, janela/impacto, owner UI e CRA pendentes.
 Sem quiescência retroativa. Histórico owner PASS preservado, 6683 CLOSED,
 Guided Builder pausado e DELIVERED/READ → HUMAN/WAITING separado.
+
+
+### Correções incrementais da guarda — 2026-09-26
+
+Sobre 889a1c7c/e6a12bc9: consentimento opt-out/revoke preservado com política e
+RBAC existentes nos dois artefatos; aceite conhecido alcança SQL apesar de
+contenção/EIO do ledger. Pendência compartilhada .uncertain impede abertura,
+novos envios e drain; recuperação permanece permanentemente fechada. Nenhum
+retry cego ou limpeza de lock/tarefa por timeout. Se SQL e filesystem falham,
+a resposta pode ficar só em memória: coordenação/durabilidade não são prometidas.
+Resultados afetados: guarda 15/15, runner 11/11, rotas candidatas 5/5; recuperação
+consentimento 1/1 e fechamento 2/2; CRM 4/4 em cada artefato; ambos builds PASS.
+Detalhes sem duplicar relatório: preflight `docs/saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md`
+e procedimento em `docs/RUNBOOK_WHATSAPP_AGENT.md` (seção de consentimento/aceite).
+Histórico/evidências preservados. NOT DEPLOYED / OWNER UI PENDING; primeira
+transição, owner UI/CRA e incertezas antigas pendentes. 6683 CLOSED; divergência
+DELIVERED/READ → HUMAN/WAITING separada, sem quiescência retroativa.

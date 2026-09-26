@@ -366,3 +366,40 @@ Backups/patches/hashes anteriores preservados; staging exclui todo estado privad
 CI push restrito main/develop, sem deploy; Vercel com exclusão nominal das duas
 branches. NOT DEPLOYED / OWNER UI PENDING; CRA/primeira transição pendentes.
 Não há quiescência retroativa; 6683 CLOSED e materialização separada.
+
+
+### Achados incrementais de guarda — revisão 889a1c7c / e6a12bc9
+
+Corrigidos os dois achados sem nova auditoria geral: exceção exata de consentimento
+nos dois artefatos preserva autenticação/feature/tenant; resposta conhecida do
+provider alcança a persistência SQL mesmo quando o ledger falha. Runner não
+classifica aceite com persistência pendente como rejeição. Marcador compartilhado
+`.uncertain` impede nova admissão/abertura/drain; recuperação só recebeu a exceção
+de consentimento e leitura desse marcador, permanecendo fechada em código.
+[Operação, diagnóstico de locks e limite quando SQL + filesystem falham](../RUNBOOK_WHATSAPP_AGENT.md#correção-dos-achados-de-consentimento-e-aceiteledger--2026-09-26).
+
+Validação final afetada, provider simulado e dois DBs loopback sintéticos:
+
+- Guarda: **15/15**, com contenção real de outro escritor/processo, EIO, lock
+  abandonado/inverificável e falha simultânea SQL/filesystem. Reprodução anterior
+  dos dois erros pós-aceite: **2 falhas esperadas**, preservadas localmente.
+- Runner/grupos afetados: **11/11**, incluindo 3 casos de receipt/SQL e manutenção
+  dos casos de pausa/cancel/needs_review/falha durante provider e drain administrativo.
+- Rotas candidatas: **5/5**, incluindo consentimento com guarda fechada, RBAC global,
+  pré-validação e 2 casos reais de test-send com resposta preservada no SQL.
+- Rotas legadas de consentimento na recuperação: **1/1**.
+- Consumidores atuais do CRM (opt-out, autenticação, capability e RBAC): **4/4 em
+  cada artefato**. Guarda fechada por ausência de arquivo nessas fixtures.
+- Recuperação fechada/diagnóstico do marcador compartilhado: **2/2** no DB base.
+- Builds backend candidato e recuperação: **PASS**; diff --check conferido antes
+  do commit. Não repetidos suites amplas, smokes UI, migration/drift ou builds frontend.
+
+Contagens incluem subconjuntos já executados, não somar como casos únicos. Durante
+as fixtures novas, corrigidos escape do subprocesso e nome de campanha duplicado
+que retornava 409 antes do cenário de EIO; nenhuma assertion enfraquecida. Evidências
+anteriores intactas; novos logs/backups/hashes em `local-evidence/recovery/guard-findings/`.
+Sem SQL durável nem marcador gravável, aceite pode permanecer só em memória;
+retomada automática após reparo não é garantida segura: manter todos executores
+sem admissão e reconciliar. Nenhuma operação remota autorizada/executada nesta etapa.
+NOT DEPLOYED / OWNER UI PENDING. Primeira transição/CRA pendentes, sem quiescência
+retroativa. 6683 CLOSED e divergência de materialização separada.

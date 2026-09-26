@@ -21,6 +21,42 @@ const instance = `${process.pid}:${executorIdentity(process.pid)}:${crypto.rando
 const context = new AsyncLocalStorage<string>();
 const build = process.env.CAMPAIGN_BUILD_ID || `guard-sha256:${crypto.createHash("sha256").update(fs.readFileSync(fileURLToPath(import.meta.url))).digest("hex")}`;
 export class CampaignOperationsClosed extends Error { constructor() { super("campaign_operations_closed"); } }
+class CampaignLedgerUnavailable extends CampaignOperationsClosed {
+  constructor(readonly reason: string) { super(); }
+}
+const volatileFaults = new Map<string, string>();
+function pendingFault(file: string) {
+  return volatileFaults.get(file) || (fs.existsSync(`${file}.uncertain`) ? "ledger_review_required" : null);
+}
+function retainLedgerFault(error: unknown) {
+  const file = filename();
+  const reason = error instanceof CampaignLedgerUnavailable ? error.reason : "ledger_io_or_corrupt";
+  volatileFaults.set(file, reason);
+  // Independent of the contended writer lock: every cooperating process sees
+  // this sticky closed fence. Never expire/remove it, even after SQL succeeds.
+  try {
+    try { fs.mkdirSync(`${file}.uncertain`, { mode: 0o700 }); }
+    catch (e) { if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e; }
+    const dir = fs.openSync(path.dirname(file), "r");
+    try { fs.fsyncSync(dir); } finally { fs.closeSync(dir); }
+  } catch {
+    // With no writable filesystem we can only retain a process-local fence and
+    // the already durable intent/task. Do not claim impossible durability.
+    console.error("campaign_ledger_fault_fence_not_durable: operational review required");
+  }
+}
+function lockReason(lock: string) {
+  try {
+    const owner = JSON.parse(fs.readFileSync(path.join(lock, "owner.json"), "utf8")) as { instance: string };
+    const [pidText, identity] = owner.instance.split(":");
+    const pid = Number(pidText);
+    if (!Number.isInteger(pid) || pid <= 0 || !identity) return "lock_owner_unverifiable";
+    try { process.kill(pid, 0); }
+    catch (error) { return (error as NodeJS.ErrnoException).code === "ESRCH" ? "lock_abandoned" : "lock_owner_unverifiable"; }
+    if (executorIdentity(pid) === "unknown") return "lock_owner_unverifiable";
+    return executorIdentity(pid) === identity ? "lock_busy_live" : "lock_abandoned";
+  } catch { return "lock_owner_unverifiable"; }
+}
 function filename() {
   const file = process.env.CAMPAIGN_OPERATIONS_FILE;
   if (!file || !path.isAbsolute(file)) throw new CampaignOperationsClosed();
@@ -40,7 +76,7 @@ function read(file: string): State {
   const value = JSON.parse(fs.readFileSync(file, "utf8")) as State;
   if (value.version !== 1 || typeof value.open !== "boolean" || !Number.isInteger(value.generation) ||
       !value.tasks || typeof value.tasks !== "object" || Array.isArray(value.tasks) || !Array.isArray(value.audit)) throw new CampaignOperationsClosed();
-  if (!validatedHostId() || value.hostId !== validatedHostId()) value.open = false;
+  if (!validatedHostId() || value.hostId !== validatedHostId() || pendingFault(file)) value.open = false;
   for (const task of Object.values(value.tasks)) if (!task || typeof task.instance !== "string" || typeof task.phase !== "string") throw new CampaignOperationsClosed();
   for (const task of Object.values(value.tasks)) {
     const pid = Number(task.instance.split(":")[0]);
@@ -52,12 +88,14 @@ function read(file: string): State {
   }
   return value;
 }
-function locked<T>(fn: (state: State) => T, write = true): T {
+function locked<T>(fn: (state: State) => T, write = true, committed?: () => void): T {
   const file = filename();
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const lock = `${file}.lock`;
-  try { fs.mkdirSync(lock, { mode: 0o700 }); } catch { throw new CampaignOperationsClosed(); }
+  try { fs.mkdirSync(lock, { mode: 0o700 }); }
+  catch (error) { throw new CampaignLedgerUnavailable((error as NodeJS.ErrnoException).code === "EEXIST" ? lockReason(lock) : "ledger_io"); }
   try {
+    fs.writeFileSync(path.join(lock, "owner.json"), JSON.stringify({ instance }), { mode: 0o600 });
     const state = read(file);
     const result = fn(state);
     if (write) {
@@ -68,22 +106,28 @@ function locked<T>(fn: (state: State) => T, write = true): T {
       const dir = fs.openSync(path.dirname(file), "r");
       try { fs.fsyncSync(dir); } finally { fs.closeSync(dir); }
     }
+    committed?.(); // Invoke provider only after durable phase, still serialized with close.
     return result;
-  } finally { fs.rmdirSync(lock); }
+  } finally {
+    fs.rmSync(path.join(lock, "owner.json"), { force: true });
+    fs.rmdirSync(lock);
+  }
 }
 export function campaignOperationsStatus() {
   try {
     return locked(s => ({ available: true, open: process.env.CAMPAIGN_RECOVERY_ONLY === "true" ? false : s.open, generation: s.generation,
-      drained: (!s.open || process.env.CAMPAIGN_RECOVERY_ONLY === "true") && Object.keys(s.tasks).length === 0,
+      drained: (!s.open || process.env.CAMPAIGN_RECOVERY_ONLY === "true") && Object.keys(s.tasks).length === 0 && !pendingFault(filename()),
+      ledgerFault: pendingFault(filename()),
       instance, build, tasks: Object.entries(s.tasks).map(([id, task]) => ({ id, ...task })),
       audit: s.audit.slice(-20) }), false);
-  } catch { return { available: false, open: false, generation: null, drained: false, instance, build, tasks: [], audit: [] }; }
+  } catch (error) { return { available: false, open: false, generation: null, drained: false, instance, build, tasks: [], audit: [], ledgerFault: error instanceof CampaignLedgerUnavailable ? error.reason : "ledger_io_or_corrupt" }; }
 }
 export function setCampaignOperations(open: boolean, expectedGeneration: number, actor: string, reason: string) {
   if (!actor.trim() || !reason.trim()) throw new Error("operation_reason_required");
   locked(s => {
     if (s.generation !== expectedGeneration) throw new Error("operation_generation_conflict");
     if (open && (process.env.CAMPAIGN_RECOVERY_ONLY === "true" || Object.keys(s.tasks).length)) throw new Error("operation_not_drained");
+    if (open && pendingFault(filename())) throw new Error("operation_ledger_review_required");
     if (open && !validatedHostId()) throw new Error("operation_topology_unvalidated");
     if (open) s.hostId = validatedHostId()!;
     s.open = open; s.generation++;
@@ -115,32 +159,45 @@ export function campaignTask<T>(kind: string, fn: () => Promise<T>, cleanup = fa
   // Synchronous admission happens before fn's first await, including detached work.
   const id = admit(kind, "admitted", cleanup);
   return context.run(id, async () => {
-    try { return await fn(); } finally { done(id); }
+    try { return await fn(); } finally {
+      try { done(id); } catch (error) { retainLedgerFault(error); }
+    }
   });
 }
 export async function campaignProviderAttempt<T>(intent: () => Promise<void>, submit: () => Promise<T>, reference?: { clientId: string; campaignId: string; messageId: string }) {
   const id = admit("provider", "intent");
   if (reference) locked(s => { s.tasks[id].reference = reference; });
   try { await intent(); } catch (error) { done(id); throw error; }
-  // Serialize the actual invocation with close, not just HTTP admission. If
-  // intent persistence races close, preserve that intent for explicit review.
+  // Persist before invoking submit, with the same lock spanning that boundary.
+  // Once submitted, a lock-release error must not discard its eventual response.
+  let pending: Promise<T> | undefined;
+  let ledgerFailed = false;
   try {
-    const pending = locked(s => {
+    locked(s => {
       if (!s.open) throw new CampaignOperationsClosed();
       s.tasks[id].phase = "provider_or_uncertain";
-      return submit();
-    });
-    const result = await pending;
-    locked(s => { s.tasks[id].phase = "persisting"; });
-    return { result, persisted: () => done(id) };
+    }, true, () => { pending = submit(); });
   } catch (error) {
-    // No timeout or restart clears this. Existing domain intent/results are the
-    // reconciliation evidence; this ledger never claims delivery.
-    throw error;
+    if (!pending) throw error;
+    ledgerFailed = true; retainLedgerFault(error);
   }
+  const result = await pending!;
+  try { locked(s => { s.tasks[id].phase = "persisting"; }); }
+  catch (error) { ledgerFailed = true; retainLedgerFault(error); }
+  // SQL persistence by the caller takes precedence over ledger bookkeeping.
+  // A known response is never transformed into a rejection by an FS exception.
+  return { result, persisted: () => {
+    if (ledgerFailed) return false;
+    try { done(id); return true; }
+    catch (error) { ledgerFailed = true; retainLedgerFault(error); return false; }
+  } };
 }
+
 export function isCampaignMutation(method: string | undefined, pathname: string) {
   if (["GET", "HEAD", "OPTIONS"].includes(method || "GET")) return false;
+  // Exact consent-management endpoints retain their own authentication, feature
+  // policy and tenant scope. No suffix/prefix exception may admit a send route.
+  if (method === "POST" && ["/app/campaigns/opt-out", "/app/campaigns/opt-out/revoke"].includes(pathname)) return false;
   // User stop actions remain available under maintenance; existing RBAC applies.
   if (/\/(pause|cancel)$/.test(pathname)) return false;
   return /^\/(app|admin)\/(campaigns|campaign-batches)(\/|$)/.test(pathname) || /^\/public-api\/v1\/campaigns(\/|$)/.test(pathname);

@@ -18406,3 +18406,71 @@ test("operational close during real test-send prevalidation blocks provider and 
   assert.equal(campaignOperationsStatus().drained, true);
   setCampaignOperations(true, campaignOperationsStatus().generation!, "local-test-operator", "test finished");
 });
+
+
+test("closed guard preserves exact opt-out and revoke authorization without admitting campaigns", async t => {
+  const guard = await import("../campaigns/campaignOperations.js");
+  const originalFile = process.env.CAMPAIGN_OPERATIONS_FILE;
+  process.env.CAMPAIGN_OPERATIONS_FILE = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "consent-closed-")), "state.json");
+  t.after(() => { if (originalFile === undefined) delete process.env.CAMPAIGN_OPERATIONS_FILE; else process.env.CAMPAIGN_OPERATIONS_FILE = originalFile; });
+  const waId = "5541999981991";
+  for (const [route, expectedStatus] of [["/app/campaigns/opt-out", "recorded"], ["/app/campaigns/opt-out/revoke", "revoked"]]) {
+    const unauthenticated = await requestUnauth("POST", route, { waId });
+    assert.equal(unauthenticated.status, 401);
+    const disabledFeature = await request<ErrorPayload>("POST", route, governmentAdmin, { waId });
+    assert.equal(disabledFeature.status, 403); assert.equal(getErrorCode(disabledFeature.body), "feature_not_enabled");
+    const permitted = await request<{ status: string }>("POST", route, businessAdmin, { waId, reason: "synthetic consent" });
+    assert.equal(permitted.status, 200, JSON.stringify(permitted.body)); assert.equal(permitted.body.status, expectedStatus);
+    const own = await filterOptedOutCampaignRecipients(prisma, { clientId: businessClientId, waIds: [waId] });
+    assert.equal(own.blocked.length, expectedStatus === "recorded" ? 1 : 0);
+    const other = await filterOptedOutCampaignRecipients(prisma, { clientId: overrideClientId, waIds: [waId] });
+    assert.equal(other.blocked.length, 0);
+  }
+  for (const route of ["/app/campaigns", "/app/campaigns/x/send", "/app/campaigns/x/test-send", "/app/campaigns/opt-out/send", "/app/campaigns/opt-out/revoke/test-send"]) {
+    assert.equal((await request("POST", route, businessAdmin, {})).status, 503, route);
+  }
+  const { processDueScheduledCampaigns } = await import("../campaigns/campaignRunner.js");
+  assert.equal((await processDueScheduledCampaigns()).claimed, 0);
+  assert.equal(guard.campaignOperationsStatus().open, false);
+});
+
+
+import nativeFs from "node:fs";
+import { holdCampaignLedgerLock } from "../campaigns/campaignOperationsContentionTestSupport.js";
+for (const fault of ["writer-contention", "ledger-write"] as const) {
+  test(`test-send persists known acceptance despite ${fault} and refuses retry`, async t => {
+    const { campaignOperationsStatus, setCampaignOperations } = await import("../campaigns/campaignOperations.js");
+    const previousFile = process.env.CAMPAIGN_OPERATIONS_FILE;
+    process.env.CAMPAIGN_OPERATIONS_FILE = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "testsend-receipt-")), "state.json");
+    setCampaignOperations(true, 0, "synthetic-operator", "receipt test");
+    t.after(() => { process.env.CAMPAIGN_OPERATIONS_FILE = previousFile; });
+    const template = await prisma.template.create({ data: { clientId: businessClientId, name: `receipt_${fault.replace(/-/g, "_")}_${safeTemplatePrefix}`, category: "UTILITY", language: "pt_BR", status: "approved", content: "Aviso local" } });
+    const waId = fault === "ledger-write" ? "5541991189782" : "5541991189781";
+    const lead = await prisma.lead.create({ data: { tenantId: businessClientId, waId, waIdCanonical: waId, channel: "whatsapp", provider: "meta", name: "Synthetic receipt", phone: waId, status: "RETORNO_FUTURO" } });
+    const created = await request<{ campaign: { id: string } }>("POST", "/app/campaigns/drafts", businessAdmin, { name: `Receipt persistence ${fault}`, templateId: template.id, selectedLeadIds: [lead.id], returnDestination: defaultCampaignReturnDestination() });
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+    const id = created.body.campaign.id, originalFetch = globalThis.fetch, rename = nativeFs.renameSync;
+    let writer: Awaited<ReturnType<typeof holdCampaignLedgerLock>> | undefined; let calls = 0;
+    t.after(async () => { globalThis.fetch = originalFetch; nativeFs.renameSync = rename; if (writer) await writer.release(); });
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (!url.startsWith("https://graph.facebook.com/")) return originalFetch(input, init);
+      calls++;
+      if (fault === "writer-contention") writer = await holdCampaignLedgerLock();
+      else nativeFs.renameSync = ((from: nativeFs.PathLike, to: nativeFs.PathLike) => {
+        if (String(to) === process.env.CAMPAIGN_OPERATIONS_FILE) throw Object.assign(new Error("ledger EIO"), { code: "EIO" });
+        return rename(from, to);
+      }) as typeof nativeFs.renameSync;
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.testsend.receipt.${fault}` }] }), { status: 200 });
+    };
+    const sent = await request<{ ok: boolean }>("POST", `/app/campaigns/${id}/test-send`, businessAdmin, { waId });
+    assert.equal(sent.status, 200, JSON.stringify(sent.body)); assert.equal(sent.body.ok, true);
+    const rows = await prisma.outboundMessage.findMany({ where: { clientId: businessClientId, metaMessageId: `wamid.testsend.receipt.${fault}` } });
+    assert.equal(rows.length, 1); assert.equal(rows[0].status, "SENT");
+    assert.equal(await prisma.event.count({ where: { clientId: businessClientId, messageId: id, eventName: "campaign.test_send.sent" } }), 1);
+    nativeFs.renameSync = rename; if (writer) await writer.release();
+    assert.equal(campaignOperationsStatus().open, false); assert.equal(campaignOperationsStatus().drained, false);
+    assert.equal((await request("POST", `/app/campaigns/${id}/test-send`, businessAdmin, { waId })).status, 503);
+    assert.equal(calls, 1);
+  });
+}
