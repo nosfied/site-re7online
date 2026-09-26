@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "review/campaign-recovery-20260926": false,
+      "review/campaign-service-recovery-20260926": false
+    }
+  }
+}

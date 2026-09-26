@@ -468,3 +468,11 @@ Observacao:
 - deploy manual na VPS
 - valide `/health` e o fluxo afetado
 - registre branch, commit, horario e resultado
+
+
+## Recuperação de atendimento com campanhas fechadas — 2026-09-26
+
+Artefato separado baseado em `5ee2de6b`, NOT DEPLOYED / OWNER UI PENDING.
+Procedimento, compatibilidade local e limitações em
+[artefato de recuperação](CAMPAIGN_SERVICE_RECOVERY_REVIEW.md).
+Não ressuscitar o runner original, apagar estado ou inferir quiescência retroativa.

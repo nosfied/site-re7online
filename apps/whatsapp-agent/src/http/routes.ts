@@ -1,3 +1,4 @@
+import { campaignTask, campaignProviderAttempt, CampaignOperationsClosed, isCampaignMutation, campaignOperationsStatus, setCampaignOperations } from "../campaigns/campaignOperations.js";
 import { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -1241,6 +1242,15 @@ async function handleInternalWebSessionHandoffRealtime(
 }
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
+  const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+  if (!isCampaignMutation(req.method, pathname)) return handleRequestWithCampaignAdmission(req, res);
+  try { return await campaignTask("http-prevalidation", () => handleRequestWithCampaignAdmission(req, res)); }
+  catch (error) {
+    if (!(error instanceof CampaignOperationsClosed)) throw error;
+    if (!res.headersSent) json(res, 503, { error: "campaign_operations_closed" });
+  }
+}
+async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
   const requestId = crypto.randomUUID();
   const parsedUrl = new URL(url, `http://${req.headers.host ?? "localhost"}`);
@@ -16693,6 +16703,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 500, httpError("server_error", "Server error"));
       }
       return;
+    }
+
+    if (pathname === "/admin/ops/campaign-execution") {
+      if (requireSuperadmin()) return;
+      if (req.method === "GET") { json(res, 200, campaignOperationsStatus()); return; }
+      if (req.method === "POST") {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        if (typeof body.open !== "boolean" || !Number.isInteger(body.generation) || typeof body.reason !== "string" || !body.reason.trim()) {
+          json(res, 400, { error: "operation_input_invalid" }); return;
+        }
+        try { json(res, 200, setCampaignOperations(body.open, Number(body.generation), "platform-superadmin", body.reason)); }
+        catch { json(res, 409, { error: "operation_unavailable_or_not_drained" }); }
+        return;
+      }
+      json(res, 405, { error: "method_not_allowed" }); return;
     }
 
     if (req.method === "GET" && pathname === "/admin/ops/metrics") {

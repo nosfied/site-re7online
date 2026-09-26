@@ -1,3 +1,4 @@
+import { campaignOperationsAreOpen } from "./campaignOperations.js";
 import crypto from "node:crypto";
 import { MessageStatus, MessageType } from "@prisma/client";
 import { getTenant } from "../config/tenantConfig.js";
@@ -131,6 +132,7 @@ function buildNormalizedCampaignRunRecipients(params: {
 }
 
 export function startCampaignRun(params: StartCampaignRunParams) {
+  if (!campaignOperationsAreOpen()) return null;
   if (runningCampaigns.has(params.campaignId)) {
     logger.warn({
       event: "campaign.runner.skipped_already_running",
@@ -384,6 +386,7 @@ async function materializeDynamicCampaignSnapshot(params: {
 }
 
 export async function processDueScheduledCampaigns(params: { now?: Date; limit?: number } = {}) {
+  if (!campaignOperationsAreOpen()) return { checked: 0, claimed: 0 };
   const prisma = getPrisma();
   const now = params.now ?? new Date();
   const dueCampaigns = await prisma.campaign.findMany({
