@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import type { PrismaClient } from "@prisma/client";
+import { setPrismaForTesting } from "../db.js";
 import { createWebchatInboundMessage } from "./webchatInboundService.js";
+
+// The service receives a mocked Prisma; its shared audit writer must use a mock too.
+test.beforeEach(() => setPrismaForTesting({
+  event: { create: async ({ data }: { data: unknown }) => data },
+} as unknown as PrismaClient));
+test.afterEach(() => setPrismaForTesting(undefined));
 
 function makeDate(value: string) {
   return new Date(value);
@@ -223,10 +231,11 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
         ) ?? null;
       },
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
-        const idFilter = where.id as { startsWith?: string } | undefined;
+        const idFilter = where.id as { gte?: string; lte?: string } | undefined;
         return state.conversations.find((item) => {
           if (where.clientId && item.clientId !== where.clientId) return false;
-          if (idFilter?.startsWith && !String(item.id).startsWith(idFilter.startsWith)) return false;
+          if (idFilter?.gte && String(item.id) < idFilter.gte) return false;
+          if (idFilter?.lte && String(item.id) > idFilter.lte) return false;
           return true;
         }) ?? null;
       },

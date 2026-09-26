@@ -942,7 +942,8 @@ function buildBrazilMobileWaIdRange(areaCode: string, start: number, count: numb
 async function runQueueUntilBatchCompleted(params: { batchId: string; now: Date; timeoutMs?: number }) {
   const deadline = Date.now() + (params.timeoutMs ?? 30_000);
   while (Date.now() < deadline) {
-    await processDueScheduledCampaigns({ now: params.now, limit: 10 });
+    // Long batches must issue fresh leases; the scheduling cutoff is not a frozen wall clock.
+    await processDueScheduledCampaigns({ now: new Date(Math.max(params.now.getTime(), Date.now())), limit: 10 });
     const batch = await prisma.campaignExecutionBatch.findUnique({
       where: { id: params.batchId },
       select: { status: true },

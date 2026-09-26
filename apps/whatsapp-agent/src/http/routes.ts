@@ -1,3 +1,6 @@
+import { lockCampaignExecutionBatch } from "../campaigns/campaignExecutionQueue.js";
+import { applyCampaignExecutionBatchAction } from "../campaigns/campaignBatchControl.js";
+import { createCsvCampaignBatch, CampaignBatchIdempotencyConflict } from "../campaigns/campaignCsvBatch.js";
 import { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -15239,138 +15242,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const shouldCreateGroupedCsv =
         body.grouped === true || body.createGrouped === true || importPlan.acceptedRows.length > CAMPAIGN_DRAFT_RECIPIENT_LIMIT;
       if (shouldCreateGroupedCsv) {
-        const groupedRequestId = String(body.requestId ?? requestId).trim();
-        const eventRequestId = `campaign-csv-group:${groupedRequestId}`;
-        const existing = await prisma.event.findUnique({
-          where: {
-            clientId_eventName_requestId: {
-              clientId: client.id,
-              eventName: "campaign.csv_group.created",
-              requestId: eventRequestId,
-            },
-          },
-          select: { payloadJson: true },
-        });
-        if (existing?.payloadJson && typeof existing.payloadJson === "object" && !Array.isArray(existing.payloadJson)) {
-          const payload = existing.payloadJson as Record<string, unknown>;
-          const campaignIds = Array.isArray(payload.campaignIds)
-            ? payload.campaignIds.map((value) => String(value ?? "").trim()).filter(Boolean)
-            : [];
-          const campaigns = campaignIds.length > 0
-            ? await prisma.campaign.findMany({ where: { clientId: client.id, id: { in: campaignIds } } })
-            : [];
-          const campaignById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
-          json(res, 200, {
-            ok: true,
-            idempotent: true,
-            grouped: true,
-            batchId: typeof payload.batchId === "string" ? payload.batchId : null,
-            campaigns: campaignIds
-              .map((campaignId) => campaignById.get(campaignId))
-              .filter((campaign): campaign is NonNullable<typeof campaign> => Boolean(campaign))
-              .map((campaign) => ({ ...serializeCampaign(campaign), campaignId: campaign.id })),
-            draft: {
-              summary: importPlan.preview.summary,
-              recipients: importPlan.preview.recipients,
-            },
-            csv: {
-              headers: parsed.headers,
-              delimiter: parsed.delimiter,
-            },
+        let created;
+        try {
+          created = await createCsvCampaignBatch(prisma, {
+            clientId: client.id, actorId: clientAuth.userId, requestId: String(body.requestId ?? requestId).trim(),
+            name, templateId: resolvedTemplate.templateId, templateName: resolvedTemplate.templateName,
+            payload: { name, templateId: resolvedTemplate.templateId, csvText: String(body.csvText ?? ""), mapping: normalizeCampaignCsvMapping(body.mapping), returnDestination: returnDestination.destination },
+            returnDestination: returnDestination.destination as unknown as Prisma.InputJsonValue,
+            plan: importPlan,
           });
+        } catch (error) {
+          if (!(error instanceof CampaignBatchIdempotencyConflict)) throw error;
+          json(res, 409, httpError(error.message, "Esta chave de criação já foi usada com outro conteúdo."));
           return;
         }
-        const chunks = chunkArray(importPlan.acceptedRows, CAMPAIGN_DRAFT_RECIPIENT_LIMIT);
-        const batch = await prisma.campaignExecutionBatch.upsert({
-          where: {
-            clientId_idempotencyKey: {
-              clientId: client.id,
-              idempotencyKey: groupedRequestId,
-            },
-          },
-          create: {
-            clientId: client.id,
-            name,
-            sourceMode: "CSV_IMPORT",
-            status: "draft",
-            totalRecipients: importPlan.acceptedRows.length,
-            blockedCount:
-              importPlan.preview.summary.optOutBlocked +
-              importPlan.preview.summary.invalid +
-              importPlan.preview.summary.missingRequiredVariables +
-              importPlan.preview.summary.unresolvedCrmSituations,
-            chunkCount: chunks.length,
-            idempotencyKey: groupedRequestId,
-            createdByUserId: clientAuth.userId,
-            metadata: {
-              createdFrom: "campaign_csv_group",
-              headers: parsed.headers,
-              delimiter: parsed.delimiter,
-            },
-          },
-          update: {},
-        });
-        const createdCampaigns = [];
-        for (const [index, rows] of chunks.entries()) {
-          const chunkIndex = index + 1;
-          const chunkName = formatCampaignSplitDraftName(name, index, chunks.length);
-          const campaign = await createCampaign({
-            clientId: client.id,
-            templateId: resolvedTemplate.templateId,
-            templateName: resolvedTemplate.templateName,
-            name: chunkName,
-            totalRecipients: 0,
-            status: "draft",
-          });
-          await prisma.campaignExecutionBatchCampaign.create({
-            data: {
-              clientId: client.id,
-              batchId: batch.id,
-              campaignId: campaign.id,
-              chunkIndex,
-              recipientCount: rows.length,
-              status: "draft",
-            },
-          });
-          const chunkRecipients: CampaignImportRecipientInput[] = rows.map((row) => ({
-            phone: row.waIdCanonical,
-            name: row.name,
-            crmSituation: row.crmSituationInput,
-            variables: row.variables,
-            rowNumber: row.rowNumber,
-          }));
-          const imported = await importCampaignRecipients(prisma, {
-            clientId: client.id,
-            campaignId: campaign.id,
-            actorId: clientAuth.userId,
-            requestId: `${requestId}:csv-group:${chunkIndex}`,
-            source: "csv",
-            recipients: chunkRecipients,
-            crmStatuses: resolvedStatuses.statuses,
-            returnDestination: returnDestination.destination,
-          });
-          if (!imported.ok) {
-            throw new Error(`csv_group_chunk_import_failed:${imported.error}`);
-          }
-          createdCampaigns.push(imported.campaign ?? campaign);
-        }
-        await persistEvent({
-          clientId: client.id,
-          requestId: eventRequestId,
-          eventName: "campaign.csv_group.created",
-          payloadJson: {
-            batchId: batch.id,
-            campaignIds: createdCampaigns.map((campaign) => campaign.id),
-            chunkSizes: chunks.map((chunk) => chunk.length),
-            totalEligible: importPlan.acceptedRows.length,
-          },
-        });
         json(res, 200, {
           ok: true,
-          idempotent: false,
+          idempotent: created.idempotent,
           grouped: true,
-          batchId: batch.id,
-          campaigns: createdCampaigns.map((campaign) => ({ ...serializeCampaign(campaign), campaignId: campaign.id })),
+          batchId: created.batchId,
+          campaigns: created.campaigns.map((campaign) => ({ ...serializeCampaign(campaign), campaignId: campaign.id })),
           draft: {
             summary: importPlan.preview.summary,
             recipients: importPlan.preview.recipients,
@@ -16233,7 +16124,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     req.method === "POST" &&
     pathname.startsWith("/app/campaign-batches/") &&
     pathname.split("/").length === 5 &&
-    (pathname.endsWith("/pause") || pathname.endsWith("/resume") || pathname.endsWith("/cancel") || pathname.endsWith("/schedule"))
+    (pathname.endsWith("/pause") || pathname.endsWith("/resume") || pathname.endsWith("/cancel") || pathname.endsWith("/schedule") || pathname.endsWith("/send"))
   ) {
     const prisma = getPrisma();
     try {
@@ -16245,26 +16136,30 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("bad_request", "Informe o conjunto."));
         return;
       }
-      if (pathname.endsWith("/schedule")) {
-        const body = await readJsonBody(req, res);
+      if (pathname.endsWith("/schedule") || pathname.endsWith("/send")) {
+        const immediate = pathname.endsWith("/send");
+        const body = immediate ? {} : await readJsonBody(req, res);
         if (!body) return;
-        const scheduledAt = new Date(String(body.scheduledAt ?? ""));
-        if (!Number.isFinite(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+        const scheduledAt = immediate ? new Date() : new Date(String(body.scheduledAt ?? ""));
+        if (!immediate && (!Number.isFinite(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now())) {
           json(res, 400, httpError("invalid_schedule", "Informe uma data e horário futuros."));
           return;
         }
         const result = await prisma.$transaction(async (tx) => {
+          await lockCampaignExecutionBatch(tx, client.id, batchId);
           const batch = await tx.campaignExecutionBatch.findFirst({
             where: { id: batchId, clientId: client.id },
             include: { campaigns: { include: { campaign: true }, orderBy: { chunkIndex: "asc" } } },
           });
           if (!batch) return { status: 404, error: "campaign_batch_not_found" };
+          const metadata = batch.metadata && typeof batch.metadata === "object" && !Array.isArray(batch.metadata) ? batch.metadata as Prisma.JsonObject : {};
+          if (immediate && metadata.startMode === "immediate") return { status: 200, error: null };
           if (batch.status !== "draft" || !batch.campaigns.length || batch.campaigns.some((link) => link.campaign.status !== "draft")) {
             return { status: 409, error: "campaign_batch_not_draft" };
           }
           const claimed = await tx.campaignExecutionBatch.updateMany({
             where: { id: batchId, clientId: client.id, status: "draft" },
-            data: { status: "scheduled", eligibleAt: scheduledAt, requestedAt: new Date() },
+            data: { status: "scheduled", eligibleAt: scheduledAt, requestedAt: new Date(), metadata: { ...metadata, startMode: immediate ? "immediate" : "future" } },
           });
           if (!claimed.count) return { status: 409, error: "campaign_batch_not_draft" };
           for (const link of batch.campaigns) {
@@ -16274,7 +16169,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               clientId: client.id, campaignId: link.campaignId, batchId, chunkIndex: link.chunkIndex,
               sequence: link.chunkIndex, kind: "batch_chunk", status: "queued", eligibleAt: scheduledAt,
               idempotencyKey: `batch:${batchId}:chunk:${link.chunkIndex}`,
-              metadata: { source: "batch_schedule", scheduledBy: clientAuth.userId },
+              metadata: { source: immediate ? "batch_send" : "batch_schedule", scheduledBy: clientAuth.userId },
             } });
           }
           return { status: 200, error: null };
@@ -38358,185 +38253,6 @@ async function cancelScopedCampaign(
   return cancelled;
 }
 
-async function applyCampaignExecutionBatchAction(
-  prisma: ReturnType<typeof getPrisma>,
-  params: {
-    clientId: string;
-    batchId: string;
-    action: "pause" | "resume" | "cancel";
-    userId: string;
-    requestId: string;
-  }
-) {
-  const batch = await prisma.campaignExecutionBatch.findFirst({
-    where: { id: params.batchId, clientId: params.clientId },
-    include: {
-      campaigns: {
-        include: {
-          campaign: { select: { id: true, status: true } },
-        },
-        orderBy: { chunkIndex: "asc" },
-      },
-    },
-  });
-  if (!batch) {
-    return {
-      ok: false as const,
-      status: 404 as const,
-      error: "campaign_batch_not_found" as const,
-      message: "Conjunto de campanhas não encontrado.",
-    };
-  }
-
-  const now = new Date();
-  const childCampaigns = batch.campaigns.map((item) => item.campaign);
-  const childCampaignIds = childCampaigns.map((campaign) => campaign.id);
-  const runningJobs = await prisma.campaignExecutionJob.count({
-    where: {
-      clientId: params.clientId,
-      batchId: batch.id,
-      status: { in: ["running", "needs_review"] },
-    },
-  });
-
-  if (params.action === "pause") {
-    const pausableCampaignIds = childCampaigns
-      .filter((campaign) => canTransitionCampaignStatus(campaign.status, "paused"))
-      .map((campaign) => campaign.id);
-    const queuedJobs = await prisma.campaignExecutionJob.count({
-      where: { clientId: params.clientId, batchId: batch.id, status: "queued" },
-    });
-    if (pausableCampaignIds.length === 0 && runningJobs === 0 && queuedJobs === 0) {
-      return {
-        ok: false as const,
-        status: 409 as const,
-        error: "campaign_batch_not_pausable" as const,
-        message: "Este conjunto não pode ser pausado neste estado.",
-      };
-    }
-    await prisma.$transaction(async (tx) => {
-      if (pausableCampaignIds.length > 0) {
-        await tx.campaign.updateMany({
-          where: { clientId: params.clientId, id: { in: pausableCampaignIds } },
-          data: { status: "paused" },
-        });
-      }
-      await tx.campaignExecutionJob.updateMany({
-        where: { clientId: params.clientId, batchId: batch.id, status: "queued" },
-        data: { status: "paused", failureReason: null },
-      });
-      await tx.campaignExecutionBatch.update({
-        where: { id: batch.id },
-        data: {
-          status: "paused",
-          failureReason: runningJobs > 0 ? "pause_requested_after_current_call" : null,
-        },
-      });
-    });
-  } else if (params.action === "resume") {
-    const resumableLinks = batch.campaigns.filter((item) =>
-      canTransitionCampaignStatus(item.campaign.status, "sending")
-    );
-    if (resumableLinks.length === 0) {
-      return {
-        ok: false as const,
-        status: 409 as const,
-        error: "campaign_batch_not_resumable" as const,
-        message: "Este conjunto não pode ser retomado neste estado.",
-      };
-    }
-    await prisma.$transaction(async (tx) => {
-      await tx.campaign.updateMany({
-        where: {
-          clientId: params.clientId,
-          id: { in: resumableLinks.map((item) => item.campaignId) },
-        },
-        data: { status: "scheduled", scheduledAt: null },
-      });
-      await tx.campaignExecutionJob.updateMany({
-        where: { clientId: params.clientId, batchId: batch.id, status: "paused" },
-        data: { status: "queued", eligibleAt: now, failureReason: null },
-      });
-      await tx.campaignExecutionBatch.update({
-        where: { id: batch.id },
-        data: { status: "scheduled", failureReason: null },
-      });
-    });
-    for (const item of resumableLinks) {
-      const existingJob = await prisma.campaignExecutionJob.findFirst({
-        where: {
-          clientId: params.clientId,
-          batchId: batch.id,
-          campaignId: item.campaignId,
-          chunkIndex: item.chunkIndex,
-          status: { in: ["queued", "running", "needs_review"] },
-        },
-        select: { id: true },
-      });
-      if (existingJob) continue;
-      await enqueueCampaignExecutionJob({
-        prisma,
-        clientId: params.clientId,
-        campaignId: item.campaignId,
-        batchId: batch.id,
-        chunkIndex: item.chunkIndex,
-        kind: "batch_chunk",
-        eligibleAt: now,
-        idempotencyKey: `batch:${batch.id}:chunk:${item.chunkIndex}`,
-        metadata: { source: "batch_resume", resumedBy: params.userId },
-      });
-    }
-  } else {
-    const cancellableCampaignIds = childCampaigns
-      .filter((campaign) => canTransitionCampaignStatus(campaign.status, "cancelled"))
-      .map((campaign) => campaign.id);
-    if (cancellableCampaignIds.length === 0 && runningJobs === 0) {
-      return {
-        ok: false as const,
-        status: 409 as const,
-        error: "campaign_batch_not_cancelable" as const,
-        message: "Este conjunto não pode ser cancelado neste estado.",
-      };
-    }
-    await prisma.$transaction(async (tx) => {
-      if (cancellableCampaignIds.length > 0) {
-        await tx.campaign.updateMany({
-          where: { clientId: params.clientId, id: { in: cancellableCampaignIds } },
-          data: { status: "cancelled", scheduledAt: null },
-        });
-      }
-      await tx.campaignExecutionJob.updateMany({
-        where: { clientId: params.clientId, batchId: batch.id, status: { in: ["queued", "paused"] } },
-        data: { status: "cancelled", finishedAt: now, failureReason: "batch_cancelled" },
-      });
-      await tx.campaignExecutionBatch.update({
-        where: { id: batch.id },
-        data: {
-          status: runningJobs > 0 ? "needs_review" : "cancelled",
-          completedAt: runningJobs > 0 ? null : now,
-          failureReason: runningJobs > 0 ? "cancel_requested_during_execution" : null,
-        },
-      });
-    });
-  }
-
-  await persistEvent({
-    clientId: params.clientId,
-    messageId: batch.id,
-    requestId: `campaign-batch-${params.action}:${batch.id}:${params.requestId}`,
-    eventName: `campaign.batch.${params.action}`,
-    payloadJson: {
-      batchId: batch.id,
-      action: params.action,
-      requestedBy: params.userId,
-      requestedAt: now.toISOString(),
-      childCampaignIds,
-      runningJobs,
-    },
-  });
-
-  return { ok: true as const };
-}
 
 async function discardScopedCampaignDraft(
   prisma: ReturnType<typeof getPrisma>,

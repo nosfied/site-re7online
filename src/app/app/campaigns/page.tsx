@@ -48,6 +48,7 @@ import {
   resumeAppCampaignBatch,
   scheduleAppCampaignDraft,
   scheduleAppCampaignBatch,
+  sendAppCampaignBatch,
   saveAppSession,
   sendAppCampaignDraft,
   sendAppCampaignTest,
@@ -2859,12 +2860,22 @@ export default function AppCampaignsPage() {
   const handleSendDraftCampaign = async () => {
     if (!session || !selectedCampaign || selectedCampaign.status !== "draft") return;
     const confirmed = window.confirm(
-      "Esta ação iniciará o envio de modelo aprovado para os contatos elegíveis deste rascunho. Contatos com envio ativo bloqueado, anonimizados, sem WhatsApp válido ou duplicados serão revalidados e ignorados antes do envio."
+      selectedCampaign.executionBatch
+        ? `Enviar este conjunto de ${selectedCampaign.executionBatch.chunkCount} lotes agora? Os lotes entrarão na fila do tenant e os contatos serão revalidados antes do envio.`
+        : "Esta ação iniciará o envio de modelo aprovado para os contatos elegíveis deste rascunho. Contatos com envio ativo bloqueado, anonimizados, sem WhatsApp válido ou duplicados serão revalidados e ignorados antes do envio."
     );
     if (!confirmed) return;
     setSendingDraft(true);
     setDetailError(null);
     try {
+      if (selectedCampaign.executionBatch) {
+        await sendAppCampaignBatch(session, selectedCampaign.executionBatch.id);
+        const refreshed = await getAppCampaign(session, selectedCampaign.id);
+        setSelectedCampaign(refreshed.campaign);
+        await refreshCampaigns(session, selectedCampaign.id);
+        showToast("success", "Conjunto na fila", "Os lotes aguardam sua vez na fila de envio do tenant.");
+        return;
+      }
       const response = await sendAppCampaignDraft(session, selectedCampaign.id);
       setSelectedCampaign(response.campaign);
       await refreshCampaigns(session, response.campaign.id);
@@ -4590,11 +4601,11 @@ export default function AppCampaignsPage() {
                           </button>
                           <button
                             type="button"
-                            disabled={sendingDraft || discardingDraft || Boolean(selectedCampaign.executionBatch)}
+                            disabled={sendingDraft || discardingDraft}
                             onClick={handleSendDraftCampaign}
                             className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {sendingDraft ? "Iniciando..." : "Enviar campanha"}
+                            {sendingDraft ? "Iniciando..." : selectedCampaign.executionBatch ? "Enviar conjunto agora" : "Enviar campanha"}
                           </button>
                         </div>
                       </div>

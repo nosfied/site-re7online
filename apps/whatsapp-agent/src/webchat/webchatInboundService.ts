@@ -417,7 +417,8 @@ async function resolveProtocolLookup(params: {
   const conversation = await params.prisma.conversation.findFirst({
     where: {
       clientId: params.clientId,
-      id: { startsWith: idPrefix },
+      // Native UUID filters do not support startsWith; this interval is the same 12-hex prefix.
+      id: { gte: `${idPrefix}-0000-0000-000000000000`, lte: `${idPrefix}-ffff-ffff-ffffffffffff` },
       deletedAt: null,
       anonymizedAt: null,
     },

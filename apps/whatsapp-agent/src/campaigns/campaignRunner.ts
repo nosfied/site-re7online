@@ -45,6 +45,7 @@ import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 import { normalizeCrmWhatsappIdentity } from "../crm/crmWhatsappIdentity.js";
 import {
   CAMPAIGN_EXECUTION_RENEW_MS,
+  lockCampaignExecutionBatch,
   assertCampaignExecutionLease,
   claimNextCampaignExecutionJob,
   enqueueCampaignExecutionJob,
@@ -228,57 +229,40 @@ export function setCampaignRunnerSleepForTests(fn: ((ms: number) => Promise<void
   };
 }
 
-async function updateBatchProgressAfterChunk(params: {
-  clientId: string;
-  batchId: string;
-  campaignId: string;
-  chunkIndex: number | null;
+export async function updateBatchProgressAfterChunk(params: {
+  clientId: string; batchId: string; campaignId: string; chunkIndex: number | null;
 }) {
   const prisma = getPrisma();
-  const campaign = await prisma.campaign.findFirst({
-    where: { id: params.campaignId, clientId: params.clientId },
-    select: { status: true },
-  });
-  if (!campaign) return;
-  await prisma.campaignExecutionBatchCampaign.updateMany({
-    where: { clientId: params.clientId, batchId: params.batchId, campaignId: params.campaignId },
-    data: { status: campaign.status },
-  });
-  const batch = await prisma.campaignExecutionBatch.findFirst({
-    where: { id: params.batchId, clientId: params.clientId },
-    select: { id: true, chunkCount: true, metadata: true },
-  });
-  if (!batch) return;
-  const links = await prisma.campaignExecutionBatchCampaign.findMany({
-    where: { clientId: params.clientId, batchId: params.batchId },
-    orderBy: { chunkIndex: "asc" },
-    include: { campaign: { select: { status: true, sentCount: true, blockedCount: true } } },
-  });
-  const allTerminal = links.length > 0 && links.every((link) => CAMPAIGN_TERMINAL_STATUSES.has(link.campaign.status));
-  const hasFailure = links.some((link) => link.campaign.status === "failed" || link.campaign.status === "blocked");
-  const nextActive = links.find((link) => !CAMPAIGN_TERMINAL_STATUSES.has(link.campaign.status));
-  const completedAt = allTerminal ? new Date() : undefined;
-  const batchStatus = allTerminal ? (hasFailure ? "failed" : "completed") : "running";
-  await prisma.campaignExecutionBatch.update({
-    where: { id: params.batchId },
-    data: {
-      status: batchStatus,
-      currentChunkIndex: nextActive?.chunkIndex ?? params.chunkIndex,
-      completedAt,
-    },
-  });
-  const metadata = isRecord(batch.metadata) ? batch.metadata : {};
-  const parentCampaignId = typeof metadata.parentCampaignId === "string" ? metadata.parentCampaignId : "";
-  if (!parentCampaignId) return;
-  const sentCount = links.reduce((total, link) => total + link.campaign.sentCount, 0);
-  const blockedCount = links.reduce((total, link) => total + link.campaign.blockedCount, 0);
-  await prisma.campaign.updateMany({
-    where: { id: parentCampaignId, clientId: params.clientId },
-    data: {
-      sentCount,
-      blockedCount,
-      status: allTerminal ? batchStatus : "sending",
-    },
+  await prisma.$transaction(async (tx) => {
+    await lockCampaignExecutionBatch(tx, params.clientId, params.batchId);
+    const batch = await tx.campaignExecutionBatch.findFirst({ where: { id: params.batchId, clientId: params.clientId } });
+    if (!batch) return;
+    const campaign = await tx.campaign.findFirst({ where: { id: params.campaignId, clientId: params.clientId } });
+    if (!campaign) return;
+    await tx.campaignExecutionBatchCampaign.updateMany({ where: { batchId: batch.id, campaignId: campaign.id }, data: { status: campaign.status } });
+    const links = await tx.campaignExecutionBatchCampaign.findMany({ where: { batchId: batch.id }, orderBy: { chunkIndex: "asc" }, include: { campaign: true } });
+    const uncertain = await tx.campaignExecutionJob.count({ where: { batchId: batch.id, status: "needs_review" } });
+    const hasFailure = links.some((link) => ["failed", "blocked"].includes(link.campaign.status));
+    const allCompleted = links.length > 0 && links.every((link) => link.campaign.status === "completed");
+    const allTerminal = links.length > 0 && links.every((link) => CAMPAIGN_TERMINAL_STATUSES.has(link.campaign.status));
+    const preserve = ["cancelled", "needs_review", "failed", "blocked"].includes(batch.status);
+    const status = uncertain ? "needs_review" : preserve ? batch.status : hasFailure ? "failed" : batch.status === "paused" ? "paused" : allCompleted ? "completed" : allTerminal ? "cancelled" : "running";
+    if (["failed", "blocked", "needs_review"].includes(status)) {
+      await tx.campaignExecutionJob.updateMany({ where: { batchId: batch.id, status: { in: ["queued", "paused"] } }, data: { status: "blocked", failureReason: "batch_execution_stopped" } });
+    }
+    await tx.campaignExecutionBatch.update({ where: { id: batch.id }, data: {
+      status, completedAt: ["completed", "cancelled", "failed", "blocked"].includes(status) ? new Date() : null,
+      currentChunkIndex: links.find((link) => !CAMPAIGN_TERMINAL_STATUSES.has(link.campaign.status))?.chunkIndex ?? params.chunkIndex,
+      failureReason: hasFailure && !batch.failureReason ? "batch_chunk_failed" : batch.failureReason,
+    } });
+    const metadata = isRecord(batch.metadata) ? batch.metadata : {};
+    if (typeof metadata.parentCampaignId === "string") {
+      await tx.campaign.updateMany({ where: { id: metadata.parentCampaignId, clientId: params.clientId }, data: {
+        sentCount: links.reduce((n, link) => n + link.campaign.sentCount, 0),
+        blockedCount: links.reduce((n, link) => n + link.campaign.blockedCount, 0),
+        status: status === "running" ? "sending" : status === "needs_review" ? "blocked" : status,
+      } });
+    }
   });
 }
 
@@ -552,6 +536,20 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
   | { ok: false; reason: string }
 > {
   const prisma = getPrisma();
+  const readSnapshot = async () => {
+    const event = await prisma.event.findUnique({ where: { clientId_eventName_requestId: {
+      clientId: params.clientId, eventName: "campaign.dynamic_batch_snapshot.created",
+      requestId: `campaign-dynamic-batch-snapshot:${params.campaignId}`,
+    } } });
+    if (!event) return null;
+    const payload = isRecord(event.payloadJson) ? event.payloadJson : {};
+    const saved = readPrivateCampaignSeedFields(payload);
+    if (saved.recipients.length !== Number(payload.eligibleCount)) return { ok: false as const, reason: "batch_snapshot_unreadable" };
+    return { ok: true as const, recipients: saved.recipients, componentsByWaId: saved.componentsByWaId,
+      blockedCount: Number(payload.blockedCount ?? 0), matchedCount: Number(payload.matchedCount ?? 0), statusLabel: String(payload.statusLabel ?? "") };
+  };
+  const saved = await readSnapshot();
+  if (saved) return saved;
   const statusId = params.seed.dynamicFilter?.crmBusinessStatusId;
   if (!statusId) return { ok: false, reason: "dynamic_filter_invalid" };
   const tenant = await getTenant(params.clientKey);
@@ -632,14 +630,34 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
     },
   });
 
-  return {
-    ok: true,
-    recipients,
-    componentsByWaId: Object.keys(componentsByWaId).length > 0 ? componentsByWaId : undefined,
-    blockedCount: blocked.length,
-    matchedCount: leads.length,
-    statusLabel: status.label,
-  };
+  // A uniqueness collision must use the durable winner, never freshly resolved CRM.
+  return (await readSnapshot()) ?? { ok: false, reason: "batch_snapshot_missing" };
+}
+
+let batchMaterializationHook: ((phase: "after_snapshot" | "before_enqueue") => Promise<void> | void) | null = null;
+export function setCampaignBatchMaterializationHookForTests(hook: typeof batchMaterializationHook) {
+  if (process.env.NODE_ENV === "production") throw new Error("campaign_runner_test_hook_unavailable");
+  batchMaterializationHook = hook;
+}
+
+async function recoverInterruptedBatchMaterializations(now: Date) {
+  const prisma = getPrisma();
+  // Only controllers with no provider work are automatically recoverable.
+  const jobs = await prisma.campaignExecutionJob.findMany({ where: {
+    campaignId: null, kind: "batch_chunk", status: "running", leaseExpiresAt: { lte: now },
+    batch: { sourceMode: "DYNAMIC_CRM_FILTER" },
+  }, take: 20, orderBy: [{ leaseExpiresAt: "asc" }, { id: "asc" }] });
+  for (const job of jobs) {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM "Client" WHERE id = ${job.clientId}::uuid FOR UPDATE`;
+      await lockCampaignExecutionBatch(tx, job.clientId, job.batchId!);
+      const batch = await tx.campaignExecutionBatch.findUnique({ where: { id: job.batchId! } });
+      if (!batch) return;
+      const status = ["scheduled", "running"].includes(batch.status) ? "queued" : batch.status === "paused" ? "paused" : "cancelled";
+      const recovered = await tx.campaignExecutionJob.updateMany({ where: { id: job.id, status: "running", leaseToken: job.leaseToken, leaseExpiresAt: { lte: now } }, data: { status, leaseToken: null, leaseOwner: null, leaseExpiresAt: null } });
+      if (recovered.count) await tx.tenantCampaignExecutionLease.updateMany({ where: { clientId: job.clientId, jobId: job.id, leaseToken: job.leaseToken ?? undefined, expiresAt: { lte: now } }, data: { jobId: null, expiresAt: now } });
+    });
+  }
 }
 
 async function materializeDynamicBatchJob(params: {
@@ -677,25 +695,18 @@ async function materializeDynamicBatchJob(params: {
     select: { campaignId: true, chunkIndex: true },
   });
   if (existingChildren.length > 0) {
-    for (const child of existingChildren) {
-      await enqueueCampaignExecutionJob({
-        prisma,
-        clientId: params.job.clientId,
-        campaignId: child.campaignId,
-        batchId: batch.id,
-        chunkIndex: child.chunkIndex,
-        kind: "batch_chunk",
-        eligibleAt: params.now,
-        idempotencyKey: `batch:${batch.id}:chunk:${child.chunkIndex}`,
-        metadata: { source: "batch_existing_child" },
-      });
-    }
-    await finishCampaignExecutionJob({
-      clientId: params.job.clientId,
-      jobId: params.job.id,
-      leaseToken: params.job.leaseToken,
-      status: "completed",
+    await prisma.$transaction(async (tx) => {
+      await lockCampaignExecutionBatch(tx, params.job.clientId, batch.id);
+      const current = await tx.campaignExecutionBatch.findUniqueOrThrow({ where: { id: batch.id } });
+      if (!["scheduled", "running"].includes(current.status)) return;
+      for (const child of existingChildren) {
+        await enqueueCampaignExecutionJob({ prisma: tx, clientId: params.job.clientId,
+          campaignId: child.campaignId, batchId: batch.id, chunkIndex: child.chunkIndex,
+          kind: "batch_chunk", eligibleAt: params.now, idempotencyKey: `batch:${batch.id}:chunk:${child.chunkIndex}`,
+          metadata: { source: "batch_existing_child" } });
+      }
     });
+    await finishCampaignExecutionJob({ clientId: params.job.clientId, jobId: params.job.id, leaseToken: params.job.leaseToken, status: "completed" });
     return;
   }
   if (!isRecord(batch.metadata)) {
@@ -762,8 +773,8 @@ async function materializeDynamicBatchJob(params: {
     now: params.now,
   });
   if (!snapshot.ok) {
-    await prisma.campaignExecutionBatch.update({
-      where: { id: batch.id },
+    await prisma.campaignExecutionBatch.updateMany({
+      where: { id: batch.id, status: { in: ["scheduled", "running"] } },
       data: { status: "failed", failureReason: snapshot.reason },
     });
     await finishCampaignExecutionJob({
@@ -776,8 +787,8 @@ async function materializeDynamicBatchJob(params: {
     return;
   }
   if (snapshot.recipients.length === 0) {
-    await prisma.campaignExecutionBatch.update({
-      where: { id: batch.id },
+    await prisma.campaignExecutionBatch.updateMany({
+      where: { id: batch.id, status: { in: ["scheduled", "running"] } },
       data: { status: "blocked", failureReason: "no_eligible_recipients", totalRecipients: 0, blockedCount: snapshot.blockedCount },
     });
     await finishCampaignExecutionJob({
@@ -790,8 +801,15 @@ async function materializeDynamicBatchJob(params: {
     return;
   }
 
+  if (process.env.NODE_ENV !== "production") await batchMaterializationHook?.("after_snapshot");
   const recipientChunks = chunkArray(snapshot.recipients, CAMPAIGN_BATCH_CHUNK_SIZE);
   await prisma.$transaction(async (tx) => {
+    await lockCampaignExecutionBatch(tx, params.job.clientId, batch.id);
+    const current = await tx.campaignExecutionBatch.findUniqueOrThrow({ where: { id: batch.id } });
+    const owner = await tx.campaignExecutionJob.findFirst({ where: { id: params.job.id, status: "running", leaseToken: params.job.leaseToken } });
+    if (!owner || !["scheduled", "running"].includes(current.status)) return;
+    if (await tx.campaignExecutionBatchCampaign.count({ where: { batchId: batch.id } })) return;
+
     await tx.campaignExecutionBatch.update({
       where: { id: batch.id },
       data: {
@@ -875,36 +893,28 @@ async function materializeDynamicBatchJob(params: {
         },
       });
     }
+    if (process.env.NODE_ENV !== "production") await batchMaterializationHook?.("before_enqueue");
+    const children = await tx.campaignExecutionBatchCampaign.findMany({ where: { batchId: batch.id }, orderBy: { chunkIndex: "asc" } });
+    for (const child of children) {
+      await enqueueCampaignExecutionJob({ prisma: tx, clientId: params.job.clientId,
+        campaignId: child.campaignId, batchId: batch.id, chunkIndex: child.chunkIndex,
+        kind: "batch_chunk", eligibleAt: params.now, idempotencyKey: `batch:${batch.id}:chunk:${child.chunkIndex}`,
+        metadata: { source: "dynamic_batch_materialized", recipientCount: child.recipientCount } });
+    }
   });
-  for (const [index, recipients] of recipientChunks.entries()) {
-    const child = await prisma.campaignExecutionBatchCampaign.findFirst({
-      where: { clientId: params.job.clientId, batchId: batch.id, chunkIndex: index + 1 },
-      select: { campaignId: true, chunkIndex: true },
-    });
-    if (!child) continue;
-    await enqueueCampaignExecutionJob({
-      prisma,
-      clientId: params.job.clientId,
-      campaignId: child.campaignId,
-      batchId: batch.id,
-      chunkIndex: child.chunkIndex,
-      kind: "batch_chunk",
-      eligibleAt: params.now,
-      idempotencyKey: `batch:${batch.id}:chunk:${child.chunkIndex}`,
-      metadata: { source: "dynamic_batch_materialized", recipientCount: recipients.length },
-    });
-  }
+  const state = await prisma.campaignExecutionBatch.findUniqueOrThrow({ where: { id: batch.id } });
   await finishCampaignExecutionJob({
     clientId: params.job.clientId,
     jobId: params.job.id,
     leaseToken: params.job.leaseToken,
-    status: "completed",
+    status: state.status === "paused" ? "paused" : state.status === "cancelled" || state.status === "needs_review" ? "cancelled" : "completed",
   });
 }
 
 export async function processDueScheduledCampaigns(params: { now?: Date; limit?: number } = {}) {
   const prisma = getPrisma();
   const now = params.now ?? new Date();
+  await recoverInterruptedBatchMaterializations(now);
   const dueCampaigns = await prisma.campaign.findMany({
     where: {
       status: "scheduled",
@@ -1805,7 +1815,7 @@ async function runCampaignInBackground(
 
           if (!result.ok) {
             await prisma.campaign.updateMany({
-              where: { id: params.campaignId, status: "sending" },
+              where: { id: params.campaignId, status: { in: ["sending", "paused"] } },
               data: {
                 status: "failed",
                 sentCount,

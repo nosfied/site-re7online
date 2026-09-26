@@ -5594,3 +5594,9 @@ export async function scheduleAppCampaignBatch(session: AppSession, batchId: str
     method: "POST", body: JSON.stringify({ scheduledAt }),
   });
 }
+
+export async function sendAppCampaignBatch(session: AppSession, batchId: string): Promise<{ ok: true; batchId: string }> {
+  return requestAppJson(session, `/app/campaign-batches/${encodeURIComponent(batchId)}/send`, {
+    method: "POST", body: JSON.stringify({}),
+  });
+}

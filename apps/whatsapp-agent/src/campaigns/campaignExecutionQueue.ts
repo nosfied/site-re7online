@@ -27,7 +27,7 @@ function leaseExpiry(now: Date, leaseMs = CAMPAIGN_EXECUTION_LEASE_MS) {
 }
 
 export async function enqueueCampaignExecutionJob(params: {
-  prisma?: PrismaClient;
+  prisma?: PrismaClient | Prisma.TransactionClient;
   clientId: string;
   campaignId?: string | null;
   eligibleAt: Date;
@@ -92,11 +92,13 @@ export async function acquireTemporaryTenantCampaignExecutionLease(params: {
   const leaseToken = crypto.randomUUID();
   const ownerId = workerId();
   const acquired = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT id FROM "Client" WHERE id = ${params.clientId}::uuid FOR UPDATE`;
     const tenantHasRunningJob = await tx.campaignExecutionJob.findFirst({
       where: { clientId: params.clientId, status: { in: ["running", "needs_review"] } },
       select: { id: true },
     });
     if (tenantHasRunningJob) return false;
+    if (await tx.campaignExecutionBatch.findFirst({ where: { clientId: params.clientId, status: "running" }, select: { id: true } })) return false;
     const lease = await tryAcquireTenantLease(tx, {
       clientId: params.clientId,
       jobId,
@@ -171,18 +173,44 @@ export async function claimNextCampaignExecutionJob(params: {
 } = {}): Promise<ClaimedCampaignExecutionJob | null> {
   const prisma = getPrisma();
   const now = params.now ?? new Date();
-  const candidates = await prisma.campaignExecutionJob.findMany({
-    where: {
-      status: "queued",
-      eligibleAt: { lte: now },
-    },
-    orderBy: [{ eligibleAt: "asc" }, { sequence: "asc" }, { id: "asc" }],
-    take: params.limit ?? 20,
-  });
+  // Exclude blocked tenants and preserve an active group's continuity BEFORE LIMIT.
+  // The bounded result is rechecked under tenant/batch locks before claiming.
+  const candidates = await prisma.$queryRaw<Array<{
+    id: string; clientId: string; campaignId: string | null; batchId: string | null;
+    chunkIndex: number | null; kind: string;
+  }>>`
+    SELECT candidates.* FROM (
+    SELECT DISTINCT ON (j."clientId") j.* FROM "CampaignExecutionJob" j
+    WHERE j.status = 'queued' AND j."eligibleAt" <= ${now.toISOString()}::timestamp
+      AND NOT EXISTS (SELECT 1 FROM "CampaignExecutionJob" active
+        WHERE active."clientId" = j."clientId" AND active.status IN ('running', 'needs_review'))
+      AND NOT EXISTS (SELECT 1 FROM "TenantCampaignExecutionLease" lease
+        WHERE lease."clientId" = j."clientId" AND lease."jobId" IS NOT NULL AND lease."expiresAt" > ${now.toISOString()}::timestamp)
+      AND (j."batchId" IS NULL OR EXISTS (SELECT 1 FROM "CampaignExecutionBatch" b
+        WHERE b.id = j."batchId" AND b.status IN ('scheduled', 'running')))
+      AND NOT EXISTS (SELECT 1 FROM "CampaignExecutionBatch" active_batch
+        WHERE active_batch."clientId" = j."clientId" AND active_batch.status = 'running'
+          AND active_batch.id IS DISTINCT FROM j."batchId")
+    ORDER BY j."clientId", j."eligibleAt", j.sequence, j.id
+    ) candidates
+    ORDER BY candidates."eligibleAt", candidates.sequence, candidates.id
+    LIMIT ${Math.max(1, Math.min(params.limit ?? 20, 100))}
+  `;
   const ownerId = workerId();
   for (const candidate of candidates) {
     const token = crypto.randomUUID();
     const claimed = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM "Client" WHERE id = ${candidate.clientId}::uuid FOR UPDATE`;
+      if (candidate.batchId) {
+        await lockCampaignExecutionBatch(tx, candidate.clientId, candidate.batchId);
+        const batch = await tx.campaignExecutionBatch.findUnique({ where: { id: candidate.batchId } });
+        if (!batch || !["scheduled", "running"].includes(batch.status)) return null;
+      }
+      const otherActiveBatch = await tx.campaignExecutionBatch.findFirst({ where: {
+        clientId: candidate.clientId, status: "running",
+        ...(candidate.batchId ? { id: { not: candidate.batchId } } : {}),
+      } });
+      if (otherActiveBatch) return null;
       const tenantHasActiveJob = await tx.campaignExecutionJob.findFirst({
         where: { clientId: candidate.clientId, status: { in: ["running", "needs_review"] } },
         select: { id: true },
@@ -214,6 +242,11 @@ export async function claimNextCampaignExecutionJob(params: {
           data: { jobId: null, expiresAt: now },
         });
         return null;
+      }
+      if (candidate.batchId) {
+        await tx.campaignExecutionBatch.update({ where: { id: candidate.batchId }, data: {
+          status: "running", effectiveStartedAt: now, currentChunkIndex: candidate.chunkIndex,
+        } });
       }
       return {
         id: candidate.id,
@@ -301,6 +334,8 @@ export async function finishCampaignExecutionJob(params: {
   const prisma = getPrisma();
   const now = new Date();
   await prisma.$transaction(async (tx) => {
+    const job = await tx.campaignExecutionJob.findFirst({ where: { id: params.jobId, clientId: params.clientId } });
+    if (job?.batchId) await lockCampaignExecutionBatch(tx, params.clientId, job.batchId);
     const updated = await tx.campaignExecutionJob.updateMany({
       where: { id: params.jobId, clientId: params.clientId, leaseToken: params.leaseToken, status: "running" },
       data: {
@@ -311,6 +346,10 @@ export async function finishCampaignExecutionJob(params: {
       },
     });
     if (updated.count !== 1) return;
+    if (job?.batchId && ["failed", "blocked"].includes(params.status)) {
+      await tx.campaignExecutionBatch.updateMany({ where: { id: job.batchId, status: { in: ["scheduled", "running"] } }, data: { status: params.status, failureReason: params.failureReason ?? "batch_chunk_failed", completedAt: now } });
+      await tx.campaignExecutionJob.updateMany({ where: { batchId: job.batchId, status: "queued" }, data: { status: "blocked", failureReason: "batch_execution_stopped" } });
+    }
     if (params.releaseTenantLease ?? true) {
       await tx.tenantCampaignExecutionLease.updateMany({
         where: { clientId: params.clientId, jobId: params.jobId, leaseToken: params.leaseToken },
@@ -344,9 +383,14 @@ export async function markCampaignExecutionJobNeedsReview(params: {
   return prisma.$transaction(async (tx) => {
     const job = await tx.campaignExecutionJob.findFirst({
       where: { id: params.jobId, clientId: params.clientId, status: "running" },
-      select: { id: true, leaseToken: true },
+      select: { id: true, leaseToken: true, batchId: true },
     });
     if (!job) return false;
+    if (job.batchId) {
+      await lockCampaignExecutionBatch(tx, params.clientId, job.batchId);
+      await tx.campaignExecutionBatch.update({ where: { id: job.batchId }, data: { status: "needs_review", failureReason: params.reason } });
+      await tx.campaignExecutionJob.updateMany({ where: { batchId: job.batchId, status: { in: ["queued", "paused"] } }, data: { status: "blocked", failureReason: "batch_execution_stopped" } });
+    }
     await tx.campaignExecutionJob.update({
       where: { id: job.id },
       data: {
@@ -378,4 +422,9 @@ export async function releaseCampaignExecutionLease(params: {
       data: { jobId: null, expiresAt: now, heartbeatAt: now },
     });
   });
+}
+
+/** Actions, materialization and progress serialize on the same aggregate row. */
+export async function lockCampaignExecutionBatch(tx: Prisma.TransactionClient, clientId: string, batchId: string) {
+  await tx.$executeRaw`SELECT id FROM "CampaignExecutionBatch" WHERE id = ${batchId} AND "clientId" = ${clientId}::uuid FOR UPDATE`;
 }

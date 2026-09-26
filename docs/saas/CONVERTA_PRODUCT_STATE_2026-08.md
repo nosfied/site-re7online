@@ -1,5 +1,52 @@
 # Converta Product State - 2026-08
 
+## Correcoes da revisao Git 109c9f15 — 2026-09-26
+
+Status: LOCAL REVIEW FIXES VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+Base desta correcao: `109c9f1544003750d29930bd7b10ce6a4cf50c03`, branch
+`review/campaign-recovery-20260926`. Historico `6d664d0b` e owner PASS do lote
+anterior preservados; esta nota nao concede aceite CRA nem prontidao para deploy.
+
+- CSV: grupo, filhos, seeds e resultado idempotente na mesma transacao; falha
+  no segundo filho deixa zero registros. Retries concorrentes produzem um unico
+  conjunto. Chave vinculada ao tenant/operacao/hash do payload; conflito = 409.
+- Estados: locks de grupo preservam pausa/cancelamento/needs_review; falha
+  impeditiva bloqueia os proximos lotes, inclusive rejeicao recebida apos pausa.
+  Cancelado nao vira completed. Dinamica sem filhos pode pausar/retomar.
+- Fila: tenants ocupados excluidos antes do limite; um candidato por tenant,
+  ate 20 por consulta (teto 100), rechecado sob lock. Caso com 25 jobs antigos de
+  A nao impede B; exclusividade e continuidade contra avulsa/test-send mantidas.
+- Dinamica: recuperacao reutiliza o snapshot persistido, mesmo com CRM alterado;
+  filhos e enqueue sao atomicos. Recuperacao do intervalo legado filhos/sem jobs
+  nao duplica filhos nem snapshot. Apenas controlador sem provider recupera lease.
+- UI/API: Enviar conjunto agora exige confirmacao e RBAC, entra na mesma fila,
+  e retry nao duplica jobs. Agendamento futuro permanece sem antecipacao.
+
+Validacao final: 13/13 focados novos; suites afetadas de campanhas **198/198**
+(fila 8, runner 10, revisao 11, rotas 128, importacao 7, exclusao 5, UI 29),
+compostas por 188 casos fora do runner e sua repeticao final 10/10; Webchat 17/17.
+Builds backend/frontend PASS. Smoke visual de confirmar/recusar envio agregado,
+pausa, retomada e cancelamento PASS; zero outbound/provider. Nao houve repeticao
+da bateria visual anterior. Evidencia local: `local-evidence/recovery/review-fixes/`.
+
+A primeira suite teve interrupcao SIGKILL do runner durante diagnostico de I/O
+JSON; as demais suites passaram. A repeticao isolada revelou dois testes longos
+com relogio congelado emitindo leases vencidas. Fixture corrigida para tempo
+atual, sem reduzir audiencia, assertions ou concorrencia; runner final 10/10.
+O build expos tipagem incorreta da nova fixture CSV e filtro startsWith sobre
+UUID no Webchat, ja presente na base. Corrigidos TemplateContext e intervalo UUID
+equivalente; quatro testes de protocolo e limites SQL locais validados. O mock
+da auditoria compartilhada foi isolado (antes tentava gravar tenant_a no DB real).
+O registro historico de build PASS nao substitui esta nova evidencia compilada.
+
+Schema/SQL migration sem alteracao; DB local `re7_recovery_audit` com 60 migrations
+concluidas e zero pendentes. Nenhum migrate adicional, db push/reset ou correcao
+de drift historico. Continuam pendentes ensaio operacional de rollout/rollback,
+owner UI, aceite CRA e drift residual inventariado no runbook. CI de push apenas
+main/develop; bloqueio Vercel da branch de revisao preservado. Sem deploy/DB de
+producao/provider real. DELIVERED/READ → Conversation/HUMAN/WAITING continua
+separada e sem alteracao funcional; reparo 6683 CLOSED.
+
 ## Persistencia para revisao Git — 2026-09-26
 
 Status desta frente: TECHNICAL LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.

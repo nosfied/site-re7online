@@ -18320,3 +18320,42 @@ test("aggregate scheduling is tenant scoped, atomic and does not start outbound 
   assert.equal(await prisma.campaignExecutionJob.count({ where: { batchId: batch.id } }), 2);
   assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId } }), outbound);
 });
+
+test("review immediate group send is manager scoped, concurrent-idempotent and preserves future scheduling", async () => {
+  async function group(name: string) {
+    const batch = await prisma.campaignExecutionBatch.create({ data: { clientId: businessClientId, name, sourceMode: "CSV_IMPORT", status: "draft", chunkCount: 2, totalRecipients: 2, idempotencyKey: crypto.randomUUID() } });
+    for (const chunkIndex of [1, 2]) {
+      const child = await prisma.campaign.create({ data: { clientId: businessClientId, name: `${name} ${chunkIndex}`, templateName: "review_send", status: "draft", totalRecipients: 1 } });
+      await prisma.campaignExecutionBatchCampaign.create({ data: { clientId: businessClientId, batchId: batch.id, campaignId: child.id, chunkIndex, recipientCount: 1 } });
+    }
+    return batch;
+  }
+  const batch = await group("Immediate review");
+  const route = `/app/campaign-batches/${batch.id}/send`;
+  const outbound = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  assert.equal((await request("POST", route, businessAgent, {})).status, 403);
+  assert.equal((await request("POST", route, overrideAdmin, {})).status, 404);
+  const replies = await Promise.all([request("POST", route, businessAdmin, {}), request("POST", route, businessSupervisor, {})]);
+  assert.deepEqual(replies.map((reply) => reply.status), [200, 200]);
+  const jobs = await prisma.campaignExecutionJob.findMany({ where: { batchId: batch.id }, orderBy: { chunkIndex: "asc" } });
+  assert.deepEqual(jobs.map((job) => [job.chunkIndex, job.status]), [[1, "queued"], [2, "queued"]]);
+  assert.ok(jobs.every((job) => job.eligibleAt.getTime() <= Date.now()), "Immediate group jobs must already be eligible");
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId } }), outbound);
+  const future = await group("Future review");
+  const scheduledAt = new Date(Date.now() + 86400000).toISOString();
+  assert.equal((await request("POST", `/app/campaign-batches/${future.id}/schedule`, businessAdmin, { scheduledAt })).status, 200);
+  assert.equal((await request("POST", `/app/campaign-batches/${future.id}/send`, businessAdmin, {})).status, 409);
+  assert.equal((await prisma.campaignExecutionBatch.findUniqueOrThrow({ where: { id: future.id } })).eligibleAt?.toISOString(), scheduledAt);
+});
+
+test("review grouped CSV API rejects reused content key and serializes concurrent retries", async () => {
+  const template = await prisma.template.create({ data: { clientId: businessClientId, name: `review_csv_${prefix}`, category: "UTILITY", language: "pt_BR", status: "approved", content: "Ola {{1}}" } });
+  const payload = { name: "Review CSV", templateId: template.id, grouped: true, requestId: `review-csv-${prefix}`, csvText: "telefone,nome\n5541942000001,Ana\n5541942000002,Bia", mapping: { contactColumn: "telefone", field1Column: "nome", variableColumns: { "1": "field1" } }, returnDestination: defaultCampaignReturnDestination() };
+  const [a, b] = await Promise.all([request<{ batchId: string; campaigns: Array<{ id: string }> }>("POST", "/app/campaigns/drafts/csv", businessAdmin, payload), request<{ batchId: string; campaigns: Array<{ id: string }> }>("POST", "/app/campaigns/drafts/csv", businessAdmin, payload)]);
+  assert.equal(a.status, 200, JSON.stringify(a.body)); assert.equal(b.status, 200, JSON.stringify(b.body));
+  assert.equal(a.body.batchId, b.body.batchId);
+  assert.deepEqual(a.body.campaigns.map((c) => c.id), b.body.campaigns.map((c) => c.id));
+  const conflict = await request<ErrorPayload>("POST", "/app/campaigns/drafts/csv", businessAdmin, { ...payload, name: "Different payload" });
+  assert.equal(conflict.status, 409, JSON.stringify(conflict.body));
+  assert.equal(getErrorCode(conflict.body), "campaign_batch_idempotency_conflict");
+});
