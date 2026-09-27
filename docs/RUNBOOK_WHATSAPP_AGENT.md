@@ -1211,6 +1211,10 @@ restart/reload, firewall, provider ou envio foi executado.
 
 ### G0 — evidência antes de pedir janela
 
+> Histórico de 4d282049: o pacote abaixo foi posteriormente fornecido pelo owner
+> em 27/09 e está consolidado no preflight. Não repetir a solicitação. O complemento
+> executivo ao final substitui a lista de pendências e detalha a contenção.
+
 Não foram localizados os novos resultados privilegiados anunciados. O owner
 informou que não sabe localizá-los. Acesso SSH existente funcionou e reconfirmou
 HEAD `5ee2de6b`; as tentativas exatas `sudo -n nginx -T`, nft, iptables, ip6tables,
@@ -1525,3 +1529,237 @@ artefatos/config privada no alvo, backup/restore/segredos e tempos, decisão A c
 incerteza explicitada, aceitação do atendimento/frontend e decisão B. Não há
 aprovação final de implantação implícita. NOT DEPLOYED / OWNER UI PENDING;
 primeira transição pendente, 6683 CLOSED, DELIVERED/READ → HUMAN/WAITING separado.
+
+
+## G0 consolidado — complemento executivo de 27/09/2026
+
+Prevalece este complemento para evidência/pendências e contenção; os comandos do
+plano anterior de releases, guarda, recovery, migration/candidato e validação
+continuam condicionados aos gates. Nada abaixo foi executado. Fonte/atribuição e
+matriz completa no [preflight](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#g0-consolidado-em-27092026--owner-e-leituras-dirigidas).
+Candidato a1cc380e, recovery 03f930e5. NOT DEPLOYED / OWNER UI PENDING.
+
+### Lacuna dirigida que ainda impede autorizar a primeira parada
+
+Um PM2 root foi observado, separado de deploy; sem filhos imediatos naquele
+instante, mas dumps/fallback e user units não legíveis por deploy. O operador deve
+fornecer somente projeção sanitizada desse estado e identificar quem/o que pode
+iniciá-lo. Não repetir as evidências já entregues. Exemplo de leitura em sessão
+privilegiada própria, sem PM2 start/resurrect/jlist que possa iniciar novo daemon:
+
+```bash
+sudo python3 - <<'PYROOT'
+import json
+from pathlib import Path
+for name in ('dump.pm2', 'dump.pm2.bak'):
+    p = Path('/root/.pm2') / name
+    if not p.exists():
+        print(name, 'absent'); continue
+    data = json.loads(p.read_text())
+    print(name, [{k: x.get(k) for k in
+      ('name', 'pm_exec_path', 'pm_cwd', 'status', 'autorestart')}
+      for x in data])
+p = Path('/root/.config/systemd/user')
+print('root_user_units', [x.name for x in p.iterdir()] if p.exists() else [])
+PYROOT
+```
+
+Conferir árvore de processos root PM2, unidades/drop-ins/links indicados e mecanismo
+que criou a sessão; leitura de comandos dos possíveis iniciadores em ambiente
+privado, devolvendo apenas finalidade e controle. Ausência de filhos agora não
+resolve saved/fallback/boot. Confirmar automações externas/deploy hooks com seu
+responsável, sem deduzir ausência pela lista de units. Se houver referência à API
+antiga, preparar retirada SOMENTE dessa entrada nesse supervisor e salvar estado
+seguro, preservando original privado; não kill/reload all nem parar unidade global.
+Não há comando mutável root PM2 pronto até identificar as entradas exatas. Esse
+é o ponto de parada concreto, não pedido para reenviar nginx/firewall.
+
+### Contenção temporária central — somente em janela aprovada
+
+Escolha proposta: barreira temporária na porta real da API, incluindo loopback,
+seguida da retirada do executor antigo. Controla acesso direto, Nginx, alias admin,
+frontend /public-api e acesso local sem depender de precedência do vhost duplicado.
+Não alterar INPUT/FORWARD/Docker existentes, não ativar UFW nem editar firewall do
+provedor. Não corrigir exposição permanente das portas nesta frente.
+
+**A decisão A vem ANTES da barreira:** ela interrompe tráfego API de todos os
+tenants, inclusive HTTP já em andamento; não é apenas bloqueio de novas campanhas.
+Scheduler/Promises antigas podem continuar até a parada do processo, e uma chamada
+provider já iniciada pode ser aceita depois. A barreira não é um fence de egress
+provider, não prova drain e não elimina a incerteza submetida ao owner.
+
+Pré-condições: somente endpoints/listeners API identificados pelo inventário; sem
+outra API fora de 3001; controle de todos os supervisores incluindo root; operador
+nomeado com sudo e sessão SSH/console de recuperação; nenhum processo antigo será
+iniciado automaticamente. Se algum item não for comprovado, não aplicar a barreira.
+
+Operador prepara este arquivo PRIVADO na janela futura (`$EVIDENCE` exclusivo,
+0700; umask 077), revisa e valida com nft --check; não executar agora:
+
+```bash
+cat > "$EVIDENCE/api-fence.nft" <<'NFT'
+table inet re7_campaign_transition {
+  chain api_input {
+    type filter hook input priority -10; policy accept;
+    tcp dport 3001 counter reject with tcp reset
+  }
+}
+NFT
+sudo nft --check --file "$EVIDENCE/api-fence.nft"
+# Confirmar previamente que a tabela não existe. Se já existir, parar/investigar.
+sudo nft list tables
+# Somente depois da decisão A e validação:
+sudo nft --file "$EVIDENCE/api-fence.nft"
+sudo nft list table inet re7_campaign_transition
+```
+
+Família inet cobre IPv4/IPv6 do host, mesmo sem comprovação de IPv6 público.
+Regra deliberadamente também pega loopback e pode encerrar conexões API existentes.
+Não afeta SSH/DB/worker diretamente. Frontend 3000 pode exibir páginas, mas seus
+chamados API falham; isso não constitui atendimento disponível. Outros listeners
+API, containers/hosts não inventariados invalidam esse plano; não ampliar portas
+às cegas. Regra temporária não persiste em reboot: durante a janela impedir boot
+involuntário e garantir saved/fallback sem API antiga, nunca depender só da regra.
+
+Verificação futura SEM enviar mensagens: GET health via loopback/direto e via
+/agent-api/health deve falhar (conexão recusada/reset ou erro de upstream), incluindo
+alias seguido de redirect; observar contador da regra. GET através de rewrite
+público do frontend não pode alcançar a API. Não usar POST de campanha como probe.
+Apenas depois dessas verificações retirar API antiga conforme plano anterior e
+comprovar fim de todos os PIDs/ausência de respawn. Não esperar N segundos e chamar
+isso drain. Capturar T0/barreira/parada e sinais antes/depois para reconciliação.
+
+Reversão da barreira, exclusivamente da tabela criada por esta janela:
+
+```bash
+# Conferir que a tabela ainda é a criada pela janela, sem alterações de terceiros.
+sudo nft list table inet re7_campaign_transition
+sudo nft delete table inet re7_campaign_transition
+```
+
+Não executar flush ruleset nem restaurar dump global de firewall. Antes da retirada
+da API, reverter a barreira devolve o estado antigo, portanto também campanhas:
+exige decisão explícita de abortar A, nunca reação automática a um erro. Depois
+da parada antiga, remover a barreira somente com recovery/candidato guardado de
+SHA/config conferidos, ou API ainda parada sob controle; jamais ressuscitar 5ee.
+Como a barreira bloqueia até health local, comprovar offline o artefato/cwd/Client,
+configuração efetiva da guarda e ausência de executores antigos antes de removê-la;
+para a primeira retomada usar recovery fechada INCONDICIONALMENTE em código.
+Depois liberar tráfego para validar health/diagnóstico/atendimento; se falhar,
+reaplicar a mesma barreira revisada e manter campanhas suspensas. Health não aceita
+atendimento sozinho. Nova prova de diagnóstico não encerra chamadas antigas.
+
+### Jobs concorrentes — tratamento temporário, não correção de higiene
+
+Timezone lida: Etc/UTC. Jobs recebidos do owner: persistent snapshot 02:40; media
+cleanup 03:00; duas linhas backup-data 03:15; backup PG com alerta 03:20; retention
+03:30; check de backup 04:00. Não inferir fim dos processos pelo relógio.
+
+Conteúdos lidos: backup-data aplica retenção 14 dias; PG aplica retenção configurada;
+persistent backup usa rsync/manifest/link latest e remove snapshots pela seleção
+7/4/3 documentada; media cleanup remove arquivos; retention faz soft-delete e
+anonymize (inclui OutboundMessage/Event). Alertas podem enviar e-mail. Nenhum deles
+foi executado nesta tarefa, nem foi encontrada invocação direta de campaignRunner
+nos caminhos chamados inspecionados. Locks flock são próprios de cada rotina:
+não garantem coordenação de todas nem eliminam duplicidade sequencial.
+
+Para a janela, operador suspende temporariamente SOMENTE as seis entradas deploy
+relacionadas (duas backup-data, media, retention, backup+alert e check) e a entrada
+cron.d persistent snapshot, preservando conteúdo/metadata originais privadamente.
+Não parar cron.service, timers globais ou atualizações do host. Comandos futuros:
+
+```bash
+crontab -l > "$EVIDENCE/deploy.crontab.before"
+# Criar deploy.crontab.window a partir dessa cópia: comentar SOMENTE as seis
+# linhas identificadas; revisão humana do diff, nenhuma outra linha alterada.
+diff -u "$EVIDENCE/deploy.crontab.before" "$EVIDENCE/deploy.crontab.window"
+# diff exit 1 é esperado pelas linhas comentadas, não liberação automática.
+crontab "$EVIDENCE/deploy.crontab.window"
+# Para a entrada cron.d, preservar cópia privada fora de /etc/cron.d, e preparar
+# arquivo temporário root:root 0644 que apenas comente a linha 02:40 existente.
+sudo install -o root -g root -m 0644 "$EVIDENCE/re7-converta-backup.window" /etc/cron.d/re7-converta-backup
+```
+
+Essa preparação é gate: arquivos `.window` não existem nem foram aprovados nesta
+tarefa. O operador valida diff/hash e preserva original cron.d antes de instalar.
+Não exportar credenciais que possam existir em outras linhas de crontab. O cadastro
+cron suspenso não encerra job já iniciado: verificar processos/locks/logs; deixar
+concluir ou adiar a janela, sem matar backup/retention em transação e sem remover
+lock. Não iniciar captura/reconciliação/migration em paralelo com esses jobs.
+
+Restabelecer originais somente após verificar que não houve edição concorrente
+nos cadastros e que DB/storage/atendimento estão estáveis, anotando execuções
+perdidas para decisão do operador. Não executar catch-up automático:
+
+```bash
+crontab "$EVIDENCE/deploy.crontab.before"
+sudo install -o root -g root -m 0644 "$EVIDENCE/re7-converta-backup.before" /etc/cron.d/re7-converta-backup
+```
+
+Restaurar o cadastro original também restaura sua linha duplicada: eliminar essa
+duplicidade é mudança de higiene separada. `.bak` Nginx igualmente terá revisão
+própria: preservar fora do glob, mover somente o backup e validar nginx -t antes
+de reload autorizado em outra ação. Nada disso foi aplicado como parte desta etapa.
+
+### Ordem integrada, impacto, reversão e aprovação concreta
+
+1. **Operador/DBA:** fechar lacuna PM2 root/automações; nomear responsáveis e
+   substitutos; conferir releases/configs/Client/guarda compartilhada; preparar
+   artefatos privados da barreira e cron, sem ativar. Não alterar papel superuser.
+2. **DBA:** backup fresco + restore isolado comprovado, chaves e RPO/tempo; espaço
+   e retenção pendente conferidos. Scripts lidos fazem descarte e não incluem
+   automaticamente `/var/lib/re7/campaign-operations`: não executá-los cegamente
+   como captura preservadora. Guardar também ledger + .lock + .uncertain com
+   contexto de consistência, nunca limpar para copiar. Offsite/backups do provedor
+   não estão comprovados. Dump sobre produção não é rollback.
+3. **Owner A:** recebe sinais conhecidos/quantidade desconhecida das chamadas
+   antigas, impacto em atendimento/webhooks e critérios de abortar, e decide
+   explicitamente a primeira interrupção. Se requer zero incerteza antiga, não
+   prosseguir com esta instrumentação. Registrar limite de parada e responsável
+   pela recuperação; não apresentar 30–60 min como tempo comprovado.
+4. **Operador:** suspender iniciadores concorrentes e crons selecionados; conferir
+   ausência de jobs ativos; ativar contenção temporária da API; retirar somente
+   executores antigos e referências saved/fallback/boot de TODOS os PM2 abrangidos.
+   As instruções anteriores de disable sem --now valem só para unit deploy
+   identificada; não resolvem automaticamente o daemon root. Worker/sessões ficam
+   preservados. Se há executor residual, parar antes de migration/outro executor.
+5. **Operador:** provisionar/configurar guarda persistente (sem sobrescrever estado)
+   e recovery fechada. Retirar barreira após conferir artefato/cwd/config e ausência
+   do antigo; validar atendimento. Saved/fallback seguros antes de reabilitar boot.
+   Inbox/CRM/auth/realtime e webhooks ficam indisponíveis/degradados entre contenção
+   e validação; worker pode permanecer conectado, callbacks falham. Nenhuma garantia
+   de inbound/retries/replay integral. Consentimento CRM legítimo continua permitido
+   quando a API guardada retorna, conforme RBAC/política existentes.
+6. **DBA + owner:** gates de incerteza/backup resolvidos e autorização de migration
+   aditiva; recovery continua fechada. Em falha de DDL, preservar DB/histórico,
+   diagnosticar; não down/reset/restore automático. Depois conter novamente API,
+   retirar recovery com mesmos controles e iniciar candidato fechado sobre o
+   MESMO estado persistente, nunca uma cópia vazia. Não reiniciar worker/sessões.
+7. **Operador/owner:** retirar barreira após comprovações, validar atendimento
+   funcional, frontend compatível e diagnóstico em todas as instâncias. Em falha,
+   conservar campaigns closed, conter tráfego quando necessário e retornar código
+   recovery sobre o DB atual; não abrir para testar. Restaurar crons/boot apenas
+   para estado seguro verificado, preservando arquivos originais/evidências.
+8. **Owner B separado:** só então decide abertura com geração atual e sem
+   task/lock incerto/.uncertain; revisar jobs/agendamentos vencidos e orçamento
+   multi-tenant antes de abrir (abertura pode iniciar trabalho). Aceites antigos
+   incertos exigem reconciliação; não bypass de ledger ou retry cego. UI/CRA não
+   são aprovados por esta documentação ou pelo health.
+
+Aborto antes da mutation: falta de controle PM2 root/outros iniciadores; inventário
+incompleto de listeners; artefato/config não conferido; backup/restore/chaves não
+comprovados; jobs de retenção ativos; falta de decisão A sobre desconhecidos.
+Após parar o antigo, "abortar" significa recovery fechada ou manter API parada,
+não desfazer contenção restabelecendo runner antigo. Preservar aceites e dados
+multi-tenant; não ampliar alteração funcional para conseguir um PASS.
+
+Próxima aprovação concreta: depois das confirmações dirigidas, autorizar a
+contenção temporária descrita + suspensão/restauração dos crons selecionados +
+retirada da API antiga + retorno do atendimento pela recovery fechada, com
+responsáveis nominados, RPO e limite de indisponibilidade. Migration e abertura B
+mantêm gates próprios; não é pedido genérico de janela nem aprovação implícita.
+
+Todos os contratos permanecem: multi-tenant/RBAC, opt-out/revoke legítimos, alias
+12/13, delivery truth, zero-eligible, preservação de aceites, pause/cancel sem nova
+tentativa após chamada em voo, HUMAN/WAITING e worker/sessões. 6683 CLOSED;
+DELIVERED/READ separado. NOT DEPLOYED / OWNER UI PENDING, sem aceite CRA.

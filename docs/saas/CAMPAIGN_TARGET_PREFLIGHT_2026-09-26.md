@@ -407,6 +407,10 @@ retroativa. 6683 CLOSED e divergência de materialização separada.
 
 ## Consolidação para a primeira transição — evidência ainda pendente
 
+> Registro histórico de 4d282049. A consolidação do owner recebida em 27/09,
+> registrada abaixo, supre as saídas antes indisponíveis. Não solicitar novamente
+> aquele pacote; somente as lacunas novas e materiais discriminadas ao final.
+
 Artefatos funcionais fixos: candidato `a1cc380eddcd1467b8e0d3a8e405f82689a25b3d`,
 recuperação `03f930e5453efd313a91a16de3e22057a0573d9c`. NOT DEPLOYED / OWNER UI PENDING.
 As seções anteriores são histórico, não confirmação de prontidão atual.
@@ -444,3 +448,98 @@ G0 pendente impede solicitar janela genérica ou declarar pronto para aprovaçã
 final. Owner não precisa fornecer senha: operador executa pacote de leitura em
 sessão própria e entrega matriz sanitizada. Sem números arbitrários de manutenção.
 6683 CLOSED, owner UI/CRA pendentes, materialização separada, sem quiescência retroativa.
+
+
+## G0 consolidado em 27/09/2026 — owner e leituras dirigidas
+
+Candidato funcional `a1cc380eddcd1467b8e0d3a8e405f82689a25b3d`; recuperação
+`03f930e5453efd313a91a16de3e22057a0573d9c`; plano anterior `4d282049`.
+**NOT DEPLOYED / OWNER UI PENDING. G0 parcialmente fechado, não autorização de parada.**
+
+### Evidência fornecida pelo owner (não executada pelo Codex)
+
+Fonte: consolidação textual do owner de 27/09/2026, sessão deploy no alvo, com
+saídas/capturas conferidas pelo owner. Não existem neste documento hashes, arquivos
+locais ou anexos inventados para essas saídas originais. Não repetir nem pedir
+reenvio desse pacote. Atribuir separadamente as leituras complementares abaixo.
+
+| Assunto | Evidência recebida e consequência |
+| --- | --- |
+| Nginx | nginx -T: syntax/test successful; conflitos Converta IPv4 80/443, ignored. Includes modules-enabled/*.conf, conf.d/*.conf, sites-enabled/*. |
+| Rotas | Alias admin 301 para Converta preservando URI; Converta encaminha /agent-api/ e realtime para API 3001, / para frontend 3000. API host oferece health/webhook e 404 residual; default IPv4/IPv6 80 serve arquivos/404 |
+| Duplicidade | .bak de 10/08 também incluído, mesmos listeners/server_name/proxies, sem limite 10m do principal. Registro de higiene; não removido |
+| Journal | Reloads 10/08 19:58:24 e 12/08 01:15:48; starts posteriores, último mostrado 15/09 07:00:15 successful, com warnings de conflito. Não prova igualdade integral disco/memória |
+| Firewall host | IPv4 INPUT ACCEPT sem regras, IPv6 INPUT ACCEPT sem regras; UFW inactive. FORWARD/Docker não bloqueiam portas do host. Não observada regra 3000/3001; proteção do Postgres é distinta |
+| Provedor | Captura DigitalOcean do droplet operacional sem Cloud Firewall associado. IPv6 do droplet não aberto/comprovado. Aviso de backups automáticos ausentes não invalida dumps locais nem prova offsite |
+| PM2/systemd | Unit deploy: enabled/inactive, forking, Restart on-failure; boot resurrect, reload all e kill. Não significa que o daemon/apps estejam parados |
+| Inventário apresentado | 243 units e 19 timers; nenhum outro explicitamente nomeado PM2/Converta, sem inferir ausência por nome. Root sem crontab; spool somente deploy; rc.local inexistente |
+| Cron | Deploy: backup-data duplicado 03:15; media cleanup 03:00; retention 03:30; postgres backup+alert 03:20 e check 04:00. Cron.d persistent backup 02:40; demais entradas de sistema listadas pelo owner |
+
+Portas diretas externas já comprovadas no preflight anterior; INPUT ACCEPT, UFW
+inativo e ausência de Cloud Firewall são coerentes com essa exposição. Não houve
+nova varredura, nem afirmação de que IPv6 público esteja ativo. Frontend direto e
+rewrite /public-api continuam caminhos para a API; RBAC não é fence de manutenção.
+
+### Leituras complementares feitas pelo Codex, sem executar scripts
+
+- Lidos os scripts chamados: backup-data usa flock e remove arquivos antigos após
+  14 dias; postgres backup faz dump/list/checksum, retenção configurável (default
+  14 dias), e o wrapper/check pode enviar e-mail por canonicalMail. Não foi enviado
+  alerta nem executado backup. Locks próprios não coordenam entre rotinas distintas.
+- `/usr/local/sbin/re7-converta-backup`: dump custom + list, rsync dos três conteúdos,
+  manifest/SHA256SUMS e link latest; retenção remove snapshots não selecionados.
+  Não é operação puramente de leitura ou de captura sem descarte. Não inclui
+  automaticamente o novo diretório da guarda. Nada foi executado.
+- Cleanup de mídia remove arquivos; retention executa soft-delete/anonymize e
+  atualiza identidades, OutboundMessage/Event e payloads conforme política. Pode
+  alterar evidência necessária à reconciliação; suspender execuções concorrentes
+  na janela aprovada. Não foi consultado nem alterado dado de tenant.
+- Timezone do servidor lida diretamente: Etc/UTC. Agenda recebida passa a ser
+  interpretada em UTC; horários críticos conhecidos vão de 02:40 a 04:00 UTC,
+  sem afirmar que os jobs terminam nessa faixa.
+- Nginx master/workers observados iniciados em 15/09 07:00:16; mtimes do principal
+  e .bak de Converta são 10/08 19:58:24, anteriores ao start do journal do owner.
+  Outros vhosts e snippets consultados também são anteriores. Correlação temporal
+  compatível; sem imagem da configuração carregada, histórico integral de bytes
+  ou todos os includes externos, igualdade disco/memória continua NÃO comprovada.
+- Units personalizadas e cron.daily consultados não mostraram chamada adicional
+  explícita à API nos trechos lidos. Per-boot cloud scripts vazio; user units de
+  deploy ausentes. Isso não certifica automações externas ou unidades root privadas.
+- **Novo achado material:** há daemon PM2 de root com PM2_HOME `/root/.pm2`, além
+  de deploy. Na fotografia, não havia filhos imediatos desse daemon; seu cgroup
+  pertence a sessão de root. Origem/controle de restart não deduzidos dessa sessão.
+  Dumps principal/backup e user units root negaram leitura. Não iniciar CLI root
+  cegamente (pode criar daemon), não matar esse daemon e não declarar inventário
+  de supervisores completo só porque a unit nomeada era única.
+
+Evidências complementares realmente coletadas nesta tarefa ficam privadamente em
+`local-evidence/recovery/g0-owner-consolidation/`; essa referência NÃO representa
+as saídas/capturas originais fornecidas pelo owner. Nenhum segredo/arquivo privado
+entra no commit. Não repetidos implementação, testes, builds, migration ou drift.
+
+### Bloqueadores restantes versus higiene
+
+Bloqueador técnico novo: operador precisa conferir estado vivo/saved/fallback e
+iniciadores do PM2 root, bem como automações externas capazes de recriar a API.
+Sem isso, cessar a instância deploy não prova que outra não ressuscitará 5ee2de6b.
+Pacote específico no runbook; não repetir nginx -T/firewall/crons já entregues.
+
+Gates operacionais preservados: responsáveis nominados; artefatos/configuração
+privada disponíveis; guarda host único/persistente; backup fresco + restauração
+isolada + chaves/tempo/RPO; inventário de chamadas conhecidas e incertezas; decisão
+A sobre primeira interrupção e impacto; validação de atendimento; decisão B
+separada para abrir campanhas. Chamadas antigas não observáveis continuam como
+incerteza explícita, não como zero. Não presumir needs_review produtivo.
+
+Higiene planejada separadamente: retirar duplicidade do cron backup e mover .bak
+Nginx para fora de sites-enabled após revisão própria. Nenhuma dessas correções
+foi aplicada ou incluída automaticamente no escopo. A duplicidade Nginx não precisa
+ser corrigida para a contenção temporária central proposta, que não depende da
+precedência de vhost; a falta de prova disco/memória permanece registrada.
+
+[Complemento executivo com contenção, reversão e gates](../RUNBOOK_WHATSAPP_AGENT.md#g0-consolidado--complemento-executivo-de-27092026).
+Próxima aprovação concreta somente após lacuna PM2 root e demais gates: autorizar
+contenção temporária da API, suspensão das rotinas concorrentes e parada da versão
+antiga com incerteza apresentada, retornando atendimento pela recovery fechada.
+Isso não libera migration/campanhas automaticamente. 6683 CLOSED; owner UI/CRA
+pendentes; contratos anteriores e materialização DELIVERED/READ separados.

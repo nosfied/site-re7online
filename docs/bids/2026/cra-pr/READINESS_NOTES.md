@@ -1478,3 +1478,24 @@ separadamente; backup fresco/restore e validação de atendimento são gates.
 NOT DEPLOYED / OWNER UI PENDING; primeira transição e CRA pendentes. Sem prova
 retroativa de drain, sem promessa inbound/retry. 6683 CLOSED, histórico owner
 PASS preservado e DELIVERED/READ → HUMAN/WAITING separado. Nenhuma operação mutável.
+
+
+### Consolidação G0 do owner — 27/09/2026
+
+Evidências de Nginx/rede/DigitalOcean/systemd/cron recebidas e atribuídas ao owner,
+sem repetir coleta nem inventar hashes/arquivos das saídas originais. A pendência
+histórica de reenvio dessas saídas está superada. Leituras dirigidas de scripts e
+metadados identificaram rotinas destrutivas de retenção e um PM2 root adicional;
+saved/fallback/user units root ainda precisam de leitura privilegiada específica.
+G0 parcialmente fechado: não presumir inventário completo ou disco=memória Nginx.
+Plano exato de contenção central API, suspensão/restauração de cron, prevenção de
+resurrect e reversão no RUNBOOK_WHATSAPP_AGENT, complemento executivo 27/09;
+matriz observado/proposto/pendente no preflight único. Backup duplicado/.bak Nginx
+são higiene separada, sem correção incidental. Backup fresco+restore isolado,
+responsáveis e decisões A (primeira parada/incerteza) e B (abrir campanhas)
+continuam gates. Recuperação fechada → migration aditiva → candidato fechado →
+validação de atendimento; sem dump sobre produção como rollback automático.
+Candidato a1cc380e/recovery 03f930e5 inalterados; nenhuma suíte/build/migration ou
+implementação repetida. NOT DEPLOYED / OWNER UI PENDING, sem aceite CRA, sem
+quiescência retroativa ou garantia inbound/retries. 6683 CLOSED; contratos prévios,
+HUMAN/WAITING, worker/sessões e DELIVERED/READ separado preservados.
