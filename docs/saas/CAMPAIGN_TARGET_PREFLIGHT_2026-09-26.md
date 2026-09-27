@@ -654,3 +654,140 @@ parada antiga e retorno pela recovery fechada, com impacto/reversão já descrit
 Nenhuma autorização operacional inferida desta leitura; migration e abertura B
 permanecem separadas. NOT DEPLOYED / OWNER UI PENDING; CRA pendente; 6683 CLOSED;
 DELIVERED/READ → HUMAN/WAITING separado; nenhuma quiescência retroativa.
+
+
+## Preparação da noite de 27/09/2026 — decisão A ainda não executada
+
+Referência documental 8d2b0e01. Owner informou plataforma sem uso por ele nesta
+noite (America/Fortaleza), nomeou **Deifson Oliveira** responsável operacional e
+confirmou intervenções somente Deifson/Codex, em execução única sem deploy paralelo.
+Deifson executa comandos com senha na própria sessão; Codex não solicita senha.
+Isso encerra a pendência de nomeação/coordenação, não prova ausência de webhooks,
+trabalho de outros tenants, schedulers ou chamadas em voo. Horário final do owner
+foi solicitado e permanece não informado nesta preparação.
+
+### Estado e ações realmente executadas
+
+Produção reconfirmada em 5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e; tracked limpo,
+apenas dados do worker untracked. API/front/worker mantiveram os mesmos PIDs,
+status online e contadores de restart antes/depois. pm2-deploy continua
+inactive/enabled. Nenhum serviço produtivo parado/iniciado/recarregado, cron/boot/
+firewall alterado, migration executada, provider chamado ou envio realizado.
+Releases novas foram escritas fora do checkout ativo, sem ativação. Não repetido G0.
+
+Antes: disco 42.591 MiB livres, RAM disponível 911 MiB, swap usada 283 MiB;
+após preparação: disco 41.196 MiB livres, RAM disponível 971 MiB, swap usada
+371 MiB, load 0,11/0,11/0,04. São amostras, não medição de pico nem prova de ausência
+de impacto. Restore/builds ficaram na máquina local (cerca de 7,9 GiB RAM disponível
+antes), para não disputar essa carga com a VPS. Nenhuma limpeza/permissão histórica
+corrigida. Diretórios/arquivos novos privados; retenção problemática anterior intacta.
+
+### Backup fresco e restauração comprovada, com limites
+
+Destino persistente privado:
+`/opt/re7online/backups/converta-persistent/preparations/night-20260927T233110Z`.
+Captura 20:31:10–20:31:21 Fortaleza; pg_dump custom: **4,432 s**, 21.738.573 bytes,
+SHA256 `c731aac4d9f93a500b64ab945f950b77c3a7079a1dbb54ec4220cf3d7e41770a`.
+Checksum + catálogo conferidos. Rotina própria sem descarte, com lock do backup,
+sem executar scripts de retenção, sem atualizar latest e sem apagar snapshots.
+Conteúdo 471.470.080 bytes (4,321 s); dados runtime 17.121.280 bytes (0,328 s);
+configuração/chaves/PM2 saved+fallback privados 71.680 bytes. Manifests/hashes no
+destino. Configurações das releases também preservadas em tar privado separado.
+
+Dump copiado com hash idêntico e restaurado em **cluster local PostgreSQL 16 novo,
+sem listener TCP**, socket privado e sem aplicação/integrações durante restore.
+pg_restore --exit-on-error --no-owner --no-privileges: **4,299 s, exit 0**;
+66 tabelas, 10 tenants, 104 campanhas, 13.477 inbound, 12.924 outbound,
+172.617 eventos, zero constraints não validadas. Cliente pg_restore: RSS máximo
+8.152 KiB (não inclui o servidor PostgreSQL). Primeiro startup falhou somente
+pelo path de socket >107 bytes; corrigido para path privado curto, sem reset/dados
+apagados. Cluster local desligado ao fim; cópia preservada, nunca restore produtivo.
+Conteúdo/runtime/config também copiados, hashes conferidos e extraídos isoladamente:
+715/395/4 arquivos; transferência+extração 47,469/4,139/2,431 s respectivamente.
+Não é backup offsite automatizado/gerenciado; há cópia local privada nesta estação.
+
+**Chaves:** 85/85 ciphertexts de seed de campanha decriptados no restore; 9/10
+segredos de canal. O restante é telegramBotToken, registro configured e conta
+connected, com IV de 4 bytes/tag de 9 bytes, incompatível com a estrutura emitida
+pelo código (12/16). A chave efetiva preparada coincide com .env copiado; saved
+PM2 não contém outra chave. Não presumir que rotação de chave corrigiria o formato.
+Nenhum segredo/destinatário foi exposto e nenhum provider foi consultado.
+MFA/webhook: chaves presentes, zero ciphertexts no dump; não alegar decriptação
+exercitada nesses domínios. A limitação Telegram já está na cópia do banco anterior
+à troca; não foi criada por migration/recovery e não foi corrigida incidentalmente.
+Owner precisa dar destino explícito a essa limitação antes de afirmar atendimento
+integral: esclarecer/restaurar segredo em tarefa autorizada separada, ou aceitar
+essa restrição de canal de forma explícita. Não mascarar como recuperação total.
+
+Filesystem capturado vivo não é atômico com DB e sessão Web ativa não teve restore
+funcional validado; worker/sessões originais seguem preservados in-place. Writes
+posteriores ao dump continuam possíveis: RPO não é zero e novo ponto de preservação
+será necessário antes de migration, em decisão separada. Não usar dump como rollback
+normal, pois perderia inbound/aceites/escritas posteriores.
+
+### Releases e tempo de recuperação medido
+
+Preparadas em `/opt/re7online/releases/<SHA>`:
+- candidato a1cc380eddcd1467b8e0d3a8e405f82689a25b3d;
+- recuperação 03f930e5453efd313a91a16de3e22057a0573d9c.
+
+Fontes por git archive do SHA exato, dependências próprias, Prisma Client gerado
+somente na área nova e compilação de empacotamento (77,235/52,063 s locais); sem
+suítes repetidas e sem migration. Client anterior apresentava formatação/ordem de
+atributos; artefato novo gerado do schema fixo. Um pacote inicial de recovery tinha
+links externos de dependências: marcado **não utilizável**, preservado; substituído
+por recovery-standalone.tar.gz, com materialização adicional de 40,481 s. Release
+instalada não contém esses links; .data foi vinculada intencionalmente ao storage
+persistente original APÓS validação das dependências.
+
+Hashes dos arquivos de release conferidos no alvo (7.913/7.895), extração+verificação
+9,669/9,209 s. Sintaxe e construção de PrismaClient sem conectar no Node 20.20.0
+produtivo passaram. private prepared.ecosystem.cjs em cada release preserva env
+efetivo/configuração/chaves, cwd/script exatos, paths absolutos de conteúdo e .data
+existente, host único e guard compartilhado. Ambos com scheduler de campanhas
+inibido na configuração preparada. Recovery permanentemente fechada em código.
+Candidato não é ativado em A; sua configuração final de scheduler exige fase própria.
+Guarda `/var/lib/re7/campaign-operations/state.json` **ainda não provisionada**.
+
+Medição local da recovery exata: **0,829 s até bootstrap DB read + health 200**, em
+namespace de rede novo com somente loopback, role somente leitura sobre restore,
+sem segredos produtivos, fallback de tenants desligado e schedulers campaign/chatbot
+desativados. Node local 22.13.0, diferente do alvo: não é medição de startup real da
+VPS nem validação de Inbox/CRM/webhooks/provider. Ao encerrar o probe, SIGTERM não
+terminou em 10 s; somente esse processo isolado foi finalizado forçadamente.
+Não atribuir drain à parada PM2 nem tratar limite técnico local como SLA de retorno.
+
+### Campanhas, sinais e decisão
+
+Às 20:39:06: 104 campanhas (85 completed/12 cancelled/5 failed/2 draft), zero
+scheduled vencidas/futuras. 61 submit_started e 61 provider_accepted, todos com
+OutboundMessage correlacionado por tenant+messageId; 16 test-send requests, todos
+com resultado (10 sent/6 failed). Nenhum evento de reconciliation_required nas
+consultas. Tail limitado dos logs: quatro erros históricos do scheduler em 18/09
+e seis falhas de template em 21/09; sem transformar leitura parcial em prova de
+quiescência. Chamadas antigas sem registro continuam com **quantidade desconhecida**.
+Não reenviar, reconciliar ou classificar incerteza como rejeição.
+
+Comandos privados preparados, **não aplicados**, no destino de preparação:
+DECISION_A_COMMANDS.md, api-fence.nft, originais e versões propostas de crontab
+(6 entradas deploy + 1 cron.d). nft --check privilegiado e inexistência da tabela
+proposta ainda precisam da leitura de Deifson; comandos enviados sem pedir senha.
+Permanece necessário acesso superadmin privado para conferir guard no retorno;
+OPS_CURL não foi criado/autenticado nesta etapa.
+
+**Janela recomendada, condicional:** não iniciar A enquanto faltarem check nft,
+disposição da limitação Telegram e horário final confirmado. Como limite de
+planejamento desta noite, propor início **até 23:00 Fortaleza**, escalonamento
+imediato se retorno/validação não fechar em **20 minutos**, e replanejar se isso
+invadir o horário final do owner. Esses 20 minutos são reserva operacional proposta
+para etapas manuais/validação, NÃO duração comprovada de recuperação nem autorização
+ou disponibilidade presumida. Primeiro cron concorrente conhecido 23:40 (02:40 UTC);
+não deixar a execução avançar até ele sem controle explícito dos holds. Medidas de
+restore/bootstrap não garantem retorno se houver falha de configuração/atendimento;
+nesse caso campanhas ficam fechadas e pode persistir indisponibilidade, sem retorno
+automático ao runner antigo. Owner precisa aceitar essa contingência em A.
+
+Próxima decisão concreta, após gates: autorizar somente contenção → parada antiga →
+retorno pela recovery fechada, com intervalo finito e limitação Telegram explícita.
+Migration e abertura de campanhas continuam decisões separadas. NOT DEPLOYED /
+OWNER UI PENDING; CRA pendente; 6683 CLOSED; materialização DELIVERED/READ separada.

@@ -2898,3 +2898,26 @@ RPO/indisponibilidade e decisão A sobre chamadas incertas continuam independent
 Depois desses gates, decidir contenção/parada antiga/retorno recovery fechada;
 migration e abertura B separadas. NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED;
 CRA pendente, DELIVERED/READ separado e worker/sessões preservados.
+
+
+### Preparação operacional da noite 27/09 — decisão A pendente
+
+Owner nomeou Deifson Oliveira e confirmou execução única Deifson/Codex; coleta G0
+não repetida. Produção 5ee2de6b e processos preservados. Backup novo sem retenção,
+dump 21.738.573 bytes/checksum, restore PostgreSQL isolado PASS em 4,299 s;
+conteúdos/config também extraídos e conferidos. 85/85 seeds decriptados; 9/10
+segredos de canal: Telegram restante tem ciphertext malformado (IV/tag 4/9 bytes),
+sem correção incidental ou provider. Não declarar recuperação integral do canal.
+Releases exatas a1cc380e/03f930e5 independentes e verificadas, env privado/storage
+preservados, inativas; guard ainda não provisionado. Compilação de empacotamento,
+sem repetir suítes. Recovery local sem rede externa e role read-only: bootstrap/
+health 0,829 s; não comprova retorno produtivo; SIGTERM do probe não encerrou em
+10 s e somente o processo local foi finalizado. Runtime produtivo não alterado.
+104 campanhas, zero scheduled; 61 intents/61 aceites correlacionados; 16 test-sends
+com resultado. Chamadas sem registro continuam desconhecidas; não reenviar.
+Preflight centraliza caminhos/hashes/recursos/limites, runbook comandos revisados.
+Pendências para A: check nft por Deifson, disposição Telegram, fim de janela e
+contingência confirmados, acesso superadmin privado para validação. Proposta até
+23:00 + reserva operacional de 20 min, condicionada ao owner, não SLA. Nenhuma
+parada/firewall/cron/boot/migration/deploy executados. Migration/abertura separadas;
+NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED; CRA e materialização separados.

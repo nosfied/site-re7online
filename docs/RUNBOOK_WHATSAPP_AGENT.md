@@ -1870,3 +1870,85 @@ API HTTP pode ficar indisponível e inbound/retries não têm garantia comprovad
 Migration e abertura B não são autorizadas por esta consolidação. Sem testes/builds
 ou mudança operacional; NOT DEPLOYED / OWNER UI PENDING, 6683 CLOSED e materialização
 separada. Coleta técnica encerrada não equivale a janela aprovada ou quiescência.
+
+
+## Preparação executada em 27/09 à noite — comandos de A continuam futuros
+
+[Evidência única, medidas e limitações](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#preparação-da-noite-de-27092026--decisão-a-ainda-não-executada).
+Responsável Deifson Oliveira; somente Deifson/Codex, sem execução paralela. Não
+pedir senha. Backup/restore isolado realizados; processos produtivos preservados.
+Roteiro completo revisado permanece privado no destino persistente abaixo como
+`DECISION_A_COMMANDS.md`; nenhum comando mutável do roteiro foi executado.
+
+```bash
+PREP=/opt/re7online/backups/converta-persistent/preparations/night-20260927T233110Z
+RECOVERY=/opt/re7online/releases/03f930e5453efd313a91a16de3e22057a0573d9c
+PM2=/home/deploy/.npm-global/bin/pm2
+# Única leitura privilegiada pendente, na sessão de Deifson:
+sudo nft --check --file "$PREP/api-fence.nft"
+sudo nft list tables
+```
+
+Abortar se check falhar ou tabela inet re7_campaign_transition já existir; não
+substituir tabela alheia. Sem guarda provisionada ou autenticação superadmin já
+conferida; preparar estes gates antes de levantar a contenção. Roteiro antigo de
+PM2 deve usar a **configuração privada preparada** abaixo (cwd/paths/ambiente exatos),
+não depender apenas de exports ou do ecosystem genérico versionado.
+
+**Somente APÓS decisão A explícita, estado/horários reconfirmados:** comparar crons
+atuais com cópias before, impedir execuções concorrentes já ativas (adiar, não matar
+por timeout), suspender só as entradas propostas e boot known inactive/enabled:
+
+```bash
+crontab -l | cmp - "$PREP/deploy.crontab.before"
+cmp /etc/cron.d/re7-converta-backup "$PREP/re7-converta-backup.before"
+systemctl show pm2-deploy.service --property=ActiveState,UnitFileState
+# Se divergir de inactive/enabled: parar o procedimento, não a unit global.
+crontab "$PREP/deploy.crontab.window"
+sudo install -o root -g root -m 0644 "$PREP/re7-converta-backup.window" /etc/cron.d/re7-converta-backup
+sudo systemctl disable pm2-deploy.service
+sudo nft --file "$PREP/api-fence.nft"
+sudo nft list table inet re7_campaign_transition
+```
+
+Verificar bloqueio API direto/loopback/aliases/frontend; health também bloqueado.
+Preservar saved/fallback atuais privadamente, retirar SOMENTE re7-whatsapp-agent,
+salvar/inspecionar estado sem API antiga e substituir fallback somente após cópia
+original preservada. Conferir fim de PID/filhos/listeners e ausência de respawn;
+worker/frontend devem manter estado/PIDs. Aplicar exatamente os passos detalhados
+de 5b391ecb, sem pm2 kill/reload all ou parada global. PM2 pode forçar encerramento;
+nenhuma garantia de drain do código antigo. Provisionar guard novo com O_EXCL e
+fsync conforme bloco PYGUARD anterior; abortar se houver estado/lock/.uncertain
+pré-existente, sem apagar ou sobrescrever. Compartilhar mesmo path/host entre versões.
+
+```bash
+# Após os gates de parada/guard/paths; não executar nesta preparação:
+"$PM2" start "$RECOVERY/prepared.ecosystem.cjs" --only re7-whatsapp-agent
+# Conferir cwd/script/build, processos antigos ausentes e guard fechado offline.
+sudo nft delete table inet re7_campaign_transition
+curl --fail --max-time 5 --silent --show-error http://127.0.0.1:3001/health
+```
+
+Validar atendimento com Deifson e diagnóstico backend superadmin por credencial
+privada existente; não expor token. Health não basta e guard novo não oferece
+quiescência retroativa. Não declarar Telegram recuperado: ciphertext malformado no
+backup requer disposição explícita do owner. Sem provider/envio real nesta etapa.
+Após validação, salvar PM2, inspecionar saved seguro, preservar/corrigir fallback,
+reabilitar somente boot originalmente enabled SEM start/reload e restaurar crons
+originais após comparar com held files. Sem disparar jobs de catch-up. Não apagar
+duplicidade histórica ou .bak Nginx incidentalmente.
+
+**Reversão:** antes da parada, retirada da contenção devolveria runner antigo e
+exige decisão explícita de abortar pelo owner. Depois da parada, não restaurar dump
+PM2 antigo/5ee2de6b: manter recovery fechada ou API contida/parada para diagnóstico.
+Reaplicar só a tabela temporária própria revisada se o atendimento falhar após
+retirada; nunca flush ruleset. Não existe garantia medida de alternativa que devolva
+atendimento se recovery falhar; não prometer limite de indisponibilidade nesse caso.
+Não restaurar dump DB sobre produção como rollback normal.
+
+**Tempo:** restore DB 4,299 s; probe local bootstrap+health 0,829 s, não atendimento
+produtivo. Proposta de planejamento: iniciar até 23:00, reservar 20 min para executar
+etapas humanas/validar ou escalar, antes do primeiro cron 23:40. Reserva não é SLA
+nem disponibilidade presumida; horário final owner ainda precisa ser confirmado.
+Sem check nft, disposição Telegram ou fim de janela confirmado, não iniciar A.
+Migration e abertura B separadas. NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED.
