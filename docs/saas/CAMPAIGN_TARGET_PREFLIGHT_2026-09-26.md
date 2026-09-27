@@ -543,3 +543,56 @@ contenção temporária da API, suspensão das rotinas concorrentes e parada da 
 antiga com incerteza apresentada, retornando atendimento pela recovery fechada.
 Isso não libera migration/campanhas automaticamente. 6683 CLOSED; owner UI/CRA
 pendentes; contratos anteriores e materialização DELIVERED/READ separados.
+
+
+## Complemento PM2 root — leitura owner de 27/09/2026
+
+Complementa 5b391ecb, preservando seu histórico. Fonte **owner**, em sessão
+`deploy@re7online-api-01`, executando exatamente o Python do runbook: `dump.pm2
+absent`, `dump.pm2.bak absent`, `root_user_units []`. Origens declaradas:
+`/root/.pm2/dump.pm2`, `/root/.pm2/dump.pm2.bak` e
+`/root/.config/systemd/user`. Não são saídas executadas pelo Codex; não lhes
+atribuímos arquivo original ou checksum. Não solicitar novamente essa leitura
+nem o pacote G0. Encerra a pendência de leitura desses dois dumps e desse diretório
+na fotografia do owner; não atesta ausência de daemon, apps vivas, outros caminhos
+PM2_HOME, units carregadas/transientes ou iniciadores.
+
+Leitura complementar Codex, sem sudo/CLI PM2/mutação: o mesmo PID observado segue
+com PPID 1 e cgroup de sessão root. Systemd descreve `session-54095.scope` como
+`active/abandoned`, `Transient=yes`, em `user-0.slice`. Isso caracteriza um processo
+remanescente da sessão; não revela usuário humano/comando histórico, nem cria uma
+política de restart do PM2. A consulta loginctl não retornou propriedades úteis;
+não foi convertida em prova de ausência. A fotografia anterior sem filhos imediatos
+continua temporal, não é certificação de inventário vivo atual.
+
+`user@0.service` está `active/running`, com `Restart=no`; é o gerenciador de user
+units, não uma unit comprovada de PM2 root. Referências literais a PM2/API nos
+arquivos acessíveis de `/etc/systemd/system`, `/run/systemd/system`,
+`/etc/systemd/user` e `/usr/lib/systemd/user` apontaram somente para
+`pm2-deploy.service` e seu link de enablement. Reutilizadas as leituras anteriores
+de cron, units personalizadas e per-boot: nenhum iniciador automático root PM2
+foi identificado nesse escopo. Busca literal não exclui wrappers indiretos ou
+arquivos inacessíveis. Não repetir o inventário G0.
+
+**Distinção:** origem histórica exata desconhecida; nenhum mecanismo automático
+atual de restart do PM2 root foi comprovado. O mecanismo efetivamente comprovado
+é o resurrect/restart de PM2 **deploy**, já tratado no plano. Root ainda pode
+criar apps manualmente/por automação; ausência de dumps não impede `pm2 start`.
+Não declarar que existe um supervisor root reiniciando a API sem evidência.
+
+**Controle de supervisores ainda não integralmente comprovado:** falta a projeção
+das units carregadas/habilitadas do gerenciador root ativo, inclusive transientes,
+e identificar com o responsável automações externas/acessos de manutenção capazes
+de invocar PM2 como root durante a janela. O runbook contém um único bloco mínimo
+para a primeira lacuna; não lê env, argumentos de comandos, chaves ou histórico.
+Origem histórica desconhecida, isoladamente, não é bloqueador: fechar o gate pelo
+controle atual, não por uma investigação forense indefinida. Se nenhuma unit
+iniciadora for encontrada e os responsáveis controlarem os outros iniciadores,
+registrar esse escopo e rever a árvore imediatamente antes da parada autorizada.
+
+Próxima ação: operador executa apenas a projeção residual e nomeia o responsável
+pelo bloqueio de novas intervenções/automações; Codex relaciona eventuais entradas
+aos controles específicos do plano. Backup fresco/restauração isolada, responsáveis
+da transição e decisão owner sobre chamadas incertas são requisitos independentes,
+ainda não satisfeitos por esta leitura. Sem operação, testes/builds ou mudança
+funcional. NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED; materialização separada.

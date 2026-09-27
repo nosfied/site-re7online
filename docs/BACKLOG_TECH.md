@@ -2865,3 +2865,19 @@ Candidato a1cc380e/recovery 03f930e5 inalterados; nenhuma suíte/build/migration
 implementação repetida. NOT DEPLOYED / OWNER UI PENDING, sem aceite CRA, sem
 quiescência retroativa ou garantia inbound/retries. 6683 CLOSED; contratos prévios,
 HUMAN/WAITING, worker/sessões e DELIVERED/READ separado preservados.
+
+
+### Complemento dirigido PM2 root — 27/09/2026
+
+Owner encerrou leitura de dump.pm2/dump.pm2.bak (ausentes) e user units root ([]).
+Não repetir pedido nem interpretar como inexistência de daemon/apps/iniciadores.
+Leitura dirigida confirma daemon em scope de sessão active/abandoned, PPID 1;
+origem histórica desconhecida, sem mecanismo automático root PM2 comprovado.
+Manager user@0 ativo: pendência exata é projeção das units carregadas/habilitadas
+(inclusive transientes), com bloco único sanitizado no runbook, e responsável por
+intervenções/automações externas. Resurrect deploy continua mecanismo comprovado.
+Controle atual demonstrado pode encerrar gate sem recuperar origem histórica.
+Preflight é fonte da evidência; plano/impacto/reversão anteriores preservados.
+Backup/restore, responsáveis e decisão sobre chamadas incertas seguem separados.
+Somente documentação; candidato/recovery inalterados; NOT DEPLOYED / OWNER UI
+PENDING; 6683 CLOSED; divergência de materialização separada.

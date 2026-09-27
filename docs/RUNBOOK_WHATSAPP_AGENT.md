@@ -1541,6 +1541,9 @@ Candidato a1cc380e, recovery 03f930e5. NOT DEPLOYED / OWNER UI PENDING.
 
 ### Lacuna dirigida que ainda impede autorizar a primeira parada
 
+> Histórico de 5b391ecb: a leitura PYROOT abaixo já foi fornecida pelo owner.
+> Não repetir. O complemento PM2 root ao final delimita somente a lacuna residual.
+
 Um PM2 root foi observado, separado de deploy; sem filhos imediatos naquele
 instante, mas dumps/fallback e user units não legíveis por deploy. O operador deve
 fornecer somente projeção sanitizada desse estado e identificar quem/o que pode
@@ -1763,3 +1766,77 @@ Todos os contratos permanecem: multi-tenant/RBAC, opt-out/revoke legítimos, ali
 12/13, delivery truth, zero-eligible, preservação de aceites, pause/cancel sem nova
 tentativa após chamada em voo, HUMAN/WAITING e worker/sessões. 6683 CLOSED;
 DELIVERED/READ separado. NOT DEPLOYED / OWNER UI PENDING, sem aceite CRA.
+
+
+## Complemento PM2 root — gate residual de 27/09/2026
+
+O owner confirmou os dois dumps ausentes e `root_user_units []` pelo Python acima.
+Essa solicitação está encerrada. Ver atribuição, leituras próprias e limites no
+[preflight](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#complemento-pm2-root--leitura-owner-de-27092026).
+Scope `active/abandoned` + PPID 1 não prova origem histórica nem restart; nenhum
+reiniciador automático root PM2 foi encontrado nas leituras acessíveis. O manager
+`user@0.service` ativo justifica apenas a leitura residual abaixo. Não executar
+CLI PM2 root, nem reiniciar manager/bus para obter evidência.
+
+**Único bloco adicional proposto ao operador (somente leitura):** finalidade é
+listar units carregadas/habilitadas do manager root, inclusive transientes, e
+mostrar metadados de origem sem argumentos/env. A consulta usa o bus já existente;
+se indisponível, registrar falha, não iniciar serviços. Não reler dumps/user dir,
+Nginx/firewall/cron. Saída sem credenciais; caminhos ficam sujeitos à revisão do
+operador antes de compartilhar.
+
+```bash
+sudo python3 - <<'PYROOTLIVE'
+import os, subprocess, json
+from pathlib import Path
+bus = Path('/run/user/0/bus')
+if not bus.exists():
+    print('root_user_bus absent; no service started'); raise SystemExit(0)
+env = dict(os.environ, XDG_RUNTIME_DIR='/run/user/0',
+           DBUS_SESSION_BUS_ADDRESS='unix:path=/run/user/0/bus')
+def query(*args):
+    p = subprocess.run(['systemctl', '--user', *args], env=env,
+                       capture_output=True, text=True, timeout=15)
+    if p.returncode:
+        print(json.dumps({'query': args[0], 'rc': p.returncode}))
+        return ''  # no raw stderr/command/env
+    return p.stdout
+units = query('list-units', '--all', '--plain', '--no-legend', '--no-pager',
+              '--type=service,timer,path,socket')
+for line in units.splitlines():
+    fields = line.split()
+    if not fields: continue
+    name = fields[0]
+    print(json.dumps({'unit': name, 'state': fields[1:4]}))
+    # Explicit allowlist excludes ExecStart/Environment and their secrets.
+    print(query('show', name,
+          '--property=FragmentPath,DropInPaths,Transient,Restart,Triggers,TriggeredBy'))
+print(query('list-unit-files', '--no-legend', '--no-pager',
+            '--type=service,timer,path,socket'))
+PYROOTLIVE
+```
+
+Operador interpreta somente eventuais units iniciadoras: conferir localmente o
+arquivo/wrapper indicado e devolver finalidade, identidade e controle necessário,
+sem copiar comandos com segredos. Uma unit genérica pode chamar wrapper indireto;
+a lista sem o vínculo não basta para aprovar. Nenhuma unit encontrada significa
+apenas ausência nesse manager consultado; não controla SSH/manual/CI externo.
+Responsável pela VPS deve identificar e congelar, **somente na janela aprovada**,
+intervenções/deploy hooks externos capazes de criar apps como root ou deploy.
+Nenhum mecanismo externo específico foi comprovado nesta investigação.
+
+Critério de encerramento do gate: units iniciadoras eventualmente encontradas
+mapeadas e com contenção aprovada; responsáveis por intervenções externas nomeados;
+árvore/processos/portas conferidos antes da parada para detectar nova instância;
+saved/boot deploy tratado conforme plano, sem matar worker ou daemon global.
+Origem histórica não recuperável pode permanecer documentada se o controle atual
+for demonstrado. Não condicionar o gate a recuperar shell history ou a provar
+impossibilidade absoluta de um administrador executar comandos.
+
+Próxima ação concreta ainda é essa leitura residual e atribuição de controle.
+Depois, preparar aprovação A de contenção/parada/retorno pela recovery fechada.
+Backup fresco + restore isolado, nomes do operador/DBA e decisão sobre chamadas
+incertas continuam gates separados. A evidência de PM2 não prova quiescência, não
+libera migration nem abertura de campanhas. Plano de impacto/reversão de 5b391ecb
+inalterado; nenhuma parada/alteração de infraestrutura executada.
+NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED; DELIVERED/READ separado.
