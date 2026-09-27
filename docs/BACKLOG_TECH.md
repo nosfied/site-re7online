@@ -2869,6 +2869,8 @@ HUMAN/WAITING, worker/sessões e DELIVERED/READ separado preservados.
 
 ### Complemento dirigido PM2 root — 27/09/2026
 
+> Histórico: projeção recebida posteriormente; pendência de coleta encerrada abaixo.
+
 Owner encerrou leitura de dump.pm2/dump.pm2.bak (ausentes) e user units root ([]).
 Não repetir pedido nem interpretar como inexistência de daemon/apps/iniciadores.
 Leitura dirigida confirma daemon em scope de sessão active/abandoned, PPID 1;
@@ -2881,3 +2883,18 @@ Preflight é fonte da evidência; plano/impacto/reversão anteriores preservados
 Backup/restore, responsáveis e decisão sobre chamadas incertas seguem separados.
 Somente documentação; candidato/recovery inalterados; NOT DEPLOYED / OWNER UI
 PENDING; 6683 CLOSED; divergência de materialização separada.
+
+
+### Root user manager — projeção encerrada, decisão operacional pendente
+
+Owner forneceu PYROOTLIVE sem erros em 27/09/2026. Não repetir leitura/dumps/G0.
+Preflight registra estados, origem e limites; runbook encerra a coleta dirigida.
+Sem iniciador automático root PM2 comprovado, sem inferência de inexistência de
+indiretos pelo nome e sem investigação indefinida da origem histórica. Nenhuma
+leitura de produção, teste/build ou implementação nesta consolidação.
+Pendência material passa a ser confirmação owner de responsáveis/controles sobre
+intervenções e automações externas. Backup fresco/restore isolado, operador/DBA,
+RPO/indisponibilidade e decisão A sobre chamadas incertas continuam independentes.
+Depois desses gates, decidir contenção/parada antiga/retorno recovery fechada;
+migration e abertura B separadas. NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED;
+CRA pendente, DELIVERED/READ separado e worker/sessões preservados.

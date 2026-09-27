@@ -547,6 +547,9 @@ pendentes; contratos anteriores e materialização DELIVERED/READ separados.
 
 ## Complemento PM2 root — leitura owner de 27/09/2026
 
+> Histórico de 082a8946: a projeção PYROOTLIVE foi recebida e encerrada no
+> complemento seguinte. Não repetir a solicitação residual registrada abaixo.
+
 Complementa 5b391ecb, preservando seu histórico. Fonte **owner**, em sessão
 `deploy@re7online-api-01`, executando exatamente o Python do runbook: `dump.pm2
 absent`, `dump.pm2.bak absent`, `root_user_units []`. Origens declaradas:
@@ -596,3 +599,58 @@ aos controles específicos do plano. Backup fresco/restauração isolada, respon
 da transição e decisão owner sobre chamadas incertas são requisitos independentes,
 ainda não satisfeitos por esta leitura. Sem operação, testes/builds ou mudança
 funcional. NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED; materialização separada.
+
+
+## Root user manager — projeção recebida e coleta encerrada
+
+Fonte: leitura manual do **owner em 27/09/2026**, bloco PYROOTLIVE de 082a8946,
+reportado sem erros. Não executada pelo Codex; não inventados arquivo original ou
+hash dessa saída. Pendência de obter a projeção **ENCERRADA**, sem solicitar
+repetição de PYROOTLIVE, dumps ou pacote G0.
+
+| Evidência fornecida | Resultado |
+| --- | --- |
+| Serviços carregados | dbus, dirmngr, gpg-agent, keyboxd, launchpadlib-cache-clean, pk-debconf-helper e snapd.session-agent: inactive/dead; systemd-remount-fs: not-found/inactive/dead |
+| Sockets carregados | dbus, dirmngr, gpg-agent-browser/extra/ssh, gpg-agent, keyboxd, pk-debconf-helper e snapd.session-agent: active/listening |
+| Timer carregado | launchpadlib-cache-clean.timer: active/waiting |
+| Metadados carregados | Transient=no e DropInPaths vazio em todas as units exibidas; serviços Restart=no; FragmentPath /usr/lib/systemd/user/<unit>, exceto not-found |
+| Unit files enabled | session-migration.service; dirmngr.socket; gpg-agent-browser/extra/ssh e gpg-agent.socket; keyboxd.socket; pk-debconf-helper.socket; launchpadlib-cache-clean.timer |
+| Generated | autostarts app-at\x2dspi\x2ddbus\x2dbus@autostart, app-snap\x2duserd\x2dautostart e app-xdg\x2duser\x2ddirs@autostart (services) |
+| Disabled | systemd-tmpfiles-setup.service, snapd.session-agent.socket, systemd-tmpfiles-clean.timer |
+| Static | services at-spi-dbus-bus, dbus, dconf, dirmngr, gpg-agent, keyboxd, launchpadlib-cache-clean, pk-debconf-helper, snapd.session-agent, ssh-agent, systemd-exit, systemd-tmpfiles-clean; dbus.socket |
+
+Não houve unit explicitamente PM2/Converta na projeção. Essa observação **não**
+exclui iniciadores indiretos pelo nome. Correlacionada às leituras anteriores dos
+arquivos acessíveis de systemd/cron/per-boot, sem referência root PM2 encontrada,
+a projeção não fornece indício material novo que justifique abrir outra rodada
+de leitura de conteúdo. Não foram acessados produção, serviços ou CLI PM2 nesta
+consolidação. Units enabled/generated não foram confundidas com serviços ativos;
+sockets ativos podem ativar serviços, e Restart=no não exclui outras ativações.
+
+O daemon root observado permanece evidência histórica distinta: PPID 1 em scope
+de sessão active/abandoned. O scope de sessão era transiente; as user units agora
+reportadas não são transientes — não há contradição entre objetos diferentes.
+Dumps ausentes, user dir vazio e ausência de filhos na fotografia anterior não
+provam ausência de daemon/aplicações atuais. Nenhum mecanismo automático root PM2
+foi comprovado; o resurrect/restart deploy continua mecanismo conhecido a controlar.
+Origem histórica desconhecida não sustenta investigação indefinida: **coleta dirigida
+PM2 root encerrada no escopo disponível**, sem certificar ausência universal de
+iniciadores nem declarar controle operacional já implantado.
+
+**Pendências materiais:** owner ainda não confirmou responsáveis e controles de
+intervenções manuais/automações externas capazes de criar API/PM2 como root ou
+deploy. Nomear quem controla acessos/deploy hooks e quem executa/verifica o plano
+na janela; se uma automação concreta for declarada, mapear seu controle específico.
+Não pedir prova abstrata de inexistência de todos os iniciadores possíveis.
+Backup fresco + restauração isolada, operador/DBA nominados, RPO/limite de
+indisponibilidade e decisão sobre chamadas antigas conhecidas/incertas continuam
+requisitos independentes. A verificação de árvore/portas e saved/boot antes da
+parada é controle temporal de execução, não repetição da auditoria G0.
+
+**Próxima decisão concreta:** owner nomeia os responsáveis e confirma o controle
+de intervenções/automações durante a janela. Com backup/restore e incertezas
+apresentados, decidir A: contenção API, suspensão das rotinas selecionadas,
+parada antiga e retorno pela recovery fechada, com impacto/reversão já descritos.
+Nenhuma autorização operacional inferida desta leitura; migration e abertura B
+permanecem separadas. NOT DEPLOYED / OWNER UI PENDING; CRA pendente; 6683 CLOSED;
+DELIVERED/READ → HUMAN/WAITING separado; nenhuma quiescência retroativa.

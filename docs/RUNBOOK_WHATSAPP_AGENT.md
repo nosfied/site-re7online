@@ -1770,6 +1770,9 @@ DELIVERED/READ separado. NOT DEPLOYED / OWNER UI PENDING, sem aceite CRA.
 
 ## Complemento PM2 root — gate residual de 27/09/2026
 
+> Histórico de 082a8946: PYROOTLIVE já executado pelo owner e recebido sem erros.
+> Bloco preservado como registro, não como nova tarefa. Prevalece o encerramento abaixo.
+
 O owner confirmou os dois dumps ausentes e `root_user_units []` pelo Python acima.
 Essa solicitação está encerrada. Ver atribuição, leituras próprias e limites no
 [preflight](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#complemento-pm2-root--leitura-owner-de-27092026).
@@ -1840,3 +1843,30 @@ incertas continuam gates separados. A evidência de PM2 não prova quiescência,
 libera migration nem abertura de campanhas. Plano de impacto/reversão de 5b391ecb
 inalterado; nenhuma parada/alteração de infraestrutura executada.
 NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED; DELIVERED/READ separado.
+
+
+## Root user manager — encerramento da coleta dirigida
+
+Projeção PYROOTLIVE recebida do owner em 27/09/2026 sem erros; obtenção da leitura
+**encerrada**. [Evidência e limites consolidados no preflight](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#root-user-manager--projeção-recebida-e-coleta-encerrada).
+Não repetir bloco, dumps ou G0. Units carregadas sem transientes/drop-ins, serviços
+Restart=no, sockets e timer de sessão ativos; nenhum iniciador root PM2 comprovado.
+Não concluir ausência de indiretos por nomes. Não há indício material novo para
+leitura adicional de conteúdo; não abrir investigação histórica indefinida.
+
+O controle de execução da janela ainda exige **confirmação do owner sobre quem
+responde por intervenções/automações externas**, não mais uma projeção root manager.
+Nomear responsável pelos acessos/deploy hooks e indicar como evitar novas criações
+root/deploy durante a janela autorizada. Se existir iniciador concreto, incorporar
+somente sua contenção e reversão ao plano. Não alterar agora serviços/permissões.
+Preservar prevenção de resurrect deploy e conferência temporal árvore/portas antes
+da parada; não matar PM2 global/worker nem tratar fotografia antiga como estado vivo.
+
+Próxima decisão: atribuir esses responsáveis/controles. Preparar, separadamente,
+backup fresco/restore isolado com DBA, RPO e limite de indisponibilidade; apresentar
+chamadas conhecidas/incertas. Só então owner decide A (contenção/parada antiga e
+retorno recovery fechada). O procedimento/impacto/reversão de 5b391ecb permanece;
+API HTTP pode ficar indisponível e inbound/retries não têm garantia comprovada.
+Migration e abertura B não são autorizadas por esta consolidação. Sem testes/builds
+ou mudança operacional; NOT DEPLOYED / OWNER UI PENDING, 6683 CLOSED e materialização
+separada. Coleta técnica encerrada não equivale a janela aprovada ou quiescência.
