@@ -910,3 +910,106 @@ Telegram permanece não validado, separado. Nenhum aceite CRA ou owner UI do can
 **Etapa A concluída; recovery ATIVA. Candidato a1cc380e NOT DEPLOYED / OWNER UI
 PENDING. Migration NÃO executada.** 6683 CLOSED; DELIVERED/READ → HUMAN/WAITING
 continua separado; sem reabertura de desenho, testes/suítes ou implementação.
+
+
+## Migration aditiva aplicada com recovery fechada — 27/09/2026
+
+Complemento ao fechamento **87335585**, sob autorização explícita do owner para
+backup novo, somente `20260925143000_add_campaign_execution_queue` e preparação
+inativa da configuração candidata. Este registro atualiza o estado; os registros
+anteriores de migration pendente/configuração inválida permanecem como histórico.
+
+### Backup e gates efetivamente conferidos
+
+Antes do DDL: recovery 03f930e5 PID 1478445/zero restarts, guarda fechada, frontend e
+worker com os mesmos PIDs; saved/fallback idênticos e seguros, boot inactive/enabled,
+crons originais. Manifest recovery 7.895 e candidato 7.913 arquivos conferidos; SQL
+idêntico ao commit a1cc380e. Espaço antes 43.206.623.232 bytes, depois 42.691.031.040.
+Nenhuma rotina concorrente, transação longa ou lock esperando. Três advisory locks
+de aquisição de sessão existentes, idle/sem transação, não conflitam com a chave
+Prisma; preservados, sem encerramento de sessões alheias.
+
+Backup persistente novo:
+`/opt/re7online/backups/converta-persistent/preparations/migration-20260928T005604Z/`.
+Captura 21:56:04–21:56:15 America/Fortaleza; pg_dump custom 5,005 s, catálogo
+`pg_restore --list` e SHA256SUMS verificados. `database.dump`: **21.742.438 bytes**,
+SHA256 `2b4a0a1d325914b5251be25c7dc18194e92ff3e1506439e6b571766ce4d5c847`.
+Inclui content.tar, runtime-data.tar, private-config.tar (guarda/auxiliares presentes,
+configuração recovery corrigida, .envs, saved/fallback, cron.d e configuração candidata
+nova), crontab deploy e unit PM2. Guarda estável/fechada durante cópia. Diretório
+privado, sem descarte, sem atualizar latest, sem executar rotinas de retenção.
+
+**Distinção de restore:** foi reutilizada a restauração isolada do dump anterior
+`night-20260927T233110Z/database.dump`, SHA256
+`c731aac4d9f93a500b64ab945f950b77c3a7079a1dbb54ec4220cf3d7e41770a`, 4,299 s,
+66 tabelas/104 campanhas. O dump fresco NÃO foi restaurado: hash e catálogo foram
+verificados, conforme autorização para reutilizar o ensaio. Cópia viva de arquivos
+não é snapshot atômico com DB; sem prova de consistência de restauração das sessões,
+RPO zero ou cópia offsite. Worker/sessões permaneceram em execução.
+
+### Resultado real da migration e impacto observado
+
+Antes: 59 migrations concluídas (65 registros históricos, incluindo rollback antigo),
+zero falhas pendentes e somente a fila pendente. Todos os checksums concluídos
+correspondem ao release. `Prisma migrate deploy --schema <release>/apps/whatsapp-agent/prisma/schema.prisma`
+do candidato a1cc380e, sem iniciar aplicativo/scheduler. Execução 21:57:40–21:57:44,
+**3,238 s**, exit 0. Registro PostgreSQL iniciou 00:57:43.843413Z e terminou
+00:57:44.031119Z (aproximadamente 188 ms). Depois: **60 concluídas, zero falhas,
+nenhuma pendente**, migrate status exit 0. Checksum no Git/release/banco:
+`3c2d73af6aa9612854856b5763e1fab76d3fac79ed725daeb7851fe55e9791ad`.
+
+Conferidos quatro objetos novos: CampaignExecutionBatch, CampaignExecutionBatchCampaign,
+CampaignExecutionJob e TenantCampaignExecutionLease; 60 colunas/tipos/nullability,
+4 PKs, 8 FKs validadas com destinos/colunas e CASCADE corretos, 17 índices incluindo
+PKs, ordem/unicidade/validade dos índices explícitos. Zero linhas nas quatro tabelas.
+Não houve db push/reset/resolve/down, outra migration ou correção de drift histórico.
+
+Limites somente nas conexões da operação: lock_timeout 5s, statement_timeout 30s,
+connect_timeout 5s, socket_timeout 40s, subprocesso 60s. Settings confirmados pelo
+Prisma Client usando a mesma URL parametrizada; sem ALTER ROLE/configuração global.
+Uso de `options` suportado pelo [conector Prisma PostgreSQL](https://docs.prisma.io/docs/orm/v6/overview/databases/postgresql).
+Se prazo/erro: preservar estado/logs, permanecer em recovery fechada, nenhum
+resolve/down/restore automático; eventual término limitado ao grupo de processos
+da própria invocação. Nenhum timeout ou cancelamento ocorreu.
+
+Coordenação: flock exclusivo de backup durante captura e novamente no deploy;
+nenhuma tarefa concorrente nos gates. Limite de início definido em 02:10 UTC/23:10
+Fortaleza, antes da primeira rotina 02:40 UTC/23:40. Execução terminou 21:57, sem
+necessidade de suspender crons/supervisão. Não confundir com os holds da etapa A.
+
+Depois do DDL: API recovery 03f930e5 no mesmo PID/zero restarts; frontend/worker
+preservados. Health loopback e duas entradas públicas HTTP 200/db ok. GET superadmin
+guarda HTTP 200, available=true/open=false/generation 0/build 03f930e5/tasks 0. Owner
+confirmou **Inbox e CRM funcionando**, na sessão privada demo, somente leitura.
+Nenhuma interrupção de atendimento observada; não houve monitoramento contínuo de
+latência, aceite de todos os tenants ou prova de inbound/retries. Contagens 104
+campanhas (85 completed/12 cancelled/5 failed/2 draft), zero scheduled, 61 intents
++61 aceites com Outbound, 16 test-sends com resultado, permanecem iguais. Sem
+campanha de teste/envio/provider provocado. Incertezas antigas não são encerradas
+por essas contagens nem pelo drained do ledger novo.
+
+### Configuração candidata preparada, sem ativação
+
+Novo arquivo privado 0600 no release a1cc380e:
+`migration-prepared.ecosystem.config.cjs`; SHA256
+`84175271e80f847e5d196d0c7a0ef996e50d34f021968cb23b18eaf666b8c60a`.
+78 chaves de aplicação da .env, valores efetivos da configuração recovery válida,
+PATH explícito e flags de campanha; sem copiar ambiente bruto/metadados PM2/SSH/SUDO.
+Script/cwd absolutos do candidato, node explícito, uma instância fork, watch=false.
+Mesma guarda persistente/host single-host, scheduler desabilitado; recovery-only=false
+apenas no arquivo candidato inativo, sem alterar flags do processo recovery.
+
+**Prova de resolução:** PM2 instalado 6.0.14, funções puras Common.isConfigFile,
+parseConfig e prepareAppConf, em processo separado com ambiente reduzido. Verificados
+script/cwd/exec_mode/watch e ausência de chaves env capazes de sobrescrever identidade
+no merge. Não houve daemon RPC/start, importação do app, scheduler nem provider.
+Isso comprova resolução, **não comprova startup produtivo do candidato**. Arquivos
+prepared antigos inválidos preservados e continuam proibidos para uso.
+
+Evidência privada completa junto ao backup novo e localmente em
+`local-evidence/recovery/migration-20260927/`, fora do Git. Apenas documentação
+publicada. **STOP operacional:** recovery ATIVA/fechada; migration APLICADA;
+candidato a1cc380e **NOT DEPLOYED / OWNER UI PENDING**, CRA pendente. Próxima decisão
+separada é ativar candidato inicialmente fechado, após reconfirmar gates/configuração;
+abertura é outra decisão. Telegram não validado/sem correção, 6683 CLOSED,
+DELIVERED/READ → HUMAN/WAITING separado; owner PASS anterior preservado.

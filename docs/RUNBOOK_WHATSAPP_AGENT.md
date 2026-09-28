@@ -2011,3 +2011,45 @@ recovery fechada preservada. Não é ordem para executar agora. Ativação do ca
 exige corrigir configuração PM2 antes, e autorização distinta; abertura/owner UI/CRA
 seguem pendentes. Nenhum down/reset ou dump sobre produção como rollback normal.
 6683 CLOSED; materialização DELIVERED/READ separada.
+
+
+## Migration autorizada concluída — recovery mantida, candidato inativo
+
+[Registro único: backup, hashes, catálogo e tempos](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#migration-aditiva-aplicada-com-recovery-fechada--27092026).
+Em 27/09 às 21:57 Fortaleza, somente 20260925143000_add_campaign_execution_queue
+aplicada via Prisma do release a1cc380e; 59→60 concluídas, sem pendências/falhas.
+Recovery 03f930e5 permanece ativa/fechada, mesmo PID; owner confirmou Inbox/CRM demo
+pós-DDL. Não repetir migrate deploy para “validar” nem reaplicar roteiro da etapa A.
+
+Procedimento executado: gates de versão/guarda/saved/cron e espaço → checksums/history
+somente leitura → conexão Prisma com timeouts próprios verificados → configuração
+candidata limpa/inativa → backup novo com flock/hash/catálogo → reconferência dos
+gates e somente migrate deploy → catálogo/checksum/status, health/diagnóstico
+superadmin e Inbox/CRM owner. Sem parada, mudança de cron/boot ou retenção. Operação
+terminou antes do limite 23:10; primeira rotina agendada 23:40. Limites 5s lock/30s
+statement/40s socket/60s subprocesso; em erro preservar migration/logs/objetos e
+recovery fechada. Não matar sessões alheias, resolver migration, fazer down/reset
+ou restaurar dump sobre produção automaticamente.
+
+Evidências/scripts privados no backup `preparations/migration-20260928T005604Z`.
+`deploy.py` é registro da execução, com bloqueio contra repetição, NÃO comando para
+próxima etapa. Dump novo hash/catálogo verificados; restauração reutilizada é a do
+dump night-20260927T233110Z, não deste dump novo. Guarda/auxiliares/configuração ativa
+corrigida e saved/fallback incluídos. Restauração de sessões e RPO zero não comprovados.
+
+Configuração futura correta do candidato:
+`/opt/re7online/releases/a1cc380eddcd1467b8e0d3a8e405f82689a25b3d/migration-prepared.ecosystem.config.cjs`.
+Não usar prepared.ecosystem*. Valores de aplicação obtidos por chaves .env da
+configuração ativa válida, sem metadados de /proc/environ. Parser/normalizador PM2
+6.0.14 comprovou caminhos, fork/watch=false e merge sem sobrescrita; nenhum start.
+Guarda compartilhada single-host, host conferido, scheduler desabilitado. Em eventual
+ativação autorizada, usar invocação com ambiente reduzido (env -i PATH/HOME/USER
+explícitos) e verificar processo efetivo/saved; esta referência NÃO autoriza start.
+Recovery permanece no stage-a.ecosystem.config.cjs, permanentemente fechada.
+
+Próximos gates, somente com autorização separada: reconfirmar guarda/configuração/
+backup e estado vigente; ativação candidata fechada com validação real de atendimento
+antes de salvar supervisão; em falha, recovery conhecida compatível com DDL aditivo,
+sem ressuscitar 5ee2de6b. Abertura de campanhas e aceite owner UI/CRA são decisões
+separadas. STOP após preparação. Sem garantia retroativa de drain/inbound/retry,
+Telegram inalterado/não validado; 6683 CLOSED e materialização separada.

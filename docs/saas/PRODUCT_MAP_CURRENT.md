@@ -1320,3 +1320,19 @@ Candidato a1cc380e/recovery 03f930e5 inalterados; nenhuma suíte/build/migration
 implementação repetida. NOT DEPLOYED / OWNER UI PENDING, sem aceite CRA, sem
 quiescência retroativa ou garantia inbound/retries. 6683 CLOSED; contratos prévios,
 HUMAN/WAITING, worker/sessões e DELIVERED/READ separado preservados.
+
+
+### Migration aditiva com recovery fechada — 27/09/2026
+
+[Registro operacional e limites](CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#migration-aditiva-aplicada-com-recovery-fechada--27092026).
+Após 87335585, backup persistente fresco verificado e somente migration da fila
+aplicada via Prisma em 3,238 s: 59→60 concluídas, checksum/catálogo/status conferidos.
+Recovery 03f930e5 ATIVA, campanhas permanentemente fechadas; frontend/worker
+preservados. Owner confirmou Inbox/CRM demo pós-DDL, sem envio provocado.
+Configuração candidata limpa .config.cjs resolvida pelo PM2 isoladamente, sem start;
+artefatos inválidos preservados. Dump fresco não restaurado: reutilizado ensaio
+do dump anterior identificado no preflight. Sem alteração de drift histórico.
+STOP: candidato a1cc380e NOT DEPLOYED / OWNER UI PENDING; ativação fechada e abertura
+exigem decisões separadas, CRA pendente. Não inferir quiescência retroativa ou
+validar todos os tenants/webhooks por health/demo. Telegram separado/não validado;
+6683 CLOSED, owner PASS anterior e divergência DELIVERED/READ preservados.
