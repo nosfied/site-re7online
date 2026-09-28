@@ -146,6 +146,8 @@ function makePrisma() {
     waPhoneNumbers: [] as Array<{ clientId: string; phoneNumberId: string; display: string | null }>,
   };
   const client = {
+    // Lock behavior is covered against PostgreSQL in tenantOperationalConfigStore.test.
+    $queryRaw: async () => [{ id: "unit-mock-existing-row" }],
     tenantMetaConfig: {
       findUnique: async (args: { where: { clientId: string } }) =>
         state.metaConfigs.find((item) => item.clientId === args.where.clientId) ?? null,

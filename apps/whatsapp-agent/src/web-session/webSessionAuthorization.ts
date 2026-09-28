@@ -1,3 +1,4 @@
+import { withLockedTenantOperationalConfig } from "../config/tenantOperationalConfigStore.js";
 import crypto from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 
@@ -97,35 +98,38 @@ export async function saveWebSessionAuthorization(params: {
   const canonical = normalizeWebSessionAuthorizedNumber(params.number);
   if (!canonical) return { ok: false as const, error: "invalid_authorized_number" };
   const now = new Date().toISOString();
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const current = readWebSessionAuthorizationFromConfig(existing?.config);
+    const next = {
+      status: current.status === "OWNED" && current.authorizedNumberCanonical === canonical ? "OWNED" : "AUTHORIZED",
+      authorizedNumberCanonical: canonical,
+      authorizedNumberMasked: maskWebSessionNumber(canonical),
+      authorizedNumberHash: fingerprintWebSessionNumber(canonical),
+      authorizedAt: now,
+      authorizedBy: params.actorUserId,
+      releasedAt: null,
+      releasedBy: null,
+    };
+    await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        schemaVersion: 1,
+        config: { ...existingConfig, webSessionAuthorization: next } as Prisma.InputJsonValue,
+      },
+      create: {
+        clientId: params.clientId,
+        schemaVersion: 1,
+        config: { ...existingConfig, webSessionAuthorization: next } as Prisma.InputJsonValue,
+      },
+    });
+    return { ok: true as const, authorization: readWebSessionAuthorizationFromConfig({ webSessionAuthorization: next }) };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const current = readWebSessionAuthorizationFromConfig(existing?.config);
-  const next = {
-    status: current.status === "OWNED" && current.authorizedNumberCanonical === canonical ? "OWNED" : "AUTHORIZED",
-    authorizedNumberCanonical: canonical,
-    authorizedNumberMasked: maskWebSessionNumber(canonical),
-    authorizedNumberHash: fingerprintWebSessionNumber(canonical),
-    authorizedAt: now,
-    authorizedBy: params.actorUserId,
-    releasedAt: null,
-    releasedBy: null,
-  };
-  await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      schemaVersion: 1,
-      config: { ...existingConfig, webSessionAuthorization: next } as Prisma.InputJsonValue,
-    },
-    create: {
-      clientId: params.clientId,
-      schemaVersion: 1,
-      config: { ...existingConfig, webSessionAuthorization: next } as Prisma.InputJsonValue,
-    },
-  });
-  return { ok: true as const, authorization: readWebSessionAuthorizationFromConfig({ webSessionAuthorization: next }) };
 }
 
 export async function markWebSessionAuthorizationOwned(params: {
@@ -134,29 +138,32 @@ export async function markWebSessionAuthorizationOwned(params: {
   actorUserId?: string | null;
   observedIdentity: string;
 }) {
-  const current = await resolveWebSessionAuthorization({ prisma: params.prisma, clientId: params.clientId });
-  const canonical = normalizeWebSessionAuthorizedNumber(params.observedIdentity);
-  if (!canonical || current.authorizedNumberCanonical !== canonical) return current;
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
-  });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const webSessionAuthorization = {
-    ...(isRecord(existingConfig.webSessionAuthorization) ? existingConfig.webSessionAuthorization : {}),
-    status: "OWNED",
-    authorizedNumberCanonical: canonical,
-    authorizedNumberMasked: maskWebSessionNumber(canonical),
-    authorizedNumberHash: fingerprintWebSessionNumber(canonical),
-    ownedAt: new Date().toISOString(),
-    ownedBy: params.actorUserId ?? null,
-  };
-  await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: { schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
-    create: { clientId: params.clientId, schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
-  });
-  return readWebSessionAuthorizationFromConfig({ webSessionAuthorization });
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const current = await resolveWebSessionAuthorization({ prisma: params.prisma, clientId: params.clientId });
+    const canonical = normalizeWebSessionAuthorizedNumber(params.observedIdentity);
+    if (!canonical || current.authorizedNumberCanonical !== canonical) return current;
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const webSessionAuthorization = {
+      ...(isRecord(existingConfig.webSessionAuthorization) ? existingConfig.webSessionAuthorization : {}),
+      status: "OWNED",
+      authorizedNumberCanonical: canonical,
+      authorizedNumberMasked: maskWebSessionNumber(canonical),
+      authorizedNumberHash: fingerprintWebSessionNumber(canonical),
+      ownedAt: new Date().toISOString(),
+      ownedBy: params.actorUserId ?? null,
+    };
+    await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: { schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
+      create: { clientId: params.clientId, schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
+    });
+    return readWebSessionAuthorizationFromConfig({ webSessionAuthorization });
+  }, { createIfMissing: false, onMissing: () => readWebSessionAuthorizationFromConfig({}) });
 }
 
 export async function markWebSessionAuthorizationReleased(params: {
@@ -164,25 +171,28 @@ export async function markWebSessionAuthorizationReleased(params: {
   clientId: string;
   actorUserId: string;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const current = readWebSessionAuthorizationFromConfig(existing?.config);
+    const webSessionAuthorization = {
+      status: "RELEASED",
+      previousNumberMasked: current.authorizedNumberMasked,
+      previousNumberHash: fingerprintWebSessionNumber(current.authorizedNumberCanonical),
+      releasedAt: new Date().toISOString(),
+      releasedBy: params.actorUserId,
+    };
+    await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: { schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
+      create: { clientId: params.clientId, schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
+    });
+    return readWebSessionAuthorizationFromConfig({ webSessionAuthorization });
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const current = readWebSessionAuthorizationFromConfig(existing?.config);
-  const webSessionAuthorization = {
-    status: "RELEASED",
-    previousNumberMasked: current.authorizedNumberMasked,
-    previousNumberHash: fingerprintWebSessionNumber(current.authorizedNumberCanonical),
-    releasedAt: new Date().toISOString(),
-    releasedBy: params.actorUserId,
-  };
-  await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: { schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
-    create: { clientId: params.clientId, schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
-  });
-  return readWebSessionAuthorizationFromConfig({ webSessionAuthorization });
 }
 
 export async function markWebSessionAuthorizationInvalidatedByMetaIdentityChange(params: {
@@ -191,24 +201,27 @@ export async function markWebSessionAuthorizationInvalidatedByMetaIdentityChange
   actorUserId: string | null;
   reason?: string | null;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const current = readWebSessionAuthorizationFromConfig(existing?.config);
+    const webSessionAuthorization = {
+      status: "INVALIDATED_BY_META_IDENTITY_CHANGE",
+      previousNumberMasked: current.authorizedNumberMasked,
+      previousNumberHash: fingerprintWebSessionNumber(current.authorizedNumberCanonical),
+      invalidatedAt: new Date().toISOString(),
+      invalidatedBy: params.actorUserId,
+      invalidationReason: params.reason ?? "meta_identity_changed",
+    };
+    await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: { schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
+      create: { clientId: params.clientId, schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
+    });
+    return readWebSessionAuthorizationFromConfig({ webSessionAuthorization });
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const current = readWebSessionAuthorizationFromConfig(existing?.config);
-  const webSessionAuthorization = {
-    status: "INVALIDATED_BY_META_IDENTITY_CHANGE",
-    previousNumberMasked: current.authorizedNumberMasked,
-    previousNumberHash: fingerprintWebSessionNumber(current.authorizedNumberCanonical),
-    invalidatedAt: new Date().toISOString(),
-    invalidatedBy: params.actorUserId,
-    invalidationReason: params.reason ?? "meta_identity_changed",
-  };
-  await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: { schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
-    create: { clientId: params.clientId, schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
-  });
-  return readWebSessionAuthorizationFromConfig({ webSessionAuthorization });
 }

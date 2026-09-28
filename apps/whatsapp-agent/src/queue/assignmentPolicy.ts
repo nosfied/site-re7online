@@ -1,3 +1,4 @@
+import { withLockedTenantOperationalConfig } from "../config/tenantOperationalConfigStore.js";
 import crypto from "node:crypto";
 import { ConversationOperationalStatus, Prisma, type PrismaClient } from "@prisma/client";
 import {
@@ -487,25 +488,28 @@ export async function saveQueueAssignmentPolicy(params: {
   requestId: string;
   policy: QueueAssignmentPolicyInput;
 }): Promise<{ policy: QueueAssignmentPolicy; config: Record<string, unknown> }> {
-  const current = await resolveQueueAssignmentPolicy({
-    prisma: params.prisma,
-    clientId: params.clientId,
-  });
-  const previousConfig = current.config ?? {};
-  const nextPolicy: QueueAssignmentPolicy = {
-    ...params.policy,
-    presenceModeSource: params.policy.presenceModeSource ?? "explicit",
-    lastAssignedUserIdByScope: current.policy.lastAssignedUserIdByScope,
-  };
-  const config = {
-    ...previousConfig,
-    queueAssignmentPolicy: nextPolicy,
-  } satisfies Prisma.InputJsonObject;
+  const { nextPolicy, config } = await withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    const current = await resolveQueueAssignmentPolicy({
+      prisma: tx as PrismaClient,
+      clientId: params.clientId,
+    });
+    const previousConfig = current.config ?? {};
+    const nextPolicy: QueueAssignmentPolicy = {
+      ...params.policy,
+      presenceModeSource: params.policy.presenceModeSource ?? "explicit",
+      lastAssignedUserIdByScope: current.policy.lastAssignedUserIdByScope,
+    };
+    const config = {
+      ...previousConfig,
+      queueAssignmentPolicy: nextPolicy,
+    } satisfies Prisma.InputJsonObject;
 
-  await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    create: { clientId: params.clientId, config },
-    update: { config },
+    await tx.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      create: { clientId: params.clientId, config },
+      update: { config },
+    });
+    return { nextPolicy, config };
   });
 
   await recordQueueAssignmentEvent({
@@ -585,200 +589,204 @@ async function applyBalancedQueueAssignmentLocked(params: {
     departmentId: params.departmentId,
   });
 
-  const latestPolicy = await resolveQueueAssignmentPolicy({
-    prisma: params.prisma,
-    clientId: params.clientId,
-  });
-  if (!latestPolicy.config) return { applied: false, reason: "no_policy" };
-  if (!latestPolicy.policy.enabled || latestPolicy.policy.mode === "manual") {
-    return { applied: false, reason: "manual" };
-  }
-
-  const current = await params.prisma.conversationRuntimeState.findUnique({
-    where: { id: params.runtimeStateId },
-    select: {
-      assignedUserId: true,
-      status: true,
-      departmentId: true,
-      queueId: true,
-    },
-  });
-  const assignedUserId = current?.assignedUserId ?? params.assignedUserId ?? null;
-  const status = current?.status ?? params.status ?? null;
-  const departmentId = current?.departmentId ?? params.departmentId ?? null;
-  const queueId = current?.queueId ?? params.queueId ?? null;
-
-  if (assignedUserId) return { applied: false, reason: "already_assigned" };
-  if (status !== ConversationOperationalStatus.WAITING && status !== "WAITING") {
-    return { applied: false, reason: "status_not_waiting" };
-  }
-
-  const { policy, config } = latestPolicy;
-  const assignmentMode = policy.mode === "round_robin" || policy.mode === "least_active" ? policy.mode : null;
-  if (!assignmentMode) return { applied: false, reason: "manual" };
-  if (policy.scope === "department" && !departmentId) {
-    await recordQueueAssignmentEvent({
+  // Keep queue advisory -> config row lock order. Re-read policy, cursor,
+  // eligibility and load before selecting, while holding the config lock.
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async () => {
+    const latestPolicy = await resolveQueueAssignmentPolicy({
       prisma: params.prisma,
       clientId: params.clientId,
-      conversationId: params.conversationId,
-      requestId: `${params.requestId ?? "queue-assignment"}:no-department:${params.runtimeStateId}`,
-      eventName: "queue.assignment.no_eligible_agent",
-      payload: {
-        mode: assignmentMode,
-        scope: policy.scope,
-        departmentId: null,
-        eligibleCount: 0,
-        reason: "department_required",
-        source: params.source,
+    });
+    if (!latestPolicy.config) return { applied: false, reason: "no_policy" };
+    if (!latestPolicy.policy.enabled || latestPolicy.policy.mode === "manual") {
+      return { applied: false, reason: "manual" };
+    }
+
+    const current = await params.prisma.conversationRuntimeState.findUnique({
+      where: { id: params.runtimeStateId },
+      select: {
+        assignedUserId: true,
+        status: true,
+        departmentId: true,
+        queueId: true,
       },
     });
-    return { applied: false, reason: "no_eligible_agent" };
-  }
-  const users =
-    departmentId
-      ? await getEligibleUsersForDepartmentAssignment(params.prisma, {
-          clientId: params.clientId,
-          departmentId: departmentId as string,
-          includeSupervisors: policy.includeSupervisors,
-          fallbackToLegacy: true,
-        })
-      : await params.prisma.user.findMany({
-          where: {
+    const assignedUserId = current?.assignedUserId ?? params.assignedUserId ?? null;
+    const status = current?.status ?? params.status ?? null;
+    const departmentId = current?.departmentId ?? params.departmentId ?? null;
+    const queueId = current?.queueId ?? params.queueId ?? null;
+
+    if (assignedUserId) return { applied: false, reason: "already_assigned" };
+    if (status !== ConversationOperationalStatus.WAITING && status !== "WAITING") {
+      return { applied: false, reason: "status_not_waiting" };
+    }
+
+    const { policy, config } = latestPolicy;
+    const assignmentMode = policy.mode === "round_robin" || policy.mode === "least_active" ? policy.mode : null;
+    if (!assignmentMode) return { applied: false, reason: "manual" };
+    if (policy.scope === "department" && !departmentId) {
+      await recordQueueAssignmentEvent({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        conversationId: params.conversationId,
+        requestId: `${params.requestId ?? "queue-assignment"}:no-department:${params.runtimeStateId}`,
+        eventName: "queue.assignment.no_eligible_agent",
+        payload: {
+          mode: assignmentMode,
+          scope: policy.scope,
+          departmentId: null,
+          eligibleCount: 0,
+          reason: "department_required",
+          source: params.source,
+        },
+      });
+      return { applied: false, reason: "no_eligible_agent" };
+    }
+    const users =
+      departmentId
+        ? await getEligibleUsersForDepartmentAssignment(params.prisma, {
             clientId: params.clientId,
-            isActive: true,
-            role: policy.includeSupervisors ? { in: ["AGENT", "SUPERVISOR"] } : "AGENT",
-          },
-          select: { id: true, createdAt: true },
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-        });
+            departmentId: departmentId as string,
+            includeSupervisors: policy.includeSupervisors,
+            fallbackToLegacy: true,
+          })
+        : await params.prisma.user.findMany({
+            where: {
+              clientId: params.clientId,
+              isActive: true,
+              role: policy.includeSupervisors ? { in: ["AGENT", "SUPERVISOR"] } : "AGENT",
+            },
+            select: { id: true, createdAt: true },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          });
 
-  const activeByUser = await countActiveAssignmentsForUsers({
-    prisma: params.prisma,
-    clientId: params.clientId,
-    userIds: users.map((user) => user.id),
-    departmentId,
-    scope: policy.scope,
-  });
+    const activeByUser = await countActiveAssignmentsForUsers({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      userIds: users.map((user) => user.id),
+      departmentId,
+      scope: policy.scope,
+    });
 
-  const presenceEligibleUserIds =
-    policy.presenceMode === "IGNORE"
-      ? null
-      : await getPresenceEligibleUserIds({
-          prisma: params.availabilityPrisma,
-          clientId: params.clientId,
-          userIds: users.map((user) => user.id),
-          mode: policy.presenceMode,
-        });
+    const presenceEligibleUserIds =
+      policy.presenceMode === "IGNORE"
+        ? null
+        : await getPresenceEligibleUserIds({
+            prisma: params.availabilityPrisma,
+            clientId: params.clientId,
+            userIds: users.map((user) => user.id),
+            mode: policy.presenceMode,
+          });
 
-  const eligible = users.filter((user) => {
-    if (presenceEligibleUserIds && !presenceEligibleUserIds.has(user.id)) return false;
-    const activeCount = activeByUser.get(user.id) ?? 0;
-    return policy.maxActivePerAgent === null || activeCount < policy.maxActivePerAgent;
-  });
-  if (eligible.length === 0) {
+    const eligible = users.filter((user) => {
+      if (presenceEligibleUserIds && !presenceEligibleUserIds.has(user.id)) return false;
+      const activeCount = activeByUser.get(user.id) ?? 0;
+      return policy.maxActivePerAgent === null || activeCount < policy.maxActivePerAgent;
+    });
+    if (eligible.length === 0) {
+      await recordQueueAssignmentEvent({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        conversationId: params.conversationId,
+        requestId: `${params.requestId ?? "queue-assignment"}:no-eligible:${params.runtimeStateId}`,
+        eventName: "queue.assignment.no_eligible_agent",
+        payload: {
+          mode: assignmentMode,
+          scope: policy.scope,
+          departmentId: sanitizeDepartmentId(departmentId),
+          eligibleCount: 0,
+          reason:
+            users.length === 0
+              ? "no_active_agents"
+              : policy.presenceMode !== "IGNORE" && presenceEligibleUserIds?.size === 0
+                ? "online_presence_unavailable"
+                : "max_active_reached",
+          source: params.source,
+          requireOnline: policy.requireOnline,
+          presenceMode: policy.presenceMode,
+          presenceModeSource: policy.presenceModeSource,
+        },
+      });
+      return { applied: false, reason: "no_eligible_agent" };
+    }
+
+    const selected =
+      assignmentMode === "least_active"
+        ? [...eligible].sort((a, b) => {
+            const loadDiff = (activeByUser.get(a.id) ?? 0) - (activeByUser.get(b.id) ?? 0);
+            if (loadDiff !== 0) return loadDiff;
+            return a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id);
+          })[0]
+        : selectRoundRobinUser(eligible, policy.lastAssignedUserIdByScope[getScopeKey(policy, departmentId)]);
+
+    const assignedAt = new Date();
+    await params.prisma.conversationRuntimeState.update({
+      where: { id: params.runtimeStateId },
+      data: {
+        assignedUserId: selected.id,
+        assignedTo: `user:${selected.id}`,
+        assignedAt,
+        departmentId: departmentId ?? undefined,
+        queueId: queueId ?? undefined,
+        status: ConversationOperationalStatus.IN_PROGRESS,
+      },
+    });
+    await params.prisma.conversationAssignment.create({
+      data: {
+        conversationId: params.runtimeStateId,
+        fromUserId: null,
+        toUserId: selected.id,
+        assignedAt,
+      },
+    });
+
+    if (assignmentMode === "round_robin") {
+      const scopeKey = getScopeKey(policy, departmentId);
+      await params.prisma.tenantOperationalConfig.update({
+        where: { clientId: params.clientId },
+        data: {
+          config: {
+            ...config,
+            queueAssignmentPolicy: {
+              ...policy,
+              lastAssignedUserIdByScope: {
+                ...policy.lastAssignedUserIdByScope,
+                [scopeKey]: selected.id,
+              },
+            },
+          } satisfies Prisma.InputJsonObject,
+        },
+      });
+    }
+
     await recordQueueAssignmentEvent({
       prisma: params.prisma,
       clientId: params.clientId,
       conversationId: params.conversationId,
-      requestId: `${params.requestId ?? "queue-assignment"}:no-eligible:${params.runtimeStateId}`,
-      eventName: "queue.assignment.no_eligible_agent",
+      requestId: `${params.requestId ?? "queue-assignment"}:${policy.mode}:${params.runtimeStateId}`,
+      eventName: getEventName(assignmentMode),
       payload: {
         mode: assignmentMode,
         scope: policy.scope,
         departmentId: sanitizeDepartmentId(departmentId),
-        eligibleCount: 0,
-        reason:
-          users.length === 0
-            ? "no_active_agents"
-            : policy.presenceMode !== "IGNORE" && presenceEligibleUserIds?.size === 0
-              ? "online_presence_unavailable"
-              : "max_active_reached",
+        selectedUserId: selected.id,
+        eligibleCount: eligible.length,
+        activeCount: activeByUser.get(selected.id) ?? 0,
         source: params.source,
         requireOnline: policy.requireOnline,
         presenceMode: policy.presenceMode,
         presenceModeSource: policy.presenceModeSource,
       },
     });
-    return { applied: false, reason: "no_eligible_agent" };
-  }
 
-  const selected =
-    assignmentMode === "least_active"
-      ? [...eligible].sort((a, b) => {
-          const loadDiff = (activeByUser.get(a.id) ?? 0) - (activeByUser.get(b.id) ?? 0);
-          if (loadDiff !== 0) return loadDiff;
-          return a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id);
-        })[0]
-      : selectRoundRobinUser(eligible, policy.lastAssignedUserIdByScope[getScopeKey(policy, departmentId)]);
-
-  const assignedAt = new Date();
-  await params.prisma.conversationRuntimeState.update({
-    where: { id: params.runtimeStateId },
-    data: {
-      assignedUserId: selected.id,
-      assignedTo: `user:${selected.id}`,
-      assignedAt,
-      departmentId: departmentId ?? undefined,
-      queueId: queueId ?? undefined,
-      status: ConversationOperationalStatus.IN_PROGRESS,
-    },
-  });
-  await params.prisma.conversationAssignment.create({
-    data: {
-      conversationId: params.runtimeStateId,
-      fromUserId: null,
-      toUserId: selected.id,
-      assignedAt,
-    },
-  });
-
-  if (assignmentMode === "round_robin") {
-    const scopeKey = getScopeKey(policy, departmentId);
-    await params.prisma.tenantOperationalConfig.update({
-      where: { clientId: params.clientId },
-      data: {
-        config: {
-          ...config,
-          queueAssignmentPolicy: {
-            ...policy,
-            lastAssignedUserIdByScope: {
-              ...policy.lastAssignedUserIdByScope,
-              [scopeKey]: selected.id,
-            },
-          },
-        } satisfies Prisma.InputJsonObject,
-      },
-    });
-  }
-
-  await recordQueueAssignmentEvent({
-    prisma: params.prisma,
-    clientId: params.clientId,
-    conversationId: params.conversationId,
-    requestId: `${params.requestId ?? "queue-assignment"}:${policy.mode}:${params.runtimeStateId}`,
-    eventName: getEventName(assignmentMode),
-    payload: {
+    return {
+      applied: true,
       mode: assignmentMode,
-      scope: policy.scope,
-      departmentId: sanitizeDepartmentId(departmentId),
       selectedUserId: selected.id,
+      assignedAt,
       eligibleCount: eligible.length,
       activeCount: activeByUser.get(selected.id) ?? 0,
-      source: params.source,
-      requireOnline: policy.requireOnline,
-      presenceMode: policy.presenceMode,
-      presenceModeSource: policy.presenceModeSource,
-    },
-  });
-
-  return {
-    applied: true,
-    mode: assignmentMode,
-    selectedUserId: selected.id,
-    assignedAt,
-    eligibleCount: eligible.length,
-    activeCount: activeByUser.get(selected.id) ?? 0,
-  };
+    };
+  }, { createIfMissing: false, onMissing: () => ({ applied: false, reason: "no_policy" }) });
 }
 
 function selectRoundRobinUser<T extends { id: string }>(eligible: T[], lastAssignedUserId?: string | null) {

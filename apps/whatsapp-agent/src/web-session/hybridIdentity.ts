@@ -1,3 +1,4 @@
+import { withLockedTenantOperationalConfig } from "../config/tenantOperationalConfigStore.js";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { persistEvent } from "../db/persist.js";
 import { clearAllWebSessionAuthState } from "./webSessionAuthStore.js";
@@ -258,40 +259,41 @@ export async function startWhatsappNumberReplacement(params: {
     return { ok: false as const, status: 400, code: "invalid_replacement_number" };
   }
   const now = new Date().toISOString();
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
-  });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const [meta, webAuthorization] = await Promise.all([
-    resolveOperationalMetaWhatsappIdentity(params),
-    resolveWebSessionAuthorization(params),
-  ]);
-  const whatsappNumberReplacement = {
-    status: "ACTIVE",
-    targetNumberCanonical,
-    targetNumberMasked: maskWebSessionNumber(targetNumberCanonical),
-    targetNumberHash: fingerprintWebSessionNumber(targetNumberCanonical),
-    previousMetaNumberMasked: meta.maskedNumber,
-    previousMetaNumberHash: fingerprintWebSessionNumber(meta.canonicalNumber),
-    previousWebNumberMasked: webAuthorization.authorizedNumberMasked,
-    previousWebNumberHash: fingerprintWebSessionNumber(webAuthorization.authorizedNumberCanonical),
-    startedAt: now,
-    startedBy: params.actorUserId,
-  };
-  const nextConfig: Record<string, unknown> = {
-    ...existingConfig,
-    whatsappNumberReplacement,
-  };
-  delete nextConfig.whatsappPrimaryTransport;
-  await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: { schemaVersion: 1, config: nextConfig as Prisma.InputJsonValue },
-    create: {
-      clientId: params.clientId,
-      schemaVersion: 1,
-      config: nextConfig as Prisma.InputJsonValue,
-    },
+  const meta = await resolveOperationalMetaWhatsappIdentity(params);
+  const { existingConfig, webAuthorization, whatsappNumberReplacement } = await withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    const existing = await tx.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const webAuthorization = await resolveWebSessionAuthorization({ ...params, prisma: tx as PrismaClient });
+    const whatsappNumberReplacement = {
+      status: "ACTIVE",
+      targetNumberCanonical,
+      targetNumberMasked: maskWebSessionNumber(targetNumberCanonical),
+      targetNumberHash: fingerprintWebSessionNumber(targetNumberCanonical),
+      previousMetaNumberMasked: meta.maskedNumber,
+      previousMetaNumberHash: fingerprintWebSessionNumber(meta.canonicalNumber),
+      previousWebNumberMasked: webAuthorization.authorizedNumberMasked,
+      previousWebNumberHash: fingerprintWebSessionNumber(webAuthorization.authorizedNumberCanonical),
+      startedAt: now,
+      startedBy: params.actorUserId,
+    };
+    const nextConfig: Record<string, unknown> = {
+      ...existingConfig,
+      whatsappNumberReplacement,
+    };
+    delete nextConfig.whatsappPrimaryTransport;
+    await tx.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: { schemaVersion: 1, config: nextConfig as Prisma.InputJsonValue },
+      create: {
+        clientId: params.clientId,
+        schemaVersion: 1,
+        config: nextConfig as Prisma.InputJsonValue,
+      },
+    });
+    return { existingConfig, webAuthorization, whatsappNumberReplacement };
   });
   await clearOperationalMetaWhatsappIdentity({
     prisma: params.prisma,
@@ -340,24 +342,28 @@ export async function cancelWhatsappNumberReplacement(params: {
   actorUserId: string | null;
   requestId: string;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
-  });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const current = readWhatsappNumberReplacementFromConfig(existingConfig);
+  const current = await withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    const existing = await tx.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const current = readWhatsappNumberReplacementFromConfig(existingConfig);
+    if (!current) return null;
+    const nextConfig = { ...existingConfig };
+    delete nextConfig.whatsappNumberReplacement;
+    await tx.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: { schemaVersion: 1, config: nextConfig as Prisma.InputJsonValue },
+      create: {
+        clientId: params.clientId,
+        schemaVersion: 1,
+        config: nextConfig as Prisma.InputJsonValue,
+      },
+    });
+    return current;
+  }, { createIfMissing: false, onMissing: () => null });
   if (!current) return { cancelled: false, replacement: null };
-  const nextConfig = { ...existingConfig };
-  delete nextConfig.whatsappNumberReplacement;
-  await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: { schemaVersion: 1, config: nextConfig as Prisma.InputJsonValue },
-    create: {
-      clientId: params.clientId,
-      schemaVersion: 1,
-      config: nextConfig as Prisma.InputJsonValue,
-    },
-  });
   const event = (params.prisma as unknown as { event?: PrismaClient["event"] }).event;
   if (event) {
     await event.create({
@@ -391,29 +397,34 @@ export async function completeWhatsappNumberReplacementIfMatched(params: {
   if (!confirmedNumberCanonical) {
     return { completed: false as const, reason: "missing_confirmed_number" as const };
   }
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
-  });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const current = readWhatsappNumberReplacementFromConfig(existingConfig);
-  if (!current) {
-    return { completed: false as const, reason: "no_active_replacement" as const };
-  }
-  if (current.targetNumberCanonical !== confirmedNumberCanonical) {
-    return { completed: false as const, reason: "target_mismatch" as const };
-  }
-  const nextConfig = { ...existingConfig };
-  delete nextConfig.whatsappNumberReplacement;
-  await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: { schemaVersion: 1, config: nextConfig as Prisma.InputJsonValue },
-    create: {
-      clientId: params.clientId,
-      schemaVersion: 1,
-      config: nextConfig as Prisma.InputJsonValue,
-    },
-  });
+  const outcome = await withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    const existing = await tx.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const current = readWhatsappNumberReplacementFromConfig(existingConfig);
+    if (!current) {
+      return { completed: false as const, reason: "no_active_replacement" as const };
+    }
+    if (current.targetNumberCanonical !== confirmedNumberCanonical) {
+      return { completed: false as const, reason: "target_mismatch" as const };
+    }
+    const nextConfig = { ...existingConfig };
+    delete nextConfig.whatsappNumberReplacement;
+    await tx.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: { schemaVersion: 1, config: nextConfig as Prisma.InputJsonValue },
+      create: {
+        clientId: params.clientId,
+        schemaVersion: 1,
+        config: nextConfig as Prisma.InputJsonValue,
+      },
+    });
+    return { completed: true as const, current };
+  }, { createIfMissing: false, onMissing: () => ({ completed: false as const, reason: "no_active_replacement" as const }) });
+  if (!outcome.completed) return outcome;
+  const current = outcome.current;
   const event = (params.prisma as unknown as { event?: PrismaClient["event"] }).event;
   if (event) {
     await event.create({
@@ -681,52 +692,58 @@ export async function saveWhatsappPrimaryTransport(params: {
   clientId: string;
   provider: WhatsappPrimaryTransport;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        schemaVersion: 1,
+        config: { ...existingConfig, whatsappPrimaryTransport: params.provider } as Prisma.InputJsonValue,
+      },
+      create: {
+        clientId: params.clientId,
+        schemaVersion: 1,
+        config: { ...existingConfig, whatsappPrimaryTransport: params.provider } as Prisma.InputJsonValue,
+      },
+    });
+    return params.provider;
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      schemaVersion: 1,
-      config: { ...existingConfig, whatsappPrimaryTransport: params.provider } as Prisma.InputJsonValue,
-    },
-    create: {
-      clientId: params.clientId,
-      schemaVersion: 1,
-      config: { ...existingConfig, whatsappPrimaryTransport: params.provider } as Prisma.InputJsonValue,
-    },
-  });
-  return params.provider;
 }
 
 export async function clearWhatsappPrimaryTransport(params: {
   prisma: PrismaClient | Prisma.TransactionClient;
   clientId: string;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
-  });
-  if (!isRecord(existing?.config) || !("whatsappPrimaryTransport" in existing.config)) {
-    return { cleared: false };
-  }
-  const nextConfig = { ...existing.config };
-  delete nextConfig.whatsappPrimaryTransport;
-  await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      schemaVersion: 1,
-      config: nextConfig as Prisma.InputJsonValue,
-    },
-    create: {
-      clientId: params.clientId,
-      schemaVersion: 1,
-      config: nextConfig as Prisma.InputJsonValue,
-    },
-  });
-  return { cleared: true };
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    if (!isRecord(existing?.config) || !("whatsappPrimaryTransport" in existing.config)) {
+      return { cleared: false };
+    }
+    const nextConfig = { ...existing.config };
+    delete nextConfig.whatsappPrimaryTransport;
+    await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        schemaVersion: 1,
+        config: nextConfig as Prisma.InputJsonValue,
+      },
+      create: {
+        clientId: params.clientId,
+        schemaVersion: 1,
+        config: nextConfig as Prisma.InputJsonValue,
+      },
+    });
+    return { cleared: true };
+  }, { createIfMissing: false, onMissing: () => ({ cleared: false }) });
 }
 
 export async function invalidateWebSessionForMetaIdentityChange(params: {

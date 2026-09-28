@@ -1,3 +1,4 @@
+import { withLockedTenantOperationalConfig } from "../config/tenantOperationalConfigStore.js";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import test from "node:test";
@@ -1138,4 +1139,48 @@ test("concurrent least-active assignments observe committed load", async () => {
   const countByUser = new Map(assignedCounts.map((row) => [row.assignedUserId, row._count._all]));
   assert.equal(countByUser.get(first.id), 2);
   assert.equal(countByUser.get(second.id), 2);
+});
+
+
+test("assignment rereads the cursor after config lock, preserving revocation and other scopes", async () => {
+  const client = await createClient("fresh-cursor");
+  const first = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "fresh-a" });
+  const second = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "fresh-b" });
+  await setPolicy(client.id, { enabled: true, mode: "round_robin", scope: "department", includeSupervisors: false, presenceMode: "IGNORE" });
+  const target = await createRuntime({ clientId: client.id, departmentId: client.departmentId, queueId: client.queueId, suffix: "fresh-target" });
+  let signal!: () => void, release!: () => void;
+  const entered = new Promise<void>(r => { signal = r; });
+  const proceed = new Promise<void>(r => { release = r; });
+  const holder = withLockedTenantOperationalConfig(prisma, client.id, async tx => {
+    const record = await tx.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } });
+    const current = record.config as Record<string, any>;
+    await tx.tenantOperationalConfig.update({ where: { clientId: client.id }, data: { config: {
+      ...current, allowAgentOwnClosedConversations: false, sentinel: [null, false],
+      queueAssignmentPolicy: { ...current.queueAssignmentPolicy, lastAssignedUserIdByScope: {
+        [`department:${client.departmentId}`]: first.id, "department:other-synthetic": "keep"
+      }}
+    } }});
+    signal(); await proceed;
+  });
+  await entered;
+  const assignment = applyBalancedQueueAssignment({ prisma, clientId: client.id, conversationId: target.conversation.id,
+    runtimeStateId: target.runtime.id, waId: target.runtime.waId, waIdCanonical: target.runtime.waIdCanonical,
+    departmentId: client.departmentId, queueId: client.queueId, status: target.runtime.status, source: "test" });
+  try {
+    const deadline = Date.now() + 3000;
+    let blocked = false;
+    while (Date.now() < deadline) {
+      const rows = await prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND pid<>pg_backend_pid()`;
+      if (Number(rows[0].n) > 0) { blocked = true; break; }
+      await new Promise(r => setTimeout(r, 5));
+    }
+    assert(blocked, "assignment must wait for the configuration lock");
+  } finally { release(); }
+  await holder;
+  const result = await assignment;
+  assert(result.applied); assert.equal(result.selectedUserId, second.id);
+  const current = (await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } })).config as Record<string, any>;
+  assert.equal(current.allowAgentOwnClosedConversations, false);
+  assert.deepEqual(current.sentinel, [null, false]);
+  assert.equal(current.queueAssignmentPolicy.lastAssignedUserIdByScope["department:other-synthetic"], "keep");
 });

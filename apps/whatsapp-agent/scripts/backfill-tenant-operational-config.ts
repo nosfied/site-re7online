@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+import { withLockedTenantOperationalConfig } from "../src/config/tenantOperationalConfigStore.js";
 import path from "node:path";
 import process from "node:process";
 import dotenv from "dotenv";
@@ -375,29 +376,32 @@ async function main() {
         aiIntentQualification: summarizeAiIntentQualification(aiIntentQualification),
       });
       if (options.dryRun) continue;
-      const nextConfig = mergeConfig(
-        client.operationalConfig?.config,
-        statuses,
-        manualHandoffTemplate,
-        followUp,
-        handoffLeadNotification,
-        mediaHandoffPolicy,
-        planLimits,
-        automationFlags,
-        aiAssistantConfig,
-        aiIntentQualification
-      );
-      await prisma.tenantOperationalConfig.upsert({
-        where: { clientId: client.id },
-        update: {
-          config: nextConfig,
-          schemaVersion: 1,
-        },
-        create: {
-          clientId: client.id,
-          config: nextConfig,
-          schemaVersion: 1,
-        },
+      await withLockedTenantOperationalConfig(prisma, client.id, async (tx) => {
+        const current = await tx.tenantOperationalConfig.findUnique({ where: { clientId: client.id }, select: { config: true } });
+        const nextConfig = mergeConfig(
+          current?.config,
+          statuses,
+          manualHandoffTemplate,
+          followUp,
+          handoffLeadNotification,
+          mediaHandoffPolicy,
+          planLimits,
+          automationFlags,
+          aiAssistantConfig,
+          aiIntentQualification
+        );
+        await tx.tenantOperationalConfig.upsert({
+          where: { clientId: client.id },
+          update: {
+            config: nextConfig,
+            schemaVersion: 1,
+          },
+          create: {
+            clientId: client.id,
+            config: nextConfig,
+            schemaVersion: 1,
+          },
+        });
       });
     }
     const report = {

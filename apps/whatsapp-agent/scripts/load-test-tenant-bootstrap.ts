@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { withLockedTenantOperationalConfig } from "../src/config/tenantOperationalConfigStore.js";
 import crypto from "node:crypto";
 import path from "node:path";
 import process from "node:process";
@@ -130,41 +131,44 @@ async function upsertTenantConfig(params: {
   prisma: PrismaClient;
   clientId: string;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
-  });
-  const config = mergeJson(existing?.config);
-  const nextConfig = {
-    ...config,
-    planLimits: {
-      planName: "load-test",
-      messagesLimit: null,
-      quotaMonthlyConversations: null,
-      quotaWarnAtPct: 0.9,
-      quotaBlockedReplyText: null,
-      quotaExcludeWaIds: [],
-    },
-    templates: {
-      ...((config.templates && typeof config.templates === "object" && !Array.isArray(config.templates))
-        ? config.templates
-        : {}),
-      manualHandoff: "loadtest_manual_handoff_v1",
-    },
-    automationFlags: {
-      disableChatbot: true,
-      disableAiFallback: true,
-      disableIntentClassifier: true,
-    },
-  };
-  return params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: { config: nextConfig as Prisma.InputJsonValue, schemaVersion: 1 },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as PrismaClient };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const config = mergeJson(existing?.config);
+    const nextConfig = {
+      ...config,
+      planLimits: {
+        planName: "load-test",
+        messagesLimit: null,
+        quotaMonthlyConversations: null,
+        quotaWarnAtPct: 0.9,
+        quotaBlockedReplyText: null,
+        quotaExcludeWaIds: [],
+      },
+      templates: {
+        ...((config.templates && typeof config.templates === "object" && !Array.isArray(config.templates))
+          ? config.templates
+          : {}),
+        manualHandoff: "loadtest_manual_handoff_v1",
+      },
+      automationFlags: {
+        disableChatbot: true,
+        disableAiFallback: true,
+        disableIntentClassifier: true,
+      },
+    };
+    return params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: { config: nextConfig as Prisma.InputJsonValue, schemaVersion: 1 },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+    });
   });
 }
 
@@ -275,7 +279,7 @@ async function buildStatus(prisma: PrismaClient, options: Options) {
       operationalConfig: true,
     },
   });
-  const tenants = await getTenants().catch(() => ({}));
+  const tenants = await getTenants().catch((): TenantConfigMap => ({}));
   const tenantConfig = tenants[options.tenant];
   return {
     tenant: options.tenant,

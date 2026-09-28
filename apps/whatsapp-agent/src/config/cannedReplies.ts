@@ -1,3 +1,4 @@
+import { withLockedTenantOperationalConfig } from "./tenantOperationalConfigStore.js";
 import crypto from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 
@@ -168,25 +169,28 @@ export async function createCannedReply(params: {
   userId: string;
 }) {
   const now = new Date().toISOString();
-  const config = await loadOperationalConfig(params.prisma, params.clientId);
-  const replies = readCannedRepliesFromConfig(config);
-  const reply: CannedReply = {
-    id: crypto.randomUUID(),
-    title: normalizeTitle(params.input.title),
-    body: normalizeBody(params.input.body),
-    category: normalizeCategory(params.input.category),
-    active: true,
-    createdAt: now,
-    updatedAt: now,
-    createdBy: params.userId,
-    updatedBy: params.userId,
-  };
-  const nextConfig = {
-    ...config,
-    cannedReplies: [reply, ...replies],
-  };
-  await saveOperationalConfig(params.prisma, params.clientId, nextConfig);
-  return reply;
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const config = await loadOperationalConfig(params.prisma, params.clientId);
+    const replies = readCannedRepliesFromConfig(config);
+    const reply: CannedReply = {
+      id: crypto.randomUUID(),
+      title: normalizeTitle(params.input.title),
+      body: normalizeBody(params.input.body),
+      category: normalizeCategory(params.input.category),
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: params.userId,
+      updatedBy: params.userId,
+    };
+    const nextConfig = {
+      ...config,
+      cannedReplies: [reply, ...replies],
+    };
+    await saveOperationalConfig(params.prisma, params.clientId, nextConfig);
+    return reply;
+  });
 }
 
 export async function updateCannedReply(params: {
@@ -197,32 +201,35 @@ export async function updateCannedReply(params: {
   userId: string;
 }) {
   const now = new Date().toISOString();
-  const config = await loadOperationalConfig(params.prisma, params.clientId);
-  const replies = readCannedRepliesFromConfig(config);
-  const index = replies.findIndex((reply) => reply.id === params.replyId);
-  if (index === -1) return null;
-  const current = replies[index];
-  if (!current) return null;
-  const next: CannedReply = {
-    ...current,
-    title: Object.prototype.hasOwnProperty.call(params.input, "title")
-      ? normalizeTitle(params.input.title)
-      : current.title,
-    body: Object.prototype.hasOwnProperty.call(params.input, "body")
-      ? normalizeBody(params.input.body)
-      : current.body,
-    category: Object.prototype.hasOwnProperty.call(params.input, "category")
-      ? normalizeCategory(params.input.category)
-      : current.category,
-    updatedAt: now,
-    updatedBy: params.userId,
-  };
-  replies[index] = next;
-  await saveOperationalConfig(params.prisma, params.clientId, {
-    ...config,
-    cannedReplies: replies,
-  });
-  return next;
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const config = await loadOperationalConfig(params.prisma, params.clientId);
+    const replies = readCannedRepliesFromConfig(config);
+    const index = replies.findIndex((reply) => reply.id === params.replyId);
+    if (index === -1) return null;
+    const current = replies[index];
+    if (!current) return null;
+    const next: CannedReply = {
+      ...current,
+      title: Object.prototype.hasOwnProperty.call(params.input, "title")
+        ? normalizeTitle(params.input.title)
+        : current.title,
+      body: Object.prototype.hasOwnProperty.call(params.input, "body")
+        ? normalizeBody(params.input.body)
+        : current.body,
+      category: Object.prototype.hasOwnProperty.call(params.input, "category")
+        ? normalizeCategory(params.input.category)
+        : current.category,
+      updatedAt: now,
+      updatedBy: params.userId,
+    };
+    replies[index] = next;
+    await saveOperationalConfig(params.prisma, params.clientId, {
+      ...config,
+      cannedReplies: replies,
+    });
+    return next;
+  }, { createIfMissing: false, onMissing: () => null });
 }
 
 export async function setCannedReplyActive(params: {
@@ -233,22 +240,25 @@ export async function setCannedReplyActive(params: {
   userId: string;
 }) {
   const now = new Date().toISOString();
-  const config = await loadOperationalConfig(params.prisma, params.clientId);
-  const replies = readCannedRepliesFromConfig(config);
-  const index = replies.findIndex((reply) => reply.id === params.replyId);
-  if (index === -1) return null;
-  const current = replies[index];
-  if (!current) return null;
-  const next: CannedReply = {
-    ...current,
-    active: params.active,
-    updatedAt: now,
-    updatedBy: params.userId,
-  };
-  replies[index] = next;
-  await saveOperationalConfig(params.prisma, params.clientId, {
-    ...config,
-    cannedReplies: replies,
-  });
-  return next;
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const config = await loadOperationalConfig(params.prisma, params.clientId);
+    const replies = readCannedRepliesFromConfig(config);
+    const index = replies.findIndex((reply) => reply.id === params.replyId);
+    if (index === -1) return null;
+    const current = replies[index];
+    if (!current) return null;
+    const next: CannedReply = {
+      ...current,
+      active: params.active,
+      updatedAt: now,
+      updatedBy: params.userId,
+    };
+    replies[index] = next;
+    await saveOperationalConfig(params.prisma, params.clientId, {
+      ...config,
+      cannedReplies: replies,
+    });
+    return next;
+  }, { createIfMissing: false, onMissing: () => null });
 }

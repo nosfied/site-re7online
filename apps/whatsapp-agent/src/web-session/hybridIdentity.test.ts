@@ -40,7 +40,10 @@ function makePrisma() {
   };
   const prisma = {
     state,
+    // Unit-only adapter. Integration tests exercise real row locks.
+    $queryRaw: async () => [{ id: "unit-mock-existing-row" }],
     tenantOperationalConfig: {
+      createMany: async () => ({ count: 0 }),
       findUnique: async (args: { where: { clientId: string } }) =>
         state.operationalConfigs.find((item) => item.clientId === args.where.clientId) ?? null,
       upsert: async (args: {

@@ -29,7 +29,10 @@ import {
 
 function prismaWithConfig(config: unknown) {
   return {
+    // Unit-only SQL adapter; lock behavior is tested against PostgreSQL separately.
+    $queryRaw: async () => [{ id: "unit-mock-existing-row" }],
     tenantOperationalConfig: {
+      createMany: async () => ({ count: 0 }),
       findUnique: async () => ({ config }),
     },
   } as never;
@@ -38,7 +41,10 @@ function prismaWithConfig(config: unknown) {
 function prismaWithMutableConfig(initialConfig: unknown) {
   let config = initialConfig;
   return {
+    // Unit-only SQL adapter; lock behavior is tested against PostgreSQL separately.
+    $queryRaw: async () => [{ id: "unit-mock-existing-row" }],
     tenantOperationalConfig: {
+      createMany: async () => ({ count: 0 }),
       findUnique: async () => ({ config }),
       upsert: async ({ update, create }: { update: { config: unknown }; create: { config: unknown } }) => {
         config = update.config ?? create.config;
@@ -254,7 +260,10 @@ test("resolveInteractiveContactStartPolicy defaults Web Session contact start to
 test("saveInteractiveContactStartPolicy persists explicit Web Session contact start opt-in", async () => {
   let storedConfig: unknown = { whatsappPrimaryTransport: "web_session" };
   const prisma = {
+    // Unit-only SQL adapter; lock behavior is tested against PostgreSQL separately.
+    $queryRaw: async () => [{ id: "unit-mock-existing-row" }],
     tenantOperationalConfig: {
+      createMany: async () => ({ count: 0 }),
       findUnique: async () => ({ config: storedConfig }),
       upsert: async ({ update, create }: { update: { config: unknown }; create: { config: unknown } }) => {
         storedConfig = update.config ?? create.config;
@@ -318,7 +327,10 @@ test("normalizeSatisfactionPolicySettings reads legacy comment settings into can
 test("saveSatisfactionPolicySettings writes canonical satisfaction policy only", async () => {
   let savedConfig: Record<string, unknown> | null = null;
   const prisma = {
+    // Unit-only SQL adapter; lock behavior is tested against PostgreSQL separately.
+    $queryRaw: async () => [{ id: "unit-mock-existing-row" }],
     tenantOperationalConfig: {
+      createMany: async () => ({ count: 0 }),
       findUnique: async () => ({
         config: {
           satisfactionPolicy: {
@@ -379,7 +391,10 @@ test("saveWhatsappTransportRoutingEnabled persists one transport without touchin
     },
   };
   const prisma = {
+    // Unit-only SQL adapter; lock behavior is tested against PostgreSQL separately.
+    $queryRaw: async () => [{ id: "unit-mock-existing-row" }],
     tenantOperationalConfig: {
+      createMany: async () => ({ count: 0 }),
       findUnique: async () => ({ config: storedConfig }),
       upsert: async ({ update, create }: { update: { config: unknown }; create: { config: unknown } }) => {
         storedConfig = update.config ?? create.config;
@@ -449,7 +464,10 @@ test("saveWhatsappTemplatePolicySettings persists allowlist without touching oth
     },
   };
   const prisma = {
+    // Unit-only SQL adapter; lock behavior is tested against PostgreSQL separately.
+    $queryRaw: async () => [{ id: "unit-mock-existing-row" }],
     tenantOperationalConfig: {
+      createMany: async () => ({ count: 0 }),
       findUnique: async () => ({ config: storedConfig }),
       upsert: async ({ update, create }: { update: { config: unknown }; create: { config: unknown } }) => {
         storedConfig = update.config ?? create.config;

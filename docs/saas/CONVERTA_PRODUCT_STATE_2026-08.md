@@ -1,5 +1,74 @@
 # Converta Product State - 2026-08
 
+## Persistência compartilhada — dependência local separada — 28/09/2026
+
+**LOCAL VALIDATED / NOT DEPLOYED.** [Implementação, provas e limites](SECULT_CLOSED_CONFIG_CONCURRENCY_PROPOSAL_2026-09-28.md).
+34 escritores substitutivos migrados para lock transacional + leitura/transformação
+atual; criação concorrente sem sobrescrita e no-op de linha ausente protegidos.
+Rodízio decide após releitura sob lock; sem alteração de algoritmo, autorização
+WEB_SESSION ou identidade híbrida. Sem schema/migration ou configuração SECULT.
+
+Validação: **185/185** na suíte afetada e **22/22** do worker simulado; builds de
+backend/worker e typecheck dos três scripts PASS. Build worker canônico usa
+--noCheck; não representa typecheck integral. Evidências privadas preservadas.
+Implementação local encerrada; publicação somente para revisão autorizada depois,
+sem deploy/produção. Revisão adicional: worker estrito falha com 13 diagnósticos
+idênticos ao parent; tipagem integral NÃO APROVADA, sem correção alheia. Backend e
+scripts alterados checados. Rodízio conserva corpo de decisão/selector e ordem
+advisory → config → runtime. P2002 preexistente propaga HTTP 400 com código/mensagem
+Prisma após rollback, sem retry. Retorno a escritores antigos elimina a garantia;
+rollback futuro, especialmente após SECULT, exige tratamento explícito da permissão.
+
+SECULT continua **NOT IMPLEMENTED / NOT DEPLOYED**, aguardando revisão desta
+validação e implementação funcional própria. O bloqueio por persistência está
+tratado localmente, sem declarar garantia em produção. API, worker WEB_SESSION
+(escritor via fontes compartilhadas) e scripts precisam usar a correção para essa
+garantia valer; escritor antigo ainda pode restaurar JSON obsoleto. Rollout separado.
+
+Pendência preexistente separada: `/admin/tenants` com update vazio preserva config,
+mas disputa de criação pode retornar P2002; rota não alterada, sem perda de dados
+no teste. Não confundir com criação segura do novo helper. Campanhas/CRA aguardam
+retorno funcional do owner; DB-only aceita; Guia inatividade pausado; 6683 CLOSED.
+
+O registro SECULT abaixo é o histórico da parada/proposta anterior, preservado;
+“não implementado/validado” naquele registro não é o estado atual desta dependência.
+
+## SECULT — consulta AGENT de CLOSED — 28/09/2026
+
+Delimitação técnica posterior: [proposta compartilhada de persistência](SECULT_CLOSED_CONFIG_CONCURRENCY_PROPOSAL_2026-09-28.md).
+Inventário: 35 pontos/9 arquivos, sendo 34 substitutivos e um create-only seguro.
+Proposta: helper transacional com lock da linha de configuração e transformação
+do JSON fresco; migrar 34 escritores, sem alterar decisões de domínio. Sem nova
+tabela/migration. Ainda não implementado/validado; SECULT mantém o bloqueio.
+Reprodução anterior íntegra; nenhuma mudança produtiva ou de prioridade CRA.
+
+**BLOCKED BEFORE IMPLEMENTATION / NOT DEPLOYED.** Frente prioritária; Guia
+inatividade pausado. Requisito: allowAgentOwnClosedConversations=false por default,
+gestão SUPERVISOR/ADMIN na configuração Inbox existente, consulta da conversa
+atualmente CLOSED pelo responsável comprovado em CompletedServiceSnapshot.
+Sem nova tela/categoria, arquivo ou segmentação de mensagens por ciclo; histórico
+e privacidade existentes preservados. Reentrada remove somente essa exceção;
+nenhuma permissão operacional, alteração de distribuição/lifecycle ou ampliação
+de inboxVisibilityPolicy ADMIN-only.
+
+Impedimento local reproduzido em PostgreSQL isolado, dados sintéticos e duas
+conexões: saveAgentSignatureSettings leu config com chave true; outra conexão
+confirmou false; o upsert do salvador real restaurou true com o JSON antigo.
+Os salvadores atuais substituem o documento inteiro; não há proteção concorrente
+reutilizável nesse caminho. Escritores de rodízio e WEB_SESSION também compartilham
+o JSON. Proteger apenas o novo setter não resolve; é necessário tratar a escrita
+concorrente das chaves compartilhadas, preservando as decisões de distribuição.
+
+Aplicada a parada exigida por ampliação material. Próximo passo depende de
+delimitar essa proteção como pré-requisito local, sem mudar armazenamento aprovado
+nem aceitar revogação insegura. Nenhum código funcional alterado; reprodução
+confirma falha existente, não PASS da funcionalidade. Evidências privadas em
+local-evidence/secult-own-closed-20260928/RESULT_REPORT.md; sem produção, providers,
+envio, build/smoke, commit/push/deploy. Realtime amplo e divergência lista/detalhe
+registrados separadamente, sem alegar resolução. DB-only permanece aceita;
+campanhas/CRA implantadas aguardam validação funcional de Deifson. 6683 CLOSED.
+
+
 ## Atualização produtiva — flows DB-only — 28/09/2026
 
 **DEPLOYED / CLIENT ACCEPTED — correção de flows DB-only.** Backend/frontend

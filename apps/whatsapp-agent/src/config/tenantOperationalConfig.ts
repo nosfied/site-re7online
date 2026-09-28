@@ -1,3 +1,4 @@
+import { withLockedTenantOperationalConfig } from "./tenantOperationalConfigStore.js";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { env } from "./env.js";
 import {
@@ -937,37 +938,40 @@ export async function saveWebSessionAlertEmails(params: {
   clientId: string;
   emails: unknown;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const nextEmails = normalizeWebSessionAlertEmails(params.emails);
+    const nextConfig = {
+      ...existingConfig,
+      webSessionAlertEmails: nextEmails,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      emails: nextEmails,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const nextEmails = normalizeWebSessionAlertEmails(params.emails);
-  const nextConfig = {
-    ...existingConfig,
-    webSessionAlertEmails: nextEmails,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    emails: nextEmails,
-  };
 }
 
 export async function resolveRuntimeLimitsSettings(params: {
@@ -998,42 +1002,45 @@ export async function saveRuntimeLimitsSettings(params: {
   settings: Partial<RuntimeLimitsSettings>;
   tenant?: Pick<TenantConfig, "maxActiveAppUsers"> | null;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const currentSettings = parseOperationalConfig(existing?.config).runtimeLimits
+      ?? normalizeRuntimeLimitsSettingsFromTenant(params.tenant);
+    const nextSettings = normalizeRuntimeLimitsSettings({
+      ...currentSettings,
+      ...params.settings,
+    });
+    const nextConfig = {
+      ...existingConfig,
+      runtimeLimits: nextSettings,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: nextSettings,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const currentSettings = parseOperationalConfig(existing?.config).runtimeLimits
-    ?? normalizeRuntimeLimitsSettingsFromTenant(params.tenant);
-  const nextSettings = normalizeRuntimeLimitsSettings({
-    ...currentSettings,
-    ...params.settings,
-  });
-  const nextConfig = {
-    ...existingConfig,
-    runtimeLimits: nextSettings,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    settings: nextSettings,
-  };
 }
 
 export async function resolveSatisfactionPolicySettings(params: {
@@ -1059,44 +1066,47 @@ export async function saveSatisfactionPolicySettings(params: {
   clientId: string;
   settings: unknown;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const currentSettings = normalizeSatisfactionPolicySettings(existingConfig.satisfactionPolicy);
+    const inputSettings = isRecord(params.settings) ? params.settings : {};
+    const nextSettings = normalizeSatisfactionPolicySettings({
+      ...currentSettings,
+      ...inputSettings,
+    });
+    const nextConfig = {
+      ...existingConfig,
+      satisfactionPolicy: nextSettings,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+        config: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: parseOperationalConfig(saved.config).satisfactionPolicy ?? getDefaultSatisfactionPolicySettings(),
+      source: "db" as const,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const currentSettings = normalizeSatisfactionPolicySettings(existingConfig.satisfactionPolicy);
-  const inputSettings = isRecord(params.settings) ? params.settings : {};
-  const nextSettings = normalizeSatisfactionPolicySettings({
-    ...currentSettings,
-    ...inputSettings,
-  });
-  const nextConfig = {
-    ...existingConfig,
-    satisfactionPolicy: nextSettings,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-      config: true,
-    },
-  });
-  return {
-    record: saved,
-    settings: parseOperationalConfig(saved.config).satisfactionPolicy ?? getDefaultSatisfactionPolicySettings(),
-    source: "db" as const,
-  };
 }
 
 export async function resolveServiceMessagePolicySettings(params: {
@@ -1123,41 +1133,44 @@ export async function saveServiceMessagePolicySettings(params: {
   clientId: string;
   settings: unknown;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const currentSettings = normalizeServiceMessagePolicySettings(existingConfig.serviceMessages);
+    const inputSettings = isRecord(params.settings) ? params.settings : {};
+    const nextSettings = mergeServiceMessagePolicySettings(currentSettings, inputSettings);
+    const nextConfig = {
+      ...existingConfig,
+      serviceMessages: nextSettings,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+        config: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: parseOperationalConfig(saved.config).serviceMessages ?? getDefaultServiceMessagePolicySettings(),
+      source: "db" as const,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const currentSettings = normalizeServiceMessagePolicySettings(existingConfig.serviceMessages);
-  const inputSettings = isRecord(params.settings) ? params.settings : {};
-  const nextSettings = mergeServiceMessagePolicySettings(currentSettings, inputSettings);
-  const nextConfig = {
-    ...existingConfig,
-    serviceMessages: nextSettings,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-      config: true,
-    },
-  });
-  return {
-    record: saved,
-    settings: parseOperationalConfig(saved.config).serviceMessages ?? getDefaultServiceMessagePolicySettings(),
-    source: "db" as const,
-  };
 }
 
 export async function resolveChatbotCloseMessageSettings(params: {
@@ -1182,50 +1195,53 @@ export async function saveChatbotCloseMessageSettings(params: {
   clientId: string;
   settings: unknown;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
-  });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const existingCloseCommand = isRecord(existingConfig.chatbotCloseCommand)
-    ? { ...existingConfig.chatbotCloseCommand }
-    : {};
-  const nextSettings = normalizeChatbotCloseMessageSettings({
-    ...existingCloseCommand,
-    ...(isRecord(params.settings) ? params.settings : {}),
-  });
-  const nextConfig = {
-    ...existingConfig,
-    chatbotCloseCommand: {
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const existingCloseCommand = isRecord(existingConfig.chatbotCloseCommand)
+      ? { ...existingConfig.chatbotCloseCommand }
+      : {};
+    const nextSettings = normalizeChatbotCloseMessageSettings({
       ...existingCloseCommand,
-      closedMessage: nextSettings.closedMessage,
-    },
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-      config: true,
-    },
+      ...(isRecord(params.settings) ? params.settings : {}),
+    });
+    const nextConfig = {
+      ...existingConfig,
+      chatbotCloseCommand: {
+        ...existingCloseCommand,
+        closedMessage: nextSettings.closedMessage,
+      },
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+        config: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: normalizeChatbotCloseMessageSettings(
+        isRecord(saved.config) ? saved.config.chatbotCloseCommand : null
+      ),
+      source: "db" as const,
+    };
   });
-  return {
-    record: saved,
-    settings: normalizeChatbotCloseMessageSettings(
-      isRecord(saved.config) ? saved.config.chatbotCloseCommand : null
-    ),
-    source: "db" as const,
-  };
 }
 
 export async function resolveCrmBusinessStatuses(params: {
@@ -1270,41 +1286,44 @@ export async function saveAgentSignatureSettings(params: {
   clientId: string;
   settings: Partial<AgentSignatureSettings>;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const currentSettings = parseOperationalConfig(existing?.config).agentSignature ?? getDefaultAgentSignatureSettings();
+    const nextSettings = normalizeAgentSignatureSettings({
+      ...currentSettings,
+      ...params.settings,
+    });
+    const nextConfig = {
+      ...existingConfig,
+      agentSignature: nextSettings,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: nextSettings,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const currentSettings = parseOperationalConfig(existing?.config).agentSignature ?? getDefaultAgentSignatureSettings();
-  const nextSettings = normalizeAgentSignatureSettings({
-    ...currentSettings,
-    ...params.settings,
-  });
-  const nextConfig = {
-    ...existingConfig,
-    agentSignature: nextSettings,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    settings: nextSettings,
-  };
 }
 
 export async function resolveInboxVisibilityPolicy(params: {
@@ -1346,36 +1365,39 @@ export async function saveInteractiveContactStartPolicy(params: {
   clientId: string;
   allowInteractiveContactStartViaWebSession: unknown;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const nextValue = normalizeAllowInteractiveContactStartViaWebSession(
+      params.allowInteractiveContactStartViaWebSession
+    );
+    const nextConfig = {
+      ...existingConfig,
+      allowInteractiveContactStartViaWebSession: nextValue,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: { config: true },
+    });
+    return {
+      allowInteractiveContactStartViaWebSession: parseOperationalConfig(saved.config)
+        .allowInteractiveContactStartViaWebSession ?? false,
+      source: "db" as const,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const nextValue = normalizeAllowInteractiveContactStartViaWebSession(
-    params.allowInteractiveContactStartViaWebSession
-  );
-  const nextConfig = {
-    ...existingConfig,
-    allowInteractiveContactStartViaWebSession: nextValue,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: { config: true },
-  });
-  return {
-    allowInteractiveContactStartViaWebSession: parseOperationalConfig(saved.config)
-      .allowInteractiveContactStartViaWebSession ?? false,
-    source: "db" as const,
-  };
 }
 
 export async function resolveWhatsappTransportRoutingSettings(params: {
@@ -1400,44 +1422,47 @@ export async function saveWhatsappTransportRoutingEnabled(params: {
   transport: WhatsappTransportRoutingKey;
   enabledForRouting: unknown;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const current = parseOperationalConfig(existing?.config).whatsappTransports ?? {};
+    const nextSettings: WhatsappTransportRoutingSettings = {
+      ...current,
+      [params.transport]: {
+        enabledForRouting: params.enabledForRouting === true,
+      },
+    };
+    const nextConfig = {
+      ...existingConfig,
+      whatsappTransports: nextSettings,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+        config: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: parseOperationalConfig(saved.config).whatsappTransports ?? {},
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const current = parseOperationalConfig(existing?.config).whatsappTransports ?? {};
-  const nextSettings: WhatsappTransportRoutingSettings = {
-    ...current,
-    [params.transport]: {
-      enabledForRouting: params.enabledForRouting === true,
-    },
-  };
-  const nextConfig = {
-    ...existingConfig,
-    whatsappTransports: nextSettings,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-      config: true,
-    },
-  });
-  return {
-    record: saved,
-    settings: parseOperationalConfig(saved.config).whatsappTransports ?? {},
-  };
 }
 
 export async function resolveWhatsappTemplatePolicySettings(params: {
@@ -1463,43 +1488,46 @@ export async function saveWhatsappTemplatePolicySettings(params: {
   clientId: string;
   allowedCategories: unknown;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const nextSettings = normalizeWhatsappTemplatePolicySettings({
+      allowedCategories: params.allowedCategories,
+    });
+    const nextConfig = {
+      ...existingConfig,
+      whatsappTemplatePolicy: nextSettings,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+        config: true,
+      },
+    });
+    const settings = parseOperationalConfig(saved.config).whatsappTemplatePolicy ?? {};
+    return {
+      record: saved,
+      settings,
+      source: "db" as const,
+      unrestricted: !Array.isArray(settings.allowedCategories),
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const nextSettings = normalizeWhatsappTemplatePolicySettings({
-    allowedCategories: params.allowedCategories,
-  });
-  const nextConfig = {
-    ...existingConfig,
-    whatsappTemplatePolicy: nextSettings,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-      config: true,
-    },
-  });
-  const settings = parseOperationalConfig(saved.config).whatsappTemplatePolicy ?? {};
-  return {
-    record: saved,
-    settings,
-    source: "db" as const,
-    unrestricted: !Array.isArray(settings.allowedCategories),
-  };
 }
 
 export async function saveInboxVisibilityPolicy(params: {
@@ -1507,33 +1535,36 @@ export async function saveInboxVisibilityPolicy(params: {
   clientId: string;
   policy: InboxVisibilityPolicy;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const nextPolicy = normalizeInboxVisibilityPolicy(params.policy);
+    const nextConfig = {
+      ...existingConfig,
+      inboxVisibilityPolicy: nextPolicy,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: { config: true },
+    });
+    return {
+      policy: parseOperationalConfig(saved.config).inboxVisibilityPolicy ?? "shared",
+      source: "db" as const,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const nextPolicy = normalizeInboxVisibilityPolicy(params.policy);
-  const nextConfig = {
-    ...existingConfig,
-    inboxVisibilityPolicy: nextPolicy,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: { config: true },
-  });
-  return {
-    policy: parseOperationalConfig(saved.config).inboxVisibilityPolicy ?? "shared",
-    source: "db" as const,
-  };
 }
 
 export async function resolveManualHandoffTemplate(params: {
@@ -1604,42 +1635,45 @@ export async function saveFollowUpSettings(params: {
     | "defaultLanguage"
   > | null;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const currentFollowUp = parseOperationalConfig(existing?.config).followUp
+      ?? normalizeFollowUpSettingsFromTenant(params.tenant);
+    const nextFollowUp = normalizeFollowUpSettings({
+      ...currentFollowUp,
+      ...params.settings,
+    }, params.tenant);
+    const nextConfig = {
+      ...existingConfig,
+      followUp: nextFollowUp,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: nextFollowUp,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const currentFollowUp = parseOperationalConfig(existing?.config).followUp
-    ?? normalizeFollowUpSettingsFromTenant(params.tenant);
-  const nextFollowUp = normalizeFollowUpSettings({
-    ...currentFollowUp,
-    ...params.settings,
-  }, params.tenant);
-  const nextConfig = {
-    ...existingConfig,
-    followUp: nextFollowUp,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    settings: nextFollowUp,
-  };
 }
 
 export async function resolveHandoffLeadNotificationSettings(params: {
@@ -1676,44 +1710,47 @@ export async function saveHandoffLeadNotificationSettings(params: {
     "handoffLeadNotificationEnabled" | "handoffLeadNotificationRecipients"
   > | null;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const currentSettings = parseOperationalConfig(existing?.config).handoffLeadNotification
+      ?? normalizeHandoffLeadNotificationSettingsFromTenant(params.tenant);
+    const nextSettings: HandoffLeadNotificationSettings = {
+      enabled: params.settings.enabled ?? currentSettings.enabled,
+      recipients: params.settings.recipients
+        ? normalizeHandoffLeadNotificationRecipients(params.settings.recipients)
+        : currentSettings.recipients,
+    };
+    const nextConfig = {
+      ...existingConfig,
+      handoffLeadNotification: nextSettings,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: nextSettings,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const currentSettings = parseOperationalConfig(existing?.config).handoffLeadNotification
-    ?? normalizeHandoffLeadNotificationSettingsFromTenant(params.tenant);
-  const nextSettings: HandoffLeadNotificationSettings = {
-    enabled: params.settings.enabled ?? currentSettings.enabled,
-    recipients: params.settings.recipients
-      ? normalizeHandoffLeadNotificationRecipients(params.settings.recipients)
-      : currentSettings.recipients,
-  };
-  const nextConfig = {
-    ...existingConfig,
-    handoffLeadNotification: nextSettings,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    settings: nextSettings,
-  };
 }
 
 export async function resolveMediaHandoffPolicy(params: {
@@ -1743,37 +1780,40 @@ export async function saveMediaHandoffPolicy(params: {
   clientId: string;
   policy: TenantMediaHandoffPolicy;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const nextPolicy = normalizeTenantMediaHandoffPolicy(params.policy);
+    const nextConfig = {
+      ...existingConfig,
+      mediaHandoffPolicy: nextPolicy,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      policy: nextPolicy,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const nextPolicy = normalizeTenantMediaHandoffPolicy(params.policy);
-  const nextConfig = {
-    ...existingConfig,
-    mediaHandoffPolicy: nextPolicy,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    policy: nextPolicy,
-  };
 }
 
 export async function resolveWhatsappMediaPolicy(params: {
@@ -1802,37 +1842,40 @@ export async function saveWhatsappMediaPolicy(params: {
   clientId: string;
   policy: unknown;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const nextPolicy = normalizeWhatsappMediaPolicy(params.policy);
+    const nextConfig = {
+      ...existingConfig,
+      whatsappMediaPolicy: nextPolicy,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      policy: nextPolicy,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const nextPolicy = normalizeWhatsappMediaPolicy(params.policy);
-  const nextConfig = {
-    ...existingConfig,
-    whatsappMediaPolicy: nextPolicy,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    policy: nextPolicy,
-  };
 }
 
 export async function resolvePlanLimitsSettings(params: {
@@ -1879,42 +1922,45 @@ export async function savePlanLimitsSettings(params: {
     | "quotaExcludeWaIds"
   > | null;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const currentSettings = parseOperationalConfig(existing?.config).planLimits
+      ?? normalizePlanLimitsSettingsFromTenant(params.tenant);
+    const nextSettings = normalizePlanLimitsSettings({
+      ...currentSettings,
+      ...params.settings,
+    });
+    const nextConfig = {
+      ...existingConfig,
+      planLimits: nextSettings,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: nextSettings,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const currentSettings = parseOperationalConfig(existing?.config).planLimits
-    ?? normalizePlanLimitsSettingsFromTenant(params.tenant);
-  const nextSettings = normalizePlanLimitsSettings({
-    ...currentSettings,
-    ...params.settings,
-  });
-  const nextConfig = {
-    ...existingConfig,
-    planLimits: nextSettings,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    settings: nextSettings,
-  };
 }
 
 export async function resolveAutomationFlagsSettings(params: {
@@ -1959,42 +2005,45 @@ export async function saveAutomationFlagsSettings(params: {
     | "disableChatbotFlowEditing"
   > | null;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const currentSettings = parseOperationalConfig(existing?.config).automationFlags
+      ?? normalizeAutomationFlagsSettingsFromTenant(params.tenant);
+    const nextSettings = normalizeAutomationFlagsSettings({
+      ...currentSettings,
+      ...params.settings,
+    });
+    const nextConfig = {
+      ...existingConfig,
+      automationFlags: nextSettings,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: nextSettings,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const currentSettings = parseOperationalConfig(existing?.config).automationFlags
-    ?? normalizeAutomationFlagsSettingsFromTenant(params.tenant);
-  const nextSettings = normalizeAutomationFlagsSettings({
-    ...currentSettings,
-    ...params.settings,
-  });
-  const nextConfig = {
-    ...existingConfig,
-    automationFlags: nextSettings,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    settings: nextSettings,
-  };
 }
 
 export async function resolveAiAssistantConfigSettings(params: {
@@ -2051,42 +2100,45 @@ export async function saveAiAssistantConfigSettings(params: {
     | "aiAssistantProfile"
   > | null;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const currentSettings = parseOperationalConfig(existing?.config).aiAssistantConfig
+      ?? normalizeAiAssistantConfigSettingsFromTenant(params.tenant);
+    const nextSettings = normalizeAiAssistantConfigSettings({
+      ...currentSettings,
+      ...params.settings,
+    });
+    const nextConfig = {
+      ...existingConfig,
+      aiAssistantConfig: nextSettings,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: nextSettings,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const currentSettings = parseOperationalConfig(existing?.config).aiAssistantConfig
-    ?? normalizeAiAssistantConfigSettingsFromTenant(params.tenant);
-  const nextSettings = normalizeAiAssistantConfigSettings({
-    ...currentSettings,
-    ...params.settings,
-  });
-  const nextConfig = {
-    ...existingConfig,
-    aiAssistantConfig: nextSettings,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    settings: nextSettings,
-  };
 }
 
 export function applyAiAssistantConfigToTenant<T extends Partial<TenantConfig>>(
@@ -2131,46 +2183,49 @@ export async function saveAiIntentQualificationSettings(params: {
   settings: Partial<AiIntentQualificationSettings>;
   tenant?: Pick<TenantConfig, "aiAssistantIntentCatalog" | "aiQualification"> | null;
 }) {
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const currentSettings = parseOperationalConfig(existing?.config).aiIntentQualification
+      ?? normalizeAiIntentQualificationSettingsFromTenant(params.tenant);
+    const nextSettings: AiIntentQualificationSettings = {
+      aiAssistantIntentCatalog: Object.prototype.hasOwnProperty.call(params.settings, "aiAssistantIntentCatalog")
+        ? normalizeAiAssistantIntentCatalog(params.settings.aiAssistantIntentCatalog)
+        : currentSettings.aiAssistantIntentCatalog,
+      aiQualification: Object.prototype.hasOwnProperty.call(params.settings, "aiQualification")
+        ? normalizeQualificationSchema(params.settings.aiQualification) ?? null
+        : currentSettings.aiQualification,
+    };
+    const nextConfig = {
+      ...existingConfig,
+      aiIntentQualification: nextSettings,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      settings: nextSettings,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const currentSettings = parseOperationalConfig(existing?.config).aiIntentQualification
-    ?? normalizeAiIntentQualificationSettingsFromTenant(params.tenant);
-  const nextSettings: AiIntentQualificationSettings = {
-    aiAssistantIntentCatalog: Object.prototype.hasOwnProperty.call(params.settings, "aiAssistantIntentCatalog")
-      ? normalizeAiAssistantIntentCatalog(params.settings.aiAssistantIntentCatalog)
-      : currentSettings.aiAssistantIntentCatalog,
-    aiQualification: Object.prototype.hasOwnProperty.call(params.settings, "aiQualification")
-      ? normalizeQualificationSchema(params.settings.aiQualification) ?? null
-      : currentSettings.aiQualification,
-  };
-  const nextConfig = {
-    ...existingConfig,
-    aiIntentQualification: nextSettings,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    settings: nextSettings,
-  };
 }
 
 export function applyAiIntentQualificationToTenant<T extends Partial<TenantConfig>>(
@@ -2201,34 +2256,37 @@ export async function saveCrmBusinessStatuses(params: {
   statuses: CrmBusinessStatusConfig[];
 }) {
   const normalized = normalizeCrmBusinessStatuses(params.statuses);
-  const existing = await params.prisma.tenantOperationalConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: { config: true },
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    params = { ...params, prisma: tx as typeof params.prisma };
+    const existing = await params.prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const nextConfig = {
+      ...existingConfig,
+      crmBusinessStatuses: normalized,
+    };
+    const saved = await params.prisma.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: {
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      create: {
+        clientId: params.clientId,
+        config: nextConfig as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+      select: {
+        id: true,
+        schemaVersion: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      record: saved,
+      statuses: normalized,
+    };
   });
-  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
-  const nextConfig = {
-    ...existingConfig,
-    crmBusinessStatuses: normalized,
-  };
-  const saved = await params.prisma.tenantOperationalConfig.upsert({
-    where: { clientId: params.clientId },
-    update: {
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    create: {
-      clientId: params.clientId,
-      config: nextConfig as Prisma.InputJsonValue,
-      schemaVersion: 1,
-    },
-    select: {
-      id: true,
-      schemaVersion: true,
-      updatedAt: true,
-    },
-  });
-  return {
-    record: saved,
-    statuses: normalized,
-  };
 }

@@ -1,4 +1,5 @@
 #!/usr/bin/env -S node --import tsx
+import { withLockedTenantOperationalConfig } from "../src/config/tenantOperationalConfigStore.js";
 import crypto from "node:crypto";
 import process from "node:process";
 import { Prisma, PrismaClient } from "@prisma/client";
@@ -312,10 +313,14 @@ async function main() {
       },
     });
     if (options.apply) {
-      await prisma.tenantOperationalConfig.upsert({
-        where: { clientId: client.id },
-        update: { config: nextConfig as Prisma.InputJsonObject, schemaVersion: 1 },
-        create: { clientId: client.id, config: nextConfig as Prisma.InputJsonObject, schemaVersion: 1 },
+      await withLockedTenantOperationalConfig(prisma, client.id, async (tx) => {
+        const current = await tx.tenantOperationalConfig.findUnique({ where: { clientId: client.id }, select: { config: true } });
+        const nextConfig = mergeOperationalConfig(current?.config);
+        await tx.tenantOperationalConfig.upsert({
+          where: { clientId: client.id },
+          update: { config: nextConfig as Prisma.InputJsonObject, schemaVersion: 1 },
+          create: { clientId: client.id, config: nextConfig as Prisma.InputJsonObject, schemaVersion: 1 },
+        });
       });
     }
 
