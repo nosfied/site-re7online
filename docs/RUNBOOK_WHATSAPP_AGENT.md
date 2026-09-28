@@ -1874,6 +1874,9 @@ separada. Coleta técnica encerrada não equivale a janela aprovada ou quiescên
 
 ## Preparação executada em 27/09 à noite — comandos de A continuam futuros
 
+> Histórico de 0e98af9a: etapa A executada posteriormente. Os nomes de configuração
+> preparados abaixo foram invalidados durante a execução; usar o fechamento ao final.
+
 [Evidência única, medidas e limitações](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#preparação-da-noite-de-27092026--decisão-a-ainda-não-executada).
 Responsável Deifson Oliveira; somente Deifson/Codex, sem execução paralela. Não
 pedir senha. Backup/restore isolado realizados; processos produtivos preservados.
@@ -1952,3 +1955,59 @@ etapas humanas/validar ou escalar, antes do primeiro cron 23:40. Reserva não é
 nem disponibilidade presumida; horário final owner ainda precisa ser confirmado.
 Sem check nft, disposição Telegram ou fim de janela confirmado, não iniciar A.
 Migration e abertura B separadas. NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED.
+
+
+## Etapa A — fechamento operacional e correções de invocação
+
+[Evidência única e linha do tempo](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#etapa-a-concluída--27092026-americafortaleza).
+Recovery 03f930e5 ativa; candidato NÃO implantado, migration/abertura não autorizadas.
+Owner validou Inbox/CRM demo em leitura; Telegram fora de uso e limitação aceita,
+sem validação desse canal. Interrupção 21:22:54–21:30:53 Fortaleza (7min59s).
+Boot/crons restaurados e saved/fallback seguro; worker/frontend preservados.
+
+**Configuração válida atual (referência, não ordem para reiniciar):**
+`/opt/re7online/releases/03f930e5453efd313a91a16de3e22057a0573d9c/stage-a.ecosystem.config.cjs`.
+Os arquivos `prepared.ecosystem.cjs` e `prepared.ecosystem.config.cjs` anteriores
+foram preservados como evidência, mas NÃO devem ser usados. Primeiro nome foi
+tratado como script; o segundo revelou metadados PM2 indevidamente copiados em env,
+que chegaram a iniciar API antiga sob contenção. Instância removida imediatamente
+após identificação, sem salvar estado dessa tentativa. Registrar esse incidente;
+não resumir como startup recovery bem-sucedido na primeira tentativa.
+
+Na montagem de qualquer configuração futura, preservar variáveis de aplicação,
+**não copiar /proc/environ inteiro para env do ecosystem**. Excluir metadados como
+pm_exec_path, pm_cwd, pm_id, watch/status e PM2_*; validar script/cwd reais no processo
+e no saved, tipos booleanos de watch e flags do guard. Recovery corrigida removeu
+72 chaves impróprias; código Git não mudou. Sufixo reconhecido pelo PM2 do alvo é
+`.config.cjs`. Construção de PrismaClient ou hash de arquivo não validam a semântica
+de startup do PM2. Configuração do candidato antigo continua bloqueada para uso.
+
+Invocações cron com caminho longo falharam sem alteração do cadastro. Usar cwd e
+basename para aplicar os arquivos já revisados, somente na autorização apropriada:
+
+```bash
+# Referência para futuras janelas; hoje o original já está restaurado.
+(cd "$PREP" && crontab deploy.crontab.window)
+(cd "$PREP" && crontab deploy.crontab.before)
+```
+
+Ao final de A: API PID1478445/restarts0/watchfalse/cwd e script da recovery;
+worker/frontend com mesmos PIDs; guard `/var/lib/re7/campaign-operations/state.json`
+fechado, 0600, diretório privado 0700. GET autenticado superadmin confirmou build,
+available=true/open=false/taskCount0. Não interpretar drained=true como prova
+retroativa. Sem apagar locks/estado/uncertain; não houve abertura nem provedor real
+provocado pela validação. Verificação de boot/saved/fallback foi estática, sem reboot.
+
+Evidências privadas do alvo em
+`/opt/re7online/backups/converta-persistent/preparations/night-20260927T233110Z/stage-a/`;
+cópias sanitizadas locais em `local-evidence/recovery/stage-a-20260927/`. Origens
+owner (sudo/UI) e Codex (verificação/PM2) separadas no preflight; segredos excluídos
+no staging. Roteiro histórico preservado; estado atual prevalece sobre instruções
+antigas que poderiam iniciar configuração inválida ou ressuscitar 5ee2de6b.
+
+Próxima etapa requer autorização específica de migration, backup novo sem retenção,
+status/checksums limitados à aditiva esperada, controle de locks/limite de abortar e
+recovery fechada preservada. Não é ordem para executar agora. Ativação do candidato
+exige corrigir configuração PM2 antes, e autorização distinta; abertura/owner UI/CRA
+seguem pendentes. Nenhum down/reset ou dump sobre produção como rollback normal.
+6683 CLOSED; materialização DELIVERED/READ separada.

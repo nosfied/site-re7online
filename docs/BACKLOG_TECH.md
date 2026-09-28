@@ -2921,3 +2921,24 @@ contingência confirmados, acesso superadmin privado para validação. Proposta 
 23:00 + reserva operacional de 20 min, condicionada ao owner, não SLA. Nenhuma
 parada/firewall/cron/boot/migration/deploy executados. Migration/abertura separadas;
 NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED; CRA e materialização separados.
+
+
+### Etapa A executada — 27/09/2026 à noite
+
+Recovery03f930e5 ativa com campanhas permanentemente fechadas; API antiga retirada;
+frontend/worker preservados. Contenção 21:22:54–21:30:53 (7min59s), Inbox/CRM demo
+confirmados pelo owner, GET superadmin guard available/closed/build correto.
+Saved/fallback seguros, boot inactive/enabled e crons originais restaurados.
+Dois defeitos de configuração encontrados/corrigidos durante contenção: nome CJS
+não reconhecido como ecosystem e env com metadados PM2 sobrescrevendo script/cwd.
+Houve inicialização indevida do código antigo entre 21:27 e 21:28, com barreira
+mantida/scheduler campanhas inibido, seguida de parada e configuração corrigida.
+Não omitir o incidente nem alegar quiescência por contagens iguais. Configuração
+válida recovery: stage-a.ecosystem.config.cjs; versões prepared são inválidas.
+Configuração preparada do candidato também exige correção antes da ativação.
+Preflight registra horários/limites, runbook invocação corrigida. Nenhuma mudança
+funcional nos artefatos, migration, abertura, reenvio ou provider provocado na
+validação. Telegram não usado/limitação aceita pelo owner, canal não validado.
+Próxima decisão: autorizar migration aditiva separadamente, com novo backup,
+status esperado e condições de abortar; manter recovery fechada. Candidato
+NOT DEPLOYED / OWNER UI PENDING; CRA pendente, 6683 CLOSED, materialização separada.

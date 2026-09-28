@@ -1,5 +1,9 @@
 # Preflight somente leitura — campanhas, 2026-09-26
 
+> Atualização vigente: etapa A executada em 27/09 à noite, registrada ao final.
+> API em recovery 03f930e5, campanhas permanentemente fechadas. Candidato a1cc380e
+> NOT DEPLOYED / OWNER UI PENDING. Seções anteriores preservam o histórico.
+
 Candidato: `2ecfc91a35775326ffa90693b3ff4f77ac37c9ca`; branch
 `review/campaign-recovery-20260926`. **NOT DEPLOYED / OWNER UI PENDING**.
 Este documento registra leitura do alvo, não autorização nem execução de rollout.
@@ -791,3 +795,118 @@ Próxima decisão concreta, após gates: autorizar somente contenção → parad
 retorno pela recovery fechada, com intervalo finito e limitação Telegram explícita.
 Migration e abertura de campanhas continuam decisões separadas. NOT DEPLOYED /
 OWNER UI PENDING; CRA pendente; 6683 CLOSED; materialização DELIVERED/READ separada.
+
+
+## Etapa A concluída — 27/09/2026, America/Fortaleza
+
+Autorização explícita do owner após preparação 0e98af9a: contenção, parada antiga,
+retorno pela recovery 03f930e5; NÃO migration/candidato/abertura. Deifson confirmou
+acompanhamento até a conclusão, execução única Deifson/Codex, ausência de uso
+informada sem atribuir quiescência, aceitação das incertezas e do ponto de
+escalonamento de 20 min. Telegram não usado; limitação preexistente aceita para
+trabalho futuro, sem correção ou validação daquele canal. Owner forneceu nft check
+sem erro/tabela ausente; não foi pedido reenvio. Login privado confirmado; GET
+administrativo com credencial global já configurada, autorizada pelo owner,
+usada somente em memória no VPS, sem expor senha/token.
+
+### Linha do tempo e atribuição
+
+Horários Fortaleza de 27/09; registros UTC correspondem a 28/09 após 00:00.
+
+| Horário | Ação / evidência |
+| --- | --- |
+| 21:08–21:10 | Hashes recovery/backup, config, processos, ausência de tarefas concorrentes e fotografia de campanhas conferidos por Codex; nenhuma divergência de dados detectada |
+| 21:18:19 | Codex suspendeu exatamente seis entradas cron deploy; original preservado |
+| Até 21:21:43 | Deifson suspendeu cron.d e desabilitou boot; Codex confirmou inactive/disabled, holds exatos, API/front/worker intactos e ausência de jobs concorrentes |
+| 21:22:54 | Deifson aplicou tabela inet temporária; loopback recusado; Codex confirmou porta direta recusada e proxies HTTPS 502 |
+| 21:23:46–21:23:48 | Codex retirou somente API antiga; PID/listener encerrados, saved/fallback sem API, worker/front preservados |
+| 21:25:36 | Após mkdir privado por Deifson, Codex criou state.json com O_EXCL, 0600 e fsync, fechado; nenhum estado anterior sobrescrito |
+| 21:25–21:28 | Tentativas de startup expuseram dois defeitos da configuração preparada, descritos abaixo; contenção mantida |
+| 21:29:56–21:29:59 | Recovery efetiva iniciada/verificada no cwd/script corretos; PID 1478445, watch=false, scheduler campanhas desativado |
+| 21:30:53 | Deifson removeu somente tabela temporária; 64 pacotes/3.632 bytes no contador antes da remoção |
+| 21:31:26 | Owner confirmou health DB ok; Codex confirmou HTTP 200 em Converta/API/alias admin e frontend |
+| Até 21:33:50 | Owner confirmou Inbox e CRM do tenant demo funcionando com sessão; Codex confirmou GET superadmin da guarda, salvou/fixou fallback seguro e restaurou cron deploy |
+| Até 21:35:28 | Deifson restaurou cron.d e boot; Codex verificou originais exatos, inactive/enabled e runtime seguro |
+
+Interrupção HTTP por contenção: **7 min 59 s**, de 21:22:54 a 21:30:53.
+Retorno/validação ocorreram antes do escalonamento 21:42:54. Esse resultado não
+é promessa para próximas janelas, nem comprovação de ausência de perda/retry inbound.
+
+### Incidentes da execução — não omitir nem reutilizar configurações inválidas
+
+1. Crontab rejeitou o caminho absoluto longo, truncando o filename. Cadastro foi
+   conferido intacto; aplicado/restaurado o MESMO arquivo com nome relativo no cwd
+   de preparação. Sem alteração de conteúdo ou correção de duplicidade histórica.
+2. `prepared.ecosystem.cjs` não foi reconhecido como arquivo de configuração pelo
+   PM2; foi iniciado como script `prepared.ecosystem`, sem API. A entrada incidental
+   foi removida isoladamente. Sufixo `.config.cjs` é necessário nesse PM2.
+3. A cópia do ambiente inicial continha metadados internos PM2. Após corrigir o
+   sufixo, esses campos sobrescreveram cwd/script e criaram **uma instância do código
+   antigo** (PID 1477765), apesar do build/env pretendido. Bootstrap observado
+   21:27:05; detectada 21:28:15 e parada 21:28:17. A contenção permaneceu aplicada,
+   scheduler de campanhas estava `true` para DISABLED; nenhum saved/fallback dessa
+   tentativa foi publicado. Isso foi uma inicialização indevida, não retorno
+   planejado à versão antiga. Não afirmar que o código antigo permaneceu ausente
+   durante toda a troca. Não inferir ausência absoluta de efeitos não registrados.
+
+A correção removeu 72 chaves internas/herdadas inadequadas da configuração da
+recovery, preservando variáveis de aplicação, e fixou script/cwd/watch explicitamente.
+Configuração vigente privada:
+`/opt/re7online/releases/03f930e5453efd313a91a16de3e22057a0573d9c/stage-a.ecosystem.config.cjs`.
+SHA256 `3f30d92c466ce0f5ba21e8fc125045048be56966fd0558bbe8fcc07311e11790`.
+Arquivos anteriores e logs preservados. Sem modificação funcional do artefato Git.
+**Não usar prepared.ecosystem.cjs nem prepared.ecosystem.config.cjs da tentativa.**
+A configuração preparada do candidato compartilha esse defeito de montagem e
+permanece inválida para ativação; corrigir e verificar em autorização futura, sem
+iniciar candidato agora. Manifest de código não valida semântica de configuração PM2.
+
+### Estado final comprovado
+
+API: recovery **03f930e5453efd313a91a16de3e22057a0573d9c**, script/cwd sob seu release,
+PID 1478445, online, zero restarts, watch=false. Frontend 1039702 e worker 3747763
+mantiveram PIDs/restarts; subprocesso frontend e sessões worker não foram trocados.
+Checkout original continua HEAD 5ee2de6b, tracked limpo: isso descreve frontend/
+worker, NÃO a versão efetiva da API. Saved e fallback idênticos, inspecionados com
+API apontando para recovery e flags fechadas; boot restaurado inactive/enabled,
+sem start/reload da unit global. Não ensaiado reboot/resurrect real nesta janela.
+Cron deploy e cron.d restaurados byte a byte, sem catch-up ou retenção manual.
+Tabela temporária removida pelo owner; rotas retornaram, nenhuma regra global limpa.
+
+Guarda persistente `/var/lib/re7/campaign-operations/state.json`, diretório
+deploy:deploy 0700, arquivo 0600; filesystem ext4 e ancestrais sem symlink.
+GET `/admin/ops/campaign-execution` autenticado: HTTP 200, available=true,
+open=false, generation=0, build03f930e5, taskCount=0, drained=true; sem lock ou
+marcador uncertain no check final. **drained só descreve o novo ledger**, não
+encerra chamadas antigas/incertezas aceitas pelo owner. Recovery bloqueia abertura
+em código, não depende apenas do scheduler inibido. Não houve POST para abrir.
+
+Às 21:32:55, agregados iguais ao antes: 104 campanhas, zero scheduled, 61 intents
++61 aceites com Outbound correspondente, 16 test-sends com resultado. Nenhum
+reenfileiramento/reenvio/reconciliação executado. Essa evidência não comprova
+inexistência de chamada antiga sem registro. Não foi provocado provider/send na
+validação; não prometer observabilidade completa de tráfego de fundo.
+Owner confirmou somente leitura de Inbox/CRM no tenant demo; demais tenants,
+webhooks reais, envio e retries não receberam aceite funcional por essa leitura.
+Telegram permanece não validado, separado. Nenhum aceite CRA ou owner UI do candidato.
+
+### Requisitos para a próxima decisão (migration)
+
+- Autorização específica para **somente migration aditiva**, mantendo recovery
+  fechada/atendimento; ativação do candidato e abertura não ficam implícitas.
+- Novo ponto de backup imediatamente antes da migration, sem descarte, hashes e
+  capacidade conferidos: o backup 20:31 foi restaurado, mas houve writes possíveis
+  após ele. Incluir guarda completa/auxiliares e configuração ativa corrigida.
+  Reutilizar prova de restore, sem alegar RPO zero ou restore produtivo.
+- Conferir que somente `20260925143000_add_campaign_execution_queue` está pendente,
+  que checksums/artefatos não mudaram e que recovery/guarda/supervisão continuam
+  corretos. Não repetir auditoria de drift nem alterar drift histórico incidental.
+- Definir ponto de abortar/escalonar diante de locks/erro de migration, preservar
+  dados/aceites e permanecer em recovery; não down/reset/db push ou dump sobre
+  produção como rollback normal. Plano de observação de impacto aprovado pelo owner.
+- Antes de qualquer ativação futura do candidato: gerar configuração sem metadados
+  internos PM2, sufixo reconhecido, paths/host/guard corretos; comprovar resolução
+  efetiva. Essa correção operacional é gate da ativação, não autorização para fazê-la.
+
+**Etapa A concluída; recovery ATIVA. Candidato a1cc380e NOT DEPLOYED / OWNER UI
+PENDING. Migration NÃO executada.** 6683 CLOSED; DELIVERED/READ → HUMAN/WAITING
+continua separado; sem reabertura de desenho, testes/suítes ou implementação.
