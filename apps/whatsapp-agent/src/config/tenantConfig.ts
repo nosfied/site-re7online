@@ -235,7 +235,7 @@ function buildDefaultTenant(): TenantConfigMap {
   return { default: tenant };
 }
 
-async function loadTenantsFromFile(): Promise<TenantConfigMap | null> {
+async function loadTenantsFromFile(strict = false): Promise<TenantConfigMap | null> {
   try {
     const raw = await fs.readFile(getTenantsPath(), "utf-8");
     const data = normalizeTenantConfigMap(JSON.parse(raw));
@@ -244,6 +244,7 @@ async function loadTenantsFromFile(): Promise<TenantConfigMap | null> {
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code !== "ENOENT") {
+      if (strict) throw error;
       logger.warn({
         event: "tenant.loaded",
         source: "env_fallback",
@@ -1034,7 +1035,11 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
   }
 }
 
-export async function getTenants(): Promise<TenantConfigMap> {
+export async function getTenants(options?: { strict?: boolean }): Promise<TenantConfigMap> {
+  // Authorization-sensitive writes must distinguish absent legacy configuration
+  // from unreadable/invalid configuration, even after a permissive cached load.
+  // Keep the existing cache/default behavior for all other callers.
+  if (options?.strict) return (await loadTenantsFromFile(true)) ?? buildDefaultTenant();
   if (cachedTenants) return cachedTenants;
   const fromFile = await loadTenantsFromFile();
   cachedTenants = fromFile ?? buildDefaultTenant();

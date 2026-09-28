@@ -1,5 +1,35 @@
 # Converta Product State - 2026-08
 
+## Gravação de flows DB-only — 2026-09-28
+
+Publicação para revisão autorizada em 28/09/2026, exclusivamente na branch
+`review/campaign-recovery-20260926`, sem deploy. Os registros “sem commit/push”
+abaixo descrevem a etapa local anterior. Código testado conferido por SHA-256;
+apenas esta nota documental foi acrescentada para publicação. Quatro PASS
+preservados: Guia criar/editar e Avançado criar/editar. Status continua
+**LOCAL VALIDATED / NOT DEPLOYED**; aviso React key permanece separado.
+Auto-deploy desabilitado para esta branch em `vercel.json`; workflow CI com
+push restrito a main/develop. Evidências privadas e estado operacional excluídos.
+
+
+**LOCAL VALIDATED / NOT DEPLOYED**, base `01989157` contendo `a1cc380e`.
+Correção separada da visibilidade encerrada em `363ce3ab`: POST/PUT passam a
+reutilizar fallback por Client, mantendo RBAC, precedência de flags DB,
+isolamento, defaults e transações. Erro de leitura/configuração não libera
+gravação. Mensagens seguras e rascunho literal preservado após falha.
+
+Provas: rotas focadas 7/7; regressão de rotas chatbot 14/14; unitários afetados
+164/164; builds backend/frontend PASS. Smoke autenticado sintético: Guia criar,
+Guia editar (incluindo menu), Avançado criar e Avançado editar — quatro PASS,
+cada um com falha controlada, ausência de escrita, conteúdo preservado,
+salvar/recarregar/reabrir e conferência dos quatro campos persistidos.
+
+Sem commit/push/deploy, consulta produtiva, migration, provider ou envio.
+Sem aceite CRA. Visibilidade anterior e 6683 continuam CLOSED; Telegram,
+DELIVERED/READ e validação de lotes permanecem separados.
+[Escopo, evidências e limitações](../BACKLOG_TECH.md#db-only-chatbot-flow-writes--2026-09-28).
+
+
 ## Inicio efetivo e ensaio operacional local — 2026-09-26
 
 Status: LOCAL ROLLOUT / SUSPENDED ROLLBACK REHEARSED; NOT DEPLOYED / OWNER UI PENDING.

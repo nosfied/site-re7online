@@ -89,3 +89,20 @@ test("active send block uses a specific opt-out message", () => {
 test("session audit open status does not imply realtime presence", () => {
   assert.equal(getSessionAuditStatusUxLabel("OPEN"), "Aberta");
 });
+
+
+test("flow write errors use safe Portuguese messages instead of raw server details", () => {
+  for (const [errorCode, expected] of [
+    ["forbidden", "Você não tem permissão"],
+    ["chatbot_flow_editing_locked_by_admin", "Criação e edição de fluxos estão bloqueadas"],
+    ["invalid_chatbot_definition", "A definição do fluxo é inválida"],
+    ["invalid_chatbot_reference", "Revise os departamentos"],
+    ["chatbot_flow_not_found", "Fluxo não encontrado"],
+    ["tenant_not_found", "Não foi possível acessar a configuração"],
+    ["internal_server_error", "Não foi possível"],
+  ]) {
+    const result = getAppErrorUxMessage({ errorCode, status: errorCode === "internal_server_error" ? 500 : 400, message: "PRIVATE /data/tenants.json payload", fallback: "Falha ao salvar" });
+    assert.ok(result.includes(expected), result);
+    assert.ok(!result.includes("PRIVATE") && !result.includes("tenants.json"));
+  }
+});

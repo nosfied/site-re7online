@@ -64,6 +64,19 @@ export function getAppErrorUxMessage(input: {
                   ? "template_category_not_allowed"
                   : null);
   switch (inferredCode) {
+    case "forbidden":
+      return "Você não tem permissão para realizar esta ação.";
+    case "chatbot_flow_editing_locked_by_admin":
+      return "Criação e edição de fluxos estão bloqueadas no console interno.";
+    case "invalid_chatbot_definition":
+      return "A definição do fluxo é inválida. Revise as etapas antes de salvar.";
+    case "invalid_chatbot_reference":
+      return "Revise os departamentos e as filas selecionados no fluxo.";
+    case "chatbot_flow_not_found":
+      return "Fluxo não encontrado ou indisponível para sua organização.";
+    case "tenant_not_found":
+    case "client_not_found":
+      return "Não foi possível acessar a configuração da organização. Contate o suporte.";
     case "session_replaced":
       return "Sua sessão foi encerrada porque houve um novo login em outro dispositivo.";
     case "session_revoked":

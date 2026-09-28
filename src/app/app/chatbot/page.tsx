@@ -76,17 +76,11 @@ function canManageNotificationSettings(role: string) {
 }
 
 function normalizeChatbotError(error: AppApiError, fallback: string) {
-  if (error.errorCode === "invalid_chatbot_definition") {
-    return "JSON inválido para o fluxo.";
-  }
   if (error.errorCode === "ai_context_missing") {
     return "IA automática exige configuração prévia da organização.";
   }
   if (error.errorCode === "chatbot_locked_by_admin") {
     return "Fluxo configurável está desativado no console interno.";
-  }
-  if (error.errorCode === "chatbot_flow_editing_locked_by_admin") {
-    return "Criação e edição de fluxos estão bloqueadas no console interno.";
   }
   if (error.errorCode === "ai_locked_by_admin") {
     return "IA conversacional está desativada no console interno.";
@@ -100,7 +94,7 @@ function normalizeChatbotError(error: AppApiError, fallback: string) {
   if (error.errorCode === "managed_by_internal_admin") {
     return "Estas configurações são gerenciadas no console interno.";
   }
-  if (error.status === 403) {
+  if (error.status === 403 && !error.errorCode) {
     return "Sem permissão para gerenciar fluxos de automação.";
   }
   return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback });
@@ -725,7 +719,6 @@ export default function AppChatbotPage() {
       setError("JSON inválido no novo fluxo.");
       return;
     }
-    setNewDefinition(parsedDefinition.formatted);
     setCreating(true);
     setError(null);
     setSuccess(null);
@@ -776,13 +769,6 @@ export default function AppChatbotPage() {
       setError("JSON inválido no fluxo selecionado.");
       return;
     }
-    setDrafts((current) => ({
-      ...current,
-      [flow.id]: {
-        ...draft,
-        definitionText: parsedDefinition.formatted,
-      },
-    }));
     setSavingId(flow.id);
     setError(null);
     setSuccess(null);

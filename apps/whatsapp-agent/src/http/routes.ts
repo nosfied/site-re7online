@@ -12384,12 +12384,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         endpoint: pathname,
         requestId,
       }))) return;
-      const tenants = await getTenants();
-      const tenant = tenants[client.clientKey];
-      if (!tenant) {
-        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
-        return;
-      }
+      const tenants = await getTenants({ strict: true });
+      const tenant = tenants[client.clientKey] ?? buildDbBackedTenantFallback(client);
       const automationFlags = (await resolveAutomationFlagsSettings({
         prisma,
         clientId: client.id,
@@ -12487,12 +12483,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         endpoint: "/app/chatbot/flows/:flowId",
         requestId,
       }))) return;
-      const tenants = await getTenants();
-      const tenant = tenants[client.clientKey];
-      if (!tenant) {
-        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
-        return;
-      }
+      const tenants = await getTenants({ strict: true });
+      const tenant = tenants[client.clientKey] ?? buildDbBackedTenantFallback(client);
       const automationFlags = (await resolveAutomationFlagsSettings({
         prisma,
         clientId: client.id,

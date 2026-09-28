@@ -1,5 +1,104 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## DB-only chatbot flow writes — 2026-09-28
+
+Publicação para revisão autorizada em 28/09/2026, exclusivamente na branch
+`review/campaign-recovery-20260926`, sem deploy. Os registros “sem commit/push”
+abaixo descrevem a etapa local anterior. Código testado conferido por SHA-256;
+apenas esta nota documental foi acrescentada para publicação. Quatro PASS
+preservados: Guia criar/editar e Avançado criar/editar. Status continua
+**LOCAL VALIDATED / NOT DEPLOYED**; aviso React key permanece separado.
+Auto-deploy desabilitado para esta branch em `vercel.json`; workflow CI com
+push restrito a main/develop. Evidências privadas e estado operacional excluídos.
+
+
+Status desta correção: **LOCAL VALIDATED / NOT DEPLOYED**. Sem commit/push,
+sem aceite CRA e sem alteração produtiva. Base `01989157`, branch
+`review/campaign-recovery-20260926`, worktree persistente
+`tmp/worktrees/re7-campaign-recovery-20260926`; contém `a1cc380e` e preserva
+fila/guarda de campanhas. Checkout do worker não foi usado como base.
+
+Defeito separado do encerramento de visibilidade de 15/09 (`363ce3ab`):
+POST/PUT de `/app/chatbot/flows` exigiam entrada no JSON legado, embora GET e
+configurações suportassem Client somente no banco. Não atribuir contagens
+HTTP globais ao CRA. Nenhuma nova investigação ou consulta produtiva nesta etapa.
+
+Correção mínima: após auth/ADMIN/Client ativo/feature chatbot, as duas rotas
+usam o tenant legado ou `buildDbBackedTenantFallback(client)`. O helper e
+`resolveAutomationFlagsSettings` não foram alterados: flags persistidas no DB
+continuam prioritárias, inclusive sobre JSON permissivo. Defaults existentes
+permanecem; `disableChatbot` não equivale a bloqueio de edição;
+`operationalServiceMessages` não libera nem bloqueia edição de flows.
+
+O carregador legado já ocultava erros de leitura/validação. Foi adicionada
+leitura estrita opt-in, usada apenas por essas duas rotas: lê novamente o
+arquivo, não confia em cache de fallback e propaga falha não-ENOENT. Arquivo
+inexistente mantém o default existente; entrada ausente admite fallback por
+Client; JSON corrompido, mapa inválido/vazio ou erro de leitura bloqueiam a
+gravação com erro seguro. Não grava cadastro/configuração como efeito colateral.
+O comportamento dos demais consumidores permanece inalterado.
+
+UX: mensagens PT-BR pelo tratamento central para permissão, bloqueio,
+definição/referência inválida, recurso indisponível e falha interna. O smoke
+Avançado revelou reformatação do JSON antes da resposta; removida essa
+reescrita nas duas ações para preservar literalmente o texto não salvo na
+falha. Builder/modos, transações e semântica de entryPoint não foram redesenhados.
+
+Provas locais (DB dedicado `re7_flow_db_only_20260928`, loopback:55432, schema
+copiado do banco local auditado sem dados; fixtures sintéticas):
+
+- Controle negativo restaurando somente as condições antigas: reproduziu
+  `404 tenant_not_found`; código corrigido restaurado byte a byte em finally.
+- Teste focado de rotas: 7/7 PASS (pai + seis subcasos).
+- Regressão de rotas chatbot: 14/14 PASS (oito testes principais, seis subcasos).
+- Suítes unitárias afetadas finais: 164/164 PASS; inclui leitura estrita 4/4.
+- Casos negativos com comparação de todas as linhas de ChatbotFlow antes/depois:
+  RBAC AGENT/SUPERVISOR, cliente inativo/inexistente, feature desabilitada,
+  bloqueio DB, referências estrangeiras, definição inválida, resolvedor falho,
+  arquivo ilegível/corrompido e falha de escrita dentro da transação após demissão
+  do entryPoint anterior. Nenhum fluxo/entryPoint alterado nesses casos.
+- Tenant legado, leitura SUPERVISOR, defaults sem criação de configuração,
+  edição com mensagens operacionais desligadas e isolamento preservados.
+- Build backend PASS; build frontend final PASS; `git diff --check` PASS.
+
+| Smoke autenticado com ADMIN DB-only | Rota real | Resultado |
+| --- | --- | --- |
+| Guia — criar | POST /app/chatbot/flows | PASS |
+| Guia — editar existente, inclusive texto de menu | PUT /app/chatbot/flows/:id | PASS |
+| Avançado/JSON — criar | POST /app/chatbot/flows | PASS |
+| Avançado/JSON — editar existente | PUT /app/chatbot/flows/:id | PASS |
+
+Em cada combinação: falha real por configuração local inválida (500), mensagem
+segura, conteúdo de campos preservado e DB inalterado; retirada da falha,
+mesmo payload salvo, recarga/reabertura e conferência de name/definition/
+isActive/entryPoint no DB. Guia e Avançado usam os mesmos handlers, comprovado
+por captura local das requisições. No Guia, criação manteve flags default
+false/false; edição exercitou flags e alteração de menu. Não houve reconstrução
+de fluxo existente para forçar sucesso. Avançado preservou inclusive JSON
+não formatado após falha.
+
+Evidências persistentes no worktree: `local-evidence/flow-db-only-20260928/`
+(RESULT_REPORT, logs, snapshots JSON, capturas, patch e hashes). Sem dados CRA,
+provider real ou envio; API local sem bootstrap de schedulers/integrações,
+fetch externo bloqueado e contador do smoke zero. Não há schema/migration.
+
+Limites: validação sintética local, sem aceite dos usuários CRA ou implantação;
+não cobre todos os tipos possíveis de fluxo nem altera os contratos de runtime.
+O histórico de visibilidade permanece CLOSED/DEPLOYED/CUSTOMER VALIDATED;
+esta entrega de gravação ainda exige revisão e autorização de publicação.
+6683 CLOSED; Telegram, DELIVERED/READ → HUMAN/WAITING e validação de lotes
+permanecem separados, sem nova alegação de PASS.
+
+Aviso visual separado: console React indicou key ausente em lista do
+ChatbotFlowBuilder, que não foi alterado nesta correção. Não bloqueou os quatro
+smokes; não se declara console integralmente limpo nem se corrige o builder
+incidentalmente.
+
+Pendência separada: inventariar futuramente os demais consumidores de tenants
+legados e seu fallback permissivo. Não houve auditoria geral nem correção
+incidental desses caminhos; a opção estrita não foi ativada globalmente.
+
+
 ## Inicio efetivo e ensaio operacional local — 2026-09-26
 
 Status: LOCAL ROLLOUT / SUSPENDED ROLLBACK REHEARSED; NOT DEPLOYED / OWNER UI PENDING.

@@ -18474,3 +18474,130 @@ for (const fault of ["writer-contention", "ledger-write"] as const) {
     assert.equal(calls, 1);
   });
 }
+
+
+test("db-only flow writes preserve authorization, isolation and atomicity", async (t) => {
+  const client = await prisma.client.create({ data: {
+    clientKey: `${prefix}-flow-write-db-only`, name: "Synthetic DB Only Flow Writer",
+    profile: "business", features: { chatbot: true, operationalServiceMessages: false },
+  } });
+  const admin = await createUser({ clientId: client.id, role: "ADMIN", suffix: "flow-write-admin" });
+  const supervisor = await createUser({ clientId: client.id, role: "SUPERVISOR", suffix: "flow-write-supervisor" });
+  const agent = await createUser({ clientId: client.id, role: "AGENT", suffix: "flow-write-agent" });
+  const definition = { start: "hello", nodes: { hello: { type: "text", text: "Synthetic hello" } } };
+  const payload = { name: "Synthetic original", definition, isActive: true, entryPoint: true };
+  const file = path.join(tempRoot, ".data", "tenants.json");
+  const originalFile = await fs.readFile(file, "utf8");
+  const snapshot = () => prisma.chatbotFlow.findMany({ orderBy: { id: "asc" } });
+  let id = "";
+  async function deny(method: string, route: string, user: TestUser, body: unknown, status: number, code?: string) {
+    const before = await snapshot();
+    const response = await request<ErrorPayload>(method, route, user, body);
+    assert.equal(response.status, status, JSON.stringify(response.body));
+    if (code) assert.equal(getErrorCode(response.body), code);
+    assert.deepEqual(await snapshot(), before, "negative request must not change ANY flow or entryPoint");
+  }
+  async function flags(blocked: boolean) {
+    await prisma.tenantOperationalConfig.upsert({ where: { clientId: client.id },
+      create: { clientId: client.id, config: { automationFlags: { disableChatbot: true, disableChatbotFlowEditing: blocked } } },
+      update: { config: { automationFlags: { disableChatbot: true, disableChatbotFlowEditing: blocked } } },
+    });
+  }
+  await t.test("DB-only defaults allow ADMIN create/update without operational messages or config side effects", async () => {
+    const created = await request<{ flow: { id: string } }>("POST", "/app/chatbot/flows", admin, payload);
+    assert.equal(created.status, 200, JSON.stringify(created.body)); id = created.body.flow.id;
+    const edited = { ...payload, name: "Synthetic edited", isActive: false,
+      definition: { start: "hello", nodes: { hello: { type: "text", text: "Edited text" } } } };
+    const updated = await request("PUT", `/app/chatbot/flows/${id}`, admin, edited);
+    assert.equal(updated.status, 200, JSON.stringify(updated.body));
+    const saved = await prisma.chatbotFlow.findUniqueOrThrow({ where: { id } });
+    for (const k of ["name", "definition", "isActive", "entryPoint"] as const) assert.deepEqual(saved[k], edited[k]);
+    assert.equal(saved.clientId, client.id);
+    assert.equal(await prisma.tenantOperationalConfig.count({ where: { clientId: client.id } }), 0);
+    assert.equal(await fs.readFile(file, "utf8"), originalFile);
+    assert.equal((await request("GET", "/app/chatbot/flows", supervisor)).status, 200);
+  });
+  await t.test("DB editing lock denies both writes even with permissive JSON; disableChatbot alone does not", async () => {
+    for (const legacy of [false, true]) {
+      if (legacy) await fs.writeFile(file, JSON.stringify({ ...JSON.parse(originalFile), [client.clientKey]: { ...makeTenant(client.clientKey), disableChatbotFlowEditing: false } }));
+      await flags(true);
+      await deny("POST", "/app/chatbot/flows", admin, payload, 403, "chatbot_flow_editing_locked_by_admin");
+      await deny("PUT", `/app/chatbot/flows/${id}`, admin, payload, 403, "chatbot_flow_editing_locked_by_admin");
+    }
+    await fs.writeFile(file, originalFile); await flags(false);
+    assert.equal((await request("PUT", `/app/chatbot/flows/${id}`, admin, payload)).status, 200);
+  });
+  await t.test("AGENT and SUPERVISOR writes denied; inactive, disabled feature and missing Client denied", async () => {
+    for (const user of [agent, supervisor]) {
+      await deny("POST", "/app/chatbot/flows", user, payload, 403);
+      await deny("PUT", `/app/chatbot/flows/${id}`, user, payload, 403);
+    }
+    for (const change of [{ status: "INACTIVE" as const }, { features: { chatbot: false } }]) {
+      await prisma.client.update({ where: { id: client.id }, data: change });
+      await deny("POST", "/app/chatbot/flows", admin, payload, "status" in change ? 401 : 403);
+      await deny("PUT", `/app/chatbot/flows/${id}`, admin, payload, "status" in change ? 401 : 403);
+      await prisma.client.update({ where: { id: client.id }, data: { status: "ACTIVE", features: { chatbot: true, operationalServiceMessages: false } } });
+    }
+    const delegate = prisma.client; const original = delegate.findUnique.bind(delegate);
+    delegate.findUnique = ((args: any) => args.where.id === client.id && args.select?.clientKey ? Promise.resolve(null) : original(args)) as typeof delegate.findUnique;
+    try {
+      await deny("POST", "/app/chatbot/flows", admin, payload, 404, "client_not_found");
+      await deny("PUT", `/app/chatbot/flows/${id}`, admin, payload, 404, "client_not_found");
+    } finally { delegate.findUnique = original; }
+  });
+  await t.test("foreign flows, departments, queues and invalid definitions cannot modify entryPoints", async () => {
+    const other = await prisma.chatbotFlow.create({ data: { ...payload, clientId: businessClientId } });
+    await deny("PUT", `/app/chatbot/flows/${other.id}`, admin, payload, 404, "chatbot_flow_not_found");
+    const ownDepartment = await prisma.department.create({ data: { clientId: client.id, name: "Synthetic department", slug: `${prefix}-write-own` } });
+    for (const invalid of [
+      { start: "missing", nodes: {} },
+      { start: "handoff", nodes: { handoff: { type: "handoff", departmentId: businessReturnDepartmentId } } },
+      { start: "handoff", nodes: { handoff: { type: "handoff", departmentId: ownDepartment.id, queueId: businessReturnQueueId } } },
+    ]) {
+      await deny("POST", "/app/chatbot/flows", admin, { ...payload, definition: invalid }, 400);
+      await deny("PUT", `/app/chatbot/flows/${id}`, admin, { ...payload, definition: invalid }, 400);
+    }
+  });
+  await t.test("resolver and corrupted/unreadable JSON fail closed, including after cached load", async () => {
+    const delegate = prisma.tenantOperationalConfig; const original = delegate.findUnique.bind(delegate);
+    delegate.findUnique = ((args: any) => args.where.clientId === client.id ? Promise.reject(new Error("synthetic resolver failure")) : original(args)) as typeof delegate.findUnique;
+    try {
+      await deny("POST", "/app/chatbot/flows", admin, payload, 500);
+      await deny("PUT", `/app/chatbot/flows/${id}`, admin, payload, 500);
+    } finally { delegate.findUnique = original; }
+    try {
+      await fs.writeFile(file, "{invalid");
+      await deny("POST", "/app/chatbot/flows", admin, payload, 500);
+      await deny("PUT", `/app/chatbot/flows/${id}`, admin, payload, 500);
+      await fs.unlink(file); await fs.mkdir(file);
+      await deny("POST", "/app/chatbot/flows", admin, payload, 500);
+      await deny("PUT", `/app/chatbot/flows/${id}`, admin, payload, 500);
+      await fs.rmdir(file);
+    } finally { await fs.writeFile(file, originalFile); }
+  });
+  await t.test("entryPoint create/update is tenant scoped and transaction failures roll back prior demotion", async () => {
+    const otherBefore = await prisma.chatbotFlow.findMany({ where: { clientId: businessClientId }, orderBy: { id: "asc" } });
+    const second = await request<{ flow: { id: string } }>("POST", "/app/chatbot/flows", admin, { ...payload, name: "Second" });
+    assert.equal(second.status, 200);
+    assert.equal((await prisma.chatbotFlow.findUniqueOrThrow({ where: { id } })).entryPoint, false);
+    assert.equal((await request("PUT", `/app/chatbot/flows/${id}`, admin, payload)).status, 200);
+    assert.equal((await prisma.chatbotFlow.findUniqueOrThrow({ where: { id: second.body.flow.id } })).entryPoint, false);
+    assert.deepEqual(await prisma.chatbotFlow.findMany({ where: { clientId: businessClientId }, orderBy: { id: "asc" } }), otherBefore);
+    const original = prisma.$transaction.bind(prisma);
+    prisma.$transaction = ((fn: any, ...rest: any[]) => original(async (tx: any) => {
+      const proxy = new Proxy(tx, { get(target, key) {
+        if (key !== "chatbotFlow") return target[key];
+        return new Proxy(target.chatbotFlow, { get(model, op) {
+          if (op === "create" || op === "update") return async () => { throw new Error("synthetic write failure after demotion"); };
+          return model[op];
+        } });
+      } });
+      return fn(proxy);
+    }, ...rest)) as typeof prisma.$transaction;
+    try {
+      await deny("POST", "/app/chatbot/flows", admin, payload, 500);
+      await deny("PUT", `/app/chatbot/flows/${second.body.flow.id}`, admin, payload, 500);
+    } finally { prisma.$transaction = original; }
+    assert.equal(await fs.readFile(file, "utf8"), originalFile);
+  });
+});
