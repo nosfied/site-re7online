@@ -1245,3 +1245,105 @@ reenviar incertos; recovery fechada só pelo procedimento coordenado se necessá
 Aceite de lotes/CRA pendente; 6683 CLOSED, Telegram e DELIVERED/READ separados.
 Evidências privadas junto à preparação opening e localmente em
 `local-evidence/recovery/opening-20260927/`; publicação somente documental.
+
+
+## Deploy técnico da correção de flows DB-only — 28/09/2026
+
+**DEPLOYED / CLIENT ACCEPTED — correção de flows DB-only.** Registro posterior
+às etapas históricas anteriores: backend e frontend efetivos em
+`e8ebd776ba7c92cc9013fefb29035eae3ab1af4e`, antes `a1cc380e`. Comparação entre
+artefatos restringiu o delta funcional à correção aprovada de flows e UX;
+schema e dependências sem diferença. Nenhuma migration aplicada: permanecem 60.
+Release isolada, sem usar checkout do worker como base da API; 3.129 hashes de
+arquivos conferidos. Builds de artefatos backend/frontend passaram; não se
+repetiram suítes locais já aprovadas (7/7, 14/14, 164/164 e quatro smokes Guia/
+Avançado criar/editar). Estes continuam provas locais, não aceite produtivo.
+
+### Backup e retorno
+
+Preparação persistente: `/opt/re7online/backups/converta-persistent/preparations/flow-write-20260928T192050Z`.
+Backup fresco 19:20:50–19:21:04 UTC, com espaço previamente conferido (~39 GiB),
+lock de backup e sem descarte. `database.dump`: 22.006.795 bytes, SHA-256
+`de422b0199feb7b635204c64417a86a8aa7d64947726d40afff64ab47c96aee5`;
+catálogo 614 entradas; manifesto SHA256SUMS conferido. Também preservados conteúdo,
+configuração privada ativa, guarda/auxiliares, dados operacionais, saved/fallback
+PM2 e crons. Dump produzido em 4,695 s. **Este mesmo dump fresco** foi restaurado
+em DB local isolado `re7_flow_deploy_restore_20260928` (loopback), em 3,712 s,
+sem aplicações/integrações/schedulers/providers conectados: 60 migrations,
+10 clients, 21 flows, 104 campanhas, zero jobs/grupos. Cópia live de arquivos e
+sessões não é snapshot atômico com DB nem prova de recuperação integral de inbound;
+não há prova adicional de cópia offsite. Retenção não alterada.
+
+Retorno de código disponível em `/opt/re7online/releases/a1cc380eddcd1467b8e0d3a8e405f82689a25b3d`,
+API `scheduler-enabled.ecosystem.config.cjs` e frontend `frontend.ecosystem.config.cjs`.
+Compatível com o DB atual: era a versão efetivamente ativa sobre essas mesmas
+60 migrations e o novo delta não altera schema. Retorno exige fechar admissões,
+comprovar drain, conter entradas/controlar supervisão e trocar apenas processos
+necessários, preservando guarda compartilhada. Não restaurar DB sobre dados novos,
+não usar API do checkout antigo do worker nem down/reset. Recovery `03f930e5`
+permanece alternativa fechada conforme runbook, sem retorno automático.
+
+### Execução e evidências
+
+Horários UTC (Fortaleza = UTC−3):
+
+- 19:27:50.983: fechamento superadmin, geração 1→2; 19:27:51.020: drain comprovado,
+  tasks=0, ledgerFault=null. Fila, grupos, leases, sending e scheduled zerados.
+- 19:29:23: owner aplicou contenção 3000/3001 e suspendeu boot/cron conforme plano.
+- 19:30:20–19:30:31: troca sequencial API/frontend; nenhum worker reiniciado.
+- 19:32:20: identidade real, script/cwd, host, watch=false, scheduler habilitado
+  com guarda fechada, saved/fallback conferidos antes da retirada da barreira.
+- 19:32:44: owner retirou contenção; duração 3min21s. Não equivale a garantia
+  de ausência de impacto em requests/webhooks durante a janela.
+- 19:33:43: health local e dois caminhos públicos 200/db ok; frontend local e
+  público 200 com BUILD_ID `fNgALKLUIc78JDuyWHkRb`. Diagnóstico superadmin fechado
+  e leitura de configuração/flows autorizada. Owner confirmou sessão, Inbox,
+  CRM, lista e abertura de fluxo existente somente em leitura.
+- 19:36:13.540: abertura superadmin auditada, geração 2→3, após nova leitura da
+  fila vazia. Motivo: deploy autorizado concluído, identidade/health/UI conferidos,
+  retomada da admissão anterior sem envio de validação. Sem edição direta do ledger.
+- 19:36:26.557 e 19:37:26.560: dois ciclos reais do scheduler admitidos e concluídos,
+  observados pelas gravações atômicas do ledger; nenhuma tarefa inesperada.
+- 19:43:18: health/frontend/diagnóstico novamente conferidos; guarda aberta geração 3,
+  tasks=0, fault=null; jobs/grupos/leases/sending/scheduled=0; flows e fingerprint
+  preservados. 19:44:15: contagens de submissão/aceitação e test-send sem incremento
+  desde a abertura. Não provocados envios; observação não prova chamadas históricas
+  ausentes de registros.
+
+API PID 1632829, frontend PID 1632888, ambos sem restarts e em release e8ebd776.
+Worker PID 3747763 e filho 3747829 preservados, contador preexistente 626 inalterado.
+Guarda `/var/lib/re7/campaign-operations/state.json`, mesma identidade de host,
+`single-host`; não coordena múltiplos hosts. Configuração ativa API
+`<release-e8ebd776>/flow-write.ecosystem.config.cjs`, frontend
+`<release-e8ebd776>/frontend.ecosystem.config.cjs`, sem ambiente bruto PM2.
+Saved/fallback idênticos e apontando para nova release; deploy crontab restaurado
+por comparação exata. Owner confirmou restauração do cron root de backup e boot
+`inactive/enabled`; não iniciou serviço systemd nem executou reboot de teste.
+
+Logs da inicialização: API sem erro; frontend com aviso Next sobre múltiplos
+lockfiles/inferência de workspace, sem crash ou restart. Não houve correção
+incidental; aviso React key do smoke local é outro item. Scripts de swap/open
+na preparação são históricos e não devem ser reaplicados. Evidências privadas
+persistentes em `local-evidence/flow-deploy-20260928`, fora do Git.
+
+### Pendências e limites
+
+No fechamento técnico, a confirmação funcional do cliente ainda estava pendente.
+Em 28/09/2026, o owner encaminhou a confirmação de Eduardo: “Funcionou, obrigado
+Deifson”. Registrado aceite funcional do cliente para a correção de gravação de
+flows DB-only em `e8ebd776`, encerrando essa pendência específica. A mensagem não
+informa quais operações ou modos foram usados: não comprova que Eduardo testou
+Guia criar/editar e Avançado criar/editar. Essas quatro combinações têm evidência
+local separada. A validação técnica produtiva foi somente leitura, sem gravações
+de fluxos reais ou envios provocados. Este aceite não abrange CRA global,
+lotes completos ou todos os papéis por sessões distintas. Campanhas abertas e
+scheduler habilitado ao final, preservando incertezas históricas. 6683 CLOSED;
+Telegram e DELIVERED/READ → HUMAN/WAITING continuam frentes separadas.
+
+Verificação final às 19:46:41 UTC: crons deploy/root comparados aos originais,
+boot inactive/enabled, saved/fallback idênticos, worker/filho preservados e
+API/frontend sem restarts. Após a inicialização, API registrou às 19:43:53
+um WARN `multichannel.shadow_write.failed`, modelo OutboundMessage, motivo
+`missing_channel_account_id`; sem erro estruturado/crash observado. Não
+atribuído à gravação de flows sem evidência causal; acompanhar separadamente,
+sem correção incidental. Nenhum identificador de registro exposto nos docs.

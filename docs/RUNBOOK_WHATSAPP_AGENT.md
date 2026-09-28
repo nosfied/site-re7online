@@ -2135,3 +2135,35 @@ snapshot/lotes/ordem, pausa/retomada e resultado sem retry cego. Esta liberaçã
 criou dados para preencher cobertura nem valida lotes completos, RBAC por sessões
 distintas ou CRA. CAMPAIGNS OPEN / SCHEDULER ENABLED; 6683 CLOSED, Telegram e
 DELIVERED/READ separados, incertezas antigas não apagadas.
+
+
+## Estado após deploy de flows DB-only — 28/09/2026
+
+[Registro operacional completo](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#deploy-técnico-da-correção-de-flows-db-only--28092026).
+API/frontend e8ebd776 efetivos; guarda compartilhada aberta geração 3, scheduler
+habilitado e dois ciclos observados. Crons e boot restaurados; saved/fallback
+seguros. Worker preservado. Nenhuma migration neste deploy, DB permanece em 60.
+Os caminhos a1cc380e das seções anteriores agora são retorno, não versão ativa.
+
+Configurações atuais: `<release-e8ebd776>/flow-write.ecosystem.config.cjs` e
+`<release-e8ebd776>/frontend.ecosystem.config.cjs`. Ambiente reduzido, watch=false,
+identidade single-host e guarda persistente existentes; não copiar ambiente bruto
+PM2. Não repetir swap/open da preparação flow-write-20260928T192050Z.
+
+Em regressão: fechar pelo mecanismo superadmin usando geração atual e motivo;
+inspecionar tarefas/fault e aguardar drain real, sem matar chamadas ou apagar
+locks. Conter e controlar supervisão conforme procedimento anterior; substituir
+somente API/frontend afetados por a1cc380e, verificar fim dos processos antes de
+iniciar retorno. Usar `scheduler-enabled.ecosystem.config.cjs` da release antiga
+com guarda compartilhada fechada e `frontend.ecosystem.config.cjs`; conferir
+script/cwd/build/host/flags, health e atendimento antes de liberar tráfego e
+admissões. Salvar estado seguro, preservar fallback e restaurar rotinas.
+Nenhum restore sobre dados novos, down/reset ou retorno à API do worker.
+
+Backup fresco íntegro e restauração local comprovada no registro único; cópias
+live de sessões/arquivos não provam inbound integral. Validação técnica produtiva
+foi somente leitura. Em 28/09/2026, Eduardo confirmou “Funcionou, obrigado Deifson”
+(relato encaminhado pelo owner): **DEPLOYED / CLIENT ACCEPTED**, restrito à
+correção de gravação de flows DB-only em `e8ebd776`. Não informa modos/operações
+exercitados nem comprova as quatro combinações locais. Sem aceite global CRA
+ou de lotes. 6683 CLOSED; demais frentes preservadas.

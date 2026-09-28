@@ -1,5 +1,24 @@
 # CRA-PR Readiness Notes
 
+## Atualização produtiva — flows DB-only — 28/09/2026
+
+**DEPLOYED / CLIENT ACCEPTED — correção de flows DB-only.** Backend/frontend
+`e8ebd776` implantados por procedimento controlado, com backup fresco restaurado
+em DB local isolado, fechamento/drain e reabertura geração 3. Campanhas abertas,
+scheduler observado em dois ciclos; worker/sessões e dados preservados. Owner
+confirmou sessão, Inbox, CRM e leitura de flows. Na validação técnica, não foram
+gravados fluxos reais nem provocados envios. Em 28/09/2026, Eduardo confirmou:
+“Funcionou, obrigado Deifson” (relato encaminhado pelo owner). Aceite funcional
+restrito à correção de gravação DB-only implantada em `e8ebd776`; não identifica
+operações ou modos exercitados e não comprova as quatro combinações Guia/Avançado.
+Não constitui aceite global CRA nem validação integral de lotes.
+[Registro único, backup, rollback e limitações](../../../saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#deploy-técnico-da-correção-de-flows-db-only--28092026).
+Os estados LOCAL VALIDATED / NOT DEPLOYED abaixo são históricos da publicação
+para revisão. Quatro PASS locais preservados: Guia criar/editar e Avançado
+criar/editar. Avisos React key e Next/workspace separados, sem correção incidental.
+6683 CLOSED; Telegram e DELIVERED/READ permanecem separados.
+
+
 ## Gravação de flows DB-only — 2026-09-28
 
 Publicação para revisão autorizada em 28/09/2026, exclusivamente na branch
