@@ -1013,3 +1013,122 @@ candidato a1cc380e **NOT DEPLOYED / OWNER UI PENDING**, CRA pendente. Próxima d
 separada é ativar candidato inicialmente fechado, após reconfirmar gates/configuração;
 abertura é outra decisão. Telegram não validado/sem correção, 6683 CLOSED,
 DELIVERED/READ → HUMAN/WAITING separado; owner PASS anterior preservado.
+
+
+## Candidato ativado com campanhas fechadas — 27/09/2026
+
+Complemento a **06f27fb1**, sob autorização explícita para backend a1cc380e e
+frontend correspondente, sem abertura e sem habilitar scheduler de campanhas.
+Este estado sucede os registros históricos de candidato NOT DEPLOYED; não altera
+aceites anteriores nem transforma a validação de atendimento em aceite CRA/lotes.
+
+### Preparação e artefatos
+
+Reconfirmados 60 migrations concluídas/sem pendências, quatro tabelas da fila
+vazias, guarda closed/generation 0/tasks 0/sem marcador uncertain, recovery e
+supervisores esperados. Backend: 7.913 arquivos do manifest e configuração corrigida
+conferidos. Nenhuma rotina concorrente nos gates; nenhum filho imediato no daemon
+PM2 root observado, sem repetir G0 ou executar CLI PM2 root.
+
+Backup DB e auxiliares `migration-20260928T005604Z` reutilizados: hashes conferidos,
+feito cerca de 24 minutos antes da troca; esta etapa não altera schema nem usa
+restore como retorno. Reutilizado ensaio isolado anterior já identificado no registro
+da migration. Não há garantia de RPO zero/restauração de sessões. Nova captura
+**somente operacional**, necessária para preservar o estado exato antes da troca:
+`/opt/re7online/backups/converta-persistent/preparations/activation-20260928T011150Z/`.
+Inclui configurações, guarda, saved/fallback, frontend env/manifest/BUILD_ID,
+crons e configuração limpa para retornar ao frontend anterior. Sem descarte.
+
+Frontend compilado uma vez em área local isolada a partir do git archive exato
+**a1cc380eddcd1467b8e0d3a8e405f82689a25b3d**, com env frontend privado existente;
+package/lock/Next config iguais à base anterior. Build Next 16.1.5 concluído; aviso
+sobre inferência de workspace root registrado, sem falha de compilação. Artefato
+26.471.174 bytes, SHA256
+`aa8cfdd1c30d6dd4fa6dca57bff1c2057689a2aa5123436affcb012d6937763d`,
+1.843 arquivos no manifest. Instalado em `<release-a1cc380e>/frontend`, dependências
+copiadas para esse diretório, sem sobrescrever a árvore servida anteriormente.
+BUILD_ID **esJVODIxT1rETZKxEPdX5**. Frontend anterior permanece intacto no checkout
+5ee2de6b, BUILD_ID Ywhs03ZOWIsb-IppyXqEJ; recovery 03f930e5 também disponível.
+Não repetidas suítes aprovadas/build backend, pois código não mudou.
+
+### Execução e estado efetivo
+
+Horários America/Fortaleza, em 27/09 (UTC em 28/09):
+
+- 22:19:05: crontab deploy temporariamente suspenso pelo Codex após gates.
+- 22:19:42: Deifson suspendeu cron.d backup, desabilitou boot sem --now e aplicou
+  contenção revisada/check nft nas portas 3000/3001. Nenhuma regra anterior removida.
+- 22:20:16–22:20:25: Codex retirou somente API recovery, iniciou candidato com
+  `migration-prepared.ecosystem.config.cjs` e ambiente reduzido; conferiu identidade;
+  depois retirou somente frontend anterior e iniciou frontend correspondente.
+  Sem duas APIs concorrentes, kill/reload all, reinício de worker ou env PM2 bruto.
+- 22:21:14: listeners, processos, guarda e saved/fallback candidato conferidos;
+  logs novos de erro API/frontend vazios, zero restarts. Arquivos anteriores salvos.
+- 22:21:51: Deifson retirou somente tabela temporária; 31 pacotes rejeitados.
+  Contenção total **129 segundos (2min09s)**; não é garantia de inbound/retries.
+- 22:25:41: após health/diagnóstico e confirmação visual do owner, Codex restaurou
+  crontab deploy original. Deifson restaurou cron.d e habilitou boot, sem iniciar
+  unit global. Às 22:27:38, ambos crons byte a byte e boot inactive/enabled conferidos.
+
+| Componente | Versão/identidade efetiva | Estado final |
+| --- | --- | --- |
+| API | a1cc380e; PID 1489424; `<release>/apps/whatsapp-agent/dist/index.js` | online, zero restarts, watch=false |
+| Frontend | a1cc380e; PID 1489466; `<release>/frontend/node_modules/next/dist/bin/next`; BUILD_ID acima | online, zero restarts, watch=false |
+| Worker | checkout 5ee2de6b; PM2 PID 3747763/filho 3747829 | preservado; restarts 626 inalterado |
+| Recovery | 03f930e5; stage-a.ecosystem.config.cjs | disponível para retorno; não ativa |
+
+Identidade não inferida apenas do nome/build env: cwd/exe reais em /proc, entrypoint
+pm_exec_path do processo (carregado pelo fork container PM2), script/cwd PM2,
+hash do entrypoint/manifest, flags reais e host conferidos. O título/argv do Node
+pode truncar caminho; não foi usado como prova isolada. API efetiva confirmou build
+via diagnóstico e frontend confirmou BUILD_ID no HTML servido local/publicamente.
+Configuração frontend explícita `frontend.ecosystem.config.cjs`; nunca usados
+prepared.ecosystem* inválidos. Saved/fallback idênticos com candidato fechado e
+worker preservado; boot habilitado apenas após verificação. Sem ensaio de reboot.
+
+Guarda compartilhada `/var/lib/re7/campaign-operations/state.json`, single-host,
+host conferido; open=false/generation 0/tasks 0, sem lock/uncertain no check final.
+**CAMPAIGN_SCHEDULE_PROCESSOR_DISABLED=true** no processo real e saved; nenhum
+POST de abertura, provider call/envio ou mutação de negócio provocado na validação.
+
+### Validação e limites
+
+Health loopback e entradas converta/api HTTP 200/db ok. Diagnóstico superadmin HTTP 200:
+available=true, open=false, drained=true, build a1cc380e, tasks 0. Frontend local e
+público /app/campaigns HTTP 200 com BUILD_ID esperado. GET /app/campaigns e diagnóstico sem
+credenciais retornam 401; nenhum token exposto ou sessão fabricada.
+
+Owner confirmou sessão/telas funcionando após recarregar e relatou detalhe e grupo
+abertos. **A identidade desse “grupo” não está comprovada**: consultas atuais
+mostram zero CampaignExecutionBatch. Clarificação solicitada; não contar relato
+como prova de navegação/execução de lotes. Inbox/CRM/lista e detalhe existentes
+receberam relato visual de funcionamento, não validação de envio. Não criado fixture
+produtivo. Matriz AGENT/SUPERVISOR/ADMIN permanece coberta pelas evidências anteriores;
+esta janela não exerceu sessões legítimas distintas de cada papel, nem mudou RBAC.
+Health/UI não validam fluxo completo, concorrência real, todos os tenants ou inbound.
+Drained do ledger novo não prova quiescência retroativa das chamadas antigas.
+
+### Próxima decisão: abertura e scheduler, separadamente autorizados
+
+Leitura nova às **22:27:39**: jobs 0, grupos 0, leases 0, scheduled vencidas 0/futuras 0,
+sending 0. Às 22:23, campanhas anteriores: 85 completed/12 cancelled/5 failed/2 draft.
+Nenhuma fila existente para despachar observada; isso é uma fotografia, reconferir
+imediatamente antes de qualquer decisão. Não reenviar/reconciliar resultados antigos.
+
+**Abrir a guarda permite admissões manuais/test-send conforme RBAC/política.**
+Rotas de envio imediato chamam processamento de fila diretamente; desligar o timer
+NÃO é bloqueio global de envio após abertura. Habilitar scheduler inicializa também
+uma varredura imediata e ticks periódicos, podendo admitir elegíveis presentes no
+momento futuro. Não prometer “abertura sem envios” com base apenas na fila vazia.
+
+Permanecem gates: autorização específica, releitura de jobs/agendamentos/ledger,
+identidade/topologia single-host confirmada, motivo/geração da mudança e observação
+operacional; sem inventar quiescência antiga. Retorno preparado é recovery 03f930e5
+sobre DB atual e frontend anterior, mantendo guarda fechada; sem down/reset/dump
+sobre produção ou API 5ee2de6b. **STOP: DEPLOYED / CAMPAIGNS CLOSED / SCHEDULER DISABLED.**
+Aceite funcional de lotes/owner UI completo e CRA pendentes. Telegram não validado,
+6683 CLOSED, DELIVERED/READ → HUMAN/WAITING separado e owner PASS anterior preservado.
+
+Evidências privadas junto à preparação activation e em
+`local-evidence/recovery/activation-20260927/`, fora do Git. Publicação exclusivamente
+documental na branch de revisão; sem gatilho adicional de implantação.

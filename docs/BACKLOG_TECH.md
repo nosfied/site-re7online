@@ -2958,3 +2958,19 @@ STOP: candidato a1cc380e NOT DEPLOYED / OWNER UI PENDING; ativação fechada e a
 exigem decisões separadas, CRA pendente. Não inferir quiescência retroativa ou
 validar todos os tenants/webhooks por health/demo. Telegram separado/não validado;
 6683 CLOSED, owner PASS anterior e divergência DELIVERED/READ preservados.
+
+
+### Candidato implantado fechado — 27/09/2026
+
+[Estado e limites comprovados](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#candidato-ativado-com-campanhas-fechadas--27092026).
+Backend e frontend a1cc380e ativos; worker 5ee2de6b preservado, recovery 03f930e5
+disponível para retorno. Frontend compilado isoladamente uma vez; troca sequencial
+sob contenção 2min09s, crons/boot e saved/fallback seguros restaurados. Health,
+guarda fechada e BUILD_ID servido conferidos; owner confirmou telas/sessão/detalhe.
+Grupo de execução não comprovado (DB sem grupos); nenhum fixture/envio produtivo.
+Às 22:27:39: zero jobs/grupos/leases/agendamentos/sending. Guarda fechada e scheduler
+desabilitado permanecem; abrir guarda pode admitir envio manual mesmo sem timer.
+**DEPLOYED / CAMPAIGNS CLOSED / SCHEDULER DISABLED**, sem aceite CRA ou validação
+completa de lotes/owner UI. Abertura e habilitação do scheduler exigem decisões
+separadas e nova leitura do estado. Sem quiescência retroativa/inbound garantido.
+6683 CLOSED, Telegram/materialização separados, histórico owner PASS preservado.

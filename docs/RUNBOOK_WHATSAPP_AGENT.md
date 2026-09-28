@@ -2053,3 +2053,45 @@ antes de salvar supervisão; em falha, recovery conhecida compatível com DDL ad
 sem ressuscitar 5ee2de6b. Abertura de campanhas e aceite owner UI/CRA são decisões
 separadas. STOP após preparação. Sem garantia retroativa de drain/inbound/retry,
 Telegram inalterado/não validado; 6683 CLOSED e materialização separada.
+
+
+## Candidato fechado ativo — procedimento executado e retorno disponível
+
+[Estado efetivo e evidências](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#candidato-ativado-com-campanhas-fechadas--27092026).
+Backend/frontend a1cc380e ativos; guarda fechada, scheduler desabilitado. Recovery
+03f930e5 e frontend anterior 5ee2de6b disponíveis, worker/sessões preservados.
+Contenção 27/09 22:19:42–22:21:51 Fortaleza; crons originais e boot seguro restaurados.
+Não reaplicar os scripts históricos: swap.py tem marcador contra repetição e descreve
+a troca já executada. Nenhuma abertura está autorizada neste fechamento.
+
+Artefatos atuais:
+
+- API: `<release-a1cc380e>/migration-prepared.ecosystem.config.cjs`.
+- Frontend: `<release-a1cc380e>/frontend.ecosystem.config.cjs`, build
+  esJVODIxT1rETZKxEPdX5 em frontend isolado, sem alterar checkout anterior.
+- Retorno API: `<release-03f930e5>/stage-a.ecosystem.config.cjs`.
+- Retorno frontend: `preparations/activation-20260928T011150Z/frontend-return.config.cjs`;
+  aponta somente para Next anterior, não inicia API antiga.
+
+Retorno, se necessário e coordenado: conter 3000/3001 com arquivo próprio revisado,
+suspender rotinas/boot conforme gates, retirar SOMENTE processo afetado, conferir fim
+de PID/listener antes de iniciar artefato de retorno com ambiente reduzido; verificar
+/proc cwd/exe/entrypoint, host/guarda/scheduler/watch, health/atendimento, salvar estado
+seguro e preservar/corrigir fallback, retirar contenção e restaurar rotinas. Nunca
+kill/reload all, prepared.ecosystem* inválido, API 5ee2de6b, down/reset/restore DB como
+rollback normal. Em divergência de identidade, manter contenção e interromper para
+diagnóstico; não prosseguir confiando no nome PM2/build env. Worker não é alvo.
+
+Validação efetiva: health/diagnóstico guard/build, HTML com BUILD_ID correto,
+owner confirmou atendimento/lista/detalhe em sessão privada; grupo de execução não
+comprovado porque DB está sem grupos. Não criar dados para preencher cobertura.
+RBAC não alterado, sem fabricar sessões/aceite por papel. Logs novos sem erro e
+processos sem restarts; boot verificado estaticamente, sem ensaio de reboot.
+
+Para futura abertura: reler jobs/agendamentos/ledger, explicitar autorização e
+motivo/geração. Em 22:27:39 estavam zerados jobs/grupos/leases/scheduled/sending.
+Abrir guarda permite chamadas manuais/test-send autorizadas mesmo sem timer;
+habilitar scheduler dispara varredura imediata e ticks. Estas decisões permanecem
+separadas. Não remover lock/tarefa por timeout ou reenviar resultado incerto.
+DEPLOYED CLOSED; validação completa de lotes/owner UI e CRA pendentes. Telegram,
+6683 CLOSED e divergência DELIVERED/READ preservados separadamente.
