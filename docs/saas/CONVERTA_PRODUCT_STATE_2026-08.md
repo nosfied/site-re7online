@@ -2083,3 +2083,19 @@ desabilitado permanecem; abrir guarda pode admitir envio manual mesmo sem timer.
 completa de lotes/owner UI. Abertura e habilitação do scheduler exigem decisões
 separadas e nova leitura do estado. Sem quiescência retroativa/inbound garantido.
 6683 CLOSED, Telegram/materialização separados, histórico owner PASS preservado.
+
+
+### Liberação controlada — 27/09/2026
+
+[Registro auditado e limites](CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#liberação-controlada-concluída--campanhas-abertas-e-scheduler-habilitado).
+Após 84e92930 e autorização explícita, somente API a1cc380e reiniciada para habilitar
+scheduler com guarda fechada; atendimento confirmado pelo owner. Fila novamente
+vazia antes do POST superadmin: abertura 22:43:42.139, geração 0→1, motivo auditado.
+Duas varreduras reais consecutivas observadas com intervalo 60s, sem trabalho
+pendente/envio observado; nenhum fixture ou envio provocado. Frontend/worker
+preservados, saved/fallback/configuração persistente e crons/boot conferidos.
+**CAMPAIGNS OPEN / SCHEDULER ENABLED**; lotes completos/validação funcional e CRA
+continuam pendentes. Restart com guarda aberta não ensaiado, incertezas antigas
+não encerradas. Próxima validação owner exige audiência/destinatários controlados
+e revisão de template/variáveis antes de qualquer envio. 6683 CLOSED, Telegram e
+DELIVERED/READ separados; histórico owner PASS preservado.

@@ -2095,3 +2095,43 @@ habilitar scheduler dispara varredura imediata e ticks. Estas decisões permanec
 separadas. Não remover lock/tarefa por timeout ou reenviar resultado incerto.
 DEPLOYED CLOSED; validação completa de lotes/owner UI e CRA pendentes. Telegram,
 6683 CLOSED e divergência DELIVERED/READ preservados separadamente.
+
+
+## Liberação operacional concluída — configuração atual e resposta a falha
+
+[Registro único de abertura e observação](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#liberação-controlada-concluída--campanhas-abertas-e-scheduler-habilitado).
+Em 27/09/2026, API a1cc380e reiniciada sozinha com guarda fechada; scheduler habilitado
+por `<release-a1cc380e>/scheduler-enabled.ecosystem.config.cjs`. Identidade real,
+health/diagnóstico e Inbox/CRM owner conferidos antes da abertura. Frontend/worker
+preservados. POST superadmin abriu às 22:43:42.139 Fortaleza, geração 0→1, motivo no
+registro único. Sem edição direta de ledger ou envio provocado.
+
+Dois ciclos reais às 22:46:38.623 e 22:47:38.623, com tarefa scheduler/claim interno
+admitida e concluída; fila permaneceu vazia, eventos de envio sem incremento e
+zero saídas registradas no período observado. Logs sem erro. Saved/fallback seguros,
+crons originais e boot inactive/enabled restaurados. Scripts em
+`preparations/opening-20260928T013618Z` são evidência histórica, NÃO reaplicar open.cjs
+ou restart-api.py. Nenhum teste/build/suíte foi repetido.
+
+Configuração persistida habilita scheduler; guarda aberta/geração 1 está no arquivo
+compartilhado e vinculada ao host. Um restart sem tarefas/fault pode retomar admissão
+e varredura inicial; **não foi provocado restart com guarda aberta para provar isso**.
+Se houver tarefa abandonada, lock/fault ou identidade divergente, o mecanismo fecha
+admissão: não apagar evidências nem inferir rejeição/reenviar. Arquivo de configuração
+fechada anterior continua disponível, mas não representa o estado ativo atual.
+
+Resposta a divergência: consultar GET superadmin /admin/ops/campaign-execution e
+fechar pelo POST existente com open=false, geração retornada e motivo explícito;
+manter credencial privada. Depois inspecionar tasks/ledgerFault e chamadas aceitas/
+incertas; fechamento impede novas admissões, não comprova drain imediatamente.
+Não matar provider ou remover lock/tarefa por prazo. Em falha do mecanismo, conter
+novas entradas conforme plano e avaliar processos/chamadas antes de parar; recovery
+03f930e5 fechada sobre DB atual só quando necessária e coordenada. Sem down/reset/
+restore de dump, sem API 5ee2de6b e sem alterar frontend/worker incidentalmente.
+
+Validação funcional posterior pelo owner: conferir audiência, template e variáveis;
+definir destinatários controlados/autorizados e janela antes de envio; conferir
+snapshot/lotes/ordem, pausa/retomada e resultado sem retry cego. Esta liberação não
+criou dados para preencher cobertura nem valida lotes completos, RBAC por sessões
+distintas ou CRA. CAMPAIGNS OPEN / SCHEDULER ENABLED; 6683 CLOSED, Telegram e
+DELIVERED/READ separados, incertezas antigas não apagadas.

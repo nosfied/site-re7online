@@ -1132,3 +1132,116 @@ Aceite funcional de lotes/owner UI completo e CRA pendentes. Telegram não valid
 Evidências privadas junto à preparação activation e em
 `local-evidence/recovery/activation-20260927/`, fora do Git. Publicação exclusivamente
 documental na branch de revisão; sem gatilho adicional de implantação.
+
+
+## Liberação controlada concluída — campanhas abertas e scheduler habilitado
+
+Complemento a **84e92930**, em 27/09/2026 America/Fortaleza, sob autorização explícita
+do owner. Sucede o estado histórico fechado, sem alterar código do candidato
+**a1cc380eddcd1467b8e0d3a8e405f82689a25b3d**, schema ou frontend. Não houve criação
+de campanha/fixture nem envio provocado para validar. Aceite funcional de lotes e
+CRA continuam pendentes; não confundir liberação operacional com esses aceites.
+
+### Gates, preservação e reinício somente da API
+
+Leitura 22:34:43: jobs/grupos/leases/agendamentos vencidos/futuros zero; estados
+anteriores 85 completed/12 cancelled/5 failed/2 draft. Os rascunhos não estavam
+enfileirados. Guarda disponível/fechada, geração 0, tasks 0, sem lock/uncertain/fault;
+host único conferido na configuração, processo e identidade local, dentro da
+topologia single-host previamente inventariada. Sem quiescência retroativa inferida.
+
+Estado/configuração preservados privadamente em
+`/opt/re7online/backups/converta-persistent/preparations/opening-20260928T013618Z/`:
+configuração fechada anterior, guard-before.private.tar, saved/fallback e crons.
+Novo arquivo ativo: `<release-a1cc380e>/scheduler-enabled.ecosystem.config.cjs`,
+SHA256 `747c2b624abb221e08cc871ed7474f6eb8823932655f58016bc53430bc13a31a`.
+Única alteração de aplicação: CAMPAIGN_SCHEDULE_PROCESSOR_DISABLED true→false.
+Parser/normalizador PM2 conferido sem startup prévio. Configuração corrigida anterior
+permanece preservada para retorno fechado; não reutilizados prepared.ecosystem*.
+
+- 22:38:07: Codex suspendeu crontab deploy previsto, sem tarefa concorrente.
+- 22:38:54: Deifson suspendeu cron.d backup/boot sem --now e conteve somente 3001;
+ frontend e worker não foram parados nem trocados.
+- 22:39:35–22:39:40: fila reconferida vazia, API anterior removida e única API nova
+ iniciada com ambiente reduzido. Identidade real /proc cwd/exe/pm_exec_path,
+ script/configuração, host, watch=false e CAMPAIGN_SCHEDULE_PROCESSOR_DISABLED=false
+ conferidos. Guarda
+ permaneceu FECHADA; evento campaign.schedule.processor.started observado.
+- 22:40:40: Deifson retirou a tabela temporária, 23 pacotes rejeitados;
+ contenção 106s (1min46s). Health loopback/público 200/db ok e diagnóstico superadmin
+ confirmaram candidato correto, guarda fechada geração 0/tasks 0/sem ledgerFault.
+ Owner confirmou Inbox/CRM funcionando na sessão privada, somente leitura.
+
+API efetiva PID 1493326, online/zero restarts; frontend a1cc380e PID 1489466/build
+esJVODIxT1rETZKxEPdX5 e worker 5ee2de6b PID 3747763/filho 3747829 preservados.
+Scheduler com intervalo existente de 60.000ms, sem alteração de implementação.
+Nenhuma abertura ocorreu antes da validação de atendimento e nova leitura de fila.
+
+### Abertura auditada e observação efetiva
+
+Às 22:43:41.923, releitura imediata: jobs 0/grupos 0/leases 0, scheduled vencidas 0/
+futuras 0, sending/paused 0. Às **22:43:42.139**, POST superadmin existente abriu a
+guarda usando geração atual **0→1**, HTTP 200. Actor auditado `platform-superadmin`;
+segredo somente em memória do processo, sem exposição. Motivo persistido:
+
+> Owner Deifson authorized controlled campaign release after 84e92930; queue/schedules empty, scheduler enabled while closed, service validated; no validation sends
+
+Não editado ledger diretamente, não removidos locks/tarefas/marcadores. Abertura
+vinculou o arquivo compartilhado ao host validado. Zero tarefas e ledgerFault=null
+na resposta; drained=false é esperado com guarda aberta, mesmo sem tarefas.
+
+Observação passiva via inotify dos renames atômicos do ledger, sem lock de leitura,
+sem invocar scheduler manualmente e sem fixtures. Primeiro probe capturou scheduler
+às 22:44:38, mas classificou seu filho normal `claim` como inesperado e parou. Código
+existente confirmou esse filho como parte da varredura; fila/leases/saídas continuavam
+zero. Evidência inicial preservada; corrigida somente classificação do observador,
+sem alteração funcional ou nova abertura da guarda.
+
+Dois ciclos consecutivos completos observados no PID 1493326/build a1cc380e/geração 1:
+
+| Início Fortaleza | Duração observada da tarefa | Resultado |
+| --- | --- | --- |
+| 22:46:38.623 | 49,82ms | scheduler + claim interno; tarefa retirada, guarda aberta|
+| 22:47:38.623 | 95,92ms | scheduler + claim interno; tarefa retirada, guarda aberta|
+
+Intervalo observado 60s; 8 renames e 2 claims no probe completo. A admissão e conclusão
+do caminho real de varredura foram observadas, não apenas o log de inicialização
+ou uma espera arbitrária. Não houve tarefa de provider/campanha nesse probe;
+nenhum erro registrado nos logs consultados. Isso não valida envio/lotes vazios
+como se fossem uma execução funcional completa.
+
+Às 22:47:58.632: jobs/grupos/leases/scheduled vencidas/futuras/sending zero,
+ledger sem tarefas, open=true/geração 1/sem fault. Desde a abertura até essa leitura:
+**zero novos OutboundMessage**; deltas de intents/aceites/test-send todos zero
+(baselines 61 submit_started, 61 provider_accepted, 16 test_send.requested, 10 sent,
+6 failed). Nenhum envio de campanha/test-send observado ou provocado no período.
+Não afirmar ausência universal de tráfego externo sem registro nem encerrar as
+incertezas antigas; qualquer tráfego real futuro não é ação desta validação.
+
+### Supervisão, persistência e limites finais
+
+Saved/fallback idênticos apontam para candidato com scheduler habilitado,
+script/cwd/host/guarda corretos e watch=false. Configuração ativa é a nova
+scheduler-enabled.ecosystem.config.cjs, não a cópia de scheduler desabilitado.
+Codex restaurou crontab deploy 22:48:30; Deifson restaurou cron.d backup e boot sem
+start/reload. Às 22:49:56: ambos crons byte a byte, boot **inactive/enabled**, três
+processos esperados estáveis e guarda aberta/geração 1/sem tarefas, host vinculado.
+Não houve retenção manual, mudança de frontend/worker ou rollback da migration.
+
+Comportamento previsto após restart, **não ensaiado com guarda aberta**: a
+configuração persistida inicia scheduler e a guarda persiste aberta no mesmo host
+se o estado estiver válido e sem tarefas abandonadas/fault. Scheduler faz varredura
+inicial e ticks. Estado ilegível/corrompido, host divergente, lock ou tarefa abandonada
+bloqueiam admissão; não apagar/reabrir por timeout. Não prometer retomada automática
+de resultado incerto, nem coordenação entre hosts. Reboot/resurrect não foi provocado.
+
+**CAMPAIGNS OPEN / SCHEDULER ENABLED.** Próxima validação funcional é do owner:
+revisar audiência/template/variáveis e papéis; definir campanha e destinatários
+controlados com consentimento antes de qualquer envio; validar lote/snapshot/ordem,
+pausa/retomada e resultado com evidência. Não executar casos produtivos artificialmente
+nesta etapa. Se surgir divergência, fechar admissões via API superadmin com geração
+atual e motivo, observar tarefas em andamento, sem matar provider/limpar ledger ou
+reenviar incertos; recovery fechada só pelo procedimento coordenado se necessária.
+Aceite de lotes/CRA pendente; 6683 CLOSED, Telegram e DELIVERED/READ separados.
+Evidências privadas junto à preparação opening e localmente em
+`local-evidence/recovery/opening-20260927/`; publicação somente documental.
