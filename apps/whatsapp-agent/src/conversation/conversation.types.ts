@@ -1,3 +1,4 @@
+import type { RuntimeWriteToken } from "./runtimeWriteFence.js";
 export type ConversationIntent = "pricing" | "support" | "handoff" | "unknown";
 export type ConversationFlow = "quote_site" | `chatbot:${string}`;
 export type ConversationOperationalStatus =
@@ -189,6 +190,8 @@ export type QuoteSiteAnswers = {
 };
 
 export type ConversationState = {
+  /** Read-only PostgreSQL revision; never part of persisted automation answers. */
+  runtimeWriteToken?: RuntimeWriteToken;
   clientKey?: string;
   conversationKey?: string;
   waId: string;

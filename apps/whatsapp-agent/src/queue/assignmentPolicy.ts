@@ -39,7 +39,7 @@ export type QueueAssignmentPolicyValidationResult =
   | { ok: false; status: number; code: string; message: string };
 
 export type BalancedQueueAssignmentResult =
-  | { applied: false; reason: "manual" | "already_assigned" | "status_not_waiting" | "no_policy" | "no_eligible_agent" }
+  | { applied: false; reason: "manual" | "already_assigned" | "status_not_waiting" | "no_policy" | "no_eligible_agent" | "automation_active" | "runtime_changed" }
   | {
       applied: true;
       mode: "round_robin" | "least_active";
@@ -604,12 +604,25 @@ async function applyBalancedQueueAssignmentLocked(params: {
     const current = await params.prisma.conversationRuntimeState.findUnique({
       where: { id: params.runtimeStateId },
       select: {
+        clientId: true,
+        mode: true,
+        handoffStatus: true,
+        updatedAt: true,
         assignedUserId: true,
         status: true,
         departmentId: true,
         queueId: true,
       },
     });
+    // WAITING also exists in BOT reentry. It is not by itself a human queue entry.
+    // Legacy accepted handoff can still carry BOT; pending confirmation alone
+    // remains automation (conversation.service.shouldAutoReply / handleHandoff).
+    if (!current || current.clientId !== params.clientId) {
+      return { applied: false, reason: "runtime_changed" };
+    }
+    if (current.mode !== "HUMAN" && current.handoffStatus !== "ACTIVE") {
+      return { applied: false, reason: "automation_active" };
+    }
     const assignedUserId = current?.assignedUserId ?? params.assignedUserId ?? null;
     const status = current?.status ?? params.status ?? null;
     const departmentId = current?.departmentId ?? params.departmentId ?? null;
@@ -719,8 +732,15 @@ async function applyBalancedQueueAssignmentLocked(params: {
         : selectRoundRobinUser(eligible, policy.lastAssignedUserIdByScope[getScopeKey(policy, departmentId)]);
 
     const assignedAt = new Date();
-    await params.prisma.conversationRuntimeState.update({
-      where: { id: params.runtimeStateId },
+    const assignment = await params.prisma.conversationRuntimeState.updateMany({
+      where: {
+        id: params.runtimeStateId,
+        clientId: params.clientId,
+        updatedAt: current.updatedAt,
+        assignedUserId: null,
+        status: ConversationOperationalStatus.WAITING,
+        OR: [{ mode: "HUMAN" }, { handoffStatus: "ACTIVE" }],
+      },
       data: {
         assignedUserId: selected.id,
         assignedTo: `user:${selected.id}`,
@@ -730,6 +750,9 @@ async function applyBalancedQueueAssignmentLocked(params: {
         status: ConversationOperationalStatus.IN_PROGRESS,
       },
     });
+    // A claim/transfer/close can occur while availability is being resolved.
+    // Do not overwrite it or advance the cursor for an assignment not applied.
+    if (assignment.count !== 1) return { applied: false, reason: "runtime_changed" };
     await params.prisma.conversationAssignment.create({
       data: {
         conversationId: params.runtimeStateId,

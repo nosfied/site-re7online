@@ -1632,7 +1632,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           ? "IN_PROGRESS"
           : nextStateCandidate.status,
     };
-    await storage.upsertConversation(nextState);
+    const revision = await storage.upsertConversation(nextState, state.runtimeWriteToken);
+    if (state.runtimeWriteToken && revision === null) {
+      logger.info({ event: "automation.runtime.stale_write_skipped", clientId: tenantClientId });
+      return await storage.getConversation(state.waId, tenantClientKey) ?? currentState ?? state;
+    }
+    if (revision) nextState.runtimeWriteToken = revision;
     if (tenantClientId && isWhatsAppMultichannelShadowWriteEnabled()) {
       await safeApplyWhatsAppMultichannelShadow({
         prisma: getPrisma(),
@@ -1663,8 +1668,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       messageId,
       new Date().toISOString()
     );
-    await upsertConversationSafe(nextState);
-    return nextState;
+    return upsertConversationSafe(nextState);
   };
 
   await persistEventSafe(
@@ -3583,6 +3587,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (shouldResetForBotReentry) {
       currentConversation = resetConversationForBotReentry(currentConversation, message.timestamp);
       await storage.upsertConversation(currentConversation);
+      currentConversation = await storage.getConversation(currentConversation.waId, tenantClientKey) ?? currentConversation;
       const resetReason = directConversationForInbound?.deletedAt
         ? "inbound_after_soft_delete"
         : shouldResetClosedConversation
@@ -3602,6 +3607,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     currentConversation = activeCycleResult.state;
     if (activeCycleResult.created) {
       await storage.upsertConversation(currentConversation);
+      currentConversation = await storage.getConversation(currentConversation.waId, tenantClientKey) ?? currentConversation;
       await recordServiceCycleEvent({
         prisma,
         clientId: tenantClientId,

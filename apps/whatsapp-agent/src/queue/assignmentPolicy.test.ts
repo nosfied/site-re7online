@@ -1184,3 +1184,86 @@ test("assignment rereads the cursor after config lock, preserving revocation and
   assert.deepEqual(current.sentinel, [null, false]);
   assert.equal(current.queueAssignmentPolicy.lastAssignedUserIdByScope["department:other-synthetic"], "keep");
 });
+
+for (const provider of ["meta", "web_session"] as const) {
+  test(`${provider}: automation WAITING does not assign or advance cursor while processing is pending`, async () => {
+    const client = await createClient(`bot-${provider}`);
+    await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: `bot-${provider}` });
+    await setPolicy(client.id, { enabled: true, mode: "round_robin", scope: "department", presenceMode: "IGNORE" });
+    const { conversation, runtime } = await createRuntime({ ...client, clientId: client.id, suffix: `bot-${provider}` });
+    await prisma.conversationRuntimeState.update({ where: { id: runtime.id }, data: { mode: "BOT", provider, handoffStatus: "NONE" } });
+    const before = await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } });
+    const started = defer(), finish = defer();
+    const pendingAutomation = (async () => { started.resolve(); await finish.promise; })();
+    await started.promise;
+    const result = await applyBalancedQueueAssignment({ prisma, clientId: client.id, conversationId: conversation.id,
+      runtimeStateId: runtime.id, waId: runtime.waId, departmentId: client.departmentId,
+      status: "WAITING", source: `${provider}.automation-test` });
+    assert.deepEqual(result, { applied: false, reason: "automation_active" });
+    assert.equal((await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: runtime.id } })).assignedUserId, null);
+    assert.equal(await prisma.conversationAssignment.count({ where: { conversationId: runtime.id } }), 0);
+    assert.deepEqual((await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } })).config, before.config);
+    finish.resolve(); await pendingAutomation;
+  });
+}
+
+for (const [mode, handoffStatus, allowed] of [
+  ["BOT", "PENDING", false], ["BOT", "ACTIVE", true], ["HUMAN", "PENDING", true], ["HUMAN", "NONE", true],
+] as const) {
+  test(`human queue contract: ${mode}/${handoffStatus} allowed=${allowed}`, async () => {
+    const client = await createClient(`contract-${mode}-${handoffStatus}`);
+    await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: `contract-${mode}-${handoffStatus}` });
+    await setPolicy(client.id, { enabled: true, mode: "round_robin", scope: "department", presenceMode: "IGNORE" });
+    const { runtime, conversation } = await createRuntime({ ...client, clientId: client.id, suffix: `contract-${mode}-${handoffStatus}` });
+    await prisma.conversationRuntimeState.update({ where: { id: runtime.id }, data: { mode, handoffStatus } });
+    const result = await applyBalancedQueueAssignment({ prisma, clientId: client.id, conversationId: conversation.id,
+      runtimeStateId: runtime.id, waId: runtime.waId, source: "contract-test" });
+    assert.equal(result.applied, allowed);
+  });
+}
+
+test("wrong tenant cannot use another tenant runtime id", async () => {
+  const a = await createClient("isolation-a"), b = await createClient("isolation-b");
+  await setPolicy(a.id, { enabled: true, mode: "round_robin", scope: "tenant", presenceMode: "IGNORE" });
+  const { runtime } = await createRuntime({ ...b, clientId: b.id, suffix: "isolation" });
+  const result = await applyBalancedQueueAssignment({ prisma, clientId: a.id, runtimeStateId: runtime.id,
+    waId: runtime.waId, source: "isolation-test" });
+  assert.deepEqual(result, { applied: false, reason: "runtime_changed" });
+  assert.equal((await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: runtime.id } })).assignedUserId, null);
+});
+
+test("human claim between queue read and write is preserved without cursor advance", async () => {
+  const client = await createClient("claim-race");
+  const human = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "claim-race" });
+  await setPolicy(client.id, { enabled: true, mode: "round_robin", scope: "department", presenceMode: "IGNORE" });
+  const { runtime } = await createRuntime({ ...client, clientId: client.id, suffix: "claim-race" });
+  const before = await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } });
+  const beforeWrite = defer(), release = defer();
+  // Real transaction/DB; delay only the final write to make the race deterministic.
+  const wrapped = new Proxy(prisma, { get(target, key) {
+    if (key !== "$transaction") return Reflect.get(target, key);
+    return (callback: (tx: Prisma.TransactionClient) => Promise<unknown>) => target.$transaction(tx => callback(new Proxy(tx, {
+      get(transaction, property) {
+        if (property !== "conversationRuntimeState") return Reflect.get(transaction, property);
+        return new Proxy(transaction.conversationRuntimeState, { get(model, operation) {
+          if (operation !== "updateMany") return Reflect.get(model, operation);
+          return async (args: Prisma.ConversationRuntimeStateUpdateManyArgs) => {
+            beforeWrite.resolve(); await release.promise; return model.updateMany(args);
+          };
+        } });
+      },
+    })));
+  } });
+  const attempt = applyBalancedQueueAssignment({ prisma: wrapped, clientId: client.id, runtimeStateId: runtime.id,
+    waId: runtime.waId, source: "claim-race-test" });
+  await beforeWrite.promise;
+  try {
+    await prisma.conversationRuntimeState.update({ where: { id: runtime.id }, data: {
+      assignedUserId: human.id, assignedTo: `user:${human.id}`, assignedAt: new Date(), status: "IN_PROGRESS",
+    } });
+  } finally { release.resolve(); }
+  assert.deepEqual(await attempt, { applied: false, reason: "runtime_changed" });
+  assert.equal((await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: runtime.id } })).assignedUserId, human.id);
+  assert.deepEqual((await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } })).config, before.config);
+  assert.equal(await prisma.conversationAssignment.count({ where: { conversationId: runtime.id } }), 0);
+});

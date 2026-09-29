@@ -1,3 +1,4 @@
+import { captureRuntimeWriteToken, updateRuntimeIfUnchanged, type RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
 import crypto from "node:crypto";
 import { HandoffStatus, MessageType, Prisma, type PrismaClient } from "@prisma/client";
 import { findDefaultOperationalDepartment } from "../bootstrap/defaultOperationalDepartment.js";
@@ -1189,6 +1190,8 @@ async function ensureWebSessionRuntimeState(params: {
       answers: {},
     },
     select: {
+      updatedAt: true,
+      version: true,
       id: true,
       firstSeenAt: true,
       windowIsOpen: true,
@@ -1266,6 +1269,7 @@ function runtimeToConversationState(params: {
   message: NormalizedWebSessionInboundMessage;
 }): ConversationState {
   return {
+    runtimeWriteToken: captureRuntimeWriteToken(params.runtime),
     clientKey: params.message.tenantKey,
     conversationKey: makeConversationKey(params.message.tenantKey, params.message.sender),
     waId: params.message.sender,
@@ -1330,8 +1334,9 @@ async function persistWebSessionRuntimeState(params: {
   clientId: string;
   waId: string;
   state: ConversationState;
+  expected?: RuntimeWriteToken;
 }) {
-  await params.prisma.conversationRuntimeState.update({
+  const write = {
     where: {
       clientId_waId: {
         clientId: params.clientId,
@@ -1365,7 +1370,20 @@ async function persistWebSessionRuntimeState(params: {
       status: params.state.status ?? null,
       closedAt: params.state.closedAt ? new Date(params.state.closedAt) : null,
     },
-  });
+  } satisfies Prisma.ConversationRuntimeStateUpdateArgs;
+  const expected = params.expected ?? params.state.runtimeWriteToken;
+  if (expected) {
+    const token = await updateRuntimeIfUnchanged({ prisma: params.prisma, clientId: params.clientId,
+      waId: params.waId, expected, data: write.data });
+    if (!token) {
+      logger.info({ event: "automation.runtime.stale_write_skipped", clientId: params.clientId });
+      return false;
+    }
+    params.state.runtimeWriteToken = token;
+    return true;
+  }
+  await params.prisma.conversationRuntimeState.update(write);
+  return true;
 }
 
 async function shouldReopenClosedConversationWindow(params: {
@@ -3283,12 +3301,14 @@ export async function ingestWebSessionInboundMessage(params: {
               queueId: handoffDecision.queueId ?? runtimeConversationState.queueId ?? null,
             };
           }
-          await persistWebSessionRuntimeState({
+          const persisted = await persistWebSessionRuntimeState({
             prisma,
             clientId: params.message.clientId,
             waId: params.message.sender,
             state: runtimeConversationState,
+            expected: runtimeConversationState.runtimeWriteToken,
           });
+          if (!persisted) return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
           const postFlowRuntime = await prisma.conversationRuntimeState.findUnique({
             where: {
               clientId_waId: {

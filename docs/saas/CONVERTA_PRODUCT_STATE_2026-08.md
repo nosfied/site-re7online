@@ -1,5 +1,9 @@
 # Converta Product State - 2026-08
 
+## Frentes locais separadas — automação, 29/09/2026
+
+[Correção automação × rodízio](AUTOMATION_QUEUE_RACE_LOCAL_2026-09-29.md): LOCAL VALIDATED / NOT DEPLOYED, código destinado somente à revisão; bloqueia distribuição indevida e persistência obsoleta nos caminhos validados. Resposta automática tardia após intervenção permanece lacuna de contrato, sem promessa de cancelamento. [Acompanhamento BOT](INBOX_AUTOMATION_VISIBILITY_PROPOSAL_2026-09-29.md): somente proposta, reutilizando Inbox/Automação; gestão ADMIN e escopos a revisar. Campanhas/CRA aguardam validação funcional do owner; inatividade no Guia pausada.
+
 ## Fechamento SECULT — confirmação do owner em 29/09/2026
 
 **DEPLOYED / CLIENT ACCEPTED.** Deifson informou: “SECULT aprovou. Já está

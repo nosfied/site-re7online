@@ -1,5 +1,13 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## Automação × rodízio e acompanhamento BOT — 29/09/2026
+
+- **Defeito automação × rodízio: correção LOCAL VALIDATED / NOT DEPLOYED**, publicação somente para revisão. Distribuição exige controle humano; conclusão obsoleta não apaga transição concorrente. 115 testes afetados PASS e refinamento de 13 reexecutado; worker mínimo Node20 validado com seleção de 15 casos. Limites de tipagem, storage legado e resposta automática tardia explícitos no [relatório](saas/AUTOMATION_QUEUE_RACE_LOCAL_2026-09-29.md). O guard de envio não demonstra exclusão de toda intervenção humana: revisar contrato antes de ampliar a correção.
+- **Acompanhamento BOT: PROPOSTA, NÃO IMPLEMENTADA.** Reutilizar filtro Automação e Inbox, chave ADMIN/default false, leitura por escopo departamental e intervenção separada. [Matriz, caminhos e decisões](saas/INBOX_AUTOMATION_VISIBILITY_PROPOSAL_2026-09-29.md).
+- **Preexistente separado:** realtime SUPERVISOR tem caminho amplo por tenant. Novos eventos BOT não podem herdar esse alcance; autorização BOT indispensável não autoriza reformulação geral de eventos humanos.
+
+SECULT DEPLOYED / CLIENT ACCEPTED conforme relato do owner. Campanhas/CRA aguardam validação funcional do owner; inatividade no Guia pausada; DB-only encerrada; 6683 CLOSED. Nenhuma mudança produtiva nesta frente.
+
 ## Fechamento SECULT — confirmação do owner em 29/09/2026
 
 **DEPLOYED / CLIENT ACCEPTED.** Deifson informou: “SECULT aprovou. Já está

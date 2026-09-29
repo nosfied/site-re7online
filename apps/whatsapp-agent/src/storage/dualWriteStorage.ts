@@ -1,4 +1,5 @@
-import { ConversationOperationalStatus, HandoffStatus } from "@prisma/client";
+import { captureRuntimeWriteToken, updateRuntimeIfUnchanged, type RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
+import { ConversationOperationalStatus, HandoffStatus, type Prisma } from "@prisma/client";
 import { env } from "../config/env.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
@@ -450,6 +451,8 @@ export function createDualWriteStorage(
     clientKey: string;
     waId: string;
     db: {
+      updatedAt: Date;
+      version: number;
       waId: string;
       waIdCanonical: string | null;
       conversationKey: string | null;
@@ -497,6 +500,7 @@ export function createDualWriteStorage(
         ? (params.db.answers as ConversationState["answers"])
         : {};
     return {
+      runtimeWriteToken: readSource === "postgres" && !jsonWriteEnabled ? captureRuntimeWriteToken({ ...params.db, handoffStatus: params.db.handoffStatus ?? HandoffStatus.NONE }) : undefined,
       clientKey: params.clientKey,
       conversationKey:
         params.db.conversationKey ?? makeConversationKey(params.clientKey, params.db.waId),
@@ -637,6 +641,7 @@ export function createDualWriteStorage(
         waIdCanonical: true,
         conversationKey: true,
         channelAccountId: true,
+        version: true,
         externalUserHash: true,
         legacyWaId: true,
         firstSeenAt: true,
@@ -826,12 +831,12 @@ export function createDualWriteStorage(
     });
   }
 
-  async function writeShadow(state: ConversationState) {
+  async function writeShadow(state: ConversationState, expected?: RuntimeWriteToken) {
     const clientId = await getClientId(state.clientKey, "write");
     if (!clientId) {
       return;
     }
-    await prisma.conversationRuntimeState.upsert({
+    const write = {
       where: {
         clientId_waId: { clientId, waId: state.waId },
       },
@@ -920,7 +925,12 @@ export function createDualWriteStorage(
         closedAt: toDate(state.closedAt),
         version: { increment: 1 },
       },
-    });
+    } satisfies Prisma.ConversationRuntimeStateUpsertArgs;
+
+    if (expected) {
+      return updateRuntimeIfUnchanged({ prisma, clientId, waId: state.waId, expected, data: write.update });
+    }
+    await prisma.conversationRuntimeState.upsert(write);
     logger.info({
       event: "state.shadow.write",
       waId: state.waId,
@@ -1038,7 +1048,12 @@ export function createDualWriteStorage(
       });
       throw new Error(errorMessage);
     },
-    async upsertConversation(state: ConversationState) {
+    async upsertConversation(state: ConversationState, expected?: RuntimeWriteToken) {
+      if (expected) {
+        if (readSource !== "postgres" || jsonWriteEnabled) throw new Error("conditional_runtime_write_requires_postgres_only");
+        // Do not swallow a conditional-write error or fall back to an unconditional upsert.
+        return writeShadow(state, expected);
+      }
       if (jsonWriteEnabled) {
         await primary.upsertConversation(state);
       } else {

@@ -1,5 +1,9 @@
 # Product Map Current
 
+## Atualização local — automação, 29/09/2026
+
+Fila/runtime: [correção local do conflito automação × rodízio](AUTOMATION_QUEUE_RACE_LOCAL_2026-09-29.md), sem deploy; API e worker mínimo têm deltas distintos. Inbox: [proposta de acompanhamento BOT](INBOX_AUTOMATION_VISIBILITY_PROPOSAL_2026-09-29.md), sem implementação, reaproveita filtro Automação. Visualização não autoriza intervenção nem consome capacidade. Campanhas/CRA seguem aguardando o owner; inatividade no Guia pausada.
+
 ## Fechamento SECULT — confirmação do owner em 29/09/2026
 
 **DEPLOYED / CLIENT ACCEPTED.** Deifson informou: “SECULT aprovou. Já está

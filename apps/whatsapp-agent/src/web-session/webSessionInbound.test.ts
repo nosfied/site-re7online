@@ -615,13 +615,36 @@ function fakePrisma() {
           if (where?.closedAt === null && runtimeState.closedAt != null) return false;
           return true;
         }),
+      updateManyAndReturn: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        const found = state.runtimeStates.findIndex(row => Object.entries(where).every(([key, expected]) => {
+          if (expected === undefined) return true;
+          const actual = row[key];
+          return actual instanceof Date && expected instanceof Date
+            ? actual.getTime() === expected.getTime() : actual === expected;
+        }));
+        if (found < 0) return [];
+        const before = state.runtimeStates[found];
+        const row = { ...before, ...withoutUndefined(data), updatedAt: new Date(),
+          version: Number(before.version ?? 0) + Number((data.version as { increment?: number })?.increment ?? 0) };
+        state.runtimeStates[found] = row;
+        return [row];
+      },
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
         const existing = state.runtimeStates[0];
         const row: Record<string, unknown> = existing
           ? { ...existing, ...withoutUndefined(update) }
           : { id: "runtime_1", ...withoutUndefined(create) };
+        Object.assign(row, {
+          version: Number(row.version ?? 0), updatedAt: new Date(),
+          mode: row.mode ?? null, handoffStatus: row.handoffStatus ?? "NONE",
+          assignedUserId: row.assignedUserId ?? null, assignedAt: row.assignedAt ?? null,
+          departmentId: row.departmentId ?? null, queueId: row.queueId ?? null,
+          status: row.status ?? null, closedAt: row.closedAt ?? null, lastInboundAt: row.lastInboundAt ?? null,
+        });
         state.runtimeStates[0] = row;
         return {
+          updatedAt: row.updatedAt,
+          version: row.version,
           id: String(row.id),
           firstSeenAt: row.firstSeenAt instanceof Date ? row.firstSeenAt : new Date("2026-08-11T12:00:00.000Z"),
           windowIsOpen: row.windowIsOpen === true,

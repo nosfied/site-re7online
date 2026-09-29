@@ -1,3 +1,4 @@
+import type { RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
 import { NormalizedMessage } from "../domain/whatsapp/types.js";
 import { ConversationState } from "../conversation/conversation.types.js";
 
@@ -32,7 +33,7 @@ export interface Storage {
   ): Promise<void>;
   updateMessage(messageId: string, patch: Partial<StoredRecord>): Promise<void>;
   getConversation(waId: string, clientKey?: string): Promise<ConversationState | null>;
-  upsertConversation(state: ConversationState): Promise<void>;
+  upsertConversation(state: ConversationState, expected?: RuntimeWriteToken): Promise<void | RuntimeWriteToken | null>;
   updateConversationWindow(
     waId: string,
     lastInboundAt: string,
