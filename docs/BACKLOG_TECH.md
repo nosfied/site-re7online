@@ -1,5 +1,20 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## Estado vigente — janela SECULT de 29/09/2026
+
+**Código implantado; ativação SECULT e aceite funcional pendentes.** API/frontend
+`a3d16d4b`, worker mínimo `bf5f1d76` + cinco fontes `f06d49cb` (pacote `042e386a`).
+[Fechamento técnico, backup, horários, limites e retorno](saas/SECULT_ROLLOUT_2026-09-29.md).
+Campanhas reabertas (geração 5), scheduler observado; Inbox/CRM confirmados pelo
+owner. Chave permanece desligada em todos os tenants: falta sessão legítima ou
+grant de suporte existente para o setter SECULT. Sem contorno de RBAC/SQL.
+Compatibilidade de API/worker/scripts deve ser mantida; retorno a escritores antigos
+perde a garantia concorrente. Primeira interrupção autorizada não comprova drain
+retroativo do worker. Campanhas/CRA aguardam validação funcional do owner; DB-only
+encerrada, inatividade no Guia pausada, 6683 CLOSED. Registros abaixo preservam
+o escopo e o estado histórico de cada etapa.
+
+
 ## SECULT — publicação para revisão após Node20 — 29/09/2026
 
 **LOCAL VALIDATED / NOT DEPLOYED.** Node v20.20.0 exato: 65 módulos carregados sem

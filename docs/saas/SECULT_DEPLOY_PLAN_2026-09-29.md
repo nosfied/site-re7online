@@ -1,5 +1,20 @@
 # SECULT — plano de implantação para revisão, 29/09/2026
 
+## Estado vigente — janela SECULT de 29/09/2026
+
+**Código implantado; ativação SECULT e aceite funcional pendentes.** API/frontend
+`a3d16d4b`, worker mínimo `bf5f1d76` + cinco fontes `f06d49cb` (pacote `042e386a`).
+[Fechamento técnico, backup, horários, limites e retorno](SECULT_ROLLOUT_2026-09-29.md).
+Campanhas reabertas (geração 5), scheduler observado; Inbox/CRM confirmados pelo
+owner. Chave permanece desligada em todos os tenants: falta sessão legítima ou
+grant de suporte existente para o setter SECULT. Sem contorno de RBAC/SQL.
+Compatibilidade de API/worker/scripts deve ser mantida; retorno a escritores antigos
+perde a garantia concorrente. Primeira interrupção autorizada não comprova drain
+retroativo do worker. Campanhas/CRA aguardam validação funcional do owner; DB-only
+encerrada, inatividade no Guia pausada, 6683 CLOSED. Registros abaixo preservam
+o escopo e o estado histórico de cada etapa.
+
+
 **PREPARAÇÃO LOCAL / PREFLIGHT READ-ONLY / NOT DEPLOYED.** Candidato
 `a3d16d4bdc4b143deeb6b66d4e963b0b4b3f216b`, incluindo persistência `f06d49cb`,
 funcionalidade `48e0fc2a` e correções revisadas. Nenhuma mudança produtiva autorizada
