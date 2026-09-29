@@ -1,5 +1,19 @@
 # SECULT — fechamento técnico da janela de 29/09/2026
 
+## Fechamento SECULT — confirmação do owner em 29/09/2026
+
+**DEPLOYED / CLIENT ACCEPTED.** Deifson informou: “SECULT aprovou. Já está
+utilizando a nova atualização.” Ativação e uso registrados conforme esse relato;
+não foram informados horário, executor da ativação ou casos específicos exercitados.
+A confirmação do cliente é distinta das verificações técnicas e testes locais.
+A pendência de ativação registrada na janela anterior fica superada pelo relato,
+sem reescrever sua evidência histórica ou afirmar nova leitura técnica da chave.
+Permanecem os limites de shutdown, tipagem e rollback documentados; escritores
+compatíveis são necessários para preservar a garantia de concorrência.
+Campanhas/CRA aguardam validação funcional do owner; inatividade no Guia pausada;
+DB-only encerrada/aceita; 6683 CLOSED. Telegram e DELIVERED/READ separados.
+
+
 **CÓDIGO IMPLANTADO / ATIVAÇÃO PENDENTE / ACEITE FUNCIONAL PENDENTE.**
 Execução autorizada pelo owner após revisão `042e386a`, incluindo primeira
 interrupção do worker antigo e seus riscos residuais. Este registro atualiza o
