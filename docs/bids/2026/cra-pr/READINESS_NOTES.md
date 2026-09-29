@@ -1,5 +1,9 @@
 # CRA-PR Readiness Notes
 
+## Acompanhamento de automação — evidência local, sem aceite produtivo
+
+[Implementação e validação local](../../../saas/INBOX_AUTOMATION_LOCAL_2026-09-29.md): chave default false gerenciada por ADMIN, acompanhamento SUPERVISOR/ADMIN do tenant no filtro Automação, fora de TODAS. LOCAL VALIDATED / NOT DEPLOYED. Não comprova aceite CRA nem cancela respostas automáticas em andamento. Campanhas/CRA continuam aguardando validação funcional do owner. Correção DB-only aceita e SECULT encerrada permanecem separadas.
+
 ## 28/09/2026 — fronteira da validação local SECULT
 
 A consulta AGENT de CLOSED recebeu validação local separada, ainda NOT DEPLOYED;

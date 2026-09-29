@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
+  fetchAutomationConversationsSettings,
+  updateAutomationConversationsSettings,
   fetchOwnClosedConversationsSettings,
   updateOwnClosedConversationsSettings,
   AppAgentSignatureSettings,
@@ -83,6 +85,9 @@ function SettingsBadge({ label, tone = "default" }: { label: string; tone?: "def
 export default function AppSettingsInboxPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
+  const [allowAutomation, setAllowAutomation] = useState(false);
+  const [canUpdateAutomation, setCanUpdateAutomation] = useState(false);
+  const [savingAutomation, setSavingAutomation] = useState(false);
   const [allowOwnClosed, setAllowOwnClosed] = useState(false);
   const [canUpdateOwnClosed, setCanUpdateOwnClosed] = useState(false);
   const [savingOwnClosed, setSavingOwnClosed] = useState(false);
@@ -124,6 +129,9 @@ export default function AppSettingsInboxPage() {
     async (activeSession: AppSession) => {
       const response = await fetchAppAgentSignatureSettings(activeSession);
       applyResponse(response);
+      const automation = await fetchAutomationConversationsSettings(activeSession);
+      setAllowAutomation(automation.allowAutomationConversationsInInbox);
+      setCanUpdateAutomation(automation.permissions.canUpdate);
       const closed = await fetchOwnClosedConversationsSettings(activeSession);
       setAllowOwnClosed(closed.allowAgentOwnClosedConversations);
       setCanUpdateOwnClosed(closed.permissions.canUpdate);
@@ -188,6 +196,17 @@ export default function AppSettingsInboxPage() {
     [canUpdateServiceMessages, saving, session]
   );
 
+  const saveAutomation = async () => {
+    if (!session || !canUpdateAutomation) return;
+    setSavingAutomation(true); setError(null); setSuccess(null);
+    try {
+      const response = await updateAutomationConversationsSettings(session, allowAutomation);
+      setAllowAutomation(response.allowAutomationConversationsInInbox);
+      setSuccess("Acompanhamento de automação atualizado.");
+    } catch (error) { setError(normalizeSettingsError(error as AppApiError, "Não foi possível atualizar o acompanhamento.")); }
+    finally { setSavingAutomation(false); }
+  };
+
   const saveOwnClosed = async () => {
     if (!session || !canUpdateOwnClosed) return;
     setSavingOwnClosed(true); setError(null); setSuccess(null);
@@ -246,6 +265,15 @@ export default function AppSettingsInboxPage() {
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
       <div className="inbox-settings-theme grid gap-4">
+        <section className="rounded-xl border border-white/10 p-4 space-y-3">
+          <h2 className="font-semibold">Acompanhamento de automação</h2>
+          <label className="flex items-center gap-3">
+            <input type="checkbox" checked={allowAutomation} disabled={!canUpdateAutomation || loading || savingAutomation} onChange={event => setAllowAutomation(event.target.checked)} />
+            Exibir conversas no filtro Automação
+          </label>
+          <p className="text-sm text-white/60">SUPERVISOR e ADMIN podem acompanhar a automação do próprio tenant. Não inclui conversas em Todas nem concede novas permissões para assumir, enviar ou transferir.</p>
+          <button type="button" className="rounded-lg border border-white/20 px-4 py-2 disabled:opacity-50" disabled={!canUpdateAutomation || loading || savingAutomation} onClick={() => void saveAutomation()}>{savingAutomation ? "Salvando..." : "Salvar acompanhamento"}</button>
+        </section>
         <section className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
           <label className="flex items-center gap-3">
             <input type="checkbox" checked={allowOwnClosed} disabled={!canUpdateOwnClosed || loading || savingOwnClosed} onChange={event => setAllowOwnClosed(event.target.checked)} />

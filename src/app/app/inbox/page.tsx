@@ -1429,7 +1429,7 @@ function isConversationUnreadForUser(
   state: InboxReadState,
   user: AppSession["user"] | null | undefined
 ) {
-  if (!user) return false;
+  if (!user || item.automationReadOnly) return false;
   if (!canUserReceiveTargetedNotification(item, user)) return false;
   const identityCandidates = getConversationIdentityCandidates(item);
   if (identityCandidates.some((key) => state.manuallyUnreadByConversationKey[key])) return true;
@@ -1447,9 +1447,10 @@ function getConversationUnreadBadgeCount(
 }
 
 function canCurrentUserMutateConversationReadState(
-  item: Pick<InboxConversationItem, "assignedUserId"> | null | undefined,
+  item: Pick<InboxConversationItem, "assignedUserId" | "automationReadOnly"> | null | undefined,
   userId?: string | null
 ) {
+  if (item?.automationReadOnly) return false;
   const assignedUserId = String(item?.assignedUserId ?? "").trim();
   if (!assignedUserId) return true;
   return assignedUserId === String(userId ?? "").trim();
@@ -1896,6 +1897,7 @@ function applyConversationOperationalPayload(
     nextAssignedUserId && payload.status === "WAITING" ? ("IN_PROGRESS" as const) : payload.status;
   return {
     ...item,
+    automationReadOnly: isAutomationQueueConversation({ ...item, ...payload }),
     waId: payload.waId ?? item.waId,
     waIdCanonical: payload.waIdCanonical ?? item.waIdCanonical,
     protocol: payload.protocol ?? item.protocol ?? null,
@@ -2207,8 +2209,9 @@ function formatOperationalDuration(seconds?: number | null) {
 }
 
 function getConversationOperationalDurationLabel(
-  item: Pick<InboxConversationItem, "waitingFirstResponseSec" | "activeDurationSec" | "status" | "assignedUserId">
+  item: Pick<InboxConversationItem, "waitingFirstResponseSec" | "activeDurationSec" | "status" | "assignedUserId" | "automationReadOnly">
 ) {
+  if (item.automationReadOnly) return null;
   const waiting = formatOperationalDuration(item.waitingFirstResponseSec);
   if (waiting && !item.assignedUserId && item.status !== "CLOSED") return `1a resposta ${waiting}`;
   const active = formatOperationalDuration(item.activeDurationSec);
@@ -2516,6 +2519,7 @@ export default function AppInboxPage() {
   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
   const selectedConversationKeyRef = useRef<string | null>(null);
   const selectedConversationWaIdRef = useRef<string | null>(null);
+  const selectedAutomationReadRef = useRef(false);
   const skipNextSelectedConversationListMarkReadRef = useRef(false);
   const queueMutationAutoReadSuppressedKeysRef = useRef(new Set<string>());
   const autoReadSuppressionSessionKeyRef = useRef<string | null>(null);
@@ -3960,6 +3964,10 @@ export default function AppInboxPage() {
         UNASSIGNED: Number(response.filterCounts.UNASSIGNED ?? 0),
       });
     }
+    const automationRevoked = response.allowAutomationConversationsInInbox !== true;
+    if (automationRevoked && selectedAutomationReadRef.current) {
+      evictConversationFromLocalState([selectedConversationKey, selectedConversationWaId, ...selectedConversationIdentityCandidatesRef.current]);
+    }
     const pageItems = response.conversations ?? response.items;
     const shouldRemoveMissingItems = loadedConversationPageCountRef.current <= 1;
     if (!response.filterCounts && pageItems.length === 0) {
@@ -4051,7 +4059,7 @@ export default function AppInboxPage() {
     suppressNextConversationRefreshNotificationRef.current = false;
     const previousListScrollTop = conversationListRef.current?.scrollTop ?? null;
     setConversations((current) =>
-      mergeConversationsPreservingStableOrder(current, sortedItems, prioritizeLeads, {
+      mergeConversationsPreservingStableOrder(automationRevoked ? current.filter(item => !item.automationReadOnly) : current, sortedItems, prioritizeLeads, {
         removeMissing: shouldRemoveMissingItems,
         preserveMissingIdentities: [
           selectedConversationKey,
@@ -4812,6 +4820,7 @@ export default function AppInboxPage() {
   );
 
   useEffect(() => {
+    selectedAutomationReadRef.current = selectedConversation?.automationReadOnly === true;
     selectedConversationKeyRef.current = selectedConversationKey;
     selectedConversationWaIdRef.current = selectedConversationWaId;
     if (selectedConversation) {
@@ -4830,6 +4839,7 @@ export default function AppInboxPage() {
     () =>
       Boolean(
         selectedConversation &&
+        !selectedConversation.automationReadOnly &&
         !(isAgentUser && selectedConversationIsClosed) &&
         !isConversationAssignedToAnotherUser(selectedConversation, session?.user.id ?? "")
       ),
@@ -5062,6 +5072,7 @@ export default function AppInboxPage() {
         default:
           break;
       }
+      if (conversationFilter !== "AUTOMATION" && isAutomationQueueConversation(item)) return false;
       switch (conversationFilter) {
         case "AUTOMATION":
           return isAutomationQueueConversation(item);
@@ -5779,6 +5790,7 @@ export default function AppInboxPage() {
           queueName: response.queueName,
           status: response.status,
           humanInboxVisible: response.humanInboxVisible,
+          automationReadOnly: response.automationReadOnly,
           closedAt: response.closedAt,
           lastInboundAt: response.lastInboundAt,
           lastOutboundAt: response.message.createdAt,

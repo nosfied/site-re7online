@@ -1,5 +1,9 @@
 # Product Map Current
 
+## Inbox Automação — delta local
+
+[Implementação local](INBOX_AUTOMATION_LOCAL_2026-09-29.md) reaproveita Inbox/filtro Automação e settings transacional. SUPERVISOR/ADMIN leem todo o tenant com opt-in; AGENT não ganha acesso. Autorizações operacionais existentes preservadas. API/frontend alterados; worker mínimo sem novo delta BOT. NOT DEPLOYED; campanhas/CRA aguardam owner.
+
 ## Atualização local — automação, 29/09/2026
 
 Fila/runtime: [correção local do conflito automação × rodízio](AUTOMATION_QUEUE_RACE_LOCAL_2026-09-29.md), sem deploy; API e worker mínimo têm deltas distintos. Inbox: [proposta de acompanhamento BOT](INBOX_AUTOMATION_VISIBILITY_PROPOSAL_2026-09-29.md), sem implementação, reaproveita filtro Automação. Visualização não autoriza intervenção nem consome capacidade. Campanhas/CRA seguem aguardando o owner; inatividade no Guia pausada.

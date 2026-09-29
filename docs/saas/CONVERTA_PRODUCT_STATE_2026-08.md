@@ -1,5 +1,9 @@
 # Converta Product State - 2026-08
 
+## Acompanhamento BOT — implementação local
+
+LOCAL VALIDATED / NOT DEPLOYED: SUPERVISOR/ADMIN do próprio tenant, opt-in ADMIN/default false, somente filtro Automação; não compõe TODAS nem concede ações. [Provas, privacidade, revogação e artefatos](INBOX_AUTOMATION_LOCAL_2026-09-29.md). Nenhum delta BOT no worker mínimo; coordenação de respostas em andamento permanece demanda separada. Campanhas/CRA owner pending; SECULT encerrada; inatividade no Guia pausada.
+
 ## Frentes locais separadas — automação, 29/09/2026
 
 [Correção automação × rodízio](AUTOMATION_QUEUE_RACE_LOCAL_2026-09-29.md): LOCAL VALIDATED / NOT DEPLOYED, código destinado somente à revisão; bloqueia distribuição indevida e persistência obsoleta nos caminhos validados. Resposta automática tardia após intervenção permanece lacuna de contrato, sem promessa de cancelamento. [Acompanhamento BOT](INBOX_AUTOMATION_VISIBILITY_PROPOSAL_2026-09-29.md): somente proposta, reutilizando Inbox/Automação; gestão ADMIN e escopos a revisar. Campanhas/CRA aguardam validação funcional do owner; inatividade no Guia pausada.

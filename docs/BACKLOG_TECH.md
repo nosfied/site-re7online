@@ -1,5 +1,17 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## CRA-PR — acompanhamento BOT, escopo final local
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Decisão do owner substitui o gate departamental abaixo: SUPERVISOR/ADMIN do próprio tenant, sem vínculo departamental para leitura, somente filtro Automação, fora de TODAS; AGENT sem exceção. Default false, gestão ADMIN, helper transacional (36 escritores). [Implementação, provas e limites](saas/INBOX_AUTOMATION_LOCAL_2026-09-29.md). Código sobre 91230f88, revisão final aprovada para commit local separado, sem push/deploy. Matriz de operações e roteiro funcional registrados no relatório; código byte-idêntico ao validado.
+
+**Demanda maior mantida pendente:** coordenação entre intervenção humana e resposta automática em andamento; não resolvida pela chave de acompanhamento nem pela proteção de persistência 91230f88. Sem cancelamento prometido. Campanhas/CRA aguardam validação funcional do owner; SECULT encerrada; inatividade no Guia pausada; 6683 CLOSED.
+
+## Acompanhamento BOT — verificação departamental sobre 91230f88
+
+**BLOCKED BEFORE IMPLEMENTATION**, conforme gate do owner. O contrato humano compara departamento/vínculo, sem marcador de confirmação, mas não estabelece autorização BOT por fallback Meta ou contexto de nó/opção do chatbot compartilhado com WEB_SESSION. “Destino confirmado” era condição proposta, não regra comprovada do resolvedor. [Evidência e decisão concreta](saas/INBOX_AUTOMATION_VISIBILITY_PROPOSAL_2026-09-29.md#verificação-do-contrato-departamental--etapa-local-sobre-91230f88): definir se departamento persistido, inclusive fallback/contexto, autoriza acompanhamento; alternativa mínima é ADMIN-only até essa definição, sem criar marcador. Nenhuma implementação/ativação, nem delta no worker.
+
+Correção automação × rodízio 91230f88 preservada separadamente, somente revisão. SECULT encerrada; campanhas/CRA aguardam validação funcional do owner; inatividade no Guia pausada; 6683 CLOSED.
+
 ## Automação × rodízio e acompanhamento BOT — 29/09/2026
 
 - **Defeito automação × rodízio: correção LOCAL VALIDATED / NOT DEPLOYED**, publicação somente para revisão. Distribuição exige controle humano; conclusão obsoleta não apaga transição concorrente. 115 testes afetados PASS e refinamento de 13 reexecutado; worker mínimo Node20 validado com seleção de 15 casos. Limites de tipagem, storage legado e resposta automática tardia explícitos no [relatório](saas/AUTOMATION_QUEUE_RACE_LOCAL_2026-09-29.md). O guard de envio não demonstra exclusão de toda intervenção humana: revisar contrato antes de ampliar a correção.

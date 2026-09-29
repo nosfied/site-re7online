@@ -1,3 +1,4 @@
+import { resolveAutomationRealtimeReaders } from "./automationReadAccess.js";
 import { getPrisma } from "../db.js";
 import { resolveRealtimeAgentReaders } from "./agentReadAccess.js";
 import { WebSocket } from "ws";
@@ -176,6 +177,10 @@ export function publishRealtimeEventAsync(event: InboxRealtimeEvent) {
   return deliverRealtimeEvent(event, epoch).catch(error => logger.warn({ event: "realtime.access.failed", clientId: event.clientId, message: (error as Error).message }));
 }
 async function deliverRealtimeEvent(event: InboxRealtimeEvent, epoch: AccessEpoch) {
+  const managerIds = [...new Set([...connections.values()].filter(c => c.clientId === event.clientId && (c.role === "ADMIN" || c.role === "SUPERVISOR")).map(c => c.userId))];
+  const automationReaders = event.type === "inbox.access.updated" ? null
+    : await resolveAutomationRealtimeReaders(getPrisma(), event, managerIds);
+
   const agentIds = [...new Set([...connections.values()].filter(c => c.clientId === event.clientId && c.role === "AGENT").map(c => c.userId))];
   const agentReaders = event.type !== "inbox.access.updated" && agentIds.length
     ? await resolveRealtimeAgentReaders(getPrisma(), event, agentIds).catch(() => new Set<string>()) : new Set<string>();
@@ -189,6 +194,13 @@ async function deliverRealtimeEvent(event: InboxRealtimeEvent, epoch: AccessEpoc
     ) {
       connection.socket.close(4001, "support_access_expired");
       removeConnection(connection.id, "support_access_expired");
+      continue;
+    }
+    if (automationReaders !== null) {
+      if (!accessEpochChanged(event.clientId, epoch) && automationReaders.has(connection.userId)) {
+        connection.socket.send(JSON.stringify({ type: "inbox.access.updated", clientId: event.clientId }));
+        delivered++;
+      }
       continue;
     }
     if (connection.role === "AGENT" && event.type !== "inbox.access.updated") {
@@ -214,6 +226,7 @@ async function deliverRealtimeEvent(event: InboxRealtimeEvent, epoch: AccessEpoc
       delivered,
     });
   }
+  if (automationReaders !== null) return;
   void dispatchWebPushForRealtimeEvent(event).catch((error) => {
     logger.warn({
       event: "push.failed",

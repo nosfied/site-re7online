@@ -1141,6 +1141,7 @@ type AppConversationOperationalPayload = {
   queueName: string | null;
   status: ConversationOperationalStatus | null;
   humanInboxVisible?: boolean;
+  automationReadOnly?: boolean;
   closedAt: string | null;
   awaitingConsent?: boolean;
   lastInboundAt: string | null;
@@ -3018,6 +3019,7 @@ export async function fetchAppConversations(
   readState?: AppInboxReadState;
   inboxVisibilityPolicy?: AppInboxVisibilityPolicy;
   allowAgentOwnClosedConversations?: boolean;
+  allowAutomationConversationsInInbox?: boolean;
 }> {
   const params = new URLSearchParams();
   if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
@@ -5608,4 +5610,12 @@ export function fetchOwnClosedConversationsSettings(session: AppSession): Promis
 }
 export function updateOwnClosedConversationsSettings(session: AppSession, enabled: boolean): Promise<OwnClosedConversationsSettings> {
   return requestAppJson(session, "/app/settings/inbox/closed-conversations", { method: "PUT", body: JSON.stringify({ allowAgentOwnClosedConversations: enabled }) });
+}
+
+export type AutomationConversationsSettings = { ok: true; allowAutomationConversationsInInbox: boolean; permissions: { canUpdate: boolean } };
+export function fetchAutomationConversationsSettings(session: AppSession): Promise<AutomationConversationsSettings> {
+  return requestAppJson(session, "/app/settings/inbox/automation-conversations");
+}
+export function updateAutomationConversationsSettings(session: AppSession, enabled: boolean): Promise<AutomationConversationsSettings> {
+  return requestAppJson(session, "/app/settings/inbox/automation-conversations", { method: "PUT", body: JSON.stringify({ allowAutomationConversationsInInbox: enabled }) });
 }

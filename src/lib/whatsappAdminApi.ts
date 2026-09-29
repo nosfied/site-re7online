@@ -95,6 +95,7 @@ export type InboxChannelSwitchWarning = {
 };
 
 export type InboxConversationItem = {
+  automationReadOnly?: boolean;
   waId: string;
   waIdCanonical?: string | null;
   protocol?: string | null;

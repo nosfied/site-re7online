@@ -1,3 +1,5 @@
+import { isAutomationConversation, resolveAutomationReadPermission } from "../inbox/automationAccess.js";
+import { resolveAllowAutomationConversationsInInbox, saveAllowAutomationConversationsInInbox } from "../config/tenantOperationalConfig.js";
 import { loadOwnClosedConversationIds } from "../inbox/ownClosedAccess.js";
 import { resolveAllowAgentOwnClosedConversations, saveAllowAgentOwnClosedConversations } from "../config/tenantOperationalConfig.js";
 import { campaignTask, campaignProviderAttempt, CampaignOperationsClosed, isCampaignMutation, campaignOperationsStatus, setCampaignOperations } from "../campaigns/campaignOperations.js";
@@ -5788,6 +5790,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         }),
         await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
+      const automationRead = isAutomationConversation(scopedConversation);
+      if (automationRead && !await resolveAutomationReadPermission(prisma, client.id, clientAuth.role)) {
+        json(res, 404, { error: "conversation_not_found" }); return;
+      }
       if (isAgentRole(clientAuth.role) && scopedConversation?.status !== "CLOSED" && !shouldUserSeeConversationInInbox({
         ...scopedConversation, handoffStatus: scopedConversation?.handoff?.status,
         currentUserId: clientAuth.userId, userRole: clientAuth.role, userDepartmentIds: departmentAccess.departmentIds,
@@ -5801,7 +5807,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         return;
       }
       if (
-        !ownClosedRead && !hasConversationDepartmentAccess({
+        !ownClosedRead && !automationRead && !hasConversationDepartmentAccess({
           role: clientAuth.role,
           currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
@@ -5914,6 +5920,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
       latency.duration("routeOperationalState", routeOperationalStateStartedAt);
+      const automationRead = isAutomationConversation(scopedConversation);
+      if (automationRead && !await resolveAutomationReadPermission(prisma, client.id, clientAuth.role)) {
+        json(res, 404, { error: "conversation_not_found" }); return;
+      }
       if (isAgentRole(clientAuth.role) && scopedConversation?.status !== "CLOSED" && !shouldUserSeeConversationInInbox({
         ...scopedConversation, handoffStatus: scopedConversation?.handoff?.status,
         currentUserId: clientAuth.userId, userRole: clientAuth.role, userDepartmentIds: departmentAccess.departmentIds,
@@ -5927,7 +5937,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         return;
       }
       if (
-        !ownClosedRead && !hasConversationDepartmentAccess({
+        !ownClosedRead && !automationRead && !hasConversationDepartmentAccess({
           role: clientAuth.role,
           currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
@@ -5969,7 +5979,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         latency,
       });
       latency.duration("buildPayload", buildPayloadStartedAt);
-      json(res, 200, result);
+      json(res, 200, { ...result, automationReadOnly: automationRead });
       latency.finish("channel_latency.app_conversation_detail", {
         requestId,
         tenantKey: client.clientKey,
@@ -6572,6 +6582,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         client.clientKey
       );
       if (rejectAgentClosedConversationAction(res, clientAuth.role, scopedConversation)) return;
+      if (isAutomationConversation(scopedConversation)) { json(res, 403, { error: "automation_read_only" }); return; }
       const readScope = resolveConversationReadScope(scopedConversation);
       const conversationKeys = Array.from(
         new Set(
@@ -6727,6 +6738,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         scopedConversation,
         await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
+      const automationRead = isAutomationConversation(materializedConversation);
+      if (automationRead && (!resolvedConversation.winner || !await resolveAutomationReadPermission(prisma, client.id, clientAuth.role))) {
+        json(res, 404, { error: "conversation_not_found" }); return;
+      }
       if (isAgentRole(clientAuth.role) && materializedConversation?.status !== "CLOSED" && !shouldUserSeeConversationInInbox({
         ...materializedConversation, handoffStatus: materializedConversation?.handoff?.status,
         currentUserId: clientAuth.userId, userRole: clientAuth.role, userDepartmentIds: departmentAccess.departmentIds,
@@ -6740,7 +6755,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         return;
       }
       if (
-        !ownClosedRead && !hasConversationDepartmentAccess({
+        !ownClosedRead && !automationRead && !hasConversationDepartmentAccess({
           role: clientAuth.role,
           currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
@@ -6769,7 +6784,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
 
       const conversationWhere = {
         clientId: client.id,
-        ...(ownClosedRead && resolvedConversation.winner?.historyVisibleAfter ? { createdAt: { gt: resolvedConversation.winner.historyVisibleAfter } } : {}),
+        ...((ownClosedRead || automationRead) && resolvedConversation.winner?.historyVisibleAfter ? { createdAt: { gt: resolvedConversation.winner.historyVisibleAfter } } : {}),
         messageId,
         type: { in: ["IMAGE", "AUDIO", "VIDEO", "DOCUMENT"] as MessageType[] },
         OR: [
@@ -6795,7 +6810,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       ]);
 
       const mediaMessage = inbound ?? outbound;
-      if (!mediaMessage || (ownClosedRead && isManagementOnlyInboxMessage(mediaMessage.rawPayload))) {
+      if (!mediaMessage || ((ownClosedRead || automationRead) && isManagementOnlyInboxMessage(mediaMessage.rawPayload))) {
         json(res, 404, { error: "media_not_found" });
         return;
       }
@@ -6832,7 +6847,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         const fileName = sanitizeDownloadFileName(localMedia.fileName) || `${messageId}`;
         const headers: Record<string, string> = {
           "Content-Type": localMedia.mimeType || "application/octet-stream",
-          "Cache-Control": ownClosedRead ? "private, no-store" : "private, max-age=31536000, immutable",
+          "Cache-Control": (ownClosedRead || automationRead) ? "private, no-store" : "private, max-age=31536000, immutable",
           "Content-Disposition": `inline; filename="${fileName}"`,
           "Content-Length": String(localMedia.size),
         };
@@ -8783,6 +8798,38 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         requestId,
       });
       json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (pathname === "/app/settings/inbox/automation-conversations" && (req.method === "GET" || req.method === "PUT")) {
+    const prisma = getPrisma();
+    const auth = requireClientAuth(req, res);
+    if (!auth) return;
+    if (!isAdminOrSupervisorRole(auth.role) || (req.method === "PUT" && !isAdminRole(auth.role))) { json(res, 403, httpError("forbidden", "Sem permissão para alterar esta configuração.")); return; }
+    try {
+      const client = await getScopedClientById(prisma, auth.clientId);
+      if (!client) { json(res, 404, httpError("client_not_found", "Tenant não encontrado.")); return; }
+      if (client.status !== "ACTIVE") { json(res, 403, httpError("client_inactive", "Tenant inativo.")); return; }
+      let enabled: boolean;
+      if (req.method === "PUT") {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const input = body as Record<string, unknown>;
+        if (typeof input.allowAutomationConversationsInInbox !== "boolean" || Object.keys(input).some(key => key !== "allowAutomationConversationsInInbox")) {
+          json(res, 400, httpError("invalid_settings", "Configuração inválida.")); return;
+        }
+        enabled = await prisma.$transaction(async tx => {
+          const result = await saveAllowAutomationConversationsInInbox({ prisma: tx, clientId: client.id, enabled: input.allowAutomationConversationsInInbox as boolean });
+          await tx.event.create({ data: { clientId: client.id, requestId: `${requestId}:automation-settings`, eventName: "inbox.automation.settings_updated", payloadJson: { actorUserId: auth.userId, enabled: result } } });
+          return result;
+        });
+        publishRealtimeEvent({ type: "inbox.access.updated", clientId: client.id });
+      } else enabled = await resolveAllowAutomationConversationsInInbox({ prisma, clientId: client.id });
+      json(res, 200, { ok: true, allowAutomationConversationsInInbox: enabled, permissions: { canUpdate: isAdminRole(auth.role) } });
+    } catch (error) {
+      logger.error({ event: "inbox.automation.settings_failed", requestId, message: (error as Error).message });
+      json(res, 500, httpError("server_error", "Não foi possível atualizar a configuração."));
     }
     return;
   }
@@ -34676,11 +34723,13 @@ function conversationMatchesListFilters(item: {
 }, filters: ConversationListFilters, ownClosedWaIds?: ReadonlySet<string>) {
   if (filters.automation) {
     if (!conversationListItemIsAutomation(item)) return false;
+  } else if (conversationListItemIsAutomation(item)) {
+    return false;
   } else if (filters.status && item.status !== filters.status) {
     return false;
   }
   if (filters.channel && serializeInboxChannelFields(item).channel !== filters.channel) return false;
-  if (filters.departmentIds) {
+  if (filters.departmentIds && !filters.automation) {
     const inDepartmentScope =
       filters.departmentIds.length > 0 &&
       Boolean(item.departmentId && filters.departmentIds.includes(item.departmentId));
@@ -34712,17 +34761,7 @@ function conversationListItemIsAutomation(item: {
   assignedUserId: string | null;
   assignedAt?: string | null;
 }) {
-  return (
-    item.mode === "BOT" &&
-    (
-      item.status === ConversationOperationalStatus.WAITING ||
-      item.status === ConversationOperationalStatus.WAITING_USER ||
-      item.status === null
-    ) &&
-    (item.handoffStatus === null || item.handoffStatus === undefined || item.handoffStatus === "none") &&
-    !item.assignedUserId &&
-    !item.assignedAt
-  );
+  return isAutomationConversation(item);
 }
 
 function conversationListItemIsInHumanFlow(item: {
@@ -34874,7 +34913,7 @@ function buildConversationFilterCounts(
   const counts = {
     ALL: baseItems.length,
     WAITING: 0,
-    AUTOMATION: 0,
+    AUTOMATION: items.filter(item => conversationMatchesListFilters(item, { ...baseFilters, automation: true }, ownClosedWaIds)).length,
     IN_PROGRESS: 0,
     WAITING_USER: 0,
     CLOSED: 0,
@@ -34885,9 +34924,7 @@ function buildConversationFilterCounts(
     if (item.status && Object.prototype.hasOwnProperty.call(counts, item.status)) {
       counts[item.status] += 1;
     }
-    if (conversationListItemIsAutomation(item)) {
-      counts.AUTOMATION += 1;
-    }
+
     if (currentUserId && item.assignedUserId === currentUserId) {
       counts.MINE += 1;
     }
@@ -34929,6 +34966,7 @@ async function buildConversationListPayload(
     profile?: string | null;
   }
 ) {
+  const allowAutomationConversationsInInbox = await resolveAutomationReadPermission(prisma, params.clientId, params.userRole);
   const allowAgentOwnClosedConversations = isAgentRole(params.userRole)
     ? await resolveAllowAgentOwnClosedConversations({ prisma, clientId: params.clientId }).catch(error => {
         // Only this optional grant degrades to false. Other Inbox dependencies still fail normally.
@@ -35050,6 +35088,7 @@ async function buildConversationListPayload(
       readState,
       inboxVisibilityPolicy: params.inboxVisibilityPolicy ?? "shared",
       allowAgentOwnClosedConversations,
+      allowAutomationConversationsInInbox,
     };
   }
 
@@ -35571,6 +35610,7 @@ async function buildConversationListPayload(
       leadCompany: lead?.company ?? null,
       ...displayOperationalFields,
       humanInboxVisible,
+      automationReadOnly: isAutomationConversation(displayOperationalFields),
       ...buildConversationOperationalTimingFields({
         source: { ...conversation, lastInboundAt: displayOperationalFields.lastInboundAt },
         operational: displayOperationalFields,
@@ -35585,6 +35625,7 @@ async function buildConversationListPayload(
   recordInboxListTiming(params.clientId, "assembly", assemblyStartedAt);
   const filteringSortingStartedAt = channelLatencyNow();
   const itemMatchesUserInboxVisibility = (item: (typeof allItems)[number]) => {
+    if (isAutomationConversation(item)) return allowAutomationConversationsInInbox;
     if (shouldDenyAgentClosedConversationAccess(params.userRole, item)) return ownClosedKeys.has(item.waIdCanonical);
     const userParticipated = [item.waId, item.waIdCanonical]
       .map((value) => String(value ?? "").trim())
@@ -35641,6 +35682,7 @@ async function buildConversationListPayload(
     readState,
     inboxVisibilityPolicy: params.inboxVisibilityPolicy ?? "shared",
     allowAgentOwnClosedConversations,
+    allowAutomationConversationsInInbox,
   };
 }
 
