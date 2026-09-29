@@ -1,5 +1,9 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## Automação — preparação remota concluída, janela pendente
+
+**PUBLISHED FOR REVIEW / NOT DEPLOYED.** [Evidências de releases, backup fresco e restauração isolada](saas/AUTOMATION_RELEASE_PREPARATION_2026-09-29.md). Pacote API/frontend ba66c241 mantido; worker mínimo f06+912 separado. Configs privadas resolvidas sem início; restore local PASS/60 checksums, banco temporário removido. Guarda/scheduler/processos/sessões preservados; Automação desligada. Pendem início/fim da janela, horizonte de escalonamento/retorno e aceite do risco residual inbound/outbound/auth. Entradas históricas abaixo preservam o estado de cada etapa; não representam pendência atual de preparar releases/backup. Campanhas/CRA aguardam owner; SECULT encerrada.
+
 ## Automação — plano de publicação controlada, aprovação pendente
 
 PUBLISHED FOR REVIEW / NOT DEPLOYED. [Plano ba66c241 e worker mínimo91230f88](saas/AUTOMATION_RELEASE_PLAN_2026-09-29.md): pacotes locais verificados, Prisma compatível sem migration; produção só lida. Pendentes backup fresco/restauração, releases/configs remotas, janela/fim e decisão sobre risco residual do worker; não confundir zero tarefas com drain. Ownership individual lock→PID não comprovado pela projeção disponível, barreira conservadora obrigatória antes do sucessor. Deploy com chave Automação false; ativação tenant/aceite posteriores. Sem mudança de guarda/scheduler/cron/boot nesta preparação. Campanhas/CRA aguardam validação funcional do owner; inatividade Guia pausada; limitação de resposta automática separada; SECULT encerrada;6683 CLOSED.

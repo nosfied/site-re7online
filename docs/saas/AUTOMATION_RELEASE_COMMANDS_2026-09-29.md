@@ -1,8 +1,8 @@
-# Release Automação — comandos revisáveis, NÃO EXECUTADOS
+# Release Automação — comandos revisáveis da janela
 
 Usar junto ao [plano e seus gates](AUTOMATION_RELEASE_PLAN_2026-09-29.md). **Não é autorização de execução.** Trechos são sequenciais e exigem inspeção entre etapas; não colar como script único. Deifson executa sudo na própria sessão. Codex não solicita senha/token. Não executar scripts históricos de swap/prepare sem adaptação: contêm PIDs e releases antigos e terminação expressamente autorizada naquela janela.
 
-## 1. Preparação futura, antes da janela
+## 1. Preparação antes da janela — executada em área isolada
 
 Escolher identificador único; nunca reaproveitar preparação parcial:
 
@@ -208,6 +208,6 @@ Scripts escritores manuais devem usar a API ba66; os jobs históricos de backup/
 
 ## 6. Retorno compatível
 
-Se necessário retornar binários: mesma contenção e barreira de saída antes de iniciar o par anterior por `"$PM" start "$PREP/active.ecosystem.config.cjs" --only <nome>`, sequencialmente. Configuração de retorno precisa estar conferida contra releases a3/minimal-f06; não apontar checkout do worker como API. Salvar/fallback novamente só após identidade verificada. Usa DB e auth ATUAIS; sem restore/down/reset. Reintroduz defeito 91230f88 e nega BOT na API antiga; não equivale a revogar a chave mantendo código corrigido. Nunca voltar a escritor pré-f06/5ee/e8 neste plano.
+Se necessário retornar binários: mesma contenção e barreira de saída antes de iniciar o par anterior por `"$PM" start "$PREP/return.ecosystem.config.cjs" --only <nome>`, sequencialmente. Configuração de retorno precisa estar conferida contra releases a3/minimal-f06; não apontar checkout do worker como API. Salvar/fallback novamente só após identidade verificada. Usa DB e auth ATUAIS; sem restore/down/reset. Reintroduz defeito 91230f88 e nega BOT na API antiga; não equivale a revogar a chave mantendo código corrigido. Nunca voltar a escritor pré-f06/5ee/e8 neste plano.
 
-**Nenhum comando operacional desta página foi executado nesta preparação.** Backup/restauração/configuração remota e controles da janela são gates futuros. Apenas empacotamento local, comparação de hashes/schema e preflight read-only foram feitos.
+**Preparação/configuração remota, backup e restauração isolada executados**, conforme [resultado](AUTOMATION_RELEASE_PREPARATION_2026-09-29.md). Seções3–6 não executadas. PREP efetivo `automation-20260929T220203Z`; não repetir criação/cópia sobre esses arquivos. Configuração de retorno efetiva `return.ecosystem.config.cjs`. Banco temporário de verificação removido; backups preservados. Janela e risco worker ainda exigem decisão final.

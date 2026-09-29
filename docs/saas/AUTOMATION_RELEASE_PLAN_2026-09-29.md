@@ -1,6 +1,6 @@
 # Release Automação — plano controlado para aprovação
 
-**PUBLISHED FOR REVIEW / NOT DEPLOYED. PLANO, NÃO EXECUTADO.** API/frontend fixos em `ba66c24112ccb10f2dfdcced54350f513d399bc6`, código funcional até d06a92b8. Worker exclusivamente mínimo bf5f1d76 + pré-requisito f06d49cb + backport 91230f88; nunca worker completo da API. Esta etapa só leu produção e empacotou localmente, sem aplicação/provider iniciado, backup produtivo novo, mudança de guarda, scheduler, supervisão ou configuração de tenant.
+**PUBLISHED FOR REVIEW / NOT DEPLOYED. Preparação executada; janela não executada.** API/frontend fixos em `ba66c24112ccb10f2dfdcced54350f513d399bc6`, código funcional até d06a92b8. Worker exclusivamente mínimo bf5f1d76 + pré-requisito f06d49cb + backport 91230f88; nunca worker completo da API. Atualização: [releases remotas, backup fresco e restauração isolada comprovados](AUTOMATION_RELEASE_PREPARATION_2026-09-29.md). Sem aplicação/provider iniciado, mudança de guarda, scheduler, supervisão ou configuração de tenant. As leituras e etapas inicialmente pendentes abaixo ficam preservadas como histórico; o relatório de preparação atualiza seu estado.
 
 ## Preflight necessário, 29/09/2026 21:45–21:50 UTC
 
@@ -13,7 +13,7 @@
 
 ## Artefatos isolados prontos como pacotes de código
 
-[Manifesto com hashes](../reviews/automation-worker-backport/RELEASE_ARTIFACTS_2026-09-29.json). Pacotes privados locais em `local-evidence/automation-release-plan/artifacts/`; não versionar tarballs ou configuração. API e frontend juntos, worker separado. Não transferidos nem extraídos na VPS nesta etapa.
+[Manifesto com hashes](../reviews/automation-worker-backport/RELEASE_ARTIFACTS_2026-09-29.json). Pacotes privados locais em `local-evidence/automation-release-plan/artifacts/`; não versionar tarballs ou configuração. API e frontend juntos, worker separado. Posteriormente transferidos/extraídos em releases isoladas, conforme relatório de preparação.
 
 | Pacote | Bytes | SHA256 |
 | --- | ---: | --- |
@@ -22,7 +22,7 @@
 
 API: fontes/scripts/prisma do SHA fixo e dist da validação final backend. Frontend: build existente l1eBvPioySXt7NLiuFMkg; 198 arquivos de entrada conferem com ba66c241; rewrite público aponta 127.0.0.1:3001. Worker: os 93 compilados conferem integralmente com o manifesto versionado (três alterados e um helper novo sobre os 92 ativos). Reutilizados testes/builds; nenhum teste repetido, nenhum full-worker build.
 
-Os pacotes **não incluem node_modules**. Na preparação remota isolada futura, copiar dependências das respectivas releases ativas somente após reconferir package/lock e clientes, como na janela anterior; nunca vincular ou modificar diretório servido. Package e lock dos três componentes coincidem hoje com os ativos. Alteração até a janela invalida essa reutilização; abortar/reproduzir dependências isoladamente, não atualizar incidentalmente. Copiar dependências é etapa pendente antes de classificar release remota como executável/pronta para troca.
+Os pacotes **não incluem node_modules**. Na preparação remota isolada futura, copiar dependências das respectivas releases ativas somente após reconferir package/lock e clientes, como na janela anterior; nunca vincular ou modificar diretório servido. Package e lock dos três componentes coincidem hoje com os ativos. Alteração até a janela invalida essa reutilização; abortar/reproduzir dependências isoladamente, não atualizar incidentalmente. Cópia e resolução isolada concluídas posteriormente; ver relatório de preparação. Isso não comprova execução do candidato em produção.
 
 Prisma: nenhuma diferença schema/migrations a3→ba; DB com 60 migrations. Source schema SHA256 7fec399ffbbeb4f2d002d128481f96c1aaebb3efb9d0a76f2ba129939c5b54bd. `prisma format` executado apenas em cópia local com URL sintética porta 1 produziu byte a byte o schema do Client ativo/local: 75c32a1d4fa67626d991d89d0327749c7ca65edea02e969c5733fd2b2c0dc594. Diferença original era espaços e ordenação de declarações @@unique/@@index, não DDL. API client/generated6.19.2; worker wrapper6.19.3/generated6.19.2, conforme reprodução já validada. Sem migrate deploy/db push/reset.
 
@@ -65,7 +65,7 @@ Tempo: os2min09 da janela anterior são referência histórica, não SLA. Limite
 ## Pendências para aprovação final
 
 - Owner: janela/fim, execução única e aceite explícito do risco residual de interrupção WEB_SESSION/PM2; autorizar futuramente contenção, fechamento/restauração da guarda e supervisão como etapas coordenadas, não incidentais.
-- Operacional: preparar releases remotas/configs/retorno, backup fresco e restauração isolada, controle de ownership (incluindo lacuna lock→PID), gates imediatos. Configs privadas permanecem fora do Git.
+- Operacional: releases remotas/configs/retorno, backup e restauração isolada concluídos; pendem gates imediatos da janela e controle de ownership (incluindo lacuna lock→PID). Configs privadas permanecem fora do Git.
 - Validação: sessão legítima do owner para leitura de atendimento; tenant e usuários legítimos para ativação/aceite posterior, sem incomodar cliente como pré-requisito do deploy fechado.
 - Pendências separadas: resposta automática em andamento continua limitação técnica preexistente; Campanhas/CRA aguardam validação funcional do owner; inatividade no Guia pausada. SECULT encerrada/aceita; DB-only encerrada;6683 CLOSED; Telegram e DELIVERED/READ separados.
 

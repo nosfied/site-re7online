@@ -1,5 +1,9 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## Automação — preparação remota e retorno verificados
+
+**PUBLISHED FOR REVIEW / NOT DEPLOYED.** [Evidências de releases, backup fresco e restauração isolada](saas/AUTOMATION_RELEASE_PREPARATION_2026-09-29.md). Pacote API/frontend ba66c241 mantido; worker mínimo f06+912 separado. Configs privadas resolvidas sem início; restore local PASS/60 checksums, banco temporário removido. Guarda/scheduler/processos/sessões preservados; Automação desligada. Pendem início/fim da janela, horizonte de escalonamento/retorno e aceite do risco residual inbound/outbound/auth. Entradas históricas abaixo preservam o estado de cada etapa; não representam pendência atual de preparar releases/backup. Campanhas/CRA aguardam owner; SECULT encerrada.
+
 ## Preparação da release Automação ba66c241 — sem execução
 
 [Plano, artefatos, preflight e limites](saas/AUTOMATION_RELEASE_PLAN_2026-09-29.md) e [comandos revisáveis](saas/AUTOMATION_RELEASE_COMMANDS_2026-09-29.md). PUBLISHED FOR REVIEW / NOT DEPLOYED. API/frontend fixos em ba66c241; worker mínimo f06 + backport91230f88. Artefatos preparados apenas localmente; falta preparação remota/configs, backup fresco/restauração e aprovação da janela com risco residual WEB_SESSION. Última parada executada não comprovou drain worker; ownership/processos/sockets devem ser verificados antes de sucessor. Guarda atual aberta não é drained. Opt-in Automação permanecerá desligado; ativação/aceite separados.
