@@ -1,5 +1,9 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## Preparação da release Automação ba66c241 — sem execução
+
+[Plano, artefatos, preflight e limites](saas/AUTOMATION_RELEASE_PLAN_2026-09-29.md) e [comandos revisáveis](saas/AUTOMATION_RELEASE_COMMANDS_2026-09-29.md). PUBLISHED FOR REVIEW / NOT DEPLOYED. API/frontend fixos em ba66c241; worker mínimo f06 + backport91230f88. Artefatos preparados apenas localmente; falta preparação remota/configs, backup fresco/restauração e aprovação da janela com risco residual WEB_SESSION. Última parada executada não comprovou drain worker; ownership/processos/sockets devem ser verificados antes de sucessor. Guarda atual aberta não é drained. Opt-in Automação permanecerá desligado; ativação/aceite separados.
+
 ## Fechamento SECULT — confirmação do owner em 29/09/2026
 
 **DEPLOYED / CLIENT ACCEPTED.** Deifson informou: “SECULT aprovou. Já está

@@ -1,0 +1,28 @@
+{
+  "release": "ba66c24112ccb10f2dfdcced54350f513d399bc6",
+  "functionalCode": "d06a92b84f4308170a6f22a53cb6171cfbe6d6a2",
+  "frontendBuildId": "l1eBvPioySXt7NLiuFMkg",
+  "schemaSourceSha256": "7fec399ffbbeb4f2d002d128481f96c1aaebb3efb9d0a76f2ba129939c5b54bd",
+  "generatedPrismaSchemaSha256": "75c32a1d4fa67626d991d89d0327749c7ca65edea02e969c5733fd2b2c0dc594",
+  "schemaDifference": "Prisma format normalization (whitespace and index declaration ordering) byte-identical to generated schema; matches active API/worker",
+  "dependenciesIncluded": false,
+  "reusedEvidence": [
+    "automation-audit-races/final-build.log",
+    "bot-inbox-20260929/frontend-build-final.log",
+    "automation-queue-fix-20260929/worker-comparison.json"
+  ],
+  "artifacts": {
+    "api-frontend.tar.gz": {
+      "sha256": "c55822624d31d4afdbd173d5e05533655bbf2672c9bf473147269a038f607455",
+      "bytes": 25579837,
+      "files": 2053,
+      "manifestSha256": "43157dcc4cc63593c05d04f982febaa2f4a4e5f13038eb1e49922d6d606cd437"
+    },
+    "worker-minimal.tar.gz": {
+      "sha256": "86021259868d5be22da5ecf993ac7f2ed866c154349636e113092d61fb9dff9f",
+      "bytes": 1318153,
+      "files": 509,
+      "manifestSha256": "fac06ba2406096f917f76e4801129403618608f36d42ac083978c65a6636498c"
+    }
+  }
+}

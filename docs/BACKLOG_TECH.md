@@ -1,5 +1,9 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## Automação — plano de publicação controlada, aprovação pendente
+
+PUBLISHED FOR REVIEW / NOT DEPLOYED. [Plano ba66c241 e worker mínimo91230f88](saas/AUTOMATION_RELEASE_PLAN_2026-09-29.md): pacotes locais verificados, Prisma compatível sem migration; produção só lida. Pendentes backup fresco/restauração, releases/configs remotas, janela/fim e decisão sobre risco residual do worker; não confundir zero tarefas com drain. Ownership individual lock→PID não comprovado pela projeção disponível, barreira conservadora obrigatória antes do sucessor. Deploy com chave Automação false; ativação tenant/aceite posteriores. Sem mudança de guarda/scheduler/cron/boot nesta preparação. Campanhas/CRA aguardam validação funcional do owner; inatividade Guia pausada; limitação de resposta automática separada; SECULT encerrada;6683 CLOSED.
+
 ## Automação — publicação para auditoria GitHub
 
 **PUBLISHED FOR REVIEW / NOT DEPLOYED.** Código até d06a92b8, mantendo c6884100 e 91230f88 separados; [pacote versionado do worker mínimo e relatório final](reviews/automation-worker-backport/README.md). Sem deploy, ativação ou novos testes nesta publicação. Limitação de respostas automáticas separada; Campanhas/CRA aguardam owner, inatividade no Guia pausada.
