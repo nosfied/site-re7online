@@ -1,5 +1,13 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+> Atualização local 29/09 — [alternativa mínima e parada do worker](saas/SECULT_DEPLOY_PLAN_2026-09-29.md):
+> base bf5f1d76 reproduz o bundle alcançável; backport de cinco fontes f06 recomendado
+> para revisão. G1/G2 continuam abertos. 45+30 testes PASS; quatro reproduções mostram
+> shutdown inseguro, não drain aprovado. Proposta de correção separada não implementada.
+> Rollback antigo perde garantia de concorrência; revogar em código SECULT exige
+> escritores compatíveis. Produção intacta, SECULT não ativada; campanhas/CRA aguardam owner.
+
+
 ## Inicio efetivo e ensaio operacional local — 2026-09-26
 
 Status: LOCAL ROLLOUT / SUSPENDED ROLLBACK REHEARSED; NOT DEPLOYED / OWNER UI PENDING.
@@ -2167,3 +2175,21 @@ foi somente leitura. Em 28/09/2026, Eduardo confirmou “Funcionou, obrigado Dei
 correção de gravação de flows DB-only em `e8ebd776`. Não informa modos/operações
 exercitados nem comprova as quatro combinações locais. Sem aceite global CRA
 ou de lotes. 6683 CLOSED; demais frentes preservadas.
+
+
+## SECULT — plano futuro de implantação a3d16d4b, 29/09/2026
+
+Consultar o [plano revisável específico](saas/SECULT_DEPLOY_PLAN_2026-09-29.md)
+antes de reaproveitar comandos históricos. Nenhuma operação produtiva foi realizada
+nessa preparação. Builds locais não autorizam o swap. O worker vivo contém módulos
+compartilhados anteriores ao checkout 5ee2de6b: preservar o bundle real para retorno,
+não recompilar esse SHA presumindo equivalência. Delta adicional de fila/CRM exige
+revisão própria; shutdown worker ainda não prova drain de mensagens/auth/control.
+
+Gates separados: revisão/ensaio worker → configuração/artefatos compatíveis → backup
+fresco + restore isolado → fechamento superadmin/drain campanhas → contenção e
+parada segura de TODOS os escritores → código default false → atendimento validado
+→ decisão específica de ativação SECULT. Não inferir drain worker da guarda nem
+zerar/expirar locks/tarefas. Não usar PM2 kill/reload all, REVOKE compartilhado,
+migration ou restore produtivo como rollback rotineiro. Rollback a escritores
+antigos exige revogação comprovada antes e impede garantia de concorrência futura.

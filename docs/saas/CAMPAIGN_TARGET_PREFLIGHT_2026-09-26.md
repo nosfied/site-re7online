@@ -1,5 +1,13 @@
 # Preflight somente leitura — campanhas, 2026-09-26
 
+> Atualização local 29/09 — [alternativa mínima e parada do worker](SECULT_DEPLOY_PLAN_2026-09-29.md):
+> base bf5f1d76 reproduz o bundle alcançável; backport de cinco fontes f06 recomendado
+> para revisão. G1/G2 continuam abertos. 45+30 testes PASS; quatro reproduções mostram
+> shutdown inseguro, não drain aprovado. Proposta de correção separada não implementada.
+> Rollback antigo perde garantia de concorrência; revogar em código SECULT exige
+> escritores compatíveis. Produção intacta, SECULT não ativada; campanhas/CRA aguardam owner.
+
+
 > Atualização vigente: etapa A executada em 27/09 à noite, registrada ao final.
 > API em recovery 03f930e5, campanhas permanentemente fechadas. Candidato a1cc380e
 > NOT DEPLOYED / OWNER UI PENDING. Seções anteriores preservam o histórico.
@@ -1347,3 +1355,21 @@ um WARN `multichannel.shadow_write.failed`, modelo OutboundMessage, motivo
 `missing_channel_account_id`; sem erro estruturado/crash observado. Não
 atribuído à gravação de flows sem evidência causal; acompanhar separadamente,
 sem correção incidental. Nenhum identificador de registro exposto nos docs.
+
+
+## Preflight SECULT a3d16d4b — 29/09/2026, somente leitura
+
+[Plano consolidado e evidências sanitizadas](SECULT_DEPLOY_PLAN_2026-09-29.md).
+API/frontend continuam e8ebd776, 2.020 hashes iguais à evidência de deploy; worker
+continua no checkout 5ee2de6b, porém seu dist compartilhado é anterior e difere em
+21 módulos alcançáveis do candidato. Não atribuir SHA de checkout ao bundle inteiro.
+Três WEB_SESSION conectadas; chave SECULT ausente nos dez tenants; guarda aberta
+geração 3/tasks zero/fault null, `drained=false`. Jobs/grupos/leases/sending/scheduled
+zerados na leitura, sem inferir ausência de operações WEB_SESSION. Sem mutation.
+
+Próxima decisão é revisão do delta adicional do worker e resolução/ensaio do drain
+worker antes da janela, não autorização genérica de deploy. Plano especifica backup
+fresco futuro, preservação de ciphertext/chaves/sessões, exclusão de escritores
+antigos, rollout default false e ativação posterior exclusiva secult-pe. Nenhuma
+admissão fechada, cron modificado, configuração aplicada ou processo reiniciado.
+Campanhas/CRA aguardam owner; Telegram/DELIVERED-READ separados; 6683 CLOSED.

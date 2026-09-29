@@ -1,5 +1,19 @@
 # SECULT — consulta de conversas próprias encerradas
 
+> Decisão complementar do owner, 29/09: não há obrigação de disponibilizar legados
+> sem comprovação suficiente. Os que já satisfazem todos os critérios implementados
+> permanecem elegíveis. Sem backfill, inferência de responsável ou corte temporal novo.
+> Nenhuma alteração funcional decorrente desta decisão; SECULT NOT DEPLOYED.
+
+
+> Atualização local 29/09 — [alternativa mínima e parada do worker](SECULT_DEPLOY_PLAN_2026-09-29.md):
+> base bf5f1d76 reproduz o bundle alcançável; backport de cinco fontes f06 recomendado
+> para revisão. G1/G2 continuam abertos. 45+30 testes PASS; quatro reproduções mostram
+> shutdown inseguro, não drain aprovado. Proposta de correção separada não implementada.
+> Rollback antigo perde garantia de concorrência; revogar em código SECULT exige
+> escritores compatíveis. Produção intacta, SECULT não ativada; campanhas/CRA aguardam owner.
+
+
 28/09/2026, America/Fortaleza. **LOCAL VALIDATED / NOT DEPLOYED** para o escopo
 abaixo. Base `f06d49cb61fcf57b423603b93797acad4b797d33`, branch
 `review/campaign-recovery-20260926`. Dependência de persistência permanece nesse
@@ -313,3 +327,15 @@ e DELIVERED/READ permanecem separados.
 Evidências persistentes e privadas: `local-evidence/secult-implementation-20260928/`
 (contagens, logs completos inclusive falhas corrigidas, comparação de tipos, smoke,
 patch revisável e hashes). `.data/`, `local-db-setup.log` e evidências fora do Git.
+
+
+## Preparação operacional posterior à revisão de a3d16d4b
+
+Owner concluiu revisão sem novo bloqueador no delta. [Plano de implantação de
+29/09](SECULT_DEPLOY_PLAN_2026-09-29.md) mantém NOT DEPLOYED e separa gates de worker,
+backup/retorno, implantação de código e ativação exclusiva secult-pe. O preflight
+read-only encontrou dist compartilhado do worker mais antigo que seu checkout:
+atualizá-lo introduz fila operacional/origem CRM/normalização além da persistência.
+Essas mudanças e a falta de drain worker comprovado precisam de revisão/ensaio;
+os 31 testes SECULT não são prova dessas transições produtivas. Nenhuma ativação,
+parada, fechamento de admissões ou alteração produtiva executada.

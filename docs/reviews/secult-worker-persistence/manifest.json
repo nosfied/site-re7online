@@ -1,0 +1,206 @@
+{
+  "sourceBase": "bf5f1d7610ca3f8144faa6f7b7994598e4a4017b",
+  "patchSha256": "9ce907c09adce3f196953a25780760de2c186c901585b5527ae9c584c3010dc1",
+  "purpose": "Reproducible review package; worker only; not authorized for production",
+  "build": "Node22.13.0; TypeScript5.9.3; npm run build (tsc --noCheck)",
+  "files": {
+    "dist/whatsapp-agent/src/agent/qualification.js": "a89299cc5ae087851acb2e18e5361b7dc84f2d2a0fb936cb79d237b655165432",
+    "dist/whatsapp-agent/src/agent/semanticQualificationResolver.js": "8ae72939d87f2ce9e2d081d89a4bc35fb0de3152dfa4d76b901e041a74e724cf",
+    "dist/whatsapp-agent/src/bootstrap/defaultOperationalDepartment.js": "343253d0fbfa5a3e3e3877527328c910905d922f61c302a74999349f7aac2e4b",
+    "dist/whatsapp-agent/src/campaigns/optOutRegistry.js": "1030db50d5b9d2155ddb62f488fe3f2b87b539ddd10d7146242ce12739451327",
+    "dist/whatsapp-agent/src/channels/channel.types.js": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+    "dist/whatsapp-agent/src/channels/channelAccountSecretCrypto.js": "7e245c304f44f387212b4dfafc3a19290b64f7c0ec84de60fcee7919d21bd624",
+    "dist/whatsapp-agent/src/channels/hybridInboundDedupe.js": "e20d01e5eb6cb028c8c3ea9a64d726e507ab628520f6e65f437c673ac132dc80",
+    "dist/whatsapp-agent/src/channels/tenantChannelAccount.js": "0a2ec45e4a103ce68c831eb2d335950418620e1a1fe3550972bb4bb9ddeb71c4",
+    "dist/whatsapp-agent/src/channels/tenantChannelAccount.types.js": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+    "dist/whatsapp-agent/src/channels/whatsappBackfillDryRun.js": "6fc1df60cc7055a0ac5f0df8da71d88b993404cafbe53fd5692b88a2d4affa0d",
+    "dist/whatsapp-agent/src/channels/whatsappMultichannelShadowWrite.js": "34eb789a22042f8f45846d595a1c5c6d6a981719527d7f1e5a2d6b6923bf6265",
+    "dist/whatsapp-agent/src/chatbot/chatbotConsentRuntime.js": "7cda66172f9f71cd602c268913561787ecf6ca7b6883f33ae5da767b7731c132",
+    "dist/whatsapp-agent/src/chatbot/chatbotFlow.js": "81c358c642f8d4a7a3e4a7e3b21e8b881e7e154a7bb5a96e07107efe3e6df231",
+    "dist/whatsapp-agent/src/chatbot/departmentAwareHandoff.js": "df8dd85f18a37d54654898aa58ba9137b4cebf6b156ba99e40b3037a219c4553",
+    "dist/whatsapp-agent/src/config/env.js": "c89d881fe872adc60120ffdabaf73a76a50458ba936acc00e9d0c159ccde4642",
+    "dist/whatsapp-agent/src/config/tenantConfig.js": "ca64ce036f46bbfe06ec70d578da246533476947671f9dc818e251e92a93c09b",
+    "dist/whatsapp-agent/src/config/tenantOperationalConfig.js": "7bde77e497eff67e9f9646f549b31c6883795cd2d79ac617fcc5318a23539866",
+    "dist/whatsapp-agent/src/config/tenantOperationalConfigStore.js": "590a2e183990bdc7b17ec7d90396e8043f7e1a49922e30bae4263fe0b7d4a519",
+    "dist/whatsapp-agent/src/consent/contactConsent.js": "6e53711e7adb1ce92540bf3dafdf692e1536d780464428fa4ba385807fc64dd5",
+    "dist/whatsapp-agent/src/contacts/contactLifecycle.js": "7ef66005dddc659c37be735a69a3d3d88d5f64088664407039b8dd980ad664b5",
+    "dist/whatsapp-agent/src/contacts/contactOperationalExclusion.js": "5f89c6d831c469291554d754276ff238fc0d5a7297547623a9365e8a364af355",
+    "dist/whatsapp-agent/src/conversation/automationRuntime.js": "67b4cc3bceb5a2b63c7bc7837aaa055b5cf3aaf6ead198b59e2ddb7b1c07efdc",
+    "dist/whatsapp-agent/src/conversation/conversation.service.js": "9da72b5b680ebae67d3af32b0eebcd5777c5a7af7a2d63c051cbf8df2fa4c5bd",
+    "dist/whatsapp-agent/src/conversation/conversation.types.js": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+    "dist/whatsapp-agent/src/conversation/serviceCycle.js": "5fda5c2bf60bd7c87d2e05469fafc0292fa6080259e76c4e722929d10b5eb836",
+    "dist/whatsapp-agent/src/crm/crmConversationStart.js": "7cad38ba3f32adf40dfbbde829466e6f7e6d7523235382eb68978aa6bc95c216",
+    "dist/whatsapp-agent/src/crm/crmWhatsappIdentity.js": "f6e774fcff37dce022d723381c6c7205a9662763f31e28a08b7a9826ae72430e",
+    "dist/whatsapp-agent/src/db/persist.js": "e229e77a49b199c37331cb181f95ac79762ad31c8cf716dcbc62b2d09ea40d53",
+    "dist/whatsapp-agent/src/db.js": "aec14630622dfa44a6a7f3617a471dcbfafb98a990c41a17b894abd99d5ec0e1",
+    "dist/whatsapp-agent/src/departments/businessHours.js": "806b7f394c0c49db02dc205aaef4f1d25441ec6a07e359a6ce1c0c70365e5720",
+    "dist/whatsapp-agent/src/domain/whatsapp/types.js": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+    "dist/whatsapp-agent/src/features/clientFeatures.js": "d6783e5cfada966cce34358b8e0fecef353677c12dcdab1b5e4977a694374e23",
+    "dist/whatsapp-agent/src/inbox/agentSignature.js": "a4faee2069ebeaba4919df6782e54d7400a6d7e8df63fe9489ff329b88a028a7",
+    "dist/whatsapp-agent/src/inbox/conversationProtocol.js": "db5fc5dd5047c9a7c3d9a11f4a2dd0e2db91e21160b071b905469904e08a5034",
+    "dist/whatsapp-agent/src/inbox/messageVisibility.js": "2f9141857041f1cfd05bedd4203a33fa4436b556a84c884d480ae918d2611e1e",
+    "dist/whatsapp-agent/src/logger/logger.js": "ef1b97e241f5cbff3d59baba24388c267077dd9f8f873094c39436eb674783c9",
+    "dist/whatsapp-agent/src/mail/canonicalMail.js": "7ef2090828eaae1ef840470d2d44f150a7db4f32a9437e93800108a6a6f3eb16",
+    "dist/whatsapp-agent/src/media/audioTranscode.js": "1cccb9f112c0a82bd76b94f9375347b14dcf7a93011de70730f387bf06bffb35",
+    "dist/whatsapp-agent/src/media/webSessionMedia.js": "80624af2fa305b65d09a6d7ed80fb0a928d65fcad75f3610d38311bbe99cddd4",
+    "dist/whatsapp-agent/src/meta/metaCloudReadiness.js": "581a948cba9946b7b799aa84b4cce761dbd9e0cae786f5ae98021e9b219a6877",
+    "dist/whatsapp-agent/src/metrics/conversationMetrics.js": "d7d9751e278ebf740eb5d8eef6e78244b29028101c387ea1eebe9c36a3f9436e",
+    "dist/whatsapp-agent/src/privacy/anonymizedIdentityGuard.js": "509b5b52650d12c62df7092d3cc497e2d0310ea3c60145f95492e60ad785f5dd",
+    "dist/whatsapp-agent/src/push/webPushService.js": "93400d2a543b7510dee0806314718c23f02dffe22760b9f686da61657c8ec5cd",
+    "dist/whatsapp-agent/src/queue/agentAvailability.js": "7aba646fcc379fc3314b222076dfd6d54e3b051eb061b3b8c565737eb04e131d",
+    "dist/whatsapp-agent/src/queue/assignmentPolicy.js": "797ce7700cb246abcdfafc79a25055c50893b56305fc798e7945fffc0fbb020d",
+    "dist/whatsapp-agent/src/queue/queuePosition.js": "73daf58329919828bc0eee7cbfa6416c25da3338a836ce0638bde321f75102df",
+    "dist/whatsapp-agent/src/realtime/events.js": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+    "dist/whatsapp-agent/src/realtime/hub.js": "14dca0dfdc918c6dc5f7385a92cac18e86baf579e22dfd2e300a0b3351600a77",
+    "dist/whatsapp-agent/src/storage/conversationKey.js": "dcda89287e8e07d1b80dda57fddc7156961ef4e33d3775c5b2fed130b2d1b8ce",
+    "dist/whatsapp-agent/src/storage/dualWriteStorage.js": "432062203d11f1aac3296c7b929651c4cf57a9a337ad66f0b4056ba610a229e9",
+    "dist/whatsapp-agent/src/storage/jsonFileStorage.js": "55ef9f966427de71154787b019e290ce376c99c3d2f930c6c3578ad8d1827a21",
+    "dist/whatsapp-agent/src/storage/runtimeStorage.js": "8acbe2c41c8728cce2b3113e726efa8241c3e5286452d1919c7537d0d647f9fa",
+    "dist/whatsapp-agent/src/storage/storage.js": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+    "dist/whatsapp-agent/src/storage/storageFactory.js": "ebec769a94f38ef6a6cb58bc079859c5d9238c645df7d27988292b470639fe6e",
+    "dist/whatsapp-agent/src/users/departmentMemberships.js": "f240e558c2d6c596fbbaa60952ad9da9616c7c616b9c7f9a372db63809558d7e",
+    "dist/whatsapp-agent/src/utils/departmentSlug.js": "dba67b585cf4ba912b0646f7ab3ea82a758f7c401388b0e9149d1a677da5c193",
+    "dist/whatsapp-agent/src/utils/waid.js": "7d290d5b8ab0f84a678a489fd3d26436e83489df111bbb318c2559337f0b64ee",
+    "dist/whatsapp-agent/src/web-session/hybridIdentity.js": "b7da3a21a841177629ca37b0918914eb83bf02d27034beddbfe6461ed147507e",
+    "dist/whatsapp-agent/src/web-session/hybridIdentity.test.js": "263cd9f16ca4595e64529678662933d13b5f45b04d5e024b7038f50fa841df5a",
+    "dist/whatsapp-agent/src/web-session/qrMemoryStore.js": "facda5ed242dffdcbd278a13638f5a45bd217ef46381ea260cf1ba5e0150ce86",
+    "dist/whatsapp-agent/src/web-session/webSessionAdvisoryLock.js": "0a91c6f7651855da89d36d841939d497c38598861a29f42c8a1963e395e83c34",
+    "dist/whatsapp-agent/src/web-session/webSessionAdvisoryLock.test.js": "cbb30dc6a91f21b4a15dcdac48fa154cb4db9db0569e9b7d679c85aff3a33c00",
+    "dist/whatsapp-agent/src/web-session/webSessionAuthStore.js": "ac8e39b617be9c0636f96560644ef20dd637d830b26d740752b6d5fd7a24a806",
+    "dist/whatsapp-agent/src/web-session/webSessionAuthStore.test.js": "08b8bcaaa85b1e28fb9553a2632885657e179c66763d0218b786e0e4005cb4c0",
+    "dist/whatsapp-agent/src/web-session/webSessionAuthorization.js": "a9e0e03e967ca7f86013d46329ecb9d0272adb3b78e7d77f6fa020caa37e92ec",
+    "dist/whatsapp-agent/src/web-session/webSessionConnectionAdmin.js": "c9097a2dabcedecc30ffaee84f2e00618295379c077f2a50451162947c6fa002",
+    "dist/whatsapp-agent/src/web-session/webSessionConnectionAdmin.test.js": "458093a52a804e994b776d4da00908377545a2f6cc3811fac1e3f519a4475b77",
+    "dist/whatsapp-agent/src/web-session/webSessionConnectionRuntime.js": "a8d991e69772bcb43c429e473af4fe530e86f3564054b2dc361a18240ff6cc08",
+    "dist/whatsapp-agent/src/web-session/webSessionDisconnectAlerts.js": "ec2f3312e853ad9165f0b556314213a03fbdc02b99d964b2fa857f61cf146ef4",
+    "dist/whatsapp-agent/src/web-session/webSessionDisconnectAlerts.test.js": "b66782367bd9ad4a1c36745e18133ab1895db05a7b357e7e0d6fb5fcebffef0d",
+    "dist/whatsapp-agent/src/web-session/webSessionIdentity.js": "561991b890bddca14b702a71794d44b0befc08eec74d56fcf1a9d40632048569",
+    "dist/whatsapp-agent/src/web-session/webSessionIdentity.test.js": "fd0a09c05144717cf488c6e87d2f92e56648c8bc6d01f206ea20e430bf00ec6f",
+    "dist/whatsapp-agent/src/web-session/webSessionInbound.js": "ce4131e3cd740dc55b3c8bb0e50e0c75d36d5bbeb422a82d0de6143d67e61f25",
+    "dist/whatsapp-agent/src/web-session/webSessionInbound.test.js": "494d1fd29558c5f6821f703912812bf06e0d1387e7581639703806c29f7a4bee",
+    "dist/whatsapp-agent/src/web-session/webSessionLifecycle.js": "7256e7672cab81962c0bf80a9e38ee9514ab0f9a5c958251ce8aab06d5da13ef",
+    "dist/whatsapp-agent/src/web-session/webSessionLifecycle.test.js": "1d1f9acb118ce345074fa1b7f6fe1ea7068417cbf0d2e2c257bd000954412061",
+    "dist/whatsapp-agent/src/web-session/webSessionOutboundService.js": "869be3734056662ef52dab5b6e6fd782757efa8cf6f6328c23fbebd5265d57c4",
+    "dist/whatsapp-agent/src/web-session/webSessionOutboundService.test.js": "20a1e05eab5a6fd81b8f9a7a55bcd7d08a3ed0048e59c692c57d381091a3245a",
+    "dist/whatsapp-agent/src/web-session/webSessionReceipts.js": "8cd576c2bca0974db4cf3176270c89528733e0df11dc7604f0c0b10041504ba7",
+    "dist/whatsapp-agent/src/web-session/webSessionReceipts.test.js": "74f0c5ac036ddf5d9a0eac28cf53648d811785751a90ccf4147ede1c370f2c74",
+    "dist/whatsapp-web-worker/src/index.js": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd",
+    "dist/whatsapp-web-worker/src/web-session/baileysAuthState.js": "2535cd086bc4c9ee46327a77b6ccbbe86d1b9e348751a36b7abeca12c04dbcc2",
+    "dist/whatsapp-web-worker/src/web-session/baileysAuthState.test.js": "4fd2d5a899be01731c4054f2d44ed5f1a6b66f5024f8d9a120e7ba7ecae1b25d",
+    "dist/whatsapp-web-worker/src/web-session/baileysSocketFactory.js": "67fde08c3f25463636d8bb465b47983faf18191161db31b929cd88a3f47148bf",
+    "dist/whatsapp-web-worker/src/web-session/baileysSocketFactory.test.js": "f8f42b2692b934176136e57c6cb5964c947a3bdb22e23c3a744be8856481fd2a",
+    "dist/whatsapp-web-worker/src/web-session/dedicatedPgAdvisoryLock.js": "e078f5933004343c61000f438e4d2f38a01561367c0b35a1bad5f413ceed45a8",
+    "dist/whatsapp-web-worker/src/web-session/dedicatedPgAdvisoryLock.test.js": "b2a009b1272a635704f4660cc1c2000de3e964c6e4b1ea347534a7307ece8a90",
+    "dist/whatsapp-web-worker/src/web-session/sensitiveConsoleFilter.js": "2a9e5f51156c87d03d6085e2986d39fb5a3a56ed3042aa6bddd2d6aa7163b545",
+    "dist/whatsapp-web-worker/src/web-session/sensitiveConsoleFilter.test.js": "1c4d10eeb5fd11c0e9ceebe6777fef013a720ce56ac93ce23b06038168da6989",
+    "dist/whatsapp-web-worker/src/webSessionControlServer.js": "5d7e0027e7212334c8e521e250e04fb874b32268dd71a860cb61ecd97e43fe92",
+    "dist/whatsapp-web-worker/src/whatsappWebSessionWorker.js": "796597dbfd629354f458db7b0176d6f93b238f1243cb20600d49ec180478b393",
+    "dist/whatsapp-web-worker/src/whatsappWebSessionWorker.test.js": "7c09a9da12124659de7153564dbdf40fc335be928f5a27f669f9f7b4df2981f0",
+    "package-lock.json": "9124054db95a78d8e34c7fefa935410406434984ca06c2e823e0f1df53a5e0db",
+    "package.json": "54aecf3426907eb54a0bb84cf1f8f01c1d9c8f6896e998cc1de70fa9c297cac9",
+    "tsconfig.json": "2ccd6f7e96d5cbe464215fe65833b29bfe719eb2096617604bd85ff7456804a4"
+  },
+  "sourceFiles": {
+    "config/tenantOperationalConfig.ts": {
+      "identicalToReviewedF06": true,
+      "sha256": "9ac0829853b1133a31d4a26862f07d9829a436374e7e0130ee889564737a3872",
+      "configWrites": 19
+    },
+    "config/tenantOperationalConfigStore.ts": {
+      "identicalToReviewedF06": true,
+      "sha256": "aab2044b4e08a1ca7d5749152d0bdb7b59158c6db41294a2df913318b9bdb776",
+      "configWrites": 0
+    },
+    "queue/assignmentPolicy.ts": {
+      "identicalToReviewedF06": true,
+      "sha256": "cc881cdc2aa43fb284a732c3cbceb864cd117b66d0968a3a479c11826e998d91",
+      "configWrites": 2
+    },
+    "web-session/hybridIdentity.ts": {
+      "identicalToReviewedF06": true,
+      "sha256": "480cfbeea402a763fb98683f31daf43503099146e04a81a84ec6c9d1bff32edd",
+      "configWrites": 5
+    },
+    "web-session/webSessionAuthorization.ts": {
+      "identicalToReviewedF06": true,
+      "sha256": "5596b1a0f686524d969f82b63041e668eb097d47366d7b5687ab812c2907ca67",
+      "configWrites": 4
+    }
+  },
+  "comparison": {
+    "sourceBaseExact": "bf5f1d7610ca3f8144faa6f7b7994598e4a4017b",
+    "patch": "9ce907c09adce3f196953a25780760de2c186c901585b5527ae9c584c3010dc1",
+    "liveReachable": 65,
+    "minimalReachable": 66,
+    "missing": [],
+    "changed": [
+      {
+        "file": "whatsapp-agent/src/config/tenantOperationalConfig.js",
+        "live": "f110395e06707a1329796314ce49f82da725168f9087847cd00da114acf3d33f",
+        "minimal": "7bde77e497eff67e9f9646f549b31c6883795cd2d79ac617fcc5318a23539866"
+      },
+      {
+        "file": "whatsapp-agent/src/config/tenantOperationalConfigStore.js",
+        "live": null,
+        "minimal": "590a2e183990bdc7b17ec7d90396e8043f7e1a49922e30bae4263fe0b7d4a519"
+      },
+      {
+        "file": "whatsapp-agent/src/queue/assignmentPolicy.js",
+        "live": "e58b9717c291ab4b86eb06277ef3a521560f5dd6ab5fc6bf70067007318239d5",
+        "minimal": "797ce7700cb246abcdfafc79a25055c50893b56305fc798e7945fffc0fbb020d"
+      },
+      {
+        "file": "whatsapp-agent/src/web-session/hybridIdentity.js",
+        "live": "99ed71cfdb32d381938c9d07906c0fa8e1bac2ea77380b8639558e671291af75",
+        "minimal": "b7da3a21a841177629ca37b0918914eb83bf02d27034beddbfe6461ed147507e"
+      },
+      {
+        "file": "whatsapp-agent/src/web-session/webSessionAuthorization.js",
+        "live": "0f5b46aa9689308c559f4e611cff3d3755daca50ac2bd495b65a74c5b3e6b552",
+        "minimal": "a9e0e03e967ca7f86013d46329ecb9d0272adb3b78e7d77f6fa020caa37e92ec"
+      }
+    ]
+  },
+  "toolchain": {
+    "node": "22.13.0",
+    "typescript": "5.9.3",
+    "npm": "11.7.0"
+  },
+  "lockedPackages": {
+    "whatsapp-agent": {
+      "lockSha256": "f617d4f8c0f90bc8cb36dda100baec1e59ef1c9fc9a203c2e419e0b04725cdbb",
+      "versions": {
+        "prisma": "6.19.2",
+        "@prisma/client": "6.19.2",
+        "typescript": "5.9.3",
+        "@whiskeysockets/baileys": null,
+        "pg": null
+      }
+    },
+    "whatsapp-web-worker": {
+      "lockSha256": "9124054db95a78d8e34c7fefa935410406434984ca06c2e823e0f1df53a5e0db",
+      "versions": {
+        "prisma": "6.19.3",
+        "@prisma/client": "6.19.3",
+        "typescript": "5.9.3",
+        "@whiskeysockets/baileys": "7.0.0-rc13",
+        "pg": "8.23.0"
+      }
+    }
+  },
+  "prismaSchema": {
+    "revision": "a3d16d4bdc4b143deeb6b66d4e963b0b4b3f216b",
+    "path": "apps/whatsapp-agent/prisma/schema.prisma",
+    "sha256": "7fec399ffbbeb4f2d002d128481f96c1aaebb3efb9d0a76f2ba129939c5b54bd",
+    "purpose": "generation only; same schema as deployed API e8ebd776; no migration"
+  },
+  "runtimeValidation": {
+    "node": "20.20.0",
+    "loadedCompiledModules": 65,
+    "testsPassed": 104,
+    "dependenciesUnchanged": true,
+    "report": "NODE20_RESULTS.md",
+    "productionSessionValidation": false,
+    "safeShutdownValidated": false
+  }
+}

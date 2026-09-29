@@ -1,5 +1,32 @@
 # Product Map Current
 
+> Atualização local 29/09 — [alternativa mínima e parada do worker](SECULT_DEPLOY_PLAN_2026-09-29.md):
+> base bf5f1d76 reproduz o bundle alcançável; backport de cinco fontes f06 recomendado
+> para revisão. G1/G2 continuam abertos. 45+30 testes PASS; quatro reproduções mostram
+> shutdown inseguro, não drain aprovado. Proposta de correção separada não implementada.
+> Rollback antigo perde garantia de concorrência; revogar em código SECULT exige
+> escritores compatíveis. Produção intacta, SECULT não ativada; campanhas/CRA aguardam owner.
+
+
+## SECULT — preparação de implantação a3d16d4b — 29/09/2026
+
+**PREFLIGHT READ-ONLY / ARTEFATOS LOCAIS / NOT DEPLOYED.** API/frontend efetivos
+e8ebd776; 2.020 hashes conferidos. Worker: checkout 5ee2de6b, mas módulos compartilhados
+compilados mais antigos; 21 módulos alcançáveis diferentes/novos no candidato,
+incluindo fila operacional, origem CRM e normalização além da dependência SECULT.
+**Gate material:** revisar delta adicional do worker e comprovar parada/retorno
+WEB_SESSION antes de aprovar janela. Guarda de campanhas não drena todo o worker.
+Três WEB_SESSION conectadas; fila/agendamentos vazios são fotografia, não quiescência.
+Chave ausente nos dez tenants; nenhuma ativação. Builds isolados API/frontend/worker
+passaram, sem converter --noCheck em aprovação de tipos ou aceite produtivo.
+[Plano único: versões, delta, artefatos, backup, sequência, retorno e gates](SECULT_DEPLOY_PLAN_2026-09-29.md).
+Backup fresco e restauração desse dump ficam para janela autorizada; não realizados
+agora. Implantação de todos os escritores compatíveis precede ativação separada
+somente secult-pe. Rollback legado perde garantia, exige revogação/exclusão de
+escritores antigos. Campanhas/CRA aguardam owner; DB-only encerrada, Guia inatividade
+pausado, 6683 CLOSED. Sem commit/push/deploy/restart/cron/admissão nesta preparação.
+
+
 ## SECULT — decisão departamental aplicada localmente — 29/09/2026
 
 **LOCAL VALIDATED / NOT DEPLOYED.** Owner definiu vínculo departamental atual

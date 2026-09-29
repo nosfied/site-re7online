@@ -1,5 +1,69 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## SECULT — publicação para revisão após Node20 — 29/09/2026
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Node v20.20.0 exato: 65 módulos carregados sem
+entrypoint, 104 testes PASS (29+45+30), dependências inalteradas. [Provas e limites](reviews/secult-worker-persistence/NODE20_RESULTS.md).
+Material somente para revisão: patch de cinco fontes, receita/manifesto, proposta
+de parada e plano. G1 revisão/configuração e G2 parada continuam abertos. Primeira
+interrupção não tem drain comprovado; sem implementação de shutdown. Campanhas/CRA
+aguardam owner; legados sem prova não precisam ser liberados; 6683 CLOSED.
+
+
+## SECULT — backport escolhido, pacote fonte reproduzido — 29/09/2026
+
+**REVISÃO LOCAL / NOT DEPLOYED.** Direção do owner: worker mínimo sobre bf5f1d76;
+cinco fontes f06 separadas da API/frontend. Reconstrução limpa pelos lockfiles:
+92 compilados idênticos. [Diff exato, manifesto e proposta completa](reviews/secult-worker-persistence/README.md).
+G1 revisão/runtime alvo e G2 parada continuam abertos. Nova correção de shutdown não
+implementada; primeira interrupção antiga tem risco próprio, sem prova retroativa.
+Retorno preferencial compatível+chave false não se confunde com API antiga sem SECULT,
+que perde garantia de persistência. Legados sem comprovação não precisam ser
+liberados; sem backfill/inferência/corte temporal. Campanhas/CRA aguardam owner.
+
+
+## SECULT — alternativa mínima do worker e gate de parada — 29/09/2026
+
+**AVALIAÇÃO LOCAL CONCLUÍDA / G1 E G2 ABERTOS / NOT DEPLOYED.** Base bf5f1d76
+reproduz 91 JS do bundle real e todos os 65 módulos alcançáveis; pacote/lock/tsconfig
+idênticos. Backport experimental de cinco fontes exatas de f06 altera somente quatro
+módulos + helper; recomendado para revisão em lugar dos 21 módulos do worker completo.
+45 regressões e 30 testes de concorrência PASS; tipagem mantém 13 erros, logs de
+44 linhas idênticos baseline/backport. Builds --noCheck não aprovam tipos.
+
+Quatro ensaios dirigidos reproduzem a **falha do shutdown atual**: libera ownership
+com socket/inbound/outbound/auth pendentes; store de auth pode reportar falha ignorada
+pelo adapter; timeout não é rejeição comprovada. Não existe drain seguro demonstrado.
+Proposta mínima de admissão/contagem, conclusão auth e fechamento de transporte antes
+de liberar lock apresentada, **não implementada**. Não encerrar HUMAN para deploy.
+
+Rollback feature-aware exige todos os escritores compatíveis; voltar à API antiga
+nega CLOSED, porém perde garantia de persistência e exige exclusão de snapshots
+antigos antes de qualquer retorno à funcionalidade. Reprodução confirma que escritor
+antigo restaura true revogado. Nenhuma produção alterada ou nova implementação SECULT.
+[Comparação, artefato, ensaios, proposta de parada e retorno](saas/SECULT_DEPLOY_PLAN_2026-09-29.md).
+Campanhas/CRA aguardam owner; DB-only encerrada; Guia inatividade pausado; 6683 CLOSED.
+
+
+## SECULT — preparação de implantação a3d16d4b — 29/09/2026
+
+**PREFLIGHT READ-ONLY / ARTEFATOS LOCAIS / NOT DEPLOYED.** API/frontend efetivos
+e8ebd776; 2.020 hashes conferidos. Worker: checkout 5ee2de6b, mas módulos compartilhados
+compilados mais antigos; 21 módulos alcançáveis diferentes/novos no candidato,
+incluindo fila operacional, origem CRM e normalização além da dependência SECULT.
+**Gate material:** revisar delta adicional do worker e comprovar parada/retorno
+WEB_SESSION antes de aprovar janela. Guarda de campanhas não drena todo o worker.
+Três WEB_SESSION conectadas; fila/agendamentos vazios são fotografia, não quiescência.
+Chave ausente nos dez tenants; nenhuma ativação. Builds isolados API/frontend/worker
+passaram, sem converter --noCheck em aprovação de tipos ou aceite produtivo.
+[Plano único: versões, delta, artefatos, backup, sequência, retorno e gates](saas/SECULT_DEPLOY_PLAN_2026-09-29.md).
+Backup fresco e restauração desse dump ficam para janela autorizada; não realizados
+agora. Implantação de todos os escritores compatíveis precede ativação separada
+somente secult-pe. Rollback legado perde garantia, exige revogação/exclusão de
+escritores antigos. Campanhas/CRA aguardam owner; DB-only encerrada, Guia inatividade
+pausado, 6683 CLOSED. Sem commit/push/deploy/restart/cron/admissão nesta preparação.
+
+
 ## SECULT — decisão departamental aplicada localmente — 29/09/2026
 
 **LOCAL VALIDATED / NOT DEPLOYED.** Owner definiu vínculo departamental atual
