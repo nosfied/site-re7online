@@ -5791,6 +5791,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
       const automationRead = isAutomationConversation(scopedConversation);
+      const validateAutomationRead = automationRead ? createAutomationReadCheckpoint(prisma, { clientId: client.id, clientKey: client.clientKey, role: clientAuth.role, resolved: resolvedConversation, requestId }) : undefined;
       if (automationRead && !await resolveAutomationReadPermission(prisma, client.id, clientAuth.role)) {
         json(res, 404, { error: "conversation_not_found" }); return;
       }
@@ -5842,9 +5843,12 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         cursor,
         requestId,
         source: "app_conversation_timeline",
+        validateAutomationRead,
       });
+      await validateAutomationRead?.();
       json(res, 200, result);
     } catch (error) {
+      if (error instanceof AutomationReadChanged) { json(res, 404, { error: "conversation_not_found" }); return; }
       logger.error({
         event: "app.conversation.timeline.error",
         message: (error as Error).message,
@@ -5921,6 +5925,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       );
       latency.duration("routeOperationalState", routeOperationalStateStartedAt);
       const automationRead = isAutomationConversation(scopedConversation);
+      const validateAutomationRead = automationRead ? createAutomationReadCheckpoint(prisma, { clientId: client.id, clientKey: client.clientKey, role: clientAuth.role, resolved: resolvedConversation, requestId }) : undefined;
       if (automationRead && !await resolveAutomationReadPermission(prisma, client.id, clientAuth.role)) {
         json(res, 404, { error: "conversation_not_found" }); return;
       }
@@ -5976,9 +5981,11 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         includeAssignedUserName: true,
         requestId,
         source: "app_conversation_detail",
+        validateAutomationRead,
         latency,
       });
       latency.duration("buildPayload", buildPayloadStartedAt);
+      await validateAutomationRead?.();
       json(res, 200, { ...result, automationReadOnly: automationRead });
       latency.finish("channel_latency.app_conversation_detail", {
         requestId,
@@ -5990,6 +5997,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         mode: "json_first",
       });
     } catch (error) {
+      if (error instanceof AutomationReadChanged) { json(res, 404, { error: "conversation_not_found" }); return; }
       logger.error({
         event: "app.conversation.messages.error",
         message: (error as Error).message,
@@ -6739,6 +6747,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
       const automationRead = isAutomationConversation(materializedConversation);
+      const validateAutomationRead = automationRead ? createAutomationReadCheckpoint(prisma, { clientId: client.id, clientKey: client.clientKey, role: clientAuth.role, resolved: resolvedConversation, requestId }) : undefined;
       if (automationRead && (!resolvedConversation.winner || !await resolveAutomationReadPermission(prisma, client.id, clientAuth.role))) {
         json(res, 404, { error: "conversation_not_found" }); return;
       }
@@ -6824,6 +6833,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             conversationId: resolvedConversation.winner.id,
             metadata: supportAttachment,
           });
+          await validateAutomationRead?.();
           streamSupportAttachment({
             res,
             absolutePath: resolved.absolutePath,
@@ -6851,6 +6861,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           "Content-Disposition": `inline; filename="${fileName}"`,
           "Content-Length": String(localMedia.size),
         };
+        await validateAutomationRead?.();
         res.writeHead(200, headers);
         createReadStream(localMedia.absolutePath)
           .on("error", (error) => {
@@ -6883,6 +6894,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         return;
       }
 
+      await validateAutomationRead?.();
       const media = await fetchMediaContent(mediaId, {
         accessToken: credentials.accessToken,
       });
@@ -6913,6 +6925,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       if (media.contentLength) {
         headers["Content-Length"] = media.contentLength;
       }
+      try { await validateAutomationRead?.(); } catch (error) {
+        await media.response.body?.cancel();
+        throw error;
+      }
       res.writeHead(200, headers);
 
       if (!media.response.body) {
@@ -6935,6 +6951,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         })
         .pipe(res);
     } catch (error) {
+      if (error instanceof AutomationReadChanged) { json(res, 404, { error: "conversation_not_found" }); return; }
       logger.error({
         event: "app.conversation.media.error",
         message: (error as Error).message,
@@ -35686,6 +35703,31 @@ async function buildConversationListPayload(
   };
 }
 
+// A BOT exception is scoped to this request; a handoff requires a fresh request under human rules.
+class AutomationReadChanged extends Error {}
+type AutomationResolvedTarget = Awaited<ReturnType<typeof resolveConversationTarget>>;
+type AutomationReadCheckpoint = (target?: AutomationResolvedTarget, state?: ConversationState | null) => Promise<void>;
+function createAutomationReadCheckpoint(prisma: ReturnType<typeof getPrisma>, params: {
+  clientId: string; clientKey: string; role: string; resolved: AutomationResolvedTarget; requestId: string;
+}): AutomationReadCheckpoint {
+  const sameTarget = (target: AutomationResolvedTarget) => Boolean(target.winner &&
+    target.winner.id === params.resolved.winner?.id &&
+    String(target.winner.historyVisibleAfter ?? "") === String(params.resolved.winner?.historyVisibleAfter ?? ""));
+  return async (target, state) => {
+    if ((target && !sameTarget(target)) || (state !== undefined && !isAutomationConversation(state))) throw new AutomationReadChanged();
+    const current = await resolveConversationTarget(prisma, {
+      clientId: params.clientId, clientKey: params.clientKey, rawWaId: params.resolved.resolvedWaId,
+      requestId: params.requestId, source: "app_automation_read_checkpoint",
+    });
+    if (!sameTarget(current)) throw new AutomationReadChanged();
+    const currentState = await loadInboxConversationState(prisma, {
+      clientId: params.clientId, clientKey: params.clientKey, waId: current.resolvedWaId,
+      channel: serializeInboxChannelFields(current.winner).channel,
+    });
+    if (!isAutomationConversation(currentState) || !await resolveAutomationReadPermission(prisma, params.clientId, params.role)) throw new AutomationReadChanged();
+  };
+}
+
 async function buildConversationDetailPayload(
   prisma: ReturnType<typeof getPrisma>,
   params: {
@@ -35700,6 +35742,7 @@ async function buildConversationDetailPayload(
     requestId: string;
     source: string;
     latency?: ChannelLatencyProfiler | null;
+    validateAutomationRead?: AutomationReadCheckpoint;
   }
 ) {
   const defaultsStartedAt = channelLatencyNow();
@@ -35727,6 +35770,7 @@ async function buildConversationDetailPayload(
       )
     : null;
   params.latency?.duration("detailRuntimeConversation", runtimeConversationStartedAt);
+  await params.validateAutomationRead?.(resolved, conversation);
   const detailWaIds = Array.from(
     new Set(
       [
@@ -36110,6 +36154,7 @@ async function buildContactTimelinePayload(
     cursor: ContactTimelineCursor | null;
     requestId: string;
     source: string;
+    validateAutomationRead?: AutomationReadCheckpoint;
   }
 ) {
   const resolved = await resolveConversationTarget(prisma, {
@@ -36119,6 +36164,7 @@ async function buildContactTimelinePayload(
     requestId: params.requestId,
     source: params.source,
   });
+  await params.validateAutomationRead?.(resolved);
   const detailWaIds = Array.from(
     new Set(
       [

@@ -4,7 +4,7 @@
 
 O direcionamento final substitui **tanto a matriz departamental quanto a alternativa ADMIN-only** abaixo. Com `allowAutomationConversationsInInbox=true`, SUPERVISOR/ADMIN autenticados do próprio tenant acompanham BOT somente no filtro Automação, sem exigir vínculo departamental. AGENT não recebe exceção. Default false; gestão ADMIN. O campo departmentId não é usado como autorização desta leitura, portanto não há marcador de destino nem nova regra departamental. As regras de departamento/capacidade continuam valendo nas intervenções explícitas existentes.
 
-**LOCAL VALIDATED / NOT DEPLOYED**, conforme [implementação e evidências](INBOX_AUTOMATION_LOCAL_2026-09-29.md). A correção 91230f88 permanece separada. A demanda maior de intervenção coordenada com resposta automática em andamento continua pendente; esta chave não cancela envios nem altera esse contrato. Campanhas/CRA aguardam validação funcional do owner; SECULT encerrada.
+**LOCAL VALIDATED / NOT DEPLOYED**, conforme [implementação e evidências](INBOX_AUTOMATION_LOCAL_2026-09-29.md). A correção 91230f88 permanece separada. A limitação técnica de intervenção coordenada com resposta automática em andamento continua pendente, separada da frente maior já registrada; esta chave não cancela envios nem altera esse contrato. Campanhas/CRA aguardam validação funcional do owner; SECULT encerrada.
 
 Os registros a seguir são histórico da proposta/auditoria, superados apenas onde conflitarem com o escopo vigente.
 

@@ -201,3 +201,89 @@ test("existing explicit transfer retains human lifecycle and does not depend on 
  const state=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});assert.equal(state.mode,"HUMAN");assert.equal(state.assignedUserId,b.id);assert.equal(state.status,"IN_PROGRESS");
  assert.equal(externalCalls,0);
 });
+
+test("audit: delayed BOT event never becomes human content after CLOSED/HUMAN, aliases or revocation",async()=>{
+ const {setPrismaForTesting}=await import("../db.js");
+ for(const status of ["CLOSED","IN_PROGRESS"]) for(const enabled of [true,false]){
+  const f=await bot();await enable(enabled);const seen:string[]=[];
+  const socket={readyState:WebSocket.OPEN,on(){return this;},send(v:string){seen.push(v);},close(){},ping(){},terminate(){}} as unknown as WebSocket;
+  addConnection(socket,{userId:supervisor.id,clientId:client.id,email:supervisor.email,role:supervisor.role});
+  let enter!:()=>void,release!:()=>void;const reached=new Promise<void>(r=>enter=r),gate=new Promise<void>(r=>release=r);let once=true;
+  const delayed=prisma.$extends({query:{conversationRuntimeState:{async findFirst({args,query}){if(once){once=false;enter();await gate;}return query(args);}}}});
+  setPrismaForTesting(delayed as any);
+  const event:any={type:"message.created",clientId:client.id,waId:f.waId+"@s.whatsapp.net",waIdCanonical:f.waId,mode:"BOT",handoffStatus:"none",humanInboxVisible:false,message:{inboxVisibility:"management_only",bodyText:"restricted-old-bot",createdAt:new Date().toISOString()}};
+  const pending=publishRealtimeEventAsync(event);
+  await reached;await prisma.conversationRuntimeState.update({where:{id:f.state.id},data:{status:status as any,mode:status==="CLOSED"?"BOT":"HUMAN",handoffStatus:status==="CLOSED"?"NONE":"ACTIVE"}});release();await pending;setPrismaForTesting(prisma);
+  assert(!seen.some(x=>x.includes("restricted-old-bot")),JSON.stringify({status,enabled,seen}));
+  if(!enabled)assert.equal(seen.length,0);
+  seen.length=0;
+  if(status==="IN_PROGRESS"){
+   await publishRealtimeEventAsync({...event,waId:f.waId,mode:"HUMAN",handoffStatus:"active",humanInboxVisible:true,message:{...event.message,inboxVisibility:"human_timeline",bodyText:"legitimate-human"}});
+   assert(seen.some(x=>x.includes("legitimate-human")));
+  }
+  if(status==="CLOSED"){
+   await publishRealtimeEventAsync({type:"conversation.handoff.updated",clientId:client.id,waId:f.waId,mode:"BOT",status:"CLOSED",handoffStatus:"none",updatedAt:new Date().toISOString(),reason:"legitimate-closure"});
+   assert(seen.some(x=>x.includes("legitimate-closure")));
+  }
+  closeRealtimeConnectionsForClient(client.id,"test_complete");
+ }
+});
+
+test("audit: REST BOT grant cannot survive transition or revocation between authorization and builder/media",async()=>{
+ const {setPrismaForTesting}=await import("../db.js");
+ const outsideDepartment=await prisma.department.create({data:{clientId:client.id,name:"Outside",slug:"outside-audit"}});
+ for(const suffix of ["","/timeline","/media-audit"]) for(const change of ["human","revoke"]){
+  await enable(true);const f=await bot("web_session");
+  let route=f.route+suffix;
+  if(suffix==="/media-audit"){
+   const id=f.state.id+"-audit-media",content=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ5kAAAAASUVORK5CYII=","base64");
+   const media=await storeWebSessionMediaFile({clientId:client.id,messageId:id,content,mimeType:"image/png",fileName:"synthetic.png",kind:"image"});
+   await prisma.inboundMessage.create({data:{clientId:client.id,waId:f.waId,waIdCanonical:f.waId,messageId:id,type:"IMAGE",allowlistHit:true,rawPayload:{media}}});
+   route=f.route+"/messages/"+id+"/media";
+  }
+  let enter!:()=>void,release!:()=>void;const reached=new Promise<void>(r=>enter=r),gate=new Promise<void>(r=>release=r);let once=true;
+  const delayed=prisma.$extends({query:{tenantOperationalConfig:{async findUnique({args,query}){const row=await query(args);if(once){once=false;enter();await gate;}return row;}}}});
+  setPrismaForTesting(delayed as any);
+  const pending=fetch(base+route,{headers:{authorization:`Bearer ${issueClientAuthToken(supervisor,`${supervisor.id}-session`)}`}});
+  await reached;
+  if(change==="human")await prisma.conversationRuntimeState.update({where:{id:f.state.id},data:{mode:"HUMAN",status:"IN_PROGRESS",handoffStatus:"ACTIVE",departmentId:outsideDepartment.id,assignedUserId:b.id,assignedAt:new Date()}});
+  else await saveAllowAutomationConversationsInInbox({prisma,clientId:client.id,enabled:false});
+  release();const result=await pending;const body=await result.text();setPrismaForTesting(prisma);
+  assert([403,404].includes(result.status),JSON.stringify({suffix,change,status:result.status,body}));
+  assert(!body.includes("current service"));
+ }
+});
+
+test("audit: revocation or handoff after payload/media lookup is denied before response headers",async()=>{
+ const {setPrismaForTesting}=await import("../db.js");
+ for(const kind of ["detail","timeline","media"]) for(const revoke of [true,false]){
+  await enable(true);const f=await bot("web_session");let route=f.route+(kind==="timeline"?"/timeline":"");
+  if(kind==="media"){
+   const id=f.state.id+"-late-media",content=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ5kAAAAASUVORK5CYII=","base64");
+   const media=await storeWebSessionMediaFile({clientId:client.id,messageId:id,content,mimeType:"image/png",fileName:"synthetic.png",kind:"image"});
+   await prisma.inboundMessage.create({data:{clientId:client.id,waId:f.waId,waIdCanonical:f.waId,messageId:id,type:"IMAGE",allowlistHit:true,rawPayload:{media}}});
+   route=f.route+"/messages/"+id+"/media";
+  }
+  let enter!:()=>void,release!:()=>void;const reached=new Promise<void>(r=>enter=r),gate=new Promise<void>(r=>release=r);let once=true;
+  const pause=async(result:any)=>{if(once){once=false;enter();await gate;}return result;};
+  const delayed=prisma.$extends({query:{inboundMessage:{async findMany({args,query}){const r=await query(args);return kind!=="media"?pause(r):r;},async findFirst({args,query}){const r=await query(args);return kind==="media"?pause(r):r;}}}});
+  setPrismaForTesting(delayed as any);
+  const pending=fetch(base+route,{headers:{authorization:`Bearer ${issueClientAuthToken(supervisor,`${supervisor.id}-session`)}`}});
+  await reached;
+  if(revoke)await saveAllowAutomationConversationsInInbox({prisma,clientId:client.id,enabled:false});
+  else await prisma.conversationRuntimeState.update({where:{id:f.state.id},data:{mode:"HUMAN",status:"IN_PROGRESS",handoffStatus:"ACTIVE",assignedUserId:b.id,assignedAt:new Date(),departmentId:null}});
+  release();const response=await pending;const body=await response.text();setPrismaForTesting(prisma);
+  assert.equal(response.status,404,JSON.stringify({kind,revoke,body}));assert(!body.includes("current service"));
+ }
+});
+
+test("audit: unchanged BOT grant remains readable without mutation and human reads keep their rules",async()=>{
+ await enable(true);const f=await bot();const before=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}});
+ for(const actor of [admin,supervisor])for(const suffix of ["","/timeline"]){
+  const r=await request("GET",f.route+suffix,actor);assert.equal(r.status,200);assert(!JSON.stringify(r.body).includes("private before cutoff"));
+ }
+ assert.deepEqual(await prisma.conversationRuntimeState.findUniqueOrThrow({where:{id:f.state.id}}),before);
+ await prisma.conversationRuntimeState.update({where:{id:f.state.id},data:{mode:"HUMAN",handoffStatus:"ACTIVE",status:"IN_PROGRESS",departmentId:department.id,queueId:queue.id,assignedUserId:supervisor.id,assignedAt:new Date()}});
+ await enable(false);
+ for(const suffix of ["","/timeline"])assert.equal((await request("GET",f.route+suffix,supervisor)).status,200);
+});

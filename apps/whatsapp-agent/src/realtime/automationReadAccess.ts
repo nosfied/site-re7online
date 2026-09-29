@@ -8,7 +8,8 @@ export async function resolveAutomationRealtimeReaders(prisma: PrismaClient, eve
   if (!("waId" in event) || !event.waId) return null;
   const identities = [...new Set([event.waId, event.waIdCanonical, ...buildWaIdLookup(event.waId).variants].filter((x): x is string => Boolean(x)))];
   const state = await prisma.conversationRuntimeState.findFirst({ where: { clientId: event.clientId, OR: [{ waId: { in: identities } }, { waIdCanonical: { in: identities } }] } });
-  const wasBot = state?.status !== "CLOSED" && "mode" in event && isAutomationConversation({ mode: event.mode, handoffStatus: "handoffStatus" in event ? event.handoffStatus : null,
+  // Event provenance survives lifecycle transitions: never upgrade an old BOT payload to human delivery.
+  const wasBot = "mode" in event && isAutomationConversation({ mode: event.mode, status: event.type === "conversation.handoff.updated" ? event.status : undefined, handoffStatus: "handoffStatus" in event ? event.handoffStatus : null,
     assignedUserId: "assignedUserId" in event ? event.assignedUserId : null });
   if (!isAutomationConversation(state) && !wasBot) return null;
   const allowed = new Set<string>();

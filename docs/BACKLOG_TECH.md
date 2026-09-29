@@ -1,10 +1,14 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## Automação — auditoria dirigida de c6884100
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Confirmados e corrigidos localmente: evento BOT restrito após CLOSED escapava para caminho humano; leitura REST podia usar grant BOT após handoff fora do vínculo. Proveniência do evento preservada e checkpoints nos builders/antes de JSON e mídia. 4 novos testes dirigidos PASS e build backend PASS; sem repetir suítes anteriores. [Reprodução, correção e limites da autorização](saas/INBOX_AUTOMATION_LOCAL_2026-09-29.md#auditoria-dirigida-posterior-a-c6884100--corridas-de-leitura). Correção separada de c6884100/91230f88; sem push/deploy/ativação. Respostas automáticas em andamento são limitação técnica separada. Campanhas/CRA aguardam validação funcional do owner; inatividade no Guia continua pausada.
+
 ## CRA-PR — acompanhamento BOT, escopo final local
 
 **LOCAL VALIDATED / NOT DEPLOYED.** Decisão do owner substitui o gate departamental abaixo: SUPERVISOR/ADMIN do próprio tenant, sem vínculo departamental para leitura, somente filtro Automação, fora de TODAS; AGENT sem exceção. Default false, gestão ADMIN, helper transacional (36 escritores). [Implementação, provas e limites](saas/INBOX_AUTOMATION_LOCAL_2026-09-29.md). Código sobre 91230f88, revisão final aprovada para commit local separado, sem push/deploy. Matriz de operações e roteiro funcional registrados no relatório; código byte-idêntico ao validado.
 
-**Demanda maior mantida pendente:** coordenação entre intervenção humana e resposta automática em andamento; não resolvida pela chave de acompanhamento nem pela proteção de persistência 91230f88. Sem cancelamento prometido. Campanhas/CRA aguardam validação funcional do owner; SECULT encerrada; inatividade no Guia pausada; 6683 CLOSED.
+**Limitação técnica separada, sem redefinir a frente maior pendente:** coordenação entre intervenção humana e resposta automática em andamento; não resolvida pela chave de acompanhamento nem pela proteção de persistência 91230f88. Sem cancelamento prometido. Campanhas/CRA aguardam validação funcional do owner; SECULT encerrada; inatividade no Guia pausada; 6683 CLOSED.
 
 ## Acompanhamento BOT — verificação departamental sobre 91230f88
 

@@ -29,7 +29,7 @@ Revogação nega novas leituras/entregas. Na revalidação/polling, UI remove BO
 - Transferência explícita existente respeita escopo, responsável/papel e elegibilidade do destino; teste ADMIN→agente confirma transição humana. Não se alteraram handlers de claim, transfer, send ou lifecycle.
 - Composer continua condicionado a controle humano/responsabilidade e canal. Ler BOT não habilita envio; atender após claim usa o caminho anterior. Nenhum teste fez envio real. Transferência/claim local não chamou provider.
 
-**Limitação material preservada:** resposta automática em andamento pode ter sido submetida ou ainda vir a ser submetida após intervenção. 91230f88 protege persistência obsoleta, não cancela provider. A demanda maior de admissão/drain de resposta e coordenação com intervenção permanece aguardando revisão própria, separada deste acompanhamento. Não prometer interrupção instantânea por “Assumir”.
+**Limitação material preservada:** resposta automática em andamento pode ter sido submetida ou ainda vir a ser submetida após intervenção. 91230f88 protege persistência obsoleta, não cancela provider. A coordenação de admissão/resposta em andamento permanece uma limitação técnica separada, não uma redefinição da frente maior pendente. Não prometer interrupção instantânea por “Assumir”.
 
 ## Evidências locais
 
@@ -82,3 +82,27 @@ Referências: `http/routes.ts::hasConversationDepartmentAccess`, `canManageOwned
 **Resposta automática tardia:** limitação preexistente a este delta e registrada na correção 91230f88. Se a chamada já foi submetida antes de assumir/encaminhar, o contato pode receber a resposta automática depois da transição humana; não há cancelamento garantido. Há também lacuna anterior para resposta ainda não submetida quando o controle muda: a persistência protegida não constitui barreira atômica de admissão do envio. Esta implementação não toca os transportadores nem resolve essa coordenação. Não reenviar resposta incerta e não interpretar proteção de estado como garantia de ausência de resposta tardia.
 
 Estado final: **LOCAL VALIDATED / NOT DEPLOYED**; aceite funcional futuro separado. Campanhas/CRA continuam aguardando validação funcional do owner.
+
+
+## Auditoria dirigida posterior a c6884100 — corridas de leitura
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Dois riscos confirmados com reprodução negativa local sobre c6884100, sem consulta/mutação produtiva. Correção em commit separado; mantém o parent c6884100 e a correção 91230f88 distintos.
+
+1. **Realtime confirmado:** evento message.created de origem BOT/none com conteúdo management_only, bloqueado antes da resolução, seguido de runtime CLOSED, era liberado como payload humano ao SUPERVISOR. A condição `state?.status !== CLOSED` removia a proveniência BOT. Removida somente essa dependência do estado atual: evento identificado como automação permanece no caminho sem conteúdo (invalidação ou nenhuma entrega) mesmo após CLOSED/HUMAN. Chave revogada nega entrega. A identidade inclui waIdCanonical e aliases; eventos humanos legítimos permanecem no caminho humano anterior. O status declarado em conversation.handoff.updated distingue uma notificação legítima de encerramento (CLOSED) de message.created antigo de automação, que não pode perder sua origem. Não se reformulou o realtime humano amplo preexistente.
+2. **REST confirmado:** barreira na leitura inicial da chave seguida de transição para HUMAN em departamento alheio permitia que builder entregasse conteúdo sob a exceção BOT anterior. Agora a concessão BOT é vinculada à requisição: o builder valida seu alvo/estado resolvido e há nova verificação imediatamente antes do JSON/headers. Reutiliza resolveConversationTarget, loadInboxConversationState e resolveAutomationReadPermission; mesmo conversation ID e historyVisibleAfter, ainda BOT e chave válida. Se mudou para humano, a requisição anterior recebe 404; uma nova requisição passa pelas regras humanas/departamentais existentes, sem herdar o grant BOT. Falhas gerais de DB continuam pelo tratamento de erro; não viram sucesso vazio.
+
+Mídia local e suporte: checkpoint após resolver arquivo e antes dos headers; mídia remota: checkpoint antes da busca e após o provider devolver resposta, antes de repassar corpo/headers. Se negada depois da busca, cancela-se o corpo remoto ainda não repassado. Sem transação/lock durante provider ou streaming. Corte de histórico/management_only permanecem; mudança de alvo ou corte durante preparação nega esta requisição.
+
+**Momento e limite:** autorização é conferida nas leituras do checkpoint final anterior à entrega, não apenas antes da preparação. São leituras canônicas, não uma transação serializável entre banco e socket. Alterações posteriores às observações finais ou ao início da entrega não cancelam bytes já admitidos/recebidos; revogação não equivale a recolhimento de conteúdo. Não se promete atomicidade global entre alteração de política e rede nem interrupção retroativa de stream. Os testes demonstram as janelas solicitadas durante preparação e antes desse checkpoint, não todas as intercalações possíveis de infraestrutura. Nenhum mecanismo de envio automático foi alterado.
+
+### Evidência nova, sem reatribuir suítes anteriores
+
+- `automationConversations.test.ts`, seleção `--test-name-pattern='audit:'`: **4 PASS**, 0 falhas. Duas reproduções iniciais falharam antes da correção, confirmando os riscos.
+- Primeiro caso: 4 combinações CLOSED/HUMAN × chave ligada/desligada com barreira no resolvedor de evento, identidade com alias/canonical, conteúdo restrito nunca entregue; controles humanos legítimos e notificações explícitas de encerramento preservados.
+- Segundo: 6 combinações detalhe/timeline/mídia × handoff para fora do vínculo/revogação, entre autorização e builder/resolução.
+- Terceiro: 6 combinações detalhe/timeline/mídia × handoff/revogação após busca de conteúdo e antes dos headers.
+- Quarto: leitura BOT estável ADMIN/SUPERVISOR mantém sucesso/corte e não altera runtime; leitura humana autorizada continua com chave desligada.
+- Build backend final PASS. Frontend/worker não alterados; não repetidos smoke, build frontend, 36/22 históricos ou suítes do worker. Essas evidências permanecem da versão anterior nos seus escopos; não são novos PASS desta correção.
+- Provas privadas preservadas em `local-evidence/automation-audit-races/`, sem incluí-las no Git. Não houve teste com provider real; a revisão de streaming remoto foi de código, enquanto mídia local teve barreiras reais no harness.
+
+**Pendências distintas:** (a) limitação técnica preexistente de resposta automática já submetida ou ainda em admissão durante intervenção, não resolvida aqui; (b) frente de Campanhas/CRA aguardando validação funcional do owner e inatividade no Guia pausada, mantidas como registradas. O rótulo anterior “demanda maior” para (a) foi corrigido; não substitui nem redefine as frentes pendentes. SECULT aceita/encerrada; 6683 CLOSED.
