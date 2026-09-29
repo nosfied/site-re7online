@@ -6,6 +6,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getPrisma } from "../db.js";
+import { syncUserDepartmentMemberships } from "../users/departmentMemberships.js";
 import { issueClientAuthToken } from "../auth/clientAuth.js";
 import { buildAppAuthSessionExpiresAt } from "../auth/sessionPolicy.js";
 import { saveAgentSignatureSettings, saveAllowAgentOwnClosedConversations } from "../config/tenantOperationalConfig.js";
@@ -165,6 +166,154 @@ test("realtime resolves current ownership, denies other tenants and stops delive
  await request("PUT",settingsRoute,supervisor,{allowAgentOwnClosedConversations:false});await publishRealtimeEventAsync(event);await barrier();assert.equal(received.get(a.id)!.filter(e=>e.type==="message.created").length,1);assert(received.get(a.id)!.some(e=>e.type==="inbox.access.updated"));
  for(const socket of sockets)socket.close();closeRealtimeConnectionsForClient(client.id,"test_complete");closeRealtimeConnectionsForClient(other.id,"test_complete");
  });
+
+
+function barrier() {
+ let release!: () => void;
+ const promise = new Promise<void>(resolve => { release = resolve; });
+ return { promise, release };
+}
+async function makeActive(f: any, owner = a) {
+ await prisma.conversationRuntimeState.update({where:{id:f.state.id},data:{
+  status:"IN_PROGRESS",closedAt:null,mode:"HUMAN",assignedUserId:owner.id,
+  departmentId:department.id,queueId:queue.id,
+  answers:{operationalProtocol:{...f.cycle,cycleId:crypto.randomUUID()}},
+ }});
+}
+function syntheticMessage(f: any) {
+ return {type:"message.created",clientId:client.id,waId:f.waId,humanInboxVisible:true,
+  message:{inboxVisibility:"human_timeline",direction:"INBOUND",type:"TEXT",status:"RECEIVED",
+   bodyText:"barrier message",createdAt:"2026-09-28T11:00:00Z"}} as any;
+}
+async function withPendingAuthorization(f: any, during: () => Promise<void>) {
+ const entered=barrier(), resume=barrier();let armed=true;
+ const original=prisma.user.findMany;
+ // Pause after the current state and users were read, before delivery of that grant.
+ prisma.user.findMany=((...args: any[]) => (original as any)(...args).then(async (rows: unknown) => {
+  if (armed) { armed=false; entered.release(); await resume.promise; }
+  return rows;
+ })) as typeof original;
+ const sent:any[]=[];
+ const socket={readyState:WebSocket.OPEN,on(){return this;},send(raw:string){sent.push(JSON.parse(raw));},close(){},ping(){},terminate(){}} as unknown as WebSocket;
+ addConnection(socket,{userId:a.id,clientId:client.id,email:a.email,role:"AGENT"});
+ const pending=publishRealtimeEventAsync(syntheticMessage(f));
+ try { await entered.promise;await during();resume.release();await pending;return sent; }
+ finally {resume.release();await pending;prisma.user.findMany=original;closeRealtimeConnectionsForClient(client.id,"barrier_complete");}
+}
+
+test("permission-only config read failure denies CLOSED but preserves active Inbox and general errors",async()=>{
+ const active=await fixture(),closed=await fixture();await makeActive(active);
+ await saveAllowAgentOwnClosedConversations({prisma,clientId:client.id,enabled:true});
+ const original=prisma.tenantOperationalConfig.findUnique;let injected=0;
+ // The same table backs other settings. Fail ONLY this resolver, not those reads.
+ prisma.tenantOperationalConfig.findUnique=((...args: any[])=>{
+  if(new Error().stack?.includes("resolveAllowAgentOwnClosedConversations")) {injected++;throw Error("synthetic own-closed permission read unavailable");}
+  return (original as any)(...args);
+ }) as typeof original;
+ try {
+  const list=await request("GET","/app/conversations");assert.equal(list.status,200);
+  assert.equal(list.body.allowAgentOwnClosedConversations,false);
+  assert(list.body.items.some((item:any)=>item.waId===active.waId));
+  assert(!list.body.items.some((item:any)=>item.waId===closed.waId));
+  assert.equal(list.body.filterCounts.CLOSED,0);
+  assert.equal((await request("GET",active.route)).status,200);
+  assert.equal((await request("GET",closed.route)).status,500);
+  assert(injected>=2);
+ } finally {prisma.tenantOperationalConfig.findUnique=original;}
+ const findConversations=prisma.conversation.findMany;
+ prisma.conversation.findMany=()=>{throw Error("synthetic general conversation read unavailable");};
+ try {assert.equal((await request("GET","/app/conversations")).status,500);}
+ finally {prisma.conversation.findMany=findConversations;}
+});
+
+for(const enabled of [false,true]) {
+ test(`independent conversation handoff preserves pending A message; permission=${enabled}`,{timeout:10000},async()=>{
+  await saveAllowAgentOwnClosedConversations({prisma,clientId:client.id,enabled});
+  const first=await fixture(),second=await fixture();await makeActive(first);await makeActive(second);
+  const sent=await withPendingAuthorization(first,async()=>{
+   await publishRealtimeEventAsync({type:"conversation.handoff.updated",clientId:client.id,waId:second.waId,status:"IN_PROGRESS",updatedAt:new Date().toISOString()});
+  });
+  assert.equal(sent.filter(event=>event.type==="message.created"&&event.waId===first.waId).length,1);
+ });
+}
+for(const transition of ["transfer","reentry"] as const) {
+ test(`same conversation ${transition} blocks old pending authorization`,{timeout:10000},async()=>{
+  await saveAllowAgentOwnClosedConversations({prisma,clientId:client.id,enabled:true});
+  const f=await fixture();if(transition==="transfer")await makeActive(f);
+  const sent=await withPendingAuthorization(f,async()=>{
+   await makeActive(f,b);
+   // Handoff with a canonical identity still invalidates the pending raw-identity event.
+   await publishRealtimeEventAsync({type:"conversation.handoff.updated",clientId:client.id,waId:f.waId,waIdCanonical:f.waId,status:"IN_PROGRESS",assignedUserId:b.id,updatedAt:new Date().toISOString()});
+  });
+  assert.equal(sent.filter(event=>event.type==="message.created").length,0);
+ });
+}
+test("tenant revocation blocks pending authorization for own CLOSED",{timeout:10000},async()=>{
+ await saveAllowAgentOwnClosedConversations({prisma,clientId:client.id,enabled:true});const f=await fixture();
+ const sent=await withPendingAuthorization(f,async()=>{
+  assert.equal((await request("PUT",settingsRoute,supervisor,{allowAgentOwnClosedConversations:false})).status,200);
+ });
+ assert.equal(sent.filter(event=>event.type==="message.created").length,0);
+ assert(sent.some(event=>event.type==="inbox.access.updated"));
+});
+
+test("snapshot department requires current canonical access across list detail timeline media and open socket",async()=>{
+ await saveAllowAgentOwnClosedConversations({prisma,clientId:client.id,enabled:true});
+ const f=await fixture();const otherDepartment=await prisma.department.create({data:{clientId:client.id,name:"Other synthetic",slug:crypto.randomUUID()}});
+ const messageId=`${f.state.id}-department-image`,content=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ5kAAAAASUVORK5CYII=","base64");
+ const media=await storeWebSessionMediaFile({clientId:client.id,messageId,content,mimeType:"image/png",fileName:"synthetic.png",kind:"image"});
+ await prisma.inboundMessage.create({data:{clientId:client.id,waId:f.waId,waIdCanonical:f.waId,messageId,type:"IMAGE",allowlistHit:true,rawPayload:{media},createdAt:new Date("2026-09-28T11:00:00Z")}});
+ const socket=new WebSocket(base.replace("http:","ws:")+"/app/realtime?token="+encodeURIComponent(issueClientAuthToken(a,`${a.id}-session`)));
+ const received:any[]=[];socket.on("message",raw=>received.push(JSON.parse(String(raw))));
+ await new Promise<void>((resolve,reject)=>{socket.once("open",resolve);socket.once("error",reject);});
+ const sync=async(ids:string[])=>syncUserDepartmentMemberships(prisma,{clientId:client.id,userId:a.id,departmentIds:ids,primaryDepartmentId:ids[0]??null});
+ const check=async(allowed:boolean,label:string)=>{
+  const list=await request("GET","/app/conversations?status=CLOSED");assert.equal(list.status,200,label);
+  assert.equal(list.body.items.some((i:any)=>i.waId===f.waId),allowed,label);
+  if(!allowed)assert.equal(list.body.filterCounts.CLOSED,0,label);
+  for(const suffix of ["","/timeline",`/messages/${messageId}/media`]){
+   const result=await fetch(base+f.route+suffix,{headers:{authorization:`Bearer ${issueClientAuthToken(a,`${a.id}-session`)}`}});
+   assert.equal(result.status,allowed?200:404,label+suffix);await result.arrayBuffer();
+  }
+  const before=received.filter(e=>e.type==="message.created").length;
+  await publishRealtimeEventAsync(syntheticMessage(f));
+  await new Promise<void>(resolve=>{socket.once("pong",()=>resolve());socket.ping();});
+  assert.equal(received.filter(e=>e.type==="message.created").length,before+(allowed?1:0),label+" socket");
+ };
+ try {
+  // No memberships yet: legacy User.departmentId is accepted by the canonical resolver.
+  await check(true,"legacy department, cleared current state");
+  await sync([department.id]);await check(true,"active membership");
+  await sync([]);await check(false,"removed membership and legacy field");
+  await sync([otherDepartment.id]);await check(false,"other department");
+  await sync([department.id]);
+  await prisma.department.update({where:{id:department.id},data:{isActive:false}});await check(false,"inactive department");
+  await prisma.department.update({where:{id:department.id},data:{isActive:true}});
+  await prisma.completedServiceSnapshot.update({where:{id:f.snapshot.id},data:{departmentId:null}});
+  // Only this closure lacks proof; other authorized closures remain visible.
+  assert.equal((await request("GET",f.route)).status,404);
+  assert.equal((await resolveRealtimeAgentReaders(prisma,syntheticMessage(f),[a.id])).size,0);
+  await prisma.completedServiceSnapshot.update({where:{id:f.snapshot.id},data:{departmentId:department.id}});await check(true,"restored valid membership");
+  await sync([]);
+  const active=await fixture();await makeActive(active);
+  assert.equal((await request("GET",active.route)).status,200,"active assignee exemption unchanged");
+  assert.equal((await request("GET",f.route,supervisor)).status,403,"supervisor still requires current department scope");
+  assert.equal((await request("GET",f.route,admin)).status,200,"admin unchanged");
+ } finally {
+  await prisma.department.update({where:{id:department.id},data:{isActive:true}});await sync([department.id]);
+  socket.close();closeRealtimeConnectionsForClient(client.id,"department_test_complete");
+ }
+});
+
+test("department removal while CLOSED authorization is pending denies delivery",async()=>{
+ await saveAllowAgentOwnClosedConversations({prisma,clientId:client.id,enabled:true});const f=await fixture();
+ try {
+  const sent=await withPendingAuthorization(f,async()=>{
+   await syncUserDepartmentMemberships(prisma,{clientId:client.id,userId:a.id,departmentIds:[],primaryDepartmentId:null});
+  });
+  assert.equal(sent.filter(event=>event.type==="message.created").length,0);
+ } finally {await syncUserDepartmentMemberships(prisma,{clientId:client.id,userId:a.id,departmentIds:[department.id],primaryDepartmentId:department.id});}
+});
 
  test("config validation, inactive user/client and configuration read error fail closed",async()=>{
  const f=await fixture();

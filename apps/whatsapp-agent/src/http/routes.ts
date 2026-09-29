@@ -34930,7 +34930,11 @@ async function buildConversationListPayload(
   }
 ) {
   const allowAgentOwnClosedConversations = isAgentRole(params.userRole)
-    ? await resolveAllowAgentOwnClosedConversations({ prisma, clientId: params.clientId }) : false;
+    ? await resolveAllowAgentOwnClosedConversations({ prisma, clientId: params.clientId }).catch(error => {
+        // Only this optional grant degrades to false. Other Inbox dependencies still fail normally.
+        logger.error({ event: "inbox.own_closed.permission_read_failed", clientId: params.clientId, message: (error as Error).message });
+        return false;
+      }) : false;
   const defaultsStartedAt = channelLatencyNow();
   const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, params.clientId);
   recordInboxListTiming(params.clientId, "defaults", defaultsStartedAt);

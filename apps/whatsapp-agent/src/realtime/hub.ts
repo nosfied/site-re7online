@@ -138,18 +138,44 @@ export function closeRealtimeConnectionsForClient(clientId: string, reason: stri
   }
 }
 
-const accessEpoch = new Map<string, number>();
+const tenantAccessEpoch = new Map<string, number>();
+const conversationAccessEpoch = new Map<string, number>();
+
+function conversationEpochKeys(event: InboxRealtimeEvent): string[] {
+  if (!("waId" in event)) return [];
+  return [...new Set([event.waId, event.waIdCanonical].flatMap(value => {
+    const raw = value?.trim();
+    if (!raw) return [];
+    // Preserve synthetic channel identities; normalize formatted phone identities only.
+    const identity = /^[+\d\s()-]+$/.test(raw) ? raw.replace(/\D/g, "") : raw.toLowerCase();
+    return [JSON.stringify([event.clientId, identity])];
+  }))];
+}
+
+type AccessEpoch = { tenant: number; conversations: Array<[string, number]> };
+function accessEpochChanged(clientId: string, epoch: AccessEpoch) {
+  return (tenantAccessEpoch.get(clientId) ?? 0) !== epoch.tenant ||
+    epoch.conversations.some(([key, version]) => (conversationAccessEpoch.get(key) ?? 0) !== version);
+}
 export function publishRealtimeEvent(event: InboxRealtimeEvent): void {
   void publishRealtimeEventAsync(event);
 }
 
 /** Same publication path; allows local behavioral tests to await actual delivery. */
 export function publishRealtimeEventAsync(event: InboxRealtimeEvent) {
-  if (event.type === "inbox.access.updated" || event.type === "conversation.handoff.updated") accessEpoch.set(event.clientId, (accessEpoch.get(event.clientId) ?? 0) + 1);
-  const epoch = accessEpoch.get(event.clientId) ?? 0;
+  const keys = conversationEpochKeys(event);
+  if (event.type === "inbox.access.updated") {
+    tenantAccessEpoch.set(event.clientId, (tenantAccessEpoch.get(event.clientId) ?? 0) + 1);
+  } else if (event.type === "conversation.handoff.updated") {
+    for (const key of keys) conversationAccessEpoch.set(key, (conversationAccessEpoch.get(key) ?? 0) + 1);
+  }
+  const epoch: AccessEpoch = {
+    tenant: tenantAccessEpoch.get(event.clientId) ?? 0,
+    conversations: keys.map(key => [key, conversationAccessEpoch.get(key) ?? 0]),
+  };
   return deliverRealtimeEvent(event, epoch).catch(error => logger.warn({ event: "realtime.access.failed", clientId: event.clientId, message: (error as Error).message }));
 }
-async function deliverRealtimeEvent(event: InboxRealtimeEvent, epoch: number) {
+async function deliverRealtimeEvent(event: InboxRealtimeEvent, epoch: AccessEpoch) {
   const agentIds = [...new Set([...connections.values()].filter(c => c.clientId === event.clientId && c.role === "AGENT").map(c => c.userId))];
   const agentReaders = event.type !== "inbox.access.updated" && agentIds.length
     ? await resolveRealtimeAgentReaders(getPrisma(), event, agentIds).catch(() => new Set<string>()) : new Set<string>();
@@ -166,7 +192,7 @@ async function deliverRealtimeEvent(event: InboxRealtimeEvent, epoch: number) {
       continue;
     }
     if (connection.role === "AGENT" && event.type !== "inbox.access.updated") {
-      if ((accessEpoch.get(event.clientId) ?? 0) !== epoch || !agentReaders.has(connection.userId)) {
+      if (accessEpochChanged(event.clientId, epoch) || !agentReaders.has(connection.userId)) {
         if (event.type === "conversation.handoff.updated") connection.socket.send(JSON.stringify({ type: "inbox.access.updated", clientId: event.clientId }));
         continue;
       }

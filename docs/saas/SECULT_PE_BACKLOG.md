@@ -1,5 +1,48 @@
 # SECULT-PE Backlog
 
+## SECULT — decisão departamental aplicada localmente — 29/09/2026
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Owner definiu vínculo departamental atual
+obrigatório ao departamento do snapshot do encerramento. Perda efetiva do vínculo
+revoga consulta; departamento ausente/inativo não concede exceção. Helper único
+reutiliza resolvedor canônico com fallback legado, sem estender dispensa de assignee
+atual ao responsável histórico. Lista, contagens, detalhe, timeline, mídia e realtime
+cobertos; ativos e SUPERVISOR/ADMIN preservados. Mesma Inbox/filtro/histórico.
+
+Código final: **31/31 testes afetados PASS**, build TypeScript backend PASS e smoke
+AGENT autenticado com revogação do vínculo e remoção automática do painel/lista.
+UI usa polling existente, com atraso visual e sem promessa de revogação instantânea
+do conteúdo já exibido. Novas consultas/entregas são negadas. Duas correções anteriores
+revalidadas na suíte. As 112 provas/smoke anteriores ficam como histórico, sem
+reatribuição integral ao delta; limites de tipagem frontend/worker preservados.
+[Decisão, provas e limites](SECULT_OWN_CLOSED_LOCAL_2026-09-28.md). Sem commit/push/deploy/ativação.
+API/worker/scripts compatíveis exigidos antes de ativar; rollback a escritores
+antigos perde a garantia. Campanhas/CRA aguardam owner; DB-only encerrada, inatividade
+no Guia pausada; 6683 CLOSED. A pendência departamental abaixo foi resolvida por esta
+nova decisão; registros anteriores preservados como histórico.
+
+
+## SECULT — revisão local de 48e0fc2a — 29/09/2026
+
+**CORREÇÕES LOCAIS VALIDADAS / NOT DEPLOYED; decisão departamental pendente.**
+Falha isolada da nova permissão nega CLOSED sem derrubar os caminhos ativos da
+Inbox; erros gerais continuam propagados. Realtime separa invalidação por conversa
+e por tenant: handoff de B preserva mensagem pendente de A; transferência/reentrada
+na própria conversa e revogação continuam protegidas. Reprodução: 3 falhas em seis
+casos antes; 6/6 depois. Regressões afetadas 25/25 e build TypeScript backend PASS.
+As 112 provas e smoke anteriores permanecem históricas, sem reatribuição integral
+ao delta. UI/worker não alterados nem novamente validados nesta revisão.
+
+Não foi encontrado contrato explícito estendendo a exceção departamental do assignee
+atual ao responsável histórico. A afirmação documental anterior foi corrigida;
+regra não alterada silenciosamente. Owner deve definir se perda de vínculo revoga
+consulta própria CLOSED antes de preparar deploy. [Detalhes, referências e evidências](SECULT_OWN_CLOSED_LOCAL_2026-09-28.md).
+API/worker/scripts compatíveis continuam necessários; rollback para escritores
+antigos perde garantia de revogação. Campanhas/CRA aguardam owner; DB-only encerrada,
+inatividade no Guia pausada; 6683 CLOSED. Sem commit/push/deploy ou ativação.
+Os registros anteriores abaixo descrevem as respectivas etapas históricas.
+
+
 ## SECULT — funcionalidade local sobre f06d49cb — 28/09/2026
 
 **LOCAL VALIDATED / NOT DEPLOYED.** Consulta AGENT de sua conversa atualmente CLOSED,
