@@ -1,5 +1,9 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## Automação — publicação para auditoria GitHub
+
+**PUBLISHED FOR REVIEW / NOT DEPLOYED.** Código até d06a92b8, mantendo c6884100 e 91230f88 separados; [pacote versionado do worker mínimo e relatório final](reviews/automation-worker-backport/README.md). Sem deploy, ativação ou novos testes nesta publicação. Limitação de respostas automáticas separada; Campanhas/CRA aguardam owner, inatividade no Guia pausada.
+
 ## Automação — auditoria dirigida de c6884100
 
 **LOCAL VALIDATED / NOT DEPLOYED.** Confirmados e corrigidos localmente: evento BOT restrito após CLOSED escapava para caminho humano; leitura REST podia usar grant BOT após handoff fora do vínculo. Proveniência do evento preservada e checkpoints nos builders/antes de JSON e mídia. 4 novos testes dirigidos PASS e build backend PASS; sem repetir suítes anteriores. [Reprodução, correção e limites da autorização](saas/INBOX_AUTOMATION_LOCAL_2026-09-29.md#auditoria-dirigida-posterior-a-c6884100--corridas-de-leitura). Correção separada de c6884100/91230f88; sem push/deploy/ativação. Respostas automáticas em andamento são limitação técnica separada. Campanhas/CRA aguardam validação funcional do owner; inatividade no Guia continua pausada.

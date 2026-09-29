@@ -1,0 +1,285 @@
+diff --git a/apps/whatsapp-agent/src/conversation/conversation.types.ts b/apps/whatsapp-agent/src/conversation/conversation.types.ts
+--- a/apps/whatsapp-agent/src/conversation/conversation.types.ts
++++ b/apps/whatsapp-agent/src/conversation/conversation.types.ts
+@@ -1,3 +1,4 @@
++import type { RuntimeWriteToken } from "./runtimeWriteFence.js";
+ export type ConversationIntent = "pricing" | "support" | "handoff" | "unknown";
+ export type ConversationFlow = "quote_site" | `chatbot:${string}`;
+ export type ConversationOperationalStatus =
+@@ -189,6 +190,8 @@
+ };
+ 
+ export type ConversationState = {
++  /** Read-only PostgreSQL revision; never part of persisted automation answers. */
++  runtimeWriteToken?: RuntimeWriteToken;
+   clientKey?: string;
+   conversationKey?: string;
+   waId: string;
+diff --git a/apps/whatsapp-agent/src/queue/assignmentPolicy.ts b/apps/whatsapp-agent/src/queue/assignmentPolicy.ts
+--- a/apps/whatsapp-agent/src/queue/assignmentPolicy.ts
++++ b/apps/whatsapp-agent/src/queue/assignmentPolicy.ts
+@@ -39,7 +39,7 @@
+   | { ok: false; status: number; code: string; message: string };
+ 
+ export type BalancedQueueAssignmentResult =
+-  | { applied: false; reason: "manual" | "already_assigned" | "status_not_waiting" | "no_policy" | "no_eligible_agent" }
++  | { applied: false; reason: "manual" | "already_assigned" | "status_not_waiting" | "no_policy" | "no_eligible_agent" | "automation_active" | "runtime_changed" }
+   | {
+       applied: true;
+       mode: "round_robin" | "least_active";
+@@ -604,12 +604,25 @@
+     const current = await params.prisma.conversationRuntimeState.findUnique({
+       where: { id: params.runtimeStateId },
+       select: {
++        clientId: true,
++        mode: true,
++        handoffStatus: true,
++        updatedAt: true,
+         assignedUserId: true,
+         status: true,
+         departmentId: true,
+         queueId: true,
+       },
+     });
++    // WAITING also exists in BOT reentry. It is not by itself a human queue entry.
++    // Legacy accepted handoff can still carry BOT; pending confirmation alone
++    // remains automation (conversation.service.shouldAutoReply / handleHandoff).
++    if (!current || current.clientId !== params.clientId) {
++      return { applied: false, reason: "runtime_changed" };
++    }
++    if (current.mode !== "HUMAN" && current.handoffStatus !== "ACTIVE") {
++      return { applied: false, reason: "automation_active" };
++    }
+     const assignedUserId = current?.assignedUserId ?? params.assignedUserId ?? null;
+     const status = current?.status ?? params.status ?? null;
+     const departmentId = current?.departmentId ?? params.departmentId ?? null;
+@@ -719,8 +732,15 @@
+         : selectRoundRobinUser(eligible, policy.lastAssignedUserIdByScope[getScopeKey(policy, departmentId)]);
+ 
+     const assignedAt = new Date();
+-    await params.prisma.conversationRuntimeState.update({
+-      where: { id: params.runtimeStateId },
++    const assignment = await params.prisma.conversationRuntimeState.updateMany({
++      where: {
++        id: params.runtimeStateId,
++        clientId: params.clientId,
++        updatedAt: current.updatedAt,
++        assignedUserId: null,
++        status: ConversationOperationalStatus.WAITING,
++        OR: [{ mode: "HUMAN" }, { handoffStatus: "ACTIVE" }],
++      },
+       data: {
+         assignedUserId: selected.id,
+         assignedTo: `user:${selected.id}`,
+@@ -730,6 +750,9 @@
+         status: ConversationOperationalStatus.IN_PROGRESS,
+       },
+     });
++    // A claim/transfer/close can occur while availability is being resolved.
++    // Do not overwrite it or advance the cursor for an assignment not applied.
++    if (assignment.count !== 1) return { applied: false, reason: "runtime_changed" };
+     await params.prisma.conversationAssignment.create({
+       data: {
+         conversationId: params.runtimeStateId,
+diff --git a/apps/whatsapp-agent/src/storage/dualWriteStorage.ts b/apps/whatsapp-agent/src/storage/dualWriteStorage.ts
+--- a/apps/whatsapp-agent/src/storage/dualWriteStorage.ts
++++ b/apps/whatsapp-agent/src/storage/dualWriteStorage.ts
+@@ -1,4 +1,5 @@
+-import { ConversationOperationalStatus, HandoffStatus } from "@prisma/client";
++import { captureRuntimeWriteToken, updateRuntimeIfUnchanged, type RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
++import { ConversationOperationalStatus, HandoffStatus, type Prisma } from "@prisma/client";
+ import { env } from "../config/env.js";
+ import { getPrisma } from "../db.js";
+ import { logger } from "../logger/logger.js";
+@@ -450,6 +451,8 @@
+     clientKey: string;
+     waId: string;
+     db: {
++      updatedAt: Date;
++      version: number;
+       waId: string;
+       waIdCanonical: string | null;
+       conversationKey: string | null;
+@@ -497,6 +500,7 @@
+         ? (params.db.answers as ConversationState["answers"])
+         : {};
+     return {
++      runtimeWriteToken: readSource === "postgres" && !jsonWriteEnabled ? captureRuntimeWriteToken({ ...params.db, handoffStatus: params.db.handoffStatus ?? HandoffStatus.NONE }) : undefined,
+       clientKey: params.clientKey,
+       conversationKey:
+         params.db.conversationKey ?? makeConversationKey(params.clientKey, params.db.waId),
+@@ -637,6 +641,7 @@
+         waIdCanonical: true,
+         conversationKey: true,
+         channelAccountId: true,
++        version: true,
+         externalUserHash: true,
+         legacyWaId: true,
+         firstSeenAt: true,
+@@ -826,12 +831,12 @@
+     });
+   }
+ 
+-  async function writeShadow(state: ConversationState) {
++  async function writeShadow(state: ConversationState, expected?: RuntimeWriteToken) {
+     const clientId = await getClientId(state.clientKey, "write");
+     if (!clientId) {
+       return;
+     }
+-    await prisma.conversationRuntimeState.upsert({
++    const write = {
+       where: {
+         clientId_waId: { clientId, waId: state.waId },
+       },
+@@ -920,7 +925,12 @@
+         closedAt: toDate(state.closedAt),
+         version: { increment: 1 },
+       },
+-    });
++    } satisfies Prisma.ConversationRuntimeStateUpsertArgs;
++
++    if (expected) {
++      return updateRuntimeIfUnchanged({ prisma, clientId, waId: state.waId, expected, data: write.update });
++    }
++    await prisma.conversationRuntimeState.upsert(write);
+     logger.info({
+       event: "state.shadow.write",
+       waId: state.waId,
+@@ -1038,7 +1048,12 @@
+       });
+       throw new Error(errorMessage);
+     },
+-    async upsertConversation(state: ConversationState) {
++    async upsertConversation(state: ConversationState, expected?: RuntimeWriteToken) {
++      if (expected) {
++        if (readSource !== "postgres" || jsonWriteEnabled) throw new Error("conditional_runtime_write_requires_postgres_only");
++        // Do not swallow a conditional-write error or fall back to an unconditional upsert.
++        return writeShadow(state, expected);
++      }
+       if (jsonWriteEnabled) {
+         await primary.upsertConversation(state);
+       } else {
+diff --git a/apps/whatsapp-agent/src/storage/storage.ts b/apps/whatsapp-agent/src/storage/storage.ts
+--- a/apps/whatsapp-agent/src/storage/storage.ts
++++ b/apps/whatsapp-agent/src/storage/storage.ts
+@@ -1,3 +1,4 @@
++import type { RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
+ import { NormalizedMessage } from "../domain/whatsapp/types.js";
+ import { ConversationState } from "../conversation/conversation.types.js";
+ 
+@@ -32,7 +33,7 @@
+   ): Promise<void>;
+   updateMessage(messageId: string, patch: Partial<StoredRecord>): Promise<void>;
+   getConversation(waId: string, clientKey?: string): Promise<ConversationState | null>;
+-  upsertConversation(state: ConversationState): Promise<void>;
++  upsertConversation(state: ConversationState, expected?: RuntimeWriteToken): Promise<void | RuntimeWriteToken | null>;
+   updateConversationWindow(
+     waId: string,
+     lastInboundAt: string,
+diff --git a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts b/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
+--- a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
++++ b/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
+@@ -1,3 +1,4 @@
++import { captureRuntimeWriteToken, updateRuntimeIfUnchanged, type RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
+ import crypto from "node:crypto";
+ import { HandoffStatus, MessageType, Prisma, type PrismaClient } from "@prisma/client";
+ import { findDefaultOperationalDepartment } from "../bootstrap/defaultOperationalDepartment.js";
+@@ -1188,6 +1189,8 @@
+       answers: {},
+     },
+     select: {
++      updatedAt: true,
++      version: true,
+       id: true,
+       firstSeenAt: true,
+       windowIsOpen: true,
+@@ -1265,6 +1268,7 @@
+   message: NormalizedWebSessionInboundMessage;
+ }): ConversationState {
+   return {
++    runtimeWriteToken: captureRuntimeWriteToken(params.runtime),
+     clientKey: params.message.tenantKey,
+     conversationKey: makeConversationKey(params.message.tenantKey, params.message.sender),
+     waId: params.message.sender,
+@@ -1329,8 +1333,9 @@
+   clientId: string;
+   waId: string;
+   state: ConversationState;
++  expected?: RuntimeWriteToken;
+ }) {
+-  await params.prisma.conversationRuntimeState.update({
++  const write = {
+     where: {
+       clientId_waId: {
+         clientId: params.clientId,
+@@ -1364,7 +1369,20 @@
+       status: params.state.status ?? null,
+       closedAt: params.state.closedAt ? new Date(params.state.closedAt) : null,
+     },
+-  });
++  } satisfies Prisma.ConversationRuntimeStateUpdateArgs;
++  const expected = params.expected ?? params.state.runtimeWriteToken;
++  if (expected) {
++    const token = await updateRuntimeIfUnchanged({ prisma: params.prisma, clientId: params.clientId,
++      waId: params.waId, expected, data: write.data });
++    if (!token) {
++      logger.info({ event: "automation.runtime.stale_write_skipped", clientId: params.clientId });
++      return false;
++    }
++    params.state.runtimeWriteToken = token;
++    return true;
++  }
++  await params.prisma.conversationRuntimeState.update(write);
++  return true;
+ }
+ 
+ async function shouldReopenClosedConversationWindow(params: {
+@@ -3273,12 +3291,14 @@
+               queueId: handoffDecision.queueId ?? runtimeConversationState.queueId ?? null,
+             };
+           }
+-          await persistWebSessionRuntimeState({
++          const persisted = await persistWebSessionRuntimeState({
+             prisma,
+             clientId: params.message.clientId,
+             waId: params.message.sender,
+             state: runtimeConversationState,
++            expected: runtimeConversationState.runtimeWriteToken,
+           });
++          if (!persisted) return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
+           const postFlowRuntime = await prisma.conversationRuntimeState.findUnique({
+             where: {
+               clientId_waId: {
+diff --git a/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts b/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts
+new file mode 100644
+--- /dev/null
++++ b/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts
+@@ -0,0 +1,28 @@
++import type { ConversationRuntimeState, Prisma } from "@prisma/client";
++
++// Observed control, not a proposed document. No lock is held across provider I/O.
++export const runtimeWriteTokenSelect = {
++  updatedAt: true, version: true, mode: true, handoffStatus: true,
++  assignedUserId: true, assignedAt: true, departmentId: true, queueId: true,
++  status: true, closedAt: true, lastInboundAt: true,
++} as const;
++export type RuntimeWriteToken = Pick<ConversationRuntimeState, keyof typeof runtimeWriteTokenSelect>;
++
++export function captureRuntimeWriteToken(row: RuntimeWriteToken): RuntimeWriteToken {
++  return Object.fromEntries(Object.keys(runtimeWriteTokenSelect).map(key => [key, row[key as keyof RuntimeWriteToken]])) as RuntimeWriteToken;
++}
++
++export async function updateRuntimeIfUnchanged(params: {
++  prisma: Pick<Prisma.TransactionClient, "conversationRuntimeState">;
++  clientId: string;
++  waId: string;
++  expected: RuntimeWriteToken;
++  data: Prisma.ConversationRuntimeStateUpdateManyMutationInput;
++}): Promise<RuntimeWriteToken | null> {
++  const rows = await params.prisma.conversationRuntimeState.updateManyAndReturn({
++    where: { ...params.expected, clientId: params.clientId, waId: params.waId },
++    data: { ...params.data, version: { increment: 1 } },
++    select: runtimeWriteTokenSelect,
++  });
++  return rows[0] ? captureRuntimeWriteToken(rows[0]) : null;
++}

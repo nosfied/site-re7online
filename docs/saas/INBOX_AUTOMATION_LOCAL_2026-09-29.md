@@ -1,5 +1,9 @@
 # Acompanhamento de automação na Inbox — implementação local
 
+## Publicação para auditoria independente
+
+**PUBLISHED FOR REVIEW / NOT DEPLOYED.** Candidato funcional `d06a92b84f4308170a6f22a53cb6171cfbe6d6a2`, sobre c6884100/91230f88. [Patch, manifesto e composição do worker mínimo](../reviews/automation-worker-backport/README.md) versionados em commit documental separado. As seções seguintes preservam a evidência LOCAL VALIDATED e seus limites; publicação não é deploy nem aceite funcional. Sem nova execução de testes nesta etapa.
+
 **LOCAL VALIDATED / NOT DEPLOYED.** Branch `review/campaign-recovery-20260926`; base `91230f8884faaab7adfc5cbc4a49967dee91a89a`. Delta revisado para commit local separado, sem push nesta etapa. Sem produção, migration, provider real ou ativação produtiva. Ativações/revogações abaixo ocorreram exclusivamente em tenants sintéticos do DB local.
 
 ## Contrato final e reaproveitamento
