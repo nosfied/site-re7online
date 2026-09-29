@@ -26,9 +26,9 @@ export const CONVERSATION_FILTER_BY_VALUE = new Map(
   CONVERSATION_FILTERS.map((item) => [item.value, item])
 );
 
-export function getMoreConversationFiltersForRole(role: string | null | undefined) {
+export function getMoreConversationFiltersForRole(role: string | null | undefined, allowOwnClosed = false) {
   const normalizedRole = String(role ?? "").trim().toUpperCase();
   return MORE_CONVERSATION_FILTERS.filter(
-    (item) => normalizedRole !== "AGENT" || item.value !== "CLOSED"
+    (item) => normalizedRole !== "AGENT" || item.value !== "CLOSED" || allowOwnClosed
   );
 }

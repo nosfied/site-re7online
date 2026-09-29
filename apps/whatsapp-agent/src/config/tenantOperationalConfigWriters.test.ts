@@ -33,5 +33,5 @@ test('all config replacements are lexically locked or the audited private canned
    ts.forEachChild(n,visit);
   };visit(source);
  }
- assert.equal(replacements,34);assert.equal(createOnly,1);assert.equal(cannedCalls,3);
+ assert.equal(replacements,35);assert.equal(createOnly,1);assert.equal(cannedCalls,3);
 });

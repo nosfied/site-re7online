@@ -28,6 +28,7 @@ export type InboxRealtimeMessage = {
 };
 
 export type InboxRealtimeEvent =
+  | { type: "inbox.access.updated"; clientId: string }
   | {
       type: "message.created";
       clientId: string;

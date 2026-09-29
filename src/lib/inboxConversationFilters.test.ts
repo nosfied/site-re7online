@@ -42,3 +42,9 @@ test("admin and supervisor inbox more filters keep closed conversations availabl
     ["IN_PROGRESS", "WAITING_USER", "CLOSED", "UNASSIGNED"]
   );
 });
+
+test("agent uses existing Encerradas filter only while own-closed permission is enabled", () => {
+ assert.deepEqual(getMoreConversationFiltersForRole("AGENT", true), getMoreConversationFiltersForRole("SUPERVISOR"));
+ assert.equal(getMoreConversationFiltersForRole("AGENT", false).some(filter => filter.value === "CLOSED"), false);
+ assert.equal(CONVERSATION_FILTER_BY_VALUE.get("CLOSED")?.label, "Encerradas");
+});

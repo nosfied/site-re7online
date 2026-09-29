@@ -1,3 +1,5 @@
+import { getPrisma } from "../db.js";
+import { resolveRealtimeAgentReaders } from "./agentReadAccess.js";
 import { WebSocket } from "ws";
 import { logger } from "../logger/logger.js";
 import { InboxRealtimeEvent } from "./events.js";
@@ -136,7 +138,21 @@ export function closeRealtimeConnectionsForClient(clientId: string, reason: stri
   }
 }
 
-export function publishRealtimeEvent(event: InboxRealtimeEvent) {
+const accessEpoch = new Map<string, number>();
+export function publishRealtimeEvent(event: InboxRealtimeEvent): void {
+  void publishRealtimeEventAsync(event);
+}
+
+/** Same publication path; allows local behavioral tests to await actual delivery. */
+export function publishRealtimeEventAsync(event: InboxRealtimeEvent) {
+  if (event.type === "inbox.access.updated" || event.type === "conversation.handoff.updated") accessEpoch.set(event.clientId, (accessEpoch.get(event.clientId) ?? 0) + 1);
+  const epoch = accessEpoch.get(event.clientId) ?? 0;
+  return deliverRealtimeEvent(event, epoch).catch(error => logger.warn({ event: "realtime.access.failed", clientId: event.clientId, message: (error as Error).message }));
+}
+async function deliverRealtimeEvent(event: InboxRealtimeEvent, epoch: number) {
+  const agentIds = [...new Set([...connections.values()].filter(c => c.clientId === event.clientId && c.role === "AGENT").map(c => c.userId))];
+  const agentReaders = event.type !== "inbox.access.updated" && agentIds.length
+    ? await resolveRealtimeAgentReaders(getPrisma(), event, agentIds).catch(() => new Set<string>()) : new Set<string>();
   let delivered = 0;
   for (const connection of connections.values()) {
     if (connection.clientId !== event.clientId) continue;
@@ -148,6 +164,12 @@ export function publishRealtimeEvent(event: InboxRealtimeEvent) {
       connection.socket.close(4001, "support_access_expired");
       removeConnection(connection.id, "support_access_expired");
       continue;
+    }
+    if (connection.role === "AGENT" && event.type !== "inbox.access.updated") {
+      if ((accessEpoch.get(event.clientId) ?? 0) !== epoch || !agentReaders.has(connection.userId)) {
+        if (event.type === "conversation.handoff.updated") connection.socket.send(JSON.stringify({ type: "inbox.access.updated", clientId: event.clientId }));
+        continue;
+      }
     }
     connection.socket.send(JSON.stringify(event));
     delivered += 1;

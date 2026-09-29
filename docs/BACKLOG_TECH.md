@@ -1,5 +1,30 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## SECULT — funcionalidade local sobre f06d49cb — 28/09/2026
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Consulta AGENT de sua conversa atualmente CLOSED,
+chave `allowAgentOwnClosedConversations=false` por default, gestão SUPERVISOR/ADMIN
+na página Inbox existente. Snapshot comprova o responsável do encerramento atual;
+sem arquivo por ciclo, nova categoria ou permissão operacional. Dependência de
+persistência continua em commit separado. Entrega local de 28/09 preservada;
+publicação exclusivamente para revisão autorizada em 29/09, sem deploy/ativação.
+
+Provas: HTTP/DB/socket **10/10**, persistência com setter real **37/37**, regressões
+**65/65**; builds backend/frontend PASS. Worker build --noCheck PASS; tipagem estrita
+mantém 13 erros preexistentes. Tsc frontend amplo mantém 22 diagnósticos idênticos à
+base. Smoke autenticado confirma configuração, Encerradas, consulta, controles
+bloqueados e revogação do painel. [Implementação, matriz e limites](saas/SECULT_OWN_CLOSED_LOCAL_2026-09-28.md).
+
+API, worker e scripts precisam ser compatíveis antes da ativação; retorno a escritores
+antigos perde a garantia de revogação. Campanhas/CRA aguardam validação funcional do
+owner; DB-only encerrada/aceita, inatividade no Guia pausada, 6683 CLOSED. Sem produção.
+Revisão de publicação: 22 arquivos; comparação completa das 40 linhas dos 22
+diagnósticos frontend idêntica à base f06d49cb, mesmas dependências/compilador,
+zero diagnóstico novo. Código validado sem mudanças; 112 provas e smoke reutilizados.
+CI push restrito a main/develop; Vercel desabilitado na branch de revisão.
+Os registros anteriores abaixo preservam o estado histórico de cada etapa.
+
+
 ## Persistência compartilhada — dependência local separada — 28/09/2026
 
 **LOCAL VALIDATED / NOT DEPLOYED.** [Implementação, provas e limites](saas/SECULT_CLOSED_CONFIG_CONCURRENCY_PROPOSAL_2026-09-28.md).

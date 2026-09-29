@@ -3017,6 +3017,7 @@ export async function fetchAppConversations(
   nextCursor?: string | null;
   readState?: AppInboxReadState;
   inboxVisibilityPolicy?: AppInboxVisibilityPolicy;
+  allowAgentOwnClosedConversations?: boolean;
 }> {
   const params = new URLSearchParams();
   if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
@@ -5599,4 +5600,12 @@ export async function sendAppCampaignBatch(session: AppSession, batchId: string)
   return requestAppJson(session, `/app/campaign-batches/${encodeURIComponent(batchId)}/send`, {
     method: "POST", body: JSON.stringify({}),
   });
+}
+
+export type OwnClosedConversationsSettings = { ok: true; allowAgentOwnClosedConversations: boolean; permissions: { canUpdate: boolean } };
+export function fetchOwnClosedConversationsSettings(session: AppSession): Promise<OwnClosedConversationsSettings> {
+  return requestAppJson(session, "/app/settings/inbox/closed-conversations");
+}
+export function updateOwnClosedConversationsSettings(session: AppSession, enabled: boolean): Promise<OwnClosedConversationsSettings> {
+  return requestAppJson(session, "/app/settings/inbox/closed-conversations", { method: "PUT", body: JSON.stringify({ allowAgentOwnClosedConversations: enabled }) });
 }

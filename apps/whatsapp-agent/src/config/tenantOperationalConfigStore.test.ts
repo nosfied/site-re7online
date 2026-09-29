@@ -13,7 +13,7 @@ const url = new URL(process.env.DATABASE_URL ?? 'http://missing');
 assert(['localhost','127.0.0.1','::1'].includes(url.hostname) && url.pathname.startsWith('/re7_config_persistence'), 'isolated synthetic DB required');
 const a = new PrismaClient(), b = new PrismaClient(), observer = new PrismaClient();
 const clients: string[] = [];
-const flag = 'allowAgentOwnClosedConversations'; // Synthetic sentinel, not the SECULT feature.
+const flag = 'allowAgentOwnClosedConversations'; // Real setter; all fixtures remain synthetic.
 function deferred() { let resolve!: () => void; const promise = new Promise<void>(r => { resolve = r; }); return { promise, resolve }; }
 async function fixture(initial?: Record<string, any>) {
  const client = await a.client.create({data:{clientKey:`config-lock-${crypto.randomUUID()}`,name:'Synthetic config lock'}});
@@ -23,10 +23,7 @@ async function fixture(initial?: Record<string, any>) {
 }
 async function read(id:string) { return (await a.tenantOperationalConfig.findUniqueOrThrow({where:{clientId:id}})).config as Record<string,any>; }
 async function setFlag(prisma:PrismaClient, id:string, enabled:boolean) {
- return withLockedTenantOperationalConfig(prisma,id,async tx=>{
-  const row=await tx.tenantOperationalConfig.findUniqueOrThrow({where:{clientId:id}});
-  await tx.tenantOperationalConfig.update({where:{clientId:id},data:{config:{...(row.config as object),[flag]:enabled}}});
- });
+ return config.saveAllowAgentOwnClosedConversations({prisma,clientId:id,enabled});
 }
 async function waitForBlockedWriter() {
  const end=Date.now()+3000;
@@ -91,7 +88,7 @@ test('different tenant does not wait; callbacks read the latest committed docume
 
 const setters: Array<[string,(p:PrismaClient,id:string)=>Promise<unknown>]> = Object.entries(config)
  .filter(([name])=>name.startsWith('save'))
- .map(([name,fn])=>[name,(p,id)=>(fn as Function)({prisma:p,clientId:id,settings:{enabled:true,mode:'user_name',format:'bold_line'},emails:[],statuses:[],policy:name==='saveInboxVisibilityPolicy'?'shared':{},transport:'meta',enabledForRouting:false})]);
+ .map(([name,fn])=>[name,(p,id)=>(fn as Function)({prisma:p,clientId:id,enabled:false,settings:{enabled:true,mode:'user_name',format:'bold_line'},emails:[],statuses:[],policy:name==='saveInboxVisibilityPolicy'?'shared':{},transport:'meta',enabledForRouting:false})]);
 const policy={enabled:true,mode:'round_robin' as const,scope:'department' as const,maxActivePerAgent:2,includeSupervisors:false,requireOnline:false,presenceMode:'IGNORE' as const,notifyAssignedOnly:false};
 setters.push(
  ['cannedReplies',(p,id)=>createCannedReply({prisma:p,clientId:id,userId:'synthetic',input:{title:'Synthetic',body:'Body'}})],

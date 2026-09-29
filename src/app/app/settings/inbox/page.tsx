@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
+  fetchOwnClosedConversationsSettings,
+  updateOwnClosedConversationsSettings,
   AppAgentSignatureSettings,
   AppApiError,
   AppInboxVisibilityPolicy,
@@ -81,6 +83,9 @@ function SettingsBadge({ label, tone = "default" }: { label: string; tone?: "def
 export default function AppSettingsInboxPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
+  const [allowOwnClosed, setAllowOwnClosed] = useState(false);
+  const [canUpdateOwnClosed, setCanUpdateOwnClosed] = useState(false);
+  const [savingOwnClosed, setSavingOwnClosed] = useState(false);
   const [settings, setSettings] = useState<AppAgentSignatureSettings>(getDefaultSettings);
   const [inboxVisibilityPolicy, setInboxVisibilityPolicy] = useState<AppInboxVisibilityPolicy>(
     getDefaultInboxVisibilityPolicy
@@ -119,6 +124,9 @@ export default function AppSettingsInboxPage() {
     async (activeSession: AppSession) => {
       const response = await fetchAppAgentSignatureSettings(activeSession);
       applyResponse(response);
+      const closed = await fetchOwnClosedConversationsSettings(activeSession);
+      setAllowOwnClosed(closed.allowAgentOwnClosedConversations);
+      setCanUpdateOwnClosed(closed.permissions.canUpdate);
     },
     [applyResponse]
   );
@@ -180,6 +188,17 @@ export default function AppSettingsInboxPage() {
     [canUpdateServiceMessages, saving, session]
   );
 
+  const saveOwnClosed = async () => {
+    if (!session || !canUpdateOwnClosed) return;
+    setSavingOwnClosed(true); setError(null); setSuccess(null);
+    try {
+      const response = await updateOwnClosedConversationsSettings(session, allowOwnClosed);
+      setAllowOwnClosed(response.allowAgentOwnClosedConversations);
+      setSuccess("Permissão de consulta atualizada.");
+    } catch (error) { setError(normalizeSettingsError(error as AppApiError, "Não foi possível atualizar a permissão.")); }
+    finally { setSavingOwnClosed(false); }
+  };
+
   const handleSave = async () => {
     if (!session || readOnly) return;
     setSaving(true);
@@ -227,6 +246,15 @@ export default function AppSettingsInboxPage() {
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
       <div className="inbox-settings-theme grid gap-4">
+        <section className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+          <label className="flex items-center gap-3">
+            <input type="checkbox" checked={allowOwnClosed} disabled={!canUpdateOwnClosed || loading || savingOwnClosed} onChange={event => setAllowOwnClosed(event.target.checked)} />
+            Permitir consulta dos próprios atendimentos concluídos
+          </label>
+          <p className="text-sm text-white/70">Permite aos atendentes consultar conversas encerradas sob sua responsabilidade, respeitando as regras de acesso existentes. Não permite enviar mensagens, assumir, transferir ou reabrir.</p>
+          <button type="button" className="rounded-lg border border-white/20 px-4 py-2 disabled:opacity-50" disabled={!canUpdateOwnClosed || loading || savingOwnClosed} onClick={() => void saveOwnClosed()}>{savingOwnClosed ? "Salvando..." : "Salvar permissão de consulta"}</button>
+        </section>
+
         {loading ? (
           <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
             <p className="text-sm text-white/70">Carregando configuração...</p>

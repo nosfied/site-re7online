@@ -1,3 +1,5 @@
+import { loadOwnClosedConversationIds } from "../inbox/ownClosedAccess.js";
+import { resolveAllowAgentOwnClosedConversations, saveAllowAgentOwnClosedConversations } from "../config/tenantOperationalConfig.js";
 import { campaignTask, campaignProviderAttempt, CampaignOperationsClosed, isCampaignMutation, campaignOperationsStatus, setCampaignOperations } from "../campaigns/campaignOperations.js";
 import { lockCampaignExecutionBatch } from "../campaigns/campaignExecutionQueue.js";
 import { applyCampaignExecutionBatchAction } from "../campaigns/campaignBatchControl.js";
@@ -5786,12 +5788,20 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         }),
         await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
-      if (shouldDenyAgentClosedConversationAccess(clientAuth.role, scopedConversation)) {
+      if (isAgentRole(clientAuth.role) && scopedConversation?.status !== "CLOSED" && !shouldUserSeeConversationInInbox({
+        ...scopedConversation, handoffStatus: scopedConversation?.handoff?.status,
+        currentUserId: clientAuth.userId, userRole: clientAuth.role, userDepartmentIds: departmentAccess.departmentIds,
+        policy: (await resolveInboxVisibilityPolicy({ prisma, clientId: client.id })).policy,
+      })) { json(res, 404, { error: "conversation_not_found" }); return; }
+      const ownClosedRead = isAgentRole(clientAuth.role) && scopedConversation?.status === "CLOSED"
+        ? (await loadOwnClosedConversationIds(prisma, { clientId: client.id, userId: clientAuth.userId, candidates: resolvedConversation.winner ? [{ id: resolvedConversation.winner.id, state: scopedConversation }] : [] })).size > 0
+        : false;
+      if (shouldDenyAgentClosedConversationAccess(clientAuth.role, scopedConversation) && !ownClosedRead) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
       if (
-        !hasConversationDepartmentAccess({
+        !ownClosedRead && !hasConversationDepartmentAccess({
           role: clientAuth.role,
           currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
@@ -5904,12 +5914,20 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
       latency.duration("routeOperationalState", routeOperationalStateStartedAt);
-      if (shouldDenyAgentClosedConversationAccess(clientAuth.role, scopedConversation)) {
+      if (isAgentRole(clientAuth.role) && scopedConversation?.status !== "CLOSED" && !shouldUserSeeConversationInInbox({
+        ...scopedConversation, handoffStatus: scopedConversation?.handoff?.status,
+        currentUserId: clientAuth.userId, userRole: clientAuth.role, userDepartmentIds: departmentAccess.departmentIds,
+        policy: (await resolveInboxVisibilityPolicy({ prisma, clientId: client.id })).policy,
+      })) { json(res, 404, { error: "conversation_not_found" }); return; }
+      const ownClosedRead = isAgentRole(clientAuth.role) && scopedConversation?.status === "CLOSED"
+        ? (await loadOwnClosedConversationIds(prisma, { clientId: client.id, userId: clientAuth.userId, candidates: resolvedConversation.winner ? [{ id: resolvedConversation.winner.id, state: scopedConversation }] : [] })).size > 0
+        : false;
+      if (shouldDenyAgentClosedConversationAccess(clientAuth.role, scopedConversation) && !ownClosedRead) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
       if (
-        !hasConversationDepartmentAccess({
+        !ownClosedRead && !hasConversationDepartmentAccess({
           role: clientAuth.role,
           currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
@@ -6553,6 +6571,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         resolvedConversation.resolvedWaId,
         client.clientKey
       );
+      if (rejectAgentClosedConversationAction(res, clientAuth.role, scopedConversation)) return;
       const readScope = resolveConversationReadScope(scopedConversation);
       const conversationKeys = Array.from(
         new Set(
@@ -6708,12 +6727,20 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         scopedConversation,
         await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
-      if (shouldDenyAgentClosedConversationAccess(clientAuth.role, materializedConversation)) {
+      if (isAgentRole(clientAuth.role) && materializedConversation?.status !== "CLOSED" && !shouldUserSeeConversationInInbox({
+        ...materializedConversation, handoffStatus: materializedConversation?.handoff?.status,
+        currentUserId: clientAuth.userId, userRole: clientAuth.role, userDepartmentIds: departmentAccess.departmentIds,
+        policy: (await resolveInboxVisibilityPolicy({ prisma, clientId: client.id })).policy,
+      })) { json(res, 404, { error: "conversation_not_found" }); return; }
+      const ownClosedRead = isAgentRole(clientAuth.role) && materializedConversation?.status === "CLOSED"
+        ? (await loadOwnClosedConversationIds(prisma, { clientId: client.id, userId: clientAuth.userId, candidates: resolvedConversation.winner ? [{ id: resolvedConversation.winner.id, state: materializedConversation }] : [] })).size > 0
+        : false;
+      if (shouldDenyAgentClosedConversationAccess(clientAuth.role, materializedConversation) && !ownClosedRead) {
         json(res, 404, { error: "media_not_found" });
         return;
       }
       if (
-        !hasConversationDepartmentAccess({
+        !ownClosedRead && !hasConversationDepartmentAccess({
           role: clientAuth.role,
           currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
@@ -6742,6 +6769,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
 
       const conversationWhere = {
         clientId: client.id,
+        ...(ownClosedRead && resolvedConversation.winner?.historyVisibleAfter ? { createdAt: { gt: resolvedConversation.winner.historyVisibleAfter } } : {}),
         messageId,
         type: { in: ["IMAGE", "AUDIO", "VIDEO", "DOCUMENT"] as MessageType[] },
         OR: [
@@ -6767,7 +6795,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       ]);
 
       const mediaMessage = inbound ?? outbound;
-      if (!mediaMessage) {
+      if (!mediaMessage || (ownClosedRead && isManagementOnlyInboxMessage(mediaMessage.rawPayload))) {
         json(res, 404, { error: "media_not_found" });
         return;
       }
@@ -6804,7 +6832,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         const fileName = sanitizeDownloadFileName(localMedia.fileName) || `${messageId}`;
         const headers: Record<string, string> = {
           "Content-Type": localMedia.mimeType || "application/octet-stream",
-          "Cache-Control": "private, max-age=31536000, immutable",
+          "Cache-Control": ownClosedRead ? "private, no-store" : "private, max-age=31536000, immutable",
           "Content-Disposition": `inline; filename="${fileName}"`,
           "Content-Length": String(localMedia.size),
         };
@@ -8755,6 +8783,38 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         requestId,
       });
       json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (pathname === "/app/settings/inbox/closed-conversations" && (req.method === "GET" || req.method === "PUT")) {
+    const prisma = getPrisma();
+    const auth = requireClientAuth(req, res);
+    if (!auth) return;
+    if (!isAdminOrSupervisorRole(auth.role)) { json(res, 403, httpError("forbidden", "Sem permissão para alterar esta configuração.")); return; }
+    try {
+      const client = await getScopedClientById(prisma, auth.clientId);
+      if (!client) { json(res, 404, httpError("client_not_found", "Tenant não encontrado.")); return; }
+      if (client.status !== "ACTIVE") { json(res, 403, httpError("client_inactive", "Tenant inativo.")); return; }
+      let enabled: boolean;
+      if (req.method === "PUT") {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const input = body as Record<string, unknown>;
+        if (typeof input.allowAgentOwnClosedConversations !== "boolean" || Object.keys(input).some(key => key !== "allowAgentOwnClosedConversations")) {
+          json(res, 400, httpError("invalid_settings", "Configuração inválida.")); return;
+        }
+        enabled = await prisma.$transaction(async tx => {
+          const result = await saveAllowAgentOwnClosedConversations({ prisma: tx, clientId: client.id, enabled: input.allowAgentOwnClosedConversations as boolean });
+          await tx.event.create({ data: { clientId: client.id, requestId: `${requestId}:own-closed-settings`, eventName: "inbox.own_closed.settings_updated", payloadJson: { actorUserId: auth.userId, enabled: result } } });
+          return result;
+        });
+        publishRealtimeEvent({ type: "inbox.access.updated", clientId: client.id });
+      } else enabled = await resolveAllowAgentOwnClosedConversations({ prisma, clientId: client.id });
+      json(res, 200, { ok: true, allowAgentOwnClosedConversations: enabled, permissions: { canUpdate: true } });
+    } catch (error) {
+      logger.error({ event: "inbox.own_closed.settings_failed", requestId, message: (error as Error).message });
+      json(res, 500, httpError("server_error", "Não foi possível atualizar a configuração."));
     }
     return;
   }
@@ -34613,7 +34673,7 @@ function conversationMatchesListFilters(item: {
   departmentId: string | null;
   assignedUserId: string | null;
   assignedAt?: string | null;
-}, filters: ConversationListFilters) {
+}, filters: ConversationListFilters, ownClosedWaIds?: ReadonlySet<string>) {
   if (filters.automation) {
     if (!conversationListItemIsAutomation(item)) return false;
   } else if (filters.status && item.status !== filters.status) {
@@ -34626,7 +34686,8 @@ function conversationMatchesListFilters(item: {
       Boolean(item.departmentId && filters.departmentIds.includes(item.departmentId));
     const directlyAssigned =
       Boolean(filters.departmentScopeUserId) && item.assignedUserId === filters.departmentScopeUserId;
-    if (!inDepartmentScope && !directlyAssigned) return false;
+    const ownClosure = item.status === ConversationOperationalStatus.CLOSED && ownClosedWaIds?.has(item.waId);
+    if (!inDepartmentScope && !directlyAssigned && !ownClosure) return false;
   }
   if (filters.departmentId && item.departmentId !== filters.departmentId) return false;
   if (filters.assignedUserId && item.assignedUserId !== filters.assignedUserId) return false;
@@ -34799,7 +34860,8 @@ function buildConversationFilterCounts(
     assignedAt?: string | null;
   }>,
   filters: ConversationListFilters,
-  currentUserId?: string | null
+  currentUserId?: string | null,
+  ownClosedWaIds?: ReadonlySet<string>
 ) {
   const baseFilters = {
     ...filters,
@@ -34808,7 +34870,7 @@ function buildConversationFilterCounts(
     unassigned: false,
     automation: false,
   };
-  const baseItems = items.filter((item) => conversationMatchesListFilters(item, baseFilters));
+  const baseItems = items.filter((item) => conversationMatchesListFilters(item, baseFilters, ownClosedWaIds));
   const counts = {
     ALL: baseItems.length,
     WAITING: 0,
@@ -34867,6 +34929,8 @@ async function buildConversationListPayload(
     profile?: string | null;
   }
 ) {
+  const allowAgentOwnClosedConversations = isAgentRole(params.userRole)
+    ? await resolveAllowAgentOwnClosedConversations({ prisma, clientId: params.clientId }) : false;
   const defaultsStartedAt = channelLatencyNow();
   const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, params.clientId);
   recordInboxListTiming(params.clientId, "defaults", defaultsStartedAt);
@@ -34981,6 +35045,7 @@ async function buildConversationListPayload(
       nextCursor: null,
       readState,
       inboxVisibilityPolicy: params.inboxVisibilityPolicy ?? "shared",
+      allowAgentOwnClosedConversations,
     };
   }
 
@@ -35387,6 +35452,12 @@ async function buildConversationListPayload(
     }
   }
 
+  const ownClosedIds = allowAgentOwnClosedConversations ? await loadOwnClosedConversationIds(prisma, {
+    clientId: params.clientId, userId: params.userId ?? "", enabled: true,
+    candidates: winners.map(item => ({ id: item.id, state: runtimeByWaId.get(item.waIdCanonical) })),
+  }) : new Set<string>();
+  const ownClosedKeys = new Set(winners.filter(item => ownClosedIds.has(item.id)).map(item => item.waIdCanonical));
+  const ownClosedWaIds = new Set(winners.filter(item => ownClosedIds.has(item.id)).map(item => item.waId));
   const allItems = await Promise.all(winners.map(async (conversation) => {
     const key = conversation.waIdCanonical;
     const lead = leadByWaId.get(key);
@@ -35510,7 +35581,7 @@ async function buildConversationListPayload(
   recordInboxListTiming(params.clientId, "assembly", assemblyStartedAt);
   const filteringSortingStartedAt = channelLatencyNow();
   const itemMatchesUserInboxVisibility = (item: (typeof allItems)[number]) => {
-    if (shouldDenyAgentClosedConversationAccess(params.userRole, item)) return false;
+    if (shouldDenyAgentClosedConversationAccess(params.userRole, item)) return ownClosedKeys.has(item.waIdCanonical);
     const userParticipated = [item.waId, item.waIdCanonical]
       .map((value) => String(value ?? "").trim())
       .filter(Boolean)
@@ -35529,13 +35600,14 @@ async function buildConversationListPayload(
     allItems.filter(
       (item) =>
         itemMatchesUserInboxVisibility(item) &&
-        conversationMatchesListFilters(item, params.filters)
+        conversationMatchesListFilters(item, params.filters, ownClosedWaIds)
     )
   );
   const filterCounts = buildConversationFilterCounts(
     allItems.filter(itemMatchesUserInboxVisibility),
     params.filters,
-    params.userId ?? null
+    params.userId ?? null,
+    ownClosedWaIds
   );
   const items = filteredItems.slice(0, params.limit);
   const nextCursorSource =
@@ -35564,6 +35636,7 @@ async function buildConversationListPayload(
     nextCursor,
     readState,
     inboxVisibilityPolicy: params.inboxVisibilityPolicy ?? "shared",
+    allowAgentOwnClosedConversations,
   };
 }
 

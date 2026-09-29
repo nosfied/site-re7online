@@ -1,5 +1,16 @@
 # CRA-PR Readiness Notes
 
+## 28/09/2026 — fronteira da validação local SECULT
+
+A consulta AGENT de CLOSED recebeu validação local separada, ainda NOT DEPLOYED;
+ver [evidências e limites](../../../saas/SECULT_OWN_CLOSED_LOCAL_2026-09-28.md).
+Não altera aceite CRA: campanhas/lotes aguardam retorno funcional do owner.
+DB-only permanece encerrada e aceita; inatividade no Guia pausada; 6683 CLOSED.
+Publicação SECULT para revisão autorizada em 29/09 sobre f06d49cb, sem deploy;
+112 provas locais reutilizadas, sem ampliar a evidência de aceite CRA.
+Nenhuma ativação produtiva, provider ou envio foi realizado nesta frente.
+
+
 ## Atualização produtiva — flows DB-only — 28/09/2026
 
 **DEPLOYED / CLIENT ACCEPTED — correção de flows DB-only.** Backend/frontend

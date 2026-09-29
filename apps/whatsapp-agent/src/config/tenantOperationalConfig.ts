@@ -2290,3 +2290,32 @@ export async function saveCrmBusinessStatuses(params: {
     };
   });
 }
+
+/** Explicit opt-in only. No legacy JSON fallback for this permission. */
+export async function resolveAllowAgentOwnClosedConversations(params: {
+  prisma: PrismaClient | import("@prisma/client").Prisma.TransactionClient;
+  clientId: string;
+}): Promise<boolean> {
+  const row = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId }, select: { config: true },
+  });
+  const config = row?.config;
+  return Boolean(config && typeof config === "object" && !Array.isArray(config) && config.allowAgentOwnClosedConversations === true);
+}
+
+export async function saveAllowAgentOwnClosedConversations(params: {
+  prisma: PrismaClient | import("@prisma/client").Prisma.TransactionClient;
+  clientId: string;
+  enabled: boolean;
+}) {
+  if (typeof params.enabled !== "boolean") throw new Error("invalid_closed_conversations_setting");
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    const row = await tx.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: params.clientId } });
+    const config = row.config && typeof row.config === "object" && !Array.isArray(row.config) ? row.config : {};
+    await tx.tenantOperationalConfig.update({
+      where: { clientId: params.clientId },
+      data: { config: { ...config, allowAgentOwnClosedConversations: params.enabled } },
+    });
+    return params.enabled;
+  });
+}

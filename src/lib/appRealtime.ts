@@ -6,6 +6,7 @@ export type AppHandoffStatus = "none" | "pending" | "active";
 export type AppInboxVisibilityPolicy = "shared" | "assignee_only_after_assignment";
 
 export type AppRealtimeEvent =
+  | { type: "inbox.access.updated"; clientId: string; waId?: null; waIdCanonical?: null }
   | {
       type: "message.created";
       clientId: string;
@@ -572,6 +573,7 @@ export function createAppRealtimeClient(options: AppRealtimeClientOptions): AppR
       try {
         const event = JSON.parse(String(message.data)) as AppRealtimeEvent;
         if (
+          event?.type === "inbox.access.updated" ||
           event?.type === "message.created" ||
           event?.type === "message.status.updated" ||
           event?.type === "conversation.handoff.updated" ||

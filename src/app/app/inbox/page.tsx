@@ -1975,9 +1975,10 @@ function getConversationStatusLabelForItem(
 }
 
 function getConversationModeLabel(
-  item: Pick<InboxConversationItem, "mode" | "handoffStatus"> | null
+  item: Pick<InboxConversationItem, "mode" | "handoffStatus" | "status"> | null
 ) {
   if (!item) return "Sem modo";
+  if (item.status === "CLOSED") return "Atendimento encerrado";
   if (item.handoffStatus === "active" || item.handoffStatus === "pending") return "Atendimento humano";
   return item.mode === "HUMAN" ? "Atendimento humano" : "Automação ativa";
 }
@@ -2374,6 +2375,7 @@ export default function AppInboxPage() {
   const [selectedConversationWaId, setSelectedConversationWaId] = useState<string | null>(null);
   const [crmStartContext, setCrmStartContext] = useState<CrmConversationStartContext | null>(null);
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
+  const [allowOwnClosed, setAllowOwnClosed] = useState(false);
   const [inboxVisibilityPolicy, setInboxVisibilityPolicy] = useState<AppInboxVisibilityPolicy>("shared");
   const [messagesConversationKey, setMessagesConversationKey] = useState<string | null>(null);
   const [leadNotes, setLeadNotes] = useState<LeadNoteItem[]>([]);
@@ -3254,6 +3256,7 @@ export default function AppInboxPage() {
     waId?: string | null
   ) => {
     if (!activityAt) return;
+    if (session?.user.role === "AGENT" && conversations.some(item => item.status === "CLOSED" && conversationIdentityMatches(getConversationIdentityCandidates(item), conversationKeys.filter((key): key is string => Boolean(key))))) return;
     const uniqueKeys = Array.from(
       new Set(
         conversationKeys
@@ -3290,7 +3293,7 @@ export default function AppInboxPage() {
         activityAt,
       }).catch(() => undefined);
     }
-  }, [readState, session]);
+  }, [readState, session, conversations]);
 
   const completeHydrationRead = useCallback((conversationKey: string) => {
     const pendingRead = pendingReadAfterHydrationRef.current;
@@ -3437,6 +3440,15 @@ export default function AppInboxPage() {
 
   const applyRealtimeEvent = useCallback((event: AppRealtimeEvent) => {
     if (!session || event.clientId !== session.user.clientId) return;
+    if (event.type === "inbox.access.updated" || (session.user.role === "AGENT" && event.type === "conversation.handoff.updated" && event.status === "CLOSED")) {
+      timelineCacheRef.current.clear();
+      void refreshConversationListRef.current?.(session);
+      const selected = selectedConversationWaIdRef.current;
+      if (selected) void refreshSelectedTimelineRef.current?.(session, selected, "replace").catch((error: AppApiError) => {
+        if (error.status === 403 || error.status === 404) evictConversationFromLocalState([selected, ...selectedConversationIdentityCandidatesRef.current]);
+      });
+      return;
+    }
     if (shouldRealtimeEventRefreshInboxList(event)) {
       realtimeListRefetchSchedulerRef.current?.schedule();
     }
@@ -3886,7 +3898,7 @@ export default function AppInboxPage() {
       conversationFilter === "WAITING" ||
       conversationFilter === "IN_PROGRESS" ||
       conversationFilter === "WAITING_USER" ||
-      (!isAgentUser && conversationFilter === "CLOSED");
+      ((!isAgentUser || allowOwnClosed) && conversationFilter === "CLOSED");
     const status =
       supportsStatusFilter ? conversationFilter : null;
     return {
@@ -3907,6 +3919,7 @@ export default function AppInboxPage() {
     departmentFilter,
     isAdminUser,
     isAgentUser,
+    allowOwnClosed,
     session?.user.id,
   ]);
 
@@ -3931,6 +3944,7 @@ export default function AppInboxPage() {
     if (response.readState) {
       setReadState((current) => mergeReadStatePreservingUnrelated(current, response.readState!));
     }
+    setAllowOwnClosed(response.allowAgentOwnClosedConversations === true);
     if (response.inboxVisibilityPolicy) {
       setInboxVisibilityPolicy(response.inboxVisibilityPolicy);
     }
@@ -4141,6 +4155,7 @@ export default function AppInboxPage() {
       if (response.readState) {
         setReadState((current) => mergeReadStatePreservingUnrelated(current, response.readState!));
       }
+      setAllowOwnClosed(response.allowAgentOwnClosedConversations === true);
       if (response.inboxVisibilityPolicy) {
         setInboxVisibilityPolicy(response.inboxVisibilityPolicy);
       }
@@ -5104,15 +5119,15 @@ export default function AppInboxPage() {
     }
   }, [filteredConversations, isBusinessTenant, session]);
   const visibleMoreConversationFilters = useMemo(
-    () => getMoreConversationFiltersForRole(session?.user.role),
-    [session?.user.role]
+    () => getMoreConversationFiltersForRole(session?.user.role, allowOwnClosed),
+    [session?.user.role, allowOwnClosed]
   );
   useEffect(() => {
-    if (isAgentUser && conversationFilter === "CLOSED") {
+    if (isAgentUser && !allowOwnClosed && conversationFilter === "CLOSED") {
       setConversationFilter("ALL");
       setShowMoreConversationFilters(false);
     }
-  }, [conversationFilter, isAgentUser]);
+  }, [conversationFilter, isAgentUser, allowOwnClosed]);
   const selectedMoreConversationFilter = useMemo(
     () => visibleMoreConversationFilters.find((item) => item.value === conversationFilter) ?? null,
     [conversationFilter, visibleMoreConversationFilters]

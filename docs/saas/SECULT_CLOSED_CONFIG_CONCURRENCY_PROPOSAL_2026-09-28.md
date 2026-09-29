@@ -1,5 +1,17 @@
 # Persistência compartilhada — pré-requisito SECULT
 
+## Continuidade após revisão de f06d49cb
+
+A revisão da dependência foi concluída pelo owner sem bloqueador para avanço local.
+A funcionalidade SECULT foi implementada e validada somente no worktree, com o 35º
+escritor usando o helper e testes de revogação pelo setter real. Ver
+[resultado e limites próprios](SECULT_OWN_CLOSED_LOCAL_2026-09-28.md).
+A dependência permanece no commit separado f06d49cb; não implantada isoladamente.
+Em 29/09, publicação da funcionalidade autorizada somente para revisão sobre essa
+base, reutilizando as evidências locais; sem deploy nem ativação.
+As afirmações “SECULT não implementada” abaixo são histórico da entrega anterior.
+
+
 Atualização de 28/09/2026. Base local `3b891eb0c862c6767d57e7886f09cba85dc1ac2f`,
 branch `review/campaign-recovery-20260926`. **LOCAL VALIDATED / NOT DEPLOYED**
 para esta dependência. Publicação autorizada somente para revisão, sem migration
