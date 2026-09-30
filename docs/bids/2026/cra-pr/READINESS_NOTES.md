@@ -1,5 +1,11 @@
 # CRA-PR Readiness Notes
 
+## Release Automação implantada — 29/09/2026, Fortaleza
+
+**DEPLOYED / AUTOMATION NOT ACTIVATED.** [Execução, versões, backup, retorno e limites](../../../saas/AUTOMATION_ROLLOUT_2026-09-29.md). API/frontend ba66c241 (funcional d06a92b8); worker exclusivamente mínimo bf5+f06+backport91230f88. Correção912 separada do acompanhamento BOT. `allowAutomationConversationsInInbox` permanece false/ausente em todos; nenhum tenant ativado. Owner confirmou sessão, Inbox, CRM e configurações em leitura; não equivale a aceite funcional de Automação. Contenção de 3min20; processos antigos/sockets ausentes e barreira DB/locks zero antes do sucessor. Sessões preservaram 3 connected / 1 disconnected / 1 pending; risco residual inbound/outbound/auth não é eliminado por essa contagem. Guarda reaberta na geração 7, scheduler preservado e dois ciclos naturais observados; crons/boot/saved/fallback restaurados com referências compatíveis. Registros anteriores de NOT DEPLOYED permanecem históricos, superados apenas quanto ao deploy técnico por esta entrada.
+
+Escritores compatíveis e retorno a3/minimal-f06 preservados; rollback não restaura DB/auth antigos nem autoriza dois proprietários. Respostas automáticas em andamento seguem limitação separada, sem promessa de cancelamento. Campanhas/CRA aguardam validação funcional do owner; ativação/aceite BOT posteriores; SECULT encerrada/aceita; inatividade no Guia pausada; DB-only encerrada; 6683 CLOSED.
+
 ## Acompanhamento de automação — evidência local, sem aceite produtivo
 
 [Implementação e validação local](../../../saas/INBOX_AUTOMATION_LOCAL_2026-09-29.md): chave default false gerenciada por ADMIN, acompanhamento SUPERVISOR/ADMIN do tenant no filtro Automação, fora de TODAS. LOCAL VALIDATED / NOT DEPLOYED. Não comprova aceite CRA nem cancela respostas automáticas em andamento. Campanhas/CRA continuam aguardando validação funcional do owner. Correção DB-only aceita e SECULT encerrada permanecem separadas.

@@ -1,5 +1,7 @@
 # Release Automação — plano controlado para aprovação
 
+> Atualização posterior: execução autorizada registrada em [AUTOMATION_ROLLOUT_2026-09-29](AUTOMATION_ROLLOUT_2026-09-29.md). **DEPLOYED / AUTOMATION NOT ACTIVATED.** O conteúdo abaixo preserva a preparação e os gates como histórico; não é autorização para repetir a janela.
+
 **PUBLISHED FOR REVIEW / NOT DEPLOYED. Preparação executada; janela não executada.** API/frontend fixos em `ba66c24112ccb10f2dfdcced54350f513d399bc6`, código funcional até d06a92b8. Worker exclusivamente mínimo bf5f1d76 + pré-requisito f06d49cb + backport 91230f88; nunca worker completo da API. Atualização: [releases remotas, backup fresco e restauração isolada comprovados](AUTOMATION_RELEASE_PREPARATION_2026-09-29.md). Sem aplicação/provider iniciado, mudança de guarda, scheduler, supervisão ou configuração de tenant. As leituras e etapas inicialmente pendentes abaixo ficam preservadas como histórico; o relatório de preparação atualiza seu estado.
 
 ## Preflight necessário, 29/09/2026 21:45–21:50 UTC

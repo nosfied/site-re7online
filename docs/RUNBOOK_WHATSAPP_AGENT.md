@@ -1,5 +1,11 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## Release Automação implantada — 29/09/2026, Fortaleza
+
+**DEPLOYED / AUTOMATION NOT ACTIVATED.** [Execução, versões, backup, retorno e limites](saas/AUTOMATION_ROLLOUT_2026-09-29.md). API/frontend ba66c241 (funcional d06a92b8); worker exclusivamente mínimo bf5+f06+backport91230f88. Correção912 separada do acompanhamento BOT. `allowAutomationConversationsInInbox` permanece false/ausente em todos; nenhum tenant ativado. Owner confirmou sessão, Inbox, CRM e configurações em leitura; não equivale a aceite funcional de Automação. Contenção de 3min20; processos antigos/sockets ausentes e barreira DB/locks zero antes do sucessor. Sessões preservaram 3 connected / 1 disconnected / 1 pending; risco residual inbound/outbound/auth não é eliminado por essa contagem. Guarda reaberta na geração 7, scheduler preservado e dois ciclos naturais observados; crons/boot/saved/fallback restaurados com referências compatíveis. Registros anteriores de NOT DEPLOYED permanecem históricos, superados apenas quanto ao deploy técnico por esta entrada.
+
+Escritores compatíveis e retorno a3/minimal-f06 preservados; rollback não restaura DB/auth antigos nem autoriza dois proprietários. Respostas automáticas em andamento seguem limitação separada, sem promessa de cancelamento. Campanhas/CRA aguardam validação funcional do owner; ativação/aceite BOT posteriores; SECULT encerrada/aceita; inatividade no Guia pausada; DB-only encerrada; 6683 CLOSED.
+
 ## Automação — preparação remota e retorno verificados
 
 **PUBLISHED FOR REVIEW / NOT DEPLOYED.** [Evidências de releases, backup fresco e restauração isolada](saas/AUTOMATION_RELEASE_PREPARATION_2026-09-29.md). Pacote API/frontend ba66c241 mantido; worker mínimo f06+912 separado. Configs privadas resolvidas sem início; restore local PASS/60 checksums, banco temporário removido. Guarda/scheduler/processos/sessões preservados; Automação desligada. Pendem início/fim da janela, horizonte de escalonamento/retorno e aceite do risco residual inbound/outbound/auth. Entradas históricas abaixo preservam o estado de cada etapa; não representam pendência atual de preparar releases/backup. Campanhas/CRA aguardam owner; SECULT encerrada.

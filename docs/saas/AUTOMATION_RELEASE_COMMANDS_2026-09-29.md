@@ -1,5 +1,7 @@
 # Release Automação — comandos revisáveis da janela
 
+> Atualização posterior: execução autorizada registrada em [AUTOMATION_ROLLOUT_2026-09-29](AUTOMATION_ROLLOUT_2026-09-29.md). **DEPLOYED / AUTOMATION NOT ACTIVATED.** O conteúdo abaixo preserva a preparação e os gates como histórico; não é autorização para repetir a janela.
+
 Usar junto ao [plano e seus gates](AUTOMATION_RELEASE_PLAN_2026-09-29.md). **Não é autorização de execução.** Trechos são sequenciais e exigem inspeção entre etapas; não colar como script único. Deifson executa sudo na própria sessão. Codex não solicita senha/token. Não executar scripts históricos de swap/prepare sem adaptação: contêm PIDs e releases antigos e terminação expressamente autorizada naquela janela.
 
 ## 1. Preparação antes da janela — executada em área isolada
@@ -131,7 +133,7 @@ sudo nft list tables
 # Gate: tabela ainda ausente, drain comprovado, configs/backup/retorno revisados.
 cmp /etc/cron.d/re7-converta-backup "$PREP/re7-converta-backup.before"
 sudo install -o root -g root -m 0644 "$PREP/re7-converta-backup.window" /etc/cron.d/re7-converta-backup
-crontab "$PREP/deploy.crontab.window"
+crontab - < "$PREP/deploy.crontab.window"
 sudo systemctl disable pm2-deploy.service
 sudo nft --file "$PREP/automation-fence.nft"
 date -Is
@@ -199,7 +201,7 @@ Owner confirma Inbox/CRM/auth em sessão própria, apenas leitura. Recontar fila
 ```bash
 cmp /etc/cron.d/re7-converta-backup "$PREP/re7-converta-backup.window"
 sudo install -o root -g root -m 0644 "$PREP/re7-converta-backup.before" /etc/cron.d/re7-converta-backup
-crontab "$PREP/deploy.crontab.before"
+crontab - < "$PREP/deploy.crontab.before"
 sudo systemctl enable pm2-deploy.service
 systemctl show pm2-deploy.service --property=ActiveState,UnitFileState
 ```

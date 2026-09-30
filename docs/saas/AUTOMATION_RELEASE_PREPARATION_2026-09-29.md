@@ -1,5 +1,7 @@
 # Release Automação — preparação remota e backup, 29/09/2026
 
+> Atualização posterior: execução autorizada registrada em [AUTOMATION_ROLLOUT_2026-09-29](AUTOMATION_ROLLOUT_2026-09-29.md). **DEPLOYED / AUTOMATION NOT ACTIVATED.** O conteúdo abaixo preserva a preparação e os gates como histórico; não é autorização para repetir a janela.
+
 **PUBLISHED FOR REVIEW / NOT DEPLOYED. Automação desligada.** Complementa o [plano](AUTOMATION_RELEASE_PLAN_2026-09-29.md) e os [comandos da janela](AUTOMATION_RELEASE_COMMANDS_2026-09-29.md). Preparação autorizada executada; nenhuma troca de processo, contenção, alteração de guarda/scheduler/cron/boot ou ativação. Sem novos testes/builds: pacotes ba66c241 e worker mínimo previamente verificados reutilizados.
 
 ## Releases e configurações
