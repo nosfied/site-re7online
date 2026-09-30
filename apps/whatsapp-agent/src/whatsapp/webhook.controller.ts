@@ -1,3 +1,4 @@
+import { updateRuntimeIfUnchanged } from "../conversation/runtimeWriteFence.js";
 import { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
 import { Prisma, MessageStatus, MessageType } from "@prisma/client";
@@ -159,6 +160,8 @@ import { buildInboxMessageMedia } from "../http/inboxMedia.js";
 import { extractMessageLocation } from "../inbox/messageLocation.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import {
+  buildWhatsAppMultichannelIdentity,
+  buildWhatsAppMultichannelShadowPatch,
   isWhatsAppMultichannelShadowWriteEnabled,
   safeApplyWhatsAppMultichannelShadow,
 } from "../channels/whatsappMultichannelShadowWrite.js";
@@ -863,6 +866,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     intent: ConversationIntent | undefined;
     messageId: string;
     replyText: string;
+    runtimeWriteToken?: ConversationState["runtimeWriteToken"];
     guard?: { version: number; lastInboundAt?: string };
   }) => {
     if (tenantClientId && tenantClientKey && !env.WHATSAPP_SANDBOX) {
@@ -885,6 +889,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           clientId: tenantClientId,
           requestId: `web-session-inbound:${params.messageId}`,
           outboundSource: "bot",
+          runtimeWriteToken: params.runtimeWriteToken,
           skipAgentSignature: true,
           source: { channel: "whatsapp", provider: "web_session", channelAccountId: null },
         });
@@ -1639,13 +1644,24 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
     if (revision) nextState.runtimeWriteToken = revision;
     if (tenantClientId && isWhatsAppMultichannelShadowWriteEnabled()) {
-      await safeApplyWhatsAppMultichannelShadow({
-        prisma: getPrisma(),
-        model: "ConversationRuntimeState",
-        clientId: tenantClientId,
-        waId: nextState.waId,
-        phoneNumberId: phoneNumberId ?? undefined,
-      });
+      const identity = buildWhatsAppMultichannelIdentity({ waId: nextState.waId, phoneNumberId });
+      if (nextState.runtimeWriteToken && identity) {
+        // This own identity projection must earn its receipt too: raw shadow SQL does not bump updatedAt.
+        const shadowRevision = await updateRuntimeIfUnchanged({
+          prisma, clientId: tenantClientId, waId: nextState.waId,
+          expected: nextState.runtimeWriteToken, data: buildWhatsAppMultichannelShadowPatch(identity),
+        });
+        if (!shadowRevision) {
+          logger.info({ event: "automation.runtime.stale_write_skipped", clientId: tenantClientId, phase: "identity_projection" });
+          return await storage.getConversation(state.waId, tenantClientKey) ?? currentState ?? state;
+        }
+        nextState.runtimeWriteToken = shadowRevision;
+      } else {
+        await safeApplyWhatsAppMultichannelShadow({
+          prisma: getPrisma(), model: "ConversationRuntimeState", clientId: tenantClientId,
+          waId: nextState.waId, phoneNumberId: phoneNumberId ?? undefined,
+        });
+      }
     }
     if (departmentChanged && resolvedDepartmentId) {
       logger.info({
@@ -2732,6 +2748,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const replyText = mediaHandoffPolicy.customerNoticeText;
     const result = await sendPassiveOutboundText({
+      runtimeWriteToken: params.nextState.runtimeWriteToken,
       toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || params.nextState.waId : params.toE164,
       waId: params.nextState.waId,
       intent: params.nextState.intent,
@@ -4323,6 +4340,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               (await resolveCurrentTenantCredentials()) ?? undefined
             )
           : sendPassiveOutboundText({
+              runtimeWriteToken: updatedConversation.runtimeWriteToken,
               toE164: toForReply,
               waId: normalizedFrom,
               intent: updatedConversation.intent,
@@ -4691,6 +4709,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
           const handoffReply = activatedHandoff.replyText;
           const result = await sendPassiveOutboundText({
+            runtimeWriteToken: updatedConversation.runtimeWriteToken,
             toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
@@ -4759,6 +4778,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         );
         if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
           const result = await sendPassiveOutboundText({
+            runtimeWriteToken: updatedConversation.runtimeWriteToken,
             toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
@@ -4882,6 +4902,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       );
       if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
         const result = await sendPassiveOutboundText({
+          runtimeWriteToken: updatedConversation.runtimeWriteToken,
           toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
           waId: normalizedFrom,
           intent: updatedConversation.intent,
@@ -5746,6 +5767,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       if (chatbotHandoffDecision.closedText.trim() && env.outboundEnabled) {
         try {
           const feedbackResult = await sendPassiveOutboundText({
+            runtimeWriteToken: updatedConversation.runtimeWriteToken,
             toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
@@ -5812,6 +5834,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
         try {
           const feedbackResult = await sendPassiveOutboundText({
+            runtimeWriteToken: updatedConversation.runtimeWriteToken,
             toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
@@ -6214,6 +6237,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           updatedConversation = await upsertConversationSafe(updatedConversation);
           if (demoReplyText) {
             await sendPassiveOutboundText({
+              runtimeWriteToken: updatedConversation.runtimeWriteToken,
               toE164: message.from,
               waId: normalizedFrom,
               intent: updatedConversation.intent,
@@ -8207,6 +8231,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             (await resolveCurrentTenantCredentials()) ?? undefined
           )
         : sendPassiveOutboundText({
+            runtimeWriteToken: updatedConversation.runtimeWriteToken,
             toE164: toForReply,
             waId: normalizedFrom,
             intent: updatedConversation.intent,

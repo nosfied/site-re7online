@@ -616,12 +616,22 @@ function fakePrisma() {
           return true;
         }),
       updateManyAndReturn: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
-        const found = state.runtimeStates.findIndex(row => Object.entries(where).every(([key, expected]) => {
+        const matches = (row: Record<string, unknown>, filter: Record<string, unknown>): boolean => Object.entries(filter).every(([key, expected]) => {
           if (expected === undefined) return true;
-          const actual = row[key];
+          if (key === "OR") return (expected as Record<string, unknown>[]).some(part => matches(row, part));
+          if (key === "AND") return (expected as Record<string, unknown>[]).every(part => matches(row, part));
+          const actual = row[key] ?? null;
+          if (expected && typeof expected === "object" && !(expected instanceof Date)) {
+            if ("equals" in expected) {
+              const value = (expected as { equals: unknown }).equals;
+              return value === Prisma.AnyNull ? actual === null : JSON.stringify(actual) === JSON.stringify(value);
+            }
+            if ("lte" in expected) return actual instanceof Date && actual <= (expected as { lte: Date }).lte;
+          }
           return actual instanceof Date && expected instanceof Date
             ? actual.getTime() === expected.getTime() : actual === expected;
-        }));
+        });
+        const found = state.runtimeStates.findIndex(row => matches(row, where));
         if (found < 0) return [];
         const before = state.runtimeStates[found];
         const row = { ...before, ...withoutUndefined(data), updatedAt: new Date(),
@@ -643,6 +653,7 @@ function fakePrisma() {
         });
         state.runtimeStates[0] = row;
         return {
+          clientId: row.clientId, waId: row.waId,
           updatedAt: row.updatedAt,
           version: row.version,
           id: String(row.id),

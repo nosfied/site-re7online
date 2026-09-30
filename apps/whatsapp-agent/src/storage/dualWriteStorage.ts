@@ -451,6 +451,10 @@ export function createDualWriteStorage(
     clientKey: string;
     waId: string;
     db: {
+      clientId: string;
+      channel: string | null;
+      provider: string | null;
+      channelAccountId: string | null;
       updatedAt: Date;
       version: number;
       waId: string;
@@ -484,7 +488,7 @@ export function createDualWriteStorage(
       flowStep: number | null;
       chatbotNodeId: string | null;
       chatbotActive: boolean;
-      answers: unknown;
+      answers: Prisma.JsonValue;
       mode: string | null;
       assignedUserId: string | null;
       assignedTo: string | null;
@@ -636,6 +640,9 @@ export function createDualWriteStorage(
       },
       select: {
         id: true,
+        clientId: true,
+        channel: true,
+        provider: true,
         updatedAt: true,
         waId: true,
         waIdCanonical: true,

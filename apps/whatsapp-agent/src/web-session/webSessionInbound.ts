@@ -1190,6 +1190,7 @@ async function ensureWebSessionRuntimeState(params: {
       answers: {},
     },
     select: {
+      clientId: true, waId: true, channel: true, provider: true, channelAccountId: true,
       updatedAt: true,
       version: true,
       id: true,
@@ -1491,6 +1492,7 @@ async function sendWebSessionBotText(params: {
     waId: params.waId,
     waIdCanonical: params.waIdCanonical,
     text: normalizeBotMenuOptionMarkdown(params.text),
+    runtimeWriteToken: params.state.runtimeWriteToken,
     clientKey: params.clientKey,
     clientId: params.clientId,
     requestId: params.requestId,
@@ -3193,6 +3195,7 @@ export async function ingestWebSessionInboundMessage(params: {
               waId: params.message.sender,
               waIdCanonical: params.message.senderCanonical,
               text: normalizedReplyText,
+              runtimeWriteToken: runtimeConversationState.runtimeWriteToken,
               clientKey: params.message.tenantKey,
               clientId: params.message.clientId,
               requestId: `${requestId}:bot-reply`,

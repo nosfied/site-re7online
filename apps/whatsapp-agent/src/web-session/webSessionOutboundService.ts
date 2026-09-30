@@ -1,3 +1,4 @@
+import { recordOwnRuntimeOutboundActivity, invalidateRuntimeWriteToken, type RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
 import { MessageStatus, MessageType, type PrismaClient } from "@prisma/client";
 import type { ServiceCycleSnapshot } from "../conversation/serviceCycle.js";
 import { applyAgentSignature } from "../inbox/agentSignature.js";
@@ -133,6 +134,7 @@ async function markWebSessionOutboundActivity(params: {
   channelAccountId: string;
   sentAt: Date;
   messageId: string;
+  runtimeWriteToken?: RuntimeWriteToken;
 }) {
   const waIdCanonical = params.waIdCanonical ?? params.waId;
   const identityWhere = {
@@ -140,25 +142,35 @@ async function markWebSessionOutboundActivity(params: {
     channel: "whatsapp",
     OR: [{ waId: params.waId }, { waIdCanonical }],
   };
-  await Promise.all([
-    params.prisma.conversation.updateMany({
-      where: identityWhere,
-      data: {
-        provider: "web_session",
-        channelAccountId: params.channelAccountId,
-        lastOutboundAt: params.sentAt,
-      },
-    }),
-    params.prisma.conversationRuntimeState.updateMany({
-      where: identityWhere,
-      data: {
-        provider: "web_session",
-        channelAccountId: params.channelAccountId,
-        lastOutboundAt: params.sentAt,
-        lastOutboundMessageId: params.messageId,
-      },
-    }),
-  ]);
+  try {
+    await Promise.all([
+      params.prisma.conversation.updateMany({
+        where: { ...identityWhere, AND: [{ OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lte: params.sentAt } }] }] },
+        data: {
+          ...(params.runtimeWriteToken ? {} : { provider: "web_session", channelAccountId: params.channelAccountId }),
+          lastOutboundAt: params.sentAt,
+        },
+      }),
+      (async () => {
+        const expected = params.runtimeWriteToken;
+        if (expected && await recordOwnRuntimeOutboundActivity({
+          prisma: params.prisma, clientId: params.clientId, waId: params.waId, expected,
+          sentAt: params.sentAt, messageId: params.messageId, channelAccountId: params.channelAccountId,
+        })) return;
+        // Accepted outbound survives a conflict, without restoring control or older activity.
+        await params.prisma.conversationRuntimeState.updateMany({
+          where: { ...identityWhere, AND: [{ OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lte: params.sentAt } }] }] },
+          data: { ...(expected ? {} : { provider: "web_session", channelAccountId: params.channelAccountId }),
+            lastOutboundAt: params.sentAt, lastOutboundMessageId: params.messageId },
+        });
+      })(),
+    ]);
+  } catch (error) {
+    if (!params.runtimeWriteToken) throw error;
+    invalidateRuntimeWriteToken(params.runtimeWriteToken);
+    logger.error({ event: "automation.runtime.activity_write_failed", clientId: params.clientId,
+      messageId: params.messageId, error: (error as Error).message });
+  }
 }
 
 async function findWebSessionAccount(params: {
@@ -480,6 +492,7 @@ export async function createWebSessionTextOutboundMessage(params: {
   clientKey: string;
   clientId: string;
   requestId: string;
+  runtimeWriteToken?: RuntimeWriteToken;
   actorUserId?: string | null;
   outboundSource?: "inbox_text" | "canned_reply" | "protocol_notice" | "bot";
   cannedReplyId?: string | null;
@@ -706,6 +719,7 @@ export async function createWebSessionTextOutboundMessage(params: {
       channelAccountId: account.channelAccountId,
       sentAt: createdAt,
       messageId,
+      runtimeWriteToken: outboundSource === "bot" ? params.runtimeWriteToken : undefined,
     });
   }
   logger.info({
