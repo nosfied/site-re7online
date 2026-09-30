@@ -1,5 +1,7 @@
 # Release Automação — comandos revisáveis da janela
 
+> Para a correção do incidente 91230f88, **não repetir esta troca histórica de três processos**. Usar o [plano de 30/09](AUTOMATION_RUNTIME_FIX_PREPARATION_2026-09-30.md), que prepara somente API e worker e preserva o frontend ativo.
+
 > Atualização posterior: execução autorizada registrada em [AUTOMATION_ROLLOUT_2026-09-29](AUTOMATION_ROLLOUT_2026-09-29.md). **DEPLOYED / AUTOMATION NOT ACTIVATED.** O conteúdo abaixo preserva a preparação e os gates como histórico; não é autorização para repetir a janela.
 
 Usar junto ao [plano e seus gates](AUTOMATION_RELEASE_PLAN_2026-09-29.md). **Não é autorização de execução.** Trechos são sequenciais e exigem inspeção entre etapas; não colar como script único. Deifson executa sudo na própria sessão. Codex não solicita senha/token. Não executar scripts históricos de swap/prepare sem adaptação: contêm PIDs e releases antigos e terminação expressamente autorizada naquela janela.

@@ -1,5 +1,9 @@
 # Incidente produtivo — gravação própria de automação rejeitada após 91230f88
 
+**Implantação técnica, 30/09/2026:** [registro sanitizado](AUTOMATION_RUNTIME_FIX_ROLLOUT_2026-09-30.md). API b66bb89a e worker mínimo corrigido estão ativos; frontend preservado. O incidente continua aberto até prova funcional de avanço em Syer.
+
+**Preparação posterior, 30/09/2026:** [releases isoladas, hashes, backup, restauração e comandos da troca API/worker](AUTOMATION_RUNTIME_FIX_PREPARATION_2026-09-30.md). A correção b66bb89a ainda não foi implantada; o incidente só fecha com avanço de fluxo persistido e resposta seguinte correta em Syer.
+
 **INCIDENT OPEN IN PRODUCTION. Correção LOCAL VALIDATED / NOT DEPLOYED, publicada somente para revisão.** Prioridade sobre as frentes pendentes. Não confundir saúde de processo com recuperação do fluxo.
 
 ## Início e escopo comprovado

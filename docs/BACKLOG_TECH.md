@@ -1,5 +1,9 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**Atualização operacional 30/09, 02:30 UTC — correção 91230f88 DEPLOYED TECHNICALLY / INCIDENT OPEN.** [Troca, backup, validações e limites](saas/AUTOMATION_RUNTIME_FIX_ROLLOUT_2026-09-30.md). API b66bb89a e worker mínimo com backport específico efetivos; frontend ba66 preservado; guarda e scheduler no estado inicial. Falta prova em conversa nova Syer: outbound aceito, nó/flow persistido e resposta seguinte avançando. META_CLOUD puro e híbrido API→WEB permanecem não exercitados.
+
+**Atualização 30/09 — incidente 91230f88: PREPARED / NOT DEPLOYED / INCIDENT OPEN.** [Plano operacional e backup fresco verificado](saas/AUTOMATION_RUNTIME_FIX_PREPARATION_2026-09-30.md): API b66bb89a + worker mínimo com backport específico preparados; frontend atual permanece. Decisão final da janela, troca com barreira de saída e prova funcional de avanço em Syer ainda pendentes. META_CLOUD e híbrido não exercitados após correção permanecem pendentes. Campanhas/CRA seguem aguardando validação funcional do owner.
+
 ## Incidente prioritário 91230f88 — correção local para revisão, 29/09/2026
 
 **INCIDENT OPEN IN PRODUCTION / FIX LOCAL VALIDATED / NOT DEPLOYED.** [Matriz de todos os tenants, causa, testes e retorno compatível](saas/AUTOMATION_RUNTIME_SELF_WRITE_INCIDENT_2026-09-29.md). Syer: escrita própria de atividade outbound invalidava updatedAt e impedia persistir avanço. Tendência: conflito correlacionado com encaminhamento humano legítimo; não atribuído ao loop. Demais tenants inventariados, sem prova de ocorrência no período observado.

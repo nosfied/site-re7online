@@ -1,5 +1,11 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**Atualização operacional 30/09, 02:30 UTC — DEPLOYED TECHNICALLY / INCIDENT OPEN.** [Registro sanitizado da troca API b66bb89a + worker mínimo, frontend preservado](saas/AUTOMATION_RUNTIME_FIX_ROLLOUT_2026-09-30.md). Guarda reaberta geração 9; sessões e atendimento verificados. Avanço real do fluxo em Syer ainda não comprovado, portanto não declarar recuperação funcional.
+
+## Preparação operacional do incidente 91230f88 — 30/09/2026
+
+**PREPARED / NOT DEPLOYED / INCIDENT OPEN.** [Plano de troca somente API/worker, hashes, backup fresco, restauração local e gates](saas/AUTOMATION_RUNTIME_FIX_PREPARATION_2026-09-30.md). Releases privadas b66bb89a e worker mínimo bf5+f06+912+b66; frontend ba66 preservado. Nenhuma contenção, parada, mudança de guarda ou ativação executada. Teste funcional do avanço do fluxo em Syer permanece gate de recuperação. As seções históricas abaixo registram o estado nas respectivas datas.
+
 ## Incidente prioritário 91230f88 — correção local para revisão, 29/09/2026
 
 **INCIDENT OPEN IN PRODUCTION / FIX LOCAL VALIDATED / NOT DEPLOYED.** [Matriz de todos os tenants, causa, testes e retorno compatível](saas/AUTOMATION_RUNTIME_SELF_WRITE_INCIDENT_2026-09-29.md). Syer: escrita própria de atividade outbound invalidava updatedAt e impedia persistir avanço. Tendência: conflito correlacionado com encaminhamento humano legítimo; não atribuído ao loop. Demais tenants inventariados, sem prova de ocorrência no período observado.
