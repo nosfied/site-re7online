@@ -1,6 +1,6 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
-**Atualização operacional 30/09, 02:30 UTC — DEPLOYED TECHNICALLY / INCIDENT OPEN.** [Registro sanitizado da troca API b66bb89a + worker mínimo, frontend preservado](saas/AUTOMATION_RUNTIME_FIX_ROLLOUT_2026-09-30.md). Guarda reaberta geração 9; sessões e atendimento verificados. Avanço real do fluxo em Syer ainda não comprovado, portanto não declarar recuperação funcional.
+**Atualização operacional 30/09, 02:30 UTC — DEPLOYED TECHNICALLY / INCIDENT OPEN.** [Registro sanitizado da troca API b66bb89a + worker mínimo, frontend preservado](saas/AUTOMATION_RUNTIME_FIX_ROLLOUT_2026-09-30.md). Guarda reaberta geração 9; sessões e atendimento verificados. Avanço real do fluxo em Syer via WEB_SESSION comprovado às 02:32–02:33 UTC por outbounds SENT, nó menu persistido e confirmação visual do owner; META_CLOUD puro e híbrido API→WEB seguem pendentes.
 
 ## Preparação operacional do incidente 91230f88 — 30/09/2026
 
