@@ -206,6 +206,8 @@ export type AppSupportConversation = {
   updatedAt: string;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
+  windowIsOpen?: boolean | null;
+  windowExpiresAt?: string | null;
 };
 
 export type AppSupportMessage = {
@@ -1146,6 +1148,8 @@ type AppConversationOperationalPayload = {
   awaitingConsent?: boolean;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
+  windowIsOpen?: boolean | null;
+  windowExpiresAt?: string | null;
   waitingFirstResponseSec?: number | null;
   activeDurationSec?: number | null;
   isUnassigned: boolean;

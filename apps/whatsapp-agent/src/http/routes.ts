@@ -7331,7 +7331,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         json(res, 409, httpError("conversation_not_assigned", "Assuma a conversa antes de responder manualmente."));
         return;
       }
-      if (!isWebSessionWhatsApp && !isWindowOpen(currentConversation, Date.now())) {
+      if (!isWindowOpen(currentConversation, Date.now())) {
         await persistEvent({
           clientId: client.id,
           conversationId: conversationRow.id,
@@ -7816,7 +7816,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         });
         return;
       }
-      if (resolvedChannel === "whatsapp" && !isWebSessionWhatsApp && !isWindowOpen(currentConversation, Date.now())) {
+      if (resolvedChannel === "whatsapp" && !isWindowOpen(currentConversation, Date.now())) {
         json(res, 409, { error: buildWindowClosedError(currentConversation.window.expiresAt) });
         return;
       }
@@ -8238,6 +8238,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           error: "conversation_not_assigned",
           message: "Assuma a conversa antes de responder manualmente.",
         });
+        return;
+      }
+      if (!isWindowOpen(currentConversation, Date.now())) {
+        json(res, 409, { error: buildWindowClosedError(currentConversation.window.expiresAt) });
         return;
       }
 
@@ -13378,6 +13382,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       const operationalConversation = materializeConversationOperationalState(conversation, defaults) ?? conversation;
       if (isClosedConversation(operationalConversation)) {
         json(res, 409, httpError("conversation_closed", "Atendimento encerrado nao pode ser assumido."));
+        return;
+      }
+      if (!isWindowOpen(operationalConversation, Date.now())) {
+        json(res, 409, { error: buildWindowClosedError(operationalConversation.window.expiresAt) });
         return;
       }
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
@@ -32687,6 +32695,7 @@ function serializeConversationOperationalFields(params: {
     closedAt?: string | null;
     lastInboundAt?: string | null;
     lastOutboundAt?: string | null;
+    window?: { isOpen?: boolean | null; expiresAt?: string | null } | null;
     answers?: {
       flowContext?: Record<string, unknown> | null;
       flowTags?: string[] | null;
@@ -32723,6 +32732,8 @@ function serializeConversationOperationalFields(params: {
     awaitingConsent: Boolean(params.awaitingConsent),
     lastInboundAt: conversation?.lastInboundAt ?? null,
     lastOutboundAt: conversation?.lastOutboundAt ?? null,
+    windowIsOpen: conversation?.window?.isOpen ?? null,
+    windowExpiresAt: conversation?.window?.expiresAt ?? null,
     isUnassigned: !conversation?.assignedUserId,
     flowContext,
     flowTags: sanitizeInboxFlowTags(conversation?.answers?.flowTags ?? null),
@@ -33314,6 +33325,23 @@ async function sendConversationProtocolNoticeIfNeeded(
   }
   if (protocolNotification.trigger !== "first_human_handoff") {
     return { sent: false as const, reason: "unsupported_trigger" as const };
+  }
+  if (params.conversation && !isWindowOpen(params.conversation, Date.now())) {
+    await persistEvent({
+      clientId: params.clientId,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical ?? null,
+      messageId: `protocol.notice.${params.requestId}`,
+      requestId: `${params.requestId}:protocol:event`,
+      eventName: "conversation.protocol.notice.skipped",
+      payloadJson: {
+        source: "protocol_notice",
+        protocol: params.protocol,
+        cycleId: getActiveServiceCycle(params.conversation)?.cycleId ?? null,
+        reason: "window_closed",
+      },
+    });
+    return { sent: false as const, reason: "window_closed" as const };
   }
   if (params.channel && serializeInboxChannelFields({ channel: params.channel }).channel !== "whatsapp") {
     return { sent: false as const, reason: "non_whatsapp_channel" as const };

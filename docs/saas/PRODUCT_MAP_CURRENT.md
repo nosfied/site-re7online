@@ -1,5 +1,9 @@
 # Product Map Current
 
+
+## Atualização local 30/09 - gate único de janela livre Inbox/WEB/híbrido
+
+LOCAL VALIDATED / NOT DEPLOYED. Na linha `review/campaign-recovery-20260926` em `e3f4e1f1fd4ad41312bb1ccfe2516a08c1e2bbfc`, com `b66bb89a` preservado, a política local passa a exigir janela livre para Assumir, texto livre, mensagem pronta, mídia, protocolo e inatividade antes do provider em META_CLOUD, WEB_ONLY e HYBRID. Templates aprovados continuam pelos gates próprios; Contact Start WEB permanece exceção estrita; atendimento já assumido mantém responsável/lifecycle e só bloqueia freeform vencido. UI usa o estado de janela projetado pela API e não oferece template indisponível em WEB_ONLY. Evidência: unit de fronteira `isWindowOpen`, regressão `automationOwnActivity`, teste focado Inbox WEB/híbrido e builds backend/frontend. Sem deploy, produção, envio real, schema/migration.
 ## Incidente prioritário 91230f88 — correção local para revisão, 29/09/2026
 
 **INCIDENT OPEN IN PRODUCTION / FIX LOCAL VALIDATED / NOT DEPLOYED.** [Matriz de todos os tenants, causa, testes e retorno compatível](AUTOMATION_RUNTIME_SELF_WRITE_INCIDENT_2026-09-29.md). Syer: escrita própria de atividade outbound invalidava updatedAt e impedia persistir avanço. Tendência: conflito correlacionado com encaminhamento humano legítimo; não atribuído ao loop. Demais tenants inventariados, sem prova de ocorrência no período observado.

@@ -1,5 +1,9 @@
 # Converta Product State - 2026-08
 
+
+## Atualização local 30/09 - gate único de janela livre Inbox/WEB/híbrido
+
+LOCAL VALIDATED / NOT DEPLOYED sobre `e3f4e1f1fd4ad41312bb1ccfe2516a08c1e2bbfc` (branch `review/campaign-recovery-20260926`, inclui `b66bb89a`). A implementação local reutiliza `isWindowOpen` para bloquear Assumir antes de mutação e negar texto livre, mensagem pronta, mídia, protocolo e inatividade fora da janela em Meta, Web Session e híbrido, sem mexer em CRM/RBAC, lifecycle já assumido, templates aprovados ou Contact Start WEB. UI mostra janela fechada e evita sugerir template indisponível em WEB_ONLY. Evidência local: `conversation.service.test.ts` 5/5, `automationOwnActivity.test.ts` 15/15, teste focado de Inbox WEB/híbrido PASS, backend build PASS, frontend build PASS. Não há deploy, provider real, envio real, schema/migration ou atribuição causal à suspensão Demo. DELIVERED/READ -> HUMAN/WAITING e mídias em templates permanecem decisões/frentes separadas.
 ## Incidente prioritário 91230f88 — correção local para revisão, 29/09/2026
 
 **INCIDENT OPEN IN PRODUCTION / FIX LOCAL VALIDATED / NOT DEPLOYED.** [Matriz de todos os tenants, causa, testes e retorno compatível](AUTOMATION_RUNTIME_SELF_WRITE_INCIDENT_2026-09-29.md). Syer: escrita própria de atividade outbound invalidava updatedAt e impedia persistir avanço. Tendência: conflito correlacionado com encaminhamento humano legítimo; não atribuído ao loop. Demais tenants inventariados, sem prova de ocorrência no período observado.

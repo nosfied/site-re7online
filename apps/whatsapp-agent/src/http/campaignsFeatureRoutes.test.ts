@@ -4156,6 +4156,17 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
       lastInboundAt: new Date("2026-08-11T12:00:00.000Z"),
     },
   });
+  await seedHybridRuntimeState({
+    waId,
+    waIdCanonical: legacyCanonicalWaId,
+    firstSeenAt: "2026-08-11T12:00:00.000Z",
+    lastInboundAt: "2026-08-11T12:00:00.000Z",
+    window: { isOpen: false, expiresAt: "2026-01-01T10:00:00.000Z" },
+    mode: "HUMAN",
+    status: "IN_PROGRESS",
+    assignedUserId: businessAdmin.id,
+    assignedTo: businessAdmin.name,
+  });
   const quotedInbound = await prisma.inboundMessage.create({
     data: {
       clientId: businessClientId,
@@ -4199,6 +4210,63 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
   });
   assert.equal(blockedTemplate.status, 409);
   assert.equal(getErrorCode(blockedTemplate.body), "template_transport_unavailable");
+
+  const closedTextResponse = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Mensagem web session fora da janela.",
+  });
+  assert.equal(closedTextResponse.status, 409, JSON.stringify(closedTextResponse.body));
+  assert.equal(getErrorCode(closedTextResponse.body), "window_closed");
+  assert.equal(workerTextRequests.length, 0);
+
+  const closedCanned = await request<{ ok: true; item: { id: string } }>(
+    "POST",
+    "/app/canned-replies",
+    businessAdmin,
+    { title: "Web fechada", body: "Mensagem pronta fora da janela." }
+  );
+  assert.equal(closedCanned.status, 201, JSON.stringify(closedCanned.body));
+  const closedCannedResponse = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send-canned-reply`, businessAdmin, {
+    cannedReplyId: closedCanned.body.item.id,
+  });
+  assert.equal(closedCannedResponse.status, 409, JSON.stringify(closedCannedResponse.body));
+  assert.equal(getErrorCode(closedCannedResponse.body), "window_closed");
+  assert.equal(workerTextRequests.length, 0);
+
+  const imagePng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l2t0XQAAAABJRU5ErkJggg==",
+    "base64"
+  );
+  const closedMediaForm = new FormData();
+  closedMediaForm.set("caption", "Midia web session fora da janela.");
+  closedMediaForm.set("file", new Blob([imagePng], { type: "image/png" }), "web-session-closed.png");
+  const closedMediaResponse = await requestMultipart<ErrorPayload>(
+    `/app/conversation/${waId}/send-media`,
+    businessAdmin,
+    closedMediaForm
+  );
+  assert.equal(closedMediaResponse.status, 409, JSON.stringify(closedMediaResponse.body));
+  assert.equal(getErrorCode(closedMediaResponse.body), "window_closed");
+  assert.equal(workerMediaRequests.length, 0);
+
+  await prisma.conversation.updateMany({
+    where: { clientId: businessClientId, waId },
+    data: { windowIsOpen: true, windowExpiresAt: new Date("2099-01-01T10:00:00.000Z") },
+  });
+  await prisma.conversationRuntimeState.updateMany({
+    where: { clientId: businessClientId, waId },
+    data: { windowIsOpen: true, windowExpiresAt: new Date("2099-01-01T10:00:00.000Z") },
+  });
+  await seedHybridRuntimeState({
+    waId,
+    waIdCanonical: legacyCanonicalWaId,
+    firstSeenAt: "2026-08-11T12:00:00.000Z",
+    lastInboundAt: "2026-08-11T12:00:00.000Z",
+    window: { isOpen: true, expiresAt: "2099-01-01T10:00:00.000Z" },
+    mode: "HUMAN",
+    status: "IN_PROGRESS",
+    assignedUserId: businessAdmin.id,
+    assignedTo: businessAdmin.name,
+  });
 
   const response = await request<{
     ok: true;
@@ -4361,6 +4429,36 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
       lastInboundAt: new Date("2026-08-11T12:10:00.000Z"),
     },
   });
+  const closedClaimResponse = await request<ErrorPayload>(
+    "POST",
+    `/app/conversation/${protocolWaId}/claim`,
+    businessAdmin,
+    {}
+  );
+  assert.equal(closedClaimResponse.status, 409, JSON.stringify(closedClaimResponse.body));
+  assert.equal(getErrorCode(closedClaimResponse.body), "window_closed");
+  assert.equal(workerTextRequests.length, 2);
+
+  await prisma.conversation.updateMany({
+    where: { clientId: businessClientId, waId: protocolWaId },
+    data: { windowIsOpen: true, windowExpiresAt: new Date("2099-01-01T10:00:00.000Z") },
+  });
+  await prisma.conversationRuntimeState.updateMany({
+    where: { clientId: businessClientId, waId: protocolWaId },
+    data: { windowIsOpen: true, windowExpiresAt: new Date("2099-01-01T10:00:00.000Z") },
+  });
+  await seedHybridRuntimeState({
+    waId: protocolWaId,
+    waIdCanonical: protocolWaId,
+    firstSeenAt: "2026-08-11T12:10:00.000Z",
+    lastInboundAt: "2026-08-11T12:10:00.000Z",
+    window: { isOpen: true, expiresAt: "2099-01-01T10:00:00.000Z" },
+    mode: "HUMAN",
+    status: "WAITING",
+    assignedUserId: null,
+    assignedTo: null,
+  });
+
   const claimResponse = await request<{ ok: true; protocol: string | null; assignedUserId: string | null }>(
     "POST",
     `/app/conversation/${protocolWaId}/claim`,
@@ -4406,8 +4504,8 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
       waIdCanonical: legacyMetaWaId,
       channel: "whatsapp",
       provider: "meta",
-      windowIsOpen: false,
-      windowExpiresAt: new Date("2026-01-01T10:00:00.000Z"),
+      windowIsOpen: true,
+      windowExpiresAt: new Date("2099-01-01T10:00:00.000Z"),
       lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
     },
   });
@@ -4419,7 +4517,8 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
       conversationKey: `${prefix}-business:${legacyMetaWaId}`,
       channel: "whatsapp",
       provider: "meta",
-      windowIsOpen: false,
+      windowIsOpen: true,
+      windowExpiresAt: new Date("2099-01-01T10:00:00.000Z"),
       mode: "HUMAN",
       status: "IN_PROGRESS",
       assignedUserId: businessAdmin.id,
@@ -4438,6 +4537,33 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
     assignedUserId: businessAdmin.id,
     assignedTo: businessAdmin.name,
   });
+  const closedHybridText = await request<ErrorPayload>("POST", `/app/conversation/${legacyMetaWaId}/send`, businessAdmin, {
+    text: "Mensagem web session em conversa Meta fechada.",
+  });
+  assert.equal(closedHybridText.status, 409, JSON.stringify(closedHybridText.body));
+  assert.equal(getErrorCode(closedHybridText.body), "window_closed");
+  assert.equal(workerTextRequests.length, 3);
+
+  await prisma.conversation.updateMany({
+    where: { clientId: businessClientId, waId: legacyMetaWaId },
+    data: { windowIsOpen: true, windowExpiresAt: new Date("2099-01-01T10:00:00.000Z") },
+  });
+  await prisma.conversationRuntimeState.updateMany({
+    where: { clientId: businessClientId, waId: legacyMetaWaId },
+    data: { windowIsOpen: true, windowExpiresAt: new Date("2099-01-01T10:00:00.000Z") },
+  });
+  await seedHybridRuntimeState({
+    waId: legacyMetaWaId,
+    waIdCanonical: legacyMetaWaId,
+    firstSeenAt: "2026-01-01T08:00:00.000Z",
+    lastInboundAt: "2026-01-01T08:00:00.000Z",
+    window: { isOpen: true, expiresAt: "2099-01-01T10:00:00.000Z" },
+    mode: "HUMAN",
+    status: "IN_PROGRESS",
+    assignedUserId: businessAdmin.id,
+    assignedTo: businessAdmin.name,
+  });
+
   const primaryTransportResponse = await request<{
     ok: true;
     message: { status: string; metaMessageId: string | null };
@@ -4472,10 +4598,6 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
   assert.equal(workerTextRequests.length, 5);
   assert.equal(workerTextRequests[4]?.recipientWaId, legacyMetaWaId);
 
-  const imagePng = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l2t0XQAAAABJRU5ErkJggg==",
-    "base64"
-  );
   const mediaForm = new FormData();
   mediaForm.set("caption", "Imagem via Web Session em conversa Meta fechada.");
   mediaForm.set("file", new Blob([imagePng], { type: "image/png" }), "web-session-hybrid.png");
@@ -4531,8 +4653,8 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
       waIdCanonical: hybridAutoMetaWaId,
       channel: "whatsapp",
       provider: "meta",
-      windowIsOpen: false,
-      windowExpiresAt: new Date("2026-01-01T10:00:00.000Z"),
+      windowIsOpen: true,
+      windowExpiresAt: new Date("2099-01-01T10:00:00.000Z"),
       lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
     },
   });
@@ -4544,7 +4666,8 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
       conversationKey: `${prefix}-business:${hybridAutoMetaWaId}`,
       channel: "whatsapp",
       provider: "meta",
-      windowIsOpen: false,
+      windowIsOpen: true,
+      windowExpiresAt: new Date("2099-01-01T10:00:00.000Z"),
       mode: "HUMAN",
       status: "IN_PROGRESS",
       assignedUserId: businessAdmin.id,

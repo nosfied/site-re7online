@@ -3,6 +3,7 @@ import { validateChatbotFlowDefinition } from "./chatbotFlow.js";
 import { resolveChatbotConsentPrecedence } from "./chatbotConsentRuntime.js";
 import { resolveDepartmentAwareHandoff } from "./departmentAwareHandoff.js";
 import type { ConversationState } from "../conversation/conversation.types.js";
+import { isWindowOpen } from "../conversation/conversation.service.js";
 import {
   ensureActiveServiceCycle,
   recordServiceCycleEvent,
@@ -184,9 +185,13 @@ async function sendBotText(params: {
   requestId: string;
   text: string;
   serviceCycle: ServiceCycleSnapshot;
+  conversation: ConversationState;
 }) {
-  if (!params.text.trim()) return;
-  await createWebSessionTextOutboundMessage({
+  if (!params.text.trim()) return { sent: false as const, reason: "empty_text" as const };
+  if (!isWindowOpen(params.conversation, Date.now())) {
+    return { sent: false as const, reason: "window_closed" as const };
+  }
+  const result = await createWebSessionTextOutboundMessage({
     prisma: params.prisma,
     waId: params.waId,
     waIdCanonical: params.waIdCanonical ?? params.waId,
@@ -198,12 +203,14 @@ async function sendBotText(params: {
     outboundSource: "bot",
     skipAgentSignature: true,
     serviceCycle: params.serviceCycle,
+    conversation: params.conversation,
     source: {
       channel: "whatsapp",
       provider: "web_session",
       channelAccountId: params.channelAccountId,
     },
   });
+  return result.ok ? { sent: true as const, status: result.status } : { sent: false as const, reason: result.error };
 }
 
 export async function processChatbotInactivityTimeouts(params: {
@@ -229,6 +236,10 @@ export async function processChatbotInactivityTimeouts(params: {
       waId: true,
       waIdCanonical: true,
       channelAccountId: true,
+      firstSeenAt: true,
+      lastInboundAt: true,
+      windowIsOpen: true,
+      windowExpiresAt: true,
       flow: true,
       answers: true,
       departmentId: true,
@@ -255,6 +266,31 @@ export async function processChatbotInactivityTimeouts(params: {
       isRecord(state.answers.chatbotRuntime) &&
       state.answers.chatbotRuntime.inactivityHandoffTriggeredAt;
     if (alreadyTriggered) continue;
+    const currentRuntimeWindowState = {
+      waId: state.waId,
+      waIdCanonical: state.waIdCanonical ?? state.waId,
+      firstSeenAt: state.firstSeenAt?.toISOString() ?? state.lastInboundAt?.toISOString() ?? now.toISOString(),
+      lastInboundAt: state.lastInboundAt?.toISOString() ?? "",
+      window: {
+        isOpen: state.windowIsOpen,
+        expiresAt: state.windowExpiresAt?.toISOString(),
+      },
+      handoff: { status: "none" },
+      answers: isRecord(state.answers) ? state.answers : {},
+      mode: "BOT",
+    } as ConversationState;
+    if (!isWindowOpen(currentRuntimeWindowState, now.getTime())) {
+      await recordInactivityHandoffSkipped({
+        prisma: params.prisma,
+        clientId: state.clientId,
+        waId: state.waId,
+        waIdCanonical: state.waIdCanonical,
+        runtimeStateId: state.id,
+        now,
+        reason: "window_closed",
+      });
+      continue;
+    }
     const consentPrecedence = await resolveChatbotConsentPrecedence({
       prisma: params.prisma,
       clientId: state.clientId,
@@ -399,6 +435,7 @@ export async function processChatbotInactivityTimeouts(params: {
       requestId: `chatbot-inactivity:${state.id}:handoff`,
       text: fallbackHandoff.feedbackText,
       serviceCycle: cycleResult.cycle,
+        conversation: currentRuntimeWindowState,
     });
     const protocol = cycleResult.cycle.protocol;
     const serviceMessages = await resolveServiceMessagePolicySettings({
@@ -416,6 +453,7 @@ export async function processChatbotInactivityTimeouts(params: {
         requestId: `chatbot-inactivity:${state.id}:protocol`,
         text: renderProtocolNoticeTemplate(serviceMessages.settings.protocolNotice.text, protocol),
         serviceCycle: cycleResult.cycle,
+        conversation: currentRuntimeWindowState,
       });
     }
     const position = await getQueuePosition({
@@ -439,6 +477,7 @@ export async function processChatbotInactivityTimeouts(params: {
             : serviceMessages.settings.queuePositionNotice.text ?? closedPolicy.queuePositionText
         ).replace("{position}", String(position)),
         serviceCycle: cycleResult.cycle,
+        conversation: currentRuntimeWindowState,
       });
     }
     if (decision.kind === "closed") {
@@ -452,6 +491,7 @@ export async function processChatbotInactivityTimeouts(params: {
         requestId: `chatbot-inactivity:${state.id}:off-hours`,
         text: closedPolicy.offHoursMessage,
         serviceCycle: cycleResult.cycle,
+        conversation: currentRuntimeWindowState,
       });
     }
     processed += 1;

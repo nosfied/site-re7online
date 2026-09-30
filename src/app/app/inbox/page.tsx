@@ -1884,6 +1884,8 @@ function applyConversationOperationalPayload(
     closedAt: string | null;
     lastInboundAt: string | null;
     lastOutboundAt: string | null;
+    windowIsOpen?: boolean | null;
+    windowExpiresAt?: string | null;
     waitingFirstResponseSec?: number | null;
     activeDurationSec?: number | null;
     isUnassigned: boolean;
@@ -1921,6 +1923,8 @@ function applyConversationOperationalPayload(
     closedAt: payload.closedAt,
     lastInboundAt: payload.lastInboundAt,
     lastOutboundAt: payload.lastOutboundAt,
+    windowIsOpen: payload.windowIsOpen ?? item.windowIsOpen ?? null,
+    windowExpiresAt: payload.windowExpiresAt ?? item.windowExpiresAt ?? null,
     waitingFirstResponseSec: payload.waitingFirstResponseSec ?? item.waitingFirstResponseSec ?? null,
     activeDurationSec: payload.activeDurationSec ?? item.activeDurationSec ?? null,
     isUnassigned: payload.isUnassigned,
@@ -2039,8 +2043,9 @@ function canSendInboxMedia(channel: InboxChannel, item?: Pick<InboxConversationI
   return channel === "whatsapp";
 }
 
-function canSendInboxTemplate(channel: InboxChannel) {
-  return channel === "whatsapp";
+function canSendInboxTemplate(channel: InboxChannel, item?: Pick<InboxConversationItem, "provider"> | null) {
+  if (channel !== "whatsapp") return false;
+  return item?.provider !== "web_session";
 }
 
 function getInboxTextOutboundDisabledMessage(
@@ -2226,6 +2231,18 @@ function canReplyToConversation(
   if (!item) return false;
   const status = getConversationOperationalStatus(item);
   return item.mode === "HUMAN" && item.assignedUserId === currentUserId && status !== "CLOSED";
+}
+
+function isConversationFreeformWindowOpen(
+  item: Pick<InboxConversationItem, "channel" | "windowIsOpen" | "windowExpiresAt"> | null
+) {
+  if (!item || getConversationChannel(item) !== "whatsapp") return true;
+  if (item.windowIsOpen === false) return false;
+  if (item.windowExpiresAt) {
+    const expiresAt = Date.parse(item.windowExpiresAt);
+    if (Number.isFinite(expiresAt) && Date.now() >= expiresAt) return false;
+  }
+  return true;
 }
 
 function isConversationAssignedToAnotherUser(
@@ -5168,22 +5185,26 @@ export default function AppInboxPage() {
     selectedConversationChannel,
     selectedConversation
   );
+  const selectedConversationWindowOpen = isConversationFreeformWindowOpen(selectedConversation);
   const selectedConversationSupportsTemplateOutbound = canSendInboxTemplate(
-    selectedConversationChannel
+    selectedConversationChannel,
+    selectedConversation
   );
   const selectedConversationOutboundDisabledMessage =
     getInboxTextOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
   const selectedConversationMediaOutboundDisabledMessage =
     getInboxMediaOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
+  const selectedConversationWindowClosedMessage = "A janela de 24 horas está fechada. Aguarde uma nova resposta do cliente ou use um modelo aprovado quando disponível.";
   const crmStartComposerEnabled = Boolean(crmStartContext && session);
-  const composerEnabled = (canReply && selectedConversationSupportsOutbound) || crmStartComposerEnabled;
+  const composerEnabled = (canReply && selectedConversationSupportsOutbound && selectedConversationWindowOpen) || crmStartComposerEnabled;
   const templateComposerEnabled = canReply && selectedConversationSupportsTemplateOutbound;
   const cannedRepliesFeatureEnabled = hasCapability(session, "cannedReplies");
   const cannedComposerEnabled =
     cannedRepliesFeatureEnabled &&
     canReply &&
     selectedConversationChannel === "whatsapp" &&
-    selectedConversationSupportsOutbound;
+    selectedConversationSupportsOutbound &&
+    selectedConversationWindowOpen;
   const canUseInboxTemplates = canUseInboxTemplatesForRole(session?.user.role);
   const usableInboxTemplates = useMemo(
     () =>
@@ -5242,7 +5263,8 @@ export default function AppInboxPage() {
     Boolean(selectedConversationWaId) &&
     Boolean(selectedConversation) &&
     !selectedConversationIsClosed &&
-    !isSelectedConversationLocked;
+    !isSelectedConversationLocked &&
+    selectedConversationWindowOpen;
 
   const isSelectedConversationOwnedByCurrentUser = useMemo(
     () =>
@@ -5844,6 +5866,18 @@ export default function AppInboxPage() {
       });
       return;
     }
+    if (!selectedConversationWindowOpen) {
+      logInboxUxEvent(
+        session,
+        "inbox.action.send.blocked",
+        buildInboxActionPayload(actionId, selectedConversation, {
+          reason: "window_closed",
+        })
+      );
+      setError(selectedConversationWindowClosedMessage);
+      setErrorDetails(null);
+      return;
+    }
     if (!selectedConversationSupportsOutbound) {
       logInboxUxEvent(
         session,
@@ -5921,6 +5955,11 @@ export default function AppInboxPage() {
   const sendMediaFile = useCallback(
     async (file: File, caption?: string) => {
       if (!session || !selectedConversationWaId || !selectedConversation) return;
+      if (!selectedConversationWindowOpen) {
+        setError(selectedConversationWindowClosedMessage);
+        setErrorDetails(null);
+        return;
+      }
       if (!selectedConversationSupportsOutbound || !selectedConversationSupportsMediaOutbound) {
         setError(
           !selectedConversationSupportsOutbound
@@ -6271,6 +6310,11 @@ export default function AppInboxPage() {
 
   const handleOpenCannedModal = useCallback(() => {
     if (!selectedConversationWaId || !selectedConversation) return;
+    if (!selectedConversationWindowOpen) {
+      setError(selectedConversationWindowClosedMessage);
+      setErrorDetails(null);
+      return;
+    }
     if (selectedConversationChannel !== "whatsapp" || !selectedConversationSupportsOutbound) {
       setError("Mensagens prontas estão disponíveis apenas para conversas WhatsApp com envio habilitado.");
       setErrorDetails(null);
@@ -6307,6 +6351,10 @@ export default function AppInboxPage() {
 
   const handleSendCannedReply = async () => {
     if (!session || !selectedConversationWaId || !selectedConversation || !selectedCannedReply) return;
+    if (!selectedConversationWindowOpen) {
+      setCannedReplyError(selectedConversationWindowClosedMessage);
+      return;
+    }
     if (!cannedComposerEnabled) {
       setCannedReplyError("Assuma uma conversa WhatsApp para enviar mensagem pronta.");
       return;
@@ -6430,6 +6478,11 @@ export default function AppInboxPage() {
 
   const handleToggleAudioRecording = async () => {
     if (!selectedConversationWaId) return;
+    if (!selectedConversationWindowOpen) {
+      setError(selectedConversationWindowClosedMessage);
+      setErrorDetails(null);
+      return;
+    }
     if (!selectedConversationSupportsOutbound || !selectedConversationSupportsMediaOutbound) {
       setError(
         !selectedConversationSupportsOutbound
@@ -8580,7 +8633,11 @@ export default function AppInboxPage() {
                 </div>
               </div>
             ) : null}
-            {selectedConversation && !selectedConversationSupportsOutbound ? (
+            {selectedConversation && !selectedConversationWindowOpen ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                {selectedConversationWindowClosedMessage}
+              </div>
+            ) : selectedConversation && !selectedConversationSupportsOutbound ? (
               <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-900">
                 {selectedConversationOutboundDisabledMessage}
               </div>
@@ -8661,7 +8718,7 @@ export default function AppInboxPage() {
               >
                 😊
               </button>
-              {canUseInboxTemplates ? (
+              {canUseInboxTemplates && selectedConversationSupportsTemplateOutbound ? (
                 <button
                   type="button"
                   disabled={
@@ -8733,9 +8790,11 @@ export default function AppInboxPage() {
                   autoCapitalize="sentences"
                   spellCheck={false}
                   placeholder={
-                    selectedConversation && !selectedConversationSupportsOutbound
-                      ? selectedConversationOutboundDisabledMessage
-                      : canReply || crmStartContext
+                    selectedConversation && !selectedConversationWindowOpen
+                      ? selectedConversationWindowClosedMessage
+                      : selectedConversation && !selectedConversationSupportsOutbound
+                        ? selectedConversationOutboundDisabledMessage
+                        : canReply || crmStartContext
                       ? isHydratingSelectedTimeline
                         ? "Carregando mensagens..."
                         : "Digite uma mensagem"

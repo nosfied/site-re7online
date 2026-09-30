@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   handleHandoff,
+  isWindowOpen,
   shouldRunLegacyHandoffAutomation,
 } from "./conversation.service.js";
 import type { ConversationState } from "./conversation.types.js";
@@ -27,6 +28,17 @@ function makeConversation(overrides: Partial<ConversationState> = {}): Conversat
     ...overrides,
   };
 }
+
+test("isWindowOpen closes exactly at expiration boundary", () => {
+  const state = makeConversation({
+    window: { isOpen: true, expiresAt: "2026-08-28T12:00:00.000Z" },
+  });
+
+  assert.equal(isWindowOpen(state, Date.parse("2026-08-28T11:59:59.999Z")), true);
+  assert.equal(isWindowOpen(state, Date.parse("2026-08-28T12:00:00.000Z")), false);
+  assert.equal(isWindowOpen(makeConversation({ window: { isOpen: false, expiresAt: "2026-08-28T12:00:00.000Z" } }), Date.parse("2026-08-28T11:00:00.000Z")), false);
+  assert.equal(isWindowOpen(makeConversation({ window: { isOpen: true, expiresAt: undefined } }), Date.parse("2026-08-28T11:00:00.000Z")), false);
+});
 
 test("legacy handoff automation respects tenant disable flag", () => {
   assert.equal(

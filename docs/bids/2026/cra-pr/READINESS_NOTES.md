@@ -1,5 +1,9 @@
 # CRA-PR Readiness Notes
 
+
+## Atualização local 30/09 - política de janela livre da Inbox
+
+LOCAL VALIDATED / NOT DEPLOYED; não é aceite CRA. Base `e3f4e1f1fd4ad41312bb1ccfe2516a08c1e2bbfc`, branch `review/campaign-recovery-20260926`, preservando `b66bb89a`. Delta local bloqueia Assumir e freeform fora da janela também em WEB/híbrido, revalida protocolo/inatividade antes do provider e preserva templates aprovados, CRM/RBAC, lifecycle já assumido e Contact Start WEB. Testes locais: `conversation.service.test.ts` 5/5, `automationOwnActivity.test.ts` 15/15, teste focado de Inbox WEB/híbrido PASS; backend/frontend builds PASS. Sem produção, provider real, envio real, schema/migration ou atribuição causal à suspensão Demo. DELIVERED/READ -> HUMAN/WAITING, validação produtiva META_CLOUD puro/API->WEB e mídias de template permanecem separadas.
 ## Incidente prioritário 91230f88 — correção local para revisão, 29/09/2026
 
 **INCIDENT OPEN IN PRODUCTION / FIX LOCAL VALIDATED / NOT DEPLOYED.** [Matriz de todos os tenants, causa, testes e retorno compatível](../../../saas/AUTOMATION_RUNTIME_SELF_WRITE_INCIDENT_2026-09-29.md). Syer: escrita própria de atividade outbound invalidava updatedAt e impedia persistir avanço. Tendência: conflito correlacionado com encaminhamento humano legítimo; não atribuído ao loop. Demais tenants inventariados, sem prova de ocorrência no período observado.

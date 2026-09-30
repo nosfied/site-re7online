@@ -140,6 +140,8 @@ export type InboxConversationItem = {
   closedAt: string | null;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
+  windowIsOpen?: boolean | null;
+  windowExpiresAt?: string | null;
   waitingFirstResponseSec?: number | null;
   activeDurationSec?: number | null;
   unreadCount?: number;
@@ -2081,6 +2083,8 @@ export async function transferConversationDepartment(
   closedAt: string | null;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
+  windowIsOpen?: boolean | null;
+  windowExpiresAt?: string | null;
   isUnassigned: boolean;
 }> {
   const params = new URLSearchParams();
