@@ -1,5 +1,7 @@
 # Release Automação — execução controlada, 29/09/2026
 
+> Etapa posterior: [ativação exclusivamente em Syer, com validação parcial e regressão de consentimento identificada](SYER_AUTOMATION_ACTIVATION_2026-09-29.md). O registro abaixo preserva o estado desligado ao final do deploy; não representa o valor atual de Syer.
+
 **DEPLOYED / AUTOMATION NOT ACTIVATED / FUNCTIONAL AUTOMATION ACCEPTANCE PENDING.** Registro da execução autorizada sobre o [plano 3e7c0a84](AUTOMATION_RELEASE_PLAN_2026-09-29.md). Não confundir deploy do código com ativação ou aceite funcional do acompanhamento BOT. `allowAutomationConversationsInInbox` permanece false/ausente em todos os tenants. Correção 91230f88 continua entrega separada da funcionalidade de leitura.
 
 ## Artefatos efetivos e retorno
