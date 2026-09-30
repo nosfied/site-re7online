@@ -1,5 +1,13 @@
 # Incidente produtivo — gravação própria de automação rejeitada após 91230f88
 
+## Observação dirigida de tráfego natural — 30/09/2026
+
+Consulta **somente leitura** de registros criados após a troca (02:26:30 UTC), encerrada nesta rodada às 10:15 UTC; nenhuma mensagem, provider call ou mutação foi provocada. **Syer** permanece como recuperação funcional comprovada no caminho híbrido cujo inbound vencedor foi WEB_SESSION: dois outbounds `SENT`, nó menu persistido e avanço confirmado pelo owner, conforme registro de implantação.
+
+Em **SECULT-PE**, entre 10:05 e 10:06 UTC, houve quatro inbounds naturais WEB_SESSION e quatro outbounds WEB_SESSION registrados `SENT`; o runtime posterior permaneceu BOT, ativo, com flow e nó persistidos. Isso comprova atividade e persistência do worker corrigido, **não** uma validação funcional do fluxo da SECULT ou de cada transição intermediária. O evento genérico `whatsapp.hybrid.inbound.logical_message.*` não muda a classificação: a configuração efetiva consultada para SECULT não habilitava o roteamento híbrido API→WEB.
+
+Não foi observada execução META_CLOUD pura nem inbound processado pela API com outbound WEB no intervalo. As duas vias continuam **não exercitadas**, e ausência de tráfego não é PASS nem motivo para deploy. Nos arquivos estruturados atuais da API/worker não apareceram novos `automation.runtime.stale_write_skipped` ou `automation.runtime.activity_write_failed` até 10:09 UTC; não houve novo conflito para classificar como intervenção legítima ou auto-invalidação. Esse limite de observabilidade não prova ausência universal de conflitos. A rodada de consultas foi encerrada. Retomar somente diante de caso natural conhecido ou interação controlada indicada pelo owner, correlacionando inbound, executor, outbound aceito e runtime persistido. Evidência privada permanece fora do Git.
+
 **Implantação técnica, 30/09/2026:** [registro sanitizado](AUTOMATION_RUNTIME_FIX_ROLLOUT_2026-09-30.md). API b66bb89a e worker mínimo corrigido estão ativos; frontend preservado. Syer WEB_SESSION comprovado funcionalmente após dois inbounds novos: outbounds SENT, nó menu persistido e confirmação visual do owner. META_CLOUD puro e híbrido API→WEB continuam não exercitados; incidente aberto para esses limites.
 
 **Preparação posterior, 30/09/2026:** [releases isoladas, hashes, backup, restauração e comandos da troca API/worker](AUTOMATION_RUNTIME_FIX_PREPARATION_2026-09-30.md). A correção b66bb89a ainda não foi implantada; o incidente só fecha com avanço de fluxo persistido e resposta seguinte correta em Syer.
