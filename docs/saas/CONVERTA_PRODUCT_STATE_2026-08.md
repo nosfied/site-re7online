@@ -1,6 +1,11 @@
 # Converta Product State - 2026-08
 
 
+## Preparacao 01/10 - release af26f48a freeform window
+
+PREPARED FOR REVIEW / NOT DEPLOYED. Pacote em `docs/reviews/automation-freeform-window-release-af26/` reconcilia producao atual por leitura: PM2 usa releases isoladas `ba66c241` no frontend, `b66bb89a` na API e worker minimo `bf5+f06+912+b66`, apesar do checkout produtivo estar em `5ee2de6b`. Candidato `af26f48a` fica preparado como patch API/frontend e worker minimo recomposto com o patch auditado, sem usar build completo da API como worker. Nao houve troca de release, restart, ativacao, migration, provider real ou envio real. Execucao futura exige backup fresco, restore verificado, contencao/barreira de saida e aceite tecnico separado de validacao funcional. META_CLOUD puro e hibrido API->WEB continuam pendentes.
+
+
 ## Fechamento local 01/10 - API->WEB pelo receiveWebhook
 
 LOCAL VALIDATED / NOT DEPLOYED em `2daa2b459a0d20727cb97e2895a2059e50dd49e4` (branch `review/campaign-recovery-20260926`). O complemento atual substitui a evidencia de caller extraido por prova integrada no handler `receiveWebhook`: quando uma resposta de chatbot e preparada e a janela fecha antes do envio WEB/hibrido, incluindo expiracao controlada imediatamente antes da revalidacao do sender sem escrita no runtime, o runtime volta somente os campos de progresso dependentes da resposta via `updateRuntimeIfUnchanged`, sem apagar inbound, respostas recebidas, template-needed ou operacoes independentes; sem intervencao concorrente o CAS restaura o no anterior; com intervencao humana concorrente, o CAS nega a restauracao e preserva o estado humano. Testes: `webhookApiWebWindow.test.ts` 4/4; `automationOwnActivity.test.ts` + novo teste 21/21; backend build PASS; `git diff --check` PASS. Worker nao reaberto; sem producao/provider/envio/schema/migration; META_CLOUD puro e hibrido API->WEB produtivos continuam pendentes.

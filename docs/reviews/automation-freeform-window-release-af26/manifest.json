@@ -1,0 +1,95 @@
+{
+  "status": "PREPARED_FOR_REVIEW_NOT_DEPLOYED",
+  "preparedAt": "2026-10-01",
+  "branch": "review/campaign-recovery-20260926",
+  "candidateSha": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
+  "candidateParent": "66b3dc5ce2413518103315eb0570b4553daa60da",
+  "deployedApiBaseSha": "b66bb89aca9112277463b7d2adbee0b9e7831157",
+  "readOnlyProductionObservation": {
+    "host": "re7online-api-01",
+    "repoCheckoutHead": "5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e",
+    "authorizedDirt": ["apps/whatsapp-web-worker/.data/"],
+    "adminFrontRelease": "/opt/re7online/releases/ba66c24112ccb10f2dfdcced54350f513d399bc6",
+    "adminFrontPid": 1856062,
+    "adminFrontBuildId": "Ywhs03ZOWIsb-IppyXqEJ",
+    "apiRelease": "/opt/re7online/releases/b66bb89aca9112277463b7d2adbee0b9e7831157-api",
+    "apiPid": 1880019,
+    "workerRelease": "/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a",
+    "workerPid": 1880130,
+    "health": "ok=true db=ok",
+    "workerDistFileCount": 92
+  },
+  "candidatePatch": {
+    "path": "api-frontend-freeform-window-af26.patch",
+    "sha256": "fb4de7d7a2922328c67cfc5e1169ef8a49815980d88d45ada3746e43f98e563f",
+    "lines": 1241,
+    "scope": [
+      "apps/whatsapp-agent/src/chatbot/chatbotInactivityProcessor.ts",
+      "apps/whatsapp-agent/src/http/routes.ts",
+      "apps/whatsapp-agent/src/web-session/webSessionInbound.ts",
+      "apps/whatsapp-agent/src/whatsapp/webhook.controller.ts",
+      "src/app/app/inbox/page.tsx",
+      "src/lib/appClientApi.ts",
+      "src/lib/inboxWindow.ts",
+      "src/lib/whatsappAdminApi.ts"
+    ]
+  },
+  "sourceHashes": {
+    "apps/whatsapp-agent/src/chatbot/chatbotInactivityProcessor.ts": "94348bb4212ff312083d49972ca7b04e7866f2d31306e7edad3312bbc5bebf4a",
+    "apps/whatsapp-agent/src/http/routes.ts": "1156f3df5dacc63350301b78f3c59831a305cfb904b5bd8cbd88b0f4d9524911",
+    "apps/whatsapp-agent/src/web-session/webSessionInbound.ts": "011679c9a20ffaae08042e86d3347e18d3bd21fb62fcaa561ab298abba982551",
+    "apps/whatsapp-agent/src/whatsapp/webhook.controller.ts": "326c0827416eacfefb775fb0b1ab63b1b49a0c3669800ef14818155e32279c42",
+    "src/app/app/inbox/page.tsx": "fa8c6b17939e98ab0fb0633d87ef2830bd083754e01e7ab95faabc07357413f5",
+    "src/lib/appClientApi.ts": "d05b0fc6a9aad131ef22bee90cd7fd481b6f83be7a7ae7d043dd96476f3f5337",
+    "src/lib/inboxWindow.ts": "11644ac61f66dc0e05d00ef8562184ed89456444d1599618ab146156d1cf5fc7",
+    "src/lib/whatsappAdminApi.ts": "adf431fc56e948ecace2c6e21d9c61332b864723f651c16d9a8a8eafad762c76"
+  },
+  "workerMinimalCandidate": {
+    "composition": "bf5f1d76 + f06d49cb five-source persistence + 91230f88 + b66bb89a + worker-freeform-window-gate-20261001.patch",
+    "patchPath": "../automation-worker-backport/worker-freeform-window-gate-20261001.patch",
+    "patchSha256": "ab1080df3804b35479a179425bf664db79b0f0caec50f5dd00f97cdac0c1c566",
+    "patchLines": 660,
+    "manifestPath": "../automation-worker-backport/manifest.json",
+    "manifestSha256": "3fa762b7f2c62e60b3291b44dbf562be731c0fd2437bd2be635a5abae28ecb55",
+    "doNotUseFullApiTreeAsWorker": true
+  },
+  "currentActiveHashesReadOnly": {
+    "apiDist/whatsapp/webhook.controller.js": "f3bd6cd1024ca18ca2872bb3aba5d150b53cc8653033caba82e9e0e7fa9cd208",
+    "apiDist/web-session/webSessionOutboundService.js": "31feeaf217dd718d2d73470fec46759f3f1c75c68738dfb36ed7c3cfac0cb99a",
+    "apiDist/conversation/runtimeWriteFence.js": "004fc03d06c558c9b6b9874c0eee07de997176465b04400a2480942c69ec4029",
+    "workerDist/whatsapp-agent/src/web-session/webSessionInbound.js": "cdb9a78affa176f0b1d19c5c3cf23ee654b1b5adf50763576292f0a5c9205e53",
+    "workerDist/whatsapp-agent/src/web-session/webSessionOutboundService.js": "31feeaf217dd718d2d73470fec46759f3f1c75c68738dfb36ed7c3cfac0cb99a",
+    "workerDist/whatsapp-agent/src/conversation/runtimeWriteFence.js": "004fc03d06c558c9b6b9874c0eee07de997176465b04400a2480942c69ec4029"
+  },
+  "dependencies": {
+    "node": "Node 20 lineage; re-read node -v during future preflight",
+    "lockfiles": "no dependency or lockfile change prepared",
+    "pm2": "reuse existing PM2 process model and saved-state procedure"
+  },
+  "prisma": {
+    "schemaChange": "none identified in candidate release scope",
+    "migration": "none",
+    "dbPush": "forbidden"
+  },
+  "localValidationReused": {
+    "webhookApiWebWindow.test.ts": "4/4 PASS",
+    "automationOwnActivity.test.ts plus new test": "21/21 PASS",
+    "backendBuild": "PASS from prior local validation",
+    "gitDiffCheck": "PASS from prior local validation",
+    "worker": "final audited worker patch and manifest reused; no worker reopened in af26f48a step"
+  },
+  "notIncluded": [
+    "bundles",
+    "credentials",
+    "auth files",
+    "database dumps",
+    "fixtures",
+    "private evidence",
+    "production mutations"
+  ],
+  "pendingValidations": [
+    "META_CLOUD pure productive validation",
+    "HYBRID API-to-WEB productive validation",
+    "owner functional acceptance after any future release"
+  ]
+}

@@ -1,5 +1,7 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**Preparacao 01/10 — release af26f48a freeform window: PREPARED FOR REVIEW / NOT DEPLOYED.** [Pacote revisavel, manifesto, patch API/frontend e composicao worker minima](reviews/automation-freeform-window-release-af26/README.md). Leitura produtiva confirmou PM2 usando releases isoladas: frontend `ba66c241`, API `b66bb89a`, worker minimo `bf5+f06+912+b66`; o checkout do repo em producao estava em `5ee2de6b`, portanto nao deve ser usado como prova do artefato ativo. Preparacao exige backup fresco persistente, restauracao verificada, contencao/barreira de saida para API/worker, build frontend/backend e worker minimo recomposto com patch final auditado. Nao houve troca de release, restart, ativacao, migration, provider call ou envio real. META_CLOUD puro e hibrido API->WEB continuam pendentes.
+
 **Atualização operacional 30/09, 02:30 UTC — DEPLOYED TECHNICALLY / INCIDENT OPEN.** [Registro sanitizado da troca API b66bb89a + worker mínimo, frontend preservado](saas/AUTOMATION_RUNTIME_FIX_ROLLOUT_2026-09-30.md). Guarda reaberta geração 9; sessões e atendimento verificados. Avanço real do fluxo em Syer via WEB_SESSION comprovado às 02:32–02:33 UTC por outbounds SENT, nó menu persistido e confirmação visual do owner; META_CLOUD puro e híbrido API→WEB seguem pendentes.
 
 ## Preparação operacional do incidente 91230f88 — 30/09/2026

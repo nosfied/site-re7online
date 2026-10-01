@@ -1,6 +1,11 @@
 # CRA-PR Readiness Notes
 
 
+## Preparacao 01/10 - release af26f48a freeform window
+
+PREPARED FOR REVIEW / NOT DEPLOYED; nao e aceite CRA. O pacote `docs/reviews/automation-freeform-window-release-af26/` registra composicao, hashes, backup/rollback esperado e separa validacao tecnica de aceite funcional. Candidato `af26f48a` permanece sem deploy, sem provider real e sem envio real. META_CLOUD puro e hibrido API->WEB continuam pendentes de validacao separada com autorizacao especifica.
+
+
 ## Fechamento local 01/10 - API->WEB pelo receiveWebhook
 
 LOCAL VALIDATED / NOT DEPLOYED; nao e aceite CRA. Base `2daa2b459a0d20727cb97e2895a2059e50dd49e4`, branch `review/campaign-recovery-20260926`. Prova integrada no `receiveWebhook` cobre API->WEB com payload Meta, tenant/conta locais e provider WEB simulado: janela fechada gera zero provider call/outbound SENT e mantem no recuperavel, sem intervencao concorrente faz CAS `restored=true` e recupera o no anterior; com intervencao humana concorrente, CAS `restored=false` nao sobrescreve estado humano; janela aberta envia e conclui o fluxo terminal. O ajuste usa `updateRuntimeIfUnchanged` para reverter apenas progresso dependente da resposta, preservando inbound, respostas e estados independentes; a prova nova tambem cobre expiracao por relogio controlado sem escrita no runtime e intervencao humana concorrente com CAS `restored=false`. Testes: `webhookApiWebWindow.test.ts` 4/4; `automationOwnActivity.test.ts` + novo teste 21/21; backend build PASS; `git diff --check` PASS. Sem producao/provider/envio/schema/migration/deploy; META_CLOUD puro e hibrido API->WEB produtivos seguem pendentes.

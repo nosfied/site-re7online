@@ -1,0 +1,1241 @@
+diff --git a/apps/whatsapp-agent/src/chatbot/chatbotInactivityProcessor.ts b/apps/whatsapp-agent/src/chatbot/chatbotInactivityProcessor.ts
+index 42053c4e..70f87715 100644
+--- a/apps/whatsapp-agent/src/chatbot/chatbotInactivityProcessor.ts
++++ b/apps/whatsapp-agent/src/chatbot/chatbotInactivityProcessor.ts
+@@ -3,6 +3,7 @@ import { validateChatbotFlowDefinition } from "./chatbotFlow.js";
+ import { resolveChatbotConsentPrecedence } from "./chatbotConsentRuntime.js";
+ import { resolveDepartmentAwareHandoff } from "./departmentAwareHandoff.js";
+ import type { ConversationState } from "../conversation/conversation.types.js";
++import { isWindowOpen } from "../conversation/conversation.service.js";
+ import {
+   ensureActiveServiceCycle,
+   recordServiceCycleEvent,
+@@ -184,9 +185,14 @@ async function sendBotText(params: {
+   requestId: string;
+   text: string;
+   serviceCycle: ServiceCycleSnapshot;
++  conversation: ConversationState;
++  nowMs?: () => number;
+ }) {
+-  if (!params.text.trim()) return;
+-  await createWebSessionTextOutboundMessage({
++  if (!params.text.trim()) return { sent: false as const, reason: "empty_text" as const };
++  if (!isWindowOpen(params.conversation, params.nowMs?.() ?? Date.now())) {
++    return { sent: false as const, reason: "window_closed" as const };
++  }
++  const result = await createWebSessionTextOutboundMessage({
+     prisma: params.prisma,
+     waId: params.waId,
+     waIdCanonical: params.waIdCanonical ?? params.waId,
+@@ -198,18 +204,50 @@ async function sendBotText(params: {
+     outboundSource: "bot",
+     skipAgentSignature: true,
+     serviceCycle: params.serviceCycle,
++    conversation: params.conversation,
+     source: {
+       channel: "whatsapp",
+       provider: "web_session",
+       channelAccountId: params.channelAccountId,
+     },
+   });
++  return result.ok ? { sent: true as const, status: result.status } : { sent: false as const, reason: result.error };
++}
++
++async function recordInactivitySendSkipped(params: {
++  prisma: PrismaClient;
++  clientId: string;
++  conversationId?: string | null;
++  waId: string;
++  waIdCanonical: string | null;
++  runtimeStateId: string;
++  now: Date;
++  messageStage: string;
++  result: Awaited<ReturnType<typeof sendBotText>>;
++}) {
++  if (params.result.sent) return;
++  await recordInactivityHandoffSkipped({
++    prisma: params.prisma,
++    clientId: params.clientId,
++    conversationId: params.conversationId ?? null,
++    waId: params.waId,
++    waIdCanonical: params.waIdCanonical,
++    runtimeStateId: params.runtimeStateId,
++    now: params.now,
++    reason: params.result.reason === "window_closed" ? "window_closed_after_claim" : "send_failed",
++    payload: {
++      messageStage: params.messageStage,
++      sendReason: params.result.reason,
++    },
++  });
+ }
+
++
+ export async function processChatbotInactivityTimeouts(params: {
+   prisma: PrismaClient;
+   now?: Date;
+   limit?: number;
++  nowMs?: () => number;
+ }) {
+   const now = params.now ?? new Date();
+   const candidates = await params.prisma.conversationRuntimeState.findMany({
+@@ -229,6 +267,10 @@ export async function processChatbotInactivityTimeouts(params: {
+       waId: true,
+       waIdCanonical: true,
+       channelAccountId: true,
++      firstSeenAt: true,
++      lastInboundAt: true,
++      windowIsOpen: true,
++      windowExpiresAt: true,
+       flow: true,
+       answers: true,
+       departmentId: true,
+@@ -255,6 +297,31 @@ export async function processChatbotInactivityTimeouts(params: {
+       isRecord(state.answers.chatbotRuntime) &&
+       state.answers.chatbotRuntime.inactivityHandoffTriggeredAt;
+     if (alreadyTriggered) continue;
++    const currentRuntimeWindowState = {
++      waId: state.waId,
++      waIdCanonical: state.waIdCanonical ?? state.waId,
++      firstSeenAt: state.firstSeenAt?.toISOString() ?? state.lastInboundAt?.toISOString() ?? now.toISOString(),
++      lastInboundAt: state.lastInboundAt?.toISOString() ?? "",
++      window: {
++        isOpen: state.windowIsOpen,
++        expiresAt: state.windowExpiresAt?.toISOString(),
++      },
++      handoff: { status: "none" },
++      answers: isRecord(state.answers) ? state.answers : {},
++      mode: "BOT",
++    } as ConversationState;
++    if (!isWindowOpen(currentRuntimeWindowState, now.getTime())) {
++      await recordInactivityHandoffSkipped({
++        prisma: params.prisma,
++        clientId: state.clientId,
++        waId: state.waId,
++        waIdCanonical: state.waIdCanonical,
++        runtimeStateId: state.id,
++        now,
++        reason: "window_closed",
++      });
++      continue;
++    }
+     const consentPrecedence = await resolveChatbotConsentPrecedence({
+       prisma: params.prisma,
+       clientId: state.clientId,
+@@ -389,7 +456,7 @@ export async function processChatbotInactivityTimeouts(params: {
+         cycle: cycleResult.cycle,
+       });
+     }
+-    await sendBotText({
++    const handoffSend = await sendBotText({
+       prisma: params.prisma,
+       clientId: state.clientId,
+       clientKey: client.clientKey,
+@@ -399,6 +466,19 @@ export async function processChatbotInactivityTimeouts(params: {
+       requestId: `chatbot-inactivity:${state.id}:handoff`,
+       text: fallbackHandoff.feedbackText,
+       serviceCycle: cycleResult.cycle,
++      conversation: currentRuntimeWindowState,
++      nowMs: params.nowMs,
++    });
++    await recordInactivitySendSkipped({
++      prisma: params.prisma,
++      clientId: state.clientId,
++      conversationId: conversation?.id ?? null,
++      waId: state.waId,
++      waIdCanonical: state.waIdCanonical,
++      runtimeStateId: state.id,
++      now,
++      messageStage: "handoff",
++      result: handoffSend,
+     });
+     const protocol = cycleResult.cycle.protocol;
+     const serviceMessages = await resolveServiceMessagePolicySettings({
+@@ -406,7 +486,7 @@ export async function processChatbotInactivityTimeouts(params: {
+       clientId: state.clientId,
+     });
+     if (serviceMessages.settings.protocolNotice.enabled) {
+-      await sendBotText({
++      const protocolSend = await sendBotText({
+         prisma: params.prisma,
+         clientId: state.clientId,
+         clientKey: client.clientKey,
+@@ -416,6 +496,19 @@ export async function processChatbotInactivityTimeouts(params: {
+         requestId: `chatbot-inactivity:${state.id}:protocol`,
+         text: renderProtocolNoticeTemplate(serviceMessages.settings.protocolNotice.text, protocol),
+         serviceCycle: cycleResult.cycle,
++        conversation: currentRuntimeWindowState,
++        nowMs: params.nowMs,
++      });
++      await recordInactivitySendSkipped({
++        prisma: params.prisma,
++        clientId: state.clientId,
++        conversationId: conversation?.id ?? null,
++        waId: state.waId,
++        waIdCanonical: state.waIdCanonical,
++        runtimeStateId: state.id,
++        now,
++        messageStage: "protocol",
++        result: protocolSend,
+       });
+     }
+     const position = await getQueuePosition({
+@@ -425,7 +518,7 @@ export async function processChatbotInactivityTimeouts(params: {
+       queueId: destination.queueId,
+     });
+     if (position && serviceMessages.settings.queuePositionNotice.enabled) {
+-      await sendBotText({
++      const positionSend = await sendBotText({
+         prisma: params.prisma,
+         clientId: state.clientId,
+         clientKey: client.clientKey,
+@@ -439,10 +532,23 @@ export async function processChatbotInactivityTimeouts(params: {
+             : serviceMessages.settings.queuePositionNotice.text ?? closedPolicy.queuePositionText
+         ).replace("{position}", String(position)),
+         serviceCycle: cycleResult.cycle,
++        conversation: currentRuntimeWindowState,
++        nowMs: params.nowMs,
++      });
++      await recordInactivitySendSkipped({
++        prisma: params.prisma,
++        clientId: state.clientId,
++        conversationId: conversation?.id ?? null,
++        waId: state.waId,
++        waIdCanonical: state.waIdCanonical,
++        runtimeStateId: state.id,
++        now,
++        messageStage: "queue_position",
++        result: positionSend,
+       });
+     }
+     if (decision.kind === "closed") {
+-      await sendBotText({
++      const offHoursSend = await sendBotText({
+         prisma: params.prisma,
+         clientId: state.clientId,
+         clientKey: client.clientKey,
+@@ -452,6 +558,19 @@ export async function processChatbotInactivityTimeouts(params: {
+         requestId: `chatbot-inactivity:${state.id}:off-hours`,
+         text: closedPolicy.offHoursMessage,
+         serviceCycle: cycleResult.cycle,
++        conversation: currentRuntimeWindowState,
++        nowMs: params.nowMs,
++      });
++      await recordInactivitySendSkipped({
++        prisma: params.prisma,
++        clientId: state.clientId,
++        conversationId: conversation?.id ?? null,
++        waId: state.waId,
++        waIdCanonical: state.waIdCanonical,
++        runtimeStateId: state.id,
++        now,
++        messageStage: "off_hours",
++        result: offHoursSend,
+       });
+     }
+     processed += 1;
+diff --git a/apps/whatsapp-agent/src/http/routes.ts b/apps/whatsapp-agent/src/http/routes.ts
+index a8f694e7..e5cf7575 100644
+--- a/apps/whatsapp-agent/src/http/routes.ts
++++ b/apps/whatsapp-agent/src/http/routes.ts
+@@ -6113,23 +6113,6 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
+         json(res, 403, httpError("forbidden", "Conversa fora do seu departamento."));
+         return;
+       }
+-      if (
+-        currentConversation.mode !== "HUMAN" ||
+-        !canManageOwnedConversation(clientAuth.role, currentConversation.assignedUserId, clientAuth.userId)
+-      ) {
+-        logAppRbacDenied({
+-          requestId,
+-          route: "/app/conversation/:waId/send-template",
+-          userId: clientAuth.userId,
+-          clientId: client.id,
+-          role: clientAuth.role,
+-          reason: currentConversation.mode !== "HUMAN" ? "not_human_mode" : "not_owner",
+-          waId: resolvedConversation.resolvedWaIdCanonical,
+-        });
+-        json(res, 409, httpError("conversation_not_assigned", "Assuma a conversa antes de enviar template."));
+-        return;
+-      }
+-
+       const identityCandidates = Array.from(
+         new Set([resolvedConversation.resolvedWaId, resolvedConversation.resolvedWaIdCanonical].filter(Boolean))
+       );
+@@ -7331,7 +7314,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
+         json(res, 409, httpError("conversation_not_assigned", "Assuma a conversa antes de responder manualmente."));
+         return;
+       }
+-      if (!isWebSessionWhatsApp && !isWindowOpen(currentConversation, Date.now())) {
++      if (!isWindowOpen(currentConversation, Date.now())) {
+         await persistEvent({
+           clientId: client.id,
+           conversationId: conversationRow.id,
+@@ -7816,7 +7799,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
+         });
+         return;
+       }
+-      if (resolvedChannel === "whatsapp" && !isWebSessionWhatsApp && !isWindowOpen(currentConversation, Date.now())) {
++      if (resolvedChannel === "whatsapp" && !isWindowOpen(currentConversation, Date.now())) {
+         json(res, 409, { error: buildWindowClosedError(currentConversation.window.expiresAt) });
+         return;
+       }
+@@ -8240,6 +8223,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
+         });
+         return;
+       }
++      if (!isWindowOpen(currentConversation, Date.now())) {
++        json(res, 409, { error: buildWindowClosedError(currentConversation.window.expiresAt) });
++        return;
++      }
+
+       const replyContext = parsedReplyTo.replyTo
+         ? await resolveInboxContextualReply(prisma, {
+@@ -13380,6 +13367,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
+         json(res, 409, httpError("conversation_closed", "Atendimento encerrado nao pode ser assumido."));
+         return;
+       }
++      if (!isWindowOpen(operationalConversation, Date.now())) {
++        json(res, 409, { error: buildWindowClosedError(operationalConversation.window.expiresAt) });
++        return;
++      }
+       const departmentAccess = await loadAppDepartmentAccess(prisma, {
+         clientId: client.id,
+         userId: clientAuth.userId,
+@@ -32687,6 +32678,7 @@ function serializeConversationOperationalFields(params: {
+     closedAt?: string | null;
+     lastInboundAt?: string | null;
+     lastOutboundAt?: string | null;
++    window?: { isOpen?: boolean | null; expiresAt?: string | null } | null;
+     answers?: {
+       flowContext?: Record<string, unknown> | null;
+       flowTags?: string[] | null;
+@@ -32723,6 +32715,8 @@ function serializeConversationOperationalFields(params: {
+     awaitingConsent: Boolean(params.awaitingConsent),
+     lastInboundAt: conversation?.lastInboundAt ?? null,
+     lastOutboundAt: conversation?.lastOutboundAt ?? null,
++    windowIsOpen: conversation?.window?.isOpen ?? null,
++    windowExpiresAt: conversation?.window?.expiresAt ?? null,
+     isUnassigned: !conversation?.assignedUserId,
+     flowContext,
+     flowTags: sanitizeInboxFlowTags(conversation?.answers?.flowTags ?? null),
+@@ -33315,6 +33309,23 @@ async function sendConversationProtocolNoticeIfNeeded(
+   if (protocolNotification.trigger !== "first_human_handoff") {
+     return { sent: false as const, reason: "unsupported_trigger" as const };
+   }
++  if (params.conversation && !isWindowOpen(params.conversation, Date.now())) {
++    await persistEvent({
++      clientId: params.clientId,
++      waId: params.waId,
++      waIdCanonical: params.waIdCanonical ?? null,
++      messageId: `protocol.notice.${params.requestId}`,
++      requestId: `${params.requestId}:protocol:event`,
++      eventName: "conversation.protocol.notice.skipped",
++      payloadJson: {
++        source: "protocol_notice",
++        protocol: params.protocol,
++        cycleId: getActiveServiceCycle(params.conversation)?.cycleId ?? null,
++        reason: "window_closed",
++      },
++    });
++    return { sent: false as const, reason: "window_closed" as const };
++  }
+   if (params.channel && serializeInboxChannelFields({ channel: params.channel }).channel !== "whatsapp") {
+     return { sent: false as const, reason: "non_whatsapp_channel" as const };
+   }
+diff --git a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts b/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
+index e2b0e60b..d7334a9c 100644
+--- a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
++++ b/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
+@@ -15,7 +15,7 @@ import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/cont
+ import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
+ import { shouldResetClosedConversationForBotReentry } from "../conversation/automationRuntime.js";
+ import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
+-import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
++import { activateHumanHandoff, isWindowOpen, updateOutbound } from "../conversation/conversation.service.js";
+ import { buildCrmWhatsappExternalUserHash } from "../crm/crmWhatsappIdentity.js";
+ import { recordCrmConversationContactOrigin } from "../crm/crmContactUpsert.js";
+ import {
+@@ -1467,6 +1467,12 @@ async function shouldPreclassifyInboundAsSatisfactionManagement(params: {
+   return Boolean(pendingSurvey);
+ }
+
++type WebSessionBotTextResult = {
++  state: ConversationState;
++  sent: boolean;
++  reason?: "empty" | "window_closed" | "send_failed";
++};
++
+ async function sendWebSessionBotText(params: {
+   prisma: PrismaClient;
+   clientId: string;
+@@ -1481,8 +1487,18 @@ async function sendWebSessionBotText(params: {
+   inboxVisibility?: InboxMessageVisibility;
+   inboxInteractionKind?: string | null;
+   publishMessageCreatedRealtime?: WebSessionMessageCreatedRealtimePublisher;
+-}) {
+-  if (!params.text.trim()) return params.state;
++}): Promise<WebSessionBotTextResult> {
++  if (!params.text.trim()) return { state: params.state, sent: false, reason: "empty" };
++  if (!isWindowOpen(params.state, Date.now())) {
++    logger.warn({
++      event: "web_session.bot_outbound.window_closed",
++      clientId: params.clientId,
++      waIdSuffix: maskIdentifier(params.waId).suffix,
++      requestId: params.requestId,
++      source: "web_session_bot",
++    });
++    return { state: params.state, sent: false, reason: "window_closed" };
++  }
+   const serviceCycle = params.serviceCycle ?? getServiceCycleForDisplay(params.state);
+   const inferredManagementKind = params.requestId.includes(":survey") ? "satisfaction" : null;
+   const inboxInteractionKind = params.inboxInteractionKind ?? inferredManagementKind;
+@@ -1546,9 +1562,13 @@ async function sendWebSessionBotText(params: {
+         createdAt: outboundResult.createdAt,
+       },
+     }, params.publishMessageCreatedRealtime);
+-    return nextState;
++    return { state: nextState, sent: true };
+   }
+-  return params.state;
++  return { state: params.state, sent: false, reason: "send_failed" };
++}
++
++async function sendWebSessionBotState(params: Parameters<typeof sendWebSessionBotText>[0]) {
++  return (await sendWebSessionBotText(params)).state;
+ }
+
+ async function sendWebSessionHandoffNotifications(params: {
+@@ -1606,7 +1626,7 @@ async function sendWebSessionHandoffNotifications(params: {
+   });
+   let nextState = params.state;
+   for (const notification of notifications) {
+-    nextState = await sendWebSessionBotText({
++    nextState = await sendWebSessionBotState({
+       prisma: params.prisma,
+       clientId: params.clientId,
+       clientKey: params.clientKey,
+@@ -1709,7 +1729,7 @@ async function sendWebSessionSatisfactionSurvey(params: {
+       },
+     },
+   });
+-  return sendWebSessionBotText({
++  return sendWebSessionBotState({
+     prisma: params.prisma,
+     clientId: params.clientId,
+     clientKey: params.clientKey,
+@@ -1788,7 +1808,7 @@ async function restartWebSessionBotConversation(params: {
+   });
+   const state = chatbotResult.state;
+   if (!chatbotResult.replyText?.trim()) return state;
+-  return sendWebSessionBotText({
++  return sendWebSessionBotState({
+     prisma: params.prisma,
+     clientId: params.clientId,
+     clientKey: params.clientKey,
+@@ -1924,7 +1944,7 @@ export async function closeWebSessionHumanService(params: {
+     closedAt: params.now.toISOString(),
+   };
+   if (serviceMessages.settings.closeNotice.enabled) {
+-    nextState = await sendWebSessionBotText({
++    nextState = await sendWebSessionBotState({
+       prisma: params.prisma,
+       clientId: params.clientId,
+       clientKey: params.clientKey,
+@@ -1987,7 +2007,7 @@ async function handleWebSessionSatisfactionInbound(params: {
+       return { handled: true as const, state: clearSatisfactionCommentRuntime(params.state) };
+     }
+     if (text === "1") {
+-      const state = await sendWebSessionBotText({
++      const state = await sendWebSessionBotState({
+         prisma: params.prisma,
+         clientId: params.clientId,
+         clientKey: params.clientKey,
+@@ -2005,7 +2025,7 @@ async function handleWebSessionSatisfactionInbound(params: {
+         where: { id: surveyId },
+         data: { status: "responded" },
+       });
+-      const state = await sendWebSessionBotText({
++      const state = await sendWebSessionBotState({
+         prisma: params.prisma,
+         clientId: params.clientId,
+         clientKey: params.clientKey,
+@@ -2018,7 +2038,7 @@ async function handleWebSessionSatisfactionInbound(params: {
+       });
+       return { handled: true as const, state };
+     }
+-    const state = await sendWebSessionBotText({
++    const state = await sendWebSessionBotState({
+       prisma: params.prisma,
+       clientId: params.clientId,
+       clientKey: params.clientKey,
+@@ -2047,7 +2067,7 @@ async function handleWebSessionSatisfactionInbound(params: {
+       where: { id: surveyId },
+       data: { status: "responded" },
+     });
+-    const state = await sendWebSessionBotText({
++    const state = await sendWebSessionBotState({
+       prisma: params.prisma,
+       clientId: params.clientId,
+       clientKey: params.clientKey,
+@@ -2108,7 +2128,7 @@ async function handleWebSessionSatisfactionInbound(params: {
+           status: "CLOSED" as const,
+           closedAt: params.state.closedAt ?? params.now.toISOString(),
+         };
+-        await sendWebSessionBotText({
++        await sendWebSessionBotState({
+           prisma: params.prisma,
+           clientId: params.clientId,
+           clientKey: params.clientKey,
+@@ -2121,7 +2141,7 @@ async function handleWebSessionSatisfactionInbound(params: {
+         });
+         return { handled: true as const, state: nextState };
+       }
+-      const state = await sendWebSessionBotText({
++      const state = await sendWebSessionBotState({
+         prisma: params.prisma,
+         clientId: params.clientId,
+         clientKey: params.clientKey,
+@@ -2161,7 +2181,7 @@ async function handleWebSessionSatisfactionInbound(params: {
+           status: "CLOSED" as const,
+           closedAt: params.now.toISOString(),
+         };
+-        await sendWebSessionBotText({
++        await sendWebSessionBotState({
+           prisma: params.prisma,
+           clientId: params.clientId,
+           clientKey: params.clientKey,
+@@ -2174,7 +2194,7 @@ async function handleWebSessionSatisfactionInbound(params: {
+         });
+         return { handled: true as const, state: nextState };
+       }
+-      const state = await sendWebSessionBotText({
++      const state = await sendWebSessionBotState({
+         prisma: params.prisma,
+         clientId: params.clientId,
+         clientKey: params.clientKey,
+@@ -2196,7 +2216,7 @@ async function handleWebSessionSatisfactionInbound(params: {
+       where: { id: survey.id },
+       data: { status: "expired" },
+     });
+-    const state = await sendWebSessionBotText({
++    const state = await sendWebSessionBotState({
+       prisma: params.prisma,
+       clientId: params.clientId,
+       clientKey: params.clientKey,
+@@ -2210,7 +2230,7 @@ async function handleWebSessionSatisfactionInbound(params: {
+     return { handled: true as const, state };
+   }
+   if (!Number.isInteger(score) || score < 1 || score > 5) {
+-    const state = await sendWebSessionBotText({
++    const state = await sendWebSessionBotState({
+       prisma: params.prisma,
+       clientId: params.clientId,
+       clientKey: params.clientKey,
+@@ -2242,7 +2262,7 @@ async function handleWebSessionSatisfactionInbound(params: {
+     where: { id: survey.id },
+     data: { status: "responded", answeredAt: respondedAt },
+   });
+-  const state = await sendWebSessionBotText({
++  const state = await sendWebSessionBotState({
+     prisma: params.prisma,
+     clientId: params.clientId,
+     clientKey: params.clientKey,
+@@ -2985,7 +3005,7 @@ export async function ingestWebSessionInboundMessage(params: {
+         return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
+       }
+       if (inboundChoice === "2") {
+-        runtimeConversationState = await sendWebSessionBotText({
++        runtimeConversationState = await sendWebSessionBotState({
+           prisma,
+           clientId: params.message.clientId,
+           clientKey: params.message.tenantKey,
+@@ -3012,7 +3032,7 @@ export async function ingestWebSessionInboundMessage(params: {
+         });
+         return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
+       }
+-      runtimeConversationState = await sendWebSessionBotText({
++      runtimeConversationState = await sendWebSessionBotState({
+         prisma,
+         clientId: params.message.clientId,
+         clientKey: params.message.tenantKey,
+@@ -3044,7 +3064,7 @@ export async function ingestWebSessionInboundMessage(params: {
+         getOperationalProtocol(runtimeConversationState) ??
+         buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
+       if (closePolicy.confirmation.enabled) {
+-        runtimeConversationState = await sendWebSessionBotText({
++        runtimeConversationState = await sendWebSessionBotState({
+           prisma,
+           clientId: params.message.clientId,
+           clientKey: params.message.tenantKey,
+@@ -3124,6 +3144,7 @@ export async function ingestWebSessionInboundMessage(params: {
+             definition: validatedDefinition.definition,
+             at: params.message.timestamp,
+           });
++          const stateBeforeChatbotFlow = runtimeConversationState;
+           const chatbotResult = await executeChatbotFlowWithConsent({
+             prisma,
+             clientId: params.message.clientId,
+@@ -3188,76 +3209,38 @@ export async function ingestWebSessionInboundMessage(params: {
+             });
+           }
+           if (replyText?.trim()) {
+-            const normalizedReplyText = normalizeBotMenuOptionMarkdown(replyText);
+-            const replyServiceCycle = getActiveServiceCycle(runtimeConversationState);
+-            const outboundResult = await createWebSessionTextOutboundMessage({
++            const botReplyResult = await sendWebSessionBotText({
+               prisma,
+               waId: params.message.sender,
+               waIdCanonical: params.message.senderCanonical,
+-              text: normalizedReplyText,
+-              runtimeWriteToken: runtimeConversationState.runtimeWriteToken,
++              text: replyText,
++              state: runtimeConversationState,
+               clientKey: params.message.tenantKey,
+               clientId: params.message.clientId,
+               requestId: `${requestId}:bot-reply`,
+-              actorUserId: null,
+-              outboundSource: "bot",
+-              skipAgentSignature: true,
+-              serviceCycle: replyServiceCycle,
++              channelAccountId: params.message.channelAccountId,
++              serviceCycle: getActiveServiceCycle(runtimeConversationState),
+               inboxVisibility: chatbotResult.managementInteraction?.outboundKind
+                 ? "management_only"
+                 : undefined,
+               inboxInteractionKind: chatbotResult.managementInteraction?.outboundKind ?? null,
+-              source: {
+-                channel: "whatsapp",
+-                provider: "web_session",
+-                channelAccountId: params.message.channelAccountId,
+-              },
++              publishMessageCreatedRealtime: params.publishMessageCreatedRealtime,
+             });
+-            if (outboundResult.ok && outboundResult.status === "SENT") {
+-              runtimeConversationState = updateOutbound(
+-                runtimeConversationState,
+-                outboundResult.messageId,
+-                outboundResult.createdAt
+-              );
+-              const humanInboxVisible = chatbotResult.managementInteraction?.outboundKind
+-                ? false
+-                : shouldProjectStateToHumanInbox(runtimeConversationState);
+-              const eventInboxVisibility: InboxMessageVisibility = humanInboxVisible
+-                ? "human_timeline"
+-                : "management_only";
+-              await publishWebSessionMessageCreatedRealtime({
+-                type: "message.created",
++            runtimeConversationState = botReplyResult.state;
++            if (!botReplyResult.sent) {
++              logger.info({
++                event: "web_session.bot_reply.not_sent",
+                 clientId: params.message.clientId,
+-                waId: params.message.sender,
+-                waIdCanonical: params.message.senderCanonical,
+-                mode: runtimeConversationState.mode === "HUMAN" ? "HUMAN" : "BOT",
+-                handoffStatus: runtimeConversationState.handoff.status,
+-                humanInboxVisible,
+-                assignedUserId: runtimeConversationState.assignedUserId ?? null,
+-                departmentId: runtimeConversationState.departmentId ?? null,
+-                protocol: replyServiceCycle?.protocol ?? null,
+-                cycleId: replyServiceCycle?.cycleId ?? null,
+-                message: {
+-                  inboxVisibility: eventInboxVisibility,
+-                  protocol: replyServiceCycle?.protocol ?? null,
+-                  cycleId: replyServiceCycle?.cycleId ?? null,
+-                  internalMessageId: outboundResult.internalMessageId,
+-                  messageKind: "outbound",
+-                  direction: "OUTBOUND",
+-                  type: "TEXT",
+-                  status: "SENT",
+-                  intent: runtimeConversationState.intent ?? null,
+-                  bodyText: outboundResult.bodyText,
+-                  media: null,
+-                  templateName: null,
+-                  templateLang: null,
+-                  requestId: `${requestId}:bot-reply`,
+-                  messageId: outboundResult.messageId,
+-                  metaMessageId: null,
+-                  errorBody: null,
+-                  createdAt: outboundResult.createdAt,
+-                },
+-              }, params.publishMessageCreatedRealtime);
++                waIdSuffix: maskIdentifier(params.message.sender).suffix,
++                requestId,
++                reason: botReplyResult.reason ?? "unknown",
++              });
++              if (botReplyResult.reason === "window_closed") {
++                runtimeConversationState = {
++                  ...stateBeforeChatbotFlow,
++                  answers: chatbotResult.state.answers,
++                };
++              }
+             }
+           }
+           let handoffServiceCycle: ServiceCycleSnapshot | null = null;
+diff --git a/apps/whatsapp-agent/src/whatsapp/webhook.controller.ts b/apps/whatsapp-agent/src/whatsapp/webhook.controller.ts
+index b4915e05..2ba5adaa 100644
+--- a/apps/whatsapp-agent/src/whatsapp/webhook.controller.ts
++++ b/apps/whatsapp-agent/src/whatsapp/webhook.controller.ts
+@@ -123,6 +123,7 @@ import {
+   ConversationIntent,
+   ConversationState,
+ } from "../conversation/conversation.types.js";
++
+ import {
+   claimHybridInboundLogicalMessage,
+   markHybridInboundLogicalMessageCompleted,
+@@ -169,6 +170,33 @@ import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOu
+ import { ensureCampaignOutboundConversation } from "../campaigns/campaignOutboundConversation.js";
+ import { parseOutboundReturnDestination } from "../routing/outboundReturnDestination.js";
+
++type WebhookControllerTestHooks = {
++  beforePassiveWindowRevalidation?: (params: {
++    clientId: string | null;
++    waId: string;
++    messageId: string;
++  }) => Promise<void> | void;
++  beforeChatbotReplyProgressRollback?: (params: {
++    clientId: string | null;
++    waId: string;
++    messageId: string;
++    reason: string;
++  }) => Promise<void> | void;
++  afterChatbotReplyProgressRollback?: (params: {
++    clientId: string | null;
++    waId: string;
++    messageId: string;
++    reason: string;
++    restored: boolean;
++  }) => Promise<void> | void;
++};
++
++function getWebhookControllerTestHooks(): WebhookControllerTestHooks | undefined {
++  if (env.ENV !== "test") return undefined;
++  return (globalThis as typeof globalThis & { __re7WebhookControllerTestHooks?: WebhookControllerTestHooks })
++    .__re7WebhookControllerTestHooks;
++}
++
+ const agentBrain = createAgentBrain();
+ const adminTemplateDedup = new Map<string, number>();
+ const ADMIN_TEMPLATE_TTL_MS = 10 * 60 * 1000;
+@@ -880,6 +908,33 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+         if (!shouldSendOutbound(params.waId, params.guard, params.messageId)) {
+           return { ok: false, errorBody: "late_reply_dropped" };
+         }
++        await getWebhookControllerTestHooks()?.beforePassiveWindowRevalidation?.({
++          clientId: tenantClientId,
++          waId: params.waId,
++          messageId: params.messageId,
++        });
++        const currentRuntime = await loadPersistedRuntimeForInbound(params.waId, new Date().toISOString());
++        const runtimeWindowExpiresAt = currentRuntime?.window?.expiresAt;
++        const runtimeWindowExpiresAtMs = runtimeWindowExpiresAt ? Date.parse(runtimeWindowExpiresAt) : NaN;
++        const passiveWindowBlockReason = !currentRuntime
++          ? "window_unavailable"
++          : !runtimeWindowExpiresAt || !Number.isFinite(runtimeWindowExpiresAtMs)
++            ? "window_invalid"
++            : !isWindowOpen(currentRuntime, Date.now())
++              ? "window_closed"
++              : null;
++        if (passiveWindowBlockReason) {
++          logger.warn({
++            event: "web_session.passive_outbound.window_blocked",
++            clientId: tenantClientId,
++            clientKey: tenantClientKey,
++            waId: maskNumber(params.waId),
++            requestId: meta?.requestId,
++            rid: params.messageId,
++            reason: passiveWindowBlockReason,
++          });
++          return { ok: false, errorBody: passiveWindowBlockReason };
++        }
+         const result = await createWebSessionTextOutboundMessage({
+           prisma,
+           waId: params.waId,
+@@ -5226,6 +5281,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+       flowId: null as string | null,
+       pendingHandoff: undefined as ChatbotPendingHandoff | undefined,
+     };
++    let chatbotReplyProgressCheckpoint: ConversationState | null = null;
+
+     if (!handoffResult.handled) {
+       const previousHandoffStatus = updatedConversation.handoff.status;
+@@ -5520,6 +5576,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+             }
+           }
+           if (!shouldDeferInitialMenuToAssistant) {
++            const chatbotProgressBeforeReply = updatedConversation;
+             const chatbotResult = await executeChatbotFlowWithConsent({
+               prisma,
+               clientId: tenantClientId,
+@@ -5535,6 +5592,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+               nowIso: message.timestamp,
+               startNodeId: chatbotStartNodeId,
+             });
++            if (chatbotResult.replyText?.trim()) {
++              chatbotReplyProgressCheckpoint = chatbotProgressBeforeReply;
++            }
+             updatedConversation = chatbotResult.state;
+             chatbotFlowResult = {
+               handled: chatbotResult.handled,
+@@ -5644,6 +5704,54 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+         requestId: meta?.requestId,
+       });
+     }
++    const rollbackChatbotReplyProgressIfNeeded = async (reason: string, state: ConversationState) => {
++      if (
++        flowResult.flowKey !== "chatbot" ||
++        !chatbotReplyProgressCheckpoint ||
++        !tenantClientId ||
++        !state.runtimeWriteToken
++      ) {
++        return;
++      }
++      await getWebhookControllerTestHooks()?.beforeChatbotReplyProgressRollback?.({
++        clientId: tenantClientId,
++        waId: normalizedFrom,
++        messageId: message.messageId,
++        reason,
++      });
++      const restored = await updateRuntimeIfUnchanged({
++        prisma,
++        clientId: tenantClientId,
++        waId: normalizedFrom,
++        expected: state.runtimeWriteToken,
++        data: {
++          flow: chatbotReplyProgressCheckpoint.flow ?? null,
++          flowStep: chatbotReplyProgressCheckpoint.flowStep ?? null,
++          chatbotNodeId: chatbotReplyProgressCheckpoint.chatbotNodeId ?? null,
++          chatbotActive: chatbotReplyProgressCheckpoint.chatbotActive === true,
++        },
++      });
++      logger.info({
++        event: restored ? "chatbot.reply_progress.rollback" : "chatbot.reply_progress.rollback_skipped",
++        messageId: message.messageId,
++        replyType: "text",
++        reason,
++        clientId: tenantClientId,
++        clientKey: tenantClientKey,
++        waId: maskNumber(normalizedFrom),
++        route: meta?.route,
++        method: meta?.method,
++        requestId: meta?.requestId,
++      });
++      await getWebhookControllerTestHooks()?.afterChatbotReplyProgressRollback?.({
++        clientId: tenantClientId,
++        waId: normalizedFrom,
++        messageId: message.messageId,
++        reason,
++        restored: Boolean(restored),
++      });
++    };
++
+     if (flowResult.handled) {
+       updatedConversation = flowResult.state ?? updatedConversation;
+     }
+@@ -6356,7 +6464,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+         intent: updatedConversation.intent,
+         lastInboundMessageId: message.messageId,
+       });
+-      await upsertConversationSafe(blockedConversation);
++      updatedConversation = await upsertConversationSafe(blockedConversation);
++      await rollbackChatbotReplyProgressIfNeeded("window_closed", updatedConversation);
+       for (const event of decision.events ?? []) {
+         if (event.event === "outbound.blocked.window_closed") {
+           logger.warn({
+@@ -8262,6 +8371,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+             requestId: meta?.requestId,
+           });
+         } else {
++          const windowDenied =
++            result.errorBody === "window_closed" ||
++            result.errorBody === "window_invalid" ||
++            result.errorBody === "window_unavailable";
++          if (windowDenied && replyType === "text") {
++            await rollbackChatbotReplyProgressIfNeeded(result.errorBody ?? "window_denied", updatedConversation);
++          }
+           logger.error({
+             event: "reply.error",
+             messageId: message.messageId,
+diff --git a/src/app/app/inbox/page.tsx b/src/app/app/inbox/page.tsx
+index 44dfd2f6..e65c3dd7 100644
+--- a/src/app/app/inbox/page.tsx
++++ b/src/app/app/inbox/page.tsx
+@@ -51,6 +51,7 @@ import {
+   PRIMARY_CONVERSATION_FILTERS,
+   type ConversationFilter,
+ } from "@/lib/inboxConversationFilters";
++import { isInboxFreeformWindowOpen } from "@/lib/inboxWindow";
+ import {
+   addAutoReadSuppressionKeys,
+   clearAutoReadSuppressionKeys,
+@@ -1884,6 +1885,8 @@ function applyConversationOperationalPayload(
+     closedAt: string | null;
+     lastInboundAt: string | null;
+     lastOutboundAt: string | null;
++    windowIsOpen?: boolean | null;
++    windowExpiresAt?: string | null;
+     waitingFirstResponseSec?: number | null;
+     activeDurationSec?: number | null;
+     isUnassigned: boolean;
+@@ -1921,6 +1924,8 @@ function applyConversationOperationalPayload(
+     closedAt: payload.closedAt,
+     lastInboundAt: payload.lastInboundAt,
+     lastOutboundAt: payload.lastOutboundAt,
++    windowIsOpen: payload.windowIsOpen ?? item.windowIsOpen ?? null,
++    windowExpiresAt: payload.windowExpiresAt ?? item.windowExpiresAt ?? null,
+     waitingFirstResponseSec: payload.waitingFirstResponseSec ?? item.waitingFirstResponseSec ?? null,
+     activeDurationSec: payload.activeDurationSec ?? item.activeDurationSec ?? null,
+     isUnassigned: payload.isUnassigned,
+@@ -2228,6 +2233,13 @@ function canReplyToConversation(
+   return item.mode === "HUMAN" && item.assignedUserId === currentUserId && status !== "CLOSED";
+ }
+
++function isConversationFreeformWindowOpen(
++  item: Pick<InboxConversationItem, "channel" | "windowIsOpen" | "windowExpiresAt"> | null,
++  nowMs = Date.now()
++) {
++  return isInboxFreeformWindowOpen(item, nowMs);
++}
++
+ function isConversationAssignedToAnotherUser(
+   item: Pick<InboxConversationItem, "assignedUserId"> | null,
+   currentUserId: string
+@@ -2407,11 +2419,13 @@ export default function AppInboxPage() {
+   const [sendingMessage, setSendingMessage] = useState(false);
+   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+   const [templatesLoading, setTemplatesLoading] = useState(false);
++  const [templatesLoaded, setTemplatesLoaded] = useState(false);
+   const [templateItems, setTemplateItems] = useState<AppTemplateItem[]>([]);
+   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+   const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
+   const [sendingTemplate, setSendingTemplate] = useState(false);
+   const [templateError, setTemplateError] = useState<string | null>(null);
++  const [windowNowMs, setWindowNowMs] = useState(() => Date.now());
+   const [cannedModalOpen, setCannedModalOpen] = useState(false);
+   const [cannedRepliesLoading, setCannedRepliesLoading] = useState(false);
+   const [cannedReplies, setCannedReplies] = useState<AppCannedReplyItem[]>([]);
+@@ -2519,6 +2533,7 @@ export default function AppInboxPage() {
+   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
+   const selectedConversationKeyRef = useRef<string | null>(null);
+   const selectedConversationWaIdRef = useRef<string | null>(null);
++  const templatesSessionKeyRef = useRef<string | null>(null);
+   const selectedAutomationReadRef = useRef(false);
+   const skipNextSelectedConversationListMarkReadRef = useRef(false);
+   const queueMutationAutoReadSuppressedKeysRef = useRef(new Set<string>());
+@@ -2976,6 +2991,16 @@ export default function AppInboxPage() {
+       skipNextSelectedConversationListMarkReadRef.current = false;
+       autoReadSuppressionSessionKeyRef.current = sessionKey;
+     }
++    if (templatesSessionKeyRef.current !== sessionKey) {
++      setTemplateItems([]);
++      setTemplatesLoaded(false);
++      setTemplatesLoading(false);
++      setSelectedTemplateId("");
++      setTemplateVariables({});
++      setTemplateError(null);
++      setTemplateModalOpen(false);
++      templatesSessionKeyRef.current = sessionKey;
++    }
+   }, [session]);
+
+   useEffect(() => () => {
+@@ -4830,6 +4855,18 @@ export default function AppInboxPage() {
+     }
+   }, [selectedConversation, selectedConversationKey, selectedConversationWaId]);
+
++  useEffect(() => {
++    setWindowNowMs(Date.now());
++    if (getConversationChannel(selectedConversation) !== "whatsapp" || selectedConversation?.windowIsOpen !== true) {
++      return;
++    }
++    const expiresAt = Date.parse(selectedConversation.windowExpiresAt ?? "");
++    if (!Number.isFinite(expiresAt)) return;
++    const delayMs = Math.max(0, expiresAt - Date.now()) + 250;
++    const timeout = window.setTimeout(() => setWindowNowMs(Date.now()), delayMs);
++    return () => window.clearTimeout(timeout);
++  }, [selectedConversation?.channel, selectedConversation?.windowExpiresAt, selectedConversation?.windowIsOpen, selectedConversationKey]);
++
+   const selectedChannelSwitchWarning = selectedConversation?.channelSwitchWarning?.pending
+     ? selectedConversation.channelSwitchWarning
+     : null;
+@@ -5168,22 +5205,22 @@ export default function AppInboxPage() {
+     selectedConversationChannel,
+     selectedConversation
+   );
+-  const selectedConversationSupportsTemplateOutbound = canSendInboxTemplate(
+-    selectedConversationChannel
+-  );
++  const selectedConversationWindowOpen = isConversationFreeformWindowOpen(selectedConversation, windowNowMs);
++  const selectedConversationSupportsTemplateOutbound = canSendInboxTemplate(selectedConversationChannel);
+   const selectedConversationOutboundDisabledMessage =
+     getInboxTextOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
+   const selectedConversationMediaOutboundDisabledMessage =
+     getInboxMediaOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
++  const selectedConversationWindowClosedMessage = "A janela de 24 horas está fechada. Aguarde uma nova resposta do cliente ou use um modelo aprovado quando disponível.";
+   const crmStartComposerEnabled = Boolean(crmStartContext && session);
+-  const composerEnabled = (canReply && selectedConversationSupportsOutbound) || crmStartComposerEnabled;
+-  const templateComposerEnabled = canReply && selectedConversationSupportsTemplateOutbound;
++  const composerEnabled = (canReply && selectedConversationSupportsOutbound && selectedConversationWindowOpen) || crmStartComposerEnabled;
+   const cannedRepliesFeatureEnabled = hasCapability(session, "cannedReplies");
+   const cannedComposerEnabled =
+     cannedRepliesFeatureEnabled &&
+     canReply &&
+     selectedConversationChannel === "whatsapp" &&
+-    selectedConversationSupportsOutbound;
++    selectedConversationSupportsOutbound &&
++    selectedConversationWindowOpen;
+   const canUseInboxTemplates = canUseInboxTemplatesForRole(session?.user.role);
+   const usableInboxTemplates = useMemo(
+     () =>
+@@ -5196,6 +5233,8 @@ export default function AppInboxPage() {
+       ),
+     [templateItems]
+   );
++  const inboxTemplatesAvailable = usableInboxTemplates.length > 0;
++  const inboxTemplateActionAvailable = templatesLoading || inboxTemplatesAvailable || Boolean(templateError);
+   const selectedTemplate = useMemo(
+     () => usableInboxTemplates.find((template) => template.id === selectedTemplateId) ?? null,
+     [selectedTemplateId, usableInboxTemplates]
+@@ -5242,7 +5281,8 @@ export default function AppInboxPage() {
+     Boolean(selectedConversationWaId) &&
+     Boolean(selectedConversation) &&
+     !selectedConversationIsClosed &&
+-    !isSelectedConversationLocked;
++    !isSelectedConversationLocked &&
++    selectedConversationWindowOpen;
+
+   const isSelectedConversationOwnedByCurrentUser = useMemo(
+     () =>
+@@ -5844,6 +5884,18 @@ export default function AppInboxPage() {
+       });
+       return;
+     }
++    if (!selectedConversationWindowOpen) {
++      logInboxUxEvent(
++        session,
++        "inbox.action.send.blocked",
++        buildInboxActionPayload(actionId, selectedConversation, {
++          reason: "window_closed",
++        })
++      );
++      setError(selectedConversationWindowClosedMessage);
++      setErrorDetails(null);
++      return;
++    }
+     if (!selectedConversationSupportsOutbound) {
+       logInboxUxEvent(
+         session,
+@@ -5921,6 +5973,11 @@ export default function AppInboxPage() {
+   const sendMediaFile = useCallback(
+     async (file: File, caption?: string) => {
+       if (!session || !selectedConversationWaId || !selectedConversation) return;
++      if (!selectedConversationWindowOpen) {
++        setError(selectedConversationWindowClosedMessage);
++        setErrorDetails(null);
++        return;
++      }
+       if (!selectedConversationSupportsOutbound || !selectedConversationSupportsMediaOutbound) {
+         setError(
+           !selectedConversationSupportsOutbound
+@@ -6097,12 +6154,14 @@ export default function AppInboxPage() {
+     try {
+       const response = await listAppTemplates(session);
+       setTemplateItems(response.items);
++      setTemplatesLoaded(true);
+     } catch (err) {
+       const typed = err as { status?: number; message?: string; details?: string };
+       if (typed.status === 401) {
+         handleUnauthorized();
+         return;
+       }
++      setTemplatesLoaded(true);
+       setTemplateError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível carregar os modelos." }));
+     } finally {
+       setTemplatesLoading(false);
+@@ -6116,8 +6175,12 @@ export default function AppInboxPage() {
+       setErrorDetails(null);
+       return;
+     }
+-    if (!canReply) {
+-      setError("Assuma a conversa para enviar modelo.");
++    if (!inboxTemplatesAvailable) {
++      if (templateError) {
++        void loadInboxTemplates();
++        return;
++      }
++      setError("Nenhum modelo aprovado está disponível para este tenant.");
+       setErrorDetails(null);
+       return;
+     }
+@@ -6138,13 +6201,23 @@ export default function AppInboxPage() {
+     selectedConversation,
+     selectedConversationSupportsTemplateOutbound,
+     selectedConversationWaId,
++    inboxTemplatesAvailable,
+     templateItems.length,
+   ]);
+
++  useEffect(() => {
++    if (!session || !canUseInboxTemplates || templatesLoaded || templatesLoading) return;
++    void loadInboxTemplates();
++  }, [canUseInboxTemplates, loadInboxTemplates, session, templatesLoaded, templatesLoading]);
++
+   const handleSendTemplate = async () => {
+     if (!session || !selectedConversationWaId || !selectedConversation || !selectedTemplate) return;
+-    if (!templateComposerEnabled) {
+-      setTemplateError("Assuma uma conversa WhatsApp para enviar modelo.");
++    if (!selectedConversationSupportsTemplateOutbound) {
++      setTemplateError("Envio de modelo está disponível apenas para conversas do WhatsApp.");
++      return;
++    }
++    if (!inboxTemplatesAvailable) {
++      setTemplateError("Nenhum modelo aprovado está disponível para este tenant.");
+       return;
+     }
+     const missingKeys = selectedTemplateVariableKeys.filter((key) => !templateVariables[key]?.trim());
+@@ -6271,6 +6344,11 @@ export default function AppInboxPage() {
+
+   const handleOpenCannedModal = useCallback(() => {
+     if (!selectedConversationWaId || !selectedConversation) return;
++    if (!selectedConversationWindowOpen) {
++      setError(selectedConversationWindowClosedMessage);
++      setErrorDetails(null);
++      return;
++    }
+     if (selectedConversationChannel !== "whatsapp" || !selectedConversationSupportsOutbound) {
+       setError("Mensagens prontas estão disponíveis apenas para conversas WhatsApp com envio habilitado.");
+       setErrorDetails(null);
+@@ -6307,6 +6385,10 @@ export default function AppInboxPage() {
+
+   const handleSendCannedReply = async () => {
+     if (!session || !selectedConversationWaId || !selectedConversation || !selectedCannedReply) return;
++    if (!selectedConversationWindowOpen) {
++      setCannedReplyError(selectedConversationWindowClosedMessage);
++      return;
++    }
+     if (!cannedComposerEnabled) {
+       setCannedReplyError("Assuma uma conversa WhatsApp para enviar mensagem pronta.");
+       return;
+@@ -6430,6 +6512,11 @@ export default function AppInboxPage() {
+
+   const handleToggleAudioRecording = async () => {
+     if (!selectedConversationWaId) return;
++    if (!selectedConversationWindowOpen) {
++      setError(selectedConversationWindowClosedMessage);
++      setErrorDetails(null);
++      return;
++    }
+     if (!selectedConversationSupportsOutbound || !selectedConversationSupportsMediaOutbound) {
+       setError(
+         !selectedConversationSupportsOutbound
+@@ -8580,7 +8667,11 @@ export default function AppInboxPage() {
+                 </div>
+               </div>
+             ) : null}
+-            {selectedConversation && !selectedConversationSupportsOutbound ? (
++            {selectedConversation && !selectedConversationWindowOpen ? (
++              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
++                {selectedConversationWindowClosedMessage}
++              </div>
++            ) : selectedConversation && !selectedConversationSupportsOutbound ? (
+               <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-900">
+                 {selectedConversationOutboundDisabledMessage}
+               </div>
+@@ -8661,12 +8752,12 @@ export default function AppInboxPage() {
+               >
+                 😊
+               </button>
+-              {canUseInboxTemplates ? (
++              {canUseInboxTemplates && selectedConversationSupportsTemplateOutbound && (inboxTemplateActionAvailable) ? (
+                 <button
+                   type="button"
+                   disabled={
+                     !selectedConversationWaId ||
+-                    !templateComposerEnabled ||
++                    templatesLoading ||
+                     isHydratingSelectedTimeline ||
+                     sendingTemplate
+                   }
+@@ -8733,9 +8824,11 @@ export default function AppInboxPage() {
+                   autoCapitalize="sentences"
+                   spellCheck={false}
+                   placeholder={
+-                    selectedConversation && !selectedConversationSupportsOutbound
+-                      ? selectedConversationOutboundDisabledMessage
+-                      : canReply || crmStartContext
++                    selectedConversation && !selectedConversationWindowOpen
++                      ? selectedConversationWindowClosedMessage
++                      : selectedConversation && !selectedConversationSupportsOutbound
++                        ? selectedConversationOutboundDisabledMessage
++                        : canReply || crmStartContext
+                       ? isHydratingSelectedTimeline
+                         ? "Carregando mensagens..."
+                         : "Digite uma mensagem"
+diff --git a/src/lib/appClientApi.ts b/src/lib/appClientApi.ts
+index add660ff..ae0c7fb9 100644
+--- a/src/lib/appClientApi.ts
++++ b/src/lib/appClientApi.ts
+@@ -206,6 +206,8 @@ export type AppSupportConversation = {
+   updatedAt: string;
+   lastInboundAt: string | null;
+   lastOutboundAt: string | null;
++  windowIsOpen?: boolean | null;
++  windowExpiresAt?: string | null;
+ };
+
+ export type AppSupportMessage = {
+@@ -1146,6 +1148,8 @@ type AppConversationOperationalPayload = {
+   awaitingConsent?: boolean;
+   lastInboundAt: string | null;
+   lastOutboundAt: string | null;
++  windowIsOpen?: boolean | null;
++  windowExpiresAt?: string | null;
+   waitingFirstResponseSec?: number | null;
+   activeDurationSec?: number | null;
+   isUnassigned: boolean;
+diff --git a/src/lib/inboxWindow.ts b/src/lib/inboxWindow.ts
+new file mode 100644
+index 00000000..63ce1945
+--- /dev/null
++++ b/src/lib/inboxWindow.ts
+@@ -0,0 +1,17 @@
++export type InboxWindowState = {
++  channel?: string | null;
++  windowIsOpen?: boolean | null;
++  windowExpiresAt?: string | null;
++};
++
++export function isInboxFreeformWindowOpen(
++  item: InboxWindowState | null | undefined,
++  nowMs = Date.now()
++) {
++  if (!item || item.channel !== "whatsapp") return true;
++  if (item.windowIsOpen !== true) return false;
++  if (!item.windowExpiresAt) return false;
++  const expiresAt = Date.parse(item.windowExpiresAt);
++  if (!Number.isFinite(expiresAt)) return false;
++  return nowMs < expiresAt;
++}
+diff --git a/src/lib/whatsappAdminApi.ts b/src/lib/whatsappAdminApi.ts
+index 8f053555..94b13b01 100644
+--- a/src/lib/whatsappAdminApi.ts
++++ b/src/lib/whatsappAdminApi.ts
+@@ -140,6 +140,8 @@ export type InboxConversationItem = {
+   closedAt: string | null;
+   lastInboundAt: string | null;
+   lastOutboundAt: string | null;
++  windowIsOpen?: boolean | null;
++  windowExpiresAt?: string | null;
+   waitingFirstResponseSec?: number | null;
+   activeDurationSec?: number | null;
+   unreadCount?: number;
+@@ -2081,6 +2083,8 @@ export async function transferConversationDepartment(
+   closedAt: string | null;
+   lastInboundAt: string | null;
+   lastOutboundAt: string | null;
++  windowIsOpen?: boolean | null;
++  windowExpiresAt?: string | null;
+   isUnassigned: boolean;
+ }> {
+   const params = new URLSearchParams();

@@ -1,6 +1,11 @@
 # Product Map Current
 
 
+## Preparacao 01/10 - pacote de release freeform window
+
+PREPARED FOR REVIEW / NOT DEPLOYED. A proxima release revisavel e `af26f48a`, embalada em `docs/reviews/automation-freeform-window-release-af26/` com patch API/frontend, manifesto e referencia ao worker minimo com patch final. O mapa operacional preserva a composicao ativa lida: frontend `ba66c241`, API `b66bb89a`, worker minimo `bf5+f06+912+b66`; retorno deve restaurar codigo e builds dessas releases, nao apenas Git HEAD. Sem nova funcionalidade, sem deploy e sem validacao produtiva META_CLOUD puro/API->WEB.
+
+
 ## Fechamento local 01/10 - API->WEB pelo receiveWebhook
 
 LOCAL VALIDATED / NOT DEPLOYED sobre `2daa2b459a0d20727cb97e2895a2059e50dd49e4`. O handler `receiveWebhook` agora preserva estado recuperavel quando o fluxo prepara resposta, mas o gate de janela bloqueia o envio WEB/hibrido antes do provider: zero envio, sem sucesso falso e sem avanco dependente da mensagem; expiracao imediatamente antes da revalidacao do sender sem intervencao restaura o no anterior via CAS; intervencao humana concorrente continua preservada; janela aberta segue enviando pelo WEB simulado e conclui o no terminal. Evidencia integrada: `webhookApiWebWindow.test.ts` 4/4; regressao `automationOwnActivity.test.ts` + novo teste 21/21; backend build PASS; `git diff --check` PASS. Worker e validacoes produtivas permanecem separados.
