@@ -1467,6 +1467,12 @@ async function shouldPreclassifyInboundAsSatisfactionManagement(params: {
   return Boolean(pendingSurvey);
 }
 
+type WebSessionBotTextResult = {
+  state: ConversationState;
+  sent: boolean;
+  reason?: "empty" | "window_closed" | "send_failed";
+};
+
 async function sendWebSessionBotText(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -1481,8 +1487,8 @@ async function sendWebSessionBotText(params: {
   inboxVisibility?: InboxMessageVisibility;
   inboxInteractionKind?: string | null;
   publishMessageCreatedRealtime?: WebSessionMessageCreatedRealtimePublisher;
-}) {
-  if (!params.text.trim()) return params.state;
+}): Promise<WebSessionBotTextResult> {
+  if (!params.text.trim()) return { state: params.state, sent: false, reason: "empty" };
   if (!isWindowOpen(params.state, Date.now())) {
     logger.warn({
       event: "web_session.bot_outbound.window_closed",
@@ -1491,7 +1497,7 @@ async function sendWebSessionBotText(params: {
       requestId: params.requestId,
       source: "web_session_bot",
     });
-    return params.state;
+    return { state: params.state, sent: false, reason: "window_closed" };
   }
   const serviceCycle = params.serviceCycle ?? getServiceCycleForDisplay(params.state);
   const inferredManagementKind = params.requestId.includes(":survey") ? "satisfaction" : null;
@@ -1556,9 +1562,13 @@ async function sendWebSessionBotText(params: {
         createdAt: outboundResult.createdAt,
       },
     }, params.publishMessageCreatedRealtime);
-    return nextState;
+    return { state: nextState, sent: true };
   }
-  return params.state;
+  return { state: params.state, sent: false, reason: "send_failed" };
+}
+
+async function sendWebSessionBotState(params: Parameters<typeof sendWebSessionBotText>[0]) {
+  return (await sendWebSessionBotText(params)).state;
 }
 
 async function sendWebSessionHandoffNotifications(params: {
@@ -1616,7 +1626,7 @@ async function sendWebSessionHandoffNotifications(params: {
   });
   let nextState = params.state;
   for (const notification of notifications) {
-    nextState = await sendWebSessionBotText({
+    nextState = await sendWebSessionBotState({
       prisma: params.prisma,
       clientId: params.clientId,
       clientKey: params.clientKey,
@@ -1719,7 +1729,7 @@ async function sendWebSessionSatisfactionSurvey(params: {
       },
     },
   });
-  return sendWebSessionBotText({
+  return sendWebSessionBotState({
     prisma: params.prisma,
     clientId: params.clientId,
     clientKey: params.clientKey,
@@ -1798,7 +1808,7 @@ async function restartWebSessionBotConversation(params: {
   });
   const state = chatbotResult.state;
   if (!chatbotResult.replyText?.trim()) return state;
-  return sendWebSessionBotText({
+  return sendWebSessionBotState({
     prisma: params.prisma,
     clientId: params.clientId,
     clientKey: params.clientKey,
@@ -1934,7 +1944,7 @@ export async function closeWebSessionHumanService(params: {
     closedAt: params.now.toISOString(),
   };
   if (serviceMessages.settings.closeNotice.enabled) {
-    nextState = await sendWebSessionBotText({
+    nextState = await sendWebSessionBotState({
       prisma: params.prisma,
       clientId: params.clientId,
       clientKey: params.clientKey,
@@ -1997,7 +2007,7 @@ async function handleWebSessionSatisfactionInbound(params: {
       return { handled: true as const, state: clearSatisfactionCommentRuntime(params.state) };
     }
     if (text === "1") {
-      const state = await sendWebSessionBotText({
+      const state = await sendWebSessionBotState({
         prisma: params.prisma,
         clientId: params.clientId,
         clientKey: params.clientKey,
@@ -2015,7 +2025,7 @@ async function handleWebSessionSatisfactionInbound(params: {
         where: { id: surveyId },
         data: { status: "responded" },
       });
-      const state = await sendWebSessionBotText({
+      const state = await sendWebSessionBotState({
         prisma: params.prisma,
         clientId: params.clientId,
         clientKey: params.clientKey,
@@ -2028,7 +2038,7 @@ async function handleWebSessionSatisfactionInbound(params: {
       });
       return { handled: true as const, state };
     }
-    const state = await sendWebSessionBotText({
+    const state = await sendWebSessionBotState({
       prisma: params.prisma,
       clientId: params.clientId,
       clientKey: params.clientKey,
@@ -2057,7 +2067,7 @@ async function handleWebSessionSatisfactionInbound(params: {
       where: { id: surveyId },
       data: { status: "responded" },
     });
-    const state = await sendWebSessionBotText({
+    const state = await sendWebSessionBotState({
       prisma: params.prisma,
       clientId: params.clientId,
       clientKey: params.clientKey,
@@ -2118,7 +2128,7 @@ async function handleWebSessionSatisfactionInbound(params: {
           status: "CLOSED" as const,
           closedAt: params.state.closedAt ?? params.now.toISOString(),
         };
-        await sendWebSessionBotText({
+        await sendWebSessionBotState({
           prisma: params.prisma,
           clientId: params.clientId,
           clientKey: params.clientKey,
@@ -2131,7 +2141,7 @@ async function handleWebSessionSatisfactionInbound(params: {
         });
         return { handled: true as const, state: nextState };
       }
-      const state = await sendWebSessionBotText({
+      const state = await sendWebSessionBotState({
         prisma: params.prisma,
         clientId: params.clientId,
         clientKey: params.clientKey,
@@ -2171,7 +2181,7 @@ async function handleWebSessionSatisfactionInbound(params: {
           status: "CLOSED" as const,
           closedAt: params.now.toISOString(),
         };
-        await sendWebSessionBotText({
+        await sendWebSessionBotState({
           prisma: params.prisma,
           clientId: params.clientId,
           clientKey: params.clientKey,
@@ -2184,7 +2194,7 @@ async function handleWebSessionSatisfactionInbound(params: {
         });
         return { handled: true as const, state: nextState };
       }
-      const state = await sendWebSessionBotText({
+      const state = await sendWebSessionBotState({
         prisma: params.prisma,
         clientId: params.clientId,
         clientKey: params.clientKey,
@@ -2206,7 +2216,7 @@ async function handleWebSessionSatisfactionInbound(params: {
       where: { id: survey.id },
       data: { status: "expired" },
     });
-    const state = await sendWebSessionBotText({
+    const state = await sendWebSessionBotState({
       prisma: params.prisma,
       clientId: params.clientId,
       clientKey: params.clientKey,
@@ -2220,7 +2230,7 @@ async function handleWebSessionSatisfactionInbound(params: {
     return { handled: true as const, state };
   }
   if (!Number.isInteger(score) || score < 1 || score > 5) {
-    const state = await sendWebSessionBotText({
+    const state = await sendWebSessionBotState({
       prisma: params.prisma,
       clientId: params.clientId,
       clientKey: params.clientKey,
@@ -2252,7 +2262,7 @@ async function handleWebSessionSatisfactionInbound(params: {
     where: { id: survey.id },
     data: { status: "responded", answeredAt: respondedAt },
   });
-  const state = await sendWebSessionBotText({
+  const state = await sendWebSessionBotState({
     prisma: params.prisma,
     clientId: params.clientId,
     clientKey: params.clientKey,
@@ -2995,7 +3005,7 @@ export async function ingestWebSessionInboundMessage(params: {
         return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
       }
       if (inboundChoice === "2") {
-        runtimeConversationState = await sendWebSessionBotText({
+        runtimeConversationState = await sendWebSessionBotState({
           prisma,
           clientId: params.message.clientId,
           clientKey: params.message.tenantKey,
@@ -3022,7 +3032,7 @@ export async function ingestWebSessionInboundMessage(params: {
         });
         return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
       }
-      runtimeConversationState = await sendWebSessionBotText({
+      runtimeConversationState = await sendWebSessionBotState({
         prisma,
         clientId: params.message.clientId,
         clientKey: params.message.tenantKey,
@@ -3054,7 +3064,7 @@ export async function ingestWebSessionInboundMessage(params: {
         getOperationalProtocol(runtimeConversationState) ??
         buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
       if (closePolicy.confirmation.enabled) {
-        runtimeConversationState = await sendWebSessionBotText({
+        runtimeConversationState = await sendWebSessionBotState({
           prisma,
           clientId: params.message.clientId,
           clientKey: params.message.tenantKey,
@@ -3134,6 +3144,7 @@ export async function ingestWebSessionInboundMessage(params: {
             definition: validatedDefinition.definition,
             at: params.message.timestamp,
           });
+          const stateBeforeChatbotFlow = runtimeConversationState;
           const chatbotResult = await executeChatbotFlowWithConsent({
             prisma,
             clientId: params.message.clientId,
@@ -3198,8 +3209,7 @@ export async function ingestWebSessionInboundMessage(params: {
             });
           }
           if (replyText?.trim()) {
-            const beforeBotReplyOutboundId = runtimeConversationState.lastOutboundMessageId ?? null;
-            runtimeConversationState = await sendWebSessionBotText({
+            const botReplyResult = await sendWebSessionBotText({
               prisma,
               waId: params.message.sender,
               waIdCanonical: params.message.senderCanonical,
@@ -3216,13 +3226,21 @@ export async function ingestWebSessionInboundMessage(params: {
               inboxInteractionKind: chatbotResult.managementInteraction?.outboundKind ?? null,
               publishMessageCreatedRealtime: params.publishMessageCreatedRealtime,
             });
-            if ((runtimeConversationState.lastOutboundMessageId ?? null) === beforeBotReplyOutboundId) {
+            runtimeConversationState = botReplyResult.state;
+            if (!botReplyResult.sent) {
               logger.info({
                 event: "web_session.bot_reply.not_sent",
                 clientId: params.message.clientId,
                 waIdSuffix: maskIdentifier(params.message.sender).suffix,
                 requestId,
+                reason: botReplyResult.reason ?? "unknown",
               });
+              if (botReplyResult.reason === "window_closed") {
+                runtimeConversationState = {
+                  ...stateBeforeChatbotFlow,
+                  answers: chatbotResult.state.answers,
+                };
+              }
             }
           }
           let handoffServiceCycle: ServiceCycleSnapshot | null = null;

@@ -13,6 +13,21 @@
 
 API/frontend do candidato incluem os três deltas funcionais. O worker permanece na base mínima: **não** usar o build completo da árvore da API. c6884100/d06a92b8 não exigem novo delta no worker; 91230f88 tem o backport específico abaixo.
 
+
+## Complemento 01/10 - gate de janela freeform WEB/BOT
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Complemento sobre `4f8f9869ab44cac0f46557b94ae0ef1d8699452d`, sem producao, provider real, envio real, migration, commit ou push. O delta da API nega `sendPassiveOutboundText` quando o runtime esta ausente (`window_unavailable`), a janela e invalida (`window_invalid`) ou expira apos o preparo (`window_closed`) antes do provider. O caminho WEB/BOT usa resultado explicito de envio; quando `sendWebSessionBotText` retorna `window_closed`, registra `web_session.bot_reply.not_sent` e nao persiste avanco dependente de resposta nao enviada.
+
+Backport minimo do worker: [worker-freeform-window-gate-20261001.patch](worker-freeform-window-gate-20261001.patch), `sha256=0b09cbcfa2b6c26624c332a3e7cb53e27691b2e4b391d513dd1d436b74d6d8be`, 515 linhas, sem bundles. O patch aplica sobre a composicao minima preservada `bf5 + f06 + 912 + b66`, mantendo os patches anteriores e alterando somente fontes necessarias (`webSessionInbound`, helper CRM minimo exigido pelo source e `runtimeWriteFence` compativel com o Prisma antigo).
+
+Evidencia separada:
+
+- Fonte/API: `automationOwnActivity.test.ts` 18/18 PASS; `campaignsFeatureRoutes.test.ts` focado 1/1 PASS; backend build PASS.
+- Worker fonte recomposta: `apps/whatsapp-web-worker npm run build` PASS.
+- Worker compilado recomposto: prova dirigida privada `local-evidence/freeform-window-gate-worker-20261001/compiled-worker-proof.mjs` PASS para `botWindowExpired` e `ownActivityB66`; hashes dos compilados alterados estao no manifesto.
+
+A suite historica compilada completa nao e usada como gate desta correcao porque contem fixtures anteriores ao contrato de janela e foi tratada como diagnostico, nao como aprovacao integral. META_CLOUD puro e hibrido API->WEB continuam pendentes de validacao produtiva separada.
+
 ## Worker mínimo reproduzível
 
 Base `bf5f1d7610ca3f8144faa6f7b7994598e4a4017b`, com as cinco fontes de persistência f06d49cb do [pacote pré-requisito](../secult-worker-persistence/README.md), revisado em 042e386a. Sobre essa árvore aplica-se [worker-automation-91230f88.patch](worker-automation-91230f88.patch). O [manifesto](manifest.json) informa hashes de fontes/dependências e todos os compilados base/candidato; não inclui os compilados.

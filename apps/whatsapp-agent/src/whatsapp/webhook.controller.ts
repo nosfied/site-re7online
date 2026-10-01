@@ -881,16 +881,26 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           return { ok: false, errorBody: "late_reply_dropped" };
         }
         const currentRuntime = await loadPersistedRuntimeForInbound(params.waId, new Date().toISOString());
-        if (currentRuntime && !isWindowOpen(currentRuntime, Date.now())) {
+        const runtimeWindowExpiresAt = currentRuntime?.window?.expiresAt;
+        const runtimeWindowExpiresAtMs = runtimeWindowExpiresAt ? Date.parse(runtimeWindowExpiresAt) : NaN;
+        const passiveWindowBlockReason = !currentRuntime
+          ? "window_unavailable"
+          : !runtimeWindowExpiresAt || !Number.isFinite(runtimeWindowExpiresAtMs)
+            ? "window_invalid"
+            : !isWindowOpen(currentRuntime, Date.now())
+              ? "window_closed"
+              : null;
+        if (passiveWindowBlockReason) {
           logger.warn({
-            event: "web_session.passive_outbound.window_closed",
+            event: "web_session.passive_outbound.window_blocked",
             clientId: tenantClientId,
             clientKey: tenantClientKey,
             waId: maskNumber(params.waId),
             requestId: meta?.requestId,
             rid: params.messageId,
+            reason: passiveWindowBlockReason,
           });
-          return { ok: false, errorBody: "window_closed" };
+          return { ok: false, errorBody: passiveWindowBlockReason };
         }
         const result = await createWebSessionTextOutboundMessage({
           prisma,

@@ -249,5 +249,56 @@
     "whatsapp-agent/src/logger/logger.js": "ef1b97e241f5cbff3d59baba24388c267077dd9f8f873094c39436eb674783c9",
     "whatsapp-agent/src/domain/whatsapp/types.js": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
   },
-  "evidence": "Existing build and 15 selected Node20 tests reused; no rebuild or rerun. Strict typing limitations remain; source patch application is not new runtime validation."
+  "evidence": "Existing build and 15 selected Node20 tests reused; no rebuild or rerun. Strict typing limitations remain; source patch application is not new runtime validation.",
+  "freeformWindowGateCorrection": {
+    "base": "4f8f9869ab44cac0f46557b94ae0ef1d8699452d",
+    "status": "LOCAL VALIDATED / NOT DEPLOYED",
+    "patch": "worker-freeform-window-gate-20261001.patch",
+    "patchSha256": "0b09cbcfa2b6c26624c332a3e7cb53e27691b2e4b391d513dd1d436b74d6d8be",
+    "patchLines": 515,
+    "scope": "Worker minimal recomposition over bf5+f06+912+b66; no bundles, secrets, production mutation, provider call or deploy.",
+    "sourceFiles": {
+      "apps/whatsapp-agent/src/web-session/webSessionInbound.ts": "011679c9a20ffaae08042e86d3347e18d3bd21fb62fcaa561ab298abba982551",
+      "apps/whatsapp-agent/src/whatsapp/webhook.controller.ts": "ff7d97dbd05dedbe9cc90102f51d7cfec0204fa7c86fa02fde1877853c115b02",
+      "apps/whatsapp-agent/src/conversation/automationOwnActivity.test.ts": "23a5a0127f9c07d4f89118a9041953bfe4708b2c732e2e990b389b9e1685dd44"
+    },
+    "sourceValidation": [
+      {
+        "command": "DATABASE_URL=postgresql://...@127.0.0.1:55432/re7_recovery_regression node --test --import tsx src/conversation/automationOwnActivity.test.ts",
+        "result": "PASS",
+        "count": "18/18"
+      },
+      {
+        "command": "DATABASE_URL=postgresql://...@127.0.0.1:55432/re7_recovery_regression node --test --import tsx --test-name-pattern \"web session inbound uses shared chatbot flow and queue handoff\" src/http/campaignsFeatureRoutes.test.ts",
+        "result": "PASS",
+        "count": "1/1"
+      },
+      {
+        "command": "npm run build (apps/whatsapp-agent)",
+        "result": "PASS"
+      }
+    ],
+    "workerBuild": {
+      "command": "npm run build (apps/whatsapp-web-worker in recomposed source)",
+      "result": "PASS"
+    },
+    "compiledWorkerProof": {
+      "command": "DATABASE_URL=postgresql://...@127.0.0.1:55432/re7_recovery_regression node local-evidence/freeform-window-gate-worker-20261001/compiled-worker-proof.mjs",
+      "result": "PASS",
+      "cases": [
+        "botWindowExpired",
+        "ownActivityB66"
+      ],
+      "note": "private evidence outside Git; no real provider call"
+    },
+    "changedCompiledHashes": {
+      "whatsapp-agent/src/web-session/webSessionInbound.js": "a12a23a85fa1184c55ba24e9826f869b8fcb48dee880150b46ac43187cd1fa13",
+      "whatsapp-agent/src/conversation/runtimeWriteFence.js": "2a618fc59539410da1553376976f2ae6d2dbc6af5a703914fe144149c1679c98",
+      "whatsapp-agent/src/crm/crmContactUpsert.js": "fc47557c5553c7778c422ce3c2cc44ef2a22a61aa0295a9e3d53edec08d16b61"
+    },
+    "limitations": [
+      "Full historical compiled worker suite not used as approval gate for this correction; directed compiled proof covers changed reachable paths.",
+      "META_CLOUD pure and hybrid API->WEB productive validation remains pending."
+    ]
+  }
 }
