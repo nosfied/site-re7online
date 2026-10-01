@@ -5248,6 +5248,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       flowId: null as string | null,
       pendingHandoff: undefined as ChatbotPendingHandoff | undefined,
     };
+    let chatbotReplyProgressCheckpoint: ConversationState | null = null;
 
     if (!handoffResult.handled) {
       const previousHandoffStatus = updatedConversation.handoff.status;
@@ -5542,6 +5543,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             }
           }
           if (!shouldDeferInitialMenuToAssistant) {
+            const chatbotProgressBeforeReply = updatedConversation;
             const chatbotResult = await executeChatbotFlowWithConsent({
               prisma,
               clientId: tenantClientId,
@@ -5557,6 +5559,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               nowIso: message.timestamp,
               startNodeId: chatbotStartNodeId,
             });
+            if (chatbotResult.replyText?.trim()) {
+              chatbotReplyProgressCheckpoint = chatbotProgressBeforeReply;
+            }
             updatedConversation = chatbotResult.state;
             chatbotFlowResult = {
               handled: chatbotResult.handled,
@@ -5666,6 +5671,41 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         requestId: meta?.requestId,
       });
     }
+    const rollbackChatbotReplyProgressIfNeeded = async (reason: string, state: ConversationState) => {
+      if (
+        flowResult.flowKey !== "chatbot" ||
+        !chatbotReplyProgressCheckpoint ||
+        !tenantClientId ||
+        !state.runtimeWriteToken
+      ) {
+        return;
+      }
+      const restored = await updateRuntimeIfUnchanged({
+        prisma,
+        clientId: tenantClientId,
+        waId: normalizedFrom,
+        expected: state.runtimeWriteToken,
+        data: {
+          flow: chatbotReplyProgressCheckpoint.flow ?? null,
+          flowStep: chatbotReplyProgressCheckpoint.flowStep ?? null,
+          chatbotNodeId: chatbotReplyProgressCheckpoint.chatbotNodeId ?? null,
+          chatbotActive: chatbotReplyProgressCheckpoint.chatbotActive === true,
+        },
+      });
+      logger.info({
+        event: restored ? "chatbot.reply_progress.rollback" : "chatbot.reply_progress.rollback_skipped",
+        messageId: message.messageId,
+        replyType: "text",
+        reason,
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(normalizedFrom),
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+    };
+
     if (flowResult.handled) {
       updatedConversation = flowResult.state ?? updatedConversation;
     }
@@ -6378,7 +6418,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         intent: updatedConversation.intent,
         lastInboundMessageId: message.messageId,
       });
-      await upsertConversationSafe(blockedConversation);
+      updatedConversation = await upsertConversationSafe(blockedConversation);
+      await rollbackChatbotReplyProgressIfNeeded("window_closed", updatedConversation);
       for (const event of decision.events ?? []) {
         if (event.event === "outbound.blocked.window_closed") {
           logger.warn({
@@ -8284,6 +8325,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             requestId: meta?.requestId,
           });
         } else {
+          const windowDenied =
+            result.errorBody === "window_closed" ||
+            result.errorBody === "window_invalid" ||
+            result.errorBody === "window_unavailable";
+          if (windowDenied && replyType === "text") {
+            await rollbackChatbotReplyProgressIfNeeded(result.errorBody ?? "window_denied", updatedConversation);
+          }
           logger.error({
             event: "reply.error",
             messageId: message.messageId,

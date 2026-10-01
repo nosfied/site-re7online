@@ -1,6 +1,10 @@
 # CRA-PR Readiness Notes
 
 
+## Fechamento local 01/10 - API->WEB pelo receiveWebhook
+
+LOCAL VALIDATED / NOT DEPLOYED; nao e aceite CRA. Base `2daa2b459a0d20727cb97e2895a2059e50dd49e4`, branch `review/campaign-recovery-20260926`. Prova integrada no `receiveWebhook` cobre API->WEB com payload Meta, tenant/conta locais e provider WEB simulado: janela fechada gera zero provider call/outbound SENT e mantem no recuperavel; janela aberta envia e conclui o fluxo terminal. O ajuste usa `updateRuntimeIfUnchanged` para reverter apenas progresso dependente da resposta, preservando inbound, respostas e estados independentes. Testes: `webhookApiWebWindow.test.ts` 2/2; `automationOwnActivity.test.ts` + novo teste 21/21; backend build PASS; `git diff --check` PASS. Sem producao/provider/envio/schema/migration/deploy; META_CLOUD puro e hibrido API->WEB produtivos seguem pendentes.
+
 ## Complemento local 01/10 - janela WhatsApp, templates e WEB automatico
 
 LOCAL VALIDATED / NOT DEPLOYED; nao e aceite CRA. Base `4f8f9869ab44cac0f46557b94ae0ef1d8699452d`, branch `review/campaign-recovery-20260926`. UI/template anteriores preservados; complemento dirigido fecha API passive WEB e WEB/BOT: runtime ausente/invalido/expirado nega antes do provider, expiracao apos preparo de resposta nao envia, e negativa de BOT por janela nao persiste avanco dependente de envio, reset ou retry cego. `b66bb89a` preservado. Backport minimo do worker documentado em `docs/reviews/automation-worker-backport/worker-freeform-window-gate-20261001.patch` (`sha256=ab1080df3804b35479a179425bf664db79b0f0caec50f5dd00f97cdac0c1c566`), sem bundles. Testes locais novos: `automationOwnActivity.test.ts` 19/19, `campaignsFeatureRoutes.test.ts` focado 1/1; backend build PASS; worker minimo build PASS; prova API->WEB de caller branch PASS; prova dirigida dos compilados PASS. Sem schema/migration/provider/envio/deploy; META_CLOUD puro e hibrido API->WEB continuam pendentes de validacao separada.

@@ -1,6 +1,10 @@
 # Product Map Current
 
 
+## Fechamento local 01/10 - API->WEB pelo receiveWebhook
+
+LOCAL VALIDATED / NOT DEPLOYED sobre `2daa2b459a0d20727cb97e2895a2059e50dd49e4`. O handler `receiveWebhook` agora preserva estado recuperavel quando o fluxo prepara resposta, mas o gate de janela bloqueia o envio WEB/hibrido antes do provider: zero envio, sem sucesso falso e sem avanco dependente da mensagem; janela aberta segue enviando pelo WEB simulado e conclui o no terminal. Evidencia integrada: `webhookApiWebWindow.test.ts` 2/2; regressao `automationOwnActivity.test.ts` + novo teste 21/21; backend build PASS; `git diff --check` PASS. Worker e validacoes produtivas permanecem separados.
+
 ## Complemento local 01/10 - consistencia de janela WhatsApp e templates
 
 LOCAL VALIDATED / NOT DEPLOYED sobre `4f8f9869ab44cac0f46557b94ae0ef1d8699452d`. UI da Inbox e templates/readiness preservam o contrato anterior; o complemento atual fecha API passive WEB e WEB/BOT automatico: runtime ausente/invalido/expirado nega antes do provider, expiracao apos preparo nao envia, caller API->WEB nao persiste no preparado sem envio, e resposta BOT negada por janela nao avanca no dependente de envio nem faz reset/retry cego. Backport minimo do worker documentado em `docs/reviews/automation-worker-backport/worker-freeform-window-gate-20261001.patch`, sem bundles. Evidencia local: `automationOwnActivity.test.ts` 19/19, foco `campaignsFeatureRoutes.test.ts` 1/1, backend build PASS, worker minimo build PASS, prova API->WEB de caller branch PASS, prova dirigida dos compilados PASS (`botWindowExpired`, `ownActivityB66`) e prova de corrida `updateManyFindUniqueBarrier` PASS apos reproduzir a falha. Sem deploy, producao ou envio real; validacao produtiva META_CLOUD puro/API->WEB pendente.
