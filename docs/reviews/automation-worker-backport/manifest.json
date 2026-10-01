@@ -254,19 +254,21 @@
     "base": "4f8f9869ab44cac0f46557b94ae0ef1d8699452d",
     "status": "LOCAL VALIDATED / NOT DEPLOYED",
     "patch": "worker-freeform-window-gate-20261001.patch",
-    "patchSha256": "0b09cbcfa2b6c26624c332a3e7cb53e27691b2e4b391d513dd1d436b74d6d8be",
-    "patchLines": 515,
-    "scope": "Worker minimal recomposition over bf5+f06+912+b66; no bundles, secrets, production mutation, provider call or deploy.",
+    "patchSha256": "ab1080df3804b35479a179425bf664db79b0f0caec50f5dd00f97cdac0c1c566",
+    "patchLines": 660,
+    "scope": "Worker minimal recomposition over bf5+f06+912+b66; no bundles, secrets, production mutation, provider call or deploy. Adds Prisma-compat atomic runtime fence and WEB outbound caller token wiring.",
     "sourceFiles": {
       "apps/whatsapp-agent/src/web-session/webSessionInbound.ts": "011679c9a20ffaae08042e86d3347e18d3bd21fb62fcaa561ab298abba982551",
-      "apps/whatsapp-agent/src/whatsapp/webhook.controller.ts": "ff7d97dbd05dedbe9cc90102f51d7cfec0204fa7c86fa02fde1877853c115b02",
-      "apps/whatsapp-agent/src/conversation/automationOwnActivity.test.ts": "23a5a0127f9c07d4f89118a9041953bfe4708b2c732e2e990b389b9e1685dd44"
+      "apps/whatsapp-agent/src/conversation/automationOwnActivity.test.ts": "7526e9602e26e9ea523bb173718d3cd6ff7c3de035b9da6e617fc2fcb0092c00",
+      "apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts": "e185029905f6deac6fc48d7568e7267a4721c9ed730d413e6a5d5c653b8ebdae",
+      "apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts": "c4d3ad0843cb43651aa80ab1e4ebeed7b2bb8f8b64cc39b201c2c824882dfb96",
+      "apps/whatsapp-agent/src/crm/crmContactUpsert.ts": "54fc33ab4b013f95676dd767a9ec0535f4eb5e63eb49be10fecceecc0e66d826"
     },
     "sourceValidation": [
       {
         "command": "DATABASE_URL=postgresql://...@127.0.0.1:55432/re7_recovery_regression node --test --import tsx src/conversation/automationOwnActivity.test.ts",
         "result": "PASS",
-        "count": "18/18"
+        "count": "19/19"
       },
       {
         "command": "DATABASE_URL=postgresql://...@127.0.0.1:55432/re7_recovery_regression node --test --import tsx --test-name-pattern \"web session inbound uses shared chatbot flow and queue handoff\" src/http/campaignsFeatureRoutes.test.ts",
@@ -287,18 +289,22 @@
       "result": "PASS",
       "cases": [
         "botWindowExpired",
-        "ownActivityB66"
+        "ownActivityB66",
+        "updateManyFindUniqueBarrier"
       ],
-      "note": "private evidence outside Git; no real provider call"
+      "note": "private evidence outside Git; first race proof reproduced the updateMany/findUnique refresh failure, final recomposed compiled worker passes without real provider call"
     },
     "changedCompiledHashes": {
       "whatsapp-agent/src/web-session/webSessionInbound.js": "a12a23a85fa1184c55ba24e9826f869b8fcb48dee880150b46ac43187cd1fa13",
-      "whatsapp-agent/src/conversation/runtimeWriteFence.js": "2a618fc59539410da1553376976f2ae6d2dbc6af5a703914fe144149c1679c98",
-      "whatsapp-agent/src/crm/crmContactUpsert.js": "fc47557c5553c7778c422ce3c2cc44ef2a22a61aa0295a9e3d53edec08d16b61"
+      "whatsapp-agent/src/conversation/runtimeWriteFence.js": "1d411533d766b1a2e7d76c8a98aa6f61324611270ea5507584f8c28ab7545d9d",
+      "whatsapp-agent/src/crm/crmContactUpsert.js": "fc47557c5553c7778c422ce3c2cc44ef2a22a61aa0295a9e3d53edec08d16b61",
+      "whatsapp-agent/src/web-session/webSessionOutboundService.js": "31feeaf217dd718d2d73470fec46759f3f1c75c68738dfb36ed7c3cfac0cb99a"
     },
     "limitations": [
       "Full historical compiled worker suite not used as approval gate for this correction; directed compiled proof covers changed reachable paths.",
-      "META_CLOUD pure and hybrid API->WEB productive validation remains pending."
+      "API->WEB caller branch proof is local and exercises prepared state plus caller persistence condition; full productive META_CLOUD/API->WEB validation remains separate.",
+      "META_CLOUD pure and hybrid API->WEB productive validation remains pending.",
+      "No production, provider real, send, migration or deploy was performed in this local-only round."
     ]
   }
 }

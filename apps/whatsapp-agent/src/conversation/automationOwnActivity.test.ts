@@ -269,6 +269,52 @@ test("passive WEB sender revalidates window after reply preparation and before p
   assert.equal(after.chatbotNodeId,null);
 });
 
+
+test("API WEB caller does not persist prepared node when window expires before provider", {skip:process.env.INCIDENT_WORKER_MINIMAL === "true"}, async()=>{
+  const [{readFileSync},vm,ts,{createDualWriteStorage},{updateOutbound}]=await Promise.all([
+    import("node:fs"),import("node:vm"),import("typescript"),import("../storage/dualWriteStorage.js"),import("./conversation.service.js")]);
+  const source=readFileSync(new URL("../whatsapp/webhook.controller.ts",import.meta.url),"utf8");
+  function extract(start:string,end:string,name:string,context:Record<string,unknown>){
+    const a=source.indexOf(start),b=source.indexOf(end,a);assert(a>=0&&b>a);
+    const module={exports:{}};
+    vm.runInNewContext(ts.default.transpileModule(source.slice(a,b)+`\nmodule.exports=${name};`,{compilerOptions:{module:ts.default.ModuleKind.CommonJS,target:ts.default.ScriptTarget.ES2020}}).outputText,{module,exports:module.exports,Date,...context});
+    return module.exports as (arg:any)=>Promise<any>;
+  }
+  const f=await fixture("api-web-caller-window-expired");
+  await prisma.conversationRuntimeState.create({data:{clientId:f.client.id,waId:f.waId,waIdCanonical:f.waId,channel:"whatsapp",provider:"web_session",channelAccountId:f.account.channelAccountId,mode:"BOT",handoffStatus:"NONE",answers:{step:"menu"},firstSeenAt:new Date(),lastInboundAt:new Date(),lastInboundMessageId:"inbound-before-prep",windowIsOpen:true,windowExpiresAt:new Date(Date.now()+60_000),chatbotNodeId:"menu",chatbotActive:true}});
+  const storage=createDualWriteStorage(new Proxy({} as any,{get(){return()=>{throw new Error("JSON not permitted")}}}),{readSource:"postgres",jsonWriteEnabled:false});
+  const state=(await storage.getConversation(f.waId,f.client.clientKey))!;assert(state.runtimeWriteToken);
+  const prepared={...state,chatbotNodeId:"next",chatbotActive:true,answers:{...(state.answers??{}),step:"next"}};
+  await prisma.conversationRuntimeState.update({where:{clientId_waId:{clientId:f.client.id,waId:f.waId}},data:{windowIsOpen:true,windowExpiresAt:new Date(Date.now()-1_000)}});
+  const beforeSends=sends;
+  const beforeOutboundCount=await prisma.outboundMessage.count({where:{clientId:f.client.id}});
+  const sendPassive=extract("  const sendPassiveOutboundText = async","  const typedPayload","sendPassiveOutboundText",{
+    prisma,tenantClientId:f.client.id,tenantClientKey:f.client.clientKey,tenantClientStatus:"ACTIVE",env:{WHATSAPP_SANDBOX:false},
+    resolveEffectiveWhatsappOutboundTransport:(await import("../crm/crmConversationStart.js")).resolveEffectiveWhatsappOutboundTransport,
+    shouldSendOutbound:()=>true,createWebSessionTextOutboundMessage,canonicalizeBrazilWaId:(s:string)=>s,
+    loadPersistedRuntimeForInbound: async (waId:string) => {
+      const runtime = await prisma.conversationRuntimeState.findUnique({where:{clientId_waId:{clientId:f.client.id,waId}}});
+      return runtime ? { window: { isOpen: runtime.windowIsOpen, expiresAt: runtime.windowExpiresAt?.toISOString() } } : null;
+    },
+    isWindowOpen:(runtimeState:any, now:number)=>Boolean(runtimeState.window?.isOpen && runtimeState.window?.expiresAt && now < Date.parse(runtimeState.window.expiresAt)),
+    logger:{warn(){}},maskNumber:()=>"synthetic",meta:{requestId:"synthetic-api-web-caller"},
+    sendOutboundText:async()=>{throw new Error("meta fallback must not be used")},MessageStatus:{SENT:"SENT",FAILED:"FAILED"},
+  });
+  const save=extract("  const upsertConversationSafe = async","  const persistOutboundConversation = async","upsertConversationSafe",{storage,tenantClientId:f.client.id,tenantClientKey:f.client.clientKey,logger:{info(){}},resolveRuntimeDepartmentId:async(id:unknown)=>id,prisma,phoneNumberId:"synthetic-meta-account",updateRuntimeIfUnchanged,...await import("../channels/whatsappMultichannelShadowWrite.js"),isWhatsAppMultichannelShadowWriteEnabled:()=>true,getPrisma});
+
+  const result=await sendPassive({toE164:f.waId,waId:f.waId,intent:"unknown",messageId:crypto.randomUUID(),replyText:"Resposta preparada",runtimeWriteToken:prepared.runtimeWriteToken});
+  if(result.ok) await save(updateOutbound(prepared,result.messageId,new Date().toISOString()));
+
+  assert.equal(result.ok,false);
+  assert.equal(result.errorBody,"window_closed");
+  assert.equal(sends,beforeSends);
+  assert.equal(await prisma.outboundMessage.count({where:{clientId:f.client.id}}),beforeOutboundCount);
+  const after=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{clientId_waId:{clientId:f.client.id,waId:f.waId}}});
+  assert.equal(after.chatbotNodeId,"menu");
+  assert.deepEqual(after.answers,{step:"menu"});
+  assert.equal(after.lastInboundMessageId,"inbound-before-prep");
+});
+
 test("passive WEB sender denies missing and invalid runtime before provider", {skip:process.env.INCIDENT_WORKER_MINIMAL === "true"}, async()=>{
   const [{readFileSync},vm,ts]=await Promise.all([import("node:fs"),import("node:vm"),import("typescript")]);
   const source=readFileSync(new URL("../whatsapp/webhook.controller.ts",import.meta.url),"utf8");

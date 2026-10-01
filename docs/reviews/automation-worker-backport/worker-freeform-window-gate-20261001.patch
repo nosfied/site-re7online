@@ -1,6 +1,217 @@
+diff --git a/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts b/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts
+index afc4d086..6e5045c3 100644
+--- a/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts
++++ b/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts
+@@ -1,28 +1,152 @@
+-import type { ConversationRuntimeState, Prisma } from "@prisma/client";
++import { Prisma, type ConversationRuntimeState } from "@prisma/client";
+
+ // Observed control, not a proposed document. No lock is held across provider I/O.
+ export const runtimeWriteTokenSelect = {
+-  updatedAt: true, version: true, mode: true, handoffStatus: true,
++  clientId: true, waId: true, channel: true, provider: true, channelAccountId: true,
++  answers: true, lastInboundMessageId: true, updatedAt: true, version: true, mode: true, handoffStatus: true,
+   assignedUserId: true, assignedAt: true, departmentId: true, queueId: true,
+   status: true, closedAt: true, lastInboundAt: true,
+ } as const;
+ export type RuntimeWriteToken = Pick<ConversationRuntimeState, keyof typeof runtimeWriteTokenSelect>;
+
++type RuntimeWritePrisma = Pick<Prisma.TransactionClient, "conversationRuntimeState" | "$queryRaw">;
++
+ export function captureRuntimeWriteToken(row: RuntimeWriteToken): RuntimeWriteToken {
+-  return Object.fromEntries(Object.keys(runtimeWriteTokenSelect).map(key => [key, row[key as keyof RuntimeWriteToken]])) as RuntimeWriteToken;
++  return Object.fromEntries(Object.keys(runtimeWriteTokenSelect).map(key => [key, key === "answers" ? structuredClone(row.answers) : row[key as keyof RuntimeWriteToken]])) as RuntimeWriteToken;
++}
++
++function jsonParam(value: unknown) {
++  return Prisma.sql`${JSON.stringify(value ?? null)}::jsonb`;
++}
++
++function timestampLiteral(value: Date | string) {
++  const date = value instanceof Date ? value : new Date(value);
++  return date.toISOString().replace("T", " ").replace("Z", "");
++}
++
++function dateParam(value: Date | string | null | undefined) {
++  return value == null ? Prisma.sql`NULL` : Prisma.sql`${timestampLiteral(value)}::timestamp(3)`;
++}
++
++function enumParam(value: unknown, enumName: "HandoffStatus" | "ConversationOperationalStatus") {
++  return value == null ? Prisma.sql`NULL` : Prisma.sql`${String(value)}::${Prisma.raw(`"${enumName}"`)}`;
++}
++
++function tokenPredicate(token: RuntimeWriteToken) {
++  return Prisma.sql`
++    "clientId" = ${token.clientId}::uuid AND
++    "waId" = ${token.waId} AND
++    "channel" IS NOT DISTINCT FROM ${token.channel} AND
++    "provider" IS NOT DISTINCT FROM ${token.provider} AND
++    "channelAccountId" IS NOT DISTINCT FROM ${token.channelAccountId} AND
++    "answers" IS NOT DISTINCT FROM ${jsonParam(token.answers)} AND
++    "lastInboundMessageId" IS NOT DISTINCT FROM ${token.lastInboundMessageId} AND
++    "updatedAt" IS NOT DISTINCT FROM ${dateParam(token.updatedAt)} AND
++    "version" IS NOT DISTINCT FROM ${token.version} AND
++    "mode" IS NOT DISTINCT FROM ${token.mode} AND
++    "handoffStatus" IS NOT DISTINCT FROM ${enumParam(token.handoffStatus, "HandoffStatus")} AND
++    "assignedUserId" IS NOT DISTINCT FROM ${token.assignedUserId} AND
++    "assignedAt" IS NOT DISTINCT FROM ${dateParam(token.assignedAt)} AND
++    "departmentId" IS NOT DISTINCT FROM ${token.departmentId} AND
++    "queueId" IS NOT DISTINCT FROM ${token.queueId} AND
++    "status" IS NOT DISTINCT FROM ${enumParam(token.status, "ConversationOperationalStatus")} AND
++    "closedAt" IS NOT DISTINCT FROM ${dateParam(token.closedAt)} AND
++    "lastInboundAt" IS NOT DISTINCT FROM ${dateParam(token.lastInboundAt)}
++  `;
++}
++
++const returnRuntimeWriteToken = Prisma.sql`
++  "clientId", "waId", "channel", "provider", "channelAccountId", "answers", "lastInboundMessageId",
++  "updatedAt" AT TIME ZONE 'UTC' AS "updatedAt",
++  "version", "mode", "handoffStatus", "assignedUserId",
++  CASE WHEN "assignedAt" IS NULL THEN NULL ELSE "assignedAt" AT TIME ZONE 'UTC' END AS "assignedAt",
++  "departmentId", "queueId", "status",
++  CASE WHEN "closedAt" IS NULL THEN NULL ELSE "closedAt" AT TIME ZONE 'UTC' END AS "closedAt",
++  CASE WHEN "lastInboundAt" IS NULL THEN NULL ELSE "lastInboundAt" AT TIME ZONE 'UTC' END AS "lastInboundAt"
++`;
++
++function dataAssignments(data: Prisma.ConversationRuntimeStateUpdateManyMutationInput) {
++  const assignments: Prisma.Sql[] = [];
++  const add = (column: string, value: unknown, cast?: "json" | "date" | "handoff" | "status") => {
++    if (value === undefined) return;
++    const rendered = cast === "json" ? jsonParam(value)
++      : cast === "date" ? dateParam(value as Date | string | null | undefined)
++      : cast === "handoff" ? enumParam(value, "HandoffStatus")
++      : cast === "status" ? enumParam(value, "ConversationOperationalStatus")
++      : value === null ? Prisma.sql`NULL` : Prisma.sql`${value as never}`;
++    assignments.push(Prisma.sql`${Prisma.raw(`"${column}"`)} = ${rendered}`);
++  };
++  add("lastOutboundAt", data.lastOutboundAt as never, "date");
++  add("lastOutboundMessageId", data.lastOutboundMessageId as never);
++  add("intent", data.intent as never);
++  add("handoffStatus", data.handoffStatus as never, "handoff");
++  add("handoffRequestedAt", data.handoffRequestedAt as never, "date");
++  add("handoffActivatedAt", data.handoffActivatedAt as never, "date");
++  add("handoffReleasedAt", data.handoffReleasedAt as never, "date");
++  add("flow", data.flow as never);
++  add("flowStep", data.flowStep as never);
++  add("chatbotNodeId", data.chatbotNodeId as never);
++  add("chatbotActive", data.chatbotActive as never);
++  add("answers", data.answers as never, "json");
++  add("mode", data.mode as never);
++  add("assignedUserId", data.assignedUserId as never);
++  add("assignedTo", data.assignedTo as never);
++  add("assignedAt", data.assignedAt as never, "date");
++  add("departmentId", data.departmentId as never);
++  add("queueId", data.queueId as never);
++  add("status", data.status as never, "status");
++  add("closedAt", data.closedAt as never, "date");
++  const version = data.version;
++  const increment = typeof version === "object" && version && "increment" in version ? Number(version.increment ?? 0) : 0;
++  if (increment) assignments.push(Prisma.sql`"version" = "version" + ${increment}`);
++  assignments.push(Prisma.sql`"updatedAt" = ${dateParam(new Date())}`);
++  return Prisma.join(assignments, ", ");
++}
++
++const invalidatedTokens = new WeakSet<RuntimeWriteToken>();
++export function invalidateRuntimeWriteToken(token: RuntimeWriteToken) {
++  invalidatedTokens.add(token);
++}
++
++// A receipt is earned by the activity UPDATE itself, never by rereading current state.
++// The shared token belongs only to this execution; shallow state transforms retain it.
++export async function recordOwnRuntimeOutboundActivity(params: {
++  prisma: RuntimeWritePrisma;
++  clientId: string;
++  waId: string;
++  expected: RuntimeWriteToken;
++  sentAt: Date;
++  messageId: string;
++  channelAccountId: string;
++}): Promise<boolean> {
++  const token = params.expected;
++  if (invalidatedTokens.has(token) || token.clientId !== params.clientId || token.waId !== params.waId) return false;
++  const rows = await params.prisma.$queryRaw<RuntimeWriteToken[]>`
++    UPDATE "ConversationRuntimeState"
++    SET "provider" = 'web_session', "channelAccountId" = ${params.channelAccountId},
++        "lastOutboundAt" = ${dateParam(params.sentAt)}, "lastOutboundMessageId" = ${params.messageId}, "updatedAt" = ${dateParam(new Date())}
++    WHERE ${tokenPredicate(token)}
++      AND ("lastOutboundAt" IS NULL OR "lastOutboundAt" <= ${params.sentAt})
++    RETURNING ${returnRuntimeWriteToken}
++  `;
++  if (rows.length !== 1) { invalidateRuntimeWriteToken(token); return false; }
++  Object.assign(token, captureRuntimeWriteToken(rows[0]));
++  return true;
+ }
+
+ export async function updateRuntimeIfUnchanged(params: {
+-  prisma: Pick<Prisma.TransactionClient, "conversationRuntimeState">;
++  prisma: RuntimeWritePrisma;
+   clientId: string;
+   waId: string;
+   expected: RuntimeWriteToken;
+   data: Prisma.ConversationRuntimeStateUpdateManyMutationInput;
+ }): Promise<RuntimeWriteToken | null> {
+-  const rows = await params.prisma.conversationRuntimeState.updateManyAndReturn({
+-    where: { ...params.expected, clientId: params.clientId, waId: params.waId },
+-    data: { ...params.data, version: { increment: 1 } },
+-    select: runtimeWriteTokenSelect,
+-  });
++  if (invalidatedTokens.has(params.expected) || params.expected.clientId !== params.clientId || params.expected.waId !== params.waId) return null;
++  const rows = await params.prisma.$queryRaw<RuntimeWriteToken[]>`
++    UPDATE "ConversationRuntimeState"
++    SET ${dataAssignments(params.data)}
++    WHERE ${tokenPredicate(params.expected)} AND "clientId" = ${params.clientId}::uuid AND "waId" = ${params.waId}
++    RETURNING ${returnRuntimeWriteToken}
++  `;
+   return rows[0] ? captureRuntimeWriteToken(rows[0]) : null;
+ }
+diff --git a/apps/whatsapp-agent/src/crm/crmContactUpsert.ts b/apps/whatsapp-agent/src/crm/crmContactUpsert.ts
+index 595dfebe..bc45e875 100644
+--- a/apps/whatsapp-agent/src/crm/crmContactUpsert.ts
++++ b/apps/whatsapp-agent/src/crm/crmContactUpsert.ts
+@@ -520,6 +520,38 @@ export async function upsertCrmContact(
+   return result;
+ }
+
++
++export async function recordCrmConversationContactOrigin(params: {
++  clientId: string;
++  leadId: string;
++  contactId?: string | null;
++  waId: string;
++  waIdCanonical?: string | null;
++  conversationId?: string | null;
++  requestId: string;
++  source?: string | null;
++}) {
++  const canonical = params.waIdCanonical ?? normalizeWaIdDigits(params.waId) ?? params.waId;
++  await persistEvent({
++    clientId: params.clientId,
++    conversationId: params.conversationId ?? null,
++    waId: params.waId,
++    waIdCanonical: canonical,
++    requestId: `${CRM_CONTACT_CREATED_EVENT}:conversation:${params.leadId}`,
++    eventName: CRM_CONTACT_CREATED_EVENT,
++    payloadJson: {
++      contactId: params.contactId ?? null,
++      leadId: params.leadId,
++      source: params.source ?? "conversation_inbound",
++      createdContact: false,
++      createdLead: true,
++      waIdLast4: canonical.slice(-4),
++      waIdLength: canonical.length,
++      requestId: params.requestId,
++    },
++  });
++}
++
+ function normalizeHeader(value: string) {
+   return value
+     .trim()
+diff --git a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts b/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
+index df3cf248..d7334a9c 100644
 --- a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
 +++ b/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
-@@ -15,8 +15,9 @@
+@@ -15,8 +15,9 @@ import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/cont
  import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
  import { shouldResetClosedConversationForBotReentry } from "../conversation/automationRuntime.js";
  import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
@@ -11,7 +222,7 @@
  import {
    buildCompletedServiceSnapshotExpectation,
    clearActiveServiceCycle,
-@@ -1189,6 +1190,7 @@
+@@ -1189,6 +1190,7 @@ async function ensureWebSessionRuntimeState(params: {
        answers: {},
      },
      select: {
@@ -19,7 +230,7 @@
        updatedAt: true,
        version: true,
        id: true,
-@@ -1465,6 +1467,12 @@
+@@ -1465,6 +1467,12 @@ async function shouldPreclassifyInboundAsSatisfactionManagement(params: {
    return Boolean(pendingSurvey);
  }
 
@@ -32,7 +243,7 @@
  async function sendWebSessionBotText(params: {
    prisma: PrismaClient;
    clientId: string;
-@@ -1479,8 +1487,18 @@
+@@ -1479,8 +1487,18 @@ async function sendWebSessionBotText(params: {
    inboxVisibility?: InboxMessageVisibility;
    inboxInteractionKind?: string | null;
    publishMessageCreatedRealtime?: WebSessionMessageCreatedRealtimePublisher;
@@ -53,7 +264,7 @@
    const serviceCycle = params.serviceCycle ?? getServiceCycleForDisplay(params.state);
    const inferredManagementKind = params.requestId.includes(":survey") ? "satisfaction" : null;
    const inboxInteractionKind = params.inboxInteractionKind ?? inferredManagementKind;
-@@ -1490,6 +1508,7 @@
+@@ -1490,6 +1508,7 @@ async function sendWebSessionBotText(params: {
      waId: params.waId,
      waIdCanonical: params.waIdCanonical,
      text: normalizeBotMenuOptionMarkdown(params.text),
@@ -61,7 +272,7 @@
      clientKey: params.clientKey,
      clientId: params.clientId,
      requestId: params.requestId,
-@@ -1543,9 +1562,13 @@
+@@ -1543,9 +1562,13 @@ async function sendWebSessionBotText(params: {
          createdAt: outboundResult.createdAt,
        },
      }, params.publishMessageCreatedRealtime);
@@ -77,7 +288,7 @@
  }
 
  async function sendWebSessionHandoffNotifications(params: {
-@@ -1603,7 +1626,7 @@
+@@ -1603,7 +1626,7 @@ async function sendWebSessionHandoffNotifications(params: {
    });
    let nextState = params.state;
    for (const notification of notifications) {
@@ -86,7 +297,7 @@
        prisma: params.prisma,
        clientId: params.clientId,
        clientKey: params.clientKey,
-@@ -1706,7 +1729,7 @@
+@@ -1706,7 +1729,7 @@ async function sendWebSessionSatisfactionSurvey(params: {
        },
      },
    });
@@ -95,7 +306,7 @@
      prisma: params.prisma,
      clientId: params.clientId,
      clientKey: params.clientKey,
-@@ -1785,7 +1808,7 @@
+@@ -1785,7 +1808,7 @@ async function restartWebSessionBotConversation(params: {
    });
    const state = chatbotResult.state;
    if (!chatbotResult.replyText?.trim()) return state;
@@ -104,7 +315,7 @@
      prisma: params.prisma,
      clientId: params.clientId,
      clientKey: params.clientKey,
-@@ -1921,7 +1944,7 @@
+@@ -1921,7 +1944,7 @@ export async function closeWebSessionHumanService(params: {
      closedAt: params.now.toISOString(),
    };
    if (serviceMessages.settings.closeNotice.enabled) {
@@ -113,7 +324,7 @@
        prisma: params.prisma,
        clientId: params.clientId,
        clientKey: params.clientKey,
-@@ -1984,7 +2007,7 @@
+@@ -1984,7 +2007,7 @@ async function handleWebSessionSatisfactionInbound(params: {
        return { handled: true as const, state: clearSatisfactionCommentRuntime(params.state) };
      }
      if (text === "1") {
@@ -122,7 +333,7 @@
          prisma: params.prisma,
          clientId: params.clientId,
          clientKey: params.clientKey,
-@@ -2002,7 +2025,7 @@
+@@ -2002,7 +2025,7 @@ async function handleWebSessionSatisfactionInbound(params: {
          where: { id: surveyId },
          data: { status: "responded" },
        });
@@ -131,7 +342,7 @@
          prisma: params.prisma,
          clientId: params.clientId,
          clientKey: params.clientKey,
-@@ -2015,7 +2038,7 @@
+@@ -2015,7 +2038,7 @@ async function handleWebSessionSatisfactionInbound(params: {
        });
        return { handled: true as const, state };
      }
@@ -140,7 +351,7 @@
        prisma: params.prisma,
        clientId: params.clientId,
        clientKey: params.clientKey,
-@@ -2044,7 +2067,7 @@
+@@ -2044,7 +2067,7 @@ async function handleWebSessionSatisfactionInbound(params: {
        where: { id: surveyId },
        data: { status: "responded" },
      });
@@ -149,7 +360,7 @@
        prisma: params.prisma,
        clientId: params.clientId,
        clientKey: params.clientKey,
-@@ -2105,7 +2128,7 @@
+@@ -2105,7 +2128,7 @@ async function handleWebSessionSatisfactionInbound(params: {
            status: "CLOSED" as const,
            closedAt: params.state.closedAt ?? params.now.toISOString(),
          };
@@ -158,7 +369,7 @@
            prisma: params.prisma,
            clientId: params.clientId,
            clientKey: params.clientKey,
-@@ -2118,7 +2141,7 @@
+@@ -2118,7 +2141,7 @@ async function handleWebSessionSatisfactionInbound(params: {
          });
          return { handled: true as const, state: nextState };
        }
@@ -167,7 +378,7 @@
          prisma: params.prisma,
          clientId: params.clientId,
          clientKey: params.clientKey,
-@@ -2158,7 +2181,7 @@
+@@ -2158,7 +2181,7 @@ async function handleWebSessionSatisfactionInbound(params: {
            status: "CLOSED" as const,
            closedAt: params.now.toISOString(),
          };
@@ -176,7 +387,7 @@
            prisma: params.prisma,
            clientId: params.clientId,
            clientKey: params.clientKey,
-@@ -2171,7 +2194,7 @@
+@@ -2171,7 +2194,7 @@ async function handleWebSessionSatisfactionInbound(params: {
          });
          return { handled: true as const, state: nextState };
        }
@@ -185,7 +396,7 @@
          prisma: params.prisma,
          clientId: params.clientId,
          clientKey: params.clientKey,
-@@ -2193,7 +2216,7 @@
+@@ -2193,7 +2216,7 @@ async function handleWebSessionSatisfactionInbound(params: {
        where: { id: survey.id },
        data: { status: "expired" },
      });
@@ -194,7 +405,7 @@
        prisma: params.prisma,
        clientId: params.clientId,
        clientKey: params.clientKey,
-@@ -2207,7 +2230,7 @@
+@@ -2207,7 +2230,7 @@ async function handleWebSessionSatisfactionInbound(params: {
      return { handled: true as const, state };
    }
    if (!Number.isInteger(score) || score < 1 || score > 5) {
@@ -203,7 +414,7 @@
        prisma: params.prisma,
        clientId: params.clientId,
        clientKey: params.clientKey,
-@@ -2239,7 +2262,7 @@
+@@ -2239,7 +2262,7 @@ async function handleWebSessionSatisfactionInbound(params: {
      where: { id: survey.id },
      data: { status: "responded", answeredAt: respondedAt },
    });
@@ -212,7 +423,7 @@
      prisma: params.prisma,
      clientId: params.clientId,
      clientKey: params.clientKey,
-@@ -2455,6 +2478,15 @@
+@@ -2455,6 +2478,15 @@ async function ensureWebSessionContactIdentity(params: {
      requestId: `web-session-contact-reactivation:${params.message.channelAccountDbId}:${params.message.externalMessageId}`,
      source: "web_session_inbound",
    });
@@ -228,7 +439,7 @@
  }
 
  async function resolveSingleWebSessionInboundContactCandidate(
-@@ -2973,7 +3005,7 @@
+@@ -2973,7 +3005,7 @@ export async function ingestWebSessionInboundMessage(params: {
          return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
        }
        if (inboundChoice === "2") {
@@ -237,7 +448,7 @@
            prisma,
            clientId: params.message.clientId,
            clientKey: params.message.tenantKey,
-@@ -3000,7 +3032,7 @@
+@@ -3000,7 +3032,7 @@ export async function ingestWebSessionInboundMessage(params: {
          });
          return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
        }
@@ -246,7 +457,7 @@
          prisma,
          clientId: params.message.clientId,
          clientKey: params.message.tenantKey,
-@@ -3032,7 +3064,7 @@
+@@ -3032,7 +3064,7 @@ export async function ingestWebSessionInboundMessage(params: {
          getOperationalProtocol(runtimeConversationState) ??
          buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
        if (closePolicy.confirmation.enabled) {
@@ -255,7 +466,7 @@
            prisma,
            clientId: params.message.clientId,
            clientKey: params.message.tenantKey,
-@@ -3112,6 +3144,7 @@
+@@ -3112,6 +3144,7 @@ export async function ingestWebSessionInboundMessage(params: {
              definition: validatedDefinition.definition,
              at: params.message.timestamp,
            });
@@ -263,7 +474,7 @@
            const chatbotResult = await executeChatbotFlowWithConsent({
              prisma,
              clientId: params.message.clientId,
-@@ -3176,75 +3209,38 @@
+@@ -3176,75 +3209,38 @@ export async function ingestWebSessionInboundMessage(params: {
              });
            }
            if (replyText?.trim()) {
@@ -359,157 +570,91 @@
              }
            }
            let handoffServiceCycle: ServiceCycleSnapshot | null = null;
---- a/apps/whatsapp-agent/src/crm/crmContactUpsert.ts
-+++ b/apps/whatsapp-agent/src/crm/crmContactUpsert.ts
-@@ -520,6 +520,38 @@
-   return result;
- }
-
-+
-+export async function recordCrmConversationContactOrigin(params: {
-+  clientId: string;
-+  leadId: string;
-+  contactId?: string | null;
-+  waId: string;
-+  waIdCanonical?: string | null;
-+  conversationId?: string | null;
-+  requestId: string;
-+  source?: string | null;
-+}) {
-+  const canonical = params.waIdCanonical ?? normalizeWaIdDigits(params.waId) ?? params.waId;
-+  await persistEvent({
-+    clientId: params.clientId,
-+    conversationId: params.conversationId ?? null,
-+    waId: params.waId,
-+    waIdCanonical: canonical,
-+    requestId: `${CRM_CONTACT_CREATED_EVENT}:conversation:${params.leadId}`,
-+    eventName: CRM_CONTACT_CREATED_EVENT,
-+    payloadJson: {
-+      contactId: params.contactId ?? null,
-+      leadId: params.leadId,
-+      source: params.source ?? "conversation_inbound",
-+      createdContact: false,
-+      createdLead: true,
-+      waIdLast4: canonical.slice(-4),
-+      waIdLength: canonical.length,
-+      requestId: params.requestId,
-+    },
-+  });
-+}
-+
- function normalizeHeader(value: string) {
-   return value
-     .trim()
---- a/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts
-+++ b/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts
-@@ -1,15 +1,80 @@
--import type { ConversationRuntimeState, Prisma } from "@prisma/client";
-+import { Prisma, type ConversationRuntimeState } from "@prisma/client";
-
- // Observed control, not a proposed document. No lock is held across provider I/O.
- export const runtimeWriteTokenSelect = {
--  updatedAt: true, version: true, mode: true, handoffStatus: true,
-+  clientId: true, waId: true, channel: true, provider: true, channelAccountId: true,
-+  answers: true, lastInboundMessageId: true, updatedAt: true, version: true, mode: true, handoffStatus: true,
-   assignedUserId: true, assignedAt: true, departmentId: true, queueId: true,
-   status: true, closedAt: true, lastInboundAt: true,
- } as const;
- export type RuntimeWriteToken = Pick<ConversationRuntimeState, keyof typeof runtimeWriteTokenSelect>;
-
- export function captureRuntimeWriteToken(row: RuntimeWriteToken): RuntimeWriteToken {
--  return Object.fromEntries(Object.keys(runtimeWriteTokenSelect).map(key => [key, row[key as keyof RuntimeWriteToken]])) as RuntimeWriteToken;
-+  return Object.fromEntries(Object.keys(runtimeWriteTokenSelect).map(key => [key, key === "answers" ? structuredClone(row.answers) : row[key as keyof RuntimeWriteToken]])) as RuntimeWriteToken;
-+}
-+
-+function tokenWhere(token: RuntimeWriteToken): Prisma.ConversationRuntimeStateWhereInput {
-+  return { ...token, answers: { equals: token.answers === null ? Prisma.AnyNull : token.answers } };
-+}
-+
-+function sameTokenExceptUpdatedAt(left: RuntimeWriteToken, right: RuntimeWriteToken) {
-+  for (const key of Object.keys(runtimeWriteTokenSelect) as Array<keyof RuntimeWriteToken>) {
-+    if (key === "updatedAt") continue;
-+    const a = left[key];
-+    const b = right[key];
-+    if (a instanceof Date || b instanceof Date) {
-+      if ((a as Date | null)?.getTime?.() !== (b as Date | null)?.getTime?.()) return false;
-+    } else if (key === "answers") {
-+      if (JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)) return false;
-+    } else if (a !== b) {
-+      return false;
-+    }
+diff --git a/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts b/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts
+index e0fd019b..1aea7bfa 100644
+--- a/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts
++++ b/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts
+@@ -1,3 +1,4 @@
++import { recordOwnRuntimeOutboundActivity, invalidateRuntimeWriteToken, type RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
+ import { MessageStatus, MessageType, type PrismaClient } from "@prisma/client";
+ import type { ServiceCycleSnapshot } from "../conversation/serviceCycle.js";
+ import { applyAgentSignature } from "../inbox/agentSignature.js";
+@@ -133,6 +134,7 @@ async function markWebSessionOutboundActivity(params: {
+   channelAccountId: string;
+   sentAt: Date;
+   messageId: string;
++  runtimeWriteToken?: RuntimeWriteToken;
+ }) {
+   const waIdCanonical = params.waIdCanonical ?? params.waId;
+   const identityWhere = {
+@@ -140,25 +142,35 @@ async function markWebSessionOutboundActivity(params: {
+     channel: "whatsapp",
+     OR: [{ waId: params.waId }, { waIdCanonical }],
+   };
+-  await Promise.all([
+-    params.prisma.conversation.updateMany({
+-      where: identityWhere,
+-      data: {
+-        provider: "web_session",
+-        channelAccountId: params.channelAccountId,
+-        lastOutboundAt: params.sentAt,
+-      },
+-    }),
+-    params.prisma.conversationRuntimeState.updateMany({
+-      where: identityWhere,
+-      data: {
+-        provider: "web_session",
+-        channelAccountId: params.channelAccountId,
+-        lastOutboundAt: params.sentAt,
+-        lastOutboundMessageId: params.messageId,
+-      },
+-    }),
+-  ]);
++  try {
++    await Promise.all([
++      params.prisma.conversation.updateMany({
++        where: { ...identityWhere, AND: [{ OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lte: params.sentAt } }] }] },
++        data: {
++          ...(params.runtimeWriteToken ? {} : { provider: "web_session", channelAccountId: params.channelAccountId }),
++          lastOutboundAt: params.sentAt,
++        },
++      }),
++      (async () => {
++        const expected = params.runtimeWriteToken;
++        if (expected && await recordOwnRuntimeOutboundActivity({
++          prisma: params.prisma, clientId: params.clientId, waId: params.waId, expected,
++          sentAt: params.sentAt, messageId: params.messageId, channelAccountId: params.channelAccountId,
++        })) return;
++        // Accepted outbound survives a conflict, without restoring control or older activity.
++        await params.prisma.conversationRuntimeState.updateMany({
++          where: { ...identityWhere, AND: [{ OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lte: params.sentAt } }] }] },
++          data: { ...(expected ? {} : { provider: "web_session", channelAccountId: params.channelAccountId }),
++            lastOutboundAt: params.sentAt, lastOutboundMessageId: params.messageId },
++        });
++      })(),
++    ]);
++  } catch (error) {
++    if (!params.runtimeWriteToken) throw error;
++    invalidateRuntimeWriteToken(params.runtimeWriteToken);
++    logger.error({ event: "automation.runtime.activity_write_failed", clientId: params.clientId,
++      messageId: params.messageId, error: (error as Error).message });
 +  }
-+  return true;
-+}
-+
-+const invalidatedTokens = new WeakSet<RuntimeWriteToken>();
-+export function invalidateRuntimeWriteToken(token: RuntimeWriteToken) {
-+  invalidatedTokens.add(token);
-+}
-+
-+// A receipt is earned by the activity UPDATE itself, never by rereading current state.
-+// The shared token belongs only to this execution; shallow state transforms retain it.
-+export async function recordOwnRuntimeOutboundActivity(params: {
-+  prisma: Pick<Prisma.TransactionClient, "conversationRuntimeState">;
-+  clientId: string;
-+  waId: string;
-+  expected: RuntimeWriteToken;
-+  sentAt: Date;
-+  messageId: string;
-+  channelAccountId: string;
-+}): Promise<boolean> {
-+  const token = params.expected;
-+  if (invalidatedTokens.has(token) || token.clientId !== params.clientId || token.waId !== params.waId) return false;
-+  const write = await params.prisma.conversationRuntimeState.updateMany({
-+    where: { ...tokenWhere(token), OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lte: params.sentAt } }] },
-+    data: { provider: "web_session", channelAccountId: params.channelAccountId,
-+      lastOutboundAt: params.sentAt, lastOutboundMessageId: params.messageId },
-+  });
-+  if (write.count !== 1) { invalidateRuntimeWriteToken(token); return false; }
-+  const row = await params.prisma.conversationRuntimeState.findUnique({
-+    where: { clientId_waId: { clientId: params.clientId, waId: params.waId } },
-+    select: runtimeWriteTokenSelect,
-+  });
-+  if (!row) { invalidateRuntimeWriteToken(token); return false; }
-+  Object.assign(token, captureRuntimeWriteToken(row));
-+  return true;
-+}
-+
-+async function readCurrentToken(params: {
-+  prisma: Pick<Prisma.TransactionClient, "conversationRuntimeState">;
-+  clientId: string;
-+  waId: string;
-+}) {
-+  return params.prisma.conversationRuntimeState.findUnique({
-+    where: { clientId_waId: { clientId: params.clientId, waId: params.waId } },
-+    select: runtimeWriteTokenSelect,
-+  });
  }
 
- export async function updateRuntimeIfUnchanged(params: {
-@@ -19,10 +84,22 @@
-   expected: RuntimeWriteToken;
-   data: Prisma.ConversationRuntimeStateUpdateManyMutationInput;
- }): Promise<RuntimeWriteToken | null> {
--  const rows = await params.prisma.conversationRuntimeState.updateManyAndReturn({
--    where: { ...params.expected, clientId: params.clientId, waId: params.waId },
-+  if (invalidatedTokens.has(params.expected) || params.expected.clientId !== params.clientId || params.expected.waId !== params.waId) return null;
-+  let expected = params.expected;
-+  let write = await params.prisma.conversationRuntimeState.updateMany({
-+    where: { ...tokenWhere(expected), clientId: params.clientId, waId: params.waId },
-     data: { ...params.data, version: { increment: 1 } },
--    select: runtimeWriteTokenSelect,
-   });
--  return rows[0] ? captureRuntimeWriteToken(rows[0]) : null;
-+  if (write.count !== 1) {
-+    const current = await readCurrentToken(params);
-+    if (!current || !sameTokenExceptUpdatedAt(current, expected)) return null;
-+    expected = captureRuntimeWriteToken(current);
-+    write = await params.prisma.conversationRuntimeState.updateMany({
-+      where: { ...tokenWhere(expected), clientId: params.clientId, waId: params.waId },
-+      data: { ...params.data, version: { increment: 1 } },
-+    });
-+    if (write.count !== 1) return null;
-+  }
-+  const row = await readCurrentToken(params);
-+  return row ? captureRuntimeWriteToken(row) : null;
- }
+ async function findWebSessionAccount(params: {
+@@ -480,6 +492,7 @@ export async function createWebSessionTextOutboundMessage(params: {
+   clientKey: string;
+   clientId: string;
+   requestId: string;
++  runtimeWriteToken?: RuntimeWriteToken;
+   actorUserId?: string | null;
+   outboundSource?: "inbox_text" | "canned_reply" | "protocol_notice" | "bot";
+   cannedReplyId?: string | null;
+@@ -706,6 +719,7 @@ export async function createWebSessionTextOutboundMessage(params: {
+       channelAccountId: account.channelAccountId,
+       sentAt: createdAt,
+       messageId,
++      runtimeWriteToken: outboundSource === "bot" ? params.runtimeWriteToken : undefined,
+     });
+   }
+   logger.info({
