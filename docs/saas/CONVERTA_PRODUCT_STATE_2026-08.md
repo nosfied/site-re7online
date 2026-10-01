@@ -1,5 +1,9 @@
 # Converta Product State - 2026-08
 
+## Complemento local 30/09 - templates/readiness e inatividade apos auditoria 339c7947
+
+LOCAL VALIDATED / NOT DEPLOYED em `339c794748716c2e12c790e0530a3a71210d17b8` (branch `review/campaign-recovery-20260926`). Ajuste local nao infere disponibilidade Meta pelo provider da conversa: a UI usa lista/readiness de templates do tenant e WEB_ONLY sem modelo utilizavel nao recebe oferta indevida; o backend aceita template fora da janela sem exigir Assumir, preservando RBAC, departamento, categoria, opt-out e readiness. Inatividade agora registra negativa quando `sendBotText` encontra janela expirada apos o claim, sem sucesso falso, reset indevido ou retry cego. Mapeamento de imports nao indicou necessidade de backport no `whatsapp-web-worker`; delta alcanca o `whatsapp-agent`. Testes locais: `campaignsPageContract.test.ts` 30/30, `chatbotInactivityProcessor.test.ts` 12/12, rotas focadas 4/4, `automationOwnActivity.test.ts` 15/15. Sem producao/provider/envio/schema/migration; META_CLOUD puro e API->WEB continuam nao exercitados.
+
 
 ## Atualização local 30/09 - gate único de janela livre Inbox/WEB/híbrido
 

@@ -186,9 +186,10 @@ async function sendBotText(params: {
   text: string;
   serviceCycle: ServiceCycleSnapshot;
   conversation: ConversationState;
+  nowMs?: () => number;
 }) {
   if (!params.text.trim()) return { sent: false as const, reason: "empty_text" as const };
-  if (!isWindowOpen(params.conversation, Date.now())) {
+  if (!isWindowOpen(params.conversation, params.nowMs?.() ?? Date.now())) {
     return { sent: false as const, reason: "window_closed" as const };
   }
   const result = await createWebSessionTextOutboundMessage({
@@ -213,10 +214,40 @@ async function sendBotText(params: {
   return result.ok ? { sent: true as const, status: result.status } : { sent: false as const, reason: result.error };
 }
 
+async function recordInactivitySendSkipped(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  conversationId?: string | null;
+  waId: string;
+  waIdCanonical: string | null;
+  runtimeStateId: string;
+  now: Date;
+  messageStage: string;
+  result: Awaited<ReturnType<typeof sendBotText>>;
+}) {
+  if (params.result.sent) return;
+  await recordInactivityHandoffSkipped({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    conversationId: params.conversationId ?? null,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical,
+    runtimeStateId: params.runtimeStateId,
+    now: params.now,
+    reason: params.result.reason === "window_closed" ? "window_closed_after_claim" : "send_failed",
+    payload: {
+      messageStage: params.messageStage,
+      sendReason: params.result.reason,
+    },
+  });
+}
+
+
 export async function processChatbotInactivityTimeouts(params: {
   prisma: PrismaClient;
   now?: Date;
   limit?: number;
+  nowMs?: () => number;
 }) {
   const now = params.now ?? new Date();
   const candidates = await params.prisma.conversationRuntimeState.findMany({
@@ -425,7 +456,7 @@ export async function processChatbotInactivityTimeouts(params: {
         cycle: cycleResult.cycle,
       });
     }
-    await sendBotText({
+    const handoffSend = await sendBotText({
       prisma: params.prisma,
       clientId: state.clientId,
       clientKey: client.clientKey,
@@ -435,7 +466,19 @@ export async function processChatbotInactivityTimeouts(params: {
       requestId: `chatbot-inactivity:${state.id}:handoff`,
       text: fallbackHandoff.feedbackText,
       serviceCycle: cycleResult.cycle,
-        conversation: currentRuntimeWindowState,
+      conversation: currentRuntimeWindowState,
+      nowMs: params.nowMs,
+    });
+    await recordInactivitySendSkipped({
+      prisma: params.prisma,
+      clientId: state.clientId,
+      conversationId: conversation?.id ?? null,
+      waId: state.waId,
+      waIdCanonical: state.waIdCanonical,
+      runtimeStateId: state.id,
+      now,
+      messageStage: "handoff",
+      result: handoffSend,
     });
     const protocol = cycleResult.cycle.protocol;
     const serviceMessages = await resolveServiceMessagePolicySettings({
@@ -443,7 +486,7 @@ export async function processChatbotInactivityTimeouts(params: {
       clientId: state.clientId,
     });
     if (serviceMessages.settings.protocolNotice.enabled) {
-      await sendBotText({
+      const protocolSend = await sendBotText({
         prisma: params.prisma,
         clientId: state.clientId,
         clientKey: client.clientKey,
@@ -454,6 +497,18 @@ export async function processChatbotInactivityTimeouts(params: {
         text: renderProtocolNoticeTemplate(serviceMessages.settings.protocolNotice.text, protocol),
         serviceCycle: cycleResult.cycle,
         conversation: currentRuntimeWindowState,
+        nowMs: params.nowMs,
+      });
+      await recordInactivitySendSkipped({
+        prisma: params.prisma,
+        clientId: state.clientId,
+        conversationId: conversation?.id ?? null,
+        waId: state.waId,
+        waIdCanonical: state.waIdCanonical,
+        runtimeStateId: state.id,
+        now,
+        messageStage: "protocol",
+        result: protocolSend,
       });
     }
     const position = await getQueuePosition({
@@ -463,7 +518,7 @@ export async function processChatbotInactivityTimeouts(params: {
       queueId: destination.queueId,
     });
     if (position && serviceMessages.settings.queuePositionNotice.enabled) {
-      await sendBotText({
+      const positionSend = await sendBotText({
         prisma: params.prisma,
         clientId: state.clientId,
         clientKey: client.clientKey,
@@ -478,10 +533,22 @@ export async function processChatbotInactivityTimeouts(params: {
         ).replace("{position}", String(position)),
         serviceCycle: cycleResult.cycle,
         conversation: currentRuntimeWindowState,
+        nowMs: params.nowMs,
+      });
+      await recordInactivitySendSkipped({
+        prisma: params.prisma,
+        clientId: state.clientId,
+        conversationId: conversation?.id ?? null,
+        waId: state.waId,
+        waIdCanonical: state.waIdCanonical,
+        runtimeStateId: state.id,
+        now,
+        messageStage: "queue_position",
+        result: positionSend,
       });
     }
     if (decision.kind === "closed") {
-      await sendBotText({
+      const offHoursSend = await sendBotText({
         prisma: params.prisma,
         clientId: state.clientId,
         clientKey: client.clientKey,
@@ -492,6 +559,18 @@ export async function processChatbotInactivityTimeouts(params: {
         text: closedPolicy.offHoursMessage,
         serviceCycle: cycleResult.cycle,
         conversation: currentRuntimeWindowState,
+        nowMs: params.nowMs,
+      });
+      await recordInactivitySendSkipped({
+        prisma: params.prisma,
+        clientId: state.clientId,
+        conversationId: conversation?.id ?? null,
+        waId: state.waId,
+        waIdCanonical: state.waIdCanonical,
+        runtimeStateId: state.id,
+        now,
+        messageStage: "off_hours",
+        result: offHoursSend,
       });
     }
     processed += 1;

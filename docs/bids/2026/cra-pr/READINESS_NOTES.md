@@ -1,5 +1,9 @@
 # CRA-PR Readiness Notes
 
+## Complemento local 30/09 - auditoria 339c7947
+
+LOCAL VALIDATED / NOT DEPLOYED; nao e aceite CRA. Base `339c794748716c2e12c790e0530a3a71210d17b8`, branch `review/campaign-recovery-20260926`. Complemento corrige os achados de auditoria sem producao: template de Inbox usa readiness/lista do tenant, nao provider da conversa; template fora da janela nao exige Assumir, mas conserva RBAC/departamento/categoria/opt-out/readiness; WEB_ONLY sem modelo utilizavel nao recebe oferta indevida. Inatividade registra negativa de `sendBotText` se a janela expirar apos claim, sem sucesso falso, reset ou retry cego; `b66bb89a` preservado. Testes locais: `campaignsPageContract.test.ts` 30/30, `chatbotInactivityProcessor.test.ts` 12/12, rotas focadas 4/4, `automationOwnActivity.test.ts` 15/15. Sem schema/migration/provider/envio/deploy; META_CLOUD puro e hibrido API->WEB continuam pendentes.
+
 
 ## Atualização local 30/09 - política de janela livre da Inbox
 

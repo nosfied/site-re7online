@@ -6113,23 +6113,6 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         json(res, 403, httpError("forbidden", "Conversa fora do seu departamento."));
         return;
       }
-      if (
-        currentConversation.mode !== "HUMAN" ||
-        !canManageOwnedConversation(clientAuth.role, currentConversation.assignedUserId, clientAuth.userId)
-      ) {
-        logAppRbacDenied({
-          requestId,
-          route: "/app/conversation/:waId/send-template",
-          userId: clientAuth.userId,
-          clientId: client.id,
-          role: clientAuth.role,
-          reason: currentConversation.mode !== "HUMAN" ? "not_human_mode" : "not_owner",
-          waId: resolvedConversation.resolvedWaIdCanonical,
-        });
-        json(res, 409, httpError("conversation_not_assigned", "Assuma a conversa antes de enviar template."));
-        return;
-      }
-
       const identityCandidates = Array.from(
         new Set([resolvedConversation.resolvedWaId, resolvedConversation.resolvedWaIdCanonical].filter(Boolean))
       );

@@ -1,5 +1,9 @@
 # Product Map Current
 
+## Complemento local 30/09 - readiness de templates e negativa de inatividade
+
+LOCAL VALIDATED / NOT DEPLOYED sobre `339c794748716c2e12c790e0530a3a71210d17b8`. Templates aprovados de Inbox passam a depender de readiness/lista do tenant, nao do provider da conversa; fora da janela o template pode seguir pelo gate Meta sem Assumir, enquanto WEB_ONLY sem template utilizavel nao oferece caminho indevido. Inatividade distingue expiracao durante execucao: registra skip de envio e mantem estado operacional recuperavel, sem marcar sucesso falso. `b66bb89a` preservado; worker minimo sem backport necessario pelo mapeamento de imports. Evidencia: frontend contract 30/30, inactivity 12/12, Inbox/template routes 4/4, automation own activity 15/15. Sem deploy, producao ou envio real.
+
 
 ## Atualização local 30/09 - gate único de janela livre Inbox/WEB/híbrido
 

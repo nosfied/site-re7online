@@ -13,6 +13,14 @@ import { resolveChatbotConsentPrecedence } from "./chatbotConsentRuntime.js";
 
 type RuntimeRow = {
   id: string;
+  clientId: string;
+  waId: string;
+  waIdCanonical: string | null;
+  channelAccountId: string | null;
+  firstSeenAt: Date;
+  lastInboundAt: Date;
+  windowIsOpen: boolean;
+  windowExpiresAt: Date | null;
   chatbotActive: boolean;
   mode: string;
   handoffStatus: HandoffStatus;
@@ -54,6 +62,14 @@ function makePrisma(row: RuntimeRow) {
 function makeRow(overrides: Partial<RuntimeRow> = {}): RuntimeRow {
   return {
     id: "runtime-1",
+    clientId: "client-1",
+    waId: "558400002218",
+    waIdCanonical: "558400002218",
+    channelAccountId: "web-account-1",
+    firstSeenAt: new Date("2026-08-15T09:00:00.000Z"),
+    lastInboundAt: new Date("2026-08-15T10:00:00.000Z"),
+    windowIsOpen: true,
+    windowExpiresAt: new Date("2026-08-15T12:00:00.000Z"),
     chatbotActive: true,
     mode: "BOT",
     handoffStatus: HandoffStatus.NONE,
@@ -62,6 +78,9 @@ function makeRow(overrides: Partial<RuntimeRow> = {}): RuntimeRow {
     answers: {
       chatbotRuntime: {
         lastInteractionAt: "2026-08-15T10:00:00.000Z",
+        acceptedConsents: {
+          "attendance:secult-pe-v1": true,
+        },
       },
     },
     handoffActivatedAt: null,
@@ -375,6 +394,7 @@ test("processChatbotInactivityTimeouts skips handoff while consent is pending", 
     },
     ...makeConsentPrisma(null),
     conversation: {
+      findFirst: async () => ({ id: "conversation-1" }),
       findUnique: async () => ({ id: "conversation-1" }),
     },
     ...makeInactivityEventPrisma(events),
@@ -393,6 +413,78 @@ test("processChatbotInactivityTimeouts skips handoff while consent is pending", 
   assert.equal(events[0]?.eventName, "chatbot.inactivity.handoff.skipped");
   assert.equal(events[0]?.payloadJson.reason, "consent_pending");
   assert.deepEqual(events[0]?.payloadJson.pendingConsentNodeIds, ["consent"]);
+});
+
+test("processChatbotInactivityTimeouts records send skip when window expires after claim", async () => {
+  const now = new Date("2026-08-15T11:01:00.000Z");
+  const state: Record<string, any> = {
+    id: "runtime-expiring-window",
+    clientId: "client-1",
+    waId: "558400002218",
+    waIdCanonical: "558400002218",
+    channelAccountId: "web-account-1",
+    firstSeenAt: new Date("2026-08-15T09:00:00.000Z"),
+    lastInboundAt: new Date("2026-08-15T10:00:00.000Z"),
+    windowIsOpen: true,
+    windowExpiresAt: new Date("2026-08-15T11:01:00.500Z"),
+    flow: "chatbot:flow-secult",
+    chatbotActive: true,
+    mode: "BOT",
+    handoffStatus: HandoffStatus.NONE,
+    assignedUserId: null,
+    closedAt: null,
+    answers: {
+      chatbotRuntime: {
+        lastInteractionAt: "2026-08-15T10:00:00.000Z",
+      },
+    },
+    departmentId: "department-1",
+    queueId: "queue-1",
+    status: null,
+  };
+  state.answers.chatbotRuntime.acceptedConsents = { "attendance:secult-pe-v1": true };
+  const events: InactivityEventRow[] = [];
+  const eventStore = makeInactivityEventPrisma(events);
+  const prisma = {
+    conversationRuntimeState: {
+      findMany: async (args?: { where?: Record<string, unknown> }) => {
+        if (args?.where && Object.prototype.hasOwnProperty.call(args.where, "queueId")) return [];
+        return [state];
+      },
+      updateMany: async ({ where, data }: { where: Record<string, any>; data: Record<string, unknown> }) => {
+        const expectedAnswers = where.answers?.equals;
+        if (state.id !== where.id || state.mode !== where.mode || !deepEqual(state.answers, expectedAnswers)) {
+          return { count: 0 };
+        }
+        Object.assign(state, data);
+        return { count: 1 };
+      },
+    },
+    chatbotFlow: { findFirst: async () => ({ id: "flow-secult", definition: makeConsentFlow() }) },
+    ...makeConsentPrisma({ status: "accepted" }),
+    conversation: {
+      findFirst: async () => ({ id: "conversation-1" }),
+      findUnique: async () => ({ id: "conversation-1" }),
+    },
+    client: { findUnique: async () => ({ clientKey: "tenant-1" }) },
+    tenantOperationalConfig: { findUnique: async () => null },
+    event: eventStore.event,
+  };
+
+  const result = await processChatbotInactivityTimeouts({
+    prisma: prisma as never,
+    now,
+    nowMs: () => new Date("2026-08-15T11:01:01.000Z").getTime(),
+  });
+
+  assert.equal(result.processed, 1);
+  assert.equal(state.mode, "HUMAN");
+  assert.equal(state.status, "WAITING");
+  assert.equal(state.assignedUserId, null);
+  assert.equal(events.some((event) => event.payloadJson.reason === "window_closed_after_claim"), true);
+  const skipped = events.find((event) => event.payloadJson.reason === "window_closed_after_claim");
+  assert.equal(skipped?.payloadJson.messageStage, "handoff");
+  assert.equal(skipped?.payloadJson.sendReason, "window_closed");
 });
 
 test("consent_pending cooldown suppresses only persisted event while processor keeps evaluating", async () => {
@@ -421,6 +513,7 @@ test("consent_pending cooldown suppresses only persisted event while processor k
     },
     ...makeConsentPrisma(null),
     conversation: {
+      findFirst: async () => ({ id: "conversation-1" }),
       findUnique: async () => ({ id: "conversation-1" }),
     },
     ...makeInactivityEventPrisma(events),

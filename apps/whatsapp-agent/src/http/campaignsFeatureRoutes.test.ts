@@ -10153,9 +10153,9 @@ test("inbox template send uses approved active template and updates timeline saf
       provider: "meta",
       windowIsOpen: false,
       mode: "HUMAN",
-      status: "IN_PROGRESS",
-      assignedUserId: businessAdmin.id,
-      assignedTo: businessAdmin.name,
+      status: "WAITING",
+      assignedUserId: null,
+      assignedTo: null,
       lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
     },
   });
@@ -10253,7 +10253,7 @@ test("inbox template send uses approved active template and updates timeline saf
   assert.equal(JSON.stringify(usagePayload).includes(waId), false);
 });
 
-test("inbox template send routes hard template intent through Meta in hybrid Web-origin conversation", async (t) => {
+test("inbox template send routes hard template intent through Meta in unassigned hybrid Web-origin conversation", async (t) => {
   const waId = "5541991177820";
   const channelAccountId = `hybrid-web-origin-${safeTemplatePrefix}`;
   const template = await prisma.template.create({
@@ -10315,9 +10315,9 @@ test("inbox template send routes hard template intent through Meta in hybrid Web
       channelAccountId,
       windowIsOpen: false,
       mode: "HUMAN",
-      status: "IN_PROGRESS",
-      assignedUserId: businessAdmin.id,
-      assignedTo: businessAdmin.name,
+      status: "WAITING",
+      assignedUserId: null,
+      assignedTo: null,
       lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
     },
   });
@@ -10372,6 +10372,13 @@ test("inbox template send routes hard template intent through Meta in hybrid Web
     where: { clientId: businessClientId, waId, provider: "web_session" },
   });
   assert.equal(webSessionOutbounds, 0);
+  const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+    select: { assignedUserId: true, status: true, lastOutboundMessageId: true },
+  });
+  assert.equal(runtime.assignedUserId, null);
+  assert.equal(runtime.status, "WAITING");
+  assert.ok(runtime.lastOutboundMessageId?.startsWith("inbox.template."));
 });
 
 test("inbox template send does not use global env credentials for tenant template", async () => {

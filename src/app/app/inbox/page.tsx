@@ -2043,9 +2043,8 @@ function canSendInboxMedia(channel: InboxChannel, item?: Pick<InboxConversationI
   return channel === "whatsapp";
 }
 
-function canSendInboxTemplate(channel: InboxChannel, item?: Pick<InboxConversationItem, "provider"> | null) {
-  if (channel !== "whatsapp") return false;
-  return item?.provider !== "web_session";
+function canSendInboxTemplate(channel: InboxChannel) {
+  return channel === "whatsapp";
 }
 
 function getInboxTextOutboundDisabledMessage(
@@ -2424,6 +2423,7 @@ export default function AppInboxPage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
   const [templateItems, setTemplateItems] = useState<AppTemplateItem[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
@@ -5186,10 +5186,7 @@ export default function AppInboxPage() {
     selectedConversation
   );
   const selectedConversationWindowOpen = isConversationFreeformWindowOpen(selectedConversation);
-  const selectedConversationSupportsTemplateOutbound = canSendInboxTemplate(
-    selectedConversationChannel,
-    selectedConversation
-  );
+  const selectedConversationSupportsTemplateOutbound = canSendInboxTemplate(selectedConversationChannel);
   const selectedConversationOutboundDisabledMessage =
     getInboxTextOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
   const selectedConversationMediaOutboundDisabledMessage =
@@ -5197,7 +5194,6 @@ export default function AppInboxPage() {
   const selectedConversationWindowClosedMessage = "A janela de 24 horas está fechada. Aguarde uma nova resposta do cliente ou use um modelo aprovado quando disponível.";
   const crmStartComposerEnabled = Boolean(crmStartContext && session);
   const composerEnabled = (canReply && selectedConversationSupportsOutbound && selectedConversationWindowOpen) || crmStartComposerEnabled;
-  const templateComposerEnabled = canReply && selectedConversationSupportsTemplateOutbound;
   const cannedRepliesFeatureEnabled = hasCapability(session, "cannedReplies");
   const cannedComposerEnabled =
     cannedRepliesFeatureEnabled &&
@@ -5217,6 +5213,7 @@ export default function AppInboxPage() {
       ),
     [templateItems]
   );
+  const inboxTemplatesAvailable = usableInboxTemplates.length > 0;
   const selectedTemplate = useMemo(
     () => usableInboxTemplates.find((template) => template.id === selectedTemplateId) ?? null,
     [selectedTemplateId, usableInboxTemplates]
@@ -6136,12 +6133,14 @@ export default function AppInboxPage() {
     try {
       const response = await listAppTemplates(session);
       setTemplateItems(response.items);
+      setTemplatesLoaded(true);
     } catch (err) {
       const typed = err as { status?: number; message?: string; details?: string };
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
+      setTemplatesLoaded(true);
       setTemplateError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível carregar os modelos." }));
     } finally {
       setTemplatesLoading(false);
@@ -6155,8 +6154,8 @@ export default function AppInboxPage() {
       setErrorDetails(null);
       return;
     }
-    if (!canReply) {
-      setError("Assuma a conversa para enviar modelo.");
+    if (!inboxTemplatesAvailable) {
+      setError("Nenhum modelo aprovado está disponível para este tenant.");
       setErrorDetails(null);
       return;
     }
@@ -6177,13 +6176,23 @@ export default function AppInboxPage() {
     selectedConversation,
     selectedConversationSupportsTemplateOutbound,
     selectedConversationWaId,
+    inboxTemplatesAvailable,
     templateItems.length,
   ]);
 
+  useEffect(() => {
+    if (!session || !canUseInboxTemplates || templatesLoaded || templatesLoading) return;
+    void loadInboxTemplates();
+  }, [canUseInboxTemplates, loadInboxTemplates, session, templatesLoaded, templatesLoading]);
+
   const handleSendTemplate = async () => {
     if (!session || !selectedConversationWaId || !selectedConversation || !selectedTemplate) return;
-    if (!templateComposerEnabled) {
-      setTemplateError("Assuma uma conversa WhatsApp para enviar modelo.");
+    if (!selectedConversationSupportsTemplateOutbound) {
+      setTemplateError("Envio de modelo está disponível apenas para conversas do WhatsApp.");
+      return;
+    }
+    if (!inboxTemplatesAvailable) {
+      setTemplateError("Nenhum modelo aprovado está disponível para este tenant.");
       return;
     }
     const missingKeys = selectedTemplateVariableKeys.filter((key) => !templateVariables[key]?.trim());
@@ -8718,12 +8727,12 @@ export default function AppInboxPage() {
               >
                 😊
               </button>
-              {canUseInboxTemplates && selectedConversationSupportsTemplateOutbound ? (
+              {canUseInboxTemplates && selectedConversationSupportsTemplateOutbound && (templatesLoading || inboxTemplatesAvailable) ? (
                 <button
                   type="button"
                   disabled={
                     !selectedConversationWaId ||
-                    !templateComposerEnabled ||
+                    templatesLoading ||
                     isHydratingSelectedTimeline ||
                     sendingTemplate
                   }

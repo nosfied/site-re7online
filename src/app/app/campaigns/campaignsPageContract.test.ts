@@ -65,6 +65,17 @@ test("customer campaign and inbox surfaces do not render financial estimates", (
   assert.ok(!inboxSource.includes("Mensagem pronta é enviada como texto comum. A cobrança depende"));
 });
 
+test("inbox template offer uses tenant readiness instead of conversation provider", () => {
+  assert.ok(inboxSource.includes("const inboxTemplatesAvailable = usableInboxTemplates.length > 0;"));
+  assert.ok(inboxSource.includes("templatesLoading || inboxTemplatesAvailable"));
+  assert.ok(inboxSource.includes("const [templatesLoaded, setTemplatesLoaded] = useState(false);"));
+  assert.ok(inboxSource.includes("setTemplatesLoaded(true);"));
+  assert.ok(inboxSource.includes("templatesLoaded || templatesLoading"));
+  assert.ok(inboxSource.includes("void loadInboxTemplates();"));
+  assert.ok(!inboxSource.includes('item?.provider !== "web_session"'));
+  assert.ok(!inboxSource.includes('Assuma a conversa para enviar modelo.'));
+});
+
 test("campaign destination remains department-only in standard flow", () => {
   assert.ok(pageSource.includes('<span className="text-white/70">Setor</span>'));
   assert.ok(pageSource.includes('type: "human_department"'));
