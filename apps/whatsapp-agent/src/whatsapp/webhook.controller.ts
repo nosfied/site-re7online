@@ -123,6 +123,7 @@ import {
   ConversationIntent,
   ConversationState,
 } from "../conversation/conversation.types.js";
+
 import {
   claimHybridInboundLogicalMessage,
   markHybridInboundLogicalMessageCompleted,
@@ -168,6 +169,33 @@ import {
 import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOutboundService.js";
 import { ensureCampaignOutboundConversation } from "../campaigns/campaignOutboundConversation.js";
 import { parseOutboundReturnDestination } from "../routing/outboundReturnDestination.js";
+
+type WebhookControllerTestHooks = {
+  beforePassiveWindowRevalidation?: (params: {
+    clientId: string | null;
+    waId: string;
+    messageId: string;
+  }) => Promise<void> | void;
+  beforeChatbotReplyProgressRollback?: (params: {
+    clientId: string | null;
+    waId: string;
+    messageId: string;
+    reason: string;
+  }) => Promise<void> | void;
+  afterChatbotReplyProgressRollback?: (params: {
+    clientId: string | null;
+    waId: string;
+    messageId: string;
+    reason: string;
+    restored: boolean;
+  }) => Promise<void> | void;
+};
+
+function getWebhookControllerTestHooks(): WebhookControllerTestHooks | undefined {
+  if (env.ENV !== "test") return undefined;
+  return (globalThis as typeof globalThis & { __re7WebhookControllerTestHooks?: WebhookControllerTestHooks })
+    .__re7WebhookControllerTestHooks;
+}
 
 const agentBrain = createAgentBrain();
 const adminTemplateDedup = new Map<string, number>();
@@ -880,6 +908,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         if (!shouldSendOutbound(params.waId, params.guard, params.messageId)) {
           return { ok: false, errorBody: "late_reply_dropped" };
         }
+        await getWebhookControllerTestHooks()?.beforePassiveWindowRevalidation?.({
+          clientId: tenantClientId,
+          waId: params.waId,
+          messageId: params.messageId,
+        });
         const currentRuntime = await loadPersistedRuntimeForInbound(params.waId, new Date().toISOString());
         const runtimeWindowExpiresAt = currentRuntime?.window?.expiresAt;
         const runtimeWindowExpiresAtMs = runtimeWindowExpiresAt ? Date.parse(runtimeWindowExpiresAt) : NaN;
@@ -5680,6 +5713,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       ) {
         return;
       }
+      await getWebhookControllerTestHooks()?.beforeChatbotReplyProgressRollback?.({
+        clientId: tenantClientId,
+        waId: normalizedFrom,
+        messageId: message.messageId,
+        reason,
+      });
       const restored = await updateRuntimeIfUnchanged({
         prisma,
         clientId: tenantClientId,
@@ -5703,6 +5742,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         route: meta?.route,
         method: meta?.method,
         requestId: meta?.requestId,
+      });
+      await getWebhookControllerTestHooks()?.afterChatbotReplyProgressRollback?.({
+        clientId: tenantClientId,
+        waId: normalizedFrom,
+        messageId: message.messageId,
+        reason,
+        restored: Boolean(restored),
       });
     };
 

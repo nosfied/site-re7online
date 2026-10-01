@@ -3,7 +3,7 @@
 
 ## Fechamento local 01/10 - API->WEB pelo receiveWebhook
 
-LOCAL VALIDATED / NOT DEPLOYED sobre `2daa2b459a0d20727cb97e2895a2059e50dd49e4`. O handler `receiveWebhook` agora preserva estado recuperavel quando o fluxo prepara resposta, mas o gate de janela bloqueia o envio WEB/hibrido antes do provider: zero envio, sem sucesso falso e sem avanco dependente da mensagem; janela aberta segue enviando pelo WEB simulado e conclui o no terminal. Evidencia integrada: `webhookApiWebWindow.test.ts` 2/2; regressao `automationOwnActivity.test.ts` + novo teste 21/21; backend build PASS; `git diff --check` PASS. Worker e validacoes produtivas permanecem separados.
+LOCAL VALIDATED / NOT DEPLOYED sobre `2daa2b459a0d20727cb97e2895a2059e50dd49e4`. O handler `receiveWebhook` agora preserva estado recuperavel quando o fluxo prepara resposta, mas o gate de janela bloqueia o envio WEB/hibrido antes do provider: zero envio, sem sucesso falso e sem avanco dependente da mensagem; expiracao imediatamente antes da revalidacao do sender preserva intervencao humana concorrente via CAS; janela aberta segue enviando pelo WEB simulado e conclui o no terminal. Evidencia integrada: `webhookApiWebWindow.test.ts` 3/3; regressao `automationOwnActivity.test.ts` + novo teste 21/21; backend build PASS; `git diff --check` PASS. Worker e validacoes produtivas permanecem separados.
 
 ## Complemento local 01/10 - consistencia de janela WhatsApp e templates
 

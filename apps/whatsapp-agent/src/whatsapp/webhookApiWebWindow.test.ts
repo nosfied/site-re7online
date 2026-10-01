@@ -173,6 +173,38 @@ async function fixture(name: string) {
   return { client, phoneNumberId, waId };
 }
 
+function setWebhookControllerTestHooks(hooks: unknown) {
+  (globalThis as typeof globalThis & { __re7WebhookControllerTestHooks?: unknown }).__re7WebhookControllerTestHooks = hooks;
+}
+
+function clearWebhookControllerTestHooks() {
+  delete (globalThis as typeof globalThis & { __re7WebhookControllerTestHooks?: unknown }).__re7WebhookControllerTestHooks;
+}
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function withTimeout<T>(promise: Promise<T>, label: string, ms = 1000): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`Timed out waiting for `)), ms);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 function metaWebhook(params: { phoneNumberId: string; waId: string; text: string; timestamp: Date }) {
   return {
     object: "whatsapp_business_account",
@@ -228,6 +260,69 @@ test("API to WEB handler keeps chatbot node recoverable when window closes befor
   assert.equal(row.chatbotActive, true);
   assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id, status: "SENT" } }), 0);
   assert.deepEqual((row.answers as Record<string, unknown>).preserved, true);
+});
+
+test("API to WEB handler preserves human intervention when window expires before sender revalidation", async () => {
+  const f = await fixture("expires-human");
+  const beforeSends = sends;
+  const rollbackFinished = deferred<{ restored: boolean; reason: string }>();
+  let revalidationHits = 0;
+  let humanInterventionApplied = false;
+  setWebhookControllerTestHooks({
+    beforePassiveWindowRevalidation: async (params: { clientId: string | null; waId: string; messageId: string }) => {
+      if (params.clientId !== f.client.id || params.waId !== f.waId) return;
+      revalidationHits += 1;
+      await prisma.conversationRuntimeState.update({
+        where: { clientId_waId: { clientId: f.client.id, waId: f.waId } },
+        data: { windowIsOpen: false, windowExpiresAt: new Date(Date.now() - 1000) },
+      });
+    },
+    beforeChatbotReplyProgressRollback: async (params: { clientId: string | null; waId: string; messageId: string; reason: string }) => {
+      if (params.clientId !== f.client.id || params.waId !== f.waId) return;
+      humanInterventionApplied = true;
+      await prisma.conversationRuntimeState.update({
+        where: { clientId_waId: { clientId: f.client.id, waId: f.waId } },
+        data: {
+          mode: "HUMAN",
+          status: "WAITING",
+          flow: null,
+          flowStep: null,
+          chatbotNodeId: null,
+          chatbotActive: false,
+          answers: { preserved: true, humanIntervention: true },
+          version: { increment: 1 },
+        },
+      });
+    },
+    afterChatbotReplyProgressRollback: (params: { clientId: string | null; waId: string; messageId: string; reason: string; restored: boolean }) => {
+      if (params.clientId === f.client.id && params.waId === f.waId) {
+        rollbackFinished.resolve({ restored: params.restored, reason: params.reason });
+      }
+    },
+  });
+  try {
+    await receiveWebhook(
+      metaWebhook({ phoneNumberId: f.phoneNumberId, waId: f.waId, text: "1", timestamp: new Date() }),
+      { requestId: "api-web-window-expire-human", route: "/webhook", method: "POST", rawBodyLength: 0 }
+    );
+    const rollback = await withTimeout(rollbackFinished.promise, "chatbot rollback CAS");
+    const row = await prisma.conversationRuntimeState.findUniqueOrThrow({
+      where: { clientId_waId: { clientId: f.client.id, waId: f.waId } },
+    });
+    assert.equal(revalidationHits, 1);
+    assert.equal(humanInterventionApplied, true);
+    assert.equal(rollback.reason, "window_closed");
+    assert.equal(rollback.restored, false);
+    assert.equal(sends, beforeSends);
+    assert.equal(row.mode, "HUMAN");
+    assert.equal(row.status, "WAITING");
+    assert.equal(row.chatbotNodeId, null);
+    assert.equal(row.chatbotActive, false);
+    assert.deepEqual(row.answers, { preserved: true, humanIntervention: true });
+    assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id, status: "SENT" } }), 0);
+  } finally {
+    clearWebhookControllerTestHooks();
+  }
 });
 
 test("API to WEB handler advances chatbot node when window remains open", async () => {
