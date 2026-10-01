@@ -1,5 +1,10 @@
 # CRA-PR Readiness Notes
 
+
+## Complemento local 01/10 - janela WhatsApp, templates e WEB automatico
+
+LOCAL VALIDATED / NOT DEPLOYED; nao e aceite CRA. Base `4b78bddedb827336df4154229472229c57df5e5b`, branch `review/campaign-recovery-20260926`. UI e backend agora alinham a negativa de freeform quando a janela WhatsApp esta ausente, invalida ou expirada; painel aberto reavalia no vencimento. Templates aprovados preservam gates Meta/RBAC/departamento/categoria/opt-out/readiness e nao exigem Assumir, nao assumem conversa, nao alteram lifecycle/no BOT e nao abrem janela. WEB automatico tem gate antes do provider no caminho BOT/protocolo de `webSessionInbound`; `sendPassiveOutboundText` revalida janela imediatamente antes do provider e bloqueia expiracao apos preparo de IA com zero envio; inatividade conserva evento tecnico quando a janela expira apos claim; `b66bb89a` preservado. Backport minimo do worker documentado em `docs/reviews/freeform-window-gate/`. Testes locais: rotas focadas 9/9, `automationOwnActivity` selecionado 13/13, frontend/helper 32/32; builds backend/worker/frontend PASS. Sem schema/migration/provider/envio/deploy; META_CLOUD puro e hibrido API->WEB continuam pendentes de validacao separada.
+
 ## Complemento local 30/09 - auditoria 339c7947
 
 LOCAL VALIDATED / NOT DEPLOYED; nao e aceite CRA. Base `339c794748716c2e12c790e0530a3a71210d17b8`, branch `review/campaign-recovery-20260926`. Complemento corrige os achados de auditoria sem producao: template de Inbox usa readiness/lista do tenant, nao provider da conversa; template fora da janela nao exige Assumir, mas conserva RBAC/departamento/categoria/opt-out/readiness; WEB_ONLY sem modelo utilizavel nao recebe oferta indevida. Inatividade registra negativa de `sendBotText` se a janela expirar apos claim, sem sucesso falso, reset ou retry cego; `b66bb89a` preservado. Testes locais: `campaignsPageContract.test.ts` 30/30, `chatbotInactivityProcessor.test.ts` 12/12, rotas focadas 4/4, `automationOwnActivity.test.ts` 15/15. Sem schema/migration/provider/envio/deploy; META_CLOUD puro e hibrido API->WEB continuam pendentes.

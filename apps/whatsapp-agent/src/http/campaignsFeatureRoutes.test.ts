@@ -4849,6 +4849,7 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
       channelAccountId,
       firstSeenAt: new Date("2026-08-12T11:59:00.000Z"),
       windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
       lastInboundAt: new Date("2026-08-12T11:59:00.000Z"),
       mode: "HUMAN",
       status: "WAITING",
@@ -4868,7 +4869,7 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
       sender: waitingWaId,
       senderCanonical: waitingWaId,
       senderJid: `${waitingWaId}@s.whatsapp.net`,
-      timestamp: new Date("2026-08-12T12:00:00.000Z"),
+      timestamp: new Date(),
       type: MessageType.TEXT,
       text: "oi",
       rawPayload: { provider: "web_session", type: "text" },
@@ -4896,7 +4897,7 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
       sender: waId,
       senderCanonical: waId,
       senderJid: `${waId}@s.whatsapp.net`,
-      timestamp: new Date("2026-08-12T12:00:00.000Z"),
+      timestamp: new Date(),
       type: MessageType.TEXT,
       text: "oi",
       rawPayload: { provider: "web_session", type: "text" },
@@ -4927,7 +4928,7 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
       sender: waId,
       senderCanonical: waId,
       senderJid: `${waId}@s.whatsapp.net`,
-      timestamp: new Date("2026-08-12T12:00:10.000Z"),
+      timestamp: new Date(Date.now() + 10_000),
       type: MessageType.TEXT,
       text: "2",
       rawPayload: { provider: "web_session", type: "text" },
@@ -10234,8 +10235,8 @@ test("inbox template send uses approved active template and updates timeline saf
     where: { clientId_waId: { clientId: businessClientId, waId } },
   });
   assert.equal(runtime.mode, "HUMAN");
-  assert.equal(runtime.status, "IN_PROGRESS");
-  assert.equal(runtime.assignedUserId, businessAdmin.id);
+  assert.equal(runtime.status, "WAITING");
+  assert.equal(runtime.assignedUserId, null);
   assert.equal(runtime.lastOutboundMessageId, outbound.messageId);
 
   const event = await prisma.event.findFirstOrThrow({
@@ -10379,6 +10380,275 @@ test("inbox template send routes hard template intent through Meta in unassigned
   assert.equal(runtime.assignedUserId, null);
   assert.equal(runtime.status, "WAITING");
   assert.ok(runtime.lastOutboundMessageId?.startsWith("inbox.template."));
+});
+
+
+test("inbox template send preserves assignment lifecycle and bot runtime while using Meta", async (t) => {
+  const waId = "5541991177822";
+  await configureBusinessTemplateMetaTransport({ webSessionEnabled: true, suffix: `${safeTemplatePrefix}-state` });
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `inbox_state_template_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso de atendimento.",
+    },
+  });
+  const conversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "web_session",
+      windowIsOpen: false,
+      windowExpiresAt: new Date("2026-01-01T10:00:00.000Z"),
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "web_session",
+      windowIsOpen: false,
+      windowExpiresAt: new Date("2026-01-01T10:00:00.000Z"),
+      mode: "BOT",
+      status: "WAITING",
+      assignedUserId: businessSupervisor.id,
+      assignedTo: businessSupervisor.name,
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+      flow: "chatbot:active-template-state-test",
+      answers: { chatbotRuntime: { flowStructureHash: "state", flowStartNodeId: "menu" } },
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+
+  const before = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+    select: {
+      mode: true,
+      status: true,
+      assignedUserId: true,
+      assignedTo: true,
+      chatbotActive: true,
+      chatbotNodeId: true,
+      flow: true,
+      windowIsOpen: true,
+      windowExpiresAt: true,
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  let metaCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaCalls += 1;
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.state.${safeTemplatePrefix}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await request<{ ok: true; message: { status: string; metaMessageId: string | null } }>(
+    "POST",
+    `/app/conversation/${waId}/send-template`,
+    businessAdmin,
+    { templateId: template.id }
+  );
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.equal(response.body.message.status, "SENT");
+  assert.equal(response.body.message.metaMessageId, `wamid.state.${safeTemplatePrefix}`);
+  assert.equal(metaCalls, 1);
+
+  const after = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+    select: {
+      mode: true,
+      status: true,
+      assignedUserId: true,
+      assignedTo: true,
+      chatbotActive: true,
+      chatbotNodeId: true,
+      flow: true,
+      windowIsOpen: true,
+      windowExpiresAt: true,
+      lastOutboundMessageId: true,
+    },
+  });
+  assert.equal(after.mode, before.mode);
+  assert.equal(after.status, before.status);
+  assert.equal(after.assignedUserId, before.assignedUserId);
+  assert.equal(after.assignedTo, before.assignedTo);
+  assert.equal(after.chatbotActive, before.chatbotActive);
+  assert.equal(after.chatbotNodeId, before.chatbotNodeId);
+  assert.equal(after.flow, before.flow);
+  assert.equal(after.windowIsOpen, false);
+  assert.equal(after.windowExpiresAt?.toISOString(), before.windowExpiresAt?.toISOString());
+  assert.ok(after.lastOutboundMessageId?.startsWith("inbox.template."));
+  const assignedEvents = await prisma.event.count({
+    where: { clientId: businessClientId, conversationId: conversation.id, eventName: "conversation.assigned" },
+  });
+  assert.equal(assignedEvents, 0);
+});
+
+test("inbox template send preserves authorization gates without provider calls", async (t) => {
+  await configureBusinessTemplateMetaTransport({ suffix: `${safeTemplatePrefix}-authz` });
+  const existingConfig = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: businessClientId },
+    select: { config: true },
+  });
+  t.after(async () => {
+    await prisma.tenantOperationalConfig.upsert({
+      where: { clientId: businessClientId },
+      update: { config: (existingConfig?.config ?? {}) as Prisma.InputJsonValue, schemaVersion: 1 },
+      create: { clientId: businessClientId, config: (existingConfig?.config ?? {}) as Prisma.InputJsonValue, schemaVersion: 1 },
+    });
+    await prisma.platformSupportSession.deleteMany({ where: { actingClientId: businessClientId } });
+    await prisma.platformSupportAccessGrant.deleteMany({ where: { clientId: businessClientId } });
+  });
+  const baseConfig =
+    existingConfig?.config && typeof existingConfig.config === "object" && !Array.isArray(existingConfig.config)
+      ? (existingConfig.config as Record<string, unknown>)
+      : {};
+  const utilityTemplate = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `inbox_authz_utility_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso utilitario.",
+    },
+  });
+  const marketingTemplate = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `inbox_authz_marketing_${safeTemplatePrefix}`,
+      category: "MARKETING",
+      language: "pt_BR",
+      status: "approved",
+      content: "Oferta bloqueada.",
+    },
+  });
+  const otherTenantTemplate = await prisma.template.create({
+    data: {
+      clientId: overrideClientId,
+      name: `inbox_authz_other_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Outro tenant.",
+    },
+  });
+  const departmentA = await prisma.department.create({
+    data: { clientId: businessClientId, name: `${prefix} Inbox A`, slug: `${prefix}-inbox-a` },
+  });
+  const departmentB = await prisma.department.create({
+    data: { clientId: businessClientId, name: `${prefix} Inbox B`, slug: `${prefix}-inbox-b` },
+  });
+  await assignUserDepartments({ clientId: businessClientId, userId: businessSupervisor.id, departmentIds: [departmentA.id] });
+  const waId = "5541991177823";
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      departmentId: departmentB.id,
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      departmentId: departmentB.id,
+      mode: "HUMAN",
+      status: "WAITING",
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  let metaCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaCalls += 1;
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.authz.${safeTemplatePrefix}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const departmentDenied = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send-template`, businessSupervisor, {
+    templateId: utilityTemplate.id,
+  });
+  assert.equal(departmentDenied.status, 403, JSON.stringify(departmentDenied.body));
+  assert.equal(getErrorCode(departmentDenied.body), "forbidden");
+
+  const crossTenant = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send-template`, businessAdmin, {
+    templateId: otherTenantTemplate.id,
+  });
+  assert.equal(crossTenant.status, 404);
+  assert.equal(getErrorCode(crossTenant.body), "template_not_found");
+
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: { config: { ...baseConfig, whatsappTemplatePolicy: { allowedCategories: ["UTILITY"] } }, schemaVersion: 1 },
+    create: { clientId: businessClientId, config: { whatsappTemplatePolicy: { allowedCategories: ["UTILITY"] } }, schemaVersion: 1 },
+  });
+  const categoryDenied = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send-template`, businessAdmin, {
+    templateId: marketingTemplate.id,
+  });
+  assert.equal(categoryDenied.status, 403, JSON.stringify(categoryDenied.body));
+  assert.equal(getErrorCode(categoryDenied.body), "template_category_not_allowed");
+
+  const grant = await request<{ ok: true; grant: { id: string } }>("POST", "/app/settings/support-access", businessAdmin, {
+    durationHours: 4,
+    reason: "validacao local template inbox",
+  });
+  assert.equal(grant.status, 200, JSON.stringify(grant.body));
+  const entered = await request<{ ok: true; token: string }>(
+    "POST",
+    `/app/platform-support/tenants/${prefix}-business/enter`,
+    supportAdmin
+  );
+  assert.equal(entered.status, 200, JSON.stringify(entered.body));
+  const supportDenied = await requestWithBearer<ErrorPayload>(
+    "POST",
+    `/app/conversation/${waId}/send-template`,
+    entered.body.token,
+    { templateId: utilityTemplate.id }
+  );
+  assert.equal(supportDenied.status, 403, JSON.stringify(supportDenied.body));
+  assert.equal(getErrorCode(supportDenied.body), "support_operational_action_blocked");
+
+  assert.equal(metaCalls, 0);
+  const outbounds = await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId } });
+  assert.equal(outbounds, 0);
 });
 
 test("inbox template send does not use global env credentials for tenant template", async () => {

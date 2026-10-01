@@ -151,7 +151,7 @@ test("Meta/hybrid IA: real assistant, passive WEB sender and Postgres builder re
   for(const provider of ["meta","web_session"]) for(const intervene of [false,true,"identity"] as const) {
     const f=await fixture(`hybrid-ai-${provider}-${intervene}`);
     const storage=createDualWriteStorage(new Proxy({} as any,{get(){return()=>{throw new Error("JSON not permitted")}}}),{readSource:"postgres",jsonWriteEnabled:false});
-    await prisma.conversationRuntimeState.create({data:{clientId:f.client.id,waId:f.waId,waIdCanonical:f.waId,channel:"whatsapp",provider:"meta",mode:"BOT",handoffStatus:"NONE",answers:{},firstSeenAt:new Date(),lastInboundAt:new Date()}});
+    await prisma.conversationRuntimeState.create({data:{clientId:f.client.id,waId:f.waId,waIdCanonical:f.waId,channel:"whatsapp",provider:"meta",mode:"BOT",handoffStatus:"NONE",answers:{},firstSeenAt:new Date(),lastInboundAt:new Date(),windowIsOpen:true,windowExpiresAt:new Date(Date.now()+60_000)}});
     let state=(await storage.getConversation(f.waId,f.client.clientKey))!;assert(state?.runtimeWriteToken);
     const ai=await generateControlledAssistantReply({brain:{async generateReply(){return {text:JSON.stringify({reply:"Orientação sintética",intent:"general",stage:"qualification",goal:"discover_service",confidence:0.9,missing_information:[],next_action:"ask_question",next_question:"Qual serviço?",handoff_recommended:false,lead_temp:"morno",priority:"media"}),source:"ai",model:"simulated"}}},text:"Explique um serviço",tenant:{name:"Synthetic",defaultLanguage:"pt_BR"},state,nowIso:new Date().toISOString(),preclassifiedEducationalIntent:{allowed:true,intent:"general"} as any});
     assert(ai.ok);if(!ai.ok)return;
@@ -170,6 +170,12 @@ test("Meta/hybrid IA: real assistant, passive WEB sender and Postgres builder re
       prisma,tenantClientId:f.client.id,tenantClientKey:f.client.clientKey,tenantClientStatus:"ACTIVE",env:{WHATSAPP_SANDBOX:false},
       resolveEffectiveWhatsappOutboundTransport:provider === "meta" ? async()=>({status:"ready",provider:"meta"}) : (await import("../crm/crmConversationStart.js")).resolveEffectiveWhatsappOutboundTransport,
       shouldSendOutbound:()=>true,createWebSessionTextOutboundMessage,canonicalizeBrazilWaId:(s:string)=>s,
+      loadPersistedRuntimeForInbound: async (waId:string) => {
+        const runtime = await prisma.conversationRuntimeState.findUnique({where:{clientId_waId:{clientId:f.client.id,waId}}});
+        return runtime ? { window: { isOpen: runtime.windowIsOpen, expiresAt: runtime.windowExpiresAt?.toISOString() } } : null;
+      },
+      isWindowOpen:(state:any, now:number)=>Boolean(state.window?.isOpen && state.window?.expiresAt && now < Date.parse(state.window.expiresAt)),
+      logger:{warn(){}},maskNumber:()=>"synthetic",meta:{requestId:"synthetic"},
       sendOutboundText:sendMeta,MessageStatus:{SENT:"SENT",FAILED:"FAILED"},
     });
     const shadowDb=intervene!=="identity" ? prisma : new Proxy(prisma,{get(target,key){
@@ -193,4 +199,40 @@ test("Meta/hybrid IA: real assistant, passive WEB sender and Postgres builder re
     if(intervene==="identity")assert.equal(final.channelAccountId,"human-switched-account");
     assert.equal(await prisma.outboundMessage.count({where:{clientId:f.client.id,status:"SENT"}}),1);
   }
+});
+
+
+test("passive WEB sender revalidates window after reply preparation and before provider", {skip:process.env.INCIDENT_WORKER_MINIMAL === "true"}, async()=>{
+  const [{readFileSync},vm,ts]=await Promise.all([import("node:fs"),import("node:vm"),import("typescript")]);
+  const source=readFileSync(new URL("../whatsapp/webhook.controller.ts",import.meta.url),"utf8");
+  function extract(start:string,end:string,name:string,context:Record<string,unknown>){
+    const a=source.indexOf(start),b=source.indexOf(end,a);assert(a>=0&&b>a);
+    const module={exports:{}};
+    vm.runInNewContext(ts.default.transpileModule(source.slice(a,b)+`\nmodule.exports=${name};`,{compilerOptions:{module:ts.default.ModuleKind.CommonJS,target:ts.default.ScriptTarget.ES2020}}).outputText,{module,exports:module.exports,Date,...context});
+    return module.exports as (arg:any)=>Promise<any>;
+  }
+  const f=await fixture("passive-window-expired");
+  await prisma.conversationRuntimeState.create({data:{clientId:f.client.id,waId:f.waId,waIdCanonical:f.waId,channel:"whatsapp",provider:"web_session",mode:"BOT",handoffStatus:"NONE",answers:{},firstSeenAt:new Date(),lastInboundAt:new Date(),windowIsOpen:true,windowExpiresAt:new Date(Date.now()+60_000)}});
+  const preparedReply = "Resposta preparada";
+  await prisma.conversationRuntimeState.update({where:{clientId_waId:{clientId:f.client.id,waId:f.waId}},data:{windowIsOpen:true,windowExpiresAt:new Date(Date.now()-1_000)}});
+  const beforeSends=sends;
+  const sendPassive=extract("  const sendPassiveOutboundText = async","  const typedPayload","sendPassiveOutboundText",{
+    prisma,tenantClientId:f.client.id,tenantClientKey:f.client.clientKey,tenantClientStatus:"ACTIVE",env:{WHATSAPP_SANDBOX:false},
+    resolveEffectiveWhatsappOutboundTransport:(await import("../crm/crmConversationStart.js")).resolveEffectiveWhatsappOutboundTransport,
+    shouldSendOutbound:()=>true,createWebSessionTextOutboundMessage,canonicalizeBrazilWaId:(s:string)=>s,
+    loadPersistedRuntimeForInbound: async (waId:string) => {
+      const runtime = await prisma.conversationRuntimeState.findUnique({where:{clientId_waId:{clientId:f.client.id,waId}}});
+      return runtime ? { window: { isOpen: runtime.windowIsOpen, expiresAt: runtime.windowExpiresAt?.toISOString() } } : null;
+    },
+    isWindowOpen:(state:any, now:number)=>Boolean(state.window?.isOpen && state.window?.expiresAt && now < Date.parse(state.window.expiresAt)),
+    logger:{warn(){}},maskNumber:()=>"synthetic",meta:{requestId:"synthetic"},
+    sendOutboundText:async()=>{throw new Error("meta fallback must not be used")},MessageStatus:{SENT:"SENT",FAILED:"FAILED"},
+  });
+  const result=await sendPassive({toE164:f.waId,waId:f.waId,intent:"unknown",messageId:crypto.randomUUID(),replyText:preparedReply});
+  assert.equal(result.ok,false);
+  assert.equal(result.errorBody,"window_closed");
+  assert.equal(sends,beforeSends);
+  const after=await prisma.conversationRuntimeState.findUniqueOrThrow({where:{clientId_waId:{clientId:f.client.id,waId:f.waId}}});
+  assert.equal(after.mode,"BOT");
+  assert.equal(after.chatbotNodeId,null);
 });

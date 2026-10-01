@@ -1,5 +1,10 @@
 # Product Map Current
 
+
+## Complemento local 01/10 - consistencia de janela WhatsApp e templates
+
+LOCAL VALIDATED / NOT DEPLOYED sobre `4b78bddedb827336df4154229472229c57df5e5b`. UI da Inbox nega freeform com janela WhatsApp ausente/invalida/expirada e agenda atualizacao no vencimento; templates/readiness nao vazam entre sessao/tenant e a UI permite recuperar erro de carregamento. Send-template continua separado de Assumir: pode seguir pelo gate Meta fora da janela, preservando RBAC, departamento, categoria, opt-out e readiness, sem assumir conversa nem alterar lifecycle/BOT. WEB/BOT automatico passa por gate `isWindowOpen` no helper do WEB_SESSION antes do provider; `sendPassiveOutboundText` revalida janela imediatamente antes do provider e nega expiracao apos preparo de IA com zero envio; inatividade ja registra negativa controlada. Backport minimo do worker documentado em `docs/reviews/freeform-window-gate/`. Evidencia local: 9/9 rotas Inbox/template/WEB, 13/13 `automationOwnActivity` selecionado, 32/32 frontend/helper, builds backend/worker/frontend PASS. Sem deploy, producao ou envio real; validacao produtiva META_CLOUD puro/API->WEB pendente.
+
 ## Complemento local 30/09 - readiness de templates e negativa de inatividade
 
 LOCAL VALIDATED / NOT DEPLOYED sobre `339c794748716c2e12c790e0530a3a71210d17b8`. Templates aprovados de Inbox passam a depender de readiness/lista do tenant, nao do provider da conversa; fora da janela o template pode seguir pelo gate Meta sem Assumir, enquanto WEB_ONLY sem template utilizavel nao oferece caminho indevido. Inatividade distingue expiracao durante execucao: registra skip de envio e mantem estado operacional recuperavel, sem marcar sucesso falso. `b66bb89a` preservado; worker minimo sem backport necessario pelo mapeamento de imports. Evidencia: frontend contract 30/30, inactivity 12/12, Inbox/template routes 4/4, automation own activity 15/15. Sem deploy, producao ou envio real.

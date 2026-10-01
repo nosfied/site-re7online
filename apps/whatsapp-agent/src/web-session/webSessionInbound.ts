@@ -15,7 +15,7 @@ import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/cont
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import { shouldResetClosedConversationForBotReentry } from "../conversation/automationRuntime.js";
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
-import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
+import { activateHumanHandoff, isWindowOpen, updateOutbound } from "../conversation/conversation.service.js";
 import { buildCrmWhatsappExternalUserHash } from "../crm/crmWhatsappIdentity.js";
 import { recordCrmConversationContactOrigin } from "../crm/crmContactUpsert.js";
 import {
@@ -1483,6 +1483,16 @@ async function sendWebSessionBotText(params: {
   publishMessageCreatedRealtime?: WebSessionMessageCreatedRealtimePublisher;
 }) {
   if (!params.text.trim()) return params.state;
+  if (!isWindowOpen(params.state, Date.now())) {
+    logger.warn({
+      event: "web_session.bot_outbound.window_closed",
+      clientId: params.clientId,
+      waIdSuffix: maskIdentifier(params.waId).suffix,
+      requestId: params.requestId,
+      source: "web_session_bot",
+    });
+    return params.state;
+  }
   const serviceCycle = params.serviceCycle ?? getServiceCycleForDisplay(params.state);
   const inferredManagementKind = params.requestId.includes(":survey") ? "satisfaction" : null;
   const inboxInteractionKind = params.inboxInteractionKind ?? inferredManagementKind;
@@ -3188,76 +3198,31 @@ export async function ingestWebSessionInboundMessage(params: {
             });
           }
           if (replyText?.trim()) {
-            const normalizedReplyText = normalizeBotMenuOptionMarkdown(replyText);
-            const replyServiceCycle = getActiveServiceCycle(runtimeConversationState);
-            const outboundResult = await createWebSessionTextOutboundMessage({
+            const beforeBotReplyOutboundId = runtimeConversationState.lastOutboundMessageId ?? null;
+            runtimeConversationState = await sendWebSessionBotText({
               prisma,
               waId: params.message.sender,
               waIdCanonical: params.message.senderCanonical,
-              text: normalizedReplyText,
-              runtimeWriteToken: runtimeConversationState.runtimeWriteToken,
+              text: replyText,
+              state: runtimeConversationState,
               clientKey: params.message.tenantKey,
               clientId: params.message.clientId,
               requestId: `${requestId}:bot-reply`,
-              actorUserId: null,
-              outboundSource: "bot",
-              skipAgentSignature: true,
-              serviceCycle: replyServiceCycle,
+              channelAccountId: params.message.channelAccountId,
+              serviceCycle: getActiveServiceCycle(runtimeConversationState),
               inboxVisibility: chatbotResult.managementInteraction?.outboundKind
                 ? "management_only"
                 : undefined,
               inboxInteractionKind: chatbotResult.managementInteraction?.outboundKind ?? null,
-              source: {
-                channel: "whatsapp",
-                provider: "web_session",
-                channelAccountId: params.message.channelAccountId,
-              },
+              publishMessageCreatedRealtime: params.publishMessageCreatedRealtime,
             });
-            if (outboundResult.ok && outboundResult.status === "SENT") {
-              runtimeConversationState = updateOutbound(
-                runtimeConversationState,
-                outboundResult.messageId,
-                outboundResult.createdAt
-              );
-              const humanInboxVisible = chatbotResult.managementInteraction?.outboundKind
-                ? false
-                : shouldProjectStateToHumanInbox(runtimeConversationState);
-              const eventInboxVisibility: InboxMessageVisibility = humanInboxVisible
-                ? "human_timeline"
-                : "management_only";
-              await publishWebSessionMessageCreatedRealtime({
-                type: "message.created",
+            if ((runtimeConversationState.lastOutboundMessageId ?? null) === beforeBotReplyOutboundId) {
+              logger.info({
+                event: "web_session.bot_reply.not_sent",
                 clientId: params.message.clientId,
-                waId: params.message.sender,
-                waIdCanonical: params.message.senderCanonical,
-                mode: runtimeConversationState.mode === "HUMAN" ? "HUMAN" : "BOT",
-                handoffStatus: runtimeConversationState.handoff.status,
-                humanInboxVisible,
-                assignedUserId: runtimeConversationState.assignedUserId ?? null,
-                departmentId: runtimeConversationState.departmentId ?? null,
-                protocol: replyServiceCycle?.protocol ?? null,
-                cycleId: replyServiceCycle?.cycleId ?? null,
-                message: {
-                  inboxVisibility: eventInboxVisibility,
-                  protocol: replyServiceCycle?.protocol ?? null,
-                  cycleId: replyServiceCycle?.cycleId ?? null,
-                  internalMessageId: outboundResult.internalMessageId,
-                  messageKind: "outbound",
-                  direction: "OUTBOUND",
-                  type: "TEXT",
-                  status: "SENT",
-                  intent: runtimeConversationState.intent ?? null,
-                  bodyText: outboundResult.bodyText,
-                  media: null,
-                  templateName: null,
-                  templateLang: null,
-                  requestId: `${requestId}:bot-reply`,
-                  messageId: outboundResult.messageId,
-                  metaMessageId: null,
-                  errorBody: null,
-                  createdAt: outboundResult.createdAt,
-                },
-              }, params.publishMessageCreatedRealtime);
+                waIdSuffix: maskIdentifier(params.message.sender).suffix,
+                requestId,
+              });
             }
           }
           let handoffServiceCycle: ServiceCycleSnapshot | null = null;

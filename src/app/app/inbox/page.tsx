@@ -51,6 +51,7 @@ import {
   PRIMARY_CONVERSATION_FILTERS,
   type ConversationFilter,
 } from "@/lib/inboxConversationFilters";
+import { isInboxFreeformWindowOpen } from "@/lib/inboxWindow";
 import {
   addAutoReadSuppressionKeys,
   clearAutoReadSuppressionKeys,
@@ -2233,15 +2234,10 @@ function canReplyToConversation(
 }
 
 function isConversationFreeformWindowOpen(
-  item: Pick<InboxConversationItem, "channel" | "windowIsOpen" | "windowExpiresAt"> | null
+  item: Pick<InboxConversationItem, "channel" | "windowIsOpen" | "windowExpiresAt"> | null,
+  nowMs = Date.now()
 ) {
-  if (!item || getConversationChannel(item) !== "whatsapp") return true;
-  if (item.windowIsOpen === false) return false;
-  if (item.windowExpiresAt) {
-    const expiresAt = Date.parse(item.windowExpiresAt);
-    if (Number.isFinite(expiresAt) && Date.now() >= expiresAt) return false;
-  }
-  return true;
+  return isInboxFreeformWindowOpen(item, nowMs);
 }
 
 function isConversationAssignedToAnotherUser(
@@ -2429,6 +2425,7 @@ export default function AppInboxPage() {
   const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
+  const [windowNowMs, setWindowNowMs] = useState(() => Date.now());
   const [cannedModalOpen, setCannedModalOpen] = useState(false);
   const [cannedRepliesLoading, setCannedRepliesLoading] = useState(false);
   const [cannedReplies, setCannedReplies] = useState<AppCannedReplyItem[]>([]);
@@ -2536,6 +2533,7 @@ export default function AppInboxPage() {
   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
   const selectedConversationKeyRef = useRef<string | null>(null);
   const selectedConversationWaIdRef = useRef<string | null>(null);
+  const templatesSessionKeyRef = useRef<string | null>(null);
   const selectedAutomationReadRef = useRef(false);
   const skipNextSelectedConversationListMarkReadRef = useRef(false);
   const queueMutationAutoReadSuppressedKeysRef = useRef(new Set<string>());
@@ -2992,6 +2990,16 @@ export default function AppInboxPage() {
       clearAutoReadSuppressionKeys(queueMutationAutoReadSuppressedKeysRef.current);
       skipNextSelectedConversationListMarkReadRef.current = false;
       autoReadSuppressionSessionKeyRef.current = sessionKey;
+    }
+    if (templatesSessionKeyRef.current !== sessionKey) {
+      setTemplateItems([]);
+      setTemplatesLoaded(false);
+      setTemplatesLoading(false);
+      setSelectedTemplateId("");
+      setTemplateVariables({});
+      setTemplateError(null);
+      setTemplateModalOpen(false);
+      templatesSessionKeyRef.current = sessionKey;
     }
   }, [session]);
 
@@ -4847,6 +4855,18 @@ export default function AppInboxPage() {
     }
   }, [selectedConversation, selectedConversationKey, selectedConversationWaId]);
 
+  useEffect(() => {
+    setWindowNowMs(Date.now());
+    if (getConversationChannel(selectedConversation) !== "whatsapp" || selectedConversation?.windowIsOpen !== true) {
+      return;
+    }
+    const expiresAt = Date.parse(selectedConversation.windowExpiresAt ?? "");
+    if (!Number.isFinite(expiresAt)) return;
+    const delayMs = Math.max(0, expiresAt - Date.now()) + 250;
+    const timeout = window.setTimeout(() => setWindowNowMs(Date.now()), delayMs);
+    return () => window.clearTimeout(timeout);
+  }, [selectedConversation?.channel, selectedConversation?.windowExpiresAt, selectedConversation?.windowIsOpen, selectedConversationKey]);
+
   const selectedChannelSwitchWarning = selectedConversation?.channelSwitchWarning?.pending
     ? selectedConversation.channelSwitchWarning
     : null;
@@ -5185,7 +5205,7 @@ export default function AppInboxPage() {
     selectedConversationChannel,
     selectedConversation
   );
-  const selectedConversationWindowOpen = isConversationFreeformWindowOpen(selectedConversation);
+  const selectedConversationWindowOpen = isConversationFreeformWindowOpen(selectedConversation, windowNowMs);
   const selectedConversationSupportsTemplateOutbound = canSendInboxTemplate(selectedConversationChannel);
   const selectedConversationOutboundDisabledMessage =
     getInboxTextOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
@@ -5214,6 +5234,7 @@ export default function AppInboxPage() {
     [templateItems]
   );
   const inboxTemplatesAvailable = usableInboxTemplates.length > 0;
+  const inboxTemplateActionAvailable = templatesLoading || inboxTemplatesAvailable || Boolean(templateError);
   const selectedTemplate = useMemo(
     () => usableInboxTemplates.find((template) => template.id === selectedTemplateId) ?? null,
     [selectedTemplateId, usableInboxTemplates]
@@ -6155,6 +6176,10 @@ export default function AppInboxPage() {
       return;
     }
     if (!inboxTemplatesAvailable) {
+      if (templateError) {
+        void loadInboxTemplates();
+        return;
+      }
       setError("Nenhum modelo aprovado está disponível para este tenant.");
       setErrorDetails(null);
       return;
@@ -8727,7 +8752,7 @@ export default function AppInboxPage() {
               >
                 😊
               </button>
-              {canUseInboxTemplates && selectedConversationSupportsTemplateOutbound && (templatesLoading || inboxTemplatesAvailable) ? (
+              {canUseInboxTemplates && selectedConversationSupportsTemplateOutbound && (inboxTemplateActionAvailable) ? (
                 <button
                   type="button"
                   disabled={

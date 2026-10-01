@@ -1,0 +1,25 @@
+{
+  "base": "4b78bddedb827336df4154229472229c57df5e5b",
+  "branch": "review/campaign-recovery-20260926",
+  "workerComposition": "bf5f1d76 + f06d49cb five-source persistence + 91230f88 + b66bb89a; apply this patch on top without replacing the worker with the full API tree",
+  "patch": "worker-web-session-window-gate.patch",
+  "patchSha256": "e77a0a6101a458d2a754a97aa8514e17ce1de4e62bf0ec1078fd014782be2ed8",
+  "sourceFilesChanged": {
+    "apps/whatsapp-agent/src/web-session/webSessionInbound.ts": "e68f03e3a82756e999163f62969ce4bee040c5a4a23985ee2ead41d47264c0d2"
+  },
+  "apiOnlySourceFilesChanged": {
+    "apps/whatsapp-agent/src/whatsapp/webhook.controller.ts": "ae9eb862653fbf54053f943d3287d586bb3740439071db0267ec090e98ff2273",
+    "apps/whatsapp-agent/src/conversation/automationOwnActivity.test.ts": "5005dddee728212aa9ca3eb565fab94038435678dfbee894ac04f35f65cff031"
+  },
+  "workerCompiledHashesFromLocalBuild": {
+    "apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionInbound.js": "917cf1700ff3dd8bad0f0efa7f1382c62954a98de3cbe9aefdeddbaf5e63a814",
+    "apps/whatsapp-web-worker/dist/whatsapp-agent/src/conversation/conversation.service.js": "9da72b5b680ebae67d3af32b0eebcd5777c5a7af7a2d63c051cbf8df2fa4c5bd"
+  },
+  "workerBuild": "npm --prefix apps/whatsapp-web-worker run build PASS (noCheck, local only)",
+  "compiledValidation": "Provider-simulated WEB paths validated by campaignsFeatureRoutes focused 9/9 and automationOwnActivity focused 13/13 against local DB; no production/provider real/send real.",
+  "notes": [
+    "conversation.service.js is already present in the worker artifact; no new dependency file is introduced by the patch.",
+    "Do not include dist bundles in Git; hashes are for reviewer comparison only.",
+    "sendPassiveOutboundText gate is API process code and is not part of the worker patch."
+  ]
+}

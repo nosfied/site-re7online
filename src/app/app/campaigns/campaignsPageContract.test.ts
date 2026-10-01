@@ -67,11 +67,17 @@ test("customer campaign and inbox surfaces do not render financial estimates", (
 
 test("inbox template offer uses tenant readiness instead of conversation provider", () => {
   assert.ok(inboxSource.includes("const inboxTemplatesAvailable = usableInboxTemplates.length > 0;"));
-  assert.ok(inboxSource.includes("templatesLoading || inboxTemplatesAvailable"));
+  assert.ok(inboxSource.includes("const inboxTemplateActionAvailable = templatesLoading || inboxTemplatesAvailable || Boolean(templateError);"));
+  assert.ok(inboxSource.includes("inboxTemplateActionAvailable"));
   assert.ok(inboxSource.includes("const [templatesLoaded, setTemplatesLoaded] = useState(false);"));
   assert.ok(inboxSource.includes("setTemplatesLoaded(true);"));
   assert.ok(inboxSource.includes("templatesLoaded || templatesLoading"));
   assert.ok(inboxSource.includes("void loadInboxTemplates();"));
+  assert.ok(inboxSource.includes("templatesSessionKeyRef"));
+  assert.ok(inboxSource.includes("setTemplateItems([]);"));
+  assert.ok(inboxSource.includes("const [windowNowMs, setWindowNowMs] = useState(() => Date.now());"));
+  assert.ok(inboxSource.includes("setWindowNowMs(Date.now())"));
+  assert.ok(inboxSource.includes("isConversationFreeformWindowOpen(selectedConversation, windowNowMs)"));
   assert.ok(!inboxSource.includes('item?.provider !== "web_session"'));
   assert.ok(!inboxSource.includes('Assuma a conversa para enviar modelo.'));
 });

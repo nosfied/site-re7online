@@ -880,6 +880,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         if (!shouldSendOutbound(params.waId, params.guard, params.messageId)) {
           return { ok: false, errorBody: "late_reply_dropped" };
         }
+        const currentRuntime = await loadPersistedRuntimeForInbound(params.waId, new Date().toISOString());
+        if (currentRuntime && !isWindowOpen(currentRuntime, Date.now())) {
+          logger.warn({
+            event: "web_session.passive_outbound.window_closed",
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            waId: maskNumber(params.waId),
+            requestId: meta?.requestId,
+            rid: params.messageId,
+          });
+          return { ok: false, errorBody: "window_closed" };
+        }
         const result = await createWebSessionTextOutboundMessage({
           prisma,
           waId: params.waId,
