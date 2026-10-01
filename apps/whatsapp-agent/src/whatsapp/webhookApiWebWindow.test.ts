@@ -197,7 +197,7 @@ async function withTimeout<T>(promise: Promise<T>, label: string, ms = 1000): Pr
     return await Promise.race([
       promise,
       new Promise<T>((_, reject) => {
-        timeout = setTimeout(() => reject(new Error(`Timed out waiting for `)), ms);
+        timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${label}`)), ms);
       }),
     ]);
   } finally {
@@ -260,6 +260,74 @@ test("API to WEB handler keeps chatbot node recoverable when window closes befor
   assert.equal(row.chatbotActive, true);
   assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id, status: "SENT" } }), 0);
   assert.deepEqual((row.answers as Record<string, unknown>).preserved, true);
+});
+
+test("API to WEB handler restores chatbot node when time closes window before sender revalidation", async () => {
+  const f = await fixture("expires-time");
+  const beforeSends = sends;
+  const rollbackFinished = deferred<{ restored: boolean; reason: string }>();
+  const originalDateNow = Date.now;
+  let revalidationHits = 0;
+  let versionAtRevalidation: number | undefined;
+  let windowExpiresAtAtRevalidation: Date | null | undefined;
+  setWebhookControllerTestHooks({
+    beforePassiveWindowRevalidation: async (params: { clientId: string | null; waId: string; messageId: string }) => {
+      if (params.clientId !== f.client.id || params.waId !== f.waId) return;
+      revalidationHits += 1;
+      const row = await prisma.conversationRuntimeState.findUniqueOrThrow({
+        where: { clientId_waId: { clientId: f.client.id, waId: f.waId } },
+        select: { version: true, windowIsOpen: true, windowExpiresAt: true, answers: true },
+      });
+      assert.equal(row.windowIsOpen, true);
+      assert.ok(row.windowExpiresAt);
+      assert.deepEqual((row.answers as Record<string, unknown>).preserved, true);
+      versionAtRevalidation = row.version;
+      windowExpiresAtAtRevalidation = row.windowExpiresAt;
+      Date.now = () => row.windowExpiresAt!.getTime() + 1000;
+    },
+    beforeChatbotReplyProgressRollback: async (params: { clientId: string | null; waId: string; messageId: string; reason: string }) => {
+      if (params.clientId !== f.client.id || params.waId !== f.waId) return;
+      assert.equal(params.reason, "window_closed");
+      const row = await prisma.conversationRuntimeState.findUniqueOrThrow({
+        where: { clientId_waId: { clientId: f.client.id, waId: f.waId } },
+        select: { version: true, windowIsOpen: true, windowExpiresAt: true },
+      });
+      assert.equal(row.version, versionAtRevalidation);
+      assert.equal(row.windowIsOpen, true);
+      assert.equal(row.windowExpiresAt?.toISOString(), windowExpiresAtAtRevalidation?.toISOString());
+    },
+    afterChatbotReplyProgressRollback: (params: { clientId: string | null; waId: string; messageId: string; reason: string; restored: boolean }) => {
+      if (params.clientId === f.client.id && params.waId === f.waId) {
+        rollbackFinished.resolve({ restored: params.restored, reason: params.reason });
+      }
+    },
+  });
+  try {
+    await receiveWebhook(
+      metaWebhook({ phoneNumberId: f.phoneNumberId, waId: f.waId, text: "1", timestamp: new Date(originalDateNow()) }),
+      { requestId: "api-web-window-expire-time", route: "/webhook", method: "POST", rawBodyLength: 0 }
+    );
+    const rollback = await withTimeout(rollbackFinished.promise, "chatbot rollback after clock expiration");
+    Date.now = originalDateNow;
+    const row = await prisma.conversationRuntimeState.findUniqueOrThrow({
+      where: { clientId_waId: { clientId: f.client.id, waId: f.waId } },
+    });
+    assert.equal(revalidationHits, 1);
+    assert.equal(rollback.reason, "window_closed");
+    assert.equal(rollback.restored, true);
+    assert.equal(sends, beforeSends);
+    assert.equal(row.windowIsOpen, true);
+    assert.equal(row.windowExpiresAt?.toISOString(), windowExpiresAtAtRevalidation?.toISOString());
+    assert.equal(row.chatbotNodeId, "menu");
+    assert.equal(row.chatbotActive, true);
+    assert.equal(row.mode, "BOT");
+    assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id, status: "SENT" } }), 0);
+    assert.equal(await prisma.inboundMessage.count({ where: { clientId: f.client.id } }), 1);
+    assert.deepEqual((row.answers as Record<string, unknown>).preserved, true);
+  } finally {
+    Date.now = originalDateNow;
+    clearWebhookControllerTestHooks();
+  }
 });
 
 test("API to WEB handler preserves human intervention when window expires before sender revalidation", async () => {
