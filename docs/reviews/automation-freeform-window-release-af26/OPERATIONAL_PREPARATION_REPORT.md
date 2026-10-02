@@ -1,5 +1,10 @@
 # Operational preparation evidence - 2026-10-02
 
+The report below preserves the earlier private-package simulation stage. The
+later [cumulative remote preparation](REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md)
+records actual isolated builds/restore/smoke and activation blockers. No
+operational switch/return script was executed in either stage.
+
 Status: PRIVATE PACKAGE SIMULATION VALIDATED / NOT EXECUTED / NOT DEPLOYED.
 Review base: `8b2466db51837384d0b2142e9cad19c8fde4c25f`; functional candidate:
 `af26f48a9c309b24ec4d23cfa97cc1e407c09d98`. No functional code changed here.

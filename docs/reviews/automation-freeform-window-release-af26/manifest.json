@@ -1,5 +1,5 @@
 {
-  "status": "PREPARED_FOR_REVIEW_NOT_DEPLOYED",
+  "status": "ISOLATED_PREPARATION_COMPLETED_ACTIVATION_BLOCKED_NOT_DEPLOYED",
   "preparedAt": "2026-10-01",
   "branch": "review/campaign-recovery-20260926",
   "candidateSha": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
@@ -8,7 +8,9 @@
   "readOnlyProductionObservation": {
     "host": "re7online-api-01",
     "repoCheckoutHead": "5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e",
-    "authorizedDirt": ["apps/whatsapp-web-worker/.data/"],
+    "authorizedDirt": [
+      "apps/whatsapp-web-worker/.data/"
+    ],
     "adminFrontRelease": "/opt/re7online/releases/ba66c24112ccb10f2dfdcced54350f513d399bc6",
     "adminFrontPid": 1856062,
     "adminFrontBuildId": "l1eBvPioySXt7NLiuFMkg",
@@ -46,13 +48,17 @@
     "src/lib/whatsappAdminApi.ts": "adf431fc56e948ecace2c6e21d9c61332b864723f651c16d9a8a8eafad762c76"
   },
   "workerMinimalCandidate": {
-    "composition": "bf5f1d76 + f06d49cb five-source persistence + 91230f88 + b66bb89a + worker-freeform-window-gate-20261001.patch",
+    "composition": "bf5 + f06 + 912 + final cumulative patch (b66 not applied separately)",
     "patchPath": "../automation-worker-backport/worker-freeform-window-gate-20261001.patch",
     "patchSha256": "ab1080df3804b35479a179425bf664db79b0f0caec50f5dd00f97cdac0c1c566",
     "patchLines": 660,
     "manifestPath": "../automation-worker-backport/manifest.json",
-    "manifestSha256": "3fa762b7f2c62e60b3291b44dbf562be731c0fd2437bd2be635a5abae28ecb55",
-    "doNotUseFullApiTreeAsWorker": true
+    "manifestSha256": "c01b1bec4bc78c0bd9a3128705a4e519bfc3111516631d7474d6b2a7f565cd0c",
+    "doNotUseFullApiTreeAsWorker": true,
+    "patchSemantics": "cumulative from bf5+f06+912; b66 protections included, do not apply b66 separately",
+    "sourceEquivalence": "worker-source-equivalence.json: 408/408; zero added/missing/changed",
+    "compiledEquivalence": "executables-manifest.json: 99/99 byte-identical to tested worker",
+    "pinnedDocumentalManifestSha256": "3fa762b7f2c62e60b3291b44dbf562be731c0fd2437bd2be635a5abae28ecb55"
   },
   "currentActiveHashesReadOnly": {
     "apiDist/whatsapp/webhook.controller.js": "f3bd6cd1024ca18ca2872bb3aba5d150b53cc8653033caba82e9e0e7fa9cd208",
@@ -92,5 +98,7 @@
     "META_CLOUD pure productive validation",
     "HYBRID API-to-WEB productive validation",
     "owner functional acceptance after any future release"
-  ]
+  ],
+  "remotePreparation": "REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md",
+  "executables": "executables-manifest.json"
 }

@@ -1,5 +1,9 @@
 # CRA-PR Readiness Notes
 
+## Preparacao corrigida 02/10 - evidencias tecnicas, nao aceite CRA
+
+ISOLATED BUILDS / RESTORE / SMOKE VALIDATED / NOT DEPLOYED; ACTIVATION BLOCKED. [Registro sanitizado](../../../reviews/automation-freeform-window-release-af26/REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md). Composicao worker corrigida bf5+f06+912+patch cumulativo preserva b66/fence; 408 fontes e 99 compilados identicos ao testado permitem reutilizar provas. Builds isolados, backup fresco/restore local e smoke de artefato com API/auth/Meta simulados 3/3 nao equivalem a owner validation, aceite CRA ou exercicio produtivo META_CLOUD puro/API->WEB. Contagens atuais divergem dos gates historicos; exige reconciliacao antes de ativacao. Producao, historico, Campanhas e reparo 6683 preservados; nenhuma mensagem/provider real/restart/migration nesta etapa.
+
 
 ## Preparacao 01/10 - release af26f48a freeform window
 

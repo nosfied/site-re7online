@@ -256,7 +256,7 @@
     "patch": "worker-freeform-window-gate-20261001.patch",
     "patchSha256": "ab1080df3804b35479a179425bf664db79b0f0caec50f5dd00f97cdac0c1c566",
     "patchLines": 660,
-    "scope": "Worker minimal recomposition over bf5+f06+912+b66; no bundles, secrets, production mutation, provider call or deploy. Adds Prisma-compat atomic runtime fence and WEB outbound caller token wiring.",
+    "scope": "Minimal worker assembled from bf5+f06+912 plus final cumulative patch. Includes b66 protections and atomic runtime fence; b66 is not a separate predecessor patch. No full API worker replacement.",
     "sourceFiles": {
       "apps/whatsapp-agent/src/web-session/webSessionInbound.ts": "011679c9a20ffaae08042e86d3347e18d3bd21fb62fcaa561ab298abba982551",
       "apps/whatsapp-agent/src/conversation/automationOwnActivity.test.ts": "7526e9602e26e9ea523bb173718d3cd6ff7c3de035b9da6e617fc2fcb0092c00",
@@ -305,6 +305,7 @@
       "API->WEB caller branch proof is local and exercises prepared state plus caller persistence condition; full productive META_CLOUD/API->WEB validation remains separate.",
       "META_CLOUD pure and hybrid API->WEB productive validation remains pending.",
       "No production, provider real, send, migration or deploy was performed in this local-only round."
-    ]
+    ],
+    "cumulativeAssemblyEvidence": "../automation-freeform-window-release-af26/worker-source-equivalence.json"
   }
 }

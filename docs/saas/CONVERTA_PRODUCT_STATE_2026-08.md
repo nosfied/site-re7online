@@ -1,5 +1,9 @@
 # Converta Product State - 2026-08
 
+## Preparacao corrigida 02/10 - af26, sem ativacao
+
+ISOLATED BUILDS / RESTORE / SMOKE VALIDATED / NOT DEPLOYED; ACTIVATION BLOCKED. [Evidencias e hashes](../reviews/automation-freeform-window-release-af26/REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md): worker bf5+f06+912+patch final cumulativo inclui b66, sem aplica-lo separado; fontes 408/408 e compilados 99/99 iguais ao testado. API/frontend/worker compilados isoladamente, Prisma/lockfiles compativeis, backup fresco/restauracao local verificados e smoke com respostas simuladas 3/3. Producao permanece nas releases isoladas b66/ba66/worker minimo anterior. Contagens finais de jobs/lease/configuracao/sessoes exigem reconciliacao dos gates antes de qualquer ativacao. Sem owner/CRA acceptance ou prova produtiva META_CLOUD puro/API->WEB. Historico, Campanhas e 6683 preservados; Guided Builder pausado.
+
 
 ## Preparacao 01/10 - release af26f48a freeform window
 

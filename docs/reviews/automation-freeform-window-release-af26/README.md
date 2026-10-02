@@ -1,19 +1,28 @@
 # Automation Freeform Window Release af26f48a
 
-**DOCUMENTAL REVIEW / NOT DEPLOYED / EXECUTION PREFLIGHT PENDING.** Functional
+**ISOLATED PREPARATION / NOT DEPLOYED / ACTIVATION PREFLIGHT BLOCKED.** Functional
 candidate: `af26f48a9c309b24ec4d23cfa97cc1e407c09d98`. This document replaces the
 conflicting recipes with one ordered sequence, shared by switch and return.
-Commands were reviewed, not executed. The private script bindings described
+Preparation commands were executed only in isolated sources/releases; process
+switch commands were not executed. The private script bindings described
 below are mandatory preparation gates; historical scripts must not run against
 their old preparation directory.
 
-**2026-10-02 preparation BLOCKED before builds:** the pinned final worker patch
+**Historical first attempt, 2026-10-02, BLOCKED before builds:** the pinned final worker patch
 does not apply after the runbook's b66 predecessor patch. Its old blobs correspond
-to the preserved base912 sources. Do not execute the assembly sequence below
-unchanged or overwrite the partial source tree. See the
+to the preserved base912 sources. Do not repeat that historical b66-stacked
+recipe or overwrite the partial source tree. Use the corrected sequence below.
+See the
 [remote preparation result](REMOTE_PREPARATION_2026-10-02.md) for exact hashes,
 failure locations, unchanged processes and the composition prerequisite to resume.
-No fresh backup/restore, candidate executable or isolated smoke proof was produced.
+That first attempt produced no fresh backup/restore, candidate executable or smoke.
+The corrected attempt is recorded separately in
+[cumulative preparation](REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md) and its
+[executable registry](executables-manifest.json). Worker sources are 408/408
+equal to the tested reference, and all 99 compiled files match that reference.
+Active processes/releases remain unchanged. Current job/lease/config/session
+counts no longer match the historical activation invariants; do not activate or
+relax those checks based on this preparation.
 
 ## Evidence and unresolved divergences
 
@@ -39,12 +48,14 @@ This is not a counting-method change or evidence of an intervening rebuild.
 See [operational preparation report](OPERATIONAL_PREPARATION_REPORT.md) and
 [sanitized operational manifest](operational-manifest.json). Fresh preflight
 must still compare exact lists/hashes and abort on unexplained drift. Candidate
-executable hashes and its own BUILD_ID remain pending isolated builds.
+executable hashes and its own BUILD_ID are now recorded in the cumulative registry.
 
 Package `manifest.json` contains source/document/historical hashes, not final
 candidate executable validation. API/frontend comparison patch SHA256:
 `fb4de7d7a2922328c67cfc5e1169ef8a49815980d88d45ada3746e43f98e563f`.
-Worker is **bf5 + f06 + 912 + b66 + audited window patch**, independently assembled.
+Worker is **bf5 + f06 + 912 + final cumulative window patch**, independently
+assembled. The final patch includes the b66 protections and atomic
+`UPDATE ... RETURNING` fence; **never apply b66 separately before it**.
 
 ## Historical scripts actually inspected
 
@@ -52,7 +63,9 @@ On 2026-10-02, file reads/downloads confirmed the six scripts below at:
 
 `/opt/re7online/backups/converta-persistent/preparations/runtime-fix-20260930T020103Z`
 
-No script, process operation, backup, restore or build was executed. References:
+During that earlier script-inspection stage, no script, process operation,
+backup, restore or build was executed. The subsequent authorized preparation
+is recorded separately above. References:
 [previous preparation](../../saas/AUTOMATION_RUNTIME_FIX_PREPARATION_2026-09-30.md),
 [executed rollout](../../saas/AUTOMATION_RUNTIME_FIX_ROLLOUT_2026-09-30.md),
 [three-process procedure](../../saas/AUTOMATION_RELEASE_COMMANDS_2026-09-29.md),
@@ -92,7 +105,7 @@ DOC_SHA=db671f4f43aa6aaf2e1f874540ebef8d633515da
 TARGET=af26f48a9c309b24ec4d23cfa97cc1e407c09d98
 BASE_WORKER=bf5f1d7610ca3f8144faa6f7b7994598e4a4017b
 ORIGIN_URL=https://github.com/nosfied/site-re7online.git
-SOURCE_ROOT=/opt/re7online/release-sources/freeform-window-af26
+SOURCE_ROOT=/opt/re7online/release-sources/freeform-window-af26-cumulative-20261002
 DOC_SRC="$SOURCE_ROOT/documental-db671f4f"
 API_SRC="$SOURCE_ROOT/api-frontend-af26"
 WORKER_SRC="$SOURCE_ROOT/worker-minimal-af26"
@@ -102,6 +115,10 @@ WORKER_RELEASE=/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89
 EVIDENCE=/opt/re7online/release-evidence/freeform-window-af26-$(date -u +%Y%m%d-%H%M%S)
 HIST=/opt/re7online/backups/converta-persistent/preparations/runtime-fix-20260930T020103Z
 PM=/home/deploy/.npm-global/bin/pm2
+test ! -e "$SOURCE_ROOT"
+test ! -e "$API_RELEASE"
+test ! -e "$FRONT_RELEASE"
+test ! -e "$WORKER_RELEASE"
 install -d -m 700 "$SOURCE_ROOT" "$EVIDENCE"
 git clone --no-checkout "$ORIGIN_URL" "$DOC_SRC"
 git -C "$DOC_SRC" checkout --detach "$DOC_SHA"
@@ -109,13 +126,20 @@ test "$(git -C "$DOC_SRC" rev-parse HEAD)" = "$DOC_SHA"
 PATCH_ROOT="$DOC_SRC/docs/reviews"
 git clone --no-checkout "$ORIGIN_URL" "$API_SRC"
 git -C "$API_SRC" checkout --detach "$TARGET"
-git clone --no-checkout "$ORIGIN_URL" "$WORKER_SRC"
-git -C "$WORKER_SRC" checkout --detach "$BASE_WORKER"
+install -d -m 700 "$WORKER_SRC"
+git -C "$DOC_SRC" archive "$BASE_WORKER" apps/whatsapp-agent/src apps/whatsapp-agent/prisma apps/whatsapp-agent/package.json apps/whatsapp-agent/package-lock.json apps/whatsapp-agent/tsconfig.json apps/whatsapp-web-worker | tar -x -C "$WORKER_SRC"
+git -C "$WORKER_SRC" init --quiet
 ```
 
 All source/release destinations must be absent; abort instead of replacing an
 existing candidate. Fixed documental checkout contains the required patches;
 never use a moving branch or productive checkout for them.
+The corrected directory now exists; these commands are not an overwrite recipe.
+Use another exclusive directory for any later assembly. The recorded preparation
+transferred checksum-verified `git archive` inputs instead of clones, with the
+same pinned sources. Minimal packaging includes all sibling agent sources and
+worker sources/scripts, not API-only operational scripts, matching the tested
+408-file source set and 99-file compiled set.
 
 Capture live hostname, Node/PM2, configs/env privately, cwd/exe/PIDs/start ticks,
 descendants/listeners, supervision enabled/active state, cron content/metadata,
@@ -130,17 +154,21 @@ cd "$PATCH_ROOT"
 sha256sum -c <<'HASHES'
 9ce907c09adce3f196953a25780760de2c186c901585b5527ae9c584c3010dc1  secult-worker-persistence/worker-persistence.patch
 a265d491677562c2587394cf071f72bc9d9a5b699d5441fc986beabfa5ccaa4f  automation-worker-backport/worker-automation-91230f88.patch
-bb187244008d3d567dfc9a1aabb79f98229eae0e5b432a3e59111fc6d2f7b42c  runtime-self-write-backport/worker-runtime-self-write.patch
 ab1080df3804b35479a179425bf664db79b0f0caec50f5dd00f97cdac0c1c566  automation-worker-backport/worker-freeform-window-gate-20261001.patch
 3fa762b7f2c62e60b3291b44dbf562be731c0fd2437bd2be635a5abae28ecb55  automation-worker-backport/manifest.json
 HASHES
-for patch in secult-worker-persistence/worker-persistence.patch automation-worker-backport/worker-automation-91230f88.patch runtime-self-write-backport/worker-runtime-self-write.patch automation-worker-backport/worker-freeform-window-gate-20261001.patch; do
+for patch in secult-worker-persistence/worker-persistence.patch automation-worker-backport/worker-automation-91230f88.patch automation-worker-backport/worker-freeform-window-gate-20261001.patch; do
   git -C "$WORKER_SRC" apply --check "$PATCH_ROOT/$patch"
   git -C "$WORKER_SRC" apply "$PATCH_ROOT/$patch"
 done
 git -C "$API_SRC" diff --check
 git -C "$WORKER_SRC" diff --check
 ```
+
+Before transfer/build, compare every resulting source/script relative path and
+SHA256 with the tested minimal tree, not merely the changed modules. Any
+added/missing/changed source blocks continuation. The corrected attempt passed
+all 408 files; see `worker-source-equivalence.json`.
 
 Before builds, prepare private frontend build environment from the actually
 active frontend and effective API/worker environment from current PM2 configs
@@ -168,6 +196,9 @@ from active realpaths; never start against a new empty `.data` or duplicate auth
 ownership. Record private symlink/config bindings for final release paths.
 
 ```bash
+export NODE_ENV=production
+export NEXT_TELEMETRY_DISABLED=1
+export NODE_OPTIONS=--max-old-space-size=1536
 install -m 600 "$EVIDENCE/frontend.env.production.local" "$API_SRC/.env.production.local"
 install -m 600 "$API_SRC/apps/whatsapp-agent/prisma/schema.prisma" "$WORKER_SRC/apps/whatsapp-agent/prisma/schema.prisma"
 cd "$API_SRC"
@@ -202,11 +233,15 @@ dotenv inputs or inherited overrides. The preserved compiled rewrite is
 no productive dependency update. Start worker through its compiled Node entry in
 the private CJS, avoiding unreviewed `npm start`/Prisma prestart generation.
 Verify final config/data bindings before containment.
+The heap option applies only to isolated compiler subprocesses, never to PM2 or
+business configuration. The first isolated API compile exhausted its default
+heap; the successful retry used this limit and niceness 10.
 
 ### Isolated frontend verification before activation
 
-This is a future preparation gate, not a test run or productive smoke performed
-in this documentary step. Start only the isolated candidate frontend on a free
+This gate was exercised by the cumulative preparation's bounded simulated smoke;
+it is not a productive session/provider validation. For a later run, start only
+the isolated candidate frontend on a free
 loopback port with its resolved build inputs. Do not connect a candidate API or
 worker to active DB/auth/providers for this check. Use the existing local fixture
 and response-simulation infrastructure, a fresh browser profile and deny-by-default
@@ -280,15 +315,17 @@ cat "$FRONT_RELEASE/.next/BUILD_ID" > "$EVIDENCE/frontend.candidate.BUILD_ID"
 
 Use identical relative-path commands on confirmed active releases; record full
 deltas, dependency/lockfile and Prisma identities. Resolve BUILD_ID and 92/93
-before proceeding. Executable hashes remain pending. Reuse approved compiled
+before proceeding. Executable hashes are in `executables-manifest.json`; source
+and documentary hashes remain separate. Reuse approved compiled
 proofs only when sources/composition match; build alone is not behavioral proof.
 
 Fresh persistent backup and isolated restore follow the canonical runbook and
 previous `backup-manifest.json`/`restore-result.json` contracts: dump path/size/
 hash/catalog, config/auth snapshot paths, restore equivalence, temporary DB
 removal, initial release/config identity. Preserve snapshots and the retention
-permission incident. Historical backup is not the fresh window backup. No backup
-or restore is executed in this documentary review.
+permission incident. Historical backup is not the fresh activation-window backup.
+The cumulative preparation report records the actual preparation backup and
+isolated restore; activation still requires current evidence.
 
 Before containment, privately prepare and review:
 
@@ -305,9 +342,14 @@ Before containment, privately prepare and review:
 - Partial-start recovery barrier for actual surviving processes: the original
   pair script requires all apps online and cannot recover that case unchanged.
 
-**Bound helpers/configs/frontend adapter are not yet prepared or exercised.**
+**Bound helpers/configs/frontend adapter have local simulation proof and were
+copied privately to the preparation directory, but never executed operationally.**
 Their exact paths, arguments, hashes and reviewed contracts must be added to the
-private window manifest before execution. No invented script path is presented
+private window manifest before execution. The final count read found 2 jobs,
+1 lease, 2 automation flags, 4 connected WEB accounts and 5 auth records;
+historical validator constants and zero-work prerequisites are not satisfied.
+These are activation blockers, not permission to remove jobs or change controls.
+No invented script path is presented
 as existing. Without these artifacts the runbook is not execution-ready. Do not
 replace barriers with raw delete/start, superficial `ps -p`, copied certificates
 or generic reload. This gate applies equally to deployment and return.
@@ -436,8 +478,10 @@ use its actual-composition barrier before successors.
 Source/patch recipe and historical script contracts are reviewed. Bound private
 helpers/configs and frontend/recovery adapters are prepared with simulation proof;
 frontend build configuration is resolved by the candidate contract. Final isolated
-builds/hashes, fresh preflight/config equality, backup/restore and isolated frontend
-checks remain execution gates. No activation readiness or owner acceptance claimed.
+builds/hashes, schema/lockfile equality and fresh backup/restore are recorded in
+the cumulative preparation report. Activation still requires a fresh bounded
+preflight and reviewed work/invariant reconciliation. No activation readiness
+or owner acceptance is claimed.
 META_CLOUD pure and hybrid API-to-WEB
 remain pending, with real interactions requiring separate exact-ID authorization.
 Campanhas, template media, Guided Builder and repair 6683 remain preserved.

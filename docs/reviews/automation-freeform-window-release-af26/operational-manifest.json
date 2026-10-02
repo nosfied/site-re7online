@@ -1,8 +1,8 @@
 {
-  "status": "PRIVATE_LOCAL_PACKAGE_SIMULATION_VALIDATED_NOT_EXECUTED_NOT_DEPLOYED",
+  "status": "PRIVATE_PACKAGE_PREPARED_BUILDS_RESTORE_SMOKE_VALIDATED_ACTIVATION_BLOCKED_NOT_DEPLOYED",
   "reviewHead": "8b2466db51837384d0b2142e9cad19c8fde4c25f",
   "functionalTarget": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
-  "workerComposition": "bf5+f06+912+b66+audited final window patch",
+  "workerComposition": "bf5 + f06 + 912 + final cumulative patch (b66 not applied separately)",
   "configuration": {
     "published": false,
     "effectiveEnvironmentPreserved": true,
@@ -22,7 +22,7 @@
   "hashKinds": {
     "historicalScripts": "file hashes of originals read/downloaded",
     "boundScripts": "prepared local source hashes, not application executable hashes",
-    "applicationCandidateExecutables": "PENDING"
+    "applicationCandidateExecutables": "executables-manifest.json; hashes of final isolated build outputs, distinct from scripts/source/archive hashes"
   },
   "historicalScriptHashes": {
     "start-one.py": "d069aa30da224ec9f6e9b37577552b974d535a8b73d685ed6f86da1c6fa60515",
@@ -217,14 +217,17 @@
     }
   },
   "blockers": [
-    "2026-10-02 remote source assembly: final worker patch old blobs match base912, not the b66-patched predecessor tree; see REMOTE_PREPARATION_2026-10-02.md. No candidate builds or fresh backup/restore executed."
+    "Final read: jobs=2, groups=0, leases=1, sendingScheduled=0; no job/lease status inferred and no cleanup attempted. Historical zero-work gates require reconciliation.",
+    "Final read: flagsTrue=2, webConnected=4, webAuth=5 versus bound verifier constants 1/3/4; rebind after reviewed immediate preflight, never waive assertions.",
+    "Restore proof is at private PREP/restore-result.json; bind it at WINDOW/restore-result.json and fresh backup manifests at each mode path before any operation; no execution gates enabled.",
+    "Backup is the dated preparation snapshot, not authority to restore old DB/auth. Fresh activation-window backup and current ownership/quiescence proof required."
   ],
   "futureExecutionPrerequisites": [
-    "separate release authorization",
-    "fresh preflight and current count invariants",
-    "candidate isolated builds and executable/dependency/Prisma hashes",
-    "fresh backup and verified isolated restore",
-    "actual nft JSON/privileges and control metadata verification"
+    "separate activation authorization",
+    "reviewed bounded immediate preflight and work/count reconciliation",
+    "proof files bound at exact private script paths",
+    "fresh activation backup/current DB+auth return compatibility",
+    "verified OS/process/socket/DB exit barriers before successors"
   ],
   "productivePathsPending": [
     "META_CLOUD pure",
@@ -232,11 +235,11 @@
   ],
   "noActions": [
     "no functional app change",
-    "no production DB",
+    "no production DB mutation",
     "no provider send",
-    "no remote build",
-    "no backup/restore",
-    "no containment/stop/restart/deploy"
+    "no containment/stop/restart/deploy",
+    "no guard/cron/supervision/configuration mutation",
+    "no migration"
   ],
   "evidenceHashes": {
     "results-python.txt": "548f542e8a5b97d490e138a8676543ef83a55d84e5c0d2d15d59fb25210f476e",
@@ -245,5 +248,7 @@
     "test-package.py": "d5f83013f8a38ee5a522273aca3a2ac978874d8bc344d528f2f2465b06e121b4",
     "test-guard.cjs": "3b901d3088ffa57faa083fedecdf1aaf1d952cb3081d1bebbefaba22575cd091"
   },
-  "publication": "sanitized documentation only; private configuration and operational helpers excluded"
+  "publication": "sanitized documentation only; private configuration and operational helpers excluded",
+  "cumulativePreparation": "REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md",
+  "historicalScopeNote": "Existing simulations/hash tables are historical reused evidence, not live stop/start rehearsal. Preparation builds and read-only backup plus local restore occurred only in the corrected attempt."
 }

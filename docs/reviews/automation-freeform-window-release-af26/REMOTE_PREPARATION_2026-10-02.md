@@ -1,5 +1,9 @@
 # Remote preparation - stopped at source composition gate
 
+Historical first attempt, preserved unchanged below. Superseded only for the
+preparation result by the authorized [cumulative retry](REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md).
+Neither attempt deployed or replaced processes.
+
 Status: BLOCKED / PARTIAL SOURCE ASSEMBLY / NOT BUILT / NOT DEPLOYED.
 Authorization: remote preparation under runbook `502498657180c767880c4ac708f3459f90bd98ab`;
 functional candidate `af26f48a9c309b24ec4d23cfa97cc1e407c09d98`.
