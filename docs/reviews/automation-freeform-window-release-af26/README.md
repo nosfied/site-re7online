@@ -55,6 +55,190 @@ Worker candidate:
 See `manifest.json` for the source hashes included in this preparation. No
 bundles, secrets, local fixtures, auth material, or private evidence are included.
 
+## Isolated Assembly And Build Plan
+
+Future release preparation must use isolated source and release directories. Do
+not build API, frontend, or worker from the productive checkout
+`/opt/re7online/site-re7online` while it remains at `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`.
+That checkout is a Git working copy reference only; PM2 is currently serving the
+isolated releases listed above.
+
+Recommended future directory contract, to be created only during an authorized
+release window:
+
+```bash
+umask 077
+RELEASE_ROOT=/opt/re7online/releases
+SOURCE_ROOT=/opt/re7online/release-sources/freeform-window-af26
+EVIDENCE=/opt/re7online/release-evidence/freeform-window-af26-$(date -u +%Y%m%d-%H%M%S)
+API_SRC="$SOURCE_ROOT/api-frontend-af26"
+WORKER_SRC="$SOURCE_ROOT/worker-minimal-af26"
+API_RELEASE="$RELEASE_ROOT/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-api"
+FRONT_RELEASE="$RELEASE_ROOT/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front"
+WORKER_RELEASE="$RELEASE_ROOT/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a-af26-window"
+install -d -m 700 "$SOURCE_ROOT" "$EVIDENCE"
+```
+
+Source acquisition must clone or archive from the reviewed Git object, not reuse
+the productive checkout contents:
+
+```bash
+ORIGIN_URL="$(git -C /opt/re7online/site-re7online remote get-url origin)"
+git clone --no-checkout "$ORIGIN_URL" "$API_SRC"
+git -C "$API_SRC" fetch origin review/campaign-recovery-20260926
+git -C "$API_SRC" checkout --detach af26f48a9c309b24ec4d23cfa97cc1e407c09d98
+git -C "$API_SRC" diff --check
+```
+
+API and frontend candidate build sequence:
+
+```bash
+cd "$API_SRC"
+scripts/deploy-impact-matrix.sh b66bb89aca9112277463b7d2adbee0b9e7831157 af26f48a9c309b24ec4d23cfa97cc1e407c09d98 | tee "$EVIDENCE/impact-api-front.txt"
+npm ci --include=dev
+npm --prefix apps/whatsapp-agent run db:generate
+npm --prefix apps/whatsapp-agent run build
+npm run build
+cat .next/BUILD_ID | tee "$EVIDENCE/frontend.BUILD_ID"
+install -d -m 755 "$API_RELEASE" "$FRONT_RELEASE"
+# Copy the built API tree and frontend tree using the isolated release packaging
+# convention from prior releases. Preserve node_modules only if that convention
+# is still the active one in preflight evidence.
+```
+
+Worker minimal source must be composed separately from the worker line, not from
+the full API tree. Use the preserved worker package as the source recipe:
+
+```bash
+ORIGIN_URL="$(git -C /opt/re7online/site-re7online remote get-url origin)"
+git clone --no-checkout "$ORIGIN_URL" "$WORKER_SRC"
+git -C "$WORKER_SRC" checkout --detach bf5f1d7610ca3f8144faa6f7b7994598e4a4017b
+# Apply the reviewed f06 five-source persistence backport, then the 91230f88
+# and b66bb89a deltas already present in the current minimal worker composition.
+git -C "$WORKER_SRC" apply /opt/re7online/site-re7online/docs/reviews/automation-worker-backport/worker-freeform-window-gate-20261001.patch
+cd "$WORKER_SRC/apps/whatsapp-web-worker"
+npm ci --include=dev
+npm run db:generate
+npm run build
+install -d -m 755 "$WORKER_RELEASE"
+# Copy only the minimal worker release tree and its required shared compiled modules.
+```
+
+The generic `apps/whatsapp-agent/scripts/deploy-vps.sh` is allowed as a dry-run
+impact reference only (`--dry-run <target>`). It performs pull/build/reload in a
+single checkout and therefore must not be used as the isolated release switch for
+this package. The concrete impact script reused here is
+`scripts/deploy-impact-matrix.sh`; backup scripts reused here are
+`apps/whatsapp-agent/scripts/backup-postgres.sh` and
+`apps/whatsapp-agent/scripts/backup-postgres-with-alert.sh`; health smoke helper is
+`apps/whatsapp-agent/scripts/deploy-check.sh` after the candidate process is
+already started in the isolated release.
+
+## BUILD_ID And 92/93 Worker Count Reconciliation
+
+The productive frontend `BUILD_ID` read-only observation
+`Ywhs03ZOWIsb-IppyXqEJ` identifies the currently active isolated frontend release
+`ba66c241...`; it is not a hash of `af26f48a` and must not be carried forward as
+the candidate build identifier. The future candidate `BUILD_ID` must be read from
+`$FRONT_RELEASE/.next/BUILD_ID` after the authorized isolated frontend build and
+recorded in `$EVIDENCE/frontend.BUILD_ID`.
+
+The productive worker read counted `92` compiled files in the currently active
+worker release. The reviewed worker backport manifest records
+`baseCompiledCount=92` and `candidateCompiledCount=93` because the candidate
+minimal worker adds `whatsapp-agent/src/conversation/runtimeWriteFence.js`. This
+is a real candidate artifact delta in the worker composition, not a change in
+counting criterion. Future preparation must record both:
+
+```bash
+find "$WORKER_RELEASE/dist" -type f -name "*.js" | sort > "$EVIDENCE/worker-dist-js-files.txt"
+wc -l "$EVIDENCE/worker-dist-js-files.txt" | tee "$EVIDENCE/worker-dist-js-count.txt"
+```
+
+## Executable Hash Registry
+
+Final executable hashes are still pending because this step did not build
+artifacts. During a future authorized preparation, write final hashes and deltas
+to private evidence first, then publish a sanitized follow-up manifest if needed:
+
+```bash
+find "$API_RELEASE/apps/whatsapp-agent/dist" -type f -name "*.js" -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/api-dist.sha256"
+find "$WORKER_RELEASE/dist" -type f -name "*.js" -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/worker-dist.sha256"
+find "$FRONT_RELEASE/.next" -type f -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/frontend-next.sha256"
+# Compare against active release hash snapshots recorded in manifest.json:
+diff -u "$EVIDENCE/active-api-dist.sha256" "$EVIDENCE/api-dist.sha256" > "$EVIDENCE/api-dist.delta" || true
+diff -u "$EVIDENCE/active-worker-dist.sha256" "$EVIDENCE/worker-dist.sha256" > "$EVIDENCE/worker-dist.delta" || true
+```
+
+The public `manifest.json` keeps only source, package, active-read hashes and the
+location where future executable hashes must be recorded. Do not add bundles,
+credentials, database dumps, auth files or private evidence to Git.
+
+## Containment, Sequential Start And Return
+
+Use the containment model already documented in `docs/RUNBOOK_WHATSAPP_AGENT.md`
+for the 29/09 and 30/09 automation releases. The future operator must execute
+commands equivalent to those prior releases, with the af26 paths above:
+
+```bash
+install -m 600 /home/deploy/.pm2/dump.pm2 "$EVIDENCE/dump.pm2.before"
+install -m 600 /home/deploy/.pm2/dump.pm2.bak "$EVIDENCE/dump.pm2.bak.before" || true
+/home/deploy/.npm-global/bin/pm2 jlist > "$EVIDENCE/pm2.before.json"
+ss -ltnp > "$EVIDENCE/listeners.before.txt"
+```
+
+If privileged supervision is present, follow the previously used supervisor gate:
+`sudo systemctl disable pm2-deploy.service` without `--now`, confirm
+`systemctl is-enabled pm2-deploy.service` and `systemctl is-active
+pm2-deploy.service`, and abort on any state drift instead of improvising
+`restart` or `reload all`. Preserve cron and PM2 resurrect evidence; do not edit
+cron lines during this package step.
+
+Process replacement must be explicit and sequential, not a generic reload:
+
+```bash
+/home/deploy/.npm-global/bin/pm2 delete re7-whatsapp-agent
+/home/deploy/.npm-global/bin/pm2 save
+ss -ltnp > "$EVIDENCE/listeners.after-api-delete.txt"
+# Confirm old API PID, descendants and port are gone before starting successor.
+cd "$API_RELEASE/apps/whatsapp-agent"
+/home/deploy/.npm-global/bin/pm2 start ecosystem.config.cjs --only re7-whatsapp-agent --env production --update-env
+curl --fail --silent --show-error http://127.0.0.1:3001/health
+apps/whatsapp-agent/scripts/deploy-check.sh
+
+# Frontend only after API health is stable.
+/home/deploy/.npm-global/bin/pm2 delete re7-admin-front
+/home/deploy/.npm-global/bin/pm2 save
+cd "$FRONT_RELEASE"
+/home/deploy/.npm-global/bin/pm2 start npm --name re7-admin-front -- start
+
+# Worker only if the minimal worker candidate is selected for activation.
+/home/deploy/.npm-global/bin/pm2 delete re7-whatsapp-web-worker
+/home/deploy/.npm-global/bin/pm2 save
+cd "$WORKER_RELEASE/apps/whatsapp-web-worker"
+/home/deploy/.npm-global/bin/pm2 start npm --name re7-whatsapp-web-worker -- start
+```
+
+After all selected successors are healthy, restore the saved-state chain and
+supervision explicitly:
+
+```bash
+/home/deploy/.npm-global/bin/pm2 save
+install -m 600 /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+# Re-enable pm2-deploy.service only if it was enabled before the window, and do
+# not start/reload the unit as part of this command.
+sudo systemctl enable pm2-deploy.service
+```
+
+Return must use the isolated active releases recorded in this package and the
+current DB/auth state, not `git checkout` alone. Start from the preserved PM2
+dumps when possible; otherwise start exactly these releases in order: API
+`/opt/re7online/releases/b66bb89aca9112277463b7d2adbee0b9e7831157-api`,
+frontend `/opt/re7online/releases/ba66c24112ccb10f2dfdcced54350f513d399bc6`,
+worker `/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a`.
+Re-run health and smoke checks after return and record new PIDs; do not restore
+old database/auth dumps unless the owner separately authorizes data rollback.
+
 ## Commands For Future Release Review
 
 These commands are for review only. Execute only after explicit deploy
