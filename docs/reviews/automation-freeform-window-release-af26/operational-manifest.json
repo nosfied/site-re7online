@@ -1,5 +1,5 @@
 {
-  "status": "PREPARATION_COMPLETE_ACTIVATION_WINDOW_REQUIRED_NOT_DEPLOYED",
+  "status": "PREPARATION_COMPLETE_ACTIVATION_BLOCKED_SUDO_NOT_DEPLOYED",
   "reviewHead": "8b2466db51837384d0b2142e9cad19c8fde4c25f",
   "functionalTarget": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
   "workerComposition": "bf5 + f06 + 912 + final cumulative patch (b66 not applied separately)",
@@ -222,7 +222,23 @@
     "Restore proof is at private PREP/restore-result.json; bind it at WINDOW/restore-result.json and fresh backup manifests at each mode path before any operation; no execution gates enabled.",
     "Backup is the dated preparation snapshot, not authority to restore old DB/auth. Fresh activation-window backup and current ownership/quiescence proof required."
   ],
-  "blockers": [],
+  "blockers": ["Authorized activation preflight: sudo -n nft -j list tables and sudo -n -l require unavailable sudo authentication. No containment or process change executed."],
+  "activationAttempt": {
+    "report": "ACTIVATION_ATTEMPT_2026-10-02.md",
+    "reviewedPreparation": "9947af777433305760dba9b4e8a9d3f45489fae0",
+    "preflightFortaleza": "2026-10-02T12:30:34.954124-03:00",
+    "preservationCheckFortaleza": "2026-10-02T12:34:57.080650-03:00",
+    "containmentStarted": false,
+    "freshBackupRestoreExecuted": false,
+    "processSwitchExecuted": false,
+    "returnUsed": false,
+    "executionGatesRemainFalse": true,
+    "activePids": {"api": 1880019, "worker": 1880130, "frontend": 1856062},
+    "health": {"ok": true, "db": "ok"},
+    "cronAndSupervisionEqual": true,
+    "guard": {"open": true, "generation": 9, "tasks": 0, "ledgerFault": null},
+    "privilegeRequirement": "Authenticated privileged context compatible with reviewed noninteractive scripts; owner authorization already covers switch and prescribed return."
+  },
   "preparationGateClosure": {
     "report": "PREPARATION_GATES_2026-10-02.md",
     "reviewHead": "aaad298febcda5375ff21c6bfce74824423fcbde",

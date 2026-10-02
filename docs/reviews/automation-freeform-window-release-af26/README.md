@@ -1,5 +1,12 @@
 # Automation Freeform Window Release af26f48a
 
+**Authorized activation attempt, 2026-10-02: BLOCKED BEFORE CONTAINMENT.**
+[Attempt and preservation proof](ACTIVATION_ATTEMPT_2026-10-02.md): noninteractive
+sudo authentication was unavailable for the required nft preflight. Original
+processes/controls remain active; no fresh activation backup, containment, swap
+or return was executed. Preparation closure remains historical evidence, not
+proof of deployment. Execution requires the authenticated privilege prerequisite.
+
 **ISOLATED PREPARATION COMPLETE / NOT DEPLOYED / ACTIVATION WINDOW REQUIRED.** Functional
 candidate: `af26f48a9c309b24ec4d23cfa97cc1e407c09d98`. This document replaces the
 conflicting recipes with one ordered sequence, shared by switch and return.

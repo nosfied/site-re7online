@@ -1,5 +1,15 @@
 # Converta Product State - 2026-08
 
+## Janela autorizada 02/10 - af26 bloqueada antes da contencao
+
+BLOCKED BEFORE CONTAINMENT / NOT DEPLOYED. [Registro](../reviews/automation-freeform-window-release-af26/ACTIVATION_ATTEMPT_2026-10-02.md).
+9947af77 fechou preparacao/bindings; execucao autorizada encontrou sudo sem
+autenticacao no preflight nft. PIDs/releases originais, health/DB, guarda, cron e
+supervisao preservados. Backup fresco/restauracao da janela e troca nao executados;
+retorno nao usado. Falta contexto privilegiado autenticado compativel com scripts,
+sem dispensar preflight fresco/barreiras. Nao altera aceite de outras frentes,
+nem valida META_CLOUD puro/API->WEB, owner ou CRA.
+
 ## Preparacao corrigida 02/10 - af26, sem ativacao
 
 ISOLATED BUILDS / RESTORE / SMOKE VALIDATED / NOT DEPLOYED; ACTIVATION BLOCKED. [Evidencias e hashes](../reviews/automation-freeform-window-release-af26/REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md): worker bf5+f06+912+patch final cumulativo inclui b66, sem aplica-lo separado; fontes 408/408 e compilados 99/99 iguais ao testado. API/frontend/worker compilados isoladamente, Prisma/lockfiles compativeis, backup fresco/restauracao local verificados e smoke com respostas simuladas 3/3. Producao permanece nas releases isoladas b66/ba66/worker minimo anterior. Contagens finais de jobs/lease/configuracao/sessoes exigem reconciliacao dos gates antes de qualquer ativacao. Sem owner/CRA acceptance ou prova produtiva META_CLOUD puro/API->WEB. Historico, Campanhas e 6683 preservados; Guided Builder pausado.

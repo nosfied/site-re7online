@@ -1,5 +1,15 @@
 # Product Map Current
 
+## Janela autorizada 02/10 - gate operacional sudo
+
+BLOCKED BEFORE CONTAINMENT / NOT DEPLOYED. [Evidencia](../reviews/automation-freeform-window-release-af26/ACTIVATION_ATTEMPT_2026-10-02.md).
+Preparacao 9947af77 concluida; sudo nao autenticado impediu preflight nft da troca.
+API b66/frontend ba66/worker minimo anterior seguem ativos e saudaveis; nenhuma
+parada, troca, restauracao produtiva ou retorno. Proximo passo e resolver o contexto
+privilegiado dos scripts e reconfirmar janela/backup/barreiras autorizados, nao nova
+funcionalidade. Campanhas/6683 preservados; P2 pausado e provas produtivas
+META_CLOUD puro/API->WEB continuam separadas e pendentes.
+
 ## Preparacao corrigida 02/10 - release af26 isolada
 
 ISOLATED BUILDS / RESTORE / SMOKE VALIDATED / NOT DEPLOYED; ACTIVATION BLOCKED. [Pacote e limites](../reviews/automation-freeform-window-release-af26/REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md). Worker: bf5+f06+912+patch final cumulativo (b66 incluido), igualdade total de 408 fontes/99 compilados com referencia testada. API/frontend/worker isolados, hashes/deltas, Prisma/lockfiles, backup fresco/restore local e smoke simulado registrados. Nenhum processo ativo substituido; retorno continua usando releases realmente ativas e DB/auth atuais. Proximo gate operacional: reconciliar contagens atuais/validadores e preflight fresco, nao iniciar nova frente. META_CLOUD puro/API->WEB produtivos pendentes; owner e CRA nao validados por esta preparacao; Campanhas/6683 preservados e Guided Builder pausado.

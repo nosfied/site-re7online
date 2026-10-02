@@ -1,5 +1,14 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**Janela autorizada 02/10 - af26: BLOCKED BEFORE CONTAINMENT / NOT DEPLOYED.**
+[Registro e preservacao](reviews/automation-freeform-window-release-af26/ACTIVATION_ATTEMPT_2026-10-02.md).
+Preparacao/bindings fechados em 9947af77; tentativa imediata bloqueada por
+autenticacao sudo indisponivel no preflight nft. Releases/PIDs originais e health
+DB OK, guarda/cron/supervisao preservados. Sem backup fresco da janela, parada,
+troca ou retorno; exige contexto privilegiado autenticado e reconfirmacao fresca,
+nao nova autorizacao do owner nem relaxamento de barreiras. META_CLOUD puro e
+API->WEB pendentes; Campanhas/6683 e demais encerramentos preservados, P2 pausado.
+
 **Preparacao corrigida 02/10 - af26: ISOLATED BUILDS / RESTORE / SMOKE VALIDATED / NOT DEPLOYED; ACTIVATION BLOCKED.** [Resultado e limites](reviews/automation-freeform-window-release-af26/REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md). Receita real: bf5+f06+912+patch final cumulativo, sem aplicar b66 separado; 408/408 fontes e 99/99 compilados iguais ao worker testado, protecoes b66/fence atomico preservadas. Builds API/frontend/worker PASS; backup persistente fresco com 614 objetos, restore local verificado/60 checksums e smoke isolado simulado 3/3. Artefatos ativos/PIDs/guarda/cron/supervisao preservados. Leitura final encontrou 2 jobs/1 lease e contagens de configuracao/sessoes diferentes dos validadores historicos: ativacao exige reconciliacao justificada e preflight fresco, sem relaxar gates ou limpar registros. Sem swap/restart/migration/envio real; META_CLOUD puro/API->WEB produtivos e owner permanecem pendentes. Retencao de snapshots segue pendencia separada; Campanhas, 6683 e demais encerramentos preservados; Guided Builder pausado. Entradas anteriores abaixo sao historicas.
 
 

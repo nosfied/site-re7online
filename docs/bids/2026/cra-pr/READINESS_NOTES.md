@@ -1,5 +1,14 @@
 # CRA-PR Readiness Notes
 
+## Janela autorizada 02/10 - impedimento operacional, sem aceite CRA
+
+BLOCKED BEFORE CONTAINMENT / NOT DEPLOYED. [Registro](../../../reviews/automation-freeform-window-release-af26/ACTIVATION_ATTEMPT_2026-10-02.md).
+Preparacao 9947af77/bindings fechada; tentativa autorizada bloqueada antes do backup
+fresco por sudo sem autenticacao para o preflight nft. Processos originais,
+health/DB e controles preservados. Sem contencao/troca/retorno ou envio; resolve-se
+o contexto privilegiado e reconfirma-se janela/barreiras, sem novo desenho ou
+promover preparacao a aceite funcional/CRA. META_CLOUD puro/API->WEB pendentes.
+
 ## Preparacao corrigida 02/10 - evidencias tecnicas, nao aceite CRA
 
 ISOLATED BUILDS / RESTORE / SMOKE VALIDATED / NOT DEPLOYED; ACTIVATION BLOCKED. [Registro sanitizado](../../../reviews/automation-freeform-window-release-af26/REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md). Composicao worker corrigida bf5+f06+912+patch cumulativo preserva b66/fence; 408 fontes e 99 compilados identicos ao testado permitem reutilizar provas. Builds isolados, backup fresco/restore local e smoke de artefato com API/auth/Meta simulados 3/3 nao equivalem a owner validation, aceite CRA ou exercicio produtivo META_CLOUD puro/API->WEB. Contagens atuais divergem dos gates historicos; exige reconciliacao antes de ativacao. Producao, historico, Campanhas e reparo 6683 preservados; nenhuma mensagem/provider real/restart/migration nesta etapa.
