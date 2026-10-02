@@ -1,6 +1,6 @@
 # Automation Freeform Window Release af26f48a
 
-**ISOLATED PREPARATION / NOT DEPLOYED / ACTIVATION PREFLIGHT BLOCKED.** Functional
+**ISOLATED PREPARATION COMPLETE / NOT DEPLOYED / ACTIVATION WINDOW REQUIRED.** Functional
 candidate: `af26f48a9c309b24ec4d23cfa97cc1e407c09d98`. This document replaces the
 conflicting recipes with one ordered sequence, shared by switch and return.
 Preparation commands were executed only in isolated sources/releases; process
@@ -20,9 +20,11 @@ The corrected attempt is recorded separately in
 [cumulative preparation](REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md) and its
 [executable registry](executables-manifest.json). Worker sources are 408/408
 equal to the tested reference, and all 99 compiled files match that reference.
-Active processes/releases remain unchanged. Current job/lease/config/session
-counts no longer match the historical activation invariants; do not activate or
-relax those checks based on this preparation.
+Active processes/releases remain unchanged. The remaining preparation bindings
+were reconciled in [preparation gates](PREPARATION_GATES_2026-10-02.md).
+Historical job totals are not a drain certificate. Guards, executor exit,
+descendants, sockets and DB barriers remain mandatory at activation; fresh work
+and backup preflight must be reconfirmed. No execution gate has been enabled.
 
 ## Evidence and unresolved divergences
 

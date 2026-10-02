@@ -1,5 +1,5 @@
 {
-  "status": "PRIVATE_PACKAGE_PREPARED_BUILDS_RESTORE_SMOKE_VALIDATED_ACTIVATION_BLOCKED_NOT_DEPLOYED",
+  "status": "PREPARATION_COMPLETE_ACTIVATION_WINDOW_REQUIRED_NOT_DEPLOYED",
   "reviewHead": "8b2466db51837384d0b2142e9cad19c8fde4c25f",
   "functionalTarget": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
   "workerComposition": "bf5 + f06 + 912 + final cumulative patch (b66 not applied separately)",
@@ -216,12 +216,77 @@
       "status": "CORRECTED_ARTIFACT_ATTRIBUTION: old 5ee2de6b frontend and pre-runtimeWriteFence worker; exact mistaken-summary command unavailable"
     }
   },
-  "blockers": [
+  "historicalPreparationBlockers": [
     "Final read: jobs=2, groups=0, leases=1, sendingScheduled=0; no job/lease status inferred and no cleanup attempted. Historical zero-work gates require reconciliation.",
     "Final read: flagsTrue=2, webConnected=4, webAuth=5 versus bound verifier constants 1/3/4; rebind after reviewed immediate preflight, never waive assertions.",
     "Restore proof is at private PREP/restore-result.json; bind it at WINDOW/restore-result.json and fresh backup manifests at each mode path before any operation; no execution gates enabled.",
     "Backup is the dated preparation snapshot, not authority to restore old DB/auth. Fresh activation-window backup and current ownership/quiescence proof required."
   ],
+  "blockers": [],
+  "preparationGateClosure": {
+    "report": "PREPARATION_GATES_2026-10-02.md",
+    "reviewHead": "aaad298febcda5375ff21c6bfce74824423fcbde",
+    "classificationUtc": "2026-10-02T14:59:55.026227+00:00",
+    "durableJobs": 3,
+    "completedJobsWithFinishedAt": 3,
+    "releasedExpiredLeasesWithoutJob": 1,
+    "blockingWork": {"jobs": 0, "groups": 0, "leases": 0, "sendingScheduled": 0},
+    "identityCounts": {"flags": 2, "connected": 4, "auth": 5},
+    "guardAtClassification": {"open": true, "drained": false, "tasks": 0, "generation": 9},
+    "operationalEntryPointsExecuted": false,
+    "coreExitBarrierHelpersChanged": false,
+    "executionGatesRemainFalse": true,
+    "proofModes": 4,
+    "tests": {"bindings": "9/9", "simulatedGuard": "16/16", "afterManifestByteFix": "bindings only 9/9"},
+    "dumpSha256": "14f6c8fe0cdca3525350a31e5a371fcd7987c0fb8f271840dbef60b655bdb53e",
+    "exactBackupManifestSha256": "cf2c4da6cf171d15e400783c2d3c9880327f918613d409794917fce582bbce03",
+    "restoreResultSha256": "1d1423c7c653bc0c4f23cf0583ac358477df1e197ec6f735f0922915ed495c69",
+    "validatorHelperSha256": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+    "switchScriptsManifestSha256": "658a6104b7027f17003bc8d8f3bb25a27d68ca2b1d825f6d26acee37857942bf",
+    "scope": "Private preparation bindings only; no executable build changes. Fresh work/backup and executor exit proof required at activation."
+  },
+  "finalPrivateBindingHashes": {
+    "switch": {
+      "close.cjs": "2337ae87627ac92d01e7f6e5ae24990ed6ecd59e51e70c9b94d1c38523b4fdf7",
+      "open.cjs": "ecd13ebc60d4495dd9f73af914d41baa4ceeaf0118c84f4f9daeb692097c791b",
+      "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+      "preparation-bindings.cjs": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+      "baseline.private.json": "db533b0b7ea6686d68ae575aed322d0feffc2c69d78fd85415f9e180cb44c23c",
+      "proof-bindings.private.json": "371e004a0284c6c6f2f4a64ef7f20ea32d4a8bcf3c81f3417372f4f3d0e8a828",
+      "backup-manifest.json": "cf2c4da6cf171d15e400783c2d3c9880327f918613d409794917fce582bbce03",
+      "scripts.sha256": "658a6104b7027f17003bc8d8f3bb25a27d68ca2b1d825f6d26acee37857942bf"
+    },
+    "return": {
+      "close.cjs": "2337ae87627ac92d01e7f6e5ae24990ed6ecd59e51e70c9b94d1c38523b4fdf7",
+      "open.cjs": "ecd13ebc60d4495dd9f73af914d41baa4ceeaf0118c84f4f9daeb692097c791b",
+      "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+      "preparation-bindings.cjs": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+      "baseline.private.json": "32ef2a87611665f2d08ba1ebaad63540e6743985d814d7ac1520b2476d243331",
+      "proof-bindings.private.json": "371e004a0284c6c6f2f4a64ef7f20ea32d4a8bcf3c81f3417372f4f3d0e8a828",
+      "backup-manifest.json": "cf2c4da6cf171d15e400783c2d3c9880327f918613d409794917fce582bbce03",
+      "scripts.sha256": "7672965143cf80cc3c2e478f2860af0415c646376f36fec28ef8ca1d4eff24e3"
+    },
+    "return-partial": {
+      "close.cjs": "2337ae87627ac92d01e7f6e5ae24990ed6ecd59e51e70c9b94d1c38523b4fdf7",
+      "open.cjs": "ecd13ebc60d4495dd9f73af914d41baa4ceeaf0118c84f4f9daeb692097c791b",
+      "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+      "preparation-bindings.cjs": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+      "baseline.private.json": "32ef2a87611665f2d08ba1ebaad63540e6743985d814d7ac1520b2476d243331",
+      "proof-bindings.private.json": "371e004a0284c6c6f2f4a64ef7f20ea32d4a8bcf3c81f3417372f4f3d0e8a828",
+      "backup-manifest.json": "cf2c4da6cf171d15e400783c2d3c9880327f918613d409794917fce582bbce03",
+      "scripts.sha256": "bd35ba002dbdb6dfe6407b6971c48190049e7538b92a1767855b1d2e17ad19de"
+    },
+    "return-front-missing": {
+      "close.cjs": "2337ae87627ac92d01e7f6e5ae24990ed6ecd59e51e70c9b94d1c38523b4fdf7",
+      "open.cjs": "ecd13ebc60d4495dd9f73af914d41baa4ceeaf0118c84f4f9daeb692097c791b",
+      "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+      "preparation-bindings.cjs": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+      "baseline.private.json": "32ef2a87611665f2d08ba1ebaad63540e6743985d814d7ac1520b2476d243331",
+      "proof-bindings.private.json": "371e004a0284c6c6f2f4a64ef7f20ea32d4a8bcf3c81f3417372f4f3d0e8a828",
+      "backup-manifest.json": "cf2c4da6cf171d15e400783c2d3c9880327f918613d409794917fce582bbce03",
+      "scripts.sha256": "7672965143cf80cc3c2e478f2860af0415c646376f36fec28ef8ca1d4eff24e3"
+    }
+  },
   "futureExecutionPrerequisites": [
     "separate activation authorization",
     "reviewed bounded immediate preflight and work/count reconciliation",
