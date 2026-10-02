@@ -11,13 +11,14 @@
     "authorizedDirt": ["apps/whatsapp-web-worker/.data/"],
     "adminFrontRelease": "/opt/re7online/releases/ba66c24112ccb10f2dfdcced54350f513d399bc6",
     "adminFrontPid": 1856062,
-    "adminFrontBuildId": "Ywhs03ZOWIsb-IppyXqEJ",
+    "adminFrontBuildId": "l1eBvPioySXt7NLiuFMkg",
     "apiRelease": "/opt/re7online/releases/b66bb89aca9112277463b7d2adbee0b9e7831157-api",
     "apiPid": 1880019,
     "workerRelease": "/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a",
     "workerPid": 1880130,
     "health": "ok=true db=ok",
-    "workerDistFileCount": 92
+    "workerDistFileCount": 93,
+    "correction": "2026-10-02: initial summary mixed old frontend/build and pre-runtimeWriteFence worker counts; preserved deployment and bounded file read agree. See operational report."
   },
   "candidatePatch": {
     "path": "api-frontend-freeform-window-af26.patch",

@@ -1,0 +1,248 @@
+{
+  "status": "PRIVATE_LOCAL_PACKAGE_SIMULATION_VALIDATED_NOT_EXECUTED_NOT_DEPLOYED",
+  "reviewHead": "8b2466db51837384d0b2142e9cad19c8fde4c25f",
+  "functionalTarget": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
+  "workerComposition": "bf5+f06+912+b66+audited final window patch",
+  "configuration": {
+    "published": false,
+    "effectiveEnvironmentPreserved": true,
+    "changes": [
+      "three isolated cwd/script pairs",
+      "API CAMPAIGN_BUILD_ID"
+    ],
+    "auth": "current shared realpaths; never restore historical state",
+    "frontendBuildEnv": {
+      "file": "window/frontend-build-env.private.json",
+      "source": "declared effective PM2 environment captured privately",
+      "assumedActiveEnvFile": ".env.production.local absent in active release; no file invented",
+      "limit": "compiled public-api rewrite established; two public PM2 values match preserved bundle; site ID and full original shell build inputs unresolved"
+    }
+  },
+  "hashKinds": {
+    "historicalScripts": "file hashes of originals read/downloaded",
+    "boundScripts": "prepared local source hashes, not application executable hashes",
+    "applicationCandidateExecutables": "PENDING"
+  },
+  "historicalScriptHashes": {
+    "start-one.py": "d069aa30da224ec9f6e9b37577552b974d535a8b73d685ed6f86da1c6fa60515",
+    "close.cjs": "efba29660bd91d5471c4d45c0ac7f827122f703a271b86510d51addffcf0f177",
+    "open.cjs": "00326334383d61621bb906d1e143add1b51215cd40d171c168b478ef5b97d85e",
+    "stop-pair.py": "e1eb8f273178a6c657fdda8bcebb20ce0169dac41b1ac333f0e0f10489a21fc5",
+    "read-state.py": "bcd304cab7e74937fdb753a2631221d7ae7b65a726486ac6210eb8a8e4b90b5e",
+    "validate.cjs": "334c2ec0016568cb1c74ef3b80868c9dd57fb768d894a1361d9a4fe18253278c"
+  },
+  "boundScriptHashes": {
+    "switch/candidate.ecosystem.config.cjs": "8eb369ecc3f6785b03c5244bcbb14eeb1c117be6ddc1994e23b2e6788cf4d291",
+    "switch/close.cjs": "461049d14ac2db20962f3f103b5c7c4fa7b1eb74320362dd4fea1c2953209a7d",
+    "switch/contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+    "switch/execution-check.cjs": "420c912f8431f9c065714605af98b516d2acf5089330bd8dbc35276a0c85e9c9",
+    "switch/open.cjs": "aa056e063fa1cc34f7b1ad395c014ba4d871ab2f5a9f4459a53d1f370ba06e37",
+    "switch/ops.py": "ca22bdd654f65edd75fdb1283355e51563c7adfb661aa0918589153da92fc2da",
+    "switch/read-state.py": "8223daf215d2f0c938f30667e134267655077cfd81ac512df3a13cbbc286cf25",
+    "switch/recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+    "switch/restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+    "switch/return.ecosystem.config.cjs": "e48703b62c1db4aaf2bce3a53ec156b2e5c97df291534683df602b79b1bf337c",
+    "switch/start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+    "switch/stop-front.py": "cb7bb5820b315ab305a09b8eeaf0f4ba1205498e908977d24a7f88111ca3610f",
+    "switch/stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+    "switch/unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+    "switch/validate.cjs": "6e72f09ea40a379d902fffe161ce98dbadf3ade1e6e298b3087a957ba8c1e673",
+    "return/candidate.ecosystem.config.cjs": "e48703b62c1db4aaf2bce3a53ec156b2e5c97df291534683df602b79b1bf337c",
+    "return/close.cjs": "461049d14ac2db20962f3f103b5c7c4fa7b1eb74320362dd4fea1c2953209a7d",
+    "return/contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+    "return/execution-check.cjs": "420c912f8431f9c065714605af98b516d2acf5089330bd8dbc35276a0c85e9c9",
+    "return/open.cjs": "aa056e063fa1cc34f7b1ad395c014ba4d871ab2f5a9f4459a53d1f370ba06e37",
+    "return/ops.py": "ca22bdd654f65edd75fdb1283355e51563c7adfb661aa0918589153da92fc2da",
+    "return/read-state.py": "8223daf215d2f0c938f30667e134267655077cfd81ac512df3a13cbbc286cf25",
+    "return/recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+    "return/restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+    "return/return.ecosystem.config.cjs": "8eb369ecc3f6785b03c5244bcbb14eeb1c117be6ddc1994e23b2e6788cf4d291",
+    "return/start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+    "return/stop-front.py": "cb7bb5820b315ab305a09b8eeaf0f4ba1205498e908977d24a7f88111ca3610f",
+    "return/stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+    "return/unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+    "return/validate.cjs": "6e72f09ea40a379d902fffe161ce98dbadf3ade1e6e298b3087a957ba8c1e673",
+    "return-partial/candidate.ecosystem.config.cjs": "e48703b62c1db4aaf2bce3a53ec156b2e5c97df291534683df602b79b1bf337c",
+    "return-partial/close.cjs": "461049d14ac2db20962f3f103b5c7c4fa7b1eb74320362dd4fea1c2953209a7d",
+    "return-partial/contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+    "return-partial/execution-check.cjs": "420c912f8431f9c065714605af98b516d2acf5089330bd8dbc35276a0c85e9c9",
+    "return-partial/open.cjs": "aa056e063fa1cc34f7b1ad395c014ba4d871ab2f5a9f4459a53d1f370ba06e37",
+    "return-partial/ops.py": "ca22bdd654f65edd75fdb1283355e51563c7adfb661aa0918589153da92fc2da",
+    "return-partial/read-state.py": "8223daf215d2f0c938f30667e134267655077cfd81ac512df3a13cbbc286cf25",
+    "return-partial/recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+    "return-partial/restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+    "return-partial/return.ecosystem.config.cjs": "d529bea36d06c9b217640871aeda7449d7c03fa4919dd32cb57dfc69c7dd672f",
+    "return-partial/start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+    "return-partial/stop-front.py": "cb7bb5820b315ab305a09b8eeaf0f4ba1205498e908977d24a7f88111ca3610f",
+    "return-partial/stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+    "return-partial/unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+    "return-partial/validate.cjs": "6e72f09ea40a379d902fffe161ce98dbadf3ade1e6e298b3087a957ba8c1e673",
+    "return-front-missing/candidate.ecosystem.config.cjs": "e48703b62c1db4aaf2bce3a53ec156b2e5c97df291534683df602b79b1bf337c",
+    "return-front-missing/close.cjs": "461049d14ac2db20962f3f103b5c7c4fa7b1eb74320362dd4fea1c2953209a7d",
+    "return-front-missing/contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+    "return-front-missing/execution-check.cjs": "420c912f8431f9c065714605af98b516d2acf5089330bd8dbc35276a0c85e9c9",
+    "return-front-missing/open.cjs": "aa056e063fa1cc34f7b1ad395c014ba4d871ab2f5a9f4459a53d1f370ba06e37",
+    "return-front-missing/ops.py": "ca22bdd654f65edd75fdb1283355e51563c7adfb661aa0918589153da92fc2da",
+    "return-front-missing/read-state.py": "8223daf215d2f0c938f30667e134267655077cfd81ac512df3a13cbbc286cf25",
+    "return-front-missing/recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+    "return-front-missing/restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+    "return-front-missing/return.ecosystem.config.cjs": "8eb369ecc3f6785b03c5244bcbb14eeb1c117be6ddc1994e23b2e6788cf4d291",
+    "return-front-missing/start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+    "return-front-missing/stop-front.py": "cb7bb5820b315ab305a09b8eeaf0f4ba1205498e908977d24a7f88111ca3610f",
+    "return-front-missing/stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+    "return-front-missing/unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+    "return-front-missing/validate.cjs": "6e72f09ea40a379d902fffe161ce98dbadf3ade1e6e298b3087a957ba8c1e673"
+  },
+  "contracts": [
+    "closed guard, generation, no tasks/fault and verified restore before stop",
+    "cron/fence/supervision verified before each operational phase",
+    "historical per-process stop ordering and one-use journals preserved",
+    "PID/start ticks/children/sockets gone before successors; pair DB owners/locks zero",
+    "frontend identity preserved during pair switch; separate frontend exit certificate",
+    "partial recovery uses fresh current-cohort certificate and checks previous cohort absent",
+    "API then worker, typed failures block later starts, no automatic replay",
+    "current auth captured after pair exit; never restored",
+    "complete verified compatible set before PM2 save/fallback",
+    "CAS restoration only to initial guard open/closed; exact initial cron and inactive supervision",
+    "operational CLI has no simulation bypass and all execution gates are false"
+  ],
+  "simulatedValidation": {
+    "python": {
+      "result": "42/42 PASS",
+      "cases": [
+        "test_advisory_lock_blocks_certificate",
+        "test_bound_cores_equal_exact_tested_copy",
+        "test_changed_configuration_denied",
+        "test_containment_failure_blocks_delete",
+        "test_containment_preserves_supervision_and_no_intermediate_save",
+        "test_duplicate_start_not_submitted_twice",
+        "test_duplicate_stop_not_repeated",
+        "test_failed_front_start_recovered_with_new_front_certificate",
+        "test_fence_counter_values_do_not_weaken_rule_check",
+        "test_front_exit_certificate_required",
+        "test_front_survivor_denied",
+        "test_frontend_changed_during_pair_stop_blocks",
+        "test_guard_generation_changed_before_start_blocks",
+        "test_incomplete_pair_is_not_regular_return",
+        "test_initial_open_guard_blocks_stop",
+        "test_live_child_blocks_certificate",
+        "test_live_executor_blocks_certificate_and_successor",
+        "test_missing_artifact_denied",
+        "test_no_successor_after_pair_stop_recoverable",
+        "test_operational_cli_rejects_local_directory",
+        "test_partial_api_started_recovered_without_overlap",
+        "test_partial_recovery_old_executor_alive_denied",
+        "test_pending_tasks_or_fault_blocks",
+        "test_pid_reuse_does_not_count_as_old_executor",
+        "test_remaining_socket_blocks_certificate",
+        "test_respawn_blocks_certificate",
+        "test_restarted_successor_not_accepted",
+        "test_restoration_preserves_initially_disabled_supervision",
+        "test_restore_controls_requires_technical_validation",
+        "test_restore_exact_cron_and_initial_enabled_inactive",
+        "test_restore_proof_missing_blocks",
+        "test_return_cannot_use_switch_certificate",
+        "test_start_failure_requires_new_recovery_barrier",
+        "test_start_without_certificate_denied",
+        "test_successor_changed_before_worker_start_denied",
+        "test_switch_and_return_same_pair_and_frontend_barrier",
+        "test_system_listing_cannot_resurrect_missing_pm2_daemon",
+        "test_unfence_denied_for_incomplete_start",
+        "test_unfence_only_after_complete_verified_set",
+        "test_unknown_db_owner_blocks_certificate",
+        "test_unknown_pm2_application_blocks_all_deletes",
+        "test_worker_before_api_denied"
+      ],
+      "file": "test-package.py",
+      "testedCoreSha256": "ca22bdd654f65edd75fdb1283355e51563c7adfb661aa0918589153da92fc2da"
+    },
+    "guardAndVerifierVm": {
+      "result": "16/16 PASS",
+      "file": "test-guard.cjs",
+      "cases": [
+        "close preserves historical CAS and verifies drained state",
+        "initially closed guard remains closed without a mutation",
+        "busy campaign queue prevents guard mutation",
+        "guard fault prevents guard mutation",
+        "stale close generation never reports success",
+        "initially closed admission never reopened by restoration",
+        "initially open admission restored using current CAS generation",
+        "stale reopen never overwrites newer guard generation",
+        "read-only verifier binds selected build and preserves baseline checks",
+        "baseline divergence fails validation instead of changing data",
+        "closed execution gates prevent any guard or command activity",
+        "return and partial recovery guard helpers bind their selected original build",
+        "return verifier validates original release rather than candidate build",
+        "actual execution checker denies unapproved gate values",
+        "actual checker validates exact bound hashes in fully mocked filesystem",
+        "actual checker detects bound helper tampering before any operation"
+      ]
+    },
+    "finalHashCheckerVm": {
+      "result": "3/3 PASS",
+      "file": "results-checker-final.txt",
+      "note": "only integrity cases rerun after final core stop-order refinement"
+    },
+    "pythonSyntaxFiles": 45,
+    "cjsSyntaxFiles": 24,
+    "scope": "in-memory process/command driver and Node VM fake fs/fetch/commands; no operational CLI, DB or provider executed",
+    "limits": [
+      "not an OS exit proof",
+      "not a live firewall or PM2 rehearsal",
+      "not build/Prisma/production validation"
+    ]
+  },
+  "reconciliation": {
+    "freshReadUtc": "2026-10-02T11:34:15.826210+00:00",
+    "readScope": "PM2 listing, /proc/files/guard, cron and supervision; no DB/provider",
+    "frontendBuildId": "l1eBvPioySXt7NLiuFMkg",
+    "historicalBuildId": "l1eBvPioySXt7NLiuFMkg",
+    "frontendServerStaticDelta": {
+      "added": [],
+      "missing": [],
+      "changed": []
+    },
+    "workerAllFiles": 93,
+    "workerJsFiles": 93,
+    "workerDeltaAgainstB66Manifest": {
+      "added": [],
+      "missing": [],
+      "changed": []
+    },
+    "earlierSummary": {
+      "buildId": "Ywhs03ZOWIsb-IppyXqEJ",
+      "workerCount": 92,
+      "status": "CORRECTED_ARTIFACT_ATTRIBUTION: old 5ee2de6b frontend and pre-runtimeWriteFence worker; exact mistaken-summary command unavailable"
+    }
+  },
+  "blockers": [
+    "complete original frontend build-time input set not established; PM2 WEBCHAT_SITE_ID value absent from preserved bundle"
+  ],
+  "futureExecutionPrerequisites": [
+    "separate release authorization",
+    "fresh preflight and current count invariants",
+    "candidate isolated builds and executable/dependency/Prisma hashes",
+    "fresh backup and verified isolated restore",
+    "actual nft JSON/privileges and control metadata verification"
+  ],
+  "productivePathsPending": [
+    "META_CLOUD pure",
+    "hybrid API-to-WEB"
+  ],
+  "noActions": [
+    "no functional app change",
+    "no production DB",
+    "no provider send",
+    "no remote build",
+    "no backup/restore",
+    "no containment/stop/restart/deploy"
+  ],
+  "evidenceHashes": {
+    "results-python.txt": "548f542e8a5b97d490e138a8676543ef83a55d84e5c0d2d15d59fb25210f476e",
+    "results-guard.txt": "a056abf8bce157c90edf82d258e1936adcc46849ff77b3e69b9f724a5bfc5f62",
+    "results-checker-final.txt": "6ba8f8248b319dd55a12f463b69e64fb87ae7b99dd06d9529a9fe2474afc98ab",
+    "test-package.py": "d5f83013f8a38ee5a522273aca3a2ac978874d8bc344d528f2f2465b06e121b4",
+    "test-guard.cjs": "3b901d3088ffa57faa083fedecdf1aaf1d952cb3081d1bebbefaba22575cd091"
+  },
+  "publication": "sanitized documentation only; private configuration and operational helpers excluded"
+}

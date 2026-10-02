@@ -22,13 +22,16 @@ with worker `.data/` untracked. It does not identify the active executables and
 must not supply candidate sources/builds/patches. Reconfirm active releases and
 DB/auth realpaths at future preflight.
 
-BUILD_ID and worker 92/93 are **UNRESOLVED / PREFLIGHT REQUIRED**. Historical
-preparation reports frontend `l1eBvPioySXt7NLiuFMkg`; the later read reports
-`Ywhs03ZOWIsb-IppyXqEJ` for the same directory. Historical worker evidence reports
-93, later read 92. No cause is established. Compare actual BUILD_ID, full relative
-file lists and hashes with preserved historical evidence. Abort on unexplained
-divergence; no inferred rebuild or counting explanation. Record the candidate's
-own BUILD_ID only after its isolated build.
+Reconciliation on 2026-10-02 corrects the initial manifest's mixed artifact
+attribution: `Ywhs03ZOWIsb-IppyXqEJ` belongs to the older `5ee2de6b` frontend;
+92 belongs to the worker before `runtimeWriteFence.js` was added. Preserved
+deployment evidence and the bounded read agree on active frontend BUILD_ID
+`l1eBvPioySXt7NLiuFMkg` and 93 worker files (all JS), with no file/hash drift.
+This is not a counting-method change or evidence of an intervening rebuild.
+See [operational preparation report](OPERATIONAL_PREPARATION_REPORT.md) and
+[sanitized operational manifest](operational-manifest.json). Fresh preflight
+must still compare exact lists/hashes and abort on unexplained drift. Candidate
+executable hashes and its own BUILD_ID remain pending isolated builds.
 
 Package `manifest.json` contains source/document/historical hashes, not final
 candidate executable validation. API/frontend comparison patch SHA256:
@@ -177,8 +180,14 @@ rsync -a --exclude .git --exclude .data --exclude local-evidence "$API_SRC/" "$F
 rsync -a --exclude .git --exclude .data --exclude local-evidence "$WORKER_SRC/apps/" "$WORKER_RELEASE/apps/"
 ```
 
-Private environment file above must exist from the confirmed active frontend,
-with no credential output. `npm ci` installs fixed lockfiles in isolated sources;
+The environment-file install above is conditional on a reviewed, complete
+private build-input set. It is currently BLOCKED: the active release has no
+`.env.production.local`; PM2 runtime values alone do not establish every original
+build input. Do not fabricate/copy a nonexistent file or run this build sequence
+until the missing inputs are resolved. The preserved compiled rewrite is
+`/public-api/:path* -> http://127.0.0.1:3001/public-api/:path*`; production
+`/agent-api` is not a Next rewrite. See the report for bounded configuration proof.
+`npm ci` installs fixed lockfiles in isolated sources;
 no productive dependency update. Start worker through its compiled Node entry in
 the private CJS, avoiding unreviewed `npm start`/Prisma prestart generation.
 Verify final config/data bindings before containment.
