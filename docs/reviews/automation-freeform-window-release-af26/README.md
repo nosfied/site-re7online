@@ -1,5 +1,7 @@
 # Automation Freeform Window Release af26f48a
 
+**Gate atual (leitura 02/10/2026): V3 BLOQUEADO / NOT DEPLOYED.** A [auditoria dirigida do docker-proxy](DOCKER_PROXY_ATTRIBUTION_AUDIT_2026-10-02.md) confirmou artefatos ativos/candidatos íntegros, mas não comprovou a atribuição individual dos backends PostgreSQL à API sucessora na topologia alvo. O executor não pode ler os FDs do proxy root; o laboratório local exercitou o código TCPProxy da versão observada, sem daemon Docker/bridge completo. Não abrir nova janela com V3. A leitura também encontrou duas configurações de acompanhamento BOT ligadas (Syer e outra), divergência documental a reconciliar sem alteração incidental.
+
 **Estado em 02/10/2026: NOT DEPLOYED.** A janela que chegou à contenção terminou em [retorno compatível documentado](WINDOW_RETURN_2026-10-02.md). O protocolo de prova/identidade precisa de correção e novo ensaio antes de outra tentativa; os artefatos preparados permanecem preservados.
 
 O [protocolo corrigido localmente](OPERATIONAL_PROTOCOL_FIX_2026-10-02.md) tem patch sanitizado, hashes, ensaio controlado e leitura pontual da janela. **LOCAL VALIDATED / NOT DEPLOYED**: sua revisão/instalação em pacote novo e uma nova decisão de janela ainda são necessárias.

@@ -1,6 +1,10 @@
 # Pacote operacional af26 v2 — preparação e ensaio local, 02/10/2026
 
-**PREPARED LOCALLY / NOT DEPLOYED.** O pacote privado novo está em `local-evidence/freeform-window-operational-20261002/package-v2-final/`. Não foi copiado para a VPS, instalado, executado contra produção ou usado para contenção/parada/troca. O HEAD funcional e os três processos produtivos não foram alterados nesta rodada. A janela anterior e seus marcadores permanecem preservados separadamente. O [patch cumulativo sanitizado](operational-proof-protocol-v2-20261002.patch) contém somente `ops.py` e `delegated.py`, sem configurações privadas ou pacote executável completo.
+**PREPARED LOCALLY / NOT DEPLOYED.** O V2 original permanece preservado em `local-evidence/freeform-window-operational-20261002/package-v2-verified/`. A área `package-v2-final/` recebeu posteriormente o overlay local V3, documentado separadamente. O V2 não foi copiado para a VPS, instalado, executado contra produção ou usado para contenção/parada/troca. O HEAD funcional e os três processos produtivos não foram alterados nesta rodada. A janela anterior e seus marcadores permanecem preservados separadamente. O [patch cumulativo sanitizado](operational-proof-protocol-v2-20261002.patch) contém somente `ops.py` e `delegated.py`, sem configurações privadas ou pacote executável completo.
+
+**Auditoria posterior: BLOQUEADO.** A [prova isolada do gate DB](DB_ZERO_WORKER_GATE_AUDIT_2026-10-02.md) mostrou que `db_zero()` conta as conexões da API sucessora e impede o start do worker na implantação e no retorno. Os resultados abaixo continuam históricos, mas não autorizam preparar uma nova janela com este V2.
+
+O [overlay V3 local](OPERATIONAL_DB_OWNER_V3_LOCAL_2026-10-02.md) corrige o gate no laboratório; a [leitura posterior da topologia alvo](DOCKER_PROXY_ATTRIBUTION_AUDIT_2026-10-02.md) comprovou incompatibilidade do confronto direto através do `docker-proxy`. Nenhuma nova janela é permitida com esse gate.
 
 ## Proveniência e integridade
 
