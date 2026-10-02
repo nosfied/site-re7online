@@ -12,10 +12,11 @@
     ],
     "auth": "current shared realpaths; never restore historical state",
     "frontendBuildEnv": {
-      "file": "window/frontend-build-env.private.json",
-      "source": "declared effective PM2 environment captured privately",
+      "file": "window/frontend-candidate-contract/build-env.private.json",
+      "source": "four-entry candidate minimum from unchanged declared active PM2 settings; optional absent inputs retain pinned code fallbacks",
       "assumedActiveEnvFile": ".env.production.local absent in active release; no file invented",
-      "limit": "compiled public-api rewrite established; two public PM2 values match preserved bundle; site ID and full original shell build inputs unresolved"
+      "limit": "historical full shell inputs not established and no longer required; candidate minimum resolved by FRONTEND_BUILD_CONTRACT.md and frontend-build-provenance.json",
+      "candidateMinimum": "private window/frontend-candidate-contract/frontend.env.production.local; four entries; no missing mandatory values"
     }
   },
   "hashKinds": {
@@ -215,9 +216,7 @@
       "status": "CORRECTED_ARTIFACT_ATTRIBUTION: old 5ee2de6b frontend and pre-runtimeWriteFence worker; exact mistaken-summary command unavailable"
     }
   },
-  "blockers": [
-    "complete original frontend build-time input set not established; PM2 WEBCHAT_SITE_ID value absent from preserved bundle"
-  ],
+  "blockers": [],
   "futureExecutionPrerequisites": [
     "separate release authorization",
     "fresh preflight and current count invariants",

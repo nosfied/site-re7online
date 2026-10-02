@@ -1,0 +1,63 @@
+{
+  "candidate": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
+  "status": "CANDIDATE_BUILD_CONFIGURATION_RESOLVED_NOT_BUILT_NOT_DEPLOYED",
+  "policy": "preserve active declared settings; use pinned candidate fallbacks for absent optional inputs; not historical build reproduction",
+  "sourceEvidence": {
+    "snapshotUtc": "2026-10-02T11:34:15.826210+00:00",
+    "snapshotSha256": "b2d668bfc5daa2b7be826e12e66896a75ba5e6a10c2c1c35e4462d6d6b1744a4",
+    "frontendRelease": "/opt/re7online/releases/ba66c24112ccb10f2dfdcced54350f513d399bc6",
+    "environmentChangedKeysAgainstHistoricalConfig": []
+  },
+  "sourceHashes": {
+    "next.config.ts": "cb890f864314b47dc1c169dac389a664fbcca63472bf0b8caed4d64bafc135ad",
+    "src/components/ConvertaWebchatEmbed.tsx": "4fbe844a6f2e99871eb9f1de6fd40a0a99d742cc078373260854bf5ee9c111e0",
+    "src/app/converta/page.tsx": "b5877d3a59a2f35891d4777b06fa114be1ef6982c23f38cda72f850ac2320ecb",
+    "src/lib/metaEmbeddedSignup.ts": "1ea50a7754339e5cc0d1dc718641b1579331cc3267fb033baf49ba10a15707dc",
+    "src/lib/appClientApi.ts": "d05b0fc6a9aad131ef22bee90cd7fd481b6f83be7a7ae7d043dd96476f3f5337",
+    "src/lib/whatsappAdminApi.ts": "adf431fc56e948ecace2c6e21d9c61332b864723f651c16d9a8a8eafad762c76",
+    "src/app/app/login/page.tsx": "4b3b8f0ac93feea0515c54bf6b36a13a77b306e561afb83ce119a80da57d8cea",
+    "package.json": "7e71eee9b14f4d3e76c7e59a3b83d09b5532c17edac010c84386b38117f66caa"
+  },
+  "privateFileHashes": {
+    "frontend.env.production.local": "03b6ebd61d923411602bb9fe00dd9cdec49591216cb4cf17ad7e00e56644d43f",
+    "build-env.private.json": "174b070f4a6f4e54f853c0c5216208977d92675a359de4bc77b742b1acfa40b8"
+  },
+  "configuredKeys": [
+    "NODE_ENV",
+    "NEXT_PUBLIC_CONVERTA_WEBCHAT_SITE_ID",
+    "NEXT_PUBLIC_CONVERTA_WEBCHAT_API_BASE_URL",
+    "NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID"
+  ],
+  "deliberatelyUnset": [
+    "NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL",
+    "NEXT_PUBLIC_META_EMBEDDED_SIGNUP_APP_ID"
+  ],
+  "siteId": {
+    "consumerReachable": true,
+    "route": "/converta",
+    "source": "nonempty unchanged active declared PM2 value",
+    "effect": "widget data-site-id; absence disables widget",
+    "historicalBuildInputProven": false
+  },
+  "bundleCorroboration": {
+    "NEXT_PUBLIC_CONVERTA_WEBCHAT_SITE_ID": false,
+    "NEXT_PUBLIC_CONVERTA_WEBCHAT_API_BASE_URL": true,
+    "NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID": true
+  },
+  "defaultMetaAppIdPresentInPreservedJs": true,
+  "missingMandatoryValues": [],
+  "remainingReleaseGates": [
+    "separate remote preparation authorization",
+    "fresh active configuration comparison",
+    "isolated executable builds/hashes and dependency/Prisma checks",
+    "backup/restore and exit barriers before separately authorized activation"
+  ],
+  "noActions": [
+    "no app source change",
+    "no tests/builds",
+    "no remote access",
+    "no active config change",
+    "no provider",
+    "no deploy"
+  ]
+}

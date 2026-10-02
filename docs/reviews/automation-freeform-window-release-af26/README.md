@@ -180,17 +180,83 @@ rsync -a --exclude .git --exclude .data --exclude local-evidence "$API_SRC/" "$F
 rsync -a --exclude .git --exclude .data --exclude local-evidence "$WORKER_SRC/apps/" "$WORKER_RELEASE/apps/"
 ```
 
-The environment-file install above is conditional on a reviewed, complete
-private build-input set. It is currently BLOCKED: the active release has no
-`.env.production.local`; PM2 runtime values alone do not establish every original
-build input. Do not fabricate/copy a nonexistent file or run this build sequence
-until the missing inputs are resolved. The preserved compiled rewrite is
+The environment-file install above uses the private minimum derived from the
+candidate contract, not a file copied from the active release. Configuration
+is now RESOLVED: see [frontend build contract](FRONTEND_BUILD_CONTRACT.md).
+The private source file is
+`local-evidence/freeform-window-operational-20261002/window/frontend-candidate-contract/frontend.env.production.local`;
+bind it to `$EVIDENCE/frontend.env.production.local` only during separately
+authorized preparation. Use an allowlisted build environment, without unrelated
+dotenv inputs or inherited overrides. The preserved compiled rewrite is
 `/public-api/:path* -> http://127.0.0.1:3001/public-api/:path*`; production
 `/agent-api` is not a Next rewrite. See the report for bounded configuration proof.
 `npm ci` installs fixed lockfiles in isolated sources;
 no productive dependency update. Start worker through its compiled Node entry in
 the private CJS, avoiding unreviewed `npm start`/Prisma prestart generation.
 Verify final config/data bindings before containment.
+
+### Isolated frontend verification before activation
+
+This is a future preparation gate, not a test run or productive smoke performed
+in this documentary step. Start only the isolated candidate frontend on a free
+loopback port with its resolved build inputs. Do not connect a candidate API or
+worker to active DB/auth/providers for this check. Use the existing local fixture
+and response-simulation infrastructure, a fresh browser profile and deny-by-default
+egress. Intercept requests before navigation; any unhandled API/Meta/provider
+request must fail the check, not fall through to production. The built localhost
+rewrite is not permission to reach the active backend. If server-side requests
+cannot be isolated, do not start the candidate until that isolation is prepared.
+
+Record private configuration comparisons and sanitized screenshots/request
+summaries; exclude values, tokens and response PII from Git. Verify:
+
+- `/converta`: widget script loads and launcher renders; `data-site-id` equals
+  the private contract value, and `data-api-base`/resolved request destination
+  equal the intended private API base. Confirm the actual widget consumer reads
+  those attributes. Record equality results, not the identifiers. No missing-site
+  fallback or accidental production/domain-relative destination is accepted.
+- Opening the widget invokes `POST /webchat/v1/session`; fulfill it with an
+  isolated synthetic response only. Capture the requested site and URL privately.
+  Any message-history polling also uses simulated replies. Never submit text,
+  click a response option or allow `POST /webchat/v1/messages`. Close the profile
+  afterward; no real visitor/session/contact creation or provider call.
+- Authentication: login UI, intended `/agent-api` destination and session/error
+  handling with existing local fixtures/simulated responses; no production login
+  or fabricated production session. Page 200 is not authenticated proof.
+- Inbox: authenticated local fixture loading, RBAC, missing/invalid/expired
+  window UI, lifecycle display and template readiness remain available; no claim,
+  manual/pronta/media send, template send or CRM mutation.
+- Meta Embedded Signup: intended App/Config ID resolution against the private
+  contract/code fallbacks, loading/error/recovery UI and existing runtime override
+  behavior. Intercept SDK/network responses; do not launch actual signup/OAuth,
+  exchange a code, approve a template or change an account.
+
+These checks establish candidate wiring/rendering under isolation, not production
+widget identity validity, provider readiness or owner acceptance. Preserve approved
+behavioral evidence; repeat only a check justified by the newly built executable.
+
+### Final remote preparation order (separate authorization required)
+
+1. Fresh read-only preflight: active isolated release identities, ownership,
+   private config/auth bindings, prerequisites and reviewed source/patch hashes.
+   Preserve originals as return; no active rebuild or config change.
+2. Assemble pinned API/frontend and minimal worker sources in the isolated
+   directories defined above. Apply only verified packaged patches; use the
+   four-entry private frontend contract and unchanged API/worker configuration.
+3. Resolve pinned dependencies and generated Prisma/schema compatibility in
+   those isolated trees; build API, frontend and worker there. No migration.
+4. Register full executable hashes, BUILD_ID, relative file lists and complete
+   deltas against each active release, plus dependency/Prisma/config identities.
+   Review differences; exercise the isolated frontend checklist above and reuse
+   approved source/compiled proofs only for matching composition.
+5. Prepare fresh bound private switch/return/partial-recovery helpers and review
+   hashes/initial controls. Take a fresh persistent backup under the canonical
+   procedure and verify isolated restoration, equivalence and manifests. Retention
+   cleanup permission failure remains separate; no improvised chmod/delete.
+6. Deliver the preparation evidence for review. Builds and backup/restore need
+   their preparation authorization; neither authorizes process replacement.
+   Admissions/containment, stop barriers, sequential starts and exact control
+   restoration remain a separate, explicitly authorized activation stage below.
 
 ## 3. Executable registry, backup and script preparation gates
 
@@ -360,9 +426,11 @@ or readiness regression triggers reviewed return; partial-start recovery must
 use its actual-composition barrier before successors.
 
 Source/patch recipe and historical script contracts are reviewed. Bound private
-helpers/configs, frontend/recovery adapters, final builds/hashes, fresh backup/
-restore and live divergence reconciliation remain execution gates. No deploy
-readiness or owner acceptance claimed. META_CLOUD pure and hybrid API-to-WEB
+helpers/configs and frontend/recovery adapters are prepared with simulation proof;
+frontend build configuration is resolved by the candidate contract. Final isolated
+builds/hashes, fresh preflight/config equality, backup/restore and isolated frontend
+checks remain execution gates. No activation readiness or owner acceptance claimed.
+META_CLOUD pure and hybrid API-to-WEB
 remain pending, with real interactions requiring separate exact-ID authorization.
 Campanhas, template media, Guided Builder and repair 6683 remain preserved.
 

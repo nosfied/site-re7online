@@ -25,6 +25,12 @@ identify the candidate's still-unbuilt executables.
 
 ## Effective frontend configuration and remaining blocker
 
+Subsequent closure on 2026-10-02: the historical-input blocker described below
+is superseded by the [candidate build contract](FRONTEND_BUILD_CONTRACT.md).
+The minimal private configuration preserves existing PM2 values plus code
+fallbacks; all required values are available. Historical-input uncertainty is
+retained as a limit, not a requirement to reconstruct an old shell environment.
+
 The existing assembly script reused the preserved final local `.next` build
 and checked source identity; the final log records `next build --webpack`.
 That build's BUILD_ID matches the active release. Its routes manifest contains
@@ -67,6 +73,10 @@ These are mocks, not live OS exit, firewall, PM2, DB, Prisma or release proofs.
 No tests/builds were repeated in this documentary follow-up.
 
 ## Execution gates and return
+
+Frontend configuration is now ready for separately authorized remote preparation;
+see the contract and sanitized provenance record. Other execution gates below
+remain pending and closed.
 
 All operational execution gates remain closed. Return targets remain the
 isolated active b66 API, ba66 frontend and bf5+f06+912+b66 worker with current
