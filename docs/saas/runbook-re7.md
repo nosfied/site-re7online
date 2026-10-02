@@ -1,5 +1,11 @@
 # Runbook Re7
 
+## Janela af26 de 02/10/2026 — retorno compatível
+
+A tentativa de troca af26 **não implantou o candidato**. O registro sanitizado da contenção, do bloqueio por prova expirada, do retorno `return-partial` e do estado final está em [WINDOW_RETURN_2026-10-02.md](../reviews/automation-freeform-window-release-af26/WINDOW_RETURN_2026-10-02.md). API b66, worker mínimo b66 e frontend ba66 permaneceram como releases efetivas ao encerramento. Guarda, cron e supervisão voltaram ao estado inicial; Inbox e CRM foram conferidos pelo owner.
+
+**Gate para a próxima janela:** corrigir no pacote auditado a identidade de processo baseada em PID/tempo de início (estado Linux `R/S` é transitório) e permitir nova prova expirada por nonce/arquivo novo, sem sobrescrever ou apagar provas anteriores. O reparo de emergência foi restrito ao verificador privado de retorno; não torna o procedimento original de switch apto a nova tentativa. Reconfirmar executor único, releases, tarefas, backup fresco e restauração isolada. Não reutilizar certificados ou marcadores desta janela e não usar espera arbitrária como prova de drain.
+
 ## Rotacao de token
 
 Rotacione o token administrativo de um tenant somente com `ADMIN_TOKEN` (superadmin). O endpoint resolve o tenant pelo `clientKey` no path e nunca usa `X-Client-Key`.

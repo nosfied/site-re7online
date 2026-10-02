@@ -1,5 +1,7 @@
 # Automation Freeform Window Release af26f48a
 
+**Estado em 02/10/2026: NOT DEPLOYED.** A janela que chegou à contenção terminou em [retorno compatível documentado](WINDOW_RETURN_2026-10-02.md). O protocolo de prova/identidade precisa de correção e novo ensaio antes de outra tentativa; os artefatos preparados permanecem preservados.
+
 **Authorized activation attempt, 2026-10-02: BLOCKED BEFORE CONTAINMENT.**
 [Attempt and preservation proof](ACTIVATION_ATTEMPT_2026-10-02.md): noninteractive
 sudo authentication was unavailable for the required nft preflight. Original

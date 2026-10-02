@@ -1,5 +1,7 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**Janela posterior 02/10 - af26: RETURNED TO COMPATIBLE RELEASES / NOT DEPLOYED.** [Registro sanitizado](reviews/automation-freeform-window-release-af26/WINDOW_RETURN_2026-10-02.md). Após backup fresco/restauração isolada e saída comprovada do par antigo, a prova de start do candidato expirou. O retorno `return-partial` restaurou API b66, worker mínimo b66 e frontend ba66, com guarda/scheduler/cron/boot no estado inicial e Inbox/CRM conferidos pelo owner. Um comparador operacional de identidade confundiu `R→S` com restart; correção restrita foi aplicada somente ao verificador privado de recuperação, com originais preservados e nova prova do worker. **Não promover af26** sem corrigir e reensaiar o protocolo de prova/identidade no pacote revisado e abrir uma janela nova. META_CLOUD puro/API→WEB produtivos seguem não exercitados; Campanhas/CRA conservam pendências anteriores. A entrada seguinte registra a tentativa anterior, distinta, bloqueada antes de contenção.
+
 **Janela autorizada 02/10 - af26: BLOCKED BEFORE CONTAINMENT / NOT DEPLOYED.**
 [Registro e preservacao](reviews/automation-freeform-window-release-af26/ACTIVATION_ATTEMPT_2026-10-02.md).
 Preparacao/bindings fechados em 9947af77; tentativa imediata bloqueada por
