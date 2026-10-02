@@ -6,6 +6,8 @@ A tentativa de troca af26 **não implantou o candidato**. O registro sanitizado 
 
 **Gate para a próxima janela:** corrigir no pacote auditado a identidade de processo baseada em PID/tempo de início (estado Linux `R/S` é transitório) e permitir nova prova expirada por nonce/arquivo novo, sem sobrescrever ou apagar provas anteriores. O reparo de emergência foi restrito ao verificador privado de retorno; não torna o procedimento original de switch apto a nova tentativa. Reconfirmar executor único, releases, tarefas, backup fresco e restauração isolada. Não reutilizar certificados ou marcadores desta janela e não usar espera arbitrária como prova de drain.
 
+A [correção local dos quatro modos](../reviews/automation-freeform-window-release-af26/OPERATIONAL_PROTOCOL_FIX_2026-10-02.md) passou ensaio com relógio controlado e permanece **NOT DEPLOYED**. O procedimento da próxima janela deve usar a versão revisada de `OWNER-STEPS.txt`: cada `record` exige o nonce novo da requisição atual; prova expirada gera arquivo novo após reconferir as pré-condições. Se já existir `stop-start` ou `start-intent`, não renovar a ação para repeti-la; escolher o retorno parcial compatível e comprovar novamente a barreira de saída. O lock de janela serializa comandos no host, mas não substitui confirmação de topologia e executor único. A leitura produtiva agregada da janela anterior não prova ausência de resultados externos incertos.
+
 ## Rotacao de token
 
 Rotacione o token administrativo de um tenant somente com `ADMIN_TOKEN` (superadmin). O endpoint resolve o tenant pelo `clientKey` no path e nunca usa `X-Client-Key`.
