@@ -1,0 +1,33 @@
+{
+  "status": "LOCAL VALIDATED / NOT DEPLOYED",
+  "baseCommit": "b8ae27c703355e08266413a4237ba9eae35059d6",
+  "source": {
+    "ops.py": "513a458e6409d8f62669185833a61657cb561f2f62ed6f0ff4539eaf01fd2f65",
+    "delegated.py": "6d9ca0273af34a105ea8bb9f156914b5ed422287a557f87d88bfa50415d80877"
+  },
+  "resultInEachMode": {
+    "modes": ["switch", "return", "return-partial", "return-front-missing"],
+    "ops.py": "13a19bbfe96015bfcf6f57919073ff67b76538090a12cb04ad9a0b3cf213da77",
+    "delegated.py": "13dbe88e7e0b068f4ee936a44dbeaede9e524984850d443cf9771d256b42d188"
+  },
+  "privateOwnerStepsSha256": "1108d6e86a03ae05d2d6a242b4d35e06e5e18c514a301a77d982a6b1ef53aac4",
+  "sanitizedPatchSha256": "ee351706c900945e2608ee8d04eddeaaad7e6dbbf76d6f01af94e3eb80b14638",
+  "functionalBuildsReused": {
+    "apiTree": "6e92592b41ba0a67565c3c2f62f332807a297e8f52fb884db569bbadcbead611",
+    "frontendTree": "76e0f9f4723ec74fb4d6c5b76551b5f8517739b2ed2d82127612d7a9e7a8392d",
+    "minimalWorkerTree": "7d57c73c7769948fc5123479827358e8b4759e872bb7e33358fad06724670d60"
+  },
+  "validation": {
+    "packageRegression": "44 passed",
+    "delegatedRegression": "34 passed",
+    "clockSequenceRegression": "2 passed",
+    "postgresRealDirected": "5 passed",
+    "production": "not exercised"
+  },
+  "privateTestEvidenceSha256": {
+    "test-package-v3.py": "ed42c6929fa97677f9bccac6c90db6487561a89f51fa305aeb8cb1d642a92a36",
+    "test-delegated-v3.py": "3ad061ea03602c1de32fd2754c95fcb6ada280a2d195dbc7da2de03a708db48c",
+    "test-new-package-v3.py": "053c261618ac4e63d870287ac3c027281bea23ac3e3f8647fedf40c6d8ba87f3",
+    "test-dbowner-v3-live.py": "82764cd2cc07d41667b806ff26b03b11e6562bf5f3ae3267018e236e04044f23"
+  }
+}

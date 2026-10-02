@@ -1,0 +1,90 @@
+--- a/ops.py
++++ b/ops.py
+@@ -8,0 +9,3 @@
++import ipaddress
++import socket
++import struct
+@@ -11,0 +15 @@
++from urllib.parse import urlsplit
+@@ -107,0 +112,53 @@
++
++    def db_backends(self):
++        sql = "BEGIN READ ONLY; SET LOCAL statement_timeout='10s'; SELECT json_build_object('backends',COALESCE((SELECT json_agg(json_build_object('pid',pid,'address',host(client_addr),'port',client_port) ORDER BY pid) FROM pg_stat_activity WHERE datname=current_database() AND backend_type='client backend' AND pid<>pg_backend_pid()),'[]'::json),'advisoryLocks',(SELECT count(*) FROM pg_locks WHERE locktype='advisory' AND database=(SELECT oid FROM pg_database WHERE datname=current_database()))); ROLLBACK;"
++        return json.loads(self.run(['docker', 'exec', '-i', 'wa-agent-postgres', 'psql', '-X', '-U', 'wa_agent', '-d', 'whatsapp_agent', '-Atq', '-v', 'ON_ERROR_STOP=1'], sql))
++
++    def api_db_sockets(self, pid):
++        """Established IPv4 sockets held by this exact process, not all sockets in its netns."""
++        fds = Path('/proc', str(pid), 'fd')
++        inodes = set()
++        for fd in fds.iterdir():
++            try:
++                target = os.readlink(fd)
++            except FileNotFoundError:
++                continue
++            if target.startswith('socket:[') and target.endswith(']'):
++                inodes.add(target[8:-1])
++        sockets = []
++        for line in Path('/proc', str(pid), 'net', 'tcp').read_text().splitlines()[1:]:
++            parts = line.split()
++            if parts[9] not in inodes or parts[3] != '01':
++                continue
++            def endpoint(value):
++                address, port = value.split(':')
++                return (socket.inet_ntop(socket.AF_INET, struct.pack('<I', int(address, 16))), int(port, 16))
++            sockets.append({'local': endpoint(parts[1]), 'peer': endpoint(parts[2]), 'inode': parts[9]})
++        return sockets
++
++    def db_only_successor_api(self, pid, identity, database_url):
++        """Fail closed unless every PG backend has one API-owned socket endpoint."""
++        require(same_process(identity, self.identity(pid)), 'successor_identity_changed')
++        url = urlsplit(database_url)
++        require(url.scheme in {'postgresql', 'postgres'}, 'db_endpoint_unprovable')
++        try:
++            host = str(ipaddress.IPv4Address(url.hostname))
++            port = url.port or 5432
++        except (ValueError, TypeError):
++            raise RuntimeError('db_endpoint_unprovable')
++        first = self.db_backends()
++        require(first['advisoryLocks'] == 0, 'unknown_db_owner')
++        sockets = self.api_db_sockets(pid)
++        # A socket to another destination may reuse a source port; peer binding
++        # and inode ownership are both required. NAT/proxy ambiguity denies.
++        for backend in first['backends']:
++            address, source_port = backend['address'], backend['port']
++            require(address is not None and isinstance(source_port, int) and source_port > 0,
++                    'unknown_db_owner')
++            matches = [s for s in sockets if s['local'] == (address, source_port)
++                       and s['peer'] == (host, port)]
++            require(len(matches) == 1, 'unknown_db_owner')
++        require(len({(b['address'], b['port']) for b in first['backends']}) == len(first['backends']),
++                'unknown_db_owner')
++        require(first == self.db_backends(), 'db_owner_changed_during_check')
++        require(same_process(identity, self.identity(pid)), 'successor_identity_changed')
+@@ -280,0 +338,13 @@
++    def db_gate_for_start(self, name, live):
++        if name == API:
++            require(self.d.db_zero() == {'otherClientBackends': 0, 'advisoryLocks': 0},
++                    'unknown_db_owner')
++        elif name == WORKER:
++            api = live[API]
++            marker = json.loads((self.root / ('started-' + API + '.json')).read_text())
++            require(marker['pid'] == api['pid'] and
++                    same_process(marker['identity'], self.d.identity(api['pid'])),
++                    'successor_identity_changed')
++            self.d.db_only_successor_api(api['pid'], marker['identity'],
++                                         self.target[API]['env']['DATABASE_URL'])
++
+@@ -286,3 +355,0 @@
+-        if name != FRONT:
+-            require(self.d.db_zero() == {'otherClientBackends': 0, 'advisoryLocks': 0},
+-                    'unknown_db_owner')
+@@ -306,0 +374 @@
++        self.db_gate_for_start(name, live)
+--- a/delegated.py
++++ b/delegated.py
+@@ -98,3 +97,0 @@
+-        if name != ops.FRONT:
+-            ops.require(driver.db_zero() == {'otherClientBackends': 0, 'advisoryLocks': 0},
+-                        'unknown_db_owner')
+@@ -121,0 +119 @@
++        op.db_gate_for_start(name, live)
