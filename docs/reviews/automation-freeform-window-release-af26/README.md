@@ -7,6 +7,14 @@ Commands were reviewed, not executed. The private script bindings described
 below are mandatory preparation gates; historical scripts must not run against
 their old preparation directory.
 
+**2026-10-02 preparation BLOCKED before builds:** the pinned final worker patch
+does not apply after the runbook's b66 predecessor patch. Its old blobs correspond
+to the preserved base912 sources. Do not execute the assembly sequence below
+unchanged or overwrite the partial source tree. See the
+[remote preparation result](REMOTE_PREPARATION_2026-10-02.md) for exact hashes,
+failure locations, unchanged processes and the composition prerequisite to resume.
+No fresh backup/restore, candidate executable or isolated smoke proof was produced.
+
 ## Evidence and unresolved divergences
 
 Read-only inspection on 2026-10-01 recorded:

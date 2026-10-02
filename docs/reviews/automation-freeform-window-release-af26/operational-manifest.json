@@ -216,7 +216,9 @@
       "status": "CORRECTED_ARTIFACT_ATTRIBUTION: old 5ee2de6b frontend and pre-runtimeWriteFence worker; exact mistaken-summary command unavailable"
     }
   },
-  "blockers": [],
+  "blockers": [
+    "2026-10-02 remote source assembly: final worker patch old blobs match base912, not the b66-patched predecessor tree; see REMOTE_PREPARATION_2026-10-02.md. No candidate builds or fresh backup/restore executed."
+  ],
   "futureExecutionPrerequisites": [
     "separate release authorization",
     "fresh preflight and current count invariants",
