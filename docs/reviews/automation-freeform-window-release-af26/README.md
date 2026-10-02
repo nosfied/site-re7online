@@ -1,424 +1,375 @@
 # Automation Freeform Window Release af26f48a
 
-**PREPARED FOR REVIEW / NOT DEPLOYED.** This package prepares the release plan for
-`af26f48a9c309b24ec4d23cfa97cc1e407c09d98` on branch
-`review/campaign-recovery-20260926`. It does not authorize deployment,
-activation, provider calls, real sends, process reloads, migrations, or
-configuration changes.
+**DOCUMENTAL REVIEW / NOT DEPLOYED / EXECUTION PREFLIGHT PENDING.** Functional
+candidate: `af26f48a9c309b24ec4d23cfa97cc1e407c09d98`. This document replaces the
+conflicting recipes with one ordered sequence, shared by switch and return.
+Commands were reviewed, not executed. The private script bindings described
+below are mandatory preparation gates; historical scripts must not run against
+their old preparation directory.
 
-## Current Productive Composition Read
+## Evidence and unresolved divergences
 
-Read-only VPS inspection on 2026-10-01 confirmed:
+Read-only inspection on 2026-10-01 recorded:
 
-- Repo checkout: `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`, detached, dirty only
-  for `apps/whatsapp-web-worker/.data/`.
-- `re7-admin-front`: PM2 online, PID `1856062`, release
-  `/opt/re7online/releases/ba66c24112ccb10f2dfdcced54350f513d399bc6`, BUILD_ID
-  `Ywhs03ZOWIsb-IppyXqEJ`.
-- `re7-whatsapp-agent`: PM2 online, PID `1880019`, release
-  `/opt/re7online/releases/b66bb89aca9112277463b7d2adbee0b9e7831157-api`.
-- `re7-whatsapp-web-worker`: PM2 online, PID `1880130`, release
-  `/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a`.
-- `/health`: `ok=true`, `db=ok`.
-- Worker dist file count read: `92`.
+| Component | Observed active isolated release |
+| --- | --- |
+| API | `/opt/re7online/releases/b66bb89aca9112277463b7d2adbee0b9e7831157-api` |
+| Frontend | `/opt/re7online/releases/ba66c24112ccb10f2dfdcced54350f513d399bc6` |
+| Worker | `/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a` |
 
-The productive runtime is release-based. Do not infer the active API/worker from
-the repository checkout alone.
+The repo checkout was detached at `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`,
+with worker `.data/` untracked. It does not identify the active executables and
+must not supply candidate sources/builds/patches. Reconfirm active releases and
+DB/auth realpaths at future preflight.
 
-## Candidate Composition
+BUILD_ID and worker 92/93 are **UNRESOLVED / PREFLIGHT REQUIRED**. Historical
+preparation reports frontend `l1eBvPioySXt7NLiuFMkg`; the later read reports
+`Ywhs03ZOWIsb-IppyXqEJ` for the same directory. Historical worker evidence reports
+93, later read 92. No cause is established. Compare actual BUILD_ID, full relative
+file lists and hashes with preserved historical evidence. Abort on unexplained
+divergence; no inferred rebuild or counting explanation. Record the candidate's
+own BUILD_ID only after its isolated build.
 
-API/frontend candidate:
+Package `manifest.json` contains source/document/historical hashes, not final
+candidate executable validation. API/frontend comparison patch SHA256:
+`fb4de7d7a2922328c67cfc5e1169ef8a49815980d88d45ada3746e43f98e563f`.
+Worker is **bf5 + f06 + 912 + b66 + audited window patch**, independently assembled.
 
-- Functional target: `af26f48a9c309b24ec4d23cfa97cc1e407c09d98`.
-- Parent for this release preparation: `66b3dc5ce2413518103315eb0570b4553daa60da`.
-- Base of the deployed API release line: `b66bb89aca9112277463b7d2adbee0b9e7831157`.
-- Source patch prepared for reviewer comparison:
-  `api-frontend-freeform-window-af26.patch`
-  (`sha256=fb4de7d7a2922328c67cfc5e1169ef8a49815980d88d45ada3746e43f98e563f`,
-  `1241` lines).
+## Historical scripts actually inspected
 
-Worker candidate:
+On 2026-10-02, file reads/downloads confirmed the six scripts below at:
 
-- Keep the production worker composition minimal:
-  `bf5f1d76 + f06d49cb + 91230f88 + b66bb89a`.
-- Apply the final audited worker patch:
-  `../automation-worker-backport/worker-freeform-window-gate-20261001.patch`
-  (`sha256=ab1080df3804b35479a179425bf664db79b0f0caec50f5dd00f97cdac0c1c566`,
-  `660` lines).
-- Do not replace the worker with the full API tree.
-- Existing worker manifest:
-  `../automation-worker-backport/manifest.json`
-  (`sha256=3fa762b7f2c62e60b3291b44dbf562be731c0fd2437bd2be635a5abae28ecb55`).
+`/opt/re7online/backups/converta-persistent/preparations/runtime-fix-20260930T020103Z`
 
-## Source Hashes
+No script, process operation, backup, restore or build was executed. References:
+[previous preparation](../../saas/AUTOMATION_RUNTIME_FIX_PREPARATION_2026-09-30.md),
+[executed rollout](../../saas/AUTOMATION_RUNTIME_FIX_ROLLOUT_2026-09-30.md),
+[three-process procedure](../../saas/AUTOMATION_RELEASE_COMMANDS_2026-09-29.md),
+[canonical runbook](../../RUNBOOK_WHATSAPP_AGENT.md).
 
-See `manifest.json` for the source hashes included in this preparation. No
-bundles, secrets, local fixtures, auth material, or private evidence are included.
+| Script | SHA256 | Actual contract |
+| --- | --- | --- |
+| `close.cjs` | `efba29660bd91d5471c4d45c0ac7f827122f703a271b86510d51addffcf0f177` | Private return config; backup manifest; initially open guard; zero jobs/sending/scheduled; generation-based close and drain verification. |
+| `stop-pair.py` | `e1eb8f273178a6c657fdda8bcebb20ce0169dac41b1ac333f0e0f10489a21fc5` | One-use; closed guard, window cron, disabled supervision, restore proof and fence. Captures API/worker trees/start ticks/sockets; stops both; requires old identities/sockets absent and zero other DB clients/advisory locks. Frontend identity/path must remain unchanged. Produces `old-exit-confirmed.json`. |
+| `start-one.py` | `d069aa30da224ec9f6e9b37577552b974d535a8b73d685ed6f86da1c6fa60515` | API then worker only; fresh exit certificate, exact remaining PM2 apps and private candidate CJS; verifies cwd/script/executable/env/watch/restarts. |
+| `read-state.py` | `bcd304cab7e74937fdb753a2631221d7ae7b65a726486ac6210eb8a8e4b90b5e` | Private state capture; fixed paths need binding; output stays private. |
+| `validate.cjs` | `334c2ec0016568cb1c74ef3b80868c9dd57fb768d894a1361d9a4fe18253278c` | Read-only health/guard/frontend/worker/DB/process checks; hardcodes b66 build and historical counts. |
+| `open.cjs` | `00326334383d61621bb906d1e143add1b51215cd40d171c168b478ef5b97d85e` | Generation-based reopen after closed/drained checks; hardcodes b66 build. |
 
-## Isolated Assembly And Build Plan
+Shell `PREP` does not override their hardcoded directory. Future private
+preparation must preserve hash-verified originals and produce reviewed bound
+copies for fresh `switch/` and `return/` directories, with original/bound hashes
+and diffs. Bind only PREP, source/target configs, expected frontend path/build,
+evidence-backed counts and release reason; preserve ownership, CAS, drain, exit
+and single-use assertions. Never delete markers to repeat a partial stop.
 
-Future release preparation must use isolated source and release directories. Do
-not build API, frontend, or worker from the productive checkout
-`/opt/re7online/site-re7online` while it remains at `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`.
-That checkout is a Git working copy reference only; PM2 is currently serving the
-isolated releases listed above.
+`close.cjs` requires an open guard; an initially closed guard needs a reviewed
+verification branch, without forced reopening. `open.cjs` is used only if initial
+guard was open. The original pair stop requires all three PM2 apps online; a
+partially started pair needs a separately reviewed barrier adaptation. Historical
+`start-one.py` cannot start frontend. These are concrete preparation dependencies,
+not demonstrated automatic recovery paths.
 
-Recommended future directory contract, to be created only during an authorized
-release window:
+## 1. Freeze source and directory identities
+
+Future commands are individual reviewed steps, after authorization:
 
 ```bash
+set -euo pipefail
 umask 077
-RELEASE_ROOT=/opt/re7online/releases
+DOC_SHA=db671f4f43aa6aaf2e1f874540ebef8d633515da
+TARGET=af26f48a9c309b24ec4d23cfa97cc1e407c09d98
+BASE_WORKER=bf5f1d7610ca3f8144faa6f7b7994598e4a4017b
+ORIGIN_URL=https://github.com/nosfied/site-re7online.git
 SOURCE_ROOT=/opt/re7online/release-sources/freeform-window-af26
-EVIDENCE=/opt/re7online/release-evidence/freeform-window-af26-$(date -u +%Y%m%d-%H%M%S)
+DOC_SRC="$SOURCE_ROOT/documental-db671f4f"
 API_SRC="$SOURCE_ROOT/api-frontend-af26"
 WORKER_SRC="$SOURCE_ROOT/worker-minimal-af26"
-API_RELEASE="$RELEASE_ROOT/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-api"
-FRONT_RELEASE="$RELEASE_ROOT/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front"
-WORKER_RELEASE="$RELEASE_ROOT/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a-af26-window"
+API_RELEASE=/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-api
+FRONT_RELEASE=/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front
+WORKER_RELEASE=/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a-af26-window
+EVIDENCE=/opt/re7online/release-evidence/freeform-window-af26-$(date -u +%Y%m%d-%H%M%S)
+HIST=/opt/re7online/backups/converta-persistent/preparations/runtime-fix-20260930T020103Z
+PM=/home/deploy/.npm-global/bin/pm2
 install -d -m 700 "$SOURCE_ROOT" "$EVIDENCE"
-```
-
-Source acquisition must clone or archive from the reviewed Git object, not reuse
-the productive checkout contents:
-
-```bash
-ORIGIN_URL="$(git -C /opt/re7online/site-re7online remote get-url origin)"
+git clone --no-checkout "$ORIGIN_URL" "$DOC_SRC"
+git -C "$DOC_SRC" checkout --detach "$DOC_SHA"
+test "$(git -C "$DOC_SRC" rev-parse HEAD)" = "$DOC_SHA"
+PATCH_ROOT="$DOC_SRC/docs/reviews"
 git clone --no-checkout "$ORIGIN_URL" "$API_SRC"
-git -C "$API_SRC" fetch origin review/campaign-recovery-20260926
-git -C "$API_SRC" checkout --detach af26f48a9c309b24ec4d23cfa97cc1e407c09d98
-git -C "$API_SRC" diff --check
+git -C "$API_SRC" checkout --detach "$TARGET"
+git clone --no-checkout "$ORIGIN_URL" "$WORKER_SRC"
+git -C "$WORKER_SRC" checkout --detach "$BASE_WORKER"
 ```
 
-API and frontend candidate build sequence:
+All source/release destinations must be absent; abort instead of replacing an
+existing candidate. Fixed documental checkout contains the required patches;
+never use a moving branch or productive checkout for them.
+
+Capture live hostname, Node/PM2, configs/env privately, cwd/exe/PIDs/start ticks,
+descendants/listeners, supervision enabled/active state, cron content/metadata,
+guard generation/open/scheduler/tasks/fault, sessions and auth/data realpaths.
+Require supported Node20 lineage, unambiguous ownership and compatible return
+releases. Current DB/auth must remain current through switch and return.
+
+## 2. Isolated assembly, configuration and builds
 
 ```bash
+cd "$PATCH_ROOT"
+sha256sum -c <<'HASHES'
+9ce907c09adce3f196953a25780760de2c186c901585b5527ae9c584c3010dc1  secult-worker-persistence/worker-persistence.patch
+a265d491677562c2587394cf071f72bc9d9a5b699d5441fc986beabfa5ccaa4f  automation-worker-backport/worker-automation-91230f88.patch
+bb187244008d3d567dfc9a1aabb79f98229eae0e5b432a3e59111fc6d2f7b42c  runtime-self-write-backport/worker-runtime-self-write.patch
+ab1080df3804b35479a179425bf664db79b0f0caec50f5dd00f97cdac0c1c566  automation-worker-backport/worker-freeform-window-gate-20261001.patch
+3fa762b7f2c62e60b3291b44dbf562be731c0fd2437bd2be635a5abae28ecb55  automation-worker-backport/manifest.json
+HASHES
+for patch in secult-worker-persistence/worker-persistence.patch automation-worker-backport/worker-automation-91230f88.patch runtime-self-write-backport/worker-runtime-self-write.patch automation-worker-backport/worker-freeform-window-gate-20261001.patch; do
+  git -C "$WORKER_SRC" apply --check "$PATCH_ROOT/$patch"
+  git -C "$WORKER_SRC" apply "$PATCH_ROOT/$patch"
+done
+git -C "$API_SRC" diff --check
+git -C "$WORKER_SRC" diff --check
+```
+
+Before builds, prepare private frontend build environment from the actually
+active frontend and effective API/worker environment from current PM2 configs
+and resolved files. Produce private candidate/return ecosystem CJS as in the
+previous preparation, binding only cwd/script/build identity. Preserve DB URL,
+crypto keys, control credentials, tenant/transport settings, scheduler, shared
+guard, auth/session/media/data realpaths. Record allowlisted equality privately;
+no secret values in console/Git, no `eval` or PM2 metadata copied wholesale as env.
+Historical CJS files point at older releases and cannot be reused unchanged.
+
+The existing configuration routine was also read in `$HIST/prepare.py`, SHA256
+`4640521a84b7cf5de754086afc904bf18dbccb8caef483b71d282c57a4f190d2`.
+It clones an existing ecosystem CJS, checks each app against live cwd/script and
+`/proc/<pid>/environ`, then writes exclusive-create private candidate/return CJS
+with mode 600. Reuse that routine after binding all three new paths and target
+build. Do not execute the whole historical `prepare.py`: it copies old releases,
+substitutes old modules and hardcodes 93. Preserve its auth realpath and generated
+Prisma equality checks in the new private preparation.
+
+Compare candidate Prisma schema with active DB-compatible generated schema,
+structurally if formatting differs. Abort on a migration requirement. Minimal
+worker needs sibling API dependencies/schema/generated client; retain them in
+its release. Its runtime sources remain minimal. Resolve shared auth/data paths
+from active realpaths; never start against a new empty `.data` or duplicate auth
+ownership. Record private symlink/config bindings for final release paths.
+
+```bash
+install -m 600 "$EVIDENCE/frontend.env.production.local" "$API_SRC/.env.production.local"
+install -m 600 "$API_SRC/apps/whatsapp-agent/prisma/schema.prisma" "$WORKER_SRC/apps/whatsapp-agent/prisma/schema.prisma"
 cd "$API_SRC"
-scripts/deploy-impact-matrix.sh b66bb89aca9112277463b7d2adbee0b9e7831157 af26f48a9c309b24ec4d23cfa97cc1e407c09d98 | tee "$EVIDENCE/impact-api-front.txt"
 npm ci --include=dev
+npm --prefix apps/whatsapp-agent ci --include=dev
 npm --prefix apps/whatsapp-agent run db:generate
 npm --prefix apps/whatsapp-agent run build
 npm run build
-cat .next/BUILD_ID | tee "$EVIDENCE/frontend.BUILD_ID"
-install -d -m 755 "$API_RELEASE" "$FRONT_RELEASE"
-rsync -a --delete --exclude .git --exclude apps/whatsapp-web-worker/.data "$API_SRC/" "$API_RELEASE/"
-rsync -a --delete --exclude .git --exclude apps/whatsapp-web-worker/.data "$API_SRC/" "$FRONT_RELEASE/"
-```
-
-Worker minimal source must be composed separately from the worker line, not from
-the full API tree. The final freeform-window patch must be read from this reviewed
-package path, not from a productive checkout. The prerequisite patches are fixed
-by SHA-256 before application:
-
-```bash
-ORIGIN_URL="$(git -C /opt/re7online/site-re7online remote get-url origin)"
-git clone --no-checkout "$ORIGIN_URL" "$WORKER_SRC"
-git -C "$WORKER_SRC" checkout --detach bf5f1d7610ca3f8144faa6f7b7994598e4a4017b
-
-PATCH_ROOT=/opt/re7online/site-re7online/docs/reviews
-sha256sum -c <<'EOF'
-9ce907c09adce3f196953a25780760de2c186c901585b5527ae9c584c3010dc1  /opt/re7online/site-re7online/docs/reviews/secult-worker-persistence/worker-persistence.patch
-a265d491677562c2587394cf071f72bc9d9a5b699d5441fc986beabfa5ccaa4f  /opt/re7online/site-re7online/docs/reviews/automation-worker-backport/worker-automation-91230f88.patch
-bb187244008d3d567dfc9a1aabb79f98229eae0e5b432a3e59111fc6d2f7b42c  /opt/re7online/site-re7online/docs/reviews/runtime-self-write-backport/worker-runtime-self-write.patch
-ab1080df3804b35479a179425bf664db79b0f0caec50f5dd00f97cdac0c1c566  /opt/re7online/site-re7online/docs/reviews/automation-worker-backport/worker-freeform-window-gate-20261001.patch
-3fa762b7f2c62e60b3291b44dbf562be731c0fd2437bd2be635a5abae28ecb55  /opt/re7online/site-re7online/docs/reviews/automation-worker-backport/manifest.json
-EOF
-
-git -C "$WORKER_SRC" apply --check "$PATCH_ROOT/secult-worker-persistence/worker-persistence.patch"
-git -C "$WORKER_SRC" apply "$PATCH_ROOT/secult-worker-persistence/worker-persistence.patch"
-git -C "$WORKER_SRC" apply --check "$PATCH_ROOT/automation-worker-backport/worker-automation-91230f88.patch"
-git -C "$WORKER_SRC" apply "$PATCH_ROOT/automation-worker-backport/worker-automation-91230f88.patch"
-git -C "$WORKER_SRC" apply --check "$PATCH_ROOT/runtime-self-write-backport/worker-runtime-self-write.patch"
-git -C "$WORKER_SRC" apply "$PATCH_ROOT/runtime-self-write-backport/worker-runtime-self-write.patch"
-git -C "$WORKER_SRC" apply --check "$PATCH_ROOT/automation-worker-backport/worker-freeform-window-gate-20261001.patch"
-git -C "$WORKER_SRC" apply "$PATCH_ROOT/automation-worker-backport/worker-freeform-window-gate-20261001.patch"
-
-cd "$WORKER_SRC/apps/whatsapp-web-worker"
-npm ci --include=dev
-npm run db:generate
-npm run build
-install -d -m 755 "$WORKER_RELEASE/apps/whatsapp-web-worker"
-rsync -a --delete \
-  "$WORKER_SRC/apps/whatsapp-web-worker/" \
-  "$WORKER_RELEASE/apps/whatsapp-web-worker/"
-```
-
-The generic `apps/whatsapp-agent/scripts/deploy-vps.sh` is allowed as a dry-run
-impact reference only (`--dry-run <target>`). It performs pull/build/reload in a
-single checkout and therefore must not be used as the isolated release switch for
-this package. The concrete impact script reused here is
-`scripts/deploy-impact-matrix.sh`; backup scripts reused here are
-`apps/whatsapp-agent/scripts/backup-postgres.sh` and
-`apps/whatsapp-agent/scripts/backup-postgres-with-alert.sh`; health smoke helper is
-`apps/whatsapp-agent/scripts/deploy-check.sh` after the candidate process is
-already started in the isolated release.
-
-## BUILD_ID And 92/93 Worker Count Reconciliation
-
-The productive frontend `BUILD_ID` read-only observation
-`Ywhs03ZOWIsb-IppyXqEJ` identifies the currently active isolated frontend release
-`ba66c241...`; it is not a hash of `af26f48a` and must not be carried forward as
-the candidate build identifier. The future candidate `BUILD_ID` must be read from
-`$FRONT_RELEASE/.next/BUILD_ID` after the authorized isolated frontend build and
-recorded in `$EVIDENCE/frontend.BUILD_ID`.
-
-The productive worker read counted `92` compiled files in the currently active
-worker release. The reviewed worker backport manifest records
-`baseCompiledCount=92`, `candidateCompiledCount=93`, `changedCompiled` as
-`dualWriteStorage.js`, `assignmentPolicy.js`, `webSessionInbound.js`, and
-`addedCompiled` as `whatsapp-agent/src/conversation/runtimeWriteFence.js`. That
-is the documented explanation for the candidate-side 93 count. It is not enough
-for release execution by itself: future preflight must regenerate the active and
-candidate file lists and confirm that the only added compiled file is still
-`runtimeWriteFence.js`. If the regenerated lists differ, treat the 92/93
-reconciliation as pending and abort before process swap.
-
-```bash
-(cd /opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a/apps/whatsapp-web-worker && find dist -type f -name "*.js" | sort) > "$EVIDENCE/active-worker-dist-js-files.txt"
-(cd "$WORKER_RELEASE/apps/whatsapp-web-worker" && find dist -type f -name "*.js" | sort) > "$EVIDENCE/candidate-worker-dist-js-files.txt"
-wc -l "$EVIDENCE/active-worker-dist-js-files.txt" "$EVIDENCE/candidate-worker-dist-js-files.txt" | tee "$EVIDENCE/worker-dist-js-counts.txt"
-comm -3 "$EVIDENCE/active-worker-dist-js-files.txt" "$EVIDENCE/candidate-worker-dist-js-files.txt" | tee "$EVIDENCE/worker-dist-js-list-delta.txt"
-```
-
-## Executable Hash Registry
-
-Final executable hashes are still pending because this step did not build
-artifacts. During a future authorized preparation, write final hashes and deltas
-to private evidence first, then publish a sanitized follow-up manifest if needed:
-
-```bash
-find "$API_RELEASE/apps/whatsapp-agent/dist" -type f -name "*.js" -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/api-dist.sha256"
-(cd "$WORKER_RELEASE/apps/whatsapp-web-worker" && find dist -type f -name "*.js" -print0 | sort -z | xargs -0 sha256sum) > "$EVIDENCE/worker-dist.sha256"
-find "$FRONT_RELEASE/.next" -type f -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/frontend-next.sha256"
-# Compare against active release hash snapshots recorded in manifest.json:
-diff -u "$EVIDENCE/active-api-dist.sha256" "$EVIDENCE/api-dist.sha256" > "$EVIDENCE/api-dist.delta" || true
-diff -u "$EVIDENCE/active-worker-dist.sha256" "$EVIDENCE/worker-dist.sha256" > "$EVIDENCE/worker-dist.delta" || true
-```
-
-The public `manifest.json` keeps only source, package, active-read hashes and the
-location where future executable hashes must be recorded. Do not add bundles,
-credentials, database dumps, auth files or private evidence to Git.
-
-## Containment, Sequential Start And Return
-
-Use the containment model already documented in `docs/RUNBOOK_WHATSAPP_AGENT.md`
-for the 29/09 and 30/09 automation releases. The future operator must preserve
-supervision/admission evidence, stop both API and worker, prove both exit, and
-only then start successors sequentially. Do not use `pm2 save` while the process
-set is intentionally incomplete; that would make the incomplete state look
-recoverable.
-
-```bash
-install -m 600 /home/deploy/.pm2/dump.pm2 "$EVIDENCE/dump.pm2.before"
-install -m 600 /home/deploy/.pm2/dump.pm2.bak "$EVIDENCE/dump.pm2.bak.before" || true
-/home/deploy/.npm-global/bin/pm2 jlist > "$EVIDENCE/pm2.before.json"
-ss -ltnp > "$EVIDENCE/listeners.before.txt"
-crontab -l > "$EVIDENCE/crontab.deploy.before" || true
-systemctl is-enabled pm2-deploy.service > "$EVIDENCE/pm2-deploy.enabled.before" 2>&1 || true
-systemctl is-active pm2-deploy.service > "$EVIDENCE/pm2-deploy.active.before" 2>&1 || true
-if [ -n "${CAMPAIGN_OPERATIONS_FILE:-}" ] && [ -f "$CAMPAIGN_OPERATIONS_FILE" ]; then
-  install -m 600 "$CAMPAIGN_OPERATIONS_FILE" "$EVIDENCE/campaign-operations.before.json"
-fi
-```
-
-If privileged supervision is present, follow the previously used supervisor gate:
-`sudo systemctl disable pm2-deploy.service` without `--now`, confirm
-`systemctl is-enabled pm2-deploy.service` and `systemctl is-active
-pm2-deploy.service`, and abort on any state drift instead of improvising
-`restart` or `reload all`. Preserve cron and PM2 resurrect evidence; do not edit
-cron lines during this package step.
-
-Process replacement must be explicit and sequential, not a generic reload:
-
-```bash
-API_OLD_PID=$(/home/deploy/.npm-global/bin/pm2 jlist | jq -r '.[] | select(.name=="re7-whatsapp-agent") | .pid')
-WORKER_OLD_PID=$(/home/deploy/.npm-global/bin/pm2 jlist | jq -r '.[] | select(.name=="re7-whatsapp-web-worker") | .pid')
-/home/deploy/.npm-global/bin/pm2 delete re7-whatsapp-agent
-/home/deploy/.npm-global/bin/pm2 delete re7-whatsapp-web-worker
-ps -p "$API_OLD_PID" > "$EVIDENCE/api-old-pid-after-delete.txt" 2>&1 && exit 72 || true
-ps -p "$WORKER_OLD_PID" > "$EVIDENCE/worker-old-pid-after-delete.txt" 2>&1 && exit 73 || true
-ss -ltnp > "$EVIDENCE/listeners.after-api-worker-delete.txt"
-/home/deploy/.npm-global/bin/pm2 jlist > "$EVIDENCE/pm2.after-api-worker-delete.json"
-# Abort if old API PID, old worker PID, API listener, worker descendants or a
-# supervisor-respawned process remain visible. Do not start a successor yet.
-
-cd "$API_RELEASE/apps/whatsapp-agent"
-/home/deploy/.npm-global/bin/pm2 start ecosystem.config.cjs --only re7-whatsapp-agent --env production --update-env
-curl --fail --silent --show-error http://127.0.0.1:3001/health
-apps/whatsapp-agent/scripts/deploy-check.sh
-
-cd "$WORKER_RELEASE/apps/whatsapp-web-worker"
-/home/deploy/.npm-global/bin/pm2 start npm --name re7-whatsapp-web-worker -- start
-/home/deploy/.npm-global/bin/pm2 jlist > "$EVIDENCE/pm2.after-api-worker-start.json"
-
-# Frontend only after API and worker checks are stable.
-FRONT_OLD_PID=$(/home/deploy/.npm-global/bin/pm2 jlist | jq -r '.[] | select(.name=="re7-admin-front") | .pid')
-/home/deploy/.npm-global/bin/pm2 delete re7-admin-front
-ps -p "$FRONT_OLD_PID" > "$EVIDENCE/front-old-pid-after-delete.txt" 2>&1 && exit 74 || true
-cd "$FRONT_RELEASE"
-/home/deploy/.npm-global/bin/pm2 start npm --name re7-admin-front -- start
-```
-
-After all selected successors are healthy, restore the saved-state chain and
-supervision explicitly:
-
-```bash
-/home/deploy/.npm-global/bin/pm2 jlist > "$EVIDENCE/pm2.after-all-start.json"
-/home/deploy/.npm-global/bin/pm2 save
-install -m 600 /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
-# Re-enable pm2-deploy.service only if it was enabled before the window, and do
-# not start/reload the unit as part of this command.
-sudo systemctl enable pm2-deploy.service
-systemctl is-enabled pm2-deploy.service > "$EVIDENCE/pm2-deploy.enabled.after" 2>&1 || true
-```
-
-Return must use the isolated active releases recorded in this package and the
-current DB/auth state, not `git checkout` alone. If the candidate is not accepted,
-stop successors first, prove exit, then start the previously active isolated
-releases. Do not save PM2 until all three active successors are healthy.
-
-```bash
-/home/deploy/.npm-global/bin/pm2 delete re7-whatsapp-agent || true
-/home/deploy/.npm-global/bin/pm2 delete re7-whatsapp-web-worker || true
-/home/deploy/.npm-global/bin/pm2 delete re7-admin-front || true
-cd /opt/re7online/releases/b66bb89aca9112277463b7d2adbee0b9e7831157-api/apps/whatsapp-agent
-/home/deploy/.npm-global/bin/pm2 start ecosystem.config.cjs --only re7-whatsapp-agent --env production --update-env
-curl --fail --silent --show-error http://127.0.0.1:3001/health
-cd /opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a/apps/whatsapp-web-worker
-/home/deploy/.npm-global/bin/pm2 start npm --name re7-whatsapp-web-worker -- start
-cd /opt/re7online/releases/ba66c24112ccb10f2dfdcced54350f513d399bc6
-/home/deploy/.npm-global/bin/pm2 start npm --name re7-admin-front -- start
-/home/deploy/.npm-global/bin/pm2 jlist > "$EVIDENCE/pm2.after-return.json"
-/home/deploy/.npm-global/bin/pm2 save
-install -m 600 /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
-# Restore pm2-deploy.service enabled state only if the before file proves it was enabled.
-```
-
-Re-run health and smoke checks after return and record new PIDs; do not restore
-old database/auth dumps unless the owner separately authorizes data rollback.
-
-## Commands For Future Release Review
-
-These commands are for review only. Execute only after explicit deploy
-authorization and fresh preflight.
-
-```bash
-cd /opt/re7online/site-re7online
-git fetch origin
-git rev-parse HEAD
-git status --short
-git log -5 --oneline
-/home/deploy/.npm-global/bin/pm2 jlist | jq -r '.[] | [.name,.pid,.pm2_env.status,.pm2_env.pm_cwd,.pm2_env.pm_exec_path] | @tsv'
-curl -fsS http://127.0.0.1:3001/health
-```
-
-Gate before mutation:
-
-- only authorized dirt: `?? apps/whatsapp-web-worker/.data/`;
-- productive releases still match this document or the divergence is explained;
-- rollback releases are present and readable;
-- fresh backup and restore check are complete;
-- no concurrent deploy, backup, or operational incident is active.
-
-Build/release preparation, after authorization:
-
-```bash
-# API/backend candidate release
-npm --prefix apps/whatsapp-agent run build
-
-# Frontend candidate release, because src/app/app/inbox and src/lib changed
-npm run build
-
-# Worker minimal candidate only from the minimal composition plus audited patch
+cd "$WORKER_SRC"
+npm --prefix apps/whatsapp-agent ci --include=dev
+npm --prefix apps/whatsapp-web-worker ci --include=dev
+npm --prefix apps/whatsapp-agent run db:generate
+node apps/whatsapp-web-worker/scripts/copy-prisma-client.mjs
 npm --prefix apps/whatsapp-web-worker run build
+install -d -m 700 "$API_RELEASE" "$FRONT_RELEASE" "$WORKER_RELEASE"
+rsync -a --exclude .git --exclude .data --exclude local-evidence "$API_SRC/" "$API_RELEASE/"
+rsync -a --exclude .git --exclude .data --exclude local-evidence "$API_SRC/" "$FRONT_RELEASE/"
+rsync -a --exclude .git --exclude .data --exclude local-evidence "$WORKER_SRC/apps/" "$WORKER_RELEASE/apps/"
 ```
 
-Reload only after successful builds and containment gates:
+Private environment file above must exist from the confirmed active frontend,
+with no credential output. `npm ci` installs fixed lockfiles in isolated sources;
+no productive dependency update. Start worker through its compiled Node entry in
+the private CJS, avoiding unreviewed `npm start`/Prisma prestart generation.
+Verify final config/data bindings before containment.
 
-- `re7-whatsapp-agent`;
-- `re7-admin-front`;
-- `re7-whatsapp-web-worker` only if the minimal worker artifact was rebuilt and
-  selected for activation.
+## 3. Executable registry, backup and script preparation gates
 
-Do not run `prisma db push`, `migrate reset`, data repair, auth clear, logout,
-provider sends, campaign sends, test-send, or tenant activation as part of this
-release.
+```bash
+for pair in "api:$API_RELEASE/apps/whatsapp-agent/dist" "worker:$WORKER_RELEASE/apps/whatsapp-web-worker/dist" "frontend:$FRONT_RELEASE/.next"; do
+  label=${pair%%:*}
+  directory=${pair#*:}
+  (cd "$directory" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$EVIDENCE/$label.executables.sha256"
+done
+cat "$FRONT_RELEASE/.next/BUILD_ID" > "$EVIDENCE/frontend.candidate.BUILD_ID"
+(cd "$WORKER_RELEASE/apps/whatsapp-web-worker" && find dist -type f | sort) > "$EVIDENCE/worker.candidate.files"
+```
 
-## Dependencies, Prisma And Configuration
+Use identical relative-path commands on confirmed active releases; record full
+deltas, dependency/lockfile and Prisma identities. Resolve BUILD_ID and 92/93
+before proceeding. Executable hashes remain pending. Reuse approved compiled
+proofs only when sources/composition match; build alone is not behavioral proof.
 
-- Runtime expected from current VPS lineage: Node 20/PM2. Previous rollout recorded Node v20.20.0; future preflight must re-read `node -v` and PM2 before mutation.
-- No lockfile or dependency installation is part of this preparation. If future preflight finds dependency drift, stop and document before build.
-- Prisma schema/migration: unchanged for this release scope; no `prisma db push`, `migrate reset`, repair, or data mutation.
-- Configuration: preserve existing production environment, auth/session material, guard/scheduler settings, backup cron and PM2 saved state unless the runbook step explicitly changes them during an authorized window.
-- Secrets are intentionally absent from this package; future operators must read them only from the existing server environment.
+Fresh persistent backup and isolated restore follow the canonical runbook and
+previous `backup-manifest.json`/`restore-result.json` contracts: dump path/size/
+hash/catalog, config/auth snapshot paths, restore equivalence, temporary DB
+removal, initial release/config identity. Preserve snapshots and the retention
+permission incident. Historical backup is not the fresh window backup. No backup
+or restore is executed in this documentary review.
 
-## Backup And Rollback
+Before containment, privately prepare and review:
 
-Before any future mutation:
+- `switch/`: old pair as return CJS; candidate pair as candidate CJS; current
+  frontend path; fresh one-use markers.
+- `return/`: candidate pair as return CJS; original pair as candidate CJS; actual
+  frontend path; fresh stop certificate generated during return, never copied.
+- Bound six historical scripts, original/bound hashes and diffs, fresh manifests,
+  shared `WINDOW` initial-state/cron/fence evidence, checked nft file, auth paths.
+- Frontend barrier/start adapter from the historical three-process procedure:
+  capture PID/start ticks/tree/socket identities; stop only frontend; verify all
+  captured identities/sockets absent; then start selected private CJS entry and
+  verify cwd/script/env/BUILD_ID. Pair `start-one.py` cannot perform this step.
+- Partial-start recovery barrier for actual surviving processes: the original
+  pair script requires all apps online and cannot recover that case unchanged.
 
-1. Create a fresh persistent PostgreSQL backup using the established backup
-   procedure.
-2. Record path, size, SHA-256, object count, previous functional head, PM2
-   process paths and PIDs, frontend BUILD_ID, API/worker release paths, auth/config
-   snapshot locations, and restore result.
-3. Verify restore in an isolated local or temporary database before proceeding.
+**Bound helpers/configs/frontend adapter are not yet prepared or exercised.**
+Their exact paths, arguments, hashes and reviewed contracts must be added to the
+private window manifest before execution. No invented script path is presented
+as existing. Without these artifacts the runbook is not execution-ready. Do not
+replace barriers with raw delete/start, superficial `ps -p`, copied certificates
+or generic reload. This gate applies equally to deployment and return.
 
-Rollback must restore code **and built artifacts** compatible with current DB/auth.
-Returning only Git HEAD is insufficient because production uses isolated release
-directories. Preferred rollback target is the currently active composition:
+## 4. Single containment, exit and start sequence
 
-- API: `/opt/re7online/releases/b66bb89aca9112277463b7d2adbee0b9e7831157-api`;
-- frontend: `/opt/re7online/releases/ba66c24112ccb10f2dfdcced54350f513d399bc6`;
-- worker:
-  `/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88-b66bb89a`.
+Choose fresh bound `PREP=switch/` or `PREP=return/`; `WINDOW` is their shared
+initial-state/cron/fence directory. Assign absolute reviewed paths before these
+commands. Neither variable redirects unbound historical scripts.
 
-Rollback to that composition preserves DB/auth state but reintroduces the gaps
-closed after `b66bb89a`. It is a technical return, not functional incident
-closure.
+```bash
+test -s "$PREP/scripts.sha256"
+(cd "$PREP" && sha256sum -c scripts.sha256)
+python3 "$PREP/read-state.py" > "$PREP/immediate-before.private.json"
+node "$PREP/close.cjs"
+```
 
-## Containment And Abort Criteria
+Require closed/drained guard, current generation, tasks=0, fault=null and no
+unexpected work. Initially closed state uses the reviewed verification branch,
+not forced reopening. Campaign drain does not prove worker/inbound/auth drain;
+in-flight interruption requires assessment in the authorized window, never replay
+of uncertain submissions.
 
-Containment must follow the existing runtime-fix runbook model:
+When entering containment from the initial state:
 
-- fresh read of processes, sessions, guard/scheduler and health;
-- close guard/admission only when the runbook requires it;
-- establish an outbound/inbound barrier before stopping paired API/worker
-  processes if worker ownership could overlap;
-- confirm old process exit by PID/start tick/descendants/sockets before starting
-  successors;
-- never start a successor while an old API/worker process may still submit work;
-- keep frontend restart separate from API/worker restart.
+```bash
+sudo nft --check --file "$WINDOW/automation-fence.nft"
+sudo nft list tables
+crontab -l | cmp - "$WINDOW/deploy.crontab.before"
+cmp /etc/cron.d/re7-converta-backup "$WINDOW/re7-converta-backup.before"
+sudo install -o root -g root -m 0644 "$WINDOW/re7-converta-backup.window" /etc/cron.d/re7-converta-backup
+(cd "$WINDOW" && crontab deploy.crontab.window)
+sudo systemctl disable pm2-deploy.service
+sudo nft --file "$WINDOW/automation-fence.nft"
+sudo nft list table inet re7_campaign_transition
+systemctl show pm2-deploy.service --property=ActiveState,UnitFileState
+```
 
-Abort before mutation if:
+Require checked fence for ports 3000/3001, table absent before installation,
+unchanged unrelated rules, initial enabled/inactive supervision contract, no
+third-party/root PM2 or concurrent initiator. Cron `.window` is a reviewed minimal
+diff from `.before`; suspending cron does not terminate an existing job.
 
-- productive composition differs without explanation;
-- backup or restore verification fails;
-- unexpected dirty files appear;
-- process ownership is ambiguous;
-- old processes or sockets survive the exit barrier;
-- worker minimal patch cannot be reconciled by hash;
-- Prisma schema/migration review finds a pending migration;
-- health or DB is degraded before release.
+Return while containment is still active verifies nft table, cron `.window` and
+disabled supervision; it does not add a duplicate table or compare active window
+cron to `.before`. Return after restoration repeats the full containment entry.
+Both directions then execute the same stop/start sequence:
 
-Rollback if post-release health fails, logs show new fatal request errors,
-unexpected PM2 restart, auth/session regression, worker session regression, or
-provider-readiness regression attributable to the release.
+```bash
+python3 "$PREP/stop-pair.py"
+test -s "$PREP/old-exit-confirmed.json"
+python3 "$PREP/start-one.py" re7-whatsapp-agent
+python3 "$PREP/start-one.py" re7-whatsapp-web-worker
+```
 
-## Post-Release Technical Checks
+The fresh certificate must prove both old API/worker identities, descendants and
+sockets absent, zero unknown DB clients/locks, unchanged frontend and no respawn,
+**before any pair successor**. Failure maintains containment and forbids new
+processes, extra kill, lock deletion, logout or auth clear. API starts first, then
+worker. Verify local API and worker control health with private credentials;
+public checks occur after fence removal. Pair verifier does not support partially
+started return without the separately reviewed recovery barrier.
 
-Use read-only checks unless the owner explicitly authorizes a real interaction:
+Under the same containment, use the reviewed frontend barrier/start adapter from
+section 3, with its exact private-manifest command, selecting candidate frontend
+for switch or original frontend for return. Require its old-process/socket exit
+certificate before its successor. If this adapter is absent, stop before the
+frontend action; do not improvise reload. A second independent release recipe is
+not permitted.
 
-- PM2 online and only expected PIDs changed;
-- `/health` ok/db ok;
-- `/app/inbox`, `/app/crm`, and settings reachable with legitimate session;
-- Inbox UI shows window status correctly and does not offer WEB_ONLY template path
-  when unavailable;
-- logs contain no new `unhandledRejection`, Prisma fatal error, QR/auth clearing,
-  or unexpected 5xx;
-- worker health/session state preserved;
-- no provider sends, campaign sends, test-send, flow activation, or tenant setting
-  change caused by validation.
+## 5. Validate and restore exact initial controls
 
-Technical validation is not owner functional acceptance. META_CLOUD pure and
-hybrid API-to-WEB remain pending and require separate authorization with exact
-tenant/account/conversation IDs and real interaction scope.
+Only after all selected processes pass identity/hash/env checks:
+
+```bash
+"$PM" save
+install -m 600 /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+cmp /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+sudo nft list table inet re7_campaign_transition
+sudo nft delete table inet re7_campaign_transition
+node "$PREP/validate.cjs"
+```
+
+Verifier must use selected build and justified preflight invariants, not historic
+counts. Confirm health/DB, worker ownership/auth/sessions, frontend BUILD_ID and
+read-only authenticated UI when legitimate session exists. Page 200 alone is
+insufficient; unavailable smoke is NOT EXERCISED. On failure keep admissions
+closed and re-enter the same containment/exit sequence for return.
+
+Restore guard to initial open/closed condition: bound `open.cjs` only if initially
+open, after health/identity checks, using current generation. Otherwise leave
+CLOSED. Never replace current guard JSON with saved state. Scheduler/business
+flags must remain equal to initial configuration.
+
+```bash
+cmp /etc/cron.d/re7-converta-backup "$WINDOW/re7-converta-backup.window"
+crontab -l | cmp - "$WINDOW/deploy.crontab.window"
+sudo install -o root -g root -m 0644 "$WINDOW/re7-converta-backup.before" /etc/cron.d/re7-converta-backup
+(cd "$WINDOW" && crontab deploy.crontab.before)
+cmp /etc/cron.d/re7-converta-backup "$WINDOW/re7-converta-backup.before"
+crontab -l | cmp - "$WINDOW/deploy.crontab.before"
+```
+
+Restore boot enabled state from initial evidence: `sudo systemctl enable
+pm2-deploy.service` only if initially enabled; leave disabled if initially
+disabled. Require initial inactive state still inactive; no start/reload of unit.
+Compare ActiveState/UnitFileState, cron content/metadata, guard/scheduler,
+compatible saved/fallback and process identities after switch or return. No
+intermediate/incomplete `pm2 save`.
+
+## Abort, return and acceptance
+
+Abort for unexplained active artifact/BUILD_ID/count drift, missing bound scripts
+or frontend/recovery barrier, dependency/schema/config drift, wrong auth paths,
+failed fresh backup/restore, ambiguous ownership or concurrent operation. During
+containment, any surviving executor/socket/DB owner or uncertain call prevents a
+successor. Deadline does not waive the barrier.
+
+Return uses the three isolated originals above, freshly verified with current
+DB/auth, through the same sequence and fresh exit proof. No Git reset alone, old
+DB/auth restore, shared restart or replay. It reintroduces gaps fixed by candidate
+and does not close the incident. Candidate-attributable fatal, health/auth/session
+or readiness regression triggers reviewed return; partial-start recovery must
+use its actual-composition barrier before successors.
+
+Source/patch recipe and historical script contracts are reviewed. Bound private
+helpers/configs, frontend/recovery adapters, final builds/hashes, fresh backup/
+restore and live divergence reconciliation remain execution gates. No deploy
+readiness or owner acceptance claimed. META_CLOUD pure and hybrid API-to-WEB
+remain pending, with real interactions requiring separate exact-ID authorization.
+Campanhas, template media, Guided Builder and repair 6683 remain preserved.
+
+## Documentary command review, 2026-10-02
+
+Reviewed all nine Bash blocks in order; `bash -n` passed for each without executing
+their contents. Relative document links and all five patch/manifest hashes were
+checked. Verified the Prisma-copy helper exists at the fixed worker base. Order:
+fixed checkouts -> patch verification/application -> private environment/schema
+gate -> isolated dependencies/Prisma/builds -> executable registry -> fresh
+backup/restore and bound helpers -> admissions/containment -> pair exit proof ->
+sequential pair start -> frontend exit/start proof -> technical checks -> exact
+initial-control restoration. The same exit guarantees apply to return.
+
+This is syntax/source-contract review, not a shell dry-run, deployment rehearsal
+or runtime validation. Blocks depending on private environment, bound helpers,
+frontend/partial-recovery adapters and initial-state evidence remain blocked
+until those prerequisites are concretely prepared and reviewed. No command in
+this document was used for productive mutation during the review.
