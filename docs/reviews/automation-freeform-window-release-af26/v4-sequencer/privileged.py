@@ -85,7 +85,7 @@ def policy_from(path=POLICY):
     for mode in ('switch', 'return'):
         require(set(value['targetProcesses'][mode]) == {
             're7-whatsapp-agent', 're7-whatsapp-web-worker'}, 'policy_target_shape')
-        for cfg in value['targetProcesses'][mode].values():
+        for name, cfg in value['targetProcesses'][mode].items():
             require(set(cfg) == {'cwd', 'script', 'sha256'} and
                     cfg['cwd'].startswith('/opt/re7online/releases/') and
                     cfg['script'].startswith(cfg['cwd'] + '/') and
@@ -240,7 +240,7 @@ def target_processes_live(value, mode):
     require(len(children) == 3 and front['pid'] in children,
             'pm2_child_set_drift')
     matched = {front['pid']}
-    for cfg in value['targetProcesses'][mode].values():
+    for name, cfg in value['targetProcesses'][mode].items():
         script = Path(cfg['script'])
         require(script.is_file() and not script.is_symlink() and
                 hashlib.sha256(script.read_bytes()).hexdigest() == cfg['sha256'],
@@ -251,10 +251,15 @@ def target_processes_live(value, mode):
                 continue
             try:
                 cwd = os.readlink(Path('/proc', str(pid), 'cwd'))
-                argv = Path('/proc', str(pid), 'cmdline').read_bytes().split(b'\0')
+                raw = Path('/proc', str(pid), 'environ').read_bytes().split(b'\0')
             except FileNotFoundError:
                 continue
-            if cwd == cfg['cwd'] and cfg['script'].encode() in argv:
+            values = [entry.split(b'=', 1) for entry in raw if b'=' in entry]
+            selected = {key: [value for k, value in values if k == key]
+                        for key in (b'name', b'pm_cwd', b'pm_exec_path')}
+            if (cwd == cfg['cwd'] and selected[b'name'] == [name.encode()] and
+                    selected[b'pm_cwd'] == [cfg['cwd'].encode()] and
+                    selected[b'pm_exec_path'] == [cfg['script'].encode()]):
                 candidates.append(pid)
         require(len(candidates) == 1, 'target_process_ambiguous')
         matched.add(candidates[0])

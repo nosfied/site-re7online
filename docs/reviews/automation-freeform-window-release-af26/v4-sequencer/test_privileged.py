@@ -142,10 +142,12 @@ class ProcessIdentityTests(unittest.TestCase):
             children = []
             try:
                 children.append(subprocess.Popen(['sleep', '30']))
-                for script in (script_a, script_w):
+                for name, script in (('re7-whatsapp-agent', script_a),
+                                     ('re7-whatsapp-web-worker', script_w)):
                     children.append(subprocess.Popen(
-                        [sys.executable, '-c', 'import time;time.sleep(30)', str(script)],
-                        cwd=base))
+                        [sys.executable, '-c', 'import time;time.sleep(30)'],
+                        cwd=base, env={**os.environ, 'name': name,
+                                       'pm_cwd': str(base), 'pm_exec_path': str(script)}))
                 front, api, worker = children
                 daemon_identity = p.process_identity(os.getpid())
                 front_identity = p.process_identity(front.pid)
@@ -162,6 +164,12 @@ class ProcessIdentityTests(unittest.TestCase):
                             'sha256': hashlib.sha256(script_w.read_bytes()).hexdigest()}}},
                     'savedPaths': {'pm2': str(saved), 'fallback': str(fallback)}}
                 p.target_processes_live(value, 'switch')
+                same_bytes_other_script = base / 'other-api.js'
+                same_bytes_other_script.write_bytes(script_a.read_bytes())
+                wrong = json.loads(json.dumps(value))
+                wrong['targetProcesses']['switch']['re7-whatsapp-agent']['script'] = str(same_bytes_other_script)
+                with self.assertRaisesRegex(RuntimeError, 'target_process_ambiguous'):
+                    p.target_processes_live(wrong, 'switch')
                 wrong = json.loads(json.dumps(value))
                 wrong['pm2Daemon']['ticks'] = '0'
                 with self.assertRaisesRegex(RuntimeError, 'pm2_daemon_drift'):

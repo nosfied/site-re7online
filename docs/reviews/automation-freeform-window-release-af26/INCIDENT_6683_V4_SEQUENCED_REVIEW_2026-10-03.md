@@ -1,5 +1,7 @@
 # 6683 — executor V4 sequencial para revisão
 
+**Atualização posterior:** a [tentativa executada e o retorno compatível](INCIDENT_6683_V4_SEQUENCED_RETURN_2026-10-03.md) substituem o estado preparatório descrito abaixo. O pacote `165710Z` foi consumido; API 879cb1fa não foi liberada ao tráfego.
+
 **LOCAL REHEARSAL / NOT DEPLOYED.** A API 879cb1fa e o worker mínimo/frontend af26 não mudaram. A falha da tentativa anterior foi operacional: a prova `preflight` foi emitida antes de fechar a guarda, prendendo-a à geração antiga. O [executor e helper sanitizados](v4-sequencer/README.md) impõem a ordem no código e mantêm `delegated.py`, `ops.py`, V4, nonces, certificados, intents e os modos de retorno existentes.
 
 Sequência: conferir manifests, policy root-owned e execução única; capturar processos e geração inicial; fechar guarda por CAS; exigir nova geração e drain; **somente então** emitir, registrar e executar `preflight`; preparar crontab de deploy; aplicar cron/boot/fence pelo helper restrito; comprovar contenção; parar API/worker antigos uma única vez; exigir certificado de saída e frontend inalterado; iniciar API 879cb1fa; obter prova V4 fresca e iniciar o mesmo worker mínimo; conferir configuração, processos, sessões e saúde; salvar PM2/fallback; validar par no helper root-owned; retirar fence; conferir atendimento/guarda e restaurar cron/boot/admissões. O frontend permanece no mesmo PID. O horizonte de 15 minutos é para comunicação e contingência, não para matar processo ou bypass.
