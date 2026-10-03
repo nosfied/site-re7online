@@ -1,5 +1,6 @@
 """Deterministic protocol-order simulation. Does not contact production."""
 import copy
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -47,6 +48,10 @@ class FakeBridge:
             k: True for k in ('ownerAuthorized', 'preflightReviewed', 'artifactsVerified',
                                'restoreVerified', 'discrepanciesResolved')}))
         (self.window / 'privileged-policy.sha256').write_text('synthetic\n')
+        (self.window / 'sequencer.py').write_text('synthetic sequencer')
+        (self.window / 'sequencer-manifest.json').write_text(json.dumps({
+            'filesSha256': {'sequencer.py': hashlib.sha256(
+                b'synthetic sequencer').hexdigest()}}))
 
     def run(self, args, **kwargs):
         self.events.append(('hash_check', str(kwargs.get('cwd'))))

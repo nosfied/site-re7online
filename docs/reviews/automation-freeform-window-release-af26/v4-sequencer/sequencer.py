@@ -4,6 +4,7 @@ No simulation option exists in the CLI. Tests inject a fake Bridge directly.
 The old package is ineligible: its preflight request already exists.
 """
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -144,6 +145,11 @@ class Sequencer:
     def eligible(self):
         require(not (self.window / 'aborted-before-containment.private.json').exists(),
                 'aborted_package_cannot_reuse')
+        manifest = json.loads((self.window / 'sequencer-manifest.json').read_text())
+        for name, expected in manifest['filesSha256'].items():
+            require(Path(name).name == name and
+                    hashlib.sha256((self.window / name).read_bytes()).hexdigest() == expected,
+                    'sequencer_source_hash_drift')
         for mode in ('switch', 'return', 'return-partial'):
             self.b.run(['sha256sum', '-c', 'scripts.sha256'], cwd=self.root / mode)
         gates = json.loads((self.window / 'execution-gates.private.json').read_text())
