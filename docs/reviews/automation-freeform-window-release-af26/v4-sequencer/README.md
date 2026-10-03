@@ -19,16 +19,17 @@ python3 -m unittest -v test_sequencer.py test_privileged.py
 
 Criar diretório privado **novo** sob `/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-*`, a partir das fontes estáticas íntegras, sem copiar `owner-request`, `owner-proof`, `*.consumed`, intents, certificados ou gates da tentativa abortada. Recriar configurações, bindings, baseline, backup/restore isolado e manifests. Copiar estas fontes versionadas para a preparação nova e incluir seus hashes nos manifests. `prepare_policy.py "$P"` gera `window/privileged-policy.private.json` e seu SHA no novo pacote; `render_sudoers.py "$P/window/re7-incident-6683-window.sudoers.proposed"` gera exatamente nove linhas. Os destinos de instalação e fase estavam ausentes na leitura de 03/10, mas devem ser reconferidos imediatamente antes da instalação. Se a API/worker/frontend ou daemon PM2 mudar de PID + start ticks entre geração da política e `inspect`, **não** adaptar na janela; preparar política nova antes de conter tráfego.
 
-Depois da revisão independente, a **aprovação específica de Deifson para esta delegação adicional** deve cobrir os comandos seguintes. Eles instalam somente dois arquivos root-owned e a regra sudo literal; não param serviço nem aplicam nft. Substituir `P` pelo caminho completo da preparação nova revisada. Conferir os hashes esperados do [manifesto](manifest.json) e do arquivo privado `privileged-policy.sha256` antes e depois de `install`; não seguir se qualquer destino existir ou for symlink.
+Depois da revisão independente, a **aprovação específica de Deifson para esta delegação adicional** deve cobrir os comandos seguintes. Eles instalam somente dois arquivos root-owned e a regra sudo literal; não param serviço nem aplicam nft. `P` já aponta à preparação nova; conferir os hashes esperados do [manifesto](manifest.json) e do arquivo privado `privileged-policy.sha256` antes e depois de `install`. Não seguir se qualquer destino existir ou for symlink.
 
 ```bash
 set -euo pipefail
-P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-NOVA-PREPARACAO
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T163000Z
 H=/usr/local/libexec/re7/incident-6683-window-control.py
 Q=/usr/local/libexec/re7/incident-6683-window-policy.json
 S=/etc/sudoers.d/re7-incident-6683-window
 EXPECTED_HELPER_SHA=7ff947e36742a0b6611c01c81bc39ee682e1db7db3f1147893be2ea1f5be51b5
 EXPECTED_SUDOERS_SHA=62b5a2ac1d56b013f6db4bb8180b0637b985786214f4bc3ce0e5f8d3f7c5111a
+EXPECTED_POLICY_SHA=b8e47f174871b83b87f309645c1583905380183a2f22c847cd86ad95dae050af
 test ! -e "$H" && test ! -L "$H"
 test ! -e "$Q" && test ! -L "$Q"
 sudo test ! -e "$S" && sudo test ! -L "$S"
@@ -36,11 +37,13 @@ sudo test ! -e /var/lib/re7/incident-6683-v4-phase.json
 sudo test ! -L /var/lib/re7/incident-6683-v4-phase.json
 test "$(sha256sum "$P/window/privileged.py" | cut -d' ' -f1)" = "$EXPECTED_HELPER_SHA"
 test "$(sha256sum "$P/window/re7-incident-6683-window.sudoers.proposed" | cut -d' ' -f1)" = "$EXPECTED_SUDOERS_SHA"
+test "$(cat "$P/window/privileged-policy.sha256")" = "$EXPECTED_POLICY_SHA"
+test "$(sha256sum "$P/window/privileged-policy.private.json" | cut -d' ' -f1)" = "$EXPECTED_POLICY_SHA"
 sudo install -o root -g root -m 0644 "$P/window/privileged.py" "$H"
 sudo install -o root -g root -m 0600 "$P/window/privileged-policy.private.json" "$Q"
 sudo namei -l "$H" "$Q"
 test "$(sha256sum "$H" | cut -d' ' -f1)" = "$EXPECTED_HELPER_SHA"
-sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = "$(cat "$P/window/privileged-policy.sha256")"
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = "$EXPECTED_POLICY_SHA"
 sudo visudo -cf "$P/window/re7-incident-6683-window.sudoers.proposed"
 sudo install -o root -g root -m 0440 "$P/window/re7-incident-6683-window.sudoers.proposed" "$S"
 sudo cmp "$P/window/re7-incident-6683-window.sudoers.proposed" "$S"
@@ -57,13 +60,15 @@ Após a janela e após comprovar que nenhum retorno depende do helper, Deifson p
 
 ```bash
 set -euo pipefail
-P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-NOVA-PREPARACAO
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T163000Z
 H=/usr/local/libexec/re7/incident-6683-window-control.py
 Q=/usr/local/libexec/re7/incident-6683-window-policy.json
 S=/etc/sudoers.d/re7-incident-6683-window
+EXPECTED_HELPER_SHA=7ff947e36742a0b6611c01c81bc39ee682e1db7db3f1147893be2ea1f5be51b5
+EXPECTED_POLICY_SHA=b8e47f174871b83b87f309645c1583905380183a2f22c847cd86ad95dae050af
 sudo cmp "$P/window/re7-incident-6683-window.sudoers.proposed" "$S"
-test "$(sha256sum "$H" | cut -d' ' -f1)" = "$(sha256sum "$P/window/privileged.py" | cut -d' ' -f1)"
-sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = "$(cat "$P/window/privileged-policy.sha256")"
+test "$(sha256sum "$H" | cut -d' ' -f1)" = "$EXPECTED_HELPER_SHA"
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = "$EXPECTED_POLICY_SHA"
 sudo rm -- "$S"
 sudo visudo -c
 sudo rm -- "$H" "$Q"
