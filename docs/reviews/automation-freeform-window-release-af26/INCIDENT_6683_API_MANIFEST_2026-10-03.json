@@ -1,0 +1,22 @@
+{
+  "status": "PREPARED FOR REVIEW / NOT DEPLOYED",
+  "sourceCommit": "879cb1faa88493cd78dd789b71f85043d6c8ff9c",
+  "testOnlyFollowupCommit": "9814b564ba2ba818a0de7017cd17093f28ccf9b1",
+  "parent": "67cb9a84ef3c78f324ea1931ef62aff10dc8a6bd",
+  "productionApi": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
+  "candidateApiPath": "/opt/re7online/releases/879cb1faa88493cd78dd789b71f85043d6c8ff9c-api",
+  "returnApiPath": "/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-api",
+  "sourceFilesVerified": 428,
+  "compiledFilesVerified": 425,
+  "sourceManifestSha256": "e7a92bf07f996f0776e64893e35e8368a630a3d5c2457baa7e6a243c9b5693ca",
+  "compiledManifestSha256": "2aefa4e68320b3ee4e41e4443c93694db6c9daf66f79300522640a0c121c4928",
+  "sourceCompiledTarSha256": "91524e85e42fc50b8b98abab4468710286a31bf551a08bd800738fb3221a0f61",
+  "privateCandidateConfigSha256": "250920e12d1ebe14558a6d88af266ba70a13d6f62c6e0d9d9c7bfdf96ad22267",
+  "privateReturnConfigSha256": "7963b801e6f6bef3d2b21d903f3fffac910c0e9573b84fb34bb99b25b7591ed0",
+  "prismaClientVersion": "6.19.2",
+  "schemaAndPackageLockChangedFromAf26": false,
+  "frontendChanged": false,
+  "workerChanged": false,
+  "executionGatesEnabled": false,
+  "privateConfigsVersioned": false
+}

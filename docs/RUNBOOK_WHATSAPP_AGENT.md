@@ -1,5 +1,7 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**Novo 6683 — `879cb1fa` FOR REVIEW / NOT DEPLOYED.** [Revisão temporal, dry-run e pacote API/retorno](reviews/automation-freeform-window-release-af26/INCIDENT_6683_REVIEW_CLOSE_2026-10-03.md). A API af26, o worker mínimo e o frontend seguem ativos; a release nova foi montada apenas em diretório isolado. Na próxima janela, usar preparação V4 fresca, preservar frontend e coordenar API/worker; os modos consumidos da janela anterior não podem ser reutilizados. Não houve reparo de dados.
+
 **Observação dirigida após af26:** [matriz de aceite e caso demo final 6683](reviews/automation-freeform-window-release-af26/POST_DEPLOY_ACCEPTANCE_2026-10-03.md). Estado técnico estável não valida os três transportes. A conversa nova 6683 teve claim permitido por janela aberta no runtime sem inbound persistido; o protocolo falhou na Meta (131047) embora o evento interno diga `notice.sent`. Não reenviar nem alterar runtime sem análise própria. Reparo histórico 6683 permanece CLOSED.
 
 **Estado vigente 03/10 UTC — af26 V4 DEPLOYED TECHNICALLY / OWNER VALIDATION PENDING.** [Execução sanitizada e limites](reviews/automation-freeform-window-release-af26/V4_WINDOW_RESULT_2026-10-03.md). API/frontend af26 e worker mínimo af26 são os componentes ativos; frontend BUILD_ID, health/DB, worker, sessões e Inbox/CRM em leitura passaram. Guarda aberta geração 13, scheduler habilitado, crons/boot e saved/fallback restaurados. Nenhum envio foi provocado para validar. Aceite funcional af26, META_CLOUD puro e híbrido API→WEB seguem pendentes. Registros de V3 bloqueado e preflight V4 abaixo são históricos, não o estado implantado atual.
@@ -2265,3 +2267,9 @@ parada segura de TODOS os escritores → código default false → atendimento v
 zerar/expirar locks/tarefas. Não usar PM2 kill/reload all, REVOKE compartilhado,
 migration ou restore produtivo como rollback rotineiro. Rollback a escritores
 antigos exige revogação comprovada antes e impede garantia de concorrência futura.
+
+# Revisão do novo 6683 — pacote API preparado, 03/10/2026
+
+Consultar [revisão, diagnóstico e retorno](reviews/automation-freeform-window-release-af26/INCIDENT_6683_REVIEW_CLOSE_2026-10-03.md) e [manifesto](reviews/automation-freeform-window-release-af26/INCIDENT_6683_API_MANIFEST_2026-10-03.json). A correção `879cb1fa` **não está implantada**. `OutboundMessage.createdAt` é posterior à chamada Meta e à atualização de atividade outbound; o fence novo usa o snapshot persistido no `submit_started` antes do provider. Quatro linhas foram avaliadas por dry-run produtivo somente leitura, sem reparo.
+
+A release API está isolada; o frontend e o worker mínimo ativos não foram tocados. Para a próxima janela, **não executar literalmente** os modos V4 já consumidos: criar preparação e nonces frescos, adaptar a sequência para preservar o frontend e coordenar a parada/reinício do mesmo worker mínimo com a API, mantendo zero conexões/locks antes da API e prova V4 antes do worker. Configuração privada candidata/retorno e auth atual ficam fora do Git. Retorno aponta à API af26, após saída comprovada da candidata e prova antes do worker; nunca restaurar dump sobre dados novos. Backup/restore fresco, rechecagem dos processos/sessões/trabalhos/guarda/scheduler e decisão de janela continuam gates obrigatórios. Nenhum comando desta seção autoriza deploy ou saneamento dos quatro casos.

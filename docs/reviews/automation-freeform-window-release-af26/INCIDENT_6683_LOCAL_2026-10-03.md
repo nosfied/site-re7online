@@ -2,6 +2,8 @@
 
 **LOCAL VALIDATED / NOT DEPLOYED / FAIL produtivo permanece.** Esta frente trata a conversa nova observada em outubro, sem reabrir o reparo controlado de setembro (CLOSED). Produção af26 não foi alterada. WEB_SESSION e híbrido API→WEB seguem NOT EXERCISED em produção; CRA/campanhas aguardam validação funcional do owner.
 
+**Revisão posterior de 67cb9a84:** o fence por `submittedAt=OutboundMessage.createdAt` desta etapa era insuficiente após atividade outbound própria; ver [correção 879cb1fa, prova com barreira, dry-run produtivo somente leitura e release API isolada](INCIDENT_6683_REVIEW_CLOSE_2026-10-03.md). O texto histórico abaixo descreve a evidência e a implementação naquele commit, sem substituí-las retroativamente.
+
 ## Causa e alcance demonstrados
 
 No código efetivo anterior, `campaignRunner` chama `sendTemplate`. Após aceitação simulada pela Meta, `outboundTemplateService.sendTemplate` chamava `getOrCreateConversation(storage, clientKey, waId, sentAt)`. Para destinatário novo, esse construtor grava `lastInboundAt=sentAt`, `window.isOpen=true` e expiração 24 horas depois, apesar de o único fato ser outbound. Essa é a **primeira gravação indevida** na sequência reproduzida. `campaignOutboundConversation.ensureCampaignOutboundConversation`, chamado pelo webhook DELIVERED/READ, criava runtime sem especificar janela e herdava `windowIsOpen=true` do schema quando ainda não existia linha. Inbox apenas lê runtime/DB; claim consultava `isWindowOpen` e, por isso, podia aceitar uma janela fictícia. O mesmo código de `sendTemplate` e o default da materialização já constam de b66bb89a, antes da release af26.
