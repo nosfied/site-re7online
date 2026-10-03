@@ -17,6 +17,7 @@ import {
   markCampaignExecutionJobNeedsReview,
 } from "./campaignExecutionQueue.js";
 import { recordContactOptOut } from "./optOutRegistry.js";
+import { ensureCampaignOutboundConversation } from "./campaignOutboundConversation.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaign-runner-test-secret";
 process.env.WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || "campaign-runner-test-token";
@@ -91,6 +92,7 @@ test("campaign runner skips operationally excluded recipients at send-time", asy
       totalRecipients: recipients.length,
     },
   });
+
   await prisma.contact.create({
     data: {
       clientId,
@@ -401,9 +403,34 @@ test("campaign runner persists provider acceptance without opening operational c
     },
   });
 
+  const foreignClientId = crypto.randomUUID();
+  await prisma.client.create({ data: {
+    id: foreignClientId, clientKey: `${clientKey}-foreign`, name: "Foreign recipient tenant",
+    profile: "business", features: {},
+  } });
+  t.after(() => { void cleanup(foreignClientId).catch(() => undefined); });
+  let humanInboundAt = new Date("2026-09-20T12:00:00.000Z");
+  let humanExpiresAt = new Date("2026-09-21T12:00:00.000Z");
+  await prisma.conversationRuntimeState.create({ data: {
+    clientId, waId: ddd55CanonicalRecipient, waIdCanonical: ddd55CanonicalRecipient,
+    firstSeenAt: humanInboundAt, lastInboundAt: humanInboundAt,
+    windowIsOpen: false, windowExpiresAt: humanExpiresAt,
+    mode: "HUMAN", status: "IN_PROGRESS", assignedUserId: "human-owner",
+    departmentId: null, queueId: null, answers: { retained: true },
+  } });
+  await prisma.conversationRuntimeState.create({ data: {
+    clientId: foreignClientId, waId: ddd55CanonicalRecipient, waIdCanonical: ddd55CanonicalRecipient,
+    firstSeenAt: humanInboundAt, lastInboundAt: humanInboundAt,
+    windowIsOpen: false, windowExpiresAt: humanExpiresAt,
+    mode: "HUMAN", status: "WAITING", answers: { foreign: true },
+  } });
+
   const originalFetch = globalThis.fetch;
   const metaRecipients: string[] = [];
   const metaComponentsByRecipient = new Map<string, unknown>();
+  let canonicalProviderEntered = false;
+  let releaseCanonicalProvider: (() => void) | undefined;
+  const canonicalProviderGate = new Promise<void>((resolve) => { releaseCanonicalProvider = resolve; });
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (url.startsWith("https://graph.facebook.com/")) {
@@ -413,6 +440,10 @@ test("campaign runner persists provider acceptance without opening operational c
       };
       if (request.to) metaRecipients.push(request.to);
       if (request.to) metaComponentsByRecipient.set(request.to, request.template?.components);
+      if (request.to === ddd55CanonicalRecipient) {
+        canonicalProviderEntered = true;
+        await canonicalProviderGate;
+      }
       return new Response(JSON.stringify({ messages: [{ id: metaMessageId }] }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -437,6 +468,19 @@ test("campaign runner persists provider acceptance without opening operational c
     },
   });
   assert.ok(runId);
+
+  await waitFor(async () => canonicalProviderEntered);
+  humanInboundAt = new Date("2026-09-20T13:00:00.000Z");
+  humanExpiresAt = new Date("2026-09-21T13:00:00.000Z");
+  await prisma.conversationRuntimeState.update({
+    where: { clientId_waId: { clientId, waId: ddd55CanonicalRecipient } },
+    data: {
+      lastInboundAt: humanInboundAt, windowExpiresAt: humanExpiresAt,
+      assignedUserId: "new-human-owner", answers: { retained: true, newInbound: true },
+      provider: "web_session", channelAccountId: "synthetic-account",
+    },
+  });
+  releaseCanonicalProvider?.();
 
   await waitFor(async () => {
     const refreshed = await prisma.campaign.findUnique({ where: { id: campaign.id } });
@@ -474,6 +518,23 @@ test("campaign runner persists provider acceptance without opening operational c
   assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waId: ddd55CanonicalRecipient } }), 1);
   assert.equal(await prisma.conversation.count({ where: { clientId, waId: recipient } }), 0);
   assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId, waId: recipient } }), 0);
+  const preservedHuman = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId, waId: ddd55CanonicalRecipient } },
+  });
+  assert.equal(preservedHuman.lastInboundAt?.toISOString(), humanInboundAt.toISOString());
+  assert.equal(preservedHuman.windowExpiresAt?.toISOString(), humanExpiresAt.toISOString());
+  assert.equal(preservedHuman.windowIsOpen, false);
+  assert.equal(preservedHuman.mode, "HUMAN");
+  assert.equal(preservedHuman.status, "IN_PROGRESS");
+  assert.equal(preservedHuman.assignedUserId, "new-human-owner");
+  assert.deepEqual(preservedHuman.answers, { retained: true, newInbound: true });
+  assert.equal(preservedHuman.provider, "web_session");
+  assert.equal(preservedHuman.channelAccountId, "synthetic-account");
+  const preservedForeign = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: foreignClientId, waId: ddd55CanonicalRecipient } },
+  });
+  assert.equal(preservedForeign.lastOutboundAt, null);
+  assert.deepEqual(preservedForeign.answers, { foreign: true });
   assert.equal(
     await prisma.event.count({
       where: {
@@ -494,6 +555,60 @@ test("campaign runner persists provider acceptance without opening operational c
     }),
     1
   );
+});
+
+test("delayed campaign delivery does not reset a newer human cycle", async (t) => {
+  const clientId = crypto.randomUUID();
+  const clientKey = `late-campaign-status-${clientId}`;
+  const waId = "5541991100425";
+  await prisma.client.create({ data: { id: clientId, clientKey, name: "Late campaign receipt", profile: "business", features: { campaigns: true } } });
+  t.after(() => { void cleanup(clientId).catch(() => undefined); });
+  const department = await prisma.department.create({ data: { clientId, name: "New human department", slug: `new-${clientId}` } });
+  const queue = await prisma.queue.create({ data: { clientId, departmentId: department.id, name: "New human queue" } });
+  const submittedAt = new Date(Date.now() - 60_000);
+  const inboundAt = new Date();
+  const expiry = new Date(inboundAt.getTime() + 24 * 60 * 60 * 1000);
+  const conversation = await prisma.conversation.create({ data: {
+    clientId, waId, waIdCanonical: waId, channel: "whatsapp", provider: "meta",
+    departmentId: department.id, lastInboundAt: inboundAt, windowIsOpen: true, windowExpiresAt: expiry,
+  } });
+  await prisma.conversationRuntimeState.create({ data: {
+    clientId, waId, waIdCanonical: waId, conversationKey: `${clientKey}:${waId}`,
+    channel: "whatsapp", provider: "meta", firstSeenAt: inboundAt, lastInboundAt: inboundAt,
+    windowIsOpen: true, windowExpiresAt: expiry, mode: "HUMAN", status: "IN_PROGRESS",
+    departmentId: department.id, queueId: queue.id, assignedUserId: "current-human",
+    answers: { currentCycle: true },
+  } });
+  await ensureCampaignOutboundConversation(prisma, {
+    clientId, clientKey, waId, waIdCanonical: waId, messageId: `campaign.${clientId}.1`,
+    campaignId: clientId, campaignRunId: clientId, templateName: "synthetic_template",
+    sentAt: new Date(), submittedAt, source: "campaign", conversationId: conversation.id,
+    returnDestination: { type: "human_department", departmentId: department.id, queueId: queue.id },
+  });
+  const after = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { clientId_waId: { clientId, waId } } });
+  const afterConversation = await prisma.conversation.findUniqueOrThrow({ where: { id: conversation.id } });
+  assert.equal(after.lastInboundAt?.toISOString(), inboundAt.toISOString());
+  assert.equal(after.windowExpiresAt?.toISOString(), expiry.toISOString());
+  assert.equal(after.assignedUserId, "current-human");
+  assert.equal(after.status, "IN_PROGRESS");
+  assert.deepEqual(after.answers, { currentCycle: true });
+  assert.equal(afterConversation.lastInboundAt?.toISOString(), inboundAt.toISOString());
+  assert.equal(afterConversation.departmentId, department.id);
+
+  const otherDepartment = await prisma.department.create({ data: { clientId, name: "Old campaign destination", slug: `old-${clientId}` } });
+  const otherQueue = await prisma.queue.create({ data: { clientId, departmentId: otherDepartment.id, name: "Old campaign queue" } });
+  await prisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date(submittedAt.getTime() - 1000) } });
+  await ensureCampaignOutboundConversation(prisma, {
+    clientId, clientKey, waId, waIdCanonical: waId, messageId: `campaign.${clientId}.2`,
+    campaignId: clientId, campaignRunId: clientId, templateName: "synthetic_template",
+    sentAt: new Date(), submittedAt, source: "campaign", conversationId: conversation.id,
+    returnDestination: { type: "human_department", departmentId: otherDepartment.id, queueId: otherQueue.id },
+  });
+  const rolledBackConversation = await prisma.conversation.findUniqueOrThrow({ where: { id: conversation.id } });
+  const rolledBackRuntime = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { clientId_waId: { clientId, waId } } });
+  assert.equal(rolledBackConversation.departmentId, department.id);
+  assert.equal(rolledBackRuntime.departmentId, department.id);
+  assert.equal(rolledBackRuntime.assignedUserId, "current-human");
 });
 
 test("campaign runner materializes CRM identity for provider failure without creating conversation runtime", async (t) => {

@@ -33338,9 +33338,14 @@ async function sendConversationProtocolNoticeIfNeeded(
       ...(lookup.length ? { OR: [{ waId: { in: lookup } }, { waIdCanonical: { in: lookup } }] } : { waId: params.waId }),
       bodyText: { contains: params.protocol },
     },
-    select: { id: true },
+    select: { id: true, status: true },
   });
-  if (alreadySent) return { sent: false as const, reason: "already_sent" as const };
+  // A failed submission is still an attempted notice. Do not retry it implicitly
+  // on a later claim, and do not mislabel it as submitted or delivered.
+  if (alreadySent) return {
+    sent: false as const,
+    reason: alreadySent.status === "FAILED" ? "previous_attempt_failed" as const : "already_submitted" as const,
+  };
 
   try {
     const noticeText = buildProtocolNotificationText(protocolNotification, params.protocol);
@@ -33374,35 +33379,40 @@ async function sendConversationProtocolNoticeIfNeeded(
             source: "protocol_notice",
             actorUserId: params.actorUserId ?? undefined,
           });
+    const submitted = result.ok && result.status === "SENT";
+    const failed = result.ok && result.status === "FAILED";
+    const noticeEvent = submitted
+      ? "conversation.protocol.notice.sent"
+      : failed ? "conversation.protocol.notice.failed" : "conversation.protocol.notice.skipped";
     await persistEvent({
       clientId: params.clientId,
       waId: params.waId,
       waIdCanonical: params.waIdCanonical ?? null,
       messageId: `protocol.notice.${params.requestId}`,
       requestId: `${params.requestId}:protocol:event`,
-      eventName: result.ok ? "conversation.protocol.notice.sent" : "conversation.protocol.notice.skipped",
+      eventName: noticeEvent,
       payloadJson: {
         source: "protocol_notice",
         provider,
         protocol: params.protocol,
         cycleId: getActiveServiceCycle(params.conversation ?? null)?.cycleId ?? null,
         status: result.ok ? result.status : null,
-        reason: result.ok ? null : result.error,
+        reason: failed ? "provider_failed" : result.ok ? null : result.error,
       },
     });
     logger.info({
-      event: result.ok ? "conversation.protocol.notice.sent" : "conversation.protocol.notice.skipped",
+      event: noticeEvent,
       requestId: params.requestId,
       clientId: params.clientId,
       clientKey: params.clientKey,
       waId: maskWaId(params.waIdCanonical ?? params.waId),
       protocol: params.protocol,
       status: result.ok ? result.status : null,
-      reason: result.ok ? null : result.error,
+      reason: failed ? "provider_failed" : result.ok ? null : result.error,
     });
-    return result.ok
+    return submitted
       ? { sent: true as const, status: result.status }
-      : { sent: false as const, reason: result.error };
+      : { sent: false as const, reason: failed ? "provider_failed" as const : result.ok ? "not_submitted" as const : result.error };
   } catch (error) {
     logger.warn({
       event: "conversation.protocol.notice.skipped",

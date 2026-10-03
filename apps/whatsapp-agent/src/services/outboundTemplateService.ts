@@ -3,10 +3,6 @@ import { logger } from "../logger/logger.js";
 import {
   ConversationIntent,
 } from "../conversation/conversation.types.js";
-import {
-  getOrCreateConversation,
-  updateOutbound,
-} from "../conversation/conversation.service.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
 import { checkUsageGate } from "../usage/usageGate.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
@@ -223,19 +219,16 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
         },
       });
 
-      if (params.clientKey && params.waId) {
-        const conversation = await getOrCreateConversation(
-          runtimeStorage,
-          params.clientKey,
-          params.waId,
-          sentAt
-        );
-        const nextConversation = updateOutbound(
-          conversation,
-          metaMessageId ?? params.messageId ?? params.rid,
-          sentAt
-        );
-        await runtimeStorage.upsertConversation(nextConversation);
+      if (params.clientId && params.clientKey && params.waId) {
+        // An outbound template is not an inbound. Update only outbound activity so a
+        // concurrent inbound, claim, or handoff cannot be replaced by a stale state.
+        await getPrisma().conversationRuntimeState.updateMany({
+          where: { clientId: params.clientId, waId: params.waId },
+          data: {
+            lastOutboundAt: new Date(sentAt),
+            lastOutboundMessageId: metaMessageId ?? params.messageId ?? params.rid ?? null,
+          },
+        });
       }
 
       logger.info({

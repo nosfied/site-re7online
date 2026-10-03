@@ -18,11 +18,11 @@ import { resolveDepartmentOperationalQueue } from "../departments/operationalQue
 import {
   applyAdminCommand,
   activateHumanHandoff,
-  clearTemplateNeeded,
   decideOutboundPolicy,
   detectIntent,
   getHandoffStatus,
   getOrCreateConversation,
+  getOrCreateOutboundConversation,
   handleHandoff,
   logConversationIntent,
   logConversationWindow,
@@ -3136,6 +3136,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 campaignRunId,
                 templateName: outbound.templateName ?? "",
                 sentAt: new Date(normalizeStatusTimestamp(item.timestamp)),
+                submittedAt: outbound.createdAt,
                 source: "campaign",
                 conversationId: typeof currentRaw.previousConversationId === "string" ? currentRaw.previousConversationId : null,
                 returnDestination,
@@ -3719,7 +3720,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const debugCommand = parseDebugCloseWindowCommand(message.text);
     if (debugCommand && isAdmin && !env.DISABLE_DEBUG_COMMANDS) {
       const targetWaId = normalizeWaId(debugCommand.waId);
-      const targetConversation = await getOrCreateConversation(
+      const targetConversation = await getOrCreateOutboundConversation(
         storage,
         tenantClientKey,
         targetWaId,
@@ -3911,19 +3912,34 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           method: meta?.method,
           requestId: meta?.requestId,
         });
-        const targetConversation = await getOrCreateConversation(
-          storage,
-          tenantClientKey,
-          targetWaId,
-          message.timestamp
-        );
-        const clearedTarget = clearTemplateNeeded(
-          await persistOutboundConversation(
-            targetConversation,
-            result.messageId
-          )
-        );
-        await upsertConversationSafe(clearedTarget);
+        const sentAt = new Date();
+        await prisma.conversationRuntimeState.upsert({
+          where: { clientId_waId: { clientId: tenantClientId, waId: targetWaId } },
+          create: {
+            clientId: tenantClientId,
+            waId: targetWaId,
+            waIdCanonical: canonicalizeBrazilWaId(targetWaId),
+            conversationKey: makeConversationKey(tenantClientKey, targetWaId),
+            channel: "whatsapp",
+            provider: "meta",
+            firstSeenAt: sentAt,
+            windowIsOpen: false,
+            windowExpiresAt: null,
+            lastInboundAt: null,
+            lastOutboundAt: sentAt,
+            lastOutboundMessageId: result.messageId ?? null,
+            templateNeeded: false,
+            answers: {},
+          },
+          update: {
+            lastOutboundAt: sentAt,
+            lastOutboundMessageId: result.messageId ?? null,
+            templateNeeded: false,
+            templateSuggested: null,
+            lastNeedAt: null,
+            lastIntent: null,
+          },
+        });
       } else {
         logger.error({
           event: "admin.template.error",

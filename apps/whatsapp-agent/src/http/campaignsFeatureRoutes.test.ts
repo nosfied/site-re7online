@@ -387,7 +387,7 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000) {
   assert.fail("Timed out waiting for async condition");
 }
 
-async function deliverCampaignOutbound(campaignId: string, position = 1) {
+async function deliverCampaignOutbound(campaignId: string, position = 1, status: "delivered" | "read" = "delivered") {
   const messageId = `campaign.${campaignId}.${position}`;
   const outbound = await prisma.outboundMessage.findFirstOrThrow({
     where: { clientId: businessClientId, messageId },
@@ -453,7 +453,7 @@ async function deliverCampaignOutbound(campaignId: string, position = 1) {
                 {
                   id: outbound.metaMessageId,
                   recipient_id: outbound.waId,
-                  status: "delivered",
+                  status,
                   timestamp: String(Math.floor(Date.now() / 1000)),
                   conversation: {
                     id: `${prefix}-campaign-delivered-${campaignId}-${position}`,
@@ -484,7 +484,7 @@ async function deliverCampaignOutbound(campaignId: string, position = 1) {
     const metaStatus = raw.metaStatus && typeof raw.metaStatus === "object" && !Array.isArray(raw.metaStatus)
       ? raw.metaStatus as Record<string, unknown>
       : {};
-    return metaStatus.lastStatus === "delivered";
+    return metaStatus.lastStatus === status;
   });
   return outbound;
 }
@@ -7950,6 +7950,7 @@ test("meta status webhook creates one active message billing event on delivered 
       channel: "whatsapp",
       provider: "meta_cloud",
       lastInboundAt: new Date("2026-09-01T09:00:00.000Z"),
+      updatedAt: new Date("2026-09-01T09:00:00.000Z"),
     },
   });
   await prisma.outboundMessage.create({
@@ -16202,9 +16203,11 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   });
 
   const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (url.startsWith("https://graph.facebook.com/")) {
+      providerCalls += 1;
       const payload = JSON.parse(String(init?.body ?? "{}")) as { to?: string };
       assert.equal(payload.to, waId);
       return new Response(JSON.stringify({ messages: [{ id: `wamid.new.${safeTemplatePrefix}` }] }), {
@@ -16315,6 +16318,9 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
       queueId: true,
       departmentId: true,
       lastOutboundMessageId: true,
+      windowIsOpen: true,
+      windowExpiresAt: true,
+      lastInboundAt: true,
       assignedUserId: true,
     },
   });
@@ -16324,6 +16330,16 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   assert.ok(runtime.departmentId);
   assert.ok(runtime.queueId);
   assert.equal(runtime.lastOutboundMessageId, `campaign.${response.body.campaign.id}.1`);
+  assert.equal(runtime.windowIsOpen, false);
+  assert.equal(runtime.windowExpiresAt, null);
+  assert.equal(runtime.lastInboundAt, null);
+  await deliverCampaignOutbound(response.body.campaign.id, 1, "read");
+  const afterRead = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+  });
+  assert.equal(afterRead.windowIsOpen, false);
+  assert.equal(afterRead.windowExpiresAt, null);
+  assert.equal(afterRead.lastInboundAt, null);
 
   const creationEvent = await prisma.event.findFirstOrThrow({
     where: {
@@ -16382,6 +16398,69 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
         item.messageId === `campaign.${response.body.campaign.id}.1`
     )
   );
+  const callsBeforeBlockedActions = providerCalls;
+  const closedClaim = await request<ErrorPayload>("POST", `/app/conversation/${waId}/claim`, businessAdmin, {});
+  assert.equal(closedClaim.status, 409, JSON.stringify(closedClaim.body));
+  assert.equal(getErrorCode(closedClaim.body), "window_closed");
+  const closedText = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send`, businessAdmin, { text: "Texto sem inbound" });
+  assert.equal(closedText.status, 409, JSON.stringify(closedText.body));
+  assert.equal(getErrorCode(closedText.body), "window_closed");
+  assert.equal(providerCalls, callsBeforeBlockedActions);
+  assert.equal(await prisma.event.count({ where: { clientId: businessClientId, waId, eventName: "conversation.protocol.notice.sent" } }), 0);
+
+});
+
+test("failed Meta protocol submission records failed, never sent or delivered", async (t) => {
+  const waId = "5584951957791";
+  const protocolAdmin = await createUser({ clientId: businessClientId, role: "ADMIN", suffix: "protocol-provider-failed" });
+  await assignUserDepartments({ clientId: businessClientId, userId: protocolAdmin.id, departmentIds: [businessReturnDepartmentId] });
+  await configureBusinessTemplateMetaTransport({ suffix: `${safeTemplatePrefix}-protocol-fail` });
+  const currentConfig = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: businessClientId }, select: { config: true },
+  });
+  const config = currentConfig?.config && typeof currentConfig.config === "object" && !Array.isArray(currentConfig.config)
+    ? currentConfig.config as Record<string, unknown> : {};
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: { config: { ...config, protocolNotification: { enabled: true, trigger: "first_human_handoff", includeProtocol: true } } },
+    create: { clientId: businessClientId, config: { ...config, protocolNotification: { enabled: true, trigger: "first_human_handoff", includeProtocol: true } } },
+  });
+  const inboundAt = new Date();
+  const expiresAt = new Date(inboundAt.getTime() + 24 * 60 * 60 * 1000);
+  await prisma.conversation.create({ data: {
+    clientId: businessClientId, waId, waIdCanonical: waId, channel: "whatsapp", provider: "meta",
+    departmentId: businessReturnDepartmentId, windowIsOpen: true, windowExpiresAt: expiresAt, lastInboundAt: inboundAt,
+  } });
+  await prisma.conversationRuntimeState.create({ data: {
+    clientId: businessClientId, waId, waIdCanonical: waId,
+    conversationKey: `${prefix}-business:${waId}`, channel: "whatsapp", provider: "meta",
+    firstSeenAt: inboundAt,
+    departmentId: businessReturnDepartmentId, queueId: businessReturnQueueId,
+    mode: "HUMAN", status: "WAITING", windowIsOpen: true, windowExpiresAt: expiresAt, lastInboundAt: inboundAt,
+  } });
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      providerCalls += 1;
+      return new Response(JSON.stringify({ error: { code: 131047, message: "window closed" } }), { status: 400 });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const claim = await request<{ ok: true; protocol: string | null }>("POST", `/app/conversation/${waId}/claim`, protocolAdmin, {});
+  assert.equal(claim.status, 200, JSON.stringify(claim.body));
+  assert.ok(claim.body.protocol);
+  assert.equal(providerCalls, 1);
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, waId, rawPayload: { path: ["source"], equals: "protocol_notice" } },
+    select: { status: true, bodyText: true },
+  });
+  assert.equal(outbound.status, "FAILED");
+  assert.match(outbound.bodyText ?? "", /CVT-/);
+  assert.equal(await prisma.event.count({ where: { clientId: businessClientId, waId, eventName: "conversation.protocol.notice.failed" } }), 1);
+  assert.equal(await prisma.event.count({ where: { clientId: businessClientId, waId, eventName: "conversation.protocol.notice.sent" } }), 0);
 });
 
 test("campaign send failure materializes CRM without reactivating soft-deleted conversation", async (t) => {

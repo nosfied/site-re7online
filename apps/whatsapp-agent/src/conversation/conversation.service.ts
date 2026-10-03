@@ -24,6 +24,25 @@ export async function getOrCreateConversation(
   waId: string,
   timestamp: string
 ): Promise<ConversationState> {
+  return getOrCreateConversationWithOrigin(storage, clientKey, waId, timestamp, "inbound");
+}
+
+export async function getOrCreateOutboundConversation(
+  storage: Storage,
+  clientKey: string,
+  waId: string,
+  timestamp: string
+): Promise<ConversationState> {
+  return getOrCreateConversationWithOrigin(storage, clientKey, waId, timestamp, "outbound");
+}
+
+async function getOrCreateConversationWithOrigin(
+  storage: Storage,
+  clientKey: string,
+  waId: string,
+  timestamp: string,
+  origin: "inbound" | "outbound"
+): Promise<ConversationState> {
   const existing = await storage.getConversation(waId, clientKey);
   if (existing) {
     return existing;
@@ -38,8 +57,10 @@ export async function getOrCreateConversation(
     waId,
     waIdCanonical: canonicalizeBrazilWaId(waId),
     firstSeenAt,
-    lastInboundAt: firstSeenAt,
-    window: { isOpen: true, expiresAt: addHoursIso(firstSeenAt, WINDOW_HOURS) },
+    lastInboundAt: origin === "inbound" ? firstSeenAt : "",
+    window: origin === "inbound"
+      ? { isOpen: true, expiresAt: addHoursIso(firstSeenAt, WINDOW_HOURS) }
+      : { isOpen: false },
     intent: "unknown",
     handoff: { status: "none" },
     demoStatus: "none",

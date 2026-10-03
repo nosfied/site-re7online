@@ -262,6 +262,7 @@ export async function ensureCampaignOutboundConversation(
     campaignRunId: string;
     templateName: string;
     sentAt: Date;
+    submittedAt: Date;
     source: "campaign" | "manual" | "bot";
     conversationId?: string | null;
     returnDestination?: OutboundReturnDestination | null;
@@ -338,59 +339,80 @@ export async function ensureCampaignOutboundConversation(
 
   if (existing) {
     const wasSoftDeleted = Boolean(existing.deletedAt);
-    await prisma.conversation.updateMany({
-      where: { id: existing.id, clientId: params.clientId },
-      data: {
-        departmentId: conversationDepartmentId,
-        deletedAt: null,
-        lastOutboundAt: params.sentAt,
-      },
-    });
-    const runtimeUpdate = await prisma.conversationRuntimeState.updateMany({
-      where: {
-        clientId: params.clientId,
-        OR: [{ waId: params.waId }, { waIdCanonical }],
-      },
-      data: {
-        lastOutboundAt: params.sentAt,
-        lastOutboundMessageId: params.messageId,
-        mode: runtimeDestination.mode,
-        status: runtimeDestination.status,
-        departmentId: runtimeDestination.departmentId,
-        queueId: runtimeDestination.queueId,
-        assignedUserId: null,
-        assignedTo: null,
-        assignedAt: null,
-        closedAt: null,
-        chatbotActive: runtimeDestination.chatbotActive,
-        flow: runtimeDestination.flow,
-        chatbotNodeId: runtimeDestination.chatbotNodeId,
-      },
-    });
-    if (runtimeUpdate.count === 0) {
-      await prisma.conversationRuntimeState.create({
-        data: {
-          clientId: params.clientId,
-          waId: params.waId,
-          waIdCanonical,
-          conversationKey: makeConversationKey(params.clientKey, params.waId),
-          channel: "whatsapp",
-          provider: "meta",
-          firstSeenAt: params.sentAt,
-          lastOutboundAt: params.sentAt,
-          lastOutboundMessageId: params.messageId,
-          mode: runtimeDestination.mode,
-          status: runtimeDestination.status,
-          departmentId: runtimeDestination.departmentId,
-          queueId: runtimeDestination.queueId,
-          chatbotActive: runtimeDestination.chatbotActive,
-          flow: runtimeDestination.flow,
-          chatbotNodeId: runtimeDestination.chatbotNodeId,
-          answers: {},
-        },
+    class SupersededCampaignReceipt extends Error {}
+    let applied = false;
+    try {
+      await prisma.$transaction(async (tx) => {
+        const conversationUpdate = await tx.conversation.updateMany({
+          where: { id: existing.id, clientId: params.clientId, updatedAt: { lt: params.submittedAt } },
+          data: {
+            departmentId: conversationDepartmentId,
+            deletedAt: null,
+            lastOutboundAt: params.sentAt,
+          },
+        });
+        if (conversationUpdate.count === 0) throw new SupersededCampaignReceipt();
+        const runtimeUpdate = await tx.conversationRuntimeState.updateMany({
+          where: {
+            clientId: params.clientId,
+            OR: [{ waId: params.waId }, { waIdCanonical }],
+            updatedAt: { lt: params.submittedAt },
+          },
+          data: {
+            lastOutboundAt: params.sentAt,
+            lastOutboundMessageId: params.messageId,
+            mode: runtimeDestination.mode,
+            status: runtimeDestination.status,
+            departmentId: runtimeDestination.departmentId,
+            queueId: runtimeDestination.queueId,
+            assignedUserId: null,
+            assignedTo: null,
+            assignedAt: null,
+            closedAt: null,
+            chatbotActive: runtimeDestination.chatbotActive,
+            flow: runtimeDestination.flow,
+            chatbotNodeId: runtimeDestination.chatbotNodeId,
+          },
+        });
+        if (runtimeUpdate.count === 0) {
+          const currentRuntime = await tx.conversationRuntimeState.findFirst({
+            where: { clientId: params.clientId, OR: [{ waId: params.waId }, { waIdCanonical }] },
+            select: { id: true },
+          });
+          // A newer inbound, claim, handoff or close owns the operational state.
+          // A delayed delivery receipt must not recreate or reset that cycle.
+          if (currentRuntime) throw new SupersededCampaignReceipt();
+          await tx.conversationRuntimeState.create({
+            data: {
+              clientId: params.clientId,
+              waId: params.waId,
+              waIdCanonical,
+              conversationKey: makeConversationKey(params.clientKey, params.waId),
+              channel: "whatsapp",
+              provider: "meta",
+              firstSeenAt: params.sentAt,
+              windowIsOpen: false,
+              windowExpiresAt: null,
+              lastInboundAt: null,
+              lastOutboundAt: params.sentAt,
+              lastOutboundMessageId: params.messageId,
+              mode: runtimeDestination.mode,
+              status: runtimeDestination.status,
+              departmentId: runtimeDestination.departmentId,
+              queueId: runtimeDestination.queueId,
+              chatbotActive: runtimeDestination.chatbotActive,
+              flow: runtimeDestination.flow,
+              chatbotNodeId: runtimeDestination.chatbotNodeId,
+              answers: {},
+            },
+          });
+        }
       });
+      applied = true;
+    } catch (error) {
+      if (!(error instanceof SupersededCampaignReceipt)) throw error;
     }
-    if (wasSoftDeleted) {
+    if (applied && wasSoftDeleted) {
       await recordCampaignOutboundConversationReactivated({
         clientId: params.clientId,
         conversationId: existing.id,
@@ -427,10 +449,6 @@ export async function ensureCampaignOutboundConversation(
     },
     update: {
       lastOutboundAt: params.sentAt,
-      channel: "whatsapp",
-      provider: "meta",
-      phoneNumberId: params.phoneNumberId ?? undefined,
-      departmentId: conversationDepartmentId,
     },
     create: {
       clientId: params.clientId,
@@ -455,20 +473,8 @@ export async function ensureCampaignOutboundConversation(
       },
     },
     update: {
-      waIdCanonical,
-      conversationKey: makeConversationKey(params.clientKey, params.waId),
-      channel: "whatsapp",
-      provider: "meta",
       lastOutboundAt: params.sentAt,
       lastOutboundMessageId: params.messageId,
-      mode: runtimeDestination.mode,
-      status: runtimeDestination.status,
-      departmentId: runtimeDestination.departmentId,
-      queueId: runtimeDestination.queueId,
-      closedAt: null,
-      chatbotActive: runtimeDestination.chatbotActive,
-      flow: runtimeDestination.flow,
-      chatbotNodeId: runtimeDestination.chatbotNodeId,
     },
     create: {
       clientId: params.clientId,
@@ -478,6 +484,9 @@ export async function ensureCampaignOutboundConversation(
       channel: "whatsapp",
       provider: "meta",
       firstSeenAt: params.sentAt,
+      windowIsOpen: false,
+      windowExpiresAt: null,
+      lastInboundAt: null,
       lastOutboundAt: params.sentAt,
       lastOutboundMessageId: params.messageId,
       mode: runtimeDestination.mode,
