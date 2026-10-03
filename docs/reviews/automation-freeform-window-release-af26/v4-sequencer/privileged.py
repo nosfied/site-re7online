@@ -18,7 +18,7 @@ import tempfile
 
 POLICY = Path('/usr/local/libexec/re7/incident-6683-window-policy.json')
 AUDIT = Path('/var/log/re7-incident-6683-window.log')
-PHASE = Path('/var/lib/re7/incident-6683-v4-phase.json')
+PHASE = None
 LOCK = Path('/var/lib/re7/incident-6683-v4-control.lock')
 CRON = Path('/etc/cron.d/re7-converta-backup')
 GUARD = Path('/var/lib/re7/campaign-operations/state.json')
@@ -31,6 +31,12 @@ ACTIONS = frozenset({'inspect', 'check-absent', 'check-present', 'enter', 'unfen
 def require(ok, code):
     if not ok:
         raise RuntimeError(code)
+
+
+def phase_path(policy_hash):
+    require(len(policy_hash) == 64 and all(c in '0123456789abcdef' for c in policy_hash),
+            'policy_hash_invalid')
+    return Path('/var/lib/re7/incident-6683-v4-phase-' + policy_hash + '.json')
 
 
 def root_regular(path):
@@ -376,6 +382,7 @@ def act(action, value):
 
 
 def main(argv):
+    global PHASE
     require(len(argv) == 2 and argv[1] in ACTIONS, 'literal_action_required')
     action = argv[1]
     fd = os.open(LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -385,6 +392,7 @@ def main(argv):
                 not (info.st_mode & 0o077), 'control_lock_unsafe')
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         value = policy_from()
+        PHASE = phase_path(value['policySha256'])
         try:
             output = act(action, value)
             audit(action, 'pass', value['policySha256'])

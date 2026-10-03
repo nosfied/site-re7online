@@ -5,16 +5,16 @@
   "worker": "worker-bf5f1d76-f06d49cb-91230f88-b66bb89a-af26-window",
   "status": "LOCAL_REHEARSAL_NOT_DEPLOYED",
   "filesSha256": {
-    "sequencer.py": "a67dedb7a16fcf027436831681d73eab428b0fdf944481be8ae311f2a539454c",
-    "privileged.py": "7ff947e36742a0b6611c01c81bc39ee682e1db7db3f1147893be2ea1f5be51b5",
+    "sequencer.py": "cc9749e7bf6298c7c4240c1f6bda9249bd6dde411fa969278a0a8b25a9c4c2eb",
+    "privileged.py": "1d54d40772475ca52fcb18c04b554367db367ce888838e626a5ad519a6d78c34",
     "prepare_policy.py": "5260d65c61db2f98579a0e109b5f9d077c206f61138d8fb11b5bd6fbaf7568af",
     "render_sudoers.py": "43ac54893e854991466b11f379fdefa66662cc40822bc1b62fc8bdb110c48299",
-    "test_sequencer.py": "a7a1c543fdf007e28751ba6707d629166a566edc41eca43047e3e4bf0dfe05cc",
-    "test_privileged.py": "c2eddda8fb34bf217a407e020be368cb161e0c035dce3a31a7da69b1bdc466d1"
+    "test_sequencer.py": "82cd92a89c75340b93329108981c7f8c0b246d7845dae73b01dbbc35186186f9",
+    "test_privileged.py": "ecae4f8129e11648ea5eb3459764bb7d1ea357bb28361c33a66f67c6c2f9b728"
   },
   "literalSudoersSha256": "62b5a2ac1d56b013f6db4bb8180b0637b985786214f4bc3ce0e5f8d3f7c5111a",
   "validation": {
-    "newSyntheticTests": "15/15 PASS (one additional real user-namespace cron replacement test)",
+    "newSyntheticTests": "17/17 PASS (persisted guard task object and policy-scoped phase regressions)",
     "existingApiOnlyV4Tests": "5/5 PASS",
     "realNftSystemd": "NOT EXERCISED LOCALLY; privileged inspect required before window"
   }

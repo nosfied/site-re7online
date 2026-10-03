@@ -165,6 +165,15 @@ class ProcessIdentityTests(unittest.TestCase):
 
 
 class PolicyTests(unittest.TestCase):
+    def test_phase_is_unique_to_immutable_policy_and_preserves_legacy_phase(self):
+        first = p.phase_path('a' * 64)
+        second = p.phase_path('b' * 64)
+        self.assertNotEqual(first, second)
+        self.assertNotEqual(first, Path('/var/lib/re7/incident-6683-v4-phase.json'))
+        self.assertEqual(first.parent, second.parent)
+        with self.assertRaisesRegex(RuntimeError, 'policy_hash_invalid'):
+            p.phase_path('bad')
+
     def test_fixed_policy_bytes_and_hash(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'policy.json'

@@ -169,6 +169,16 @@ class SequenceTests(unittest.TestCase):
         self.assertFalse(self.b.fenced)
         self.assertEqual((self.b.system_cron, self.b.boot), ('before', 'enabled'))
 
+    def test_persisted_empty_task_object_allows_preflight_after_close(self):
+        self.b.g['tasks'] = {}
+        self.s.run()
+        self.assertTrue(self.b.g['open'])
+        self.assertEqual(self.b.live[API]['cfg'], self.b.new[API])
+        self.assertLess(
+            self.b.events.index(('node', 'switch', 'close.cjs')),
+            next(i for i, e in enumerate(self.b.events)
+                 if e[:3] == ('protocol', 'switch', 'preflight')))
+
     def test_early_proof_denied_before_guard_mutation(self):
         (self.b.root / 'switch/owner-request-preflight.json').write_text('{}')
         with self.assertRaisesRegex(RuntimeError, 'preflight_proof_emitted_before_close'):

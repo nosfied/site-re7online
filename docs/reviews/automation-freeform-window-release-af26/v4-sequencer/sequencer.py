@@ -191,7 +191,7 @@ class Sequencer:
         guard = self.b.guard()
         require(not guard['open'] and guard['generation'] ==
                 self.baseline['guardGeneration'] + 1 and
-                guard['tasks'] == [] and not guard.get('ledgerFault'),
+                not guard['tasks'] and not guard.get('ledgerFault'),
                 'guard_close_generation_drift')
         require((self.root / 'switch' / 'drain-result.json').is_file(),
                 'drain_result_missing')
