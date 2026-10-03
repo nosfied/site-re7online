@@ -45,8 +45,8 @@ test "$(sha256sum "$P/window/privileged-policy.private.json" | cut -d' ' -f1)" =
 sudo cmp "$P/window/re7-incident-6683-window.sudoers.proposed" "$S"
 sudo install -o root -g root -m 0644 "$H" "$HA"
 sudo install -o root -g root -m 0600 "$Q" "$QA"
-sudo install -o root -g root -m 0644 "$P/window/privileged.py" "$H"
 sudo install -o root -g root -m 0600 "$P/window/privileged-policy.private.json" "$Q"
+sudo install -o root -g root -m 0644 "$P/window/privileged.py" "$H"
 sudo namei -l "$H" "$Q" "$HA" "$QA"
 test "$(sha256sum "$H" | cut -d' ' -f1)" = "$EXPECTED_HELPER_SHA"
 sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = "$EXPECTED_POLICY_SHA"
@@ -54,7 +54,7 @@ sudo visudo -c
 sudo -n /usr/bin/python3 -I -S "$H" inspect
 ```
 
-O bloco preserva o helper e a política anteriores, além da fase legada `aborted`, sem sobrescrever suas evidências. A regra sudo não contém wildcard, shell, `SETENV` ou execução de arquivo gravável por `deploy`. A última linha é leitura; confirma política, fase nova ausente, processo original e nft antes da janela. O audit root-owned continua em `/var/log/re7-incident-6683-window.log`; cada política usa fase root-owned distinta em `/var/lib/re7/incident-6683-v4-phase-<SHA>.json`, com lock comum.
+O bloco preserva o helper e a política anteriores, além da fase legada `aborted`, sem sobrescrever suas evidências. Instala a política nova **antes** do helper novo: se a instalação parar no meio, o helper antigo continua preso à fase `aborted` e nega `enter`. A regra sudo não contém wildcard, shell, `SETENV` ou execução de arquivo gravável por `deploy`. A última linha é leitura; confirma política, fase nova ausente, processo original e nft antes da janela. O audit root-owned continua em `/var/log/re7-incident-6683-window.log`; cada política usa fase root-owned distinta em `/var/lib/re7/incident-6683-v4-phase-<SHA>.json`, com lock comum.
 
 Impacto da instalação: capacidade estreita para `deploy` aplicar/remover **somente** a tabela `inet re7_campaign_transition`, alternar **somente** o cron `re7-converta-backup` entre bytes fixados, e desabilitar/habilitar **somente** `pm2-deploy.service`. Há risco operacional se essa capacidade for invocada fora do coordenador; lock, política root-owned, fases e verificação de processos reduzem o risco, mas não substituem a execução única e a supervisão do owner. A instalação não é autorizada por este documento.
 
