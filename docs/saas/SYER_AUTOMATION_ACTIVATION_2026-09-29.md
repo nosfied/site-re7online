@@ -1,5 +1,9 @@
 # Syer — ativação restrita de acompanhamento de automação
 
+## Adendo de leitura, 03/10/2026 UTC
+
+A afirmação histórica “somente em Syer” abaixo descreve a conferência de 30/09 às 00:52 UTC, não o estado atual. Leitura somente leitura do banco em 03/10 encontrou a chave `allowAutomationConversationsInInbox=true` em **dois** tenants: `syer-rodrigues` e `cra-pr`. Para CRA-PR há evento `inbox.automation.settings_updated` `enabled=true` em **30/09/2026 18:14:38.106 UTC**, com ator cuja role corrente é ADMIN e vínculo com o mesmo tenant; o handler exige ADMIN no momento da gravação. Não há, nesta leitura, prova de aceite funcional CRA-PR, nem foi feita alteração da chave. O `updatedAt` geral da configuração não é tomado como horário da ativação. Esta reconciliação é independente da análise af26/PostgreSQL.
+
 ## Incidente prioritário 91230f88 — correção local para revisão, 29/09/2026
 
 **INCIDENT OPEN IN PRODUCTION / FIX LOCAL VALIDATED / NOT DEPLOYED.** [Matriz de todos os tenants, causa, testes e retorno compatível](AUTOMATION_RUNTIME_SELF_WRITE_INCIDENT_2026-09-29.md). Syer: escrita própria de atividade outbound invalidava updatedAt e impedia persistir avanço. Tendência: conflito correlacionado com encaminhamento humano legítimo; não atribuído ao loop. Demais tenants inventariados, sem prova de ocorrência no período observado.
