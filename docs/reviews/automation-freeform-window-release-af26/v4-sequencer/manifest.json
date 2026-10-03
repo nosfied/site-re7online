@@ -1,0 +1,21 @@
+{
+  "baseCommit": "c1f699b1ed6c891e14b3351550d80888b05dd69e",
+  "functionalCandidate": "879cb1faa88493cd78dd789b71f85043d6c8ff9c",
+  "frontend": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
+  "worker": "worker-bf5f1d76-f06d49cb-91230f88-b66bb89a-af26-window",
+  "status": "LOCAL_REHEARSAL_NOT_DEPLOYED",
+  "filesSha256": {
+    "sequencer.py": "001c1438867fa1ac5849ab0930226a8c4bce8ab02c1cee9e5a8aa044b5e16288",
+    "privileged.py": "7ff947e36742a0b6611c01c81bc39ee682e1db7db3f1147893be2ea1f5be51b5",
+    "prepare_policy.py": "5260d65c61db2f98579a0e109b5f9d077c206f61138d8fb11b5bd6fbaf7568af",
+    "render_sudoers.py": "43ac54893e854991466b11f379fdefa66662cc40822bc1b62fc8bdb110c48299",
+    "test_sequencer.py": "042af7dd4a457f954bccd2ca966da135277afe8c473ea029e6dda646922b987c",
+    "test_privileged.py": "06592882d5b3766c2d396fd815d032852f1397d257062f27dd1b733a6f02f364"
+  },
+  "literalSudoersSha256": "62b5a2ac1d56b013f6db4bb8180b0637b985786214f4bc3ce0e5f8d3f7c5111a",
+  "validation": {
+    "newSyntheticTests": "14/14 PASS",
+    "existingApiOnlyV4Tests": "5/5 PASS",
+    "realNftSystemd": "NOT EXERCISED LOCALLY; privileged inspect required before window"
+  }
+}
