@@ -16101,6 +16101,7 @@ test("campaign receipt keeps inbound claim and transfer made while provider was 
   assert.ok(afterProvider.updatedAt < outbound.createdAt);
   await deliverCampaignOutbound(created.body.campaign.id);
   await deliverCampaignOutbound(created.body.campaign.id, 1, "read");
+  await deliverCampaignOutbound(created.body.campaign.id, 1, "read");
   const after = await prisma.conversationRuntimeState.findUniqueOrThrow({
     where: { clientId_waId: { clientId: businessClientId, waId } },
   });
