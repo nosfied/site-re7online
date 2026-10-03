@@ -582,7 +582,8 @@ test("delayed campaign delivery does not reset a newer human cycle", async (t) =
   await ensureCampaignOutboundConversation(prisma, {
     clientId, clientKey, waId, waIdCanonical: waId, messageId: `campaign.${clientId}.1`,
     campaignId: clientId, campaignRunId: clientId, templateName: "synthetic_template",
-    sentAt: new Date(), submittedAt, source: "campaign", conversationId: conversation.id,
+    sentAt: new Date(), source: "campaign", conversationId: conversation.id,
+    submissionRuntimeVersion: 0, submissionConversationUpdatedAt: submittedAt,
     returnDestination: { type: "human_department", departmentId: department.id, queueId: queue.id },
   });
   const after = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { clientId_waId: { clientId, waId } } });
@@ -598,10 +599,15 @@ test("delayed campaign delivery does not reset a newer human cycle", async (t) =
   const otherDepartment = await prisma.department.create({ data: { clientId, name: "Old campaign destination", slug: `old-${clientId}` } });
   const otherQueue = await prisma.queue.create({ data: { clientId, departmentId: otherDepartment.id, name: "Old campaign queue" } });
   await prisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date(submittedAt.getTime() - 1000) } });
+  await prisma.conversationRuntimeState.update({
+    where: { clientId_waId: { clientId, waId } }, data: { version: { increment: 1 } },
+  });
+  const beforeSecondReceipt = await prisma.conversation.findUniqueOrThrow({ where: { id: conversation.id } });
   await ensureCampaignOutboundConversation(prisma, {
     clientId, clientKey, waId, waIdCanonical: waId, messageId: `campaign.${clientId}.2`,
     campaignId: clientId, campaignRunId: clientId, templateName: "synthetic_template",
-    sentAt: new Date(), submittedAt, source: "campaign", conversationId: conversation.id,
+    sentAt: new Date(), source: "campaign", conversationId: conversation.id,
+    submissionRuntimeVersion: 0, submissionConversationUpdatedAt: beforeSecondReceipt.updatedAt,
     returnDestination: { type: "human_department", departmentId: otherDepartment.id, queueId: otherQueue.id },
   });
   const rolledBackConversation = await prisma.conversation.findUniqueOrThrow({ where: { id: conversation.id } });

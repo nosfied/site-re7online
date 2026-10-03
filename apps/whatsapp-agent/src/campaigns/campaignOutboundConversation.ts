@@ -262,7 +262,8 @@ export async function ensureCampaignOutboundConversation(
     campaignRunId: string;
     templateName: string;
     sentAt: Date;
-    submittedAt: Date;
+    submissionRuntimeVersion?: number | null;
+    submissionConversationUpdatedAt?: Date | null;
     source: "campaign" | "manual" | "bot";
     conversationId?: string | null;
     returnDestination?: OutboundReturnDestination | null;
@@ -343,8 +344,16 @@ export async function ensureCampaignOutboundConversation(
     let applied = false;
     try {
       await prisma.$transaction(async (tx) => {
+        // The outbound activity write after provider acceptance changes runtime.updatedAt.
+        // Compare the pre-provider operational version instead; it is not changed by
+        // that activity write, but human runtime transitions increment it.
+        if (!params.submissionConversationUpdatedAt) throw new SupersededCampaignReceipt();
         const conversationUpdate = await tx.conversation.updateMany({
-          where: { id: existing.id, clientId: params.clientId, updatedAt: { lt: params.submittedAt } },
+          where: {
+            id: existing.id,
+            clientId: params.clientId,
+            updatedAt: params.submissionConversationUpdatedAt,
+          },
           data: {
             departmentId: conversationDepartmentId,
             deletedAt: null,
@@ -352,28 +361,30 @@ export async function ensureCampaignOutboundConversation(
           },
         });
         if (conversationUpdate.count === 0) throw new SupersededCampaignReceipt();
-        const runtimeUpdate = await tx.conversationRuntimeState.updateMany({
-          where: {
-            clientId: params.clientId,
-            OR: [{ waId: params.waId }, { waIdCanonical }],
-            updatedAt: { lt: params.submittedAt },
-          },
-          data: {
-            lastOutboundAt: params.sentAt,
-            lastOutboundMessageId: params.messageId,
-            mode: runtimeDestination.mode,
-            status: runtimeDestination.status,
-            departmentId: runtimeDestination.departmentId,
-            queueId: runtimeDestination.queueId,
-            assignedUserId: null,
-            assignedTo: null,
-            assignedAt: null,
-            closedAt: null,
-            chatbotActive: runtimeDestination.chatbotActive,
-            flow: runtimeDestination.flow,
-            chatbotNodeId: runtimeDestination.chatbotNodeId,
-          },
-        });
+        const runtimeUpdate = params.submissionRuntimeVersion === undefined || params.submissionRuntimeVersion === null
+          ? { count: 0 }
+          : await tx.conversationRuntimeState.updateMany({
+              where: {
+                clientId: params.clientId,
+                OR: [{ waId: params.waId }, { waIdCanonical }],
+                version: params.submissionRuntimeVersion,
+              },
+              data: {
+                lastOutboundAt: params.sentAt,
+                lastOutboundMessageId: params.messageId,
+                mode: runtimeDestination.mode,
+                status: runtimeDestination.status,
+                departmentId: runtimeDestination.departmentId,
+                queueId: runtimeDestination.queueId,
+                assignedUserId: null,
+                assignedTo: null,
+                assignedAt: null,
+                closedAt: null,
+                chatbotActive: runtimeDestination.chatbotActive,
+                flow: runtimeDestination.flow,
+                chatbotNodeId: runtimeDestination.chatbotNodeId,
+              },
+            });
         if (runtimeUpdate.count === 0) {
           const currentRuntime = await tx.conversationRuntimeState.findFirst({
             where: { clientId: params.clientId, OR: [{ waId: params.waId }, { waIdCanonical }] },

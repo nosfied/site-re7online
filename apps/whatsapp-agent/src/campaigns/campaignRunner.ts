@@ -1625,6 +1625,22 @@ async function runCampaignInBackground(
               return;
             }
           }
+          const submissionRuntime = await prisma.conversationRuntimeState.findFirst({
+            where: {
+              clientId: params.clientId,
+              OR: [{ waId }, { waIdCanonical }],
+            },
+            select: { version: true },
+          });
+          const submissionConversation = await prisma.conversation.findFirst({
+            where: {
+              clientId: params.clientId,
+              ...(resolvedRecipient.conversationId
+                ? { id: resolvedRecipient.conversationId }
+                : { OR: [{ waId }, { waIdCanonical }] }),
+            },
+            select: { updatedAt: true },
+          });
           const attempt = await campaignProviderAttempt(() => persistEvent({
             clientId: params.clientId,
             conversationId: resolvedRecipient.conversationId ?? null,
@@ -1639,6 +1655,8 @@ async function runCampaignInBackground(
               templateName: params.templateName,
               waIdLast4: waId.slice(-4),
               waIdLength: waId.length,
+              runtimeVersionAtSubmission: submissionRuntime?.version ?? null,
+              conversationUpdatedAtAtSubmission: submissionConversation?.updatedAt.toISOString() ?? null,
             },
           }).then(() => undefined), () => sendTemplate({
             toE164: waId,

@@ -3124,6 +3124,20 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             select: { clientKey: true },
           });
           const returnDestination = parseOutboundReturnDestination(currentRaw.returnDestination);
+          const submitStarted = await prisma.event.findFirst({
+            where: {
+              clientId: outbound.clientId,
+              eventName: "campaign.message.submit_started",
+              messageId: outbound.messageId,
+            },
+            select: { payloadJson: true },
+          });
+          const submitPayload = submitStarted?.payloadJson &&
+            typeof submitStarted.payloadJson === "object" && !Array.isArray(submitStarted.payloadJson)
+              ? submitStarted.payloadJson as Record<string, unknown>
+              : null;
+          const runtimeVersion = submitPayload?.runtimeVersionAtSubmission;
+          const conversationUpdatedAt = submitPayload?.conversationUpdatedAtAtSubmission;
           const materialized = client
             ? await ensureCampaignOutboundConversation(prisma, {
                 clientId: outbound.clientId,
@@ -3136,7 +3150,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 campaignRunId,
                 templateName: outbound.templateName ?? "",
                 sentAt: new Date(normalizeStatusTimestamp(item.timestamp)),
-                submittedAt: outbound.createdAt,
+                submissionRuntimeVersion: runtimeVersion === null ||
+                  (typeof runtimeVersion === "number" && Number.isInteger(runtimeVersion) && runtimeVersion >= 0)
+                    ? runtimeVersion : undefined,
+                submissionConversationUpdatedAt: conversationUpdatedAt === null
+                  ? null
+                  : typeof conversationUpdatedAt === "string" && !Number.isNaN(Date.parse(conversationUpdatedAt))
+                    ? new Date(conversationUpdatedAt) : undefined,
                 source: "campaign",
                 conversationId: typeof currentRaw.previousConversationId === "string" ? currentRaw.previousConversationId : null,
                 returnDestination,

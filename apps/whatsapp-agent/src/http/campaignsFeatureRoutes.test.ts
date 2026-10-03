@@ -15963,6 +15963,165 @@ test("campaign send resolves safe ninth digit variant to existing conversation",
   assert.equal(JSON.stringify(resolutionEvent.payloadJson).includes(inputWaId), false);
 });
 
+test("campaign receipt keeps inbound claim and transfer made while provider was pending", async (t) => {
+  const waId = "5541991177903";
+  const transferredDepartment = await createDepartmentWithOperationalQueue(prisma, {
+    clientId: businessClientId, name: "Pending provider transfer", slug: `pending-provider-${safeTemplatePrefix}`,
+  });
+  const eligibleAdmin = await createUser({ clientId: businessClientId, role: "ADMIN", suffix: "pending-human-admin" });
+  const eligibleSupervisor = await createUser({ clientId: businessClientId, role: "SUPERVISOR", suffix: "pending-human-supervisor" });
+  await assignUserDepartments({ clientId: businessClientId, userId: eligibleAdmin.id,
+    departmentIds: [businessReturnDepartmentId, transferredDepartment.id] });
+  await assignUserDepartments({ clientId: businessClientId, userId: eligibleSupervisor.id,
+    departmentIds: [businessReturnDepartmentId, transferredDepartment.id] });
+  await configureBusinessTemplateMetaTransport({ suffix: `${safeTemplatePrefix}-pending-human` });
+  const phoneNumberId = (await prisma.tenantMetaConfig.findUniqueOrThrow({
+    where: { clientId: businessClientId }, select: { phoneNumberId: true },
+  })).phoneNumberId;
+  const template = await prisma.template.create({ data: {
+    clientId: businessClientId, name: `campaign_pending_human_${safeTemplatePrefix}`,
+    category: "UTILITY", language: "pt_BR", status: "approved", content: "Aviso",
+  } });
+  const conversation = await prisma.conversation.create({ data: {
+    clientId: businessClientId, waId, waIdCanonical: waId, channel: "whatsapp", provider: "meta",
+    departmentId: businessReturnDepartmentId, windowIsOpen: false,
+    lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+  } });
+  await prisma.conversationRuntimeState.create({ data: {
+    clientId: businessClientId, waId, waIdCanonical: waId,
+    conversationKey: `${prefix}-business:${waId}`, channel: "whatsapp", provider: "meta",
+    firstSeenAt: new Date("2026-01-01T08:00:00.000Z"),
+    lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    mode: "HUMAN", status: "WAITING", departmentId: businessReturnDepartmentId,
+    queueId: businessReturnQueueId, windowIsOpen: false,
+  } });
+  let enterProvider!: () => void;
+  let releaseProvider!: () => void;
+  const providerEntered = new Promise<void>((resolve) => { enterProvider = resolve; });
+  const providerReleased = new Promise<void>((resolve) => { releaseProvider = resolve; });
+  const originalFetch = globalThis.fetch;
+  let createdCampaignId: string | null = null;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { type?: string };
+      if (body.type === "template") {
+        enterProvider();
+        await providerReleased;
+      }
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.pending.human.${safeTemplatePrefix}` }] }), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(async () => {
+    releaseProvider();
+    const { getRunningCampaignPromiseForTests } = await import("../campaigns/campaignRunner.js");
+    if (createdCampaignId) await getRunningCampaignPromiseForTests(createdCampaignId)?.catch(() => undefined);
+    globalThis.fetch = originalFetch;
+  });
+
+  const created = await request<{ campaign: { id: string } }>("POST", "/app/campaigns", businessAdmin, {
+    name: "Corrida com atendimento humano", templateId: template.id, recipients: [waId],
+    returnDestination: defaultCampaignReturnDestination(),
+  });
+  createdCampaignId = created.body.campaign.id;
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  await providerEntered;
+  const submitStarted = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, eventName: "campaign.message.submit_started",
+      messageId: `campaign.${created.body.campaign.id}.1` },
+    select: { createdAt: true },
+  });
+  const inboundId = `wamid.pending.inbound.${safeTemplatePrefix}`;
+  const inbound = await requestUnauth("POST", "/webhook", {
+    object: "whatsapp_business_account",
+    entry: [{ id: `${prefix}-waba`, changes: [{ field: "messages", value: {
+      messaging_product: "whatsapp", metadata: { phone_number_id: phoneNumberId },
+      contacts: [{ wa_id: waId, profile: { name: "Cliente Sintetico" } }],
+      messages: [{ id: inboundId, from: waId, timestamp: String(Math.floor(Date.now() / 1000)),
+        type: "text", text: { body: "Resposta sintetica" } }],
+    } }] }],
+  });
+  assert.equal(inbound.status, 200, JSON.stringify(inbound.body));
+  await waitFor(async () => {
+    const state = await prisma.conversationRuntimeState.findUnique({
+      where: { clientId_waId: { clientId: businessClientId, waId } },
+    });
+    return Boolean(state?.lastInboundMessageId === inboundId && state.windowIsOpen);
+  });
+  const claimed = await request<{ assignedUserId: string }>(
+    "POST", `/app/conversation/${waId}/claim`, eligibleAdmin, {}
+  );
+  assert.equal(claimed.status, 200, JSON.stringify(claimed.body));
+  const moved = await request<{ departmentId: string; assignedUserId: string | null }>(
+    "POST", `/app/conversation/${waId}/transfer-department`, eligibleAdmin,
+    { departmentId: transferredDepartment.id }
+  );
+  assert.equal(moved.status, 200, JSON.stringify(moved.body));
+  assert.equal(moved.body.departmentId, transferredDepartment.id);
+  const transferred = await request<{ assignedUserId: string }>(
+    "POST", `/app/conversation/${waId}/transfer`, eligibleAdmin, { userId: eligibleSupervisor.id }
+  );
+  assert.equal(transferred.status, 200, JSON.stringify(transferred.body));
+  assert.equal(transferred.body.assignedUserId, eligibleSupervisor.id);
+  const beforeReceipt = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+  });
+  const beforeReceiptConversation = await prisma.conversation.findUniqueOrThrow({
+    where: { id: conversation.id },
+  });
+  assert.ok(beforeReceipt.updatedAt > submitStarted.createdAt);
+  assert.equal(beforeReceipt.departmentId, transferredDepartment.id);
+  releaseProvider();
+  await waitFor(async () => (await prisma.outboundMessage.count({
+    where: { clientId: businessClientId, messageId: `campaign.${created.body.campaign.id}.1` },
+  })) === 1);
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, messageId: `campaign.${created.body.campaign.id}.1` },
+  });
+  const providerAccepted = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, eventName: "campaign.message.provider_accepted",
+      messageId: `campaign.${created.body.campaign.id}.1` },
+    select: { createdAt: true },
+  });
+  assert.ok(outbound.createdAt > submitStarted.createdAt);
+  assert.ok(providerAccepted.createdAt > submitStarted.createdAt);
+  assert.ok(outbound.createdAt >= providerAccepted.createdAt);
+  const afterProvider = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+  });
+  assert.ok(afterProvider.lastOutboundAt);
+  assert.ok(outbound.createdAt >= afterProvider.lastOutboundAt);
+  assert.ok(afterProvider.updatedAt > beforeReceipt.updatedAt);
+  // Both timestamps used by the old receipt fence are now before outbound.createdAt,
+  // even though the human intervention happened after submit_started.
+  assert.ok(beforeReceiptConversation.updatedAt < outbound.createdAt);
+  assert.ok(afterProvider.updatedAt < outbound.createdAt);
+  await deliverCampaignOutbound(created.body.campaign.id);
+  await deliverCampaignOutbound(created.body.campaign.id, 1, "read");
+  const after = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+  });
+  const afterConversation = await prisma.conversation.findUniqueOrThrow({ where: { id: conversation.id } });
+  assert.equal(after.assignedUserId, eligibleSupervisor.id);
+  assert.equal(after.departmentId, beforeReceipt.departmentId);
+  assert.equal(after.queueId, beforeReceipt.queueId);
+  assert.equal(after.status, beforeReceipt.status);
+  assert.equal(after.mode, beforeReceipt.mode);
+  assert.equal(after.lastInboundAt?.toISOString(), beforeReceipt.lastInboundAt?.toISOString());
+  assert.equal(after.windowExpiresAt?.toISOString(), beforeReceipt.windowExpiresAt?.toISOString());
+  assert.equal(after.provider, beforeReceipt.provider);
+  assert.equal(after.channelAccountId, beforeReceipt.channelAccountId);
+  assert.deepEqual(after.answers, beforeReceipt.answers);
+  assert.equal(afterConversation.departmentId, transferredDepartment.id);
+  assert.equal(afterConversation.channel, beforeReceiptConversation.channel);
+  assert.equal(afterConversation.provider, beforeReceiptConversation.provider);
+  assert.equal(afterConversation.phoneNumberId, beforeReceiptConversation.phoneNumberId);
+  assert.equal(afterConversation.lastInboundAt?.toISOString(), beforeReceipt.lastInboundAt?.toISOString());
+});
+
 test("campaign send reactivates soft-deleted non-anonymized conversation", async (t) => {
   const template = await prisma.template.create({
     data: {
@@ -16407,6 +16566,39 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   assert.equal(getErrorCode(closedText.body), "window_closed");
   assert.equal(providerCalls, callsBeforeBlockedActions);
   assert.equal(await prisma.event.count({ where: { clientId: businessClientId, waId, eventName: "conversation.protocol.notice.sent" } }), 0);
+
+  const inboundId = `wamid.after.closed.${safeTemplatePrefix}`;
+  const inboundPhone = (await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, messageId: `campaign.${response.body.campaign.id}.1` },
+    select: { phoneNumberId: true },
+  })).phoneNumberId ?? process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const inbound = await requestUnauth("POST", "/webhook", {
+    object: "whatsapp_business_account", entry: [{ id: `${prefix}-waba`, changes: [{
+      field: "messages", value: {
+        messaging_product: "whatsapp", metadata: { phone_number_id: inboundPhone },
+        contacts: [{ wa_id: waId, profile: { name: "Cliente Sintetico" } }],
+        messages: [{ id: inboundId, from: waId, timestamp: String(Math.floor(Date.now() / 1000)),
+          type: "text", text: { body: "Resposta depois da campanha" } }],
+      },
+    }] }],
+  });
+  assert.equal(inbound.status, 200, JSON.stringify(inbound.body));
+  await waitFor(async () => {
+    const current = await prisma.conversationRuntimeState.findUnique({
+      where: { clientId_waId: { clientId: businessClientId, waId } },
+    });
+    return current?.lastInboundMessageId === inboundId && current.windowIsOpen;
+  });
+  const afterInbound = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+  });
+  assert.ok(afterInbound.windowExpiresAt && afterInbound.windowExpiresAt > new Date());
+  const eligibleAdmin = await createUser({ clientId: businessClientId, role: "ADMIN", suffix: "closed-campaign-inbound" });
+  await assignUserDepartments({ clientId: businessClientId, userId: eligibleAdmin.id,
+    departmentIds: [businessReturnDepartmentId] });
+  const openClaim = await request<{ assignedUserId: string }>("POST", `/app/conversation/${waId}/claim`, eligibleAdmin, {});
+  assert.equal(openClaim.status, 200, JSON.stringify(openClaim.body));
+  assert.equal(openClaim.body.assignedUserId, eligibleAdmin.id);
 
 });
 
