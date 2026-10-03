@@ -1,0 +1,40 @@
+{
+  "status": "PREPARED FOR WINDOW / NOT DEPLOYED",
+  "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-20261003T150000Z",
+  "functionalApiCommit": "879cb1faa88493cd78dd789b71f85043d6c8ff9c",
+  "returnApiCommit": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
+  "candidateApiDistManifestSha256": "2aefa4e68320b3ee4e41e4443c93694db6c9daf66f79300522640a0c121c4928",
+  "candidateApiSourceManifestSha256": "e7a92bf07f996f0776e64893e35e8368a630a3d5c2457baa7e6a243c9b5693ca",
+  "candidateApiCompiledFilesVerified": 425,
+  "candidateApiSourceFilesVerified": 428,
+  "candidateApiConfigSha256": "250920e12d1ebe14558a6d88af266ba70a13d6f62c6e0d9d9c7bfdf96ad22267",
+  "returnApiConfigSha256": "7963b801e6f6bef3d2b21d903f3fffac910c0e9573b84fb34bb99b25b7591ed0",
+  "existingMinimalWorkerCompiledFilesVerified": 99,
+  "existingMinimalWorkerManifestSha256": "7d57c73c7769948fc5123479827358e8b4759e872bb7e33358fad06724670d60",
+  "preservedFrontendCompiledFilesVerified": 1645,
+  "preservedFrontendManifestSha256": "76e0f9f4723ec74fb4d6c5b76551b5f8517739b2ed2d82127612d7a9e7a8392d",
+  "prismaClientVersion": "6.19.2",
+  "prismaGeneratedSchemaSha256BothApis": "75c32a1d4fa67626d991d89d0327749c7ca65edea02e969c5733fd2b2c0dc594",
+  "installedObserverSha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+  "liveProxyExecutableSha256": "8cd3b929d0cbae223b017134f7e8a09a7da49089fe24ffc051b8c54f7718d7e1",
+  "dbOwnerBindingSha256": "45d6999f8dd2c10742333390e4a1dff66eb597ab4138148089b205a6b7abd57b",
+  "modeScriptsSha256": {
+    "switch": "091e11893215fe0a03b7bd8fd934c12d9857d85074df3a804bd6050087f063db",
+    "return": "13c0c8ce154ff85316fab9e312894d4be9666e625a2f7b6f7630503244865d3f",
+    "return-partial": "5f6acfbd8304587e1f0e93fd64fca2af7790d2c59e0e6879e90dd7cdd348811b"
+  },
+  "filesBoundPerMode": 24,
+  "privateOwnerStepsSha256": "9713006ddf80acfbcdac22031399160ed57a8ffb61b4549ead905dc9517a10db",
+  "freshDatabaseDumpSha256": "88a4040d811b05554fa470db6d4c58d29b2e33fc8f5a2beafd6c7d5ecb409fc2",
+  "freshDatabaseDumpBytes": 24329182,
+  "catalogObjects": 614,
+  "isolatedRestore": {
+    "postgresVersion": 16,
+    "finishedMigrations": 60,
+    "temporaryDatabaseRemoved": true,
+    "providersStarted": false
+  },
+  "executionGatesEnabled": false,
+  "frontendStopStartActionsAvailable": false,
+  "privateConfigsAndOperationalEvidenceVersioned": false
+}

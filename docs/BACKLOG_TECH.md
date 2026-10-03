@@ -3447,3 +3447,7 @@ continuam pendentes. Restart com guarda aberta não ensaiado, incertezas antigas
 não encerradas. Próxima validação owner exige audiência/destinatários controlados
 e revisão de template/variáveis antes de qualquer envio. 6683 CLOSED, Telegram e
 DELIVERED/READ separados; histórico owner PASS preservado.
+
+### Caso novo 6683 — janela corretiva V4 preparada (03/10/2026)
+
+O [plano API 879cb1fa](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_WINDOW_PLAN_2026-10-03.md), [manifesto](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_MANIFEST_2026-10-03.json) e [preflight](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_PREFLIGHT_2026-10-03.md) estão **PREPARED FOR WINDOW / NOT DEPLOYED**. Preparação V4 nova com backup/restore isolado, frontend af26 preservado e mesmo worker mínimo af26; todos os gates de execução falsos. Faltam decisão de janela e reconfirmação imediata dos controles, inclusive checkpoint nft privilegiado do owner. A correção previne novos registros indevidos; não saneia 0604, 6787, 9614 ou o caso novo 6683, que permanece FAIL para aceite. O reparo homônimo de setembro segue CLOSED. Campanhas/CRA continuam aguardando validação funcional do owner; outras frentes não foram iniciadas.
