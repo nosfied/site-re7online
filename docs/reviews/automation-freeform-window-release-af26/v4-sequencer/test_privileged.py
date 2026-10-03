@@ -198,5 +198,31 @@ class PolicyTests(unittest.TestCase):
                     p.policy_from(path)
 
 
+class IsolatedFileEffectsTests(unittest.TestCase):
+    def test_atomic_cron_replacement_in_user_namespace(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder) / 'cron'
+            target.write_bytes(b'before')
+            code = '''import os,pathlib,stat,sys
+sys.path.insert(0,sys.argv[1])
+import privileged as p
+p.CRON=pathlib.Path(sys.argv[2])
+old=p.CRON.stat().st_ino
+p.write_cron(b'window')
+assert p.CRON.read_bytes()==b'window'
+assert p.CRON.stat().st_ino!=old
+assert stat.S_IMODE(p.CRON.stat().st_mode)==0o644
+p.CRON.unlink()
+p.CRON.symlink_to(pathlib.Path(sys.argv[2]).parent/'other')
+try: p.write_cron(b'wrong')
+except RuntimeError as e: assert str(e)=='cron_path_unsafe'
+else: raise AssertionError('symlink accepted')
+'''
+            subprocess.run(['unshare', '-Ur', sys.executable, '-I', '-S', '-c',
+                            code, str(Path(__file__).parent), str(target)],
+                           check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                           timeout=10)
+
+
 if __name__ == '__main__':
     unittest.main()
