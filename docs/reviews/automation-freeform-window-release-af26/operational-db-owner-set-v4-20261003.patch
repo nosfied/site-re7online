@@ -1,0 +1,387 @@
+diff --git a/ops.py b/ops.py
+--- a/ops.py
++++ b/ops.py
+@@ -9,3 +8,0 @@
+-import ipaddress
+-import socket
+-import struct
+@@ -15 +12,2 @@
+-from urllib.parse import urlsplit
++import db_owner_set_gate
++import db_owner_set_observer
+@@ -113 +111 @@
+-    def db_backends(self):
++    def db_backends(self, container_id=None):
+@@ -115,50 +113,34 @@
+-        return json.loads(self.run(['docker', 'exec', '-i', 'wa-agent-postgres', 'psql', '-X', '-U', 'wa_agent', '-d', 'whatsapp_agent', '-Atq', '-v', 'ON_ERROR_STOP=1'], sql))
+-
+-    def api_db_sockets(self, pid):
+-        """Established IPv4 sockets held by this exact process, not all sockets in its netns."""
+-        fds = Path('/proc', str(pid), 'fd')
+-        inodes = set()
+-        for fd in fds.iterdir():
+-            try:
+-                target = os.readlink(fd)
+-            except FileNotFoundError:
+-                continue
+-            if target.startswith('socket:[') and target.endswith(']'):
+-                inodes.add(target[8:-1])
+-        sockets = []
+-        for line in Path('/proc', str(pid), 'net', 'tcp').read_text().splitlines()[1:]:
+-            parts = line.split()
+-            if parts[9] not in inodes or parts[3] != '01':
+-                continue
+-            def endpoint(value):
+-                address, port = value.split(':')
+-                return (socket.inet_ntop(socket.AF_INET, struct.pack('<I', int(address, 16))), int(port, 16))
+-            sockets.append({'local': endpoint(parts[1]), 'peer': endpoint(parts[2]), 'inode': parts[9]})
+-        return sockets
+-
+-    def db_only_successor_api(self, pid, identity, database_url):
+-        """Fail closed unless every PG backend has one API-owned socket endpoint."""
+-        require(same_process(identity, self.identity(pid)), 'successor_identity_changed')
+-        url = urlsplit(database_url)
+-        require(url.scheme in {'postgresql', 'postgres'}, 'db_endpoint_unprovable')
+-        try:
+-            host = str(ipaddress.IPv4Address(url.hostname))
+-            port = url.port or 5432
+-        except (ValueError, TypeError):
+-            raise RuntimeError('db_endpoint_unprovable')
+-        first = self.db_backends()
+-        require(first['advisoryLocks'] == 0, 'unknown_db_owner')
+-        sockets = self.api_db_sockets(pid)
+-        # A socket to another destination may reuse a source port; peer binding
+-        # and inode ownership are both required. NAT/proxy ambiguity denies.
+-        for backend in first['backends']:
+-            address, source_port = backend['address'], backend['port']
+-            require(address is not None and isinstance(source_port, int) and source_port > 0,
+-                    'unknown_db_owner')
+-            matches = [s for s in sockets if s['local'] == (address, source_port)
+-                       and s['peer'] == (host, port)]
+-            require(len(matches) == 1, 'unknown_db_owner')
+-        require(len({(b['address'], b['port']) for b in first['backends']}) == len(first['backends']),
+-                'unknown_db_owner')
+-        require(first == self.db_backends(), 'db_owner_changed_during_check')
+-        require(same_process(identity, self.identity(pid)), 'successor_identity_changed')
++        return json.loads(self.run(['docker', 'exec', '-i', container_id or 'wa-agent-postgres', 'psql', '-X', '-U', 'wa_agent', '-d', 'whatsapp_agent', '-Atq', '-v', 'ON_ERROR_STOP=1'], sql))
++
++    def api_socket_inventory(self, pid):
++        return db_owner_set_observer._inventory(pid)
++
++    def proxy_socket_inventory(self, expected_sha):
++        path = Path('/usr/local/libexec/re7/db-owner-set-observer.py')
++        require(path.is_file() and not path.is_symlink(), 'proxy_observer_not_installed')
++        for part in (path, path.parent, path.parent.parent):
++            st = part.stat()
++            require(st.st_uid == 0 and not (st.st_mode & 0o022), 'proxy_observer_not_root_owned')
++        require(hashlib.sha256(path.read_bytes()).hexdigest() == expected_sha,
++                'proxy_observer_hash_mismatch')
++        output = subprocess.check_output(['sudo', '-n', '/usr/bin/python3', str(path)],
++                                         text=True, env=CLEAN, stderr=subprocess.PIPE,
++                                         timeout=10)
++        return json.loads(output)
++
++    def db_container(self):
++        items = json.loads(self.run(['docker', 'inspect', 'wa-agent-postgres']))
++        require(len(items) == 1 and items[0]['State']['Running'], 'db_container_drift')
++        item = items[0]
++        nets = item['NetworkSettings']['Networks']
++        require(len(nets) == 1, 'db_network_ambiguous')
++        require(not any(n.get('GlobalIPv6Address') for n in nets.values()),
++                'db_ipv6_path_unmodeled')
++        ip = next(iter(nets.values()))['IPAddress']
++        published = item['NetworkSettings']['Ports']['5432/tcp']
++        require(len(published) == 1, 'db_publication_ambiguous')
++        return {'id': item['Id'], 'ip': ip,
++                'published': [published[0]['HostIp'], int(published[0]['HostPort'])]}
++
++    def db_only_successor_api(self, pid, identity, database_url, bindings):
++        return db_owner_set_gate.verify(self, pid, identity, database_url, bindings)
+@@ -347,0 +330,8 @@
++            binding_bytes = (self.window / 'db-owner-bindings.private.json').read_bytes()
++            if hasattr(self.d, 'proof'):
++                proof = self.d.proof()
++                require(proof['request']['dbOwnerBindingsHash'] ==
++                        hashlib.sha256(binding_bytes).hexdigest(), 'db_owner_binding_drift')
++            bindings = json.loads(binding_bytes)
++            require(bindings['apiHttpPort'] == int(self.target[API]['env']['PORT']),
++                    'api_http_port_binding_drift')
+@@ -349 +339 @@
+-                                         self.target[API]['env']['DATABASE_URL'])
++                                         self.target[API]['env']['DATABASE_URL'], bindings)
+diff --git a/delegated.py b/delegated.py
+--- a/delegated.py
++++ b/delegated.py
+@@ -69 +69 @@
+-    return {'action': action, 'root': str(root.resolve()),
++    result = {'action': action, 'root': str(root.resolve()),
+@@ -72,0 +73,4 @@
++    if action == 'start:' + ops.WORKER:
++        binding_file = root.parent / 'window' / 'db-owner-bindings.private.json'
++        result['dbOwnerBindingsHash'] = hashlib.sha256(binding_file.read_bytes()).hexdigest()
++    return result
+diff --git a/db_owner_set_gate.py b/db_owner_set_gate.py
+new file mode 100644
+--- /dev/null
++++ b/db_owner_set_gate.py
+@@ -0,0 +1,144 @@
++"""Fail-closed set attribution for the af26 API -> docker-proxy -> PostgreSQL gate.
++
++Only the owner of each observed socket and the exact fixed DB route matter here.
++This is a point-in-time proof; containment/PM2/nonce/old-exit gates stay in ops.py.
++"""
++import ipaddress
++from urllib.parse import urlsplit
++
++
++def require(ok, reason):
++    if not ok:
++        raise RuntimeError(reason)
++
++
++def _tcp(rows, inode_set):
++    return [r for r in rows if r['inode'] in inode_set]
++
++
++def _pair(row):
++    return (tuple(row['local']), tuple(row['peer']))
++
++
++def _loopback(address):
++    ip = ipaddress.ip_address(address)
++    return ip.is_loopback or bool(isinstance(ip, ipaddress.IPv6Address) and
++                                  ip.ipv4_mapped and ip.ipv4_mapped.is_loopback)
++
++
++def _expected_proxy_args(args, host, port, target_ip):
++    required = {'-proto': 'tcp', '-host-ip': host, '-host-port': str(port),
++                '-container-ip': target_ip, '-container-port': '5432'}
++    require(len(args) in (11, 12) and args[0].endswith('/docker-proxy'), 'proxy_arguments_drift')
++    seen = {}
++    i = 1
++    while i < len(args):
++        key = args[i]
++        if key == '-use-listen-fd':
++            require(key not in seen, 'proxy_arguments_drift')
++            seen[key] = True
++            i += 1
++            continue
++        require(key in required and key not in seen and i + 1 < len(args), 'proxy_arguments_drift')
++        seen[key] = args[i + 1]
++        i += 2
++    require(all(seen.get(k) == v for k, v in required.items()), 'proxy_arguments_drift')
++    require(set(seen) <= set(required) | {'-use-listen-fd'}, 'proxy_arguments_drift')
++
++
++def _classify_api(inv, host, port, target_ip, http_port):
++    require(not inv['udp'] and not inv['udp6'], 'api_unexpected_udp')
++    # Node's unnamed socketpairs are not pathname sockets that can reach PG.
++    require(all(not r['path'] and r['type'] == '0001' and r['state'] == '03'
++                for r in inv['unix']), 'api_unexpected_unix')
++    db, http = [], []
++    for table in ('tcp', 'tcp6'):
++        for row in inv[table]:
++            local, peer, state = row['local'], row['peer'], row['state']
++            require(peer != [target_ip, 5432], 'api_direct_db_socket')
++            if table == 'tcp' and peer == [host, port] and state == '01':
++                db.append(row)
++            elif local[1] == http_port and state in ('01', '0A'):
++                if state == '01':
++                    require(_loopback(peer[0]), 'unexpected_http_during_fence')
++                else:
++                    require(local[0] in ('0.0.0.0', '::', '127.0.0.1', '::1'),
++                            'unexpected_http_listener')
++                http.append(row)
++            else:
++                # No generic exemption for a socket with a non-DB-looking peer.
++                raise RuntimeError('api_unclassified_socket')
++    require(len({_pair(r) for r in db}) == len(db), 'api_duplicate_db_socket')
++    return db
++
++
++def _classify_proxy(inv, host, port, target_ip):
++    require(not inv['tcp6'] and not inv['unix'] and not inv['udp'] and not inv['udp6'],
++            'proxy_unclassified_socket')
++    listener, ingress, egress = [], [], []
++    for row in inv['tcp']:
++        local, peer, state = row['local'], row['peer'], row['state']
++        if local == [host, port] and state == '0A' and peer[1] == 0:
++            listener.append(row)
++        elif local == [host, port] and state == '01':
++            ingress.append(row)
++        elif peer == [target_ip, 5432] and state == '01':
++            egress.append(row)
++        else:
++            raise RuntimeError('proxy_unclassified_socket')
++    require(len(listener) == 1, 'proxy_listener_drift')
++    require(len({_pair(r) for r in ingress}) == len(ingress), 'proxy_duplicate_ingress')
++    require(len({_pair(r) for r in egress}) == len(egress), 'proxy_duplicate_egress')
++    return ingress, egress
++
++
++def _one(system, pid, marker, host, port, bindings):
++    current = system.identity(pid)
++    require(current and current['ticks'] == marker['ticks'] and current['state'] != 'Z',
++            'successor_identity_changed')
++    target = system.db_container()
++    require(target['id'] == bindings['containerId'] and
++            target['ip'] == bindings['containerIp'] and
++            target['published'] == [host, port], 'db_container_drift')
++    api = system.api_socket_inventory(pid)
++    proxy = system.proxy_socket_inventory(bindings['observerSha256'])
++    require(proxy['identity'] == bindings['proxyIdentity'], 'proxy_identity_changed')
++    require(proxy['exeSha256'] == bindings['proxySha256'], 'proxy_binary_drift')
++    _expected_proxy_args(proxy['args'], host, port, target['ip'])
++    db = system.db_backends(target['id'])
++    require(db['advisoryLocks'] == 0, 'unknown_db_owner')
++    api_db = _classify_api(api, host, port, target['ip'], bindings['apiHttpPort'])
++    ingress, egress = _classify_proxy(proxy['sockets'], host, port, target['ip'])
++    api_pairs = sorted((_pair(row) for row in api_db))
++    inbound_pairs = sorted(((tuple(row['peer']), tuple(row['local'])) for row in ingress))
++    require(api_pairs == inbound_pairs, 'api_proxy_ingress_mismatch')
++    backend_pairs = [(b['address'], b['port']) for b in db['backends']]
++    egress_pairs = sorted((row['local'][0], row['local'][1]) for row in egress)
++    require(all(a is not None and isinstance(p, int) and p > 0 for a, p in backend_pairs),
++            'unknown_db_owner')
++    require(sorted(backend_pairs) == egress_pairs, 'proxy_backend_mismatch')
++    # Moby TCPProxy's reviewed 1 Accept -> 1 DialTCP is required in addition
++    # to the exact socket/backend matches; equal cardinalities alone are not proof.
++    require(len(api_pairs) == len(egress_pairs), 'proxy_pair_cardinality')
++    current = system.identity(pid)
++    require(current and current['ticks'] == marker['ticks'] and current['state'] != 'Z',
++            'successor_identity_changed')
++    require(system.db_container() == target, 'db_container_changed_during_check')
++    return (target, api, proxy, db)
++
++
++def verify(system, pid, marker, database_url, bindings):
++    url = urlsplit(database_url)
++    require(url.scheme in ('postgres', 'postgresql'), 'db_endpoint_unprovable')
++    try:
++        host = str(ipaddress.IPv4Address(url.hostname))
++        port = url.port or 5432
++    except (TypeError, ValueError):
++        raise RuntimeError('db_endpoint_unprovable')
++    require(host == '127.0.0.1' and port == bindings['publishedPort'],
++            'db_endpoint_unprovable')
++    first = _one(system, pid, marker, host, port, bindings)
++    second = _one(system, pid, marker, host, port, bindings)
++    require(first == second, 'db_owner_changed_during_check')
++    return {'apiConnections': len([r for r in first[1]['tcp'] if r['peer'] == [host, port]]),
++            'proxyPid': first[2]['identity']['pid']}
+diff --git a/db_owner_set_observer.py b/db_owner_set_observer.py
+new file mode 100644
+--- /dev/null
++++ b/db_owner_set_observer.py
+@@ -0,0 +1,111 @@
++"""Fixed-scope, read-only docker-proxy socket observer for af26 review.
++
++Operational installation must be root-owned at the fixed path in ops.py. Its
++CLI accepts no arguments or environment-supplied paths. The callable function
++is parameterized only so an isolated laboratory can use another published port.
++"""
++import hashlib
++import json
++import os
++from pathlib import Path
++import socket
++import struct
++import sys
++
++
++def _identity(pid):
++    raw = Path('/proc', str(pid), 'stat').read_text()
++    fields = raw[raw.rfind(')') + 2:].split()
++    if fields[0] == 'Z':
++        raise RuntimeError('proxy_zombie')
++    return {'pid': pid, 'ticks': fields[19]}
++
++
++def _address(value, family):
++    raw, port = value.split(':')
++    if family == socket.AF_INET:
++        addr = socket.inet_ntop(family, struct.pack('<I', int(raw, 16)))
++    else:
++        b = bytes.fromhex(raw)
++        addr = socket.inet_ntop(family, b''.join(b[i:i + 4][::-1] for i in range(0, 16, 4)))
++    return [addr, int(port, 16)]
++
++
++def _inventory(pid):
++    base = Path('/proc', str(pid))
++    inodes = set()
++    for fd in (base / 'fd').iterdir():
++        link = os.readlink(fd)  # A vanished/unreadable FD denies the sample.
++        if link.startswith('socket:['):
++            inodes.add(link[8:-1])
++    result = {'tcp': [], 'tcp6': [], 'unix': [], 'udp': [], 'udp6': []}
++    observed = set()
++    for table in result:
++        for line in (base / 'net' / table).read_text().splitlines()[1:]:
++            cols = line.split()
++            inode = cols[6] if table == 'unix' else cols[9]
++            if inode not in inodes:
++                continue
++            observed.add(inode)
++            if table == 'unix':
++                result[table].append({'inode': inode, 'type': cols[4],
++                                      'state': cols[5], 'path': cols[7] if len(cols) > 7 else ''})
++            else:
++                family = socket.AF_INET6 if table.endswith('6') else socket.AF_INET
++                result[table].append({'inode': inode, 'local': _address(cols[1], family),
++                                      'peer': _address(cols[2], family), 'state': cols[3]})
++    if observed != inodes:
++        raise RuntimeError('proxy_socket_unclassified')
++    for rows in result.values():
++        rows.sort(key=lambda row: row['inode'])
++    return result
++
++
++def _args(pid):
++    values = Path('/proc', str(pid), 'cmdline').read_bytes().split(b'\0')
++    values = [v.decode('utf-8', 'strict') for v in values if v]
++    if not values or Path(values[0]).name != 'docker-proxy':
++        raise RuntimeError('proxy_executable_unexpected')
++    return values
++
++
++def observe_proxy(host_ip='127.0.0.1', host_port=5432):
++    matches = []
++    for entry in Path('/proc').iterdir():
++        if not entry.name.isdecimal():
++            continue
++        pid = int(entry.name)
++        try:
++            if (entry / 'comm').read_text().strip() != 'docker-proxy':
++                continue
++            args = _args(pid)
++        except FileNotFoundError:
++            continue
++        if '-host-ip' in args and '-host-port' in args and \
++           args[args.index('-host-ip') + 1] == host_ip and \
++           args[args.index('-host-port') + 1] == str(host_port):
++            matches.append((pid, args))
++    if len(matches) != 1:
++        raise RuntimeError('proxy_count_or_identity')
++    pid, args = matches[0]
++    before = _identity(pid)
++    exe = Path('/proc', str(pid), 'exe')
++    digest = hashlib.sha256(exe.read_bytes()).hexdigest()
++    sockets = _inventory(pid)
++    if _identity(pid) != before or _args(pid) != args:
++        raise RuntimeError('proxy_changed_during_sample')
++    return {'identity': before, 'exeSha256': digest, 'args': args, 'sockets': sockets}
++
++
++def main():
++    if len(sys.argv) != 1 or os.geteuid() != 0:
++        raise RuntimeError('fixed_root_invocation_required')
++    print(json.dumps(observe_proxy(), sort_keys=True, separators=(',', ':')))
++
++
++if __name__ == '__main__':
++    try:
++        main()
++    except Exception:
++        print('proxy_observation_denied', file=sys.stderr)
++        sys.exit(1)

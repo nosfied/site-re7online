@@ -1,5 +1,7 @@
 # Prova de propriedade do conjunto DB via docker-proxy — especificação para revisão
 
+**Adendo 03/10 UTC:** a condução delimitou a garantia exigida pelos executores operacionais reais. A lacuna após a última amostra é comum ao V3 e à prova coletiva; por si só, não exige uma nova barreira de admissão DB. O parágrafo histórico “bloqueio de promoção” abaixo não é a decisão final. O [pacote V4 local integrado](OPERATIONAL_DB_OWNER_SET_V4_LOCAL_2026-10-03.md) preserva saída, exclusividade, contenção, supervisão, nonce e negação de clientes observados, sem alegar atomicidade. Continua NOT DEPLOYED e sujeito a revisão independente.
+
 **PROPOSTA / NÃO IMPLEMENTADA / NOT DEPLOYED.** O gate V3 direto permanece bloqueado. Este contrato não autoriza janela, mudança de privilégio, nem substitui os certificados de saída, guarda, contenção, supervisão, nonce ou exclusividade de executor.
 
 ## Propriedade e limite do pareamento individual

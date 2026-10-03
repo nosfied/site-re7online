@@ -1,0 +1,35 @@
+{
+  "status": "LOCAL VALIDATED / FOR INDEPENDENT REVIEW / NOT DEPLOYED",
+  "base": "V3 in OPERATIONAL_DB_OWNER_V3_MANIFEST.json",
+  "apply": "After verifying the V3 source hashes, apply the zero-context patch with git apply --unidiff-zero once in each of switch, return, return-partial, return-front-missing; then verify all V4 hashes. Regenerate each private scripts.sha256 including both new modules.",
+  "beforeEachMode": {
+    "ops.py": "13a19bbfe96015bfcf6f57919073ff67b76538090a12cb04ad9a0b3cf213da77",
+    "delegated.py": "13dbe88e7e0b068f4ee936a44dbeaede9e524984850d443cf9771d256b42d188"
+  },
+  "afterEachMode": {
+    "ops.py": "fcda2c4ae1843fcecb48bd4477759f455db0b67fef4ecbfd1ceab62bd3df1ec3",
+    "delegated.py": "f9701c6bcb67c3fede8620d3b98570fab05445e85c4a7c24648972c8e5651028",
+    "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+    "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+  },
+  "patchSha256": "bf58e216c6f832480b9b7ea7f408d88595a73bd4a9a46f137931e011872a4a81",
+  "observerInstallation": {
+    "fixedPath": "/usr/local/libexec/re7/db-owner-set-observer.py",
+    "rootOwnedAndNonWritableByGroupOrOther": true,
+    "cliArguments": "none",
+    "privilegedRead": "Only the docker-proxy matching the fixed 127.0.0.1:5432 publication; no process environment or credentials",
+    "productionInstallation": "NOT DONE"
+  },
+  "functionalBuildsReused": {
+    "apiTree": "6e92592b41ba0a67565c3c2f62f332807a297e8f52fb884db569bbadcbead611",
+    "frontendTree": "76e0f9f4723ec74fb4d6c5b76551b5f8517739b2ed2d82127612d7a9e7a8392d",
+    "minimalWorkerTree": "7d57c73c7769948fc5123479827358e8b4759e872bb7e33358fad06724670d60"
+  },
+  "validation": {
+    "inMemoryPackage": "45 passed",
+    "delegatedProof": "35 passed",
+    "realDockerPostgresIntegration": "3 passed; four modes in one parameterized test",
+    "realSocketNegatives": "13 passed; identity/unavailable/IPv6-DB cases within these include injected negative inputs, as individually labeled in report",
+    "production": "not exercised"
+  }
+}
