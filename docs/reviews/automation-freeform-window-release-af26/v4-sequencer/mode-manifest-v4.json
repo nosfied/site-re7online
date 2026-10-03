@@ -1,0 +1,35 @@
+{
+  "preparation": "incident-6683-v4-sequenced-20261003T165710Z",
+  "modeFiles": {
+    "ops.py": {
+      "before": "102cd858ee1ff7b3472986cd45447498f3689ee75c9d1c99a39ef0d4be929db7",
+      "after": "0806ca3c269bf1b2f3c0e63c3e645a4fe52e14322e89033b5bcb9f9c38f3a9c5"
+    },
+    "delegated.py": {
+      "before": "eb4daf2571954a851212a0ec89349823fd050f529597f7a29283d14062b67b07",
+      "after": "b79bf21975e0ceac2ae87e041f9ebb9967f30363aedc0703ad16308a28247c5d"
+    },
+    "read-state.py": {
+      "before": "c4be55d549ab28f7e5f1ac39a7dddc4d171561a9044a35224043388061c87a54",
+      "after": "21fd195318251b35316e888f1e3caf1cd58098ff6990afcc8c561dad5809ec2d"
+    },
+    "execution-check.cjs": {
+      "before": "1d67ee196b07d7ee1325ed8abfed5850dc66b2803119499cb32d08c600a25ffe",
+      "after": "e191e7274420934b757c4ddb3c911bcbe2df6b1ec3ebb612426b307bea2eb6cd"
+    }
+  },
+  "modeManifests": {
+    "switch": {
+      "before": "b634aaf55a6f546780c53282bc55a7c02945787f124a75facf165fcbb3dfef90",
+      "after": "ec664fb8d541c35bc754f597d9760eff8eb4d6049a5541ce6b54fdf9e13c92e8"
+    },
+    "return": {
+      "before": "a0b0dbbb672c61917684a3b73dcd0885de6a3c21386589015d575529a7311992",
+      "after": "43c91002076fcc08ad45d3721661f59b0492aafec7dd357c6d416c2e27d77949"
+    },
+    "return-partial": {
+      "before": "07c8c7f8ef607c8ee693cef81f6841eb7546e2355ce0633a1dde8d4b9d8608c7",
+      "after": "af3c1d3dc2f8101cd4545c61e96406be67e03bf88460da3c7ea91652dbeb5cbf"
+    }
+  }
+}

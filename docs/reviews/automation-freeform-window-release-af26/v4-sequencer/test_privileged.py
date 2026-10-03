@@ -20,7 +20,8 @@ class ControlTests(unittest.TestCase):
         self.cron = self.base / 'cron'
         self.cron.write_bytes(b'before')
         self.guard = self.base / 'guard'
-        self.guard.write_text(json.dumps({'open': False, 'tasks': [], 'ledgerFault': None}))
+        self.guard.write_text(json.dumps({'version': 1, 'open': False,
+             'generation': 14, 'tasks': {}, 'audit': []}))
         self.state = None
         self.fence = False
         self.boot = 'enabled'
@@ -86,6 +87,26 @@ class ControlTests(unittest.TestCase):
         p.act('restore-controls', self.value)
         self.assertEqual((self.cron.read_bytes(), self.boot, self.fence, self.state['stage']),
                          (b'before', 'enabled', False, 'complete'))
+
+    def test_real_guard_read_rejects_work_invalid_shape_and_open(self):
+        good = json.loads(self.guard.read_text())
+        p.guard_closed()
+        cases = (
+            {'tasks': {'active': {'phase': 'provider'}}},
+            {'tasks': None}, {'tasks': False}, {'tasks': ''}, {'tasks': []},
+            {'open': True}, {'open': None}, {'version': False},
+            {'generation': False}, {'audit': None},
+        )
+        for change in cases:
+            with self.subTest(change=change):
+                self.guard.write_text(json.dumps(good | change))
+                with self.assertRaisesRegex(RuntimeError, 'guard_(schema_invalid|not_closed_drained)'):
+                    p.guard_closed()
+        missing = good.copy()
+        missing.pop('tasks')
+        self.guard.write_text(json.dumps(missing))
+        with self.assertRaisesRegex(RuntimeError, 'guard_schema_invalid'):
+            p.guard_closed()
 
     def test_partial_privileged_failure_recovered_before_stop(self):
         self.fail_fence_once = True

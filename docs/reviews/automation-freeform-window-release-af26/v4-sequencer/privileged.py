@@ -39,6 +39,15 @@ def phase_path(policy_hash):
     return Path('/var/lib/re7/incident-6683-v4-phase-' + policy_hash + '.json')
 
 
+def guard_state(value):
+    require(type(value) is dict and type(value.get('version')) is int and
+            value['version'] == 1 and type(value.get('open')) is bool and
+            type(value.get('generation')) is int and value['generation'] >= 0 and
+            type(value.get('tasks')) is dict and type(value.get('audit')) is list,
+            'guard_schema_invalid')
+    return value
+
+
 def root_regular(path):
     path = Path(path)
     for node in (path, *path.parents):
@@ -176,8 +185,8 @@ def write_cron(content):
 
 
 def guard_closed():
-    value = json.loads(GUARD.read_text())
-    require(value.get('open') is False and value.get('tasks') == [] and
+    value = guard_state(json.loads(GUARD.read_text()))
+    require(value['open'] is False and len(value['tasks']) == 0 and
             not value.get('ledgerFault'), 'guard_not_closed_drained')
 
 

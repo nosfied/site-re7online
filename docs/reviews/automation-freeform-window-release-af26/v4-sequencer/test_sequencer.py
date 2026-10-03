@@ -5,8 +5,10 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from sequencer import API, WORKER, FRONT, Sequencer
+import privileged as privileged_helper
+from sequencer import API, WORKER, FRONT, Sequencer, guard_state
 
 
 def config(version):
@@ -26,7 +28,8 @@ class FakeBridge:
         self.live = {name: {'pid': i, 'cfg': copy.deepcopy(value)}
                      for i, (name, value) in enumerate(self.old.items(), 101)}
         self.proc = {i: {'state': 'S', 'ticks': str(i * 100)} for i in range(101, 110)}
-        self.g = {'open': True, 'generation': 13, 'tasks': [], 'ledgerFault': None}
+        self.g = {'version': 1, 'open': True, 'generation': 13, 'tasks': {},
+                  'audit': [], 'ledgerFault': None}
         self.events = []
         self.fenced = False
         self.system_cron = 'before'
@@ -58,7 +61,7 @@ class FakeBridge:
         return ''
 
     def guard(self):
-        return copy.deepcopy(self.g)
+        return guard_state(copy.deepcopy(self.g))
 
     def apps(self):
         return {name: copy.deepcopy({'name': name, **value}) for name, value in self.live.items()}
@@ -170,7 +173,6 @@ class SequenceTests(unittest.TestCase):
         self.assertEqual((self.b.system_cron, self.b.boot), ('before', 'enabled'))
 
     def test_persisted_empty_task_object_allows_preflight_after_close(self):
-        self.b.g['tasks'] = {}
         self.s.run()
         self.assertTrue(self.b.g['open'])
         self.assertEqual(self.b.live[API]['cfg'], self.b.new[API])
@@ -178,6 +180,21 @@ class SequenceTests(unittest.TestCase):
             self.b.events.index(('node', 'switch', 'close.cjs')),
             next(i for i, e in enumerate(self.b.events)
                  if e[:3] == ('protocol', 'switch', 'preflight')))
+
+    def test_invalid_persisted_guard_rejected_before_close(self):
+        for tasks in (None, False, '', []):
+            with self.subTest(tasks=tasks):
+                self.tearDown()
+                self.setUp()
+                self.b.g['tasks'] = tasks
+                with self.assertRaisesRegex(RuntimeError, 'guard_schema_invalid'):
+                    self.s.run()
+                self.assertFalse(any(e[:2] == ('node', 'switch') for e in self.b.events))
+        self.tearDown()
+        self.setUp()
+        del self.b.g['tasks']
+        with self.assertRaisesRegex(RuntimeError, 'guard_schema_invalid'):
+            self.s.run()
 
     def test_early_proof_denied_before_guard_mutation(self):
         (self.b.root / 'switch/owner-request-preflight.json').write_text('{}')
@@ -252,6 +269,98 @@ class SequenceTests(unittest.TestCase):
         self.assertEqual(self.b.live[API]['cfg'], self.b.old[API])
         self.assertEqual(self.b.live[WORKER]['cfg'], self.b.old[WORKER])
         self.assertTrue(self.b.g['open'])
+
+
+class RealGuardChainTests(unittest.TestCase):
+    def run_case(self, fail_action=None):
+        with tempfile.TemporaryDirectory() as folder:
+            bridge = FakeBridge(Path(folder) / 'incident-6683-v4-chain')
+            bridge.fail_action = fail_action
+            guard_file = bridge.window / 'guard.json'
+            guard_file.write_text(json.dumps(bridge.g))
+            cron = bridge.window / 'cron'
+            cron.write_bytes(b'before')
+            state = {'phase': None, 'fence': False, 'boot': 'enabled'}
+            value = {'cronBefore': b'before', 'cronWindow': b'window',
+                     'fence': b'table inet re7_campaign_transition {}',
+                     'policySha256': 'synthetic', 'sourceProcesses': {}}
+
+            def node(mode, script):
+                result = FakeBridge.node(bridge, mode, script)
+                guard_file.write_text(json.dumps(bridge.g))
+                return result
+
+            def guard():
+                return guard_state(json.loads(guard_file.read_text()))
+
+            def read_phase():
+                return state['phase']
+
+            def write_phase(stage, policy_hash, mode=None):
+                state['phase'] = {'stage': stage, 'policySha256': policy_hash,
+                                  'mode': mode}
+
+            def absent():
+                if state['fence']:
+                    raise RuntimeError('fence_present')
+                return b'{"nftables":[]}'
+
+            def present():
+                if not state['fence']:
+                    raise RuntimeError('fence_absent')
+                return b'{"nftables":[]}'
+
+            def system(args, *, input_bytes=None):
+                if args[:2] == ['/usr/bin/systemctl', 'show']:
+                    return ('ActiveState=inactive\nUnitFileState=' + state['boot'] + '\n').encode()
+                if args[:2] == ['/usr/bin/systemctl', 'disable']:
+                    state['boot'] = 'disabled'
+                elif args[:2] == ['/usr/bin/systemctl', 'enable']:
+                    state['boot'] = 'enabled'
+                elif args[:3] == ['/usr/sbin/nft', '--file', '-']:
+                    state['fence'] = True
+                elif args[:3] == ['/usr/sbin/nft', 'delete', 'table']:
+                    state['fence'] = False
+                return b''
+
+            def privileged(action):
+                bridge.events.append(('privileged', action))
+                return privileged_helper.act(action, value).decode()
+
+            with patch.object(privileged_helper, 'GUARD', guard_file), \
+                 patch.object(privileged_helper, 'CRON', cron), \
+                 patch.object(privileged_helper, 'source_processes_alive', lambda v: None), \
+                 patch.object(privileged_helper, 'target_processes_live', lambda v, m: None), \
+                 patch.object(privileged_helper, 'phase_read', read_phase), \
+                 patch.object(privileged_helper, 'phase_write', write_phase), \
+                 patch.object(privileged_helper, 'nft_absent', absent), \
+                 patch.object(privileged_helper, 'nft_present', present), \
+                 patch.object(privileged_helper, 'system', system), \
+                 patch.object(privileged_helper, 'write_cron', cron.write_bytes), \
+                 patch.object(bridge, 'node', node), \
+                 patch.object(bridge, 'guard', guard), \
+                 patch.object(bridge, 'privileged', privileged):
+                if fail_action:
+                    with self.assertRaisesRegex(RuntimeError, 'window_failed_returned_to_original'):
+                        Sequencer(bridge).run()
+                else:
+                    Sequencer(bridge).run()
+            self.assertEqual(bridge.g['tasks'], {})
+            self.assertTrue(bridge.g['open'])
+            self.assertEqual(state['phase']['stage'], 'complete')
+            self.assertEqual((cron.read_bytes(), state['boot'], state['fence']),
+                             (b'before', 'enabled', False))
+            actions = [event[1] for event in bridge.events if event[0] == 'privileged']
+            authorization = 'authorize-return' if fail_action else 'authorize-switch'
+            self.assertLess(actions.index('enter'), actions.index(authorization))
+            self.assertLess(actions.index(authorization), actions.index('unfence'))
+            self.assertEqual(state['phase']['mode'], 'return' if fail_action else 'switch')
+
+    def test_sequencer_invokes_real_helper_guard_for_closed_object_tasks(self):
+        self.run_case()
+
+    def test_partial_failure_uses_real_helper_guard_for_return(self):
+        self.run_case('switch:unfence')
 
 
 if __name__ == '__main__':

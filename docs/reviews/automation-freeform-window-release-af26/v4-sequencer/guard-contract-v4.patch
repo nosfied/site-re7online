@@ -1,0 +1,58 @@
+diff --git a/ops.py b/ops.py
+--- a/ops.py
++++ b/ops.py
+@@ -29,0 +30,9 @@
++def guard_state(value):
++    require(type(value) is dict and type(value.get('version')) is int and
++            value['version'] == 1 and type(value.get('open')) is bool and
++            type(value.get('generation')) is int and value['generation'] >= 0 and
++            type(value.get('tasks')) is dict and type(value.get('audit')) is list,
++            'guard_schema_invalid')
++    return value
++
++
+@@ -49 +58 @@
+-        return json.loads(Path('/var/lib/re7/campaign-operations/state.json').read_text())
++        return guard_state(json.loads(Path('/var/lib/re7/campaign-operations/state.json').read_text()))
+@@ -222 +231 @@
+-        g = self.d.guard()
++        g = guard_state(self.d.guard())
+@@ -394 +403 @@
+-        g = self.d.guard()
++        g = guard_state(self.d.guard())
+@@ -420 +429 @@
+-        g = self.d.guard()
++        g = guard_state(self.d.guard())
+@@ -454 +463 @@
+-    require(str(root).startswith('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T163000Z/'), 'not_bound_remote_preparation')
++    require(str(root).startswith('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T165710Z/'), 'not_bound_remote_preparation')
+diff --git a/delegated.py b/delegated.py
+--- a/delegated.py
++++ b/delegated.py
+@@ -68,0 +69 @@
++    guard = ops.guard_state(guard)
+@@ -376 +377 @@
+-        g = self.d.guard()
++        g = ops.guard_state(self.d.guard())
+@@ -394 +395 @@
+-    ops.require(str(root).startswith('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T163000Z/'),
++    ops.require(str(root).startswith('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T165710Z/'),
+@@ -447 +448 @@
+-    ops.require(str(root).startswith('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T163000Z/'),
++    ops.require(str(root).startswith('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T165710Z/'),
+diff --git a/read-state.py b/read-state.py
+--- a/read-state.py
++++ b/read-state.py
+@@ -3 +3 @@
+-assert str(Path(__file__).resolve()).startswith('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T163000Z/')
++assert str(Path(__file__).resolve()).startswith('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T165710Z/')
+@@ -29 +29,2 @@
+-g=json.loads(P('/var/lib/re7/campaign-operations/state.json').read_text());guard={k:g.get(k) for k in ['open','generation','ledgerFault']};guard['tasks']=len(g.get('tasks',{}))
++import ops
++g=ops.guard_state(json.loads(P('/var/lib/re7/campaign-operations/state.json').read_text()));guard={k:g.get(k) for k in ['open','generation','ledgerFault']};guard['tasks']=len(g['tasks'])
+diff --git a/execution-check.cjs b/execution-check.cjs
+--- a/execution-check.cjs
++++ b/execution-check.cjs
+@@ -3 +3 @@
+-  assert(__dirname.startsWith('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T163000Z/'));
++  assert(__dirname.startsWith('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T165710Z/'));

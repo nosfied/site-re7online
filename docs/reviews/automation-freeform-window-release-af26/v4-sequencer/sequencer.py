@@ -26,6 +26,15 @@ def require(ok, code):
         raise RuntimeError(code)
 
 
+def guard_state(value):
+    require(type(value) is dict and type(value.get('version')) is int and
+            value['version'] == 1 and type(value.get('open')) is bool and
+            type(value.get('generation')) is int and value['generation'] >= 0 and
+            type(value.get('tasks')) is dict and type(value.get('audit')) is list,
+            'guard_schema_invalid')
+    return value
+
+
 def same_identity(saved, current):
     return bool(saved and current and saved['ticks'] == current['ticks'] and
                 current['state'] != 'Z')
@@ -46,7 +55,7 @@ class Bridge:
         return result.stdout
 
     def guard(self):
-        return json.loads(GUARD.read_text())
+        return guard_state(json.loads(GUARD.read_text()))
 
     def apps(self):
         pm = '/home/deploy/.npm-global/bin/pm2'
