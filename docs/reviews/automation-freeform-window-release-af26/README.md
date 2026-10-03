@@ -1,5 +1,7 @@
 # Automation Freeform Window Release af26f48a
 
+**Estado após implantação de 03/10:** DEPLOYED TECHNICALLY / OWNER VALIDATION PENDING. [Resultado da janela V4](V4_WINDOW_RESULT_2026-10-03.md) e [observação dirigida/matriz de aceite](POST_DEPLOY_ACCEPTANCE_2026-10-03.md). O caso demo final 6683 demonstrou divergência de janela local e rejeição Meta; os registros de preparação/NOT DEPLOYED abaixo são históricos.
+
 **Preparação V4 revisável (03/10 UTC):** [testes sanitizados](v4-tests/README.md), [instalação restrita, preflight, troca e retorno](V4_INSTALL_AND_WINDOW_PLAN_2026-10-03.md), [relatório integrado](OPERATIONAL_DB_OWNER_SET_V4_LOCAL_2026-10-03.md) e [manifesto final](OPERATIONAL_DB_OWNER_SET_V4_MANIFEST.json). Quatro modos estáticos estão em novo diretório isolado na VPS; helper/sudoers não instalados, nenhuma prova antiga copiada e nenhum processo produtivo alterado. **NOT DEPLOYED.**
 
 **Atualização 03/10 UTC — V4 coletivo integrado somente LOCAL / FOR REVIEW / NOT DEPLOYED.** [Contrato, inventário de executores, ensaios e procedimento de troca/retorno](OPERATIONAL_DB_OWNER_SET_V4_LOCAL_2026-10-03.md), [patch](operational-db-owner-set-v4-20261003.patch) e [manifesto](OPERATIONAL_DB_OWNER_SET_V4_MANIFEST.json). O V3 direto abaixo permanece bloqueado pela topologia proxy. V4 não foi instalado ou preparado na VPS: o observador root de escopo fixo, sua permissão estreita e bindings frescos são pré-condições de uma janela futura, após revisão independente. Nenhum build funcional foi refeito ou deploy acionado.
