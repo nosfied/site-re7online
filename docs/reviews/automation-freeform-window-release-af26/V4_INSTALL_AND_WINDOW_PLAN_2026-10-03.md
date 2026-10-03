@@ -1,14 +1,14 @@
 # af26 V4 — instalação restrita e próxima janela (comandos para revisão)
 
-**PREPARED / NOT INSTALLED / NOT DEPLOYED.** Não executar este roteiro nesta revisão. O diretório novo `/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/v4-20261003` contém apenas 17 scripts estáticos por modo e `window/` vazio. Os quatro `scripts.sha256` passaram por leitura remota. Nenhum certificado, nonce, start-intent, configuração privada, backup-manifest ou prova da janela anterior foi copiado. Os três candidatos já isolados foram reconferidos por hash em 03/10 UTC: API 425/425 `6e92592b41ba0a67565c3c2f62f332807a297e8f52fb884db569bbadcbead611`; frontend 1645/1645 `76e0f9f4723ec74fb4d6c5b76551b5f8517739b2ed2d82127612d7a9e7a8392d`; worker mínimo 99/99 `7d57c73c7769948fc5123479827358e8b4759e872bb7e33358fad06724670d60`. Nada foi copiado para o checkout ativo.
+**PREPARED FOR WINDOW / NOT DEPLOYED (preflight de 03/10 UTC).** [Resultado sanitizado](V4_PREFLIGHT_RESULT_2026-10-03.md). O observador e a regra sudo literal foram instalados e atestados; os quatro modos foram vinculados a configurações, auth, backup e restore novos, com todos os gates de execução falsos. Não houve contenção, parada, troca ou ativação. O diretório `/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/v4-20261003` preserva os 17 scripts estáticos por modo; cada manifesto agora contém 23 entradas com os insumos privados vinculados. Nenhum certificado, nonce, start-intent ou prova da janela anterior foi copiado. Os três candidatos isolados mantêm os hashes API 425/425 `6e92592b41ba0a67565c3c2f62f332807a297e8f52fb884db569bbadcbead611`; frontend 1645/1645 `76e0f9f4723ec74fb4d6c5b76551b5f8517739b2ed2d82127612d7a9e7a8392d`; worker mínimo 99/99 `7d57c73c7769948fc5123479827358e8b4759e872bb7e33358fad06724670d60`. Nada foi copiado para o checkout ativo. A janela continua separada e exige reconfirmação imediata de estado e exclusividade.
 
 O `OWNER-STEPS.txt` privado V4 foi preparado no mesmo root (SHA-256 `694388df7dbf0c827f0b922fca9c2624232516b24ceea70558821bde7d84e549`) com os quatro modos e o novo caminho. Ele substitui somente as instruções antigas de pareamento direto, preservando o protocolo de provas de cinco minutos, renovação e retorno. Não contém prova consumida e permanece fora do Git.
 
 ## Proveniência que deve fechar antes da instalação
 
-Leitura remota atual: Engine `29.2.1`, `/usr/bin/docker-proxy` do pacote `docker-ce 5:29.2.1-1~ubuntu.24.04~noble`, origem APT configurada `download.docker.com/linux/ubuntu noble/stable`; `dpkg -V docker-ce` não apontou divergência; arquivo em disco SHA-256 `8cd3b929d0cbae223b017134f7e8a09a7da49089fe24ffc051b8c54f7718d7e1`. O [código no tag Moby docker-v29.2.1](https://github.com/moby/moby/blob/docker-v29.2.1/cmd/docker-proxy/tcp_proxy_linux.go) faz um `Accept` e um `DialTCP` por `clientLoop`, sem multiplexação nesse caminho. A versão/pacote e o hash **do arquivo** não atestam o processo **vivo**: `deploy` recebeu `PermissionError` ao ler `/proc/<proxy>/exe`. O helper root deverá comparar o hash do executável vivo, PID+start ticks e argumentos com o arquivo/pacote antes de gerar `db-owner-bindings.private.json`; divergência ou processo não legível aborta **antes da contenção**.
+Leitura remota: Engine `29.2.1`, `/usr/bin/docker-proxy` do pacote `docker-ce 5:29.2.1-1~ubuntu.24.04~noble`, origem APT configurada `download.docker.com/linux/ubuntu noble/stable`; `dpkg -V docker-ce` não apontou divergência; arquivo em disco SHA-256 `8cd3b929d0cbae223b017134f7e8a09a7da49089fe24ffc051b8c54f7718d7e1`. O [código no tag Moby docker-v29.2.1](https://github.com/moby/moby/blob/docker-v29.2.1/cmd/docker-proxy/tcp_proxy_linux.go) faz um `Accept` e um `DialTCP` por `clientLoop`, sem multiplexação nesse caminho. Na instalação, o helper root confirmou que o executável **vivo** tem esse mesmo hash, com PID+start ticks e argumentos estáveis entre leituras. O binding privado V4 foi gerado a partir dessa observação; identidade ou topologia alterada deve negar na janela.
 
-## Instalação futura — Deifson na sessão deploy, antes de qualquer interrupção
+## Instalação restrita executada em 03/10 — receita preservada para auditoria
 
 Pré-condições: execução única confirmada; diretórios de destino/arquivo/sudoers ausentes (leitura de 03/10 confirmou); patch e manifesto V4 revisados; novo diretório estático íntegro. Se algum alvo já existir, parar e preservar o estado anterior. Os comandos abaixo são os únicos que exigem senha; não acrescentam privilégio geral ao usuário `deploy`.
 
@@ -47,10 +47,12 @@ for node in (p, *p.parents):
     if s.st_uid != 0 or s.st_mode & 0o022 or not valid_type:
         raise SystemExit('helper_path_denied')
 tree = ast.parse(p.read_text())
-allowed = {'hashlib', 'json', 'os', 'pathlib', 'socket', 'struct', 'sys'}
-imports = {alias.name.split('.')[0] for n in ast.walk(tree) if isinstance(n, ast.Import)
+allowed = {'hashlib', 'json', 'os', 'socket', 'struct', 'sys'}
+imports = {alias.name for n in ast.walk(tree) if isinstance(n, ast.Import)
            for alias in n.names}
-if imports != allowed or any(isinstance(n, ast.ImportFrom) for n in ast.walk(tree)):
+froms = [(n.module, [(a.name, a.asname) for a in n.names], n.level)
+         for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
+if imports != allowed or froms != [('pathlib', [('Path', None)], 0)]:
     raise SystemExit('helper_imports_denied')
 print('helper_path_and_imports_pass')
 PY
