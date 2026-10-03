@@ -1,18 +1,19 @@
 diff --git a/ops.py b/ops.py
 --- a/ops.py
 +++ b/ops.py
-@@ -9,3 +8,0 @@
+@@ -9,3 +9 @@
 -import ipaddress
 -import socket
 -import struct
-@@ -15 +12,2 @@
++import stat
+@@ -15 +13,2 @@
 -from urllib.parse import urlsplit
 +import db_owner_set_gate
 +import db_owner_set_observer
-@@ -113 +111 @@
+@@ -113 +112 @@
 -    def db_backends(self):
 +    def db_backends(self, container_id=None):
-@@ -115,50 +113,34 @@
+@@ -115,50 +114,36 @@
 -        return json.loads(self.run(['docker', 'exec', '-i', 'wa-agent-postgres', 'psql', '-X', '-U', 'wa_agent', '-d', 'whatsapp_agent', '-Atq', '-v', 'ON_ERROR_STOP=1'], sql))
 -
 -    def api_db_sockets(self, pid):
@@ -71,12 +72,14 @@ diff --git a/ops.py b/ops.py
 +    def proxy_socket_inventory(self, expected_sha):
 +        path = Path('/usr/local/libexec/re7/db-owner-set-observer.py')
 +        require(path.is_file() and not path.is_symlink(), 'proxy_observer_not_installed')
-+        for part in (path, path.parent, path.parent.parent):
-+            st = part.stat()
-+            require(st.st_uid == 0 and not (st.st_mode & 0o022), 'proxy_observer_not_root_owned')
++        for part in (path, *path.parents):
++            st = part.lstat()
++            require(st.st_uid == 0 and not (st.st_mode & 0o022) and
++                    (stat.S_ISREG(st.st_mode) if part == path else stat.S_ISDIR(st.st_mode)),
++                    'proxy_observer_not_root_owned')
 +        require(hashlib.sha256(path.read_bytes()).hexdigest() == expected_sha,
 +                'proxy_observer_hash_mismatch')
-+        output = subprocess.check_output(['sudo', '-n', '/usr/bin/python3', str(path)],
++        output = subprocess.check_output(['sudo', '-n', '/usr/bin/python3', '-I', '-S', str(path)],
 +                                         text=True, env=CLEAN, stderr=subprocess.PIPE,
 +                                         timeout=10)
 +        return json.loads(output)
@@ -97,7 +100,7 @@ diff --git a/ops.py b/ops.py
 +
 +    def db_only_successor_api(self, pid, identity, database_url, bindings):
 +        return db_owner_set_gate.verify(self, pid, identity, database_url, bindings)
-@@ -347,0 +330,8 @@
+@@ -347,0 +333,8 @@
 +            binding_bytes = (self.window / 'db-owner-bindings.private.json').read_bytes()
 +            if hasattr(self.d, 'proof'):
 +                proof = self.d.proof()
@@ -106,7 +109,7 @@ diff --git a/ops.py b/ops.py
 +            bindings = json.loads(binding_bytes)
 +            require(bindings['apiHttpPort'] == int(self.target[API]['env']['PORT']),
 +                    'api_http_port_binding_drift')
-@@ -349 +339 @@
+@@ -349 +342 @@
 -                                         self.target[API]['env']['DATABASE_URL'])
 +                                         self.target[API]['env']['DATABASE_URL'], bindings)
 diff --git a/delegated.py b/delegated.py
@@ -120,6 +123,18 @@ diff --git a/delegated.py b/delegated.py
 +        binding_file = root.parent / 'window' / 'db-owner-bindings.private.json'
 +        result['dbOwnerBindingsHash'] = hashlib.sha256(binding_file.read_bytes()).hexdigest()
 +    return result
+diff --git a/close.cjs b/close.cjs
+--- a/close.cjs
++++ b/close.cjs
+@@ -4 +4 @@
+-(async()=>{assert(fs.existsSync(p+'/backup-manifest.json'));const bindings=require('./preparation-bindings.cjs');bindings.proofs(p);const sql='BEGIN READ ONLY; SET LOCAL statement_timeout=10000; '+bindings.sql+'; ROLLBACK;';const q=JSON.parse(cp.execFileSync('docker',['exec','-i','wa-agent-postgres','psql','-X','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1'],{input:sql,encoding:'utf8'}));bindings.noWork(q);const url='http://127.0.0.1:3001/admin/ops/campaign-execution',headers={'X-Admin-Token':a.env.ADMIN_TOKEN,'Content-Type':'application/json'};let r=await fetch(url,{headers});assert.equal(r.status,200);const before=await r.json();assert(before.available&&!before.ledgerFault&&before.tasks.length===0);if(!before.open){assert(before.drained);fs.writeFileSync(p+'/drain-result.json',JSON.stringify({initiallyClosed:true,open:false,generation:before.generation,drained:true,tasks:0,ledgerFault:null}));return;}fs.writeFileSync(p+'/guard-before.json',JSON.stringify(before));r=await fetch(url,{method:'POST',headers,body:JSON.stringify({open:false,generation:before.generation,reason:'Owner-authorized runtime fix b66bb89a and minimal worker f06+912+b66; preparation runtime-fix-20260930T020103Z'})});const result=await r.json();fs.writeFileSync(p+'/guard-close-response.json',JSON.stringify({status:r.status,result}));assert.equal(r.status,200);r=await fetch(url,{headers});const g=await r.json();assert(r.status===200&&g.available&&!g.open&&g.drained&&!g.ledgerFault&&g.tasks.length===0);fs.copyFileSync('/var/lib/re7/campaign-operations/state.json',p+'/guard-closed.private.json');const report={utc:new Date().toISOString(),available:g.available,open:g.open,drained:g.drained,generation:g.generation,tasks:g.tasks.length,ledgerFault:g.ledgerFault,queue:q};fs.writeFileSync(p+'/drain-result.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));})().catch(e=>{console.error(e.message);process.exitCode=1;});
++(async()=>{assert(fs.existsSync(p+'/backup-manifest.json'));const bindings=require('./preparation-bindings.cjs');bindings.proofs(p);const sql='BEGIN READ ONLY; SET LOCAL statement_timeout=10000; '+bindings.sql+'; ROLLBACK;';const q=JSON.parse(cp.execFileSync('docker',['exec','-i','wa-agent-postgres','psql','-X','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1'],{input:sql,encoding:'utf8'}));bindings.noWork(q);const url='http://127.0.0.1:3001/admin/ops/campaign-execution',headers={'X-Admin-Token':a.env.ADMIN_TOKEN,'Content-Type':'application/json'};let r=await fetch(url,{headers});assert.equal(r.status,200);const before=await r.json();assert(before.available&&!before.ledgerFault&&before.tasks.length===0);if(!before.open){assert(before.drained);fs.writeFileSync(p+'/drain-result.json',JSON.stringify({initiallyClosed:true,open:false,generation:before.generation,drained:true,tasks:0,ledgerFault:null}));return;}fs.writeFileSync(p+'/guard-before.json',JSON.stringify(before));r=await fetch(url,{method:'POST',headers,body:JSON.stringify({open:false,generation:before.generation,reason:'Owner-authorized af26 V4 coordinated switch; preparation freeform-window-af26/v4-20261003'})});const result=await r.json();fs.writeFileSync(p+'/guard-close-response.json',JSON.stringify({status:r.status,result}));assert.equal(r.status,200);r=await fetch(url,{headers});const g=await r.json();assert(r.status===200&&g.available&&!g.open&&g.drained&&!g.ledgerFault&&g.tasks.length===0);fs.copyFileSync('/var/lib/re7/campaign-operations/state.json',p+'/guard-closed.private.json');const report={utc:new Date().toISOString(),available:g.available,open:g.open,drained:g.drained,generation:g.generation,tasks:g.tasks.length,ledgerFault:g.ledgerFault,queue:q};fs.writeFileSync(p+'/drain-result.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));})().catch(e=>{console.error(e.message);process.exitCode=1;});
+diff --git a/open.cjs b/open.cjs
+--- a/open.cjs
++++ b/open.cjs
+@@ -5 +5 @@
+-(async()=>{assert(fs.existsSync(p+'/backup-manifest.json'));const bindings=require('./preparation-bindings.cjs');bindings.proofs(p);const sql='BEGIN READ ONLY; SET LOCAL statement_timeout=10000; '+bindings.sql+'; ROLLBACK;';const q=JSON.parse(cp.execFileSync('docker',['exec','-i','wa-agent-postgres','psql','-X','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1'],{input:sql,encoding:'utf8'}));bindings.noWork(q);const url='http://127.0.0.1:3001/admin/ops/campaign-execution',headers={'X-Admin-Token':a.env.ADMIN_TOKEN,'Content-Type':'application/json'};let r=await fetch(url,{headers});assert.equal(r.status,200);const before=await r.json();assert(before.available&&!before.open&&before.drained&&!before.ledgerFault&&before.tasks.length===0&&before.build===a.env.CAMPAIGN_BUILD_ID);fs.writeFileSync(p+'/guard-before-reopen.json',JSON.stringify(before));r=await fetch(url,{method:'POST',headers,body:JSON.stringify({open:true,generation:before.generation,reason:'Owner-authorized admission restoration after verified runtime fix b66bb89a + minimal worker f06+912+b66; Inbox CRM confirmed; runtime-fix-20260930T020103Z'})});const result=await r.json();fs.writeFileSync(p+'/guard-open-response.json',JSON.stringify({status:r.status,result}));assert.equal(r.status,200);r=await fetch(url,{headers});const g=await r.json();assert(r.status===200&&g.available&&g.open&&!g.ledgerFault&&g.tasks.length===0);fs.copyFileSync('/var/lib/re7/campaign-operations/state.json',p+'/guard-reopened.private.json');const report={utc:new Date().toISOString(),available:g.available,open:g.open,drained:g.drained,generation:g.generation,tasks:g.tasks.length,ledgerFault:g.ledgerFault,queue:q};fs.writeFileSync(p+'/open-result.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));})().catch(e=>{console.error(e.message);process.exitCode=1;});
++(async()=>{assert(fs.existsSync(p+'/backup-manifest.json'));const bindings=require('./preparation-bindings.cjs');bindings.proofs(p);const sql='BEGIN READ ONLY; SET LOCAL statement_timeout=10000; '+bindings.sql+'; ROLLBACK;';const q=JSON.parse(cp.execFileSync('docker',['exec','-i','wa-agent-postgres','psql','-X','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1'],{input:sql,encoding:'utf8'}));bindings.noWork(q);const url='http://127.0.0.1:3001/admin/ops/campaign-execution',headers={'X-Admin-Token':a.env.ADMIN_TOKEN,'Content-Type':'application/json'};let r=await fetch(url,{headers});assert.equal(r.status,200);const before=await r.json();assert(before.available&&!before.open&&before.drained&&!before.ledgerFault&&before.tasks.length===0&&before.build===a.env.CAMPAIGN_BUILD_ID);fs.writeFileSync(p+'/guard-before-reopen.json',JSON.stringify(before));r=await fetch(url,{method:'POST',headers,body:JSON.stringify({open:true,generation:before.generation,reason:'Owner-authorized admission restoration after verified af26 V4 coordinated switch; preparation freeform-window-af26/v4-20261003'})});const result=await r.json();fs.writeFileSync(p+'/guard-open-response.json',JSON.stringify({status:r.status,result}));assert.equal(r.status,200);r=await fetch(url,{headers});const g=await r.json();assert(r.status===200&&g.available&&g.open&&!g.ledgerFault&&g.tasks.length===0);fs.copyFileSync('/var/lib/re7/campaign-operations/state.json',p+'/guard-reopened.private.json');const report={utc:new Date().toISOString(),available:g.available,open:g.open,drained:g.drained,generation:g.generation,tasks:g.tasks.length,ledgerFault:g.ledgerFault,queue:q};fs.writeFileSync(p+'/open-result.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));})().catch(e=>{console.error(e.message);process.exitCode=1;});
 diff --git a/db_owner_set_gate.py b/db_owner_set_gate.py
 new file mode 100644
 --- /dev/null

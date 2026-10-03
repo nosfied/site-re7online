@@ -4,17 +4,22 @@
   "apply": "After verifying the V3 source hashes, apply the zero-context patch with git apply --unidiff-zero once in each of switch, return, return-partial, return-front-missing; then verify all V4 hashes. Regenerate each private scripts.sha256 including both new modules.",
   "beforeEachMode": {
     "ops.py": "13a19bbfe96015bfcf6f57919073ff67b76538090a12cb04ad9a0b3cf213da77",
-    "delegated.py": "13dbe88e7e0b068f4ee936a44dbeaede9e524984850d443cf9771d256b42d188"
+    "delegated.py": "13dbe88e7e0b068f4ee936a44dbeaede9e524984850d443cf9771d256b42d188",
+    "close.cjs": "2337ae87627ac92d01e7f6e5ae24990ed6ecd59e51e70c9b94d1c38523b4fdf7",
+    "open.cjs": "ecd13ebc60d4495dd9f73af914d41baa4ceeaf0118c84f4f9daeb692097c791b"
   },
   "afterEachMode": {
-    "ops.py": "fcda2c4ae1843fcecb48bd4477759f455db0b67fef4ecbfd1ceab62bd3df1ec3",
+    "ops.py": "b20e4c3a5e9803614044412aa73dbd138e385002cf40e3a3d123ad9a8f0bcc2c",
     "delegated.py": "f9701c6bcb67c3fede8620d3b98570fab05445e85c4a7c24648972c8e5651028",
     "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
-    "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+    "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+    "close.cjs": "c3403688a09b5a59c8a6a7898d2c62a255abe20c3cd78483ea73d5355974e6c3",
+    "open.cjs": "4c9b63561051e39d3a83c5602de81f2ba9d44539f7a232b81d630c177dd1d48f"
   },
-  "patchSha256": "bf58e216c6f832480b9b7ea7f408d88595a73bd4a9a46f137931e011872a4a81",
+  "patchSha256": "ee9d6cd4594db85fe991b11af804ef69811f7fdc997956b65f25e9c12edd2102",
   "observerInstallation": {
     "fixedPath": "/usr/local/libexec/re7/db-owner-set-observer.py",
+    "interpreter": "/usr/bin/python3 -I -S",
     "rootOwnedAndNonWritableByGroupOrOther": true,
     "cliArguments": "none",
     "privilegedRead": "Only the docker-proxy matching the fixed 127.0.0.1:5432 publication; no process environment or credentials",
@@ -25,11 +30,29 @@
     "frontendTree": "76e0f9f4723ec74fb4d6c5b76551b5f8517739b2ed2d82127612d7a9e7a8392d",
     "minimalWorkerTree": "7d57c73c7769948fc5123479827358e8b4759e872bb7e33358fad06724670d60"
   },
+  "isolatedPreparation": {
+    "root": "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/v4-20261003",
+    "modes": ["switch", "return", "return-partial", "return-front-missing"],
+    "staticFilesPerMode": 17,
+    "scriptsSha256FileHashEachMode": "54833b21329e105aabf3582eef91454a7ea1488363b0c8e3d8f42c4d4e113557",
+    "privateOwnerStepsSha256": "694388df7dbf0c827f0b922fca9c2624232516b24ceea70558821bde7d84e549",
+    "privateInputsOrConsumedMarkersCopied": 0,
+    "executionReady": false
+  },
   "validation": {
     "inMemoryPackage": "45 passed",
     "delegatedProof": "35 passed",
-    "realDockerPostgresIntegration": "3 passed; four modes in one parameterized test",
-    "realSocketNegatives": "13 passed; identity/unavailable/IPv6-DB cases within these include injected negative inputs, as individually labeled in report",
+    "realDockerPostgresIntegration": "3 passed before isolated helper invocation change; four modes in one parameterized test; not rerun after lab shutdown",
+    "realSocketNegatives": "13 passed before isolated helper invocation change; identity/unavailable/IPv6-DB cases include injected negatives; not rerun after lab shutdown",
+    "fixedHelperCommand": "2 passed on final package",
     "production": "not exercised"
+  },
+  "publishedTestsSha256": {
+    "test-package-set.py": "ed540b675e6e5334dbd7078d803d31302ebdd951d3f9c7bd34d458da60cec1d6",
+    "test-delegated-set.py": "15d5f0c16a875f786933d33a81c09b2270551197d04eb968feeb342ec37bcfa3",
+    "test-live-set.py": "79d737e96746416f2634b17c8c7922839d0f14eb6a845c67d34623fd76bd1f77",
+    "test-live-integration.py": "c810b117006cb652737ed7dca4b8ab0a7009b7eeac5b6d20e6ab0f9d425f9768",
+    "test-live-negative.py": "207ee3bdf0cc045c54abf8aba2067ec7e93f429505a3897e9603e6b67f15b1d2",
+    "test-helper-command.py": "1d96d2c7601f6c7a436aed26fa29525b093191d02d300fd3e8c5b6301a94a87d"
   }
 }
