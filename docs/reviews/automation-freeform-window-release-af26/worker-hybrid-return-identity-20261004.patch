@@ -1,0 +1,881 @@
+diff --git a/apps/whatsapp-agent/src/channels/inboundConversationIdentity.test.ts b/apps/whatsapp-agent/src/channels/inboundConversationIdentity.test.ts
+new file mode 100644
+index 0000000..e2de8b3
+--- /dev/null
++++ b/apps/whatsapp-agent/src/channels/inboundConversationIdentity.test.ts
+@@ -0,0 +1,119 @@
++import assert from "node:assert/strict";
++import test from "node:test";
++import type { PrismaClient } from "@prisma/client";
++import { prepareAcceptedCampaignReturnConversation, resolveInboundConversationIdentity } from "./inboundConversationIdentity.js";
++import { resolveWebSessionTransportRecipientWaId } from "../web-session/webSessionOutboundService.js";
++
++test("minimum worker sends to the provider-observed alias of its own Web account", async () => {
++  const row = { provider: "web_session", channelAccountId: "web-account", legacyWaId: "558494786787", deletedAt: null, anonymizedAt: null };
++  const prisma = { conversation: { findUnique: async () => row } } as unknown as PrismaClient;
++  const params = { prisma, clientId: "tenant", waId: "5584994786787", channelAccountId: "web-account" };
++  assert.equal(await resolveWebSessionTransportRecipientWaId(params), "558494786787");
++  assert.equal(await resolveWebSessionTransportRecipientWaId({ ...params, channelAccountId: "other" }), params.waId);
++});
++
++const modern = "5584994786787";
++const legacy = "558494786787";
++
++function fixture(rows: Array<Record<string, unknown>>) {
++  const publicNumber = "558499995328";
++  const matches = (row: Record<string, unknown>, clause: Record<string, unknown>) =>
++    Object.entries(clause).some(([field, condition]) => {
++      const value = String(row[field] ?? "");
++      if (typeof condition === "object" && condition !== null) {
++        const filter = condition as { in?: string[]; endsWith?: string };
++        return (filter.in?.includes(value) ?? false) || (filter.endsWith ? value.endsWith(filter.endsWith) : false);
++      }
++      return value === condition;
++    });
++  const prisma = {
++    conversation: {
++      findMany: async ({ where }: { where: { clientId: string; OR: Record<string, unknown>[] } }) =>
++        rows.filter((row) => row.clientId === where.clientId && !row.deletedAt && !row.anonymizedAt && where.OR.some((clause) => matches(row, clause))),
++      findUnique: async ({ where }: { where: { id: string } }) => rows.find((row) => row.id === where.id) ?? null,
++    },
++    contact: { findFirst: async () => null },
++    tenantMetaConfig: {
++      findUnique: async () => ({ phoneNumberId: "meta-phone", businessToken: "synthetic", wabaId: "synthetic", rawPayload: { source: "fixture" } }),
++    },
++    waPhoneNumber: { findFirst: async () => ({ display: publicNumber, phoneNumberId: "meta-phone" }) },
++    tenantOperationalConfig: {
++      findUnique: async () => ({ config: { webSessionAuthorization: { status: "AUTHORIZED", authorizedNumberCanonical: publicNumber } } }),
++    },
++    channelAccount: { findMany: async () => [{ channelAccountId: "web-account" }] },
++  } as unknown as PrismaClient;
++  return prisma;
++}
++
++function row(waId: string, overrides: Record<string, unknown> = {}) {
++  return {
++    id: "conversation-1", clientId: "tenant-1", waId, waIdCanonical: waId,
++    provider: "meta", phoneNumberId: "meta-phone", channelAccountId: null,
++    deletedAt: null, anonymizedAt: null, updatedAt: new Date(), lastInboundAt: null, lastOutboundAt: null,
++    ...overrides,
++  };
++}
++
++test("confirmed hybrid account selects the existing conversation in both ninth-digit directions", async () => {
++  for (const [existing, incoming] of [[modern, legacy], [legacy, modern]]) {
++    const prisma = fixture([row(existing)]);
++    const result = await resolveInboundConversationIdentity(prisma, {
++      clientId: "tenant-1", waId: incoming, provider: "web_session", channelAccountId: "web-account",
++    });
++    assert.deepEqual(result, { waId: existing, reason: "resolved", conversationId: "conversation-1" });
++  }
++});
++
++test("Meta winner can reuse the Web conversation on the same confirmed public account", async () => {
++  const prisma = fixture([row(legacy, { provider: "web_session", phoneNumberId: null, channelAccountId: "web-account" })]);
++  assert.equal((await resolveInboundConversationIdentity(prisma, {
++    clientId: "tenant-1", waId: modern, provider: "meta", channelAccountId: "meta-phone",
++  })).waId, legacy);
++});
++
++test("tenant/account mismatch, ambiguity and anonymization never select a variant", async () => {
++  const request = { clientId: "tenant-1", waId: legacy, provider: "web_session" as const, channelAccountId: "web-account" };
++  assert.equal((await resolveInboundConversationIdentity(fixture([row(modern)]), { ...request, clientId: "tenant-2" })).reason, "unchanged");
++  assert.equal((await resolveInboundConversationIdentity(fixture([row(modern)]), { ...request, channelAccountId: "other-web-account" })).reason, "unconfirmed_account");
++  assert.equal((await resolveInboundConversationIdentity(fixture([row(modern, { phoneNumberId: "other-meta-phone" })]), request)).reason, "unconfirmed_account");
++  assert.equal((await resolveInboundConversationIdentity(fixture([row(modern), row(modern, { id: "conversation-2" })]), request)).reason, "ambiguous");
++  assert.equal((await resolveInboundConversationIdentity(fixture([row(modern, { anonymizedAt: new Date() })]), request)).reason, "unchanged");
++});
++
++test("minimum worker seeds only the accepted campaign's closed return destination before Web inbound", async () => {
++  const rows: Array<Record<string, unknown>> = [];
++  const runtimes: Array<Record<string, unknown>> = [];
++  const db: Record<string, unknown> = { ...fixture(rows) };
++  db.outboundMessage = { findMany: async () => [{
++    waId: modern, waIdCanonical: modern, phoneNumberId: "meta-phone",
++    messageId: "campaign.synthetic.1", templateName: "synthetic", createdAt: new Date("2026-10-04T10:00:00Z"),
++    rawPayload: { deliveryConversationPending: true, campaignId: "campaign-1",
++      returnDestination: { type: "human_department", departmentId: "department-1", queueId: "queue-1" } },
++  }] };
++  const tx = {
++    conversation: {
++      findFirst: async () => rows.length ? { id: rows[0]?.id } : null,
++      create: async ({ data }: { data: Record<string, unknown> }) => {
++        rows.push({ id: "conversation-1", updatedAt: new Date(), lastInboundAt: null,
++          deletedAt: null, anonymizedAt: null, channelAccountId: null, ...data });
++      },
++    },
++    conversationRuntimeState: {
++      create: async ({ data }: { data: Record<string, unknown> }) => { runtimes.push(data); },
++    },
++  };
++  db.$transaction = async (callback: (value: typeof tx) => Promise<unknown>) => callback(tx);
++  const result = await prepareAcceptedCampaignReturnConversation(db as unknown as PrismaClient, {
++    clientId: "tenant-1", clientKey: "tenant-1", waId: legacy,
++    provider: "web_session", channelAccountId: "web-account", inboundAt: new Date("2026-10-04T10:01:00Z"),
++  });
++  assert.equal(result.waId, modern);
++  assert.equal(rows.length, 1);
++  assert.equal(rows[0]?.windowIsOpen, false);
++  assert.equal(rows[0]?.departmentId, "department-1");
++  assert.equal(runtimes.length, 1);
++  assert.equal(runtimes[0]?.mode, "HUMAN");
++  assert.equal(runtimes[0]?.status, "WAITING");
++  assert.equal(runtimes[0]?.queueId, "queue-1");
++  assert.equal(runtimes[0]?.lastInboundAt, undefined);
++});
+diff --git a/apps/whatsapp-agent/src/channels/inboundConversationIdentity.ts b/apps/whatsapp-agent/src/channels/inboundConversationIdentity.ts
+new file mode 100644
+index 0000000..da091b9
+--- /dev/null
++++ b/apps/whatsapp-agent/src/channels/inboundConversationIdentity.ts
+@@ -0,0 +1,192 @@
++import { ConversationOperationalStatus, MessageStatus, Prisma, type PrismaClient } from "@prisma/client";
++import { resolveCampaignRecipientConversationTarget } from "../campaigns/campaignRecipientConversationBridge.js";
++import { getBrazilNinthDigitVariant } from "../crm/crmWhatsappIdentity.js";
++import { makeConversationKey } from "../storage/conversationKey.js";
++import { normalizeHybridWhatsappNumber, resolveHybridWhatsappIdentityStatus } from "../web-session/hybridIdentity.js";
++import { normalizeWaIdDigits } from "../utils/waid.js";
++
++// The minimum worker predates the API's return-destination materializer. Accept
++// only the two already validated, persisted campaign destination shapes.
++function parseOutboundReturnDestination(value: unknown) {
++  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
++  const record = value as Record<string, unknown>;
++  const id = (field: unknown) => typeof field === "string" && field.trim() ? field.trim() : null;
++  if (record.type === "human_department") {
++    const departmentId = id(record.departmentId);
++    const queueId = id(record.queueId);
++    return departmentId && queueId ? { type: "human_department" as const, departmentId, queueId } : null;
++  }
++  if (record.type === "automated_flow") {
++    const flowId = id(record.flowId);
++    return flowId ? { type: "automated_flow" as const, flowId } : null;
++  }
++  return null;
++}
++
++/** Resolve an already existing conversation; never create or merge an identity. */
++export async function resolveInboundConversationIdentity(
++  prisma: PrismaClient,
++  input: {
++    clientId: string;
++    waId: string;
++    provider: "meta" | "web_session";
++    channelAccountId: string;
++  }
++) {
++  const waId = normalizeWaIdDigits(input.waId);
++  const target = await resolveCampaignRecipientConversationTarget(prisma, {
++    clientId: input.clientId,
++    inputWaId: waId,
++  });
++  if (target.resolved && target.matchedBy !== "brazil_ninth_digit_safe" && target.conversationId) {
++    return { waId, reason: "resolved", conversationId: target.conversationId } as const;
++  }
++  if (!target.resolved || !target.conversationId) {
++    return { waId, reason: target.reason === "ambiguous" ? "ambiguous" : "unchanged" } as const;
++  }
++
++  // The numerical variant is only a candidate. Both transports must be bound
++  // to the same provider-confirmed public number and the precise live accounts.
++  const [candidate, hybrid, metaConfig, webAccounts] = await Promise.all([
++    prisma.conversation.findUnique({
++      where: { id: target.conversationId },
++      select: { clientId: true, waId: true, provider: true, phoneNumberId: true, channelAccountId: true, deletedAt: true, anonymizedAt: true },
++    }),
++    resolveHybridWhatsappIdentityStatus({ prisma, clientId: input.clientId }),
++    prisma.tenantMetaConfig.findUnique({ where: { clientId: input.clientId }, select: { phoneNumberId: true } }),
++    prisma.channelAccount.findMany({
++      where: { clientId: input.clientId, channel: "whatsapp", provider: "web_session", runtimeEnabled: true, status: { not: "archived_duplicate" } },
++      select: { channelAccountId: true },
++    }),
++  ]);
++  const webAccountId = webAccounts.length === 1 ? webAccounts[0]?.channelAccountId : null;
++  const metaPhoneNumberId = metaConfig?.phoneNumberId;
++  const accountIsCurrent = input.provider === "meta"
++    ? input.channelAccountId === metaPhoneNumberId
++    : input.channelAccountId === webAccountId;
++  const candidateIsCurrent = candidate?.provider === "meta"
++    ? candidate.phoneNumberId === metaPhoneNumberId
++    : candidate?.provider === "web_session" && candidate.channelAccountId === webAccountId;
++  const publicNumberConfirmed =
++    hybrid.meta.configured && hybrid.meta.canonicalNumber &&
++    hybrid.web.canonicalNumber && hybrid.web.status !== "RELEASED" &&
++    hybrid.web.status !== "INVALIDATED_BY_META_IDENTITY_CHANGE" &&
++    !hybrid.conflict && !hybrid.numberReplacement &&
++    normalizeHybridWhatsappNumber(hybrid.meta.canonicalNumber) ===
++      normalizeHybridWhatsappNumber(hybrid.web.canonicalNumber);
++  if (
++    !candidate || candidate.clientId !== input.clientId || candidate.deletedAt || candidate.anonymizedAt ||
++    !metaPhoneNumberId || !webAccountId || !accountIsCurrent || !candidateIsCurrent || !publicNumberConfirmed
++  ) {
++    return { waId, reason: "unconfirmed_account" } as const;
++  }
++  return { waId: candidate.waId, reason: "resolved", conversationId: target.conversationId } as const;
++}
++
++/** A provider-accepted campaign can be answered before DELIVERED/READ arrives. */
++export async function prepareAcceptedCampaignReturnConversation(
++  prisma: PrismaClient,
++  input: {
++    clientId: string;
++    clientKey: string;
++    waId: string;
++    provider: "meta" | "web_session";
++    channelAccountId: string;
++    inboundAt: Date;
++  }
++) {
++  const existing = await resolveInboundConversationIdentity(prisma, input);
++  if (existing.reason !== "unchanged") return existing;
++  const waId = normalizeWaIdDigits(input.waId);
++  const variant = getBrazilNinthDigitVariant(waId);
++  const [hybrid, metaConfig, webAccounts] = await Promise.all([
++    resolveHybridWhatsappIdentityStatus({ prisma, clientId: input.clientId }),
++    prisma.tenantMetaConfig.findUnique({ where: { clientId: input.clientId }, select: { phoneNumberId: true } }),
++    prisma.channelAccount.findMany({
++      where: { clientId: input.clientId, channel: "whatsapp", provider: "web_session", runtimeEnabled: true, status: { not: "archived_duplicate" } },
++      select: { channelAccountId: true },
++    }),
++  ]);
++  const metaPhoneNumberId = metaConfig?.phoneNumberId;
++  const webAccountId = webAccounts.length === 1 ? webAccounts[0]?.channelAccountId : null;
++  if (!metaPhoneNumberId || !webAccountId || hybrid.conflict || hybrid.numberReplacement ||
++      !hybrid.meta.configured || !hybrid.meta.canonicalNumber ||
++      normalizeHybridWhatsappNumber(hybrid.meta.canonicalNumber) !==
++        normalizeHybridWhatsappNumber(hybrid.web.canonicalNumber) ||
++      hybrid.web.status === "RELEASED" || hybrid.web.status === "INVALIDATED_BY_META_IDENTITY_CHANGE" ||
++      (input.provider === "meta" && input.channelAccountId !== metaPhoneNumberId) ||
++      (input.provider === "web_session" && input.channelAccountId !== webAccountId)) {
++    return existing;
++  }
++  const outbounds = await prisma.outboundMessage.findMany({
++    where: {
++      clientId: input.clientId,
++      phoneNumberId: metaPhoneNumberId,
++      waId: { in: Array.from(new Set([waId, variant].filter(Boolean))) as string[] },
++      status: MessageStatus.SENT,
++      metaMessageId: { not: null },
++      createdAt: { lte: input.inboundAt },
++    },
++    orderBy: { createdAt: "desc" },
++    take: 3,
++    select: {
++      waId: true, waIdCanonical: true, phoneNumberId: true, messageId: true,
++      templateName: true, createdAt: true, rawPayload: true,
++    },
++  });
++  const pending = outbounds.filter((outbound) => {
++    const payload = outbound.rawPayload;
++    return payload && typeof payload === "object" && !Array.isArray(payload) &&
++      payload.deliveryConversationPending === true &&
++      typeof payload.campaignId === "string" &&
++      Boolean(parseOutboundReturnDestination(payload.returnDestination));
++  });
++  if (pending.length !== 1) return existing;
++  const outbound = pending[0]!;
++  const payload = outbound.rawPayload as Record<string, unknown>;
++  if (!outbound.messageId || !outbound.templateName) return existing;
++  const destination = parseOutboundReturnDestination(payload.returnDestination);
++  if (!destination) return existing;
++  try {
++    await prisma.$transaction(async (tx) => {
++      const current = await tx.conversation.findFirst({ where: {
++        clientId: input.clientId,
++        waId: { in: Array.from(new Set([waId, variant].filter(Boolean))) as string[] },
++      }, select: { id: true } });
++      if (current) return;
++      await tx.conversation.create({ data: {
++        clientId: input.clientId,
++        waId: outbound.waId,
++        waIdCanonical: outbound.waIdCanonical,
++        channel: "whatsapp",
++        provider: "meta",
++        phoneNumberId: outbound.phoneNumberId,
++        departmentId: destination.type === "human_department" ? destination.departmentId : null,
++        windowIsOpen: false,
++        lastOutboundAt: outbound.createdAt,
++      } });
++      await tx.conversationRuntimeState.create({ data: {
++        clientId: input.clientId,
++        waId: outbound.waId,
++        waIdCanonical: outbound.waIdCanonical,
++        conversationKey: makeConversationKey(input.clientKey, outbound.waId),
++        channel: "whatsapp",
++        provider: "meta",
++        firstSeenAt: outbound.createdAt,
++        lastOutboundAt: outbound.createdAt,
++        lastOutboundMessageId: outbound.messageId,
++        mode: destination.type === "human_department" ? "HUMAN" : "BOT",
++        status: destination.type === "human_department"
++          ? ConversationOperationalStatus.WAITING : ConversationOperationalStatus.WAITING_USER,
++        departmentId: destination.type === "human_department" ? destination.departmentId : null,
++        queueId: destination.type === "human_department" ? destination.queueId : null,
++        chatbotActive: destination.type === "automated_flow",
++        flow: destination.type === "automated_flow" ? `chatbot:${destination.flowId}` : null,
++        answers: {},
++      } });
++    });
++  } catch (error) {
++    if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
++  }
++  return resolveInboundConversationIdentity(prisma, input);
++}
+diff --git a/apps/whatsapp-agent/src/web-session/webSessionInbound.test.ts b/apps/whatsapp-agent/src/web-session/webSessionInbound.test.ts
+index 6add038..9240794 100644
+--- a/apps/whatsapp-agent/src/web-session/webSessionInbound.test.ts
++++ b/apps/whatsapp-agent/src/web-session/webSessionInbound.test.ts
+@@ -77,6 +77,7 @@ test("handoff notification plan can suppress protocol and queue notices independ
+ });
+ 
+ const state = {
++  allowIdentityRuntimeSqlFixture: false,
+   conversation: null as Record<string, unknown> | null,
+   inboundMessages: [] as Array<Record<string, unknown>>,
+   inboundMessageCreatePayloads: [] as Array<Record<string, unknown>>,
+@@ -90,6 +91,8 @@ const state = {
+   departments: [] as Array<Record<string, unknown>>,
+   queues: [] as Array<Record<string, unknown>>,
+   config: null as Record<string, unknown> | null,
++  metaConfig: null as Record<string, unknown> | null,
++  metaPublicNumber: null as string | null,
+   channelAccounts: [] as Array<Record<string, unknown>>,
+   users: [] as Array<Record<string, unknown>>,
+   satisfactionSurveys: [] as Array<Record<string, unknown>>,
+@@ -100,6 +103,7 @@ const state = {
+ };
+ 
+ function resetState(overrides: Partial<typeof state> = {}) {
++  state.allowIdentityRuntimeSqlFixture = overrides.allowIdentityRuntimeSqlFixture ?? false;
+   state.conversation = overrides.conversation ?? null;
+   state.inboundMessages = overrides.inboundMessages ?? [];
+   state.inboundMessageCreatePayloads = overrides.inboundMessageCreatePayloads ?? [];
+@@ -113,6 +117,8 @@ function resetState(overrides: Partial<typeof state> = {}) {
+   state.departments = overrides.departments ?? [];
+   state.queues = overrides.queues ?? [];
+   state.config = overrides.config ?? null;
++  state.metaConfig = overrides.metaConfig ?? null;
++  state.metaPublicNumber = overrides.metaPublicNumber ?? null;
+   state.channelAccounts = overrides.channelAccounts ?? [];
+   state.users = overrides.users ?? [];
+   state.satisfactionSurveys = overrides.satisfactionSurveys ?? [];
+@@ -155,7 +161,19 @@ function fakePrisma() {
+     }
+   };
+   const prisma = {
++    $queryRaw: async () => {
++      if (!state.allowIdentityRuntimeSqlFixture || !state.runtimeStates[0]) return [];
++      return [state.runtimeStates[0]];
++    },
+     conversation: {
++      findMany: async ({ where }: { where: { clientId: string; OR: Array<Record<string, { in?: string[]; endsWith?: string }>> } }) => {
++        const row = state.conversation;
++        if (!row || row.clientId !== where.clientId || row.deletedAt || row.anonymizedAt) return [];
++        return where.OR.some((clause) => Object.entries(clause).some(([key, filter]) =>
++          (filter.in?.includes(String(row[key] ?? "")) ?? false) ||
++          (filter.endsWith ? String(row[key] ?? "").endsWith(filter.endsWith) : false)
++        )) ? [row] : [];
++      },
+       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+         if (!state.conversation) return null;
+         if (where.clientId && state.conversation.clientId !== where.clientId) return null;
+@@ -163,10 +181,11 @@ function fakePrisma() {
+         if (where.id && state.conversation.id !== where.id) return null;
+         return state.conversation;
+       },
+-      findUnique: async ({ where }: { where: { clientId_waId: { clientId: string; waId: string } } }) => {
++      findUnique: async ({ where }: { where: { id?: string; clientId_waId?: { clientId: string; waId: string } } }) => {
++        if (where.id) return state.conversation?.id === where.id ? state.conversation : null;
+         if (
+-          state.conversation?.clientId === where.clientId_waId.clientId &&
+-          state.conversation?.waId === where.clientId_waId.waId
++          state.conversation?.clientId === where.clientId_waId?.clientId &&
++          state.conversation?.waId === where.clientId_waId?.waId
+         ) {
+           return state.conversation;
+         }
+@@ -227,6 +246,9 @@ function fakePrisma() {
+       },
+     },
+     outboundMessage: {
++      findMany: async ({ where }: { where: { clientId: string; waId: { in: string[] } } }) =>
++        state.outboundMessages.filter((item) => item.clientId === where.clientId &&
++          where.waId.in.includes(String(item.waId ?? ""))),
+       findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+         state.outboundMessages.find((item) => {
+           if (item.clientId !== where.clientId) return false;
+@@ -353,7 +375,14 @@ function fakePrisma() {
+     tenantOperationalConfig: {
+       findUnique: async () => state.config ? { config: state.config } : null,
+     },
++    tenantMetaConfig: { findUnique: async () => state.metaConfig },
++    waPhoneNumber: { findFirst: async () => state.metaPublicNumber ? { display: state.metaPublicNumber, phoneNumberId: "meta-phone" } : null },
+     channelAccount: {
++      findMany: async ({ where }: { where: Record<string, unknown> }) =>
++        state.channelAccounts.filter((account) =>
++          account.clientId === where.clientId && account.provider === where.provider &&
++          account.channel === where.channel && account.runtimeEnabled === where.runtimeEnabled
++        ),
+       findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) =>
+         state.channelAccounts.find((account) => {
+           if (where?.clientId && account.clientId !== where.clientId) return false;
+@@ -604,6 +633,13 @@ function fakePrisma() {
+       },
+     },
+     conversationRuntimeState: {
++      create: async ({ data }: { data: Record<string, unknown> }) => {
++        const row = { id: `runtime_${state.runtimeStates.length + 1}`, version: 0,
++          updatedAt: new Date(), handoffStatus: "NONE", assignedUserId: null,
++          assignedAt: null, closedAt: null, lastInboundAt: null, ...data };
++        state.runtimeStates.push(row);
++        return row;
++      },
+       findFirst: async () => state.runtimeStates[0] ?? null,
+       findUnique: async () => state.runtimeStates[0] ?? null,
+       findMany: async ({ where }: { where?: Record<string, unknown> } = {}) =>
+@@ -615,13 +651,47 @@ function fakePrisma() {
+           if (where?.closedAt === null && runtimeState.closedAt != null) return false;
+           return true;
+         }),
++      updateManyAndReturn: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
++        const matches = (row: Record<string, unknown>, filter: Record<string, unknown>): boolean => Object.entries(filter).every(([key, expected]) => {
++          if (expected === undefined) return true;
++          if (key === "OR") return (expected as Record<string, unknown>[]).some(part => matches(row, part));
++          if (key === "AND") return (expected as Record<string, unknown>[]).every(part => matches(row, part));
++          const actual = row[key] ?? null;
++          if (expected && typeof expected === "object" && !(expected instanceof Date)) {
++            if ("equals" in expected) {
++              const value = (expected as { equals: unknown }).equals;
++              return value === Prisma.AnyNull ? actual === null : JSON.stringify(actual) === JSON.stringify(value);
++            }
++            if ("lte" in expected) return actual instanceof Date && actual <= (expected as { lte: Date }).lte;
++          }
++          return actual instanceof Date && expected instanceof Date
++            ? actual.getTime() === expected.getTime() : actual === expected;
++        });
++        const found = state.runtimeStates.findIndex(row => matches(row, where));
++        if (found < 0) return [];
++        const before = state.runtimeStates[found];
++        const row = { ...before, ...withoutUndefined(data), updatedAt: new Date(),
++          version: Number(before.version ?? 0) + Number((data.version as { increment?: number })?.increment ?? 0) };
++        state.runtimeStates[found] = row;
++        return [row];
++      },
+       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
+         const existing = state.runtimeStates[0];
+         const row: Record<string, unknown> = existing
+           ? { ...existing, ...withoutUndefined(update) }
+           : { id: "runtime_1", ...withoutUndefined(create) };
++        Object.assign(row, {
++          version: Number(row.version ?? 0), updatedAt: new Date(),
++          mode: row.mode ?? null, handoffStatus: row.handoffStatus ?? "NONE",
++          assignedUserId: row.assignedUserId ?? null, assignedAt: row.assignedAt ?? null,
++          departmentId: row.departmentId ?? null, queueId: row.queueId ?? null,
++          status: row.status ?? null, closedAt: row.closedAt ?? null, lastInboundAt: row.lastInboundAt ?? null,
++        });
+         state.runtimeStates[0] = row;
+         return {
++          clientId: row.clientId, waId: row.waId,
++          updatedAt: row.updatedAt,
++          version: row.version,
+           id: String(row.id),
+           firstSeenAt: row.firstSeenAt instanceof Date ? row.firstSeenAt : new Date("2026-08-11T12:00:00.000Z"),
+           windowIsOpen: row.windowIsOpen === true,
+@@ -665,6 +735,7 @@ function fakePrisma() {
+     $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+       callback({
+         conversation: prisma.conversation,
++        conversationRuntimeState: prisma.conversationRuntimeState,
+         contact: prisma.contact,
+         lead: prisma.lead,
+         contactConsent: prisma.contactConsent,
+@@ -3370,6 +3441,96 @@ test("waiting human takeover remains in queue on inbound", async () => {
+   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), false);
+ });
+ 
++test("Web return through confirmed ninth-digit alias keeps campaign human destination and CRM owner", async () => {
++  const campaignWaId = "5584994786787";
++  const webWaId = "558494786787";
++  resetState({
++    allowIdentityRuntimeSqlFixture: true,
++    metaConfig: {
++      phoneNumberId: "meta-phone", businessToken: "synthetic", wabaId: "synthetic",
++      rawPayload: { source: "fixture" },
++    },
++    metaPublicNumber: "558499995328",
++    config: { webSessionAuthorization: { status: "AUTHORIZED", authorizedNumberCanonical: "558499995328" } },
++    conversation: conversationFixture({
++      waId: campaignWaId, waIdCanonical: campaignWaId, provider: "meta", channelAccountId: null,
++      phoneNumberId: "meta-phone", windowIsOpen: false, lastInboundAt: null,
++    }),
++    runtimeStates: [runtimeFixture({
++      waId: campaignWaId, waIdCanonical: campaignWaId, provider: "meta", channelAccountId: null,
++      windowIsOpen: false, lastInboundAt: null, mode: "HUMAN", status: "WAITING",
++      departmentId: "department_general", queueId: "queue_general",
++    })],
++    contacts: [{ id: "campaign-contact", clientId: "client_1", waId: campaignWaId, lifecycle: "ACTIVE", name: null }],
++    leads: [{ id: "campaign-lead", tenantId: "client_1", waId: campaignWaId, waIdCanonical: campaignWaId, name: null }],
++    chatbotFlow: {
++      id: "entry-flow", definition: { start: "menu", nodes: {
++        menu: { type: "menu", text: "Novo fluxo", options: [{ label: "Registro", next: "done" }] },
++        done: { type: "text", text: "OK" },
++      } },
++    },
++  });
++  withConnectedWebSession();
++  const result = await withFakeWorker(() => ingestBaileysWebSessionMessage({
++    clientId: "client_1", tenantKey: "tenant_1", channelAccountDbId: "account_1",
++    channelAccountId: "web-session-default",
++    message: {
++      key: { id: "MSG_ALIAS_CAMPAIGN", remoteJid: `${webWaId}@s.whatsapp.net`, fromMe: false },
++      messageTimestamp: Date.parse("2026-08-11T12:10:00.000Z") / 1000,
++      message: { conversation: "resposta" },
++    },
++  }));
++  assert.equal(result.action, "persisted");
++  assert.equal(state.conversation?.waId, campaignWaId);
++  assert.equal(state.conversation?.id, "conversation_1");
++  assert.equal(state.conversation?.windowIsOpen, true);
++  assert.equal(state.runtimeStates.length, 1);
++  assert.equal(state.runtimeStates[0]?.waId, campaignWaId);
++  assert.equal(state.runtimeStates[0]?.mode, "HUMAN");
++  assert.equal(state.runtimeStates[0]?.status, "WAITING");
++  assert.equal(state.runtimeStates[0]?.departmentId, "department_general");
++  assert.equal(state.runtimeStates[0]?.queueId, "queue_general");
++  assert.equal(state.contacts.length, 1);
++  assert.equal(state.contacts[0]?.id, "campaign-contact");
++  assert.equal(state.leads.length, 1);
++  assert.equal(state.leads[0]?.id, "campaign-lead");
++  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Novo fluxo")), false);
++});
++
++test("minimum worker materializes accepted pending campaign before Web return and keeps one CRM identity", async () => {
++  const campaignWaId = "5584994786787";
++  const webWaId = "558494786787";
++  resetState({
++    allowIdentityRuntimeSqlFixture: true,
++    metaConfig: { phoneNumberId: "meta-phone", businessToken: "synthetic", wabaId: "synthetic", rawPayload: { source: "fixture" } },
++    metaPublicNumber: "558499995328",
++    config: { webSessionAuthorization: { status: "AUTHORIZED", authorizedNumberCanonical: "558499995328" } },
++    outboundMessages: [{ clientId: "client_1", waId: campaignWaId, waIdCanonical: campaignWaId,
++      phoneNumberId: "meta-phone", status: "SENT", metaMessageId: "wamid.synthetic.accepted",
++      messageId: "campaign.synthetic.1", templateName: "synthetic",
++      createdAt: new Date("2026-08-11T12:00:00.000Z"),
++      rawPayload: { deliveryConversationPending: true, campaignId: "campaign-synthetic",
++        returnDestination: { type: "human_department", departmentId: "department_general", queueId: "queue_general" } } }],
++  });
++  withConnectedWebSession();
++  const result = await withFakeWorker(() => ingestBaileysWebSessionMessage({
++    clientId: "client_1", tenantKey: "tenant_1", channelAccountDbId: "account_1",
++    channelAccountId: "web-session-default",
++    message: { key: { id: "MSG_PENDING_CAMPAIGN", remoteJid: `${webWaId}@s.whatsapp.net`, fromMe: false },
++      messageTimestamp: Date.parse("2026-08-11T12:10:00.000Z") / 1000,
++      message: { conversation: "resposta" } },
++  }));
++  assert.equal(result.action, "persisted");
++  assert.equal(state.conversation?.waId, campaignWaId);
++  assert.equal(state.runtimeStates.length, 1);
++  assert.equal(state.runtimeStates[0]?.waId, campaignWaId);
++  assert.equal(state.runtimeStates[0]?.mode, "HUMAN");
++  assert.equal(state.runtimeStates[0]?.departmentId, "department_general");
++  assert.equal(state.runtimeStates[0]?.queueId, "queue_general");
++  assert.equal(state.contacts.length, 1);
++  assert.equal(state.leads.length, 1);
++});
++
+ test("expired CSAT asks for a new-service decision and option 1 returns to bot mode", async () => {
+   resetState({
+     config: closeConfig(),
+diff --git a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts b/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
+index d7334a9..8d40fd8 100644
+--- a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
++++ b/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
+@@ -17,6 +17,7 @@ import { shouldResetClosedConversationForBotReentry } from "../conversation/auto
+ import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
+ import { activateHumanHandoff, isWindowOpen, updateOutbound } from "../conversation/conversation.service.js";
+ import { buildCrmWhatsappExternalUserHash } from "../crm/crmWhatsappIdentity.js";
++import { prepareAcceptedCampaignReturnConversation } from "../channels/inboundConversationIdentity.js";
+ import { recordCrmConversationContactOrigin } from "../crm/crmContactUpsert.js";
+ import {
+   buildCompletedServiceSnapshotExpectation,
+@@ -94,6 +95,7 @@ export type NormalizedWebSessionInboundMessage = {
+   channelAccountId: string;
+   externalMessageId: string;
+   sender: string;
++  providerSender?: string;
+   senderCanonical: string;
+   senderJid: string;
+   recipientJid?: string | null;
+@@ -1104,7 +1106,7 @@ async function ensureWebSessionRuntimeState(params: {
+       channelAccountId: params.message.channelAccountId,
+       externalUserHash: externalUserHash(params.message.senderCanonical),
+       externalUserRef: params.message.senderCanonical,
+-      legacyWaId: params.message.sender,
++      legacyWaId: params.message.providerSender ?? params.message.sender,
+       windowIsOpen: true,
+       windowExpiresAt: new Date(params.message.timestamp.getTime() + 24 * 60 * 60 * 1000),
+       lastInboundAt: params.message.timestamp,
+@@ -1175,7 +1177,7 @@ async function ensureWebSessionRuntimeState(params: {
+       channelAccountId: params.message.channelAccountId,
+       externalUserHash: externalUserHash(params.message.senderCanonical),
+       externalUserRef: params.message.senderCanonical,
+-      legacyWaId: params.message.sender,
++      legacyWaId: params.message.providerSender ?? params.message.sender,
+       firstSeenAt: params.message.timestamp,
+       windowIsOpen: true,
+       windowExpiresAt: new Date(params.message.timestamp.getTime() + 24 * 60 * 60 * 1000),
+@@ -2342,7 +2344,7 @@ async function ensureWebSessionContactIdentity(params: {
+           channelAccountId: params.message.channelAccountId,
+           externalUserHash: externalUserHash(params.message.senderCanonical),
+           externalUserRef: params.message.senderCanonical,
+-          legacyWaId: params.message.sender,
++          legacyWaId: params.message.providerSender ?? params.message.sender,
+           ...(safeContactName ? { name: safeContactName } : {}),
+         },
+         select: { id: true },
+@@ -2360,7 +2362,7 @@ async function ensureWebSessionContactIdentity(params: {
+           channelAccountId: params.message.channelAccountId,
+           externalUserHash: externalUserHash(params.message.senderCanonical),
+           externalUserRef: params.message.senderCanonical,
+-          legacyWaId: params.message.sender,
++          legacyWaId: params.message.providerSender ?? params.message.sender,
+           ...(safeContactName ? { name: safeContactName } : {}),
+         },
+         create: {
+@@ -2372,7 +2374,7 @@ async function ensureWebSessionContactIdentity(params: {
+           channelAccountId: params.message.channelAccountId,
+           externalUserHash: externalUserHash(params.message.senderCanonical),
+           externalUserRef: params.message.senderCanonical,
+-          legacyWaId: params.message.sender,
++          legacyWaId: params.message.providerSender ?? params.message.sender,
+           lifecycle: resolveInitialContactLifecycle({ consentRequired: params.consentRequired }),
+         },
+         select: { id: true },
+@@ -2390,7 +2392,7 @@ async function ensureWebSessionContactIdentity(params: {
+     update: {
+       contactId: contact.id,
+       externalUserRef: params.message.senderCanonical,
+-      legacyWaId: params.message.sender,
++      legacyWaId: params.message.providerSender ?? params.message.sender,
+       lastSeenAt: params.message.timestamp,
+     },
+     create: {
+@@ -2401,7 +2403,7 @@ async function ensureWebSessionContactIdentity(params: {
+       channelAccountId: params.message.channelAccountId,
+       externalUserHash: externalUserHash(params.message.senderCanonical),
+       externalUserRef: params.message.senderCanonical,
+-      legacyWaId: params.message.sender,
++      legacyWaId: params.message.providerSender ?? params.message.sender,
+       firstSeenAt: params.message.timestamp,
+       lastSeenAt: params.message.timestamp,
+     },
+@@ -2428,7 +2430,7 @@ async function ensureWebSessionContactIdentity(params: {
+           channelAccountId: params.message.channelAccountId,
+           externalUserHash: externalUserHash(params.message.senderCanonical),
+           externalUserRef: params.message.senderCanonical,
+-          legacyWaId: params.message.sender,
++          legacyWaId: params.message.providerSender ?? params.message.sender,
+           contactChannelIdentityId: identity.id,
+           ...(safeLeadName ? { name: safeLeadName } : {}),
+         },
+@@ -2448,7 +2450,7 @@ async function ensureWebSessionContactIdentity(params: {
+           channelAccountId: params.message.channelAccountId,
+           externalUserHash: externalUserHash(params.message.senderCanonical),
+           externalUserRef: params.message.senderCanonical,
+-          legacyWaId: params.message.sender,
++          legacyWaId: params.message.providerSender ?? params.message.sender,
+           contactChannelIdentityId: identity.id,
+           ...(safeLeadName ? { name: safeLeadName } : {}),
+         },
+@@ -2462,7 +2464,7 @@ async function ensureWebSessionContactIdentity(params: {
+           channelAccountId: params.message.channelAccountId,
+           externalUserHash: externalUserHash(params.message.senderCanonical),
+           externalUserRef: params.message.senderCanonical,
+-          legacyWaId: params.message.sender,
++          legacyWaId: params.message.providerSender ?? params.message.sender,
+           contactChannelIdentityId: identity.id,
+           phone: params.message.sender,
+           status: "NEW",
+@@ -2571,6 +2573,8 @@ export async function ingestWebSessionInboundMessage(params: {
+   ) => Promise<void>;
+ }): Promise<WebSessionInboundResult> {
+   const prisma = params.prisma ?? getPrisma();
++  const inboundProviderWaId = params.message.sender;
++  const logicalSenderWaIdCanonical = params.message.senderCanonical;
+   const messageId = buildLocalMessageId(params.message);
+   const requestId = `web-session-inbound:${params.message.channelAccountDbId}:${params.message.externalMessageId}`;
+   let logicalClaimForProcessing: Awaited<ReturnType<typeof claimHybridInboundLogicalMessage>> | null = null;
+@@ -2581,7 +2585,7 @@ export async function ingestWebSessionInboundMessage(params: {
+       await markHybridInboundLogicalMessageCompleted({
+         prisma,
+         clientId: params.message.clientId,
+-        senderWaIdCanonical: params.message.senderCanonical,
++        senderWaIdCanonical: logicalSenderWaIdCanonical,
+         provider: "web_session",
+         providerMessageId: params.message.externalMessageId,
+         requestId,
+@@ -2604,7 +2608,7 @@ export async function ingestWebSessionInboundMessage(params: {
+       await markHybridInboundLogicalMessageFailedRetryable({
+         prisma,
+         clientId: params.message.clientId,
+-        senderWaIdCanonical: params.message.senderCanonical,
++        senderWaIdCanonical: logicalSenderWaIdCanonical,
+         provider: "web_session",
+         providerMessageId: params.message.externalMessageId,
+         requestId,
+@@ -2633,24 +2637,10 @@ export async function ingestWebSessionInboundMessage(params: {
+   });
+ 
+   try {
+-    const quotedReference = await resolveInboundQuotedReference({ prisma, message: params.message });
+-    let rawPayload: Prisma.InputJsonObject = {
+-      ...(params.message.rawPayload as Record<string, unknown>),
+-      ...(quotedReference ? { contextualReply: serializeQuotedReferenceForRawPayload(quotedReference) } : {}),
+-    };
+-    if (
+-      await shouldPreclassifyInboundAsSatisfactionManagement({
+-        prisma,
+-        clientId: params.message.clientId,
+-        waId: params.message.sender,
+-      })
+-    ) {
+-      rawPayload = withInboxMessageVisibility(rawPayload, "management_only", "satisfaction");
+-    }
+     const logicalClaim = await claimHybridInboundLogicalMessage({
+       prisma,
+       clientId: params.message.clientId,
+-      senderWaIdCanonical: params.message.senderCanonical,
++      senderWaIdCanonical: logicalSenderWaIdCanonical,
+       provider: "web_session",
+       providerMessageId: params.message.externalMessageId,
+       requestId,
+@@ -2668,6 +2658,41 @@ export async function ingestWebSessionInboundMessage(params: {
+       });
+       return { ok: true, action: "duplicate", waId: params.message.sender, messageId };
+     }
++    const identity = await prepareAcceptedCampaignReturnConversation(prisma, {
++      clientId: params.message.clientId,
++      clientKey: params.message.tenantKey,
++      waId: params.message.sender,
++      provider: "web_session",
++      channelAccountId: params.message.channelAccountId,
++      inboundAt: params.message.timestamp,
++    });
++    if (identity.reason === "resolved") {
++      params = {
++        ...params,
++        message: {
++          ...params.message,
++          sender: identity.waId,
++          providerSender: inboundProviderWaId,
++          senderCanonical: canonicalizeBrazilWaId(identity.waId),
++        },
++      };
++    } else if (identity.reason === "ambiguous" || identity.reason === "unconfirmed_account") {
++      logger.warn({ event: "whatsapp.web.inbound.conversation_identity_unresolved", clientId: params.message.clientId, reason: identity.reason, requestId });
++    }
++    const quotedReference = await resolveInboundQuotedReference({ prisma, message: params.message });
++    let rawPayload: Prisma.InputJsonObject = {
++      ...(params.message.rawPayload as Record<string, unknown>),
++      ...(quotedReference ? { contextualReply: serializeQuotedReferenceForRawPayload(quotedReference) } : {}),
++    };
++    if (
++      await shouldPreclassifyInboundAsSatisfactionManagement({
++        prisma,
++        clientId: params.message.clientId,
++        waId: params.message.sender,
++      })
++    ) {
++      rawPayload = withInboxMessageVisibility(rawPayload, "management_only", "satisfaction");
++    }
+     const inserted = await persistInboundMessage({
+       clientId: params.message.clientId,
+       phoneNumberId: undefined,
+@@ -2738,7 +2763,7 @@ export async function ingestWebSessionInboundMessage(params: {
+       channelAccountId: params.message.channelAccountId,
+       externalUserHash: externalUserHash(params.message.senderCanonical),
+       externalUserRef: params.message.senderCanonical,
+-      legacyWaId: params.message.sender,
++      legacyWaId: params.message.providerSender ?? params.message.sender,
+       windowIsOpen: true,
+       windowExpiresAt: new Date(params.message.timestamp.getTime() + 24 * 60 * 60 * 1000),
+       lastInboundAt: params.message.timestamp,
+diff --git a/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts b/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts
+index 1aea7bf..6f027a7 100644
+--- a/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts
++++ b/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts
+@@ -14,6 +14,7 @@ import {
+   type WebSessionMediaKind,
+ } from "../media/webSessionMedia.js";
+ import { recordConversationAgentOutboundMetrics } from "../metrics/conversationMetrics.js";
++import { getBrazilNinthDigitVariant } from "../crm/crmWhatsappIdentity.js";
+ import {
+   isWhatsappMediaAllowed,
+   resolveAgentSignatureSettings,
+@@ -95,10 +96,27 @@ function normalizeRecipientWaId(value: string) {
+   return /^\d{8,15}$/.test(digits) ? digits : null;
+ }
+ 
+-function resolveWebSessionTransportRecipientWaId(params: { waId: string; waIdCanonical?: string | null }) {
++export async function resolveWebSessionTransportRecipientWaId(params: {
++  prisma: PrismaClient;
++  clientId: string;
++  waId: string;
++  waIdCanonical?: string | null;
++  channelAccountId: string;
++}) {
+   // Web Session must send to the provider-observed identity. The canonical field
+   // is useful for grouping/search, but may contain legacy BR normalization variants.
+-  return normalizeRecipientWaId(params.waId) ?? normalizeRecipientWaId(params.waIdCanonical ?? "");
++  const selected = normalizeRecipientWaId(params.waId) ?? normalizeRecipientWaId(params.waIdCanonical ?? "");
++  if (!selected) return null;
++  const conversation = await params.prisma.conversation.findUnique({
++    where: { clientId_waId: { clientId: params.clientId, waId: params.waId } },
++    select: { provider: true, channelAccountId: true, legacyWaId: true, deletedAt: true, anonymizedAt: true },
++  });
++  const observed = normalizeRecipientWaId(conversation?.legacyWaId ?? "");
++  return conversation?.provider === "web_session" &&
++    conversation.channelAccountId === params.channelAccountId &&
++    !conversation.deletedAt && !conversation.anonymizedAt &&
++    observed && getBrazilNinthDigitVariant(selected) === observed
++      ? observed : selected;
+ }
+ 
+ export function normalizeBotMenuOptionMarkdown(text: string) {
+@@ -536,8 +554,6 @@ export async function createWebSessionTextOutboundMessage(params: {
+       errorDetails?: string | null;
+     }
+ > {
+-  const recipientWaId = resolveWebSessionTransportRecipientWaId(params);
+-  if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
+   const account = await findWebSessionAccount({
+     prisma: params.prisma,
+     clientId: params.clientId,
+@@ -545,6 +561,8 @@ export async function createWebSessionTextOutboundMessage(params: {
+     channelAccountId: params.source?.channelAccountId ?? null,
+   });
+   if (!account) return { ok: false, statusCode: 409, error: "web_session_account_not_found" };
++  const recipientWaId = await resolveWebSessionTransportRecipientWaId({ ...params, channelAccountId: account.channelAccountId });
++  if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
+   if (!isWebSessionAccountConnected(account)) {
+     return {
+       ok: false,
+@@ -822,7 +840,7 @@ export async function createWebSessionMediaOutboundMessage(params: {
+       errorDetails?: string | null;
+     }
+ > {
+-  const recipientWaId = resolveWebSessionTransportRecipientWaId(params);
++  let recipientWaId = normalizeRecipientWaId(params.waId) ?? normalizeRecipientWaId(params.waIdCanonical ?? "");
+   if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
+   const mediaKind = detectWebSessionMediaKind(params.mimeType, params.fileName);
+   if (!mediaKind) return { ok: false, statusCode: 400, error: "unsupported_media_type" };
+@@ -899,6 +917,9 @@ export async function createWebSessionMediaOutboundMessage(params: {
+     channelAccountId: params.source?.channelAccountId ?? null,
+   });
+   if (!account) return { ok: false, statusCode: 409, error: "web_session_account_not_found" };
++  const resolvedRecipientWaId = await resolveWebSessionTransportRecipientWaId({ ...params, channelAccountId: account.channelAccountId });
++  if (!resolvedRecipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
++  recipientWaId = resolvedRecipientWaId;
+   if (!isWebSessionAccountConnected(account)) {
+     return {
+       ok: false,

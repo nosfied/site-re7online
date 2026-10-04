@@ -90,6 +90,8 @@ const state = {
   departments: [] as Array<Record<string, unknown>>,
   queues: [] as Array<Record<string, unknown>>,
   config: null as Record<string, unknown> | null,
+  metaConfig: null as Record<string, unknown> | null,
+  metaPublicNumber: null as string | null,
   channelAccounts: [] as Array<Record<string, unknown>>,
   users: [] as Array<Record<string, unknown>>,
   satisfactionSurveys: [] as Array<Record<string, unknown>>,
@@ -113,6 +115,8 @@ function resetState(overrides: Partial<typeof state> = {}) {
   state.departments = overrides.departments ?? [];
   state.queues = overrides.queues ?? [];
   state.config = overrides.config ?? null;
+  state.metaConfig = overrides.metaConfig ?? null;
+  state.metaPublicNumber = overrides.metaPublicNumber ?? null;
   state.channelAccounts = overrides.channelAccounts ?? [];
   state.users = overrides.users ?? [];
   state.satisfactionSurveys = overrides.satisfactionSurveys ?? [];
@@ -156,6 +160,14 @@ function fakePrisma() {
   };
   const prisma = {
     conversation: {
+      findMany: async ({ where }: { where: { clientId: string; OR: Array<Record<string, { in?: string[]; endsWith?: string }>> } }) => {
+        const row = state.conversation;
+        if (!row || row.clientId !== where.clientId || row.deletedAt || row.anonymizedAt) return [];
+        return where.OR.some((clause) => Object.entries(clause).some(([key, filter]) =>
+          (filter.in?.includes(String(row[key] ?? "")) ?? false) ||
+          (filter.endsWith ? String(row[key] ?? "").endsWith(filter.endsWith) : false)
+        )) ? [row] : [];
+      },
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         if (!state.conversation) return null;
         if (where.clientId && state.conversation.clientId !== where.clientId) return null;
@@ -163,10 +175,11 @@ function fakePrisma() {
         if (where.id && state.conversation.id !== where.id) return null;
         return state.conversation;
       },
-      findUnique: async ({ where }: { where: { clientId_waId: { clientId: string; waId: string } } }) => {
+      findUnique: async ({ where }: { where: { id?: string; clientId_waId?: { clientId: string; waId: string } } }) => {
+        if (where.id) return state.conversation?.id === where.id ? state.conversation : null;
         if (
-          state.conversation?.clientId === where.clientId_waId.clientId &&
-          state.conversation?.waId === where.clientId_waId.waId
+          state.conversation?.clientId === where.clientId_waId?.clientId &&
+          state.conversation?.waId === where.clientId_waId?.waId
         ) {
           return state.conversation;
         }
@@ -353,7 +366,14 @@ function fakePrisma() {
     tenantOperationalConfig: {
       findUnique: async () => state.config ? { config: state.config } : null,
     },
+    tenantMetaConfig: { findUnique: async () => state.metaConfig },
+    waPhoneNumber: { findFirst: async () => state.metaPublicNumber ? { display: state.metaPublicNumber, phoneNumberId: "meta-phone" } : null },
     channelAccount: {
+      findMany: async ({ where }: { where: Record<string, unknown> }) =>
+        state.channelAccounts.filter((account) =>
+          account.clientId === where.clientId && account.provider === where.provider &&
+          account.channel === where.channel && account.runtimeEnabled === where.runtimeEnabled
+        ),
       findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) =>
         state.channelAccounts.find((account) => {
           if (where?.clientId && account.clientId !== where.clientId) return false;
@@ -3402,6 +3422,63 @@ test("waiting human takeover remains in queue on inbound", async () => {
   assert.equal(state.runtimeStates[0]?.departmentId, "department_general");
   assert.equal(state.runtimeStates[0]?.queueId, "queue_general");
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), false);
+});
+
+test("Web return through confirmed ninth-digit alias keeps campaign human destination and CRM owner", async () => {
+  const campaignWaId = "5584994786787";
+  const webWaId = "558494786787";
+  resetState({
+    metaConfig: {
+      phoneNumberId: "meta-phone", businessToken: "synthetic", wabaId: "synthetic",
+      rawPayload: { source: "fixture" },
+    },
+    metaPublicNumber: "558499995328",
+    config: { webSessionAuthorization: { status: "AUTHORIZED", authorizedNumberCanonical: "558499995328" } },
+    conversation: conversationFixture({
+      waId: campaignWaId, waIdCanonical: campaignWaId, provider: "meta", channelAccountId: null,
+      phoneNumberId: "meta-phone", windowIsOpen: false, lastInboundAt: null,
+    }),
+    runtimeStates: [runtimeFixture({
+      waId: campaignWaId, waIdCanonical: campaignWaId, provider: "meta", channelAccountId: null,
+      windowIsOpen: false, lastInboundAt: null, mode: "HUMAN", status: "WAITING",
+      departmentId: "department_general", queueId: "queue_general",
+    })],
+    contacts: [{ id: "campaign-contact", clientId: "client_1", waId: campaignWaId, lifecycle: "ACTIVE", name: null }],
+    leads: [{ id: "campaign-lead", tenantId: "client_1", waId: campaignWaId, waIdCanonical: campaignWaId, name: null }],
+    chatbotFlow: {
+      id: "entry-flow", definition: { start: "menu", nodes: {
+        menu: { type: "menu", text: "Novo fluxo", options: [{ label: "Registro", next: "done" }] },
+        done: { type: "text", text: "OK" },
+      } },
+    },
+  });
+  withConnectedWebSession();
+  const result = await withFakeWorker(() => ingestBaileysWebSessionMessage({
+    clientId: "client_1", tenantKey: "tenant_1", channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_ALIAS_CAMPAIGN", remoteJid: `${webWaId}@s.whatsapp.net`, fromMe: false },
+      messageTimestamp: Date.parse("2026-08-11T12:10:00.000Z") / 1000,
+      message: { conversation: "resposta" },
+    },
+  }));
+  assert.equal(result.action, "persisted");
+  assert.equal(state.conversation?.waId, campaignWaId);
+  assert.equal(state.conversation?.legacyWaId, webWaId);
+  assert.equal(state.conversation?.id, "conversation_1");
+  assert.equal(state.conversation?.windowIsOpen, true);
+  assert.equal(state.runtimeStates.length, 1);
+  assert.equal(state.runtimeStates[0]?.waId, campaignWaId);
+  assert.equal(state.runtimeStates[0]?.legacyWaId, webWaId);
+  assert.equal(state.runtimeStates[0]?.mode, "HUMAN");
+  assert.equal(state.runtimeStates[0]?.status, "WAITING");
+  assert.equal(state.runtimeStates[0]?.departmentId, "department_general");
+  assert.equal(state.runtimeStates[0]?.queueId, "queue_general");
+  assert.equal(state.contacts.length, 1);
+  assert.equal(state.contacts[0]?.id, "campaign-contact");
+  assert.equal(state.leads.length, 1);
+  assert.equal(state.leads[0]?.id, "campaign-lead");
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Novo fluxo")), false);
 });
 
 test("expired CSAT asks for a new-service decision and option 1 returns to bot mode", async () => {

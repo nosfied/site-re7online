@@ -131,6 +131,7 @@ import {
 } from "../channels/hybridInboundDedupe.js";
 import { resolveTenant, TenantResolutionError } from "../tenancy/tenantResolver.js";
 import { resolveEffectiveWhatsappOutboundTransport } from "../crm/crmConversationStart.js";
+import { prepareAcceptedCampaignReturnConversation, resolveInboundConversationIdentity } from "../channels/inboundConversationIdentity.js";
 import { ensureLeadForConversation, upsertLeadFromCapture } from "../crm/lead.service.js";
 import { runWhatsAppDualReadShadow } from "../channels/whatsappDualReadShadow.js";
 import {
@@ -3324,9 +3325,23 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         undefined
       );
 
-      for (const message of normalized.messages) {
-        const normalizedFrom = normalizeWaId(message.from);
-        const canonicalWaId = canonicalizeBrazilWaId(normalizedFrom);
+      for (let message of normalized.messages) {
+        // Keep the provider address distinct from the canonical conversation key.
+        const inboundProviderWaId = message.from;
+        let normalizedFrom = normalizeWaId(message.from);
+        let canonicalWaId = canonicalizeBrazilWaId(normalizedFrom);
+        const logicalSenderWaIdCanonical = canonicalWaId;
+        const identity = tenantClientId && phoneNumberId
+          ? await resolveInboundConversationIdentity(prisma, {
+              clientId: tenantClientId,
+              waId: normalizedFrom,
+              provider: "meta",
+              channelAccountId: phoneNumberId,
+            })
+          : { waId: normalizedFrom, reason: "unchanged" as const };
+        if (identity.reason === "ambiguous" || identity.reason === "unconfirmed_account") {
+          logger.warn({ event: "whatsapp.meta.inbound.conversation_identity_unresolved", clientId: tenantClientId, reason: identity.reason, requestId: meta?.requestId });
+        }
         if (canonicalWaId !== normalizedFrom) {
           logger.info({
             event: "waid.canonical.generated",
@@ -3342,10 +3357,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           waId: normalizedFrom,
           conversationKey: makeConversationKey(tenantClientKey, normalizedFrom),
         });
-        const releaseConversationMutex = await acquireConversationMutex(
-          tenantClientKey,
-          normalizedFrom
-        );
+        const releaseConversationMutex = await acquireConversationMutex(tenantClientKey, identity.waId);
         let logicalClaimForProcessing: Awaited<ReturnType<typeof claimHybridInboundLogicalMessage>> | null = null;
         let logicalProcessingFailed = false;
         const markLogicalProcessingCompleted = async () => {
@@ -3354,7 +3366,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             await markHybridInboundLogicalMessageCompleted({
               prisma,
               clientId: tenantClientId,
-              senderWaIdCanonical: canonicalWaId,
+              senderWaIdCanonical: logicalSenderWaIdCanonical,
               provider: "meta",
               providerMessageId: message.messageId,
               requestId: meta?.requestId ?? `meta-inbound:${message.messageId}`,
@@ -3378,7 +3390,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             await markHybridInboundLogicalMessageFailedRetryable({
               prisma,
               clientId: tenantClientId,
-              senderWaIdCanonical: canonicalWaId,
+              senderWaIdCanonical: logicalSenderWaIdCanonical,
               provider: "meta",
               providerMessageId: message.messageId,
               requestId: meta?.requestId ?? `meta-inbound:${message.messageId}`,
@@ -3469,7 +3481,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       const logicalClaim = await claimHybridInboundLogicalMessage({
         prisma,
         clientId: tenantClientId,
-        senderWaIdCanonical: canonicalWaId,
+        senderWaIdCanonical: logicalSenderWaIdCanonical,
         provider: "meta",
         providerMessageId: message.messageId,
         requestId: meta?.requestId ?? `meta-inbound:${message.messageId}`,
@@ -3499,6 +3511,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         );
         continue;
       }
+    }
+    if (identity.reason === "resolved") {
+      normalizedFrom = identity.waId;
+      canonicalWaId = canonicalizeBrazilWaId(identity.waId);
+      message = { ...message, from: identity.waId };
     }
 
     if (
@@ -3611,7 +3628,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
         const quotaReplyTo = env.WHATSAPP_SANDBOX
           ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
-          : message.from;
+          : inboundProviderWaId;
         const quotaLimit = planLimitsSettings.quotaMonthlyConversations;
         const rawQuotaTemplate =
           typeof planLimitsSettings.quotaBlockedReplyText === "string" &&
@@ -3654,6 +3671,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
     }
 
+    if (tenantClientId && phoneNumberId && identity.reason !== "resolved") {
+      const prepared = await prepareAcceptedCampaignReturnConversation(prisma, {
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: normalizedFrom,
+        provider: "meta",
+        channelAccountId: phoneNumberId,
+        inboundAt: parseWebhookTimestampToDate(message.timestamp),
+      });
+      if (prepared.reason === "resolved") {
+        normalizedFrom = prepared.waId;
+        canonicalWaId = canonicalizeBrazilWaId(prepared.waId);
+        message = { ...message, from: prepared.waId };
+      }
+    }
     const existingRuntimeForInbound = await storage.getConversation(normalizedFrom, tenantClientKey);
     const persistedRuntimeForInbound =
       existingRuntimeForInbound ? null : await loadPersistedRuntimeForInbound(normalizedFrom, message.timestamp);
@@ -4270,7 +4302,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         previousState: currentConversation,
         nextState: updatedConversation,
         messageId: message.messageId,
-        toE164: message.from,
+        toE164: inboundProviderWaId,
         allowlistHit,
         receivedMedia: isWhatsAppInboundMediaMessage(message.type),
         replyAlreadyPlanned: Boolean(handoffResult.replyText?.trim()),
@@ -4356,7 +4388,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
         await attemptTemplateFallback({
           waId: normalizedFrom,
-          toE164: message.from,
+          toE164: inboundProviderWaId,
           intent: updatedConversation.intent,
           messageId: message.messageId,
         });
@@ -4379,7 +4411,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
         await attemptTemplateFallback({
           waId: normalizedFrom,
-          toE164: message.from,
+          toE164: inboundProviderWaId,
           intent: updatedConversation.intent,
           messageId: message.messageId,
         });
@@ -4387,7 +4419,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       }
       const toForReply = env.WHATSAPP_SANDBOX
         ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
-        : message.from;
+        : inboundProviderWaId;
 
       if (replyType === "text" && !env.OUTBOUND_TEXT_ENABLED) {
         logger.error({
@@ -4404,7 +4436,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
         await attemptTemplateFallback({
           waId: normalizedFrom,
-          toE164: message.from,
+          toE164: inboundProviderWaId,
           intent: updatedConversation.intent,
           messageId: message.messageId,
         });
@@ -4801,7 +4833,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           const handoffReply = activatedHandoff.replyText;
           const result = await sendPassiveOutboundText({
             runtimeWriteToken: updatedConversation.runtimeWriteToken,
-            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || inboundProviderWaId : inboundProviderWaId,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
             messageId: `ai.handoff.confirmation.${message.messageId}`,
@@ -4870,7 +4902,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
           const result = await sendPassiveOutboundText({
             runtimeWriteToken: updatedConversation.runtimeWriteToken,
-            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || inboundProviderWaId : inboundProviderWaId,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
             messageId: `ai.handoff.declined.${message.messageId}`,
@@ -4994,7 +5026,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
         const result = await sendPassiveOutboundText({
           runtimeWriteToken: updatedConversation.runtimeWriteToken,
-          toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+          toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || inboundProviderWaId : inboundProviderWaId,
           waId: normalizedFrom,
           intent: updatedConversation.intent,
           messageId: `ai.handoff.invalid.${message.messageId}`,
@@ -5864,7 +5896,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       previousState: currentConversation,
       nextState: updatedConversation,
       messageId: message.messageId,
-      toE164: message.from,
+      toE164: inboundProviderWaId,
       allowlistHit,
       receivedMedia: isWhatsAppInboundMediaMessage(message.type),
       replyAlreadyPlanned: Boolean(chatbotFlowResult.pendingHandoff && chatbotFlowResult.replyText?.trim()),
@@ -5912,7 +5944,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         try {
           const feedbackResult = await sendPassiveOutboundText({
             runtimeWriteToken: updatedConversation.runtimeWriteToken,
-            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || inboundProviderWaId : inboundProviderWaId,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
             messageId: `flow.handoff.closed.${message.messageId}`,
@@ -5979,7 +6011,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         try {
           const feedbackResult = await sendPassiveOutboundText({
             runtimeWriteToken: updatedConversation.runtimeWriteToken,
-            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || inboundProviderWaId : inboundProviderWaId,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
             messageId: `flow.handoff.feedback.${message.messageId}`,
@@ -6382,7 +6414,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           if (demoReplyText) {
             await sendPassiveOutboundText({
               runtimeWriteToken: updatedConversation.runtimeWriteToken,
-              toE164: message.from,
+              toE164: inboundProviderWaId,
               waId: normalizedFrom,
               intent: updatedConversation.intent,
               messageId: message.messageId,
@@ -6545,7 +6577,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
       await attemptTemplateFallback({
         waId: normalizedFrom,
-        toE164: message.from,
+        toE164: inboundProviderWaId,
         intent: updatedConversation.intent,
         messageId: message.messageId,
       });
@@ -6574,7 +6606,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         reason: "automation_layers_disabled",
         timestamp: message.timestamp,
         messageId: message.messageId,
-        toE164: message.from,
+        toE164: inboundProviderWaId,
         allowlistHit,
         receivedMedia: isWhatsAppInboundMediaMessage(message.type),
         guard: inboundGuard,
@@ -6613,7 +6645,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const toForReply = env.WHATSAPP_SANDBOX
       ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
-      : message.from;
+      : inboundProviderWaId;
 
     const demoAwaitingSchedule = (updatedConversation.demoStatus ?? "none") === "requested";
     const aiBusinessContext = appliedTenantConfig?.aiBusinessContext?.trim() ?? "";
@@ -8340,7 +8372,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         reason: "no_automation_reply_configured",
         timestamp: message.timestamp,
         messageId: message.messageId,
-        toE164: message.from,
+        toE164: inboundProviderWaId,
         allowlistHit,
         receivedMedia: isWhatsAppInboundMediaMessage(message.type),
         guard: inboundGuard,

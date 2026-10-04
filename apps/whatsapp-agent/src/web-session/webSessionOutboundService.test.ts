@@ -4,8 +4,19 @@ import {
   isWebSessionTextOutboundReady,
   normalizeBotMenuOptionMarkdown,
   resolveWebSessionChannelSwitchWarning,
+  resolveWebSessionTransportRecipientWaId,
   resolveWebSessionTextRecipient,
 } from "./webSessionOutboundService.js";
+
+test("Web outbound uses the provider-observed ninth-digit variant only for its live account", async () => {
+  const conversation = { provider: "web_session", channelAccountId: "web-a", legacyWaId: "558187654321", deletedAt: null, anonymizedAt: null };
+  const prisma = { conversation: { findUnique: async () => conversation } } as never;
+  const input = { prisma, clientId: "tenant-a", waId: "5581987654321", channelAccountId: "web-a" };
+  assert.equal(await resolveWebSessionTransportRecipientWaId(input), "558187654321");
+  assert.equal(await resolveWebSessionTransportRecipientWaId({ ...input, channelAccountId: "web-b" }), input.waId);
+  conversation.anonymizedAt = new Date() as never;
+  assert.equal(await resolveWebSessionTransportRecipientWaId(input), input.waId);
+});
 
 function makeWebSessionAccount(overrides: {
   channelAccountId: string;

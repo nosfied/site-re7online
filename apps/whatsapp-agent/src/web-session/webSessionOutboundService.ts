@@ -14,6 +14,7 @@ import {
   type WebSessionMediaKind,
 } from "../media/webSessionMedia.js";
 import { recordConversationAgentOutboundMetrics } from "../metrics/conversationMetrics.js";
+import { getBrazilNinthDigitVariant } from "../crm/crmWhatsappIdentity.js";
 import {
   isWhatsappMediaAllowed,
   resolveAgentSignatureSettings,
@@ -95,10 +96,27 @@ function normalizeRecipientWaId(value: string) {
   return /^\d{8,15}$/.test(digits) ? digits : null;
 }
 
-function resolveWebSessionTransportRecipientWaId(params: { waId: string; waIdCanonical?: string | null }) {
+export async function resolveWebSessionTransportRecipientWaId(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  waId: string;
+  waIdCanonical?: string | null;
+  channelAccountId: string;
+}) {
   // Web Session must send to the provider-observed identity. The canonical field
   // is useful for grouping/search, but may contain legacy BR normalization variants.
-  return normalizeRecipientWaId(params.waId) ?? normalizeRecipientWaId(params.waIdCanonical ?? "");
+  const selected = normalizeRecipientWaId(params.waId) ?? normalizeRecipientWaId(params.waIdCanonical ?? "");
+  if (!selected) return null;
+  const conversation = await params.prisma.conversation.findUnique({
+    where: { clientId_waId: { clientId: params.clientId, waId: params.waId } },
+    select: { provider: true, channelAccountId: true, legacyWaId: true, deletedAt: true, anonymizedAt: true },
+  });
+  const observed = normalizeRecipientWaId(conversation?.legacyWaId ?? "");
+  return conversation?.provider === "web_session" &&
+    conversation.channelAccountId === params.channelAccountId &&
+    !conversation.deletedAt && !conversation.anonymizedAt &&
+    observed && getBrazilNinthDigitVariant(selected) === observed
+      ? observed : selected;
 }
 
 export function normalizeBotMenuOptionMarkdown(text: string) {
@@ -536,8 +554,6 @@ export async function createWebSessionTextOutboundMessage(params: {
       errorDetails?: string | null;
     }
 > {
-  const recipientWaId = resolveWebSessionTransportRecipientWaId(params);
-  if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
   const account = await findWebSessionAccount({
     prisma: params.prisma,
     clientId: params.clientId,
@@ -545,6 +561,8 @@ export async function createWebSessionTextOutboundMessage(params: {
     channelAccountId: params.source?.channelAccountId ?? null,
   });
   if (!account) return { ok: false, statusCode: 409, error: "web_session_account_not_found" };
+  const recipientWaId = await resolveWebSessionTransportRecipientWaId({ ...params, channelAccountId: account.channelAccountId });
+  if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
   if (!isWebSessionAccountConnected(account)) {
     return {
       ok: false,
@@ -822,7 +840,7 @@ export async function createWebSessionMediaOutboundMessage(params: {
       errorDetails?: string | null;
     }
 > {
-  const recipientWaId = resolveWebSessionTransportRecipientWaId(params);
+  let recipientWaId = normalizeRecipientWaId(params.waId) ?? normalizeRecipientWaId(params.waIdCanonical ?? "");
   if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
   const mediaKind = detectWebSessionMediaKind(params.mimeType, params.fileName);
   if (!mediaKind) return { ok: false, statusCode: 400, error: "unsupported_media_type" };
@@ -899,6 +917,9 @@ export async function createWebSessionMediaOutboundMessage(params: {
     channelAccountId: params.source?.channelAccountId ?? null,
   });
   if (!account) return { ok: false, statusCode: 409, error: "web_session_account_not_found" };
+  const resolvedRecipientWaId = await resolveWebSessionTransportRecipientWaId({ ...params, channelAccountId: account.channelAccountId });
+  if (!resolvedRecipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
+  recipientWaId = resolvedRecipientWaId;
   if (!isWebSessionAccountConnected(account)) {
     return {
       ok: false,

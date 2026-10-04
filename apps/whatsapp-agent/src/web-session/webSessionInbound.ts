@@ -17,6 +17,7 @@ import { shouldResetClosedConversationForBotReentry } from "../conversation/auto
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
 import { activateHumanHandoff, isWindowOpen, updateOutbound } from "../conversation/conversation.service.js";
 import { buildCrmWhatsappExternalUserHash } from "../crm/crmWhatsappIdentity.js";
+import { prepareAcceptedCampaignReturnConversation } from "../channels/inboundConversationIdentity.js";
 import { recordCrmConversationContactOrigin } from "../crm/crmContactUpsert.js";
 import {
   buildCompletedServiceSnapshotExpectation,
@@ -94,6 +95,7 @@ export type NormalizedWebSessionInboundMessage = {
   channelAccountId: string;
   externalMessageId: string;
   sender: string;
+  providerSender?: string;
   senderCanonical: string;
   senderJid: string;
   recipientJid?: string | null;
@@ -1104,7 +1106,7 @@ async function ensureWebSessionRuntimeState(params: {
       channelAccountId: params.message.channelAccountId,
       externalUserHash: externalUserHash(params.message.senderCanonical),
       externalUserRef: params.message.senderCanonical,
-      legacyWaId: params.message.sender,
+      legacyWaId: params.message.providerSender ?? params.message.sender,
       windowIsOpen: true,
       windowExpiresAt: new Date(params.message.timestamp.getTime() + 24 * 60 * 60 * 1000),
       lastInboundAt: params.message.timestamp,
@@ -1175,7 +1177,7 @@ async function ensureWebSessionRuntimeState(params: {
       channelAccountId: params.message.channelAccountId,
       externalUserHash: externalUserHash(params.message.senderCanonical),
       externalUserRef: params.message.senderCanonical,
-      legacyWaId: params.message.sender,
+      legacyWaId: params.message.providerSender ?? params.message.sender,
       firstSeenAt: params.message.timestamp,
       windowIsOpen: true,
       windowExpiresAt: new Date(params.message.timestamp.getTime() + 24 * 60 * 60 * 1000),
@@ -2342,7 +2344,7 @@ async function ensureWebSessionContactIdentity(params: {
           channelAccountId: params.message.channelAccountId,
           externalUserHash: externalUserHash(params.message.senderCanonical),
           externalUserRef: params.message.senderCanonical,
-          legacyWaId: params.message.sender,
+          legacyWaId: params.message.providerSender ?? params.message.sender,
           ...(safeContactName ? { name: safeContactName } : {}),
         },
         select: { id: true },
@@ -2360,7 +2362,7 @@ async function ensureWebSessionContactIdentity(params: {
           channelAccountId: params.message.channelAccountId,
           externalUserHash: externalUserHash(params.message.senderCanonical),
           externalUserRef: params.message.senderCanonical,
-          legacyWaId: params.message.sender,
+          legacyWaId: params.message.providerSender ?? params.message.sender,
           ...(safeContactName ? { name: safeContactName } : {}),
         },
         create: {
@@ -2372,7 +2374,7 @@ async function ensureWebSessionContactIdentity(params: {
           channelAccountId: params.message.channelAccountId,
           externalUserHash: externalUserHash(params.message.senderCanonical),
           externalUserRef: params.message.senderCanonical,
-          legacyWaId: params.message.sender,
+          legacyWaId: params.message.providerSender ?? params.message.sender,
           lifecycle: resolveInitialContactLifecycle({ consentRequired: params.consentRequired }),
         },
         select: { id: true },
@@ -2390,7 +2392,7 @@ async function ensureWebSessionContactIdentity(params: {
     update: {
       contactId: contact.id,
       externalUserRef: params.message.senderCanonical,
-      legacyWaId: params.message.sender,
+      legacyWaId: params.message.providerSender ?? params.message.sender,
       lastSeenAt: params.message.timestamp,
     },
     create: {
@@ -2401,7 +2403,7 @@ async function ensureWebSessionContactIdentity(params: {
       channelAccountId: params.message.channelAccountId,
       externalUserHash: externalUserHash(params.message.senderCanonical),
       externalUserRef: params.message.senderCanonical,
-      legacyWaId: params.message.sender,
+      legacyWaId: params.message.providerSender ?? params.message.sender,
       firstSeenAt: params.message.timestamp,
       lastSeenAt: params.message.timestamp,
     },
@@ -2428,7 +2430,7 @@ async function ensureWebSessionContactIdentity(params: {
           channelAccountId: params.message.channelAccountId,
           externalUserHash: externalUserHash(params.message.senderCanonical),
           externalUserRef: params.message.senderCanonical,
-          legacyWaId: params.message.sender,
+          legacyWaId: params.message.providerSender ?? params.message.sender,
           contactChannelIdentityId: identity.id,
           ...(safeLeadName ? { name: safeLeadName } : {}),
         },
@@ -2448,7 +2450,7 @@ async function ensureWebSessionContactIdentity(params: {
           channelAccountId: params.message.channelAccountId,
           externalUserHash: externalUserHash(params.message.senderCanonical),
           externalUserRef: params.message.senderCanonical,
-          legacyWaId: params.message.sender,
+          legacyWaId: params.message.providerSender ?? params.message.sender,
           contactChannelIdentityId: identity.id,
           ...(safeLeadName ? { name: safeLeadName } : {}),
         },
@@ -2462,7 +2464,7 @@ async function ensureWebSessionContactIdentity(params: {
           channelAccountId: params.message.channelAccountId,
           externalUserHash: externalUserHash(params.message.senderCanonical),
           externalUserRef: params.message.senderCanonical,
-          legacyWaId: params.message.sender,
+          legacyWaId: params.message.providerSender ?? params.message.sender,
           contactChannelIdentityId: identity.id,
           phone: params.message.sender,
           status: "NEW",
@@ -2571,6 +2573,8 @@ export async function ingestWebSessionInboundMessage(params: {
   ) => Promise<void>;
 }): Promise<WebSessionInboundResult> {
   const prisma = params.prisma ?? getPrisma();
+  const inboundProviderWaId = params.message.sender;
+  const logicalSenderWaIdCanonical = params.message.senderCanonical;
   const messageId = buildLocalMessageId(params.message);
   const requestId = `web-session-inbound:${params.message.channelAccountDbId}:${params.message.externalMessageId}`;
   let logicalClaimForProcessing: Awaited<ReturnType<typeof claimHybridInboundLogicalMessage>> | null = null;
@@ -2581,7 +2585,7 @@ export async function ingestWebSessionInboundMessage(params: {
       await markHybridInboundLogicalMessageCompleted({
         prisma,
         clientId: params.message.clientId,
-        senderWaIdCanonical: params.message.senderCanonical,
+        senderWaIdCanonical: logicalSenderWaIdCanonical,
         provider: "web_session",
         providerMessageId: params.message.externalMessageId,
         requestId,
@@ -2604,7 +2608,7 @@ export async function ingestWebSessionInboundMessage(params: {
       await markHybridInboundLogicalMessageFailedRetryable({
         prisma,
         clientId: params.message.clientId,
-        senderWaIdCanonical: params.message.senderCanonical,
+        senderWaIdCanonical: logicalSenderWaIdCanonical,
         provider: "web_session",
         providerMessageId: params.message.externalMessageId,
         requestId,
@@ -2633,24 +2637,10 @@ export async function ingestWebSessionInboundMessage(params: {
   });
 
   try {
-    const quotedReference = await resolveInboundQuotedReference({ prisma, message: params.message });
-    let rawPayload: Prisma.InputJsonObject = {
-      ...(params.message.rawPayload as Record<string, unknown>),
-      ...(quotedReference ? { contextualReply: serializeQuotedReferenceForRawPayload(quotedReference) } : {}),
-    };
-    if (
-      await shouldPreclassifyInboundAsSatisfactionManagement({
-        prisma,
-        clientId: params.message.clientId,
-        waId: params.message.sender,
-      })
-    ) {
-      rawPayload = withInboxMessageVisibility(rawPayload, "management_only", "satisfaction");
-    }
     const logicalClaim = await claimHybridInboundLogicalMessage({
       prisma,
       clientId: params.message.clientId,
-      senderWaIdCanonical: params.message.senderCanonical,
+      senderWaIdCanonical: logicalSenderWaIdCanonical,
       provider: "web_session",
       providerMessageId: params.message.externalMessageId,
       requestId,
@@ -2667,6 +2657,41 @@ export async function ingestWebSessionInboundMessage(params: {
         reason: "hybrid_logical_message_exists",
       });
       return { ok: true, action: "duplicate", waId: params.message.sender, messageId };
+    }
+    const identity = await prepareAcceptedCampaignReturnConversation(prisma, {
+      clientId: params.message.clientId,
+      clientKey: params.message.tenantKey,
+      waId: params.message.sender,
+      provider: "web_session",
+      channelAccountId: params.message.channelAccountId,
+      inboundAt: params.message.timestamp,
+    });
+    if (identity.reason === "resolved") {
+      params = {
+        ...params,
+        message: {
+          ...params.message,
+          sender: identity.waId,
+          providerSender: inboundProviderWaId,
+          senderCanonical: canonicalizeBrazilWaId(identity.waId),
+        },
+      };
+    } else if (identity.reason === "ambiguous" || identity.reason === "unconfirmed_account") {
+      logger.warn({ event: "whatsapp.web.inbound.conversation_identity_unresolved", clientId: params.message.clientId, reason: identity.reason, requestId });
+    }
+    const quotedReference = await resolveInboundQuotedReference({ prisma, message: params.message });
+    let rawPayload: Prisma.InputJsonObject = {
+      ...(params.message.rawPayload as Record<string, unknown>),
+      ...(quotedReference ? { contextualReply: serializeQuotedReferenceForRawPayload(quotedReference) } : {}),
+    };
+    if (
+      await shouldPreclassifyInboundAsSatisfactionManagement({
+        prisma,
+        clientId: params.message.clientId,
+        waId: params.message.sender,
+      })
+    ) {
+      rawPayload = withInboxMessageVisibility(rawPayload, "management_only", "satisfaction");
     }
     const inserted = await persistInboundMessage({
       clientId: params.message.clientId,
@@ -2738,7 +2763,7 @@ export async function ingestWebSessionInboundMessage(params: {
       channelAccountId: params.message.channelAccountId,
       externalUserHash: externalUserHash(params.message.senderCanonical),
       externalUserRef: params.message.senderCanonical,
-      legacyWaId: params.message.sender,
+      legacyWaId: params.message.providerSender ?? params.message.sender,
       windowIsOpen: true,
       windowExpiresAt: new Date(params.message.timestamp.getTime() + 24 * 60 * 60 * 1000),
       lastInboundAt: params.message.timestamp,

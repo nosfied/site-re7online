@@ -43,4 +43,6 @@ Pontos para a revisão da correção, sem implementá-la aqui:
 
 **Aceite parcial preservado:** janela Meta fechada após campanha e bloqueio visual de Assumir passaram. Claim backend antes do provider, retorno humano na mesma conversa e continuidade híbrida ainda não foram comprovados; status DELIVERED/READ tardio durante intervenção humana não foi exercitado. A próxima prova produtiva só deve ser escolhida após revisar a associação de identidades e usar caso sob controle cujo retorno esperado seja verificável. Não repetir campanha, anonimizar, reenviar ou alterar transporte como diagnóstico.
 
+**Seguimento local, sem produção:** a correção e o backport mínimo estão em [relatório separado](INCIDENT_6683_HYBRID_RETURN_LOCAL_FIX_2026-10-04.md). As observações acima continuam descrevendo o estado produtivo antes dessa correção; não converter em PASS produtivo.
+
 Evidência completa somente em `local-evidence/incident-6683/campaign-out6-identity-20261004.private.jsonl` (0600, fora do Git), SHA-256 `cf4ce745e259945a51b778fd54ed04f0ada1e5a52e7f3d8f21b0c2489e6c9bf7`; saída original das consultas preservada em arquivo privado separado.
