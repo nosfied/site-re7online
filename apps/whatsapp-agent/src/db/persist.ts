@@ -549,11 +549,12 @@ export async function persistEvent(params: {
   requestId?: string | null;
   eventName: string;
   payloadJson: Prisma.InputJsonValue;
-}) {
+}, transaction?: Prisma.TransactionClient) {
   if (!params.clientId) return;
   const requestId = params.requestId ?? params.messageId ?? null;
+  if (transaction) await transaction.$executeRawUnsafe("SAVEPOINT persist_event_identity");
   try {
-    const prisma = getPrisma();
+    const prisma = transaction ?? getPrisma();
     await prisma.event.create({
       data: {
         clientId: params.clientId,
@@ -567,7 +568,12 @@ export async function persistEvent(params: {
         payloadJson: params.payloadJson,
       },
     });
+    if (transaction) await transaction.$executeRawUnsafe("RELEASE SAVEPOINT persist_event_identity");
   } catch (error) {
+    if (transaction) {
+      await transaction.$executeRawUnsafe("ROLLBACK TO SAVEPOINT persist_event_identity");
+      await transaction.$executeRawUnsafe("RELEASE SAVEPOINT persist_event_identity");
+    }
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") return;
     }

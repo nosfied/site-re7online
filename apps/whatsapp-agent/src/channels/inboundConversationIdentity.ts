@@ -1,4 +1,4 @@
-import { MessageStatus, type PrismaClient } from "@prisma/client";
+import { MessageStatus, Prisma, type PrismaClient } from "@prisma/client";
 import { ensureCampaignOutboundConversationUnlocked } from "../campaigns/campaignOutboundConversation.js";
 import { withHybridConversationIdentityLock } from "./hybridConversationIdentityLock.js";
 import { resolveCampaignRecipientConversationTarget } from "../campaigns/campaignRecipientConversationBridge.js";
@@ -9,7 +9,7 @@ import { normalizeWaIdDigits } from "../utils/waid.js";
 
 /** Resolve an already existing conversation; never create or merge an identity. */
 export async function resolveInboundConversationIdentity(
-  prisma: PrismaClient,
+  prisma: PrismaClient | Prisma.TransactionClient,
   input: {
     clientId: string;
     waId: string;
@@ -36,7 +36,7 @@ export async function resolveInboundConversationIdentity(
       where: { id: target.conversationId },
       select: { clientId: true, waId: true, provider: true, phoneNumberId: true, channelAccountId: true, deletedAt: true, anonymizedAt: true },
     }),
-    resolveHybridWhatsappIdentityStatus({ prisma, clientId: input.clientId }),
+    resolveHybridWhatsappIdentityStatus({ prisma: prisma as PrismaClient, clientId: input.clientId }),
     prisma.tenantMetaConfig.findUnique({ where: { clientId: input.clientId }, select: { phoneNumberId: true } }),
     prisma.channelAccount.findMany({
       where: { clientId: input.clientId, channel: "whatsapp", provider: "web_session", runtimeEnabled: true, status: { not: "archived_duplicate" } },
@@ -69,7 +69,7 @@ export async function resolveInboundConversationIdentity(
 
 /** A provider-accepted campaign can be answered before DELIVERED/READ arrives. */
 async function prepareAcceptedCampaignReturnConversationUnlocked(
-  prisma: PrismaClient,
+  prisma: PrismaClient | Prisma.TransactionClient,
   input: {
     clientId: string;
     clientKey: string;
@@ -84,7 +84,7 @@ async function prepareAcceptedCampaignReturnConversationUnlocked(
   const waId = normalizeWaIdDigits(input.waId);
   const variant = getBrazilNinthDigitVariant(waId);
   const [hybrid, metaConfig, webAccounts] = await Promise.all([
-    resolveHybridWhatsappIdentityStatus({ prisma, clientId: input.clientId }),
+    resolveHybridWhatsappIdentityStatus({ prisma: prisma as PrismaClient, clientId: input.clientId }),
     prisma.tenantMetaConfig.findUnique({ where: { clientId: input.clientId }, select: { phoneNumberId: true } }),
     prisma.channelAccount.findMany({
       where: { clientId: input.clientId, channel: "whatsapp", provider: "web_session", runtimeEnabled: true, status: { not: "archived_duplicate" } },
@@ -150,7 +150,7 @@ export async function prepareAcceptedCampaignReturnConversation(
   prisma: PrismaClient,
   input: Parameters<typeof prepareAcceptedCampaignReturnConversationUnlocked>[1]
 ) {
-  return withHybridConversationIdentityLock(prisma, input, () =>
-    prepareAcceptedCampaignReturnConversationUnlocked(prisma, input)
+  return withHybridConversationIdentityLock(prisma, input, (tx) =>
+    prepareAcceptedCampaignReturnConversationUnlocked(tx, input)
   );
 }

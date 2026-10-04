@@ -1,4 +1,4 @@
-import { ConversationOperationalStatus, type PrismaClient } from "@prisma/client";
+import { ConversationOperationalStatus, Prisma, type PrismaClient } from "@prisma/client";
 import crypto from "node:crypto";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
@@ -13,7 +13,29 @@ function buildWhatsAppExternalUserHash(waIdCanonical: string) {
   return `whatsapp:${crypto.createHash("sha256").update(waIdCanonical).digest("hex").slice(0, 32)}`;
 }
 
+type CampaignDb = PrismaClient | Prisma.TransactionClient;
+
+function transactionClient(db: CampaignDb) {
+  return "$transaction" in db ? undefined : db as Prisma.TransactionClient;
+}
+
+async function inCampaignTransaction<T>(db: CampaignDb, work: (tx: Prisma.TransactionClient) => Promise<T>) {
+  if ("$transaction" in db) return (db as PrismaClient).$transaction(work);
+  const tx = db as Prisma.TransactionClient;
+  await tx.$executeRawUnsafe("SAVEPOINT campaign_identity_nested");
+  try {
+    const result = await work(tx);
+    await tx.$executeRawUnsafe("RELEASE SAVEPOINT campaign_identity_nested");
+    return result;
+  } catch (error) {
+    await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT campaign_identity_nested");
+    await tx.$executeRawUnsafe("RELEASE SAVEPOINT campaign_identity_nested");
+    throw error;
+  }
+}
+
 async function recordCampaignOutboundConversationReactivated(
+  db: CampaignDb,
   params: {
     clientId: string;
     conversationId: string;
@@ -44,11 +66,11 @@ async function recordCampaignOutboundConversationReactivated(
       waIdLast4: params.waId.slice(-4),
       waIdLength: params.waId.length,
     },
-  });
+  }, transactionClient(db));
 }
 
 export async function ensureCampaignOutboundCrmBootstrap(
-  prisma: PrismaClient,
+  prisma: CampaignDb,
   params: {
     clientId: string;
     waId: string;
@@ -64,7 +86,7 @@ export async function ensureCampaignOutboundCrmBootstrap(
 ) {
   const channelAccountId = params.phoneNumberId ?? "whatsapp";
 
-  const { contact, lead } = await prisma.$transaction(async (tx) => {
+  const { contact, lead } = await inCampaignTransaction(prisma, async (tx) => {
     const resolved = await resolveCrmContactIdentity(tx, {
       clientId: params.clientId,
       phone: params.waId,
@@ -181,7 +203,7 @@ export async function ensureCampaignOutboundCrmBootstrap(
       waIdLast4: params.waId.slice(-4),
       waIdLength: params.waId.length,
     },
-  });
+  }, transactionClient(prisma));
 
   return { contactId: contact.id, leadId: lead.id };
 }
@@ -251,7 +273,7 @@ export async function ensureCampaignOutboundCrmAttemptMaterialization(
 }
 
 export async function ensureCampaignOutboundConversationUnlocked(
-  prisma: PrismaClient,
+  prisma: CampaignDb,
   params: {
     clientId: string;
     clientKey: string;
@@ -268,12 +290,13 @@ export async function ensureCampaignOutboundConversationUnlocked(
     source: "campaign" | "manual" | "bot";
     conversationId?: string | null;
     returnDestination?: OutboundReturnDestination | null;
-  }
+  },
+  precomputedDefaults?: Awaited<ReturnType<typeof ensureDefaultOperationalDepartmentAndQueue>> | null
 ) {
   const waIdCanonical = params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId);
   const defaults = params.returnDestination
     ? null
-    : await ensureDefaultOperationalDepartmentAndQueue(prisma, params.clientId);
+    : precomputedDefaults ?? await ensureDefaultOperationalDepartmentAndQueue(prisma as PrismaClient, params.clientId);
   const conversationDepartmentId =
     params.returnDestination?.type === "human_department"
       ? params.returnDestination.departmentId
@@ -344,7 +367,7 @@ export async function ensureCampaignOutboundConversationUnlocked(
     class SupersededCampaignReceipt extends Error {}
     let applied = false;
     try {
-      await prisma.$transaction(async (tx) => {
+      await inCampaignTransaction(prisma, async (tx) => {
         // The outbound activity write after provider acceptance changes runtime.updatedAt.
         // Compare the pre-provider operational version instead; it is not changed by
         // that activity write, but human runtime transitions increment it.
@@ -425,7 +448,7 @@ export async function ensureCampaignOutboundConversationUnlocked(
       if (!(error instanceof SupersededCampaignReceipt)) throw error;
     }
     if (applied && wasSoftDeleted) {
-      await recordCampaignOutboundConversationReactivated({
+      await recordCampaignOutboundConversationReactivated(prisma, {
         clientId: params.clientId,
         conversationId: existing.id,
         waId: params.waId,
@@ -530,7 +553,7 @@ export async function ensureCampaignOutboundConversationUnlocked(
       waIdLast4: params.waId.slice(-4),
       waIdLength: params.waId.length,
     },
-  });
+  }, transactionClient(prisma));
 
   const crm = await ensureCampaignOutboundCrmBootstrap(prisma, {
     clientId: params.clientId,
@@ -552,7 +575,10 @@ export async function ensureCampaignOutboundConversation(
   prisma: PrismaClient,
   params: Parameters<typeof ensureCampaignOutboundConversationUnlocked>[1]
 ) {
-  return withHybridConversationIdentityLock(prisma, params, () =>
-    ensureCampaignOutboundConversationUnlocked(prisma, params)
+  const defaults = params.returnDestination
+    ? null
+    : await ensureDefaultOperationalDepartmentAndQueue(prisma, params.clientId);
+  return withHybridConversationIdentityLock(prisma, params, (tx) =>
+    ensureCampaignOutboundConversationUnlocked(tx, params, defaults)
   );
 }

@@ -716,9 +716,11 @@ function fakePrisma() {
         return state.runtimeStates[0] ?? null;
       },
     },
-    $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
-      callback({
+    $transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        ...prisma,
         $executeRaw: async () => 1,
+        $queryRaw: async () => [],
         conversation: prisma.conversation,
         contact: prisma.contact,
         lead: prisma.lead,
@@ -732,7 +734,10 @@ function fakePrisma() {
           },
           update: async () => null,
         },
-      }),
+      };
+      delete (tx as { $transaction?: unknown }).$transaction;
+      return callback(tx);
+    },
   };
   return prisma;
 }
