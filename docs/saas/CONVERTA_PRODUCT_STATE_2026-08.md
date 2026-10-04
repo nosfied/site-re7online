@@ -1,5 +1,9 @@
 # Converta Product State - 2026-08
 
+## Estado produtivo atualizado — correção do novo 6683, 03/10/2026
+
+[Registro técnico V4](../reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_DEPLOY_2026-10-03.md): API `879cb1fa` **DEPLOYED TECHNICALLY**, worker mínimo af26 coordenado e frontend af26 preservado. Guarda aberta geração 23, scheduler habilitado, cron/boot e PM2 saved/fallback restaurados; owner confirmou Inbox/CRM autenticados em leitura. Backup fresco restaurado somente em DB local isolado. Primeira validação pós-contenção falhou sem detalhe interno capturado; repetição somente leitura passou, sem repetir start. **OWNER VALIDATION PENDING** para o novo caso 6683 e os caminhos funcionais não exercitados; os quatro registros antigos não foram saneados. O reparo 6683 de setembro segue CLOSED. Campanhas/CRA continuam aguardando validação funcional do owner.
+
 ## Janela autorizada 02/10 - af26 bloqueada antes da contencao
 
 BLOCKED BEFORE CONTAINMENT / NOT DEPLOYED. [Registro](../reviews/automation-freeform-window-release-af26/ACTIVATION_ATTEMPT_2026-10-02.md).

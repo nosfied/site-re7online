@@ -1,5 +1,9 @@
 # Product Map Current
 
+## Estado produtivo atualizado — correção do novo 6683, 03/10/2026
+
+[Resultado V4](../reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_DEPLOY_2026-10-03.md): API `879cb1fa` **DEPLOYED TECHNICALLY / OWNER VALIDATION PENDING**; mesmo worker mínimo af26 retomado, frontend af26 preservado, guarda aberta geração 23 e controles restaurados. Inbox/CRM autenticados conferidos pelo owner apenas em leitura. O novo 6683 ainda requer prova funcional; 0604/6787/9614/6683 não receberam saneamento nem reenvio. O reparo homônimo anterior permanece CLOSED. Campanhas/CRA ainda aguardam validação funcional do owner.
+
 ## Janela autorizada 02/10 - gate operacional sudo
 
 BLOCKED BEFORE CONTAINMENT / NOT DEPLOYED. [Evidencia](../reviews/automation-freeform-window-release-af26/ACTIVATION_ATTEMPT_2026-10-02.md).
