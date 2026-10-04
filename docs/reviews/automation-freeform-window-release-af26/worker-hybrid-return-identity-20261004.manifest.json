@@ -2,17 +2,27 @@
   "baseWorker": "bf5f1d7610ca3f8144faa6f7b7994598e4a4017b + f06d49cb + 91230f88 + b66bb89a + af26 worker-minimal gate",
   "sourceManifest": "worker-source-equivalence.json",
   "patch": "worker-hybrid-return-identity-20261004.patch",
-  "patchSha256": "43cf9db6a13082b32031788b4a8e6dc25078199c659ea748e67e889406517c25",
+  "patchSha256": "b256b55352d2b32460eb878bfdd85d9a51ce3961340c3e81d8589cce657dd409",
   "files": [
+    {
+      "path": "apps/whatsapp-agent/src/channels/hybridConversationIdentityLock.ts",
+      "beforeSha256": null,
+      "afterSha256": "84785d38f352a24df296654809a25d395c8fc7ef8674c70a5b4a28e0ffdceb4a"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/channels/hybridConversationIdentityConcurrent.child.ts",
+      "beforeSha256": null,
+      "afterSha256": "ba11910927e6f819086d77524b7c8e3539e68bacb6dae6aff7adc84436511033"
+    },
     {
       "path": "apps/whatsapp-agent/src/channels/inboundConversationIdentity.ts",
       "beforeSha256": null,
-      "afterSha256": "fe6e824b3a2ec098347ee6ebfe21e6f4feb348db0cf181c1cdff332285d6db18"
+      "afterSha256": "a918d53fe8272851eaa4b6de9635cb73b1947f8c8af06b637f67fd11ef46d298"
     },
     {
       "path": "apps/whatsapp-agent/src/channels/inboundConversationIdentity.test.ts",
       "beforeSha256": null,
-      "afterSha256": "b3f9331d241cfa9c78f27a0c0512d11bb1ac73f8f84c3928e5716bdc893b08d5"
+      "afterSha256": "54360b7d329d76b34b6599f7b8ba44167560d694f3b4c0817928676398ed8c17"
     },
     {
       "path": "apps/whatsapp-agent/src/web-session/webSessionInbound.ts",
@@ -22,7 +32,7 @@
     {
       "path": "apps/whatsapp-agent/src/web-session/webSessionInbound.test.ts",
       "beforeSha256": "620601d73ce9ed09fdb290c71c4b7b381a2f5e2d438d4ff45e8ba1e6dd589d7b",
-      "afterSha256": "cd93825b684005b0e4559c8141ebb0ce9d22e5da32aec451d0a806866fee9b59"
+      "afterSha256": "53c5c3b0777e82bd1795d45afc231d624bfebf29df8531eaba143af780c72710"
     },
     {
       "path": "apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts",
@@ -32,8 +42,16 @@
   ],
   "compiledFiles": [
     {
+      "path": "apps/whatsapp-agent/dist/channels/hybridConversationIdentityLock.js",
+      "sha256": "d4ac806707467bcfd7e4f41a9f89df06e02831c2add036ed281268f1a433ad97"
+    },
+    {
+      "path": "apps/whatsapp-agent/dist/channels/hybridConversationIdentityConcurrent.child.js",
+      "sha256": "38ea41903782cafa39b12c2306f71355b999cabc3df0413cab2c37dded72b931"
+    },
+    {
       "path": "apps/whatsapp-agent/dist/channels/inboundConversationIdentity.js",
-      "sha256": "043b8f3c9994fcb2034557c18c839bfa4ed87da46c321129c37110cd8db9c43f"
+      "sha256": "61006f71357358aeced08a44ef9c4f97088969cffa59b1a2495ccb9b089b251f"
     },
     {
       "path": "apps/whatsapp-agent/dist/web-session/webSessionInbound.js",
@@ -44,8 +62,12 @@
       "sha256": "b4ebbda67b041adcbeb408469de4ff2c5e427eb3c68211f6142eeee6099d8940"
     },
     {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/channels/hybridConversationIdentityLock.js",
+      "sha256": "d4ac806707467bcfd7e4f41a9f89df06e02831c2add036ed281268f1a433ad97"
+    },
+    {
       "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/channels/inboundConversationIdentity.js",
-      "sha256": "043b8f3c9994fcb2034557c18c839bfa4ed87da46c321129c37110cd8db9c43f"
+      "sha256": "61006f71357358aeced08a44ef9c4f97088969cffa59b1a2495ccb9b089b251f"
     },
     {
       "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionInbound.js",
@@ -55,5 +77,6 @@
       "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionOutboundService.js",
       "sha256": "b4ebbda67b041adcbeb408469de4ff2c5e427eb3c68211f6142eeee6099d8940"
     }
-  ]
+  ],
+  "runtimeNode": "v20.20.0"
 }

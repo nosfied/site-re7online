@@ -62,6 +62,16 @@ test("Meta winner can reuse the Web conversation on the same confirmed public ac
   })).waId, legacy);
 });
 
+test("exact canonical alias returns the persisted winning waId and still verifies account", async () => {
+  const prisma = fixture([row(legacy, { waIdCanonical: modern })]);
+  assert.deepEqual(await resolveInboundConversationIdentity(prisma, {
+    clientId: "tenant-1", waId: modern, provider: "web_session", channelAccountId: "web-account",
+  }), { waId: legacy, reason: "resolved", conversationId: "conversation-1" });
+  assert.equal((await resolveInboundConversationIdentity(prisma, {
+    clientId: "tenant-1", waId: modern, provider: "web_session", channelAccountId: "other-account",
+  })).reason, "unconfirmed_account");
+});
+
 test("tenant/account mismatch, ambiguity and anonymization never select a variant", async () => {
   const request = { clientId: "tenant-1", waId: legacy, provider: "web_session" as const, channelAccountId: "web-account" };
   assert.equal((await resolveInboundConversationIdentity(fixture([row(modern)]), { ...request, clientId: "tenant-2" })).reason, "unchanged");

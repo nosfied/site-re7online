@@ -1,5 +1,6 @@
 import { MessageStatus, type PrismaClient } from "@prisma/client";
-import { ensureCampaignOutboundConversation } from "../campaigns/campaignOutboundConversation.js";
+import { ensureCampaignOutboundConversationUnlocked } from "../campaigns/campaignOutboundConversation.js";
+import { withHybridConversationIdentityLock } from "./hybridConversationIdentityLock.js";
 import { resolveCampaignRecipientConversationTarget } from "../campaigns/campaignRecipientConversationBridge.js";
 import { getBrazilNinthDigitVariant } from "../crm/crmWhatsappIdentity.js";
 import { parseOutboundReturnDestination } from "../routing/outboundReturnDestination.js";
@@ -21,8 +22,8 @@ export async function resolveInboundConversationIdentity(
     clientId: input.clientId,
     inputWaId: waId,
   });
-  if (target.resolved && target.matchedBy !== "brazil_ninth_digit_safe" && target.conversationId) {
-    return { waId, reason: "resolved", conversationId: target.conversationId } as const;
+  if (target.resolved && target.matchedBy === "exact_conversation_waid" && target.conversationId) {
+    return { waId: target.winningWaId, reason: "resolved", conversationId: target.conversationId } as const;
   }
   if (!target.resolved || !target.conversationId) {
     return { waId, reason: target.reason === "ambiguous" ? "ambiguous" : "unchanged" } as const;
@@ -63,11 +64,11 @@ export async function resolveInboundConversationIdentity(
   ) {
     return { waId, reason: "unconfirmed_account" } as const;
   }
-  return { waId: candidate.waId, reason: "resolved", conversationId: target.conversationId } as const;
+  return { waId: target.winningWaId, reason: "resolved", conversationId: target.conversationId } as const;
 }
 
 /** A provider-accepted campaign can be answered before DELIVERED/READ arrives. */
-export async function prepareAcceptedCampaignReturnConversation(
+async function prepareAcceptedCampaignReturnConversationUnlocked(
   prisma: PrismaClient,
   input: {
     clientId: string;
@@ -128,7 +129,7 @@ export async function prepareAcceptedCampaignReturnConversation(
   const outbound = pending[0]!;
   const payload = outbound.rawPayload as Record<string, unknown>;
   if (!outbound.messageId || !outbound.templateName) return existing;
-  await ensureCampaignOutboundConversation(prisma, {
+  await ensureCampaignOutboundConversationUnlocked(prisma, {
     clientId: input.clientId,
     clientKey: input.clientKey,
     waId: outbound.waId,
@@ -143,4 +144,13 @@ export async function prepareAcceptedCampaignReturnConversation(
     returnDestination: parseOutboundReturnDestination(payload.returnDestination),
   });
   return resolveInboundConversationIdentity(prisma, input);
+}
+
+export async function prepareAcceptedCampaignReturnConversation(
+  prisma: PrismaClient,
+  input: Parameters<typeof prepareAcceptedCampaignReturnConversationUnlocked>[1]
+) {
+  return withHybridConversationIdentityLock(prisma, input, () =>
+    prepareAcceptedCampaignReturnConversationUnlocked(prisma, input)
+  );
 }

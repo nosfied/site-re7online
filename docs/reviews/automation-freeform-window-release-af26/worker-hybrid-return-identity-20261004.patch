@@ -1,9 +1,98 @@
+diff --git a/apps/whatsapp-agent/src/channels/hybridConversationIdentityConcurrent.child.ts b/apps/whatsapp-agent/src/channels/hybridConversationIdentityConcurrent.child.ts
+new file mode 100644
+index 0000000..2d6830f
+--- /dev/null
++++ b/apps/whatsapp-agent/src/channels/hybridConversationIdentityConcurrent.child.ts
+@@ -0,0 +1,62 @@
++import { MessageType, PrismaClient } from "@prisma/client";
++import { prepareAcceptedCampaignReturnConversation } from "./inboundConversationIdentity.js";
++import { resolveCampaignRecipientConversationTarget } from "../campaigns/campaignRecipientConversationBridge.js";
++import { resolveHybridWhatsappIdentityStatus } from "../web-session/hybridIdentity.js";
++import { ingestBaileysWebSessionMessage } from "../web-session/webSessionInbound.js";
++
++// Test-only child: a separate Prisma pool exercises the PostgreSQL identity lock.
++const input = JSON.parse(process.argv[2] ?? "{}") as {
++  clientId: string; clientKey: string; waId: string;
++  provider: "meta" | "web_session"; channelAccountId: string; messageId: string; mode?: "selection" | "web_ingest";
++};
++const prisma = new PrismaClient();
++process.stdin.resume();
++process.stdout.write("ready\n");
++process.stdin.once("data", async () => {
++  try {
++    if (input.mode === "web_ingest") {
++      process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = "http://127.0.0.1:65535";
++      globalThis.fetch = (async () => new Response(JSON.stringify({ ok: true, messageId: `synthetic.${input.messageId}` }), {
++        status: 200, headers: { "content-type": "application/json" },
++      })) as typeof fetch;
++      const inbound = await ingestBaileysWebSessionMessage({
++        clientId: input.clientId, tenantKey: input.clientKey,
++        channelAccountDbId: input.channelAccountId, channelAccountId: input.channelAccountId,
++        message: {
++          key: { id: input.messageId, remoteJid: `${input.waId}@s.whatsapp.net`, fromMe: false },
++          messageTimestamp: Math.floor(Date.now() / 1000) + 2,
++          message: { conversation: "retorno sintético" },
++        },
++      });
++      if (inbound.action !== "persisted") throw new Error(`web_ingest_${inbound.action}`);
++      process.stdout.write("web_ingest_persisted\n");
++      return;
++    }
++    const result = await prepareAcceptedCampaignReturnConversation(prisma, {
++      clientId: input.clientId, clientKey: input.clientKey, waId: input.waId,
++      provider: input.provider, channelAccountId: input.channelAccountId,
++      inboundAt: new Date(Date.now() + 2000),
++    });
++    if (result.reason !== "resolved") {
++      const target = await resolveCampaignRecipientConversationTarget(prisma, { clientId: input.clientId, inputWaId: input.waId });
++      const candidate = target.conversationId ? await prisma.conversation.findUnique({ where: { id: target.conversationId }, select: { provider: true, phoneNumberId: true, channelAccountId: true } }) : null;
++      const hybrid = await resolveHybridWhatsappIdentityStatus({ prisma, clientId: input.clientId });
++      const meta = await prisma.tenantMetaConfig.findUnique({ where: { clientId: input.clientId }, select: { phoneNumberId: true } });
++      const webs = await prisma.channelAccount.findMany({ where: { clientId: input.clientId, channel: "whatsapp", provider: "web_session", runtimeEnabled: true, status: { not: "archived_duplicate" } }, select: { channelAccountId: true } });
++      throw new Error(`identity_${result.reason}:${JSON.stringify({ match: target.matchedBy, winner: target.winningWaId, candidate, metaPhoneNumberId: meta?.phoneNumberId, inputAccountId: input.channelAccountId, webAccounts: webs.map((x) => x.channelAccountId), metaPublic: hybrid.meta.canonicalNumber, webPublic: hybrid.web.canonicalNumber, webStatus: hybrid.web.status, conflict: hybrid.conflict, numberReplacement: hybrid.numberReplacement })}`);
++    }
++    await prisma.inboundMessage.create({ data: {
++      clientId: input.clientId, waId: result.waId, waIdCanonical: result.waId,
++      messageId: input.messageId, channel: "whatsapp", provider: input.provider,
++      channelAccountId: input.channelAccountId, type: MessageType.TEXT,
++      bodyText: "inbound sintético", allowlistHit: false,
++    } });
++    process.stdout.write(`${JSON.stringify(result)}\n`);
++  } catch (error) {
++    process.stderr.write(`${error instanceof Error ? error.message : "unknown_error"}\n`);
++    process.exitCode = 1;
++  } finally {
++    await prisma.$disconnect();
++    process.stdin.pause();
++  }
++});
+diff --git a/apps/whatsapp-agent/src/channels/hybridConversationIdentityLock.ts b/apps/whatsapp-agent/src/channels/hybridConversationIdentityLock.ts
+new file mode 100644
+index 0000000..f50c77d
+--- /dev/null
++++ b/apps/whatsapp-agent/src/channels/hybridConversationIdentityLock.ts
+@@ -0,0 +1,15 @@
++import { Prisma, type PrismaClient } from "@prisma/client";
++import { canonicalizeBrazilWaId } from "../utils/waid.js";
++
++/** Serialize only identity selection/materialization, never provider work. */
++export async function withHybridConversationIdentityLock<T>(
++  prisma: PrismaClient,
++  input: { clientId: string; waId: string },
++  work: () => Promise<T>
++): Promise<T> {
++  const key = `re7.hybrid.conversation.identity.v1:${input.clientId}:${canonicalizeBrazilWaId(input.waId)}`;
++  return prisma.$transaction(async (tx) => {
++    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
++    return work();
++  }, { timeout: 15000 });
++}
 diff --git a/apps/whatsapp-agent/src/channels/inboundConversationIdentity.test.ts b/apps/whatsapp-agent/src/channels/inboundConversationIdentity.test.ts
 new file mode 100644
-index 0000000..e2de8b3
+index 0000000..f589c13
 --- /dev/null
 +++ b/apps/whatsapp-agent/src/channels/inboundConversationIdentity.test.ts
-@@ -0,0 +1,119 @@
+@@ -0,0 +1,132 @@
 +import assert from "node:assert/strict";
 +import test from "node:test";
 +import type { PrismaClient } from "@prisma/client";
@@ -70,6 +159,18 @@ index 0000000..e2de8b3
 +  }
 +});
 +
++test("minimum worker uses persisted winning key for an exact canonical alias and verifies account", async () => {
++  const prisma = fixture([row(legacy, { waIdCanonical: modern })]);
++  const allowed = await resolveInboundConversationIdentity(prisma, {
++    clientId: "tenant-1", waId: modern, provider: "web_session", channelAccountId: "web-account",
++  });
++  assert.deepEqual(allowed, { waId: legacy, reason: "resolved", conversationId: "conversation-1" });
++  const denied = await resolveInboundConversationIdentity(prisma, {
++    clientId: "tenant-1", waId: modern, provider: "web_session", channelAccountId: "other-account",
++  });
++  assert.equal(denied.reason, "unconfirmed_account");
++});
++
 +test("Meta winner can reuse the Web conversation on the same confirmed public account", async () => {
 +  const prisma = fixture([row(legacy, { provider: "web_session", phoneNumberId: null, channelAccountId: "web-account" })]);
 +  assert.equal((await resolveInboundConversationIdentity(prisma, {
@@ -97,6 +198,7 @@ index 0000000..e2de8b3
 +      returnDestination: { type: "human_department", departmentId: "department-1", queueId: "queue-1" } },
 +  }] };
 +  const tx = {
++    $executeRaw: async () => 1,
 +    conversation: {
 +      findFirst: async () => rows.length ? { id: rows[0]?.id } : null,
 +      create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -125,11 +227,12 @@ index 0000000..e2de8b3
 +});
 diff --git a/apps/whatsapp-agent/src/channels/inboundConversationIdentity.ts b/apps/whatsapp-agent/src/channels/inboundConversationIdentity.ts
 new file mode 100644
-index 0000000..da091b9
+index 0000000..3d60c20
 --- /dev/null
 +++ b/apps/whatsapp-agent/src/channels/inboundConversationIdentity.ts
-@@ -0,0 +1,192 @@
+@@ -0,0 +1,202 @@
 +import { ConversationOperationalStatus, MessageStatus, Prisma, type PrismaClient } from "@prisma/client";
++import { withHybridConversationIdentityLock } from "./hybridConversationIdentityLock.js";
 +import { resolveCampaignRecipientConversationTarget } from "../campaigns/campaignRecipientConversationBridge.js";
 +import { getBrazilNinthDigitVariant } from "../crm/crmWhatsappIdentity.js";
 +import { makeConversationKey } from "../storage/conversationKey.js";
@@ -169,8 +272,8 @@ index 0000000..da091b9
 +    clientId: input.clientId,
 +    inputWaId: waId,
 +  });
-+  if (target.resolved && target.matchedBy !== "brazil_ninth_digit_safe" && target.conversationId) {
-+    return { waId, reason: "resolved", conversationId: target.conversationId } as const;
++  if (target.resolved && target.matchedBy === "exact_conversation_waid" && target.conversationId) {
++    return { waId: target.winningWaId, reason: "resolved", conversationId: target.conversationId } as const;
 +  }
 +  if (!target.resolved || !target.conversationId) {
 +    return { waId, reason: target.reason === "ambiguous" ? "ambiguous" : "unchanged" } as const;
@@ -211,11 +314,11 @@ index 0000000..da091b9
 +  ) {
 +    return { waId, reason: "unconfirmed_account" } as const;
 +  }
-+  return { waId: candidate.waId, reason: "resolved", conversationId: target.conversationId } as const;
++  return { waId: target.winningWaId, reason: "resolved", conversationId: target.conversationId } as const;
 +}
 +
 +/** A provider-accepted campaign can be answered before DELIVERED/READ arrives. */
-+export async function prepareAcceptedCampaignReturnConversation(
++async function prepareAcceptedCampaignReturnConversationUnlocked(
 +  prisma: PrismaClient,
 +  input: {
 +    clientId: string;
@@ -321,8 +424,17 @@ index 0000000..da091b9
 +  }
 +  return resolveInboundConversationIdentity(prisma, input);
 +}
++
++export async function prepareAcceptedCampaignReturnConversation(
++  prisma: PrismaClient,
++  input: Parameters<typeof prepareAcceptedCampaignReturnConversationUnlocked>[1]
++) {
++  return withHybridConversationIdentityLock(prisma, input, () =>
++    prepareAcceptedCampaignReturnConversationUnlocked(prisma, input)
++  );
++}
 diff --git a/apps/whatsapp-agent/src/web-session/webSessionInbound.test.ts b/apps/whatsapp-agent/src/web-session/webSessionInbound.test.ts
-index 6add038..9240794 100644
+index 6add038..127cb99 100644
 --- a/apps/whatsapp-agent/src/web-session/webSessionInbound.test.ts
 +++ b/apps/whatsapp-agent/src/web-session/webSessionInbound.test.ts
 @@ -77,6 +77,7 @@ test("handoff notification plan can suppress protocol and queue notices independ
@@ -481,19 +593,22 @@ index 6add038..9240794 100644
            id: String(row.id),
            firstSeenAt: row.firstSeenAt instanceof Date ? row.firstSeenAt : new Date("2026-08-11T12:00:00.000Z"),
            windowIsOpen: row.windowIsOpen === true,
-@@ -665,6 +735,7 @@ function fakePrisma() {
+@@ -664,7 +734,9 @@ function fakePrisma() {
+     },
      $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
        callback({
++        $executeRaw: async () => 1,
          conversation: prisma.conversation,
 +        conversationRuntimeState: prisma.conversationRuntimeState,
          contact: prisma.contact,
          lead: prisma.lead,
          contactConsent: prisma.contactConsent,
-@@ -3370,6 +3441,96 @@ test("waiting human takeover remains in queue on inbound", async () => {
+@@ -3370,6 +3442,97 @@ test("waiting human takeover remains in queue on inbound", async () => {
    assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), false);
  });
  
-+test("Web return through confirmed ninth-digit alias keeps campaign human destination and CRM owner", async () => {
++test("Web return through confirmed ninth-digit alias keeps campaign human destination and CRM owner", async (t) => {
++  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-08-11T12:10:00.000Z") });
 +  const campaignWaId = "5584994786787";
 +  const webWaId = "558494786787";
 +  resetState({
@@ -586,6 +701,45 @@ index 6add038..9240794 100644
  test("expired CSAT asks for a new-service decision and option 1 returns to bot mode", async () => {
    resetState({
      config: closeConfig(),
+@@ -3497,3 +3660,38 @@ test("expired CSAT decision rejects other input without falling through to the c
+   assert.equal((state.runtimeStates[0]?.answers as Record<string, unknown> | undefined)?.satisfactionRuntime instanceof Object, true);
+   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
+ });
++
++test("exact canonical Web return persists message, conversation, runtime and CRM on winning waId", async (t) => {
++  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-08-11T12:10:00.000Z") });
++  const winner = "558494786787";
++  const received = "5584994786787";
++  resetState({
++    metaConfig: { phoneNumberId: "meta-phone", businessToken: "synthetic", wabaId: "synthetic", rawPayload: { source: "fixture" } },
++    metaPublicNumber: "558499995328",
++    config: { webSessionAuthorization: { status: "AUTHORIZED", authorizedNumberCanonical: "558499995328" } },
++    conversation: conversationFixture({ waId: winner, waIdCanonical: received, provider: "meta", phoneNumberId: "meta-phone", windowIsOpen: false, lastInboundAt: null }),
++    runtimeStates: [runtimeFixture({ waId: winner, waIdCanonical: received, provider: "meta", windowIsOpen: false, lastInboundAt: null,
++      mode: "HUMAN", status: "WAITING", departmentId: "department_general", queueId: "queue_general" })],
++    contacts: [{ id: "contact-winner", clientId: "client_1", waId: winner, lifecycle: "ACTIVE", name: null }],
++    leads: [{ id: "lead-winner", tenantId: "client_1", waId: winner, waIdCanonical: received, name: null }],
++  });
++  withConnectedWebSession();
++  const result = await withFakeWorker(() => ingestBaileysWebSessionMessage({
++    clientId: "client_1", tenantKey: "tenant_1", channelAccountDbId: "account_1", channelAccountId: "web-session-default",
++    message: { key: { id: "MSG_EXACT_CANONICAL", remoteJid: `${received}@s.whatsapp.net`, fromMe: false },
++      messageTimestamp: Date.parse("2026-08-11T12:10:00.000Z") / 1000, message: { conversation: "resposta" } },
++  }));
++  assert.equal(result.action, "persisted");
++  assert.equal(state.conversation?.waId, winner);
++  assert.equal(state.conversation?.id, "conversation_1");
++  assert.equal(state.runtimeStates.length, 1);
++  assert.equal(state.runtimeStates[0]?.waId, winner);
++  assert.equal(state.runtimeStates[0]?.departmentId, "department_general");
++  assert.equal(state.runtimeStates[0]?.queueId, "queue_general");
++  assert.equal(state.inboundMessages.length, 1);
++  assert.equal(state.inboundMessages[0]?.waId, winner);
++  assert.equal(state.contacts.length, 1);
++  assert.equal(state.contacts[0]?.id, "contact-winner");
++  assert.equal(state.leads.length, 1);
++  assert.equal(state.leads[0]?.id, "lead-winner");
++});
 diff --git a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts b/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
 index d7334a9..8d40fd8 100644
 --- a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts

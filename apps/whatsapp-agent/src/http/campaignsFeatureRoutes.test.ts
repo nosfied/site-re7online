@@ -387,7 +387,7 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000) {
   assert.fail("Timed out waiting for async condition");
 }
 
-async function deliverCampaignOutbound(campaignId: string, position = 1, status: "delivered" | "read" = "delivered") {
+async function deliverCampaignOutbound(campaignId: string, position = 1, status: "delivered" | "read" = "delivered", timeoutMs = 3000) {
   const messageId = `campaign.${campaignId}.${position}`;
   const outbound = await prisma.outboundMessage.findFirstOrThrow({
     where: { clientId: businessClientId, messageId },
@@ -485,7 +485,7 @@ async function deliverCampaignOutbound(campaignId: string, position = 1, status:
       ? raw.metaStatus as Record<string, unknown>
       : {};
     return metaStatus.lastStatus === status;
-  });
+  }, timeoutMs);
   return outbound;
 }
 
@@ -16094,6 +16094,150 @@ test("accepted campaign return selects one human conversation before delayed Met
     clientId: businessClientId,
     eventName: "whatsapp.hybrid.inbound.logical_message.completed",
   } })) > completedBeforeMeta);
+});
+
+test("two PostgreSQL processes serialize alias returns against delayed Meta materialization", async (t) => {
+  const { spawn } = await import("node:child_process");
+  const modern = "5541923456799";
+  const legacy = "554123456799";
+  const phoneNumberId = `phone-${prefix}-business`;
+  const publicNumber = "554199995328";
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    update: { phoneNumberId, businessToken: "synthetic-token", wabaId: "synthetic-waba", rawPayload: { source: "fixture" } },
+    create: { clientId: businessClientId, phoneNumberId, businessToken: "synthetic-token", wabaId: "synthetic-waba", rawPayload: { source: "fixture" } },
+  });
+  await prisma.waPhoneNumber.upsert({
+    where: { phoneNumberId }, update: { clientId: businessClientId, display: publicNumber },
+    create: { clientId: businessClientId, phoneNumberId, display: publicNumber },
+  });
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: { config: { webSessionAuthorization: { status: "AUTHORIZED", authorizedNumberCanonical: publicNumber } } },
+    create: { clientId: businessClientId, config: { webSessionAuthorization: { status: "AUTHORIZED", authorizedNumberCanonical: publicNumber } } },
+  });
+  const webAccount = await prisma.channelAccount.findFirst({ where: {
+    clientId: businessClientId, channel: "whatsapp", provider: "web_session", runtimeEnabled: true,
+  } }) ?? await prisma.channelAccount.create({ data: {
+    clientId: businessClientId, channel: "whatsapp", provider: "web_session", channelAccountId: `concurrent-web-${prefix}`,
+    enabled: true, runtimeEnabled: true, inboundPersistenceEnabled: true, status: "connected",
+  } });
+  const { resolveHybridWhatsappIdentityStatus } = await import("../web-session/hybridIdentity.js");
+  const hybrid = await resolveHybridWhatsappIdentityStatus({ prisma, clientId: businessClientId });
+  assert.equal(hybrid.meta.canonicalNumber, publicNumber);
+  assert.equal(hybrid.web.canonicalNumber, publicNumber);
+  assert.equal(hybrid.conflict, false);
+  assert.equal((await prisma.channelAccount.findMany({ where: {
+    clientId: businessClientId, channel: "whatsapp", provider: "web_session", runtimeEnabled: true,
+    status: { not: "archived_duplicate" },
+  } })).length, 1);
+  const template = await prisma.template.create({ data: {
+    clientId: businessClientId, name: `hybrid_concurrent_${safeTemplatePrefix}`,
+    category: "UTILITY", language: "pt_BR", status: "approved", content: "Teste local",
+  } });
+  const originalFetch = globalThis.fetch;
+  let concurrentProviderCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) return new Response(JSON.stringify({ messages: [{ id: `wamid.concurrent.${safeTemplatePrefix}.${++concurrentProviderCalls}` }] }), { status: 200, headers: { "content-type": "application/json" } });
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const created = await request<{ campaign: { id: string } }>("POST", "/app/campaigns", businessAdmin, {
+    name: "Retorno simultâneo sintético", templateId: template.id, recipients: [modern],
+    returnDestination: defaultCampaignReturnDestination(),
+  });
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  await waitFor(async () => Boolean(await prisma.outboundMessage.findFirst({ where: {
+    clientId: businessClientId, messageId: `campaign.${created.body.campaign.id}.1`, status: MessageStatus.SENT,
+  } })));
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId: { in: [modern, legacy] } } }), 0);
+  const childPath = new URL("../channels/hybridConversationIdentityConcurrent.child.js", import.meta.url);
+  const compiledChildPath = process.env.RE7_WORKER_MIN_CHILD ?? (childPath.pathname.includes("/src/")
+    ? childPath.pathname.replace("/src/", "/dist/") : childPath.pathname);
+  const node20 = process.env.RE7_NODE20_BIN ?? process.execPath;
+  const startChild = (provider: "meta" | "web_session", waId: string, channelAccountId: string, mode: "selection" | "web_ingest" = "selection") => {
+    const messageId = `concurrent-${provider}-${waId}-${safeTemplatePrefix}`;
+    const child = spawn(node20, [compiledChildPath, JSON.stringify({
+      clientId: businessClientId, clientKey: `${prefix}-business`, waId, provider, channelAccountId, messageId, mode,
+    })], { env: process.env, stdio: ["pipe", "pipe", "pipe"], timeout: 20000 });
+    let output = "";
+    let errors = "";
+    child.stdout.on("data", (data) => { output += String(data); });
+    child.stderr.on("data", (data) => { errors += String(data); });
+    const ready = new Promise<void>((resolve, reject) => {
+      const interval = setInterval(() => {
+        if (output.includes("ready\n")) { clearInterval(interval); resolve(); }
+        if (child.exitCode !== null) { clearInterval(interval); reject(new Error(`${provider}: ${errors || "child_exited_before_ready"}`)); }
+      }, 5);
+    });
+    const finished = new Promise<void>((resolve, reject) => child.on("exit", (code) =>
+      code === 0 ? resolve() : reject(new Error(`${provider}: ${errors || `child_exit_${code}`}`))));
+    return { child, ready, finished, messageId };
+  };
+  const meta = startChild("meta", modern, phoneNumberId);
+  const web = startChild("web_session", legacy, webAccount.channelAccountId);
+  await Promise.all([meta.ready, web.ready]);
+  meta.child.stdin.write("go\n");
+  web.child.stdin.write("go\n");
+  await Promise.all([meta.finished, web.finished, deliverCampaignOutbound(created.body.campaign.id)]);
+  const conversation = await prisma.conversation.findFirstOrThrow({ where: { clientId: businessClientId, waId: modern } });
+  const runtime = await prisma.conversationRuntimeState.findFirstOrThrow({ where: { clientId: businessClientId, waId: modern } });
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId: { in: [modern, legacy] } } }), 1);
+  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId: { in: [modern, legacy] } } }), 1);
+  assert.equal(await prisma.contact.count({ where: { clientId: businessClientId, waId: { in: [modern, legacy] } } }), 1);
+  assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId, waId: { in: [modern, legacy] } } }), 1);
+  assert.equal(await prisma.inboundMessage.count({ where: { clientId: businessClientId, messageId: { in: [meta.messageId, web.messageId] }, waId: modern } }), 2);
+  assert.equal(runtime.mode, "HUMAN");
+  assert.equal(runtime.departmentId, businessReturnDepartmentId);
+  assert.equal(runtime.queueId, businessReturnQueueId);
+  assert.equal(conversation.windowIsOpen, false); // Workers only select/materialize; handler tests open on legitimate inbound.
+
+  const modernReal = "5541923456798";
+  const legacyReal = "554123456798";
+  const realCampaign = await request<{ campaign: { id: string } }>("POST", "/app/campaigns", businessAdmin, {
+    name: "Retorno simultâneo pelos handlers", templateId: template.id, recipients: [modernReal],
+    returnDestination: defaultCampaignReturnDestination(),
+  });
+  assert.equal(realCampaign.status, 200, JSON.stringify(realCampaign.body));
+  await waitFor(async () => Boolean(await prisma.outboundMessage.findFirst({ where: {
+    clientId: businessClientId, messageId: `campaign.${realCampaign.body.campaign.id}.1`, status: MessageStatus.SENT,
+  } })));
+  const webReal = startChild("web_session", legacyReal, webAccount.channelAccountId, "web_ingest");
+  await webReal.ready;
+  const metaMessageId = `wamid.${Buffer.from(`${modernReal}:ABCDEF0123456798`).toString("base64")}`;
+  webReal.child.stdin.write("go\n");
+  const [metaResult] = await Promise.all([
+    requestUnauth("POST", "/webhook", {
+      object: "whatsapp_business_account",
+      entry: [{ id: `${prefix}-waba`, changes: [{ field: "messages", value: {
+        messaging_product: "whatsapp", metadata: { phone_number_id: phoneNumberId },
+        contacts: [{ wa_id: modernReal, profile: { name: "Contato sintético" } }],
+        messages: [{ id: metaMessageId, from: modernReal, timestamp: String(Math.floor(Date.now() / 1000) + 2),
+          type: "text", text: { body: "retorno sintético Meta" } }],
+      } }] }],
+    }),
+    webReal.finished,
+    deliverCampaignOutbound(realCampaign.body.campaign.id, 1, "delivered", 10000),
+  ]);
+  assert.equal(metaResult.status, 200, JSON.stringify(metaResult.body));
+  await waitForEventually(async () => (await prisma.inboundMessage.count({ where: {
+    clientId: businessClientId, waId: { in: [modernReal, legacyReal] }, provider: { in: ["meta", "web_session"] },
+  } })) === 2, 5000);
+  const observedInbounds = await prisma.inboundMessage.findMany({ where: {
+    clientId: businessClientId, waId: { in: [modernReal, legacyReal] }, provider: { in: ["meta", "web_session"] },
+  }, select: { messageId: true, waId: true, provider: true } });
+  assert.equal(observedInbounds.length, 2, JSON.stringify(observedInbounds));
+  assert.equal(observedInbounds.filter((row) => row.waId === modernReal).length, 2, JSON.stringify(observedInbounds));
+  assert.deepEqual(new Set(observedInbounds.map((row) => row.provider)), new Set(["meta", "web_session"]));
+  const realRuntime = await prisma.conversationRuntimeState.findFirstOrThrow({ where: { clientId: businessClientId, waId: modernReal } });
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId: { in: [modernReal, legacyReal] } } }), 1);
+  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId: { in: [modernReal, legacyReal] } } }), 1);
+  assert.equal(await prisma.contact.count({ where: { clientId: businessClientId, waId: { in: [modernReal, legacyReal] } } }), 1);
+  assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId, waId: { in: [modernReal, legacyReal] } } }), 1);
+  assert.equal(realRuntime.mode, "HUMAN");
+  assert.equal(realRuntime.departmentId, businessReturnDepartmentId);
+  assert.equal(realRuntime.queueId, businessReturnQueueId);
 });
 
 test("campaign receipt keeps inbound claim and transfer made while provider was pending", async (t) => {

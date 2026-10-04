@@ -718,6 +718,7 @@ function fakePrisma() {
     },
     $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
+        $executeRaw: async () => 1,
         conversation: prisma.conversation,
         contact: prisma.contact,
         lead: prisma.lead,
@@ -3424,7 +3425,8 @@ test("waiting human takeover remains in queue on inbound", async () => {
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), false);
 });
 
-test("Web return through confirmed ninth-digit alias keeps campaign human destination and CRM owner", async () => {
+test("Web return through confirmed ninth-digit alias keeps campaign human destination and CRM owner", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-08-11T12:10:00.000Z") });
   const campaignWaId = "5584994786787";
   const webWaId = "558494786787";
   resetState({
@@ -3479,6 +3481,41 @@ test("Web return through confirmed ninth-digit alias keeps campaign human destin
   assert.equal(state.leads.length, 1);
   assert.equal(state.leads[0]?.id, "campaign-lead");
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Novo fluxo")), false);
+});
+
+test("exact canonical Web return persists message, conversation, runtime and CRM on winning waId", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-08-11T12:10:00.000Z") });
+  const winner = "558494786787";
+  const received = "5584994786787";
+  resetState({
+    metaConfig: { phoneNumberId: "meta-phone", businessToken: "synthetic", wabaId: "synthetic", rawPayload: { source: "fixture" } },
+    metaPublicNumber: "558499995328",
+    config: { webSessionAuthorization: { status: "AUTHORIZED", authorizedNumberCanonical: "558499995328" } },
+    conversation: conversationFixture({ waId: winner, waIdCanonical: received, provider: "meta", phoneNumberId: "meta-phone", windowIsOpen: false, lastInboundAt: null }),
+    runtimeStates: [runtimeFixture({ waId: winner, waIdCanonical: received, provider: "meta", windowIsOpen: false, lastInboundAt: null,
+      mode: "HUMAN", status: "WAITING", departmentId: "department_general", queueId: "queue_general" })],
+    contacts: [{ id: "contact-winner", clientId: "client_1", waId: winner, lifecycle: "ACTIVE", name: null }],
+    leads: [{ id: "lead-winner", tenantId: "client_1", waId: winner, waIdCanonical: received, name: null }],
+  });
+  withConnectedWebSession();
+  const result = await withFakeWorker(() => ingestBaileysWebSessionMessage({
+    clientId: "client_1", tenantKey: "tenant_1", channelAccountDbId: "account_1", channelAccountId: "web-session-default",
+    message: { key: { id: "MSG_EXACT_CANONICAL", remoteJid: `${received}@s.whatsapp.net`, fromMe: false },
+      messageTimestamp: Date.parse("2026-08-11T12:10:00.000Z") / 1000, message: { conversation: "resposta" } },
+  }));
+  assert.equal(result.action, "persisted");
+  assert.equal(state.conversation?.waId, winner);
+  assert.equal(state.conversation?.id, "conversation_1");
+  assert.equal(state.runtimeStates.length, 1);
+  assert.equal(state.runtimeStates[0]?.waId, winner);
+  assert.equal(state.runtimeStates[0]?.departmentId, "department_general");
+  assert.equal(state.runtimeStates[0]?.queueId, "queue_general");
+  assert.equal(state.inboundMessages.length, 1);
+  assert.equal(state.inboundMessages[0]?.waId, winner);
+  assert.equal(state.contacts.length, 1);
+  assert.equal(state.contacts[0]?.id, "contact-winner");
+  assert.equal(state.leads.length, 1);
+  assert.equal(state.leads[0]?.id, "lead-winner");
 });
 
 test("expired CSAT asks for a new-service decision and option 1 returns to bot mode", async () => {

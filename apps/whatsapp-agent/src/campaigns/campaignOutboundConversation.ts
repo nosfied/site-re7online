@@ -7,6 +7,7 @@ import { persistEvent } from "../db/persist.js";
 import type { OutboundReturnDestination } from "../routing/outboundReturnDestination.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
+import { withHybridConversationIdentityLock } from "../channels/hybridConversationIdentityLock.js";
 
 function buildWhatsAppExternalUserHash(waIdCanonical: string) {
   return `whatsapp:${crypto.createHash("sha256").update(waIdCanonical).digest("hex").slice(0, 32)}`;
@@ -249,7 +250,7 @@ export async function ensureCampaignOutboundCrmAttemptMaterialization(
   return { conversationId: existingConversation?.id ?? null, ...crm };
 }
 
-export async function ensureCampaignOutboundConversation(
+export async function ensureCampaignOutboundConversationUnlocked(
   prisma: PrismaClient,
   params: {
     clientId: string;
@@ -545,4 +546,13 @@ export async function ensureCampaignOutboundConversation(
   });
 
   return { conversationId: created.id, created: true, ...crm };
+}
+
+export async function ensureCampaignOutboundConversation(
+  prisma: PrismaClient,
+  params: Parameters<typeof ensureCampaignOutboundConversationUnlocked>[1]
+) {
+  return withHybridConversationIdentityLock(prisma, params, () =>
+    ensureCampaignOutboundConversationUnlocked(prisma, params)
+  );
 }
