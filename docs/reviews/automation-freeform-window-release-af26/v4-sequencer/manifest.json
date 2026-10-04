@@ -3,13 +3,13 @@
   "functionalCandidate": "879cb1faa88493cd78dd789b71f85043d6c8ff9c",
   "frontend": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
   "worker": "worker-bf5f1d76-f06d49cb-91230f88-b66bb89a-af26-window",
-  "status": "RETURNED_TO_AF26_CANDIDATE_NOT_DEPLOYED",
+  "status": "POST_DEPLOY_DIAGNOSTIC_LOCAL_VALIDATED_NOT_INSTALLED",
   "filesSha256": {
-    "sequencer.py": "3c8dc0e1c4ad1b9f12c697c3ce2f81acbdee8d9d3108efacadeeb0ec269b8fa1",
+    "sequencer.py": "54a5380ff340508e18d62cf3569619a7a715201b6b4ec983ff3e1ca5f39360c2",
     "privileged.py": "24bdba2bde2c6835f699bdc79b269e4a458a8013aa8a03a2a9a25627619b0198",
     "prepare_policy.py": "5260d65c61db2f98579a0e109b5f9d077c206f61138d8fb11b5bd6fbaf7568af",
     "render_sudoers.py": "43ac54893e854991466b11f379fdefa66662cc40822bc1b62fc8bdb110c48299",
-    "test_sequencer.py": "897950051dbe1f4aa27985e0d0204866bc19cc8cbbf61ef6006c6b3bd49b69e6",
+    "test_sequencer.py": "79933ba18cbec135377c31904a934b89db1b32b5e1fe149264c6bff9ff3fb798",
     "test_privileged.py": "839a20c9d1694a1b0072937dcd5e1519ed03dc9e0194acf5a03d086324b7c07e",
     "test_mode_guard_contract.py": "ac6eac58678d443f93ca4ae307c18056b24b34b8deb745f899865c90f8eab6db",
     "guard-contract-v4.patch": "dcaf1c73d916c74cc48ef9f0ff2f8ec46af6abd9b6e933941c4625058f49fff2",
@@ -22,6 +22,7 @@
     "realNftSystemd": "NOT EXERCISED LOCALLY; privileged inspect required before window",
     "patchedModeGuardTests": "2/2 PASS in each of switch, return, return-partial (same cases); persisted guard read and V4 bindings",
     "liveReturnIdentity": "PASS read-only for PM2 runtime metadata; switch identity rejected",
-    "attempt": "RETURNED_TO_AF26; candidate did not pass unfence; private preparation consumed"
+    "attempt": "Historical earlier return; later 6683 V4 API deployment recorded separately, without installing this diagnostic followup",
+    "diagnosticFollowup": "16/16 test_sequencer PASS and py_compile PASS; real local Node exit/stdout/stderr capture plus injected transient/persistent post-unfence failure; no productive window"
   }
 }

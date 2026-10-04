@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import time
@@ -88,7 +89,37 @@ class Bridge:
         return True
 
     def node(self, mode, script):
-        return self.run(['node', str(self.root / mode / script)])
+        require(mode in {'switch', 'return', 'return-partial'} and
+                script in {'close.cjs', 'validate.cjs', 'open.cjs'},
+                'node_step_denied')
+        try:
+            return self.run(['node', str(self.root / mode / script)])
+        except subprocess.CalledProcessError as error:
+            # Keep the exact output in the private preparation, never in the
+            # public journal or exception. validate.cjs may expose DB IDs.
+            path = self.window / 'step-output.private.jsonl'
+            stdout = error.stdout or ''
+            stderr = error.stderr or ''
+            record = {'utc': time.time(), 'mode': mode, 'step': script,
+                      'exitCode': error.returncode,
+                      'stdout': stdout[:16384], 'stderr': stderr[:16384],
+                      'stdoutBytes': len(stdout.encode()),
+                      'stderrBytes': len(stderr.encode()),
+                      'stdoutSha256': hashlib.sha256(stdout.encode()).hexdigest(),
+                      'stderrSha256': hashlib.sha256(stderr.encode()).hexdigest(),
+                      'outputTruncated': (len(stdout) > 16384 or len(stderr) > 16384)}
+            fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW,
+                         0o600)
+            try:
+                info = os.fstat(fd)
+                require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and
+                        info.st_uid == os.getuid() and info.st_mode & 0o077 == 0,
+                        'step_output_permissions')
+                os.write(fd, (json.dumps(record, sort_keys=True) + '\n').encode())
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            raise RuntimeError(f'step_failed:{mode}/{script}:exit={error.returncode}') from None
 
     def privileged(self, action):
         require(action in {'inspect', 'check-absent', 'check-present', 'enter', 'unfence',

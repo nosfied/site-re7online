@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 import privileged as privileged_helper
-from sequencer import API, WORKER, FRONT, Sequencer, guard_state
+from sequencer import API, WORKER, FRONT, Bridge, Sequencer, guard_state
 
 
 def config(version):
@@ -38,6 +38,7 @@ class FakeBridge:
         self.fail_once = False
         self.drift_at = None
         self.next_pid = 110
+        self.fail_validate_count = 0
         for mode in ('switch', 'return', 'return-partial'):
             folder = self.root / mode
             folder.mkdir()
@@ -102,6 +103,9 @@ class FakeBridge:
 
     def node(self, mode, script):
         self.events.append(('node', mode, script))
+        if script == 'validate.cjs' and self.fail_validate_count:
+            self.fail_validate_count -= 1
+            raise RuntimeError('step_failed:switch/validate.cjs:exit=1')
         if script == 'close.cjs':
             self.g['open'] = False
             self.g['generation'] += 1
@@ -269,6 +273,62 @@ class SequenceTests(unittest.TestCase):
         self.assertEqual(self.b.live[API]['cfg'], self.b.old[API])
         self.assertEqual(self.b.live[WORKER]['cfg'], self.b.old[WORKER])
         self.assertTrue(self.b.g['open'])
+
+    def test_transient_validation_after_unfence_never_restarts_pair(self):
+        self.b.fail_validate_count = 1
+        with self.assertRaisesRegex(RuntimeError, 'fence_not_proven_recovery_blocked'):
+            self.s.run()
+        self.assertFalse(self.b.fenced)
+        self.assertFalse(self.b.g['open'])
+        self.assertEqual(self.b.live[API]['cfg'], self.b.new[API])
+        self.assertEqual(self.b.live[WORKER]['cfg'], self.b.new[WORKER])
+        self.b.node('switch', 'validate.cjs')  # independent read-only recheck
+        self.assertEqual(sum(e[:3] == ('protocol', 'switch', 'start:' + API)
+                             for e in self.b.events), 1)
+        self.assertEqual(sum(e[:3] == ('protocol', 'switch', 'start:' + WORKER)
+                             for e in self.b.events), 1)
+
+    def test_persistent_validation_after_unfence_stays_closed(self):
+        self.b.fail_validate_count = 2
+        with self.assertRaisesRegex(RuntimeError, 'fence_not_proven_recovery_blocked'):
+            self.s.run()
+        with self.assertRaisesRegex(RuntimeError, 'step_failed:switch/validate.cjs'):
+            self.b.node('switch', 'validate.cjs')
+        self.assertFalse(self.b.fenced)
+        self.assertFalse(self.b.g['open'])
+        self.assertEqual(sum(e[:3] == ('protocol', 'switch', 'start:' + API)
+                             for e in self.b.events), 1)
+        self.assertEqual(sum(e[:3] == ('protocol', 'switch', 'start:' + WORKER)
+                             for e in self.b.events), 1)
+
+
+class StepDiagnosticTests(unittest.TestCase):
+    def test_real_node_failure_records_private_output_and_safe_exception(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'switch').mkdir()
+            (root / 'window').mkdir()
+            (root / 'switch/validate.cjs').write_text(
+                "process.stdout.write('private-stdout');"
+                "process.stderr.write('private-stderr');process.exit(17)")
+            bridge = Bridge.__new__(Bridge)
+            bridge.root, bridge.switch, bridge.window = (
+                root, root / 'switch', root / 'window')
+            with self.assertRaisesRegex(RuntimeError,
+                                        'step_failed:switch/validate.cjs:exit=17') as caught:
+                bridge.node('switch', 'validate.cjs')
+            self.assertNotIn('private-', str(caught.exception))
+            path = root / 'window/step-output.private.jsonl'
+            row = json.loads(path.read_text())
+            self.assertEqual((row['mode'], row['step'], row['exitCode']),
+                             ('switch', 'validate.cjs', 17))
+            self.assertEqual((row['stdout'], row['stderr']),
+                             ('private-stdout', 'private-stderr'))
+            self.assertEqual(row['stdoutSha256'],
+                             hashlib.sha256(b'private-stdout').hexdigest())
+            self.assertEqual(row['stderrSha256'],
+                             hashlib.sha256(b'private-stderr').hexdigest())
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
 
 class RealGuardChainTests(unittest.TestCase):
