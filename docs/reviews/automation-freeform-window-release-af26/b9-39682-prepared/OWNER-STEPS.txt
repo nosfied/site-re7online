@@ -1,0 +1,113 @@
+PREPARACAO SOMENTE. NAO EXECUTAR INSTALACAO OU JANELA SEM A DECISAO DO OWNER.
+Base operacional: 39682db4b4174facb05b523b1cfd830bd14cfb5c.
+Frontend preservado. DB/auth atuais. Sem migration, reparo ou reenvio.
+
+1. INSTALACAO PRE-JANELA — Deifson, na sessao deploy da VPS.
+O hash esperado da politica antiga vem da ultima atestacao privilegiada.
+O teste sudo abaixo deve confirma-lo antes de qualquer escrita. Divergencia para.
+Todos os destinos de arquivo historico devem estar ausentes.
+
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z
+H=/usr/local/libexec/re7/incident-6683-window-control.py
+Q=/usr/local/libexec/re7/incident-6683-window-policy.json
+S=/etc/sudoers.d/re7-incident-6683-window
+HA=/usr/local/libexec/re7/incident-6683-window-control.pre-b9-absent-121000.py
+QA=/usr/local/libexec/re7/incident-6683-window-policy.pre-b9-absent-121000.json
+sudo test ! -e "$HA" && sudo test ! -L "$HA"
+sudo test ! -e "$QA" && sudo test ! -L "$QA"
+test "$(sha256sum "$H" | cut -d' ' -f1)" = 24bdba2bde2c6835f699bdc79b269e4a458a8013aa8a03a2a9a25627619b0198
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = e56235b96a91f2d10868a235eaab79e2ac102797273c08d0c557d48fdf632d2d
+test "$(sha256sum "$P/window/privileged.py" | cut -d' ' -f1)" = 8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212
+test "$(sha256sum "$P/window/privileged-policy.private.json" | cut -d' ' -f1)" = 2f8f384602e66dd5050cf37cf1558ce7b137deb115a6001fa3cc8c5edf6eb6e7
+test "$(sha256sum "$P/window/re7-incident-6683-window.sudoers.proposed" | cut -d' ' -f1)" = 62b5a2ac1d56b013f6db4bb8180b0637b985786214f4bc3ce0e5f8d3f7c5111a
+sudo cmp "$P/window/re7-incident-6683-window.sudoers.proposed" "$S"
+sudo visudo -c
+sudo install -o root -g root -m 0644 "$H" "$HA"
+sudo install -o root -g root -m 0600 "$Q" "$QA"
+sudo install -o root -g root -m 0600 "$P/window/privileged-policy.private.json" "$Q"
+sudo install -o root -g root -m 0644 "$P/window/privileged.py" "$H"
+test "$(sha256sum "$H" | cut -d' ' -f1)" = 8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = 2f8f384602e66dd5050cf37cf1558ce7b137deb115a6001fa3cc8c5edf6eb6e7
+sudo namei -l "$H" "$Q"
+sudo stat -c '%U %G %a %n' "$H" "$Q"
+sudo visudo -c
+sudo -n /usr/bin/python3 -I -S "$H" inspect
+
+Esperado: helper root:root 0644, politica root:root 0600; cadeia sem symlinks
+ou escrita por deploy; inspect policySha256=2f8f384602e66dd5050cf37cf1558ce7b137deb115a6001fa3cc8c5edf6eb6e7,
+phase=null e sourceProcessesAlive=true. Nenhuma regra sudo nova.
+
+2. IDA — Codex, somente depois da decisao e da reconferencia imediata.
+Reconfirmar PID+ticks, manifestos, proxy/bindings, auth/sessoes, guarda/trabalhos,
+backup/restore, cron/boot e exclusividade; habilitar os cinco gates somente entao.
+Executar UMA vez:
+
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z
+python3 "$P/window/sequencer.py" "$P"
+
+O sequenciador fecha guarda por CAS, comprova drain, emite prova apos o fechamento,
+contem, stop-pair uma vez, exige saida/sockets/backend/locks, inicia API b9,
+prova V4 fresca e worker do tar validado. Antes do unfence, verifica controle HTTP
+do worker e ancora captura viva de arvore/sockets na fase root-owned.
+Depois do unfence: validate.cjs; so com PASS reabre guarda por CAS e restaura cron/boot.
+3001 nao e acessivel sob nft, inclusive em loopback. Frontend nao e parado.
+Falha antes da parada: abort-prestop. Falha parcial contida: return-partial;
+par completo candidato contido: return. A selecao e por estado observado.
+Intent ambiguo, sobrevivente ou observador indisponivel bloqueiam; nao repetir start.
+Escalonar aos 15 minutos de contencao. Prazo nao autoriza kill ou bypass.
+
+3. CONTINGENCIA POS-UNFENCE — Codex e Deifson.
+Somente se validacao falhar com guarda FECHADA. Capturar diagnostico privado.
+Se a fase estiver unfenced (controles ainda nao restaurados), executar UMA vez:
+
+sudo -n /usr/bin/python3 -I -S /usr/local/libexec/re7/incident-6683-window-control.py restore-controls
+
+Se ja complete, nao repetir restore-controls. Reconfirmar ausencia da barreira,
+API/frontend/daemon identificados, worker vivo correto OU ausente comprovado.
+O worker ausente deve corresponder a captura ancorada antes de unfence; nao iniciar
+worker defeituoso para fabricar identidade. O template rejeita substituto/ambiguidade.
+Gerar nova preparacao (destino deve estar ausente), sem copiar provas/intents:
+
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z
+R=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-b9b58177-absent-20261005T121000Z
+python3 "$P/window/prepare_post_unfence_return.py" "$P" "$R"
+
+O hash da politica de R somente existe depois dessa captura de PIDs/ticks.
+Conferir a saida e manifestos privados; apresentar a Deifson. Nao fixar PIDs futuros.
+Instalacao restrita dessa politica, Deifson, sem mudar helper/sudoers:
+
+set -euo pipefail
+R=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-b9b58177-absent-20261005T121000Z
+H=/usr/local/libexec/re7/incident-6683-window-control.py
+Q=/usr/local/libexec/re7/incident-6683-window-policy.json
+QA=/usr/local/libexec/re7/incident-6683-window-policy.failed-b9-absent-121000.json
+sudo test ! -e "$QA" && sudo test ! -L "$QA"
+test "$(sha256sum "$H" | cut -d' ' -f1)" = 8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = 2f8f384602e66dd5050cf37cf1558ce7b137deb115a6001fa3cc8c5edf6eb6e7
+RETURN_POLICY_SHA=$(cat "$R/window/privileged-policy.sha256")
+test "$(sha256sum "$R/window/privileged-policy.private.json" | cut -d' ' -f1)" = "$RETURN_POLICY_SHA"
+sudo install -o root -g root -m 0600 "$Q" "$QA"
+sudo install -o root -g root -m 0600 "$R/window/privileged-policy.private.json" "$Q"
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = "$RETURN_POLICY_SHA"
+sudo namei -l "$Q" "$H"
+sudo stat -c '%U %G %a %n' "$Q" "$H"
+sudo visudo -c
+sudo -n /usr/bin/python3 -I -S "$H" inspect
+
+Com worker ausente, inspect exige sourceProcessesAlive=false/sourceWorkerAbsent=true,
+phase=null. Com par vivo, sourceProcessesAlive=true. Hash exibido deve ser o de R.
+Codex, depois da conferencia:
+
+R=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-b9b58177-absent-20261005T121000Z
+python3 "$R/window/sequencer.py" "$R" --post-unfence-return
+
+Ausente: recover-partial; vivo: stop-pair. Ambos exigem API candidata fora, certificado,
+sockets/backends/locks, API 879 e worker af26 unicos, frontend preservado.
+Observador indisponivel impede worker inclusive no retorno; guarda/barreira ficam
+fechadas para diagnostico. Nao restaurar dump/auth, apagar locks ou reenviar.
+Validar retorno, saved/fallback, retirada/barreira ausente e guarda/cron/boot.
+
+4. ESTADO DESTA PREPARACAO
+Os cinco gates continuam false. Nenhum helper/politica instalado e nenhuma janela aberta.
+Quatro registros historicos intactos. Aceite funcional b9 e Campanhas/CRA pendentes.

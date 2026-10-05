@@ -1,0 +1,75 @@
+{
+  "apiFilesVerified": 13,
+  "authRecords": 5,
+  "backupDump": {
+    "bytes": 26508828,
+    "sha256": "535601239db17240c6bac4f266e251f7a7ed2902e57c3be350d566221cc1fa09"
+  },
+  "barrierAbsentObserved": true,
+  "executionGatesAllFalse": true,
+  "filesSha256": {
+    "OWNER-STEPS.txt": "561f7930b31986de798e5f1937588512c54d8c5dc5c96915cd9e6403c2193aed",
+    "REPORT.sanitized.md": "5de5090709fbda982f960a4d21dcfa7dfe63f4a292ec3e4de3e4b0dfb68387c5",
+    "backup-manifest.private.json": "152204ab9833fcac5eba5c9ffd3ebc8b059b6dcb86148e0ef27d1b50cccf8ace",
+    "mode-manifest-v4.json": "92e982e738c14947e20c786209a0913517e5f5e23f05e3a2f01d102edb857639",
+    "privileged-policy.private.json": "2f8f384602e66dd5050cf37cf1558ce7b137deb115a6001fa3cc8c5edf6eb6e7",
+    "privileged.py": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "release-manifest.private.json": "c52ad73ed1d252a754a11cdd4b5d7a36d33c4fa23e8225aafe27b3b52a0cf1a3",
+    "restore-result.json": "c22b04dd33c0b2ece7819de0cadb7bcd1e3d8fae93c759d33dd137d0cb41a7b6",
+    "sequencer-manifest.json": "cc3f8523b98ce7cb98ec7593d4b9ed5d29ff68d4e216769672a16993ce9874fd",
+    "sequencer.py": "d9719e2f1840589a74d664f57cbd6ec6404ef6622f9759e3107aac2974ad5514"
+  },
+  "guard": {
+    "generation": 25,
+    "open": true,
+    "tasks": 0
+  },
+  "installedHelperSha256": "24bdba2bde2c6835f699bdc79b269e4a458a8013aa8a03a2a9a25627619b0198",
+  "installedPolicyExpectedSha256FromLastPrivilegedAttestation": "e56235b96a91f2d10868a235eaab79e2ac102797273c08d0c557d48fdf632d2d",
+  "installedPolicyHashRecheck": "OWNER_SUDO_REQUIRED_BEFORE_ANY_INSTALL_WRITE",
+  "modes": {
+    "return": {
+      "delegatedSha256": "b251b694d9095a58f62f9856ee00e3254ef7aeb238152882b7b228b81f8fd88c",
+      "manifestSha256": "b606b74673acb8dfd4b1c1f29c56b0b329ae6cf8305533064f2eea647151904e",
+      "opsSha256": "ba1991f9b9dde1fc8cf1d739e85026ac781d84c93145cf4b2bafcefb21335ff2"
+    },
+    "return-partial": {
+      "delegatedSha256": "b251b694d9095a58f62f9856ee00e3254ef7aeb238152882b7b228b81f8fd88c",
+      "manifestSha256": "a4a903c8aaa0c703730e03bcee76dd886638c0b3b61e1aa5f506d43b28118bd3",
+      "opsSha256": "ba1991f9b9dde1fc8cf1d739e85026ac781d84c93145cf4b2bafcefb21335ff2"
+    },
+    "switch": {
+      "delegatedSha256": "b251b694d9095a58f62f9856ee00e3254ef7aeb238152882b7b228b81f8fd88c",
+      "manifestSha256": "8b2dccc8a1a27877f00cbaa4a03129069854eb358ec32747d5e58c53f6fe7a09",
+      "opsSha256": "ba1991f9b9dde1fc8cf1d739e85026ac781d84c93145cf4b2bafcefb21335ff2"
+    }
+  },
+  "otherOperationalExecutorsObserved": 0,
+  "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z",
+  "processes": {
+    "re7-admin-front": {
+      "pid": 2537692,
+      "restarts": 0
+    },
+    "re7-whatsapp-agent": {
+      "pid": 2832716,
+      "restarts": 0
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 2835341,
+      "restarts": 0
+    }
+  },
+  "requiredEnvKeysMatched": {
+    "api": 85,
+    "frontend": 6,
+    "worker": 17
+  },
+  "savedFallbackCompatible": true,
+  "schedulerEnabled": true,
+  "sessionsConnected": 4,
+  "state": "PREPARED_FOR_INSTALLATION_NOT_DEPLOYED",
+  "symlinksVerified": 11,
+  "windowLockFreeObserved": true,
+  "workerFilesVerified": 7036
+}
