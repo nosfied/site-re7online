@@ -414,6 +414,11 @@ class Sequencer:
         global_lock = self.root.parent / '.incident-6683-window.lock'
         with global_lock.open('a+') as overall:
             fcntl.flock(overall.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            manifest = json.loads((self.window / 'sequencer-manifest.json').read_text())
+            for name, expected in manifest['filesSha256'].items():
+                require(Path(name).name == name and
+                        hashlib.sha256((self.window / name).read_bytes()).hexdigest() == expected,
+                        'return_sequencer_source_hash_drift')
             require(not (self.root / mode / ('start-intent-' + API + '.json')).exists() and
                     not (self.root / mode / ('start-intent-' + WORKER + '.json')).exists(),
                     'return_start_intent_already_exists')

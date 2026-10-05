@@ -3,9 +3,10 @@
   "functionalCandidate": "879cb1faa88493cd78dd789b71f85043d6c8ff9c",
   "frontend": "af26f48a9c309b24ec4d23cfa97cc1e407c09d98",
   "worker": "worker-bf5f1d76-f06d49cb-91230f88-b66bb89a-af26-window",
-  "status": "B9_PACKAGE_AND_POST_UNFENCE_RETURN_LOCAL_VALIDATED_NOT_INSTALLED",
+  "status": "B9_PACKAGE_STAGED_POST_UNFENCE_WORKER_LOSS_BLOCKED_NOT_DEPLOYED",
   "filesSha256": {
-    "sequencer.py": "71951e4351aa41fe7819147715174db83063031faa5f335d5692dcbf10450438",
+    "sequencer.py": "26daa8aa5496a8df1219703d5d54fc97912374e383f4eb79159756007eda6d0c",
+    "prepare_post_unfence_return.py": "120af348e2702a116b0dcce0c8c125de2868cdb3941dbf8e76c7d50123232ba5",
     "privileged.py": "24bdba2bde2c6835f699bdc79b269e4a458a8013aa8a03a2a9a25627619b0198",
     "prepare_policy.py": "5260d65c61db2f98579a0e109b5f9d077c206f61138d8fb11b5bd6fbaf7568af",
     "render_sudoers.py": "43ac54893e854991466b11f379fdefa66662cc40822bc1b62fc8bdb110c48299",
@@ -27,7 +28,7 @@
     "liveReturnIdentity": "PASS read-only for PM2 runtime metadata; switch identity rejected",
     "attempt": "Historical earlier return; later 6683 V4 API deployment recorded separately, without installing this diagnostic followup",
     "diagnosticFollowup": "16/16 test_sequencer PASS and py_compile PASS; real local Node exit/stdout/stderr capture plus injected transient/persistent post-unfence failure; no productive window",
-    "b9Procedure": "28/28 V4 sequencing tests; 5/5 consumed-proof renewal tests on patched private mode copy; post-unfence complete return is simulated, not a productive window"
+    "b9Procedure": "28/28 V4 sequencing tests; 5/5 consumed-proof renewal tests on patched private mode copy; post-unfence complete return is simulated only when both candidate processes remain alive; loss of candidate worker blocks fresh root policy and window"
   },
   "b9Candidate": "b9b58177880e729854580def1180f3edb2fb83e8",
   "b9WorkerArchiveSha256": "236c1d502df5767eb7cde726ce0d7ae7c6e8200489cac4d09a417b08d98c0e98",
