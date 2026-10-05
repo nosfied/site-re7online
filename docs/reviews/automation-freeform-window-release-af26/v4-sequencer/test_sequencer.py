@@ -25,7 +25,8 @@ class FakeBridge:
         self.old = config('old')
         self.new = config('new')
         self.new[FRONT] = self.old[FRONT]
-        self.live = {name: {'pid': i, 'cfg': copy.deepcopy(value)}
+        self.live = {name: {'pid': i, 'cfg': copy.deepcopy(value),
+                            'pm2_env': {'status': 'online'}}
                      for i, (name, value) in enumerate(self.old.items(), 101)}
         self.proc = {i: {'state': 'S', 'ticks': str(i * 100)} for i in range(101, 110)}
         self.g = {'version': 1, 'open': True, 'generation': 13, 'tasks': {},
@@ -82,8 +83,12 @@ class FakeBridge:
             self.fail_action = None
             raise RuntimeError('privileged_failure')
         if action == 'inspect':
-            return json.dumps({'policySha256': 'synthetic', 'phase': None,
-                               'sourceProcessesAlive': True})
+            absent = (self.window / 'absent-worker-source.private.json').exists()
+            result = {'policySha256': 'synthetic', 'phase': None,
+                      'sourceProcessesAlive': not absent}
+            if absent:
+                result['sourceWorkerAbsent'] = True
+            return json.dumps(result)
         if action == 'check-absent':
             if self.fenced:
                 raise RuntimeError('fence_present')
@@ -138,7 +143,8 @@ class FakeBridge:
                 raise RuntimeError('simulated_uncertain_start')
             self.next_pid += 1
             cfg = self.expected_config(mode, 'candidate.config.private.json')[name]
-            self.live[name] = {'pid': self.next_pid, 'cfg': copy.deepcopy(cfg)}
+            self.live[name] = {'pid': self.next_pid, 'cfg': copy.deepcopy(cfg),
+                               'pm2_env': {'status': 'online'}}
             self.proc[self.next_pid] = {'state': 'S', 'ticks': str(self.next_pid * 100)}
             (folder / ('start-intent-' + name + '.json')).write_text('{}')
             (folder / ('started-' + name + '.json')).write_text('{}')
@@ -332,6 +338,52 @@ class SequenceTests(unittest.TestCase):
             self.s.post_unfence_return()
         self.assertFalse(self.b.fenced)
 
+    def test_post_unfence_absent_worker_returns_complete_pair(self):
+        self.b.g['open'] = False
+        self.b.live[API]['cfg'] = copy.deepcopy(self.b.new[API])
+        old = self.b.live.pop(WORKER)
+        (self.b.window / 'absent-worker-source.private.json').write_text(json.dumps({
+            'status': 'absent-proven', 'pid': old['pid'],
+            'ticks': self.b.proc[old['pid']]['ticks'],
+            'cwd': self.b.new[WORKER]['cwd'],
+            'script': self.b.new[WORKER]['script']}))
+        self.s.post_unfence_return()
+        self.assertEqual(self.b.live[API]['cfg'], self.b.old[API])
+        self.assertEqual(self.b.live[WORKER]['cfg'], self.b.old[WORKER])
+        self.assertEqual(self.b.live[FRONT]['pid'], 103)
+        self.assertIn(('protocol', 'return', 'recover-partial', 13), self.b.events)
+        self.assertFalse(self.b.fenced)
+
+    def test_post_unfence_absent_worker_observer_failure_blocks_before_fence(self):
+        self.b.g['open'] = False
+        self.b.live[API]['cfg'] = copy.deepcopy(self.b.new[API])
+        old = self.b.live.pop(WORKER)
+        (self.b.window / 'absent-worker-source.private.json').write_text(json.dumps({
+            'status': 'absent-proven', 'pid': old['pid'],
+            'ticks': self.b.proc[old['pid']]['ticks'],
+            'cwd': self.b.new[WORKER]['cwd'],
+            'script': self.b.new[WORKER]['script']}))
+        self.b.fail_action = 'privileged:inspect'
+        with self.assertRaisesRegex(RuntimeError, 'privileged_failure'):
+            self.s.post_unfence_return()
+        self.assertFalse(self.b.fenced)
+        self.assertEqual(self.b.live[API]['cfg'], self.b.new[API])
+
+    def test_post_unfence_absent_worker_failure_keeps_fence_and_guard_closed(self):
+        self.b.g['open'] = False
+        self.b.live[API]['cfg'] = copy.deepcopy(self.b.new[API])
+        old = self.b.live.pop(WORKER)
+        (self.b.window / 'absent-worker-source.private.json').write_text(json.dumps({
+            'status': 'absent-proven', 'pid': old['pid'],
+            'ticks': self.b.proc[old['pid']]['ticks'],
+            'cwd': self.b.new[WORKER]['cwd'],
+            'script': self.b.new[WORKER]['script']}))
+        self.b.fail_action = 'return:start:' + WORKER
+        with self.assertRaisesRegex(RuntimeError, 'injected_start'):
+            self.s.post_unfence_return()
+        self.assertTrue(self.b.fenced)
+        self.assertFalse(self.b.g['open'])
+
 
 class StepDiagnosticTests(unittest.TestCase):
     def test_real_node_failure_records_private_output_and_safe_exception(self):
@@ -413,9 +465,11 @@ class StepDiagnosticTests(unittest.TestCase):
                  patch.object(bridge, 'expected_config', return_value=cfg), \
                  patch.object(bridge, 'identity', return_value={'ticks': '10', 'state': 'S'}), \
                  patch.object(bridge, 'app_matches', return_value=True), \
+                 patch.object(bridge, 'capture_worker_before_unfence') as capture, \
                  patch('sequencer.request.urlopen', side_effect=urlopen):
                 bridge.pre_unfence('switch')
             self.assertEqual(requested, ['http://127.0.0.1:18087/health'])
+            capture.assert_called_once()
 
 
 class RealGuardChainTests(unittest.TestCase):
@@ -443,9 +497,10 @@ class RealGuardChainTests(unittest.TestCase):
             def read_phase():
                 return state['phase']
 
-            def write_phase(stage, policy_hash, mode=None):
+            def write_phase(stage, policy_hash, mode=None, worker_capture_hash=None):
                 state['phase'] = {'stage': stage, 'policySha256': policy_hash,
-                                  'mode': mode}
+                                  'mode': mode,
+                                  'workerCaptureSha256': worker_capture_hash}
 
             def absent():
                 if state['fence']:
@@ -478,6 +533,7 @@ class RealGuardChainTests(unittest.TestCase):
                  patch.object(privileged_helper, 'CRON', cron), \
                  patch.object(privileged_helper, 'source_processes_alive', lambda v: None), \
                  patch.object(privileged_helper, 'target_processes_live', lambda v, m: None), \
+                 patch.object(privileged_helper, 'validate_live_capture', lambda v, m: 'capture'), \
                  patch.object(privileged_helper, 'phase_read', read_phase), \
                  patch.object(privileged_helper, 'phase_write', write_phase), \
                  patch.object(privileged_helper, 'nft_absent', absent), \

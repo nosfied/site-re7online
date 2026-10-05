@@ -50,21 +50,37 @@ def create(root):
     output = window / 'privileged-policy.private.json'
     require(not output.exists() and not output.is_symlink(), 'policy_already_exists')
     live = {a['name']: a for a in json.loads(subprocess.check_output([PM, 'jlist'], text=True))}
-    require(set(live) == {API, WORKER, FRONT}, 'pm2_process_set_drift')
+    absent_path = window / 'absent-worker-source.private.json'
+    absent = json.loads(absent_path.read_text()) if absent_path.is_file() else None
+    require(set(live) == {API, WORKER, FRONT} or
+            (absent is not None and set(live) == {API, FRONT}),
+            'pm2_process_set_drift')
     source = apps(root / 'switch/return.config.private.json')
+    required_live = (API, FRONT) if absent is not None else (API, WORKER, FRONT)
     require(all(live[n]['pm2_env']['pm_cwd'] == source[n]['cwd'] and
                 live[n]['pm2_env']['pm_exec_path'] == source[n]['script'] and
-                live[n]['pm2_env']['watch'] is False for n in live),
+                live[n]['pm2_env']['watch'] is False and
+                live[n]['pm2_env']['status'] == 'online' for n in required_live),
             'source_config_drift')
+    if absent is not None and WORKER in live:
+        require(live[WORKER]['pm2_env']['status'] != 'online' and
+                live[WORKER]['pid'] in (0, None), 'worker_substitute_or_live')
     candidate = apps(root / 'switch/candidate.config.private.json')
     returned = apps(root / 'return/candidate.config.private.json')
     require(candidate[FRONT] == source[FRONT] == returned[FRONT],
             'frontend_not_preserved')
     daemon = identity(int(PM_PID.read_text().strip()))
-    identities = {n: identity(a['pid']) for n, a in live.items()}
+    identities = {n: identity(live[n]['pid']) for n in required_live}
     for entry in identities.values():
         parts = Path('/proc', str(entry['pid']), 'stat').read_text().rsplit(')', 1)[1].split()
         require(int(parts[1]) == daemon['pid'], 'pm2_parent_drift')
+    if absent is not None:
+        require(absent['status'] == 'absent-proven' and
+                absent['daemon'] == daemon and
+                absent['cwd'] == source[WORKER]['cwd'] and
+                absent['script'] == source[WORKER]['script'],
+                'absent_worker_binding_drift')
+        identities[WORKER] = {'pid': absent['pid'], 'ticks': absent['ticks']}
     def encoded(name):
         return base64.b64encode((window / name).read_bytes()).decode()
     policy = {
@@ -80,6 +96,15 @@ def create(root):
             'return': {n: target(returned[n]) for n in (API, WORKER)}},
         'savedPaths': {'pm2': '/home/deploy/.pm2/dump.pm2',
                        'fallback': '/home/deploy/.pm2/dump.pm2.bak'}}
+    if absent is not None:
+        policy['absentWorker'] = {k: absent[k] for k in
+            ('status', 'pid', 'ticks', 'pgid', 'sid', 'uid', 'tree', 'socketIds', 'cwd',
+             'script', 'priorPolicySha256', 'workerCaptureSha256')}
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('v4_privileged_check', window / 'privileged.py')
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        helper.source_processes_ready(policy)
     raw = json.dumps(policy, sort_keys=True, separators=(',', ':')).encode() + b'\n'
     os.umask(0o077)
     with output.open('xb') as stream:

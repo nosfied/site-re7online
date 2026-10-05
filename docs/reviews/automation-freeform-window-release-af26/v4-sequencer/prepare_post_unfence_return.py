@@ -15,6 +15,22 @@ import sys
 import urllib.parse
 import re
 
+SOURCE_NORMALIZED = {
+    'ops.py': 'dc7cb031d1bf9cb01093822643fb23313200ee76bf465da964c5cba17105faa0',
+    'delegated.py': '47089f123b55fa92723e7dece9b4ac8984c51395746a543025a1d816ca6f7d0f',
+}
+RESULT_NORMALIZED = {
+    'ops.py': '433948718311ca738aa64a24bdbdab5b38a8abce5bc84e7bdb6b3c9c4654035f',
+    'delegated.py': 'ab50ce75dc665c98ad6350a734a9310d03865f9ae17305d6ef813d3fbca88104',
+}
+
+
+def normalized_digest(path):
+    raw = Path(path).read_bytes()
+    raw = re.sub(rb'/opt/re7online/backups/converta-persistent/preparations/'
+                 rb'incident-6683-v4-[A-Za-z0-9-]+/', b'<PREPARATION>/', raw)
+    return hashlib.sha256(raw).hexdigest()
+
 BASE = Path('/opt/re7online/backups/converta-persistent/preparations')
 PM = '/home/deploy/.npm-global/bin/pm2'
 API = 're7-whatsapp-agent'
@@ -88,17 +104,56 @@ def main(original, destination):
                     'check-absent'], stdout=subprocess.DEVNULL, check=True)
     apps = {a['name']: a for a in json.loads(subprocess.check_output([PM, 'jlist'], text=True))}
     expected = config(original / 'switch/candidate.config.private.json')
-    require(set(apps) == {API, WORKER, FRONT} and all(
+    require(set(apps) in ({API, WORKER, FRONT}, {API, FRONT}) and all(
         apps[n]['pm2_env']['pm_cwd'] == expected[n]['cwd'] and
         apps[n]['pm2_env']['pm_exec_path'] == expected[n]['script'] and
         apps[n]['pm2_env']['watch'] is False and
-        apps[n]['pm2_env']['status'] == 'online' for n in apps),
+        apps[n]['pm2_env']['status'] == 'online' for n in (API, FRONT)),
         'candidate_process_or_config_drift')
-    for name in (API, WORKER):
+    for name in (API,):
         marker = json.loads((original / 'switch' / ('started-' + name + '.json')).read_text())
         now = process_identity(marker['pid'])
         require(apps[name]['pid'] == marker['pid'] and now and now['state'] != 'Z' and
                 now['ticks'] == marker['identity']['ticks'], 'candidate_process_identity_drift')
+    worker_marker = json.loads((original / 'switch' / ('started-' + WORKER + '.json')).read_text())
+    worker_live = WORKER in apps and apps[WORKER]['pm2_env']['status'] == 'online'
+    absent = None
+    if worker_live:
+        now = process_identity(worker_marker['pid'])
+        require(apps[WORKER]['pid'] == worker_marker['pid'] and now and
+                now['state'] != 'Z' and now['ticks'] == worker_marker['identity']['ticks'] and
+                apps[WORKER]['pm2_env']['pm_cwd'] == expected[WORKER]['cwd'] and
+                apps[WORKER]['pm2_env']['pm_exec_path'] == expected[WORKER]['script'] and
+                apps[WORKER]['pm2_env']['watch'] is False,
+                'candidate_worker_identity_drift')
+    else:
+        require(WORKER not in apps or apps[WORKER]['pid'] in (0, None),
+                'worker_substitute_or_live')
+        captured = json.loads((original / 'switch/worker-before-unfence.private.json').read_text())
+        require(captured['status'] == 'running-captured' and
+                captured['pid'] == worker_marker['pid'] and
+                captured['ticks'] == worker_marker['identity']['ticks'] and
+                captured['cwd'] == expected[WORKER]['cwd'] and
+                captured['script'] == expected[WORKER]['script'],
+                'worker_capture_binding_drift')
+        absent = {**captured, 'status': 'absent-proven'}
+        absent['priorPolicySha256'] = (original / 'window/privileged-policy.sha256').read_text().strip()
+        absent['workerCaptureSha256'] = digest(
+            original / 'switch/worker-before-unfence.private.json')
+        # The same implementation used by the root helper checks surviving
+        # descendants, process group/session, sockets and release executors.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('v4_absence', original / 'window/privileged.py')
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        source = {n: {'pid': apps[n]['pid'], 'ticks': process_identity(apps[n]['pid'])['ticks']}
+                  for n in (API, FRONT)}
+        source[WORKER] = {'pid': captured['pid'], 'ticks': captured['ticks']}
+        daemon = captured['daemon']
+        helper.source_processes_ready({'sourceProcesses': source, 'pm2Daemon': daemon,
+                                       'absentWorker': {k: absent[k] for k in
+                                           ('status', 'pid', 'ticks', 'pgid', 'sid', 'uid',
+                                            'tree', 'socketIds', 'cwd', 'script')}})
     frontend = json.loads((original / 'switch/old-exit-confirmed.json').read_text())['frontend']
     current_front = process_identity(frontend['pid'])
     require(apps[FRONT]['pid'] == frontend['pid'] and current_front and
@@ -143,6 +198,16 @@ def main(original, destination):
                  're7-incident-6683-window.sudoers.proposed'):
         shutil.copy2(original / 'window' / name, window / name)
         (window / name).chmod(0o600)
+    if absent is not None:
+        shutil.copy2(original / 'switch/worker-before-unfence.private.json',
+                     window / 'worker-before-unfence.private.json')
+        (window / 'worker-before-unfence.private.json').chmod(0o600)
+        write_json(window / 'absent-worker-source.private.json', absent)
+        write_json(window / 'prior-absent-worker.private.json', {
+            'trees': {WORKER: {pid: {'ticks': ticks, 'state': 'captured'}
+                                for pid, ticks in absent['tree'].items()}},
+            'sockets': absent['socketIds'],
+            'source': 'fresh_absence_check_of_before_unfence_capture'})
     (window / 'proxy-observation.private.json').write_bytes(observation)
     (window / 'proxy-observation.private.json').chmod(0o600)
     write_json(window / 'initial.private.json', {
@@ -170,6 +235,27 @@ def main(original, destination):
         path = returned / name
         path.write_bytes(raw)
         path.chmod(0o600)
+    if absent is not None:
+        # The minimal return adapter uses the new absent-worker report instead
+        # of consuming a prior switch stop certificate. These patches must
+        # apply to the attested sources, never a changed private script.
+        patch_path = original / 'window/absent-worker-return.patch'
+        require(patch_path.is_file(), 'absent_worker_adapter_patch_missing')
+        require(digest(patch_path) == '378841d7326acfb26832ac8d3b910837ec57626abc3d493fbc8883bf75d4210a',
+                'absent_worker_adapter_patch_drift')
+        require(all(normalized_digest(returned / n) == h for n, h in
+                    SOURCE_NORMALIZED.items()), 'absent_worker_source_drift')
+        subprocess.run(['patch', '--batch', '-p0', '-i', str(patch_path)],
+                       cwd=returned, stdout=subprocess.DEVNULL, check=True)
+        require(all(normalized_digest(returned / n) == h for n, h in
+                    RESULT_NORMALIZED.items()), 'absent_worker_result_drift')
+        plan_path = returned / 'plan.private.json'
+        plan = json.loads(plan_path.read_text())
+        require(plan.get('direction') == 'return' and plan.get('recovery') is False,
+                'return_plan_unexpected')
+        plan['recovery'] = True
+        plan['workerAbsentAtRecovery'] = True
+        write_json(plan_path, plan)
     # Bridge.app_matches imports switch/ops.py; it must also bind to this root.
     path = destination / 'switch/ops.py'
     path.write_bytes(path.read_bytes().replace(str(original).encode(), str(destination).encode()))

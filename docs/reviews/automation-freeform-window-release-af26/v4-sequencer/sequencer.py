@@ -20,6 +20,7 @@ FRONT = 're7-admin-front'
 PRIV = '/usr/local/libexec/re7/incident-6683-window-control.py'
 GUARD = Path('/var/lib/re7/campaign-operations/state.json')
 PREPARATIONS = Path('/opt/re7online/backups/converta-persistent/preparations')
+PM_PID = Path('/home/deploy/.pm2/pm2.pid')
 
 
 def require(ok, code):
@@ -223,6 +224,44 @@ class Bridge:
                         'worker_control_unhealthy')
         except Exception:
             raise RuntimeError('worker_control_unavailable_under_fence') from None
+        self.capture_worker_before_unfence(mode, apps[WORKER], config[WORKER])
+
+    def capture_worker_before_unfence(self, mode, app, config):
+        """Record the worker's last live process tree before traffic resumes."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('v4_capture_ops', self.switch / 'ops.py')
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, str(self.switch))
+        spec.loader.exec_module(module)
+        system = module.System()
+        pid = app['pid']
+        identity = self.identity(pid)
+        require(identity and identity['state'] != 'Z', 'worker_capture_identity_missing')
+        daemon_pid = int(PM_PID.read_text().strip())
+        daemon = self.identity(daemon_pid)
+        require(daemon and daemon['state'] != 'Z', 'worker_capture_daemon_missing')
+        tree = system.tree(pid)
+        require(str(pid) in tree and all(v and v['state'] != 'Z' for v in tree.values()),
+                'worker_capture_tree_ambiguous')
+        sockets = system.socket_ids([tree])
+        require(self.identity(pid) == identity and system.tree(pid) == tree,
+                'worker_capture_changed')
+        require(os.getpgid(pid) == os.getsid(pid) == pid,
+                'worker_capture_session_ambiguous')
+        record = {'status': 'running-captured', 'pid': pid, 'ticks': identity['ticks'],
+                  'pgid': pid, 'sid': pid,
+                  'uid': Path('/proc', str(pid)).stat().st_uid,
+                  'tree': {k: v['ticks'] for k, v in tree.items()},
+                  'socketIds': sockets, 'cwd': config['cwd'],
+                  'script': config['script'],
+                  'daemon': {'pid': daemon_pid, 'ticks': daemon['ticks']}}
+        path = self.root / mode / 'worker-before-unfence.private.json'
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            os.write(fd, (json.dumps(record, sort_keys=True) + '\n').encode())
+            os.fsync(fd)
+        finally:
+            os.close(fd)
 
 
 class Sequencer:
@@ -427,15 +466,26 @@ class Sequencer:
                     'return_preparation_already_consumed')
             self.b.run(['sha256sum', '-c', 'scripts.sha256'], cwd=self.root / mode)
             expected_hash = (self.window / 'privileged-policy.sha256').read_text().strip()
+            absent_path = self.window / 'absent-worker-source.private.json'
+            absent = json.loads(absent_path.read_text()) if absent_path.is_file() else None
             observed = json.loads(self.b.privileged('inspect'))
-            require(observed == {'policySha256': expected_hash, 'phase': None,
-                                 'sourceProcessesAlive': True}, 'fresh_return_policy_required')
+            expected_inspect = {'policySha256': expected_hash, 'phase': None,
+                                'sourceProcessesAlive': absent is None}
+            if absent is not None:
+                expected_inspect['sourceWorkerAbsent'] = True
+            require(observed == expected_inspect, 'fresh_return_policy_required')
             self.b.privileged('check-absent')
             guard = self.b.guard()
             require(not guard['open'] and not guard['tasks'] and
                     not guard.get('ledgerFault'), 'return_guard_not_closed')
-            apps = self.b.apps()
-            require(set(apps) == {API, WORKER, FRONT}, 'return_process_set_drift')
+            all_apps = self.b.apps()
+            apps = {n: a for n, a in all_apps.items()
+                    if a['pm2_env']['status'] == 'online'}
+            require(set(apps) == ({API, FRONT} if absent else {API, WORKER, FRONT}) and
+                    set(all_apps) <= {API, WORKER, FRONT}, 'return_process_set_drift')
+            if absent is not None and WORKER in all_apps:
+                require(all_apps[WORKER]['pid'] in (0, None),
+                        'return_worker_substitute_or_live')
             source = self.b.expected_config(mode, 'return.config.private.json')
             require(all(self.b.app_matches(n, source) for n in apps),
                     'return_source_config_drift')
@@ -445,12 +495,19 @@ class Sequencer:
                           for n, a in apps.items()}
             require(all(v['identity'] and v['identity']['state'] != 'Z'
                         for v in identities.values()), 'return_source_identity_missing')
+            if absent is not None:
+                require(absent['status'] == 'absent-proven' and
+                        absent['cwd'] == source[WORKER]['cwd'] and
+                        absent['script'] == source[WORKER]['script'],
+                        'return_absent_worker_binding_drift')
+                identities[WORKER] = {'pid': absent['pid'],
+                                      'identity': {'ticks': absent['ticks'], 'state': 'absent'}}
             self.baseline = {'guardGeneration': guard['generation'], 'apps': identities}
             self.journal('post_unfence_return_baseline', generation=guard['generation'],
                          processes={n: v['pid'] for n, v in identities.items()})
             self.b.privileged('enter')
             self.b.privileged('check-present')
-            self.action(mode, 'stop-pair')
+            self.action(mode, 'recover-partial' if absent else 'stop-pair')
             self.verify_stopped(mode)
             self.start_pair(mode)
             self.finish(mode)

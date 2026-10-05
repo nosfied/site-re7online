@@ -1,0 +1,141 @@
+--- ops.py
++++ ops.py
+@@ -196,6 +196,14 @@
+                 d = Path(app['pm2_env']['pm_cwd']) / '.data'
+                 if d.exists():
+                     t.add(d.resolve(), arcname=app['name'] + '-data')
++            plan = json.loads((root / 'plan.private.json').read_text())
++            if plan.get('workerAbsentAtRecovery') is True:
++                cfg = {a['name']: a for a in json.loads(
++                    (root / 'return.config.private.json').read_text())['apps']}
++                d = Path(cfg[WORKER]['cwd']) / '.data'
++                require(d.is_symlink() and d.resolve().is_dir(),
++                        'absent_worker_auth_binding_missing')
++                t.add(d.resolve(), arcname=WORKER + '-data')
+ 
+ 
+ def check_fence(data):
+@@ -232,6 +240,23 @@
+         require(not g['open'] and not g['tasks'] and not g.get('ledgerFault'), 'guard_not_closed_drained')
+         return g
+ 
++    def absent_worker(self):
++        require(self.plan.get('direction') == 'return' and
++                self.plan.get('workerAbsentAtRecovery') is True,
++                'absent_worker_mode_not_bound')
++        import importlib.util
++        helper_path = self.window / 'privileged.py'
++        spec = importlib.util.spec_from_file_location('v4_absent_worker', helper_path)
++        helper = importlib.util.module_from_spec(spec)
++        spec.loader.exec_module(helper)
++        policy_path = self.window / 'privileged-policy.private.json'
++        expected_hash = (self.window / 'privileged-policy.sha256').read_text().strip()
++        require(hashlib.sha256(policy_path.read_bytes()).hexdigest() == expected_hash,
++                'absent_worker_policy_hash_drift')
++        policy = json.loads(policy_path.read_text())
++        require('absentWorker' in policy, 'absent_worker_policy_missing')
++        helper.worker_absent(policy)
++
+     def config(self, app, cfg, fresh=False):
+         require(app['pm2_env']['status'] == 'online' and app['pm2_env']['watch'] is False, 'process_not_stable')
+         if fresh:
+@@ -254,7 +279,17 @@
+         self.guard()
+         self.d.containment(self.window)
+         require(json.loads((self.window / 'restore-result.json').read_text())['temporaryDatabaseRemoved'], 'restore_not_verified')
+-        apps = {a['name']: a for a in self.d.apps()}
++        all_apps = {a['name']: a for a in self.d.apps()}
++        missing_worker = self.plan.get('workerAbsentAtRecovery') is True
++        require(not missing_worker or recovery, 'absent_worker_requires_recovery')
++        if missing_worker:
++            require(WORKER not in all_apps or
++                    (all_apps[WORKER]['pm2_env']['status'] != 'online' and
++                     all_apps[WORKER]['pid'] in (0, None)),
++                    'worker_substitute_or_live')
++            self.absent_worker()
++        apps = {n: a for n, a in all_apps.items()
++                if a['pm2_env']['status'] == 'online'}
+         require(set(apps) <= NAMES, 'unknown_pm2_process')
+         front_missing = recovery and self.plan.get('frontendAbsentAtRecovery', False)
+         require(FRONT in apps or front_missing, 'frontend_missing')
+@@ -269,8 +304,12 @@
+             self.config(app, cfg)
+         if recovery:
+             require(self.plan['recovery'], 'recovery_not_bound')
+-            prior = json.loads((self.root.parent / 'switch' / 'stop-start.json').read_text())
++            prior_path = (self.window / 'prior-absent-worker.private.json') if missing_worker else \
++                (self.root.parent / 'switch' / 'stop-start.json')
++            prior = json.loads(prior_path.read_text())
+             self.old_absent(prior)
++            if missing_worker:
++                self.absent_worker()
+             if front_missing:
+                 prior_front = json.loads((self.root.parent / 'switch' / 'front-stop-start.json').read_text())
+                 self.old_absent(prior_front)
+@@ -298,6 +337,10 @@
+                         self.d.wait()
+                 self.tree_absent(trees[name])
+                 require(not any(a['name'] == name for a in self.d.apps()), 'executor_respawned')
++        if missing_worker and WORKER in all_apps:
++            self.absent_worker()
++            self.d.delete(WORKER)
++            self.absent_worker()
+         for _ in range(25):
+             try:
+                 self.old_absent(report)
+@@ -305,10 +348,13 @@
+             except RuntimeError:
+                 self.d.wait()
+         self.old_absent(report)
+-        live = {a['name']: a for a in self.d.apps()}
++        live = {a['name']: a for a in self.d.apps()
++                if a['pm2_env']['status'] == 'online'}
+         require(not (selected & live.keys()), 'executor_respawned')
+         require(set(live) == NAMES - selected - ({FRONT} if front_missing else set()), 'unexpected_owner_after_stop')
+         if not frontend:
++            if missing_worker:
++                self.absent_worker()
+             if not front_missing:
+                 require(live[FRONT]['pid'] == report['frontend']['pid'] and same_process(report['frontend']['identity'], self.d.identity(live[FRONT]['pid'])), 'frontend_identity_changed')
+             require(self.d.db_zero() == {'otherClientBackends': 0, 'advisoryLocks': 0}, 'unknown_db_owner')
+@@ -328,6 +374,8 @@
+         require(r['direction'] == self.plan['direction'] and r['configHash'] == digest(self.target), 'stale_or_wrong_certificate')
+         require(r['generation'] == self.guard()['generation'], 'guard_generation_changed')
+         self.old_absent(r)
++        if self.plan.get('workerAbsentAtRecovery') is True:
++            self.absent_worker()
+         return r
+ 
+     def db_gate_for_start(self, name, live, *, binding_proof=None):
+--- delegated.py
++++ delegated.py
+@@ -130,12 +130,27 @@
+                     'stop_already_attempted')
+         if action == 'stop-front':
+             op.certificate('old-exit-confirmed.json', ops.FRONT)
+-        live = {a['name']: a for a in driver.apps()}
++        all_apps = {a['name']: a for a in driver.apps()}
++        if op.plan.get('workerAbsentAtRecovery') is True:
++            ops.require(action == 'recover-partial' and
++                        op.plan.get('direction') == 'return' and
++                        (ops.WORKER not in all_apps or
++                         (all_apps[ops.WORKER]['pm2_env']['status'] != 'online' and
++                          all_apps[ops.WORKER]['pid'] in (0, None))),
++                        'absent_worker_recovery_state_drift')
++            op.absent_worker()
++        live = {n: a for n, a in all_apps.items()
++                if a['pm2_env']['status'] == 'online'}
+         ops.require(set(live) <= ops.NAMES, 'unknown_pm2_process')
+         if action == 'recover-partial':
+             ops.require(op.plan.get('recovery'), 'recovery_not_bound')
+-            prior = json.loads((root.parent / 'switch' / 'stop-start.json').read_text())
++            prior_path = (op.window / 'prior-absent-worker.private.json') if \
++                op.plan.get('workerAbsentAtRecovery') is True else \
++                (root.parent / 'switch' / 'stop-start.json')
++            prior = json.loads(prior_path.read_text())
+             op.old_absent(prior)
++            if op.plan.get('workerAbsentAtRecovery') is True:
++                op.absent_worker()
+             if op.plan.get('frontendAbsentAtRecovery'):
+                 prior_front = json.loads((root.parent / 'switch' / 'front-stop-start.json').read_text())
+                 op.old_absent(prior_front)

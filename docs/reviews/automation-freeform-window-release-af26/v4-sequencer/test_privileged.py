@@ -3,6 +3,8 @@ import base64
 import hashlib
 import json
 import os
+import socket
+import time
 from pathlib import Path
 import subprocess
 import sys
@@ -33,6 +35,7 @@ class ControlTests(unittest.TestCase):
                         patch.object(p, 'GUARD', self.guard),
                         patch.object(p, 'source_processes_alive', lambda v: None),
                         patch.object(p, 'target_processes_live', lambda v, m: None),
+                        patch.object(p, 'validate_live_capture', lambda v, m: 'capture'),
                         patch.object(p, 'phase_read', lambda: self.state),
                         patch.object(p, 'phase_write', self.write_phase),
                         patch.object(p, 'nft_absent', self.absent),
@@ -47,8 +50,9 @@ class ControlTests(unittest.TestCase):
             item.stop()
         self.tmp.cleanup()
 
-    def write_phase(self, stage, policy_hash, mode=None):
-        self.state = {'stage': stage, 'policySha256': policy_hash, 'mode': mode}
+    def write_phase(self, stage, policy_hash, mode=None, worker_capture_hash=None):
+        self.state = {'stage': stage, 'policySha256': policy_hash, 'mode': mode,
+                      'workerCaptureSha256': worker_capture_hash}
 
     def absent(self):
         if self.fence:
@@ -129,6 +133,112 @@ class ControlTests(unittest.TestCase):
 
 
 class ProcessIdentityTests(unittest.TestCase):
+    def test_real_absent_worker_and_survivor_denials(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            worker_dir = base / 'worker'
+            worker_dir.mkdir()
+            script = worker_dir / 'worker.js'
+            script.write_text('synthetic worker')
+            child_file = base / 'child.pid'
+            worker_code = (
+                'import subprocess,sys,time; '
+                'p=subprocess.Popen(["sleep","60"]); '
+                'open(sys.argv[1],"w").write(str(p.pid)); '
+                'time.sleep(60)')
+            api = subprocess.Popen(['sleep', '60'], cwd=base)
+            front = subprocess.Popen(['sleep', '60'], cwd=base)
+            worker = subprocess.Popen([sys.executable, '-c', worker_code,
+                                       str(child_file)], cwd=worker_dir,
+                                      start_new_session=True,
+                                      env={**os.environ, 'pm_exec_path': str(script)})
+            child = None
+            try:
+                for _ in range(100):
+                    if child_file.exists():
+                        break
+                    time.sleep(.01)
+                self.assertTrue(child_file.exists())
+                child = int(child_file.read_text())
+                daemon = p.process_identity(os.getpid())
+                worker_id = p.process_identity(worker.pid)
+                value = {'pm2Daemon': {'pid': os.getpid(), 'ticks': daemon['ticks']},
+                         'sourceProcesses': {
+                             're7-whatsapp-agent': {'pid': api.pid,
+                                 'ticks': p.process_identity(api.pid)['ticks']},
+                             're7-whatsapp-web-worker': {'pid': worker.pid,
+                                 'ticks': worker_id['ticks']},
+                             're7-admin-front': {'pid': front.pid,
+                                 'ticks': p.process_identity(front.pid)['ticks']}},
+                         'absentWorker': {'status': 'absent-proven', 'pid': worker.pid,
+                             'ticks': worker_id['ticks'], 'pgid': worker.pid,
+                             'sid': worker.pid, 'uid': os.getuid(),
+                             'tree': {str(worker.pid): worker_id['ticks'],
+                                      str(child): p.process_identity(child)['ticks']},
+                             'socketIds': [], 'cwd': str(worker_dir),
+                             'script': str(script)}}
+                with self.assertRaisesRegex(RuntimeError, 'absent_worker_pid_present'):
+                    p.source_processes_ready(value)
+                worker.terminate()
+                worker.wait(timeout=3)
+                with self.assertRaisesRegex(RuntimeError, 'absent_worker_pid_present|absent_worker_descendant_alive'):
+                    p.source_processes_ready(value)
+                worker2 = subprocess.Popen(['sleep', '60'], cwd=worker_dir,
+                                           start_new_session=True,
+                                           env={**os.environ, 'pm_exec_path': str(script)})
+                second = p.process_identity(worker2.pid)
+                value['sourceProcesses']['re7-whatsapp-web-worker'] = {
+                    'pid': worker2.pid, 'ticks': second['ticks']}
+                value['absentWorker'].update({
+                    'pid': worker2.pid, 'ticks': second['ticks'],
+                    'pgid': worker2.pid, 'sid': worker2.pid,
+                    'tree': {str(worker2.pid): second['ticks']}})
+                worker2.terminate()
+                worker2.wait(timeout=3)
+                with self.assertRaisesRegex(RuntimeError, 'absent_worker_release_executor'):
+                    p.source_processes_ready(value)
+                os.kill(child, 15)
+                # The earlier orphan may remain as a zombie until PID 1 reaps
+                # it; the original group is no longer the worker2 group.
+                p.source_processes_ready(value)
+                listener = socket.socket()
+                try:
+                    listener.bind(('127.0.0.1', 0))
+                    listener.listen(1)
+                    inode = os.readlink(f'/proc/self/fd/{listener.fileno()}')[8:-1]
+                    value['absentWorker']['socketIds'] = [inode]
+                    with self.assertRaisesRegex(RuntimeError, 'absent_worker_socket_alive'):
+                        p.source_processes_ready(value)
+                finally:
+                    listener.close()
+                p.source_processes_ready(value)
+                wrong = json.loads(json.dumps(value))
+                wrong['pm2Daemon']['ticks'] = '0'
+                with self.assertRaisesRegex(RuntimeError, 'pm2_daemon_drift'):
+                    p.source_processes_ready(wrong)
+                wrong = json.loads(json.dumps(value))
+                wrong['sourceProcesses']['re7-whatsapp-agent']['ticks'] = '0'
+                with self.assertRaisesRegex(RuntimeError, 'source_process_changed'):
+                    p.source_processes_ready(wrong)
+                real_identity = p.process_identity
+                def reused(pid):
+                    if pid == worker2.pid:
+                        return {'state': 'S', 'ticks': '999999', 'ppid': 1}
+                    return real_identity(pid)
+                with patch.object(p, 'process_identity', side_effect=reused):
+                    with self.assertRaisesRegex(RuntimeError, 'absent_worker_pid_present'):
+                        p.source_processes_ready(value)
+            finally:
+                if worker.poll() is None:
+                    worker.terminate()
+                    worker.wait(timeout=3)
+                if child is not None and p.process_identity(child) is not None:
+                    try: os.kill(child, 9)
+                    except ProcessLookupError: pass
+                for proc in (api, front):
+                    proc.terminate()
+                    proc.wait(timeout=3)
+
     def test_actual_child_processes_and_saved_fallback(self):
         with tempfile.TemporaryDirectory() as folder:
             base = Path(folder)
@@ -194,6 +304,57 @@ class ProcessIdentityTests(unittest.TestCase):
 
 
 class PolicyTests(unittest.TestCase):
+    def test_absent_worker_policy_requires_root_phase_and_exact_capture(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            prep = base / 'incident-6683-v4-synthetic'
+            (prep / 'window').mkdir(parents=True)
+            capture = prep / 'window/worker-before-unfence.private.json'
+            capture.write_text('{"synthetic":"prior live worker"}\n')
+            previous_hash = 'b' * 64
+            prior_phase = base / 'prior-phase.json'
+            prior_phase.write_text(json.dumps({
+                'stage': 'complete', 'policySha256': previous_hash,
+                'workerCaptureSha256': hashlib.sha256(capture.read_bytes()).hexdigest()}))
+            worker_cwd = '/opt/re7online/releases/synthetic-worker'
+            absent = {'status': 'absent-proven', 'pid': 102, 'ticks': '10200',
+                      'pgid': 102, 'sid': 102, 'uid': os.getuid(),
+                      'tree': {'102': '10200'}, 'socketIds': [],
+                      'cwd': worker_cwd, 'script': worker_cwd + '/index.js',
+                      'priorPolicySha256': previous_hash,
+                      'workerCaptureSha256': hashlib.sha256(capture.read_bytes()).hexdigest()}
+            target = {'cwd': worker_cwd, 'script': worker_cwd + '/index.js',
+                      'sha256': 'a' * 64}
+            value = {'preparation': str(prep),
+                     'fenceB64': base64.b64encode(b'fence').decode(),
+                     'fenceSha256': hashlib.sha256(b'fence').hexdigest(),
+                     'cronBeforeB64': base64.b64encode(b'before').decode(),
+                     'cronWindowB64': base64.b64encode(b'window').decode(),
+                     'sourceProcesses': {name: {'pid': pid, 'ticks': str(pid * 100)}
+                         for pid, name in enumerate(('re7-whatsapp-agent',
+                             're7-whatsapp-web-worker', 're7-admin-front'), 101)},
+                     'pm2Daemon': {'pid': 100, 'ticks': '10000'},
+                     'targetProcesses': {mode: {
+                         're7-whatsapp-agent': target,
+                         're7-whatsapp-web-worker': target} for mode in ('switch', 'return')},
+                     'savedPaths': {'pm2': '/home/deploy/.pm2/dump.pm2',
+                                    'fallback': '/home/deploy/.pm2/dump.pm2.bak'},
+                     'absentWorker': absent}
+            path = base / 'policy.json'
+            path.write_text(json.dumps(value))
+            with patch.object(p, 'PREPARATIONS', base), \
+                 patch.object(p, 'phase_path', return_value=prior_phase), \
+                 patch.object(p, 'root_regular', lambda x: None):
+                self.assertIn('absentWorker', p.policy_from(path))
+                capture.write_text('tampered')
+                with self.assertRaisesRegex(RuntimeError, 'absent_worker_capture_drift'):
+                    p.policy_from(path)
+                capture.write_text('{"synthetic":"prior live worker"}\n')
+                prior_phase.write_text(json.dumps({'stage': 'complete',
+                    'policySha256': previous_hash, 'workerCaptureSha256': '0' * 64}))
+                with self.assertRaisesRegex(RuntimeError, 'absent_worker_prior_phase_drift'):
+                    p.policy_from(path)
+
     def test_phase_is_unique_to_immutable_policy_and_preserves_legacy_phase(self):
         first = p.phase_path('a' * 64)
         second = p.phase_path('b' * 64)

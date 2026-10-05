@@ -23,6 +23,7 @@ LOCK = Path('/var/lib/re7/incident-6683-v4-control.lock')
 CRON = Path('/etc/cron.d/re7-converta-backup')
 GUARD = Path('/var/lib/re7/campaign-operations/state.json')
 TABLE = 're7_campaign_transition'
+PREPARATIONS = Path('/opt/re7online/backups/converta-persistent/preparations')
 ACTIONS = frozenset({'inspect', 'check-absent', 'check-present', 'enter', 'unfence',
                      'restore-controls', 'abort-prestop', 'authorize-switch',
                      'authorize-return'})
@@ -61,12 +62,14 @@ def policy_from(path=POLICY):
     root_regular(path)
     raw = Path(path).read_bytes()
     value = json.loads(raw)
-    require(set(value) == {'preparation', 'fenceB64', 'fenceSha256',
+    required = {'preparation', 'fenceB64', 'fenceSha256',
                            'cronBeforeB64', 'cronWindowB64', 'sourceProcesses',
-                           'pm2Daemon', 'targetProcesses', 'savedPaths'},
+                           'pm2Daemon', 'targetProcesses', 'savedPaths'}
+    require(set(value) in (required, required | {'absentWorker'}),
             'policy_shape')
-    require(value['preparation'].startswith(
-        '/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-'),
+    preparation = Path(value['preparation'])
+    require(preparation.parent == PREPARATIONS and
+            preparation.name.startswith('incident-6683-v4-'),
         'policy_preparation')
     for key in ('fence', 'cronBefore', 'cronWindow'):
         value[key] = base64.b64decode(value[key + 'B64'], validate=True)
@@ -79,6 +82,48 @@ def policy_from(path=POLICY):
         require(set(entry) == {'pid', 'ticks'} and isinstance(entry['pid'], int) and
                 isinstance(entry['ticks'], str) and entry['ticks'].isdigit(),
                 'policy_process_identity')
+    if 'absentWorker' in value:
+        absent = value['absentWorker']
+        worker = value['sourceProcesses']['re7-whatsapp-web-worker']
+        require(type(absent) is dict and set(absent) == {
+            'status', 'pid', 'ticks', 'pgid', 'sid', 'uid', 'tree', 'socketIds',
+            'cwd', 'script', 'priorPolicySha256', 'workerCaptureSha256'},
+            'absent_worker_shape')
+        require(absent['status'] == 'absent-proven' and
+                absent['pid'] == worker['pid'] and absent['ticks'] == worker['ticks'] and
+                type(absent['pgid']) is int and type(absent['sid']) is int and
+                absent['pgid'] == absent['sid'] == absent['pid'],
+                'absent_worker_identity')
+        require(type(absent['uid']) is int and absent['uid'] >= 0,
+                'absent_worker_uid')
+        require(type(absent['tree']) is dict and str(worker['pid']) in absent['tree'] and
+                absent['tree'][str(worker['pid'])] == worker['ticks'] and
+                all(k.isdigit() and type(v) is str and v.isdigit()
+                    for k, v in absent['tree'].items()), 'absent_worker_tree')
+        require(type(absent['socketIds']) is list and
+                all(type(s) is str and s.isdigit() for s in absent['socketIds']) and
+                len(set(absent['socketIds'])) == len(absent['socketIds']),
+                'absent_worker_sockets')
+        require(type(absent['cwd']) is str and
+                absent['cwd'].startswith('/opt/re7online/releases/') and
+                type(absent['script']) is str and
+                absent['script'].startswith(absent['cwd'] + '/'),
+                'absent_worker_release')
+        require(all(type(absent[k]) is str and len(absent[k]) == 64 and
+                    all(c in '0123456789abcdef' for c in absent[k])
+                    for k in ('priorPolicySha256', 'workerCaptureSha256')),
+                'absent_worker_capture_hash')
+        previous = phase_path(absent['priorPolicySha256'])
+        root_regular(previous)
+        phase = json.loads(previous.read_text())
+        require(phase.get('policySha256') == absent['priorPolicySha256'] and
+                phase.get('stage') in ('unfenced', 'complete') and
+                phase.get('workerCaptureSha256') == absent['workerCaptureSha256'],
+                'absent_worker_prior_phase_drift')
+        capture = Path(value['preparation'], 'window', 'worker-before-unfence.private.json')
+        require(capture.is_file() and not capture.is_symlink() and
+                hashlib.sha256(capture.read_bytes()).hexdigest() ==
+                absent['workerCaptureSha256'], 'absent_worker_capture_drift')
     require(set(value['pm2Daemon']) == {'pid', 'ticks'}, 'policy_pm2_shape')
     require(set(value['targetProcesses']) == {'switch', 'return'},
             'policy_target_modes')
@@ -206,6 +251,148 @@ def source_processes_alive(value):
                 'source_process_changed')
 
 
+def source_processes_ready(value):
+    """The normal switch still requires all three living PM2 children."""
+    if 'absentWorker' not in value:
+        return source_processes_alive(value)
+    daemon = value['pm2Daemon']
+    now_daemon = process_identity(daemon['pid'])
+    require(now_daemon and now_daemon['ticks'] == daemon['ticks'] and
+            now_daemon['state'] != 'Z', 'pm2_daemon_drift')
+    for name in ('re7-whatsapp-agent', 're7-admin-front'):
+        entry = value['sourceProcesses'][name]
+        now = process_identity(entry['pid'])
+        require(now and now['ticks'] == entry['ticks'] and
+                now['state'] != 'Z' and now['ppid'] == daemon['pid'],
+                'source_process_changed')
+    worker_absent(value)
+
+
+def worker_absent(value):
+    """Deny replacement, descendants, inherited sockets and release executors."""
+    absent = value['absentWorker']
+    ids = {int(pid) for pid in absent['tree']}
+    # A reused PID is ambiguous even if its start ticks differ.
+    for pid in ids:
+        require(process_identity(pid) is None, 'absent_worker_pid_present')
+    daemon = value['pm2Daemon']['pid']
+    children = set()
+    relevant_before = set()
+    for path in Path('/proc').iterdir():
+        if not path.name.isdigit():
+            continue
+        pid = int(path.name)
+        try:
+            raw = (path / 'stat').read_text().rsplit(')', 1)[1].split()
+        except FileNotFoundError:
+            continue
+        if raw[0] == 'Z':
+            continue
+        if int(raw[1]) == daemon:
+            children.add(pid)
+        if int(raw[2]) in (absent['pgid'], absent['sid']) or \
+                int(raw[3]) in (absent['pgid'], absent['sid']):
+            relevant_before.add(pid)
+        try:
+            if path.stat().st_uid != absent['uid']:
+                continue
+            cwd = os.readlink(path / 'cwd')
+            environ = (path / 'environ').read_bytes().split(b'\0')
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        require(cwd != absent['cwd'] and
+                b'pm_exec_path=' + absent['script'].encode() not in environ,
+                'absent_worker_release_executor')
+    if source_api_alive(value):
+        require(children == {value['sourceProcesses'][n]['pid'] for n in
+                             ('re7-whatsapp-agent', 're7-admin-front')},
+                'pm2_child_set_drift')
+    require(not relevant_before, 'absent_worker_descendant_alive')
+    found = set()
+    for net in ('tcp', 'tcp6', 'udp', 'udp6', 'unix'):
+        for line in Path('/proc/net', net).read_text().splitlines()[1:]:
+            parts = line.split()
+            found.add(parts[6] if net == 'unix' else parts[9])
+    require(not (set(absent['socketIds']) & found), 'absent_worker_socket_alive')
+    # Recheck the identity after the socket inventory; the root phase and the
+    # sequencer lock keep the operational initiators exclusive, not /proc atomic.
+    for pid in ids:
+        require(process_identity(pid) is None, 'absent_worker_pid_present')
+    for name in ('re7-whatsapp-agent', 're7-admin-front'):
+        entry = value['sourceProcesses'][name]
+        now = process_identity(entry['pid'])
+        if name == 're7-admin-front' or source_api_alive(value):
+            require(now and now['ticks'] == entry['ticks'] and now['state'] != 'Z',
+                    'source_process_changed')
+
+
+def validate_live_capture(value, mode):
+    """Root anchors the exact live tree/socket snapshot before nft is removed."""
+    capture = Path(value['preparation'], mode, 'worker-before-unfence.private.json')
+    require(capture.is_file() and not capture.is_symlink(), 'worker_capture_missing')
+    raw_capture = capture.read_bytes()
+    marker = json.loads(raw_capture)
+    require(type(marker) is dict and set(marker) == {
+        'status', 'pid', 'ticks', 'pgid', 'sid', 'uid', 'tree', 'socketIds',
+        'cwd', 'script', 'daemon'}, 'worker_capture_shape')
+    cfg = value['targetProcesses'][mode]['re7-whatsapp-web-worker']
+    require(marker['status'] == 'running-captured' and
+            marker['cwd'] == cfg['cwd'] and marker['script'] == cfg['script'] and
+            marker['daemon'] == value['pm2Daemon'] and
+            type(marker['pid']) is int and marker['pid'] > 1 and
+            type(marker['tree']) is dict and str(marker['pid']) in marker['tree'] and
+            type(marker['socketIds']) is list and
+            type(marker['uid']) is int, 'worker_capture_binding_drift')
+    observed = process_identity(marker['pid'])
+    require(observed and observed['state'] != 'Z' and
+            observed['ticks'] == marker['ticks'] and
+            observed['ppid'] == value['pm2Daemon']['pid'] and
+            marker['pgid'] == marker['sid'] == marker['pid'] and
+            os.getpgid(marker['pid']) == marker['pid'] and
+            os.getsid(marker['pid']) == marker['pid'] and
+            Path('/proc', str(marker['pid'])).stat().st_uid == marker['uid'],
+            'worker_capture_identity_drift')
+    processes = {}
+    for path in Path('/proc').iterdir():
+        if not path.name.isdigit():
+            continue
+        try:
+            parts = (path / 'stat').read_text().rsplit(')', 1)[1].split()
+        except FileNotFoundError:
+            continue
+        if parts[0] != 'Z':
+            processes[path.name] = {'ppid': parts[1], 'ticks': parts[19]}
+    tree = {str(marker['pid'])}
+    while True:
+        added = {pid for pid, item in processes.items() if item['ppid'] in tree}
+        if added <= tree:
+            break
+        tree |= added
+    require(tree == set(marker['tree']) and
+            all(processes.get(pid, {}).get('ticks') == marker['tree'][pid]
+                for pid in tree), 'worker_capture_tree_drift')
+    sockets = set()
+    for pid in tree:
+        folder = Path('/proc', pid, 'fd')
+        require(folder.is_dir(), 'worker_capture_fd_missing')
+        for fd in folder.iterdir():
+            try:
+                target = os.readlink(fd)
+            except FileNotFoundError:
+                raise RuntimeError('worker_capture_fd_changed') from None
+            if target.startswith('socket:['):
+                sockets.add(target[8:-1])
+    require(sorted(sockets) == sorted(set(marker['socketIds'])),
+            'worker_capture_sockets_drift')
+    return hashlib.sha256(raw_capture).hexdigest()
+
+
+def source_api_alive(value):
+    entry = value['sourceProcesses']['re7-whatsapp-agent']
+    now = process_identity(entry['pid'])
+    return bool(now and now['ticks'] == entry['ticks'] and now['state'] != 'Z')
+
+
 def process_identity(pid):
     try:
         fields = Path('/proc', str(pid), 'stat').read_text().rsplit(')', 1)[1].split()
@@ -227,8 +414,13 @@ def target_processes_live(value, mode):
     for name in ('re7-whatsapp-agent', 're7-whatsapp-web-worker'):
         prior = value['sourceProcesses'][name]
         old = process_identity(prior['pid'])
-        require(not old or old['ticks'] != prior['ticks'] or old['state'] == 'Z',
-                'old_process_still_alive')
+        if 'absentWorker' in value:
+            require(old is None, 'old_source_pid_reused_or_alive')
+        else:
+            require(not old or old['ticks'] != prior['ticks'] or old['state'] == 'Z',
+                    'old_process_still_alive')
+    if 'absentWorker' in value:
+        worker_absent(value)
     children = []
     for path in Path('/proc').iterdir():
         if not path.name.isdigit():
@@ -279,13 +471,15 @@ def phase_read():
     return json.loads(PHASE.read_text())
 
 
-def phase_write(stage, policy_hash, mode=None):
+def phase_write(stage, policy_hash, mode=None, worker_capture_hash=None):
     require(stage in {'fenced', 'ready', 'unfenced', 'complete', 'aborted'},
             'phase_invalid')
     require(PHASE.parent.is_dir() and not PHASE.parent.is_symlink() and
             PHASE.parent.stat().st_uid == 0 and
             not (PHASE.parent.stat().st_mode & 0o022), 'phase_parent_unsafe')
     data = {'stage': stage, 'policySha256': policy_hash, 'mode': mode}
+    if worker_capture_hash is not None:
+        data['workerCaptureSha256'] = worker_capture_hash
     fd, temporary = tempfile.mkstemp(prefix='.incident-6683-phase-', dir=str(PHASE.parent))
     try:
         os.fchmod(fd, 0o600)
@@ -310,14 +504,17 @@ def act(action, value):
     require(action in ACTIONS, 'unknown_action')
     if action == 'inspect':
         require(phase_read() is None, 'phase_already_exists')
-        source_processes_alive(value)
+        source_processes_ready(value)
         require(CRON.read_bytes() == value['cronBefore'], 'cron_before_drift')
         boot('enabled')
         nft_absent()
         system(['/usr/sbin/nft', '--check', '--file', '-'],
                input_bytes=value['fence'])
-        return json.dumps({'policySha256': value['policySha256'],
-                           'phase': None, 'sourceProcessesAlive': True}).encode()
+        result = {'policySha256': value['policySha256'], 'phase': None,
+                  'sourceProcessesAlive': 'absentWorker' not in value}
+        if 'absentWorker' in value:
+            result['sourceWorkerAbsent'] = True
+        return json.dumps(result).encode()
     if action == 'check-absent':
         return nft_absent()
     if action == 'check-present':
@@ -325,7 +522,7 @@ def act(action, value):
     if action == 'enter':
         require(phase_read() is None, 'phase_already_exists')
         guard_closed()
-        source_processes_alive(value)
+        source_processes_ready(value)
         require(CRON.read_bytes() == value['cronBefore'], 'cron_before_drift')
         boot('enabled')
         nft_absent()
@@ -353,9 +550,10 @@ def act(action, value):
         guard_closed()
         target_processes_live(value, phase['mode'])
         nft_present()
+        capture_hash = validate_live_capture(value, phase['mode'])
         system(['/usr/sbin/nft', 'delete', 'table', 'inet', TABLE])
         output = nft_absent()
-        phase_write('unfenced', value['policySha256'], phase['mode'])
+        phase_write('unfenced', value['policySha256'], phase['mode'], capture_hash)
         return output
     if action == 'restore-controls':
         phase = phase_require(value, 'unfenced')
@@ -366,7 +564,8 @@ def act(action, value):
         system(['/usr/bin/systemctl', 'enable', 'pm2-deploy.service'])
         boot('enabled')
         output = nft_absent()
-        phase_write('complete', value['policySha256'], phase['mode'])
+        phase_write('complete', value['policySha256'], phase['mode'],
+                    phase.get('workerCaptureSha256'))
         return output
     # The sequencer proves the original process identities before requesting
     # this. This fixed action is not a return path for a started successor.
@@ -375,7 +574,7 @@ def act(action, value):
     require(phase is None or (phase.get('stage') == 'fenced' and
             phase.get('policySha256') == value['policySha256']),
             'abort_phase_invalid')
-    source_processes_alive(value)
+    source_processes_ready(value)
     try:
         nft_present()
         system(['/usr/sbin/nft', 'delete', 'table', 'inet', TABLE])
