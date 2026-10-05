@@ -1,5 +1,9 @@
 # Preflight somente leitura — campanhas, 2026-09-26
 
+## Estado após retorno b9/V4 — 05/10/2026
+
+[Execução e retorno comprovado](../reviews/automation-freeform-window-release-af26/HYBRID_B9_V4_RETURN_2026-10-05.md). API 879/worker mínimo af26/frontend af26 efetivos; b9 NOT DEPLOYED. Guarda aberta geração 27, scheduler habilitado, quatro sessões connected/cinco auth e controles restaurados. Owner conferiu Inbox/CRM em leitura. Unfence do retorno foi bloqueado por mudança no inventário de sockets do mesmo worker; conclusão assistida preservou captura antiga e manteve gate root intacto. Próxima janela depende de revisão do procedimento, não de repetir provas ou starts desta tentativa. Aceite funcional b9 e Campanhas/CRA permanecem pendentes; registros históricos intactos, SECULT encerrada, setembro CLOSED.
+
 ## Release Automação implantada — 29/09/2026, Fortaleza
 
 **DEPLOYED / AUTOMATION NOT ACTIVATED.** [Execução, versões, backup, retorno e limites](AUTOMATION_ROLLOUT_2026-09-29.md). API/frontend ba66c241 (funcional d06a92b8); worker exclusivamente mínimo bf5+f06+backport91230f88. Correção912 separada do acompanhamento BOT. `allowAutomationConversationsInInbox` permanece false/ausente em todos; nenhum tenant ativado. Owner confirmou sessão, Inbox, CRM e configurações em leitura; não equivale a aceite funcional de Automação. Contenção de 3min20; processos antigos/sockets ausentes e barreira DB/locks zero antes do sucessor. Sessões preservaram 3 connected / 1 disconnected / 1 pending; risco residual inbound/outbound/auth não é eliminado por essa contagem. Guarda reaberta na geração 7, scheduler preservado e dois ciclos naturais observados; crons/boot/saved/fallback restaurados com referências compatíveis. Registros anteriores de NOT DEPLOYED permanecem históricos, superados apenas quanto ao deploy técnico por esta entrada.

@@ -1,5 +1,9 @@
 # Runbook Re7
 
+## b9/V4 — retorno de 05/10/2026
+
+[Registro efetivo e limites](../reviews/automation-freeform-window-release-af26/HYBRID_B9_V4_RETURN_2026-10-05.md): b9 não foi liberado ao tráfego. API 879/worker mínimo af26 restaurados, frontend af26 preservado; guarda aberta geração 27, cron/boot/saved/fallback e barreira restaurados. Pacote consumido não pode ser reexecutado. O helper permanece nos bytes d7 autorizados. O comparador de captura exige inventário exato, que mudou durante recuperação de sessões; a conclusão assistida preservou originais e obteve captura atual estável sob a mesma identidade antes do gate root. Antes de outra janela, ensaiar renovação explícita dessa captura, identidade sem depender de R/S e captura privada de stderr das ações root. Não confundir protocolo unfence (saved/fallback) com retirada nft, nem retorno assistido com recuperação automática. Sem bypass, novo start para testar ou restore produtivo.
+
 ## Janela af26 de 02/10/2026 — retorno compatível
 
 A tentativa de troca af26 **não implantou o candidato**. O registro sanitizado da contenção, do bloqueio por prova expirada, do retorno `return-partial` e do estado final está em [WINDOW_RETURN_2026-10-02.md](../reviews/automation-freeform-window-release-af26/WINDOW_RETURN_2026-10-02.md). API b66, worker mínimo b66 e frontend ba66 permaneceram como releases efetivas ao encerramento. Guarda, cron e supervisão voltaram ao estado inicial; Inbox e CRM foram conferidos pelo owner.
