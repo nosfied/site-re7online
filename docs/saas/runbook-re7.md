@@ -1,5 +1,9 @@
 # Runbook Re7
 
+## b9/V4 — implantação técnica concluída em 05/10
+
+[Registro de execução e pendências](../reviews/automation-freeform-window-release-af26/HYBRID_B9_CAPTURE_DEPLOYED_2026-10-05.md): API b9/worker mínimo b9 ativos, frontend af26 preservado. Sequenciador único concluiu sem retorno; renovação explícita da captura passou antes da retirada nft. Guarda aberta geração29, scheduler preservado, cron/crontab/boot inactive-enabled e saved/fallback compatíveis; sessão Inbox/CRM owner PASS. DEPLOYED TECHNICALLY / OWNER VALIDATION PENDING. A preparação 143500 está consumida; não repetir intents/starts. Retorno API879/workeraf26 exige política/provas atuais e mantém DB/auth. Relatórios abaixo preservam os estados anteriores, superados por este registro.
+
 ## b9/V4 — composição final preparada em 05/10
 
 [Relatório único e comandos executáveis](../reviews/automation-freeform-window-release-af26/HYBRID_B9_CAPTURE_COMPOSITION_PREPARED_2026-10-05.md). Diretório novo `incident-6683-v4-hybrid-b9-capture-20261005T143500Z`: três modos/25 arquivos, logger privado e recaptura antes de unfence, helper e nove comandos inalterados. Backup fresco/restore isolado PASS, gates falsos, política não instalada. Contingência fresca agora cria seus próprios gates falsos e nega execução antes de qualquer ação root enquanto não habilitados após inspect. Comandos incluem restauração explícita do crontab de deploy antes de gerar essa contingência. Reconfirmar bindings/identidades e decisão antes de instalar somente a política; não reutilizar a janela consumida. Sem nova contenção/troca; produção continua API879/workeraf26/frontendaf26.
