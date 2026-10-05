@@ -1,0 +1,40 @@
+{
+  "baseCommit": "ac9112c1398a399f05de81ad3bbbec0b2a030f50",
+  "status": "CAPTURE_RENEWAL_LOCAL_VALIDATED_NOT_DEPLOYED",
+  "functionalB9Unchanged": true,
+  "workerTarUnchangedSha256": "236c1d502df5767eb7cde726ce0d7ae7c6e8200489cac4d09a417b08d98c0e98",
+  "helperUnchanged": true,
+  "sudoersUnchanged": true,
+  "originSequencerSha256": "d9719e2f1840589a74d664f57cbd6ec6404ef6622f9759e3107aac2974ad5514",
+  "filesSha256": {
+    "sequencer.py": "691949be642b9750bb2e662c2871195e1a51130f1cdf35d025a20a661b18e340",
+    "privileged.py": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "test_sequencer.py": "6a70eab57128f9e092f3c1427ea34929742ba918ccd17a9d08428db55352cc97",
+    "test_capture_refresh.py": "5298b5aadf5e4198cd1972115088dbd7af6383dc8d79a9f9fd82166af6984002",
+    "test_capture_refresh_pm2.py": "d126ba4921438456362c27baa373c0b8fdbd2b387c6c4b99197df0235d3c54d7",
+    "capture-refresh-real-results.sanitized.json": "01000a11d33cd0f2e0b64e069f5dbf415fbd97dabc5e8de5ad445f6909d6c8ba",
+    "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+    "prepare_post_unfence_return.py": "a0983d58880acaea6f421f3a4e37164ba5dd8b07589bb28cc60139a6896c1fd8",
+    "privileged-observer-output.patch": "36b60240b10cf84b775a9c35bd9c4ca81ff6ce8482f0107f3c7217e9c50e33be"
+  },
+  "validation": {
+    "newInjectedTests": "13/13 PASS",
+    "sequencerRegression": "23/23 PASS reexecuted",
+    "realNodePm2Driver": "25 directed checks PASS/expected DENY; nft/phase simulated; ticks mismatch additionally injected; real replacement and surviving descendant exercised",
+    "absentReturnAdapterRegression": "4/4 PASS on diagnostics-patched attested ops/delegated; effects injected"
+  },
+  "observerMethodAstSha256": {
+    "System.run": "2d55c7bb42c0d0dfa4a551a32fa431126c4b2700653fdb6b5e90e4621cc6ecba",
+    "System.identity": "99e8e143f4ce2bb74118a48adce1c0a6a9bb490fa50696e0104cb399e01fa22f",
+    "System.tree": "f860eb8688be388f073c13b82c0135e5f53395467eb4cc1798086b15d648af68"
+  },
+  "privateModeObserverPatch": {
+    "sourceExactSha256": "ba1991f9b9dde1fc8cf1d739e85026ac781d84c93145cf4b2bafcefb21335ff2",
+    "sourceNormalizedSha256": "dc7cb031d1bf9cb01093822643fb23313200ee76bf465da964c5cba17105faa0",
+    "diagnosticsResultNormalizedSha256": "d9f727586a03a509c04629a1e1a4c8571a16e2d41a9c582396f558ee7158babe",
+    "absentWorkerAndDiagnosticsResultNormalizedSha256": "efe934d8def4d8e7e862ccd361225bd80ebac6277521a2f30516b75e68d930e2",
+    "modeFiles": 25,
+    "newModeDependency": "privileged_output.py",
+    "unchangedAbsentAdapterPatchSha256": "378841d7326acfb26832ac8d3b910837ec57626abc3d493fbc8883bf75d4210a"
+  }
+}

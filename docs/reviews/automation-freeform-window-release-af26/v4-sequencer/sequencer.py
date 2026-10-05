@@ -122,11 +122,14 @@ class Bridge:
                 os.close(fd)
             raise RuntimeError(f'step_failed:{mode}/{script}:exit={error.returncode}') from None
 
+    def private_record(self, name, record):
+        from privileged_output import private_record
+        private_record(self.window, name, record)
+
     def privileged(self, action):
-        require(action in {'inspect', 'check-absent', 'check-present', 'enter', 'unfence',
-                           'restore-controls', 'abort-prestop', 'authorize-switch',
-                           'authorize-return'}, 'privileged_action_denied')
-        return self.run(['sudo', '-n', '/usr/bin/python3', '-I', '-S', PRIV, action])
+        from privileged_output import run_privileged
+        args = ['sudo', '-n', '/usr/bin/python3', '-I', '-S', PRIV, action]
+        return run_privileged(args, self.window, action).decode()
 
     def protocol(self, mode, action):
         root = self.root / mode
@@ -226,42 +229,138 @@ class Bridge:
             raise RuntimeError('worker_control_unavailable_under_fence') from None
         self.capture_worker_before_unfence(mode, apps[WORKER], config[WORKER])
 
-    def capture_worker_before_unfence(self, mode, app, config):
-        """Record the worker's last live process tree before traffic resumes."""
+    def worker_capture_observation(self, mode, app, config):
         import importlib.util
         spec = importlib.util.spec_from_file_location('v4_capture_ops', self.switch / 'ops.py')
         module = importlib.util.module_from_spec(spec)
         sys.path.insert(0, str(self.switch))
         spec.loader.exec_module(module)
         system = module.System()
-        pid = app['pid']
-        identity = self.identity(pid)
-        require(identity and identity['state'] != 'Z', 'worker_capture_identity_missing')
+        policy = json.loads((self.window / 'privileged-policy.private.json').read_text())
+        apps = self.apps()
+        require(set(apps) == {API, WORKER, FRONT}, 'incomplete_process_set')
+        targets = self.expected_config(mode, 'candidate.config.private.json')
+        require(all(self.app_matches(n, targets) for n in apps), 'capture_release_drift')
+        require(apps[WORKER]['pid'] == app['pid'], 'worker_capture_identity_drift')
+        front = policy['sourceProcesses'][FRONT]
+        require(apps[FRONT]['pid'] == front['pid'] and
+                same_identity(front, self.identity(front['pid'])), 'frontend_identity_changed')
         daemon_pid = int(PM_PID.read_text().strip())
         daemon = self.identity(daemon_pid)
-        require(daemon and daemon['state'] != 'Z', 'worker_capture_daemon_missing')
+        require(daemon_pid == policy['pm2Daemon']['pid'] and
+                same_identity(policy['pm2Daemon'], daemon), 'worker_capture_daemon_drift')
+        guard = self.guard()
+        require(not guard['open'] and not guard['tasks'] and not guard.get('ledgerFault'),
+                'guard_not_closed_before_unfence')
+        pid = app['pid']
+        identity = self.identity(pid)
+        marker = json.loads((self.root / mode / ('started-' + WORKER + '.json')).read_text())
+        require(marker['pid'] == pid and same_identity(marker['identity'], identity),
+                'worker_capture_identity_drift')
         tree = system.tree(pid)
         require(str(pid) in tree and all(v and v['state'] != 'Z' for v in tree.values()),
                 'worker_capture_tree_ambiguous')
-        sockets = system.socket_ids([tree])
-        require(self.identity(pid) == identity and system.tree(pid) == tree,
-                'worker_capture_changed')
-        require(os.getpgid(pid) == os.getsid(pid) == pid,
-                'worker_capture_session_ambiguous')
+        sockets = set()
+        for child in tree:
+            folder = Path('/proc', child, 'fd')
+            require(folder.is_dir(), 'worker_capture_fd_missing')
+            try:
+                for fd in folder.iterdir():
+                    target = os.readlink(fd)
+                    if target.startswith('socket:['):
+                        sockets.add(target[8:-1])
+            except FileNotFoundError:
+                raise RuntimeError('worker_capture_fd_changed') from None
+        identity_after = self.identity(pid)
+        tree_after = system.tree(pid)
+        # R/S is scheduling state, not process identity. Zombies still deny.
+        require(same_identity(identity, identity_after) and
+                all(v and v['state'] != 'Z' for v in tree_after.values()) and
+                {k:v['ticks'] for k,v in tree.items()} ==
+                {k:v['ticks'] for k,v in tree_after.items()}, 'worker_capture_changed')
+        require(os.getpgid(pid) == os.getsid(pid) == pid, 'worker_capture_session_ambiguous')
+        expected = policy['targetProcesses'][mode][WORKER]
+        require(config['cwd'] == expected['cwd'] and config['script'] == expected['script'] and
+                hashlib.sha256(Path(config['script']).read_bytes()).hexdigest() ==
+                expected['sha256'], 'capture_release_drift')
         record = {'status': 'running-captured', 'pid': pid, 'ticks': identity['ticks'],
-                  'pgid': pid, 'sid': pid,
-                  'uid': Path('/proc', str(pid)).stat().st_uid,
-                  'tree': {k: v['ticks'] for k, v in tree.items()},
-                  'socketIds': sockets, 'cwd': config['cwd'],
-                  'script': config['script'],
+                  'pgid': pid, 'sid': pid, 'uid': Path('/proc', str(pid)).stat().st_uid,
+                  'tree': {k:v['ticks'] for k,v in tree.items()}, 'socketIds': sorted(sockets),
+                  'cwd': config['cwd'], 'script': config['script'],
                   'daemon': {'pid': daemon_pid, 'ticks': daemon['ticks']}}
+        api_marker = json.loads((self.root / mode / ('started-' + API + '.json')).read_text())
+        api_identity = self.identity(apps[API]['pid'])
+        require(apps[API]['pid'] == api_marker['pid'] and
+                same_identity(api_marker['identity'], api_identity), 'api_capture_identity_drift')
+        return record, guard['generation'], (apps[API]['pid'], api_identity['ticks'])
+
+    def capture_worker_before_unfence(self, mode, app, config):
         path = self.root / mode / 'worker-before-unfence.private.json'
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-        try:
-            os.write(fd, (json.dumps(record, sort_keys=True) + '\n').encode())
-            os.fsync(fd)
-        finally:
-            os.close(fd)
+        previous = None
+        if path.exists():
+            info = path.lstat()
+            require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and
+                    info.st_uid == os.getuid() and not info.st_mode & 0o077,
+                    'worker_capture_file_unsafe')
+            previous = json.loads(path.read_text())
+        expected_generation = self.guard()['generation']
+        for attempt in range(1, 4):
+            self.privileged('check-present')
+            try:
+                first = self.worker_capture_observation(mode, app, config)
+                second = self.worker_capture_observation(mode, app, config)
+                self.privileged('check-present')
+                require(first[1] == second[1] == expected_generation, 'capture_guard_generation_drift')
+                require(first == second, 'worker_capture_churn')
+                record, generation, _ = second
+                if previous:
+                    require(all(record[k] == previous[k] for k in record if k != 'socketIds'),
+                            'worker_capture_identity_or_tree_drift')
+                archive = None
+                if previous:
+                    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                    archive = path.with_name('worker-before-unfence.' + str(time.time_ns()) +
+                                             '.' + digest + '.private.json')
+                    require(not archive.exists(), 'worker_capture_archive_exists')
+                    os.rename(path, archive)
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                try:
+                    os.write(fd, (json.dumps(record, sort_keys=True) + '\n').encode())
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+                self.private_record('sequencer.journal.jsonl', {
+                    'utc': time.time(), 'event': 'worker_capture_refreshed', 'mode': mode,
+                    'attempt': attempt, 'generation': generation,
+                    'captureSha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+                    'previousSha256': digest if previous else None})
+                return
+            except RuntimeError as error:
+                if str(error) not in {'worker_capture_churn', 'worker_capture_fd_changed',
+                                      'worker_capture_changed'}:
+                    raise
+                self.private_record('sequencer.journal.jsonl', {
+                    'utc': time.time(), 'event': 'worker_capture_sample_denied', 'mode': mode,
+                    'attempt': attempt, 'reason': str(error)})
+        raise RuntimeError('worker_capture_unstable_after_3_attempts')
+
+    def renewed_unfence(self, mode):
+        # authorize-* has already pinned the mode. Retry only failures known to
+        # occur BEFORE nft deletion; never retry an unknown/partial root action.
+        for attempt in range(1, 4):
+            self.pre_unfence(mode)
+            try:
+                self.privileged('unfence')
+                return
+            except RuntimeError as error:
+                if str(error) not in {
+                    'privileged_failed:unfence:exit=1:worker_capture_sockets_drift',
+                    'privileged_failed:unfence:exit=1:worker_capture_fd_changed'}:
+                    raise
+                self.private_record('sequencer.journal.jsonl', {
+                    'utc': time.time(), 'event': 'unfence_capture_denied', 'mode': mode,
+                    'attempt': attempt})
+        raise RuntimeError('unfence_capture_unstable_after_3_attempts')
 
 
 class Sequencer:
@@ -390,7 +489,7 @@ class Sequencer:
         require((self.root / mode / 'owner-unfence-authorized.json').exists(),
                 'unfence_permit_missing')
         self.b.privileged('authorize-switch' if mode == 'switch' else 'authorize-return')
-        self.b.privileged('unfence')
+        self.b.renewed_unfence(mode)
         self.action(mode, 'verify-unfenced')
         self.b.node(mode, 'validate.cjs')
         self.b.node(mode, 'open.cjs')

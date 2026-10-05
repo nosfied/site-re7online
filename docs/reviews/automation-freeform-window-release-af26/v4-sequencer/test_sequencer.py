@@ -161,6 +161,10 @@ class FakeBridge:
         if self.g['open'] or self.g['tasks']:
             raise RuntimeError('pre_unfence_gate_failed')
 
+    def renewed_unfence(self, mode):
+        self.pre_unfence(mode)
+        self.privileged('unfence')
+
 
 class SequenceTests(unittest.TestCase):
     def setUp(self):

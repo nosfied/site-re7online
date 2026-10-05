@@ -1,0 +1,12 @@
+--- ops.py
++++ ops.py
+@@ -137,5 +137,6 @@
+                 'proxy_observer_hash_mismatch')
+-        output = subprocess.check_output(['sudo', '-n', '/usr/bin/python3', '-I', '-S', str(path)],
+-                                         text=True, env=CLEAN, stderr=subprocess.PIPE,
+-                                         timeout=10)
++        from privileged_output import run_privileged
++        output = run_privileged(['sudo', '-n', '/usr/bin/python3', '-I', '-S', str(path)],
++                                Path(__file__).resolve().parent.parent / 'window',
++                                'db-owner-observe', env=CLEAN, timeout=10).decode()
+         return json.loads(output)

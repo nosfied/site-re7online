@@ -1,5 +1,9 @@
 # Runbook Re7
 
+## Diagnóstico e captura V4 — revisão local de 05/10
+
+[Delta revisável e reprodução](../reviews/automation-freeform-window-release-af26/CAPTURE_RENEWAL_LOCAL_2026-10-05.md): captura privada completa de ações root e renovação limitada antes de unfence, no switch/return/return-partial. Duas leituras consistentes e mesma identidade/árvore, sem comparar R/S; arquivar cada captura anterior. Helper revalida antes de retirar nft; somente recusa reconhecida em sockets/FDs antes da exclusão admite recaptura limitada, nunca repetir start ou erro parcial desconhecido. Atualizar hash do sequenciador somente em preparação nova após revisão; helper e nove comandos sudo inalterados. LOCAL VALIDATED / NOT DEPLOYED, não executar preparação consumida.
+
 ## b9/V4 — retorno de 05/10/2026
 
 [Registro efetivo e limites](../reviews/automation-freeform-window-release-af26/HYBRID_B9_V4_RETURN_2026-10-05.md): b9 não foi liberado ao tráfego. API 879/worker mínimo af26 restaurados, frontend af26 preservado; guarda aberta geração 27, cron/boot/saved/fallback e barreira restaurados. Pacote consumido não pode ser reexecutado. O helper permanece nos bytes d7 autorizados. O comparador de captura exige inventário exato, que mudou durante recuperação de sessões; a conclusão assistida preservou originais e obteve captura atual estável sob a mesma identidade antes do gate root. Antes de outra janela, ensaiar renovação explícita dessa captura, identidade sem depender de R/S e captura privada de stderr das ações root. Não confundir protocolo unfence (saved/fallback) com retirada nft, nem retorno assistido com recuperação automática. Sem bypass, novo start para testar ou restore produtivo.

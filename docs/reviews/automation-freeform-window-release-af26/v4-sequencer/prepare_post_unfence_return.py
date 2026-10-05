@@ -16,11 +16,11 @@ import urllib.parse
 import re
 
 SOURCE_NORMALIZED = {
-    'ops.py': 'dc7cb031d1bf9cb01093822643fb23313200ee76bf465da964c5cba17105faa0',
+    'ops.py': 'd9f727586a03a509c04629a1e1a4c8571a16e2d41a9c582396f558ee7158babe',
     'delegated.py': '47089f123b55fa92723e7dece9b4ac8984c51395746a543025a1d816ca6f7d0f',
 }
 RESULT_NORMALIZED = {
-    'ops.py': '433948718311ca738aa64a24bdbdab5b38a8abce5bc84e7bdb6b3c9c4654035f',
+    'ops.py': 'efe934d8def4d8e7e862ccd361225bd80ebac6277521a2f30516b75e68d930e2',
     'delegated.py': 'ab50ce75dc665c98ad6350a734a9310d03865f9ae17305d6ef813d3fbca88104',
 }
 
@@ -99,9 +99,10 @@ def main(original, destination):
     require(subprocess.check_output(['crontab', '-l']) ==
             (original / 'window/deploy.crontab.before').read_bytes(),
             'deploy_cron_must_be_restored_first')
-    subprocess.run(['sudo', '-n', '/usr/bin/python3', '-I', '-S',
+    from privileged_output import run_privileged
+    run_privileged(['sudo', '-n', '/usr/bin/python3', '-I', '-S',
                     '/usr/local/libexec/re7/incident-6683-window-control.py',
-                    'check-absent'], stdout=subprocess.DEVNULL, check=True)
+                    'check-absent'], original / 'window', 'check-absent')
     apps = {a['name']: a for a in json.loads(subprocess.check_output([PM, 'jlist'], text=True))}
     expected = config(original / 'switch/candidate.config.private.json')
     require(set(apps) in ({API, WORKER, FRONT}, {API, FRONT}) and all(
@@ -161,8 +162,9 @@ def main(original, destination):
             current_front['ticks'] == frontend['identity']['ticks'],
             'frontend_identity_drift')
     previous_bindings = json.loads((original / 'window/db-owner-bindings.private.json').read_text())
-    observation = subprocess.check_output(['sudo', '-n', '/usr/bin/python3', '-I', '-S',
-                          '/usr/local/libexec/re7/db-owner-set-observer.py'])
+    observation = run_privileged(['sudo', '-n', '/usr/bin/python3', '-I', '-S',
+                          '/usr/local/libexec/re7/db-owner-set-observer.py'],
+                          original / 'window', 'db-owner-observe')
     proxy = json.loads(observation)
     require(proxy['identity'] == previous_bindings['proxyIdentity'] and
             proxy['exeSha256'] == previous_bindings['proxySha256'], 'proxy_identity_drift')
@@ -195,7 +197,7 @@ def main(original, destination):
                  'db-owner-bindings.private.json', 'path-bindings.private.json',
                  'backup-manifest.private.json', 'restore-result.json',
                  'prepare_policy.py', 'privileged.py', 'sequencer.py',
-                 're7-incident-6683-window.sudoers.proposed'):
+                 're7-incident-6683-window.sudoers.proposed', 'privileged_output.py'):
         shutil.copy2(original / 'window' / name, window / name)
         (window / name).chmod(0o600)
     if absent is not None:
@@ -273,9 +275,14 @@ def main(original, destination):
         path = returned / (variant + '.ecosystem.config.cjs')
         path.write_text('module.exports = ' + json.dumps(data, separators=(',', ':')) + ';\n')
         path.chmod(0o600)
+    shutil.copy2(window / 'privileged_output.py', returned / 'privileged_output.py')
+    (returned / 'privileged_output.py').chmod(0o600)
+    shutil.copy2(window / 'privileged_output.py', destination / 'switch/privileged_output.py')
+    (destination / 'switch/privileged_output.py').chmod(0o600)
     names = [line.split('  ', 1)[1] for line in
              (original / 'return/scripts.sha256').read_text().splitlines()]
-    require(len(names) == 24 and all((returned / name).is_file() for name in names),
+    require(len(names) == 25 and 'privileged_output.py' in names and
+            all((returned / name).is_file() for name in names),
             'return_static_incomplete')
     (returned / 'scripts.sha256').write_text(''.join(
         digest(returned / name) + '  ' + name + '\n' for name in names))

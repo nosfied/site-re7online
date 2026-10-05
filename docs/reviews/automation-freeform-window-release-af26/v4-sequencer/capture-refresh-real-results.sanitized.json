@@ -1,0 +1,33 @@
+{
+  "node": "20.20.0",
+  "pm2": "6.0.14",
+  "checks": [
+    "switch:renew_open_sockets:PASS_REAL",
+    "switch:renew_close_sockets:PASS_REAL",
+    "switch:persistent_churn:DENIED_REAL",
+    "switch:persistent_root_capture_race:DENIED_REAL",
+    "switch:root_revalidation_and_unfence:PASS_REAL_WITH_NFT_SIMULATED",
+    "switch:identity_mismatch:DENIED_REAL_WITH_TICKS_INJECTED",
+    "switch:surviving_descendant:DENIED_REAL",
+    "switch:real_worker_substitution:DENIED_REAL",
+    "return:renew_open_sockets:PASS_REAL",
+    "return:renew_close_sockets:PASS_REAL",
+    "return:persistent_churn:DENIED_REAL",
+    "return:persistent_root_capture_race:DENIED_REAL",
+    "return:root_revalidation_and_unfence:PASS_REAL_WITH_NFT_SIMULATED",
+    "return:identity_mismatch:DENIED_REAL_WITH_TICKS_INJECTED",
+    "return:surviving_descendant:DENIED_REAL",
+    "return:real_worker_substitution:DENIED_REAL",
+    "return-partial:renew_open_sockets:PASS_REAL",
+    "return-partial:renew_close_sockets:PASS_REAL",
+    "return-partial:persistent_churn:DENIED_REAL",
+    "return-partial:persistent_root_capture_race:DENIED_REAL",
+    "return-partial:root_revalidation_and_unfence:PASS_REAL_WITH_NFT_SIMULATED",
+    "return-partial:identity_mismatch:DENIED_REAL_WITH_TICKS_INJECTED",
+    "return-partial:surviving_descendant:DENIED_REAL",
+    "return-partial:real_worker_substitution:DENIED_REAL",
+    "return:worker_exited_descendant_survives:DENIED_REAL"
+  ],
+  "operationsSha256": "b20e4c3a5e9803614044412aa73dbd138e385002cf40e3a3d123ad9a8f0bcc2c",
+  "limits": "nft/phase effects simulated; no DB/providers; PID mismatch injected; processes/sockets/descendants real"
+}
