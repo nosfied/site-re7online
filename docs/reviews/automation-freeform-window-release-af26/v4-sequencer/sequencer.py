@@ -130,14 +130,45 @@ class Bridge:
     def protocol(self, mode, action):
         root = self.root / mode
         delegated = root / 'delegated.py'
-        payload = json.loads(self.run(['python3', str(delegated), 'request', action, str(root)]))
-        read_action = 'check-absent' if action in {
-            'preflight', 'prepare-containment', 'verify-unfenced', 'restore-controls'
-        } else 'check-present'
-        proof = self.privileged(read_action)
-        self.run(['python3', str(delegated), 'record', action, str(root), payload['nonce']],
-                 input_text=proof)
-        self.run(['python3', str(delegated), 'execute', action, str(root)])
+        phase = 'request'
+        try:
+            payload = json.loads(self.run(['python3', str(delegated), 'request', action, str(root)]))
+            phase = 'owner-read'
+            read_action = 'check-absent' if action in {
+                'preflight', 'prepare-containment', 'verify-unfenced', 'restore-controls'
+            } else 'check-present'
+            proof = self.privileged(read_action)
+            phase = 'record'
+            self.run(['python3', str(delegated), 'record', action, str(root), payload['nonce']],
+                     input_text=proof)
+            phase = 'execute'
+            self.run(['python3', str(delegated), 'execute', action, str(root)])
+        except Exception as error:
+            # A denial before start-intent was previously reported only as a
+            # generic CalledProcessError. Keep the cause private and durable.
+            stdout = getattr(error, 'stdout', None) or ''
+            stderr = getattr(error, 'stderr', None) or ''
+            record = {'utc': time.time(), 'mode': mode, 'action': action,
+                      'phase': phase, 'errorType': type(error).__name__,
+                      'exitCode': getattr(error, 'returncode', None),
+                      'stdout': stdout[:16384], 'stderr': stderr[:16384],
+                      'stdoutBytes': len(stdout.encode()),
+                      'stderrBytes': len(stderr.encode()),
+                      'stdoutSha256': hashlib.sha256(stdout.encode()).hexdigest(),
+                      'stderrSha256': hashlib.sha256(stderr.encode()).hexdigest(),
+                      'outputTruncated': len(stdout) > 16384 or len(stderr) > 16384}
+            path = self.window / 'protocol-output.private.jsonl'
+            fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            try:
+                info = os.fstat(fd)
+                require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and
+                        info.st_uid == os.getuid() and info.st_mode & 0o077 == 0,
+                        'protocol_output_permissions')
+                os.write(fd, (json.dumps(record, sort_keys=True) + '\n').encode())
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            raise RuntimeError(f'protocol_failed:{mode}/{action}/{phase}') from None
 
     def restore_guard(self, config_file):
         config = self.expected_config(config_file[0], config_file[1])[API]
@@ -162,6 +193,36 @@ class Bridge:
         require(after['open'] and after['generation'] == before['generation'] + 1 and
                 after['tasks'] == [] and not after.get('ledgerFault'), 'guard_restore_failed')
         return after
+
+    def pre_unfence(self, mode):
+        """Checks possible under nft; port 3001 HTTP is deliberately deferred."""
+        require(mode in {'switch', 'return', 'return-partial'}, 'mode_denied')
+        self.privileged('check-present')
+        guard = self.guard()
+        require(not guard['open'] and not guard['tasks'] and
+                not guard.get('ledgerFault'), 'guard_not_closed_before_unfence')
+        config = self.expected_config(mode, 'candidate.config.private.json')
+        apps = self.apps()
+        require(set(apps) == {API, WORKER, FRONT}, 'incomplete_process_set')
+        for name in (API, WORKER):
+            marker = json.loads((self.root / mode / ('started-' + name + '.json')).read_text())
+            require(apps[name]['pid'] == marker['pid'] and
+                    same_identity(marker['identity'], self.identity(marker['pid'])) and
+                    self.app_matches(name, config), 'successor_identity_or_config_drift')
+        worker_env = config[WORKER]['env']
+        host = worker_env['WHATSAPP_WEB_WORKER_CONTROL_HOST']
+        port = int(worker_env['WHATSAPP_WEB_WORKER_CONTROL_PORT'])
+        require(host == '127.0.0.1' and port > 0 and port != 3001,
+                'worker_control_binding_drift')
+        probe = request.Request(f'http://{host}:{port}/health', headers={
+            'Authorization': 'Bearer ' + worker_env['WHATSAPP_WEB_WORKER_CONTROL_TOKEN']})
+        try:
+            with request.urlopen(probe, timeout=5) as response:
+                payload = json.load(response)
+                require(response.status == 200 and payload.get('ok') is True,
+                        'worker_control_unhealthy')
+        except Exception:
+            raise RuntimeError('worker_control_unavailable_under_fence') from None
 
 
 class Sequencer:
@@ -284,6 +345,8 @@ class Sequencer:
             self.verify_started(mode, name)
 
     def finish(self, mode):
+        self.b.pre_unfence(mode)
+        self.journal('pre_unfence_pass', mode=mode)
         self.action(mode, 'unfence')  # PM2 saved/fallback before traffic.
         require((self.root / mode / 'owner-unfence-authorized.json').exists(),
                 'unfence_permit_missing')
@@ -341,6 +404,53 @@ class Sequencer:
         self.start_pair(mode)
         self.finish(mode)
 
+    def post_unfence_return(self):
+        """Fresh return preparation after post-unfence validation failed.
+
+        Requires a separately installed root-owned return policy with a new
+        phase. Never reuses the switch policy or any consumed start intent.
+        """
+        mode = 'return'
+        global_lock = self.root.parent / '.incident-6683-window.lock'
+        with global_lock.open('a+') as overall:
+            fcntl.flock(overall.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            require(not (self.root / mode / ('start-intent-' + API + '.json')).exists() and
+                    not (self.root / mode / ('start-intent-' + WORKER + '.json')).exists(),
+                    'return_start_intent_already_exists')
+            require(not (self.root / mode / 'old-exit-confirmed.json').exists() and
+                    not list((self.root / mode).glob('owner-request-*.json')),
+                    'return_preparation_already_consumed')
+            self.b.run(['sha256sum', '-c', 'scripts.sha256'], cwd=self.root / mode)
+            expected_hash = (self.window / 'privileged-policy.sha256').read_text().strip()
+            observed = json.loads(self.b.privileged('inspect'))
+            require(observed == {'policySha256': expected_hash, 'phase': None,
+                                 'sourceProcessesAlive': True}, 'fresh_return_policy_required')
+            self.b.privileged('check-absent')
+            guard = self.b.guard()
+            require(not guard['open'] and not guard['tasks'] and
+                    not guard.get('ledgerFault'), 'return_guard_not_closed')
+            apps = self.b.apps()
+            require(set(apps) == {API, WORKER, FRONT}, 'return_process_set_drift')
+            source = self.b.expected_config(mode, 'return.config.private.json')
+            require(all(self.b.app_matches(n, source) for n in apps),
+                    'return_source_config_drift')
+            target = self.b.expected_config(mode, 'candidate.config.private.json')
+            require(source[FRONT] == target[FRONT], 'frontend_not_preserved_in_return')
+            identities = {n: {'pid': a['pid'], 'identity': self.b.identity(a['pid'])}
+                          for n, a in apps.items()}
+            require(all(v['identity'] and v['identity']['state'] != 'Z'
+                        for v in identities.values()), 'return_source_identity_missing')
+            self.baseline = {'guardGeneration': guard['generation'], 'apps': identities}
+            self.journal('post_unfence_return_baseline', generation=guard['generation'],
+                         processes={n: v['pid'] for n, v in identities.items()})
+            self.b.privileged('enter')
+            self.b.privileged('check-present')
+            self.action(mode, 'stop-pair')
+            self.verify_stopped(mode)
+            self.start_pair(mode)
+            self.finish(mode)
+            fcntl.flock(overall.fileno(), fcntl.LOCK_UN)
+
     def run(self):
         lock = self.window / 'sequencer.lock'
         global_lock = self.root.parent / '.incident-6683-window.lock'
@@ -382,9 +492,14 @@ class Sequencer:
 
 
 def main(argv):
-    require(len(argv) == 2, 'exact_preparation_argument_required')
+    require(len(argv) in {2, 3}, 'exact_preparation_argument_required')
     os.umask(0o077)
-    Sequencer(Bridge(argv[1])).run()
+    sequencer = Sequencer(Bridge(argv[1]))
+    if len(argv) == 3:
+        require(argv[2] == '--post-unfence-return', 'unknown_mode')
+        sequencer.post_unfence_return()
+    else:
+        sequencer.run()
 
 
 if __name__ == '__main__':

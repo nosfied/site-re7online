@@ -1,0 +1,11 @@
+apps/whatsapp-web-worker/node_modules/.bin/esbuild	../esbuild/bin/esbuild
+apps/whatsapp-web-worker/node_modules/.bin/giget	../giget/dist/cli.mjs
+apps/whatsapp-web-worker/node_modules/.bin/jiti	../jiti/lib/jiti-cli.mjs
+apps/whatsapp-web-worker/node_modules/.bin/nypm	../nypm/dist/cli.mjs
+apps/whatsapp-web-worker/node_modules/.bin/pino	../pino/bin.js
+apps/whatsapp-web-worker/node_modules/.bin/prisma	../prisma/build/index.js
+apps/whatsapp-web-worker/node_modules/.bin/semver	../semver/bin/semver.js
+apps/whatsapp-web-worker/node_modules/.bin/tsc	../typescript/bin/tsc
+apps/whatsapp-web-worker/node_modules/.bin/tsserver	../typescript/bin/tsserver
+apps/whatsapp-web-worker/node_modules/.bin/tsx	../tsx/dist/cli.mjs
+apps/whatsapp-web-worker/node_modules/.bin/web-push	../web-push/src/cli.js

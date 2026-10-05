@@ -1,0 +1,18 @@
+{
+  "scope": "fresh preparations only; preserve consumed attempts",
+  "modes": [
+    "switch",
+    "return",
+    "return-partial"
+  ],
+  "source": {
+    "delegated.py": "02671dafa51bb247e4fd8fca669032b6288693f4b7786ba09a84595c6b248ace",
+    "ops.py": "5032ed99f54f30e691ef76f402d461c7267fd323d4eb29d05716f3e531c76a32"
+  },
+  "result": {
+    "delegated.py": "97a6f0204c6d816c13272bd2ab04c2edb2fe71feb6c33d8d36ef870fc30325a0",
+    "ops.py": "d9a4e4e7ac70062c5743f2629d30f1e79c30133afe2c2933a1097ede8726ba15"
+  },
+  "patchSha256": "9b49fb1432eb4b3390114a55d198eddee21625b6ef7f043749ce278a41d16b8d",
+  "note": "The consumed return mode in the failed b9 preparation had a temporary diagnostic patch (delegated.py SHA 68b8fbd79c87fd4a340388a71c91184062d122d509add5d80d3d648d1615bed8). Build the next preparation from the stated pristine source hash, then apply this patch; never patch or reuse the consumed mode."
+}

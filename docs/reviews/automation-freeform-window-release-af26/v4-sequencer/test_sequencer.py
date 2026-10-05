@@ -150,6 +150,11 @@ class FakeBridge:
         self.g['open'] = True
         self.g['generation'] += 1
 
+    def pre_unfence(self, mode):
+        self.events.append(('pre_unfence', mode))
+        if self.g['open'] or self.g['tasks']:
+            raise RuntimeError('pre_unfence_gate_failed')
+
 
 class SequenceTests(unittest.TestCase):
     def setUp(self):
@@ -175,6 +180,8 @@ class SequenceTests(unittest.TestCase):
         self.assertTrue(self.b.g['open'])
         self.assertFalse(self.b.fenced)
         self.assertEqual((self.b.system_cron, self.b.boot), ('before', 'enabled'))
+        self.assertLess(events.index(('pre_unfence', 'switch')),
+                        events.index(('privileged', 'unfence')))
 
     def test_persisted_empty_task_object_allows_preflight_after_close(self):
         self.s.run()
@@ -300,6 +307,30 @@ class SequenceTests(unittest.TestCase):
                              for e in self.b.events), 1)
         self.assertEqual(sum(e[:3] == ('protocol', 'switch', 'start:' + WORKER)
                              for e in self.b.events), 1)
+        # A separate fresh return policy/preparation is required after the
+        # fence has been removed. The return never repeats switch starts.
+        self.b.fail_validate_count = 0
+        self.s.post_unfence_return()
+        self.assertEqual(self.b.live[API]['cfg'], self.b.old[API])
+        self.assertEqual(self.b.live[WORKER]['cfg'], self.b.old[WORKER])
+        self.assertTrue(self.b.g['open'])
+        self.assertFalse(self.b.fenced)
+        self.assertEqual(sum(e[:3] == ('protocol', 'switch', 'start:' + API)
+                             for e in self.b.events), 1)
+
+    def test_post_unfence_return_denies_wrong_source_before_containment(self):
+        self.b.live[API]['cfg'] = copy.deepcopy(self.b.new[API])
+        self.b.g['open'] = False
+        with self.assertRaisesRegex(RuntimeError, 'return_source_config_drift'):
+            self.s.post_unfence_return()
+        self.assertFalse(self.b.fenced)
+
+    def test_post_unfence_return_denies_consumed_return_intent(self):
+        self.b.g['open'] = False
+        (self.b.root / 'return' / ('start-intent-' + API + '.json')).write_text('{}')
+        with self.assertRaisesRegex(RuntimeError, 'return_start_intent_already_exists'):
+            self.s.post_unfence_return()
+        self.assertFalse(self.b.fenced)
 
 
 class StepDiagnosticTests(unittest.TestCase):
@@ -329,6 +360,62 @@ class StepDiagnosticTests(unittest.TestCase):
             self.assertEqual(row['stderrSha256'],
                              hashlib.sha256(b'private-stderr').hexdigest())
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_protocol_request_denial_records_private_stage_and_exit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'switch').mkdir()
+            (root / 'window').mkdir()
+            bridge = Bridge.__new__(Bridge)
+            bridge.root, bridge.switch, bridge.window = root, root / 'switch', root / 'window'
+            import subprocess
+            error = subprocess.CalledProcessError(1, ['delegated'], output='',
+                                                 stderr='private renewal_binding_drift')
+            with patch.object(bridge, 'run', side_effect=error):
+                with self.assertRaisesRegex(RuntimeError,
+                                            'protocol_failed:switch/preflight/request') as caught:
+                    bridge.protocol('switch', 'preflight')
+            self.assertNotIn('private', str(caught.exception))
+            path = root / 'window/protocol-output.private.jsonl'
+            row = json.loads(path.read_text())
+            self.assertEqual((row['phase'], row['exitCode'], row['stderr']),
+                             ('request', 1, 'private renewal_binding_drift'))
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_real_pre_unfence_only_probes_worker_control_under_fence(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'switch').mkdir()
+            (root / 'window').mkdir()
+            bridge = Bridge.__new__(Bridge)
+            bridge.root, bridge.switch, bridge.window = root, root / 'switch', root / 'window'
+            apps = {n: {'pid': i} for i, n in enumerate((API, WORKER, FRONT), 101)}
+            cfg = {n: {'env': {}} for n in apps}
+            cfg[WORKER]['env'] = {'WHATSAPP_WEB_WORKER_CONTROL_HOST': '127.0.0.1',
+                                  'WHATSAPP_WEB_WORKER_CONTROL_PORT': '18087',
+                                  'WHATSAPP_WEB_WORKER_CONTROL_TOKEN': 'synthetic'}
+            for name in (API, WORKER):
+                (root / 'switch' / ('started-' + name + '.json')).write_text(json.dumps({
+                    'pid': apps[name]['pid'], 'identity': {'ticks': '10', 'state': 'S'}}))
+            class Reply:
+                status = 200
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+                def read(self, *args): return b'{"ok":true}'
+            requested = []
+            def urlopen(req, timeout):
+                requested.append(req.full_url)
+                return Reply()
+            with patch.object(bridge, 'privileged', return_value='{}'), \
+                 patch.object(bridge, 'guard', return_value={
+                     'open': False, 'tasks': {}, 'ledgerFault': None}), \
+                 patch.object(bridge, 'apps', return_value=apps), \
+                 patch.object(bridge, 'expected_config', return_value=cfg), \
+                 patch.object(bridge, 'identity', return_value={'ticks': '10', 'state': 'S'}), \
+                 patch.object(bridge, 'app_matches', return_value=True), \
+                 patch('sequencer.request.urlopen', side_effect=urlopen):
+                bridge.pre_unfence('switch')
+            self.assertEqual(requested, ['http://127.0.0.1:18087/health'])
 
 
 class RealGuardChainTests(unittest.TestCase):

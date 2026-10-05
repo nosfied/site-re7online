@@ -1,0 +1,35 @@
+--- a/delegated.py
++++ b/delegated.py
+@@ -80 +80 @@
+-def reconfirm_for_renewal(root, action, driver):
++def reconfirm_for_renewal(root, action, driver, prior_binding):
+@@ -124 +124 @@
+-        op.db_gate_for_start(name, live)
++        op.db_gate_for_start(name, live, binding_proof=prior_binding)
+@@ -206,0 +207 @@
++        prior_binding = {'request': prior}
+@@ -208 +209,3 @@
+-            observed = json.loads(proof.read_text())['observedAt']
++            prior_binding = json.loads(proof.read_text())
++            ops.require(prior_binding.get('request') == prior, 'prior_proof_request_mismatch')
++            observed = prior_binding['observedAt']
+@@ -210,0 +214,2 @@
++            prior_binding = json.loads(consumed.read_text())
++            ops.require(prior_binding.get('request') == prior, 'prior_proof_request_mismatch')
+@@ -214 +219 @@
+-        reconfirm_for_renewal(root, action, driver or DelegatedSystem(root, action))
++        reconfirm_for_renewal(root, action, driver or DelegatedSystem(root, action), prior_binding)
+--- a/ops.py
++++ b/ops.py
+@@ -333 +333 @@
+-    def db_gate_for_start(self, name, live):
++    def db_gate_for_start(self, name, live, *, binding_proof=None):
+@@ -344,3 +344,5 @@
+-            if hasattr(self.d, 'proof'):
+-                proof = self.d.proof()
+-                require(proof['request']['dbOwnerBindingsHash'] ==
++            if binding_proof is not None or hasattr(self.d, 'proof'):
++                proof = binding_proof if binding_proof is not None else self.d.proof()
++                require(isinstance(proof, dict) and isinstance(proof.get('request'), dict),
++                        'db_owner_binding_proof_invalid')
++                require(proof['request'].get('dbOwnerBindingsHash') ==
