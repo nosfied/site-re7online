@@ -1,5 +1,9 @@
 # Runbook Re7
 
+## Continuação do aceite dirigido b9 — atendimento humano
+
+[Registro final do mesmo ciclo](../reviews/automation-freeform-window-release-af26/HYBRID_B9_CONTROLLED_VALIDATION_2026-10-05.md#continuação-do-mesmo-ciclo--atendimento-humano-confirmado): claim humano/protocolo WEB_SESSION e resposta Inbox Meta persistidos/recebidos, responsável/setor/ciclo/janela preservados. PASS/OWNER CONFIRMED para este caso avulso, sem campanha adicional, configuração ou deploy. Retomar validação owner de CRM/CSV com público/conteúdo explicitamente indicado; não extrapolar ao CRA ou reparar históricos.
+
 ## Aceite dirigido b9 — retorno Meta → Web em 05/10
 
 [Prova controlada e limites](../reviews/automation-freeform-window-release-af26/HYBRID_B9_CONTROLLED_VALIDATION_2026-10-05.md): campanha avulsa demo-converta final4366/data_exame → resposta Web na mesma Conversation/runtime em Atendimento Geral/Fila Geral, janela aberta somente por inbound, sem menu nem duplicação CRM. Inbox confirmada pelo owner; claim/protocolo não exercitados. O runtime histórico isolado permaneceu intacto. Não estender este PASS às outras modalidades/transportes, concorrência, CRA ou saneamento. Sem nova janela ou configuração.
