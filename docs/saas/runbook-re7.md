@@ -1,5 +1,9 @@
 # Runbook Re7
 
+## Aceite dirigido b9 — retorno Meta → Web em 05/10
+
+[Prova controlada e limites](../reviews/automation-freeform-window-release-af26/HYBRID_B9_CONTROLLED_VALIDATION_2026-10-05.md): campanha avulsa demo-converta final4366/data_exame → resposta Web na mesma Conversation/runtime em Atendimento Geral/Fila Geral, janela aberta somente por inbound, sem menu nem duplicação CRM. Inbox confirmada pelo owner; claim/protocolo não exercitados. O runtime histórico isolado permaneceu intacto. Não estender este PASS às outras modalidades/transportes, concorrência, CRA ou saneamento. Sem nova janela ou configuração.
+
 ## b9/V4 — implantação técnica concluída em 05/10
 
 [Registro de execução e pendências](../reviews/automation-freeform-window-release-af26/HYBRID_B9_CAPTURE_DEPLOYED_2026-10-05.md): API b9/worker mínimo b9 ativos, frontend af26 preservado. Sequenciador único concluiu sem retorno; renovação explícita da captura passou antes da retirada nft. Guarda aberta geração29, scheduler preservado, cron/crontab/boot inactive-enabled e saved/fallback compatíveis; sessão Inbox/CRM owner PASS. DEPLOYED TECHNICALLY / OWNER VALIDATION PENDING. A preparação 143500 está consumida; não repetir intents/starts. Retorno API879/workeraf26 exige política/provas atuais e mantém DB/auth. Relatórios abaixo preservam os estados anteriores, superados por este registro.
