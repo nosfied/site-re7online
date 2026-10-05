@@ -1,0 +1,28 @@
+{
+  "baseCommit": "183b41224a563c063d99809d08a75ae4cdea23d4",
+  "status": "PREPARED_FOR_INSTALLATION_NOT_DEPLOYED",
+  "functionalArtifactsUnchanged": true,
+  "filesSha256": {
+    "sequencer.py": "145cb7e3c2f2f0fc1baff5799c755e1ea5e6bc63aa2220b95b10392c5cc50460",
+    "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+    "privileged.py": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "prepare_post_unfence_return.py": "322264cc250f2f29041fd7a3e5bf1711b52c35bcb852d932db1934aca3eb4a46",
+    "test_sequencer.py": "cefb61576da573283f51a6161c770d639cc56524c6580ed0c661f7b91b2a0742",
+    "test_composition_pm2.py": "529346b194a3c195e7e508edb1dcbddf7c047753fc322a508e472447ea2c908f",
+    "test_composition_template.py": "d71eb7ca5de69b918448e27009b602b050fac622f23c79eea1b70baa268172a5",
+    "composition-results.sanitized.json": "9de46aac7e11c67aac55911615a5fa0a50140dc2f0cb712d05262eafac860f42",
+    "privileged-observer-output.patch": "36b60240b10cf84b775a9c35bd9c4ca81ff6ce8482f0107f3c7217e9c50e33be"
+  },
+  "composition": {
+    "sequencer.py": "145cb7e3c2f2f0fc1baff5799c755e1ea5e6bc63aa2220b95b10392c5cc50460",
+    "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+    "privileged.py": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "prepare_post_unfence_return.py": "322264cc250f2f29041fd7a3e5bf1711b52c35bcb852d932db1934aca3eb4a46"
+  },
+  "historicalFunctionalEvidenceReused": true,
+  "validation": {
+    "realPm2Checks": 28,
+    "templateInjectionTests": 4,
+    "sequenceControlledTests": 24
+  }
+}

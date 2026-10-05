@@ -175,6 +175,13 @@ class SequenceTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_fresh_return_gates_false_deny_before_privileged_action(self):
+        f=self.b.window / 'execution-gates.private.json'
+        f.write_text(json.dumps({k:False for k in json.loads(f.read_text())}))
+        with self.assertRaisesRegex(RuntimeError,'execution_gates_incomplete'):
+            self.s.post_unfence_return()
+        self.assertFalse(any(e[0]=='privileged' for e in self.b.events))
+
     def test_full_order_and_frontend_unchanged(self):
         front = copy.deepcopy(self.b.live[FRONT])
         self.s.run()

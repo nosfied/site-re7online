@@ -557,6 +557,10 @@ class Sequencer:
                 require(Path(name).name == name and
                         hashlib.sha256((self.window / name).read_bytes()).hexdigest() == expected,
                         'return_sequencer_source_hash_drift')
+            gates = json.loads((self.window / 'execution-gates.private.json').read_text())
+            require(all(gates.get(k) is True for k in (
+                'ownerAuthorized', 'preflightReviewed', 'artifactsVerified',
+                'restoreVerified', 'discrepanciesResolved')), 'execution_gates_incomplete')
             require(not (self.root / mode / ('start-intent-' + API + '.json')).exists() and
                     not (self.root / mode / ('start-intent-' + WORKER + '.json')).exists(),
                     'return_start_intent_already_exists')

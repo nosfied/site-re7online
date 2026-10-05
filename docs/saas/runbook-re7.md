@@ -1,5 +1,9 @@
 # Runbook Re7
 
+## b9/V4 — composição final preparada em 05/10
+
+[Relatório único e comandos executáveis](../reviews/automation-freeform-window-release-af26/HYBRID_B9_CAPTURE_COMPOSITION_PREPARED_2026-10-05.md). Diretório novo `incident-6683-v4-hybrid-b9-capture-20261005T143500Z`: três modos/25 arquivos, logger privado e recaptura antes de unfence, helper e nove comandos inalterados. Backup fresco/restore isolado PASS, gates falsos, política não instalada. Contingência fresca agora cria seus próprios gates falsos e nega execução antes de qualquer ação root enquanto não habilitados após inspect. Comandos incluem restauração explícita do crontab de deploy antes de gerar essa contingência. Reconfirmar bindings/identidades e decisão antes de instalar somente a política; não reutilizar a janela consumida. Sem nova contenção/troca; produção continua API879/workeraf26/frontendaf26.
+
 ## Diagnóstico e captura V4 — revisão local de 05/10
 
 [Delta revisável e reprodução](../reviews/automation-freeform-window-release-af26/CAPTURE_RENEWAL_LOCAL_2026-10-05.md): captura privada completa de ações root e renovação limitada antes de unfence, no switch/return/return-partial. Duas leituras consistentes e mesma identidade/árvore, sem comparar R/S; arquivar cada captura anterior. Helper revalida antes de retirar nft; somente recusa reconhecida em sockets/FDs antes da exclusão admite recaptura limitada, nunca repetir start ou erro parcial desconhecido. Atualizar hash do sequenciador somente em preparação nova após revisão; helper e nove comandos sudo inalterados. LOCAL VALIDATED / NOT DEPLOYED, não executar preparação consumida.

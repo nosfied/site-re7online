@@ -212,6 +212,11 @@ def main(original, destination):
             'source': 'fresh_absence_check_of_before_unfence_capture'})
     (window / 'proxy-observation.private.json').write_bytes(observation)
     (window / 'proxy-observation.private.json').chmod(0o600)
+    # Delegated execution requires this file. Never inherit authorization from
+    # a consumed attempt; the owner/executor enables it only after fresh inspect.
+    write_json(window / 'execution-gates.private.json', {k: False for k in (
+        'ownerAuthorized', 'preflightReviewed', 'artifactsVerified',
+        'restoreVerified', 'discrepanciesResolved')})
     write_json(window / 'initial.private.json', {
         'guard': {'generation': guard['generation'], 'open': True,
                   'tasks': 0, 'ledgerFault': False},
