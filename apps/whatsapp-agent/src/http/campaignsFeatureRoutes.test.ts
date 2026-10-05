@@ -19550,3 +19550,53 @@ test("db-only flow writes preserve authorization, isolation and atomicity", asyn
     assert.equal(await fs.readFile(file, "utf8"), originalFile);
   });
 });
+
+test("reactive transport policy routes Web-origin claim protocol and Inbox reply by intent", async t => {
+  const user = await createUser({ clientId: businessClientId, role: "ADMIN", suffix: "reactive-policy" });
+  await assignUserDepartments({ clientId: businessClientId, userId: user.id, departmentIds: [businessReturnDepartmentId] });
+  await configureBusinessTemplateMetaTransport({ webSessionEnabled: true, suffix: `${safeTemplatePrefix}-reactive` });
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      calls++;
+      return new Response(JSON.stringify({ messages: [{ id: `synthetic-reactive-${calls}` }] }), { status: 200 });
+    }
+    if (url.includes("worker.invalid")) throw new Error("explicit Meta or disconnected Web must not submit Web");
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const account = await prisma.channelAccount.create({ data: {
+    clientId: businessClientId, channel: "whatsapp", provider: "web_session", channelAccountId: `${prefix}-reactive`,
+    enabled: true, runtimeEnabled: true, outboundEnabled: true, status: "disconnected",
+    metadata: { webSession: { desiredState: "CONNECTED", observedState: "DISCONNECTED" } },
+  } });
+  for (const [index, primary] of ["meta", null].entries()) {
+    const config = { whatsappPrimaryTransport: primary,
+      whatsappTransports: { meta: { enabledForRouting: true }, webSession: { enabledForRouting: true } },
+      webSessionAuthorization: { status: "OWNED", authorizedNumberCanonical: "5541991177801" },
+      protocolNotification: { enabled: true, trigger: "first_human_handoff", includeProtocol: true } };
+    await prisma.tenantOperationalConfig.update({ where: { clientId: businessClientId }, data: { config } });
+    const waId = `558495195780${index}`;
+    const inbound = new Date(); const expires = new Date(inbound.getTime()+86400000);
+    await prisma.conversation.create({ data: { clientId: businessClientId, waId, waIdCanonical: waId,
+      channel: "whatsapp", provider: "web_session", channelAccountId: account.channelAccountId,
+      departmentId: businessReturnDepartmentId, lastInboundAt: inbound, windowIsOpen: true, windowExpiresAt: expires } });
+    await prisma.conversationRuntimeState.create({ data: { clientId: businessClientId, waId, waIdCanonical: waId,
+      channel: "whatsapp", provider: "web_session", channelAccountId: account.channelAccountId,
+      departmentId: businessReturnDepartmentId, queueId: businessReturnQueueId, mode: "HUMAN", status: "WAITING",
+      firstSeenAt: inbound, answers: {}, lastInboundAt: inbound, windowIsOpen: true, windowExpiresAt: expires } });
+    const claim = await request<{ protocol: string }>("POST", `/app/conversation/${waId}/claim`, user, {});
+    assert.equal(claim.status,200,JSON.stringify(claim.body)); assert(claim.body.protocol);
+    const protocol = await prisma.outboundMessage.findFirstOrThrow({ where: { clientId: businessClientId, waId,
+      rawPayload: { path: ["source"], equals: "protocol_notice" } } });
+    assert.equal(protocol.status,"SENT"); assert.match(protocol.metaMessageId ?? "", /^synthetic-reactive-/);
+    const reply = await request<{ message: { status: string } }>("POST", `/app/conversation/${waId}/send`, user, { text: "Synthetic human reply" });
+    assert.equal(reply.status,200,JSON.stringify(reply.body)); assert.equal(reply.body.message.status,"SENT");
+    assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId, provider: "web_session" } }),0);
+    assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId, status: "SENT" } }),2);
+    assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId } }),1);
+  }
+  assert.equal(calls,4);
+});

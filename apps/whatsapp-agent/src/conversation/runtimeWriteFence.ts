@@ -32,12 +32,13 @@ export async function recordOwnRuntimeOutboundActivity(params: {
   sentAt: Date;
   messageId: string;
   channelAccountId: string;
+  preserveTransport?: boolean;
 }): Promise<boolean> {
   const token = params.expected;
   if (invalidatedTokens.has(token) || token.clientId !== params.clientId || token.waId !== params.waId) return false;
   const rows = await params.prisma.conversationRuntimeState.updateManyAndReturn({
     where: { ...tokenWhere(token), OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lte: params.sentAt } }] },
-    data: { provider: "web_session", channelAccountId: params.channelAccountId,
+    data: { ...(params.preserveTransport ? {} : { provider: "web_session", channelAccountId: params.channelAccountId }),
       lastOutboundAt: params.sentAt, lastOutboundMessageId: params.messageId },
     select: runtimeWriteTokenSelect,
   });

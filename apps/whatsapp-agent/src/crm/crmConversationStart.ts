@@ -10,10 +10,12 @@ import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalEx
 import { getFeatures } from "../features/clientFeatures.js";
 import {
   isWebSessionTextOutboundReady,
+  resolveWebSessionTextAvailability,
   resolveWebSessionTextRecipient,
 } from "../web-session/webSessionOutboundService.js";
 import {
   resolveOperationalMetaWhatsappIdentity,
+  resolveHybridWhatsappIdentityStatus,
   resolveWhatsappPrimaryTransport,
   type WhatsappPrimaryTransport,
 } from "../web-session/hybridIdentity.js";
@@ -54,7 +56,7 @@ export type EffectiveWhatsappOutboundTransport =
   | {
       status: "ready";
       provider: WhatsappPrimaryTransport;
-      source: "explicit" | "configured_web_only" | "configured_cloud_only" | "hybrid_auto";
+      source: "explicit" | "configured_web_only" | "configured_cloud_only" | "hybrid_auto" | "hybrid_reactive_contingency";
       configuredMode: WhatsappConfiguredTenantMode;
     }
   | { status: "unavailable"; source: "explicit_unavailable" | "none_operational" | "configured_unavailable"; configuredMode: WhatsappConfiguredTenantMode };
@@ -212,11 +214,14 @@ export async function resolveConfiguredWhatsappTenantMode(params: {
   };
 }
 
+export type ReactiveWhatsappIntent = "INTERACTIVE_REPLY" | "PROTOCOL_NOTICE" | "REACTIVE_AUTOMATION";
+
 export async function resolveEffectiveWhatsappOutboundTransport(params: {
   prisma: PrismaClient;
   clientId: string;
   clientKey: string;
   clientStatus: string | null | undefined;
+  intent?: ReactiveWhatsappIntent;
 }): Promise<EffectiveWhatsappOutboundTransport> {
   if (params.clientStatus !== "ACTIVE") {
     return { status: "unavailable", source: "none_operational", configuredMode: "NONE" };
@@ -225,12 +230,12 @@ export async function resolveEffectiveWhatsappOutboundTransport(params: {
     prisma: params.prisma,
     clientId: params.clientId,
   });
-  const [configuredMode, webReady, metaIdentity] = await Promise.all([
+  const [configuredMode, webAvailability, metaIdentity] = await Promise.all([
     resolveConfiguredWhatsappTenantMode({
       prisma: params.prisma,
       clientId: params.clientId,
     }),
-    isWebSessionTextOutboundReady({
+    resolveWebSessionTextAvailability({
       prisma: params.prisma,
       clientId: params.clientId,
       clientKey: params.clientKey,
@@ -240,6 +245,7 @@ export async function resolveEffectiveWhatsappOutboundTransport(params: {
       clientId: params.clientId,
     }),
   ]);
+  const webReady = webAvailability === "ready";
   const metaReady = Boolean(metaIdentity.canonicalNumber);
 
   if (explicitPrimary) {
@@ -253,9 +259,14 @@ export async function resolveEffectiveWhatsappOutboundTransport(params: {
   }
 
   if (configuredMode.mode === "HYBRID") {
-    return webReady
-      ? { status: "ready", provider: "web_session", source: "hybrid_auto", configuredMode: configuredMode.mode }
-      : { status: "unavailable", source: "configured_unavailable", configuredMode: configuredMode.mode };
+    if (webReady) return { status: "ready", provider: "web_session", source: "hybrid_auto", configuredMode: configuredMode.mode };
+    if (params.intent && webAvailability === "disconnected" && metaReady) {
+      const identity = await resolveHybridWhatsappIdentityStatus(params);
+      if (!identity.conflict && identity.web.canonicalNumber === identity.meta.canonicalNumber && !identity.numberReplacement) {
+        return { status: "ready", provider: "meta", source: "hybrid_reactive_contingency", configuredMode: configuredMode.mode };
+      }
+    }
+    return { status: "unavailable", source: "configured_unavailable", configuredMode: configuredMode.mode };
   }
   if (configuredMode.mode === "WEB_ONLY") {
     return webReady

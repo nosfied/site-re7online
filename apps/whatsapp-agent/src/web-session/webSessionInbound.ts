@@ -1,3 +1,4 @@
+import { createReactiveBotTextOutboundMessage } from "../whatsapp/reactiveBotOutbound.js";
 import { captureRuntimeWriteToken, updateRuntimeIfUnchanged, type RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
 import crypto from "node:crypto";
 import { HandoffStatus, MessageType, Prisma, type PrismaClient } from "@prisma/client";
@@ -62,7 +63,7 @@ import {
   resolveWhatsappMediaPolicy,
 } from "../config/tenantOperationalConfig.js";
 import { getDepartmentAvailability } from "../departments/businessHours.js";
-import { createWebSessionTextOutboundMessage, normalizeBotMenuOptionMarkdown } from "./webSessionOutboundService.js";
+import { normalizeBotMenuOptionMarkdown } from "./webSessionOutboundService.js";
 import {
   claimHybridInboundLogicalMessage,
   markHybridInboundLogicalMessageCompleted,
@@ -1505,7 +1506,7 @@ async function sendWebSessionBotText(params: {
   const inferredManagementKind = params.requestId.includes(":survey") ? "satisfaction" : null;
   const inboxInteractionKind = params.inboxInteractionKind ?? inferredManagementKind;
   const inboxVisibility = params.inboxVisibility ?? (inboxInteractionKind ? "management_only" : undefined);
-  const outboundResult = await createWebSessionTextOutboundMessage({
+  const outboundResult = await createReactiveBotTextOutboundMessage({
     prisma: params.prisma,
     waId: params.waId,
     waIdCanonical: params.waIdCanonical,

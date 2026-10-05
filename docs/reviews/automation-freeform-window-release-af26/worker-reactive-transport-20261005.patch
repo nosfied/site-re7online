@@ -1,0 +1,567 @@
+diff --git a/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts b/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts
+--- a/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts
++++ b/apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts
+@@ -118,15 +118,16 @@
+   sentAt: Date;
+   messageId: string;
+   channelAccountId: string;
++  preserveTransport?: boolean;
+ }): Promise<boolean> {
+   const token = params.expected;
+   if (invalidatedTokens.has(token) || token.clientId !== params.clientId || token.waId !== params.waId) return false;
+   const rows = await params.prisma.$queryRaw<RuntimeWriteToken[]>`
+     UPDATE "ConversationRuntimeState"
+-    SET "provider" = 'web_session', "channelAccountId" = ${params.channelAccountId},
++    SET ${params.preserveTransport ? Prisma.empty : Prisma.sql`"provider" = 'web_session', "channelAccountId" = ${params.channelAccountId},`}
+         "lastOutboundAt" = ${dateParam(params.sentAt)}, "lastOutboundMessageId" = ${params.messageId}, "updatedAt" = ${dateParam(new Date())}
+     WHERE ${tokenPredicate(token)}
+-      AND ("lastOutboundAt" IS NULL OR "lastOutboundAt" <= ${params.sentAt})
++      AND ("lastOutboundAt" IS NULL OR "lastOutboundAt" <= ${dateParam(params.sentAt)})
+     RETURNING ${returnRuntimeWriteToken}
+   `;
+   if (rows.length !== 1) { invalidateRuntimeWriteToken(token); return false; }
+diff --git a/apps/whatsapp-agent/src/crm/crmConversationStart.ts b/apps/whatsapp-agent/src/crm/crmConversationStart.ts
+--- a/apps/whatsapp-agent/src/crm/crmConversationStart.ts
++++ b/apps/whatsapp-agent/src/crm/crmConversationStart.ts
+@@ -10,10 +10,12 @@
+ import { getFeatures } from "../features/clientFeatures.js";
+ import {
+   isWebSessionTextOutboundReady,
++  resolveWebSessionTextAvailability,
+   resolveWebSessionTextRecipient,
+ } from "../web-session/webSessionOutboundService.js";
+ import {
+   resolveOperationalMetaWhatsappIdentity,
++  resolveHybridWhatsappIdentityStatus,
+   resolveWhatsappPrimaryTransport,
+   type WhatsappPrimaryTransport,
+ } from "../web-session/hybridIdentity.js";
+@@ -54,7 +56,7 @@
+   | {
+       status: "ready";
+       provider: WhatsappPrimaryTransport;
+-      source: "explicit" | "configured_web_only" | "configured_cloud_only" | "hybrid_auto";
++      source: "explicit" | "configured_web_only" | "configured_cloud_only" | "hybrid_auto" | "hybrid_reactive_contingency";
+       configuredMode: WhatsappConfiguredTenantMode;
+     }
+   | { status: "unavailable"; source: "explicit_unavailable" | "none_operational" | "configured_unavailable"; configuredMode: WhatsappConfiguredTenantMode };
+@@ -212,11 +214,14 @@
+   };
+ }
+
++export type ReactiveWhatsappIntent = "INTERACTIVE_REPLY" | "PROTOCOL_NOTICE" | "REACTIVE_AUTOMATION";
++
+ export async function resolveEffectiveWhatsappOutboundTransport(params: {
+   prisma: PrismaClient;
+   clientId: string;
+   clientKey: string;
+   clientStatus: string | null | undefined;
++  intent?: ReactiveWhatsappIntent;
+ }): Promise<EffectiveWhatsappOutboundTransport> {
+   if (params.clientStatus !== "ACTIVE") {
+     return { status: "unavailable", source: "none_operational", configuredMode: "NONE" };
+@@ -225,12 +230,12 @@
+     prisma: params.prisma,
+     clientId: params.clientId,
+   });
+-  const [configuredMode, webReady, metaIdentity] = await Promise.all([
++  const [configuredMode, webAvailability, metaIdentity] = await Promise.all([
+     resolveConfiguredWhatsappTenantMode({
+       prisma: params.prisma,
+       clientId: params.clientId,
+     }),
+-    isWebSessionTextOutboundReady({
++    resolveWebSessionTextAvailability({
+       prisma: params.prisma,
+       clientId: params.clientId,
+       clientKey: params.clientKey,
+@@ -240,6 +245,7 @@
+       clientId: params.clientId,
+     }),
+   ]);
++  const webReady = webAvailability === "ready";
+   const metaReady = Boolean(metaIdentity.canonicalNumber);
+
+   if (explicitPrimary) {
+@@ -253,9 +259,14 @@
+   }
+
+   if (configuredMode.mode === "HYBRID") {
+-    return webReady
+-      ? { status: "ready", provider: "web_session", source: "hybrid_auto", configuredMode: configuredMode.mode }
+-      : { status: "unavailable", source: "configured_unavailable", configuredMode: configuredMode.mode };
++    if (webReady) return { status: "ready", provider: "web_session", source: "hybrid_auto", configuredMode: configuredMode.mode };
++    if (params.intent && webAvailability === "disconnected" && metaReady) {
++      const identity = await resolveHybridWhatsappIdentityStatus(params);
++      if (!identity.conflict && identity.web.canonicalNumber === identity.meta.canonicalNumber && !identity.numberReplacement) {
++        return { status: "ready", provider: "meta", source: "hybrid_reactive_contingency", configuredMode: configuredMode.mode };
++      }
++    }
++    return { status: "unavailable", source: "configured_unavailable", configuredMode: configuredMode.mode };
+   }
+   if (configuredMode.mode === "WEB_ONLY") {
+     return webReady
+diff --git a/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts b/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts
+--- a/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts
++++ b/apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts
+@@ -413,14 +413,30 @@
+   }
+ }
+
++export async function resolveWebSessionTextAvailability(params: {
++  prisma: PrismaClient;
++  clientId: string;
++  clientKey: string;
++  channelAccountId?: string | null;
++  requireExactAccount?: boolean;
++}) {
++  const account = await findWebSessionAccount(params);
++  if (params.requireExactAccount && account?.channelAccountId !== params.channelAccountId) return "unknown" as const;
++  if (!account || !account.enabled || !account.outboundEnabled || !account.runtimeEnabled ||
++    account.client.status !== "ACTIVE" || !getFeatures(account.client).whatsappWebSession) return "policy_blocked" as const;
++  if (isWebSessionAccountConnected(account)) return "ready" as const;
++  const metadata = account.metadata as { webSession?: { observedState?: unknown } } | null;
++  return account.status === "disconnected" && metadata?.webSession?.observedState === "DISCONNECTED"
++    ? "disconnected" as const : "unknown" as const;
++}
++
+ export async function isWebSessionTextOutboundReady(params: {
+   prisma: PrismaClient;
+   clientId: string;
+   clientKey: string;
+   channelAccountId?: string | null;
+ }) {
+-  const account = await findWebSessionAccount(params);
+-  return Boolean(account && isWebSessionAccountConnected(account));
++  return await resolveWebSessionTextAvailability(params) === "ready";
+ }
+
+ export async function resolveWebSessionChannelSwitchWarning(params: {
+@@ -503,6 +519,7 @@
+ }
+
+ export async function createWebSessionTextOutboundMessage(params: {
++  beforeSubmit?: (prepared: { channelAccountId: string }) => Promise<string | null>;
+   prisma: PrismaClient;
+   waId: string;
+   waIdCanonical?: string | null;
+@@ -601,6 +618,8 @@
+     return { ok: false, statusCode: 400, error: "message_too_long" };
+   }
+
++  const blocked = await params.beforeSubmit?.({ channelAccountId: account.channelAccountId });
++  if (blocked) return { ok: false, statusCode: 409, error: blocked };
+   const sendResult = await callWorkerSendText({
+     account,
+     tenantKey: params.clientKey,
+@@ -785,6 +804,7 @@
+ }
+
+ export async function createWebSessionMediaOutboundMessage(params: {
++  beforeSubmit?: (prepared: { channelAccountId: string }) => Promise<string | null>;
+   prisma: PrismaClient;
+   waId: string;
+   waIdCanonical?: string | null;
+@@ -940,6 +960,8 @@
+     caption: params.caption ?? null,
+     kind: mediaKind,
+   });
++  const blocked = await params.beforeSubmit?.({ channelAccountId: account.channelAccountId });
++  if (blocked) return { ok: false, statusCode: 409, error: blocked };
+   const sendResult = await callWorkerSendMedia({
+     account,
+     tenantKey: params.clientKey,
+diff --git a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts b/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
+--- a/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
++++ b/apps/whatsapp-agent/src/web-session/webSessionInbound.ts
+@@ -1,3 +1,4 @@
++import { createReactiveBotTextOutboundMessage } from "../whatsapp/reactiveBotOutbound.js";
+ import { captureRuntimeWriteToken, updateRuntimeIfUnchanged, type RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
+ import crypto from "node:crypto";
+ import { HandoffStatus, MessageType, Prisma, type PrismaClient } from "@prisma/client";
+@@ -62,7 +63,7 @@
+   resolveWhatsappMediaPolicy,
+ } from "../config/tenantOperationalConfig.js";
+ import { getDepartmentAvailability } from "../departments/businessHours.js";
+-import { createWebSessionTextOutboundMessage, normalizeBotMenuOptionMarkdown } from "./webSessionOutboundService.js";
++import { normalizeBotMenuOptionMarkdown } from "./webSessionOutboundService.js";
+ import {
+   claimHybridInboundLogicalMessage,
+   markHybridInboundLogicalMessageCompleted,
+@@ -1505,7 +1506,7 @@
+   const inferredManagementKind = params.requestId.includes(":survey") ? "satisfaction" : null;
+   const inboxInteractionKind = params.inboxInteractionKind ?? inferredManagementKind;
+   const inboxVisibility = params.inboxVisibility ?? (inboxInteractionKind ? "management_only" : undefined);
+-  const outboundResult = await createWebSessionTextOutboundMessage({
++  const outboundResult = await createReactiveBotTextOutboundMessage({
+     prisma: params.prisma,
+     waId: params.waId,
+     waIdCanonical: params.waIdCanonical,
+diff --git a/apps/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.ts b/apps/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.ts
+--- /dev/null
++++ b/apps/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.ts
+@@ -0,0 +1,49 @@
++import { resolveWebSessionTextAvailability } from "../web-session/webSessionOutboundService.js";
++import { resolveTenantOutboundCredentials } from "./tenantCredentials.js";
++import type { PrismaClient } from "@prisma/client";
++import { resolveEffectiveWhatsappOutboundTransport, type ReactiveWhatsappIntent } from "../crm/crmConversationStart.js";
++import { runtimeWriteTokenSelect, type RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
++
++export type ReactiveSubmission = {
++  prisma: PrismaClient; clientId: string; clientKey: string; waId: string;
++  intent: ReactiveWhatsappIntent; provider: "meta" | "web_session";
++  runtimeWriteToken?: RuntimeWriteToken;
++  expectedWebAccountId?: string;
++  expectedMetaCredentials?: { phoneNumberId: string; accessToken: string };
++};
++
++// Recheck after credentials/signatures/media preparation, immediately before I/O.
++// This is an observation, not a lock across the provider call. A changed decision
++// denies this attempt; it never invokes a second sender.
++export async function revalidateReactiveSubmission(params: ReactiveSubmission): Promise<string | null> {
++  const client = await params.prisma.client.findFirst({
++    where: { id: params.clientId, clientKey: params.clientKey, status: "ACTIVE" },
++    select: { status: true },
++  });
++  if (!client) return "reactive_client_unavailable";
++  const transport = await resolveEffectiveWhatsappOutboundTransport({ ...params, clientStatus: client.status });
++  if (transport.status !== "ready" || transport.provider !== params.provider) return "reactive_transport_changed";
++  if (params.provider === "web_session" && params.expectedWebAccountId &&
++    await resolveWebSessionTextAvailability({ ...params, channelAccountId: params.expectedWebAccountId, requireExactAccount: true }) !== "ready") return "reactive_account_changed";
++  if (params.provider === "meta" && params.expectedMetaCredentials) {
++    const current = await resolveTenantOutboundCredentials(params);
++    if (!current || current.phoneNumberId !== params.expectedMetaCredentials.phoneNumberId ||
++      current.accessToken !== params.expectedMetaCredentials.accessToken) return "reactive_account_changed";
++  }
++  const runtime = await params.prisma.conversationRuntimeState.findUnique({
++    where: { clientId_waId: { clientId: params.clientId, waId: params.waId } },
++    select: { ...runtimeWriteTokenSelect, windowIsOpen: true, windowExpiresAt: true },
++  });
++  const now = Date.now();
++  if (!runtime || runtime.channel !== "whatsapp" || !runtime.windowIsOpen ||
++    !runtime.lastInboundAt || runtime.lastInboundAt.getTime() > now ||
++    !runtime.windowExpiresAt || runtime.windowExpiresAt.getTime() <= now ||
++    runtime.lastInboundAt.getTime() + 24 * 60 * 60 * 1000 <= now) return "window_closed";
++  const expected = params.runtimeWriteToken;
++  if (expected && Object.keys(runtimeWriteTokenSelect).some(key => {
++    const a = runtime[key as keyof RuntimeWriteToken];
++    const b = expected[key as keyof RuntimeWriteToken];
++    return JSON.stringify(a) !== JSON.stringify(b);
++  })) return "late_reply_dropped";
++  return null;
++}
+diff --git a/apps/whatsapp-agent/src/whatsapp/reactiveBotOutbound.ts b/apps/whatsapp-agent/src/whatsapp/reactiveBotOutbound.ts
+--- /dev/null
++++ b/apps/whatsapp-agent/src/whatsapp/reactiveBotOutbound.ts
+@@ -0,0 +1,70 @@
++import { resolveEffectiveWhatsappOutboundTransport } from "../crm/crmConversationStart.js";
++import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOutboundService.js";
++import { revalidateReactiveSubmission } from "./reactiveOutboundPolicy.js";
++import { resolveTenantOutboundCredentials } from "./tenantCredentials.js";
++import { sendTextMessage } from "./whatsapp.client.js";
++import { persistEvent, persistOutboundMessage } from "../db/persist.js";
++import { checkUsageGate } from "../usage/usageGate.js";
++import { invalidateRuntimeWriteToken, recordOwnRuntimeOutboundActivity } from "../conversation/runtimeWriteFence.js";
++import { buildMetaUsageEventPayload, recordMetaUsageLedgerEvent } from "../billing/metaUsageLedger.js";
++
++type Params = Omit<Parameters<typeof createWebSessionTextOutboundMessage>[0], "outboundSource" | "actorUserId" | "skipAgentSignature"> & {
++  outboundSource: "bot"; actorUserId?: null; skipAgentSignature: true;
++};
++
++// One selected sender, one submission. Errors never select an alternative.
++export async function createReactiveBotTextOutboundMessage(params: Params) {
++  const client = await params.prisma.client.findFirst({
++    where: { id: params.clientId, clientKey: params.clientKey }, select: { status: true },
++  });
++  const transport = await resolveEffectiveWhatsappOutboundTransport({ ...params, clientStatus: client?.status, intent: "REACTIVE_AUTOMATION" });
++  if (transport.status !== "ready") return { ok: false as const, statusCode: 409, error: "whatsapp_transport_unavailable" };
++  const revalidate = (prepared: { channelAccountId: string }) => revalidateReactiveSubmission({ ...params, provider: transport.provider,
++    expectedWebAccountId: prepared.channelAccountId, intent: "REACTIVE_AUTOMATION" });
++  if (transport.provider === "web_session") return createWebSessionTextOutboundMessage({
++    ...params, source: { channel: "whatsapp", provider: "web_session", channelAccountId: null }, beforeSubmit: revalidate,
++  });
++  const credentials = await resolveTenantOutboundCredentials(params);
++  if (!credentials) return { ok: false as const, statusCode: 503, error: "tenant_outbound_credentials_missing" };
++  const account = await params.prisma.waPhoneNumber.findFirst({
++    where: { clientId: params.clientId, phoneNumberId: credentials.phoneNumberId }, select: { id: true },
++  });
++  const config = await params.prisma.tenantMetaConfig.findUnique({ where: { clientId: params.clientId }, select: { phoneNumberId: true } });
++  if (!account && config?.phoneNumberId !== credentials.phoneNumberId) return { ok: false as const, statusCode: 409, error: "meta_account_unproven" };
++  const usage = await checkUsageGate({ ...params, messageType: "text" });
++  if (!usage.allowed) return { ok: false as const, statusCode: 429, error: "usage_limit_reached" };
++  const blocked = await revalidateReactiveSubmission({ ...params, provider: "meta", expectedMetaCredentials: credentials, intent: "REACTIVE_AUTOMATION" });
++  if (blocked) return { ok: false as const, statusCode: 409, error: blocked };
++  const result = await sendTextMessage(params.waId, params.text, credentials);
++  const status = result.ok ? "SENT" as const : "FAILED" as const;
++  const messageId = `reactive.bot.${params.requestId}`;
++  const createdAt = new Date();
++  const usageInput = { outboundMessageId: messageId, source: "bot" as const, messageKind: "free_text" as const,
++    templateCategory: "service", status, windowOpenAtSend: true, waId: params.waId, sentAt: createdAt.toISOString() };
++  const metaUsage = buildMetaUsageEventPayload(usageInput);
++  await persistOutboundMessage({ ...params, phoneNumberId: credentials.phoneNumberId, provider: "meta", channel: "whatsapp",
++    channelAccountId: null, messageId, type: "TEXT", status, bodyText: params.text, metaMessageId: result.messageId ?? null,
++    errorBody: result.errorBody ?? null, rawPayload: { source: "bot", actor: { source: "bot", userId: null }, metaUsage,
++      ...(params.inboxVisibility ? { inboxVisibility: params.inboxVisibility, inboxInteractionKind: params.inboxInteractionKind ?? "bot" } : {}),
++      ...(params.serviceCycle ? { serviceCycle: params.serviceCycle } : {}) } });
++  await recordMetaUsageLedgerEvent({ ...params, messageId,
++    eventName: result.ok ? "meta.usage.estimated" : "meta.usage.updated", input: usageInput });
++  await persistEvent({ ...params, messageId, eventName: result.ok ? "outbound.text.sent" : "outbound.text.failed",
++    payloadJson: { provider: "meta", source: "bot", status, errorBody: result.errorBody ?? null } });
++  if (result.ok) {
++    const identity = { clientId: params.clientId, waId: params.waId, channel: "whatsapp",
++      OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lte: createdAt } }] };
++    await params.prisma.conversation.updateMany({ where: identity, data: { lastOutboundAt: createdAt } });
++    const token = params.runtimeWriteToken;
++    try {
++      if (!token || !await recordOwnRuntimeOutboundActivity({ ...params, expected: token, sentAt: createdAt,
++        messageId, channelAccountId: "", preserveTransport: true })) {
++        await params.prisma.conversationRuntimeState.updateMany({ where: identity,
++          data: { lastOutboundAt: createdAt, lastOutboundMessageId: messageId } });
++      }
++    } catch (error) { if (token) invalidateRuntimeWriteToken(token); throw error; }
++  }
++  const row = await params.prisma.outboundMessage.findUnique({ where: { clientId_messageId: { clientId: params.clientId, messageId } }, select: { id: true } });
++  return { ok: true as const, status, messageId, internalMessageId: row?.id ?? null, metaMessageId: result.messageId ?? null,
++    createdAt: createdAt.toISOString(), bodyText: params.text, agentSignatureApplied: false, agentSignatureFormat: null };
++}
+diff --git a/apps/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.test.ts b/apps/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.test.ts
+--- /dev/null
++++ b/apps/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.test.ts
+@@ -0,0 +1,237 @@
++import test from "node:test";
++import assert from "node:assert/strict";
++import crypto from "node:crypto";
++import { getPrisma } from "../db.js";
++import { resolveEffectiveWhatsappOutboundTransport, resolveWhatsappTemplateOutboundTransport } from "../crm/crmConversationStart.js";
++import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOutboundService.js";
++import { revalidateReactiveSubmission } from "./reactiveOutboundPolicy.js";
++import { ingestWebSessionInboundMessage } from "../web-session/webSessionInbound.js";
++import { createReactiveBotTextOutboundMessage } from "./reactiveBotOutbound.js";
++import { captureRuntimeWriteToken, recordOwnRuntimeOutboundActivity, updateRuntimeIfUnchanged } from "../conversation/runtimeWriteFence.js";
++
++const prisma = getPrisma();
++const ids: string[] = [];
++const originalFetch = globalThis.fetch;
++const submissions: string[] = [];
++let beforeResponse: (() => Promise<void>) | undefined;
++let ambiguous = false;
++test.before(() => {
++  assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/[^@]+@127\.0\.0\.1:55432\/re7_transport_contingency_/);
++  globalThis.fetch = (async (url: unknown) => {
++    submissions.push(String(url));
++    await beforeResponse?.();
++    if (ambiguous) throw new DOMException("synthetic timeout after submission", "AbortError");
++    return new Response(JSON.stringify(String(url).includes("worker.invalid")
++      ? { ok: true, externalMessageId: crypto.randomUUID() }
++      : { messages: [{ id: crypto.randomUUID() }] }), { status: 200 });
++  }) as typeof fetch;
++});
++test.after(async () => {
++  globalThis.fetch = originalFetch;
++  const where = { clientId: { in: ids } };
++  await prisma.event.deleteMany({ where });
++  await prisma.outboundMessage.deleteMany({ where });
++  await prisma.inboundMessage.deleteMany({ where });
++  await prisma.contactConsent.deleteMany({ where });
++  await prisma.chatbotFlow.deleteMany({ where });
++  await prisma.contact.deleteMany({ where });
++  await prisma.lead.deleteMany({ where: { tenantId: { in: ids } } });
++  await prisma.conversationRuntimeState.deleteMany({ where });
++  await prisma.conversation.deleteMany({ where });
++  await prisma.waPhoneNumber.deleteMany({ where });
++  await prisma.channelAccount.deleteMany({ where });
++  await prisma.tenantMetaConfig.deleteMany({ where });
++  await prisma.tenantOperationalConfig.deleteMany({ where });
++  await prisma.client.deleteMany({ where: { id: { in: ids } } });
++  await prisma.$disconnect();
++});
++async function fixture() {
++  beforeResponse = undefined; ambiguous = false; submissions.length = 0;
++  const client = await prisma.client.create({ data: { clientKey: `reactive-${crypto.randomUUID()}`, name: "Synthetic", status: "ACTIVE", features: { whatsappWebSession: true, chatbot: true } } });
++  ids.push(client.id);
++  const phone = `synthetic-${crypto.randomUUID()}`;
++  await prisma.tenantMetaConfig.create({ data: { clientId: client.id, phoneNumberId: phone, wabaId: "synthetic-waba", businessToken: "synthetic-token", rawPayload: { publicWhatsappIdentity: { canonicalNumber: "5581999000000" } } } });
++  await prisma.waPhoneNumber.create({ data: { clientId: client.id, phoneNumberId: phone, display: "5581999000000" } });
++  await prisma.tenantOperationalConfig.create({ data: { clientId: client.id, config: { webSessionAuthorization: { status: "OWNED", authorizedNumberCanonical: "5581999000000" } } } });
++  const account = await prisma.channelAccount.create({ data: { clientId: client.id, channel: "whatsapp", provider: "web_session", channelAccountId: `synthetic-${crypto.randomUUID()}`, enabled: true, runtimeEnabled: true, outboundEnabled: true, status: "connected", metadata: { webSession: { observedState: "CONNECTED", desiredState: "CONNECTED" } } } });
++  const waId = "5581999111111";
++  const now = new Date();
++  await prisma.conversation.create({ data: { clientId: client.id, waId, channel: "whatsapp", provider: "web_session", channelAccountId: account.channelAccountId, lastInboundAt: now, windowIsOpen: true, windowExpiresAt: new Date(now.getTime()+86400000) } });
++  const runtime = await prisma.conversationRuntimeState.create({ data: { clientId: client.id, waId, channel: "whatsapp", provider: "web_session", channelAccountId: account.channelAccountId, mode: "BOT", answers: {}, firstSeenAt: now, lastInboundAt: now, windowIsOpen: true, windowExpiresAt: new Date(now.getTime()+86400000) } });
++  const params = { prisma, clientId: client.id, clientKey: client.clientKey, waId, text: "Synthetic reply", requestId: crypto.randomUUID(), outboundSource: "bot" as const, skipAgentSignature: true as const, runtimeWriteToken: captureRuntimeWriteToken(runtime) };
++  const decision = (intent?: "REACTIVE_AUTOMATION" | "INTERACTIVE_REPLY" | "PROTOCOL_NOTICE") => resolveEffectiveWhatsappOutboundTransport({ ...params, clientStatus: "ACTIVE", intent });
++  const disconnect = () => prisma.channelAccount.update({ where: { id: account.id }, data: { status: "disconnected", metadata: { webSession: { desiredState: "CONNECTED", observedState: "DISCONNECTED" } } } });
++  return { client, account, waId, runtime, params, decision, disconnect };
++}
++
++test("AUTO: same reactive intent policy, disconnected Web selects Meta; contact start unchanged", async () => {
++  const f = await fixture();
++  assert.equal((await f.decision("REACTIVE_AUTOMATION") as { provider: string }).provider, "web_session");
++  await f.disconnect();
++  for (const intent of ["REACTIVE_AUTOMATION", "INTERACTIVE_REPLY", "PROTOCOL_NOTICE"] as const) {
++    assert.deepEqual(await f.decision(intent), { status: "ready", provider: "meta", source: "hybrid_reactive_contingency", configuredMode: "HYBRID" });
++  }
++  assert.equal((await f.decision()).status, "unavailable");
++  const result = await createReactiveBotTextOutboundMessage(f.params);
++  assert(result.ok && result.status === "SENT");
++  assert.equal(submissions.length, 1); assert.match(submissions[0]!, /graph.facebook.com/);
++  assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id } }), 1);
++  assert(await updateRuntimeIfUnchanged({ ...f.params, expected: f.params.runtimeWriteToken, data: { answers: { syntheticStep: "next" } } }));
++  const row = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: f.runtime.id } });
++  assert.equal(row.provider, "web_session"); assert.equal(row.channelAccountId, f.account.channelAccountId);
++});
++
++test("explicit Meta/Web never fall back; disabled transport and unproven identity deny", async () => {
++  const f = await fixture(); await f.disconnect();
++  await prisma.tenantOperationalConfig.update({ where: { clientId: f.client.id }, data: { config: { whatsappPrimaryTransport: "web_session" } } });
++  assert.equal((await f.decision("PROTOCOL_NOTICE")).status, "unavailable");
++  await prisma.tenantOperationalConfig.update({ where: { clientId: f.client.id }, data: { config: { whatsappPrimaryTransport: "meta" } } });
++  assert.equal((await f.decision("PROTOCOL_NOTICE") as { provider: string }).provider, "meta");
++  await prisma.tenantOperationalConfig.update({ where: { clientId: f.client.id }, data: { config: {} } });
++  assert.equal((await f.decision("REACTIVE_AUTOMATION")).status, "unavailable");
++  await prisma.tenantOperationalConfig.update({ where: { clientId: f.client.id }, data: { config: { webSessionAuthorization: { status: "OWNED", authorizedNumberCanonical: "5581888000000" } } } });
++  assert.equal((await f.decision("REACTIVE_AUTOMATION")).status, "unavailable");
++  await prisma.channelAccount.update({ where: { id: f.account.id }, data: { outboundEnabled: false } });
++  assert.equal((await f.decision("INTERACTIVE_REPLY")).status, "unavailable");
++});
++
++test("fresh eligibility denies expired/fabricated window, changed decision and tenant mismatch before sender", async () => {
++  const f = await fixture();
++  await prisma.conversationRuntimeState.update({ where: { id: f.runtime.id }, data: { windowExpiresAt: new Date(Date.now()-1) } });
++  assert.equal(await revalidateReactiveSubmission({ ...f.params, intent: "INTERACTIVE_REPLY", provider: "web_session", runtimeWriteToken: undefined }), "window_closed");
++  assert(!(await createReactiveBotTextOutboundMessage(f.params)).ok); assert.equal(submissions.length,0);
++  await prisma.conversationRuntimeState.update({ where: { id: f.runtime.id }, data: { windowExpiresAt: new Date(Date.now()+86400000), lastInboundAt: null } });
++  assert.equal(await revalidateReactiveSubmission({ ...f.params, intent: "PROTOCOL_NOTICE", provider: "web_session", runtimeWriteToken: undefined }), "window_closed");
++  assert.equal(await revalidateReactiveSubmission({ ...f.params, clientKey: "other", intent: "INTERACTIVE_REPLY", provider: "web_session" }), "reactive_client_unavailable");
++  await prisma.tenantOperationalConfig.update({ where: { clientId: f.client.id }, data: { config: { whatsappPrimaryTransport: "meta" } } });
++  assert.equal(await revalidateReactiveSubmission({ ...f.params, intent: "INTERACTIVE_REPLY", provider: "web_session" }), "reactive_transport_changed");
++});
++
++test("ambiguous submitted Web or Meta call creates one FAILED attempt and never switches sender", async () => {
++  for (const provider of ["web_session", "meta"] as const) {
++    const f = await fixture(); if (provider === "meta") await f.disconnect();
++    ambiguous = true;
++    const result = await createReactiveBotTextOutboundMessage(f.params);
++    assert(result.ok && result.status === "FAILED");
++    assert.equal(submissions.length,1);
++    assert.match(submissions[0]!, provider === "meta" ? /graph.facebook.com/ : /worker.invalid/);
++    assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id } }), 1);
++  }
++});
++
++test("intervention during Meta call preserves accepted outbound but invalidates automatic completion", async () => {
++  const f = await fixture(); await f.disconnect();
++  beforeResponse = async () => { await prisma.conversationRuntimeState.update({ where: { id: f.runtime.id }, data: { mode: "HUMAN", departmentId: null, queueId: null, status: "IN_PROGRESS", version: { increment: 1 } } }); };
++  const result = await createReactiveBotTextOutboundMessage(f.params); assert(result.ok && result.status === "SENT");
++  assert.equal(await updateRuntimeIfUnchanged({ ...f.params, expected: f.params.runtimeWriteToken, data: { mode: "BOT" } }), null);
++  const row = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: f.runtime.id } });
++  assert.equal(row.mode, "HUMAN"); assert.equal(row.status, "IN_PROGRESS"); assert(row.lastOutboundAt);
++  assert.equal(submissions.length,1);
++});
++
++test("campaign/template hard intent remains Meta-only while AUTO reactive uses Web", async () => {
++  const f = await fixture();
++  assert.equal((await f.decision("INTERACTIVE_REPLY") as { provider: string }).provider,"web_session");
++  assert.equal((await resolveWhatsappTemplateOutboundTransport({ ...f.params, clientStatus: "ACTIVE" }) as { provider: string }).provider,"meta");
++  await prisma.tenantOperationalConfig.update({ where: { clientId: f.client.id }, data: { config: { whatsappTransports: { meta: { enabledForRouting: false } } } } });
++  assert.equal((await resolveWhatsappTemplateOutboundTransport({ ...f.params, clientStatus: "ACTIVE" })).status,"unavailable");
++});
++
++test("barrier after decision: window expires before worker submission and no outbound is created", async () => {
++  const f = await fixture();
++  assert.equal((await f.decision("INTERACTIVE_REPLY") as { provider: string }).provider,"web_session");
++  let entered!: () => void; let release!: () => void;
++  const paused = new Promise<void>(resolve => { entered = resolve; });
++  const resume = new Promise<void>(resolve => { release = resolve; });
++  const attempt = createWebSessionTextOutboundMessage({ ...f.params, beforeSubmit: async () => {
++    entered(); await resume;
++    return revalidateReactiveSubmission({ ...f.params, provider: "web_session", intent: "INTERACTIVE_REPLY" });
++  } });
++  await paused;
++  await prisma.conversationRuntimeState.update({ where: { id: f.runtime.id }, data: { windowExpiresAt: new Date(Date.now()-1) } });
++  release();
++  const result = await attempt; assert(!result.ok && result.error === "window_closed");
++  assert.equal(submissions.length,0); assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id } }),0);
++});
++
++test("barrier before submission: concurrent human transition invalidates prepared automation without sending", async () => {
++  const f = await fixture();
++  const current = await prisma.conversationRuntimeState.update({ where: { id: f.runtime.id }, data: { mode: "HUMAN", version: { increment: 1 } } });
++  assert.equal(await revalidateReactiveSubmission({ ...f.params, provider: "web_session", intent: "REACTIVE_AUTOMATION" }),"late_reply_dropped");
++  const result = await createReactiveBotTextOutboundMessage(f.params); assert(!result.ok && result.error === "late_reply_dropped");
++  assert.equal(submissions.length,0);
++  assert.equal((await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: f.runtime.id } })).updatedAt.getTime(), current.updatedAt.getTime());
++});
++
++for (const answer of ["1", "2"]) test(`Web inbound, explicit Meta reactive output: consent ${answer} persists flow progress`, async () => {
++  const f = await fixture();
++  await prisma.tenantOperationalConfig.update({ where: { clientId: f.client.id }, data: { config: { whatsappPrimaryTransport: "meta" } } });
++  await prisma.chatbotFlow.create({ data: { clientId: f.client.id, name: "Synthetic reactive consent", isActive: true, entryPoint: true, definition: {
++    start: "consent", nodes: {
++      consent: { type: "consent", purpose: "service_communications", textVersion: "synthetic", message: "Consent?", acceptOption: "1", declineOption: "2", onAccepted: "menu", onDeclined: "declined" },
++      menu: { type: "menu", text: "Menu", options: [{ label: "Continue", next: "next" }] },
++      next: { type: "menu", text: "Next", options: [{ label: "Finish", next: "done" }] },
++      declined: { type: "text", text: "Declined" }, done: { type: "text", text: "Done" },
++    },
++  } } });
++  const inbound = (text: string) => ingestWebSessionInboundMessage({ prisma, message: {
++    provider: "web_session", channel: "whatsapp", clientId: f.client.id, tenantKey: f.client.clientKey,
++    channelAccountDbId: f.account.id, channelAccountId: f.account.channelAccountId, externalMessageId: crypto.randomUUID(),
++    sender: f.waId, senderCanonical: f.waId, senderJid: `${f.waId}@s.whatsapp.net`, timestamp: new Date(), type: "TEXT", text, rawPayload: {},
++  }, publishMessageCreatedRealtime: async () => {}, publishHandoffRealtime: async () => {} });
++  assert((await inbound("Hello")).ok);
++  assert.equal((await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: f.runtime.id } })).chatbotNodeId,"consent");
++  assert((await inbound(answer)).ok);
++  let row = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: f.runtime.id } });
++  if (answer === "1") {
++    assert.equal(row.chatbotNodeId,"menu");
++    assert((await inbound("1")).ok);
++    row = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: f.runtime.id } });
++    assert.equal(row.chatbotNodeId,"next");
++  } else assert.notEqual(row.chatbotNodeId,"consent");
++  assert(row.lastOutboundAt);
++  assert.equal(await prisma.conversation.count({ where: { clientId: f.client.id } }),1);
++  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId: f.client.id } }),1);
++  assert(submissions.length >= 2); assert(submissions.every(url => url.includes("graph.facebook.com")));
++});
++
++
++test("own activity CAS uses UTC consistently in a non-UTC PostgreSQL session", async () => {
++  const f = await fixture();
++  await prisma.$transaction(async tx => {
++    await tx.$executeRaw`SET LOCAL TIME ZONE 'America/Fortaleza'`;
++    const at = new Date();
++    for (const offset of [0, 1]) {
++      assert.equal(await recordOwnRuntimeOutboundActivity({ prisma: tx,
++        clientId: f.client.id, waId: f.waId, expected: f.params.runtimeWriteToken,
++        sentAt: new Date(at.getTime() + offset), messageId: `synthetic-utc-${offset}`,
++        channelAccountId: f.account.channelAccountId, preserveTransport: true }), true);
++    }
++  });
++});
++
++
++test("prepared Web account or Meta credential change denies submission without selecting a replacement", async () => {
++  const f = await fixture();
++  let entered!: () => void; let release!: () => void;
++  const paused = new Promise<void>(resolve => { entered = resolve; });
++  const resume = new Promise<void>(resolve => { release = resolve; });
++  const attempt = createWebSessionTextOutboundMessage({ ...f.params, beforeSubmit: async prepared => {
++    entered(); await resume;
++    return revalidateReactiveSubmission({ ...f.params, intent: "INTERACTIVE_REPLY", provider: "web_session", expectedWebAccountId: prepared.channelAccountId });
++  } });
++  await paused;
++  await prisma.channelAccount.update({ where: { id: f.account.id }, data: { outboundEnabled: false } });
++  await prisma.channelAccount.create({ data: { clientId: f.client.id, channel: "whatsapp", provider: "web_session",
++    channelAccountId: `synthetic-replacement-${crypto.randomUUID()}`, enabled: true, runtimeEnabled: true, outboundEnabled: true,
++    status: "connected", metadata: { webSession: { observedState: "CONNECTED", desiredState: "CONNECTED" } } } });
++  release(); const result = await attempt;
++  assert(!result.ok && result.error === "reactive_account_changed");
++  assert.equal(submissions.length,0);
++  await prisma.tenantOperationalConfig.update({ where: { clientId: f.client.id }, data: { config: { whatsappPrimaryTransport: "meta" } } });
++  const credentials = await prisma.tenantMetaConfig.findUniqueOrThrow({ where: { clientId: f.client.id } });
++  await prisma.tenantMetaConfig.update({ where: { clientId: f.client.id }, data: { businessToken: "synthetic-rotated" } });
++  assert.equal(await revalidateReactiveSubmission({ ...f.params, intent: "REACTIVE_AUTOMATION", provider: "meta", runtimeWriteToken: undefined,
++    expectedMetaCredentials: { phoneNumberId: credentials.phoneNumberId!, accessToken: credentials.businessToken! } }), "reactive_account_changed");
++  assert.equal(submissions.length,0); assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id } }),0);
++});

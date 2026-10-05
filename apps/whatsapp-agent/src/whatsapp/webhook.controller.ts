@@ -1,3 +1,4 @@
+import { createReactiveBotTextOutboundMessage } from "./reactiveBotOutbound.js";
 import { updateRuntimeIfUnchanged } from "../conversation/runtimeWriteFence.js";
 import { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
@@ -167,7 +168,6 @@ import {
   isWhatsAppMultichannelShadowWriteEnabled,
   safeApplyWhatsAppMultichannelShadow,
 } from "../channels/whatsappMultichannelShadowWrite.js";
-import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOutboundService.js";
 import { ensureCampaignOutboundConversation } from "../campaigns/campaignOutboundConversation.js";
 import { parseOutboundReturnDestination } from "../routing/outboundReturnDestination.js";
 
@@ -904,8 +904,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         clientId: tenantClientId,
         clientKey: tenantClientKey,
         clientStatus: tenantClientStatus,
+        intent: "REACTIVE_AUTOMATION",
       });
-      if (transport.status === "ready" && transport.provider === "web_session") {
+      if (transport.status !== "ready") return { ok: false, errorBody: "whatsapp_transport_unavailable" };
+      if (transport.status === "ready") {
         if (!shouldSendOutbound(params.waId, params.guard, params.messageId)) {
           return { ok: false, errorBody: "late_reply_dropped" };
         }
@@ -936,7 +938,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           });
           return { ok: false, errorBody: passiveWindowBlockReason };
         }
-        const result = await createWebSessionTextOutboundMessage({
+        const result = await createReactiveBotTextOutboundMessage({
           prisma,
           waId: params.waId,
           waIdCanonical: canonicalizeBrazilWaId(params.waId),
@@ -960,7 +962,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         return {
           ok: result.status === MessageStatus.SENT,
           status: result.status,
-          messageId: result.messageId,
+          messageId: result.metaMessageId ?? result.messageId,
           errorBody: result.status === MessageStatus.SENT ? undefined : "web_session_send_failed",
         };
       }

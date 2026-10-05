@@ -1,3 +1,4 @@
+import { revalidateReactiveSubmission } from "../whatsapp/reactiveOutboundPolicy.js";
 import { isAutomationConversation, resolveAutomationReadPermission } from "../inbox/automationAccess.js";
 import { resolveAllowAutomationConversationsInInbox, saveAllowAutomationConversationsInInbox } from "../config/tenantOperationalConfig.js";
 import { loadOwnClosedConversationIds } from "../inbox/ownClosedAccess.js";
@@ -7236,8 +7237,13 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
               clientId: client.id,
               clientKey: client.clientKey,
               clientStatus: client.status,
+              intent: "INTERACTIVE_REPLY",
             })
           : null;
+      if (passiveTransport?.status === "unavailable") {
+        json(res, 409, httpError("whatsapp_transport_unavailable", "Transporte indisponível para este atendimento."));
+        return;
+      }
       const effectiveWhatsappProvider =
         passiveTransport?.status === "ready" ? passiveTransport.provider : resolvedChannelFields.provider;
       const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && effectiveWhatsappProvider === "web_session";
@@ -7479,6 +7485,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       const result = isWebSessionWhatsApp
         ? await createWebSessionTextOutboundMessage({
             prisma,
+            beforeSubmit: ({ channelAccountId }) => revalidateReactiveSubmission({ expectedWebAccountId: channelAccountId, prisma, clientId: client.id, clientKey: client.clientKey,
+              waId: resolvedConversation.resolvedWaId, provider: "web_session", intent: "INTERACTIVE_REPLY" }),
             waId: resolvedConversation.resolvedWaId,
             waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
             text: cannedReply.body,
@@ -7716,8 +7724,13 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
               clientId: client.id,
               clientKey: client.clientKey,
               clientStatus: client.status,
+              intent: "INTERACTIVE_REPLY",
             })
           : null;
+      if (passiveTransport?.status === "unavailable") {
+        json(res, 409, httpError("whatsapp_transport_unavailable", "Transporte indisponível para este atendimento."));
+        return;
+      }
       const effectiveWhatsappProvider =
         passiveTransport?.status === "ready" ? passiveTransport.provider : resolvedChannelFields.provider;
       const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && effectiveWhatsappProvider === "web_session";
@@ -7893,6 +7906,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
                 : isWebSessionWhatsApp
                   ? await createWebSessionTextOutboundMessage({
                       prisma,
+                      beforeSubmit: ({ channelAccountId }) => revalidateReactiveSubmission({ expectedWebAccountId: channelAccountId, prisma, clientId: client.id, clientKey: client.clientKey,
+                        waId: resolvedConversation.resolvedWaId, provider: "web_session", intent: "INTERACTIVE_REPLY" }),
                       waId: resolvedConversation.resolvedWaId,
                       waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
                       text,
@@ -8123,8 +8138,13 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
               clientId: client.id,
               clientKey: client.clientKey,
               clientStatus: client.status,
+              intent: "INTERACTIVE_REPLY",
             })
           : null;
+      if (passiveTransport?.status === "unavailable") {
+        json(res, 409, httpError("whatsapp_transport_unavailable", "Transporte indisponível para este atendimento."));
+        return;
+      }
       const effectiveWhatsappProvider =
         passiveTransport?.status === "ready" ? passiveTransport.provider : resolvedChannelFields.provider;
       const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && effectiveWhatsappProvider === "web_session";
@@ -8257,6 +8277,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         isWebSessionWhatsApp
           ? await createWebSessionMediaOutboundMessage({
               prisma,
+              beforeSubmit: ({ channelAccountId }) => revalidateReactiveSubmission({ expectedWebAccountId: channelAccountId, prisma, clientId: client.id, clientKey: client.clientKey,
+                waId: resolvedConversation.resolvedWaId, provider: "web_session", intent: "INTERACTIVE_REPLY" }),
               waId: resolvedConversation.resolvedWaId,
               waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
               clientKey: client.clientKey,
@@ -33329,8 +33351,11 @@ async function sendConversationProtocolNoticeIfNeeded(
   if (params.channel && serializeInboxChannelFields({ channel: params.channel }).channel !== "whatsapp") {
     return { sent: false as const, reason: "non_whatsapp_channel" as const };
   }
-  const provider = params.provider === "web_session" ? "web_session" : params.provider === "meta" ? "meta" : null;
-  if (!provider) return { sent: false as const, reason: "unsupported_provider" as const };
+  if (params.provider !== "web_session" && params.provider !== "meta") return { sent: false as const, reason: "unsupported_provider" as const };
+  const client = await prisma.client.findFirst({ where: { id: params.clientId, clientKey: params.clientKey }, select: { status: true } });
+  const transport = await resolveEffectiveWhatsappOutboundTransport({ prisma, ...params, clientStatus: client?.status, intent: "PROTOCOL_NOTICE" });
+  if (transport.status !== "ready") return { sent: false as const, reason: "whatsapp_transport_unavailable" as const };
+  const provider = transport.provider;
   const lookup = Array.from(new Set([params.waId, params.waIdCanonical].filter(Boolean))) as string[];
   const alreadySent = await prisma.outboundMessage.findFirst({
     where: {
@@ -33353,6 +33378,7 @@ async function sendConversationProtocolNoticeIfNeeded(
       provider === "web_session"
         ? await createWebSessionTextOutboundMessage({
             prisma,
+            beforeSubmit: ({ channelAccountId }) => revalidateReactiveSubmission({ expectedWebAccountId: channelAccountId, ...params, prisma, provider: "web_session", intent: "PROTOCOL_NOTICE" }),
             waId: params.waId,
             waIdCanonical: params.waIdCanonical ?? null,
             text: noticeText,
@@ -39554,6 +39580,9 @@ async function adminSendMessage(params: {
   if (!signedBody.ok) {
     return { ok: false, statusCode: 400, error: "message_too_long" };
   }
+  const blocked = await revalidateReactiveSubmission({ ...params, prisma: getPrisma(), provider: "meta", expectedMetaCredentials: credentials,
+    intent: params.source === "protocol_notice" ? "PROTOCOL_NOTICE" : "INTERACTIVE_REPLY" });
+  if (blocked) return { ok: false, statusCode: 409, error: blocked };
   const sendResult = await sendWhatsAppTextViaResolvedTransport({
     provider: "meta",
     to: params.waId,
@@ -40342,6 +40371,8 @@ async function adminSendMediaMessage(params: {
     uploadFileName = transcoded.fileName;
   }
 
+  const beforeUpload = await revalidateReactiveSubmission({ ...params, prisma: getPrisma(), provider: "meta", expectedMetaCredentials: credentials, intent: "INTERACTIVE_REPLY" });
+  if (beforeUpload) return { ok: false, statusCode: 409, error: beforeUpload };
   const uploaded = await uploadMedia(
     new Blob([new Uint8Array(uploadContent)], { type: uploadMimeType }),
     uploadMimeType,
@@ -40368,6 +40399,8 @@ async function adminSendMediaMessage(params: {
     };
   }
 
+  const blocked = await revalidateReactiveSubmission({ ...params, prisma: getPrisma(), provider: "meta", expectedMetaCredentials: credentials, intent: "INTERACTIVE_REPLY" });
+  if (blocked) return { ok: false, statusCode: 409, error: blocked };
   const sendResult = await sendMediaMessage({
     to: params.waId,
     kind: mediaKind,

@@ -413,14 +413,30 @@ async function callWorkerResolveRecipient(params: {
   }
 }
 
+export async function resolveWebSessionTextAvailability(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  channelAccountId?: string | null;
+  requireExactAccount?: boolean;
+}) {
+  const account = await findWebSessionAccount(params);
+  if (params.requireExactAccount && account?.channelAccountId !== params.channelAccountId) return "unknown" as const;
+  if (!account || !account.enabled || !account.outboundEnabled || !account.runtimeEnabled ||
+    account.client.status !== "ACTIVE" || !getFeatures(account.client).whatsappWebSession) return "policy_blocked" as const;
+  if (isWebSessionAccountConnected(account)) return "ready" as const;
+  const metadata = account.metadata as { webSession?: { observedState?: unknown } } | null;
+  return account.status === "disconnected" && metadata?.webSession?.observedState === "DISCONNECTED"
+    ? "disconnected" as const : "unknown" as const;
+}
+
 export async function isWebSessionTextOutboundReady(params: {
   prisma: PrismaClient;
   clientId: string;
   clientKey: string;
   channelAccountId?: string | null;
 }) {
-  const account = await findWebSessionAccount(params);
-  return Boolean(account && isWebSessionAccountConnected(account));
+  return await resolveWebSessionTextAvailability(params) === "ready";
 }
 
 export async function resolveWebSessionChannelSwitchWarning(params: {
@@ -503,6 +519,7 @@ export async function resolveWebSessionTextRecipient(params: {
 }
 
 export async function createWebSessionTextOutboundMessage(params: {
+  beforeSubmit?: (prepared: { channelAccountId: string }) => Promise<string | null>;
   prisma: PrismaClient;
   waId: string;
   waIdCanonical?: string | null;
@@ -601,6 +618,8 @@ export async function createWebSessionTextOutboundMessage(params: {
     return { ok: false, statusCode: 400, error: "message_too_long" };
   }
 
+  const blocked = await params.beforeSubmit?.({ channelAccountId: account.channelAccountId });
+  if (blocked) return { ok: false, statusCode: 409, error: blocked };
   const sendResult = await callWorkerSendText({
     account,
     tenantKey: params.clientKey,
@@ -785,6 +804,7 @@ export async function createWebSessionTextOutboundMessage(params: {
 }
 
 export async function createWebSessionMediaOutboundMessage(params: {
+  beforeSubmit?: (prepared: { channelAccountId: string }) => Promise<string | null>;
   prisma: PrismaClient;
   waId: string;
   waIdCanonical?: string | null;
@@ -940,6 +960,8 @@ export async function createWebSessionMediaOutboundMessage(params: {
     caption: params.caption ?? null,
     kind: mediaKind,
   });
+  const blocked = await params.beforeSubmit?.({ channelAccountId: account.channelAccountId });
+  if (blocked) return { ok: false, statusCode: 409, error: blocked };
   const sendResult = await callWorkerSendMedia({
     account,
     tenantKey: params.clientKey,

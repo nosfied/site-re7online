@@ -1,0 +1,135 @@
+{
+  "baseTarSha256": "236c1d502df5767eb7cde726ce0d7ae7c6e8200489cac4d09a417b08d98c0e98",
+  "reachableModuleCount": 83,
+  "changedCompiled": [
+    {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/billing/metaUsageLedger.js",
+      "beforeSha256": null,
+      "afterSha256": "bd3abcd5e692a17cef7f4e297809a83afa605f9dd8e0ca69caeb2bb1ea38e0e3"
+    },
+    {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/config/tenantJsonFallback.js",
+      "beforeSha256": null,
+      "afterSha256": "916d681f11cb7dbd122aea2014970c491794ed64c5319831deafa98076bb6228"
+    },
+    {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/conversation/runtimeWriteFence.js",
+      "beforeSha256": "1d411533d766b1a2e7d76c8a98aa6f61324611270ea5507584f8c28ab7545d9d",
+      "afterSha256": "96d4bcd304436685a14d2255fa87e7a1a4b1aa49cf18407eb0c2c8dfe7d89285"
+    },
+    {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/crm/crmConversationStart.js",
+      "beforeSha256": "7cad38ba3f32adf40dfbbde829466e6f7e6d7523235382eb68978aa6bc95c216",
+      "afterSha256": "40f74cfbcb613a1e4041c0fa0626a9ca78b1edfacda14fd0104fd0bdc26a0f3c"
+    },
+    {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/usage/usageGate.js",
+      "beforeSha256": null,
+      "afterSha256": "a94e7ed75ad5e3e71b49b7b43dd77fcb5a4a64c94e0ad7d8bb268f3eec4ccf8c"
+    },
+    {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionInbound.js",
+      "beforeSha256": "db94a52fae4a74ffd004f84e8ea5ac47d321df34f68b5a13be97b446ff829e76",
+      "afterSha256": "8e5e8b2276190fc1d4df91eca0c5ad3d54e05e969621aeafdb96112238ca5f20"
+    },
+    {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionOutboundService.js",
+      "beforeSha256": "b4ebbda67b041adcbeb408469de4ff2c5e427eb3c68211f6142eeee6099d8940",
+      "afterSha256": "6fd2e1bc0a40e7c9db7579cde0d162327c91d2e4188ca247f3a952dff3f72d4a"
+    },
+    {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/reactiveBotOutbound.js",
+      "beforeSha256": null,
+      "afterSha256": "67b2c7cff9f21c7cc6d9e8c9574be555eb2bf0512ca9d1ab7635832e7c50512e"
+    },
+    {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.js",
+      "beforeSha256": null,
+      "afterSha256": "414d7cb27ffa50b5c7b4dd96bbaca12885ff8760b26c3f8080b7f99253b22180"
+    },
+    {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/tenantCredentials.js",
+      "beforeSha256": null,
+      "afterSha256": "46bc6e139f3201ebcc8038f8d345232435dc48a3fd3a8180b6906ef01a95bfea"
+    },
+    {
+      "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/whatsapp.client.js",
+      "beforeSha256": null,
+      "afterSha256": "2c691d346346540f10af5eb54e0f9a88c8f45e6a651ba1249d498f787ca89fd2"
+    }
+  ],
+  "symlinkCount": 11,
+  "manifestSha256": "205637335c06202afe5b4f241e3082b198809607ce65f7d9357a9f7d9c2943ea",
+  "status": "LOCAL VALIDATED / NOT DEPLOYED",
+  "apiBaseSha": "6c30b7e45f903823bc593c268c359a97c9687df3",
+  "nodeVersion": "20.20.0",
+  "sourceBaseManifest": "worker-hybrid-return-identity-20261004.manifest.json",
+  "sourceFiles": [
+    {
+      "path": "apps/whatsapp-agent/src/conversation/runtimeWriteFence.ts",
+      "beforeSha256": "e185029905f6deac6fc48d7568e7267a4721c9ed730d413e6a5d5c653b8ebdae",
+      "afterSha256": "33b2908d524ac38fe894668dfeb0b11f5227d4272f231654431253e9f136298d"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/crm/crmConversationStart.ts",
+      "beforeSha256": "aad208205f0046fb3514de118a04b86be41530e6151e430ff9394f940cfb9eda",
+      "afterSha256": "542bc0b966ab77e9b1d03ec000ca5de64d5f98bfaf4d819e21d1fe8699017644"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts",
+      "beforeSha256": "d59db11c7bb4b6357ff9b234d45df0cd7a6def2bbd4697ced6563fddde3958b4",
+      "afterSha256": "499f5e02d1c3151a90f84deb5c03f061b298afc237222ab29e54b17fcaf18c3a"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/web-session/webSessionInbound.ts",
+      "beforeSha256": "31dde3e4f15b4ff48bdee508fc373e1641599cb549f5a31bd9edbabc341f9a39",
+      "afterSha256": "271b4c7702b0b0d2a612c1ee982f8d3af00a627b0911454f60a8e42786706c62"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.ts",
+      "beforeSha256": null,
+      "afterSha256": "8bb6306b18fa0b27bf06741cdd174aa7230731644aa397db4f5796dcf45138da"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/whatsapp/reactiveBotOutbound.ts",
+      "beforeSha256": null,
+      "afterSha256": "116d07b8456826d0586c71e9f5f91851da58b1de965c3ab840be014bb126554d"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.test.ts",
+      "beforeSha256": null,
+      "afterSha256": "88e4147479aada2dba05bb9acd147e715bbb348e03b5a77463491d4f32b306e1"
+    }
+  ],
+  "sourcePatchSha256": "dedb781bf54975a0909161253f301db8849882a7a54fcd019267a3592553e0ca",
+  "candidateTarSha256": "f6ff82ad02042186b75707bd69721fe9630e2c9032464f73f80e441865425af6",
+  "types": {
+    "build": "tsc --noCheck; not type approval",
+    "fullCheck": "16 diagnostics identical to attested source, same dependencies and command"
+  },
+  "testResult": "12/12 exact packaged compiled tests; isolated PostgreSQL; simulated providers",
+  "unchangedAuxiliarySources": [
+    {
+      "path": "apps/whatsapp-agent/src/billing/metaUsageLedger.ts",
+      "sha256": "03c7f947b03232b554583848d9590f71051c9d61ff1c78ef794423c19deee82f"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/config/tenantJsonFallback.ts",
+      "sha256": "86c41f204b0d831fe6118210100a9940b28045ff6c9bd02cfc0fafad82be33f1"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/usage/usageGate.ts",
+      "sha256": "971783cdd829e34e43d3a99bf9fdeed6f2af82fb758b5b168fb2efc1bafc8f68"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/whatsapp/tenantCredentials.ts",
+      "sha256": "7589c5df2100c380952185d17cfa69cec8a42585181de93e2c9b8a608e6bb05b"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/whatsapp/whatsapp.client.ts",
+      "sha256": "2185b2a9fc9bd9fd5eace2459127231aaa5ba9c519231838c98838e0d43af1ad"
+    }
+  ],
+  "compiledTestSha256": "a389b9fc0d10fc0564fb91899e90e8d2216dfdee6324bd4bb5e3e7604f6e7c44",
+  "workerOnlyCorrection": "Use existing UTC dateParam for lastOutboundAt comparison; preserve raw SQL CAS adapter and all token fields."
+}

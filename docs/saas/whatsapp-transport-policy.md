@@ -54,7 +54,7 @@ Modes:
 - `HYBRID`: Meta Cloud and Web Session are both intentionally configured.
 - `NONE`: no WhatsApp transport is enabled for routing.
 
-Runtime failure does not change mode. A `HYBRID` tenant with Meta operational and Web Session `QR_REQUIRED` remains `HYBRID`; interactive Web-routed operations return a typed unavailable result instead of silently becoming Cloud-only.
+Runtime failure does not change mode. A `HYBRID` tenant with Web Session `QR_REQUIRED` remains `HYBRID` and returns unavailable. The local reactive contingency below distinguishes a proven disconnect from unknown readiness or policy denial; it does not change configured mode.
 
 Mode transitions are explicit administrative decisions. A tenant may move between `WEB_ONLY`, `CLOUD_ONLY` and `HYBRID` by enabling or disabling configured transports for routing, without tenant recreation, contact recreation, conversation migration, history loss, Meta re-onboarding or Web Session re-pairing when the underlying configuration remains valid.
 
@@ -280,7 +280,7 @@ Only the internal admin console should change this flag. Changes must be audited
 ### HYBRID
 
 - Interactive reply: Web Session by default where allowed.
-- If Web Session is transiently unavailable, the tenant remains `HYBRID` and the interactive operation fails explicitly.
+- Unknown availability, policy denial and ambiguous submitted results fail explicitly. The local reactive contingency below permits pre-submission Meta selection only for proven Web disconnect, compatible identity and a legitimate open window; the tenant remains `HYBRID`.
 - Contact-start freeform: blocked unless explicitly enabled.
 - Template and campaign: Meta Cloud.
 - Explicit primary transport may influence only intents where policy allows provider choice.
@@ -397,3 +397,26 @@ Prepared future template:
 - category: `UTILITY`
 - language: `pt_BR`
 - body: `Olá, {{1}}. Estamos entrando em contato para dar continuidade ao seu atendimento referente a {{2}}. Para continuar, responda a esta mensagem.`
+
+
+## Reactive contingency — 05/10/2026, LOCAL VALIDATED / NOT DEPLOYED
+
+[Implementation, exact artifacts, tests and limits](../reviews/automation-freeform-window-release-af26/REACTIVE_TRANSPORT_CONTINGENCY_LOCAL_2026-10-05.md).
+This dated delta supersedes only the unconditional reactive-unavailability rule above; the historical homologation remains evidence of its original version.
+
+`resolveEffectiveWhatsappOutboundTransport` now receives the intent `INTERACTIVE_REPLY`, `PROTOCOL_NOTICE` or `REACTIVE_AUTOMATION`. Inbox text/canned/media, protocol and DB-backed reactive chatbot/IA share this policy. The inbound winner remains identity/history evidence and is not alone the outbound selector.
+
+| Selection | Reactive submission |
+| --- | --- |
+| Explicit Meta or Web | Use only the explicitly selected enabled/ready transport; failure does not authorize the other. |
+| HYBRID/AUTO, Web ready | Web remains the existing preference. |
+| HYBRID/AUTO, Web proven disconnected | Meta may be selected before submission, only when routing is enabled and the existing hybrid resolver proves the same authorized public identity, without conflict/replacement. |
+| Unknown, QR/pairing state, disabled account/feature/transport, missing identity | Deny; these are not evidence authorizing contingency. |
+| Timeout, rejection or uncertain result after submission | Preserve the single attempt; no alternate send or automatic retry. |
+| Closed/expired/unproven window | Deny both transports for this reactive path. |
+
+Proven disconnect requires both the selected account's persisted `status=disconnected` and `metadata.webSession.observedState=DISCONNECTED`. No connectivity probe, HTTP timeout or missing flag is treated as proof. Immediately before provider I/O, reread the same tenant/client identity, routing decision, the exact prepared Web account or Meta credentials, and runtime window. A disabled/replaced prepared account or changed credential denies submission, even if another account on that provider is ready. Require a real `lastInboundAt`, an open, unexpired window and inbound within 24 hours. A changed decision denies this attempt instead of selecting another provider. Automation also revalidates its existing runtime fence. No lock spans provider I/O; intervention after submission cannot cancel a provider call already accepted.
+
+Campaigns **Manual/avulsa**, **Audiência CRM** and **Importação CSV**, including internal recipient variants, immediate/grouped/scheduled execution, remain Meta-only. Approved-template policy, category gates and the separately approved contact-start Web exception are unchanged. This delta neither grants that exception nor creates inbound/window/configuration.
+
+Meta's [official messaging policy](https://whatsappbusiness.com/policy/) ties free-form replies to the 24-hour window opened/reset by user messages and requires approved templates outside it. This project additionally imposes the same legitimate-window gate on its reactive Web path; that is a project contract, not a claim that Meta specifies this routing implementation. Baileys' [maintainer documentation](https://github.com/WhiskeySockets/Baileys/blob/master/README.md) describes connection lifecycle; the conservative persisted-observation criterion and no-retry policy above are project choices. Provider acceptance, SENT, DELIVERED and READ remain distinct.
