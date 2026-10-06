@@ -1,0 +1,188 @@
+{
+  "status": "DEPLOYED TECHNICALLY / FUNCTIONAL ACCEPTANCE PENDING",
+  "production": {
+    "observedUtc": "2026-10-06T13:12:34.452734+00:00",
+    "processes": {
+      "re7-admin-front": {
+        "pid": 2537692,
+        "ticks": "2081554427",
+        "restarts": 0,
+        "cwd": "/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front",
+        "script": "/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front/node_modules/next/dist/bin/next"
+      },
+      "re7-whatsapp-agent": {
+        "pid": 3153929,
+        "ticks": "2107666112",
+        "restarts": 0,
+        "cwd": "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api/apps/whatsapp-agent",
+        "script": "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api/apps/whatsapp-agent/dist/index.js"
+      },
+      "re7-whatsapp-web-worker": {
+        "pid": 3154150,
+        "ticks": "2107666513",
+        "restarts": 0,
+        "cwd": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker",
+        "script": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker/dist/whatsapp-web-worker/src/index.js"
+      }
+    },
+    "guard": {
+      "open": true,
+      "generation": 33,
+      "tasks": 0
+    },
+    "schedulerDisabled": "false",
+    "connected": 4,
+    "auth": 5,
+    "work": {
+      "jobs": 0,
+      "groups": 0,
+      "leases": 0,
+      "sendingScheduled": 0
+    },
+    "proxyIdentityMatched": true,
+    "helperUnchanged": true,
+    "controlsMatched": true,
+    "executorLockAvailable": true,
+    "frontendBuild": "J5cHyVKiKEI5xxiGBY5If",
+    "health": {
+      "api": "PASS",
+      "db": "PASS",
+      "workerControl": "PASS"
+    },
+    "timeline": {
+      "containmentBeginUtc": "2026-10-06T13:10:46.713474+00:00",
+      "unfencedUtc": "2026-10-06T13:11:19.697029+00:00",
+      "containmentSeconds": 32.984,
+      "completedUtc": "2026-10-06T13:11:26.593595+00:00"
+    },
+    "sequence": {
+      "complete": true,
+      "return": false,
+      "privilegedFailures": 0,
+      "captureSamplesDenied": 1,
+      "captureRefreshes": 2
+    },
+    "authAndSessionsMatchedBaseline": true,
+    "apiBuild": "afbb7455f320793e05a25875e8a5f13f98cabf90"
+  },
+  "attestation": {
+    "preparation": "incident-6683-v4-reactive-afbb-baseline-20261006T020000Z",
+    "policySha256": "00912bf4e0f44d88b0c9c639ba8a3d7dd773b317ea24f9df35dbef4e4e06add9",
+    "windowHashes": {
+      "sequencer.py": "8fadca4c3071d96c6a6f82c38f1a3af8dea825b470bfbafe62f189940f348cc1",
+      "baseline_contract.py": "6ed15712948f998328b5ba82578d3241073848a4f8ce356861a12fa890964657",
+      "initial.private.json": "e6389d517dfb04baa1bd4c9f83433d81c4471f5eb36565df07774469158d77bd",
+      "mode-manifest-v4.json": "ab0202a15e47ebf612161cf77a495afd7d04a797a0854b97d497f65ceed5b238",
+      "sequencer-manifest.json": "18805a83ffd95f3cfbb2c55c652aea57e8016e39ba8a0931a146e996b0271b74",
+      "release-manifest.private.json": "b275d1221f5d483ddcc04ab4316ba6aa82552cba583cc00f6661cfe44a1158a2",
+      "backup-manifest.private.json": "d3d1365f2c01f5c1127b3c42b9b089d62d207522a2aa06fc7479cb6c0fa09ac9",
+      "restore-result.json": "b9b7de44101be8688d38861d7b60b5f13a0b4f28574adb4ac571da15129325aa",
+      "privileged.py": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+      "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+    },
+    "modeManifests": {
+      "switch": "698f80c41ac5e18c3ae3d6362d19ef596e761f562825c394f8dfbbf8b6c721b9",
+      "return": "bcc1ac41b05369368dda58c8d4ad09c0e6bbda3b7c13e4ed3b1055eedfadb2cc",
+      "return-partial": "4609b86103fcc5a29433dfea843fd5dcf32c7212fdd22ee25164b4cea8054ae0"
+    },
+    "backup": {
+      "archivesReadbackVerified": true,
+      "capturedUtc": "2026-10-06T13:00:20.509257+00:00",
+      "catalogObjects": 614,
+      "files": {
+        "configuration.private.tar.gz": {
+          "bytes": 6586,
+          "sha256": "bed9a846aa7f4879cd9b3c709a8fb822a72c93e720494b11a680c35b9e343b1b"
+        },
+        "content.private.tar.gz": {
+          "bytes": 474991160,
+          "sha256": "a029b0326828280160aab5a6d79744b2ad806c3c987beee917a6a279d01b5fa4"
+        },
+        "database.catalog": {
+          "bytes": 48617,
+          "sha256": "fc868a7e07e17ad656968bd7230858fe2192800f0f21d365ac9bdce20cc0fc61"
+        },
+        "database.dump": {
+          "bytes": 27858327,
+          "sha256": "b075448b0ae45967794fd7e289174b01146bb5630d45a754c477227ec2bc4011"
+        },
+        "runtime-data.private.tar.gz": {
+          "bytes": 2404012,
+          "sha256": "288456e0fdcfed1bedaf3f5cacc3126e39e0f49b0e166956064f23009b1cdd3c"
+        }
+      }
+    },
+    "restore": {
+      "applicationStarted": false,
+      "capturedUtc": "2026-10-06T13:01:52.450576+00:00",
+      "catalog": 614,
+      "dumpSha256": "b075448b0ae45967794fd7e289174b01146bb5630d45a754c477227ec2bc4011",
+      "historicalRollbacks": 6,
+      "migrationChecksumMismatches": [],
+      "migrationsFinished": 60,
+      "missingMigrationFiles": [],
+      "postgres": "16.15",
+      "providerCalls": 0,
+      "restoreExitCode": 0,
+      "temporaryDatabaseRemoved": true
+    }
+  },
+  "boundedLogs": {
+    "re7-whatsapp-agent": {
+      "windowStartUtc": "2026-10-06T13:10:46.713474+00:00",
+      "timestampedRecordsSinceWindow": 48,
+      "levels": {
+        "info": 45,
+        "warn": 3
+      },
+      "events": {
+        "storage.mode.resolved": 1,
+        "storage.read_source.resolved": 1,
+        "env.snapshot": 1,
+        "bootstrap.db_authoritative.ready": 1,
+        "chatbot.inactivity.processor.started": 1,
+        "campaign.schedule.processor.started": 1,
+        "server.started": 1,
+        "realtime.websocket.connected": 11,
+        "admin.auth": 4,
+        "tenant.loaded": 1,
+        "realtime.websocket.disconnected": 1,
+        "login.mfa_shadow_skipped": 2,
+        "auth.push.revoked": 2,
+        "auth.session.replaced": 2,
+        "auth.login.success": 2,
+        "inbox.sorted": 1,
+        "whatsapp.web_session.receipt.realtime_published": 4,
+        "realtime.event.published": 4,
+        "realtime.event.delivered": 4,
+        "realtime.websocket.auth_failed": 3
+      },
+      "unparsedRecordsInBoundedTail": 0,
+      "bytesLimitPerFile": 2000000
+    },
+    "re7-whatsapp-web-worker": {
+      "windowStartUtc": "2026-10-06T13:10:46.713474+00:00",
+      "timestampedRecordsSinceWindow": 99,
+      "levels": {
+        "info": 99
+      },
+      "events": {
+        "whatsapp.web.worker.started": 1,
+        "whatsapp.web.worker.control.started": 1,
+        "whatsapp.web.session.connecting": 4,
+        "whatsapp.web.auth.keys_get": 20,
+        "whatsapp.web.connection.update": 16,
+        "whatsapp.web.event_batch": 28,
+        "whatsapp.web.auth.creds_update": 10,
+        "whatsapp.web.auth.keys_set": 7,
+        "whatsapp.web.socket.node": 6,
+        "whatsapp.web.receipt.processed": 4,
+        "whatsapp.web.inbound.update_received": 2
+      },
+      "unparsedRecordsInBoundedTail": 0,
+      "bytesLimitPerFile": 2000000
+    }
+  },
+  "ownerReadOnlyInboxCrm": "PASS; explicit owner reply, no sends",
+  "functionalReactiveContingency": "NOT EXERCISED in this window"
+}
