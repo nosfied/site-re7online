@@ -19554,6 +19554,9 @@ test("db-only flow writes preserve authorization, isolation and atomicity", asyn
 test("reactive transport policy routes Web-origin claim protocol and Inbox reply by intent", async t => {
   const user = await createUser({ clientId: businessClientId, role: "ADMIN", suffix: "reactive-policy" });
   await assignUserDepartments({ clientId: businessClientId, userId: user.id, departmentIds: [businessReturnDepartmentId] });
+  const tenant = await prisma.client.findUniqueOrThrow({ where: { id: businessClientId } });
+  await prisma.client.update({ where: { id: businessClientId }, data: {
+    features: { ...(tenant.features as Record<string, unknown>), whatsappWebSession: true } as Prisma.InputJsonValue } });
   await configureBusinessTemplateMetaTransport({ webSessionEnabled: true, suffix: `${safeTemplatePrefix}-reactive` });
   const originalFetch = globalThis.fetch;
   let calls = 0;
@@ -19591,9 +19594,18 @@ test("reactive transport policy routes Web-origin claim protocol and Inbox reply
     assert.equal(claim.status,200,JSON.stringify(claim.body)); assert(claim.body.protocol);
     const protocol = await prisma.outboundMessage.findFirstOrThrow({ where: { clientId: businessClientId, waId,
       rawPayload: { path: ["source"], equals: "protocol_notice" } } });
+    const audit = { intent: "PROTOCOL_NOTICE", provider: "meta", configuredMode: "HYBRID",
+      reason: primary === "meta" ? "explicit" : "hybrid_reactive_contingency" };
+    assert.deepEqual((protocol.rawPayload as any).routingDecision, audit);
+    const event = await prisma.event.findFirstOrThrow({ where: { clientId: businessClientId, waId,
+      eventName: "conversation.protocol.notice.sent" } });
+    assert.deepEqual((event.payloadJson as any).routingDecision, audit);
     assert.equal(protocol.status,"SENT"); assert.match(protocol.metaMessageId ?? "", /^synthetic-reactive-/);
     const reply = await request<{ message: { status: string } }>("POST", `/app/conversation/${waId}/send`, user, { text: "Synthetic human reply" });
     assert.equal(reply.status,200,JSON.stringify(reply.body)); assert.equal(reply.body.message.status,"SENT");
+    const humanReply = await prisma.outboundMessage.findFirstOrThrow({ where: { clientId: businessClientId, waId,
+      rawPayload: { path: ["source"], equals: "admin_inbox" } } });
+    assert.deepEqual((humanReply.rawPayload as any).routingDecision, { ...audit, intent: "INTERACTIVE_REPLY" });
     assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId, provider: "web_session" } }),0);
     assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId, status: "SENT" } }),2);
     assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId } }),1);

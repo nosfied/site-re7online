@@ -365,3 +365,51 @@ test("passive WEB sender denies missing and invalid runtime before provider", {s
   assert.equal(invalidResult.errorBody,"window_invalid");
   assert.equal(sends,beforeInvalid);
 });
+
+test("passive reactive Meta failure reports Meta and audits contingency with one submission", async () => {
+  const [{ readFileSync }, vm, ts] = await Promise.all([import("node:fs"), import("node:vm"), import("typescript")]);
+  const source = readFileSync(new URL("../whatsapp/webhook.controller.ts", import.meta.url), "utf8");
+  const start = source.indexOf("  const sendPassiveOutboundText = async");
+  const end = source.indexOf("  const typedPayload", start);
+  assert(start >= 0 && end > start);
+  const f = await fixture("meta-failure-audit");
+  const phoneNumberId = `synthetic-${f.client.id}`;
+  await prisma.tenantMetaConfig.create({ data: { clientId: f.client.id, phoneNumberId, wabaId: "synthetic",
+    businessToken: "synthetic", rawPayload: { publicWhatsappIdentity: { canonicalNumber: "5581999000000" } } } });
+  await prisma.waPhoneNumber.create({ data: { clientId: f.client.id, phoneNumberId, display: "5581999000000" } });
+  await prisma.tenantOperationalConfig.create({ data: { clientId: f.client.id, config: {
+    webSessionAuthorization: { status: "OWNED", authorizedNumberCanonical: "5581999000000" } } } });
+  await prisma.channelAccount.update({ where: { id: f.account.id }, data: { status: "disconnected",
+    metadata: { webSession: { desiredState: "CONNECTED", observedState: "DISCONNECTED" } } } });
+  const now = new Date(); const expiry = new Date(now.getTime() + 86400000);
+  await prisma.conversationRuntimeState.create({ data: { clientId: f.client.id, waId: f.waId, channel: "whatsapp",
+    provider: "web_session", firstSeenAt: now, lastInboundAt: now, windowIsOpen: true, windowExpiresAt: expiry } });
+  const module = { exports: {} };
+  vm.runInNewContext(ts.default.transpileModule(source.slice(start, end) + "\nmodule.exports=sendPassiveOutboundText;",
+    { compilerOptions: { module: ts.default.ModuleKind.CommonJS, target: ts.default.ScriptTarget.ES2020 } }).outputText,
+    { module, exports: module.exports, Date, prisma, tenantClientId: f.client.id, tenantClientKey: f.client.clientKey,
+      tenantClientStatus: "ACTIVE", env: { WHATSAPP_SANDBOX: false },
+      resolveEffectiveWhatsappOutboundTransport: (await import("../crm/crmConversationStart.js")).resolveEffectiveWhatsappOutboundTransport,
+      getWebhookControllerTestHooks: () => undefined, shouldSendOutbound: () => true, createReactiveBotTextOutboundMessage,
+      canonicalizeBrazilWaId: (value: string) => value,
+      loadPersistedRuntimeForInbound: async () => ({ window: { isOpen: true, expiresAt: expiry.toISOString() } }),
+      isWindowOpen: () => true, MessageStatus: { SENT: "SENT", FAILED: "FAILED" },
+    });
+  const fetchBefore = globalThis.fetch;
+  let calls = 0;
+  try {
+    globalThis.fetch = (async (url: unknown) => {
+      assert.match(String(url), /graph.facebook.com/); calls++;
+      return new Response(JSON.stringify({ error: { code: 131047, message: "Synthetic policy rejection" } }), { status: 400 });
+    }) as typeof fetch;
+    const send = module.exports as (arg: any) => Promise<any>;
+    const result = await send({ waId: f.waId, toE164: f.waId, replyText: "Synthetic", messageId: crypto.randomUUID() });
+    assert.equal(result.ok, false); assert.equal(result.status, "FAILED");
+    assert.equal(result.errorBody, "meta_send_failed"); assert.equal(calls, 1);
+    const events = await prisma.event.findMany({ where: { clientId: f.client.id, eventName: "outbound.text.failed" } });
+    assert.equal(events.length, 1);
+    assert.deepEqual((events[0]!.payloadJson as any).routingDecision, { intent: "REACTIVE_AUTOMATION",
+      provider: "meta", configuredMode: "HYBRID", reason: "hybrid_reactive_contingency" });
+    assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id, status: "FAILED" } }), 1);
+  } finally { globalThis.fetch = fetchBefore; }
+});

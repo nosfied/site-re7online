@@ -159,13 +159,13 @@ fd0a09c05144717cf488c6e87d2f92e56648c8bc6d01f206ea20e430bf00ec6f  apps/whatsapp-
 494d1fd29558c5f6821f703912812bf06e0d1387e7581639703806c29f7a4bee  apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionInbound.test.js
 7256e7672cab81962c0bf80a9e38ee9514ab0f9a5c958251ce8aab06d5da13ef  apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionLifecycle.js
 1d1f9acb118ce345074fa1b7f6fe1ea7068417cbf0d2e2c257bd000954412061  apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionLifecycle.test.js
-6fd2e1bc0a40e7c9db7579cde0d162327c91d2e4188ca247f3a952dff3f72d4a  apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionOutboundService.js
+477ff354a8a375cccd9014cfbf2a32dbffeb51de57ebe929c6e33bc99483c1f2  apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionOutboundService.js
 20a1e05eab5a6fd81b8f9a7a55bcd7d08a3ed0048e59c692c57d381091a3245a  apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionOutboundService.test.js
 8cd576c2bca0974db4cf3176270c89528733e0df11dc7604f0c0b10041504ba7  apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionReceipts.js
 74f0c5ac036ddf5d9a0eac28cf53648d811785751a90ccf4147ede1c370f2c74  apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionReceipts.test.js
-67b2c7cff9f21c7cc6d9e8c9574be555eb2bf0512ca9d1ab7635832e7c50512e  apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/reactiveBotOutbound.js
-414d7cb27ffa50b5c7b4dd96bbaca12885ff8760b26c3f8080b7f99253b22180  apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.js
-a389b9fc0d10fc0564fb91899e90e8d2216dfdee6324bd4bb5e3e7604f6e7c44  apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.test.js
+414bba6cbd8c0c96e09a36b2876da06e63e551dd30582d025b75fecfa71e89c3  apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/reactiveBotOutbound.js
+67312c972133f1cc681220c3ff1db932727ba0dd0e2dfad1cc94e88fa81a8886  apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.js
+dfa02117b42c5fb104be36cf935d20a8c4b3188938f1484e5f4fa3b53fd437e6  apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.test.js
 46bc6e139f3201ebcc8038f8d345232435dc48a3fd3a8180b6906ef01a95bfea  apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/tenantCredentials.js
 2c691d346346540f10af5eb54e0f9a88c8f45e6a651ba1249d498f787ca89fd2  apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/whatsapp.client.js
 7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd  apps/whatsapp-web-worker/dist/whatsapp-web-worker/src/index.js

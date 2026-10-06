@@ -963,7 +963,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           ok: result.status === MessageStatus.SENT,
           status: result.status,
           messageId: result.metaMessageId ?? result.messageId,
-          errorBody: result.status === MessageStatus.SENT ? undefined : "web_session_send_failed",
+          errorBody: result.status === MessageStatus.SENT ? undefined
+            : result.provider === "meta" ? "meta_send_failed" : "web_session_send_failed",
         };
       }
     }

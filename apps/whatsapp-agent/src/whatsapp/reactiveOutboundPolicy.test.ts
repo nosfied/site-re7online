@@ -76,6 +76,11 @@ test("AUTO: same reactive intent policy, disconnected Web selects Meta; contact 
   assert(result.ok && result.status === "SENT");
   assert.equal(submissions.length, 1); assert.match(submissions[0]!, /graph.facebook.com/);
   assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id } }), 1);
+  const audit = { intent: "REACTIVE_AUTOMATION", provider: "meta", configuredMode: "HYBRID", reason: "hybrid_reactive_contingency" };
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({ where: { clientId: f.client.id } });
+  const event = await prisma.event.findFirstOrThrow({ where: { clientId: f.client.id, eventName: "outbound.text.sent" } });
+  assert.deepEqual((outbound.rawPayload as any).routingDecision, audit);
+  assert.deepEqual((event.payloadJson as any).routingDecision, audit);
   assert(await updateRuntimeIfUnchanged({ ...f.params, expected: f.params.runtimeWriteToken, data: { answers: { syntheticStep: "next" } } }));
   const row = await prisma.conversationRuntimeState.findUniqueOrThrow({ where: { id: f.runtime.id } });
   assert.equal(row.provider, "web_session"); assert.equal(row.channelAccountId, f.account.channelAccountId);
@@ -113,6 +118,14 @@ test("ambiguous submitted Web or Meta call creates one FAILED attempt and never 
     ambiguous = true;
     const result = await createReactiveBotTextOutboundMessage(f.params);
     assert(result.ok && result.status === "FAILED");
+    assert.equal(result.provider, provider);
+    const outbound = await prisma.outboundMessage.findFirstOrThrow({ where: { clientId: f.client.id } });
+    const event = await prisma.event.findFirstOrThrow({ where: { clientId: f.client.id,
+      eventName: provider === "meta" ? "outbound.text.failed" : "inbox.web_session.text.failed" } });
+    const audit = { intent: "REACTIVE_AUTOMATION", provider, configuredMode: "HYBRID",
+      reason: provider === "meta" ? "hybrid_reactive_contingency" : "hybrid_auto" };
+    assert.deepEqual((outbound.rawPayload as any).routingDecision, audit);
+    assert.deepEqual((event.payloadJson as any).routingDecision, audit);
     assert.equal(submissions.length,1);
     assert.match(submissions[0]!, provider === "meta" ? /graph.facebook.com/ : /worker.invalid/);
     assert.equal(await prisma.outboundMessage.count({ where: { clientId: f.client.id } }), 1);

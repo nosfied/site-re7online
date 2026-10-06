@@ -35,17 +35,17 @@
     {
       "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/web-session/webSessionOutboundService.js",
       "beforeSha256": "b4ebbda67b041adcbeb408469de4ff2c5e427eb3c68211f6142eeee6099d8940",
-      "afterSha256": "6fd2e1bc0a40e7c9db7579cde0d162327c91d2e4188ca247f3a952dff3f72d4a"
+      "afterSha256": "477ff354a8a375cccd9014cfbf2a32dbffeb51de57ebe929c6e33bc99483c1f2"
     },
     {
       "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/reactiveBotOutbound.js",
       "beforeSha256": null,
-      "afterSha256": "67b2c7cff9f21c7cc6d9e8c9574be555eb2bf0512ca9d1ab7635832e7c50512e"
+      "afterSha256": "414bba6cbd8c0c96e09a36b2876da06e63e551dd30582d025b75fecfa71e89c3"
     },
     {
       "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.js",
       "beforeSha256": null,
-      "afterSha256": "414d7cb27ffa50b5c7b4dd96bbaca12885ff8760b26c3f8080b7f99253b22180"
+      "afterSha256": "67312c972133f1cc681220c3ff1db932727ba0dd0e2dfad1cc94e88fa81a8886"
     },
     {
       "path": "apps/whatsapp-web-worker/dist/whatsapp-agent/src/whatsapp/tenantCredentials.js",
@@ -59,7 +59,7 @@
     }
   ],
   "symlinkCount": 11,
-  "manifestSha256": "205637335c06202afe5b4f241e3082b198809607ce65f7d9357a9f7d9c2943ea",
+  "manifestSha256": "650b2a216b595f858c4b9b5110d2dbcd8909bc4a7ec655c3560734c5641ca398",
   "status": "LOCAL VALIDATED / NOT DEPLOYED",
   "apiBaseSha": "6c30b7e45f903823bc593c268c359a97c9687df3",
   "nodeVersion": "20.20.0",
@@ -78,7 +78,7 @@
     {
       "path": "apps/whatsapp-agent/src/web-session/webSessionOutboundService.ts",
       "beforeSha256": "d59db11c7bb4b6357ff9b234d45df0cd7a6def2bbd4697ced6563fddde3958b4",
-      "afterSha256": "499f5e02d1c3151a90f84deb5c03f061b298afc237222ab29e54b17fcaf18c3a"
+      "afterSha256": "baf266b29cb969becf0e09ec0b19e0a2a832289fd4248e901382ffc2ded16495"
     },
     {
       "path": "apps/whatsapp-agent/src/web-session/webSessionInbound.ts",
@@ -88,26 +88,26 @@
     {
       "path": "apps/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.ts",
       "beforeSha256": null,
-      "afterSha256": "8bb6306b18fa0b27bf06741cdd174aa7230731644aa397db4f5796dcf45138da"
+      "afterSha256": "963299678f054a4c692b0b3b309c8eb2c34052b7300b26194dfb3ee4c9c2d6da"
     },
     {
       "path": "apps/whatsapp-agent/src/whatsapp/reactiveBotOutbound.ts",
       "beforeSha256": null,
-      "afterSha256": "116d07b8456826d0586c71e9f5f91851da58b1de965c3ab840be014bb126554d"
+      "afterSha256": "86b953e982b6d133d7089bc9332cd34033442eb95fb18e5022ccafc85473ef6b"
     },
     {
       "path": "apps/whatsapp-agent/src/whatsapp/reactiveOutboundPolicy.test.ts",
       "beforeSha256": null,
-      "afterSha256": "88e4147479aada2dba05bb9acd147e715bbb348e03b5a77463491d4f32b306e1"
+      "afterSha256": "3c7deb650844e4325572344d7d6dce9f775c8a86627fb0b30359646836841afa"
     }
   ],
-  "sourcePatchSha256": "dedb781bf54975a0909161253f301db8849882a7a54fcd019267a3592553e0ca",
-  "candidateTarSha256": "f6ff82ad02042186b75707bd69721fe9630e2c9032464f73f80e441865425af6",
+  "sourcePatchSha256": "ce0da6d43faa3817ec16779633cbafdbb8bd536e0e86325f23238cea55289b3c",
+  "candidateTarSha256": "8b67292578090a2f564e4a9bf399b002e667bba723c936859fc438aa1221f5c8",
   "types": {
     "build": "tsc --noCheck; not type approval",
     "fullCheck": "16 diagnostics identical to attested source, same dependencies and command"
   },
-  "testResult": "12/12 exact packaged compiled tests; isolated PostgreSQL; simulated providers",
+  "testResult": "2 directed tests PASS on exact minimal package; previous b836 proofs retained with their original scope",
   "unchangedAuxiliarySources": [
     {
       "path": "apps/whatsapp-agent/src/billing/metaUsageLedger.ts",
@@ -130,6 +130,13 @@
       "sha256": "2185b2a9fc9bd9fd5eace2459127231aaa5ba9c519231838c98838e0d43af1ad"
     }
   ],
-  "compiledTestSha256": "a389b9fc0d10fc0564fb91899e90e8d2216dfdee6324bd4bb5e3e7604f6e7c44",
-  "workerOnlyCorrection": "Use existing UTC dateParam for lastOutboundAt comparison; preserve raw SQL CAS adapter and all token fields."
+  "compiledTestSha256": "dfa02117b42c5fb104be36cf935d20a8c4b3188938f1484e5f4fa3b53fd437e6",
+  "workerOnlyCorrection": "Use existing UTC dateParam for lastOutboundAt comparison; preserve raw SQL CAS adapter and all token fields.",
+  "reviewBase": "b83657809d1cc77ed8cc6fe75bf2b28f2ac1f5bb",
+  "reviewDeltaCompiled": [
+    "web-session/webSessionOutboundService.js",
+    "whatsapp/reactiveOutboundPolicy.js",
+    "whatsapp/reactiveBotOutbound.js"
+  ],
+  "historicalProofs": "b836 12/12 retained as historical evidence, not attributed to this delta"
 }

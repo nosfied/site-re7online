@@ -4,6 +4,14 @@ import type { PrismaClient } from "@prisma/client";
 import { resolveEffectiveWhatsappOutboundTransport, type ReactiveWhatsappIntent } from "../crm/crmConversationStart.js";
 import { runtimeWriteTokenSelect, type RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
 
+// Safe decision metadata only: no account identifiers, credentials or message content.
+export function reactiveRoutingDecision(intent: ReactiveWhatsappIntent,
+  transport: Extract<Awaited<ReturnType<typeof resolveEffectiveWhatsappOutboundTransport>>, { status: "ready" }>) {
+  return { intent, provider: transport.provider, configuredMode: transport.configuredMode,
+    reason: transport.source };
+}
+export type ReactiveRoutingDecision = ReturnType<typeof reactiveRoutingDecision>;
+
 export type ReactiveSubmission = {
   prisma: PrismaClient; clientId: string; clientKey: string; waId: string;
   intent: ReactiveWhatsappIntent; provider: "meta" | "web_session";

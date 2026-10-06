@@ -1,3 +1,4 @@
+import type { ReactiveRoutingDecision } from "../whatsapp/reactiveOutboundPolicy.js";
 import { recordOwnRuntimeOutboundActivity, invalidateRuntimeWriteToken, type RuntimeWriteToken } from "../conversation/runtimeWriteFence.js";
 import { MessageStatus, MessageType, type PrismaClient } from "@prisma/client";
 import type { ServiceCycleSnapshot } from "../conversation/serviceCycle.js";
@@ -519,6 +520,7 @@ export async function resolveWebSessionTextRecipient(params: {
 }
 
 export async function createWebSessionTextOutboundMessage(params: {
+  routingDecision?: ReactiveRoutingDecision;
   beforeSubmit?: (prepared: { channelAccountId: string }) => Promise<string | null>;
   prisma: PrismaClient;
   waId: string;
@@ -634,6 +636,7 @@ export async function createWebSessionTextOutboundMessage(params: {
   const outboundSource = params.outboundSource ?? "inbox_text";
   const rawPayload = {
     source: outboundSource,
+    ...(params.routingDecision ? { routingDecision: params.routingDecision } : {}),
     ...(params.inboxVisibility
       ? {
           inboxVisibility: params.inboxVisibility,
@@ -706,6 +709,7 @@ export async function createWebSessionTextOutboundMessage(params: {
     eventName: sendResult.ok ? "inbox.web_session.text.sent" : "inbox.web_session.text.failed",
     payloadJson: {
       source: outboundSource,
+      ...(params.routingDecision ? { routingDecision: params.routingDecision } : {}),
       cannedReplyId: params.cannedReplyId ?? null,
       provider: "web_session",
       channelAccountId: account.channelAccountId,
@@ -804,6 +808,7 @@ export async function createWebSessionTextOutboundMessage(params: {
 }
 
 export async function createWebSessionMediaOutboundMessage(params: {
+  routingDecision?: ReactiveRoutingDecision;
   beforeSubmit?: (prepared: { channelAccountId: string }) => Promise<string | null>;
   prisma: PrismaClient;
   waId: string;
@@ -881,6 +886,7 @@ export async function createWebSessionMediaOutboundMessage(params: {
         channel: "whatsapp",
         mediaKind,
         source: "inbox_media",
+      ...(params.routingDecision ? { routingDecision: params.routingDecision } : {}),
       },
     });
     return {
@@ -996,6 +1002,7 @@ export async function createWebSessionMediaOutboundMessage(params: {
       sizeBytes: stored.sizeBytes,
     },
     source: "inbox_media",
+    ...(params.routingDecision ? { routingDecision: params.routingDecision } : {}),
     provider: "web_session",
     channelAccountId: account.channelAccountId,
     externalMessageId: sendResult.ok ? sendResult.externalMessageId : null,
@@ -1084,6 +1091,7 @@ export async function createWebSessionMediaOutboundMessage(params: {
     eventName: sendResult.ok ? "whatsapp.web.outbound.media.sent" : "whatsapp.web.outbound.media.failed",
     payloadJson: {
       source: "inbox_media",
+      ...(params.routingDecision ? { routingDecision: params.routingDecision } : {}),
       provider: "web_session",
       channelAccountId: account.channelAccountId,
       outboundMessageId: messageId,

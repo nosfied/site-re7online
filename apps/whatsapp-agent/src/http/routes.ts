@@ -1,4 +1,4 @@
-import { revalidateReactiveSubmission } from "../whatsapp/reactiveOutboundPolicy.js";
+import { reactiveRoutingDecision, type ReactiveRoutingDecision, revalidateReactiveSubmission } from "../whatsapp/reactiveOutboundPolicy.js";
 import { isAutomationConversation, resolveAutomationReadPermission } from "../inbox/automationAccess.js";
 import { resolveAllowAutomationConversationsInInbox, saveAllowAutomationConversationsInInbox } from "../config/tenantOperationalConfig.js";
 import { loadOwnClosedConversationIds } from "../inbox/ownClosedAccess.js";
@@ -7484,6 +7484,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
 
       const result = isWebSessionWhatsApp
         ? await createWebSessionTextOutboundMessage({
+            routingDecision: passiveTransport?.status === "ready" ? reactiveRoutingDecision("INTERACTIVE_REPLY", passiveTransport) : undefined,
             prisma,
             beforeSubmit: ({ channelAccountId }) => revalidateReactiveSubmission({ expectedWebAccountId: channelAccountId, prisma, clientId: client.id, clientKey: client.clientKey,
               waId: resolvedConversation.resolvedWaId, provider: "web_session", intent: "INTERACTIVE_REPLY" }),
@@ -7505,6 +7506,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             reply: asWebSessionContextualReply(resolvedReplyContext),
           })
         : await adminSendMessage({
+            routingDecision: passiveTransport?.status === "ready" ? reactiveRoutingDecision("INTERACTIVE_REPLY", passiveTransport) : undefined,
             waId: resolvedConversation.resolvedWaId,
             text: cannedReply.body,
             clientKey: client.clientKey,
@@ -7905,6 +7907,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
                   })
                 : isWebSessionWhatsApp
                   ? await createWebSessionTextOutboundMessage({
+                      routingDecision: passiveTransport?.status === "ready" ? reactiveRoutingDecision("INTERACTIVE_REPLY", passiveTransport) : undefined,
                       prisma,
                       beforeSubmit: ({ channelAccountId }) => revalidateReactiveSubmission({ expectedWebAccountId: channelAccountId, prisma, clientId: client.id, clientKey: client.clientKey,
                         waId: resolvedConversation.resolvedWaId, provider: "web_session", intent: "INTERACTIVE_REPLY" }),
@@ -7923,6 +7926,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
                       reply: asWebSessionContextualReply(resolvedReplyContext),
                     })
               : await adminSendMessage({
+                  routingDecision: passiveTransport?.status === "ready" ? reactiveRoutingDecision("INTERACTIVE_REPLY", passiveTransport) : undefined,
                   waId: resolvedConversation.resolvedWaId,
                   text,
                   clientKey: client.clientKey,
@@ -8276,6 +8280,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       const result =
         isWebSessionWhatsApp
           ? await createWebSessionMediaOutboundMessage({
+              routingDecision: passiveTransport?.status === "ready" ? reactiveRoutingDecision("INTERACTIVE_REPLY", passiveTransport) : undefined,
               prisma,
               beforeSubmit: ({ channelAccountId }) => revalidateReactiveSubmission({ expectedWebAccountId: channelAccountId, prisma, clientId: client.id, clientKey: client.clientKey,
                 waId: resolvedConversation.resolvedWaId, provider: "web_session", intent: "INTERACTIVE_REPLY" }),
@@ -8302,6 +8307,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
               reply: asWebSessionContextualReply(resolvedReplyContext),
             })
           : await adminSendMediaMessage({
+              routingDecision: passiveTransport?.status === "ready" ? reactiveRoutingDecision("INTERACTIVE_REPLY", passiveTransport) : undefined,
               waId: resolvedConversation.resolvedWaId,
               clientKey: client.clientKey,
               clientId: client.id,
@@ -33356,6 +33362,7 @@ async function sendConversationProtocolNoticeIfNeeded(
   const transport = await resolveEffectiveWhatsappOutboundTransport({ prisma, ...params, clientStatus: client?.status, intent: "PROTOCOL_NOTICE" });
   if (transport.status !== "ready") return { sent: false as const, reason: "whatsapp_transport_unavailable" as const };
   const provider = transport.provider;
+  const routingDecision = reactiveRoutingDecision("PROTOCOL_NOTICE", transport);
   const lookup = Array.from(new Set([params.waId, params.waIdCanonical].filter(Boolean))) as string[];
   const alreadySent = await prisma.outboundMessage.findFirst({
     where: {
@@ -33377,6 +33384,7 @@ async function sendConversationProtocolNoticeIfNeeded(
     const result =
       provider === "web_session"
         ? await createWebSessionTextOutboundMessage({
+            routingDecision,
             prisma,
             beforeSubmit: ({ channelAccountId }) => revalidateReactiveSubmission({ expectedWebAccountId: channelAccountId, ...params, prisma, provider: "web_session", intent: "PROTOCOL_NOTICE" }),
             waId: params.waId,
@@ -33397,6 +33405,7 @@ async function sendConversationProtocolNoticeIfNeeded(
             skipAgentSignature: true,
           })
         : await adminSendMessage({
+            routingDecision,
             waId: params.waId,
             text: noticeText,
             clientKey: params.clientKey,
@@ -33419,6 +33428,7 @@ async function sendConversationProtocolNoticeIfNeeded(
       eventName: noticeEvent,
       payloadJson: {
         source: "protocol_notice",
+        routingDecision,
         provider,
         protocol: params.protocol,
         cycleId: getActiveServiceCycle(params.conversation ?? null)?.cycleId ?? null,
@@ -33428,6 +33438,7 @@ async function sendConversationProtocolNoticeIfNeeded(
     });
     logger.info({
       event: noticeEvent,
+      routingDecision,
       requestId: params.requestId,
       clientId: params.clientId,
       clientKey: params.clientKey,
@@ -39491,6 +39502,7 @@ async function resolveInboxContextualReply(
 }
 
 async function adminSendMessage(params: {
+  routingDecision?: ReactiveRoutingDecision;
   waId: string;
   text: string;
   clientKey: string;
@@ -39625,6 +39637,7 @@ async function adminSendMessage(params: {
     errorBody: sendResult.errorBody ?? null,
     rawPayload: {
       source: params.source ?? "admin_inbox",
+      ...(params.routingDecision ? { routingDecision: params.routingDecision } : {}),
       ...(params.actorUserId
         ? {
             actor: {
@@ -39705,6 +39718,7 @@ async function adminSendMessage(params: {
 
   logger.info({
     event: sendResult.ok ? "admin.conversation.send.sent" : "admin.conversation.send.failed",
+    ...(params.routingDecision ? { routingDecision: params.routingDecision } : {}),
     waId: maskWaId(params.waId),
     clientKey: params.clientKey,
     requestId: params.requestId,
@@ -40239,6 +40253,7 @@ async function adminSendInstagramMessage(params: {
 }
 
 async function adminSendMediaMessage(params: {
+  routingDecision?: ReactiveRoutingDecision;
   waId: string;
   clientKey: string;
   clientId: string;
@@ -40468,6 +40483,7 @@ async function adminSendMediaMessage(params: {
         localSize: storedMedia?.size ?? null,
       },
       source: "admin_inbox_media",
+      ...(params.routingDecision ? { routingDecision: params.routingDecision } : {}),
       ...(params.actorUserId
         ? {
             actor: {
