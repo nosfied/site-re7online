@@ -1,5 +1,9 @@
 # Product Map Current
 
+## Estado reconciliado — 06/10/2026
+
+API afbb/worker mínimo reativo implantados; frontend af26 preservado, conforme [registro técnico](../reviews/automation-freeform-window-release-af26/REACTIVE_AFBB_DEPLOYED_2026-10-06.md). Aceites controlados: avulso demo em b9; CRM estático/imediato e CSV individual/imediato em afbb. Agrupamento, audiência dinâmica, agendamento, contingência Auto e CRA-PR continuam pendentes. [Correção visual de fila imediata/progresso](../reviews/automation-freeform-window-release-af26/CAMPAIGN_PROGRESS_VISUAL_LOCAL_2026-10-06.md) LOCAL VALIDATED / FOR REVIEW / NOT DEPLOYED, somente frontend, sem alteração de execução/transporte/RBAC. Entradas seguintes preservam a cronologia e não substituem este estado mais recente. Históricos intactos, setembro CLOSED; SECULT/DB-only encerradas e Guia inatividade pausado.
+
 ## Estado produtivo atualizado — correção do novo 6683, 03/10/2026
 
 [Resultado V4](../reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_DEPLOY_2026-10-03.md): API `879cb1fa` **DEPLOYED TECHNICALLY / OWNER VALIDATION PENDING**; mesmo worker mínimo af26 retomado, frontend af26 preservado, guarda aberta geração 23 e controles restaurados. Inbox/CRM autenticados conferidos pelo owner apenas em leitura. O novo 6683 ainda requer prova funcional; 0604/6787/9614/6683 não receberam saneamento nem reenvio. O reparo homônimo anterior permanece CLOSED. Campanhas/CRA ainda aguardam validação funcional do owner.

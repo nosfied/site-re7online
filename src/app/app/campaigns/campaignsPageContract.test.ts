@@ -40,13 +40,15 @@ test("campaigns require supervisor or admin in app navigation and direct page ac
   assert.ok(initialLoadEffect.includes("fetchAppCampaignReturnDestinations(session)"));
   assert.ok(pageSource.includes('if (!session || campaignAccess !== "allowed" || !selectedCampaignId)'));
   assert.ok(pageSource.includes('if (!session || campaignAccess !== "allowed" || !shouldPoll) return;'));
-  assert.ok(pageSource.includes('campaignAccess !== "allowed" ||\n      !detailModalOpen'));
-  assert.ok(pageSource.includes("getAppCampaign(session, selectedCampaignId)"));
+  assert.ok(pageSource.includes("campaignSessionRef.current !== activeSession"));
+  assert.ok(pageSource.includes("getAppCampaign(activeSession, campaignId)"));
   assert.ok(pageSource.includes("refreshCampaignDetail(session, selectedCampaignId)"));
 });
 
 test("campaign progress modal observes backend state and can be closed", () => {
-  assert.ok(pageSource.includes('selectedCampaign?.status !== "sending"'));
+  assert.ok(pageSource.includes("campaigns.some(shouldRefreshCampaign)"));
+  assert.ok(pageSource.includes("if (cancelled || inFlight) return;"));
+  assert.equal((pageSource.match(/window\.setInterval/g) ?? []).length, 1);
   assert.ok(pageSource.includes("refreshCampaignDetail(session, selectedCampaignId)"));
   assert.ok(pageSource.includes("refreshCampaigns(session, selectedCampaignId)"));
   assert.ok(pageSource.includes('onClick={() => setDetailModalOpen(false)}'));
@@ -331,7 +333,7 @@ test("campaign detail uses localized block reasons and distinct refresh/reuse ic
   assert.ok(pageSource.includes('label={refreshingDetail ? "Atualizando detalhe" : "Atualizar detalhe"}'));
   assert.ok(pageSource.includes('icon={refreshingDetail ? "…" : "↺"}'));
   assert.ok(pageSource.includes("getStatusClasses(selectedCampaign.status)"));
-  assert.ok(pageSource.includes("getStatusLabel(selectedCampaign.status)"));
+  assert.ok(pageSource.includes("getCampaignPresentationLabel(selectedCampaign)"));
   assert.ok(pageSource.includes('label="Nova campanha com filtrados"'));
   assert.ok(pageSource.includes('icon="＋"'));
   assert.ok(!pageSource.includes('label="Nova campanha com filtrados"\\n                            icon="↺"'));

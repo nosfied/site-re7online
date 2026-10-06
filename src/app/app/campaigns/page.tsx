@@ -59,6 +59,13 @@ import {
   getAudienceCrmStatusDisplay,
 } from "@/lib/campaignReusePreview";
 import { getCampaignStatusUxLabel, getMetaTemplateCategoryUxLabel } from "@/lib/appUxLabels";
+import {
+  createCampaignReadGeneration,
+  getCampaignListStatus,
+  getCampaignPresentationLabel,
+  isImmediateCampaignQueued,
+  shouldRefreshCampaign,
+} from "@/lib/campaignPresentation";
 import { isCampaignComposerDirty } from "@/lib/campaignComposerLifecycle";
 import { CampaignItem, formatDateTime, normalizeWaIdList } from "@/lib/whatsappAdminApi";
 
@@ -566,6 +573,13 @@ function getCampaignConfidence(campaign: CampaignItem) {
       classes: "campaign-panel-info",
     };
   }
+  if (campaign.status === "scheduled") {
+    return {
+      label: isImmediateCampaignQueued(campaign) ? "Aguardando processamento" : "Envio agendado",
+      icon: "INFO",
+      classes: "campaign-panel-info",
+    };
+  }
   if (campaign.status === "draft") {
     return {
       label: "Rascunho — envio ainda não iniciado",
@@ -752,8 +766,21 @@ export default function AppCampaignsPage() {
   const [returnDestinations, setReturnDestinations] = useState<AppCampaignReturnDestinationsResponse | null>(null);
   const [crmStatuses, setCrmStatuses] = useState<CrmBusinessStatusConfig[]>([]);
   const [crmStatusesWarning, setCrmStatusesWarning] = useState<string | null>(null);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
-  const [selectedCampaign, setSelectedCampaign] = useState<CampaignItem | null>(null);
+  const [selectedCampaignId, setSelectedCampaignIdState] = useState<string | null>(null);
+  const [selectedCampaignSnapshot, setSelectedCampaign] = useState<CampaignItem | null>(null);
+  const selectedCampaign = selectedCampaignSnapshot?.id === selectedCampaignId ? selectedCampaignSnapshot : null;
+  const campaignReads = useRef(createCampaignReadGeneration());
+  const selectedIdRef = useRef<string | null>(null);
+  const campaignSessionRef = useRef<AppSession | null>(null);
+  const setSelectedCampaignId = useCallback((id: string | null) => {
+    if (selectedIdRef.current !== id) {
+      campaignReads.current.invalidate("detail");
+      selectedIdRef.current = id;
+      setSelectedCampaign(null);
+      setRefreshingDetail(false);
+    }
+    setSelectedCampaignIdState(id);
+  }, []);
   const [form, setForm] = useState<CampaignFormState>(EMPTY_FORM);
   const [audienceFilters, setAudienceFilters] = useState<AudiencePreviewFilters>(EMPTY_AUDIENCE_FILTERS);
   const [audiencePreview, setAudiencePreview] = useState<AppCampaignAudiencePreviewResponse | null>(null);
@@ -844,18 +871,31 @@ export default function AppCampaignsPage() {
     setRequestedCampaignId(new URLSearchParams(window.location.search).get("campaignId"));
   }, []);
 
+  useEffect(() => {
+    const reads = campaignReads.current;
+    campaignSessionRef.current = session;
+    reads.invalidate();
+    return () => {
+      campaignSessionRef.current = null;
+      reads.invalidate();
+    };
+  }, [session]);
+
   const refreshCampaigns = useCallback(
     async (activeSession: AppSession, keepSelectedId?: string | null) => {
+      const isCurrent = campaignReads.current.begin("list");
+      const requestedSelection = selectedIdRef.current;
       const response = await listAppCampaigns(activeSession, { limit: 100 });
+      if (!isCurrent() || campaignSessionRef.current !== activeSession) return [];
       setCampaigns(response.items);
       const nextSelectedId =
         keepSelectedId && response.items.some((item) => item.id === keepSelectedId)
           ? keepSelectedId
-          : response.items[0]?.id ?? null;
-      setSelectedCampaignId(nextSelectedId);
+          : selectedIdRef.current ?? response.items[0]?.id ?? null;
+      if (selectedIdRef.current === requestedSelection) setSelectedCampaignId(nextSelectedId);
       return response.items;
     },
-    []
+    [setSelectedCampaignId]
   );
 
   const refreshTemplates = useCallback(async (activeSession: AppSession) => {
@@ -869,10 +909,14 @@ export default function AppCampaignsPage() {
 
   const refreshCampaignDetail = useCallback(
     async (activeSession: AppSession, campaignId: string, notify = false) => {
+      const isCurrent = campaignReads.current.begin("detail");
+      const canApply = () => isCurrent() && campaignSessionRef.current === activeSession && selectedIdRef.current === campaignId;
+      if (!canApply()) return null;
       setRefreshingDetail(true);
       setDetailError(null);
       try {
         const detail = await getAppCampaign(activeSession, campaignId);
+        if (!canApply() || detail.campaign.id !== campaignId) return null;
         setSelectedCampaign(detail.campaign);
         setCampaigns((prev) => prev.map((item) => (item.id === detail.campaign.id ? detail.campaign : item)));
         if (notify) {
@@ -880,6 +924,7 @@ export default function AppCampaignsPage() {
         }
         return detail.campaign;
       } catch (err) {
+        if (!canApply()) return null;
         const typed = err as { status?: number; message?: string };
         if (typed.status === 401) {
           handleUnauthorized();
@@ -892,7 +937,7 @@ export default function AppCampaignsPage() {
         }
         return null;
       } finally {
-        setRefreshingDetail(false);
+        if (canApply()) setRefreshingDetail(false);
       }
     },
     [handleUnauthorized, showToast]
@@ -903,11 +948,9 @@ export default function AppCampaignsPage() {
     setRefreshingList(true);
     setError(null);
     try {
-      const items = await refreshCampaigns(session, selectedCampaignId);
-      const nextSelectedId =
-        selectedCampaignId && items.some((item) => item.id === selectedCampaignId)
-          ? selectedCampaignId
-          : items[0]?.id ?? null;
+      await refreshCampaigns(session, selectedCampaignId);
+      if (campaignSessionRef.current !== session || selectedIdRef.current !== selectedCampaignId) return;
+      const nextSelectedId = selectedIdRef.current;
       if (nextSelectedId) {
         await refreshCampaignDetail(session, nextSelectedId);
       } else {
@@ -1426,8 +1469,8 @@ export default function AppCampaignsPage() {
       (acc, campaign) => {
         acc.total += 1;
         if (campaign.status === "draft") acc.drafts += 1;
-        if (campaign.status === "sending") acc.sending += 1;
-        if (campaign.status === "scheduled") acc.scheduled += 1;
+        if (getCampaignListStatus(campaign) === "sending") acc.sending += 1;
+        if (getCampaignListStatus(campaign) === "scheduled") acc.scheduled += 1;
         if (campaign.status === "completed") acc.completed += 1;
         if (campaign.status === "blocked") acc.blocked += 1;
         if (campaign.status === "failed") acc.failed += 1;
@@ -1464,7 +1507,7 @@ export default function AppCampaignsPage() {
     setSelectedCampaignId(campaignId);
     setDetailModalOpen(true);
     setActiveTab((current) => (current === "create" ? "all" : current));
-  }, []);
+  }, [setSelectedCampaignId]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1547,20 +1590,7 @@ export default function AppCampaignsPage() {
     setLoadingDetail(true);
     setDetailError(null);
 
-    getAppCampaign(session, selectedCampaignId)
-      .then((response) => {
-        if (cancelled) return;
-        setSelectedCampaign(response.campaign);
-        setCampaigns((prev) => prev.map((item) => (item.id === response.campaign.id ? response.campaign : item)));
-      })
-      .catch((err: { status?: number; message?: string }) => {
-        if (cancelled) return;
-        if (err.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        setDetailError(getCampaignUserFacingError(err, "Falha ao carregar detalhe da campanha."));
-      })
+    void refreshCampaignDetail(session, selectedCampaignId)
       .finally(() => {
         if (!cancelled) setLoadingDetail(false);
       });
@@ -1568,7 +1598,7 @@ export default function AppCampaignsPage() {
     return () => {
       cancelled = true;
     };
-  }, [campaignAccess, handleUnauthorized, selectedCampaignId, session]);
+  }, [campaignAccess, refreshCampaignDetail, selectedCampaignId, session]);
 
   useEffect(() => {
     setResultStatusFilter("all");
@@ -1577,11 +1607,8 @@ export default function AppCampaignsPage() {
   }, [selectedCampaignId]);
 
   const shouldPoll = useMemo(() => {
-    if (selectedCampaignId) {
-      return selectedCampaign?.status === "sending";
-    }
-    return campaigns.some((item) => item.status === "sending");
-  }, [campaigns, selectedCampaign?.status, selectedCampaignId]);
+    return (selectedCampaign !== null && shouldRefreshCampaign(selectedCampaign)) || campaigns.some(shouldRefreshCampaign);
+  }, [campaigns, selectedCampaign]);
 
   const campaignResultItems = useMemo(
     () => selectedCampaign?.messagesMetaStatus ?? [],
@@ -1652,13 +1679,13 @@ export default function AppCampaignsPage() {
         const matchesStatus =
           activeTab === "blocked"
             ? campaign.status === "blocked" || campaign.status === "failed"
-            : statusFilter === "all" || campaign.status === statusFilter;
+            : statusFilter === "all" || getCampaignListStatus(campaign) === statusFilter;
         const matchesSearch = !query || campaignName.includes(query);
         return matchesStatus && matchesSearch;
       })
       .sort((a, b) => {
-        const aSending = a.status === "sending" ? 1 : 0;
-        const bSending = b.status === "sending" ? 1 : 0;
+        const aSending = getCampaignListStatus(a) === "sending" ? 1 : 0;
+        const bSending = getCampaignListStatus(b) === "sending" ? 1 : 0;
         if (aSending !== bSending) return bSending - aSending;
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
@@ -1677,24 +1704,26 @@ export default function AppCampaignsPage() {
 
   useEffect(() => {
     if (!session || campaignAccess !== "allowed" || !shouldPoll) return;
+    let cancelled = false;
+    let inFlight = false;
     const interval = window.setInterval(async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
       try {
-        if (selectedCampaignId) {
-          const detail = await getAppCampaign(session, selectedCampaignId);
-          setSelectedCampaign(detail.campaign);
-          setCampaigns((prev) => prev.map((item) => (item.id === detail.campaign.id ? detail.campaign : item)));
-        } else {
-          await refreshCampaigns(session, null);
-        }
+        // Keep the existing list and detail readers; one timer, no overlapping ticks.
+        if (selectedCampaignId) await refreshCampaignDetail(session, selectedCampaignId);
+        if (!cancelled) await refreshCampaigns(session, selectedCampaignId);
       } catch (err) {
-        if ((err as { status?: number }).status === 401) {
-          handleUnauthorized();
-        }
+        if (!cancelled && (err as { status?: number }).status === 401) handleUnauthorized();
+      } finally {
+        inFlight = false;
       }
     }, 3000);
-
-    return () => window.clearInterval(interval);
-  }, [campaignAccess, handleUnauthorized, refreshCampaigns, selectedCampaignId, session, shouldPoll]);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [campaignAccess, handleUnauthorized, refreshCampaignDetail, refreshCampaigns, selectedCampaignId, session, shouldPoll]);
 
   useEffect(() => {
     if (!selectedCampaignId || !selectedCampaign) return;
@@ -1727,28 +1756,6 @@ export default function AppCampaignsPage() {
     };
   }, [detailModalOpen]);
 
-  useEffect(() => {
-    if (
-      !session ||
-      campaignAccess !== "allowed" ||
-      !detailModalOpen ||
-      !selectedCampaignId ||
-      selectedCampaign?.status !== "sending"
-    ) return;
-    const timer = window.setInterval(() => {
-      void refreshCampaignDetail(session, selectedCampaignId);
-      void refreshCampaigns(session, selectedCampaignId);
-    }, 2500);
-    return () => window.clearInterval(timer);
-  }, [
-    campaignAccess,
-    detailModalOpen,
-    refreshCampaignDetail,
-    refreshCampaigns,
-    selectedCampaign?.status,
-    selectedCampaignId,
-    session,
-  ]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -4145,7 +4152,7 @@ export default function AppCampaignsPage() {
                 ) : null}
                 {paginatedCampaigns.map((campaign) => {
                   const isSelected = campaign.id === selectedCampaignId;
-                  const isSending = campaign.status === "sending";
+                  const isSending = getCampaignListStatus(campaign) === "sending";
                   const queueLabel = getCampaignQueueLabel(campaign);
                   const isDynamicCampaign =
                     campaign.selectionMode === "DYNAMIC_CRM_FILTER" ||
@@ -4203,7 +4210,7 @@ export default function AppCampaignsPage() {
                       <td className="px-2 py-2 align-top">
                         <div className="flex flex-col gap-1">
                           <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(campaign.status)}`}>
-                            {getStatusLabel(campaign.status)}
+                            {getCampaignPresentationLabel(campaign)}
                           </span>
                         </div>
                       </td>
@@ -4287,7 +4294,7 @@ export default function AppCampaignsPage() {
                   <div className="flex shrink-0 items-center gap-2">
                     {selectedCampaign ? (
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClasses(selectedCampaign.status)}`}>
-                        {getStatusLabel(selectedCampaign.status)}
+                        {getCampaignPresentationLabel(selectedCampaign)}
                       </span>
                     ) : null}
                     <ActionIconButton
@@ -4692,9 +4699,11 @@ export default function AppCampaignsPage() {
                         </div>
                         {selectedCampaign.status === "scheduled" ? (
                           <div className="rounded-md border border-indigo-300/25 bg-indigo-900/20 p-3">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-100/80">Envio agendado</p>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-100/80">
+                              {isImmediateCampaignQueued(selectedCampaign) ? "Envio imediato na fila" : "Envio agendado"}
+                            </p>
                             <p className="mt-1 text-sm text-white">
-                              {selectedCampaign.scheduledAt ? formatDateTime(selectedCampaign.scheduledAt) : "Sem horário definido"}
+                              {selectedCampaign.scheduledAt ? formatDateTime(selectedCampaign.scheduledAt) : "Aguardando processamento. O resultado será atualizado nesta tela."}
                             </p>
                           </div>
                         ) : null}
