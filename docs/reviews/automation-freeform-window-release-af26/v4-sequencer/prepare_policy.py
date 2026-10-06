@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from baseline_contract import validate_preparation
 
 API = 're7-whatsapp-agent'
 WORKER = 're7-whatsapp-web-worker'
@@ -49,6 +50,9 @@ def create(root):
     window = root / 'window'
     output = window / 'privileged-policy.private.json'
     require(not output.exists() and not output.is_symlink(), 'policy_already_exists')
+    manifest = json.loads((window / 'sequencer-manifest.json').read_text())
+    post_return = manifest.get('status') == 'FRESH_POST_UNFENCE_RETURN_POLICY_NOT_INSTALLED'
+    validate_preparation(root, ['return'] if post_return else None)
     live = {a['name']: a for a in json.loads(subprocess.check_output([PM, 'jlist'], text=True))}
     absent_path = window / 'absent-worker-source.private.json'
     absent = json.loads(absent_path.read_text()) if absent_path.is_file() else None

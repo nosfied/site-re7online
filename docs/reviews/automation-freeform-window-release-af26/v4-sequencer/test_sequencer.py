@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 import privileged as privileged_helper
+from baseline_contract import capture_operational, capture_functional
 from sequencer import API, WORKER, FRONT, Bridge, Sequencer, guard_state
 
 
@@ -24,6 +25,9 @@ class FakeBridge:
         self.window.mkdir(parents=True)
         self.old = config('old')
         self.new = config('new')
+        front = self.root / 'front'; (front / '.next').mkdir(parents=True)
+        (front / '.next/BUILD_ID').write_text('synthetic-build')
+        self.old[FRONT]['cwd'] = str(front)
         self.new[FRONT] = self.old[FRONT]
         self.live = {name: {'pid': i, 'cfg': copy.deepcopy(value),
                             'pm2_env': {'status': 'online'}}
@@ -52,6 +56,11 @@ class FakeBridge:
         (self.window / 'execution-gates.private.json').write_text(json.dumps({
             k: True for k in ('ownerAuthorized', 'preflightReviewed', 'artifactsVerified',
                                'restoreVerified', 'discrepanciesResolved')}))
+        (self.window / 'initial.private.json').write_text(json.dumps(capture_operational(
+            self.guard, lambda _: 'ActiveState=inactive\nUnitFileState=enabled\n')))
+        baseline = capture_functional({'flags': [], 'auth': [], 'connected': []}, front)
+        for mode in ('switch', 'return', 'return-partial'):
+            (self.root / mode / 'baseline.private.json').write_text(json.dumps(baseline))
         (self.window / 'privileged-policy.sha256').write_text('synthetic\n')
         (self.window / 'sequencer.py').write_text('synthetic sequencer')
         (self.window / 'sequencer-manifest.json').write_text(json.dumps({
@@ -59,6 +68,8 @@ class FakeBridge:
                 b'synthetic sequencer').hexdigest()}}))
 
     def run(self, args, **kwargs):
+        if args[:2] == ['systemctl', 'show']:
+            return 'ActiveState=inactive\nUnitFileState=enabled\n'
         self.events.append(('hash_check', str(kwargs.get('cwd'))))
         return ''
 

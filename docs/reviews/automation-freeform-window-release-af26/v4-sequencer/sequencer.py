@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 from urllib import request
+from baseline_contract import validate_preparation, sequential
 
 API = 're7-whatsapp-agent'
 WORKER = 're7-whatsapp-web-worker'
@@ -384,6 +385,7 @@ class Sequencer:
     def eligible(self):
         require(not (self.window / 'aborted-before-containment.private.json').exists(),
                 'aborted_package_cannot_reuse')
+        validate_preparation(self.root)
         manifest = json.loads((self.window / 'sequencer-manifest.json').read_text())
         for name, expected in manifest['filesSha256'].items():
             require(Path(name).name == name and
@@ -414,18 +416,26 @@ class Sequencer:
                       for n, a in apps.items()}
         require(all(v['identity'] and v['identity']['state'] != 'Z'
                     for v in identities.values()), 'source_identity_missing')
+        initial = validate_preparation(self.root)
         guard = self.b.guard()
+        require(self.b.run(['systemctl', 'show', 'pm2-deploy.service',
+                            '--property=ActiveState,UnitFileState']) == initial['supervision'],
+                'baseline_supervision_drift')
+        require(initial['guard']['open'] == guard['open'] and
+                initial['guard']['generation'] == guard['generation'], 'baseline_guard_drift')
         require(guard.get('open') and not guard.get('tasks') and
                 not guard.get('ledgerFault'), 'guard_baseline_unexpected')
-        self.baseline = {'guardGeneration': guard['generation'], 'apps': identities}
+        self.baseline = sequential({'guardGeneration': guard['generation'], 'apps': identities})
         self.journal('baseline', generation=guard['generation'],
                      processes={k: v['pid'] for k, v in identities.items()})
 
     def close_then_preflight(self):
         # This order is intentional. No code path requests preflight earlier.
         require(self.baseline is not None, 'baseline_missing')
+        sequential(self.baseline)
         require(not list((self.root / 'switch').glob('owner-request-preflight*.json')),
                 'preflight_proof_emitted_before_close')
+        validate_preparation(self.root)
         self.b.node('switch', 'close.cjs')
         guard = self.b.guard()
         require(not guard['open'] and guard['generation'] ==
@@ -552,6 +562,7 @@ class Sequencer:
         global_lock = self.root.parent / '.incident-6683-window.lock'
         with global_lock.open('a+') as overall:
             fcntl.flock(overall.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            validate_preparation(self.root, ['return'])
             manifest = json.loads((self.window / 'sequencer-manifest.json').read_text())
             for name, expected in manifest['filesSha256'].items():
                 require(Path(name).name == name and
@@ -605,7 +616,8 @@ class Sequencer:
                         'return_absent_worker_binding_drift')
                 identities[WORKER] = {'pid': absent['pid'],
                                       'identity': {'ticks': absent['ticks'], 'state': 'absent'}}
-            self.baseline = {'guardGeneration': guard['generation'], 'apps': identities}
+            self.baseline = sequential({'guardGeneration': guard['generation'], 'apps': identities},
+                                       worker_absent=absent is not None)
             self.journal('post_unfence_return_baseline', generation=guard['generation'],
                          processes={n: v['pid'] for n, v in identities.items()})
             self.b.privileged('enter')

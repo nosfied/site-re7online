@@ -1,0 +1,33 @@
+{
+  "originPreparation": "incident-6683-v4-reactive-afbb7455-20261006T010000Z",
+  "patchSha256": "c1dc4a711d93b4c6a556bd97525622f8720e7f89f52ea04104b83aceb4478bbe",
+  "adapters": {
+    "ops.py": {
+      "originSha256": "8e28d31132287666bd606ae6cbc8ddedcae7aed6f8dc12025c8516467ff602d5",
+      "patchedSha256BeforeRebinding": "dbc4d585ee725a245e61d8273ae4a7dff391cc0cfb0671749aa5fbfbd6eeb7db"
+    },
+    "delegated.py": {
+      "originSha256": "92e286f81294104f2f82352c992724e77b23b786d391912071170c934562c984",
+      "patchedSha256BeforeRebinding": "bdfb8a41bf43be7d3b6c80a57e351196857c3f73b499c218afdf9557fdddd050"
+    },
+    "execution-check.cjs": {
+      "originSha256": "1d0f5a5c4ba320a4e163e61d58c48ada7e60a86915b7f63e259d4722e52ddf9b",
+      "patchedSha256BeforeRebinding": "e8917eb0d080b1fa920053fa0840491d2083fb2973504b6991433265e38952ba"
+    },
+    "open.cjs": {
+      "originSha256": "40bef72b9aea0fee3432eafd3bf265bdcad5411e8cb2e05e1bf31598b9257434",
+      "patchedSha256BeforeRebinding": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
+    }
+  },
+  "testedCompositionArchiveSha256": "2fc7b8bf3bfdba0409cdea7f4e6d6f86267d8ff4fe5fd3c5b17c58b683c3f1e4",
+  "testLogsSha256": {
+    "final-contracts-v3.private.log": "e770eec1d184fb7e8fd205168c39ea24293007646bf81c36c6d6311d2d99585d",
+    "final-template-v3.private.log": "e5af34c741d34dfa63c6bfb4d8483c279c1e32c4c088a1a06c168d808ff47b38",
+    "final-sequencer-v2.private.log": "abb121754487fc85ac5dd18de374b87e2c89c195154f841ee23ba448cf4a6463"
+  },
+  "testDriversSha256": {
+    "test_baseline_contract.py": "dbadd0973d8ccb8aa5acecf52f30e8d26c631e6595391c5b0581881d2028f9aa",
+    "test_composition_template.py": "09d95aa5204b2a3dc1f5a0afe48da76637fbbb5570ff48a26d1839e1a699fcb2",
+    "test_sequencer.py": "3ebbeb84808e6fe543312abd0a7c6bfb57e4b4ecb476aa7b5996bad3140164dd"
+  }
+}

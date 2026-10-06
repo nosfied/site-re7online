@@ -14,15 +14,10 @@ import subprocess
 import sys
 import urllib.parse
 import re
+from baseline_contract import capture_operational, capture_functional, operational, validate_preparation
 
-SOURCE_NORMALIZED = {
-    'ops.py': 'd9f727586a03a509c04629a1e1a4c8571a16e2d41a9c582396f558ee7158babe',
-    'delegated.py': '47089f123b55fa92723e7dece9b4ac8984c51395746a543025a1d816ca6f7d0f',
-}
-RESULT_NORMALIZED = {
-    'ops.py': 'efe934d8def4d8e7e862ccd361225bd80ebac6277521a2f30516b75e68d930e2',
-    'delegated.py': 'ab50ce75dc665c98ad6350a734a9310d03865f9ae17305d6ef813d3fbca88104',
-}
+SOURCE_NORMALIZED = {'ops.py': 'fa7bb2240ca0bd8f34bd9bcd65e6898127d8cba428b22a58497c4de1517393f9', 'delegated.py': '37d4a75c2cd1a64266fb1e942d99ce4f12ba7404437f7003418b03607f1af4a4'}
+RESULT_NORMALIZED = {'ops.py': '0d6c7723e8c0a7a28c0f1a44850bbfe9b28655130e2e652a1891cbbceb0a6957', 'delegated.py': '0fb7b5a7c766a2b84da809a8f97b418cefcf5873425c435b11c94af61613a704'}
 
 
 def normalized_digest(path):
@@ -40,7 +35,7 @@ STATIC = ('close.cjs', 'contain.py', 'db_owner_set_gate.py',
           'db_owner_set_observer.py', 'delegated.py', 'execution-check.cjs',
           'open.cjs', 'ops.py', 'preparation-bindings.cjs', 'read-state.py',
           'recover-partial.py', 'restore-controls.py', 'start-one.py',
-          'stop-pair.py', 'unfence.py', 'validate.cjs', 'plan.private.json')
+          'stop-pair.py', 'unfence.py', 'validate.cjs', 'plan.private.json', 'baseline_contract.py')
 
 
 def require(value, code):
@@ -197,7 +192,7 @@ def main(original, destination):
                  'db-owner-bindings.private.json', 'path-bindings.private.json',
                  'backup-manifest.private.json', 'restore-result.json',
                  'prepare_policy.py', 'privileged.py', 'sequencer.py',
-                 're7-incident-6683-window.sudoers.proposed', 'privileged_output.py'):
+                 're7-incident-6683-window.sudoers.proposed', 'privileged_output.py', 'baseline_contract.py'):
         shutil.copy2(original / 'window' / name, window / name)
         (window / name).chmod(0o600)
     if absent is not None:
@@ -217,11 +212,11 @@ def main(original, destination):
     write_json(window / 'execution-gates.private.json', {k: False for k in (
         'ownerAuthorized', 'preflightReviewed', 'artifactsVerified',
         'restoreVerified', 'discrepanciesResolved')})
-    write_json(window / 'initial.private.json', {
-        'guard': {'generation': guard['generation'], 'open': True,
-                  'tasks': 0, 'ledgerFault': False},
-        'observedUtc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        'supervision': supervision})
+    prior_initial = operational(json.loads((original / 'window/initial.private.json').read_text()))
+    write_json(window / 'initial.private.json', capture_operational(
+        lambda: json.loads(Path('/var/lib/re7/campaign-operations/state.json').read_text()),
+        lambda args: subprocess.check_output(args, text=True),
+        restore_open=prior_initial['guard']['open']))
     source_config = (original / 'switch/candidate.config.private.json').read_bytes()
     target_config = (original / 'switch/return.config.private.json').read_bytes()
     for mode, name, raw in (
@@ -270,11 +265,7 @@ def main(original, destination):
         shutil.copy2(original / 'return' / name, returned / name)
         (returned / name).chmod(0o600)
     front_release = Path(expected[FRONT]['cwd'])
-    write_json(returned / 'baseline.private.json', {
-        'auth': counts['auth'], 'connected': counts['connected'],
-        'flags': counts['flags'],
-        'frontendBuild': (front_release / '.next/BUILD_ID').read_text().strip(),
-        'observedAt': datetime.datetime.now(datetime.timezone.utc).isoformat()})
+    write_json(returned / 'baseline.private.json', capture_functional(counts, front_release))
     for variant, raw in (('candidate', target_config), ('return', source_config)):
         data = json.loads(raw)
         path = returned / (variant + '.ecosystem.config.cjs')
@@ -286,7 +277,7 @@ def main(original, destination):
     (destination / 'switch/privileged_output.py').chmod(0o600)
     names = [line.split('  ', 1)[1] for line in
              (original / 'return/scripts.sha256').read_text().splitlines()]
-    require(len(names) == 25 and 'privileged_output.py' in names and
+    require(len(names) == 26 and 'privileged_output.py' in names and
             all((returned / name).is_file() for name in names),
             'return_static_incomplete')
     (returned / 'scripts.sha256').write_text(''.join(
@@ -299,6 +290,7 @@ def main(original, destination):
     manifest['filesSha256'] = {n: digest(window / n) for n in manifest['filesSha256']
                                if (window / n).is_file()}
     write_json(window / 'sequencer-manifest.json', manifest)
+    validate_preparation(destination, ['return'])
     require(not list(destination.glob('*/owner-*')) and
             not list(destination.glob('*/start-intent-*')),
             'reused_proof_or_intent')

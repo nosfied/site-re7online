@@ -1,0 +1,149 @@
+Preparação afbb7455 corrigida — REVISÃO PENDENTE, NÃO EXECUTAR JANELA NESTA ETAPA
+Autorização funcional/retorno preservada. Instalação e execução somente após revisão do delta operacional.
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb-baseline-20261006T020000Z
+API afbb7455; tar 8b67292578090a2f564e4a9bf399b002e667bba723c936859fc438aa1221f5c8.
+Retorno API b9/worker mínimo b9; frontend preservado. Gates falsos nesta preparação.
+
+1. Deifson: instalação futura APENAS da política (helper e nove comandos iguais).
+Preservar política/fase/capturas anteriores. Este bloco não contém tráfego.
+
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb-baseline-20261006T020000Z
+H=/usr/local/libexec/re7/incident-6683-window-control.py
+Q=/usr/local/libexec/re7/incident-6683-window-policy.json
+S=/etc/sudoers.d/re7-incident-6683-window
+QA=/usr/local/libexec/re7/incident-6683-window-policy.pre-reactive-baseline-afbb-020000.json
+sudo test ! -e "$QA" && sudo test ! -L "$QA"
+test "$(sha256sum "$H" | cut -d' ' -f1)" = 8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = e8e431efdb99655a0e1f63aa91cba6eae25dedb5ca8910762376408006c4ab98
+test "$(sha256sum "$P/window/privileged-policy.private.json" | cut -d' ' -f1)" = 00912bf4e0f44d88b0c9c639ba8a3d7dd773b317ea24f9df35dbef4e4e06add9
+sudo cmp "$P/window/re7-incident-6683-window.sudoers.proposed" "$S"
+sudo visudo -c
+sudo install -o root -g root -m 0600 "$Q" "$QA"
+sudo install -o root -g root -m 0600 "$P/window/privileged-policy.private.json" "$Q"
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = 00912bf4e0f44d88b0c9c639ba8a3d7dd773b317ea24f9df35dbef4e4e06add9
+sudo namei -l "$H" "$Q"
+sudo stat -c '%U %G %a %n' "$H" "$Q" "$S"
+sudo visudo -c
+python3 "$P/window/baseline_contract.py" "$P"
+python3 - "$P" <<'CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);sys.path.insert(0,str(p/'window'))
+from sequencer import Bridge
+v=json.loads(Bridge(p).privileged('inspect'))
+assert v=={'policySha256':'00912bf4e0f44d88b0c9c639ba8a3d7dd773b317ea24f9df35dbef4e4e06add9','phase':None,'sourceProcessesAlive':True}
+print('INSTALLED_POLICY_INSPECT_PASS')
+CHECK
+
+2. Codex: reconferir processos/bindings/proxy, hashes, auth/sessões, cron/boot,
+backup/restore e exclusividade imediatamente ANTES da janela autorizada.
+Drift invalida a preparação; não atualizar bindings para aceitar outro processo.
+O helper deve continuar root:root 0644, política root:root 0600, sudoers root 0440;
+a cadeia inteira deve continuar sem symlink/escrita por deploy.
+Só após esses checks e decisão de execução, habilitar os cinco gates:
+
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb-baseline-20261006T020000Z
+python3 - "$P" <<'GATES'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);w=p/'window';sys.path.insert(0,str(w))
+from sequencer import Bridge
+v=json.loads(Bridge(p).privileged('inspect'))
+assert v=={'policySha256':'00912bf4e0f44d88b0c9c639ba8a3d7dd773b317ea24f9df35dbef4e4e06add9','phase':None,'sourceProcessesAlive':True}
+f=w/'execution-gates.private.json';g=json.loads(f.read_text())
+assert len(g)==5 and all(x is False for x in g.values())
+assert not (w/'execution-gates.before-authorized.private.json').exists()
+(w/'execution-gates.before-authorized.private.json').write_bytes(f.read_bytes())
+f.write_text(json.dumps({k:True for k in g},sort_keys=True)+'\n');f.chmod(0o600)
+GATES
+python3 "$P/window/sequencer.py" "$P" > "$P/window/execution.stdout.private.log" 2> "$P/window/execution.stderr.private.log"
+
+Uma única execução: baseline -> CAS/drain -> prova preflight -> controle de
+iniciadores/contenção -> stop-pair -> saída/certificado/zero DB e advisory locks ->
+API afbb7455 -> prova V4 fresca -> worker mínimo reativo afbb7455 -> controle HTTP sob nft -> captura ->
+saved/fallback -> authorize-switch -> renovação (dois samples, limites) -> unfence ->
+health/DB/identidades/sessões/frontend -> guarda ao estado inicial -> cron/boot.
+Porta 3001, inclusive loopback, é validada só após unfence. Frontend não para.
+15 minutos: comunicar estado/impedimento e contingência ao owner; sem bypass/kill.
+Não relançar o sequenciador após consumo; preservar logs/provas/intents.
+
+3. Retorno antes do unfence: seleção pelo estado efetivo no próprio sequenciador.
+Antes de stop/intents: abort-prestop + restauração da guarda/controles.
+API parcial: return-partial/recover-partial; par candidato completo: return/stop-pair.
+Certificar saída e zero DB/locks antes de API b9, prova V4 antes do worker mínimo b9.
+Mesma renovação/validação/unfence. Nenhum restore de DB/auth ou start repetido.
+Se o retorno também bloquear, preservar guarda fechada/contenção e diagnosticar
+privileged-output.private.jsonl; não contornar um observador/ownership falho.
+
+4. Contingência após unfence afbb7455: não reiniciar para testar nem reabrir por prazo.
+O sequenciador mantém a guarda fechada quando validate.cjs falha; preserve os logs.
+Restaurar controles SOMENTE quando helper/estado correspondente permitirem.
+Gerar nova política a partir de PID/ticks reais + daemon + último snapshot/árvore/sockets.
+A geração exige ausência de barrier, cron/boot restaurados, guarda fechada e par
+afbb7455 esperado (ou worker comprovadamente ausente); nega substituto/sobrevivente.
+Não gerar sobre um modo return/return-partial já consumido.
+
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb-baseline-20261006T020000Z
+R=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-reactive-afbb-baseline-20261006T020000Z
+python3 - "$P" <<'CONTROLS'
+import sys
+from pathlib import Path
+p=Path(sys.argv[1]);sys.path.insert(0,str(p/'window'))
+from sequencer import Bridge
+Bridge(p).privileged('restore-controls')
+CONTROLS
+crontab - < "$P/window/deploy.crontab.before"
+python3 "$P/window/prepare_post_unfence_return.py" "$P" "$R"
+
+Deifson: instalação futura da política fresca de contingência, sem mudar helper/sudoers:
+
+set -euo pipefail
+R=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-reactive-afbb-baseline-20261006T020000Z
+H=/usr/local/libexec/re7/incident-6683-window-control.py
+Q=/usr/local/libexec/re7/incident-6683-window-policy.json
+QA=/usr/local/libexec/re7/incident-6683-window-policy.failed-reactive-baseline-afbb-020000.json
+sudo test ! -e "$QA" && sudo test ! -L "$QA"
+test "$(sha256sum "$H" | cut -d' ' -f1)" = 8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = 00912bf4e0f44d88b0c9c639ba8a3d7dd773b317ea24f9df35dbef4e4e06add9
+RETURN_POLICY_SHA=$(cat "$R/window/privileged-policy.sha256")
+test "$(sha256sum "$R/window/privileged-policy.private.json" | cut -d' ' -f1)" = "$RETURN_POLICY_SHA"
+sudo install -o root -g root -m 0600 "$Q" "$QA"
+sudo install -o root -g root -m 0600 "$R/window/privileged-policy.private.json" "$Q"
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = "$RETURN_POLICY_SHA"
+sudo namei -l "$H" "$Q"
+sudo stat -c '%U %G %a %n' "$H" "$Q"
+sudo visudo -c
+python3 - "$R" <<'RETURN_CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);sys.path.insert(0,str(p/'window'))
+from sequencer import Bridge
+v=json.loads(Bridge(p).privileged('inspect'))
+assert v['policySha256']==(p/'window/privileged-policy.sha256').read_text().strip() and v['phase'] is None
+absent=(p/'window/absent-worker-source.private.json').exists()
+assert v['sourceProcessesAlive'] is (not absent)
+if absent:assert v['sourceWorkerAbsent'] is True
+print('FRESH_RETURN_POLICY_INSPECT_PASS')
+f=p/'window/execution-gates.private.json';g=json.loads(f.read_text())
+assert len(g)==5 and all(x is False for x in g.values())
+assert not (p/'window/execution-gates.before-authorized.private.json').exists()
+(p/'window/execution-gates.before-authorized.private.json').write_bytes(f.read_bytes())
+f.write_text(json.dumps({k:True for k in g},sort_keys=True)+'\n');f.chmod(0o600)
+RETURN_CHECK
+
+Codex: executar uma única vez, após inspect/pré-condições e leitura da política fresca:
+
+R=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-reactive-afbb-baseline-20261006T020000Z
+python3 "$R/window/sequencer.py" "$R" --post-unfence-return > "$R/window/execution.stdout.private.log" 2> "$R/window/execution.stderr.private.log"
+
+Worker ausente: recover-partial encerra só API candidata após comprovar ausência
+exaustiva do worker/descendentes/sockets. Par vivo: stop-pair. API b9 + worker mínimo b9
+iniciam apenas depois dos certificados/zero DB e V4. Frontend/DB/auth preservados.
+Hash da política de contingência é calculado na geração; não pode ser fixado agora
+sem inventar PID/ticks. Deifson precisa estar disponível para essa instalação root.
+Todas as ações privilegiadas do executor/template/modos usam o logger privado.
+A recusa root desconhecida não é repetida. Recaptura só para FD/sockets comprovados
+pré-delete; máximo três pares por recaptura e três unfences. Churn persistente bloqueia.

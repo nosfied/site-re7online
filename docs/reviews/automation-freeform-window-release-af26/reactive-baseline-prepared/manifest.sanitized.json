@@ -1,0 +1,153 @@
+{
+  "allGatesFalse": true,
+  "backupReusedIntegrityVerified": {
+    "bytes": 27223996,
+    "sha256": "33ba8ab892619578b6fb1ce17c2dac5c643449a33790c2ae801fbacd769782ec"
+  },
+  "guard": {
+    "generation": 31,
+    "open": true
+  },
+  "helperSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+  "modes": {
+    "return": {
+      "filesSha256": {
+        "backup-manifest.json": "9e523f00315abb6a13ecb98586b50625ad74d0ac07966859967459801f00cbe7",
+        "baseline.private.json": "bb4800f188c4433522466c8d1cef0559408b79b02a9c5dd3dee0fcccbbce8b01",
+        "baseline_contract.py": "6ed15712948f998328b5ba82578d3241073848a4f8ce356861a12fa890964657",
+        "candidate.config.private.json": "93466d20ffa24b5118d65bc8411b851516b42cb50d4a741503d07a9b21c98947",
+        "candidate.ecosystem.config.cjs": "2a3cc397a209bbe4170a2069081aef1128f2a607f61230b7809f4e1be8335609",
+        "close.cjs": "f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19",
+        "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+        "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+        "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+        "delegated.py": "98edb830753dbff92986c5abefb677969ba1defc2d2bdb5aedba63b204ac50cf",
+        "execution-check.cjs": "c5bb424669134441de4a2f5355cc97f786909c18999857dd76ff5bf167645a01",
+        "open.cjs": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+        "ops.py": "2227975426f776c2e9ec9ab48efd2a77f4fcd488c63ad853d58fe47ee22cd727",
+        "plan.private.json": "6cb4a32380d07dbd9b6b05a29293edfdb63cb7a8d1a84ddc2ca26ffd26872cf5",
+        "preparation-bindings.cjs": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+        "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+        "proof-bindings.private.json": "92158e6bb900e69a86e79528a4141352517171d83725e54a56f747b001319afc",
+        "read-state.py": "06031bbf7c99483752fe8270dcfc067f78602eceb62a258a699c8746a98dbd3e",
+        "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+        "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+        "return.config.private.json": "94b33834ed481fbf14aa38d34523f4a5b89debbe91ca41d595620ebad75acc14",
+        "return.ecosystem.config.cjs": "afb99c029bea13b4e0466478f37344da67d83f3d2bfcca35f467955b86d236ca",
+        "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+        "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+        "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+        "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+      },
+      "manifestSha256": "bc5a13c28012d1f19d46918f636f9a2db95f8300615add7968a88a06e0e519ca"
+    },
+    "return-partial": {
+      "filesSha256": {
+        "backup-manifest.json": "9e523f00315abb6a13ecb98586b50625ad74d0ac07966859967459801f00cbe7",
+        "baseline.private.json": "bb4800f188c4433522466c8d1cef0559408b79b02a9c5dd3dee0fcccbbce8b01",
+        "baseline_contract.py": "6ed15712948f998328b5ba82578d3241073848a4f8ce356861a12fa890964657",
+        "candidate.config.private.json": "93466d20ffa24b5118d65bc8411b851516b42cb50d4a741503d07a9b21c98947",
+        "candidate.ecosystem.config.cjs": "2a3cc397a209bbe4170a2069081aef1128f2a607f61230b7809f4e1be8335609",
+        "close.cjs": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768",
+        "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+        "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+        "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+        "delegated.py": "98edb830753dbff92986c5abefb677969ba1defc2d2bdb5aedba63b204ac50cf",
+        "execution-check.cjs": "c5bb424669134441de4a2f5355cc97f786909c18999857dd76ff5bf167645a01",
+        "open.cjs": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+        "ops.py": "2227975426f776c2e9ec9ab48efd2a77f4fcd488c63ad853d58fe47ee22cd727",
+        "plan.private.json": "84e12608f5abbf182d8980bdec5adf98f1b8bbac26b221e6296e5d4207f9ba10",
+        "preparation-bindings.cjs": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+        "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+        "proof-bindings.private.json": "92158e6bb900e69a86e79528a4141352517171d83725e54a56f747b001319afc",
+        "read-state.py": "06031bbf7c99483752fe8270dcfc067f78602eceb62a258a699c8746a98dbd3e",
+        "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+        "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+        "return.config.private.json": "94b33834ed481fbf14aa38d34523f4a5b89debbe91ca41d595620ebad75acc14",
+        "return.ecosystem.config.cjs": "afb99c029bea13b4e0466478f37344da67d83f3d2bfcca35f467955b86d236ca",
+        "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+        "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+        "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+        "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+      },
+      "manifestSha256": "9cd363c35f7c2b0ddf2377db0018051284c3f79a9fa8c6fe970590a38293dd9f"
+    },
+    "switch": {
+      "filesSha256": {
+        "backup-manifest.json": "9e523f00315abb6a13ecb98586b50625ad74d0ac07966859967459801f00cbe7",
+        "baseline.private.json": "bb4800f188c4433522466c8d1cef0559408b79b02a9c5dd3dee0fcccbbce8b01",
+        "baseline_contract.py": "6ed15712948f998328b5ba82578d3241073848a4f8ce356861a12fa890964657",
+        "candidate.config.private.json": "94b33834ed481fbf14aa38d34523f4a5b89debbe91ca41d595620ebad75acc14",
+        "candidate.ecosystem.config.cjs": "afb99c029bea13b4e0466478f37344da67d83f3d2bfcca35f467955b86d236ca",
+        "close.cjs": "7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc",
+        "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+        "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+        "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+        "delegated.py": "98edb830753dbff92986c5abefb677969ba1defc2d2bdb5aedba63b204ac50cf",
+        "execution-check.cjs": "c5bb424669134441de4a2f5355cc97f786909c18999857dd76ff5bf167645a01",
+        "open.cjs": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+        "ops.py": "2227975426f776c2e9ec9ab48efd2a77f4fcd488c63ad853d58fe47ee22cd727",
+        "plan.private.json": "96ae69b06dcef3084c9e5aa26a8cc7caccf3285fb8daa871432e69fd564897b0",
+        "preparation-bindings.cjs": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+        "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+        "proof-bindings.private.json": "92158e6bb900e69a86e79528a4141352517171d83725e54a56f747b001319afc",
+        "read-state.py": "06031bbf7c99483752fe8270dcfc067f78602eceb62a258a699c8746a98dbd3e",
+        "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+        "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+        "return.config.private.json": "93466d20ffa24b5118d65bc8411b851516b42cb50d4a741503d07a9b21c98947",
+        "return.ecosystem.config.cjs": "2a3cc397a209bbe4170a2069081aef1128f2a607f61230b7809f4e1be8335609",
+        "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+        "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+        "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+        "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+      },
+      "manifestSha256": "f4dbb7a66a68a5a855c1bc27eae8cbde02494b641934730767f2838829d66f60"
+    }
+  },
+  "observedUtc": "2026-10-06T09:54:32.087189+00:00",
+  "policyExpectedInstalledSha256": "e8e431efdb99655a0e1f63aa91cba6eae25dedb5ca8910762376408006c4ab98",
+  "policySha256": "00912bf4e0f44d88b0c9c639ba8a3d7dd773b317ea24f9df35dbef4e4e06add9",
+  "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb-baseline-20261006T020000Z",
+  "processes": {
+    "re7-admin-front": {
+      "pid": 2537692,
+      "restarts": 0,
+      "ticks": "2081554427"
+    },
+    "re7-whatsapp-agent": {
+      "pid": 2980770,
+      "restarts": 0,
+      "ticks": "2099843172"
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 2980928,
+      "restarts": 0,
+      "ticks": "2099843568"
+    }
+  },
+  "restoreReused": true,
+  "status": "PREPARED_FOR_REVIEW_NOT_DEPLOYED",
+  "windowHashes": {
+    "OWNER-STEPS.txt": "cdad4ce7abdbd62265971769d97dbdec21b0016bf57e6e0772b1496935c20cf2",
+    "absent-worker-return.patch": "378841d7326acfb26832ac8d3b910837ec57626abc3d493fbc8883bf75d4210a",
+    "baseline-contract.patch": "c1dc4a711d93b4c6a556bd97525622f8720e7f89f52ea04104b83aceb4478bbe",
+    "baseline_contract.py": "6ed15712948f998328b5ba82578d3241073848a4f8ce356861a12fa890964657",
+    "initial.private.json": "e6389d517dfb04baa1bd4c9f83433d81c4471f5eb36565df07774469158d77bd",
+    "mode-manifest-v4.json": "062036a24c00b1c82cfca198d4f041095cb6feeea3106b64c60831f47a1772a0",
+    "prepare_baselines.py": "a126003876c1d865d16725ba393856611525a9ea49875b37ebb595cf69deb696",
+    "prepare_policy.py": "c67018a12a628a6945ee28ac8628c1b6b7ff8df86eecd1d96295c6211e226603",
+    "prepare_post_unfence_return.py": "f015ee552329c01d0c238e4b0ce726ed4bdb51075cc381bfb95016321d04e6da",
+    "privileged-observer-output.patch": "36b60240b10cf84b775a9c35bd9c4ca81ff6ce8482f0107f3c7217e9c50e33be",
+    "privileged.py": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+    "render_sudoers.py": "43ac54893e854991466b11f379fdefa66662cc40822bc1b62fc8bdb110c48299",
+    "sequencer-manifest.json": "aabd01d392c863392c2d149e7c567aa2ab84c21a91b717b59b5803f256188532",
+    "sequencer.py": "8fadca4c3071d96c6a6f82c38f1a3af8dea825b470bfbafe62f189940f348cc1"
+  },
+  "testEvidence": {
+    "contracts": 13,
+    "sequencer": 24,
+    "template": 4,
+    "effects": "nft/systemd/crontab/DB/PM2 observations injected; Node20 read-only gate real"
+  }
+}

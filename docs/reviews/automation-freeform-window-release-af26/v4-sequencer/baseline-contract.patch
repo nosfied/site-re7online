@@ -1,0 +1,67 @@
+--- ops.py
++++ ops.py
+@@ -399,7 +399,8 @@
+         self.root = Path(root)
+         self.window = self.root.parent / 'window'
+         self.d = driver
+-        self.initial = json.loads((self.window / 'initial.private.json').read_text())
++        from baseline_contract import operational
++        self.initial = operational(json.loads((self.window / 'initial.private.json').read_text()))
+ 
+     def enter(self):
+         require('ActiveState=inactive' in self.initial['supervision'], 'unexpected_initial_supervision')
+--- delegated.py
++++ delegated.py
+@@ -11,6 +11,7 @@
+ from pathlib import Path
+ 
+ import ops
++from baseline_contract import operational, validate_preparation
+ 
+ ACTIONS = {'preflight', 'prepare-containment', 'contain', 'stop-pair',
+            'recover-partial', 'start:re7-whatsapp-agent',
+@@ -65,6 +66,7 @@
+ 
+ 
+ def bindings(root, action, guard):
++    validate_preparation(Path(root).parent, [Path(root).name])
+     root = Path(root)
+     guard = ops.guard_state(guard)
+     result = {'action': action, 'root': str(root.resolve()),
+@@ -165,7 +167,7 @@
+                     (op.window / 'deploy.crontab.before').read_bytes(), 'prepare_already_applied')
+         ops.require(Path('/etc/cron.d/re7-converta-backup').read_bytes() ==
+                     (op.window / 're7-converta-backup.before').read_bytes(), 'system_cron_drift')
+-        initial = json.loads((op.window / 'initial.private.json').read_text())
++        initial = operational(json.loads((op.window / 'initial.private.json').read_text()))
+         ops.require(driver.run(['systemctl', 'show', 'pm2-deploy.service',
+                                 '--property=ActiveState,UnitFileState']) == initial['supervision'],
+                     'supervision_drift')
+@@ -186,7 +188,7 @@
+                     (op.window / 'deploy.crontab.window').read_bytes(), 'controls_already_restored')
+         ops.require(Path('/etc/cron.d/re7-converta-backup').read_bytes() ==
+                     (op.window / 're7-converta-backup.before').read_bytes(), 'system_cron_restore_failed')
+-        initial = json.loads((op.window / 'initial.private.json').read_text())
++        initial = operational(json.loads((op.window / 'initial.private.json').read_text()))
+         ops.require(driver.run(['systemctl', 'show', 'pm2-deploy.service',
+                                 '--property=ActiveState,UnitFileState']) == initial['supervision'],
+                     'supervision_restore_failed')
+--- execution-check.cjs
++++ execution-check.cjs
+@@ -1,6 +1,7 @@
+ module.exports = function () {
+   const fs = require('fs'), path = require('path'), assert = require('assert'), crypto = require('crypto');
+   assert(__dirname.startsWith('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/'));
++  require('child_process').execFileSync('/usr/bin/python3', [path.join(__dirname, 'baseline_contract.py'), path.dirname(__dirname), path.basename(__dirname)], {stdio: 'pipe'});
+   const g = JSON.parse(fs.readFileSync(path.join(__dirname, '../window/execution-gates.private.json')));
+   assert(['ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved'].every(k => g[k] === true), 'execution gates incomplete');
+   for (const row of fs.readFileSync(path.join(__dirname, 'scripts.sha256'), 'utf8').trim().split('\n')) {
+--- open.cjs
++++ open.cjs
+@@ -1,5 +1,5 @@
++require('./execution-check.cjs')();
+ const initial=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,'../window/initial.private.json')));if(!initial.guard.open){console.log('Initial guard was closed; preserved closed state.');}else{
+-require('./execution-check.cjs')();
+ const fs=require('fs'),assert=require('assert'),cp=require('child_process');process.umask(0o077);
+ const p=__dirname;const a=require(p+'/candidate.ecosystem.config.cjs').apps[0];
+ (async()=>{assert(fs.existsSync(p+'/backup-manifest.json'));const bindings=require('./preparation-bindings.cjs');bindings.proofs(p);const sql='BEGIN READ ONLY; SET LOCAL statement_timeout=10000; '+bindings.sql+'; ROLLBACK;';const q=JSON.parse(cp.execFileSync('docker',['exec','-i','wa-agent-postgres','psql','-X','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1'],{input:sql,encoding:'utf8'}));bindings.noWork(q);const url='http://127.0.0.1:3001/admin/ops/campaign-execution',headers={'X-Admin-Token':a.env.ADMIN_TOKEN,'Content-Type':'application/json'};let r=await fetch(url,{headers});assert.equal(r.status,200);const before=await r.json();assert(before.available&&!before.open&&before.drained&&!before.ledgerFault&&before.tasks.length===0&&before.build===a.env.CAMPAIGN_BUILD_ID);fs.writeFileSync(p+'/guard-before-reopen.json',JSON.stringify(before));r=await fetch(url,{method:'POST',headers,body:JSON.stringify({open:true,generation:before.generation,reason:'Owner-authorized admission restoration after verified 6683 API correction V4 switch; preparation incident-6683-v4-sequenced-20261003T165710Z'})});const result=await r.json();fs.writeFileSync(p+'/guard-open-response.json',JSON.stringify({status:r.status,result}));assert.equal(r.status,200);r=await fetch(url,{headers});const g=await r.json();assert(r.status===200&&g.available&&g.open&&!g.ledgerFault&&g.tasks.length===0);fs.copyFileSync('/var/lib/re7/campaign-operations/state.json',p+'/guard-reopened.private.json');const report={utc:new Date().toISOString(),available:g.available,open:g.open,drained:g.drained,generation:g.generation,tasks:g.tasks.length,ledgerFault:g.ledgerFault,queue:q};fs.writeFileSync(p+'/open-result.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));})().catch(e=>{console.error(e.message);process.exitCode=1;});

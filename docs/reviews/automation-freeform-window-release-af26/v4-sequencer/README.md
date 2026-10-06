@@ -94,3 +94,8 @@ sudo rm -- "$H" "$Q"
 ```
 
 Não apagar lock, fase, audit, backups, certificados ou provas como parte da revogação; preservar a trilha. Não remover o observador V4 já instalado, pois ele serve também ao retorno. O início da janela depende ainda de backup/restore e baseline **frescos**, root helper instalado e atestado, todos os gates privados verdadeiros e ausência de executor concorrente. A guarda permanece no estado atual até lá.
+
+
+## Contratos de baseline após d717f113
+
+[Correção auditada, preparação e instalação restrita](../REACTIVE_AFBB_BASELINE_CONTRACT_REVIEW_2026-10-06.md). Usar `prepare_baselines.py` em preparação nova e `baseline_contract.py` nos consumidores; não confundir initial operacional, baseline funcional e snapshot do sequenciador. Patch de quatro adaptadores com origens atestadas, manifests26; validação antes de CAS. Helper e nove chamadas sudo inalterados; revisão pendente, sem nova janela.

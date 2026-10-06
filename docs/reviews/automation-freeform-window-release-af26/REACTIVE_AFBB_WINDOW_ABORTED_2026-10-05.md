@@ -17,7 +17,7 @@ Antes da execução, reconferência real dos hashes de fontes/compilados API, ta
 | 01:15:50.767 / 22:15:50.767 | `prepare-containment/execute` recusou; exit code 1. |
 | 01:15:51.363 / 22:15:51.363 | Recuperação `prestop`: `abort-prestop` PASS e guarda restaurada aberta geração 31. |
 
-**Causa comprovada:** `switch/delegated.py::DelegatedControls.prepare()` acessa `self.initial['supervision']` (linha 324), mas o `baseline.private.json` preparado contém apenas `auth`, `connected`, `flags`, `frontendBuild` e `observedAt`. Resultado: **`KeyError: 'supervision'`**, antes da instalação do crontab de janela e antes de `privileged enter`.
+**Causa comprovada:** `switch/delegated.py::DelegatedControls.prepare()` acessa `self.initial['supervision']` (linha 324), mas o `window/initial.private.json` preparado contém somente `guard` e `observedUtc`. Resultado: **`KeyError: 'supervision'`**, antes da instalação do crontab de janela e antes de `privileged enter`.
 
 A cadeia efetiva foi `sequencer.action → Bridge.protocol → delegated.py execute → DelegatedControls.prepare`. Stdout vazio, stderr/código de saída preservados em `window/protocol-output.private.jsonl`; erro resumido no journal. Não houve `containment_begin`, `stop-pair`, start-intent ou start de sucessor. A ordem CAS → prova → preflight funcionou; o defeito é a composição incompleta do baseline para a etapa seguinte. Não é falha de provider, artefato funcional, PM2 ou renovação de captura.
 
@@ -34,6 +34,8 @@ Leitura às **01:16:30 UTC**: mesmos PIDs/ticks e zero reinícios, guarda aberta
 | Frontend af26 | PID2537692 / ticks2081554427 / reinícios0; BUILD_ID `J5cHyVKiKEI5xxiGBY5If` |
 
 **Contenção e interrupção de processos: não ocorreram.** Admissões de campanhas ficaram fechadas por aproximadamente 2,24 segundos entre fechamento e restauração; API/worker/frontend não saíram. Horizonte de escalonamento de 15 minutos de contenção não foi iniciado. Controles já intactos foram reconferidos, sem retorno binário necessário. Owner confirmou nesta rodada que sua sessão e Inbox/CRM carregam normalmente após recarregar somente em leitura. Essa verificação de atendimento não é aceite funcional da contingência afbb.
+
+**Errata da auditoria posterior:** o texto em d717f113 chamou esse arquivo de baseline funcional. A leitura efetiva é do baseline operacional `window/initial.private.json`; o baseline funcional é distinto. [Correção e provas](REACTIVE_AFBB_BASELINE_CONTRACT_REVIEW_2026-10-06.md). Logs e tentativa permanecem preservados.
 
 ## Preservação e próximo passo
 

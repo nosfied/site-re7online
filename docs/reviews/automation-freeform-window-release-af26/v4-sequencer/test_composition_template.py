@@ -3,6 +3,7 @@ import contextlib, hashlib, importlib.util, json, os
 from pathlib import Path
 import re, shutil, subprocess, sys, tempfile, unittest
 from unittest.mock import patch
+from baseline_contract import capture_operational
 
 PACKAGE=Path(sys.argv[1]).resolve()
 # Read the fixed preparation binding from the exact staged adapter, not a dated fixture.
@@ -24,11 +25,12 @@ class Composition(unittest.TestCase):
             shutil.copytree(PACKAGE/mode,self.original/mode)
             for n in ('ops.py','delegated.py','read-state.py','execution-check.cjs'):
                 f=self.original/mode/n;f.write_bytes(f.read_bytes().replace(PRIVATE_SOURCE.encode(),str(self.original).encode()))
-        for n in ('privileged.py','sequencer.py','prepare_policy.py','prepare_post_unfence_return.py','privileged_output.py','absent-worker-return.patch','sequencer-manifest.json'):
+        for n in ('privileged.py','sequencer.py','prepare_policy.py','prepare_post_unfence_return.py','privileged_output.py','absent-worker-return.patch','sequencer-manifest.json','baseline_contract.py'):
             shutil.copyfile(PACKAGE/'window'/n,self.window/n)
         self.template=load('composed_template',self.window/'prepare_post_unfence_return.py')
         self.template.BASE=self.base
         self.guard={'version':1,'open':False,'generation':28,'tasks':{},'audit':[]}
+        (self.window/'initial.private.json').write_text(json.dumps(capture_operational(lambda:self.guard,lambda _: 'ActiveState=inactive\nUnitFileState=enabled\n',restore_open=True)))
         self.apps={};self.config={};self.returned={}
         for i,n in enumerate((self.template.API,self.template.WORKER,self.template.FRONT),101):
             d=self.base/n;d.mkdir();(d/'index.js').write_text('synthetic');(d/'.next').mkdir();(d/'.next/BUILD_ID').write_text('synthetic-build')
@@ -102,8 +104,8 @@ class Composition(unittest.TestCase):
         gates=json.loads((self.dest/'window/execution-gates.private.json').read_text())
         self.assertEqual(set(gates),{'ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved'})
         self.assertTrue(all(x is False for x in gates.values()))
-        # Hashes checked on the actual generated 25-file package, not a mocked manifest.
-        lines=(self.dest/'return/scripts.sha256').read_text().splitlines();self.assertEqual(len(lines),25)
+        # Hashes checked on the actual generated 26-file package, not a mocked manifest.
+        lines=(self.dest/'return/scripts.sha256').read_text().splitlines();self.assertEqual(len(lines),26)
         for line in lines:
             h,n=line.split('  ',1);self.assertEqual(hashlib.sha256((self.dest/'return'/n).read_bytes()).hexdigest(),h)
         for where in ('window','switch','return'):
