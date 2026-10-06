@@ -5,7 +5,11 @@ import re, shutil, subprocess, sys, tempfile, unittest
 from unittest.mock import patch
 
 PACKAGE=Path(sys.argv[1]).resolve()
-PRIVATE_SOURCE='/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9-capture-20261005T143500Z'
+# Read the fixed preparation binding from the exact staged adapter, not a dated fixture.
+bindings=set(re.findall(r'/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-[A-Za-z0-9-]+/', (PACKAGE/'switch/ops.py').read_text()))
+assert len(bindings)==1, 'test_preparation_binding_ambiguous'
+PRIVATE_SOURCE=bindings.pop().rstrip('/')
+sys.path.insert(0,str(PACKAGE/'window'))
 
 def load(name,path):
     spec=importlib.util.spec_from_file_location(name,path)

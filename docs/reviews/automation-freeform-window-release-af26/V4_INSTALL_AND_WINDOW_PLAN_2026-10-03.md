@@ -124,3 +124,8 @@ sudo rmdir /usr/local/libexec
 ```
 
 `rmdir` somente remove diretório vazio; qualquer arquivo alheio impede a remoção. O snapshot privado de leitura e o arquivo de regra proposto no novo root são evidências e não são apagados por esses comandos.
+
+
+## Preparação reativa afbb7455 (05/10, sem execução)
+
+A preparação mais recente está no [relatório único afbb](REACTIVE_AFBB_V4_PREPARED_2026-10-05.md) e em [OWNER-STEPS fixado](reactive-afbb-prepared/OWNER-STEPS.txt). Reutiliza os controles corrigidos, helper 8de358fd e composição 140fd/183b, com bindings/política novos; não reexecutar preparações consumidas. Ida: API afbb + tar mínimo reativo; retorno: API/worker b9 atualmente efetivos, frontend preservado. Só política muda em futura instalação restrita por Deifson; gates falsos. Backup/restore já verificado deve ser reconfirmado na janela. Não constitui autorização para conter/parar nem aceite CRM/CSV/CRA-PR.

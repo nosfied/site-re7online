@@ -1,0 +1,199 @@
+{
+  "status": "PREPARED FOR INSTALLATION / NOT DEPLOYED",
+  "observedUtc": "2026-10-06T01:01:56.660709+00:00",
+  "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z",
+  "releases": {
+    "api": "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api",
+    "worker": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified",
+    "returnApi": "/opt/re7online/releases/b9b58177880e729854580def1180f3edb2fb83e8-api",
+    "returnWorker": "/opt/re7online/releases/worker-minimal-hybrid-b9b58177-verified-v3/apps/whatsapp-web-worker",
+    "frontend": "/opt/re7online/releases/af26f48a9c309b24ec4d23cfa97cc1e407c09d98-front"
+  },
+  "helperSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+  "installedPolicyBytes": "root-only; expected e57320ee60e00d4f641a311e64e8acde94cd2f06081da5d8ee4fdf540c65ef7f, must be checked by Deifson before future installation",
+  "policySha256": "e8e431efdb99655a0e1f63aa91cba6eae25dedb5ca8910762376408006c4ab98",
+  "windowHashes": {
+    "privileged.py": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "prepare_policy.py": "3d612e0bd003f39c182de240c75439b455dd6f4e8a78b17e0ceaeb9ed27f9601",
+    "prepare_post_unfence_return.py": "322264cc250f2f29041fd7a3e5bf1711b52c35bcb852d932db1934aca3eb4a46",
+    "sequencer.py": "145cb7e3c2f2f0fc1baff5799c755e1ea5e6bc63aa2220b95b10392c5cc50460",
+    "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+    "sequencer-manifest.json": "79199bc239b320e8c80f49a12d04e5d7a735ef375b919540aba38a9c2cc76ff9",
+    "mode-manifest-v4.json": "09f93771aeb346925659d37cf09b31e90b46f9ddc438b2122de2033949fc05eb",
+    "release-manifest.private.json": "b275d1221f5d483ddcc04ab4316ba6aa82552cba583cc00f6661cfe44a1158a2",
+    "backup-manifest.private.json": "9e523f00315abb6a13ecb98586b50625ad74d0ac07966859967459801f00cbe7",
+    "restore-result.json": "100b0a059994a52a18a0cf654424f35010893028093e7699b987a8d66ab27db2",
+    "execution-gates.private.json": "c4649d78f9bbe9918ed049fb4f254cd8d7887684c0f83b4824ddbbd628bd865b",
+    "worker-functional-manifest.json": "ecd717aecc0ba1019a6e039b27d0ecbbf98e334b23f15cf2a6acf36c646aaaf6",
+    "worker-functional.patch": "ce0da6d43faa3817ec16779633cbafdbb8bd536e0e86325f23238cea55289b3c",
+    "OWNER-STEPS.txt": "b1fb11f3acda488cd11d51fe48addcd700f72a62d8665249ed32e9eb0b9e4625"
+  },
+  "modes": {
+    "switch": {
+      "manifestSha256": "b85ca9720a0c5b82abccf15e5ebcd54b1c338ed43bb943d8bc350ed7f16d82b3",
+      "filesSha256": {
+        "backup-manifest.json": "9e523f00315abb6a13ecb98586b50625ad74d0ac07966859967459801f00cbe7",
+        "baseline.private.json": "0c94adf09462eb134acc4ec1fa62a0610fb87f60771450723c28f1e749bcc546",
+        "candidate.config.private.json": "94b33834ed481fbf14aa38d34523f4a5b89debbe91ca41d595620ebad75acc14",
+        "candidate.ecosystem.config.cjs": "afb99c029bea13b4e0466478f37344da67d83f3d2bfcca35f467955b86d236ca",
+        "close.cjs": "7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc",
+        "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+        "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+        "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+        "delegated.py": "92e286f81294104f2f82352c992724e77b23b786d391912071170c934562c984",
+        "execution-check.cjs": "1d0f5a5c4ba320a4e163e61d58c48ada7e60a86915b7f63e259d4722e52ddf9b",
+        "open.cjs": "40bef72b9aea0fee3432eafd3bf265bdcad5411e8cb2e05e1bf31598b9257434",
+        "ops.py": "8e28d31132287666bd606ae6cbc8ddedcae7aed6f8dc12025c8516467ff602d5",
+        "plan.private.json": "96ae69b06dcef3084c9e5aa26a8cc7caccf3285fb8daa871432e69fd564897b0",
+        "preparation-bindings.cjs": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+        "proof-bindings.private.json": "92158e6bb900e69a86e79528a4141352517171d83725e54a56f747b001319afc",
+        "read-state.py": "7af8f8b4b26da28afced04673af70de1d14ee35aa1e778f8baa448c30bd7f986",
+        "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+        "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+        "return.config.private.json": "93466d20ffa24b5118d65bc8411b851516b42cb50d4a741503d07a9b21c98947",
+        "return.ecosystem.config.cjs": "2a3cc397a209bbe4170a2069081aef1128f2a607f61230b7809f4e1be8335609",
+        "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+        "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+        "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+        "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+        "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+      }
+    },
+    "return": {
+      "manifestSha256": "ff43af5246591921cb395b63fc8b4d1e0759709e70c9a69ff66eecde0902c11f",
+      "filesSha256": {
+        "backup-manifest.json": "9e523f00315abb6a13ecb98586b50625ad74d0ac07966859967459801f00cbe7",
+        "baseline.private.json": "0c94adf09462eb134acc4ec1fa62a0610fb87f60771450723c28f1e749bcc546",
+        "candidate.config.private.json": "93466d20ffa24b5118d65bc8411b851516b42cb50d4a741503d07a9b21c98947",
+        "candidate.ecosystem.config.cjs": "2a3cc397a209bbe4170a2069081aef1128f2a607f61230b7809f4e1be8335609",
+        "close.cjs": "f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19",
+        "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+        "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+        "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+        "delegated.py": "92e286f81294104f2f82352c992724e77b23b786d391912071170c934562c984",
+        "execution-check.cjs": "1d0f5a5c4ba320a4e163e61d58c48ada7e60a86915b7f63e259d4722e52ddf9b",
+        "open.cjs": "dca81bf02fd7170b552bb6ba028e9b6105e5b1637c711572e061474a6626bcec",
+        "ops.py": "8e28d31132287666bd606ae6cbc8ddedcae7aed6f8dc12025c8516467ff602d5",
+        "plan.private.json": "6cb4a32380d07dbd9b6b05a29293edfdb63cb7a8d1a84ddc2ca26ffd26872cf5",
+        "preparation-bindings.cjs": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+        "proof-bindings.private.json": "92158e6bb900e69a86e79528a4141352517171d83725e54a56f747b001319afc",
+        "read-state.py": "7af8f8b4b26da28afced04673af70de1d14ee35aa1e778f8baa448c30bd7f986",
+        "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+        "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+        "return.config.private.json": "94b33834ed481fbf14aa38d34523f4a5b89debbe91ca41d595620ebad75acc14",
+        "return.ecosystem.config.cjs": "afb99c029bea13b4e0466478f37344da67d83f3d2bfcca35f467955b86d236ca",
+        "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+        "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+        "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+        "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+        "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+      }
+    },
+    "return-partial": {
+      "manifestSha256": "0de724369a42bf7f2088d45646a90d4e9529928658d9231afeb15dd7f0bd7cf8",
+      "filesSha256": {
+        "backup-manifest.json": "9e523f00315abb6a13ecb98586b50625ad74d0ac07966859967459801f00cbe7",
+        "baseline.private.json": "0c94adf09462eb134acc4ec1fa62a0610fb87f60771450723c28f1e749bcc546",
+        "candidate.config.private.json": "93466d20ffa24b5118d65bc8411b851516b42cb50d4a741503d07a9b21c98947",
+        "candidate.ecosystem.config.cjs": "2a3cc397a209bbe4170a2069081aef1128f2a607f61230b7809f4e1be8335609",
+        "close.cjs": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768",
+        "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+        "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+        "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+        "delegated.py": "92e286f81294104f2f82352c992724e77b23b786d391912071170c934562c984",
+        "execution-check.cjs": "1d0f5a5c4ba320a4e163e61d58c48ada7e60a86915b7f63e259d4722e52ddf9b",
+        "open.cjs": "a939c916158b0db4242788ead5bae8539ab436775ba4e5219c2c10bec7417181",
+        "ops.py": "8e28d31132287666bd606ae6cbc8ddedcae7aed6f8dc12025c8516467ff602d5",
+        "plan.private.json": "84e12608f5abbf182d8980bdec5adf98f1b8bbac26b221e6296e5d4207f9ba10",
+        "preparation-bindings.cjs": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+        "proof-bindings.private.json": "92158e6bb900e69a86e79528a4141352517171d83725e54a56f747b001319afc",
+        "read-state.py": "7af8f8b4b26da28afced04673af70de1d14ee35aa1e778f8baa448c30bd7f986",
+        "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+        "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+        "return.config.private.json": "94b33834ed481fbf14aa38d34523f4a5b89debbe91ca41d595620ebad75acc14",
+        "return.ecosystem.config.cjs": "afb99c029bea13b4e0466478f37344da67d83f3d2bfcca35f467955b86d236ca",
+        "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+        "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+        "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+        "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+        "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+      }
+    }
+  },
+  "backup": {
+    "bytes": 27223996,
+    "sha256": "33ba8ab892619578b6fb1ce17c2dac5c643449a33790c2ae801fbacd769782ec"
+  },
+  "restore": {
+    "applicationStarted": false,
+    "capturedUtc": "2026-10-06T00:59:30.252454+00:00",
+    "catalog": 614,
+    "dumpSha256": "33ba8ab892619578b6fb1ce17c2dac5c643449a33790c2ae801fbacd769782ec",
+    "historicalRollbacks": 6,
+    "migrationChecksumMismatches": [],
+    "migrationsFinished": 60,
+    "missingMigrationFiles": [],
+    "postgres": "16.15",
+    "providerCalls": 0,
+    "restoreExitCode": 0,
+    "temporaryDatabaseRemoved": true
+  },
+  "guard": {
+    "open": true,
+    "generation": 29,
+    "tasks": 0
+  },
+  "work": {
+    "jobs": 0,
+    "groups": 0,
+    "leases": 0,
+    "sendingScheduled": 0
+  },
+  "connected": 4,
+  "auth": 5,
+  "schedulerDisabled": "false",
+  "processes": {
+    "re7-admin-front": {
+      "pid": 2537692,
+      "ticks": "2081554427",
+      "restarts": 0
+    },
+    "re7-whatsapp-agent": {
+      "pid": 2980770,
+      "ticks": "2099843172",
+      "restarts": 0
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 2980928,
+      "ticks": "2099843568",
+      "restarts": 0
+    }
+  },
+  "allGatesFalse": true,
+  "frontendBuild": "J5cHyVKiKEI5xxiGBY5If",
+  "identityRealHelperPass": true,
+  "proxyMatched": true,
+  "controlsMatched": true,
+  "noConsumedMarkers": true,
+  "liveHealth": {
+    "api": "ok",
+    "database": "ok",
+    "workerControl": "ok",
+    "readOnly": true
+  },
+  "healthObservedUtc": "2026-10-06T01:05:37.670331+00:00",
+  "ownerStepsSha256": "b1fb11f3acda488cd11d51fe48addcd700f72a62d8665249ed32e9eb0b9e4625",
+  "compositionTests": {
+    "result": "4/4 PASS",
+    "kind": "effects injected; exact staged modules and absent-worker patch",
+    "driverSha256": "dab2aacbd154c870c8f79c773ccb63c6f736f2fad9ec9af667e30a7562961f5c",
+    "newDriverChange": "derive one fixed preparation binding and import actual staged logger; no gate changes"
+  },
+  "reuse": {
+    "realNodePm2SocketProofs": 13,
+    "sequencerDriverProofs": 24,
+    "unchangedOperationalModules": true,
+    "newProductionExecution": false,
+    "functionalProofs": "afbb directed final compiled tests retained; not rerun"
+  }
+}
