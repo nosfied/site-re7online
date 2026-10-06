@@ -1,5 +1,7 @@
 # Contingência reativa afbb7455 — preparação coordenada API/worker
 
+**Atualização de execução (05/10): preparação consumida e abortada antes da contenção.** Consulte o [erro demonstrado, aborto e estado final](REACTIVE_AFBB_WINDOW_ABORTED_2026-10-05.md). O status de preparação abaixo é histórico; não relançar seus comandos/provas. afbb continua NOT DEPLOYED.
+
 **PREPARED FOR INSTALLATION / NOT DEPLOYED.** Candidato funcional fixado em `afbb7455f320793e05a25875e8a5f13f98cabf90`, sobre `b83657809d1cc77ed8cc6fe75bf2b28f2ac1f5bb`, branch `review/campaign-recovery-20260926`. Não houve instalação privilegiada, contenção, alteração da guarda/scheduler/cron/boot, start/restart, envio, configuração de tenant ou reparo nesta etapa. A janela continua sem autorização de execução nesta preparação.
 
 Preparação nova: `/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z`. O sufixo é identificador; os horários efetivos estão nas evidências abaixo. Cinco gates **false**. Nenhuma fase, prova, nonce, start-intent, certificado de saída ou captura consumida foi copiada das janelas anteriores. Nonces/certificados só serão emitidos no momento correto da futura execução.
