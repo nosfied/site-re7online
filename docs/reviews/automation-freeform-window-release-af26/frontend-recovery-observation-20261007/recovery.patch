@@ -1,0 +1,45 @@
+--- a/frontend-check.py
++++ b/frontend-check.py
+@@ -214 +214,25 @@
+-def inventory(r,js,exclude=None):
++def unreadable_identity_observed(q, js, observation):
++    require(observation is not None and len(observation['samples']) == 2, 'unreadable_new_or_changed_process')
++    require(0 <= time.monotonic() - observation['finishedMonotonic'] <= 10, 'observation_expired')
++    protected = {x['pid'] for x in js if x['event'] in ['parent', 'application_identity']}
++    groups = {x['group'] for x in js if x['event'] in ['parent', 'application_identity']}
++    require(q['pid'] not in protected and q['group'] not in groups and q['state'] not in ['Z','X','x'], 'unreadable_executor_identity')
++    signatures=[]
++    for sample in observation['samples']:
++        rows=sample['processes']; by={x['pid']:x for x in rows}
++        require(len(by)==len(rows), 'observation_duplicate_process')
++        match=by.get(q['pid']); require(match is not None, 'unreadable_process_unobserved')
++        require(all(match[k]==q[k] for k in ['pid','ticks','parent','group']), 'unreadable_observation_identity_drift')
++        require(match['state'] not in ['Z','X','x'] and match['roles']==[], 'unreadable_observed_executor')
++        chain=[tuple(match[k] for k in ['pid','ticks','parent','group'])]
++        seen=set(); node=match
++        while node['parent']:
++            require(node['pid'] not in seen, 'unreadable_ancestor_cycle');seen.add(node['pid'])
++            require(node['parent'] in by, 'unreadable_ancestor_incomplete');node=by[node['parent']]
++            require(node['pid'] not in protected and node['group'] not in groups and node['roles']==[] and node['state'] not in ['Z','X','x'], 'unreadable_executor_ancestor')
++            chain.append(tuple(node[k] for k in ['pid','ticks','parent','group']))
++        signatures.append(chain)
++    require(signatures[0]==signatures[1], 'unreadable_observation_changed')
++
++
++def inventory(r,js,exclude=None,observation=None):
+@@ -233 +257,2 @@
+-            require(r['preExisting'].get(f.name)==q['ticks'] and int(q['ticks'])<min(int(x['ticks']) for x in js if x['event']=='parent') and q['group'] not in groups, 'unreadable_new_or_changed_process')
++            prior = (r['preExisting'].get(f.name)==q['ticks'] and int(q['ticks'])<min(int(x['ticks']) for x in js if x['event']=='parent') and q['group'] not in groups)
++            if not prior: unreadable_identity_observed(q,js,observation)
+@@ -390,0 +416,4 @@
++    cap=P/('candidate-tree.private.json' if label=='candidate' else 'return-tree.private.json')
++    import socket_observation_contract
++    observation, policy = socket_observation(label+'-exited')
++    socket_observation_contract.absent(observation, policy, label, [x for _, previous in records for x in previous if x['event'] in ['parent', 'application_identity']], cap if cap.exists() else None)
+@@ -395 +424 @@
+-        a=inventory(prior,previous);b=inventory(prior,previous)
++        a=inventory(prior,previous,observation=observation);b=inventory(prior,previous,observation=observation)
+@@ -401,2 +430 @@
+-    cap=P/('candidate-tree.private.json' if label=='candidate' else 'return-tree.private.json')
+-    socket_absence(label, [x for _, previous in records for x in previous if x['event'] in ['parent', 'application_identity']], cap if cap.exists() else None)
++    require(0 <= time.monotonic()-observation['finishedMonotonic'] <= 10, 'observation_expired')

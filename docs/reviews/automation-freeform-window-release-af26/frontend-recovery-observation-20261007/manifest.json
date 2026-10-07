@@ -1,0 +1,13 @@
+{
+  "originCheckerSha256": "1136c0cc8e4e26234c50b6ff7d7b10997d8dad1da58bae4e3a63ea6c5303e7bf",
+  "resultCheckerSha256": "77817b16a7f760b0b75d514f54df7ef482cbb819d92fa4a6cab48541b7080c6a",
+  "patchSha256": "5c886a7502ad21084f8b92e91a9a2bfee7c203e0dbecc1b55609703d74476650",
+  "helperChanged": false,
+  "policyChanged": false,
+  "sudoersChanged": false,
+  "tests": {
+    "type": "effective classifier with synthetic process observations; not OS reproduction",
+    "passed": 17
+  },
+  "installed": false
+}
