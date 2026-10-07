@@ -1,6 +1,42 @@
 # Frontend 9f4cbe0f — preparação isolada, 06/10/2026 Fortaleza
 
-**LOCAL OPERATIONAL VALIDATED / PREPARED FOR REVIEW / NOT DEPLOYED.** Revisão operacional 07/10/2026 sobre `a92c7f26`: somente recuperação de saída precoce e prontidão limitada. Scripts novos ainda não foram copiados à VPS; o staging remoto mantém os bytes de a92c7f26 e não deve executar os comandos anteriores.  Preparação remota nova: `/opt/re7online/backups/converta-persistent/preparations/frontend-9f4cbe0f-20261007T012803Z`. Gate `execution-authorized=false`. Nenhuma parada/start produtivo, contenção, mudança de guarda/scheduler/cron/boot, API/worker, tenant, DB/auth ou histórico. Esta publicação documental não altera o candidato `9f4cbe0f9a4e891f09bb2f41e88eccec388172da`.
+**REMOTE STAGING COMPLETE / PREPARED FOR FRONTEND WINDOW / NOT DEPLOYED (07/10/2026).** Scripts de `8da6a8f3e24f92ed25947f152dc1a42275921bca` transferidos e conferidos na preparação `/opt/re7online/backups/converta-persistent/preparations/frontend-9f4cbe0f-20261007T012803Z`. Gate `execution-authorized=false`. Candidato não iniciado; frontend af26, API afbb e worker mínimo reativo preservados. A próxima etapa exige autorização da troca exclusiva do frontend. Nenhum stop/start, PM2 save, rebuild, alteração de guarda/scheduler/cron/boot, tenant, DB/auth ou histórico nesta rodada.
+
+## Staging remoto concluído — 07/10/2026
+
+Transferência em diretório exclusivo `staging-8da6a8f3-20261007T113800Z`. Os dois arquivos anteriores foram conferidos contra os hashes atestados de a92c7f26 e arquivados em `scripts-before-8da6a8f3-20261007T113800Z`, com `originals.sha256`. Nenhum arquivo histórico/captura/intenção foi removido ou sobrescrito. Os sete scripts finais, regulares e sem symlink, estão no diretório operacional com modo0644, protegido pela pasta privada0700. `scripts.sha256` SHA256 completo: `4a5bd8c32ad2a5be1474df2901d89566df79a2681b92c96cdc5f87b6ceee7e40`; os sete hashes da seção de código abaixo passaram na VPS.
+
+| Verificação remota desta rodada | Resultado e limite |
+| --- | --- |
+| Tar V2, configs candidata/retorno e manifesto de retorno | PASS, mesmos hashes completos da tabela de artefatos; sem reconstrução |
+| Candidato extraído | PASS: 22.784 arquivos,31 symlinks, modos, inventário exaustivo e BUILD_ID `LFcdEK9gXZsBhf4_c5r8G`; não iniciado |
+| Retorno af26 | PASS: todos os 23.497 arquivos e31 symlinks inventariados íntegros; BUILD_ID `J5cHyVKiKEI5xxiGBY5If` |
+| Identidades observadas 12:16 UTC /09:16 Fortaleza | Frontend PID2537692/ticks2081554427; API3153929/2107666112; worker3154150/2107666513; daemon18676/222727. Três aplicações online, restart0, mesmas releases da tabela de baseline |
+| Configuração/supervisão | Configs privadas preservadas; saved e fallback ainda referenciam af26/afbb/worker mínimo afbb; boot inactive/enabled. Node20.20.0/PM2 6.0.14 |
+| Health e leitura pública | API `ok=true`, DB `ok`; GET local `/app/login`200. Não é aceite autenticado nem validação visual produtiva |
+| Gate `before` do código final | PASS, saída0/sem timeout, stdout/stderr registrados privadamente. Captura nova arquivada em `source-tree.staging-8da6a8f3-20261007T113800Z.private.json`; futura captura canônica permanece ausente |
+| Controles futuros | Gatefalse; sem start-intent, run-control ou promoção. Não executados init, stop, start, save ou retorno na produção |
+
+Uma conferência adicional comparou equivocadamente o manifesto de **runtime frontend de retorno** ao diretório af26 inteiro e negou `return_inventory`. A diferença foi investigada, sem mudar manifesto/bindings: zero arquivo inventariado ausente e todos os hashes/links iguais. O diretório histórico também contém fontes/backend/docs e configuração privada fora daquele manifesto; dentre os caminhos runtime `.next/node_modules/public`, os únicos extras são25 arquivos em `.next/cache`. Portanto não se declara inventário exaustivo do diretório histórico inteiro. O candidato novo, por sua vez, passou no inventário estrito completo. Nada foi apagado para obter PASS.
+
+### Preservação das dependências permanentes
+
+Auditados crontab deploy, `/etc/crontab`, cron.d/daily/weekly/monthly, timers e configuração efetiva de tmpfiles, scripts executados de backup/mídia/retention e iniciador PM2. Nenhuma rotina examinada seleciona `preparations` ou esta geração. A preservação decorre de alvos distintos comprovados por caminhos resolvidos, sem symlink na cadeia da preparação, não de sua idade ou mtime.
+
+| Rotina / bytes observados | Seleção efetiva de remoção | Relação com esta preparação |
+| --- | --- | --- |
+| `/usr/local/sbin/re7-converta-backup`, SHA256 `179a9ab52ab155cfcba908628be0a8d24796c6f917829ad00054e690e2ad6f71` | somente diretórios timestamp filhos imediatos de `converta-persistent/snapshots`; `.keep-*` no root; rsync --delete nos destinos de conteúdo do snapshot | preparação é irmã de snapshots, fora de todos esses seletores |
+| `backup-data.sh`, SHA256 `32870c50972a68a81c03ff0ec6b6b7a11e79606931e0e6474615c721f5a5531f` | `.backups/*.tar.gz`, maxdepth1, mtime>14 dias | outro diretório e tipo/nome |
+| `backup-postgres.sh`, SHA256 `795d9906bbde658710e024bbe84afa9a30bd392ef8f5235b7580fa85ac2d5733` | `backups/postgres/*.dump`/`*.dump.sha256`, maxdepth1; temporários do próprio dump | não seleciona preparação/launcher/journals |
+| `cleanup-local-media.mjs`, SHA256 `bd6c1ec6e018deb677447456411b1008c4a3bf9646e8d9d929d8abc930432bc9` | arquivos sob `.data/media/outbound` | raiz resolvida distinta |
+| `run-retention.ts` / serviço de privacidade | retenção de registros; sem exclusão da geração operacional | sem seleção filesystem desta pasta |
+| tmpfiles/timers/cron de sistema examinados | tmpfiles sem regra `/opt`; rotinas do sistema em seus próprios diretórios | nenhuma remoção da preparação identificada |
+
+Boot PM2 SHA256 `0170f46aaab904b11711a62854cc1fe49f06a9d5f542bd4b286775f8ecc681d4` usa resurrect do dump; não faz limpeza. Atualmente active/saved/fallback ainda apontam para Next direto af26. Depois da promoção, passarão a referenciar launcher, observador, control e journals desta geração: **preservar a pasta inteira enquanto qualquer referência existir**, incluindo durante retorno. Só retirar depois de migração de todas as referências e ausência comprovada dos executores. Não foi necessário alterar cron/retention ou instalar privilégios. Esta é evidência dos seletores operacionais examinados, não imunidade contra exclusão manual ou uma futura rotina não auditada; nenhuma rotina foi executada para testar remoção.
+
+Os comandos finais de ida, promoção e retorno permanecem na seção abaixo e usam os scripts já conferidos. Na futura janela: reconfirmar execução única e baseline, autorizar o gate somente no escopo aprovado e produzir captures/controls novos; nunca usar as capturas de leitura desta preparação. Antes da promoção, manter retorno disponível; após promoção o gatefalse fecha a tentativa e uma troca operacional posterior exige baseline/preparação próprios. Nenhuma dependência sudo nova.
+
+Provas locais de inicialização, saída precoce, prontidão limitada, PM2 save/resurrect e morte do Next já publicadas são reutilizadas com os mesmos bytes; não foram repetidas. Nova evidência aqui é transferência/conferência remota e auditoria de seletores, não execução produtiva da supervisão nova.
 
 ## Auditoria e baseline
 
@@ -104,7 +140,7 @@ Os diretórios de evidência devem ser novos; o script nunca inicia aplicações
 | `test_supervision_pm2.py` | `16455ac178f4fad50321da421f2208ce11340fca15035050bf3dac4410052295` |
 | `verify-package.py` | `8a8aab3aeed1560d25892dcc99fc40e5d6666cb272dba550c20657f125259b38` |
 
-[scripts.sha256](frontend-9f4cbe0f-prepared/scripts.sha256) fixa esses sete arquivos; o tar/manifesto/BUILD_ID permanecem os da tabela original. Configs `.ecosystem.config.cjs` originais preservadas; `init-*` produz configs `.tracked.config.cjs` com nonce/entry/BUILD_ID privados e paths do launcher. Não é reutilização de prova/captura antiga. Antes da janela, esses scripts devem ser transferidos para o staging e conferidos pelo manifesto; **não houve transferência nesta rodada**. Nenhuma instalação root/sudo/helper/política é necessária.
+[scripts.sha256](frontend-9f4cbe0f-prepared/scripts.sha256) fixa esses sete arquivos; o tar/manifesto/BUILD_ID permanecem os da tabela original. Configs `.ecosystem.config.cjs` originais preservadas; `init-*` produz configs `.tracked.config.cjs` com nonce/entry/BUILD_ID privados e paths do launcher. Não é reutilização de prova/captura antiga. Na revisão local de8da não houve transferência; o staging remoto foi concluído e conferido nesta rodada, conforme seção inicial. Nenhuma instalação root/sudo/helper/política é necessária.
 
 ## Supervisão permanente — revisão dirigida sobre e6594000
 
@@ -150,7 +186,7 @@ Reprodução adicional dos testes de supervisão, com diretório de evidência n
 LAB_EVIDENCE_DIR=local-evidence/frontend-9f4cbe0f-prepared/reproduction-supervision-private python3 docs/reviews/automation-freeform-window-release-af26/frontend-9f4cbe0f-prepared/test_supervision_pm2.py /tmp/re7-pm2-lab/node /tmp/re7-pm2-lab/pm2/bin/pm2 /tmp/re7-frontend-9f4cbe0f-clean-final /tmp/re7-front-af26-supervision
 ```
 
-**Dependência permanente:** launcher, bootstrap, observador, control, promoção e journals da geração são referenciados pelo processo e pelo dump salvo. Preservar esse diretório enquanto active/saved/fallback o referenciarem; não tratar como preparação descartável depois da janela. Não remover/mover os scripts durante operação ou retorno. Só retirar uma geração depois de todas as referências migrarem e executores saírem. Esta rodada não transferiu scripts, não alterou limpeza/retention/cron produtivos e não instalou arquivo remoto.
+**Dependência permanente:** launcher, bootstrap, observador, control, promoção e journals da geração são referenciados pelo processo e pelo dump salvo. Preservar esse diretório enquanto active/saved/fallback o referenciarem; não tratar como preparação descartável depois da janela. Não remover/mover os scripts durante operação ou retorno. Só retirar uma geração depois de todas as referências migrarem e executores saírem. A revisão local anterior não transferiu scripts. Nesta rodada os scripts foram transferidos; a auditoria inicial comprova a separação dos seletores de limpeza existentes, sem alteração de retention/cron.
 
 ## Comandos finais revisáveis — NÃO executar nesta preparação
 
@@ -162,7 +198,7 @@ P=/opt/re7online/backups/converta-persistent/preparations/frontend-9f4cbe0f-2026
 R=/opt/re7online/releases/9f4cbe0f9a4e891f09bb2f41e88eccec388172da-front
 PM=/home/deploy/.npm-global/bin/pm2
 export PATH=/usr/bin:/bin:/home/deploy/.npm-global/bin
-# Após transferência dos scripts revisados; gate true somente em execução autorizada futura.
+# Scripts revisados já conferidos; gate true somente em execução autorizada futura.
 (cd "$P" && sha256sum -c scripts.sha256)
 test "$(cat "$P/execution-authorized")" = true
 test "$(sha256sum "$P/frontend-9f4cbe0f-v2.tar.gz" | cut -d' ' -f1)" = d0f15209922741e51ab21e22d01ff2188ce212ef23081888084c868754065e54
