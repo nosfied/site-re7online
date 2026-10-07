@@ -278,3 +278,104 @@ Reprodução em namespaces UID/PID/network isolados, Node20.20.0/PM2 6.0.14/Next
 Uma versão intermediária do ensaio após recuperação PM2 negou `executor_survived`; não preservou inventário suficiente para atribuir causa exata, que permanece desconhecida. O driver final aguarda prontidão HTTP real da incarnation recuperada antes do stop e registra diagnóstico em nova recusa. Os verificadores não foram relaxados para obter PASS. O ensaio final passou sobre os bytes publicados, sem chamadas ao certificado histórico. Esses resultados não reatribuem os ensaios fork anteriores ao comportamento cluster.
 
 Tar fa60 SHA-256 `9b375dffca78425e7193e2e73b3c3692a951dc9f638c1c73790cfd3c5e32dac2`, manifestos/BUILD_IDfa60 e9f conferidos e preservados; nenhuma suíte funcional ou build repetida. [Manifesto completo dos bytes revisáveis](frontend-socket-observation-proposal/manifest.json); scripts.sha256 local agora cobre10arquivos. Manifesto da recuperação produtiva0aa970… não foi substituído. A integração nova está somente para revisão, **fa60 NOT DEPLOYED**. Agrupamento natural, contingência AUTO e CRA-PR preservam pendências; contato4366/históricos intactos.
+
+## Pacote concreto de instalação observacional — 07/10
+
+**PREPARED FOR INSTALLATION REVIEW / NOT INSTALLED / PRIVILEGED VPS PREFLIGHT NOT EXECUTED / NOT READY FOR WINDOW.** Este é somente o staging do observador, não outra preparação operacional declarada pronta. Não existe autorização de instalação nesta rodada; os comandos abaixo são para revisão e execução futura após autorização específica. Não houve nova janela, rebuild, envio, alteração de aplicação/tenant ou de delegação DB/backend.
+
+Diretório privado novo: `/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z`. Origem reconfirmada:9f/BUILD_ID `LFcdEK9gXZsBhf4_c5r8G`, launcher3388720/ticks2118003772, Next3388733/ticks2118003808; daemon18676/ticks222727; cluster_mode/restart0. Política gerada diretamente dessas observações. O nonce da origem identifica a incarnation efetivamente viva; não foi inventado nem reciclado como autorização. Candidate/return têm nonces novos, apenas bindings de classificação inativos; nenhum start-intent/prova/certificado/marker consumido foi copiado. Scope privado `executionGate:false`, `notAWindowPreparation:true`. Preparações antigas, certificado consumido e evidências intactos.
+
+### Bytes e staging comprovados
+
+10scripts/arquivos de comando transferidos e conferidos individualmente; schema real da política PASS; identidade viva reconfirmada após transferência. Política, origem, binding e captura inicial privados600; diretório700. Os destinos helper/política novos continuam ausentes pela leitura deploy; destino sudoers não é observável por deploy e **deve ser conferido por root antes de instalar**. Qualquer destino existente, inclusive symlink pendente, bloqueia sem sobrescrita. Não se presume ausência por permissão insuficiente.
+
+| Arquivo | SHA-256 |
+|---|---|
+| observer.py | `93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385` |
+| preflight.py | `06abcfab67e17251d8b13ca8a92fd223bf056a29a9aa4b5599a7eed621027175` |
+| install.sh | `c6740222f5cdf50ef3b6ba2eb982bc1a850617176f98bafce841dc266b711c71` |
+| check-installation.sh | `318b24481a6cb1c0853b9bc50ab78913684defa38055796e9b8d2cdb3fab9be6` |
+| remove.sh | `07eca4a9f82c07fccd252ad11c7b3cd451979588c667550e1449feae90ba3e63` |
+| run-preflight.sh | `e4d9c32099c6862d6ec465fbe10c29c28d657b81cab7714174206a028135f61e` |
+| re7-frontend-socket-observer.sudoers.proposed | `118a54ec6f03c6f8af92a5e9f05d766fda08eea0d2fa79a207ecf588374e8b12` |
+| scripts.sha256 | `803d49f32993971238c24b644c4e5e30a67fd06fe980c3b9fc5bdbf6bc93296f` |
+| policy.private.json (privado) | `b92f5f882ce8ebb09738fd26af903c079762a843aa68e1068ec700addae6a5d0` |
+| origin.private.json (privado) | `e473c238902dcd757cca0a4c6c3f5ba7b6978bdf77ce9ad65323cc9536b401f6` |
+| initialSourceCapture (privado) | `a1701dbe57ccb45dbb40d1b43a890e1a33649534493b621c8b684c5799d2fbc4` |
+| socket-observer-binding.private.json (privado) | `cf05094ac8c2b30380584b111bf66009590c9667490aa6e7adfeb1a5fa555031` |
+| private.sha256 (privado) | `520f13aeb2b2630ce095ac8fe0aaffad986df807da99834025e5d558385004e7` |
+
+[Manifesto de instalação com todos os hashes](frontend-socket-observation-proposal/installation-manifest.json). O helper `93564f…` não mudou desde afeb26a3. API/worker/tar/launcher/bootstrap também não mudaram. Os novos bytes são o roteiro de instalação/remoção e o driver de preflight, ensaiado separadamente.
+
+### Instalação exata, futura e exclusiva
+
+Após revisão/autorização específica, Deifson executa na própria sessão deploy; senha somente no sudo local. O script completo versionado é [install.sh](frontend-socket-observation-proposal/install.sh), sem placeholders. Verificação externa antes de executar:
+
+```bash
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z
+test "$(sha256sum "$P/scripts.sha256" | cut -d' ' -f1)" = 803d49f32993971238c24b644c4e5e30a67fd06fe980c3b9fc5bdbf6bc93296f
+(cd "$P" && sha256sum -c scripts.sha256)
+bash "$P/install.sh"
+```
+
+A instalação reconfirma root-absence dos três destinos e a cadeia de diretórios existentes sem symlinks/escrita indevida. Usa root:root helper0644/política0600/regra0440; valida visudo global e proposta **antes**, hashes root-owned antes de habilitar a regra e visudo global **depois**. Confere AST/imports reais (inclusive `from pathlib import Path`) e Python `-I -S`. Não executa código de preparação como root no comando delegado. A única nova regra é:
+
+```sudoers
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/frontend-socket-observer.py
+```
+
+Arquivos `/usr/local/libexec/re7/frontend-socket-observer.py`, `/usr/local/libexec/re7/frontend-socket-observer-policy.json` e `/etc/sudoers.d/re7-frontend-socket-observer`. Não instala regra DB/backend, argumentos variáveis, shell ou sudo amplo. Os privilégios atuais de Deifson e as chamadas backend/DB permanecem intactos. Falha da instalação para imediatamente e preserva o estado parcial; não repetir o bloco nem contornar destino existente. A remoção abaixo trata também os arquivos já introduzidos de uma instalação parcial.
+
+Conferência independente, sem observação de tráfego nem start/stop:
+
+```bash
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z
+bash "$P/check-installation.sh"
+```
+
+### Preflight privilegiado com produção funcionando
+
+Somente depois da instalação conferida, execução **como deploy**, sem sudo no driver (apenas no leitor fixo):
+
+```bash
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z
+bash "$P/run-preflight.sh"
+```
+
+[Driver](frontend-socket-observation-proposal/preflight.py) reconfirma boot, daemon, PM2/identidade/restart, incarnation real, release/entry/hash/BUILD_ID e árvore antes da leitura. Captura sockets atuais estritamente, sem ignorar descriptor desaparecido. Arquiva a captura autoritativa anterior e snapshots de cada tentativa; nenhuma negativa é apagada. Chama o leitor root publicado, exige hashes da política/helper, receipt exclusivo e prazo monotônico, duas observações completas consecutivas e contrato efetivo de preflight. Reconfirma identidade/árvore e conjunto de sockets depois. A classificação esperada do inode compartihado é daemonfd0 + launcherfd0; outros descritores são explicados pela árvore viva exata. Owner adicional, executor inesperado, listener não explicado, zumbi ou observação incompleta negam.
+
+Leitor: orçamento8s/duas amostras; chamada externa10s; driver inicia no máximo3tentativas, orçamento de início45s e wrapper65s. O wrapper limita **somente o processo de leitura/driver**, nunca aplicação/PM2. Não há espera fixa como certificado, polling indefinido, limpeza ou repetição de start. Privileged stdout/stderr/exit/timeout e cada tentativa ficam em arquivos600/diretórios700. Terminal mostra apenas resumo e caminho do diagnóstico privado. Provas novas não autorizam janela; gate permanece falso mesmo com PASS.
+
+| Recusa | Tratamento / critério |
+|---|---|
+| Mudança observada entre amostras, incompletude transitória ou alteração de sockets entre leituras | Candidata a transitória; até3leituras novas, sem apagar a negativa. Só é confirmada transitória se uma leitura seguinte completa passar, com bindings intactos |
+| Permissão insuficiente, falta de regra/helper, arquivo/cadeia/bytes inválidos ou tabela de observação indisponível | Bloqueio de capacidade/instalação; não excluir processo nem tentar fabricar PASS. Interromper e diagnosticar a capacidade concreta |
+| PID/start ticks/boot/nonce/release/árvore divergentes, owner/listener adicional ou recusa não explicada | Bloqueio imediato; preservar diagnóstico; não adaptar bindings automaticamente |
+| Três leituras sem prova completa | `REPEATED_OBSERVATION_BLOCKED_CAUSE_NOT_ESTABLISHED`; não chamar de transitório nem afirmar incapacidade permanente por contagem. Investigar registros antes de nova rodada |
+
+A leitura root de todos os processos **ainda não foi feita na VPS**. Root pode também negar uma leitura incompleta; não se assume que instalar a regra gera PASS. Se o diagnóstico não sustentar causa, ela fica desconhecida. Nenhum processo será excluído por UID/nome para superar a negativa. Duas observações são pontuais, não atomicidade. Este preflight só permite avaliar depois a viabilidade de outra janela.
+
+### Remoção concreta e preservação
+
+[remove.sh](frontend-socket-observation-proposal/remove.sh) é executado somente quando Deifson confirmar que nenhuma operação de troca/retorno ativa ou pendente depende do observador. Exige confirmação local `REMOVE-OBSERVER-ONLY`; valida cada arquivo presente contra os hashes e ownership/modes desta geração, negando geração posterior/desconhecida. Arquiva bytes em `removal-archive-private` novo/root-owned antes de remover. Suporta instalação parcial; nunca remove arquivos pré-existentes encontrados antes da instalação, diretórios compartilhados, DB/backend ou evidências. Não execute esta remoção se o instalador foi recusado por destino pré-existente.
+
+```bash
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z
+bash "$P/remove.sh"
+```
+
+Remove somente a regra introduzida, valida visudo e depois remove helper/política desta geração; falha para e preserva o restante. Staging, arquivos de arquivo e gerações antigas permanecem. Não remover enquanto preparação/retorno depender da leitura.
+
+### Provas reutilizadas e dirigidas
+
+Ensaio real PM2/Node/Next cluster de afeb26a3 (7PASS/15negações esperadas) reutilizado, **não repetido**. Tar fa60 idêntico; não houve build/smoke funcional novo. Novos12testes PASS do driver usando arquivos/FDs/processo filho reais em namespace sem rede externa, metadata PM2 e respostas privilegiadas explicitamente simuladas. Cliente/logger e contrato de autorização são os módulos efetivos: sucesso, recusa transitória→leitura fresca, três recusas, falta de capacidade, permissão, binding/PID divergente, owner adicional, duas amostras obrigatórias, replay, PM2 duplicado, zumbi e socket mudando após observação. São provas do driver, **não comprovação de sudoers/root/proc na VPS**.
+
+```bash
+unshare -Urnpf --mount-proc sh -c 'ip link set lo up; python3 -m unittest discover -s docs/reviews/automation-freeform-window-release-af26/frontend-socket-observation-proposal -p test_preflight_driver.py -v'
+```
+
+Scripts shell/AST/imports/manifests conferidos; staging remoto/hash/schema/origem PASS. Instalação, remoção e preflight root: **NOT EXECUTED**. Backlog mantém fa60 NOT DEPLOYED e demais aceites separados. Próxima decisão é específica sobre instalar estes bytes; nenhuma janela será aberta antes da leitura privilegiada completa e de sua revisão.

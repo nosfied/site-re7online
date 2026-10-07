@@ -1,0 +1,1 @@
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/frontend-socket-observer.py

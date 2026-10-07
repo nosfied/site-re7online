@@ -1,0 +1,34 @@
+{
+  "status": "PREPARED_FOR_INSTALLATION_REVIEW_ONLY_NOT_INSTALLED_NOT_READY_FOR_WINDOW",
+  "stagingDirectory": "/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z",
+  "files": {
+    "check-installation.sh": "318b24481a6cb1c0853b9bc50ab78913684defa38055796e9b8d2cdb3fab9be6",
+    "frontend-check.py": "5b2cbc85f95b911f6d8ae0be2f63af7a20a12fedcb98f8b3281beb48363c3aed",
+    "install.sh": "c6740222f5cdf50ef3b6ba2eb982bc1a850617176f98bafce841dc266b711c71",
+    "observer.py": "93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385",
+    "preflight.py": "06abcfab67e17251d8b13ca8a92fd223bf056a29a9aa4b5599a7eed621027175",
+    "re7-frontend-socket-observer.sudoers.proposed": "118a54ec6f03c6f8af92a5e9f05d766fda08eea0d2fa79a207ecf588374e8b12",
+    "remove.sh": "07eca4a9f82c07fccd252ad11c7b3cd451979588c667550e1449feae90ba3e63",
+    "run-preflight.sh": "e4d9c32099c6862d6ec465fbe10c29c28d657b81cab7714174206a028135f61e",
+    "scripts.sha256": "803d49f32993971238c24b644c4e5e30a67fd06fe980c3b9fc5bdbf6bc93296f",
+    "socket_observation_client.py": "130e4aba02b055d28ab4857375b43f5e1f79bf3dfe63604c3776d058df44607e",
+    "socket_observation_contract.py": "2f7e5aedb4cf3ecad8098eaf8521d0c7babb445f4a5ed2c274c42d1d395b90a3"
+  },
+  "privateFilesSha256": {
+    "policy.private.json": "b92f5f882ce8ebb09738fd26af903c079762a843aa68e1068ec700addae6a5d0",
+    "origin.private.json": "e473c238902dcd757cca0a4c6c3f5ba7b6978bdf77ce9ad65323cc9536b401f6",
+    "initialSourceCapture": "a1701dbe57ccb45dbb40d1b43a890e1a33649534493b621c8b684c5799d2fbc4",
+    "socket-observer-binding.private.json": "cf05094ac8c2b30380584b111bf66009590c9667490aa6e7adfeb1a5fa555031",
+    "private.sha256": "520f13aeb2b2630ce095ac8fe0aaffad986df807da99834025e5d558385004e7"
+  },
+  "installedDestinations": {
+    "helper": "/usr/local/libexec/re7/frontend-socket-observer.py",
+    "policy": "/usr/local/libexec/re7/frontend-socket-observer-policy.json",
+    "sudoers": "/etc/sudoers.d/re7-frontend-socket-observer"
+  },
+  "executionGate": false,
+  "unchangedFunctionalTarSha256": "9b375dffca78425e7193e2e73b3c3692a951dc9f638c1c73790cfd3c5e32dac2",
+  "reviewTestsSha256": {
+    "test_preflight_driver.py": "a599baa0362ce2f326f9f33cc13d8a80a424ff48b68a8d4b07c06bd0aad1aea1"
+  }
+}

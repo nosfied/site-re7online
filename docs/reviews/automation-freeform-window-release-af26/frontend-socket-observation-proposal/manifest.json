@@ -3,7 +3,7 @@
   "files": {
     "frontend-socket-observation-proposal/observer.py": "93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385",
     "frontend-socket-observation-proposal/test_cluster_chain.py": "45dfe4f920b546f170d49be665e899241f5b39e4cd6253ce86cca06b976d92d6",
-    "frontend-socket-observation-proposal/README.md": "ee37460a48840884ee945526ca30964e4e125da3bfe5bee967275a1be4806e6e",
+    "frontend-socket-observation-proposal/README.md": "5d41faea6c627dd21a216a560f6a1b4d73d5c71a1ddb7287e6b500473afe6eb8",
     "frontend-fa60f0f6-prepared/frontend-check.py": "5b2cbc85f95b911f6d8ae0be2f63af7a20a12fedcb98f8b3281beb48363c3aed",
     "frontend-fa60f0f6-prepared/socket_observation_client.py": "130e4aba02b055d28ab4857375b43f5e1f79bf3dfe63604c3776d058df44607e",
     "frontend-fa60f0f6-prepared/socket_observation_contract.py": "2f7e5aedb4cf3ecad8098eaf8521d0c7babb445f4a5ed2c274c42d1d395b90a3",
