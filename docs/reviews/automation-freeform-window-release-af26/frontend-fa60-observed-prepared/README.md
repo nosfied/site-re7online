@@ -1,0 +1,13 @@
+# Preparação frontend fa60 com observador instalado
+
+**PREPARED FOR POLICY REVIEW / INTEGRATED PREFLIGHT DENIED / NOT READY FOR WINDOW / NOT DEPLOYED.**
+
+O [relatório único](../FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#nova-sequência-fa60-com-observador-instalado--0710) registra staging, artefatos e a negativa real. [Manifesto](manifest.json) contém hashes completos, inclusive arquivos privados sem publicar seu conteúdo.
+
+- [Patch operacional](operational-paths.patch): apenas relocação do diretório em action/check; aplicar às origens versionadas em `../frontend-fa60f0f6-prepared/`. Launcher, bootstrap, cliente e contrato reutilizados sem alteração.
+- [Diff sanitizado da política](policy-diff.sanitized.json): cinco campos; nonces representados somente por SHA-256.
+- [Substituição restrita proposta](replace-policy.sh): revisão antes da instalação, arquivamento da política antiga; helper e sudoers preservados. Não executada.
+- [Sequência, promoção e retornos](WINDOW-STEPS.txt): comandos de futura janela, não autorização. Controle falso; nenhuma partida emitida.
+- [Hashes dos comandos](review-commands.sha256).
+
+A política instalada ainda é a geração observacional antiga. A chamada real dos bytes finais foi recusada por `socket_observer_integrity_binding`, sem mutação operacional. Depois de aprovada/instalada a política nova, é obrigatório completar o preflight integrado antes de avaliar uma janela. Saída de origem/candidato/retorno exige observações novas; nenhuma evidência preparatória substitui esses gates.

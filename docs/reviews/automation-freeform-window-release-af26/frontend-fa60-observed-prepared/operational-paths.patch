@@ -1,0 +1,10 @@
+--- a/frontend-check.py
++++ b/frontend-check.py
+@@ -14 +14 @@
+-P = Path('/opt/re7online/backups/converta-persistent/preparations/frontend-fa60f0f6-20261007T171104Z')
++P = Path('/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z')
+--- a/frontend-action.py
++++ b/frontend-action.py
+@@ -8 +8 @@
+-P=Path('/opt/re7online/backups/converta-persistent/preparations/frontend-fa60f0f6-20261007T171104Z')
++P=Path('/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z')

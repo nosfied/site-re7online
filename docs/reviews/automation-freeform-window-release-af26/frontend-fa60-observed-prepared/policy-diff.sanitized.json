@@ -1,0 +1,40 @@
+{
+  "installedPolicySha256": "b92f5f882ce8ebb09738fd26af903c079762a843aa68e1068ec700addae6a5d0",
+  "proposedPolicySha256": "eff1b150640219af55c184d08a0f1752e23c5fd55954b8220d4f137ed27c5213",
+  "unchanged": [
+    "bootId",
+    "daemon.pid",
+    "daemon.ticks",
+    "frontendPort",
+    "roles.*.release",
+    "roles.*.entry",
+    "roles.source.nonce"
+  ],
+  "changes": [
+    {
+      "field": "roles.source.capture",
+      "before": "/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z/source-tree.private.json",
+      "after": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z/source-tree.private.json"
+    },
+    {
+      "field": "roles.candidate.nonce",
+      "before": "sha256:d9c05307f49dfd69b4be607c45f347b90060d5fa26d577fe2ffb6812a4c6695d",
+      "after": "sha256:7f52caf945588372910744dfb596426f9d1ba456db5f6c639d788d2b62d9d9e0"
+    },
+    {
+      "field": "roles.candidate.capture",
+      "before": "/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z/candidate-tree.private.json",
+      "after": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z/candidate-tree.private.json"
+    },
+    {
+      "field": "roles.return.nonce",
+      "before": "sha256:5bf51b8dd0d85edbbff9e0fd4e0895e6175810b4a9a8ec1d344445da6173086b",
+      "after": "sha256:0276ccc2d944c3bd7a19834c1e2d0ee0957e376892d321897f9f7f28cad974e4"
+    },
+    {
+      "field": "roles.return.capture",
+      "before": "/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z/return-tree.private.json",
+      "after": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z/return-tree.private.json"
+    }
+  ]
+}

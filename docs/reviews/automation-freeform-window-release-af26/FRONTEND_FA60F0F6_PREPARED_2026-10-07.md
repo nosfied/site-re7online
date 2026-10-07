@@ -404,3 +404,57 @@ Uma invocação de `run-preflight.sh` como deploy, depois da instalação confer
 Depois da leitura: frontend9f3388720/ticks2118003772, APIafbb3153929/ticks2107666112 e worker mínimoafbb3154150/ticks2107666513, todosonline/restart0; daemon preservado. Mesmas releases e BUILD_ID9f. Nenhuma ação em guarda/scheduler/cron/boot/saved/fallback/DB/auth/configuração de tenant foi executada. Nenhum envio, campanha, reparo histórico, build ou suíte funcional repetida. Só os três arquivos privilegiados novos autorizados foram instalados; helper/regra/política antigos DB/backend e gerações anteriores intactos.
 
 O bloqueio de **capacidade de observar a árvore ativa da VPS** está comprovadamente resolvido para estes bindings e esta execução. Isso não comprova saída produtiva futura nem ida/retorno/fa60, não oferece atomicidade temporal e não habilita gates. Outra troca de fa60 continua condicionada a preparação operacional revisada, bindings/provas frescos e autorização própria. A observação não será reutilizada como certificado de uma futura parada. Não remover o observador/permissão enquanto eventual preparação/retorno depender dele. Aceites independentes e históricos preservados.
+
+## Nova sequência fa60 com observador instalado — 07/10
+
+**PREPARED FOR POLICY REVIEW / INTEGRATED PREFLIGHT DENIED / NOT READY FOR WINDOW / fa60 NOT DEPLOYED.** Preparação efetivamente criada e conferida na VPS: `/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z`. Não houve instalação de política, stop/start/restart, promoção, alteração de controles produtivos ou envio. Gate `execution-authorized:false`; nenhum start-intent ou journal de partida. Gerações consumidas e diagnósticos preservados.
+
+### Artefatos, controles e política exatos
+
+[Pacote revisável](frontend-fa60-observed-prepared/README.md), [manifesto completo](frontend-fa60-observed-prepared/manifest.json), [diff operacional](frontend-fa60-observed-prepared/operational-paths.patch), [diff sanitizado da política](frontend-fa60-observed-prepared/policy-diff.sanitized.json) e [comandos](frontend-fa60-observed-prepared/WINDOW-STEPS.txt). A relocação altera somente o diretório fixo de action/check. Os três gates revisados `exited`, `candidate-exited`, `return-exited` usam o mesmo cliente/contrato/root reader; não receberam exceções adicionais. Launcher/bootstrap, observador instalado e sudoers permanecem byte a byte iguais. Controles de candidato e retorno foram inicializados uma vez com nonces inéditos, configuração privada derivada das origens atestadas e snapshots próprios dos processos pré-existentes. Não se copiou intent, startup ledger, certificado ou prova consumida. O nonce da origem é sua identidade efetivamente viva, não um token reaproveitado para autorizar partida.
+
+| Item | SHA-256 / identidade |
+|---|---|
+| Tar fa60 reutilizado, sem rebuild | `9b375dffca78425e7193e2e73b3c3692a951dc9f638c1c73790cfd3c5e32dac2` |
+| Manifesto funcional candidato | `35f28f07cc82496b778956b1f53cbd1f5bb1e0d02b948430530fe36ded55d0b9` |
+| BUILD_ID candidato | `HttJ8PoISXKUzSzoDZ7_E` |
+| Manifesto retorno9f ativo | `ba6b43c2c550c5926893e12b5620b59d144e0cd91890b978171656b284422eba` |
+| BUILD_ID retorno9f | `LFcdEK9gXZsBhf4_c5r8G` |
+| `scripts.sha256` (7 módulos finais) | `86dc5c7691c17735368fd509d598a866d661600cde3e1104f26badc18fdbff7a` |
+| `bindings.sha256` (privado) | `aa6e4e0a882ce4bc52363cc40344b5071bca99cde9e187d48dad609acf9c7d5f` |
+| `review-commands.sha256` | `8be652957cb74a90d383a95d10f034da61aabd860196fdb06e6d95a6043d3d0f` |
+| Helper instalado, inalterado | `93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385` |
+| Sudoers instalado, inalterado | `118a54ec6f03c6f8af92a5e9f05d766fda08eea0d2fa79a207ecf588374e8b12` |
+| Política root instalada | `b92f5f882ce8ebb09738fd26af903c079762a843aa68e1068ec700addae6a5d0` |
+| Política nova proposta, não instalada | `eff1b150640219af55c184d08a0f1752e23c5fd55954b8220d4f137ed27c5213` |
+
+Tar exato preservado por hardlink no staging novo; candidato: inventário completo, hashes/modos/symlinks/BUILD_ID PASS. Retorno: todos os arquivos e vínculos imutáveis do manifesto PASS. A primeira conferência de igualdade do inventário total do retorno recusou oito arquivos adicionais; investigação limitada identificou somente imagens WebP regulares, não executáveis, pertencentes a deploy, em `.next/cache/images/*/*.webp`. O Next empacotado cria esse cache em `ImageOptimizerCache`, linhas634/689 de `node_modules/next/dist/server/image-optimizer.js` (hash `7133d307e3a3351e61b09df73e512b751051725d43a4e7730c45a55616c65525`). Snapshot privado separado; não apagados nem copiados ao Git. Isso distingue saída runtime de artefato imutável; nenhum verificador de saída/processos foi relaxado e não se afirma igualdade do inventário total com o tar. A recusa inicial e seu diagnóstico permanecem preservados.
+
+A comparação entre política instalada e controles finais encontrou exatamente cinco campos diferentes: caminhos das capturas de source/candidate/return e nonces de candidate/return. Boot, PID/start ticks do daemon, porta3000 e release/entry de todos os papéis, além do nonce real da origem, permanecem iguais. Nonces só são publicados como digests. A política antiga **não** autoriza os novos controles. Não se adaptaram bindings para aceitá-la.
+
+### Preflight integrado real e dependência restante
+
+Uma invocação efetiva de `frontend-action.py before`, com os sete módulos finais e gatefalse, em **07/10/2026 19:55:24,086 UTC / 16:55:24,086 Fortaleza**. O root reader instalado executou com sucesso e atestou a política antiga; o consumidor final **negou `socket_observer_integrity_binding`**, pois exige a nova política. A leitura é evidência preparatória de recusa, **não PASS integrado**. Registro privado stdout/stderr/exit preservado, hash `533fcae9a02d334a6c4f3a44ec71d828b6fab4b854af230c3d071fc344ac7364`; captura preservada em `source-tree.preparation-denied.private.json`. Não se repetiu leitura para forçar PASS. O PASS observacional anterior continua válido como prova de capacidade, não como prova destes novos bindings.
+
+Conferência final remota: `scripts.sha256`, `bindings.sha256` e `review-commands.sha256` PASS; frontend9f3388720/ticks2118003772, APIafbb3153929/ticks2107666112 e worker mínimoafbb3154150/ticks2107666513, todosonline/restart0; daemon18676/ticks222727 preservado. Nenhuma captura de saída foi emitida, nenhum certificado consumido foi reutilizado. API/worker, guarda, scheduler, cron/boot, saved/fallback ativos, DB/auth e históricos não foram alterados. As cópias de saved/fallback são somente snapshots privados da preparação.
+
+### Substituição proposta antes de qualquer parada
+
+Requer revisão/autorização específica da política nova; **não executar agora**. [Bloco completo restrito](frontend-fa60-observed-prepared/replace-policy.sh), SHA `f11e74f16deb9dc11b51e39cc0e0a6f94b542cf453046a990bfbbf6078004be6`, já staged no diretório novo. Confere hashes de origem/resultado, root:root e cadeia sem links/escrita indevida, diferenças permitidas, controles novos e daemon/boot. Arquiva a política antiga em `/usr/local/libexec/re7/frontend-socket-observer-policy.pre-fa60-194628.json`, root0600, exigindo destino ausente; instala exclusivamente política nova root0600 e valida visudo antes/depois. Não grava helper/sudoers nem amplia chamadas delegadas. Destino divergente, falha parcial ou daemon alterado para a execução; não repetir nem sobrescrever arquivo desconhecido.
+
+```bash
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z
+test "$(sha256sum "$P/replace-policy.sh" | cut -d' ' -f1)" = f11e74f16deb9dc11b51e39cc0e0a6f94b542cf453046a990bfbbf6078004be6
+bash "$P/replace-policy.sh"
+```
+
+Senha somente na sessão sudo de Deifson. Depois da instalação aprovada, executar o bloco **PREPARATORY PREFLIGHT** de `WINDOW-STEPS.txt` com gatefalse. Somente PASS completo dos bytes finais permite avaliar a futura janela; preservar a captura preparatória em arquivo próprio e obter outra no início da janela. Mudança de identidade/política ou observação incompleta bloqueia; não renovar binding para mascarar divergência.
+
+### Ida, retorno e promoção preparados
+
+[Comandos finais de ida/retornos/promoção](frontend-fa60-observed-prepared/WINDOW-STEPS.txt), hash `75b2abdb40bceb3863cc16990a34d3327191504535a8c93e7b9478ef8e78ff81`. A futura janela mantém uma sessão/flock exclusiva, reconfirma manifests/artefato/configurações/core e salva snapshots atuais antes da parada. Não reinicializa os controles. Ordem: before novo → stop origem → exited com leitura root nova → delete → uma partida candidata → prontidão limitada → captura/validação → conferência owner → promoção permanente → PM2save/fallback. Prontidão preserva limite30tentativas/30s e wrapper40s, com diagnóstico privado; não repete start.
+
+Retorno antes de qualquer submissão candidata usa uma nova leitura `exited` da origem. Depois de uma submissão candidata, inclusive encerramento antes da captura, exige `candidate-exited` com ledger completo e observação root nova; erro de identidade/observação ou sobrevivente bloqueia a partida9f. Uma única partida de retorno; owner confirma antes da promoção/saved/fallback. Falha do retorno exige `return-exited` fresco e escalonamento, sem terceira partida/bypass. Depois de promoção, outra operação exige preparação própria. Alternância R/S não muda identidade; zumbi, PID reutilizado, executor/proprietário adicional, listener e leitura incompleta continuam negando. Certificado preparatório, porta fechada e PID zero não substituem saída comprovada. Aos15min informar estado/impedimento; prazo não autoriza kill.
+
+Nenhum build, suíte ou smoke funcional repetido. Reutilizadas as provas Node20.20.0 do tar, browser horário/conjuntos/leituras e PM2/Next reais já publicadas; nesta rodada houve somente geração de controles, leitura de integridade, validação estática shell/AST dos comandos e a chamada produtiva de preflight que negou. Não se atribui PASS de ida/retorno produtivos a essas provas. Persistem duas dependências: revisão/instalação exclusiva da política e preflight integrado PASS; depois, revisão/autorização própria da janela. Gate continua falso. Aceites independentes de agrupamento/contingênciaAUTO/CRA-PR e históricos preservados.

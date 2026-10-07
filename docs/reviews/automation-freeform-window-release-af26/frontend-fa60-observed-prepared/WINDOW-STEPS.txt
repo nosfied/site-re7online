@@ -1,0 +1,94 @@
+# REVIEW ONLY — no execution authorization in this package.
+P=/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z
+
+PREPARATORY PREFLIGHT, after separately approved policy replacement:
+  (cd "$P" && sha256sum -c scripts.sha256 && sha256sum -c bindings.sha256)
+  test "$(cat "$P/execution-authorized")" = false
+  python3 "$P/frontend-action.py" before
+  # Only after PASS, archive the preparatory snapshot; never reuse as source-exit proof.
+  test ! -e "$P/source-tree.preparation-reviewed.private.json"
+  mv "$P/source-tree.private.json" "$P/source-tree.preparation-reviewed.private.json"
+
+FUTURE AUTHORIZED WINDOW, same session/exclusive lock retained:
+  set -euo pipefail
+  P=/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z
+  PM=/home/deploy/.npm-global/bin/pm2
+  exec 9>"$P/window.lock"
+  flock -n 9
+  (cd "$P" && sha256sum -c scripts.sha256 && sha256sum -c bindings.sha256)
+  test "$(sha256sum "$P/frontend-fa60f0f6.tar.gz" | cut -d' ' -f1)" = 9b375dffca78425e7193e2e73b3c3692a951dc9f638c1c73790cfd3c5e32dac2
+  python3 "$P/verify-package.py" /opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front 35f28f07cc82496b778956b1f53cbd1f5bb1e0d02b948430530fe36ded55d0b9
+  test ! -e "$P/start-candidate.intent"
+  test ! -e "$P/start-return.intent"
+  test ! -e "$P/candidate.startup.private.jsonl"
+  test ! -e "$P/return.startup.private.jsonl"
+  test ! -e "$P/source-tree.private.json"
+  # Controls are already initialized. DO NOT invoke init-candidate/init-return again.
+  test ! -e "$P/saved.before.private.json"
+  test ! -e "$P/fallback.before.private.json"
+  cp -n /home/deploy/.pm2/dump.pm2 "$P/saved.before.private.json"
+  cp -n /home/deploy/.pm2/dump.pm2.bak "$P/fallback.before.private.json"
+  # Only after own window authorization and immediate reconfirmation of all bindings/core:
+  printf 'true\n' > "$P/execution-authorized"
+  python3 "$P/frontend-action.py" before
+  date -Is
+  python3 "$P/frontend-action.py" stop
+  python3 "$P/frontend-action.py" exited
+  python3 "$P/frontend-action.py" delete
+  python3 "$P/frontend-action.py" start-candidate
+  python3 "$P/frontend-action.py" ready-candidate
+  python3 "$P/frontend-action.py" capture-current
+  python3 "$P/frontend-action.py" candidate
+  curl -fsS --max-time 5 http://127.0.0.1:3001/health > "$P/api.after.private.json"
+  # Pause for owner read-only session/Inbox/CRM/campaigns confirmation.
+
+PROMOTION only after owner confirmation, without restarting:
+  python3 "$P/frontend-action.py" enable-supervision-candidate
+  python3 "$P/frontend-action.py" supervised-candidate
+  "$PM" save
+  cp /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+  python3 "$P/frontend-action.py" supervised-candidate
+  printf 'false\n' > "$P/execution-authorized"
+
+RETURN9F A — candidate never submitted, source already stopped, same lock/session:
+  test ! -e "$P/start-candidate.intent"
+  python3 "$P/frontend-action.py" exited
+  # Fresh complete root observation. Delete only if the stopped PM2 entry still exists.
+  python3 "$P/frontend-action.py" delete
+  python3 "$P/frontend-action.py" start-return
+  python3 "$P/frontend-action.py" ready-return
+  python3 "$P/frontend-action.py" return
+  # Then use RETURN PROMOTION below after owner confirmation.
+
+RETURN9F B — candidate submitted, before promotion, same lock/session:
+  # A failed/uncertain submission consumes the intent. Never repeat start.
+  # Stop only the identified candidate if still live; if already absent, proceed to
+  # candidate-exited directly. A missing/ambiguous identity ledger blocks return.
+  python3 "$P/frontend-action.py" stop
+  python3 "$P/frontend-action.py" candidate-exited
+  python3 "$P/frontend-action.py" delete
+  python3 "$P/frontend-action.py" start-return
+  python3 "$P/frontend-action.py" ready-return
+  python3 "$P/frontend-action.py" return
+
+RETURN PROMOTION only after owner confirms read-only screens:
+  python3 "$P/frontend-action.py" enable-supervision-return
+  python3 "$P/frontend-action.py" supervised-return
+  "$PM" save
+  cp /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+  python3 "$P/frontend-action.py" supervised-return
+  printf 'false\n' > "$P/execution-authorized"
+
+RETURN failure:
+  # No second start-return or third start. Observe real state and preserve all records.
+  # If the identified return remains alive but must exit, stop once:
+  python3 "$P/frontend-action.py" stop
+  # If it already exited, omit stop. Always require fresh return-exited below.
+  python3 "$P/frontend-action.py" return-exited
+  # Block on any survivor/extra owner/listener/incomplete observation. Escalate at15min;
+  # no bypass/kill by timeout. After promotion a later operation needs fresh preparation.
+
+Abort before source stop: preserve9f, gatefalse, retain all diagnoses; no consumed evidence erased.
+Failure of any absence gate blocks successors; no source PID/port-only absence inference.
+Preparation root read is not an exit certificate; each exited/candidate-exited/return-exited
+invokes a new two-sample observer read. No API/worker/guard/scheduler/cron/boot/DB/auth mutation.

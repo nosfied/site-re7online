@@ -1,0 +1,89 @@
+{
+  "directory": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z",
+  "policySha256": "eff1b150640219af55c184d08a0f1752e23c5fd55954b8220d4f137ed27c5213",
+  "installedPolicySha256": "b92f5f882ce8ebb09738fd26af903c079762a843aa68e1068ec700addae6a5d0",
+  "filesSha256": {
+    "runtime.private.json": "f4292db6d5267ce3d2a13a5bc245ccaf9b4ff49fd1447232eb4344dc5d574ebb",
+    "daemon.private.json": "97298edcc2cf3fa5b9f4868af24f6744d7ba6fcc6881c1441138629e03a99a32",
+    "candidate.ecosystem.config.cjs": "6786c96757736598affa13410312bc83fb830460dc28c407cb7b0e739f6d07ed",
+    "return.ecosystem.config.cjs": "9f3c53be22bcec9a51c8452d0aa84eaf033a7bc6b8bbff53b5cfef3f4423da27",
+    "candidate.run.private.json": "01934dd509904a8f357d673fa73b9255f5cb8918f77ccda6871cafe9a2f77925",
+    "return.run.private.json": "9d2aaeac1335387b07aa00db1dde86cc22eae66483deb96d34bd94e10cd9be89",
+    "candidate.tracked.config.cjs": "663539c0032a9fdaabb6267caf8a574b459450a63fa627f9c2bf21cb4ef3a312",
+    "return.tracked.config.cjs": "14832564f969aa7033c297d756bfabac4e2426059062c42822b97acc411429f3",
+    "observer-policy.private.json": "eff1b150640219af55c184d08a0f1752e23c5fd55954b8220d4f137ed27c5213",
+    "installed-policy-reference.private.json": "b92f5f882ce8ebb09738fd26af903c079762a843aa68e1068ec700addae6a5d0",
+    "socket-observer-binding.private.json": "47da4a41a396779ed143c293a8cd968c3ed1c026d1448d7c2ce4e675dc183954",
+    "saved.preparation.private.json": "8b4e6138af4f90610a7ebb7b86ff616ab032781f7b3b2cfa9e5bd7e0569291b3",
+    "fallback.preparation.private.json": "8b4e6138af4f90610a7ebb7b86ff616ab032781f7b3b2cfa9e5bd7e0569291b3",
+    "return-runtime-cache.private.json": "a9589838d9b8ad50a5860957dc3db94d3229ea9eec5911c680f892278c082d7e"
+  },
+  "bindingsManifestSha256": "aa6e4e0a882ce4bc52363cc40344b5071bca99cde9e187d48dad609acf9c7d5f",
+  "scriptsManifestSha256": "86dc5c7691c17735368fd509d598a866d661600cde3e1104f26badc18fdbff7a",
+  "immutableCandidateInventory": "PASS",
+  "immutableReturnFilesAndLinks": "PASS",
+  "returnRuntimeAdditions": {
+    "count": 8,
+    "pathClass": ".next/cache/images/*/*.webp",
+    "type": "regular non-executable owned WebP",
+    "sourceSha256": "7133d307e3a3351e61b09df73e512b751051725d43a4e7730c45a55616c65525"
+  },
+  "integratedPreflight": {
+    "result": "DENY",
+    "cause": "socket_observer_integrity_binding",
+    "rootReaderResult": "PASS",
+    "rootPolicyWasInstalledOldPolicy": true,
+    "at": 1791402924.0855365,
+    "privateRecordSha256": "533fcae9a02d334a6c4f3a44ec71d828b6fab4b854af230c3d071fc344ac7364"
+  },
+  "sourcePid": 3388720,
+  "sourceTicks": "2118003772",
+  "restartCount": 0,
+  "executionGate": false,
+  "startIntents": [],
+  "policyDiff": [
+    {
+      "field": "roles.source.capture",
+      "before": "/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z/source-tree.private.json",
+      "after": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z/source-tree.private.json"
+    },
+    {
+      "field": "roles.candidate.nonce",
+      "before": "sha256:d9c05307f49dfd69b4be607c45f347b90060d5fa26d577fe2ffb6812a4c6695d",
+      "after": "sha256:7f52caf945588372910744dfb596426f9d1ba456db5f6c639d788d2b62d9d9e0"
+    },
+    {
+      "field": "roles.candidate.capture",
+      "before": "/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z/candidate-tree.private.json",
+      "after": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z/candidate-tree.private.json"
+    },
+    {
+      "field": "roles.return.nonce",
+      "before": "sha256:5bf51b8dd0d85edbbff9e0fd4e0895e6175810b4a9a8ec1d344445da6173086b",
+      "after": "sha256:0276ccc2d944c3bd7a19834c1e2d0ee0957e376892d321897f9f7f28cad974e4"
+    },
+    {
+      "field": "roles.return.capture",
+      "before": "/opt/re7online/backups/converta-persistent/preparations/frontend-socket-observer-20261007T190902Z/return-tree.private.json",
+      "after": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z/return-tree.private.json"
+    }
+  ],
+  "status": "PREPARED_FOR_POLICY_REVIEW_INTEGRATED_PREFLIGHT_DENIED_NOT_READY_FOR_WINDOW",
+  "functionalTarSha256": "9b375dffca78425e7193e2e73b3c3692a951dc9f638c1c73790cfd3c5e32dac2",
+  "helperUnchanged": true,
+  "sudoersUnchanged": true,
+  "operationalScriptHashes": {
+    "verify-package.py": "2ed8b991ef2697b9e2754bcafbcc3e4744737d727d2d0855ea308a769b088f55",
+    "frontend-action.py": "1de28aed62f43a48bc57d70c1a782306d44c966a6ca7480e876cd81495c156b9",
+    "socket_observation_client.py": "130e4aba02b055d28ab4857375b43f5e1f79bf3dfe63604c3776d058df44607e",
+    "socket_observation_contract.py": "2f7e5aedb4cf3ecad8098eaf8521d0c7babb445f4a5ed2c274c42d1d395b90a3",
+    "frontend-check.py": "1136c0cc8e4e26234c50b6ff7d7b10997d8dad1da58bae4e3a63ea6c5303e7bf"
+  },
+  "reviewCommandHashes": {
+    "replace-policy.sh": "f11e74f16deb9dc11b51e39cc0e0a6f94b542cf453046a990bfbbf6078004be6",
+    "WINDOW-STEPS.txt": "75b2abdb40bceb3863cc16990a34d3327191504535a8c93e7b9478ef8e78ff81"
+  },
+  "reviewCommandsManifestSha256": "8be652957cb74a90d383a95d10f034da61aabd860196fdb06e6d95a6043d3d0f",
+  "pathPatchSha256": "15b5d60be91ba5fc6164a06e58861802298c27195b27161a41a8d3c07263b57c",
+  "policyDiffSha256": "f2539c03a92e1e832bc7d2e88b11c49f69d5931e9d8fac1b69e3b410f374ed1e"
+}
