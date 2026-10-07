@@ -87,6 +87,8 @@ def net():
         result.add(line.split()[6])
     return result, listener
 
+# Historical helpers retained solely to reproduce 550b627c tests.
+# No operational gate below calls these functions or the consumed certificate.
 SOURCE_ROOT_OBSERVATION = Path('/run/re7-frontend-source-exit-20261007T173647Z.json')
 
 def root_source_socket_observation(captured, remaining, daemon):
@@ -234,7 +236,13 @@ def inventory(r,js,exclude=None):
             require(not f.exists() or r['preExisting'].get(f.name)==proc(int(f.name),require_alive=False)['ticks'], 'incomplete_new_process')
             continue
         # Unreadable new identities deny; a closed port is never the absence proof.
-        relevant=(('RE7_FRONT_RUN='+r['nonce']).encode() in env or cwd==r['release'] or r['entry'].encode() in cmd or int((f/'stat').read_text().rsplit(') ',1)[1].split()[2]) in groups)
+        specific=(('RE7_FRONT_RUN='+r['nonce']).encode() in env or cwd==r['release'] or r['entry'].encode() in cmd)
+        # Cluster workers share the daemon's group. An exact pre-existing identity
+        # cannot become a new descendant merely by group membership. Explicit
+        # nonce/release/entry matches still deny, even for a prior process.
+        prior_identity=(r['preExisting'].get(f.name)==q['ticks'] and
+                        int(q['ticks'])<min(int(x['ticks']) for x in js if x['event']=='parent'))
+        relevant=specific or (q['group'] in groups and not prior_identity)
         if relevant: result.append(q)
     return sorted(result,key=lambda x:x['pid'])
 
@@ -354,6 +362,18 @@ def tracked_live(label, budget=3):
     require(Path(r['release'],'.next/BUILD_ID').read_text().strip()==r['buildId'], 'build_id')
     return r,js
 
+# Review-only dependency. No environment-controlled command, no historical root certificate.
+OBSERVATION_READER = None
+
+def socket_observation(stage):
+    import socket_observation_client
+    return socket_observation_client.read(P, stage, reader=OBSERVATION_READER)
+
+def socket_absence(role, ledger, capture):
+    import socket_observation_contract
+    observation, policy = socket_observation(role+'-exited')
+    socket_observation_contract.absent(observation, policy, role, ledger, capture)
+
 def tracked_absent(label):
     r,js=journal(label)
     # A saved late capture is supplementary. Permanent incarnations are evidence too.
@@ -379,7 +399,7 @@ def tracked_absent(label):
         # Non-listening sockets are also inventoried through owning processes above.
         require(Path('/proc/net/'+kind).exists(),'socket_observation_missing')
     cap=P/('candidate-tree.private.json' if label=='candidate' else 'return-tree.private.json')
-    if cap.exists(): require(not ns.intersection(json.loads(cap.read_text())['sockets']),'frontend_socket_survived')
+    socket_absence(label, [x for _, previous in records for x in previous if x['event'] in ['parent', 'application_identity']], cap if cap.exists() else None)
     require(not any(x['name']==FRONT and x['pid'] for x in rows()),'pm2_frontend_alive')
 
 def ready(label, deadline_seconds=30, attempts=30, interval=1):
@@ -444,6 +464,16 @@ def main(action):
         out = P / ('source-tree.private.json' if action == 'before' else 'candidate-tree.private.json')
         require(not out.exists(), 'capture_already_exists')
         out.write_text(json.dumps({'tree': t, 'sockets': s})); out.chmod(0o600)
+        if action == 'before':
+            import socket_observation_contract
+            observation, policy = socket_observation('preflight')
+            control = matching[0]['pm2_env'].get('RE7_FRONT_CONTROL')
+            require(type(control) is str and control, 'source_control_missing')
+            source_run, _ = supervision_live(Path(control), matching[0])
+            require(source_run['nonce'] == policy['roles']['source']['nonce'] and
+                    source_run['release'] == policy['roles']['source']['release'] and
+                    source_run['entry'] == policy['roles']['source']['entry'], 'source_observer_binding')
+            socket_observation_contract.preflight(observation, policy, out)
     elif action in ['exited', 'candidate-exited', 'return-exited']:
         if action in ['candidate-exited','return-exited']:
             tracked_absent(action.removesuffix('-exited')); print(action+':PASS');return
@@ -452,7 +482,7 @@ def main(action):
             require(not Path(f'/proc/{q["pid"]}').exists(), 'survivor_or_pid_reused')
         ns, listening = net()
         require(not listening, 'frontend_listener_survived')
-        require(not remaining_source_sockets(capture['sockets']), 'frontend_socket_survived')
+        socket_absence('source', capture['tree'], P/'source-tree.private.json')
         require(not any(r['name'] == FRONT and r['pid'] for r in rs), 'pm2_frontend_alive')
     elif action in ['candidate', 'return']:
         tracked_live(action)

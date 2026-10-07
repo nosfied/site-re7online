@@ -235,3 +235,46 @@ unshare -Urpf --mount-proc python3 \
 - Health/DBok; guarda aberta/geração33/tasks{}, conteúdo inteiro inalterado; parâmetros existentes do scheduler iguais. Crontab/cronbackup iguais; boot inactive/enabled. Não se aplicou nft nesta janela frontend. Saved/fallback foram alterados somente para persistir o frontend de retorno, com referência9f/launcher novo verificada e dumps idênticos.
 - Gatefalse; nenhuma partida do candidato e uma única do retorno. Owner confirmou sessão/Inbox/CRM/campanhas somente em leitura; isso comprova recuperação de acesso, não aceite da correção fa60.
 - **fa60 NOT DEPLOYED / OWNER FUNCTIONAL VALIDATION NOT EXERCISED.** Provas funcionais anteriores sobre tar fa60 mantidas; não reatribuídas à produção9f. Agrupamento natural, contingência AUTO positiva e CRA-PR continuam separados. Não houve nova campanha, alteração de horário ou saneamento histórico.
+
+## Auditoria observacional da árvore ativa — 07/10
+
+**LOCAL OBSERVATION CONTRACT VALIDATED / PRIVILEGED ACCESS NOT INSTALLED / NOT READY FOR WINDOW.** Frontend9f efetivo e tar fa60 preservados; não houve nova preparação remota, parada, instalação, build, envio ou alteração de backend/configuração/históricos. Certificado root consumido não foi lido/reutilizado. O ensaio faz as funções históricas de certificado falharem se forem chamadas: os gates novos não as utilizam.
+
+### Árvore e acesso efetivamente observados
+
+Leitura dirigida da geração de retorno ativa: PM2 6.0.14/Node20.20.0 em **cluster_mode** → launcher3388720/ticks2118003772 → bootstrap/Next3388733/ticks2118003808; daemon18676/ticks222727. Launcher e daemon compartilham grupo18676 e **fd0 `socket:[49928]`**. Next tem stdin `/dev/null`. São processos reais produtivos, sem inferência a partir dos ensaios fork anteriores. BUILD_ID9f e releases API/worker afbb continuam os registrados acima; sem reinícios observados nesta leitura.
+
+| Verificação | deploy | Leitura privilegiada necessária |
+|---|---|---|
+| PM2/journals/release/BUILD_ID, PID/start ticks/árvore própria e seus FDs | Disponível; zero falhas nos alvos | Não para essas identidades |
+| Propriedade exclusiva do socket compartilhado | Somente holders visíveis; não comprova exclusividade | Sim, todos os UIDs/FDs |
+| Saída origem/candidato/retorno e ausência de owner adicional | Árvores/ledgers/listeners disponíveis; owners incompletos | Sim, observação fresca em cada saída |
+| Instalação root-owned/regra literal/política fixa | Verificação pública parcial | Deifson antes de eventual janela |
+
+A varredura por deploy teve142processos com acesso negado, inclusive dois do próprio UID. Um deles é o sd-pam PID17261/ticks132263: igualdade de UID não permite presumir leitura. Não foram excluídos da exigência nem tratados como owners ausentes. Os dois proprietários visíveis do inode49928 são daemonfd0 e launcherfd0; a ausência de outros só poderá ser afirmada por leitura privilegiada nova. Observador DB instalado e helper backend existentes não oferecem essa leitura; nenhuma chamada/permissão deles foi ampliada. Os dois caminhos propostos para observador/política frontend foram encontrados ausentes.
+
+### Revisão de todos os gates e menor mecanismo
+
+Além do residual na origem, candidate-exited/return-exited ainda tinham comparação bruta de inodes. O ensaio cluster real também demonstrou `executor_survived` indevido pelo grupo compartilhado: o daemon já existente era classificado como descendente frontend. A correção local usa PID/start ticks preexistentes apenas para a inferência de grupo; match explícito de nonce/release/entry, novo processo, ledger/PID reutilizado, zumbi ou descendente continua negando.
+
+[Proposta e código](frontend-socket-observation-proposal/README.md): uma chamada Python `-I -S` sem argumentos, root-owned e com política fixa, somente leitura. O mesmo contrato cobre **source, candidate e return**. Cada gate faz duas observações consistentes de todos os proprietários e rejeita leitura incompleta, outro holder, executor e listener. Somente o fd0 Unix stream conectado pertencente exclusivamente ao daemon exato pode explicar um inode residual. Não é exclusão global de sockets/UID/grupo nem autorização pelo PID inexistente/porta fechada. Saídas privadas incluem stdout/stderr/exit/timeout; journal recebe somente motivo/nome sanitizados. Bindings/hash/boot/nonce da origem real são conferidos antes da parada; resposta antiga não serve de prova.
+
+A dependência concreta é a decisão/instalação de Deifson da chamada restrita proposta, helper e política nova, seguida de preflight real root sobre a árvore ativa. A instalação e seu teste host **não foram executados**; não se declara pacote pronto. Não é necessário sudo amplo, firewall novo ou alteração da delegação DB. Dois snapshots são observação pontual, não atomicidade: executor único e disciplina operacional continuam obrigatórios. Falha após parar impede avançar/retornar até resolver a leitura; por isso a capacidade deve ser demonstrada antes da janela.
+
+### Ensaio final e limitações
+
+Reprodução em namespaces UID/PID/network isolados, Node20.20.0/PM2 6.0.14/Next dos pacotes exatos. Os hashes de ClusterMode.js, ForkMode.js e bin/pm2 coincidem com produção (manifesto anexado); instances1 reproduz o cluster e a **herança real** de fd0. Sem DB/provider/browser produtivo; API/worker temporizadores. Chamada root direta do mesmo observador, não instalação sudoers. Resultado final22verificações:7PASS e15negações esperadas (três negações de churn são leituras distintas, não retry automático).
+
+| Cenário | Resultado | Natureza |
+|---|---|---|
+| Origem9f → candidatofa60 → retorno9f, sockets/árvore/ledgers dos três gates | PASS | Processos/Next reais; cliente chama reader efetivo no namespace |
+| Descritor daemon/launcher compartilhado e daemon-only após stop | PASS | Herança cluster real, sem inode inventado |
+| Next morre → launcher sai → PM2 recupera incarnation nova → prontidão HTTP → stop/ausência | PASS | Recuperação real local, sem repetir start da janela |
+| Executor vivo, listener adicional, holder adicional do stdin, executor destacado sobrevivente | DENY | Processos/sockets reais |
+| Churn entre amostras, três leituras distintas | DENY | Processos reais; barreira de momento injetada |
+| Falta de helper/sudo, inclusive no preflight antes de qualquer stop | DENY | Chamada real sem capacidade, alvo preservado |
+| Permissão incompleta, daemon binding divergente, ledger com PID reutilizado, replay e R/S | DENY/PASS conforme contrato | Injeções dirigidas; não alegar PID reutilizado real nem troca real de daemon |
+
+Uma versão intermediária do ensaio após recuperação PM2 negou `executor_survived`; não preservou inventário suficiente para atribuir causa exata, que permanece desconhecida. O driver final aguarda prontidão HTTP real da incarnation recuperada antes do stop e registra diagnóstico em nova recusa. Os verificadores não foram relaxados para obter PASS. O ensaio final passou sobre os bytes publicados, sem chamadas ao certificado histórico. Esses resultados não reatribuem os ensaios fork anteriores ao comportamento cluster.
+
+Tar fa60 SHA-256 `9b375dffca78425e7193e2e73b3c3692a951dc9f638c1c73790cfd3c5e32dac2`, manifestos/BUILD_IDfa60 e9f conferidos e preservados; nenhuma suíte funcional ou build repetida. [Manifesto completo dos bytes revisáveis](frontend-socket-observation-proposal/manifest.json); scripts.sha256 local agora cobre10arquivos. Manifesto da recuperação produtiva0aa970… não foi substituído. A integração nova está somente para revisão, **fa60 NOT DEPLOYED**. Agrupamento natural, contingência AUTO e CRA-PR preservam pendências; contato4366/históricos intactos.

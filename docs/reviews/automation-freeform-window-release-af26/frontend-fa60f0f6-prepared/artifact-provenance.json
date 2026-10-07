@@ -10,7 +10,7 @@
   "return": "9f4cbe0f9a4e891f09bb2f41e88eccec388172da",
   "returnBuildId": "LFcdEK9gXZsBhf4_c5r8G",
   "returnManifestSha256": "ba6b43c2c550c5926893e12b5620b59d144e0cd91890b978171656b284422eba",
-  "scriptsManifestSha256": "22786fd60d8eb43eb7856522337e9ff14541dadc30bbe76c3a7b7c02026a7971",
+  "scriptsManifestSha256": "5bdf143c779142b773ad52eb2541ea5bbb639404d94058e2c9ad1e2c6333b9a0",
   "runtimeNode": "20.20.0",
   "frontendOnly": true,
   "executionGate": false,
@@ -24,5 +24,6 @@
   "originalScriptsManifestSha256": "ca4a3c984236c6e7751f97e40925e1bb8a144f1f31d745931a737b096d1f71f7",
   "operationalResult": "RETURNED_TO_9F_FA60_NOT_DEPLOYED",
   "recoveryScriptsManifestSha256": "0aa970a8668770563cbd7d31f644e509fb51f3efb0a3575cd3d95996a234e331",
-  "operationalVerifierReviewOnly": true
+  "operationalVerifierReviewOnly": true,
+  "operationalObservationStatus": "REVIEW_ONLY_PRIVILEGED_ACCESS_NOT_INSTALLED"
 }
