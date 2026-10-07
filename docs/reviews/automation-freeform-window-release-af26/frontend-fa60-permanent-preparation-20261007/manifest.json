@@ -1,0 +1,51 @@
+{
+  "result": "PASS",
+  "checks": {
+    "candidate": "{\"result\": \"PASS\", \"files\": 22868, \"symlinks\": 31, \"BUILD_ID\": \"wBXX8kmp5RuCHCYt_ot8X\"}",
+    "return": "{\"result\": \"PASS\", \"files\": 22784, \"symlinks\": 31, \"runtimeCacheFiles\": 8, \"BUILD_ID\": \"LFcdEK9gXZsBhf4_c5r8G\"}",
+    "css": "{\"result\": \"PASS\", \"referencedStylesheets\": [{\"path\": \"static/css/8cc37bb3fdff7798.css\", \"sha256\": \"3fb05e4b7a81a49c4538a8a5114db1e9fee0ea6e10f16b70d31ad99fb4a303cf\", \"bytes\": 192809}], \"scope\": \"static evidence; computed browser styles already validated on exact tar\"}"
+  },
+  "scripts": {
+    "frontend-check.py": "44ee401662c719e3a23e0dd714a632f09c203695bb9251d07214c73c56b2fe56",
+    "frontend-action.py": "d3ff5d0f45cb4993b59325bdedc193cd47a8bfd04d6f8043cc949fa813f86445",
+    "launcher.cjs": "131a92d08fe7c6484585ed0a1e18e1bf9f9a1851907337b02ae13ca99e110fef",
+    "bootstrap.cjs": "0142c188b45fb37e29528ad62a966e5c450f3b7ba88da2d52d58c16313c292b3",
+    "socket_observation_client.py": "c5a17c1c109c942d8094d2fe0bbd0b1ca89ca0378baa411b838c949a91bf4f7f",
+    "socket_observation_contract.py": "2f7e5aedb4cf3ecad8098eaf8521d0c7babb445f4a5ed2c274c42d1d395b90a3",
+    "verify-package.py": "2ed8b991ef2697b9e2754bcafbcc3e4744737d727d2d0855ea308a769b088f55",
+    "rebind-policy.py": "ec8c9b39f39400c7168136f1d17afdda0ed52c79f4943fbac87c8e18fe4c9c5a",
+    "verify-rebinding.py": "51a7fae786eee908654ddcbd7bf11a49c9f18a264e61c9f91336de4a69cceec4",
+    "check-css.py": "bb822536d1f74f106d0b7606bfb5862c8145fcf936f3b2975f280191690ab5c2",
+    "verify-return.py": "a85628821e23aa00aaf22b9ad4b520a4caa1fe26636addb7de544f46c056f47f",
+    "install-policy.sh": "3d88b7dbc2bf3d62d782280b302f9dd723950351f17b1939a6c59a4928b6b2a1",
+    "WINDOW-STEPS.txt": "10eba8f603c41f71e443a0d39a3ec7eee2e0f2b274290b2a4ee172862c5dfe31"
+  },
+  "scriptsManifest": "815d88d2c9e85aa919baf192ba73caa13eb4ddb9bfd507e507ba0921c0dfeabb",
+  "bindingsManifest": "a9d0f216386de171d0083f3d89b06041a70523188065959cc57105a75a97e36e",
+  "policySha256": "10fa212214393d10b5263889f6a54ea850aa489950af3cbfe8f72669728bbb51",
+  "executionAuthorized": false,
+  "processesUnchanged": true,
+  "starts": 0,
+  "policyInstalled": false,
+  "tarSha256": "17bd5fb895ce14f610257fb8186b916dbc39d34cdd7f421cb07f5a0fc2e1f252",
+  "manifestSha256": "378bb220d02e29e93ccd2edf4d83cb2e903912f5548dc498e28e6a4e914cd1bf",
+  "helperSha256": "93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385",
+  "installedPolicySha256": "eff1b150640219af55c184d08a0f1752e23c5fd55954b8220d4f137ed27c5213",
+  "reviewCheckerOrigin": "a611e0234e1248629b311ba5f0901d46a933151df12091904efb9281f44036a5",
+  "reviewCheckerResult": "e0793d24b883f0958ef1f2a5dfa98c93dd87989f574339e9788cdea53c476920",
+  "status": "PACKAGE STAGED / PREPARED FOR POLICY REVIEW / NOT DEPLOYED",
+  "reviewFiles": {
+    "README.md": "19e83ec4b11935c4af801ccdf1c0b497c2ba11486eb68cc3350cec67145a8814",
+    "WINDOW-STEPS.txt": "10eba8f603c41f71e443a0d39a3ec7eee2e0f2b274290b2a4ee172862c5dfe31",
+    "assemble-checker.py": "b634b3ed47b3c2fb996f92a95651265b055b2ee959d4974461e33ef51ff44b1a",
+    "boot-binding.patch": "654b683237b34967ba77d29efb24d1a17b44cc45b8abcbef0614c57f9d4929b3",
+    "check-css.py": "bb822536d1f74f106d0b7606bfb5862c8145fcf936f3b2975f280191690ab5c2",
+    "install-policy.sh": "3d88b7dbc2bf3d62d782280b302f9dd723950351f17b1939a6c59a4928b6b2a1",
+    "rebind-policy.py": "ec8c9b39f39400c7168136f1d17afdda0ed52c79f4943fbac87c8e18fe4c9c5a",
+    "results.json": "9c8c02681fee3aa6cd466126a293abcffd32ba5e4ef5ddda6ebe44c4ffbfddd9",
+    "test_composition.py": "9bf048b7cef8d0671f3642d46b2f5604b88e5e6651a3310b102555d84e0b161b",
+    "verify-rebinding.py": "51a7fae786eee908654ddcbd7bf11a49c9f18a264e61c9f91336de4a69cceec4",
+    "verify-return.py": "a85628821e23aa00aaf22b9ad4b520a4caa1fe26636addb7de544f46c056f47f"
+  },
+  "initialScriptsManifest": "dafe18c719ab707842d9a08cfb287dca92efdad30dd57c159ee348714b494695"
+}

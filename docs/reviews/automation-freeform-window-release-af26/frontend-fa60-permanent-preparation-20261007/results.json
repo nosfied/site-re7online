@@ -1,0 +1,133 @@
+{
+  "scope": "real PM2/Node/Next namespaces; root installation simulated; no production starts",
+  "runs": {
+    "candidate": {
+      "results": [
+        {
+          "case": "window second candidate start",
+          "result": "DENY"
+        },
+        {
+          "case": "real source9f -> corrected candidate, fresh exit observation, single start; promotion simulated owner acceptance",
+          "result": "PASS"
+        },
+        {
+          "case": "real new daemon, same saved dump, legible inventory -> automatic recovery",
+          "result": "PASS"
+        },
+        {
+          "case": "supervision_policy_rebinding_required",
+          "result": "DENY",
+          "nextFork": false
+        },
+        {
+          "case": "explicit rebinding 1; root installation simulated, real observer/verifier",
+          "result": "PASS",
+          "delta": [
+            "bootId",
+            "daemon"
+          ]
+        },
+        {
+          "case": "manual explicit rebind then supervised resume; real unreadable process with permission injected",
+          "result": "PASS"
+        },
+        {
+          "case": "same newly attested daemon -> Next failure -> automatic fresh incarnation",
+          "result": "PASS"
+        },
+        {
+          "case": "supervision_policy_rebinding_required",
+          "result": "DENY",
+          "nextFork": false
+        },
+        {
+          "case": "explicit rebinding 2; root installation simulated, real observer/verifier",
+          "result": "PASS",
+          "delta": [
+            "bootId",
+            "daemon"
+          ]
+        },
+        {
+          "case": "supervision_current_executor_survived",
+          "result": "DENY",
+          "nextFork": false
+        },
+        {
+          "case": "injected boot boundary + real new daemon + explicit rebind -> recovery, no old PID/socket replay",
+          "result": "PASS"
+        }
+      ],
+      "boot": "injected ledger/policy transition; actual daemon changed",
+      "permission": "local environ denial injected; real root proc/socket observations",
+      "recoveryLabel": "candidate"
+    },
+    "return": {
+      "results": [
+        {
+          "case": "window second candidate start",
+          "result": "DENY"
+        },
+        {
+          "case": "real candidate executor survivor blocks return",
+          "result": "DENY"
+        },
+        {
+          "case": "real cluster source9f -> corrected candidate -> return9f, fresh exit observations, single start each",
+          "result": "PASS"
+        },
+        {
+          "case": "real new daemon, same saved dump, legible inventory -> automatic recovery",
+          "result": "PASS"
+        },
+        {
+          "case": "supervision_policy_rebinding_required",
+          "result": "DENY",
+          "nextFork": false
+        },
+        {
+          "case": "explicit rebinding 1; root installation simulated, real observer/verifier",
+          "result": "PASS",
+          "delta": [
+            "bootId",
+            "daemon"
+          ]
+        },
+        {
+          "case": "manual explicit rebind then supervised resume; real unreadable process with permission injected",
+          "result": "PASS"
+        },
+        {
+          "case": "same newly attested daemon -> Next failure -> automatic fresh incarnation",
+          "result": "PASS"
+        },
+        {
+          "case": "supervision_policy_rebinding_required",
+          "result": "DENY",
+          "nextFork": false
+        },
+        {
+          "case": "explicit rebinding 2; root installation simulated, real observer/verifier",
+          "result": "PASS",
+          "delta": [
+            "bootId",
+            "daemon"
+          ]
+        },
+        {
+          "case": "supervision_current_executor_survived",
+          "result": "DENY",
+          "nextFork": false
+        },
+        {
+          "case": "injected boot boundary + real new daemon + explicit rebind -> recovery, no old PID/socket replay",
+          "result": "PASS"
+        }
+      ],
+      "boot": "injected ledger/policy transition; actual daemon changed",
+      "permission": "local environ denial injected; real root proc/socket observations",
+      "recoveryLabel": "return"
+    }
+  }
+}

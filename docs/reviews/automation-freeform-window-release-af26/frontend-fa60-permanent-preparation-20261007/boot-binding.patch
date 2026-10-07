@@ -1,0 +1,37 @@
+--- a/frontend-check.py
++++ b/frontend-check.py
+@@ -280,0 +281,3 @@
++    binding=json.loads((root/'socket-observer-binding.private.json').read_text())
++    expected=binding['policy']
++    require(expected['bootId']==BOOT_ID.read_text().strip() and int(PM_PID.read_text())==expected['daemon']['pid'] and proc(expected['daemon']['pid'])['ticks']==expected['daemon']['ticks'],'supervision_policy_rebinding_required')
+@@ -285,0 +289,19 @@
++
++
++def current_boot_observed(value, own, observer):
++    # No prior boot PID/group/socket identity is reused. A fresh complete root
++    # inventory must explain current executors before the first Next fork.
++    require(0 <= time.monotonic()-value['finishedMonotonic'] <= 10,'observation_expired')
++    allowed={own['pid']:own,observer['pid']:observer}
++    for sample in value['samples']:
++        require(not sample['listeners'],'supervision_current_listener_survived')
++        rows=sample['processes'];by={q['pid']:q for q in rows}
++        require(len(by)==len(rows),'observation_duplicate_process')
++        for pid, expected in allowed.items():
++            q=by.get(pid);require(q is not None,'supervision_observer_unobserved')
++            require(all(q[k]==expected[k] for k in ['pid','ticks','parent','group']) and q['state'] not in ['Z','X','x'],'supervision_observer_identity_drift')
++        for q in rows:
++            require(not q['roles'] or q['pid'] in allowed,'supervision_current_executor_survived')
++            # The read-only observer may have its own sudo reader descendants;
++            # no second direct launcher child is allowed before the Next fork.
++            require(q['parent']!=own['pid'] or q['pid']==observer['pid'],'supervision_launcher_descendant_survived')
+@@ -310,0 +333 @@
++            fresh_boot=None
+@@ -314 +337,5 @@
+-                if prior['bootId']!=boot: continue
++                if prior['bootId']!=boot:
++                    if fresh_boot is None:
++                        fresh_boot=supervision_observation(control,r)
++                        current_boot_observed(fresh_boot,own,observer)
++                    continue
+@@ -330,0 +358 @@
++            if fresh_boot is not None:require(0 <= time.monotonic()-fresh_boot['finishedMonotonic'] <= 10,'observation_expired')

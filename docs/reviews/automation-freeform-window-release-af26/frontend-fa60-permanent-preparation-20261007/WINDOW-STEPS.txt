@@ -1,0 +1,81 @@
+REVIEW ONLY. NO WINDOW AUTHORIZATION. No commands below executed in preparation.
+P=/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-css-supervision-20261007T224500Z
+PM=/home/deploy/.npm-global/bin/pm2
+
+POLICY INSTALLATION (requires separate owner approval; current policy stays installed):
+bash "$P/install-policy.sh"
+This archives the fixed policy, preserves helper/sudoers, and performs preparatory
+before. Installation script archives source-tree.private.json as
+source-tree.preparatory.private.json only after PASS. No exit gate may reuse this capture. Gate remains false.
+
+WINDOW (requires separate approval, no daemon/boot drift accepted):
+set -euo pipefail
+exec 9>"$P/window.lock"
+flock -n 9
+(cd "$P" && sha256sum -c scripts.sha256 && sha256sum -c bindings.sha256)
+python3 "$P/frontend-action.py" before
+# before rechecks source/core/daemon and obtains NEW two-sample root observation.
+# Do not continue if preparation capture was not archived or any gate denies.
+printf 'true\n' > "$P/execution-authorized"
+python3 "$P/frontend-action.py" stop
+python3 "$P/frontend-action.py" exited
+python3 "$P/frontend-action.py" delete
+python3 "$P/frontend-action.py" start-candidate
+python3 "$P/frontend-action.py" ready-candidate
+python3 "$P/frontend-action.py" candidate
+# One start-intent; readiness <=30s/30 attempts, private diagnostics.
+# Request owner read-only session/Inbox/CRM/Campaigns/layout confirmation NOW.
+# Only after confirmation:
+python3 "$P/frontend-action.py" enable-supervision-candidate
+python3 "$P/frontend-action.py" supervised-candidate
+"$PM" save
+cp /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+python3 "$P/frontend-action.py" supervised-candidate
+printf 'false\n' > "$P/execution-authorized"
+# Check saved/fallback identity and API/worker/guard/cron/boot against baseline.
+# Preserve permanent staging/control/journals and references. Release lock last.
+
+RETURN (select from observed state; never repeat start-candidate):
+# Before source stop: no return start needed. Gatefalse, preserve diagnostics.
+# After source exited but candidate start never requested: skip stop/candidate-exited.
+# After ANY candidate start-intent, even early death:
+python3 "$P/frontend-action.py" stop
+python3 "$P/frontend-action.py" candidate-exited
+# Fresh root observation, full ledger/tree/socket/PM2 negative checks mandatory.
+# Missing PID/listener alone not proof. Failure blocks return.
+python3 "$P/frontend-action.py" delete
+python3 "$P/frontend-action.py" start-return
+python3 "$P/frontend-action.py" ready-return
+python3 "$P/frontend-action.py" return
+# Owner confirms read-only normal 9f screens before promotion/save:
+python3 "$P/frontend-action.py" enable-supervision-return
+python3 "$P/frontend-action.py" supervised-return
+"$PM" save
+cp /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+python3 "$P/frontend-action.py" supervised-return
+printf 'false\n' > "$P/execution-authorized"
+# If return fails: stop once + return-exited NEW observation; do not repeat start.
+# Escalate at15min; timeout never permits bypass/kill or additional start.
+
+PERMANENT RECOVERY (after window ended, gatefalse, promoted control only):
+# Same boot, changed daemon, local complete/legible: PM2 auto recovery works.
+# stale root binding or changed boot: deny78 before Next; explicit owner action.
+# Select actual promoted control, candidate or return, by saved PM2 reference.
+# Example candidate (return uses return.run.private.json):
+python3 "$P/rebind-policy.py" "$P/candidate.run.private.json" "$P/rebind-candidate-1"
+# Proposal has fixed bytes/hashes and executable INSTALL-POLICY.sh, no installation.
+# Review delta: ONLY bootId/daemon, original roles/releases/nonces remain fixed.
+# Owner approval then runs generated INSTALL-POLICY.sh in sudo session.
+# It archives root/local bindings, performs fresh observation and effective verifier;
+# it does NOT start/restart. Incomplete reading/survivor blocks subsequent launcher.
+# After approved binding and diagnostic deny78 with PM2 frontend stopped/PID0:
+# verify no other recovery/executor; one normal PM2 restart (not window start):
+"$PM" restart re7-admin-front
+python3 "$P/frontend-action.py" supervised-candidate
+# Capture stdout/stderr/exit privately; on denial preserve and investigate, no loop.
+# API/worker may also require separate normal boot recovery; never infer their health.
+# During window, daemon drift invalidates baselines: do not use this permanent branch
+# to rewrite window identity. Stop advance, obtain fresh reviewed recovery preparation.
+
+No helper/sudoers removal or old policy restoration while any active/saved/return
+control depends on it. No sudo widening, DB/backend or tenant change in this plan.
