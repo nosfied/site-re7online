@@ -87,6 +87,83 @@ def net():
         result.add(line.split()[6])
     return result, listener
 
+SOURCE_ROOT_OBSERVATION = Path('/run/re7-frontend-source-exit-20261007T173647Z.json')
+
+def root_source_socket_observation(captured, remaining, daemon):
+    # Fixed root-owned read certificate, only for this consumed source capture.
+    path = SOURCE_ROOT_OBSERVATION
+    for node in (path, *path.parents):
+        st = node.lstat()
+        require(st.st_uid == 0 and not st.st_mode & 0o022 and not node.is_symlink(), 'root_socket_observation_path')
+    require(path.is_file(), 'root_socket_observation_type')
+    record = json.loads(path.read_text())
+    require(set(record) == {'at', 'bootId', 'sourceSha256', 'daemon', 'observations'}, 'root_socket_observation_schema')
+    require(0 <= time.time() - record['at'] <= 120, 'root_socket_observation_expired')
+    require(record['bootId'] == BOOT_ID.read_text().strip(), 'root_socket_observation_boot')
+    require(record['sourceSha256'] == hashlib.sha256((P/'source-tree.private.json').read_bytes()).hexdigest(), 'root_socket_observation_capture')
+    require(record['daemon'] == {'pid': daemon['pid'], 'ticks': daemon['ticks']}, 'root_socket_observation_daemon')
+    expected = {inode: [[daemon['pid'], daemon['ticks'], '0', False]] for inode in remaining}
+    require(record['observations'] == [expected, expected], 'root_socket_observation_owners')
+    require(proc(daemon['pid'])['ticks'] == daemon['ticks'], 'daemon_ticks')
+    require(len(remaining) == 1 and os.readlink(f'/proc/{daemon["pid"]}/fd/0') == 'socket:[' + next(iter(remaining)) + ']', 'daemon_stdin_drift')
+    require(net()[0].intersection(captured) == remaining, 'socket_owner_observation_churn')
+    return set()
+
+def remaining_source_sockets(captured):
+    """Retain socket barrier; classify only the preserved daemon's connected Unix stdin.
+
+    A PM2 child can inherit the daemon's fd0. Its continued existence is not
+    evidence of a surviving application. No exclusion by name, UID or count.
+    """
+    remaining = net()[0].intersection(captured)
+    if not remaining:
+        return set()
+    daemon = json.loads((P / 'daemon.private.json').read_text())
+    def observe():
+        require(int(PM_PID.read_text()) == daemon['pid'], 'daemon_pid')
+        require(proc(daemon['pid'])['ticks'] == daemon['ticks'], 'daemon_ticks')
+        fd0 = os.readlink(f'/proc/{daemon["pid"]}/fd/0')
+        unix = {}
+        for line in Path('/proc/net/unix').read_text().splitlines()[1:]:
+            fields = line.split()
+            unix[fields[6]] = fields
+        result = {}
+        for inode in remaining:
+            fields = unix.get(inode)
+            require(fields is not None and fields[3:6] == ['00000000', '0001', '03'], 'frontend_socket_survived')
+            require(fd0 == 'socket:[' + inode + ']', 'frontend_socket_survived')
+            owners = []
+            for folder in Path('/proc').iterdir():
+                if not folder.name.isdigit():
+                    continue
+                try:
+                    q = proc(int(folder.name), require_alive=False)
+                    for fd in (folder / 'fd').iterdir():
+                        try:
+                            if os.readlink(fd) == 'socket:[' + inode + ']':
+                                owners.append((q['pid'], q['ticks'], fd.name, q['state'] in ['Z', 'X', 'x']))
+                        except FileNotFoundError:
+                            # /proc/self/fd enumerates its own short-lived directory FD.
+                            if q['pid'] != os.getpid():
+                                raise RuntimeError('socket_owner_observation_incomplete')
+                except (FileNotFoundError, ProcessLookupError):
+                    raise RuntimeError('socket_owner_observation_incomplete')
+                except PermissionError:
+                    raise RuntimeError('socket_owner_observation_incomplete')
+            require(owners == [(daemon['pid'], daemon['ticks'], '0', False)], 'frontend_socket_owner_ambiguous')
+            result[inode] = owners
+        require(proc(daemon['pid'])['ticks'] == daemon['ticks'], 'daemon_ticks')
+        require(os.readlink(f'/proc/{daemon["pid"]}/fd/0') == fd0, 'daemon_stdin_drift')
+        return result
+    try:
+        first = observe(); second = observe()
+    except RuntimeError as error:
+        if str(error) != 'socket_owner_observation_incomplete' or not SOURCE_ROOT_OBSERVATION.exists():
+            raise
+        return root_source_socket_observation(captured, remaining, daemon)
+    require(first == second and net()[0].intersection(captured) == remaining, 'socket_owner_observation_churn')
+    return remaining.difference(first)
+
 def run_from(label):
     r = json.loads((P / (label + '.run.private.json')).read_text())
     require(r['release'] == (TARGET if label == 'candidate' else next(x['pm_cwd'] for x in json.loads((P/'runtime.private.json').read_text())['processes'] if x['name']==FRONT)), 'run_release')
@@ -375,7 +452,7 @@ def main(action):
             require(not Path(f'/proc/{q["pid"]}').exists(), 'survivor_or_pid_reused')
         ns, listening = net()
         require(not listening, 'frontend_listener_survived')
-        require(not ns.intersection(capture['sockets']), 'frontend_socket_survived')
+        require(not remaining_source_sockets(capture['sockets']), 'frontend_socket_survived')
         require(not any(r['name'] == FRONT and r['pid'] for r in rs), 'pm2_frontend_alive')
     elif action in ['candidate', 'return']:
         tracked_live(action)

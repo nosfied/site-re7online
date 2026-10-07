@@ -1,6 +1,8 @@
 # Frontend fa60f0f6 — preparação exclusiva, 07/10/2026
 
-**PREPARED FOR WINDOW / NOT DEPLOYED.** Pacote e staging conferidos; gatefalse. Não houve stop/start produtivo, save/resurrect, alteração de guarda/scheduler/cron/boot, DB/auth/tenant/agendamentos ou contato4366. Nenhum envio/provider produtivo. API e worker continuam afbb; frontend produtivo continua9f. Preparação não constitui autorização de executar a troca nem aceite funcional.
+**RETURNED TO 9f4cbe0f / fa60 NOT DEPLOYED (07/10, 14:57 Fortaleza).** A tentativa autorizada parou o frontend antigo, encontrou um falso positivo no certificado de saída e retornou a9f com partida única, leitura confirmada pelo owner e supervisão/saved/fallback promovidos. API/worker/guarda/scheduler/cron/boot preservados. Gatefalse, controles e capturas consumidos preservados. Os comandos de preparação abaixo são registro histórico, não instrução para reutilizar esta tentativa.
+
+**Preparação anterior:** PREPARED FOR WINDOW / NOT DEPLOYED. Pacote e staging conferidos; gatefalse. Não houve stop/start produtivo, save/resurrect, alteração de guarda/scheduler/cron/boot, DB/auth/tenant/agendamentos ou contato4366. Nenhum envio/provider produtivo. API e worker continuam afbb; frontend produtivo continua9f. Preparação não constitui autorização de executar a troca nem aceite funcional.
 
 ## Procedimento e escopo auditados
 
@@ -167,3 +169,69 @@ Owner recarrega sessão habitual sem limpar cookies/storage: Inbox/CRM e campanh
 Registrar cenário PASS/FAIL/NOT EXERCISED e relatos exatos; health isolado não é aceite funcional. Abas antigas mantêm bundle9f até reload;158assets preservados reduzem falha de lazy-load. Não prometer compatibilidade universal RSC/ServerAction. Após retorno a9f, aba com JS novo pode precisar reload para assets; não repetir ações de envio por erro visual. Durante stop/start podem falhar SSR/navegação/assets, embora API/realtime permaneçam ativos; impacto não é zero garantido.
 
 Aceites anteriores permanecem nos seus casos/versionamentos. Agrupamento aguarda execução natural autorizada, contingência AUTO positiva e CRA-PR pendentes. Preparação/frontend não encerra essas frentes nem saneia históricos;4366 sem restauração automática, setembroCLOSED, SECULT/DB-only encerradas e Guia pausado.
+
+
+## Execução autorizada e retorno comprovado — 07/10
+
+**Resultado: RETURNED TO 9f4cbe0f / fa60 NOT DEPLOYED.** Nenhuma partida do candidato fa60; uma única partida do retorno9f. O tar funcional validado permanece intacto e não foi reconstruído. Não houve envio, mudança de atendimento/agendamento/tenant, restore, reparo histórico ou restauração de4366.
+
+| Checkpoint | UTC (Fortaleza = UTC−3) | Evidência |
+|---|---|---|
+| Reconferência de origem | 17:31:27 | Identidades, retorno/manifesto e controles iguais à preparação; health/DBok |
+| Parada do frontend9f | 17:36:47 (14:36:47) | stop PASS; launcher3345522 e Next3345533 saíram |
+| Certificado inicialmente negado | 17:36:59 | frontend_socket_survived; não houve delete/start antes de resolver |
+| Leitura do proprietário residual | após a recusa | Socket Unix49928 conectado, exclusivamente fd0 do daemon18676/start ticks222727 nas observações disponíveis |
+| Escalonamento | horizonte15min | Frontend parado; API/worker vivos; nenhum bypass/kill/start pelo prazo |
+| Saída revalidada | 17:53:35 | exited PASS com certificado root fresco; nenhum proprietário adicional |
+| Única partida do retorno9f | 17:53:55 | start-return PASS, intent exclusivo, nenhum start-candidate |
+| Retorno verificado | 17:54:25 (14:54:25) | ready-return/return PASS, HTTPlogin e APIhealth/DBok |
+| Promoção após leitura do owner | 17:56–17:57:50 | owner: “Sim, sessão e telas funcionam”; supervised-return PASS, PM2save/fallback PASS |
+| Reconferência final | 17:58:53 | releases, manifesto, identidades, controles e saved/fallback conferidos |
+
+Intervalo observado entre início de parada e retorno verificado: **17min38s**. Esse intervalo inclui diagnóstico, ensaio local e leitura sudo do owner; não mede indisponibilidade de cada requisição. A verificação de prontidão já havia passado antes da marca17:54:25. O horizonte15min foi escalonado e não virou certificado de saída ou autorização de kill.
+
+A recusa acidental da chamada de parada anterior não executou stop. O gate foi fechado; os controles init já gerados foram preservados. Uma releitura por `before` negou `capture_already_exists` sem sobrescrever a captura; a retomada reconfirmou em leitura a mesma árvore/PID/start ticks e ausência de intents de start. Uma leitura auxiliar com import incorreto também falhou antes da parada, sem efeitos. Todos os diagnósticos foram preservados. Esses fatos não foram tratados como starts repetidos.
+
+### Causa do bloqueio e correção operacional autorizada
+
+O gate original exigia desaparecimento de todo inode de socket capturado, incluindo stdin compartilhado com o daemon PM2. Na VPS, os dois PIDs antigos já haviam saído e o listener3000 estava ausente; o único inode residual era o fd0 Unix conectado do daemon preservado. Isso é recurso compartilhado de supervisão, não socket privado de executor sobrevivente.
+
+A correção em `remaining_source_sockets` mantém os gates de PID reutilizado/zumbi, descendentes, daemon/core e listener. Apenas classifica o residual como compartilhado quando: Unix stream conectado e sem flag de listener; identidade do daemon igual ao baseline; seu fd0 aponta ao inode exato; inventário completo demonstra **somente** aquele daemon/fd0 como proprietário; duas observações consecutivas e o conjunto residual coincidem. Outro socket/owner, identidade divergente, leitura incompleta ou churn negam. Sem exclusão por nome, UID, endereço ou contagem.
+
+A primeira execução corrigida na VPS negou `socket_owner_observation_incomplete`: deploy não podia ler `/proc/17261/fd`. Não foi descartado esse PID. Deifson realizou então a leitura root restrita de todos os proprietários, sem executar código de arquivo gravável por deploy, instalar sudoers ou alterar processos. Ela confirmou duas observações completas e idênticas. O certificado `/run/re7-frontend-source-exit-20261007T173647Z.json` é root-owned, exclusivo, cadeia root sem symlinks/escrita por outros, vinculado a boot, hash da captura original e daemon PID/ticks, com validade120s. O verificador revalidou arquivo/schema/frescor/binding/identidade/fd0 e sockets antes de aceitar `exited`. Certificado vencido, dono extra ou captura divergente nega. É evidência pontual, sem garantia atômica de concorrência posterior; execução única e controles continuam necessários.
+
+Essa dependência root foi usada **somente para recuperar a origem desta tentativa**, autorizada explicitamente pelo owner. Não há sudo novo nem exclusão global de sockets. O caminho fixo do certificado desta tentativa não deve ser reciclado para uma futura janela. Nova tentativa precisa resolver a captura/classificação e o acesso observacional antes de parar; esta rodada não declara o pacote pronto para retry automático. O certificado e todos os originais/diagnósticos permanecem preservados.
+
+### Hashes da correção e provas dirigidas
+
+| Item | SHA-256 |
+|---|---|
+| frontend-check original | f036a144c926899a894dd631552a1d38a4b5aeb5a513e9b803e14bc6928ba331 |
+| primeira correção, negou leitura incompleta | d27c358300286f7224557aeed26bc467f240bafee16e0e6774a276efb6b2a758 |
+| verificador final utilizado no retorno | 923e2747c239b434a93ef94948794fc044516689bf04527163ac81c6783114b3 |
+| teste dirigido | 893e6ff8d358571d8ae43b0d77170a4da529e04751c9c45950c4cfaadcb9e67b |
+| scripts.sha256 da recuperação (7scripts + teste), conferido na VPS | 0aa970a8668770563cbd7d31f644e509fb51f3efb0a3575cd3d95996a234e331 |
+| verificador de revisão, varredura sem exclusão por UID (somente local) | ae619698a2dc0df8c232ad69f63b700b97d31ff6210e608e0d76d109f15163f7 |
+| scripts.sha256 de revisão (somente local) | 22786fd60d8eb43eb7856522337e9ff14541dadc30bbe76c3a7b7c02026a7971 |
+
+Originais do verificador e manifests foram arquivados antes de cada substituição. Os8hashes do manifesto da recuperação passaram na VPS. Na revisão local final, a varredura também foi ampliada a todos os UIDs: permissões insuficientes negam, sem excluir genericamente processos de outro usuário. As provas dirigidas foram reexecutadas sobre esses bytes. Essa diferença de observação permanece somente para revisão; não se substituiu o verificador utilizado pelo retorno já promovido. A recuperação produtiva foi comprovada pela observação root exaustiva, não pela varredura parcial por UID. Ambos os hashes são identificados acima. Launcher/bootstrap/action e artefato funcional não mudaram.
+
+Ensaio reproduzível em Linux com namespace UID/PID/proc privado, Node20.20.0 e PM2 6.0.14 já preservados:
+
+```bash
+unshare -Urpf --mount-proc python3 \
+  docs/reviews/automation-freeform-window-release-af26/frontend-fa60f0f6-prepared/test_shared_daemon_socket.py \
+  /tmp/re7-pm2-lab/node /tmp/re7-pm2-lab/pm2/bin/pm2
+```
+
+**Processos/efeitos reais locais:** daemon PM2 e fd0 Unix; frontend Node e stop/exited; identidade de daemon divergente negada; executor vivo negado; outro socket Unix negado; processo Node adicional segurando socket negado. Nenhum DB/provider/nft/systemd produtivo. O teste fora do namespace negou corretamente uma leitura de fd sem permissão; não foi atribuído PASS.
+
+**Injeções explicitadas:** nesse laboratório o app não herdou o inode do stdin do daemon; o campo residual foi acrescentado à captura para exercitar a combinação `exited` (sem alegar herança real local). O caso de owner adicional usa processos/sockets reais com binding de daemon simulado. Os testes do registro root leem arquivo/proc/socket reais, mas injetam a cadeia de diretórios para superar o mapeamento UID do namespace: registro válido PASS; expirado/futuro/ownerextra/hash de captura divergente DENY. Ownership/cadeia do certificado root real foram conferidos na VPS na recuperação. Não equiparar essas injeções a efeitos operacionais reais ou a novo aceite funcional.
+
+### Estado efetivo final e pendências
+
+- Frontend **9f4cbe0f9a4e891f09bb2f41e88eccec388172da**, BUILD_ID `LFcdEK9gXZsBhf4_c5r8G`, launcher3388720/start ticks2118003772, online/restart0; geração operacional atual é esta preparação, ramo return. Diretório antigo9f e journals intactos; diretório novo/journals/controles também passam a depender de preservação permanente.
+- API **afbb7455**, PID3153929/ticks2107666112, e worker mínimo reativo afbb, PID3154150/ticks2107666513, online/restart0, mesmos processos/envs; daemon18676/ticks222727 preservado. Sem rebuild/backport/troca desses componentes.
+- Health/DBok; guarda aberta/geração33/tasks{}, conteúdo inteiro inalterado; parâmetros existentes do scheduler iguais. Crontab/cronbackup iguais; boot inactive/enabled. Não se aplicou nft nesta janela frontend. Saved/fallback foram alterados somente para persistir o frontend de retorno, com referência9f/launcher novo verificada e dumps idênticos.
+- Gatefalse; nenhuma partida do candidato e uma única do retorno. Owner confirmou sessão/Inbox/CRM/campanhas somente em leitura; isso comprova recuperação de acesso, não aceite da correção fa60.
+- **fa60 NOT DEPLOYED / OWNER FUNCTIONAL VALIDATION NOT EXERCISED.** Provas funcionais anteriores sobre tar fa60 mantidas; não reatribuídas à produção9f. Agrupamento natural, contingência AUTO positiva e CRA-PR continuam separados. Não houve nova campanha, alteração de horário ou saneamento histórico.
