@@ -1,0 +1,73 @@
+{
+  "status": "RETURNED_TO_9F_OWNER_READ_CONFIRMED_FA60_FUNCTIONAL_FAIL",
+  "processes": [
+    {
+      "name": "re7-whatsapp-agent",
+      "pid": 3153929,
+      "ticks": "2107666112",
+      "release": "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api/apps/whatsapp-agent",
+      "status": "online",
+      "restarts": 0
+    },
+    {
+      "name": "re7-whatsapp-web-worker",
+      "pid": 3154150,
+      "ticks": "2107666513",
+      "release": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker",
+      "status": "online",
+      "restarts": 0
+    },
+    {
+      "name": "re7-admin-front",
+      "pid": 3413279,
+      "ticks": "2119046532",
+      "release": "/opt/re7online/releases/9f4cbe0f9a4e891f09bb2f41e88eccec388172da-front",
+      "status": "online",
+      "restarts": 0
+    }
+  ],
+  "guard": {
+    "open": true,
+    "generation": 33,
+    "tasks": 0
+  },
+  "boot": "ActiveState=inactive\nUnitFileState=enabled",
+  "health": {
+    "ok": true,
+    "db": "ok"
+  },
+  "savedSha256": "4722a408e20e210097066b1cc7647e095ed7223371a3fa60dc9ce7f9441a55de",
+  "fallbackSha256": "4722a408e20e210097066b1cc7647e095ed7223371a3fa60dc9ce7f9441a55de",
+  "checkerSha256": "77817b16a7f760b0b75d514f54df7ef482cbb819d92fa4a6cab48541b7080c6a",
+  "archivedCheckerSha256": "1136c0cc8e4e26234c50b6ff7d7b10997d8dad1da58bae4e3a63ea6c5303e7bf",
+  "scriptsManifestSha256": "8bde9e92aecccf24a30d751a5bffbd089169fd5ff4e4bf11ce8f2e83c7bf1fac",
+  "archivedScriptsManifestSha256": "86dc5c7691c17735368fd509d598a866d661600cde3e1104f26badc18fdbff7a",
+  "candidateStarts": 1,
+  "returnStarts": 1,
+  "candidatePromoted": false,
+  "returnPromoted": true,
+  "executionGate": false,
+  "atUTC": "2026-10-07T20:53:03.806471+00:00",
+  "ownerReturnScreensConfirmed": true,
+  "fa60LayoutCause": "UNKNOWN",
+  "windowSourceStopUTC": "2026-10-07T20:33:52+00:00",
+  "candidateReadinessUTC": "2026-10-07T20:34:34.397425+00:00",
+  "candidateStoppedUTC": "2026-10-07T20:36:45.679618+00:00",
+  "candidateExitDeniedUTC": "2026-10-07T20:36:51.538671+00:00",
+  "candidateFreshExitPassUTC": "2026-10-07T20:46:28.187908+00:00",
+  "returnReadinessUTC": "2026-10-07T20:47:50.846659+00:00",
+  "returnValidatedUTC": "2026-10-07T20:48:08.865823+00:00",
+  "ownerConfirmationRecordedUTC": "2026-10-07T20:50:29+00:00",
+  "returnSupervisionPromotedUTC": "2026-10-07T20:50:30.930113+00:00",
+  "finalSupervisionCheckUTC": "2026-10-07T20:51:43.600773+00:00",
+  "sourceStopToValidatedReturnSeconds": 856.865823,
+  "singleContinuousOutageClaim": false,
+  "capturesReusedAsExitProof": false,
+  "gateDeniedCause": "unreadable_new_or_changed_process",
+  "recoveryCheckerCommit": "95b2d33de4f5c440e33c2027d8f49613c2e20be6",
+  "functionalTarSha256": "9b375dffca78425e7193e2e73b3c3692a951dc9f638c1c73790cfd3c5e32dac2",
+  "installedObserverPolicySha256": "eff1b150640219af55c184d08a0f1752e23c5fd55954b8220d4f137ed27c5213",
+  "helperChanged": false,
+  "sudoersChanged": false,
+  "historicalRecordsChanged": false
+}

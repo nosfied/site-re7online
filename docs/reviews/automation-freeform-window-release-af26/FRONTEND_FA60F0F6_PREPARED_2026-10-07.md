@@ -1,6 +1,6 @@
 # Frontend fa60f0f6 — preparação exclusiva, 07/10/2026
 
-**RETURNED TO 9f4cbe0f / fa60 NOT DEPLOYED (07/10, 14:57 Fortaleza).** A tentativa autorizada parou o frontend antigo, encontrou um falso positivo no certificado de saída e retornou a9f com partida única, leitura confirmada pelo owner e supervisão/saved/fallback promovidos. API/worker/guarda/scheduler/cron/boot preservados. Gatefalse, controles e capturas consumidos preservados. Os comandos de preparação abaixo são registro histórico, não instrução para reutilizar esta tentativa.
+**RETURNED TO 9f / OWNER RETURN READ CONFIRMED / fa60 FUNCTIONAL FAIL — 07/10, fechamento17:53Fortaleza.** A janela nova foi concluída com retorno comprovado e supervisão/saved/fallback9f; fa60 não foi promovido. API/worker e controles preservados. [Registro final](#retorno-9f-concluído-após-fail-de-layout--0710). As preparações e tentativas abaixo são históricas, não comandos para reuso.
 
 **Preparação anterior:** PREPARED FOR WINDOW / NOT DEPLOYED. Pacote e staging conferidos; gatefalse. Não houve stop/start produtivo, save/resurrect, alteração de guarda/scheduler/cron/boot, DB/auth/tenant/agendamentos ou contato4366. Nenhum envio/provider produtivo. API e worker continuam afbb; frontend produtivo continua9f. Preparação não constitui autorização de executar a troca nem aceite funcional.
 
@@ -495,3 +495,51 @@ Os pré-requisitos **de instalação da política e preflight integrado preparat
 Owner autorizou somente frontend; execução sob lock exclusivo, tar/manifests/retorno/controles conferidos, before novo PASS. Stop origem20:33:52UTC; exited fresco PASS, delete e partida candidata únicos PASS, prontidão20:34:34UTC/validação20:34:56UTC PASS. API/worker e controles preservados. Owner reportou layout sem tamanho/organização; **FAIL funcional**, causa desconhecida nesta etapa. Nenhuma promoção/save.
 
 Candidato identificado e parado20:36:45UTC para retorno autorizado. Gate `candidate-exited` negou `unreadable_new_or_changed_process`. Diagnóstico identifica dois SSHs posteriores à preparação com ambiente inacessível a deploy; não foram excluídos. Leitor root instalado e contrato efetivo de ausência PASS em leitura diagnóstica, sem permitir partida por isso. Retorno ainda não iniciado; frontend parado, API/worker ativos. [Correção restrita e hashes para decisão de recuperação](frontend-recovery-observation-20261007/README.md): classificador efetivo/17casos sintéticos PASS; não instalada, sem alteração de helper/política/sudoers. Preservadas captura candidata, negativa e todos os journals.
+
+## Retorno 9f concluído após FAIL de layout — 07/10
+
+**RETURNED TO 9f / OWNER RETURN READ CONFIRMED / fa60 NOT DEPLOYED.** A janela autorizada exclusivamente do frontend encerrou com uma partida candidata e uma partida de retorno, sem restart/repetição. Fa60 nunca recebeu marker de promoção ou saved/fallback. Owner relatou “sem tamanho e sem organização”; causa de layout permanece **desconhecida**, investigação separada após restabelecimento. HTTP/BUILD_ID/prontidão não foram confundidos com aceite visual.
+
+### Cronologia e alcance
+
+| Checkpoint | UTC07/10 | Fortaleza07/10 | Resultado |
+|---|---|---|---|
+| Before inédito da janela | 20:32:53 | 17:32:53 | PASS, política nova, identidades/controles/retorno/tar íntegros |
+| Início stop origem9f | 20:33:52 | 17:33:52 | Uma parada frontend; API/worker ativos |
+| Saída origem | 20:34:04 | 17:34:04 | Gate fresco PASS, dois samples completos; sem reuso da captura preparatória |
+| Candidato pronto | 20:34:34 | 17:34:34 | Partida única; prontidão limitada PASS |
+| Candidato validado tecnicamente | 20:34:56 | 17:34:56 | Identidade/BUILD_ID/HTTP PASS; owner depois rejeitou layout |
+| Candidato parado para retorno | 20:36:45 | 17:36:45 | Identidade reconfirmada; sem promoção |
+| Primeiro candidate-exited | 20:36:51 | 17:36:51 | DENY `unreadable_new_or_changed_process`; diagnóstico preservado |
+| Checker corrigido instalado | 20:46:18 | 17:46:18 | Somente bytes aprovados; arquivo e manifesto anteriores arquivados |
+| Candidate-exited novo | 20:46:28 | 17:46:28 | PASS; leitura root nova + contrato + inventário efetivos |
+| Retorno9f pronto | 20:47:50 | 17:47:50 | Uma partida, readiness PASS |
+| Retorno9f validado | 20:48:08 | 17:48:08 | Gate/BUILD_ID PASS; pronto para conferência owner |
+| Confirmação owner registrada | 20:50:29 | 17:50:29 | “sim voltou ao normal” |
+| Promoção retorno | 20:50:30 | 17:50:30 | Somente após confirmação; sem start/restart |
+| Saved/fallback + supervisão final | 20:51:43 | 17:51:43 | PASS; gatefalse |
+| Conferência final de componentes/controles | 20:53:03 | 17:53:03 | PASS; lock depois liberado |
+
+Intervalo observado início da troca→retorno validado **14min16,866s**; não é uma alegação de indisponibilidade contínua: candidato respondeu entre20:34:34 e sua parada, porém com layout rejeitado. Dois intervalos sem frontend útil, separados pela versão defeituosa. O retorno técnico foi restabelecido antes do horizonte15min; a confirmação de telas e persistência vieram depois. Nenhum timeout foi usado como prova de saída, autorização de kill ou motivo para repetir starts. Bloqueio comunicado imediatamente e recuperação restrita apresentada/aprovada enquanto frontend estava parado.
+
+### Bloqueio e correção efetivamente aplicada
+
+Inventário local não conseguia ler ambiente/cwd de dois SSHs do mesmo UID, ausentes do snapshot feito na preparação. Não eram executores frontend conforme duas observações root completas, mas a cadeia local negava antes de consumir essa prova. Identidades diagnosticadas:3409655/ticks2118900628 e3410745/ticks2118940709, grupos/ancestrais próprios, roles vazias. Não foram excluídos por nome, UID ou PID; baselines não foram reescritos. Primeiro diagnóstico amplo foi refinado ao mesmo UID do inventário efetivo; a classificação final e a negativa ficaram privadas.
+
+Owner aprovou somente o checker95b2d33d. Origem `1136c0cc8e4e26234c50b6ff7d7b10997d8dad1da58bae4e3a63ea6c5303e7bf`; resultado `77817b16a7f760b0b75d514f54df7ef482cbb819d92fa4a6cab48541b7080c6a`. Original arquivado `frontend-check.pre-recovery.private.py`. Manifesto antigo arquivado `scripts.pre-recovery.sha256`, hash `86dc5c7691c17735368fd509d598a866d661600cde3e1104f26badc18fdbff7a`; novo manifesto `8bde9e92aecccf24a30d751a5bffbd089169fd5ff4e4bf11ce8f2e83c7bf1fac`. Todos os demais scripts/helper/política/sudoers iguais.
+
+O gate passou só depois de uma chamada inteiramente nova do observador instalado. Para identidade local ilegível nova, exige duas amostras root completas e frescas, PID/ticks/parent/group exatos, nenhuma role/grupo/PID protegido, cadeia ancestral completa/consistente e nenhuma divergência; R/S ignorado como estado transitório, zumbi e observação incompleta negados. Contrato de ausência root, sockets/owners/listener e ledger continuaram obrigatórios. Os17testes publicados exercitam classificador efetivo com dados sintéticos; **separadamente**, o gate corrigido foi executado na VPS sobre processos/PM2/sockets reais e PASS. Não se atribuem a esses testes novas provas Node/PM2 de reboot ou funcionalidade fa60.
+
+### Estado liberado ao tráfego
+
+Frontend **9f4cbe0f9a4e891f09bb2f41e88eccec388172da**, BUILD_ID `LFcdEK9gXZsBhf4_c5r8G`; launcher3413279/ticks2119046532, Next3413290/ticks2119046558, daemon18676/ticks222727. Todosonline/restart0. API **afbb7455**3153929/ticks2107666112 e worker mínimo reativoafbb3154150/ticks2107666513 preservados, online/restart0. HealthAPIok/DBok, owner confirmou layout/sessão/Inbox/CRM/Campanhas normais. Nenhum envio de validação, mutation de tenant, reparo histórico ou build.
+
+Guarda aberta/generation33/tasks{}, mesmo estado operacional; scheduler/configuração/identidade da API preservados. Backupcron e crontab idênticos por hash, bootinactive/enabled igual; nenhum nft/contenção foi aplicado nesta janela frontend. DB/auth e dados atuais preservados. PM2 saved/fallback atualizados somente após confirmação do owner, ambos hash `4722a408e20e210097066b1cc7647e095ed7223371a3fa60dc9ce7f9441a55de`; API/worker no dump mantêm configuração/env/args/cron_restart iguais ao snapshot anterior. Retorno aponta ao launcher/control9f do staging novo e marker permanent; supervised-return PASS antes/depois de save. Gatefalse e lock liberado. [Resultado sanitizado](frontend-recovery-observation-20261007/returned-result.json).
+
+Staging ativo `/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z` agora é dependência permanente do retorno9f, assim como launcher/checker/controles/journals e seus vínculos saved/fallback; não remover. Preservados arquivo original, manifests anteriores, captura preparatória, captura fonte/candidata, root stdout/stderr/exit e recusas. Geração antiga9f e preparações consumidas intactas. Intents consumidos impedem reexecutar estes comandos; qualquer futura operação precisa de preparação própria.
+
+### Pendências separadas
+
+1. Investigar causa do layout fa60 em isolamento, incluindo assets e execução do pacote exato; não assumir CSS ausente sem evidência nem iniciar candidato produtivo para diagnosticar. Falha visual não reabre backend, registros ou aceites anteriores.
+2. A correção aprovada alcança gates de ausência candidata/retorno. `supervision_preflight` permanente permanece usando inventário local sem observação para uma identidade nova ilegível. Isso requer auditoria isolada específica; supervised-return prova o processo vivo atual, não recuperabilidade de todas as partidas futuras no mesmo boot. Não provocar restart/resurrect na VPS para testar essa limitação.
+3. Agrupamento aguarda caso natural autorizado, contingênciaAUTO e aceite específicoCRA-PR permanecem independentes. Históricos/4366 sem reparo; setembroCLOSED e demais frentes preservadas. Fa60 continua **FAIL / NOT DEPLOYED**, apesar do retorno técnico9f e confirmação visual concluídos.
