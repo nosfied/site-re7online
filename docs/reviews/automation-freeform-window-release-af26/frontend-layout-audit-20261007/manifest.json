@@ -1,0 +1,23 @@
+{
+  "originChecker": "77817b16a7f760b0b75d514f54df7ef482cbb819d92fa4a6cab48541b7080c6a",
+  "resultChecker": "a611e0234e1248629b311ba5f0901d46a933151df12091904efb9281f44036a5",
+  "originClient": "130e4aba02b055d28ab4857375b43f5e1f79bf3dfe63604c3776d058df44607e",
+  "resultClient": "c5a17c1c109c942d8094d2fe0bbd0b1ca89ca0378baa411b838c949a91bf4f7f",
+  "helperChanged": false,
+  "policyChanged": false,
+  "sudoersChanged": false,
+  "files": {
+    "docs/reviews/automation-freeform-window-release-af26/frontend-layout-audit-20261007/README.md": "90fecd851c66f6044850af0f03f46a91e147b2d8659f8429451bdf998050ea04",
+    "docs/reviews/automation-freeform-window-release-af26/frontend-layout-audit-20261007/assemble-checker.py": "5c1392b7165233350463cec00b4bd8c281263483b743c5b1fbb15987a081a95e",
+    "docs/reviews/automation-freeform-window-release-af26/frontend-layout-audit-20261007/build-inputs.py": "df751dac6f37ea3773873cf83c761b324d2fe61f30ecd0bb31526238f3de5c67",
+    "docs/reviews/automation-freeform-window-release-af26/frontend-layout-audit-20261007/compare_packages.py": "3c8d78aa5b1221faa81fec6eec4efc96c29d95b6bd7c22d1e1185c981ba21d34",
+    "docs/reviews/automation-freeform-window-release-af26/frontend-layout-audit-20261007/package.py": "85935b6d378766e23b589f911886ae3e5dd202a924927f91dbb3da9e64c72826",
+    "docs/reviews/automation-freeform-window-release-af26/frontend-layout-audit-20261007/results.json": "e52f29a2406c2cdd76dd12b31ef6c83942b96a1c5f883c1375b00eddbd078e05",
+    "docs/reviews/automation-freeform-window-release-af26/frontend-layout-audit-20261007/supervision.patch": "4247d9142c3e4cfe5ee9b127da87b060f8e689cb7ad9809c425412579011436c",
+    "docs/reviews/automation-freeform-window-release-af26/frontend-layout-audit-20261007/test_client.py": "33f0078aed9a7b45de1268f76ef00b26cfcc7d050e30e8ea6bf731968223bb28",
+    "docs/reviews/automation-freeform-window-release-af26/frontend-layout-audit-20261007/test_supervision.py": "187f93a449ae876acf6956a5d4e8420f70d6e09910aeeee2affd813cf5308adf",
+    "tests/browser/frontendAssetContract.mjs": "79fb0ed4a64c6afba23582472f2224df727ebb185f7024259297f6f1175d50be",
+    "tests/browser/frontendAssetLayoutAudit.mjs": "2810c186052f5a879577f4257317935eee81229f95c16c1a02371900319273b5",
+    "tests/browser/campaignScheduleAndGroups.mjs": "a2b5c07e6da9fc05a2e8fe4dc2cc3c5570270a05b32bc0cf841d30c0c82377ab"
+  }
+}

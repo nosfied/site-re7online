@@ -1,0 +1,31 @@
+--- a/frontend-check.py
++++ b/frontend-check.py
+@@ -274,0 +275,13 @@
++def supervision_observation(control, run):
++    # -I -S: load only the adjacent client, never PYTHONPATH or the release cwd.
++    import importlib.util
++    root=Path(control).parent
++    spec=importlib.util.spec_from_file_location('frontend_fixed_observation_client',root/'socket_observation_client.py')
++    client=importlib.util.module_from_spec(spec);spec.loader.exec_module(client)
++    value, policy=client.read(root,'supervision-recovery',reader=OBSERVATION_READER)
++    require(policy['bootId']==BOOT_ID.read_text().strip(),'supervision_observer_boot')
++    require(any(role['release']==run['release'] and role['entry']==run['entry'] for role in policy['roles'].values()),'supervision_observer_release')
++    require(int(PM_PID.read_text())==policy['daemon']['pid'] and proc(policy['daemon']['pid'])['ticks']==policy['daemon']['ticks'],'supervision_observer_daemon')
++    return value
++
++
+@@ -309 +322,8 @@
+-                a=inventory(prior,js,exclude=[own,observer]);b=inventory(prior,js,exclude=[own,observer])
++                try:
++                    a=inventory(prior,js,exclude=[own,observer]);b=inventory(prior,js,exclude=[own,observer])
++                except RuntimeError as error:
++                    if str(error)!='unreadable_new_or_changed_process':raise
++                    fresh=supervision_observation(control,r)
++                    a=inventory(prior,js,exclude=[own,observer],observation=fresh)
++                    b=inventory(prior,js,exclude=[own,observer],observation=fresh)
++                    require(0 <= time.monotonic()-fresh['finishedMonotonic'] <= 10,'observation_expired')
+--- a/socket_observation_client.py
++++ b/socket_observation_client.py
+@@ -24 +24 @@
+-            result = subprocess.run(COMMAND,text=True,capture_output=True,timeout=10)
++            result = subprocess.run(COMMAND,text=True,capture_output=True,timeout=10,cwd='/')

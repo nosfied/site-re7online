@@ -2,6 +2,7 @@
 // Start the local frontend separately, then:
 // node tests/browser/campaignScheduleAndGroups.mjs http://127.0.0.1:3082
 import fs from 'node:fs';
+import {assertFrontendAssetContract, inspectFrontendAssets} from './frontendAssetContract.mjs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
@@ -24,6 +25,7 @@ for (const item of Object.values(data)) if(item.status==='completed') { item.sen
 const template={id:'template-local',name:'modelo_local',status:'approved',category:'UTILITY',language:'pt_BR',content:'Texto sem variavel',variables:[],canUseInCampaign:true};
 
 let held = null, holdId = null, failId = null;
+const assetResponses=[];
 const report = { scope: 'real frontend/Chrome, controlled polling clock, simulated auth/API; no backend/provider', cases: [], requests: [], unexpected: [], exceptions: [] };
 const profile = fs.mkdtempSync('/tmp/re7-campaign-browser-');
 const log = fs.openSync(path.join(dir,'chrome.log'),'w');
@@ -39,6 +41,7 @@ try {
  const fulfill=(requestId,body,code=200)=>send('Fetch.fulfillRequest',{requestId,responseCode:code,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(JSON.stringify(body)).toString('base64')});
  ws.onmessage=async({data:raw})=>{
   const m=JSON.parse(raw);if(m.id){const p=pending.get(m.id);if(p){pending.delete(m.id);m.error?p.j(Error(m.error.message)):p.r(m.result);}return;}
+  if(m.method==='Network.responseReceived'){assetResponses.push({requestId:m.params.requestId,type:m.params.type,url:m.params.response.url,status:m.params.response.status,mime:m.params.response.mimeType});return;}
   if(m.method==='Page.javascriptDialogOpening'){report.confirmations??=[];report.confirmations.push(m.params.message);await send('Page.handleJavaScriptDialog',{accept:true});return;}
   if(m.method==='Runtime.exceptionThrown')report.exceptions.push(m.params.exceptionDetails.exception?.description||m.params.exceptionDetails.text);
   if(m.method!=='Fetch.requestPaused')return;
@@ -87,6 +90,7 @@ try {
  const composerTime='#campaign-creation-panel-audience input[type="datetime-local"]';
  await send('Page.navigate',{url:local+'/app/campaigns'});
  await until(()=>ev(`document.querySelector('[aria-label="Ver detalhes da campanha Campanha local B"]')!==null`),'loaded list');
+ report.assetContract=await inspectFrontendAssets({ev,send,responses:assetResponses});assertFrontendAssetContract(report.assetContract);
  assert.equal(await ev(`document.querySelector('[role="dialog"]')!==null`),false);
  await openAudience();await chooseOption('template-local');await chooseOption('FOLLOW_UP');await chooseOption('dept');await click('Gerar estimativa');
  await until(()=>ev(`document.querySelector(${JSON.stringify(composerTime)})!==null`),'composer datetime');

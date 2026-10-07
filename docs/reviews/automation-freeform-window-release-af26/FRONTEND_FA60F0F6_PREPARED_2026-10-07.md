@@ -543,3 +543,45 @@ Staging ativo `/opt/re7online/backups/converta-persistent/preparations/frontend-
 1. Investigar causa do layout fa60 em isolamento, incluindo assets e execução do pacote exato; não assumir CSS ausente sem evidência nem iniciar candidato produtivo para diagnosticar. Falha visual não reabre backend, registros ou aceites anteriores.
 2. A correção aprovada alcança gates de ausência candidata/retorno. `supervision_preflight` permanente permanece usando inventário local sem observação para uma identidade nova ilegível. Isso requer auditoria isolada específica; supervised-return prova o processo vivo atual, não recuperabilidade de todas as partidas futuras no mesmo boot. Não provocar restart/resurrect na VPS para testar essa limitação.
 3. Agrupamento aguarda caso natural autorizado, contingênciaAUTO e aceite específicoCRA-PR permanecem independentes. Históricos/4366 sem reparo; setembroCLOSED e demais frentes preservadas. Fa60 continua **FAIL / NOT DEPLOYED**, apesar do retorno técnico9f e confirmação visual concluídos.
+
+## Causa do layout demonstrada e supervisão ensaiada — 07/10
+
+**AUDITORIA ISOLADA CONCLUÍDA / CORREÇÕES LOCAIS PARA REVISÃO / NOT DEPLOYED.** O estado produtivo continua o retorno9f descrito acima; nenhuma leitura repetida, stop/start, instalação, save, mudança de controle ou preparação remota nesta investigação. Staging permanente9f preservado. A causa “desconhecida” no registro da recuperação permanece como diagnóstico daquele momento; as evidências abaixo agora demonstram a causa.
+
+### Causa e comparação do artefato exato
+
+Antes de recompilar, tar fa60 `9b375dffca78425e7193e2e73b3c3692a951dc9f638c1c73790cfd3c5e32dac2` e tar9f `d0f15209922741e51ab21e22d01ff2188ce212ef23081888084c868754065e54` foram conferidos e extraídos em diretórios novos, com hashes/modos/31symlinks do inventário completo verificados. Node20.20.0/Next16.1.5/Chrome reais, rede externa inexistente, APIs/auth simuladas. Mesma origem proxy HTTP local, rota `/app/campaigns`, sessão sintética, viewport1400×1100, Fortaleza e cache desabilitado. Caminhos preservados pelo proxy; TLS/Nginx da VPS não reproduzidos nem necessários para produzir a falha encontrada. Screenshots, HTML/rede, console e logs permanecem privados.
+
+| Evidência | 9f | fa60 rejeitado |
+|---|---|---|
+| Document HTML |200,text/html|200,text/html|
+| CSS efetivamente referenciado/carregado |`8cc37bb3fdff7798.css`,200,text/css,192809bytes|`47378a03a33357df.css`,200,text/css,67832bytes|
+| SHA-256 CSS |`3fb05e4b7a81a49c4538a8a5114db1e9fee0ea6e10f16b70d31ad99fb4a303cf`|`524df9d551d68e0f140655656e7a925e6d5a5c98f4a8c95065ed66f2008edea4`|
+| Tailwind |classes geradas|`@tailwind base/components/utilities` sem expansão|
+| Estilos calculados da mesma probe |flex, gap24px, padding24px, fonte14px, radius16px|block, gapnormal, padding0, fonte16px, radius0|
+| Scripts efetivamente carregados |7,200/MIME JavaScript|8,200/MIME JavaScript|
+| Exceções JS / APIs inesperadas |0/0|0/0|
+
+O build original preservado `/tmp/re7-front-fa60-build` **não continha `postcss.config.mjs` nem `tailwind.config.js`**, embora ambos existam no commit funcional fa60. O build9f preservado continha ambos. A lista de extração para o build omitira as configurações; Next compilou/minificou o CSS sem o plugin Tailwind. CSS foi servido corretamente, mas as diretivas desconhecidas pelo navegador não geram estilos. Assets antigos incluídos no tar não substituem a folha nova explicitamente referenciada. Não é evidência de cache, arquivo ausente, erro MIME ou falha de JavaScript. Reprodução do tar rejeitado + única intervenção nos inputs do build + desaparecimento da falha comprovam a causa sem mudança funcional.
+
+### Correção mínima e detector do problema
+
+[Receita e provas reproduzíveis](frontend-layout-audit-20261007/README.md), [resultados](frontend-layout-audit-20261007/results.json), [manifesto do delta](frontend-layout-audit-20261007/manifest.json). `build-inputs.py` extrai conjunto completo de inputs do SHA funcional, exige configs, compara package/lock e reutiliza node_modules íntegro sem atualizar dependências. Após a comparação inicial sem rebuild, uma compilação corretiva isolada Node20 foi necessária. Nenhum TSX/código funcional fa60 alterado.
+
+Tar corretivo privado: **`17bd5fb895ce14f610257fb8186b916dbc39d34cdd7f421cb07f5a0fc2e1f252`**,174115534bytes; manifesto completo **`378bb220d02e29e93ccd2edf4d83cb2e903912f5548dc498e28e6a4e914cd1bf`**; BUILD_ID **`wBXX8kmp5RuCHCYt_ot8X`**,22868arquivos/31links,157assets anteriores preservados sem colisão. Extração limpa/inventário completo e inicialização exata Node20 PASS. Comparação mesmo navegador/origem9f→tar corrigido PASS, CSS expandido e estilos esperados. Tars anteriores/build/evidências não substituídos. Artefato novo não foi levado à VPS nem promovido a pacote operacional pronto.
+
+Os smokes anteriores13/13 e7/7 comprovavam DOM, ações, payloads e limites de leitura; não verificavam estilos calculados, expansão do CSS ou aparência. HTTP200/BUILD_ID também não capturam esse defeito. Detector novo `frontendAssetContract.mjs` verifica Document separado de prefetch RSC, CSS/JS200/MIME, Tailwind expandido e estilos calculados; integrado antes dos13casos do smoke de horários/conjuntos. Esses13casos passaram no novo tar extraído limpo. As7provas anteriores continuam válidas para o comportamento testado anteriormente, sem atribuição de nova execução ou aceite visual. Scripts `nomodule` não solicitados pelo Chrome moderno não contam como assets falhos.
+
+### Supervisão permanente: lacuna, correção local e limites
+
+Confirmado no checker instalado após recuperação: `supervision_preflight` executa dois inventários locais sem passar observação root, embora `tracked_absent` já a consuma. Quando um processo novo do mesmo UID é ilegível, a retomada pode terminar78 antes de iniciar Next. Isso é independente do CSS.
+
+[Patch revisável](frontend-layout-audit-20261007/supervision.patch): somente em `unreadable_new_or_changed_process`, obter leitura root nova com cliente adjacente sob `-I -S`, conferir boot/daemon/release/entry/integridade/receipt e passar as duas amostras ao mesmo classificador e aos dois inventários. PID/ticks/ancestrais/grupos/roles/frescor permanecem exigidos; zumbi, sobrevivente, PID divergente, leitura ausente/incompleta negam. Cliente usa cwd `/` na chamada literal para não classificar o próprio leitor pela cwd herdada. Sem alteração de helper, política ou sudoers, sem instalação.
+
+Origem checker **`77817b16a7f760b0b75d514f54df7ef482cbb819d92fa4a6cab48541b7080c6a`** → resultado **`a611e0234e1248629b311ba5f0901d46a933151df12091904efb9281f44036a5`**. Cliente origem **`130e4aba02b055d28ab4857375b43f5e1f79bf3dfe63604c3776d058df44607e`** → resultado **`c5a17c1c109c942d8094d2fe0bbd0b1ca89ca0378baa411b838c949a91bf4f7f`**. Bytes reconstruíveis apenas do Git, conforme `assemble-checker.py`; staging ativo não modificado.
+
+Ensaio dirigido: PM2 6.0.14 cluster→launcher→bootstrap→Next9f reais, Node20, proc/rede isolados; morte do Next real e recuperação por PM2 com nonce/control novos e HTTP200 PASS. Processo Node auxiliar real, **negação local de environ injetada**; leitor root executou observador/syscalls efetivos do namespace, não a instalação sudo da VPS. Checker anterior reproduziu DENY; novo permitiu somente identidade não relevante comprovada. Negativas PASS: executor real na release sobrevivente, privilégio injetadamente indisponível e ticks do daemon divergentes; nenhuma criação de novo control/Next nesses casos. Dois testes simulados do subprocess conferiram comando literal/cwd neutro e diagnóstico privado600 de stdout/stderr/exit. Não reatribuir essas provas à permissão SSH real nem somá-las aos17testes sintéticos anteriores.
+
+**Limite mantido:** política root instalada fixa boot/PID/ticks do daemon. A correção resolve a retomada com o mesmo daemon atestado. Depois de reboot/resurrect com daemon novo, inventário local legível preserva o contrato existente; se precisar da observação privilegiada, política antiga deve negar. Este ensaio não certifica recuperação root nesse cenário nem autoriza relaxamento ou substituição silenciosa de política. A capacidade observacional para daemon novo permanece uma decisão técnica explícita antes de declarar recuperabilidade permanente completa. Nenhuma nova janela está preparada/autorizada por este resultado.
+
+Tentativas de laboratório que falharam por instrumentação foram preservadas: script `nomodule` não solicitado; RSC confundido com Document; PM2_HOME/baseline inicial do harness corrigidos. Elas não recebem PASS e não são defeitos atribuídos ao produto. Composição final reproduzível passou. Próximo passo concreto é revisar receita/detector/patch e esse limite de supervisão; eventual preparação futura deve usar tar corrigido, bindings novos e evidência de acesso aplicável, preservando9f até autorização própria. Agrupamento natural, contingênciaAUTO, CRA-PR e históricos continuam frentes separadas.

@@ -1,0 +1,236 @@
+{
+  "scope": "isolated Linux namespaces; real Node20.20.0/Next16.1.5/Chrome; simulated auth/API; local path-preserving HTTP proxy, not production Nginx/TLS",
+  "originalTarSha256": "9b375dffca78425e7193e2e73b3c3692a951dc9f638c1c73790cfd3c5e32dac2",
+  "baselineTarSha256": "d0f15209922741e51ab21e22d01ff2188ce212ef23081888084c868754065e54",
+  "correctedArtifact": {
+    "tarSha256": "17bd5fb895ce14f610257fb8186b916dbc39d34cdd7f421cb07f5a0fc2e1f252",
+    "manifestSha256": "378bb220d02e29e93ccd2edf4d83cb2e903912f5548dc498e28e6a4e914cd1bf",
+    "bytes": 174115534,
+    "buildId": "wBXX8kmp5RuCHCYt_ot8X",
+    "files": 22868,
+    "symlinks": 31,
+    "preservedStaticFiles": 157
+  },
+  "cases": [
+    {
+      "comparison": "rejected exact tar",
+      "version": "9f",
+      "route": "/app/campaigns",
+      "viewport": {
+        "width": 1400,
+        "height": 1100
+      },
+      "html": {
+        "status": 200,
+        "mime": "text/html"
+      },
+      "result": "PASS",
+      "computed": {
+        "display": "flex",
+        "gap": "24px",
+        "padding": "24px",
+        "fontSize": "14px",
+        "borderRadius": "16px"
+      },
+      "faults": [],
+      "css": [
+        {
+          "path": "/_next/static/css/8cc37bb3fdff7798.css",
+          "status": 200,
+          "mime": "text/css",
+          "bytes": 192809,
+          "sha256": "3fb05e4b7a81a49c4538a8a5114db1e9fee0ea6e10f16b70d31ad99fb4a303cf",
+          "unexpandedTailwind": false
+        }
+      ],
+      "servedScripts": 7,
+      "scriptsHttp200AndJavaScriptMime": true,
+      "uncaughtExceptions": 0,
+      "unexpectedBackendRequests": 0
+    },
+    {
+      "comparison": "rejected exact tar",
+      "version": "candidate",
+      "route": "/app/campaigns",
+      "viewport": {
+        "width": 1400,
+        "height": 1100
+      },
+      "html": {
+        "status": 200,
+        "mime": "text/html"
+      },
+      "result": "FAIL",
+      "computed": {
+        "display": "block",
+        "gap": "normal",
+        "padding": "0px",
+        "fontSize": "16px",
+        "borderRadius": "0px"
+      },
+      "faults": [
+        "tailwind_directives_unexpanded",
+        "utility_not_applied:display:block",
+        "utility_not_applied:gap:normal",
+        "utility_not_applied:padding:0px",
+        "utility_not_applied:fontSize:16px",
+        "utility_not_applied:borderRadius:0px"
+      ],
+      "css": [
+        {
+          "path": "/_next/static/css/47378a03a33357df.css",
+          "status": 200,
+          "mime": "text/css",
+          "bytes": 67832,
+          "sha256": "524df9d551d68e0f140655656e7a925e6d5a5c98f4a8c95065ed66f2008edea4",
+          "unexpandedTailwind": true
+        }
+      ],
+      "servedScripts": 9,
+      "scriptsHttp200AndJavaScriptMime": true,
+      "uncaughtExceptions": 0,
+      "unexpectedBackendRequests": 0
+    },
+    {
+      "comparison": "corrected exact tar",
+      "version": "9f",
+      "route": "/app/campaigns",
+      "viewport": {
+        "width": 1400,
+        "height": 1100
+      },
+      "html": {
+        "status": 200,
+        "mime": "text/html"
+      },
+      "result": "PASS",
+      "computed": {
+        "display": "flex",
+        "gap": "24px",
+        "padding": "24px",
+        "fontSize": "14px",
+        "borderRadius": "16px"
+      },
+      "faults": [],
+      "css": [
+        {
+          "path": "/_next/static/css/8cc37bb3fdff7798.css",
+          "status": 200,
+          "mime": "text/css",
+          "bytes": 192809,
+          "sha256": "3fb05e4b7a81a49c4538a8a5114db1e9fee0ea6e10f16b70d31ad99fb4a303cf",
+          "unexpandedTailwind": false
+        }
+      ],
+      "servedScripts": 7,
+      "scriptsHttp200AndJavaScriptMime": true,
+      "uncaughtExceptions": 0,
+      "unexpectedBackendRequests": 0
+    },
+    {
+      "comparison": "corrected exact tar",
+      "version": "candidate",
+      "route": "/app/campaigns",
+      "viewport": {
+        "width": 1400,
+        "height": 1100
+      },
+      "html": {
+        "status": 200,
+        "mime": "text/html"
+      },
+      "result": "PASS",
+      "computed": {
+        "display": "flex",
+        "gap": "24px",
+        "padding": "24px",
+        "fontSize": "14px",
+        "borderRadius": "16px"
+      },
+      "faults": [],
+      "css": [
+        {
+          "path": "/_next/static/css/8cc37bb3fdff7798.css",
+          "status": 200,
+          "mime": "text/css",
+          "bytes": 192809,
+          "sha256": "3fb05e4b7a81a49c4538a8a5114db1e9fee0ea6e10f16b70d31ad99fb4a303cf",
+          "unexpandedTailwind": false
+        }
+      ],
+      "servedScripts": 8,
+      "scriptsHttp200AndJavaScriptMime": true,
+      "uncaughtExceptions": 0,
+      "unexpectedBackendRequests": 0
+    }
+  ],
+  "supervision": {
+    "node": "20.20.0",
+    "pm2": "6.0.14",
+    "mode": "cluster_mode",
+    "results": [
+      {
+        "case": "real PM2/Next death; new unreadable auxiliary is classified by fresh real root observation (permission denial injected)",
+        "result": "PASS"
+      },
+      {
+        "case": "real PM2 recovery denies changed daemon in root policy before Next fork",
+        "result": "DENY"
+      },
+      {
+        "case": "denied recovery does not create second application/control; historical journal intact",
+        "result": "PASS"
+      }
+    ]
+  },
+  "negativeCases": [
+    {
+      "node": "20.20.0",
+      "pm2": "6.0.14",
+      "mode": "cluster_mode",
+      "results": [
+        {
+          "case": "recovery denied before Next fork: unreadable_new_or_changed_process",
+          "result": "DENY"
+        }
+      ]
+    },
+    {
+      "node": "20.20.0",
+      "pm2": "6.0.14",
+      "mode": "cluster_mode",
+      "results": [
+        {
+          "case": "recovery denied before Next fork: socket_observer_read_denied",
+          "result": "DENY"
+        }
+      ]
+    },
+    {
+      "node": "20.20.0",
+      "pm2": "6.0.14",
+      "mode": "cluster_mode",
+      "results": [
+        {
+          "case": "recovery denied before Next fork: unreadable_observed_executor",
+          "result": "DENY"
+        }
+      ]
+    }
+  ],
+  "clientSubprocessInjectedTests": 2,
+  "functionalSmoke": {
+    "passed": 13,
+    "scope": "corrected exact tar; simulated APIs/auth and controlled campaign polling; no provider"
+  },
+  "installed": false,
+  "productionMutation": false,
+  "functionalBuildInputsCompared": {
+    "files": 203,
+    "changed": [],
+    "addedBuildConfigs": [
+      "postcss.config.mjs",
+      "tailwind.config.js"
+    ]
+  }
+}
