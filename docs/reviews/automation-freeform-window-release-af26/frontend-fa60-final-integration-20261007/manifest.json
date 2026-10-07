@@ -1,0 +1,105 @@
+{
+  "status": "FINAL INTEGRATION STAGED / WINDOW POLICY REVIEW REQUIRED / NOT DEPLOYED",
+  "at": 1791416094.9394271,
+  "package": {
+    "candidate": {
+      "result": "PASS",
+      "files": 22868,
+      "symlinks": 31,
+      "BUILD_ID": "wBXX8kmp5RuCHCYt_ot8X"
+    },
+    "return": {
+      "result": "PASS",
+      "files": 22784,
+      "symlinks": 31,
+      "runtimeCacheFiles": 8,
+      "BUILD_ID": "LFcdEK9gXZsBhf4_c5r8G"
+    },
+    "css": {
+      "result": "PASS",
+      "referencedStylesheets": [
+        {
+          "path": "static/css/8cc37bb3fdff7798.css",
+          "sha256": "3fb05e4b7a81a49c4538a8a5114db1e9fee0ea6e10f16b70d31ad99fb4a303cf",
+          "bytes": 192809
+        }
+      ],
+      "scope": "static evidence; computed browser styles already validated on exact tar"
+    }
+  },
+  "tarSha256": "17bd5fb895ce14f610257fb8186b916dbc39d34cdd7f421cb07f5a0fc2e1f252",
+  "manifestSha256": "378bb220d02e29e93ccd2edf4d83cb2e903912f5548dc498e28e6a4e914cd1bf",
+  "windowPolicySha256": "6087f980ed58f084294f77dbca688c5cba9b39229d3c2b10daa35732ff74f7d4",
+  "oldWindowPolicySha256": "eff1b150640219af55c184d08a0f1752e23c5fd55954b8220d4f137ed27c5213",
+  "permanentPolicySha256": "24a78e7ebb6e92b56a6719a7234631ed11b8e93b657665817b6905a16a00add3",
+  "permanentHelperSha256": "976272ee36d6900111877c02ea6d0b72dc9dad705237c819a18861c47bfaec3d",
+  "daemon": {
+    "pid": 18676,
+    "ticks": "222727"
+  },
+  "source": {
+    "name": "re7-admin-front",
+    "pid": 3413279
+  },
+  "executionAuthorized": false,
+  "capturesOrIntents": false,
+  "starts": 0,
+  "preparatoryWindowPreflight": "NOT EXECUTED / REQUIRES NEW WINDOW POLICY AUTHORIZATION",
+  "guard": {
+    "open": true,
+    "generation": 33,
+    "tasks": {}
+  },
+  "scripts": {
+    "frontend-check.py": "a60f5a5b72563de2b451147ab99823c372c4825202db97a6436b646f05c694d4",
+    "frontend-action.py": "dd063df289206542297d9c86a49c0abf65d2e2780032a1488435cb0081471e70",
+    "launcher.cjs": "131a92d08fe7c6484585ed0a1e18e1bf9f9a1851907337b02ae13ca99e110fef",
+    "bootstrap.cjs": "0142c188b45fb37e29528ad62a966e5c450f3b7ba88da2d52d58c16313c292b3",
+    "socket_observation_client.py": "c5a17c1c109c942d8094d2fe0bbd0b1ca89ca0378baa411b838c949a91bf4f7f",
+    "socket_observation_contract.py": "2f7e5aedb4cf3ecad8098eaf8521d0c7babb445f4a5ed2c274c42d1d395b90a3",
+    "verify-package.py": "2ed8b991ef2697b9e2754bcafbcc3e4744737d727d2d0855ea308a769b088f55",
+    "check-css.py": "bb822536d1f74f106d0b7606bfb5862c8145fcf936f3b2975f280191690ab5c2",
+    "verify-return.py": "a85628821e23aa00aaf22b9ad4b520a4caa1fe26636addb7de544f46c056f47f",
+    "permanent_observation_client.py": "34dae9ac861aeb89c6787871a27dd244ca931ca1038163423efd9af2996cb374",
+    "install-window-policy.sh": "ecf081490e3424ddc243765f87518989cb78fbebc959db6434b69a94acd86db9",
+    "WINDOW-STEPS.txt": "2f9efbbfe1dab73a1337abf70b10e1cac70be7009abe52764f514e0f50fb8491"
+  },
+  "scriptsManifest": "f493b231cd1d6ebad39f6161cdfef0d65227999322acecb3ab2e1710cac65593",
+  "bindingsManifest": "52f899e1d68f85a71ac4283388d21cf6bfc08d72378b9143e56a9edcd76890e5",
+  "installation": {
+    "status": "INSTALLED VERIFIED / LIVE PERMANENT READ PASS / NO WINDOW",
+    "bootId": "97309358-78f7-4328-8d20-eb51edba1772",
+    "daemon": {
+      "pid": 18676,
+      "ticks": "222727"
+    },
+    "policySha256": "24a78e7ebb6e92b56a6719a7234631ed11b8e93b657665817b6905a16a00add3",
+    "helperSha256": "976272ee36d6900111877c02ea6d0b72dc9dad705237c819a18861c47bfaec3d",
+    "sampleProcessCounts": [
+      154,
+      154
+    ],
+    "samples": 2,
+    "durationSeconds": 0.17155499756336212,
+    "activeFrontend": "9f4cbe0f",
+    "apiWorker": "afbb7455",
+    "identitiesPreserved": true,
+    "activeScriptsPreserved": true,
+    "windowHelpersSudoersPreserved": true,
+    "savedFallbackPreserved": true,
+    "historicalCapturesRead": false,
+    "executionAuthorized": false
+  },
+  "windowSudoersPreserved": [
+    "118a54ec6f03c6f8af92a5e9f05d766fda08eea0d2fa79a207ecf588374e8b12  /etc/sudoers.d/re7-frontend-socket-observer",
+    "62b5a2ac1d56b013f6db4bb8180b0637b985786214f4bc3ce0e5f8d3f7c5111a  /etc/sudoers.d/re7-incident-6683-window"
+  ],
+  "reviewFiles": {
+    "WINDOW-STEPS.txt": "2f9efbbfe1dab73a1337abf70b10e1cac70be7009abe52764f514e0f50fb8491",
+    "frontend-action.py": "dd063df289206542297d9c86a49c0abf65d2e2780032a1488435cb0081471e70",
+    "verify-live-read.py": "e39a74859850dca4f5ab19448ed4687818d6569cd7566ef09d35fa2d9139f2dd",
+    "README.md": "c6fcb8a4a36ceb09f58c5f3ee540cf60eba60973fe4d5aa3b85746e08d5568c5",
+    "install-window-policy.sh": "ecf081490e3424ddc243765f87518989cb78fbebc959db6434b69a94acd86db9",
+    "frontend-check.py": "a60f5a5b72563de2b451147ab99823c372c4825202db97a6436b646f05c694d4"
+  }
+}
