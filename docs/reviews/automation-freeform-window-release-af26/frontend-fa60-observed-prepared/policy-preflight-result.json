@@ -1,0 +1,66 @@
+{
+  "status": "POLICY_REPLACED_INTEGRATED_PREFLIGHT_PASS_NO_WINDOW",
+  "installedPolicySha256": "eff1b150640219af55c184d08a0f1752e23c5fd55954b8220d4f137ed27c5213",
+  "archivedPolicySha256": "b92f5f882ce8ebb09738fd26af903c079762a843aa68e1068ec700addae6a5d0",
+  "archiveVerification": "Published root assertions executed by owner: NEW_POLICY_AND_ARCHIVE_PASS",
+  "helperSha256": "93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385",
+  "sudoersSha256": "118a54ec6f03c6f8af92a5e9f05d766fda08eea0d2fa79a207ecf588374e8b12",
+  "policyAndArchiveMode": "root:root 0600",
+  "preflightAtUTC": "2026-10-07T20:24:24.091880+00:00",
+  "privateCommandRecordSha256": "c2dc51ecb30c510c1d98e7207bd90d130050326460bda74d6c6939b643e5821d",
+  "privateRootReaderRecordSha256": "bb869cd42115dc5efee6f6c6579fff30f809668f61504075f7d521d704ed9eb8",
+  "preparatoryCaptureSha256": "10ef047bfd5a57af10686313f26b5f315317e426039fed656b4e1bb0127b18ed",
+  "readerDurationSeconds": 0.19194133952260017,
+  "samples": 2,
+  "processesPerSample": [
+    156,
+    156
+  ],
+  "rootReaderExitCode": 0,
+  "gateExitCode": 0,
+  "timeout": false,
+  "invocations": 1,
+  "retry": false,
+  "sharedSocketOwnersPerSample": [
+    {
+      "pid": 18676,
+      "ticks": "222727",
+      "fd": "0"
+    },
+    {
+      "pid": 3388720,
+      "ticks": "2118003772",
+      "fd": "0"
+    }
+  ],
+  "processes": [
+    {
+      "name": "re7-admin-front",
+      "version": "9f4cbe0f",
+      "pid": 3388720,
+      "ticks": "2118003772",
+      "status": "online",
+      "restarts": 0
+    },
+    {
+      "name": "re7-whatsapp-agent",
+      "version": "afbb7455",
+      "pid": 3153929,
+      "ticks": "2107666112",
+      "status": "online",
+      "restarts": 0
+    },
+    {
+      "name": "re7-whatsapp-web-worker",
+      "version": "minimal-reactive-afbb7455",
+      "pid": 3154150,
+      "ticks": "2107666513",
+      "status": "online",
+      "restarts": 0
+    }
+  ],
+  "executionGate": false,
+  "startIntents": [],
+  "futureExitProofReusable": false,
+  "windowExecuted": false
+}

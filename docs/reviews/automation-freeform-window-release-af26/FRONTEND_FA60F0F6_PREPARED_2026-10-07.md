@@ -458,3 +458,34 @@ Senha somente na sessão sudo de Deifson. Depois da instalação aprovada, execu
 Retorno antes de qualquer submissão candidata usa uma nova leitura `exited` da origem. Depois de uma submissão candidata, inclusive encerramento antes da captura, exige `candidate-exited` com ledger completo e observação root nova; erro de identidade/observação ou sobrevivente bloqueia a partida9f. Uma única partida de retorno; owner confirma antes da promoção/saved/fallback. Falha do retorno exige `return-exited` fresco e escalonamento, sem terceira partida/bypass. Depois de promoção, outra operação exige preparação própria. Alternância R/S não muda identidade; zumbi, PID reutilizado, executor/proprietário adicional, listener e leitura incompleta continuam negando. Certificado preparatório, porta fechada e PID zero não substituem saída comprovada. Aos15min informar estado/impedimento; prazo não autoriza kill.
 
 Nenhum build, suíte ou smoke funcional repetido. Reutilizadas as provas Node20.20.0 do tar, browser horário/conjuntos/leituras e PM2/Next reais já publicadas; nesta rodada houve somente geração de controles, leitura de integridade, validação estática shell/AST dos comandos e a chamada produtiva de preflight que negou. Não se atribui PASS de ida/retorno produtivos a essas provas. Persistem duas dependências: revisão/instalação exclusiva da política e preflight integrado PASS; depois, revisão/autorização própria da janela. Gate continua falso. Aceites independentes de agrupamento/contingênciaAUTO/CRA-PR e históricos preservados.
+
+## Política substituída e preflight integrado PASS — 07/10
+
+**POLICY INSTALLED VERIFIED / INTEGRATED PREPARATORY PREFLIGHT PASS / EXECUTION GATE FALSE / fa60 NOT DEPLOYED.** Autorização específica do owner incluiu somente substituição da política d896eb99 e preflight integrado. Nenhum stop/start/restart, candidato, promoção ou janela foi executado. Tar, build e provas funcionais reutilizados; nenhuma suíte repetida.
+
+### Instalação restrita conferida
+
+A capacidade sudo não interativa para substituição retornou `sudo: a password is required`, antes de qualquer mutação. Deifson executou então o bloco revisado na própria sessão sudo, sob flock exclusivo; nenhuma senha foi solicitada no chat, capturada ou registrada. `scripts.sha256` e `bindings.sha256` conferidos antes da instalação. `EXACT_FIVE_FIELD_POLICY_DIFF_PASS`, hashes root-owned, cadeia de diretórios, `NEW_POLICY_AND_ARCHIVE_PASS` e visudo antes/depois PASS. Não houve instalação parcial ou alteração de helper/sudoers.
+
+| Arquivo | Hash SHA-256 confirmado | Propriedade / modo |
+|---|---|---|
+| Política instalada `/usr/local/libexec/re7/frontend-socket-observer-policy.json` | `eff1b150640219af55c184d08a0f1752e23c5fd55954b8220d4f137ed27c5213` | root:root0600 |
+| Anterior arquivada `/usr/local/libexec/re7/frontend-socket-observer-policy.pre-fa60-194628.json` | `b92f5f882ce8ebb09738fd26af903c079762a843aa68e1068ec700addae6a5d0` | root:root0600 |
+| Helper preservado | `93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385` | root:root0644 |
+| Regra sudo literal preservada | `118a54ec6f03c6f8af92a5e9f05d766fda08eea0d2fa79a207ecf588374e8b12` | root:root0440 |
+
+Hash/modo da política anterior arquivada foram verificados pelas assertions root do instalador publicado executado pelo owner. O leitor instalado depois atestou diretamente os hashes da política nova e helper; não se publicou nem tentou ler como deploy o conteúdo protegido da política. A regra literal permanece sem argumentos adicionais e nenhuma delegação DB/backend foi ampliada.
+
+### Cadeia integrada executada com produção funcionando
+
+Depois da instalação, Codex executou a seção **PREPARATORY PREFLIGHT** de `WINDOW-STEPS.txt`, como deploy sob o mesmo `window.lock` exclusivo da preparação. Reconfirmação dos hashes completos de `scripts.sha256` e `bindings.sha256`, todos os bytes listados PASS; `execution-authorized=false`. Uma invocação de `frontend-action.py before` com os módulos finais: **PASS, exit0, sem timeout, sem retry**. O processo de leitura root também exit0 e atestou a nova política exata. As duas observações consecutivas foram completas e consistentes,156processos em cada amostra; duração do leitor0,191941s. Registro da conclusão **07/10/2026 20:24:24,092 UTC / 17:24:24,092 Fortaleza** (mtime do registro privado da ação).
+
+Contrato efetivo reconfirmou boot, daemon PID/start ticks, release/entry/nonce da origem, identidade PM2, árvore, listener e todos os proprietários pertinentes. Socket compartilhado observado com somente daemon18676/ticks222727/fd0 e launcher3388720/ticks2118003772/fd0, nas duas amostras. Nenhum processo foi excluído para obter PASS, nenhuma negativa relaxada, nenhum binding alterado. A negativa anterior `socket_observer_integrity_binding` permanece preservada e foi resolvida pela substituição autorizada da política, não por aceitar a geração antiga.
+
+Somente após PASS, captura renomeada para `source-tree.preparation-reviewed.private.json`, preservada integralmente. Hash `10ef047bfd5a57af10686313f26b5f315317e426039fed656b4e1bb0127b18ed`. `source-tree.private.json` ausente novamente, permitindo uma captura inédita no futuro preflight da janela. Diagnósticos stdout/stderr/exit/receipt mantidos em diretórios privados; hashes do registro da ação `c2dc51ecb30c510c1d98e7207bd90d130050326460bda74d6c6939b643e5821d` e do root reader `bb869cd42115dc5efee6f6c6579fff30f809668f61504075f7d521d704ed9eb8`. [Resultado sanitizado versionado](frontend-fa60-observed-prepared/policy-preflight-result.json). Manifesto original da preparação e capturas/diagnósticos anteriores não foram reescritos.
+
+### Estado confirmado e limites
+
+Conferência posterior somente leitura: frontend9f3388720/ticks2118003772, APIafbb3153929/ticks2107666112, worker mínimo reativoafbb3154150/ticks2107666513; todosonline/restart0, mesmas releases. Daemon18676/ticks222727 preservado. Nenhum intent de start ou ledger de candidato/retorno; gatefalse. Guarda, scheduler, cron/boot, saved/fallback ativos, DB/auth, configuração de tenant e históricos não foram alterados por esta execução.
+
+Os pré-requisitos **de instalação da política e preflight integrado preparatório** estão satisfeitos para esta observação. Isso não comprova saída futura nem ida/retorno produtivos, não habilita o gate e não constitui aceite funcional de fa60. A próxima janela precisa de autorização própria e reconfirmação imediata; `exited`, `candidate-exited` e `return-exited` obterão observações inéditas. Não reutilizar esta captura como certificado de saída. Produção continua9f/afbb; nenhuma parada ou envio autorizados nesta etapa. Aceites independentes e frentes históricas preservados.

@@ -1,6 +1,6 @@
 # Preparação frontend fa60 com observador instalado
 
-**PREPARED FOR POLICY REVIEW / INTEGRATED PREFLIGHT DENIED / NOT READY FOR WINDOW / NOT DEPLOYED.**
+**POLICY INSTALLED VERIFIED / INTEGRATED PREPARATORY PREFLIGHT PASS / EXECUTION GATE FALSE / NOT DEPLOYED.**
 
 O [relatório único](../FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#nova-sequência-fa60-com-observador-instalado--0710) registra staging, artefatos e a negativa real. [Manifesto](manifest.json) contém hashes completos, inclusive arquivos privados sem publicar seu conteúdo.
 
@@ -11,3 +11,7 @@ O [relatório único](../FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#nova-sequênci
 - [Hashes dos comandos](review-commands.sha256).
 
 A política instalada ainda é a geração observacional antiga. A chamada real dos bytes finais foi recusada por `socket_observer_integrity_binding`, sem mutação operacional. Depois de aprovada/instalada a política nova, é obrigatório completar o preflight integrado antes de avaliar uma janela. Saída de origem/candidato/retorno exige observações novas; nenhuma evidência preparatória substitui esses gates.
+
+## Resultado posterior à autorização específica
+
+[Resultado sanitizado](policy-preflight-result.json): owner substituiu exclusivamente a política pelo comando revisado, arquivando a anterior. Preflight integrado real PASS, duas observações completas, sem retry, gatefalse. Helper/sudoers preservados. `manifest.json` e a negativa inicial permanecem registros históricos da preparação; o resultado novo registra a instalação e leitura posteriores, sem reescrever aquelas evidências. Nenhuma autorização de janela foi concedida nesta etapa; os três gates de saída precisarão obter leituras novas.
