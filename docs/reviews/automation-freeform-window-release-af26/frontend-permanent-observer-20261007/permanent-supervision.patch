@@ -1,0 +1,44 @@
+--- a/frontend-check.py
++++ b/frontend-check.py
+@@ -274,0 +275,2 @@
++PERMANENT_READER = None
++
+@@ -276 +278 @@
+-    # -I -S: load only the adjacent client, never PYTHONPATH or the release cwd.
++    # Permanent reader has static artifact/PM2 scope, no window boot/PID binding.
+@@ -279 +281 @@
+-    spec=importlib.util.spec_from_file_location('frontend_fixed_observation_client',root/'socket_observation_client.py')
++    spec=importlib.util.spec_from_file_location('frontend_permanent_client',root/'permanent_observation_client.py')
+@@ -281,7 +283,3 @@
+-    binding=json.loads((root/'socket-observer-binding.private.json').read_text())
+-    expected=binding['policy']
+-    require(expected['bootId']==BOOT_ID.read_text().strip() and int(PM_PID.read_text())==expected['daemon']['pid'] and proc(expected['daemon']['pid'])['ticks']==expected['daemon']['ticks'],'supervision_policy_rebinding_required')
+-    value, policy=client.read(root,'supervision-recovery',reader=OBSERVATION_READER)
+-    require(policy['bootId']==BOOT_ID.read_text().strip(),'supervision_observer_boot')
+-    require(any(role['release']==run['release'] and role['entry']==run['entry'] for role in policy['roles'].values()),'supervision_observer_release')
+-    require(int(PM_PID.read_text())==policy['daemon']['pid'] and proc(policy['daemon']['pid'])['ticks']==policy['daemon']['ticks'],'supervision_observer_daemon')
++    value=client.read(root,run,reader=PERMANENT_READER)
++    d=value['effectivePolicy']['daemon']
++    require(int(PM_PID.read_text())==d['pid'] and proc(d['pid'])['ticks']==d['ticks'],'supervision_current_daemon')
+@@ -294,0 +293,2 @@
++    d=value['effectivePolicy']['daemon']
++    require(own['parent']==d['pid'],'supervision_launcher_daemon_parent')
+@@ -297,0 +298,8 @@
++        shared=sample['daemonFd0']
++        if shared.startswith('socket:['):
++            inode=shared[8:-1]
++            require(sample['network'][inode]=={'kind':'unix','state':'03','type':'0001','flags':'00000000'},'supervision_shared_socket_type')
++            for owner in sample['owners'][inode]:
++                expected=d if owner['pid']==d['pid'] else allowed.get(owner['pid'])
++                require(expected is not None and owner['ticks']==expected['ticks'] and owner['fd']=='0' and owner['state'] not in ['Z','X','x'],'supervision_additional_socket_owner')
++            require(any(q['pid']==d['pid'] and q['fd']=='0' for q in sample['owners'][inode]),'supervision_daemon_socket_unobserved')
+@@ -333 +341,2 @@
+-            fresh_boot=None
++            fresh_boot=supervision_observation(control,r)
++            current_boot_observed(fresh_boot,own,observer)
+@@ -353 +362 @@
+-                    fresh=supervision_observation(control,r)
++                    fresh=fresh_boot
+@@ -362 +371 @@
+-            if str(e) not in ['unreadable_new_or_changed_process','prior_inventory_churn','incomplete_new_process'] or attempt==3:
++            if str(e) not in ['unreadable_new_or_changed_process','prior_inventory_churn','incomplete_new_process','ownership_observation_changed','ownership_observation_incomplete','fd_observation_incomplete'] or attempt==3:

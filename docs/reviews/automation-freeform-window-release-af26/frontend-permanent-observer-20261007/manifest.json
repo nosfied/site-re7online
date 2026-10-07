@@ -1,0 +1,26 @@
+{
+  "status": "LOCAL OPERATIONAL VALIDATED / DELEGATION REVIEW REQUIRED / NOT INSTALLED / NOT DEPLOYED",
+  "checkerOrigin": "e0793d24b883f0958ef1f2a5dfa98c93dd87989f574339e9788cdea53c476920",
+  "checkerResult": "2e2cf1ee386aa8ed037426eaef85596e5649f105b3933d72c6d26fc88af2ed49",
+  "proposal": {
+    "helper": "976272ee36d6900111877c02ea6d0b72dc9dad705237c819a18861c47bfaec3d",
+    "policy": "24a78e7ebb6e92b56a6719a7234631ed11b8e93b657665817b6905a16a00add3",
+    "sudoers": "2b3131648860b84dc3f131604347aaf400475b67c234378e791cf5cf454eda39",
+    "installer": "28ecd382a6e2dc6c42c7fe87308863732ab279d8d03bfcb5cf65656973fbdfa4"
+  },
+  "files": {
+    "README.md": "836ae4030b09f5a813ddc81721205f2b9a279994fa33a8c05de030090f042dbc",
+    "assemble-checker.py": "0fc15e693fc65ed229d6c2957048b20efb53769ad907e7c6bded24403e7105c0",
+    "install-proposed.sh": "28ecd382a6e2dc6c42c7fe87308863732ab279d8d03bfcb5cf65656973fbdfa4",
+    "namespace-init.py": "2fdacee5de624433be047eb05ab661f1eb5c9ad9e3c2fdbbb4179107caa25ee6",
+    "permanent-observer.py": "976272ee36d6900111877c02ea6d0b72dc9dad705237c819a18861c47bfaec3d",
+    "permanent-supervision.patch": "5614a5ea2ce9232b9891c70b884c74b7d8e31ba3d3f97840f50b736d1ddd3193",
+    "permanent_observation_client.py": "34dae9ac861aeb89c6787871a27dd244ca931ca1038163423efd9af2996cb374",
+    "prepare-policy.py": "5036fa49ce7207b15c65eb8a7ed4c347286b7aabee36adc55be950eafda64c0a",
+    "results.json": "262adc4f380f60ba528316534b133a62cf2b28e7bb2e801d2154f18a01f58bbb",
+    "test_contract.py": "2ce5ba28fedb9584b2a92a3c3313627cf223659f3eb235663fd9f17c2cfa7dc4",
+    "test_recovery.py": "a2a94850923275f6cdb70bbcfbafafcb8f3f389e2547f0b7b2de4b14e355aacf"
+  },
+  "tarPreserved": "17bd5fb895ce14f610257fb8186b916dbc39d34cdd7f421cb07f5a0fc2e1f252",
+  "existingWindowHelperUnchanged": "93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385"
+}

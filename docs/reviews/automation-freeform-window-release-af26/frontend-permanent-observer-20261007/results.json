@@ -1,0 +1,194 @@
+{
+  "candidate": {
+    "node": "20.20.0",
+    "pm2": "6.0.14",
+    "mode": "cluster_mode",
+    "results": [
+      {
+        "case": "window second candidate start",
+        "result": "DENY"
+      },
+      {
+        "case": "real source9f -> corrected candidate, fresh exit observation, single start; promotion simulated owner acceptance",
+        "result": "PASS"
+      },
+      {
+        "case": "daemon_uid_or_state",
+        "result": "DENY",
+        "evidence": "effective helper, real daemon; invalid policy fixture"
+      },
+      {
+        "case": "daemon_cmdline",
+        "result": "DENY",
+        "evidence": "effective helper, real daemon; invalid policy fixture"
+      },
+      {
+        "case": "daemon_executable",
+        "result": "DENY",
+        "evidence": "effective helper, real daemon; invalid policy fixture"
+      },
+      {
+        "case": "real new daemon, same saved dump, legible inventory -> automatic recovery",
+        "result": "PASS"
+      },
+      {
+        "case": "new daemon + unreadable local process -> automatic fresh recovery; no policy rewrite",
+        "result": "PASS"
+      },
+      {
+        "case": "injected boot boundary + real new daemon -> automatic recovery with static permanent policy; old PIDs/sockets not used",
+        "result": "PASS"
+      },
+      {
+        "case": "supervision_current_executor_survived",
+        "result": "DENY",
+        "nextFork": false
+      },
+      {
+        "case": "real survivor blocks recovery; remove lab survivor, normal supervisor recovery",
+        "result": "PASS"
+      },
+      {
+        "case": "permanent_observation_permission_denied",
+        "result": "DENY",
+        "nextFork": false
+      },
+      {
+        "case": "duplicate PM2-home daemon title",
+        "result": "DENY",
+        "evidence": "real Node process with deliberately set title; not a second real PM2 daemon"
+      }
+    ],
+    "boot": "injected ledger/policy transition; actual daemon changed",
+    "recoveryLabel": "candidate",
+    "permission": "local environ denial injected; real root proc/socket observations"
+  },
+  "return": {
+    "node": "20.20.0",
+    "pm2": "6.0.14",
+    "mode": "cluster_mode",
+    "results": [
+      {
+        "case": "window second candidate start",
+        "result": "DENY"
+      },
+      {
+        "case": "real candidate executor survivor blocks return",
+        "result": "DENY"
+      },
+      {
+        "case": "real cluster source9f -> corrected candidate -> return9f, fresh exit observations, single start each",
+        "result": "PASS"
+      },
+      {
+        "case": "daemon_uid_or_state",
+        "result": "DENY",
+        "evidence": "effective helper, real daemon; invalid policy fixture"
+      },
+      {
+        "case": "daemon_cmdline",
+        "result": "DENY",
+        "evidence": "effective helper, real daemon; invalid policy fixture"
+      },
+      {
+        "case": "daemon_executable",
+        "result": "DENY",
+        "evidence": "effective helper, real daemon; invalid policy fixture"
+      },
+      {
+        "case": "real new daemon, same saved dump, legible inventory -> automatic recovery",
+        "result": "PASS"
+      },
+      {
+        "case": "new daemon + unreadable local process -> automatic fresh recovery; no policy rewrite",
+        "result": "PASS"
+      },
+      {
+        "case": "injected boot boundary + real new daemon -> automatic recovery with static permanent policy; old PIDs/sockets not used",
+        "result": "PASS"
+      },
+      {
+        "case": "supervision_current_executor_survived",
+        "result": "DENY",
+        "nextFork": false
+      },
+      {
+        "case": "real survivor blocks recovery; remove lab survivor, normal supervisor recovery",
+        "result": "PASS"
+      },
+      {
+        "case": "permanent_observation_permission_denied",
+        "result": "DENY",
+        "nextFork": false
+      },
+      {
+        "case": "duplicate PM2-home daemon title",
+        "result": "DENY",
+        "evidence": "real Node process with deliberately set title; not a second real PM2 daemon"
+      }
+    ],
+    "boot": "injected ledger/policy transition; actual daemon changed",
+    "recoveryLabel": "return",
+    "permission": "local environ denial injected; real root proc/socket observations"
+  },
+  "injected_contract": [
+    {
+      "case": "current identities + daemon stdin sharing",
+      "result": "PASS",
+      "evidence": "synthetic fixture"
+    },
+    {
+      "case": "additional owner",
+      "result": "DENY",
+      "reason": "supervision_additional_socket_owner",
+      "evidence": "injected fixture; effective classifer"
+    },
+    {
+      "case": "listener",
+      "result": "DENY",
+      "reason": "supervision_current_listener_survived",
+      "evidence": "injected fixture; effective classifer"
+    },
+    {
+      "case": "executor",
+      "result": "DENY",
+      "reason": "supervision_current_executor_survived",
+      "evidence": "injected fixture; effective classifer"
+    },
+    {
+      "case": "descendant",
+      "result": "DENY",
+      "reason": "supervision_launcher_descendant_survived",
+      "evidence": "injected fixture; effective classifer"
+    },
+    {
+      "case": "missing reader",
+      "result": "DENY",
+      "reason": "supervision_observer_unobserved",
+      "evidence": "injected fixture; effective classifer"
+    },
+    {
+      "case": "reused pid",
+      "result": "DENY",
+      "reason": "supervision_observer_identity_drift",
+      "evidence": "injected fixture; effective classifer"
+    },
+    {
+      "case": "zombie",
+      "result": "DENY",
+      "reason": "supervision_observer_identity_drift",
+      "evidence": "injected fixture; effective classifer"
+    },
+    {
+      "case": "duplicate",
+      "result": "DENY",
+      "reason": "observation_duplicate_process",
+      "evidence": "injected fixture; effective classifer"
+    }
+  ],
+  "client_subprocess_simulation": {
+    "case": "literal command + private diagnostic",
+    "result": "PASS",
+    "evidence": "subprocess simulation; actual client/logger"
+  }
+}
