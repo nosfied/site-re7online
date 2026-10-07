@@ -42,3 +42,45 @@ Referências: `apps/whatsapp-agent/src/http/routes.ts`, handler de envio imediat
 ## Publicação e privacidade
 
 Somente este relatório e atualizações canônicas são versionados. Evidências completas ficam em `local-evidence/crm-acceptance-afbb-20261006/` e na preparação privada da VPS, fora do Git. Branch review/campaign-recovery-20260926 excluída do deploy em vercel.json; CI push restrito a main/develop. Publicação documental não é deploy.
+
+
+## Preparação separada — agendamento real individual, 07/10/2026
+
+**PREPARATION READ-ONLY COMPLETE / SCHEDULED EXECUTION NOT EXERCISED.** Não altera o aceite estático/imediato acima nem constitui aceite de agendamento. APIafbb/worker mínimo reativo/frontend9f confirmados em leitura às10:26:16 Fortaleza, mesmas identidades e restart0; guarda aberta33, tasks{}, schedulerDisabledfalse. Nenhum deploy/start/alteração operacional, criação/agendamento/envio de campanha ou reparo nesta preparação.
+
+### Contratos e mecanismo reaproveitados
+
+Consultados [Composer Lifecycle](../../saas/CAMPAIGN_COMPOSER_LIFECYCLE.md), [agendamento estático/dinâmico](../../saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md), [Result Truth](../../saas/CAMPAIGN_RESULT_TRUTH_CANONICAL_RECONCILIATION_2026-09-18.md), checklistCRA, backlog, aceites avulso/CRM/CSV e relatório frontend9f. Os status/versões antigos nesses contratos são evidência histórica; versão produtiva atual é a composição afbb/worker mínimo reativo/9f. Reutilizadas provas locais de lifecycle (data futura UTC), fila (eligibleAt/lease/idempotência), Result Truth por identidade canônica e apresentação/polling59 testes/10 cenários isolados; nenhuma suíte/build repetido nesta preparação.
+
+Menor modalidade: **Audiência CRM / Destinatários fixos / um destinatário**, rascunho novo individual sem executionBatch, seguido de Agendar no detalhe. A seção manual avulsa do frontend é “Envio imediato manual (avançado)”/“Enviar agora”; não é o caminho de agendamento. CRM reaproveita contato elegível e não exige importação CSV ou audiência dinâmica. `handleCreateDraftFromAudience` salva leadIds explícitos; `handleScheduleDraftCampaign` envia ISO UTC a POST `/app/campaigns/:id/schedule`. `normalizeScheduledAt` nega passado; `scheduleScopedCampaignDraft` exige tenant, draft, template/variáveis, destino e elegibilidade/opt-out. Grava Campaign.scheduledAt e campaign.scheduled com o mesmo instante. Não iniciar/enviar rascunho para provar agendamento.
+
+`processDueScheduledCampaignsAdmitted` seleciona scheduledAt<=now e enfileira com eligibleAt igual ao instante e idempotencyKey `scheduled:<id>`; execução deixa campaign.scheduled.started. Intervalo nominal do scheduler60s, não garantia de execução pontual: observar atraso/fila e não clicar Enviar agora ou repetir Agendar para forçar. O frontend9f mantém agendados datados na aba Agendadas e usa polling existente3s para scheduled/sending até terminal, com invalidação por seleção/sessão; não prometer atualização instantânea.
+
+### Pré-condições efetivamente conferidas
+
+Owner indicou `Campanha teste out.10`, final9614 e `data_exame`; horário proposto07/10/2026 10:30 Fortaleza = `2026-10-07T13:30:00.000Z`. Esse horário ainda era futuro na última leitura10:26:54; **só usar se continuar futuro após revisar o rascunho e deixar margem para a observação anterior ao disparo**. Se a margem acabar, solicitar novo horário ao owner; não converter automaticamente para envio imediato nem inventar outra data.
+
+Tenant `demo-converta`/Converta Demo ACTIVE; template data_exame approved/UTILITY/pt_BR, categoriaUTILITY permitida. Resolvedores compilados efetivos às10:24:12: HYBRID com Meta/Web habilitados, seleçãoMeta explícita preservada, template ready/meta/hybrid_template, identidade híbrida sem conflito e números canônicos correspondentes. Há dois telefones Meta cadastrados; IDs completos/associação efetiva e configurações ficam no baseline privado, não confundir contagem com seleção de conta. Web consta connected. Nenhuma mudança para Auto necessária.
+
+Às10:25:26, resolvedor real de prévia CRM com busca9614 retornou total1/eligible1/blocked0, sem truncamento; filtro de opt-out: zero bloqueios. A audiência final salva deve ser conferida novamente por ID antes de agendar. Destino Atendimento Geral ativo, escolher **Atendimento Geral / Fila Geral**; também existe Fila principal, que não é a escolhida.
+
+Baseline às10:24:45: uma Conversation correspondente, dois runtimes/dois Contacts/dois Leads preexistentes no recorte pesquisado; não zerar/fundir/anonimizar ou interpretar esses totais como novas duplicações. O resolvedor CRM retorna uma identidade elegível para a seleção. Último inbound legítimo06/10 10:46:17 Fortaleza, janela até07/10 10:46:17. Portanto às10:30 a janela estará legitimamente aberta: a prova pode demonstrar **lastInboundAt e expiry preservados**, mas não envio partindo de janela fechada. Nenhum encerramento de atendimento ou alteração de timestamp para fabricar o baseline. Às10:26:54 não existia campanha com o nome proposto; somente um rascunho novo criado pelo owner poderá ser usado.
+
+### Roteiro do owner — ações futuras, não executadas nesta preparação
+
+1. Na sessão autorizada de demo-converta: Campanhas → Criar campanha → configurar nome Campanha teste out.10, modelo data_exame e preencher/mapear variáveis obrigatórias. Selecionar retorno Atendimento Geral/Fila Geral.
+2. Audiência CRM → Destinatários fixos → Busca9614, canalWhatsApp, excluir opt-out, atualizar prévia. Prosseguir apenas se houver um destinatário elegível sob seu controle, sem conjunto/agrupamento. Criar rascunho com audiência uma vez. Informar o nome/toast para conferência somente leitura do ID, seed, conta/destino, variáveis e população salva. Não clicar Enviar agora.
+3. Após essa conferência, no detalhe do rascunho → Agendar envio. Navegador deve estar no fusoFortaleza/UTC−3: o input datetime-local usa o fuso do navegador e new Date(...).toISOString(), não fixa o fuso do tenant. Para o horário proposto, preencher07/10/2026 10:30 e conferir a mesma data/hora exibida. Agendar uma vez apenas se ainda futuro com margem; informar toast e horário mostrado. Sem reuso de campanha concluída.
+4. Manter o detalhe aberto até o terminal, sem Enviar agora/reenvio/replay. Codex acompanha com leituras delimitadas abaixo. Relatar rótulos/status e recebimento no celular separadamente. Não responder nem assumir/transferir enquanto se confere a preservação da janela; este aceite não requer novo atendimento humano.
+
+### Matriz da futura observação limitada
+
+| Cenário | Estado nesta preparação | Evidência necessária depois das ações do owner |
+| --- | --- | --- |
+| Persistência/UI do horário | NOT EXERCISED | Campaign.scheduledAt + campaign.scheduled + seed e horário exibido; 10:30UTC−3 equivale13:30Z, revalidar no horário efetivamente escolhido |
+| Nenhuma submissão anterior | NOT EXERCISED | snapshot após agendar e antes de T: zero submit_started/provider_accepted/Outbound deste ID; depois correlacionar todos os timestamps, não confundir campanha antiga do mesmo contato |
+| Scheduler/submissão única Meta | NOT EXERCISED | campaign.scheduled.started, job/eligibleAt/lease/idempotência, submit_started→provider_accepted e um Outbound providerMeta correlacionados ao novo ID; sem trigger manual |
+| Atualização até terminal/Result Truth | NOT EXERCISED | relato/UI versus status/contadores/recipient result atuais; completed/jobcompleted ou SENT provam processamento/submissão, não entrega; DELIVERED/READ por webhook e recebimento relatado são evidências distintas; blocked/FAILED não são sent |
+| Janela/inbound preservados | NOT EXERCISED | comparar IDs e lastInboundAt/windowExpiresAt com baseline imediatamente anterior; zero inbound novo até a conferência; caso já aberto não prova criação desde janela fechada |
+
+Coletas antes deT, após o tick natural e no terminal, com timeout/limites e eventos exclusivamente da nova campanha; sem polling indefinido. Falha/ambiguidade deve ser registrada e delimitada, sem retry ou reparo para obter PASS. Dados completos/evidências ficam privados na preparação frontend9f/scheduled-validation, fora do Git. Esta campanha individual/estática não encerra agrupamento, audiência dinâmica, Auto, retorno híbrido novo ou CRA-PR; aceites anteriores permanecem separados.
