@@ -9,10 +9,10 @@ P=Path('/opt/re7online/backups/converta-persistent/preparations/frontend-9f4cbe0
 PM='/home/deploy/.npm-global/bin/pm2'
 
 def execute(stage, root=P, pm=PM):
-    if stage in ['stop','delete','start-candidate','start-return']:
+    if stage in ['stop','delete','start-candidate','start-return','enable-supervision-candidate','enable-supervision-return']:
         if (root/'execution-authorized').read_text().strip()!='true':
             raise RuntimeError('execution_not_authorized')
-    checks=['before','exited','init-candidate','init-return','capture-current','candidate','return','candidate-exited','return-exited','ready-candidate','ready-return']
+    checks=['supervised-candidate','supervised-return','enable-supervision-candidate','enable-supervision-return','before','exited','init-candidate','init-return','capture-current','candidate','return','candidate-exited','return-exited','ready-candidate','ready-return']
     if stage in checks: cmd=['/usr/bin/python3',str(root/'frontend-check.py'),stage]
     elif stage=='stop':cmd=[pm,'stop','re7-admin-front']
     elif stage=='delete':cmd=[pm,'delete','re7-admin-front']

@@ -46,10 +46,10 @@ with tempfile.TemporaryDirectory(prefix='re7-front-operational-') as folder:
  try:
   for mode in (['exact-next'] if len(sys.argv)>3 else ['normal','slow','exit','survivor','persistent']):
    p=base/mode;p.mkdir();g.P=p;(p/'execution-authorized').write_text('true')
-   for k in ['launcher.cjs','bootstrap.cjs']:shutil.copy2(HERE/k,p/k)
-   release=Path(sys.argv[3]).resolve() if mode=='exact-next' else p/'candidate';old=p/'return'
+   for k in ['launcher.cjs','bootstrap.cjs','frontend-check.py']:shutil.copy2(HERE/k,p/k)
+   release=Path(sys.argv[3]).resolve() if mode=='exact-next' else p/'candidate';old=Path(sys.argv[4]).resolve() if mode=='exact-next' and len(sys.argv)>4 else p/'return'
    for r,bid in [(release,'candidate'),(old,'return')]:
-    if mode=='exact-next' and r==release:continue
+    if mode=='exact-next' and (r==release or len(sys.argv)>4):continue
     (r/'node_modules/next/dist/bin').mkdir(parents=True);(r/'.next').mkdir();(r/'.next/BUILD_ID').write_text(bid);(r/'node_modules/next/dist/bin/next').write_text(JS)
    with socket.socket() as s:s.bind(('127.0.0.1',0));port=s.getsockname()[1]
    g.PORT=port;g.TARGET=str(release)
@@ -60,7 +60,7 @@ with tempfile.TemporaryDirectory(prefix='re7-front-operational-') as folder:
     e=x['pm2_env'];v['processes'].append({**{k:e.get(k) for k in ['status','pm_cwd','pm_exec_path','exec_interpreter','restart_time','exec_mode']},'name':x['name'],'pid':x['pid'],'startTicks':g.proc(x['pid'])['ticks']})
    (p/'runtime.private.json').write_text(json.dumps(v));pid=int((home/'pm2.pid').read_text());(p/'daemon.private.json').write_text(json.dumps({'pid':pid,'ticks':g.proc(pid)['ticks']}))
    for label,r in [('candidate',release),('return',old)]:
-    e={**extra,'LAB_MODE':mode if label=='candidate' else 'normal'};cfg=config(g.FRONT,r,r/'node_modules/next/dist/bin/next',e);cfg['args']=['start','-H','127.0.0.1','-p',str(port)] if mode=='exact-next' and label=='candidate' else [];(p/(label+'.ecosystem.config.cjs')).write_text('module.exports = '+json.dumps({'apps':[cfg]})+';\n')
+    e={**extra,'LAB_MODE':mode if label=='candidate' else 'normal'};cfg=config(g.FRONT,r,r/'node_modules/next/dist/bin/next',e);cfg['args']=['start','-H','127.0.0.1','-p',str(port)] if mode=='exact-next' else [];(p/(label+'.ecosystem.config.cjs')).write_text('module.exports = '+json.dumps({'apps':[cfg]})+';\n')
    g.main('before');pm('stop',g.FRONT);g.main('exited');pm('delete',g.FRONT)
    g.main('init-candidate');assert actions.execute('start-candidate',p,str(wrapper))==0
    wait(lambda:Path(g.run_from('candidate')['journal']).exists() and 'application_released' in Path(g.run_from('candidate')['journal']).read_text())
@@ -74,10 +74,13 @@ with tempfile.TemporaryDirectory(prefix='re7-front-operational-') as folder:
     wait(lambda:'application_exit' in Path(g.run_from('candidate')['journal']).read_text())
     try:g.main('ready-candidate');raise AssertionError('failure accepted')
     except RuntimeError as e:assert str(e)=='application_ended'
+    wait(lambda:any(x['name']==g.FRONT and x['pid']==0 and x['pm2_env']['status']=='stopped' and x['pm2_env']['restart_time']==0 for x in apps()))
+    assert len([x for x in Path(g.run_from('candidate')['journal']).read_text().splitlines() if json.loads(x)['event']=='application_identity'])==1
     assert not (p/'candidate-tree.private.json').exists();checks.append(mode+': failure before capture DENY readiness')
    else:
     try:g.ready('candidate',deadline_seconds=2,attempts=4,interval=.5);raise AssertionError('persistent accepted')
-    except RuntimeError as e:assert str(e) in ['readiness_deadline','readiness_deadline_or_attempt_limit']
+    except (RuntimeError,subprocess.TimeoutExpired) as e:
+     assert isinstance(e,subprocess.TimeoutExpired) or str(e) in ['readiness_deadline','readiness_deadline_or_attempt_limit']
     checks.append('persistent: limited readiness DENY, no repeat start')
    pm('stop',g.FRONT)
    if mode=='survivor':
@@ -88,7 +91,13 @@ with tempfile.TemporaryDirectory(prefix='re7-front-operational-') as folder:
     pid=int((p/'survivor.pid').read_text());os.kill(pid,15)
     # Orphan zombies in container namespaces must remain denied. Do not promote cleanup as proof.
     pm('delete',g.FRONT);continue
-   g.main('candidate-exited');pm('delete',g.FRONT)
+   # Bounded repeat of read-only absence observation, never a start retry.
+   for observation in range(3):
+    try:g.main('candidate-exited');break
+    except RuntimeError as e:
+     if str(e)!='unreadable_new_or_changed_process' or observation==2:raise
+     checks.append(mode+': incomplete observation DENIED; fresh read-only observation')
+   pm('delete',g.FRONT)
    g.main('init-return');assert actions.execute('start-return',p,str(wrapper))==0;wait(lambda:Path(g.run_from('return')['journal']).exists() and 'application_released' in Path(g.run_from('return')['journal']).read_text());g.main('ready-return');g.main('return');checks.append(mode+': compatible return PASS')
    # All real backend stand-ins retain their baseline identity.
    g.core(v,apps());pm('stop',g.FRONT);pm('delete',g.FRONT)
@@ -99,7 +108,7 @@ with tempfile.TemporaryDirectory(prefix='re7-front-operational-') as folder:
   assert record['exitCode']!=0 and record['stderr'] and 'stdout' in record and log.stat().st_mode & 0o777==0o600
   try:actions.execute('start-candidate',denied,str(wrapper));raise AssertionError('failed command replay accepted')
   except FileExistsError:checks.append('privileged-free PM2 failure: stdout/stderr/exit preserved; replay DENIED')
-  print(json.dumps({'node':'20.20.0','pm2':'6.0.14','checks':checks,'limits':'real PM2/Node/processes/HTTP/sockets; synthetic frontends and backend stand-ins; no productive effects'},indent=2))
+  print(json.dumps({'node':'20.20.0','pm2':'6.0.14','checks':checks,'limits':('real Next candidate and af26 return' if len(sys.argv)>4 else 'synthetic frontends')+'; real PM2/Node/processes/HTTP/sockets; backend stand-ins; no productive effects'},indent=2))
  finally:
   if os.environ.get('LAB_EVIDENCE_DIR'):
    shutil.copytree(base,Path(os.environ['LAB_EVIDENCE_DIR']),dirs_exist_ok=True,ignore=lambda d,n:[x for x in n if Path(d,x).is_socket()])

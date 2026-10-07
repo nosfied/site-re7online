@@ -34,7 +34,7 @@ Lockfile candidato e ativo: `add66bbb579b4c2424746ccd26b7a41ec24faecf77d324447b9
 | Config privada retorno | SHA256 `61d9cb573313339b0c2d4d436905f0824de79eb90663de1540dddca192da557d` |
 | Inventário privado da release af26 de retorno | SHA256 `4661dc9d08da2bc06761f4dd0fd323e7e8292ea74589c7dbcc697b652a34df51` |
 | Verificador do tar extraído | SHA256 `8a8aab3aeed1560d25892dcc99fc40e5d6666cb272dba550c20657f125259b38` |
-| Gates/frontend private controls frontend-check.py | SHA256 `48e0b85264b41ef1d5af8d588c03658b9783c99c17c0f739740e5914bf574012` |
+| Gates/frontend private controls frontend-check.py | SHA256 `924bf7dca0d79d10a85f2f3511c63ec6b5069a71f23158340ee8ccd404dbeb75` |
 
 22.784 arquivos e 31 symlinks internos, manifesto de conteúdo/permissões/links e inventário exaustivo. Inclui `.next` sem cache de build, public, node_modules completo autocontido, Next config, package/lock/tsconfig/next-env; nenhum env secreto/config PM2 dentro do tar. Não usar árvore de desenvolvimento ou npm install na execução. Asset estático antigo:73 arquivos preservados, colisões aceitas somente com conteúdo igual. Primeiro tar tinha permissões incompatíveis com extração segura: preservado como preliminar; somente V2 é candidato. Os compilados não foram reconstruídos por essa normalização.
 
@@ -58,7 +58,7 @@ Retorno só para af26 poderá remover URLs exclusivas do bundle novo: uma aba co
 
 A captura tardia tinha uma corrida: o Next podia sair antes de `capture-current`. Um launcher operacional sem privilégios registra PID/start ticks/grupo/sessão do próprio processo e do filho Node **antes de liberar o código Next**. Um nonce exclusivo liga PM2, configuração privada, journal e release/entry SHA/BUILD_ID. O bootstrap espera IPC antes de importar o entrypoint preservado. Isso muda a forma de inicialização preparada (PM2 → launcher → Node/Next), não os compilados, tar, dependências, API ou worker. O retorno af26 usa a mesma forma supervisionada.
 
-O launcher faz um único fork. Se o filho termina, registra o resultado e permanece supervisionado sem lançar outro Next. PM2 online isoladamente deixa de significar aplicação saudável: todos os gates validam também o filho. Reinício do launcher/daemon, PID reutilizado, zumbi, duplicação ou journal incompleto negam. O start tem intent exclusivo antes da chamada PM2; sucesso, erro ou timeout não autorizam repetir. Uma falha anterior ao registro do filho continua bloqueada por falta de prova: não se inventa identidade.
+O launcher faz um único fork por execução. Durante a janela, se o filho termina, registra o resultado e encerra com código78: PM2 fica stopped, sem retry automático. Após a promoção explícita, a morte do filho encerra o launcher com código1 e permite a recuperação normal pelo PM2, com nonce/journal novos. PM2 online isoladamente deixa de significar aplicação saudável: todos os gates validam também o filho. Durante a janela, reinício do launcher/daemon, PID reutilizado, zumbi, duplicação ou journal incompleto negam. Na supervisão permanente, restart/resurrect legítimos possuem identidades novas e não usam o baseline consumido da janela. O start tem intent exclusivo antes da chamada PM2; sucesso, erro ou timeout não autorizam repetir. Uma falha anterior ao registro do filho continua bloqueada por falta de prova: não se inventa identidade.
 
 Antes do retorno, parar somente o frontend e exigir: PIDs registrados ausentes (PID reaproveitado nega), duas observações consecutivas consistentes do inventário de processos, nenhum executor pelo nonce/cwd/entry/grupo, nenhum listener3000 e nenhum socket da captura tardia sobrevivente, quando esta existe. A captura tardia é complementar; sua ausência já não impede a recuperação do filho que teve identidade registrada antes da execução. O inventário inclui descendentes órfãos com marker/grupo/cwd, não somente filhos ainda ligados ao parent. Porta fechada/PID0 nunca certificam saída.
 
@@ -78,16 +78,16 @@ Node20.20.0/PM2 6.0.14, fork real, PM2_HOME separado e sockets HTTP reais. `fron
 | Descendente detached com socket em porta diferente3000 | DENY prontidão; executor_survived bloqueia retorno; nenhum sucessor iniciado |
 | HTTP503 persistente | DENY por prazo/tentativas; ausência comprovada e retorno PASS; ensaio reduzido2s/4 tentativas usa a mesma função, não comprova duração30s |
 | PM2 recusa config inexistente | DENY: stderr/stdout/exit preservados em arquivo0600; repetição de intent recusada antes do PM2 |
-| Pacote Next exato preservado, via launcher | PASS login HTTP/identidade/captura/saída; retorno com fixture Node |
+| Pacotes Next exatos preservados, via launcher | PASS candidato9f → retorno af26, HTTP/identidade/captura/saída; sem fixture frontend nesse ensaio |
 
-O ensaio com o tar Next usa a extração limpa já preservada, fora da árvore de desenvolvimento. O retorno **af26 completo não foi iniciado no laboratório**; sua forma PM2/Node foi ensaiada com fixture e a release af26 mantém a verificação anterior de inventário. Não transformar essa distinção em PASS produtivo. Falhas preliminares de EACCES e da asserção do nome de timeout permanecem privadas; o prazo negou corretamente e a asserção foi corrigida. Os testes funcionais anteriores59/10 e limitações22 tsc não foram reexecutados ou atribuídos a esses cenários.
+O ensaio com o tar Next usa a extração limpa já preservada, fora da árvore de desenvolvimento. Na revisão e6594000, o af26 completo não foi iniciado no laboratório. Isso foi ampliado somente no ensaio operacional atual: o pacote af26 preservado foi extraído e iniciado, com os 23.497 arquivos e symlinks comparados ao manifesto de retorno anterior, sem diferenças/ausências; nenhum rebuild. Não transformar essa distinção em PASS produtivo. Falhas preliminares de EACCES e da asserção do nome de timeout permanecem privadas; o prazo negou corretamente e a asserção foi corrigida. Os testes funcionais anteriores59/10 e limitações22 tsc não foram reexecutados ou atribuídos a esses cenários.
 
 Reprodução (paths são os binários preservados do laboratório, não instalações novas):
 
 ```bash
 LAB_EVIDENCE_DIR=local-evidence/frontend-9f4cbe0f-prepared/reproduction-private python3 docs/reviews/automation-freeform-window-release-af26/frontend-9f4cbe0f-prepared/test_operational_pm2.py /tmp/re7-pm2-lab/node /tmp/re7-pm2-lab/pm2/bin/pm2
 # Verificação específica do Next: mesma prova, com a extração íntegra preservada.
-LAB_EVIDENCE_DIR=local-evidence/frontend-9f4cbe0f-prepared/reproduction-next-private python3 docs/reviews/automation-freeform-window-release-af26/frontend-9f4cbe0f-prepared/test_operational_pm2.py /tmp/re7-pm2-lab/node /tmp/re7-pm2-lab/pm2/bin/pm2 /tmp/re7-frontend-9f4cbe0f-clean-final
+LAB_EVIDENCE_DIR=local-evidence/frontend-9f4cbe0f-prepared/reproduction-next-private python3 docs/reviews/automation-freeform-window-release-af26/frontend-9f4cbe0f-prepared/test_operational_pm2.py /tmp/re7-pm2-lab/node /tmp/re7-pm2-lab/pm2/bin/pm2 /tmp/re7-frontend-9f4cbe0f-clean-final /tmp/re7-front-af26-supervision
 ```
 
 Os diretórios de evidência devem ser novos; o script nunca inicia aplicações/providers produtivos. Limpeza de processos sintéticos no finally não é comando de recuperação produtiva.
@@ -96,14 +96,61 @@ Os diretórios de evidência devem ser novos; o script nunca inicia aplicações
 
 | Arquivo | SHA256 |
 | --- | --- |
-| `frontend-check.py` | `48e0b85264b41ef1d5af8d588c03658b9783c99c17c0f739740e5914bf574012` |
-| `frontend-action.py` | `2fa6e66e10283d159b1ce6a3705f7b1bdafe077f5c05a515a5432fefebc4c216` |
-| `launcher.cjs` | `807862928443c6591417123476127a3cc311ae39ba1be74527b80b07b0ab04b5` |
+| `frontend-check.py` | `924bf7dca0d79d10a85f2f3511c63ec6b5069a71f23158340ee8ccd404dbeb75` |
+| `frontend-action.py` | `57493c5bf7696af05758ad75fb3511decc126bb011927d011153b4cb06ad3a67` |
+| `launcher.cjs` | `131a92d08fe7c6484585ed0a1e18e1bf9f9a1851907337b02ae13ca99e110fef` |
 | `bootstrap.cjs` | `0142c188b45fb37e29528ad62a966e5c450f3b7ba88da2d52d58c16313c292b3` |
-| `test_operational_pm2.py` | `6964b497e7cbebffced1afab4b66a257e9c8f893a8d7b54b803e9c2e377f931e` |
+| `test_operational_pm2.py` | `3c4f5553915e773f8ae76dd4c1c848fc4d18723d608cd15bf571efcd6bb9f3e8` |
+| `test_supervision_pm2.py` | `16455ac178f4fad50321da421f2208ce11340fca15035050bf3dac4410052295` |
 | `verify-package.py` | `8a8aab3aeed1560d25892dcc99fc40e5d6666cb272dba550c20657f125259b38` |
 
-[scripts.sha256](frontend-9f4cbe0f-prepared/scripts.sha256) fixa esses seis arquivos; o tar/manifesto/BUILD_ID permanecem os da tabela original. Configs `.ecosystem.config.cjs` originais preservadas; `init-*` produz configs `.tracked.config.cjs` com nonce/entry/BUILD_ID privados e paths do launcher. Não é reutilização de prova/captura antiga. Antes da janela, esses scripts devem ser transferidos para o staging e conferidos pelo manifesto; **não houve transferência nesta rodada**. Nenhuma instalação root/sudo/helper/política é necessária.
+[scripts.sha256](frontend-9f4cbe0f-prepared/scripts.sha256) fixa esses sete arquivos; o tar/manifesto/BUILD_ID permanecem os da tabela original. Configs `.ecosystem.config.cjs` originais preservadas; `init-*` produz configs `.tracked.config.cjs` com nonce/entry/BUILD_ID privados e paths do launcher. Não é reutilização de prova/captura antiga. Antes da janela, esses scripts devem ser transferidos para o staging e conferidos pelo manifesto; **não houve transferência nesta rodada**. Nenhuma instalação root/sudo/helper/política é necessária.
+
+## Supervisão permanente — revisão dirigida sobre e6594000
+
+O comportamento anterior não era adequado a saved/resurrect: journal `wx` de uso único e parent mantido online depois da morte do Next. Esta revisão separa **a tentativa de implantação** da **geração de release supervisionada**:
+
+| Controle | Durante a janela | Depois da promoção |
+| --- | --- | --- |
+| Start do operador | intent exclusivo; nenhum segundo start da mesma tentativa | gate da tentativa false; não reabrir/reutilizar intents |
+| Morte do Next | parent registra exit e termina78; stop_exit_codes78 evita retry automático | parent registra exit e termina1; autorestart original do PM2 recupera |
+| Evidências | nonce/journal da tentativa fixos e preservados | cada novo launcher cria nonce, control e journal exclusivos em `.run.private.json.runs/<nonce>/` |
+| Identidade | daemon/API/worker/frontend pinados pelo baseline operacional | observador próprio da geração, PID/start ticks/bootId/entry hash/BUILD_ID; baseline de janela não é reutilizado após reboot |
+| Dump | não salvar configuração transitória antes da promoção | mesmo dump aponta para launcher/control da geração; novas execuções não truncam journals anteriores |
+
+`enable-supervision-candidate`/`enable-supervision-return` só são executados depois de prontidão e conferência funcional autorizada. Revalidam processo original/core, último resultado de prontidão, autorestart e stop_exit_codes, gravam uma promoção exclusiva vinculada a nonce/entry hash/BUILD_ID e fecham `execution-authorized=false`. Não fazem start/restart. Esse é o término da tentativa; depois disso, diagnóstico usa `supervised-*`, e uma nova troca/retorno operacional exige tentativa/baseline novos. Não invocar os comandos de retorno da tentativa já fechada para contornar a supervisão.
+
+PM2 6.0.14 normalizou `[78]` para `78` em jlist/dump. O verificador aceita somente número inteiro78 ou array unitário do mesmo inteiro; não aceita string, bool, null ou coleção vazia. Autorestart, watch e demais opções originais permanecem preservados; apenas o código78 é reservado para falha segura de janela/evidência. Não editar dump manualmente. O env fixo do dump vincula a geração/controle original; não é a identidade de uma execução nova. As identidades efetivas ficam nos controls/journals novos, com nonce/PID/start ticks/bootId próprios.
+
+Na execução inicial promovida, o Next continua com a identidade já registrada, **sem outro fork**. No próximo restart/resurrect, o launcher verifica release/entry/BUILD_ID, promoção e ausência de executores das execuções anteriores antes de fazer seu único fork. Usa `/usr/bin/python3 -I -S` e apenas o observador efetivo publicado. Rejeita sobrevivente, PID reutilizado no mesmo boot, journal inválido ou observação incompleta persistente. Somente o novo launcher e seu observador filho podem ser excluídos do inventário: PID/start ticks/parent exatos, nunca por nome/UID/contagem. Até3 leituras completas para observação incompleta/churn; sem espera fixa, limpeza ou novo start. Cada recusa é registrada privadamente. O subprocesso observador tem teto10s. Falha persistente termina78, deixando PM2 stopped com diagnóstico, sem launcher online solitário nem loop infinito de tentativas.
+
+`bootId` distingue inicialização do SO de PID reutilizado no mesmo boot. Journals de outro boot ficam preservados e não certificam identidades/sockets atuais. Cada execução nova registra o boot real e novo nonce. **Reboot do SO não foi exercitado**; encerramento/resurrect do daemon real foi. Não atribuir atomicidade contra outro operador ou cobertura a código arbitrário que apague vínculos. Nenhum privilégio/root/helper V4 novo.
+
+O inventário de metadata preexistente trata um PID que desapareceu antes de ser registrado como **não registrado**, não como exceção válida: uma identidade posterior só recebe a exceção se PID/start ticks tiver sido efetivamente observado e corresponder. A prova de ausência continua exigindo as duas observações completas. O ensaio preservou negativas preliminares de EACCES/churn, normalização PM2 e a saída assíncrona do daemon. Essas negativas não foram promovidas como PASS; os resultados finais abaixo vieram de tentativas isoladas novas. Nenhum start foi repetido para salvar uma tentativa falha.
+
+### Evidência final desta revisão
+
+| Ensaio com Node20.20.0/PM2 6.0.14 reais | Candidato9f | Retorno af26 |
+| --- | --- | --- |
+| Next pronto → promoção sem restart | PASS | PASS |
+| save → PM2 kill → saída do daemon comprovada → resurrect do mesmo dump | PASS | PASS |
+| Morte real do Next (SIGKILL no filho Next controlado apenas no laboratório) após prontidão → recuperação automática PM2 | PASS | PASS |
+| Segundo kill/resurrect usando o mesmo dump, hash inalterado | PASS | PASS |
+| Identidades/nonces distintos, evidências anteriores preservadas | PASS (4 execuções) | PASS (4 execuções) |
+| Stop final → ausência de todas as encarnações pelo mesmo verificador | PASS | PASS |
+| Start repetido na janela / start depois de gate fechado / promoção repetida | DENIED | DENIED |
+
+Os frontends são os pacotes Next reais preservados; API/worker continuam stand-ins Node sem providers/DB. PM2/processos/sockets/HTTP/dump e exit codes são reais; nft/systemd não foram simulados nem executados, pois não pertencem à operação frontend. O daemon pode continuar existindo brevemente depois de `pm2 kill`: o ensaio aguarda sua ausência por observação limitada, não toma o retorno da CLI como certificado. Nas leituras de ausência do laboratório, no máximo3 reconfirmações somente para observação incompleta, com cada negativa preservada; sobrevivente continua negando imediatamente.
+
+Os cinco cenários operacionais afetados foram reexecutados sobre o launcher novo: ida, retorno, HTTP lento, saída precoce (PM2 stopped/restart0, uma aplicação) e descendente detached com socket que bloqueou o retorno. HTTP503 com orçamento reduzido também negou; timeout da consulta PM2 no fim do orçamento é falha controlada, não prontidão. Testes funcionais59/10, build e tipos não foram repetidos/reconstruídos. Tar candidato permanece `d0f15209922741e51ab21e22d01ff2188ce212ef23081888084c868754065e54`.
+
+Reprodução adicional dos testes de supervisão, com diretório de evidência novo:
+
+```bash
+LAB_EVIDENCE_DIR=local-evidence/frontend-9f4cbe0f-prepared/reproduction-supervision-private python3 docs/reviews/automation-freeform-window-release-af26/frontend-9f4cbe0f-prepared/test_supervision_pm2.py /tmp/re7-pm2-lab/node /tmp/re7-pm2-lab/pm2/bin/pm2 /tmp/re7-frontend-9f4cbe0f-clean-final /tmp/re7-front-af26-supervision
+```
+
+**Dependência permanente:** launcher, bootstrap, observador, control, promoção e journals da geração são referenciados pelo processo e pelo dump salvo. Preservar esse diretório enquanto active/saved/fallback o referenciarem; não tratar como preparação descartável depois da janela. Não remover/mover os scripts durante operação ou retorno. Só retirar uma geração depois de todas as referências migrarem e executores saírem. Esta rodada não transferiu scripts, não alterou limpeza/retention/cron produtivos e não instalou arquivo remoto.
 
 ## Comandos finais revisáveis — NÃO executar nesta preparação
 
@@ -136,14 +183,16 @@ python3 "$P/frontend-action.py" ready-candidate
 python3 "$P/frontend-action.py" capture-current
 python3 "$P/frontend-action.py" candidate
 curl -fsS --max-time 5 http://127.0.0.1:3001/health > "$P/api.after.private.json"
-# Owner confere Inbox/CRM e matriz abaixo. Só então persistir conjunto validado.
+# Owner confere Inbox/CRM e matriz abaixo. Só então terminar tentativa e habilitar supervisão.
+python3 "$P/frontend-action.py" enable-supervision-candidate
+python3 "$P/frontend-action.py" supervised-candidate
 "$PM" save
 cp /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
-python3 "$P/frontend-action.py" candidate
+python3 "$P/frontend-action.py" supervised-candidate
 date -Is
 ```
 
-Falha de prontidão do candidato, inclusive saída anterior à captura: conservar journal/logs/intent. Confirmar daemon/core; parar somente o launcher identificado e provar ausência. **Não exige candidate-tree** quando a aplicação encerrou antes dessa captura, pois o journal registrou sua identidade antes da liberação. Se journal ausente/incompleto, sobrevivente, identidade divergente ou leitura incompleta: bloquear sucessor e diagnosticar, sem kill/bypass.
+Antes da promoção: falha de prontidão do candidato, inclusive saída anterior à captura: conservar journal/logs/intent. Confirmar daemon/core; parar somente o launcher identificado e provar ausência. **Não exige candidate-tree** quando a aplicação encerrou antes dessa captura, pois o journal registrou sua identidade antes da liberação. Se journal ausente/incompleto, sobrevivente, identidade divergente ou leitura incompleta: bloquear sucessor e diagnosticar, sem kill/bypass.
 
 ```bash
 set -euo pipefail
@@ -157,13 +206,15 @@ python3 "$P/frontend-action.py" delete
 python3 "$P/frontend-action.py" start-return
 python3 "$P/frontend-action.py" ready-return
 python3 "$P/frontend-action.py" return
-# Owner confirma leitura e API/worker inalterados; então salvar referência de retorno.
+# Owner confirma leitura e API/worker inalterados; então concluir tentativa e salvar retorno.
+python3 "$P/frontend-action.py" enable-supervision-return
+python3 "$P/frontend-action.py" supervised-return
 "$PM" save
 cp /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
-python3 "$P/frontend-action.py" return
+python3 "$P/frontend-action.py" supervised-return
 ```
 
-Falha do retorno: não repetir start-return; conservar diagnóstico, parar apenas frontend identificado se aplicável e usar `return-exited` para comprovar ausência. Não há um terceiro lançamento automático. Falha antes do stop mantém af26; falha em exited bloqueia candidato. Timeout de start é resultado incerto: inspecionar PM2/journal uma vez e aplicar gates, nunca executar start de novo. Horizonte15 minutos exige escalonar estado/bloqueio, não relaxar provas. Não há duração de indisponibilidade garantida. Guarda/scheduler/crons/boot/barreira e DB/auth permanecem intocados; API/worker nunca param.
+Antes da promoção, falha do retorno: não repetir start-return; conservar diagnóstico, parar apenas frontend identificado se aplicável e usar `return-exited` para comprovar ausência. Não há um terceiro lançamento automático. Falha antes do stop mantém af26; falha em exited bloqueia candidato. Timeout de start é resultado incerto: inspecionar PM2/journal uma vez e aplicar gates, nunca executar start de novo. Horizonte15 minutos exige escalonar estado/bloqueio, não relaxar provas. Não há duração de indisponibilidade garantida. Guarda/scheduler/crons/boot/barreira e DB/auth permanecem intocados; API/worker nunca param.
 
 ## Conferência pós-troca, somente leitura
 

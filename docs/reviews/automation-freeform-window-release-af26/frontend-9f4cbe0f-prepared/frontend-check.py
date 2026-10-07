@@ -9,6 +9,8 @@ import secrets
 import time
 import urllib.request
 
+BOOT_ID = Path('/proc/sys/kernel/random/boot_id')
+
 P = Path('/opt/re7online/backups/converta-persistent/preparations/frontend-9f4cbe0f-20261007T012803Z')
 FRONT = 're7-admin-front'
 TARGET = '/opt/re7online/releases/9f4cbe0f9a4e891f09bb2f41e88eccec388172da-front'
@@ -90,6 +92,18 @@ def run_from(label):
     require(r['release'] == (TARGET if label == 'candidate' else next(x['pm_cwd'] for x in json.loads((P/'runtime.private.json').read_text())['processes'] if x['name']==FRONT)), 'run_release')
     return r
 
+def pre_existing():
+    # Metadata for an exact pre-existing identity exemption, not an absence proof.
+    result={}
+    for f in Path('/proc').iterdir():
+        if not f.name.isdigit():continue
+        try:
+            if f.stat().st_uid==os.getuid():result[f.name]=proc(int(f.name),require_alive=False)['ticks']
+        except (FileNotFoundError,ProcessLookupError):
+            # A vanished PID grants no exemption to a later identity.
+            continue
+    return result
+
 def init_run(label):
     rbase = json.loads((P / (label + '.ecosystem.config.cjs')).read_text().split('module.exports = ',1)[1].rstrip(';\n'))
     app = rbase['apps'][0]; release = app['cwd']
@@ -97,11 +111,14 @@ def init_run(label):
     record = {'nonce':secrets.token_hex(32), 'release':release, 'entry':entry,
               'entrySha256':hashlib.sha256(Path(entry).read_bytes()).hexdigest(),
               'buildId':Path(release,'.next/BUILD_ID').read_text().strip(),
-              'args':app['args'], 'journal':str(P/(label+'.startup.private.jsonl')),
-              'preExisting':{f.name:proc(int(f.name),require_alive=False)['ticks'] for f in Path('/proc').iterdir() if f.name.isdigit() and f.stat().st_uid==os.getuid()}}
+              'args':app['args'], 'bootId':BOOT_ID.read_text().strip(), 'journal':str(P/(label+'.startup.private.jsonl')),
+              'preExisting':pre_existing()}
     out = P/(label+'.run.private.json'); require(not out.exists(), 'run_already_exists')
     require(not Path(record['journal']).exists(), 'startup_already_exists')
     out.write_text(json.dumps(record)); out.chmod(0o600)
+    require(app.get('autorestart') is True, 'permanent_autorestart_contract')
+    require(not app.get('stop_exit_codes'), 'reserved_exit_code_conflict')
+    app['stop_exit_codes']=[78] # fail closed during the window, no automatic second application
     app['script']=str(P/'launcher.cjs'); app['args']=[]
     app['env'].update(RE7_FRONT_CONTROL=str(out),RE7_FRONT_RUN=record['nonce'])
     cfg=P/(label+'.tracked.config.cjs'); cfg.write_text('module.exports = '+json.dumps(rbase)+';\n'); cfg.chmod(0o600)
@@ -115,7 +132,7 @@ def journal(label):
     require(sum(x['event']=='application_released' for x in js)==1, 'single_submission')
     return r,js
 
-def inventory(r,js):
+def inventory(r,js,exclude=None):
     # Full same-UID inventory. No generic exclusion by process name/IP/port.
     groups={x['group'] for x in js if x['event'] in ['parent','application_identity']}
     result=[]
@@ -124,6 +141,10 @@ def inventory(r,js):
         try:
             if f.stat().st_uid!=os.getuid(): continue
             q=proc(int(f.name),require_alive=False)
+            exempt=[x for x in (exclude or []) if q['pid']==x['pid']]
+            if exempt:
+                require(len(exempt)==1 and q['ticks']==exempt[0]['ticks'],'new_launcher_identity_drift')
+                continue
             env=(f/'environ').read_bytes().split(b'\0'); cwd=os.readlink(f/'cwd')
             cmd=(f/'cmdline').read_bytes()
         except PermissionError:
@@ -140,15 +161,115 @@ def inventory(r,js):
         if relevant: result.append(q)
     return sorted(result,key=lambda x:x['pid'])
 
+
+def supervision_preflight(control, launcher_pid):
+    """No PM2 start: deny surviving previous incarnations before the next fork."""
+    control=Path(control); r=json.loads(control.read_text()); boot=BOOT_ID.read_text().strip()
+    require(r['nonce'] and r['entrySha256'] and r['buildId'],'supervision_binding')
+    marker=json.loads(Path(str(control)+'.permanent').read_text())
+    require(marker=={'nonce':r['nonce'],'entrySha256':r['entrySha256'],'buildId':r['buildId']},'permanent_binding')
+    previous=[r]
+    runs=Path(str(control)+'.runs')
+    if runs.exists():
+        for d in runs.iterdir():
+            require(d.is_dir() and not d.is_symlink(),'incarnation_directory')
+            previous.append(json.loads((d/'control.json').read_text()))
+    own=proc(launcher_pid);observer=proc(os.getpid())
+    require(observer['parent']==own['pid'],'observer_parent_binding')
+    log=Path(str(control)+'.observations.private.jsonl')
+    def observation(status,attempt,reason=None):
+        with log.open('a') as f:
+            f.write(json.dumps({'launcherPid':own['pid'],'launcherTicks':own['ticks'],'attempt':attempt,'result':status,'reason':reason,'atMonotonic':time.monotonic()})+'\n')
+        log.chmod(0o600)
+    for attempt in range(1,4):
+        try:
+            require(proc(own['pid'])['ticks']==own['ticks'] and proc(observer['pid'])['ticks']==observer['ticks'],'observer_identity_drift')
+            require(BOOT_ID.read_text().strip()==boot,'observer_boot_drift')
+            for prior in previous:
+                require(prior['release']==r['release'] and prior['entrySha256']==r['entrySha256'] and prior['buildId']==r['buildId'],'prior_release_binding')
+                # Reboot invalidates /proc PIDs/sockets; never use a previous boot's identity.
+                if prior['bootId']!=boot: continue
+                jp=Path(prior['journal']);require(jp.is_file(),'prior_journal_missing')
+                js=[json.loads(x) for x in jp.read_text().splitlines()]
+                require(js and all(x['nonce']==prior['nonce'] for x in js),'prior_journal_nonce')
+                require(sum(x['event']=='parent' for x in js)==1,'prior_parent_missing')
+                for x in js:
+                    if x['event'] in ['parent','application_identity']:
+                        require(not Path(f'/proc/{x["pid"]}').exists(),'prior_executor_or_reused_pid')
+                a=inventory(prior,js,exclude=[own,observer]);b=inventory(prior,js,exclude=[own,observer])
+                require(a==b,'prior_inventory_churn');require(not a,'prior_executor_survived')
+            observation('PASS',attempt);break
+        except RuntimeError as e:
+            observation('DENY',attempt,str(e))
+            if str(e) not in ['unreadable_new_or_changed_process','prior_inventory_churn','incomplete_new_process'] or attempt==3:
+                raise
+            # New complete observations, no sleep certificate or application fork.
+    existing=pre_existing()
+    return {'bootId':boot,'preExisting':existing}
+
+
+def supervision_live(control, row):
+    """Read-only permanent identity check, independent of consumed window baselines."""
+    control=Path(control); original=json.loads(control.read_text());e=row['pm2_env']
+    require(row['name']==FRONT and e['status']=='online' and e.get('watch') is False,'supervised_frontend_status')
+    require(e['pm_exec_path']==str(control.parent/'launcher.cjs') and e['pm_cwd']==original['release'],'supervised_release')
+    require(e.get('RE7_FRONT_CONTROL')==str(control) and e.get('RE7_FRONT_RUN')==original['nonce'],'supervised_pm2_binding')
+    require(e.get('autorestart') is True and window_stop_code(e.get('stop_exit_codes')),'supervised_pm2_recovery')
+    require(json.loads(Path(str(control)+'.permanent').read_text())=={'nonce':original['nonce'],'entrySha256':original['entrySha256'],'buildId':original['buildId']},'supervised_promotion_binding')
+    tick=proc(row['pid'])['ticks'];found=[];records=[original]
+    root=Path(str(control)+'.runs')
+    if root.exists():
+        for d in root.iterdir():
+            require(d.is_dir() and not d.is_symlink(),'supervised_incarnation_directory')
+            r=json.loads((d/'control.json').read_text())
+            require(r['nonce']==d.name and r['nonce']!=original['nonce'],'supervised_new_nonce')
+            records.append(r)
+    for r in records:
+        js=[json.loads(x) for x in Path(r['journal']).read_text().splitlines()]
+        parents=[x for x in js if x['event']=='parent']
+        require(len(parents)==1,'permanent_parent_record')
+        if r['bootId']!=BOOT_ID.read_text().strip():continue
+        if parents[0]['pid']==row['pid'] and parents[0]['ticks']==tick:
+            # The initial process survives promotion unchanged; every later start has a new nonce.
+            require(r is original or r['nonce']!=original['nonce'],'fresh_supervised_identity')
+            require(r['release']==original['release'] and r['entrySha256']==original['entrySha256'] and r['buildId']==original['buildId'],'supervised_artifact')
+            require(all(x['nonce']==r['nonce'] for x in js),'supervised_journal_nonce')
+            require(not any(x['event'] in ['application_exit','child_error','launcher_error'] for x in js),'supervised_application_ended')
+            children=[x for x in js if x['event']=='application_identity'];require(len(children)==1,'supervised_child_record')
+            require(sum(x['event']=='application_released' for x in js)==1,'supervised_single_release')
+            require(proc(children[0]['pid'])['ticks']==children[0]['ticks'],'supervised_child_identity')
+            require(hashlib.sha256(Path(r['entry']).read_bytes()).hexdigest()==r['entrySha256'],'supervised_entry_hash')
+            require(Path(r['release'],'.next/BUILD_ID').read_text().strip()==r['buildId'],'supervised_build_id')
+            found.append((r,children[0]))
+    require(len(found)==1,'supervised_incarnation_missing_or_duplicate')
+    return found[0]
+
+def window_stop_code(value):
+    # PM2 6.0.14 normalizes a singleton array to numeric78. No falsy/coercive acceptance.
+    return (type(value) is int and value==78) or (type(value) is list and len(value)==1 and type(value[0]) is int and value[0]==78)
+
+def enable_supervision(label):
+    r,js=tracked_live(label)
+    require((P/(label+'.readiness.private.jsonl')).is_file(),'readiness_required')
+    require(json.loads((P/(label+'.readiness.private.jsonl')).read_text().splitlines()[-1])['result']=='PASS','readiness_not_passed')
+    row=next(x for x in rows() if x['name']==FRONT)
+    require(row['pm2_env'].get('autorestart') is True and window_stop_code(row['pm2_env'].get('stop_exit_codes')),'supervision_pm2_contract')
+    out=P/(label+'.run.private.json.permanent')
+    with out.open('x') as f:
+        f.write(json.dumps({'nonce':r['nonce'],'entrySha256':r['entrySha256'],'buildId':r['buildId']}))
+    out.chmod(0o600)
+    (P/'execution-authorized').write_text('false\n') # promotion closes the window attempt
+    # No start/restart and no replacement of the consumed window journal/config.
+
 def tracked_live(label, budget=3):
     v=json.loads((P/'runtime.private.json').read_text()); rs=rows(timeout=min(3,budget)); core(v,rs)
     r=run_from(label); jp=Path(r['journal']); require(jp.exists(),'startup_pending'); js=[json.loads(x) for x in jp.read_text().splitlines()]; require(js and all(x['nonce']==r['nonce'] for x in js),'journal_nonce'); matches=[x for x in rs if x['name']==FRONT]; require(len(matches)==1,'frontend_duplicate_or_missing')
+    require(not any(x['event'] in ['application_exit','child_error'] for x in js), 'application_ended')
     row=matches[0];e=row['pm2_env']; parent=next(x for x in js if x['event']=='parent')
     require(e['pm_cwd']==r['release'] and e['pm_exec_path']==str(P/'launcher.cjs'), 'frontend_release')
     require(e.get('RE7_FRONT_RUN')==r['nonce'], 'pm2_nonce')
     require(e['status']=='online' and e['restart_time']==0 and e.get('watch') is False, 'frontend_health_identity')
     require(row['pid']==parent['pid'] and proc(parent['pid'])['ticks']==parent['ticks'], 'parent_identity')
-    require(not any(x['event'] in ['application_exit','child_error'] for x in js), 'application_ended')
     children=[x for x in js if x['event']=='application_identity'];require(len(children)==1,'startup_pending' if not children else 'application_ledger'); child=children[0]
     require(sum(x['event']=='application_released' for x in js)==1,'single_submission')
     require(proc(child['pid'])['ticks']==child['ticks'], 'application_identity')
@@ -158,12 +279,24 @@ def tracked_live(label, budget=3):
 
 def tracked_absent(label):
     r,js=journal(label)
-    # A saved late capture is supplementary, never required to prove early exit.
-    for x in js:
-        if x['event'] in ['parent','application_identity']:
-            require(not Path(f'/proc/{x["pid"]}').exists(), 'survivor_or_pid_reused')
-    a=inventory(r,js); b=inventory(r,js)
-    require(a==b,'absence_observation_changed');require(not a,'executor_survived')
+    # A saved late capture is supplementary. Permanent incarnations are evidence too.
+    records=[(r,js)];root=P/(label+'.run.private.json.runs')
+    if root.exists():
+        for d in root.iterdir():
+            require(d.is_dir() and not d.is_symlink(),'absence_incarnation_directory')
+            prior=json.loads((d/'control.json').read_text())
+            require(prior['release']==r['release'] and prior['entrySha256']==r['entrySha256'] and prior['nonce']==d.name,'absence_incarnation_binding')
+            require(prior['bootId']==BOOT_ID.read_text().strip(),'window_boot_changed')
+            previous=[json.loads(x) for x in Path(prior['journal']).read_text().splitlines()]
+            require(previous and all(x['nonce']==prior['nonce'] for x in previous),'absence_incarnation_journal')
+            require(sum(x['event']=='parent' for x in previous)==1 and sum(x['event']=='application_identity' for x in previous)==1 and sum(x['event']=='application_released' for x in previous)==1,'absence_incarnation_incomplete')
+            records.append((prior,previous))
+    for prior,previous in records:
+        for x in previous:
+            if x['event'] in ['parent','application_identity']:
+                require(not Path(f'/proc/{x["pid"]}').exists(), 'survivor_or_pid_reused')
+        a=inventory(prior,previous);b=inventory(prior,previous)
+        require(a==b,'absence_observation_changed');require(not a,'executor_survived')
     ns,listening=net(); require(not listening,'frontend_listener_survived')
     for kind in ['tcp','tcp6']:
         # Non-listening sockets are also inventoried through owning processes above.
@@ -203,13 +336,24 @@ def ready(label, deadline_seconds=30, attempts=30, interval=1):
     raise RuntimeError('readiness_deadline_or_attempt_limit')
 
 def main(action):
+    if action.startswith('supervised-'):
+        label=action.removeprefix('supervised-');control=P/(label+'.run.private.json')
+        daemon=proc(int(PM_PID.read_text()));rs=rows()
+        matches=[x for x in rs if x['name']==FRONT];require(len(matches)==1,'supervised_duplicate_or_missing')
+        supervision_live(control,matches[0])
+        with urllib.request.urlopen(f'http://127.0.0.1:{PORT}/app/login',timeout=1) as response:
+            require(response.status==200,'supervised_http')
+        require(proc(int(PM_PID.read_text()))['pid']==daemon['pid'] and proc(daemon['pid'])['ticks']==daemon['ticks'],'supervised_daemon_changed')
+        print(action+':PASS');return
     v = json.loads((P / 'runtime.private.json').read_text())
     # Never let a diagnostic PM2 CLI bootstrap an absent daemon.
     d = json.loads((P / 'daemon.private.json').read_text())
     require(int(PM_PID.read_text()) == d['pid'], 'daemon_pid')
     require(proc(d['pid'])['ticks'] == d['ticks'], 'daemon_ticks')
     rs = rows(); core(v, rs)
-    if action.startswith('init-'):
+    if action.startswith('enable-supervision-'):
+        enable_supervision(action.removeprefix('enable-supervision-'))
+    elif action.startswith('init-'):
         init_run(action.removeprefix('init-'))
     elif action.startswith('ready-'):
         ready(action.removeprefix('ready-'))
@@ -240,4 +384,7 @@ def main(action):
     print(action + ':PASS')
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    if sys.argv[1]=='supervision-preflight':
+        print(json.dumps(supervision_preflight(sys.argv[2],int(sys.argv[3]))))
+    else:
+        main(sys.argv[1])
