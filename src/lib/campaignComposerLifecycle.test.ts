@@ -101,3 +101,11 @@ test("department, flow and destination mode mark composer dirty", () => {
     assert.equal(isCampaignComposerDirty(state), true);
   }
 });
+
+test("composer schedule alone is dirty and its reset is pristine", () => {
+  const snapshot = pristine();
+  snapshot.scheduleInput = "2026-10-07T12:40";
+  assert.equal(isCampaignComposerDirty(snapshot), true);
+  snapshot.scheduleInput = "";
+  assert.equal(isCampaignComposerDirty(snapshot), false);
+});

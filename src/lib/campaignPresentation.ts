@@ -36,3 +36,27 @@ export function createCampaignReadGeneration() {
     },
   };
 }
+
+// datetime-local shares the browser civil-time contract of formatDateTime.
+export function campaignScheduleLocalInput(instant?: string | null) {
+  if (!instant) return "";
+  const value = new Date(instant);
+  if (!Number.isFinite(value.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+
+// Only suppress a child when its explicit controller and batch relation are present.
+// Incomplete pages retain the child; names and recipient identities are irrelevant.
+export function campaignListRepresentatives<T extends { id: string; clientId: string; executionBatch?: { id: string; chunks: Array<{ campaignId: string }> } | null }>(items: T[]) {
+  const represented = new Set<string>();
+  for (const item of items) {
+    const batch = item.executionBatch;
+    if (!batch || batch.chunks.some(chunk => chunk.campaignId === item.id)) continue;
+    for (const chunk of batch.chunks) {
+      const child = items.find(candidate => candidate.id === chunk.campaignId && candidate.clientId === item.clientId);
+      if (child && child.id !== item.id) represented.add(child.id);
+    }
+  }
+  return items.filter(item => !represented.has(item.id));
+}

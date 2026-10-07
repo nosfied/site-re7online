@@ -68,3 +68,26 @@ test("newer detail wins without invalidating an independent list; session/unmoun
   assert.equal(newDetail(), false);
   assert.equal(list(), false);
 });
+
+test("schedule hydration uses civil time and preserves UTC round trip", async () => {
+  const { campaignScheduleLocalInput } = await import("./campaignPresentation");
+  const prior = process.env.TZ;
+  process.env.TZ = "America/Fortaleza";
+  try {
+    assert.equal(campaignScheduleLocalInput("2026-10-07T15:40:00Z"), "2026-10-07T12:40");
+    assert.equal(new Date("2026-10-07T12:40").toISOString(), "2026-10-07T15:40:00.000Z");
+    assert.equal(campaignScheduleLocalInput(null), "");
+    assert.equal(campaignScheduleLocalInput("invalid"), "");
+  } finally { process.env.TZ = prior; }
+});
+
+test("list groups only explicit same-tenant children, preserving incomplete relations and equal names", async () => {
+  const { campaignListRepresentatives } = await import("./campaignPresentation");
+  const item = (id: string, clientId = "tenant") => ({ id, clientId, name: "Equal name" });
+  const parent = { ...item("controller"), executionBatch: { id: "batch", chunks: [{ campaignId: "child1" }, { campaignId: "child2" }] } };
+  assert.deepEqual(campaignListRepresentatives([parent, item("child1"), item("child2"), item("independent")]).map(x=>x.id), ["controller", "independent"]);
+  assert.deepEqual(campaignListRepresentatives([item("child1"), item("child2")]).map(x=>x.id), ["child1", "child2"]);
+  assert.deepEqual(campaignListRepresentatives([parent, item("child1", "other")]).map(x=>x.id), ["controller", "child1"]);
+  const child = { ...item("child1"), executionBatch: parent.executionBatch };
+  assert.deepEqual(campaignListRepresentatives([child, item("child2")]).map(x=>x.id), ["child1", "child2"]);
+});

@@ -16,7 +16,7 @@ are never removed by composer cleanup.
 The new-campaign composer keeps the following only in React state:
 
 - campaign name, approved template and fixed/template-variable mappings;
-- manual recipients;
+- manual recipients and the composer civil schedule date/time;
 - CRM audience filters, page, preview and validation error;
 - CSV file text/name, headers, column mappings, preview, import report and
   validation error;
@@ -71,7 +71,7 @@ cannot repopulate a discarded attempt. It is safe to call repeatedly.
 
 One `isComposerDirty` contract covers meaningful name, template, variables,
 manual recipients, audience filters/preview, CSV data/mappings/preview/report
-and destination changes. Explicit discard and internal Campaign-tab navigation
+and destination/schedule changes. Explicit discard and internal Campaign-tab navigation
 ask for confirmation only when this contract is true. Empty composers reset
 without confirmation. Operations that are actively saving or previewing are
 allowed to finish before tab navigation.
@@ -107,3 +107,17 @@ application does not auto-select the first Department/Flow as hidden state.
   correctly rejected scheduling with `template_variables_required`; persisted
   schedule survival and lifecycle protection remain covered by the backend
   Campaign suite. Owner visual review remains pending.
+
+## Schedule editing boundaries — 07/10/2026
+
+The composer and persisted campaign detail have independent scheduling state.
+Detail hydration occurs once per selection/open boundary, including null time;
+background polling never replaces an operator edit. Closing and reopening the
+detail explicitly reloads its persisted instant. Composer discard/reset clears
+its schedule and schedule-only edits participate in dirty detection.
+
+Persisted ISO instants are formatted through local date components for the
+browser `datetime-local` input, consistently with existing browser-local date
+presentation. Submission converts that civil value to ISO. In a browser in
+America/Fortaleza, 12:40 maps to 15:40Z. No new tenant/server timezone rule is
+introduced; a browser in another timezone retains the existing local contract.

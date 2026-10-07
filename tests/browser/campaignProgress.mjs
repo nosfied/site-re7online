@@ -42,6 +42,7 @@ try {
    if(u.origin===local&&!p.startsWith('/agent-api'))return await send('Fetch.continueRequest',{requestId});
    if(u.origin!==local){report.unexpected.push({path:p,kind:'external blocked'});return await send('Fetch.failRequest',{requestId,errorReason:'BlockedByClient'});}
    const route=p.slice('/agent-api'.length);report.requests.push({method:request.method,route});
+   if(['/app/departments','/app/users','/app/conversations'].includes(route)) return await fulfill(requestId,{ok:true,items:[],departments:[],users:[],conversations:[],count:0});
    if(route==='/auth/me')return await fulfill(requestId,{ok:true,...session});
    if(route==='/app/tenant')return await fulfill(requestId,{ok:true,tenant:{id:user.clientId,name:'Tenant local',features:session.features,profile:session.profile}});
    if(route==='/app/campaigns')return await fulfill(requestId,{ok:true,count:4,items:Object.values(data)});

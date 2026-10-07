@@ -1,4 +1,5 @@
 export type CampaignComposerDirtySnapshot = {
+  scheduleInput?: string;
   form: {
     name: string;
     templateId: string;
@@ -68,5 +69,5 @@ export function isCampaignComposerDirty(snapshot: CampaignComposerDirtySnapshot)
     Object.values(csv.variableColumns).some((value) => value !== "") ||
     csv.hasPreview ||
     csv.hasImportReport;
-  return formIsDirty || audienceIsDirty || csvIsDirty;
+  return Boolean(snapshot.scheduleInput?.trim()) || formIsDirty || audienceIsDirty || csvIsDirty;
 }

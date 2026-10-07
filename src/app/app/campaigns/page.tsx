@@ -61,6 +61,8 @@ import {
 import { getCampaignStatusUxLabel, getMetaTemplateCategoryUxLabel } from "@/lib/appUxLabels";
 import {
   createCampaignReadGeneration,
+  campaignScheduleLocalInput,
+  campaignListRepresentatives,
   getCampaignListStatus,
   getCampaignPresentationLabel,
   isImmediateCampaignQueued,
@@ -831,7 +833,9 @@ export default function AppCampaignsPage() {
   const [resumingCampaign, setResumingCampaign] = useState(false);
   const [batchAction, setBatchAction] = useState<"pause" | "resume" | "cancel" | null>(null);
   const [testingCampaign, setTestingCampaign] = useState(false);
-  const [scheduleInput, setScheduleInput] = useState("");
+  const [composerScheduleInput, setComposerScheduleInput] = useState("");
+  const [detailScheduleInput, setDetailScheduleInput] = useState("");
+  const detailScheduleBoundary = useRef<string | null>(null);
   const [testRecipientInput, setTestRecipientInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -887,7 +891,19 @@ export default function AppCampaignsPage() {
       const requestedSelection = selectedIdRef.current;
       const response = await listAppCampaigns(activeSession, { limit: 100 });
       if (!isCurrent() || campaignSessionRef.current !== activeSession) return [];
-      setCampaigns(response.items);
+      const items = await Promise.all(response.items.map(async item => {
+        if (item.selectionMode !== "DYNAMIC_CRM_FILTER") return item;
+        try {
+          const detail = await getAppCampaign(activeSession, item.id);
+          if (detail.campaign.id !== item.id || detail.campaign.clientId !== item.clientId) return item;
+          return { ...item, executionBatch: detail.campaign.executionBatch };
+        } catch (error) {
+          if ((error as { status?: number }).status === 401) throw error;
+          return item; // No proven relation: preserve every list record.
+        }
+      }));
+      if (!isCurrent() || campaignSessionRef.current !== activeSession) return [];
+      setCampaigns(items);
       const nextSelectedId =
         keepSelectedId && response.items.some((item) => item.id === keepSelectedId)
           ? keepSelectedId
@@ -1377,6 +1393,7 @@ export default function AppCampaignsPage() {
   const isComposerDirty = useMemo(() => {
     return isCampaignComposerDirty({
       form,
+      scheduleInput: composerScheduleInput,
       audienceFilters,
       hasAudiencePreview: audiencePreview !== null,
       csv: {
@@ -1401,6 +1418,7 @@ export default function AppCampaignsPage() {
     csvPreview,
     csvText,
     csvVariableColumns,
+    composerScheduleInput,
     form,
   ]);
 
@@ -1411,6 +1429,7 @@ export default function AppCampaignsPage() {
     if (!options.preserveAudienceGeneration) audienceRequestGenerationRef.current += 1;
     csvRequestGenerationRef.current += 1;
     setForm(EMPTY_FORM);
+    setComposerScheduleInput("");
     setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
     setAudiencePreview(null);
     setAudiencePage(1);
@@ -1464,8 +1483,10 @@ export default function AppCampaignsPage() {
     [activeTab, composerBusy, confirmComposerDiscard, resetCampaignComposer, showToast]
   );
 
+  const representedCampaigns = useMemo(() => campaignListRepresentatives(campaigns), [campaigns]);
+
   const campaignStats = useMemo(() => {
-    return campaigns.reduce(
+    return representedCampaigns.reduce(
       (acc, campaign) => {
         acc.total += 1;
         if (campaign.status === "draft") acc.drafts += 1;
@@ -1478,7 +1499,7 @@ export default function AppCampaignsPage() {
       },
       { total: 0, drafts: 0, sending: 0, scheduled: 0, completed: 0, blocked: 0, failed: 0 }
     );
-  }, [campaigns]);
+  }, [representedCampaigns]);
 
   const getCampaignTabCount = useCallback(
     (tab: CampaignCenterTab) => {
@@ -1673,7 +1694,7 @@ export default function AppCampaignsPage() {
 
   const filteredCampaigns = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return campaigns
+    return representedCampaigns
       .filter((campaign) => {
         const campaignName = (campaign.name || "").toLowerCase();
         const matchesStatus =
@@ -1689,7 +1710,7 @@ export default function AppCampaignsPage() {
         if (aSending !== bSending) return bSending - aSending;
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
-  }, [activeTab, campaigns, search, statusFilter]);
+  }, [activeTab, representedCampaigns, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCampaigns.length / PAGE_SIZE));
 
@@ -1731,18 +1752,15 @@ export default function AppCampaignsPage() {
   }, [selectedCampaign, selectedCampaignId]);
 
   useEffect(() => {
-    if (!selectedCampaign) {
-      setScheduleInput("");
-      setTestRecipientInput("");
+    if (!detailModalOpen || !selectedCampaignId) {
+      detailScheduleBoundary.current = null;
       return;
     }
-    if (selectedCampaign.scheduledAt) {
-      const value = new Date(selectedCampaign.scheduledAt);
-      if (Number.isFinite(value.getTime())) {
-        setScheduleInput(value.toISOString().slice(0, 16));
-      }
-    }
-  }, [selectedCampaign]);
+    if (!selectedCampaign || detailScheduleBoundary.current === selectedCampaignId) return;
+    detailScheduleBoundary.current = selectedCampaignId;
+    setDetailScheduleInput(campaignScheduleLocalInput(selectedCampaign.scheduledAt));
+    setTestRecipientInput("");
+  }, [detailModalOpen, selectedCampaignId, selectedCampaign]);
 
   useEffect(() => {
     if (!detailModalOpen) return undefined;
@@ -2530,7 +2548,7 @@ export default function AppCampaignsPage() {
     const name = form.name.trim() || defaultDraftName;
     const templateId = form.templateId.trim();
     const crmBusinessStatusId = audienceFilters.status.trim();
-    const scheduledAt = scheduleInput ? new Date(scheduleInput) : null;
+    const scheduledAt = composerScheduleInput ? new Date(composerScheduleInput) : null;
     if (!templateId) {
       const message = "Selecione um modelo aprovado antes de agendar.";
       setAudiencePreviewError(message);
@@ -2585,7 +2603,7 @@ export default function AppCampaignsPage() {
       setForm(EMPTY_FORM);
       setAudiencePreview(null);
       setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
-      setScheduleInput("");
+      setComposerScheduleInput("");
       setActiveTab("scheduled");
       setStatusFilter("scheduled");
       setCurrentPage(1);
@@ -2906,7 +2924,7 @@ export default function AppCampaignsPage() {
 
   const handleScheduleDraftCampaign = async () => {
     if (!session || !selectedCampaign || selectedCampaign.status !== "draft") return;
-    const scheduledAt = scheduleInput ? new Date(scheduleInput) : null;
+    const scheduledAt = detailScheduleInput ? new Date(detailScheduleInput) : null;
     if (!scheduledAt || !Number.isFinite(scheduledAt.getTime())) {
       showToast("error", "Agendamento inválido", "Informe uma data e horário futuros.");
       return;
@@ -3440,8 +3458,8 @@ export default function AppCampaignsPage() {
                       <span className="text-white/70">Data/hora</span>
                       <input
                         type="datetime-local"
-                        value={scheduleInput}
-                        onChange={(event) => setScheduleInput(event.target.value)}
+                        value={composerScheduleInput}
+                        onChange={(event) => setComposerScheduleInput(event.target.value)}
                         className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                       />
                     </label>
@@ -3454,7 +3472,7 @@ export default function AppCampaignsPage() {
                       creatingDraft ||
                       campaignReusePreviewState === "loading" ||
                       (audienceRecipientMode === "STATIC_RECIPIENTS" && audienceEligibleItems.length === 0) ||
-                      (audienceRecipientMode === "DYNAMIC_CRM_FILTER" && (!audienceFilters.status || !scheduleInput)) ||
+                      (audienceRecipientMode === "DYNAMIC_CRM_FILTER" && (!audienceFilters.status || !composerScheduleInput)) ||
                       !form.templateId ||
                       templates.length === 0 ||
                       Boolean(templateVariableMappingError)
@@ -4514,7 +4532,11 @@ export default function AppCampaignsPage() {
 	                                <td className="px-3 py-2 font-semibold">
 	                                  {chunk.chunkIndex}/{selectedCampaign.executionBatch?.chunkCount ?? chunk.chunkIndex}
 	                                </td>
-	                                <td className="px-3 py-2">{chunk.name}</td>
+	                                <td className="px-3 py-2">
+                                  <button type="button" className="text-sky-200 underline" onClick={() => openCampaignDetail(chunk.campaignId)} aria-label={`Ver lote ${chunk.chunkIndex}: ${chunk.name}`}>
+                                    {chunk.name}
+                                  </button>
+                                </td>
 	                                <td className="px-3 py-2">{getStatusLabel(chunk.status)}</td>
 	                                <td className="px-3 py-2">
 	                                  {getCampaignQueueStatusLabel(chunk.queueStatus, chunk.queuePosition)}
@@ -4585,14 +4607,14 @@ export default function AppCampaignsPage() {
                             <input
                               id="campaign-schedule-at"
                               type="datetime-local"
-                              value={scheduleInput}
-                              onChange={(event) => setScheduleInput(event.target.value)}
+                              value={detailScheduleInput}
+                              onChange={(event) => setDetailScheduleInput(event.target.value)}
                               className="rounded-md border border-white/15 bg-re7-navy/50 px-3 py-2 text-sm normal-case text-white outline-none focus:border-re7-sky"
                             />
                           </label>
                           <button
                             type="button"
-                            disabled={schedulingDraft || sendingDraft || discardingDraft || !scheduleInput}
+                            disabled={schedulingDraft || sendingDraft || discardingDraft || !detailScheduleInput}
                             onClick={handleScheduleDraftCampaign}
                             className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                           >
