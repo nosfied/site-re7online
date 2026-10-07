@@ -1,6 +1,41 @@
 # Frontend 9f4cbe0f — preparação isolada, 06/10/2026 Fortaleza
 
-**REMOTE STAGING COMPLETE / PREPARED FOR FRONTEND WINDOW / NOT DEPLOYED (07/10/2026).** Scripts de `8da6a8f3e24f92ed25947f152dc1a42275921bca` transferidos e conferidos na preparação `/opt/re7online/backups/converta-persistent/preparations/frontend-9f4cbe0f-20261007T012803Z`. Gate `execution-authorized=false`. Candidato não iniciado; frontend af26, API afbb e worker mínimo reativo preservados. A próxima etapa exige autorização da troca exclusiva do frontend. Nenhum stop/start, PM2 save, rebuild, alteração de guarda/scheduler/cron/boot, tenant, DB/auth ou histórico nesta rodada.
+**DEPLOYED TECHNICALLY / OWNER READ CHECK CONFIRMED (07/10/2026).** Frontend `9f4cbe0f9a4e891f09bb2f41e88eccec388172da` implantado exclusivamente pelo procedimento revisado em `f90ecb1b`. Partida única, sem retorno ou recusas. Frontend af26 anterior saiu com ausência comprovada; API afbb e worker mínimo reativo preservados. Owner confirmou sessão/Inbox/CRM/campanhas em leitura antes da promoção; supervisão permanente promovida sem nova partida e PM2 saved/fallback persistidos. Gatefalse encerra esta tentativa. Cenários de envio/processamento/agendamento não exercitados nesta janela permanecem pendentes; não houve envio de validação ou reparo histórico.
+
+## Resultado da implantação exclusiva — 07/10/2026
+
+Reconferidos imediatamente hashes dos sete scripts e do manifesto, tar V2, configs privadas, retorno af26 (arquivos/links inventariados), candidato completo e identidades API/worker/frontend/daemon. Exclusividade sem outro executor identificado, lock da preparação disponível e nenhum control/intent da futura partida preexistente. Backups privados de saved/fallback e baseline de crontab/cron de backup/boot/guarda/scheduler capturados antes da parada. Nenhum dump/restore DB era necessário para uma release exclusivamente frontend.
+
+Sequência efetiva: gate autorizado → captura `before` nova → `init-candidate`/`init-return` novos → reconfirmação das identidades → stop somente frontend → `exited` → delete somente a entrada frontend encerrada → `start-candidate` único → prontidão limitada → captura atual → gate candidato → health API → leitura do owner → promoção permanente → gate supervisionado → PM2save/fallback → gate supervisionado final. Todas as ações executadas passaram, exit0/sem timeout; stdout/stderr/exit ficaram nos arquivos privados do wrapper. Nenhum start foi repetido, prova antiga reutilizada ou sobrevivente ignorado. Retorno foi preparado, não executado. Não houve contenção nft ou suspensão de admissões.
+
+| Checkpoint | Horário UTC / Fortaleza | Evidência |
+| --- | --- | --- |
+| Início da parada frontend | 12:44:09 /09:44:09 | registro privado antes do stop; af26 PID2537692 saiu |
+| Prontidão limitada concluída | 12:44:45.979 /09:44:45.979 | check ready-candidate PASS; limite superior observado de indisponibilidade36,965s, não duração garantida ou medição contínua |
+| Identidade/BUILD_ID/health | 12:45:05 /09:45:05 | candidate PASS, APIok/DBok |
+| Owner confirma leitura | antes da promoção | resposta “sim, tudo funciona.” ao pedido de sessão/Inbox/CRM/campanhas e troca de detalhe; nenhum envio solicitado |
+| Supervisão promovida | 12:47:55 /09:47:55 | enable-supervision-candidate PASS, sem novo fork; marker permanente, gatefalse |
+| Saved/fallback e gate supervisionado | 12:48:10 /09:48:10 | PM2save, fallback igual ao saved; gate PASS |
+| Conferência final de identidades/controles | 12:48:55 /09:48:55 | três online/restart0; guarda/scheduler/crons/boot preservados |
+
+Frontend efetivo: release9f, BUILD_ID `LFcdEK9gXZsBhf4_c5r8G`, launcher PID3345522/ticks2116147846 e Node/Next PID3345533/ticks2116147879. Journal registra exatamente parent, application_identity e application_released, sem segunda submissão. API afbb PID3153929/ticks2107666112; worker mínimo reativo afbb PID3154150/ticks2107666513; daemon PM2 PID18676/ticks222727, todos iguais ao baseline. Nenhum restart da API/worker; frontend novo restart0.
+
+Guarda permaneceu aberta, geração33; configuração do scheduler igual ao baseline. Crontab deploy e bytes do cron de backup iguais; boot `inactive/enabled`. DB/auth/configurações de tenants não foram modificados por esta operação. Health final APIok/DBok, GET local login200 e hashes dos sete scripts finais PASS. Saved e fallback têm o mesmo SHA256 `b5befab9aede10848769212b4e64972e654f87d0c9dd97042579f8f3de2b8a7a`, com API/worker nas releases preservadas e frontend apontando para `launcher.cjs` desta geração e seu control candidato. O tar não foi reconstruído. Preservar toda a pasta operacional enquanto active/saved/fallback a referenciarem, conforme auditoria abaixo.
+
+### Aceite e limites desta janela
+
+| Cenário | Resultado | Escopo da prova |
+| --- | --- | --- |
+| Versão, saída antiga, partida única, prontidão, promoção e saved/fallback | PASS produtivo | gates efetivos e observações de processos/sockets/HTTP; sem simulação |
+| Sessão, Inbox, CRM e campanhas existentes em leitura | PASS relatado pelo owner | confirmou o roteiro solicitado; não inventar campanha, fila ou operação específica |
+| Envio imediato em fila/processamento e atualização terminal/falha/parcial | NOT EXERCISED produtivamente nesta janela | provas locais válidas reutilizadas; nenhum envio/job provocado |
+| Agendamento futuro real e concorrência de respostas atrasadas ao trocar detalhe | NOT EXERCISED como cenário dirigido produtivo | leitura geral confirmada não comprova a corrida ou agendamento |
+| PM2autorrestart/resurrect após promoção e retorno af26 | NOT EXERCISED produtivamente | ensaios isolados anteriores preservados; não interromper novamente para obter PASS |
+
+Implantação técnica concluída e conferência autenticada de leitura confirmada. A correção visual está liberada, mas isso não encerra agrupamento, audiência dinâmica, agendamento real, contingência Auto ou aceite CRA-PR. Aceites limitados avulso b9/CRM estático imediato afbb/CSV individual imediato afbb preservados; históricos intactos, reparo de setembro CLOSED. Uma troca após esta promoção não pode reabrir a tentativa consumida: exige preparação/baseline novos, preservando journals/controls existentes.
+
+## Preparação histórica — staging de 8da, anterior à execução
+
 
 ## Staging remoto concluído — 07/10/2026
 
@@ -188,7 +223,7 @@ LAB_EVIDENCE_DIR=local-evidence/frontend-9f4cbe0f-prepared/reproduction-supervis
 
 **Dependência permanente:** launcher, bootstrap, observador, control, promoção e journals da geração são referenciados pelo processo e pelo dump salvo. Preservar esse diretório enquanto active/saved/fallback o referenciarem; não tratar como preparação descartável depois da janela. Não remover/mover os scripts durante operação ou retorno. Só retirar uma geração depois de todas as referências migrarem e executores saírem. A revisão local anterior não transferiu scripts. Nesta rodada os scripts foram transferidos; a auditoria inicial comprova a separação dos seletores de limpeza existentes, sem alteração de retention/cron.
 
-## Comandos finais revisáveis — NÃO executar nesta preparação
+## Comandos históricos da tentativa concluída — NÃO repetir
 
 Executar um comando por vez, conferindo exit code e diagnóstico privado; nenhum loop de start. Antes: executor único, hashes/configs de origem, API/worker/daemon iguais ao baseline e retorno íntegro. Drift nega antes da parada. Gates continuam false. Nova tentativa exige preparação/nonce próprios, preservando intents/journals anteriores.
 
