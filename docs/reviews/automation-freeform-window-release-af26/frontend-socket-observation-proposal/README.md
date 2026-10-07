@@ -1,6 +1,6 @@
-# Observação frontend — proposta restrita, não instalada
+# Observação frontend — instalação conferida e preflight VPS PASS
 
-Contrato e resultados no [relatório único](../FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#auditoria-observacional-da-árvore-ativa--0710). Não é uma preparação liberada para janela. A produção permanece no retorno 9f; nenhum arquivo daqui foi instalado.
+[Resultado efetivo de 07/10 no relatório único](../FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#instalação-conferida-e-preflight-real-na-vps--0710): helper/política/regra literal instalados após autorização específica, check-installation PASS e uma tentativa de preflight real PASS, duas amostras completas. Produção9f preservada; gatefalse/fa60 NOT DEPLOYED. [Registro sanitizado](installation-result.json). A comprovação de leitura não libera janela. As seções abaixo preservam o desenho e o roteiro da preparação anterior; suas referências a “não instalado/não executado” foram superadas somente pelo resultado desta instalação/leitura, não por deploy ou ensaio produtivo de saída.
 
 ## Dependência antes de qualquer janela
 

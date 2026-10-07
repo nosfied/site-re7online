@@ -1,0 +1,107 @@
+{
+  "status": "INSTALLATION_VERIFIED_LIVE_OBSERVATION_PASS_FA60_NOT_DEPLOYED",
+  "reviewedCommit": "b08bdbcc0507fe949f71d42140a5a4118a39ada4",
+  "scope": "restricted_frontend_observer_installation_and_read_only_preflight_only",
+  "installation": {
+    "result": "PASS",
+    "performedAndConfirmedBy": "owner in deploy sudo session",
+    "installedHelperSha256": "93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385",
+    "installedPolicySha256": "b92f5f882ce8ebb09738fd26af903c079762a843aa68e1068ec700addae6a5d0",
+    "installedSudoersSha256": "118a54ec6f03c6f8af92a5e9f05d766fda08eea0d2fa79a207ecf588374e8b12",
+    "ownership": "root:root",
+    "modes": {
+      "helper": "0644",
+      "policy": "0600",
+      "sudoers": "0440"
+    },
+    "checkInstallation": "PASS",
+    "visudoBeforeAndAfter": "PASS",
+    "literalDelegation": "/usr/bin/python3 -I -S /usr/local/libexec/re7/frontend-socket-observer.py"
+  },
+  "preflight": {
+    "result": "PASS",
+    "startedAtUtc": "2026-10-07T19:38:49.615899+00:00",
+    "startedAtFortaleza": "2026-10-07T16:38:49.615899-03:00",
+    "invocations": 1,
+    "attempts": 1,
+    "samples": 2,
+    "processesPerSample": [
+      153,
+      153
+    ],
+    "sourceExecutorsPerSample": [
+      2,
+      2
+    ],
+    "sourceListenersPerSample": [
+      1,
+      1
+    ],
+    "sourceSocketCount": 7,
+    "readerDurationSeconds": 0.1816154308617115,
+    "driverDurationSeconds": 1.0721206590533257,
+    "readerExitCode": 0,
+    "readerTimeout": false,
+    "negativeAttempts": 0,
+    "classification": "COMPLETE_CURRENT_OBSERVATION",
+    "sharedSocket": {
+      "kind": "unix",
+      "state": "03",
+      "type": "0001",
+      "flags": "00000000",
+      "ownersBothSamples": [
+        {
+          "pid": 18676,
+          "ticks": "222727",
+          "fd": "0"
+        },
+        {
+          "pid": 3388720,
+          "ticks": "2118003772",
+          "fd": "0"
+        }
+      ]
+    },
+    "privateEvidenceSha256": {
+      "attempt": "05988f4516c28b1e0ef3928c211fec1b09700df5c5d9bb53d33ea4d61219ae63",
+      "summary": "51c9bd867d9f4bc052c68c72c8d5558cb6b41c00223e4feeac551ac2a0e52f21",
+      "privilegedOutput": "c2e4a136b9cdefb39f4426de35dfa930aafbc751262aa929613b0f0834bdbbce"
+    }
+  },
+  "preserved": {
+    "frontend": {
+      "release": "9f4cbe0f9a4e891f09bb2f41e88eccec388172da",
+      "pid": 3388720,
+      "ticks": "2118003772",
+      "restartCount": 0
+    },
+    "next": {
+      "pid": 3388733,
+      "ticks": "2118003808"
+    },
+    "api": {
+      "release": "afbb7455f320793e05a25875e8a5f13f98cabf90",
+      "pid": 3153929,
+      "ticks": "2107666112",
+      "restartCount": 0
+    },
+    "worker": {
+      "release": "worker-minimal-reactive-afbb7455-verified",
+      "pid": 3154150,
+      "ticks": "2107666513",
+      "restartCount": 0
+    },
+    "dbObserverSha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+    "backendHelperSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212"
+  },
+  "executionGate": false,
+  "windowAuthorizedByThisResult": false,
+  "functionalTarRebuilt": false,
+  "productionSends": 0,
+  "productionProcessMutations": 0,
+  "limitations": [
+    "point_in_time_observation_not_atomicity",
+    "no_production_exit_gate_or_return_exercised",
+    "future_fa60_window_requires_revised_preparation_and_own_authorization"
+  ]
+}

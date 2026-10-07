@@ -379,3 +379,28 @@ unshare -Urnpf --mount-proc sh -c 'ip link set lo up; python3 -m unittest discov
 ```
 
 Scripts shell/AST/imports/manifests conferidos; staging remoto/hash/schema/origem PASS. Instalação, remoção e preflight root: **NOT EXECUTED**. Backlog mantém fa60 NOT DEPLOYED e demais aceites separados. Próxima decisão é específica sobre instalar estes bytes; nenhuma janela será aberta antes da leitura privilegiada completa e de sua revisão.
+
+## Instalação conferida e preflight real na VPS — 07/10
+
+**INSTALLATION VERIFIED / LIVE OBSERVATION PASS / fa60 NOT DEPLOYED.** Owner autorizou exclusivamente instalação restrita e preflight dos bytes b08bdbcc. Nenhuma janela foi aberta, nenhum stop/start/restart/promoção/deploy foi executado. Instalação concluída por Deifson na própria sessão sudo; senha não solicitada no chat nem registrada. Não houve instalação parcial ou recuperação.
+
+### Instalação
+
+Deifson executou o bloco publicado após conferir os manifestos/scripts e arquivos privados. `install.sh` → `check-installation.sh` PASS: hashes exatos do helper/política/regra, propriedade root:root, modos0644/0600/0440, cadeia de diretórios sem symlinks ou escrita indevida, AST/imports permitidos, regra literal Python `-I -S` sem argumentos e visudo antes/depois PASS. Confirmação `RESTRICTED_INSTALLATION_COMPLETE_NO_WINDOW`. Depois foi reconfirmado por leitura pública o hash do helper e stat root/modes/helper sem symlink; o próprio leitor root atestou os hashes reais do helper e política. Não se ampliou delegação DB/backend; os dois helpers existentes mantêm os mesmos hashes.
+
+### Observação produtiva efetivamente executada
+
+Uma invocação de `run-preflight.sh` como deploy, depois da instalação conferida. Início registrado **07/10/2026 19:38:49,616 UTC / 16:38:49,616 Fortaleza**. Primeira e única tentativa PASS; duas observações consecutivas completas,153processos em cada amostra; reader exit0/sem timeout. Tempo leitor **0,181615s**, driver **1,072121s**. Nenhuma negativa, retry ou nova invocação foi necessária. Diagnósticos privados, stdout/stderr/código/receipts e capturas anteriores preservados; não se reutilizou o certificado consumido.
+
+- Boot/bindings, PID/start ticks de daemon e origem, incarnation/nonce atual, release/entry/hash/BUILD_ID e árvore foram reconfirmados antes/depois.
+- Cada amostra identificou exatamente2executores da origem,1listener frontend explicado pela captura e7sockets da árvore.
+- Socket Unix compartilhado inode49928: stream conectado (`type0001/state03/flags00000000`), com **somente** daemon18676/ticks222727/fd0 e launcher3388720/ticks2118003772/fd0 como proprietários, iguais nas duas amostras. Não foi inferido pela quantidade de owners visíveis a deploy; a varredura root leu todos os processos.
+- Os demais proprietários foram explicados pela árvore ativa exata. Nenhum owner adicional, executor inesperado, listener não explicado ou leitura incompleta foi aceito. O Next permanece3388733/ticks2118003808.
+
+[Resultado sanitizado e hashes da evidência privada](frontend-socket-observation-proposal/installation-result.json). Diretório privado da execução: `receipts-private/preflight-19735a437277a1978e72ce765d4c3bcc` dentro do staging observacional publicado. JSON bruto, policy/bindings, stdout/stderr e lista completa dos153processos ficam fora do Git. A captura inicial e o snapshot anterior permaneceram preservados. O `installationApproved:false` do scope inicial é registro histórico imutável da preparação, não estado atual da autorização; a autorização e conclusão estão registradas neste resultado novo. `executionGate:false` permanece efetivo.
+
+### Produção preservada e limite do resultado
+
+Depois da leitura: frontend9f3388720/ticks2118003772, APIafbb3153929/ticks2107666112 e worker mínimoafbb3154150/ticks2107666513, todosonline/restart0; daemon preservado. Mesmas releases e BUILD_ID9f. Nenhuma ação em guarda/scheduler/cron/boot/saved/fallback/DB/auth/configuração de tenant foi executada. Nenhum envio, campanha, reparo histórico, build ou suíte funcional repetida. Só os três arquivos privilegiados novos autorizados foram instalados; helper/regra/política antigos DB/backend e gerações anteriores intactos.
+
+O bloqueio de **capacidade de observar a árvore ativa da VPS** está comprovadamente resolvido para estes bindings e esta execução. Isso não comprova saída produtiva futura nem ida/retorno/fa60, não oferece atomicidade temporal e não habilita gates. Outra troca de fa60 continua condicionada a preparação operacional revisada, bindings/provas frescos e autorização própria. A observação não será reutilizada como certificado de uma futura parada. Não remover o observador/permissão enquanto eventual preparação/retorno depender dele. Aceites independentes e históricos preservados.

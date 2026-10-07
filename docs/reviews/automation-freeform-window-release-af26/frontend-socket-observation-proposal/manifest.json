@@ -1,13 +1,14 @@
 {
-  "status": "REVIEW_ONLY_NOT_INSTALLED_NOT_READY_FOR_WINDOW",
+  "status": "OBSERVATION_INSTALLED_AND_VPS_PREFLIGHT_PASS_FA60_NOT_DEPLOYED_NOT_READY_FOR_WINDOW",
   "files": {
     "frontend-socket-observation-proposal/observer.py": "93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385",
     "frontend-socket-observation-proposal/test_cluster_chain.py": "45dfe4f920b546f170d49be665e899241f5b39e4cd6253ce86cca06b976d92d6",
-    "frontend-socket-observation-proposal/README.md": "5d41faea6c627dd21a216a560f6a1b4d73d5c71a1ddb7287e6b500473afe6eb8",
+    "frontend-socket-observation-proposal/README.md": "a009b615a80f893cec07a934b3cdd262452dd1ca292f3271a87379dce1b5bf1e",
     "frontend-fa60f0f6-prepared/frontend-check.py": "5b2cbc85f95b911f6d8ae0be2f63af7a20a12fedcb98f8b3281beb48363c3aed",
     "frontend-fa60f0f6-prepared/socket_observation_client.py": "130e4aba02b055d28ab4857375b43f5e1f79bf3dfe63604c3776d058df44607e",
     "frontend-fa60f0f6-prepared/socket_observation_contract.py": "2f7e5aedb4cf3ecad8098eaf8521d0c7babb445f4a5ed2c274c42d1d395b90a3",
-    "frontend-fa60f0f6-prepared/scripts.sha256": "5bdf143c779142b773ad52eb2541ea5bbb639404d94058e2c9ad1e2c6333b9a0"
+    "frontend-fa60f0f6-prepared/scripts.sha256": "5bdf143c779142b773ad52eb2541ea5bbb639404d94058e2c9ad1e2c6333b9a0",
+    "frontend-socket-observation-proposal/installation-result.json": "92531a5e63e20ba162a8822920446741899db7d4c750d6deae6b515c4c375594"
   },
   "functionalTarSha256": "9b375dffca78425e7193e2e73b3c3692a951dc9f638c1c73790cfd3c5e32dac2",
   "functionalManifestSha256": "35f28f07cc82496b778956b1f53cbd1f5bb1e0d02b948430530fe36ded55d0b9",
