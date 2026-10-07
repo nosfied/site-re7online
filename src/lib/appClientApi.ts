@@ -5139,9 +5139,10 @@ export async function listAppCampaigns(
 
 export async function getAppCampaign(
   session: AppSession,
-  campaignId: string
+  campaignId: string,
+  options?: { signal?: AbortSignal }
 ): Promise<{ ok: true; campaign: CampaignItem }> {
-  return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}`);
+  return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}`, options);
 }
 
 export async function exportAppCampaignConsumptionCsv(

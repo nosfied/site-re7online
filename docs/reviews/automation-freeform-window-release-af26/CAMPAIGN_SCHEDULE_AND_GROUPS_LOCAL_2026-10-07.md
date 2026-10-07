@@ -33,3 +33,24 @@ Reprodução: `npm run build`; iniciar `node node_modules/next/dist/bin/next sta
 Publicação somente para revisão. vercel.json exclui explicitamente a branch; CI existente só observa main/develop. Sem deploy, restart, migration, alteração de tenant ou reexecução das campanhas aceitas.
 
 Aceites anteriores avulso/CRM estático/CSV individual/agendamento individual/dinâmica controlada permanecem nos seus relatórios e versões. Agrupamento aguarda execução natural autorizada pelo tenant; contingência AUTO positiva e CRA-PR continuam separados e pendentes. Históricos intactos;4366 não restaurado automaticamente; setembro CLOSED, SECULT/DB-only encerradas e Guia pausado. Este delta requer revisão antes de qualquer preparação de implantação.
+
+## Complemento dirigido — leituras de vínculos (07/10)
+
+**LOCAL VALIDATED / NOT DEPLOYED**, complemento sobre c708c99b. A implementação inicial aguardava Promise.all de todos os detalhes dinâmicos em cada refresh. Esta seção substitui aquela descrição de carga e recuperação; as provas de horário e apresentação anteriores continuam históricas, sem reatribuição.
+
+`campaignRelationReads.ts` mantém somente vínculos explícitos e a versão observada (updatedAt/status), em memória da sessão. Detalhes já carregados alimentam esse estado; resposta antiga não substitui uma observação posterior. Nenhum nome/telefone/horário cria relação. GET bem-sucedido sem conjunto registra ausência até mudança de versão, sem esconder registros. Não há persistência local, novo endpoint ou timer.
+
+A lista é aplicada imediatamente. Leituras complementares seguem fila com no máximo2 simultâneas, sem duplicar uma campanha pendente. Campanhas concluídas/inalteradas não são relidas nos ticks. Mudança de updatedAt/status exige nova observação, preservando o vínculo anterior durante a consulta. No caminho efetivo de materialização, campaignRunner.ts atualiza o controlador para sending na mesma transação que cria filhos; updatedAt é atualizado pelo Prisma. Isso fornece a invalidação para o snapshot, sem consultar todos os concluídos novamente. Leitura direta do detalhe também atualiza a relação.
+
+Falha preserva relação comprovada e permite nova tentativa após30s no próximo refresh existente (ou imediatamente com nova versão); timeout continua10s no requestAppJson existente. Identidade divergente de ID/tenant não enriquece a lista. Mudança de sessão/desmontagem descarta o estado e cancela requests com AbortSignal, usando o mecanismo já existente no clienteHTTP. Respostas cujo registro/version mudou ou cuja relação foi atualizada por detalhe posterior são ignoradas. Não invalida tudo apenas porque outra lista chegou.
+
+### Provas novas executadas
+
+- 19 testes afetados PASS:5 do leitor de vínculos +14 de apresentação. Barreiras determinísticas cobrem fila, preservação, reutilização de detalhe, versão, falha/intervalo, descarte da sessão e tenant divergente; não são provas de provider.
+- Chrome real contra build final, APIs/autenticação simuladas, relógio do polling/retry controlado:7 cenários PASS em `tests/browser/campaignRelationReads.mjs`. Lista34registros/33dinâmicos, um detalhe suspenso, falha parcial, três ticks sem alteração, atualização independente da lista, controlador ganhando filho, ausência de vínculos na lista posterior e troca de sessão/tenant com resposta velha pendente. Filho recebe data de atualização que o colocaria na primeira página; no novo tenant sem relação ele fica visível, evitando falsa negativa por paginação.
+- Leituras complementares: início33/máximo2; três ticks seguintes33 acumuladas (zero novas); após intervalo/falha34; controlador atualizado35. Nova sessão33leituras/máximo2. GET do detalhe selecionado e lista são mecanismos anteriores, registrados separadamente no JSON privado; o limite2 diz respeito às leituras adicionais de relação, não ao tráfego total da página.
+- Build final aprovado em Node22.13.0, incluindo TypeScript. Prova de execução em **Node20.20.0 é obrigatória na futura preparação do pacote**; não declarada nesta rodada. Nenhuma dependência alterada.
+
+Reprodução adicional: iniciar o frontend compilado local na porta3082 e executar `node tests/browser/campaignRelationReads.mjs http://127.0.0.1:3082`. Chrome/DB/providers produtivos não são usados. Primeiro ensaio teve seletor de texto sobre lista invisível no composer; corrigida a navegação da fixture para Todas. Evidência preservada privadamente; não foi FAIL de scheduler.
+
+Limites: lista atual continua limitada100; registros fora dela não são presumidos. Relações válidas sobrevivem a falhas, portanto atualização de vínculo removido exige nova leitura bem-sucedida. Cache de vínculos termina com a sessão/página; recarregar exige observar novamente. Consulta de detalhe pelo operador não é limitada pela fila complementar. Sem deploy, backend/worker/envios/reparo; pendências funcionais anteriores preservadas.

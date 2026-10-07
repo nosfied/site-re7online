@@ -1,5 +1,7 @@
 "use client";
 
+import { createCampaignRelationReads } from "@/lib/campaignRelationReads";
+
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
@@ -774,6 +776,7 @@ export default function AppCampaignsPage() {
   const campaignReads = useRef(createCampaignReadGeneration());
   const selectedIdRef = useRef<string | null>(null);
   const campaignSessionRef = useRef<AppSession | null>(null);
+  const campaignRelations = useRef<ReturnType<typeof createCampaignRelationReads> | null>(null);
   const setSelectedCampaignId = useCallback((id: string | null) => {
     if (selectedIdRef.current !== id) {
       campaignReads.current.invalidate("detail");
@@ -879,11 +882,22 @@ export default function AppCampaignsPage() {
     const reads = campaignReads.current;
     campaignSessionRef.current = session;
     reads.invalidate();
+    const relations = session ? createCampaignRelationReads({
+      tenantId: session.user.clientId,
+      read: async (id, signal) => (await getAppCampaign(session, id, { signal })).campaign,
+      changed: () => {
+        if (campaignSessionRef.current === session) setCampaigns(previous => relations!.merge(previous));
+      },
+      unauthorized: handleUnauthorized,
+    }) : null;
+    campaignRelations.current = relations;
     return () => {
+      relations?.dispose();
+      campaignRelations.current = null;
       campaignSessionRef.current = null;
       reads.invalidate();
     };
-  }, [session]);
+  }, [session, handleUnauthorized]);
 
   const refreshCampaigns = useCallback(
     async (activeSession: AppSession, keepSelectedId?: string | null) => {
@@ -891,18 +905,8 @@ export default function AppCampaignsPage() {
       const requestedSelection = selectedIdRef.current;
       const response = await listAppCampaigns(activeSession, { limit: 100 });
       if (!isCurrent() || campaignSessionRef.current !== activeSession) return [];
-      const items = await Promise.all(response.items.map(async item => {
-        if (item.selectionMode !== "DYNAMIC_CRM_FILTER") return item;
-        try {
-          const detail = await getAppCampaign(activeSession, item.id);
-          if (detail.campaign.id !== item.id || detail.campaign.clientId !== item.clientId) return item;
-          return { ...item, executionBatch: detail.campaign.executionBatch };
-        } catch (error) {
-          if ((error as { status?: number }).status === 401) throw error;
-          return item; // No proven relation: preserve every list record.
-        }
-      }));
-      if (!isCurrent() || campaignSessionRef.current !== activeSession) return [];
+      // Publish the list immediately; independent bounded relation reads enrich it.
+      const items = campaignRelations.current?.update(response.items) ?? response.items;
       setCampaigns(items);
       const nextSelectedId =
         keepSelectedId && response.items.some((item) => item.id === keepSelectedId)
@@ -1748,6 +1752,7 @@ export default function AppCampaignsPage() {
 
   useEffect(() => {
     if (!selectedCampaignId || !selectedCampaign) return;
+    campaignRelations.current?.remember(selectedCampaign);
     setCampaigns((prev) => prev.map((item) => (item.id === selectedCampaign.id ? selectedCampaign : item)));
   }, [selectedCampaign, selectedCampaignId]);
 
