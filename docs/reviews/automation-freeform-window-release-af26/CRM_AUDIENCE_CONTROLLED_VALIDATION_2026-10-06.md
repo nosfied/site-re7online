@@ -91,3 +91,30 @@ Coletas antes deT, após o tick natural e no terminal, com timeout/limites e eve
 Owner criou pela interface `Campanha teste out.10`, ID `e6e40540-de86-4e01-bd19-ddaa07cc9802`, criado10:28:35.138. Leitura limitada com Prisma/seed decoder compilados efetivos, em transação READ ONLY: **PASS** para draft, um destinatário correspondente ao Lead elegível de9614, crm_audience_preview/STATIC_RECIPIENTS, template aprovado e categoria permitida, retorno humano Atendimento Geral/Fila Geral, seleçãoMeta preservada e templateMeta ready. scheduledAtnull, sentCount0, sem novo outbound no recorte desde o baseline. Seed tem mapeamento posição1/sourcefixed/valor não vazio; componentes por destinatário são gerados ao agendar/executar segundo o contrato, sua ausência no rascunho não equivale a variável ausente. Conteúdo permanece privado.
 
 Owner ofereceu10:35 ou10:40; recomendado **07/10/2026 10:40 Fortaleza = 13:40Z**, se continuar futuro com margem após esta conferência. Não houve chamada de agendamento ou envio pelo Codex. Persistência do horário, ausência de submissão antes deT, execução do scheduler, submissão única, resultado terminal e janela após envio seguem **NOT EXERCISED**, aguardando a ação única do owner e observações delimitadas. A janela anterior permanecerá legitimamente aberta até10:46:17; não apresentar este caso como baseline fechado. Preservar históricos e atendimento existente.
+
+
+## Agendamento real individual — resultado de 07/10/2026
+
+**CONTROLLED SCHEDULED CASE PASS / OWNER RECEIPT CONFIRMED.** Campanha nova `Campanha teste out.10`, ID `e6e40540-de86-4e01-bd19-ddaa07cc9802`, Audiência CRM/`STATIC_RECIPIENTS`, um destinatário sob controle do owner, template `data_exame`, Atendimento Geral/Fila Geral. API afbb7455 e worker mínimo reativo; frontend 9f4cbe0f. Os registros anteriores de preparação são históricos. O Codex somente consultou; o owner agendou e mudou a seleção de transporte pela interface. Sem deploy, envio por script, resposta nova, claim, reparo ou repetição de testes/builds nesta rodada.
+
+Horários abaixo em Fortaleza (UTC−3), 07/10/2026:
+
+| Cenário | Resultado | Evidência |
+|---|---|---|
+| Horário persistido e exibido | PASS | `campaign.scheduled` às10:34:25.863: `2026-10-07T13:40:00.000Z`, equivalente a10:40Fortaleza. Snapshot10:36:48: scheduled,1destinatário,0enviados. Owner confirmou informação correta antes do envio. |
+| Ausência de submissão antecipada | PASS no caso observado | Snapshot antes deT sem outbound novo/submissão; todos os eventos de submissão desta campanha ocorreram apósT. Não equivale a monitoramento contínuo de todos os processos. |
+| Scheduler/submissão única Meta | PASS | Job `64817b19-2ddf-41d4-a8e7-b090aade402a`, source `scheduled_campaign`, eligibleAt10:40, attempt1; iniciou10:40:06.024. `submit_started`10:40:06.464; `provider_accepted`10:40:07.606. Um outbound novo, `14ff70a7-140c-4aa0-9ed6-4362dc28be33`, Meta/template/SENT,10:40:07.740. |
+| Resultado terminal/recebimento | PASS | Campanha completed1/1 às10:40:07.824; job completed10:40:07.852. Evento `meta.usage.updated`, source `campaign`, registra delivered às10:40:16.288, deliveredAt10:40:15. Outbound permanece SENT: não reinterpretado como DELIVERED. Owner confirmou recebimento no celular, separadamente da aceitação do provider. |
+| Atualização do detalhe | PASS relatado pelo owner | Owner manteve o detalhe e informou atualização após envio. Não relatou o rótulo terminal literal nem a fase transitória: esses detalhes não recebem PASS específico. |
+| Janela preservada | PASS; baseline aberto | Sem novo inbound; lastInboundAt e windowExpiresAt da Conversation e dos dois runtimes permanecem iguais ao baseline. Janela legítima anterior até10:46:17; este teste não demonstra partida com janela fechada. |
+| Identidades preservadas | PASS | Mesmos conjuntos de IDs:1Conversation,2runtimes,2Contacts,2Leads. Histórico/aliases anteriores intactos; não houve novas duplicações nem saneamento. |
+
+A conclusão limpa `Campaign.scheduledAt` conforme o contrato existente; o instante original permanece no evento de agendamento e no job. A primeira consulta auxiliar anterior aT excluiu indevidamente a própria criação por um filtro `createdAt >`; foi corrigida para `>=` e recoletada às10:36:48, preservando a consulta anterior nas evidências privadas. Isso não foi falha do scheduler nem alteração produtiva.
+
+### Seleção AUTO e limites
+
+Baseline: Meta explícita. Owner informou mudança para AUTO no console interno. Leitura limitada às10:46:18 confirmou ausência do override `whatsappPrimaryTransport`; evento `whatsapp.primary_transport.updated` às10:36:34.988 registra previousProvider=meta, provider=null, cleared=true, representação existente de Auto. Configuração do owner preservada. A campanha continuou **Meta-only**, também sob Auto; não houve fallback reativo, desconexão provocada ou segunda submissão.
+
+Não exercitados nesta campanha: agrupamento, audiência dinâmica, contingência reativa Auto, falha/parcial de envio, recuperação de scheduler/reboot, janela inicialmente fechada e aceite específico CRA-PR. O caso não amplia os aceites avulso/CRM imediato/CSV imediato anteriores. Sem resposta do celular solicitada após o template.
+
+Desenho reutilizado: `CAMPAIGN_COMPOSER_LIFECYCLE.md`, `DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`, Result Truth canônico e checklist Utility CRA-PR; handlers de schedule, `processDueScheduledCampaignsAdmitted`, fila com eligibleAt/idempotencyKey e polling existente do detalhe. Nenhuma nova suíte ou build. Snapshots completos, números, IDs do provider e payloads permanecem privados em `scheduled-validation`, fora do Git. Consultas read-only com timeout/limites; rodada encerrada sem polling adicional.
