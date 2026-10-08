@@ -1,0 +1,61 @@
+import './campaignOperationsTestSupport.js';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import test from 'node:test';
+import { getPrisma } from '../db.js';
+import { campaignOperationsStatus, campaignTask, campaignProviderAttempt } from './campaignOperations.js';
+import { buildPrivateCampaignSeedFields } from './campaignSeedPrivacy.js';
+import { dryRunAcceptedFailure, applyAcceptedFailure, acknowledgeAcceptedFailure, type AcceptedFailureBindings } from './campaignAcceptedFailureReconciliation.js';
+process.env.APP_AUTH_SECRET = 'synthetic-reconciliation-key';
+
+test('Postgres idempotent reconciliation correlates accepted/failed, preserves SENT/snapshot/CRM and pending task', async () => {
+  const db = getPrisma(), clientId = crypto.randomUUID();
+  try {
+    await db.client.create({ data: { id: clientId, clientKey: `reconcile-${clientId}`, name: 'Synthetic', profile: 'business' } });
+    const parent = await db.campaign.create({ data: { clientId, name: 'Synthetic controller', templateName: 'synthetic', status: 'sending', totalRecipients: 6 } });
+    const child = await db.campaign.create({ data: { clientId, name: 'Synthetic child', templateName: 'synthetic', status: 'sending', totalRecipients: 6, sentCount: 1 } });
+    const batch = await db.campaignExecutionBatch.create({ data: { clientId, name: 'Synthetic', sourceMode: 'DYNAMIC_CRM_FILTER', status: 'running', idempotencyKey: crypto.randomUUID(), totalRecipients: 6, chunkCount: 1 } });
+    await db.campaignExecutionBatchCampaign.create({ data: { clientId, campaignId: child.id, batchId: batch.id, chunkIndex: 0, recipientCount: 6, status: 'sending' } });
+    const job = await db.campaignExecutionJob.create({ data: { clientId, campaignId: child.id, batchId: batch.id, kind: 'batch_chunk', status: 'queued', eligibleAt: new Date(), idempotencyKey: crypto.randomUUID(), failureReason: 'operational_suspension' } });
+    const waIds = ['5541991100950', ...Array.from({ length: 5 }, (_, i) => `123456789012${i}`)];
+    await db.lead.createMany({ data: waIds.slice(1).map(waId => ({ tenantId: clientId, waId: `anon:subject:${waId}`, status: 'NURTURE' })) });
+    const snapshot = await db.event.create({ data: { clientId, messageId: parent.id, eventName: 'campaign.dynamic_batch_snapshot.created', payloadJson: { eligibleCount: 6, ...buildPrivateCampaignSeedFields({ clientId, waIds }) } } });
+    const runId = crypto.randomUUID(), metaMessageId = 'synthetic-accepted-no-retry';
+    const accepted = await db.event.create({ data: { clientId, waId: waIds[1], messageId: `campaign.${child.id}.2`, eventName: 'campaign.message.provider_accepted', payloadJson: { campaignId: child.id, campaignRunId: runId, metaMessageId } } });
+    const webhook = await db.event.create({ data: { clientId, eventName: 'webhook.status.orphaned', payloadJson: { metaMessageId, status: 'failed', reason: 'outbound_message_not_found', errors: [{ code: 131026 }] } } });
+    const valid = await db.outboundMessage.create({ data: { clientId, waId: waIds[0], messageId: `campaign.${child.id}.1`, type: 'TEMPLATE', status: 'SENT' } });
+    await db.event.createMany({ data: [1, 2].map(i => ({ clientId, messageId: `campaign.${child.id}.${i}`, eventName: 'campaign.message.submit_started', payloadJson: {} })) });
+    let submissions = 0;
+    await campaignTask('synthetic', async () => { await campaignProviderAttempt(async () => {}, async () => { submissions++; return { ok: true }; }, { clientId, campaignId: child.id, messageId: `campaign.${child.id}.2` }); });
+    const guard = campaignOperationsStatus();
+    const b: AcceptedFailureBindings = { clientId, parentCampaignId: parent.id, campaignId: child.id, batchId: batch.id, jobId: job.id, runId,
+      acceptedEventId: accepted.id, failedWebhookEventId: webhook.id, validOutboundId: valid.id, snapshotEventId: snapshot.id, taskId: guard.tasks[0].id, guardGeneration: guard.generation! };
+    const first = await dryRunAcceptedFailure(db, b); assert.equal(first.alreadyApplied, false);
+    if (first.alreadyApplied) throw new Error('unexpected');
+    assert.equal(first.plan.blocked.length, 4);
+    await assert.rejects(dryRunAcceptedFailure(db, { ...b, runId: crypto.randomUUID() }), /correlation_mismatch/);
+    await assert.rejects(applyAcceptedFailure(db, b, 'wrong-hash'), /plan_drift/);
+    assert.equal(await db.outboundMessage.count({ where: { clientId } }), 1);
+    await applyAcceptedFailure(db, b, first.planHash);
+    const replay = await applyAcceptedFailure(db, b, first.planHash); assert.equal(replay.alreadyApplied, true);
+    assert.equal(submissions, 1);
+    assert.equal(await db.outboundMessage.count({ where: { clientId } }), 2);
+    assert.equal((await db.outboundMessage.findUniqueOrThrow({ where: { id: valid.id } })).status, 'SENT');
+    assert.deepEqual((await db.event.findUniqueOrThrow({ where: { id: snapshot.id } })).payloadJson, snapshot.payloadJson);
+    assert.equal(await db.contact.count({ where: { clientId } }), 0);
+    assert.equal(await db.lead.count({ where: { tenantId: clientId } }), 5);
+    assert.equal(await db.event.count({ where: { clientId, eventName: 'campaign.recipient.import_blocked' } }), 4);
+    assert.equal(campaignOperationsStatus().open, false);
+    assert.deepEqual(campaignOperationsStatus().tasks, guard.tasks);
+    await assert.rejects(acknowledgeAcceptedFailure(db, b, "wrong", "synthetic"), /task_drift/);
+    const task = { ...guard.tasks[0] }; delete (task as any).id;
+    const digest = crypto.createHash('sha256').update(JSON.stringify(task, (_k, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest('hex');
+    const acknowledged = await acknowledgeAcceptedFailure(db, b, digest, "synthetic");
+    assert.equal(acknowledged.open, false); assert.equal(acknowledged.tasks.length, 0);
+    assert.equal(acknowledged.generation, b.guardGeneration + 1);
+    assert.equal(await acknowledgeAcceptedFailure(db, b, digest, "synthetic").then(v => v.generation), acknowledged.generation);
+    assert.equal((await applyAcceptedFailure(db, b, first.planHash)).alreadyApplied, true);
+    const archived = acknowledged.audit.find(a => a.receiptId);
+    assert.ok(archived?.resolvedTask); assert.deepEqual(archived.resolvedTask.task, task);
+  } finally { await db.$disconnect(); }
+});

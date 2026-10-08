@@ -1,3 +1,5 @@
+import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from "./campaignEligibility.js";
+import { campaignFailureDiagnostic } from "./campaignFailureDiagnostic.js";
 import { campaignTask, campaignOperationsAreOpen, campaignProviderAttempt, CampaignOperationsClosed } from "./campaignOperations.js";
 import crypto from "node:crypto";
 import { MessageStatus, MessageType } from "@prisma/client";
@@ -33,7 +35,6 @@ import {
   filterOptedOutCampaignRecipients,
   recordCampaignOptOutBlocks,
 } from "./optOutRegistry.js";
-import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
 import {
   isWhatsappTemplateCategoryAllowedForTenant,
   WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
@@ -43,7 +44,6 @@ import {
   readPrivateCampaignSeedFields,
 } from "./campaignSeedPrivacy.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
-import { normalizeCrmWhatsappIdentity } from "../crm/crmWhatsappIdentity.js";
 import {
   suspendCampaignExecutionJob,
   CAMPAIGN_EXECUTION_RENEW_MS,
@@ -114,6 +114,7 @@ type DynamicLeadRecipient = {
   name: string | null;
   company: string | null;
   city: string | null;
+  channel: string | null;
 };
 
 function sleep(ms: number) {
@@ -123,11 +124,7 @@ function sleep(ms: number) {
 }
 
 function normalizeCampaignRunRecipientWaId(value: string) {
-  const raw = value.trim();
-  const digits = normalizeWaIdDigits(raw);
-  if (!digits) return "";
-  if (raw.startsWith("+") && digits.length >= 8) return digits;
-  return normalizeCrmWhatsappIdentity(raw)?.crmCanonicalPhone ?? digits;
+  return normalizeCampaignRecipientIdentity(value);
 }
 
 function buildNormalizedCampaignRunRecipients(params: {
@@ -138,7 +135,7 @@ function buildNormalizedCampaignRunRecipients(params: {
   const componentsByWaId: Record<string, CampaignTemplateComponents> = {};
   const seen = new Set<string>();
   for (const originalWaId of params.waIds) {
-    const normalizedWaId = normalizeCampaignRunRecipientWaId(originalWaId);
+    const normalizedWaId = normalizeCampaignRunRecipientWaId(originalWaId) || originalWaId;
     if (!normalizedWaId || seen.has(normalizedWaId)) continue;
     seen.add(normalizedWaId);
     waIds.push(normalizedWaId);
@@ -443,6 +440,7 @@ async function materializeDynamicCampaignSnapshot(params: {
       name: true,
       company: true,
       city: true,
+      channel: true,
     },
   });
   if (leads.length > 1000) return { ok: false, reason: "dynamic_match_limit_exceeded" };
@@ -452,6 +450,9 @@ async function materializeDynamicCampaignSnapshot(params: {
   const blocked: Array<{ leadId: string; reason: string }> = [];
   const seen = new Set<string>();
   for (const lead of leads) {
+    const reason = await campaignRecipientEligibility(prisma, params.clientId,
+      [lead.waId, lead.waIdCanonical || lead.waId], lead.channel);
+    if (reason) { blocked.push({ leadId: lead.id, reason }); continue; }
     const rawWaId = normalizeCampaignRunRecipientWaId(lead.waIdCanonical || lead.waId);
     const canonical = normalizeCampaignRunRecipientWaId(rawWaId);
     const dedupeKey = canonical || rawWaId;
@@ -579,6 +580,7 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
       name: true,
       company: true,
       city: true,
+      channel: true,
     },
   });
   if (leads.length > CAMPAIGN_BATCH_MAX_ANALYZED) return { ok: false, reason: "dynamic_batch_limit_exceeded" };
@@ -588,6 +590,9 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
   const blocked: Array<{ leadId: string; reason: string }> = [];
   const seen = new Set<string>();
   for (const lead of leads) {
+    const reason = await campaignRecipientEligibility(prisma, params.clientId,
+      [lead.waId, lead.waIdCanonical || lead.waId], lead.channel);
+    if (reason) { blocked.push({ leadId: lead.id, reason }); continue; }
     const rawWaId = normalizeCampaignRunRecipientWaId(lead.waIdCanonical || lead.waId);
     const canonical = normalizeCampaignRunRecipientWaId(rawWaId);
     const dedupeKey = canonical || rawWaId;
@@ -1148,6 +1153,7 @@ async function runCampaignInBackground(
   if (!campaignOperationsAreOpen()) { params.operationallySuspended = true; return; }
   const prisma = getPrisma();
   let pendingAcceptance = false;
+  let persistenceStage = "before_provider";
   let lastLeaseRenewedAt = 0;
   const ensureLease = async () => {
     if (!params.executionJob) return true;
@@ -1229,27 +1235,8 @@ async function runCampaignInBackground(
     componentsByWaId: params.componentsByWaId,
   });
   const requestedWaIds = normalizedRecipients.waIds;
-  const filteredRecipients = await filterOptedOutCampaignRecipients(prisma, {
-    clientId: params.clientId,
-    waIds: requestedWaIds,
-  });
-  const waIds = filteredRecipients.allowed;
-  if (filteredRecipients.blocked.length > 0) {
-    await prisma.campaign.update({
-      where: { id: params.campaignId },
-      data: {
-        blockedCount: {
-          increment: filteredRecipients.blocked.length,
-        },
-      },
-    });
-    await recordCampaignOptOutBlocks({
-      clientId: params.clientId,
-      campaignId: params.campaignId,
-      templateName: params.templateName,
-      blocked: filteredRecipients.blocked,
-    });
-  }
+  // Preserve snapshot positions/message IDs, including blocked recipients on resume.
+  const waIds = requestedWaIds;
 
   logger.info({
     event: "campaign.runner.started",
@@ -1405,10 +1392,6 @@ async function runCampaignInBackground(
           }
           resolvedBatch.push({ index, inputWaId, resolvedRecipient, resolutionSummary, waId, waIdCanonical });
         }
-        const operationallyExcluded = await loadOperationallyExcludedWaIds(prisma, {
-          clientId: params.clientId,
-          waIds: resolvedBatch.flatMap((item) => [item.inputWaId, item.waId, item.waIdCanonical]),
-        });
         for (const item of resolvedBatch) {
           const { index, inputWaId, resolvedRecipient, resolutionSummary, waId, waIdCanonical } = item;
           if (!(await ensureLease())) {
@@ -1416,8 +1399,9 @@ async function runCampaignInBackground(
           }
           const campaignState = await prisma.campaign.findUnique({
             where: { id: params.campaignId },
-            select: { status: true },
+            select: { status: true, clientId: true },
           });
+          if (campaignState && campaignState.clientId !== params.clientId) throw new Error("campaign_tenant_mismatch");
           if (campaignState?.status === "cancelled") {
             logger.info({
               event: "campaign.cancelled",
@@ -1511,10 +1495,20 @@ async function runCampaignInBackground(
             });
             return;
           }
-          const recipientOperationallyExcluded = [inputWaId, waId, waIdCanonical].some((identity) =>
-            operationallyExcluded.has(identity)
-          );
-          if (recipientOperationallyExcluded) {
+          const eligibilityReason = resolvedRecipient.reason === "ambiguous" ? "identity_conflict" :
+            await campaignRecipientEligibility(prisma, params.clientId, [inputWaId, waId, waIdCanonical]);
+          if (eligibilityReason) {
+            if (eligibilityReason === "active_send_blocked") {
+              const optOut = await filterOptedOutCampaignRecipients(prisma, { clientId: params.clientId, waIds: [waId] });
+              await recordCampaignOptOutBlocks({ clientId: params.clientId, campaignId: params.campaignId, templateName: params.templateName, blocked: optOut.blocked });
+            }
+            if (eligibilityReason !== "active_send_blocked") await persistEvent({
+              clientId: params.clientId, messageId: params.campaignId,
+              requestId: `campaign-recipient-eligibility:${params.campaignId}:${index + 1}`,
+              eventName: "campaign.recipient.import_blocked",
+              payloadJson: { campaignId: params.campaignId, rowNumber: index + 1, recipient: inputWaId,
+                reason: eligibilityReason, beforeProvider: true },
+            });
             blockedCount += 1;
             await prisma.campaign.update({
               where: { id: params.campaignId },
@@ -1534,7 +1528,7 @@ async function runCampaignInBackground(
                 templateName: params.templateName,
                 waIdLast4: waId.slice(-4),
                 waIdLength: waId.length,
-                reason: "contact_operationally_excluded",
+                reason: eligibilityReason,
                 timestamp: new Date().toISOString(),
               },
             });
@@ -1670,9 +1664,29 @@ async function runCampaignInBackground(
             messageId,
             clientId: params.clientId,
             clientKey: params.clientKey,
+            beforeSubmit: async () => {
+              if (!await prisma.client.findFirst({ where: { id: params.clientId, clientKey: params.clientKey }, select: { id: true } })) return "campaign_tenant_mismatch";
+              const current = await prisma.campaign.findFirst({ where: { id: params.campaignId, clientId: params.clientId }, select: { status: true } });
+              if (current?.status !== "sending") return "campaign_no_longer_sending";
+              const target = await resolveCampaignRecipientConversationTarget(prisma, { clientId: params.clientId, inputWaId });
+              if (target.reason === "ambiguous" || target.winningWaId !== waId || target.winningWaIdCanonical !== waIdCanonical) return "campaign_identity_changed_before_provider";
+              return campaignRecipientEligibility(prisma, params.clientId, [inputWaId, waId, waIdCanonical]);
+            },
           }), { clientId: params.clientId, campaignId: params.campaignId, messageId });
           const result = attempt.result;
           pendingAcceptance = result.ok;
+          persistenceStage = "provider_result_persistence";
+          if (result.blockedByEligibility) {
+            blockedCount += 1;
+            await persistEvent({ clientId: params.clientId, messageId: params.campaignId,
+              requestId: `campaign-eligibility:${params.campaignId}:${index + 1}`,
+              eventName: "campaign.recipient.import_blocked", payloadJson: {
+                campaignId: params.campaignId, campaignRunId, reason: result.errorBody, beforeProvider: true, rowNumber: index + 1, recipient: inputWaId,
+              } });
+            await prisma.campaign.updateMany({ where: { id: params.campaignId, clientId: params.clientId }, data: { blockedCount } });
+            attempt.persisted();
+            continue;
+          }
           let stopAfterCurrentProviderResult = false;
           if (params.executionJob) {
             const stillOwner = await assertCampaignExecutionLease({
@@ -1739,6 +1753,7 @@ async function runCampaignInBackground(
               },
             });
           }
+          persistenceStage = "crm_materialization";
           const conversationOutcome = await ensureCampaignOutboundCrmAttemptMaterialization(prisma, {
             clientId: params.clientId,
             waId,
@@ -1765,6 +1780,7 @@ async function runCampaignInBackground(
             waId,
             waIdCanonical,
           });
+          persistenceStage = "outbound_persistence";
           await persistOutboundMessage({
             clientId: params.clientId,
             phoneNumberId,
@@ -1793,6 +1809,7 @@ async function runCampaignInBackground(
               returnDestination: resolvedReturnDestination,
             },
           });
+          persistenceStage = "usage_persistence";
           await recordMetaUsageLedgerEvent({
             prisma,
             clientId: params.clientId,
@@ -1923,7 +1940,8 @@ async function runCampaignInBackground(
     if (pendingAcceptance) {
       params.operationallySuspended = true;
       logger.error({ event: "campaign.result.persistence_pending", campaignId: params.campaignId,
-        campaignRunId, clientId: params.clientId, providerAccepted: true, retryAllowed: false });
+        campaignRunId, clientId: params.clientId, providerAccepted: true, retryAllowed: false, persistenceStage,
+        ...campaignFailureDiagnostic(error) });
       return; // Durable intent/task remains; never classify a known acceptance as rejected.
     }
     if (error instanceof CampaignOperationsClosed) { params.operationallySuspended = true; return; }

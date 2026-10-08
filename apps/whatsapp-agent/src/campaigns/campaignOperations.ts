@@ -9,7 +9,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 // mkdir + fsync + rename serialize processes on a single local filesystem. Never
 // expire a lock or task: a crashed writer requires operator investigation.
 type Task = { parent?: string; reference?: { clientId: string; campaignId: string; messageId: string }; instance: string; build: string; generation: number; kind: string; phase: string; startedAt: string };
-type State = { hostId?: string; version: 1; open: boolean; generation: number; tasks: Record<string, Task>; audit: Array<{ action: string; actor: string; reason: string; at: string; generation: number }> };
+type State = { hostId?: string; version: 1; open: boolean; generation: number; tasks: Record<string, Task>; audit: Array<{ action: string; actor: string; reason: string; at: string; generation: number; receiptId?: string; resolvedTask?: { id: string; task: Task } }> };
 function executorIdentity(pid: number) {
   try {
     const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
@@ -201,4 +201,34 @@ export function isCampaignMutation(method: string | undefined, pathname: string)
   // User stop actions remain available under maintenance; existing RBAC applies.
   if (/\/(pause|cancel)$/.test(pathname)) return false;
   return /^\/(app|admin)\/(campaigns|campaign-batches)(\/|$)/.test(pathname) || /^\/public-api\/v1\/campaigns(\/|$)/.test(pathname);
+}
+
+// Administrative recovery only. Caller must prove a durable reconciliation receipt.
+// Archive the full task in the fsynced ledger audit; never reopen admissions here.
+export function acknowledgeReconciledCampaignTask(params: {
+  generation: number; taskId: string; reference: NonNullable<Task["reference"]>;
+  expectedTaskHash: string; receiptId: string; actor: string;
+}) {
+  if (!params.actor.trim() || !params.receiptId.trim()) throw new Error("reconciliation_actor_receipt_required");
+  locked(s => {
+    const prior = s.audit.find(a => a.action === "provider_reconciled" && a.receiptId === params.receiptId);
+    if (prior) {
+      if (prior.resolvedTask?.id !== params.taskId) throw new Error("reconciliation_receipt_conflict");
+      return;
+    }
+    if (s.open || s.generation !== params.generation || pendingFault(filename())) throw new Error("reconciliation_guard_drift");
+    if (Object.keys(s.tasks).length !== 1) throw new Error("reconciliation_other_tasks_present");
+    const task = s.tasks[params.taskId];
+    if (!task || task.kind !== "provider" || task.phase !== "persisting" ||
+      JSON.stringify(task.reference) !== JSON.stringify(params.reference)) throw new Error("reconciliation_task_mismatch");
+    const taskHash = crypto.createHash("sha256").update(JSON.stringify(task, (_key, item) =>
+      item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest("hex");
+    if (taskHash !== params.expectedTaskHash) throw new Error("reconciliation_task_drift");
+    s.generation++;
+    s.audit.push({ action: "provider_reconciled", actor: params.actor, reason: "durable_failed_result_no_retry",
+      at: new Date().toISOString(), generation: s.generation, receiptId: params.receiptId,
+      resolvedTask: { id: params.taskId, task } });
+    delete s.tasks[params.taskId]; // Resolved task survives in audit; pending tasks are never discarded.
+  });
+  return campaignOperationsStatus();
 }

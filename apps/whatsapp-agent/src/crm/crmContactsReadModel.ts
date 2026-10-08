@@ -1,3 +1,4 @@
+import { isAnonymizedMarker } from "./crmWhatsappIdentity.js";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import {
   CONTACT_OPT_OUT_RECORDED_EVENT,
@@ -278,19 +279,6 @@ function formatCrmPhoneDisplay(value: string | null | undefined) {
 
 function isWhatsappChannel(channel: string | null | undefined) {
   return !channel || channel.toLowerCase() === "whatsapp";
-}
-
-function isAnonymizedMarker(value: unknown) {
-  const normalized = normalizeText(value).toLowerCase();
-  if (!normalized) return false;
-  return (
-    normalized.startsWith("anon:") ||
-    normalized.startsWith("hash:anon:") ||
-    normalized === "[mensagem anonimizada]" ||
-    normalized === "usuario anonimizado" ||
-    normalized === "usuário anonimizado" ||
-    normalized.includes("******")
-  );
 }
 
 function isAnonymizedContactRecord(

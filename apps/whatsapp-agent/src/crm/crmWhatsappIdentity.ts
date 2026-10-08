@@ -100,3 +100,11 @@ export function buildCrmWhatsappIdentityCandidates(values: Array<string | null |
   }
   return Array.from(candidates);
 }
+
+// Shared privacy boundary: inspect raw values before any digit extraction.
+export function isAnonymizedMarker(value: unknown) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized.startsWith("anon:") || normalized.startsWith("hash:anon:") ||
+    normalized === "[mensagem anonimizada]" || normalized === "usuario anonimizado" ||
+    normalized === "usuário anonimizado" || normalized.includes("******");
+}

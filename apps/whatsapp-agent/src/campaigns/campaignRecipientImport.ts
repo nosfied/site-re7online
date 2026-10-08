@@ -1,3 +1,5 @@
+import { normalizeCampaignRecipientIdentity } from "./campaignEligibility.js";
+import { isAnonymizedMarker } from "../crm/crmWhatsappIdentity.js";
 import crypto from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import {
@@ -507,6 +509,10 @@ export async function resolveCampaignRecipientImportPlan(
 
   for (const input of params.recipients.slice(0, CAMPAIGN_IMPORT_MAX_ROWS)) {
     const rowNumber = input.rowNumber ?? null;
+    if (isAnonymizedMarker(input.phone) || !normalizeCampaignRecipientIdentity(input.phone)) {
+      addBlocked(blocked, blockedCounts, { rowNumber, reason: "invalid_whatsapp_identity", phone: null });
+      continue;
+    }
     const normalized = normalizeCrmWhatsappIdentity(input.phone);
     if (!normalized) {
       addBlocked(blocked, blockedCounts, { rowNumber, reason: "invalid_whatsapp_identity", phone: input.phone });

@@ -1,3 +1,4 @@
+import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from "../campaigns/campaignEligibility.js";
 import { reactiveRoutingDecision, type ReactiveRoutingDecision, revalidateReactiveSubmission } from "../whatsapp/reactiveOutboundPolicy.js";
 import { isAutomationConversation, resolveAutomationReadPermission } from "../inbox/automationAccess.js";
 import { resolveAllowAutomationConversationsInInbox, saveAllowAutomationConversationsInInbox } from "../config/tenantOperationalConfig.js";
@@ -33625,6 +33626,10 @@ function dedupeCampaignRecipients(
   const canonicalToOriginals = new Map<string, string[]>();
 
   for (const value of recipients) {
+    if (!normalizeCampaignRecipientIdentity(value)) {
+      logger.warn({ event: "campaign.recipient.input_rejected", reason: "invalid_whatsapp_identity", clientId: params.clientId, requestId: params.requestId });
+      continue;
+    }
     const normalized = normalizeWaIdDigits(String(value ?? "").trim());
     if (!normalized) continue;
     const canonical = canonicalizeBrazilWaId(normalized);
@@ -38372,6 +38377,12 @@ async function resolveCampaignDraftRecipientsFromLeadIds(
       }
     }
 
+    if (!reason && lead) {
+      const current = await campaignRecipientEligibility(prisma, params.clientId, [lead.waId, lead.waIdCanonical || lead.waId], lead.channel);
+      if (current === "invalid_whatsapp_identity") reason = "missing_whatsapp_identity";
+      else if (current === "identity_conflict") reason = "unknown";
+      else if (current) reason = current;
+    }
     if (reason) {
       incrementCampaignBlockedReason(blockedCounts, reason);
       blocked.push({ leadId, reason, label: getCampaignBlockedReasonLabel(reason) });

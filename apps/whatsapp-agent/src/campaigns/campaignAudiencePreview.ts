@@ -1,3 +1,4 @@
+import { crmOperationalBlockedReason } from "./campaignEligibility.js";
 import type { PrismaClient } from "@prisma/client";
 import {
   buildCrmContactsPayload,
@@ -153,9 +154,8 @@ function getBlockedReasonLabel(reason: CampaignAudienceBlockedReason) {
 }
 
 function resolveBlockedReason(item: CrmContactListItem): CampaignAudienceBlockedReason | null {
-  if (item.isAnonymized) return "anonymized_contact";
-  if (item.isOperationallyExcluded) return "operationally_excluded_contact";
-  if (item.activeOptOut) return "active_send_blocked";
+  const operational = crmOperationalBlockedReason(item);
+  if (operational) return operational;
   if (!item.channel || item.channel.toLowerCase() === "whatsapp") {
     if (!item.hasValidWhatsappIdentity) {
       return item.templateSendBlockedReason === "missing_phone"

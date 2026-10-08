@@ -29,6 +29,7 @@ export type OutboundTemplateParams = {
   messageId?: string;
   clientId?: string;
   clientKey?: string;
+  beforeSubmit?: () => Promise<string | null>;
 };
 
 export type SendTemplateResult = {
@@ -37,6 +38,7 @@ export type SendTemplateResult = {
   metaMessageId?: string;
   errorBody?: string;
   blockedByUsage?: boolean;
+  blockedByEligibility?: boolean;
 };
 
 export async function sendTemplate(params: OutboundTemplateParams): Promise<SendTemplateResult> {
@@ -171,6 +173,10 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
     }
   }
 
+  // All asynchronous credential/template/usage work is complete. No provider call
+  // can precede the campaign's final current-tenant eligibility observation.
+  const eligibilityReason = await params.beforeSubmit?.();
+  if (eligibilityReason) return { ok: false, blockedByEligibility: true, errorBody: eligibilityReason };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
 

@@ -1426,3 +1426,301 @@ test("CSV grouped batch execution preserves chunk variables and excludes post-bl
   });
   assert.equal(blockedOutbound, 0);
 });
+test("dynamic six Leads exclude five anonymized markers before snapshot/provider", async (t) => {
+  const restoreSleep = setCampaignRunnerSleepForTests(async () => undefined);
+  t.after(restoreSleep);
+  const clientId = crypto.randomUUID();
+  const clientKey = `campaign-runner-dynamic-batch-${process.pid}-${Date.now()}`;
+  const templateName = `campaign_runner_dynamic_batch_${Date.now()}`;
+  const now = new Date();
+  await cleanup(clientId).catch(() => undefined);
+  t.after(() => {
+    void cleanup(clientId).catch(() => undefined);
+  });
+
+  await prisma.client.create({
+    data: {
+      id: clientId,
+      clientKey,
+      name: "Campaign Runner Dynamic Batch Test",
+      profile: "business",
+      features: { campaigns: true },
+    },
+  });
+  const template = await prisma.template.create({
+    data: {
+      clientId,
+      name: templateName,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso {{1}}",
+      variables: ["1"],
+    },
+  });
+  const waIds = ["5541991100901", ...Array.from({ length: 5 }, (_, i) => `anon:subject:123456789012${i}`)];
+  await prisma.lead.createMany({
+    data: waIds.map((waId, index) => ({
+      tenantId: clientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: `Dynamic ${String(index + 1).padStart(4, "0")}`,
+      phone: waId,
+      status: "QUALIFIED",
+    })),
+  });
+  await prisma.contact.createMany({ data: waIds.slice(1).map(waId => ({ clientId, waId, channel: "whatsapp", provider: "meta", operationallyExcludedAt: now })) });
+  const parent = await prisma.campaign.create({
+    data: {
+      clientId,
+      templateId: template.id,
+      name: "Dynamic grouped batch",
+      templateName,
+      status: "scheduled",
+      scheduledAt: now,
+      totalRecipients: 0,
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId,
+      messageId: parent.id,
+      requestId: `campaign-seed:${parent.id}:dynamic`,
+      eventName: "campaign.seed.saved",
+      payloadJson: {
+        campaignId: parent.id,
+        templateId: template.id,
+        name: parent.name,
+        templateName,
+        templateParams: [],
+        templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+        returnDestination: null,
+        source: "dynamic_crm_filter",
+        selectionMode: "DYNAMIC_CRM_FILTER",
+        dynamicFilter: { version: 1, crmBusinessStatusId: "QUALIFIED" },
+        summary: { requested: 0, accepted: 0, blocked: 0, duplicatesRemoved: 0, blockedByReason: [] },
+        ...buildPrivateCampaignSeedFields({ clientId, waIds: [] }),
+      },
+    },
+  });
+  const batch = await prisma.campaignExecutionBatch.create({
+    data: {
+      clientId,
+      name: parent.name,
+      sourceMode: "DYNAMIC_CRM_FILTER",
+      status: "scheduled",
+      requestedAt: now,
+      eligibleAt: now,
+      chunkCount: 0,
+      idempotencyKey: `dynamic:${parent.id}`,
+      metadata: { parentCampaignId: parent.id, clientKey, createdFrom: "test_dynamic_batch" },
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId,
+      messageId: parent.id,
+      requestId: `campaign-batch-controller:${parent.id}`,
+      eventName: "campaign.batch.controller.created",
+      payloadJson: { campaignId: parent.id, batchId: batch.id, sourceMode: "DYNAMIC_CRM_FILTER" },
+    },
+  });
+  await enqueueCampaignExecutionJob({
+    prisma,
+    clientId,
+    campaignId: null,
+    batchId: batch.id,
+    eligibleAt: now,
+    kind: "batch_chunk",
+    idempotencyKey: `dynamic-batch:${batch.id}:materialize`,
+    metadata: { source: "dynamic_batch_materialize", parentCampaignId: parent.id },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const metaRecipients: string[] = [];
+  const renderedNames = new Map<string, string>();
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      const payload = JSON.parse(String(init?.body ?? "{}")) as {
+        to?: string;
+        template?: { components?: Array<{ parameters?: Array<{ text?: string }> }> };
+      };
+      if (payload.to) {
+        metaRecipients.push(payload.to);
+        renderedNames.set(payload.to, payload.template?.components?.[0]?.parameters?.[0]?.text ?? "");
+      }
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.dynamic.${metaRecipients.length}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  assert.equal(await runQueueUntilBatchCompleted({ batchId: batch.id, now, timeoutMs: 600_000 }), "completed");
+  const snapshotCount = await prisma.event.count({
+    where: { clientId, messageId: parent.id, eventName: "campaign.dynamic_batch_snapshot.created" },
+  });
+  assert.equal(snapshotCount, 1);
+  const links = await prisma.campaignExecutionBatchCampaign.findMany({
+    where: { clientId, batchId: batch.id },
+    orderBy: { chunkIndex: "asc" },
+    select: { chunkIndex: true, recipientCount: true, status: true, campaignId: true },
+  });
+  assert.deepEqual(links.map(link => link.recipientCount), [1]);
+  assert.deepEqual(metaRecipients, [waIds[0]]);
+  const snapshot = await prisma.event.findFirstOrThrow({ where: { clientId, eventName: "campaign.dynamic_batch_snapshot.created" } });
+  assert.equal((snapshot.payloadJson as { matchedCount: number }).matchedCount, 6);
+  assert.equal((snapshot.payloadJson as { eligibleCount: number }).eligibleCount, 1);
+  assert.equal((snapshot.payloadJson as { blockedCount: number }).blockedCount, 5);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId } }), 6);
+});
+
+test('accepted provider failure preserves sanitized original exception and never retries', async (t) => {
+  const { logger } = await import('../logger/logger.js');
+  const { campaignOperationsStatus } = await import('./campaignOperations.js');
+  const clientId = crypto.randomUUID(), clientKey = `accepted-error-${clientId}`;
+  await prisma.client.create({ data: { id: clientId, clientKey, name: 'Synthetic', profile: 'business', features: { campaigns: true } } });
+  await prisma.template.create({ data: { clientId, name: 'synthetic_error', category: 'UTILITY', language: 'pt_BR', status: 'approved', content: 'Synthetic' } });
+  const campaign = await prisma.campaign.create({ data: { clientId, name: 'Synthetic accepted error', templateName: 'synthetic_error', status: 'sending', totalRecipients: 1 } });
+  let calls = 0;
+  const originalFetch = globalThis.fetch, originalCreate = prisma.outboundMessage.create, originalLog = logger.error;
+  const errors: Array<Record<string, any>> = [];
+  globalThis.fetch = (async () => { calls++; return new Response(JSON.stringify({ messages: [{ id: 'synthetic-accepted-error' }] }), { status: 200, headers: { 'content-type': 'application/json' } }); }) as typeof fetch;
+  prisma.outboundMessage.create = (async () => { throw new Error('synthetic_persistence_failure Bearer secret token=secret'); }) as unknown as typeof originalCreate;
+  logger.error = ((event: any) => { errors.push(event); }) as typeof originalLog;
+  t.after(() => { globalThis.fetch = originalFetch; prisma.outboundMessage.create = originalCreate; logger.error = originalLog; });
+  startCampaignRun({ campaignId: campaign.id, clientId, clientKey, name: campaign.name, templateName: 'synthetic_error', waIds: ['5541991100990'] });
+  await getRunningCampaignPromiseForTests(campaign.id);
+  assert.equal(calls, 1);
+  assert.equal(await prisma.event.count({ where: { clientId, eventName: 'campaign.message.provider_accepted' } }), 1);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId } }), 0);
+  const log = errors.find(e => e.event === 'campaign.result.persistence_pending');
+  assert.ok(log); assert.equal(log.retryAllowed, false);
+  assert.match(log.errorMessage, /synthetic_persistence_failure/);
+  assert.ok(!JSON.stringify(log).includes('secret'));
+  assert.equal(campaignOperationsStatus().open, false);
+  assert.equal(campaignOperationsStatus().tasks.length, 1);
+  startCampaignRun({ campaignId: campaign.id, clientId, clientKey, name: campaign.name, templateName: 'synthetic_error', waIds: ['5541991100990'] });
+  await getRunningCampaignPromiseForTests(campaign.id);
+  assert.equal(calls, 1);
+});
+test("old pseudo snapshot stays immutable and blocks anonymized digits at original position", async (t) => {
+  const clientId = crypto.randomUUID();
+  const clientKey = `campaign-runner-${process.pid}-${Date.now()}`;
+  const templateName = `campaign_runner_${Date.now()}`;
+  const recipients = ["5541991100101", "1234567890123", "5541991100103"];
+  await cleanup(clientId).catch(() => undefined);
+  t.after(() => {
+    void cleanup(clientId).catch(() => undefined);
+  });
+
+  await prisma.client.create({
+    data: {
+      id: clientId,
+      clientKey,
+      name: "Campaign Runner Test",
+      profile: "business",
+      features: { campaigns: true },
+    },
+  });
+  await prisma.template.create({
+    data: {
+      clientId,
+      name: templateName,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso",
+    },
+  });
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId,
+      name: "Send-time exclusion",
+      templateName,
+      status: "sending",
+      totalRecipients: recipients.length,
+    },
+  });
+
+  await prisma.contact.create({
+    data: {
+      clientId,
+      waId: recipients[1],
+      channel: "whatsapp",
+      provider: "meta",
+      lifecycle: "ACTIVE",
+      operationallyExcludedAt: new Date(),
+    },
+  });
+
+  await prisma.lead.create({ data: { tenantId: clientId, waId: 'anon:subject:1234567890123', status: 'NURTURE' } });
+  const snapshot = await prisma.event.create({ data: { clientId, messageId: campaign.id, eventName: 'campaign.dynamic_snapshot.created', payloadJson: { eligibleCount: 3, ...buildPrivateCampaignSeedFields({ clientId, waIds: recipients }) } } });
+  const originalFetch = globalThis.fetch;
+  const metaRecipients: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      const payload = JSON.parse(String(init?.body ?? "{}")) as { to?: string };
+      if (payload.to) metaRecipients.push(payload.to);
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.${crypto.randomUUID()}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const runId = startCampaignRun({
+    campaignId: campaign.id,
+    clientId,
+    clientKey,
+    name: campaign.name,
+    templateName,
+    waIds: recipients,
+  });
+  assert.ok(runId);
+
+  await waitFor(async () => {
+    const refreshed = await prisma.campaign.findUnique({ where: { id: campaign.id } });
+    return refreshed?.status === "completed";
+  });
+
+  const completed = await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
+  assert.equal(completed.sentCount, 2);
+  assert.equal(completed.blockedCount, 1);
+  assert.deepEqual(metaRecipients, [recipients[0], recipients[2]]);
+  assert.equal(await prisma.contact.count({ where: { clientId } }), 3);
+  assert.deepEqual((await prisma.event.findUniqueOrThrow({ where: { id: snapshot.id } })).payloadJson, snapshot.payloadJson);
+  const excludedContact = await prisma.contact.findFirst({
+    where: { clientId, waId: recipients[1] },
+    select: { id: true },
+  });
+  assert.ok(excludedContact);
+  assert.equal(await prisma.contactChannelIdentity.count({ where: { clientId, contactId: excludedContact.id } }), 0);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waId: recipients[1] } }), 0);
+  const excludedOutbound = await prisma.outboundMessage.count({
+    where: { clientId, waId: recipients[1], status: MessageStatus.SENT },
+  });
+  assert.equal(excludedOutbound, 0);
+  const blockedEvent = await prisma.event.findFirst({
+    where: {
+      clientId,
+      eventName: "campaign.recipient.operationally_excluded",
+      messageId: `campaign.${campaign.id}.2`,
+    },
+    select: { payloadJson: true },
+  });
+  assert.ok(blockedEvent);
+  assert.equal(JSON.stringify(blockedEvent.payloadJson).includes(recipients[1]), false);
+});
