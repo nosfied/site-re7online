@@ -1,0 +1,282 @@
+{
+  "at": "2026-10-08T19:11:19.977252+00:00",
+  "backup": {
+    "archivesReadbackVerified": true,
+    "at": "2026-10-08T19:02:59.247501+00:00",
+    "catalogObjects": 614,
+    "files": {
+      "content.private.tar.gz": {
+        "bytes": 479460086,
+        "sha256": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810"
+      },
+      "database.catalog": {
+        "bytes": 48617,
+        "sha256": "a02f0997a430346bc02a91c88f39aba780b673db6733b9ab431e830c3583d0fc"
+      },
+      "database.dump": {
+        "bytes": 31519208,
+        "sha256": "ce2154e91169c159d7708b89a7474c00f21edcf4f92a7b739cd586e5baca6317"
+      },
+      "operational.private.tar.gz": {
+        "bytes": 7444,
+        "sha256": "d52e9a3463c0eb9f0f82847636e839f1c5702fd91083ca2824a84d40bd0c0401"
+      },
+      "runtime.private.tar.gz": {
+        "bytes": 2410264,
+        "sha256": "4f6808b1c9b9a4453a9f5e7d75e5c5e281546f50a0331535efcf1dd136f2e032"
+      }
+    },
+    "filesystemAndDatabaseNotAtomic": true,
+    "guardGeneration": 35,
+    "postReconciliation": true,
+    "startedAt": "2026-10-08T19:02:08.208975+00:00"
+  },
+  "baselineVerified": true,
+  "candidateFiles": 8820,
+  "candidateFullManifestSha256": "4fe74088465073e07269329a0c14267427c61173e04b65e85f7d847bd5b5263c",
+  "candidateSymlinks": 11,
+  "cronBootSavedFallbackPreserved": true,
+  "diagnostics": [
+    {
+      "cause": "sandbox denied Unix socket bind: Operation not permitted",
+      "preserved": true,
+      "productionImpact": false,
+      "result": "FAIL",
+      "stage": "isolated_restore_first_start"
+    },
+    {
+      "cause": "same dump restored outside socket restriction; isolated Unix socket only",
+      "result": "PASS",
+      "stage": "isolated_restore_new_directory"
+    }
+  ],
+  "finalRead": {
+    "allGatesFalse": true,
+    "archiveAndOwnershipVerified": true,
+    "archivedPolicySha256OwnerVerified": "00912bf4e0f44d88b0c9c639ba8a3d7dd773b317ea24f9df35dbef4e4e06add9",
+    "at": "2026-10-08T19:13:12.283858+00:00",
+    "backupDumpSha256": "ce2154e91169c159d7708b89a7474c00f21edcf4f92a7b739cd586e5baca6317",
+    "backupOriginalCaptureAt": "2026-10-08T19:02:08.208975+00:00",
+    "backupStillPreReconciliation": false,
+    "baselinesVerified": true,
+    "cronBootSavedFallbackPreserved": true,
+    "fiveGates": {
+      "artifactsVerified": false,
+      "discrepanciesResolved": false,
+      "ownerAuthorized": false,
+      "preflightReviewed": false,
+      "restoreVerified": false
+    },
+    "globalBatches": 1,
+    "globalJobs": 1,
+    "guard": {
+      "generation": 35,
+      "open": false,
+      "tasks": 0
+    },
+    "helperUnchanged": true,
+    "identitiesVerified": true,
+    "inspect": {
+      "phase": null,
+      "policySha256": "7b8ef5c45edc237a144ec4718753ad53ec53609fc3ecdb5be39484127f604ff1",
+      "sourceProcessesAlive": true
+    },
+    "leases": 0,
+    "out14Unchanged": true,
+    "ownerReportedResult": "POLICY_ONLY_INSTALLED_BASELINES_INSPECT_PASS_GATES_FALSE",
+    "policyInstalledAndInspected": true,
+    "policyInstalledByThisRead": false,
+    "policySha256": "7b8ef5c45edc237a144ec4718753ad53ec53609fc3ecdb5be39484127f604ff1",
+    "proxyVerified": true
+  },
+  "fiveGates": {
+    "artifactsVerified": false,
+    "discrepanciesResolved": false,
+    "ownerAuthorized": false,
+    "preflightReviewed": false,
+    "restoreVerified": false
+  },
+  "functionalBuildsOrSuitesRepeated": false,
+  "globalBatches": 1,
+  "globalJobs": 1,
+  "guard": {
+    "generation": 35,
+    "open": false,
+    "tasks": 0
+  },
+  "helperPolicySudoersUnchanged": true,
+  "inspect": {
+    "phase": null,
+    "policySha256": "7b8ef5c45edc237a144ec4718753ad53ec53609fc3ecdb5be39484127f604ff1",
+    "sourceProcessesAlive": true
+  },
+  "leases": 0,
+  "manifestDescriptiveMetadataReconciled": true,
+  "modeFiles": {
+    "return": {
+      "backup-manifest.json": "d3ed4cccd7c924863689d70babeb872b9f081a01a5a837b6cc0a9ec7092dc93e",
+      "baseline.private.json": "9a10c9ee5ccbde531162b4044a42fc77b1e151a8436b5e2e8bb1e63d3757c9d4",
+      "baseline_contract.py": "6ed15712948f998328b5ba82578d3241073848a4f8ce356861a12fa890964657",
+      "candidate.config.private.json": "4d77f8cc9bf939a77c82a7d63503c835fb26b9c3486d7770307c0ddc063df752",
+      "candidate.ecosystem.config.cjs": "2a3cc397a209bbe4170a2069081aef1128f2a607f61230b7809f4e1be8335609",
+      "close.cjs": "f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19",
+      "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+      "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+      "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+      "delegated.py": "d6ac8ed8aa0b062b54119f66c38bcaa1516e51a83398f67bea5fb010f2113b12",
+      "execution-check.cjs": "f9cc22deee5337f07cbd618a77712e7fd66d7efe3d8ff79ba7a8cbc2acbd049a",
+      "open.cjs": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+      "ops.py": "df8df75bf9c5131caa5bdbaec01c97e38ae6235a134b6f4c83aae1db86e49e19",
+      "plan.private.json": "6cb4a32380d07dbd9b6b05a29293edfdb63cb7a8d1a84ddc2ca26ffd26872cf5",
+      "preparation-bindings.cjs": "8df1e31440dd4dc9769b08587de2ba9cad8d17673212472f03a01e231232da05",
+      "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+      "proof-bindings.private.json": "6a559fe04d98d4189268beecc8cbf54c0640339126032a11d90fb0d4c45eb2f0",
+      "read-state.py": "89d348b6ed25c2a3945cfbe53c11d90df9e596f57c9df52c72543b43b1e035da",
+      "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+      "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+      "return.config.private.json": "d95c2b8397c09b01b0db078e2a33823b4c1176172fd0b29449ce1bfd6a681ef7",
+      "return.ecosystem.config.cjs": "afb99c029bea13b4e0466478f37344da67d83f3d2bfcca35f467955b86d236ca",
+      "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+      "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+      "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+      "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+      "waiting-work.cjs": "6da3f72d4197f5e1f0a28cf454e75a5504da110fdb31d2391ede98e5731616d5"
+    },
+    "return-partial": {
+      "backup-manifest.json": "d3ed4cccd7c924863689d70babeb872b9f081a01a5a837b6cc0a9ec7092dc93e",
+      "baseline.private.json": "9a10c9ee5ccbde531162b4044a42fc77b1e151a8436b5e2e8bb1e63d3757c9d4",
+      "baseline_contract.py": "6ed15712948f998328b5ba82578d3241073848a4f8ce356861a12fa890964657",
+      "candidate.config.private.json": "4d77f8cc9bf939a77c82a7d63503c835fb26b9c3486d7770307c0ddc063df752",
+      "candidate.ecosystem.config.cjs": "2a3cc397a209bbe4170a2069081aef1128f2a607f61230b7809f4e1be8335609",
+      "close.cjs": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768",
+      "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+      "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+      "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+      "delegated.py": "d6ac8ed8aa0b062b54119f66c38bcaa1516e51a83398f67bea5fb010f2113b12",
+      "execution-check.cjs": "f9cc22deee5337f07cbd618a77712e7fd66d7efe3d8ff79ba7a8cbc2acbd049a",
+      "open.cjs": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+      "ops.py": "df8df75bf9c5131caa5bdbaec01c97e38ae6235a134b6f4c83aae1db86e49e19",
+      "plan.private.json": "84e12608f5abbf182d8980bdec5adf98f1b8bbac26b221e6296e5d4207f9ba10",
+      "preparation-bindings.cjs": "8df1e31440dd4dc9769b08587de2ba9cad8d17673212472f03a01e231232da05",
+      "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+      "proof-bindings.private.json": "6a559fe04d98d4189268beecc8cbf54c0640339126032a11d90fb0d4c45eb2f0",
+      "read-state.py": "89d348b6ed25c2a3945cfbe53c11d90df9e596f57c9df52c72543b43b1e035da",
+      "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+      "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+      "return.config.private.json": "d95c2b8397c09b01b0db078e2a33823b4c1176172fd0b29449ce1bfd6a681ef7",
+      "return.ecosystem.config.cjs": "afb99c029bea13b4e0466478f37344da67d83f3d2bfcca35f467955b86d236ca",
+      "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+      "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+      "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+      "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+      "waiting-work.cjs": "6da3f72d4197f5e1f0a28cf454e75a5504da110fdb31d2391ede98e5731616d5"
+    },
+    "switch": {
+      "backup-manifest.json": "d3ed4cccd7c924863689d70babeb872b9f081a01a5a837b6cc0a9ec7092dc93e",
+      "baseline.private.json": "9a10c9ee5ccbde531162b4044a42fc77b1e151a8436b5e2e8bb1e63d3757c9d4",
+      "baseline_contract.py": "6ed15712948f998328b5ba82578d3241073848a4f8ce356861a12fa890964657",
+      "candidate.config.private.json": "d95c2b8397c09b01b0db078e2a33823b4c1176172fd0b29449ce1bfd6a681ef7",
+      "candidate.ecosystem.config.cjs": "afb99c029bea13b4e0466478f37344da67d83f3d2bfcca35f467955b86d236ca",
+      "close.cjs": "7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc",
+      "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+      "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+      "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+      "delegated.py": "d6ac8ed8aa0b062b54119f66c38bcaa1516e51a83398f67bea5fb010f2113b12",
+      "execution-check.cjs": "f9cc22deee5337f07cbd618a77712e7fd66d7efe3d8ff79ba7a8cbc2acbd049a",
+      "open.cjs": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+      "ops.py": "df8df75bf9c5131caa5bdbaec01c97e38ae6235a134b6f4c83aae1db86e49e19",
+      "plan.private.json": "96ae69b06dcef3084c9e5aa26a8cc7caccf3285fb8daa871432e69fd564897b0",
+      "preparation-bindings.cjs": "8df1e31440dd4dc9769b08587de2ba9cad8d17673212472f03a01e231232da05",
+      "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+      "proof-bindings.private.json": "6a559fe04d98d4189268beecc8cbf54c0640339126032a11d90fb0d4c45eb2f0",
+      "read-state.py": "89d348b6ed25c2a3945cfbe53c11d90df9e596f57c9df52c72543b43b1e035da",
+      "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+      "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+      "return.config.private.json": "4d77f8cc9bf939a77c82a7d63503c835fb26b9c3486d7770307c0ddc063df752",
+      "return.ecosystem.config.cjs": "2a3cc397a209bbe4170a2069081aef1128f2a607f61230b7809f4e1be8335609",
+      "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+      "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+      "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+      "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+      "waiting-work.cjs": "6da3f72d4197f5e1f0a28cf454e75a5504da110fdb31d2391ede98e5731616d5"
+    }
+  },
+  "modeManifestSha256": "3ce478ff7138accc66ef19f9e92c9780cb220ed1e9785b7df3c54d4f4714d02f",
+  "modeManifests": {
+    "return": "856133362e2dbe9cf36fb91cd4f47320fe23e889761749fd302db1755a8028ea",
+    "return-partial": "e44f423261969b863e7f549b399b23df3a28cb2878b181e36a53fd4e67de80a0",
+    "switch": "f9cfe889b28d65e06931300863b54910a49b2a33d48905807547a10da2e0d555"
+  },
+  "noConsumedMarkers": true,
+  "out14Unchanged": true,
+  "priorBindingsArchived": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z/window/backup-bindings-pre-postack-20261008T190208Z",
+  "proofBindings": {
+    "backupManifestSha256": "d3ed4cccd7c924863689d70babeb872b9f081a01a5a837b6cc0a9ec7092dc93e",
+    "catalogObjects": 614,
+    "dumpBytes": 31519208,
+    "dumpSha256": "ce2154e91169c159d7708b89a7474c00f21edcf4f92a7b739cd586e5baca6317",
+    "restoreResultSha256": "3f639e472998ea18524b467808738a173cd2cba4715da0ef506d0afcb19da99a"
+  },
+  "providerCalls": 0,
+  "proxyVerified": true,
+  "remaining": [
+    "Immediate identities/work/freshness reconfirmation required before any separately authorized window.",
+    "DB dump and operational/auth/content archives are not a cross-resource atomic snapshot.",
+    "No preflight execution proof, start-intent or exit certificate was emitted.",
+    "Guard opening remains a separate CAS decision; out.14 must not execute in this preparation.",
+    "Functional owner acceptance and CRA-PR remain separate."
+  ],
+  "restore": {
+    "applicationStarted": false,
+    "at": "2026-10-08T19:08:24.680820+00:00",
+    "checksumMismatches": [],
+    "dumpSha256": "ce2154e91169c159d7708b89a7474c00f21edcf4f92a7b739cd586e5baca6317",
+    "historicalRollbacks": 6,
+    "isolatedServerStopped": true,
+    "migrationChecksumMismatches": [],
+    "migrationsFinished": 60,
+    "missingMigrationFiles": [],
+    "postReconciliation": true,
+    "postackData": {
+      "blocked": 4,
+      "failed131026": 1,
+      "leases": 0,
+      "out14Waiting": 1,
+      "receiptCount": 1,
+      "validSent": 1
+    },
+    "postgres": "pg_restore (PostgreSQL) 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)",
+    "providerCalls": 0,
+    "restoreExitCode": 0,
+    "tables": 70,
+    "temporaryDatabaseRemoved": true,
+    "transport": "isolated Unix socket; TCP disabled"
+  },
+  "result": "POST_ACK_PREREQUISITES_PASS_NOT_EXECUTED_NOT_DEPLOYED",
+  "scope": {
+    "acknowledgementRepeated": false,
+    "backupBindingsOnlyRefreshed": true,
+    "functionalBuildsOrSuitesRepeated": false,
+    "gateChanges": false,
+    "historicalEvidencePreserved": true,
+    "productionActions": false,
+    "reconciliationRepeated": false,
+    "workloadChanged": false
+  },
+  "sequencerManifestSha256": "0772cafff15de13597609da4c84b62aefb20e721980969447fc83929a6bb0c9c",
+  "sourceProcesses": {
+    "re7-admin-front": {
+      "pid": 3438948,
+      "ticks": "2120147745"
+    },
+    "re7-whatsapp-agent": {
+      "pid": 3153929,
+      "ticks": "2107666112"
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 3154150,
+      "ticks": "2107666513"
+    }
+  },
+  "status": "PRECONDITIONS_VERIFIED_GATES_FALSE_NOT_EXECUTED_NOT_DEPLOYED"
+}
