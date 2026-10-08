@@ -16,9 +16,9 @@ function noWork(q, expected) {
   for (const value of [q, expected]) {
     for (const key of ['jobs','groups','sendingScheduled']) assert(Array.isArray(value[key]), 'waiting_missing_array:'+key);
     assert.equal(value.leases, 0, 'waiting_active_or_unresolved_lease');
-    assert(value.jobs.every(j => j && typeof j.id === 'string' && typeof j.clientId === 'string' && j.status === 'queued' &&
+    assert(value.jobs.every(j => j && typeof j.id === 'string' && typeof j.clientId === 'string' && j.status === 'queued' && j.attempt === 0 &&
       j.leaseToken === null && j.leaseExpiresAt === null), 'waiting_job_not_inactive');
-    assert(value.groups.every(g => g && typeof g.id === 'string' && typeof g.clientId === 'string' && g.status === 'queued'), 'waiting_group_not_inactive');
+    assert(value.groups.every(g => g && typeof g.id === 'string' && typeof g.clientId === 'string' && g.status === 'scheduled'), 'waiting_group_not_inactive');
     assert(value.sendingScheduled.every(c => c && typeof c.id === 'string' && typeof c.clientId === 'string' && c.status === 'scheduled'), 'waiting_campaign_not_inactive');
   }
   for (const key of ['jobs','groups','leases','sendingScheduled']) assert.equal(canonical(q[key]), canonical(expected[key]), 'waiting_work_drift:'+key);

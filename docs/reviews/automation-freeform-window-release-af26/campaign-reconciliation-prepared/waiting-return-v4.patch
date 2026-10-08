@@ -1,0 +1,44 @@
+--- a/window/prepare_post_unfence_return.py
++++ b/window/prepare_post_unfence_return.py
+@@ -37 +37 @@
+-          'recover-partial.py', 'restore-controls.py', 'start-one.py',
++          'recover-partial.py', 'restore-controls.py', 'waiting-work.cjs', 'start-one.py',
+@@ -64,0 +65,19 @@
++
++
++def read_waiting_inventory(original, container_id, db_user, db_name):
++    require(db_user and db_name, 'baseline_query_missing')
++    binding = original / 'return/preparation-bindings.cjs'
++    statement = subprocess.check_output(['/usr/bin/node', '-e',
++        'process.stdout.write(require(process.argv[1]).sql)', str(binding)], text=True, timeout=10)
++    result = subprocess.check_output(['docker', 'exec', container_id,
++        'psql', '-X', '-U', db_user, '-d', db_name, '-Atq', '-v', 'ON_ERROR_STOP=1',
++        '-c', 'BEGIN READ ONLY; SET LOCAL statement_timeout=10000; ' + statement + '; ROLLBACK;'],
++        text=True, timeout=15)
++    counts = json.loads(result.strip())
++    # Use exactly the same expected inventory and strict classifier as every mode.
++    subprocess.run(['/usr/bin/node', '-e',
++        "require(process.argv[1]).noWork(JSON.parse(require('fs').readFileSync(0,'utf8')))",
++        str(binding)], input=json.dumps(counts), text=True, timeout=10, check=True)
++    require(all(isinstance(counts.get(k), list) for k in ('flags', 'connected', 'auth')),
++        'return_work_or_baseline_ambiguous')
++    return counts
+@@ -171,11 +190 @@
+-    script = (original / 'return/preparation-bindings.cjs').read_text()
+-    statement = re.search(r'sql: `(.+?)`', script, re.S)
+-    require(statement is not None and db_user and db_name, 'baseline_query_missing')
+-    result = subprocess.check_output(['docker', 'exec', previous_bindings['containerId'],
+-             'psql', '-U', db_user, '-d', db_name, '-Atqc', statement.group(1)],
+-             text=True, timeout=15)
+-    counts = json.loads(result.strip())
+-    require(all(type(counts.get(k)) is int and counts[k] == 0 for k in
+-                ('jobs', 'groups', 'leases', 'sendingScheduled')) and
+-            all(isinstance(counts.get(k), list) for k in ('flags', 'connected', 'auth')),
+-            'return_work_or_baseline_ambiguous')
++    counts = read_waiting_inventory(original, previous_bindings['containerId'], db_user, db_name)
+@@ -194 +203 @@
+-                 'prepare_policy.py', 'privileged.py', 'sequencer.py',
++                 'prepare_policy.py', 'privileged.py', 'sequencer.py', 'waiting-work.private.json',
+@@ -280 +289 @@
+-    require(len(names) == 26 and 'privileged_output.py' in names and
++    require(len(names) == 27 and 'privileged_output.py' in names and 'waiting-work.cjs' in names and

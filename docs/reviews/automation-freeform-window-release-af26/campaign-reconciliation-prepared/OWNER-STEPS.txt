@@ -1,3 +1,5 @@
+HISTORICAL RECONCILIATION RECIPE — DO NOT REPEAT COMPLETED SQL/ACK
+Current post-ack preparation: see POST_ACK_OWNER_STEPS.txt
 REVIEW ONLY — NOT AUTHORIZATION TO EXECUTE
 Preparation: /opt/re7online/backups/converta-persistent/preparations/campaign-eligibility-reconciliation-20261008T150000Z
 API candidate: /opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008/apps/whatsapp-agent
@@ -39,7 +41,7 @@ Frontend: current corrected fa60 preserved, no stop/start.
    never copy proofs, certificates, intents or consumed markers.
    Apply closed-guard-v4.patch to the hash-attested sequencer.
    Apply waiting-work-v4.patch to the three hash-attested modes, and include
-   waiting-work.cjs as the 26th module in each scripts manifest.
+   waiting-work.cjs as the 27th module in each scripts manifest.
    Apply prepare-baselines-closed.patch to its attested baseline producer.
    Keep helper and nine-command sudo rule unchanged.
    Place run-offline.py, candidate-manifest.private.json,

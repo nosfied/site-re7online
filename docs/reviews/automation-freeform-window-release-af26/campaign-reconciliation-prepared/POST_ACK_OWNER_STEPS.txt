@@ -1,0 +1,95 @@
+REVIEW ONLY / POLICY NOT INSTALLED / NO WINDOW AUTHORIZED BY THIS ROUND
+Completed SQL and acknowledgement must not be repeated.
+Preparation: /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z
+Candidate API: /opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008/apps/whatsapp-agent
+Return API: /opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api/apps/whatsapp-agent
+Same worker: /opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker
+Preserved frontend: fa60 corrected, active permanent launcher generation 20261007T234000Z.
+Guard remains closed35; out.14 scheduled/queued/attempt0/no lease unchanged.
+
+A. Installation block FOR REVIEW, not executed now. Only policy changes.
+   Before future installation, reconfirm current identities/configs/proxy/global
+   waiting inventory/backup freshness and the three full baseline contracts under
+   exclusive execution. Any drift requires diagnosis, not binding adaptation.
+   Helper and the nine literal sudo commands remain unchanged.
+
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z
+H=/usr/local/libexec/re7/incident-6683-window-control.py
+Q=/usr/local/libexec/re7/incident-6683-window-policy.json
+S=/etc/sudoers.d/re7-incident-6683-window
+OLD=/usr/local/libexec/re7/incident-6683-window-policy.pre-campaign-eligibility-scheduled-174500.json
+for m in switch return return-partial; do (cd "$P/$m" && sha256sum -c scripts.sha256); done
+test "$(sha256sum "$H" | cut -d' ' -f1)" = 8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212
+test "$(sha256sum "$P/window/privileged-policy.private.json" | cut -d' ' -f1)" = 7b8ef5c45edc237a144ec4718753ad53ec53609fc3ecdb5be39484127f604ff1
+test "$(sha256sum "$P/window/re7-incident-6683-window.sudoers.proposed" | cut -d' ' -f1)" = 62b5a2ac1d56b013f6db4bb8180b0637b985786214f4bc3ce0e5f8d3f7c5111a
+sudo test ! -e "$OLD" && sudo test ! -L "$OLD"
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = 00912bf4e0f44d88b0c9c639ba8a3d7dd773b317ea24f9df35dbef4e4e06add9
+sudo cmp "$P/window/re7-incident-6683-window.sudoers.proposed" "$S"
+sudo visudo -c
+sudo install -o root -g root -m 0600 "$Q" "$OLD"
+sudo install -o root -g root -m 0600 "$P/window/privileged-policy.private.json" "$Q"
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = 7b8ef5c45edc237a144ec4718753ad53ec53609fc3ecdb5be39484127f604ff1
+sudo namei -l "$H" "$Q" "$OLD"
+sudo stat -c '%U %G %a %n' "$H" "$Q" "$S"
+sudo visudo -c
+python3 - "$P" <<'CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);sys.path.insert(0,str(p/'window'))
+from baseline_contract import validate_preparation
+from sequencer import Bridge
+validate_preparation(p)
+assert all(v is False for v in json.loads((p/'window/execution-gates.private.json').read_text()).values())
+v=json.loads(Bridge(p).privileged('inspect'))
+assert v=={'policySha256':'7b8ef5c45edc237a144ec4718753ad53ec53609fc3ecdb5be39484127f604ff1','phase':None,'sourceProcessesAlive':True}
+print('POLICY_ONLY_INSTALLED_BASELINES_INSPECT_PASS_GATES_FALSE')
+CHECK
+
+The expected old hash is from the published installed afbb policy. Root-only
+readback/ownership/inspect of the NEW policy are pending, not claimed PASS.
+No helper/sudoers/observer installation or broader privilege is required.
+Destination already present or partial install: preserve and report, no overwrite.
+
+B. FUTURE separately authorized window, AFTER installation/inspect and immediate
+   gates passed; existing five execution gates enabled only under that authority.
+   The command below intentionally DENIES with today's five false gates:
+python3 /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z/window/sequencer.py /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z
+
+The effective sequencer acquires global and preparation locks, validates every
+baseline/manifest BEFORE operational mutation; captures source, preserves closed
+admission, obtains fresh nonce preflight ONLY AFTER idempotent close/generation
+confirmation, then prepares/enters containment and supervisor controls. Stop pair
+ONCE; prove source/descendants/sockets exited, zero backends/advisory locks before
+API; API start ONCE; fresh V4 exhaustive ownership before same worker start ONCE.
+Frontend untouched. Worker local control is verified before unfence using the
+nft-compatible path; bounded capture renewal, PM2 saved/fallback, unfence, full
+HTTP/DB/session checks, cron/boot restoration follow. Initial admission stays
+CLOSED on success, abort and return. No SQL, protocol retry or historical repair.
+
+Failure before stop: abort restoring controls, guard closed.
+Failure after stop/API partial start: sequencer selects return-partial/return by
+actual identity/intent state, obtains new exit/DB proofs before successors. No
+uncertain start repetition, PID/port-only absence, deleted marker or reused nonce.
+Observer failure blocks both candidate and return worker start.
+
+Failure after unfence: preserve diagnostic and guard closed, observe actual state.
+No automatic recovery is implied by better diagnostics. Fresh return generation:
+python3 /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z/window/prepare_post_unfence_return.py /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-campaign-eligibility-scheduled-20261008T174500Z
+Use its emitted fresh root/hash, not this consumed policy. API/frontend/daemon and
+worker pid/start ticks/release/tree/sockets require fresh observed bindings; absent
+worker requires the complete bounded pre-unfence capture + no surviving executor.
+Deifson must install the generated fixed return policy, archiving the now-consumed
+one, BEFORE re-containment; then inspect and freshly authorize its false gates.
+Fresh sequencer --post-unfence-return command is emitted by the existing template.
+Future PID/hash values are observations, never placeholders filled to pass.
+
+At 15 minutes of containment, communicate state and impediment; no bypass/kill.
+Recovery is binary-only, preserving current DB/auth; never restore dump over new data.
+
+C. After technical validation, read global queue again. Out.13 stays terminal
+   (receipt 431e03cc-88f1-42f0-a100-5160a3a74418; 1 accepted/1 FAILED131026/4 blocked).
+   Revalidate out.14 eligibility/filter/identity/opt-out/template/destination/due
+   and all other tenants. Separate owner/current-generation CAS decision required
+   to open admission; no opening command is enabled or run by this preparation.
+   Window outcome is not owner functional acceptance of CRA-PR/other pending cases.

@@ -1,0 +1,71 @@
+{
+  "node": "20.20.0",
+  "postgres": "16",
+  "result": "PASS",
+  "unitTests": {
+    "passed": 7,
+    "failed": 0,
+    "kind": "synthetic classifier inputs"
+  },
+  "integration": {
+    "cases": 1,
+    "checks": 8,
+    "producer": "actual compiled scheduleScopedCampaignDraft + persistCampaignDraftSeed; only test visibility export appended by hash-checked loader",
+    "producerCompiledSha256": "eb2271e9a872aa0ab48d760cbf4e30d7780b283d475000e1e608ae6c035f1fb7",
+    "consumer": "actual compiled claimNextCampaignExecutionJob; synthetic operations file only",
+    "initialResult": {
+      "batch": "scheduled",
+      "job": "queued",
+      "attempt": 0,
+      "leases": 0
+    },
+    "consumedResult": {
+      "batch": "running",
+      "job": "running",
+      "attempt": 1,
+      "leases": 1,
+      "classifier": "DENY"
+    },
+    "providerCalls": 0,
+    "real": [
+      "scheduling writes",
+      "PostgreSQL queries",
+      "production inventory SQL",
+      "final preparation-bindings classifier",
+      "queue acquisition transaction and lease"
+    ],
+    "injected": [
+      "unknown client SQL row",
+      "terminal history",
+      "expired unresolved lease",
+      "running job",
+      "attempt changed",
+      "unknown/running batch"
+    ],
+    "notExercised": [
+      "HTTP authentication/UI",
+      "productive scheduling",
+      "PM2/nft/systemd switch",
+      "functional acceptance"
+    ]
+  },
+  "historicalHarnessFailuresPreserved": true,
+  "testsNotSummedWithPriorSuites": true,
+  "testFilesSha256": {
+    "producer-export-loader.mjs": "ffdd7000ef41aedb4550ee4b15a491802ae611f004c489968d57d6c4b3720c20",
+    "test_waiting_work.cjs": "df522a0d92166ffae0d6561b9088335968ef0936bc59f987c759b0c4b80873b5",
+    "test_waiting_postgres.mjs": "4cf802e6836c1d9622245370f04765698738941a4e482e51631a2470f9f147a0",
+    "waiting-work.cjs": "6da3f72d4197f5e1f0a28cf454e75a5504da110fdb31d2391ede98e5731616d5",
+    "preparation-bindings.cjs": "8df1e31440dd4dc9769b08587de2ba9cad8d17673212472f03a01e231232da05",
+    "test_waiting_return.py": "cbd9d0c6b0e2b0bd852ad1c806a760ef6f2ba6a53f07f30d392735f054b4ab6e"
+  },
+  "isolatedPostgresStopped": true,
+  "returnAdapter": {
+    "passed": 4,
+    "result": "PASS",
+    "actual": "hash-attested patch + actual return inventory function + real Node20 SQL export/classifier using isolated scheduling capture",
+    "simulated": "Docker inventory read only",
+    "notExercised": "complete new post-unfence preparation / operational return",
+    "noStarts": true
+  }
+}

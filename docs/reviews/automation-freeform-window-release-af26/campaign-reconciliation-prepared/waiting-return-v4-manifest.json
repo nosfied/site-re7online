@@ -1,0 +1,13 @@
+{
+  "file": "window/prepare_post_unfence_return.py",
+  "originSha256": "f015ee552329c01d0c238e4b0ce726ed4bdb51075cc381bfb95016321d04e6da",
+  "resultSha256": "bbca306122d1ea8b59466e9953fd60735e461f5fa14fb357601948adffaf183d",
+  "changes": [
+    "shared actual inventory SQL and classifier",
+    "read-only timeout",
+    "copy waiting inventory and module",
+    "27-file return manifest"
+  ],
+  "helperChanged": false,
+  "sudoChanged": false
+}
