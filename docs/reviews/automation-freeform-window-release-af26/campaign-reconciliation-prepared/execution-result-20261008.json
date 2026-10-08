@@ -1,0 +1,126 @@
+{
+  "reviewedCommit": "a26dbb0ed39f9484bbbb71c5e7c753d561f07b93",
+  "status": "RECONCILED_ACKNOWLEDGED_GUARD_CLOSED_API_NOT_DEPLOYED_V4_BLOCKED",
+  "sqlAppliedAt": "2026-10-08T17:03:09.821500Z",
+  "receiptVerifiedAt": "2026-10-08T17:03:10.850249Z",
+  "acknowledgedAt": "2026-10-08T17:05:34.927669Z",
+  "finalIdentitiesCheckedAt": "2026-10-08T17:12:34.816671+00:00",
+  "receiptId": "431e03cc-88f1-42f0-a100-5160a3a74418",
+  "reconciledOutboundId": "234ab978-bf43-4335-b1f8-61c8f533e46e",
+  "metaMessageIdSha256": "f94bc1dee945745c513fe8c21527e7b7a0fe5e4695a2a8c91d4805065afe56d4",
+  "planHash": "bbf9226d6c284a792164f885c8798ffde5be853b964678846f39745a124863f0",
+  "results": {
+    "persistedSent": 1,
+    "delivered": 1,
+    "failed131026": 1,
+    "blockedBeforeProvider": 4,
+    "pending": 0
+  },
+  "readModels": "exact staged candidate builders against production PostgreSQL, read-only; deployed afbb not replaced",
+  "guard": {
+    "open": false,
+    "generation": 35,
+    "tasks": 0,
+    "receiptId": "431e03cc-88f1-42f0-a100-5160a3a74418"
+  },
+  "out14": {
+    "jobId": "21c5b452-1eed-4229-a3dc-78aea84733fb",
+    "jobStatus": "queued",
+    "attempt": 0,
+    "batchId": "df8e7e5b-75dd-4381-93c9-488ec114744c",
+    "batchStatus": "scheduled",
+    "leases": 0
+  },
+  "identities": {
+    "re7-whatsapp-agent": {
+      "pid": 3153929,
+      "ticks": "2107666112",
+      "cwd": "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api/apps/whatsapp-agent",
+      "script": "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api/apps/whatsapp-agent/dist/index.js",
+      "status": "online",
+      "restarts": 0
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 3154150,
+      "ticks": "2107666513",
+      "cwd": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker",
+      "script": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker/dist/whatsapp-web-worker/src/index.js",
+      "status": "online",
+      "restarts": 0
+    },
+    "re7-admin-front": {
+      "pid": 3438948,
+      "ticks": "2120147745",
+      "cwd": "/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8",
+      "script": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-final-permanent-20261007T234000Z/launcher.cjs",
+      "status": "online",
+      "restarts": 0
+    }
+  },
+  "controls": {
+    "cronBootPreserved": true,
+    "allGatesFalse": true,
+    "guardNeverOpened": true,
+    "helperPolicySudoersNotInstalledOrReplaced": true,
+    "noServiceStoppedOrStarted": true,
+    "providerSubmissions": 0
+  },
+  "backup": {
+    "dumpSha256": "a37f8d4f2cd805686c65096e2652c2d483425ed831067cfbc47887acd366dafd",
+    "bytes": 31331720,
+    "restoreAt": "2026-10-08T17:01:57.351085+00:00",
+    "restoreExitCode": 0,
+    "tables": 70,
+    "migrationsFinished": 60,
+    "checksumMismatch": 0,
+    "temporaryDatabaseRemoved": true,
+    "applicationStarted": false,
+    "providerCalls": 0
+  },
+  "v4": {
+    "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-postack-20261008T170600Z",
+    "status": "BLOCKED",
+    "cause": "waiting-work.cjs expects batch queued; actual contract and out14 batch use scheduled",
+    "baselineEmitted": false,
+    "policyEmitted": false,
+    "policyInstalled": false,
+    "originalModeFileCount": 26,
+    "proposedModeFileCount": 27,
+    "partialWindowHashes": {
+      "re7-incident-6683-window.sudoers.proposed": "62b5a2ac1d56b013f6db4bb8180b0637b985786214f4bc3ce0e5f8d3f7c5111a",
+      "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+      "verify-worker-package-manifest.py": "ef87f562e7bb457534ece18fcf94e510ad8d9c00354e629481466269895a0bfa",
+      "dump.stderr.private.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "re7-converta-backup.before": "2e83a6778e25fe0a7edcaaea0178804ef5ce68821fe8f14da697665f7d9699fb",
+      "db-owner-bindings.private.json": "1d67ff65fc300b7bb0fb165e31a69d415d9adb5d111d3b91e444137a3a8eaeeb",
+      "baseline-contract.patch": "c1dc4a711d93b4c6a556bd97525622f8720e7f89f52ea04104b83aceb4478bbe",
+      "path-bindings.private.json": "d30a83c77269923293e7fe3ba05a35d758cced7b73bbd2c8de3e088e59eb68c1",
+      "execution-gates.private.json": "c4649d78f9bbe9918ed049fb4f254cd8d7887684c0f83b4824ddbbd628bd865b",
+      "backup-manifest.private.json": "7dc3e2d13ad219273c7ace6c777c1ef987e6d73e641ca2f29ab9efad94d74de9",
+      "verify-worker-runtime-closure.py": "f000f3768c2f9783b1cdfd08dd67e2be02170a79b42fa48e211b8d266706d494",
+      "render_sudoers.py": "43ac54893e854991466b11f379fdefa66662cc40822bc1b62fc8bdb110c48299",
+      "automation-fence.nft": "62342f28b9f011c916b8483487bb75f7211a08ffc5846c303f9a0ab0000c2797",
+      "deploy.crontab.window": "55fe793569d4221face0b54b3f3de1eae408ed0b0eadc45d7db80e810e9f37d1",
+      "privileged-observer-output.patch": "36b60240b10cf84b775a9c35bd9c4ca81ff6ce8482f0107f3c7217e9c50e33be",
+      "database.catalog": "e78676eac0c91590ccdf95f9548674d56ae64947c4ea8eef008f8a6e7f3c5a1b",
+      "deploy.crontab.before": "ff827e698a4a67b90d5818b57abfbc1d4214c6edb13ffe2b805199abdabaa742",
+      "re7-converta-backup.window": "206261d4ba6291e4f2ed9c418a3193d2e6b2f177d4150f0e7095be4c8220080c",
+      "prepare_baselines.py": "b5946bc8834806deb376d6aa6600e7d3d7e1d0bb5bd3ea93754f4c031a90eb75",
+      "prepare_policy.py": "c67018a12a628a6945ee28ac8628c1b6b7ff8df86eecd1d96295c6211e226603",
+      "sequencer.py": "0eaedc66220d5c3a8db3b582267c8f0dcddea6aae93b0c69952d938f5c548d9d",
+      "absent-worker-return.patch": "378841d7326acfb26832ac8d3b910837ec57626abc3d493fbc8883bf75d4210a",
+      "baseline_contract.py": "6ed15712948f998328b5ba82578d3241073848a4f8ce356861a12fa890964657",
+      "restore-result.json": "eb9fc241ee75d68d18d56c58d378601a003151028d39c04b2f3894f9f66dc70b",
+      "prepare_post_unfence_return.py": "f015ee552329c01d0c238e4b0ce726ed4bdb51075cc381bfb95016321d04e6da",
+      "privileged.py": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+      "waiting-observed-not-certified.private.json": "21cd8301b4846065223ed6ea4b0e1e20635cd4798a578a05d7914269bdc3d21e"
+    }
+  },
+  "privateDriversSha256": {
+    "execute.private.py": "c9315378e2eb49a0d7e6fd5dd44487ba030ee1b8479354d8eb3116cf0ffaf709",
+    "verify-readmodels.private.py": "f739848e456a340024c4e93ffd38ce29114bc601118f7e60d387631b65dc3f46",
+    "verify-readmodels-delivery-aware.private.py": "ec46bd99149920124d4e700d8b9e78328eff8e36cd7d29dedefbd4afce08b701",
+    "prepare-v4.private.py": "70e9ce244964118b262d858728091f6dfbbbfaf636cfc47363bbfbe9c55031a7",
+    "final-observation.private.py": "fda57f95840621ce7303d51d454f6fa52c0a38e0b5378cd700d45c7d14aa0ab5"
+  }
+}
