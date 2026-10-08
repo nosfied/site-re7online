@@ -1,5 +1,5 @@
 {
-  "status": "FINAL INTEGRATION STAGED / WINDOW POLICY REVIEW REQUIRED / NOT DEPLOYED",
+  "status": "DEPLOYED TECHNICALLY / OWNER READ AND LAYOUT CONFIRMED",
   "at": 1791416094.9394271,
   "package": {
     "candidate": {
@@ -96,10 +96,13 @@
   ],
   "reviewFiles": {
     "WINDOW-STEPS.txt": "2f9efbbfe1dab73a1337abf70b10e1cac70be7009abe52764f514e0f50fb8491",
+    "deployed-result.json": "aaac8c2dccc7303d8079656dc1656acd4d88c88fd9a55311f3303b94802a1543",
     "frontend-action.py": "dd063df289206542297d9c86a49c0abf65d2e2780032a1488435cb0081471e70",
     "verify-live-read.py": "e39a74859850dca4f5ab19448ed4687818d6569cd7566ef09d35fa2d9139f2dd",
-    "README.md": "c6fcb8a4a36ceb09f58c5f3ee540cf60eba60973fe4d5aa3b85746e08d5568c5",
+    "README.md": "d6684b49ce2d0bd7d12cad56e3e0c51fb554def3de4a30ead95a11a607214653",
     "install-window-policy.sh": "ecf081490e3424ddc243765f87518989cb78fbebc959db6434b69a94acd86db9",
     "frontend-check.py": "a60f5a5b72563de2b451147ab99823c372c4825202db97a6436b646f05c694d4"
-  }
+  },
+  "preparationStatus": "FINAL INTEGRATION STAGED / WINDOW POLICY REVIEW REQUIRED / NOT DEPLOYED",
+  "preparationFieldsHistorical": true
 }

@@ -1,0 +1,163 @@
+{
+  "status": "DEPLOYED TECHNICALLY / OWNER READ AND LAYOUT CONFIRMED",
+  "components": [
+    {
+      "name": "re7-whatsapp-agent",
+      "pid": 3153929,
+      "ticks": "2107666112",
+      "status": "online",
+      "restarts": 0,
+      "release": "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api/apps/whatsapp-agent",
+      "configAndSavedPreserved": true
+    },
+    {
+      "name": "re7-whatsapp-web-worker",
+      "pid": 3154150,
+      "ticks": "2107666513",
+      "status": "online",
+      "restarts": 0,
+      "release": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker",
+      "configAndSavedPreserved": true
+    },
+    {
+      "name": "re7-admin-front",
+      "pid": 3438948,
+      "ticks": "2120147745",
+      "status": "online",
+      "restarts": 0,
+      "release": "/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8",
+      "buildId": "wBXX8kmp5RuCHCYt_ot8X",
+      "control": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-final-permanent-20261007T234000Z/candidate.run.private.json"
+    }
+  ],
+  "daemon": {
+    "pid": 18676,
+    "ticks": "222727"
+  },
+  "bootId": "97309358-78f7-4328-8d20-eb51edba1772",
+  "guard": {
+    "open": true,
+    "generation": 33,
+    "tasks": {}
+  },
+  "schedulerDisabled": "false",
+  "health": {
+    "http": 200,
+    "body": {
+      "ok": true,
+      "db": "ok",
+      "uptime": 125319,
+      "timestamp": "2026-10-07T23:59:38.954Z"
+    }
+  },
+  "savedSha256": "fb0582384cf8d4c6841453528b13dccf67ac2ca2adc061095f3d36831383b9a5",
+  "fallbackSha256": "fb0582384cf8d4c6841453528b13dccf67ac2ca2adc061095f3d36831383b9a5",
+  "bootControl": "ActiveState=inactive\nUnitFileState=enabled",
+  "backupCronSha256": "2e83a6778e25fe0a7edcaaea0178804ef5ce68821fe8f14da697665f7d9699fb",
+  "deployCrontabSha256": "ff827e698a4a67b90d5818b57abfbc1d4214c6edb13ffe2b805199abdabaa742",
+  "executionAuthorized": "false",
+  "gates": [
+    {
+      "stage": "before",
+      "exitCode": 0,
+      "timeout": false
+    },
+    {
+      "stage": "before",
+      "exitCode": 0,
+      "timeout": false
+    },
+    {
+      "stage": "candidate",
+      "exitCode": 0,
+      "timeout": false
+    },
+    {
+      "stage": "delete",
+      "exitCode": 0,
+      "timeout": false
+    },
+    {
+      "stage": "enable-supervision-candidate",
+      "exitCode": 0,
+      "timeout": false
+    },
+    {
+      "stage": "exited",
+      "exitCode": 0,
+      "timeout": false
+    },
+    {
+      "stage": "ready-candidate",
+      "exitCode": 0,
+      "timeout": false
+    },
+    {
+      "stage": "start-candidate",
+      "exitCode": 0,
+      "timeout": false
+    },
+    {
+      "stage": "stop",
+      "exitCode": 0,
+      "timeout": false
+    },
+    {
+      "stage": "supervised-candidate",
+      "exitCode": 0,
+      "timeout": false
+    },
+    {
+      "stage": "supervised-candidate",
+      "exitCode": 0,
+      "timeout": false
+    },
+    {
+      "stage": "supervised-candidate",
+      "exitCode": 0,
+      "timeout": false
+    }
+  ],
+  "readiness": {
+    "attempt": 1,
+    "elapsedBudget": 0.00012054666876792908,
+    "result": "PASS"
+  },
+  "stopAt": "2026-10-07T23:50:15+00:00",
+  "readyCheckedAt": "2026-10-07T23:51:59+00:00",
+  "completedAt": "2026-10-07T23:57:37+00:00",
+  "candidateStarts": 1,
+  "returnStarts": 0,
+  "auxiliaryDiagnostics": [
+    "ModuleNotFoundError: frontend_check_placeholder during report consolidation; read only",
+    "KeyError: pm2_env during report consolidation; read only"
+  ],
+  "applicationIdentity": {
+    "pid": 3438959,
+    "ticks": "2120147786"
+  },
+  "firstReadinessUTC": "2026-10-07T23:51:22.758162+00:00",
+  "interruptionObservedUpperBoundSeconds": 68,
+  "servedAssets": {
+    "localhost": "PASS",
+    "public": "PASS",
+    "htmlHttp": 200,
+    "cssHttp": 200,
+    "cssMime": "text/css",
+    "cssSha256": "3fb05e4b7a81a49c4538a8a5114db1e9fee0ea6e10f16b70d31ad99fb4a303cf",
+    "cssBytes": 192809,
+    "javascriptAssets": 10,
+    "javascriptHttpMime": "PASS"
+  },
+  "tarSha256": "17bd5fb895ce14f610257fb8186b916dbc39d34cdd7f421cb07f5a0fc2e1f252",
+  "immutableScriptsManifest": "f493b231cd1d6ebad39f6161cdfef0d65227999322acecb3ab2e1710cac65593",
+  "windowPolicyInstalledSha256": "6087f980ed58f084294f77dbca688c5cba9b39229d3c2b10daa35732ff74f7d4",
+  "windowPolicyArchivedSha256": "eff1b150640219af55c184d08a0f1752e23c5fd55954b8220d4f137ed27c5213",
+  "scopeLimits": [
+    "Owner confirmed normal layout/session/Inbox/CRM/Campaigns; no campaign send performed",
+    "No reboot/resurrect performed in production; existing isolated proofs reused",
+    "No nft containment applied; API/worker not stopped",
+    "Cron/crontab hashes recorded after operation; not a fresh before/after byte comparison in this window",
+    "Historical data, tenant configuration, DB/auth unchanged by this procedure"
+  ]
+}

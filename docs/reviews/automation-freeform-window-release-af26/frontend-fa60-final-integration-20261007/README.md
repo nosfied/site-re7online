@@ -1,3 +1,7 @@
+# Resultado atual
+
+**DEPLOYED TECHNICALLY / OWNER READ AND LAYOUT CONFIRMED.** [Execução sanitizada](deployed-result.json) e [relatório único](../FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#implantação-do-frontend-corrigido-concluída--0710-fortaleza). Comandos abaixo e manifesto descrevem a preparação histórica consumida; **não reexecutar**. Tar corrigido/partida única/saída fresca/CSS servido PASS; promoção e save somente após confirmação owner. Preservar geração234000 enquanto referenciada.
+
 # Integração final após instalação do observador permanente
 
 Status: **INSTALLED VERIFIED / LIVE READ PASS**. Integração futura: **STAGED / WINDOW POLICY REVIEW REQUIRED / NOT DEPLOYED**.
