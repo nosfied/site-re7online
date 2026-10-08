@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-08T20:42:34.485335+00:00",
+  "canonicalRootMode": "return",
+  "changes": 2,
+  "helperPolicySudoersUnchanged": true,
+  "originSha256": "0eaedc66220d5c3a8db3b582267c8f0dcddea6aae93b0c69952d938f5c548d9d",
+  "patchAppliedToAttestedOriginAndHashVerified": true,
+  "patchSha256": "0659601486413856fe1fe05f3e19675068c5662cc57321d0c0498e4466826abc",
+  "resultSha256": "df0ba9bd3ffee691b037c9bfa67cddbb553ffa94a3011ed2f7a36ad331a57d85",
+  "scope": "return-partial maps to existing root return mode and path; no helper, policy or negative identity/socket checks changed",
+  "startsRepeated": false,
+  "syntaxVerified": true,
+  "validation": "PASS in real production return finalization: two consistent captures, archived previous capture, fixed root helper full revalidation before unfence; not a new local full return suite"
+}

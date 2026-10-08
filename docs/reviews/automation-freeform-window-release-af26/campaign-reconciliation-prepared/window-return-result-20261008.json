@@ -1,0 +1,201 @@
+{
+  "api": "afbb7455f320793e05a25875e8a5f13f98cabf90",
+  "at": "2026-10-08T20:45:41.051470+00:00",
+  "authRecords": 5,
+  "backupDumpSha256": "796d1743ff032fe80e32d7941a9f2f2b7f40884f4a4571b958414173acd96f4a",
+  "backupRestore": {
+    "applicationStarted": false,
+    "at": "2026-10-08T20:27:54.649624+00:00",
+    "checksumMismatches": [],
+    "dumpSha256": "796d1743ff032fe80e32d7941a9f2f2b7f40884f4a4571b958414173acd96f4a",
+    "historicalRollbacks": 6,
+    "isolatedServerStopped": true,
+    "migrationChecksumMismatches": [],
+    "migrationsFinished": 60,
+    "missingMigrationFiles": [],
+    "postReconciliation": true,
+    "postackData": {
+      "blocked": 4,
+      "failed131026": 1,
+      "leases": 0,
+      "out14Waiting": 1,
+      "receiptCount": 1,
+      "validSent": 1
+    },
+    "postgres": "pg_restore (PostgreSQL) 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)",
+    "providerCalls": 0,
+    "restoreExitCode": 0,
+    "tables": 70,
+    "temporaryDatabaseRemoved": true,
+    "transport": "isolated Unix socket; TCP disabled"
+  },
+  "barrierAbsent": true,
+  "boot": [
+    "ActiveState=inactive",
+    "UnitFileState=enabled"
+  ],
+  "candidateStartRepeated": false,
+  "connectedSessions": 4,
+  "containmentConfirmedAt": "2026-10-08T20:29:29.610123+00:00",
+  "containmentSeconds": 796.8510384559631,
+  "controlsCompleteAt": "2026-10-08T20:42:50.236527+00:00",
+  "cronCrontabBootPreserved": true,
+  "dbReadOnlyInventory": true,
+  "escalation15MinutesReached": false,
+  "fiveGates": {
+    "artifactsVerified": false,
+    "discrepanciesResolved": false,
+    "ownerAuthorized": false,
+    "preflightReviewed": false,
+    "restoreVerified": false
+  },
+  "frontend": "fa60-corrected-preserved",
+  "functionalOwnerAcceptance": "PENDING",
+  "globalBatches": 1,
+  "globalJobs": 1,
+  "guard": {
+    "generation": 35,
+    "open": false,
+    "tasks": 0
+  },
+  "healthHttpApiWorkerFrontend": true,
+  "helperPolicySudoersUnchanged": true,
+  "incidents": [
+    {
+      "candidateApiActuallyStarted": false,
+      "cause": "candidate JSON updated to reviewed API; copied ecosystem still launches afbb",
+      "reason": "process_config_drift",
+      "stage": "switch/start API",
+      "startIntentPreserved": true
+    },
+    {
+      "blockedCorrectly": true,
+      "reason": "ambiguous_start_intent_requires_observation",
+      "stage": "automatic recovery selection"
+    },
+    {
+      "originalsArchived": true,
+      "ownerSpecificallyAuthorized": true,
+      "returnEcosystemSerializedFromExistingTargetJson": true,
+      "sourceObservedReturnSha256": "4d77f8cc9bf939a77c82a7d63503c835fb26b9c3486d7770307c0ddc063df752",
+      "sourceOriginalSha256": "d95c2b8397c09b01b0db078e2a33823b4c1176172fd0b29449ce1bfd6a681ef7",
+      "stage": "observed return composition"
+    },
+    {
+      "cause": "root policy represents all returns as return; sequencer lookup and path used return-partial",
+      "fix": {
+        "at": "2026-10-08T20:42:34.485335+00:00",
+        "canonicalRootMode": "return",
+        "changes": 2,
+        "helperPolicySudoersUnchanged": true,
+        "originSha256": "0eaedc66220d5c3a8db3b582267c8f0dcddea6aae93b0c69952d938f5c548d9d",
+        "patchAppliedToAttestedOriginAndHashVerified": true,
+        "patchSha256": "0659601486413856fe1fe05f3e19675068c5662cc57321d0c0498e4466826abc",
+        "resultSha256": "df0ba9bd3ffee691b037c9bfa67cddbb553ffa94a3011ed2f7a36ad331a57d85",
+        "scope": "return-partial maps to existing root return mode and path; no helper, policy or negative identity/socket checks changed",
+        "startsRepeated": false,
+        "syntaxVerified": true,
+        "validation": "PASS in real production return finalization: two consistent captures, archived previous capture, fixed root helper full revalidation before unfence; not a new local full return suite"
+      },
+      "reason": "KeyError: return-partial",
+      "stage": "partial return pre-unfence capture"
+    },
+    {
+      "diagnosticPreserved": true,
+      "fixedBeforeExecution": true,
+      "productionActions": false,
+      "reason": "SyntaxError before execution",
+      "stage": "private finishing driver syntax"
+    }
+  ],
+  "leases": 0,
+  "noFurtherAttemptExecuted": true,
+  "out14Unchanged": true,
+  "ownerReadConfirmation": {
+    "confirmed": true,
+    "scope": "session, Inbox, CRM and Campaigns read-only after return; not corrective API acceptance"
+  },
+  "preparationConsumed": true,
+  "processes": {
+    "re7-admin-front": {
+      "pid": 3438948,
+      "restartCount": 0,
+      "status": "online",
+      "ticks": "2120147745"
+    },
+    "re7-whatsapp-agent": {
+      "pid": 3610638,
+      "restartCount": 0,
+      "status": "online",
+      "ticks": "2127625883"
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 3610861,
+      "restartCount": 0,
+      "status": "online",
+      "ticks": "2127626254"
+    }
+  },
+  "proxyVerified": true,
+  "receiptAfterReturn": {
+    "at": "2026-10-08T20:48:55.495270+00:00",
+    "postReturnReceiptRead": {
+      "blocked": 4,
+      "failed131026": 1,
+      "leases": 0,
+      "out14Waiting": 1,
+      "receiptCount": 1,
+      "validSent": 1
+    },
+    "productionWrites": false
+  },
+  "reconciliationAndGuardUnchanged": true,
+  "remaining": [
+    "Correct and semantically validate JSON/ecosystem generation for all modes before operational mutation.",
+    "Integrate reviewed canonical partial-return capture mapping into a new composition; preserve consumed attempt.",
+    "Fresh source identities/policy are required for another preparation: API and worker PIDs changed after return.",
+    "No campaign reopening or out.14 execution was authorized; guard remains closed35.",
+    "Corrective API and its functional owner acceptance remain pending.",
+    "Bounded health/log/read checks are not an exhaustive audit of in-flight inbound/outbound/auth during the interruption.",
+    "CRA-PR, grouping natural execution and Auto contingency functional accepts remain separate."
+  ],
+  "returnStartsPerComponent": 1,
+  "rootCaptureRefreshedAndRevalidated": true,
+  "runtimeLogObservation": {
+    "at": "2026-10-08T20:50:54.166713+00:00",
+    "boundedLogScan": {
+      "re7-whatsapp-agent/pm_err_log_path": {
+        "bytesRead": 230,
+        "rowsSinceReturn": 0
+      },
+      "re7-whatsapp-agent/pm_out_log_path": {
+        "bytesRead": 6313,
+        "rowsSinceReturn": 20
+      },
+      "re7-whatsapp-web-worker/pm_err_log_path": {
+        "bytesRead": 0,
+        "rowsSinceReturn": 0
+      },
+      "re7-whatsapp-web-worker/pm_out_log_path": {
+        "bytesRead": 45868,
+        "rowsSinceReturn": 111
+      }
+    },
+    "cutoff": "2026-10-08T20:37:35Z",
+    "errorEvents": {},
+    "noPolling": true,
+    "notAnExhaustiveTrafficAudit": true,
+    "runtimeDistinctAccountsObserved": 4,
+    "runtimeWebConnectionStates": {
+      "open": 4
+    },
+    "schedulerStartedEvents": 1
+  },
+  "savedFallbackEqual": true,
+  "savedSha256": "cb6b119d75d8d8c8a72f26a02ea9a96df9425fc050ed0dfb9e2b19869bc4b3a0",
+  "schedulerDisabledFlag": "false",
+  "sessionsAuthBaselineEqual": true,
+  "status": "RETURNED_TO_AFBB_CORRECTIVE_API_NOT_DEPLOYED",
+  "unfencedConfirmedAt": "2026-10-08T20:42:46.461161+00:00",
+  "worker": "minimal-reactive-afbb-preserved"
+}

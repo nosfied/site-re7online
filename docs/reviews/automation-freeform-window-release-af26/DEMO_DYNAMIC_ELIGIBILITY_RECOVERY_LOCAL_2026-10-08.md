@@ -192,3 +192,53 @@ Armazenamento privado novo: `window/postack-backup-20261008T190208Z` na prepara�
 Diagnóstico preservado: a primeira tentativa local de restore não iniciou o servidor porque o sandbox negou o bind Unix (`Operation not permitted`). A nova tentativa usou outro diretório isolado e o mesmo dump verificado; nenhuma aplicação ou conexão produtiva foi iniciada. Não houve outro bloqueio na conferência final.
 
 Limites: o dump PostgreSQL é consistente internamente; arquivos operacionais/auth/conteúdo e DB não constituem snapshot atômico conjunto. O backup agora contém a reconciliação, mas frescor, estados e exclusividade exigem reconfirmação imediatamente antes de futura janela autorizada. Não foi emitida prova de execução/preflight, intent ou certificado de saída; o sequenciador continua negando `execution_gates_incomplete`. Os cinco gates falsos são controles de execução, não indicação de falha dessas verificações de preparação. Abertura da guarda por CAS continua separada, após inventário global atual. CRM agrupado/execução natural, contingência Auto e aceite CRA-PR permanecem pendentes; reparo setembro CLOSED e históricos intactos.
+
+
+## Janela autorizada e retorno comprovado — 08/10
+
+**RETURNED TO AFBB / CORRECTIVE API NOT DEPLOYED.** [Resultado sanitizado](campaign-reconciliation-prepared/window-return-result-20261008.json). A preparação174500Z está consumida e preservada; não pode ser reutilizada. Guarda35 fechada/tasks:{}, cinco gates novamente falsos e out.14 intacta. Nenhum envio de teste, reenvio, nova reconciliação/ack, reparo ou restore produtivo.
+
+### Pré-condições e backup imediato
+
+Sob execução exclusiva, conferidos baselines/manifests/bindings, artefatos, helper/política/inspect phase:null, origem online/restart0, proxy e inventário global exato de out.14 aguardando. O backup19:02Z tinha aproximadamente1h20; foi preservado e substituído no staging por captura20:25:38–20:26:28Z. Dump31628847bytes/614 objetos, SHA256 `796d1743ff032fe80e32d7941a9f2f2b7f40884f4a4571b958414173acd96f4a`. Restore isolado20:27:54Z:70 tabelas/60 migrations, zero checksum/arquivo ausente, seis rollbacks históricos; recibo1/SENT1/FAILED1310261/bloqueados4, out.14 aguardando/zero lease. Banco temporário removido, servidor encerrado, TCP/app/provider ausentes. Provas/manifests anteriores arquivados; dump/arquivos continuam não atômicos entre si.
+
+### Falha demonstrada, não falha do artefato funcional
+
+`switch/start:re7-whatsapp-agent/execute` terminou exit1 com **process_config_drift**, em `ops.py::start → config → System.check_config`. A única chamada PM2 iniciou a API **afbb**, PID3608495/ticks2127578452, em vez do candidato. Cwd/script observados eram da afbb; o JSON de destino exigia `campaign-eligibility-recovery-final-reviewed-20261008`. O candidato funcional não foi executado nem chegou a servir tráfego.
+
+Causa rastreada no gerador privado efetivo `prepare-v4-scheduled-final.private.py`: reconstruiu candidate.config/return.config JSON, alterou cwd/script/build da candidata e a configuração do frontend, mas copiou os arquivos `.ecosystem.config.cjs` do modelo anterior sem reconstruí-los desses JSONs. O manifesto atestou os bytes copiados, não a correspondência JSON↔ecosystem. O preflight validava origem real, configurações JSON, arquivos e contratos, porém faltava essa verificação semântica do comando que iniciaria o PM2. A afirmação anterior de composição pronta foi insuficiente; não atribuir a falha ao PM2 nem ao código funcional.
+
+O intent da ida permaneceu completo, sem marcador started, e o sequenciador negou **ambiguous_start_intent_requires_observation**. Não repetimos a partida nem fabricamos started. Observação comprovou a configuração completa da API afbb viva e frontend preservado, com worker ausente. O retorno parcial original esperava a candidata como origem e também não podia avançar.
+
+### Recuperação especificamente autorizada e encerramento
+
+Deifson autorizou expressamente corrigir essa composição e concluir o retorno afbb. Origem antiga do retorno parcial SHA `d95c2b8397c09b01b0db078e2a33823b4c1176172fd0b29449ce1bfd6a681ef7` arquivada; origem afbb observada e integralmente conferida SHA `4d77f8cc9bf939a77c82a7d63503c835fb26b9c3486d7770307c0ddc063df752`. O ecosystem de destino do retorno foi serializado do JSON já atestado, sem alterar o destino. Manifests originais preservados; helper/política/sudoers/nove comandos não mudaram. Não se fez a ida aceitar a divergência.
+
+Retorno parcial executou recover-partial com prova fresca: saída da API afbb divergente e da origem anterior, descendentes/sockets e zero backends/locks antes do sucessor. API afbb de retorno iniciou uma vez; prova V4 fresca confirmou suas conexões e o mesmo worker iniciou uma vez. Frontend não recebeu stop/start.
+
+A finalização encontrou **KeyError:return-partial**: política root oferece switch/return, mas captura consultava targetProcesses[return-partial] e gravava a captura nesse caminho. [Patch mínimo e hashes](campaign-reconciliation-prepared/partial-return-capture-v4-manifest.json), [bytes](campaign-reconciliation-prepared/partial-return-capture-v4.patch): somente lookup/caminho da captura mapeiam return-partial→return, mantendo modo operacional/markers no retorno parcial. Origem0eaedc66…548d9d → resultado `df0ba9bd3ffee691b037c9bfa67cddbb553ffa94a3011ed2f7a36ad331a57d85`. Nenhuma negativa de PID/ticks/daemon/árvore/sockets/guarda/barreira foi relaxada; helper root revalidou integralmente a captura nova no caminho fixo. Captura anterior arquivada e renovada com duas amostras consistentes, tentativas limitadas. Prova real é esta finalização; não atribuir os testes históricos de outro cenário à composição. Aplicação do patch à origem atestada/hash final/sintaxe conferidos isoladamente, sem build/suítes funcionais repetidos.
+
+Um driver privado de finalização teve erro de sintaxe antes de executar qualquer instrução; diagnóstico e original preservados, corrigidos/conferidos antes da transferência seguinte. A retomada executou **somente finish**, sem outra partida ou stop-pair. PM2/fallback salvos antes do unfence; authorize-return e revalidação root passaram.
+
+| Checkpoint confirmado | UTC | Fortaleza |
+|---|---|---|
+| Contenção aplicada |20:29:29.610|17:29:29|
+| Par antigo saiu |20:29:41.046|17:29:41|
+| Recusa da identidade da partida de ida |20:29:57.547|17:29:57|
+| API divergente saiu no retorno parcial |20:37:35.257|17:37:35|
+| API afbb retornada identificada |20:37:37.898|17:37:37|
+| Worker retornado identificado |20:37:41.618|17:37:41|
+| Barreira retirada |20:42:46.461|17:42:46|
+| Controles restaurados/conclusão |20:42:50.236|17:42:50|
+
+Intervalo entre confirmações de contenção/unfence: **796.85s,13min16.85s**. Não chegou ao horizonte15min. Esses checkpoints medem a barreira observada; não garantem inventário integral de todo inbound/outbound/auth em andamento. Evidências privadas completas, fases/intents/provas consumidas e gerações anteriores foram preservados.
+
+### Estado efetivo após retorno
+
+Conferência20:45:41Z PASS: API **afbb7455f320793e05a25875e8a5f13f98cabf90**, PID3610638/ticks2127625883; mesmo worker mínimo reativo afbb, PID3610861/ticks2127626254; frontend fa60 corrigido permanece PID3438948/ticks2120147745. Todos online/restart0. Health HTTP API/worker/frontend e leitura DB passaram; não equivalem a aceite da correção candidata. Sessão/Inbox/CRM/Campanhas confirmadas pelo owner somente em leitura depois do retorno.
+
+Guarda integral e recibo pós-ack preservados. SQL READ ONLY20:48:55Z comprovou recibo1, SENT1, FAILED1310261, quatro bloqueios e out.14 aguardando/zero lease. Inventário global exato permanece um lote scheduled/job queued/attempt0; nenhum outro trabalho ou lease. Quatro ChannelAccounts conectados e cinco registros auth iguais ao baseline. Leitura única limitada dos logs20:50:54Z confirmou quatro contas runtime em open após a retomada, um evento de inicialização do scheduler e zero eventos error no trecho examinado; não é auditoria exaustiva. Scheduler habilitado, guarda fechada impede out.14. Nenhuma configuração de tenant alterada.
+
+Barreira ausente; cron/crontab iniciais restaurados; boot inactive/enabled. Saved/fallback iguais e compatíveis com os três processos efetivos, SHA `cb6b119d75d8d8c8a72f26a02ea9a96df9425fc050ed0dfb9e2b19869bc4b3a0`. Helper/política/sudoers preservados. Gates false; a política/fase e tentativa consumidas não devem ser reemitidas como preparação pronta.
+
+**Pendência concreta:** corrigir o produtor para derivar ecosystems dos mesmos JSONs, validar essa correspondência em TODOS os modos antes de qualquer alteração operacional, integrar o mapeamento de captura parcial e ensaiar a composição exata. A futura preparação exige novas identidades/bindings/política porque API/worker mudaram no retorno. Artefato funcional candidato íntegro/ensaios válidos permanecem reutilizáveis; nenhuma nova tentativa executada. API corretiva/aceite funcional pendentes, guarda não será aberta nesta frente. CRM agrupado/execução natural, Auto e CRA-PR continuam separados; setembro CLOSED e históricos intactos.
