@@ -1,0 +1,88 @@
+{
+  "allGatesFalse": true,
+  "archiveAndOwnershipVerified": true,
+  "archivedPolicySha256OwnerVerified": "00912bf4e0f44d88b0c9c639ba8a3d7dd773b317ea24f9df35dbef4e4e06add9",
+  "at": "2026-10-08T18:50:38.232561+00:00",
+  "backupDumpSha256": "a37f8d4f2cd805686c65096e2652c2d483425ed831067cfbc47887acd366dafd",
+  "backupFreshnessForFutureWindowNotAsserted": true,
+  "backupOriginalCaptureAt": "2026-10-08T17:00:27Z",
+  "backupStillPreReconciliation": true,
+  "baselinesVerified": true,
+  "cronBootSavedFallbackPreserved": true,
+  "fiveGates": {
+    "artifactsVerified": false,
+    "discrepanciesResolved": false,
+    "ownerAuthorized": false,
+    "preflightReviewed": false,
+    "restoreVerified": false
+  },
+  "futureWindowNotAuthorizedByThisStep": true,
+  "globalBatches": 1,
+  "globalJobs": 1,
+  "guard": {
+    "generation": 35,
+    "open": false,
+    "tasks": 0
+  },
+  "helperUnchanged": true,
+  "identitiesVerified": true,
+  "independentReadAt": "2026-10-08T18:50:38.232561+00:00",
+  "inspect": {
+    "phase": null,
+    "policySha256": "7b8ef5c45edc237a144ec4718753ad53ec53609fc3ecdb5be39484127f604ff1",
+    "sourceProcessesAlive": true
+  },
+  "installationExecutedBy": "Deifson in legitimate deploy sudo session",
+  "installationTimeNotProvided": true,
+  "leases": 0,
+  "out14Unchanged": true,
+  "ownerReportedResult": "POLICY_ONLY_INSTALLED_BASELINES_INSPECT_PASS_GATES_FALSE",
+  "ownerVerified": {
+    "archive": {
+      "group": "root",
+      "mode": "0600",
+      "owner": "root"
+    },
+    "helper": {
+      "group": "root",
+      "mode": "0644",
+      "owner": "root",
+      "sha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212"
+    },
+    "pathChain": "root-owned, no symlink shown; directories0755",
+    "policy": {
+      "group": "root",
+      "mode": "0600",
+      "owner": "root"
+    },
+    "sudoers": {
+      "group": "root",
+      "literalRuleUnchanged": true,
+      "mode": "0440",
+      "owner": "root"
+    },
+    "visudoBeforeAfter": "PASS"
+  },
+  "policyInstalledAndInspected": true,
+  "policyInstalledByThisRead": false,
+  "policySha256": "7b8ef5c45edc237a144ec4718753ad53ec53609fc3ecdb5be39484127f604ff1",
+  "preservedReleases": {
+    "API": "afbb7455f320793e05a25875e8a5f13f98cabf90",
+    "frontend": "fa60-corrected-17bd5fb8",
+    "worker": "minimal-reactive-afbb-verified"
+  },
+  "proxyVerified": true,
+  "scope": {
+    "acknowledgement": false,
+    "containment": false,
+    "deploy": false,
+    "guardOpened": false,
+    "helperReplaced": false,
+    "policyReplaced": true,
+    "processStopStartRestart": false,
+    "providerCalls": 0,
+    "reconciliation": false,
+    "sudoersReplaced": false
+  },
+  "status": "POLICY_INSTALLED_AND_INSPECTED_GATES_FALSE_NOT_DEPLOYED"
+}

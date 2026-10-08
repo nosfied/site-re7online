@@ -1,6 +1,6 @@
 # Revisão final e preparação offline — 08/10/2026
 
-**POST-ACK PREPARED FOR REVIEW / POLICY NOT INSTALLED / NOT DEPLOYED.** SQL e acknowledgement já concluídos conforme registro anterior. Guarda35 fechada; todos os gates de execução continuam falsos. [Manifesto completo dos três modos](postack-preparation-manifest.json), [prova do agendamento real](waiting-scheduled-proof.json) e [comandos concretos para revisão](POST_ACK_OWNER_STEPS.txt). A autorização desta rodada não inclui instalar política, executar janela ou abrir a guarda.
+**POLICY INSTALLED AND INSPECTED / GATES FALSE / NOT DEPLOYED.** SQL e acknowledgement já concluídos conforme registro anterior. Guarda35 fechada; todos os gates de execução continuam falsos. [Manifesto completo dos três modos](postack-preparation-manifest.json), [prova do agendamento real](waiting-scheduled-proof.json) e [comandos concretos para revisão](POST_ACK_OWNER_STEPS.txt). A instalação exclusiva do bloco A foi posteriormente autorizada e conferida: [resultado](policy-installation-result-20261008.json). Nenhuma janela/abertura foi autorizada por essa etapa. Manifesto e comando anteriores permanecem como evidência preparatória; não repetir a instalação já concluída.
 
 O [manifesto](artifact-manifest.json) fixa fontes/compilados sobre API afbb e parent afc3e5a7, CLI, overlay, schema/lock e backup. [OWNER-STEPS.txt](OWNER-STEPS.txt) separa comandos de leitura e futuras escritas, retorno e decisão CAS. Não copiar esse roteiro como um único script de execução.
 
