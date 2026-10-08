@@ -1,0 +1,26 @@
+{
+  "baselineOriginSha256": "6ed15712948f998328b5ba82578d3241073848a4f8ce356861a12fa890964657",
+  "baselineResultSha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+  "filesSha256": {
+    "baseline_contract.py": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+    "ecosystem_contract.py": "b1b5816574b351d924777959208ae159dac2ed2b95536beca0a4350cce6f232a",
+    "prepare_post_unfence_return.py": "ef5b840b2c589a1779005b135b63814128734a987f53821c9d015475f0e47135",
+    "sequencer.py": "b6abd49db636cc77d9255fbdfcde8089af3a98699240e3235dab45ee4451e86d",
+    "test_baseline_contract.py": "a2e7e08effa203a237a529373fa295e3bc5bb3b791dd1717e7193737332b76a8",
+    "test_composition_pm2.py": "eff10f934ef675b53284f0d7f683cfd6305f3357237ee076d8e6150ab50f0670",
+    "test_composition_template.py": "f223d66ab20e56e30c24c639176c474e96d8b3084b1587aab683d04d33b83f57",
+    "test_ecosystem_contract.py": "1f9a3775ec2a98f4018e94a0f425d9b42d36698f8c3d6cc0ee36372f04215d69",
+    "test_ecosystem_pm2.py": "0f438922536a151bbed2748fac376f0d1d6bc9c90370cfb0ad2808d013942e8a",
+    "test_sequencer.py": "6e872cc594d8caf38b5ad7a63ac2c98e5aa4282b2f278dc4583345a79c3440c9"
+  },
+  "helperUnchangedSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+  "newModuleSha256": "b1b5816574b351d924777959208ae159dac2ed2b95536beca0a4350cce6f232a",
+  "partialCapturePatch": "../partial-return-capture-v4.patch",
+  "patchAppliedToAttestedOriginAndResultsVerified": true,
+  "patchSha256": "5442d27b4196310c19823af5b431da4ca840f2c4dde00fc87eceb77a866117d1",
+  "postUnfenceTemplateOriginSha256": "bbca306122d1ea8b59466e9953fd60735e461f5fa14fb357601948adffaf183d",
+  "postUnfenceTemplatePatchAppliedToActualArchivedOriginAndResultVerified": true,
+  "postUnfenceTemplatePatchSha256": "46e0076041df7536b2c62765bd890ceaf32bdb09fc0b5c1ff68aef316fcdfd95",
+  "postUnfenceTemplateResultSha256": "ef5b840b2c589a1779005b135b63814128734a987f53821c9d015475f0e47135",
+  "sequencerPreparedSha256": "df0ba9bd3ffee691b037c9bfa67cddbb553ffa94a3011ed2f7a36ad331a57d85"
+}

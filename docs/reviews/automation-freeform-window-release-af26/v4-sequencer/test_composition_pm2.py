@@ -52,7 +52,7 @@ class LabBridge(seq.Bridge):
         if self.hook:self.hook(self.samples)
         return result
 
-def main(node,cli,ops_dir,composition=None):
+def main(node,cli,ops_dir,composition=None,modes=('switch','return','return-partial')):
     node=str(Path(node).resolve());cli=str(Path(cli).resolve());ops_dir=Path(ops_dir).resolve()
     assert subprocess.check_output([node,'--version'],text=True).strip()=='v20.20.0'
     assert json.loads((Path(cli).parents[1]/'package.json').read_text())['version']=='6.0.14'
@@ -119,7 +119,7 @@ def main(node,cli,ops_dir,composition=None):
                 stack.enter_context(patch.object(gate,'nft_absent',lambda:b'{}'if not state['fence']else (_ for _ in()).throw(RuntimeError('fence_present'))))
                 stack.enter_context(patch.object(gate,'system',root_system))
                 stack.enter_context(patch('sequencer.subprocess.run',side_effect=intercept))
-                for mode in ('switch','return','return-partial'):
+                for mode in modes:
                     for name in (seq.API,seq.WORKER):run(node,cli,env,'delete',name)
                     for name in (seq.API,seq.WORKER):run(node,cli,env,'start',str(base/mode/'ecosystem.config.cjs'),'--only',name)
                     apps=wait_apps(node,cli,env,{seq.API,seq.WORKER,seq.FRONT})
@@ -132,15 +132,16 @@ def main(node,cli,ops_dir,composition=None):
                     configs[mode][seq.WORKER]['env']={'WHATSAPP_WEB_WORKER_CONTROL_HOST':'127.0.0.1','WHATSAPP_WEB_WORKER_CONTROL_PORT':port,'WHATSAPP_WEB_WORKER_CONTROL_TOKEN':'synthetic'}
                     (base/mode/'candidate.config.private.json').write_text(json.dumps({'apps':list(configs[mode].values())}))
                     run(node,cli,env,'save','--force');shutil.copyfile(home/'dump.pm2',home/'dump.pm2.bak')
-                    value.clear();value.update({'preparation':str(base),'policySha256':'synthetic','pm2Daemon':{'pid':daemon_pid,'ticks':daemon['ticks']},'sourceProcesses':old,'targetProcesses':{mode:{n:{'cwd':configs[mode][n]['cwd'],'script':configs[mode][n]['script'],'sha256':hashlib.sha256(Path(configs[mode][n]['script']).read_bytes()).hexdigest()}for n in (seq.API,seq.WORKER)}},'savedPaths':{'pm2':str(home/'dump.pm2'),'fallback':str(home/'dump.pm2.bak')}})
+                    capture_mode='return' if mode=='return-partial' else mode
+                    value.clear();value.update({'preparation':str(base),'policySha256':'synthetic','pm2Daemon':{'pid':daemon_pid,'ticks':daemon['ticks']},'sourceProcesses':old,'targetProcesses':{capture_mode:{n:{'cwd':configs[mode][n]['cwd'],'script':configs[mode][n]['script'],'sha256':hashlib.sha256(Path(configs[mode][n]['script']).read_bytes()).hexdigest()}for n in (seq.API,seq.WORKER)}},'savedPaths':{'pm2':str(home/'dump.pm2'),'fallback':str(home/'dump.pm2.bak')}})
                     (base/'window/privileged-policy.private.json').write_text(json.dumps(value))
-                    state.update(fence=True,phase={'stage':'ready','mode':mode,'policySha256':'synthetic'})
+                    state.update(fence=True,phase={'stage':'ready','mode':capture_mode,'policySha256':'synthetic'})
                     # Opening/closing real local TCP sockets between the samples.
-                    b.pre_unfence(mode);before=(base/mode/'worker-before-unfence.private.json').read_bytes()
+                    b.pre_unfence(mode);before=(base/capture_mode/'worker-before-unfence.private.json').read_bytes()
                     control(mode,'open');b.pre_unfence(mode)
-                    archives=list((base/mode).glob('worker-before-unfence.*.private.json'));assert any(a.read_bytes()==before for a in archives)
-                    gate.validate_live_capture(value,mode);checks.append(mode+':renew_open_sockets:PASS_REAL')
-                    control(mode,'close');b.pre_unfence(mode);gate.validate_live_capture(value,mode);checks.append(mode+':renew_close_sockets:PASS_REAL')
+                    archives=list((base/capture_mode).glob('worker-before-unfence.*.private.json'));assert any(a.read_bytes()==before for a in archives)
+                    gate.validate_live_capture(value,capture_mode);checks.append(mode+':renew_open_sockets:PASS_REAL')
+                    control(mode,'close');b.pre_unfence(mode);gate.validate_live_capture(value,capture_mode);checks.append(mode+':renew_close_sockets:PASS_REAL')
                     b.samples=0;b.hook=lambda i:control(mode,'open')if i%2==1 else None
                     expect_deny(lambda:b.pre_unfence(mode),'worker_capture_unstable_after_3_attempts');assert b.samples==6 and state['fence'];checks.append(mode+':persistent_churn:DENIED_REAL')
                     b.hook=None;b.pre_unfence(mode)
@@ -156,7 +157,7 @@ def main(node,cli,ops_dir,composition=None):
                     failures=[x for x in private if x['exitCode']==1]
                     import base64
                     assert any(b'worker_capture_sockets_drift' in base64.b64decode(x['stderrBase64'])for x in failures)
-                    state['fence']=True;state['phase']={'stage':'ready','mode':mode,'policySha256':'synthetic'}
+                    state['fence']=True;state['phase']={'stage':'ready','mode':capture_mode,'policySha256':'synthetic'}
                     before_ids={n:(b.apps()[n]['pid'],b.apps()[n]['pm2_env']['restart_time'])for n in b.apps()}
                     root_calls=[0]
                     def transient():
@@ -168,13 +169,13 @@ def main(node,cli,ops_dir,composition=None):
                     assert root_calls[0]==2 and not state['fence']
                     assert before_ids=={n:(b.apps()[n]['pid'],b.apps()[n]['pm2_env']['restart_time'])for n in b.apps()}
                     checks.append(mode+':transient_root_refusal_private_error_no_repeated_start:PASS_REAL')
-                    state['fence']=True;state['phase']={'stage':'ready','mode':mode,'policySha256':'synthetic'}
+                    state['fence']=True;state['phase']={'stage':'ready','mode':capture_mode,'policySha256':'synthetic'}
                     marker=base/mode/('started-'+seq.WORKER+'.json');saved=marker.read_bytes();bad=json.loads(saved);bad['identity']['ticks']='0';marker.write_text(json.dumps(bad))
                     expect_deny(lambda:b.pre_unfence(mode),'worker_capture_identity_drift','successor_identity_or_config_drift');marker.write_bytes(saved);checks.append(mode+':identity_mismatch:DENIED_REAL_WITH_TICKS_INJECTED')
                     b.pre_unfence(mode)
                     child=int(control(mode,'child'))
                     try:
-                        expect_deny(lambda:b.pre_unfence(mode),'worker_capture_identity_or_tree_drift');expect_deny(lambda:gate.validate_live_capture(value,mode),'worker_capture_tree_drift');checks.append(mode+':surviving_descendant:DENIED_REAL')
+                        expect_deny(lambda:b.pre_unfence(mode),'worker_capture_identity_or_tree_drift');expect_deny(lambda:gate.validate_live_capture(value,capture_mode),'worker_capture_tree_drift');checks.append(mode+':surviving_descendant:DENIED_REAL')
                     finally:os.kill(child,15)
                     prior_pid=apps[seq.WORKER]['pid']
                     run(node,cli,env,'restart',seq.WORKER)
@@ -183,7 +184,7 @@ def main(node,cli,ops_dir,composition=None):
                     checks.append(mode+':real_worker_substitution:DENIED_REAL')
                     old={n:{'pid':apps[n]['pid'],'ticks':gate.process_identity(apps[n]['pid'])['ticks']}for n in apps}
                 # A real captured descendant outlives its worker. No successor starts.
-                apps=b.apps();parent=apps[seq.WORKER]['pid'];child=int(control('return-partial','detached-child'))
+                apps=b.apps();parent=apps[seq.WORKER]['pid'];child=int(control(modes[-1],'detached-child'))
                 parent_id=gate.process_identity(parent);child_id=gate.process_identity(child)
                 prior={'status':'absent-proven','pid':parent,'ticks':parent_id['ticks'],
                        'pgid':os.getpgid(parent),'sid':os.getsid(parent),'uid':os.getuid(),
@@ -203,8 +204,8 @@ def main(node,cli,ops_dir,composition=None):
                     checks.append('return:worker_exited_descendant_survives:DENIED_REAL')
                 finally:os.kill(child,15)
                 # Same real PM2/socket runs; synthetic log payloads are covered separately.
-                assert state['deletes']==(6 if composition else 3)
-            print(json.dumps({'node':'20.20.0','pm2':'6.0.14','checks':checks,'operationsSha256':hashlib.sha256((ops_dir/'ops.py').read_bytes()).hexdigest(),'limits':'nft/phase effects simulated; no DB/providers; PID mismatch injected; processes/sockets/descendants real'},indent=2))
+                assert state['deletes']==len(modes)*(2 if composition else 1)
+            return {'node':'20.20.0','pm2':'6.0.14','checks':checks,'operationsSha256':hashlib.sha256((ops_dir/'ops.py').read_bytes()).hexdigest(),'limits':'nft/phase effects simulated; no DB/providers; PID mismatch injected; processes/sockets/descendants real'}
         finally:
             run(node,cli,env,'kill')
 if __name__=='__main__':
@@ -217,4 +218,6 @@ if __name__=='__main__':
         if name=='privileged':gate=module
         if name=='sequencer':seq=module
     LabBridge.__bases__=(seq.Bridge,)
-    main(sys.argv[1],sys.argv[2],composition/'switch',composition)
+    # Each mode is a fresh preparation; a return capture from another live
+    # identity must never be cleared to make a partial return pass.
+    print(json.dumps({'runs':[main(sys.argv[1],sys.argv[2],composition/'switch',composition,(mode,)) for mode in ('switch','return','return-partial')]},indent=2))

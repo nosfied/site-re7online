@@ -15,7 +15,7 @@ from sequencer import API, WORKER, FRONT, Bridge, Sequencer, guard_state
 def config(version):
     return {name: {'name': name, 'cwd': '/synthetic/' + version,
                    'script': '/synthetic/' + version + '/' + name,
-                   'env': {'BUILD': version}} for name in (API, WORKER, FRONT)}
+                   'watch': False, 'env': {'BUILD': version}} for name in (API, WORKER, FRONT)}
 
 
 class FakeBridge:
@@ -53,6 +53,9 @@ class FakeBridge:
                 json.dumps({'apps': list(source.values())}))
             (folder / 'candidate.config.private.json').write_text(
                 json.dumps({'apps': list(target.values())}))
+        from ecosystem_contract import generate_mode
+        for mode in ('switch', 'return', 'return-partial'):
+            generate_mode(self.root / mode)
         (self.window / 'execution-gates.private.json').write_text(json.dumps({
             k: True for k in ('ownerAuthorized', 'preflightReviewed', 'artifactsVerified',
                                'restoreVerified', 'discrepanciesResolved')}))

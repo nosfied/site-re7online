@@ -24,7 +24,7 @@ class Baselines(unittest.TestCase):
         self.guard={'version':1,'open':False,'generation':31,'tasks':{},'audit':[],'ledgerFault':None}
         self.guardfile=self.root/'ledger.json';self.guardfile.write_text(json.dumps(self.guard));self.effects=[];self.cron='before\n';self.supervision='ActiveState=inactive\nUnitFileState=enabled\n'
         self.front=self.root/'frontend';(self.front/'.next').mkdir(parents=True);(self.front/'.next/BUILD_ID').write_text('synthetic-build')
-        self.config={'apps':[{'name':n,'cwd':str(self.front),'script':str(self.front/'index.js'),'interpreter':'/synthetic/node','env':{'CAMPAIGN_BUILD_ID':'synthetic'}}for n in ('re7-whatsapp-agent','re7-whatsapp-web-worker','re7-admin-front')]}
+        self.config={'apps':[{'name':n,'cwd':str(self.front),'script':str(self.front/'index.js'),'interpreter':'/synthetic/node','watch':False,'env':{'CAMPAIGN_BUILD_ID':'synthetic'}}for n in ('re7-whatsapp-agent','re7-whatsapp-web-worker','re7-admin-front')]}
         self.functional=contract.capture_functional({'flags':['tenant'],'connected':['session'],'auth':['auth']},self.front)
         self.initial=contract.capture_operational(self.readguard,self.osrun,restore_open=True)
         self.write_initial(self.initial)
@@ -36,6 +36,10 @@ class Baselines(unittest.TestCase):
             for n in ('ops.py','delegated.py','db_owner_set_gate.py','db_owner_set_observer.py','privileged_output.py','baseline_contract.py','execution-check.cjs','open.cjs'):
                 (d/n).write_bytes((PACKAGE/mode/n).read_bytes().replace(BOUND.encode(),str(self.root).encode()))
             for n in ('candidate','return'):(d/(n+'.config.private.json')).write_text(json.dumps(self.config))
+            from ecosystem_contract import generate_mode
+            generate_mode(d)
+            (d/'ecosystem_contract.py').write_bytes((Path(__file__).parent/'ecosystem_contract.py').read_bytes())
+            (d/'baseline_contract.py').write_bytes((Path(__file__).parent/'baseline_contract.py').read_bytes())
             (d/'baseline.private.json').write_text(json.dumps(self.functional))
             (d/'plan.private.json').write_text(json.dumps({'direction':'switch'if mode=='switch'else'return','recovery':mode=='return-partial'}))
             self.manifest(d)

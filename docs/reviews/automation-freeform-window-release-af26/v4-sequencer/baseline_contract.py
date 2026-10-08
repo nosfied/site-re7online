@@ -120,6 +120,8 @@ def read_json(path, label):
 
 def validate_preparation(root, modes=None):
     root = Path(root)
+    from ecosystem_contract import validate_all
+    validate_all(root, modes or ('switch', 'return', 'return-partial'))
     initial = operational(read_json(root / 'window/initial.private.json', 'operational'))
     modes = modes or ('switch', 'return', 'return-partial')
     baselines = []

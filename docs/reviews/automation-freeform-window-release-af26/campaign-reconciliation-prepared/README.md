@@ -1,5 +1,7 @@
 # Revisão final e preparação offline — 08/10/2026
 
+**Preparação nova para revisão, sem instalação/janela:** [composição corrigida, provas e comandos](operational-composition-20261008/README.md). JSON/ecosystem integral, retorno parcial integrado, manifests28 arquivos e bindings/política pós-retorno; guarda35 fechada/gates false/out.14 intacta. O registro consumido abaixo continua preservado.
+
 **RETURNED TO AFBB / CORRECTIVE API NOT DEPLOYED / PREPARATION CONSUMED.** [Registro da janela, causas e estado efetivo](window-return-result-20261008.json). Guarda35 fechada, gates false, out.14 intacta. Ida recusada por JSON/ecosystem divergentes; retorno especificamente corrigido/autorizado e comprovado. Frontend/helper/política/sudoers preservados. [Patch da captura parcial](partial-return-capture-v4.patch) e [proveniência](partial-return-capture-v4-manifest.json). Não executar novamente os blocos da tentativa consumida. Nova preparação depende da correção/validação semântica do produtor e das identidades atuais; não se declara pronta. Os resultados anteriores abaixo são históricos.
 
 [Conferência consolidada pós-reconciliação](postack-preconditions-result-20261008.json): backup/restore novo, hashes atualizados dos três modos, inventário global/out.14 e identidades conferidos19:13Z. Manifests anteriores são evidências históricas; o resultado novo fixa as referências atuais. Nenhuma execução de janela nesta rodada.

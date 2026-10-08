@@ -1,0 +1,97 @@
+{
+  "attestedOpsOriginSha256": "df8df75bf9c5131caa5bdbaec01c97e38ae6235a134b6f4c83aae1db86e49e19",
+  "baselineChainTests": {
+    "effects": "real Node20 subprocess and baseline/delegated modules; dangerous effects simulated",
+    "passed": 13
+  },
+  "capturePm2": {
+    "runs": [
+      {
+        "checks": [
+          "switch:renew_open_sockets:PASS_REAL",
+          "switch:renew_close_sockets:PASS_REAL",
+          "switch:persistent_churn:DENIED_REAL",
+          "switch:persistent_root_capture_race:DENIED_REAL",
+          "switch:root_revalidation_and_unfence:PASS_REAL_WITH_NFT_SIMULATED",
+          "switch:transient_root_refusal_private_error_no_repeated_start:PASS_REAL",
+          "switch:identity_mismatch:DENIED_REAL_WITH_TICKS_INJECTED",
+          "switch:surviving_descendant:DENIED_REAL",
+          "switch:real_worker_substitution:DENIED_REAL",
+          "return:worker_exited_descendant_survives:DENIED_REAL"
+        ],
+        "limits": "nft/phase effects simulated; no DB/providers; PID mismatch injected; processes/sockets/descendants real",
+        "node": "20.20.0",
+        "operationsSha256": "df8df75bf9c5131caa5bdbaec01c97e38ae6235a134b6f4c83aae1db86e49e19",
+        "pm2": "6.0.14"
+      },
+      {
+        "checks": [
+          "return:renew_open_sockets:PASS_REAL",
+          "return:renew_close_sockets:PASS_REAL",
+          "return:persistent_churn:DENIED_REAL",
+          "return:persistent_root_capture_race:DENIED_REAL",
+          "return:root_revalidation_and_unfence:PASS_REAL_WITH_NFT_SIMULATED",
+          "return:transient_root_refusal_private_error_no_repeated_start:PASS_REAL",
+          "return:identity_mismatch:DENIED_REAL_WITH_TICKS_INJECTED",
+          "return:surviving_descendant:DENIED_REAL",
+          "return:real_worker_substitution:DENIED_REAL",
+          "return:worker_exited_descendant_survives:DENIED_REAL"
+        ],
+        "limits": "nft/phase effects simulated; no DB/providers; PID mismatch injected; processes/sockets/descendants real",
+        "node": "20.20.0",
+        "operationsSha256": "df8df75bf9c5131caa5bdbaec01c97e38ae6235a134b6f4c83aae1db86e49e19",
+        "pm2": "6.0.14"
+      },
+      {
+        "checks": [
+          "return-partial:renew_open_sockets:PASS_REAL",
+          "return-partial:renew_close_sockets:PASS_REAL",
+          "return-partial:persistent_churn:DENIED_REAL",
+          "return-partial:persistent_root_capture_race:DENIED_REAL",
+          "return-partial:root_revalidation_and_unfence:PASS_REAL_WITH_NFT_SIMULATED",
+          "return-partial:transient_root_refusal_private_error_no_repeated_start:PASS_REAL",
+          "return-partial:identity_mismatch:DENIED_REAL_WITH_TICKS_INJECTED",
+          "return-partial:surviving_descendant:DENIED_REAL",
+          "return-partial:real_worker_substitution:DENIED_REAL",
+          "return:worker_exited_descendant_survives:DENIED_REAL"
+        ],
+        "limits": "nft/phase effects simulated; no DB/providers; PID mismatch injected; processes/sockets/descendants real",
+        "node": "20.20.0",
+        "operationsSha256": "df8df75bf9c5131caa5bdbaec01c97e38ae6235a134b6f4c83aae1db86e49e19",
+        "pm2": "6.0.14"
+      }
+    ]
+  },
+  "contractTests": {
+    "passed": 6,
+    "subcases": "30 field mismatches across six files; executable injection, symlink, duplicate JSON keys, overwrite denied"
+  },
+  "failuresPreserved": [
+    "Sandbox denied PM2 sockets and Node spawnSync; reruns outside sandbox passed.",
+    "First capture fixture incorrectly reused return capture for a different partial-return identity; correctly denied; final cases use separate fresh temporary preparations.",
+    "Initial artifact read used app as relative manifest base instead of release; all 8820 paths reported missing. Corrected base per manifest; no expected hash or artifact altered."
+  ],
+  "functionalRebuild": false,
+  "opsDifference": "Only fixed preparation path; byte correspondence checked. Logic unchanged.",
+  "pm2Sequence": {
+    "checks": [
+      "switch: real Node20/PM2 composition + effective /proc config; frontend preserved; unique starts",
+      "return: real Node20/PM2 composition + effective /proc config; frontend preserved; unique starts",
+      "return-partial: real Node20/PM2 composition + effective /proc config; frontend preserved; unique starts",
+      "JSON/ecosystem drift: denied before close/privileged/stop/start"
+    ],
+    "limits": "Synthetic timers; real PM2, /proc identities/config/tree. DB, nft, cron, certificates and privileged calls simulated; capture root revalidation covered by separate existing evidence.",
+    "node": "20.20.0",
+    "pm2": "6.0.14"
+  },
+  "postUnfenceTemplateTests": {
+    "module": "prepare_post_unfence_return.py",
+    "passed": 4,
+    "scope": "effective generated 28-file manifest and JSON/CJS contract, live/absent-worker fixture; real Node20 SQL/classifier loading; DB, root absence and policy generation simulated"
+  },
+  "preparedOpsSha256": "3604a6f56092cf841cc69da2bfaf71440522984bf228d5967c29bcdf7fbf356b",
+  "sequenceSimulationTests": {
+    "effects": "deterministic simulation",
+    "passed": 24
+  }
+}

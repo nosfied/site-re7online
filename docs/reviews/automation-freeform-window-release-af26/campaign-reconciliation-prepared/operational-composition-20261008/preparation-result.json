@@ -1,0 +1,184 @@
+{
+  "allGatesFalse": true,
+  "allSixEcosystemsValidated": true,
+  "at": "2026-10-08T21:28:59.073054+00:00",
+  "backupDumpSha256": "796d1743ff032fe80e32d7941a9f2f2b7f40884f4a4571b958414173acd96f4a",
+  "backupReuseOnlyFresherCheckRequiredBeforeWindow": true,
+  "baselineContractSha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+  "baselineCounts": {
+    "return": {
+      "auth": 5,
+      "connected": 4,
+      "flags": 3
+    },
+    "return-partial": {
+      "auth": 5,
+      "connected": 4,
+      "flags": 3
+    },
+    "switch": {
+      "auth": 5,
+      "connected": 4,
+      "flags": 3
+    }
+  },
+  "ecosystemContractSha256": "b1b5816574b351d924777959208ae159dac2ed2b95536beca0a4350cce6f232a",
+  "functionalRebuild": false,
+  "guardClosed35": true,
+  "helperSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+  "identities": {
+    "re7-admin-front": {
+      "pid": 3438948,
+      "restartCount": 0,
+      "ticks": "2120147745"
+    },
+    "re7-whatsapp-agent": {
+      "pid": 3610638,
+      "restartCount": 0,
+      "ticks": "2127625883"
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 3610861,
+      "restartCount": 0,
+      "ticks": "2127626254"
+    }
+  },
+  "modeFileCount": 28,
+  "modeFilesSha256": {
+    "return": {
+      "backup-manifest.json": "eaecb387dfdc2c633370dc8ed77d2dabbfdfd507411fb75d9fd8324bff79ac1a",
+      "baseline.private.json": "9dbd5488cfc40c917e994dd88341e46fb90070fadfc6018af492b22f112d686c",
+      "baseline_contract.py": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+      "candidate.config.private.json": "4d77f8cc9bf939a77c82a7d63503c835fb26b9c3486d7770307c0ddc063df752",
+      "candidate.ecosystem.config.cjs": "78b51085ccb6e7026999603297033e555e73fe4bb427482ffdc9a0c417ff89ba",
+      "close.cjs": "f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19",
+      "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+      "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+      "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+      "delegated.py": "9eb1741fc8660f3acab954e42ce6065ac0e7af999073ea5943d705e2caef522d",
+      "ecosystem_contract.py": "b1b5816574b351d924777959208ae159dac2ed2b95536beca0a4350cce6f232a",
+      "execution-check.cjs": "e424c127ddee838cd065a0dd9f1af674f428f6846bb24695d3b8d565dc9a7af4",
+      "open.cjs": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+      "ops.py": "3604a6f56092cf841cc69da2bfaf71440522984bf228d5967c29bcdf7fbf356b",
+      "plan.private.json": "6cb4a32380d07dbd9b6b05a29293edfdb63cb7a8d1a84ddc2ca26ffd26872cf5",
+      "preparation-bindings.cjs": "8df1e31440dd4dc9769b08587de2ba9cad8d17673212472f03a01e231232da05",
+      "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+      "proof-bindings.private.json": "b042991da98910de373fb3ccad3af7be0f8539c51fc1270b6699ca25b9f70dc0",
+      "read-state.py": "c0d9768cf2e10ad6515831d5638f66fdfaf3b35ca0d541aa6c096d5ea8e0550e",
+      "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+      "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+      "return.config.private.json": "d95c2b8397c09b01b0db078e2a33823b4c1176172fd0b29449ce1bfd6a681ef7",
+      "return.ecosystem.config.cjs": "b7c5c27e4f7f8255ed466eb1e5b01c34260a7914c3dc37b95ee82edcba8e6763",
+      "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+      "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+      "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+      "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+      "waiting-work.cjs": "6da3f72d4197f5e1f0a28cf454e75a5504da110fdb31d2391ede98e5731616d5"
+    },
+    "return-partial": {
+      "backup-manifest.json": "eaecb387dfdc2c633370dc8ed77d2dabbfdfd507411fb75d9fd8324bff79ac1a",
+      "baseline.private.json": "9dbd5488cfc40c917e994dd88341e46fb90070fadfc6018af492b22f112d686c",
+      "baseline_contract.py": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+      "candidate.config.private.json": "4d77f8cc9bf939a77c82a7d63503c835fb26b9c3486d7770307c0ddc063df752",
+      "candidate.ecosystem.config.cjs": "78b51085ccb6e7026999603297033e555e73fe4bb427482ffdc9a0c417ff89ba",
+      "close.cjs": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768",
+      "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+      "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+      "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+      "delegated.py": "9eb1741fc8660f3acab954e42ce6065ac0e7af999073ea5943d705e2caef522d",
+      "ecosystem_contract.py": "b1b5816574b351d924777959208ae159dac2ed2b95536beca0a4350cce6f232a",
+      "execution-check.cjs": "e424c127ddee838cd065a0dd9f1af674f428f6846bb24695d3b8d565dc9a7af4",
+      "open.cjs": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+      "ops.py": "3604a6f56092cf841cc69da2bfaf71440522984bf228d5967c29bcdf7fbf356b",
+      "plan.private.json": "84e12608f5abbf182d8980bdec5adf98f1b8bbac26b221e6296e5d4207f9ba10",
+      "preparation-bindings.cjs": "8df1e31440dd4dc9769b08587de2ba9cad8d17673212472f03a01e231232da05",
+      "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+      "proof-bindings.private.json": "b042991da98910de373fb3ccad3af7be0f8539c51fc1270b6699ca25b9f70dc0",
+      "read-state.py": "c0d9768cf2e10ad6515831d5638f66fdfaf3b35ca0d541aa6c096d5ea8e0550e",
+      "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+      "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+      "return.config.private.json": "d95c2b8397c09b01b0db078e2a33823b4c1176172fd0b29449ce1bfd6a681ef7",
+      "return.ecosystem.config.cjs": "b7c5c27e4f7f8255ed466eb1e5b01c34260a7914c3dc37b95ee82edcba8e6763",
+      "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+      "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+      "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+      "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+      "waiting-work.cjs": "6da3f72d4197f5e1f0a28cf454e75a5504da110fdb31d2391ede98e5731616d5"
+    },
+    "switch": {
+      "backup-manifest.json": "eaecb387dfdc2c633370dc8ed77d2dabbfdfd507411fb75d9fd8324bff79ac1a",
+      "baseline.private.json": "9dbd5488cfc40c917e994dd88341e46fb90070fadfc6018af492b22f112d686c",
+      "baseline_contract.py": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+      "candidate.config.private.json": "d95c2b8397c09b01b0db078e2a33823b4c1176172fd0b29449ce1bfd6a681ef7",
+      "candidate.ecosystem.config.cjs": "b7c5c27e4f7f8255ed466eb1e5b01c34260a7914c3dc37b95ee82edcba8e6763",
+      "close.cjs": "7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc",
+      "contain.py": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+      "db_owner_set_gate.py": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+      "db_owner_set_observer.py": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+      "delegated.py": "9eb1741fc8660f3acab954e42ce6065ac0e7af999073ea5943d705e2caef522d",
+      "ecosystem_contract.py": "b1b5816574b351d924777959208ae159dac2ed2b95536beca0a4350cce6f232a",
+      "execution-check.cjs": "e424c127ddee838cd065a0dd9f1af674f428f6846bb24695d3b8d565dc9a7af4",
+      "open.cjs": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+      "ops.py": "3604a6f56092cf841cc69da2bfaf71440522984bf228d5967c29bcdf7fbf356b",
+      "plan.private.json": "96ae69b06dcef3084c9e5aa26a8cc7caccf3285fb8daa871432e69fd564897b0",
+      "preparation-bindings.cjs": "8df1e31440dd4dc9769b08587de2ba9cad8d17673212472f03a01e231232da05",
+      "privileged_output.py": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+      "proof-bindings.private.json": "b042991da98910de373fb3ccad3af7be0f8539c51fc1270b6699ca25b9f70dc0",
+      "read-state.py": "c0d9768cf2e10ad6515831d5638f66fdfaf3b35ca0d541aa6c096d5ea8e0550e",
+      "recover-partial.py": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+      "restore-controls.py": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+      "return.config.private.json": "4d77f8cc9bf939a77c82a7d63503c835fb26b9c3486d7770307c0ddc063df752",
+      "return.ecosystem.config.cjs": "78b51085ccb6e7026999603297033e555e73fe4bb427482ffdc9a0c417ff89ba",
+      "start-one.py": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+      "stop-pair.py": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+      "unfence.py": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+      "validate.cjs": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+      "waiting-work.cjs": "6da3f72d4197f5e1f0a28cf454e75a5504da110fdb31d2391ede98e5731616d5"
+    }
+  },
+  "modeManifests": {
+    "return": "23aca572b47822166d59e4d3289a93f0ae84038d646d461f84d6ab69e1d7c105",
+    "return-partial": "ec6059ef69e170a4455ff06456d624423175b6eae3bd511d569d9edb59815194",
+    "switch": "2fbedc08438f0f9cf1a77973c2f41b2936327da456b621325e3c2c8164b0ca41"
+  },
+  "out14Waiting": true,
+  "pm2Daemon": {
+    "pid": 18676,
+    "ticks": "222727"
+  },
+  "policyInstalled": false,
+  "policySha256": "38a20f3c9bba0dbf009cdf7db292c6b4a2f627200843f4a6f0fbbd7f505ddd4c",
+  "postUnfenceTemplateSha256": "ef5b840b2c589a1779005b135b63814128734a987f53821c9d015475f0e47135",
+  "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-ecosystem-20261008T211000Z",
+  "proxyVerified": true,
+  "sequencerManifestSha256": "c0eb34087b274011d16d14336720e45835cea0fbfb9f43ecc7d29b60358777b4",
+  "sequencerSha256": "df0ba9bd3ffee691b037c9bfa67cddbb553ffa94a3011ed2f7a36ad331a57d85",
+  "status": "PREPARED_FOR_REVIEW_NOT_INSTALLED_NOT_EXECUTED",
+  "targetProcesses": {
+    "return": {
+      "re7-whatsapp-agent": {
+        "cwd": "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api/apps/whatsapp-agent",
+        "script": "/opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api/apps/whatsapp-agent/dist/index.js",
+        "sha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+      },
+      "re7-whatsapp-web-worker": {
+        "cwd": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker",
+        "script": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker/dist/whatsapp-web-worker/src/index.js",
+        "sha256": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd"
+      }
+    },
+    "switch": {
+      "re7-whatsapp-agent": {
+        "cwd": "/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008/apps/whatsapp-agent",
+        "script": "/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008/apps/whatsapp-agent/dist/index.js",
+        "sha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+      },
+      "re7-whatsapp-web-worker": {
+        "cwd": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker",
+        "script": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker/dist/whatsapp-web-worker/src/index.js",
+        "sha256": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd"
+      }
+    }
+  },
+  "templateOriginalPreserved": true
+}

@@ -1,0 +1,44 @@
+# PARA REVISÃO. Não executado nesta etapa. Helper e nove comandos sudo inalterados.
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-ecosystem-20261008T211000Z
+W="$P/window"
+H=/usr/local/libexec/re7/incident-6683-window-control.py
+Q=/usr/local/libexec/re7/incident-6683-window-policy.json
+S=/etc/sudoers.d/re7-incident-6683-window
+OLD=/usr/local/libexec/re7/incident-6683-window-policy.pre-ecosystem-211000.json
+test "$(sha256sum "$H" | cut -d' ' -f1)" = 8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212
+test "$(sha256sum "$W/privileged-policy.private.json" | cut -d' ' -f1)" = 38a20f3c9bba0dbf009cdf7db292c6b4a2f627200843f4a6f0fbbd7f505ddd4c
+test "$(sha256sum "$W/sequencer.py" | cut -d' ' -f1)" = df0ba9bd3ffee691b037c9bfa67cddbb553ffa94a3011ed2f7a36ad331a57d85
+test "$(sha256sum "$W/ecosystem_contract.py" | cut -d' ' -f1)" = b1b5816574b351d924777959208ae159dac2ed2b95536beca0a4350cce6f232a
+for M in switch return return-partial; do (cd "$P/$M" && sha256sum -c scripts.sha256); done
+python3 "$W/ecosystem_contract.py" validate "$P"
+python3 "$W/baseline_contract.py" "$P"
+python3 - "$W" <<'CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);g=json.loads((p/'execution-gates.private.json').read_text())
+assert set(g)=={'ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved'} and all(v is False for v in g.values())
+v=json.loads((p/'sequencer-manifest.json').read_text())
+import hashlib
+assert all(Path(n).name==n and hashlib.sha256((p/n).read_bytes()).hexdigest()==h for n,h in v['filesSha256'].items())
+print('GATES_FALSE_WINDOW_MANIFEST_PASS')
+CHECK
+sudo test ! -e "$OLD" && sudo test ! -L "$OLD"
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = 7b8ef5c45edc237a144ec4718753ad53ec53609fc3ecdb5be39484127f604ff1
+sudo cmp "$W/re7-incident-6683-window.sudoers.proposed" "$S"
+sudo visudo -c
+sudo install -o root -g root -m 0600 "$Q" "$OLD"
+sudo install -o root -g root -m 0600 "$W/privileged-policy.private.json" "$Q"
+sudo test "$(sudo sha256sum "$Q" | cut -d' ' -f1)" = 38a20f3c9bba0dbf009cdf7db292c6b4a2f627200843f4a6f0fbbd7f505ddd4c
+sudo namei -l "$H" "$Q" "$OLD"
+sudo stat -c '%U %G %a %n' "$H" "$Q" "$S"
+sudo visudo -c
+python3 - "$P" <<'CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);sys.path.insert(0,str(p/'window'))
+from sequencer import Bridge
+v=json.loads(Bridge(p).privileged('inspect'))
+assert v=={'policySha256':'38a20f3c9bba0dbf009cdf7db292c6b4a2f627200843f4a6f0fbbd7f505ddd4c','phase':None,'sourceProcessesAlive':True}
+print('POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE')
+CHECK

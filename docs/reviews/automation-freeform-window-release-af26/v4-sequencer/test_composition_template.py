@@ -23,10 +23,11 @@ class Composition(unittest.TestCase):
         self.original.mkdir();self.window=self.original/'window';self.window.mkdir()
         for mode in ('switch','return','return-partial'):
             shutil.copytree(PACKAGE/mode,self.original/mode)
-            for n in ('ops.py','delegated.py','read-state.py','execution-check.cjs'):
+            for n in ('ops.py','delegated.py','read-state.py','execution-check.cjs','preparation-bindings.cjs'):
                 f=self.original/mode/n;f.write_bytes(f.read_bytes().replace(PRIVATE_SOURCE.encode(),str(self.original).encode()))
-        for n in ('privileged.py','sequencer.py','prepare_policy.py','prepare_post_unfence_return.py','privileged_output.py','absent-worker-return.patch','sequencer-manifest.json','baseline_contract.py'):
+        for n in ('privileged.py','sequencer.py','prepare_policy.py','prepare_post_unfence_return.py','privileged_output.py','absent-worker-return.patch','sequencer-manifest.json','baseline_contract.py','ecosystem_contract.py'):
             shutil.copyfile(PACKAGE/'window'/n,self.window/n)
+        shutil.copyfile(Path(__file__).parent/'prepare_post_unfence_return.py',self.window/'prepare_post_unfence_return.py')
         self.template=load('composed_template',self.window/'prepare_post_unfence_return.py')
         self.template.BASE=self.base
         self.guard={'version':1,'open':False,'generation':28,'tasks':{},'audit':[]}
@@ -34,7 +35,7 @@ class Composition(unittest.TestCase):
         self.apps={};self.config={};self.returned={}
         for i,n in enumerate((self.template.API,self.template.WORKER,self.template.FRONT),101):
             d=self.base/n;d.mkdir();(d/'index.js').write_text('synthetic');(d/'.next').mkdir();(d/'.next/BUILD_ID').write_text('synthetic-build')
-            c={'name':n,'cwd':str(d),'script':str(d/'index.js'),'env':{'DATABASE_URL':'postgresql://synthetic@127.0.0.1:5432/synthetic'}}
+            c={'name':n,'cwd':str(d),'script':str(d/'index.js'),'watch':False,'env':{'DATABASE_URL':'postgresql://synthetic@127.0.0.1:5432/synthetic'}}
             self.config[n]=c;self.returned[n]=c.copy()
             self.apps[n]={'name':n,'pid':i,'pm2_env':{'pm_cwd':c['cwd'],'pm_exec_path':c['script'],'watch':False,'status':'online'}}
             (self.original/'switch'/('started-'+n+'.json')).write_text(json.dumps({'pid':i,'identity':{'ticks':str(i)}}))
@@ -43,13 +44,14 @@ class Composition(unittest.TestCase):
             (self.original/mode/'return.config.private.json').write_text(json.dumps({'apps':list(self.returned.values())}))
         self.proxy={'identity':{'pid':99,'ticks':'99'},'exeSha256':'synthetic-proxy'}
         binding={'proxyIdentity':self.proxy['identity'],'proxySha256':self.proxy['exeSha256'],'containerId':'synthetic'}
-        for n in ('automation-fence.nft','re7-converta-backup.before','re7-converta-backup.window','deploy.crontab.before','deploy.crontab.window','frontend-build-env.private.json','path-bindings.private.json','backup-manifest.private.json','restore-result.json','re7-incident-6683-window.sudoers.proposed'):
+        for n in ('automation-fence.nft','re7-converta-backup.before','re7-converta-backup.window','deploy.crontab.before','deploy.crontab.window','frontend-build-env.private.json','path-bindings.private.json','backup-manifest.private.json','restore-result.json','re7-incident-6683-window.sudoers.proposed','waiting-work.private.json'):
             (self.window/n).write_text('{}')
         (self.window/'db-owner-bindings.private.json').write_text(json.dumps(binding))
         (self.window/'privileged-policy.sha256').write_text('synthetic')
         (self.original/'switch/owner-unfence-authorized.json').write_text('{}')
         (self.original/'switch/old-exit-confirmed.json').write_text(json.dumps({'frontend':{'pid':103,'identity':{'ticks':'103'}}}))
-        self.real_read=Path.read_text;self.real_run=subprocess.run
+        (self.window/'waiting-work.private.json').write_text(json.dumps({'version':1,'guardMustRemainClosed':True,'jobs':[],'groups':[],'leases':0,'sendingScheduled':[]}))
+        self.real_read=Path.read_text;self.real_run=subprocess.run;self.real_output=subprocess.check_output
         self.root_checks=[]
     def tearDown(self):self.temp.cleanup()
     def execute(self,absent=False):
@@ -69,7 +71,8 @@ class Composition(unittest.TestCase):
             if args[-1]=='jlist':return json.dumps(list(self.apps.values())).encode()
             if args[0]=='systemctl':return 'ActiveState=inactive\nUnitFileState=enabled\n'
             if args[0]=='crontab':return b'{}'
-            if args[0]=='docker':return json.dumps({'jobs':0,'groups':0,'leases':0,'sendingScheduled':0,'flags':[],'connected':[],'auth':[]})
+            if args[0]=='/usr/bin/node':return self.real_output(['/tmp/re7-pm2-lab/node',*args[1:]],**kw)
+            if args[0]=='docker':return json.dumps({'jobs':[],'groups':[],'leases':0,'sendingScheduled':[],'flags':[],'connected':[],'auth':[]})
             raise AssertionError('unexpected_command')
         def run(args,**kw):
             if args[0]=='sudo':
@@ -79,6 +82,7 @@ class Composition(unittest.TestCase):
                 # Policy installation and live identity are deliberately not simulated as PASS.
                 (self.dest/'window/privileged-policy.sha256').write_text('synthetic-generated-policy')
                 return subprocess.CompletedProcess(args,0,b'',b'')
+            if args[0]=='/usr/bin/node':args=['/tmp/re7-pm2-lab/node',*args[1:]]
             return self.real_run(args,**kw)
         original_spec=importlib.util.spec_from_file_location
         def spec(name,path,*a,**kw):
@@ -105,7 +109,7 @@ class Composition(unittest.TestCase):
         self.assertEqual(set(gates),{'ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved'})
         self.assertTrue(all(x is False for x in gates.values()))
         # Hashes checked on the actual generated 26-file package, not a mocked manifest.
-        lines=(self.dest/'return/scripts.sha256').read_text().splitlines();self.assertEqual(len(lines),26)
+        lines=(self.dest/'return/scripts.sha256').read_text().splitlines();self.assertEqual(len(lines),28)
         for line in lines:
             h,n=line.split('  ',1);self.assertEqual(hashlib.sha256((self.dest/'return'/n).read_bytes()).hexdigest(),h)
         for where in ('window','switch','return'):

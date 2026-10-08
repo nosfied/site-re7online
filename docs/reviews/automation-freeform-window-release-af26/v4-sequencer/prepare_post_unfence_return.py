@@ -15,6 +15,7 @@ import sys
 import urllib.parse
 import re
 from baseline_contract import capture_operational, capture_functional, operational, validate_preparation
+from ecosystem_contract import generate_mode
 
 SOURCE_NORMALIZED = {'ops.py': 'fa7bb2240ca0bd8f34bd9bcd65e6898127d8cba428b22a58497c4de1517393f9', 'delegated.py': '37d4a75c2cd1a64266fb1e942d99ce4f12ba7404437f7003418b03607f1af4a4'}
 RESULT_NORMALIZED = {'ops.py': '0d6c7723e8c0a7a28c0f1a44850bbfe9b28655130e2e652a1891cbbceb0a6957', 'delegated.py': '0fb7b5a7c766a2b84da809a8f97b418cefcf5873425c435b11c94af61613a704'}
@@ -34,8 +35,8 @@ FRONT = 're7-admin-front'
 STATIC = ('close.cjs', 'contain.py', 'db_owner_set_gate.py',
           'db_owner_set_observer.py', 'delegated.py', 'execution-check.cjs',
           'open.cjs', 'ops.py', 'preparation-bindings.cjs', 'read-state.py',
-          'recover-partial.py', 'restore-controls.py', 'start-one.py',
-          'stop-pair.py', 'unfence.py', 'validate.cjs', 'plan.private.json', 'baseline_contract.py')
+          'recover-partial.py', 'restore-controls.py', 'waiting-work.cjs', 'start-one.py',
+          'stop-pair.py', 'unfence.py', 'validate.cjs', 'plan.private.json', 'baseline_contract.py', 'ecosystem_contract.py')
 
 
 def require(value, code):
@@ -62,6 +63,25 @@ def process_identity(pid):
 
 def config(path):
     return {app['name']: app for app in json.loads(path.read_text())['apps']}
+
+
+def read_waiting_inventory(original, container_id, db_user, db_name):
+    require(db_user and db_name, 'baseline_query_missing')
+    binding = original / 'return/preparation-bindings.cjs'
+    statement = subprocess.check_output(['/usr/bin/node', '-e',
+        'process.stdout.write(require(process.argv[1]).sql)', str(binding)], text=True, timeout=10)
+    result = subprocess.check_output(['docker', 'exec', container_id,
+        'psql', '-X', '-U', db_user, '-d', db_name, '-Atq', '-v', 'ON_ERROR_STOP=1',
+        '-c', 'BEGIN READ ONLY; SET LOCAL statement_timeout=10000; ' + statement + '; ROLLBACK;'],
+        text=True, timeout=15)
+    counts = json.loads(result.strip())
+    # Use exactly the same expected inventory and strict classifier as every mode.
+    subprocess.run(['/usr/bin/node', '-e',
+        "require(process.argv[1]).noWork(JSON.parse(require('fs').readFileSync(0,'utf8')))",
+        str(binding)], input=json.dumps(counts), text=True, timeout=10, check=True)
+    require(all(isinstance(counts.get(k), list) for k in ('flags', 'connected', 'auth')),
+        'return_work_or_baseline_ambiguous')
+    return counts
 
 
 def main(original, destination):
@@ -168,17 +188,7 @@ def main(original, destination):
     url = urllib.parse.urlparse(expected[API]['env']['DATABASE_URL'])
     db_user = urllib.parse.unquote(url.username)
     db_name = url.path.lstrip('/')
-    script = (original / 'return/preparation-bindings.cjs').read_text()
-    statement = re.search(r'sql: `(.+?)`', script, re.S)
-    require(statement is not None and db_user and db_name, 'baseline_query_missing')
-    result = subprocess.check_output(['docker', 'exec', previous_bindings['containerId'],
-             'psql', '-U', db_user, '-d', db_name, '-Atqc', statement.group(1)],
-             text=True, timeout=15)
-    counts = json.loads(result.strip())
-    require(all(type(counts.get(k)) is int and counts[k] == 0 for k in
-                ('jobs', 'groups', 'leases', 'sendingScheduled')) and
-            all(isinstance(counts.get(k), list) for k in ('flags', 'connected', 'auth')),
-            'return_work_or_baseline_ambiguous')
+    counts = read_waiting_inventory(original, previous_bindings['containerId'], db_user, db_name)
 
     destination.mkdir(mode=0o700)
     window = destination / 'window'
@@ -188,11 +198,11 @@ def main(original, destination):
     returned.mkdir(mode=0o700)
     for name in ('automation-fence.nft', 're7-converta-backup.before',
                  're7-converta-backup.window', 'deploy.crontab.before',
-                 'deploy.crontab.window', 'frontend-build-env.private.json',
+                 'deploy.crontab.window',
                  'db-owner-bindings.private.json', 'path-bindings.private.json',
                  'backup-manifest.private.json', 'restore-result.json',
-                 'prepare_policy.py', 'privileged.py', 'sequencer.py',
-                 're7-incident-6683-window.sudoers.proposed', 'privileged_output.py', 'baseline_contract.py'):
+                 'prepare_policy.py', 'privileged.py', 'sequencer.py', 'waiting-work.private.json',
+                 're7-incident-6683-window.sudoers.proposed', 'privileged_output.py', 'baseline_contract.py', 'ecosystem_contract.py'):
         shutil.copy2(original / 'window' / name, window / name)
         (window / name).chmod(0o600)
     if absent is not None:
@@ -228,12 +238,13 @@ def main(original, destination):
         path = destination / mode / name
         path.write_bytes(raw)
         path.chmod(0o600)
-    shutil.copy2(original / 'switch/ops.py', destination / 'switch/ops.py')
-    (destination / 'switch/ops.py').chmod(0o600)
+    # Bridge.app_matches imports these exact dependencies in a fresh process.
+    for name in ('ops.py', 'db_owner_set_gate.py', 'db_owner_set_observer.py'):
+        shutil.copy2(original / 'switch' / name, destination / 'switch' / name)
+        (destination / 'switch' / name).chmod(0o600)
     for name in STATIC:
         raw = (original / 'return' / name).read_bytes()
-        if name in {'ops.py', 'delegated.py', 'read-state.py', 'execution-check.cjs'}:
-            raw = raw.replace(str(original).encode(), str(destination).encode())
+        raw = raw.replace(str(original).encode(), str(destination).encode())
         path = returned / name
         path.write_bytes(raw)
         path.chmod(0o600)
@@ -266,18 +277,14 @@ def main(original, destination):
         (returned / name).chmod(0o600)
     front_release = Path(expected[FRONT]['cwd'])
     write_json(returned / 'baseline.private.json', capture_functional(counts, front_release))
-    for variant, raw in (('candidate', target_config), ('return', source_config)):
-        data = json.loads(raw)
-        path = returned / (variant + '.ecosystem.config.cjs')
-        path.write_text('module.exports = ' + json.dumps(data, separators=(',', ':')) + ';\n')
-        path.chmod(0o600)
+    generate_mode(returned)
     shutil.copy2(window / 'privileged_output.py', returned / 'privileged_output.py')
     (returned / 'privileged_output.py').chmod(0o600)
     shutil.copy2(window / 'privileged_output.py', destination / 'switch/privileged_output.py')
     (destination / 'switch/privileged_output.py').chmod(0o600)
     names = [line.split('  ', 1)[1] for line in
              (original / 'return/scripts.sha256').read_text().splitlines()]
-    require(len(names) == 26 and 'privileged_output.py' in names and
+    require(len(names) == 28 and {'privileged_output.py', 'ecosystem_contract.py', 'waiting-work.cjs'} <= set(names) and
             all((returned / name).is_file() for name in names),
             'return_static_incomplete')
     (returned / 'scripts.sha256').write_text(''.join(
