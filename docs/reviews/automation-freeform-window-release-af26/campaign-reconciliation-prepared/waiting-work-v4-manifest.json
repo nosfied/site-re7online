@@ -1,0 +1,12 @@
+{
+  "originSha256": "2191f2049c7b478f34d7e9a07026f339ca8369005e954aebf2e55d5a98a43355",
+  "resultSha256": "8df1e31440dd4dc9769b08587de2ba9cad8d17673212472f03a01e231232da05",
+  "patchSha256": "3ad8fad6498de3e6e935cbb8a248cf370918d83f7fa42a95802d403248fbadf0",
+  "moduleSha256": "5ad4e152e0c7aebcc26816d10d17880622c2682adc5afbc35d951e44e44403bb",
+  "appliesTo": [
+    "switch",
+    "return",
+    "return-partial"
+  ],
+  "requires": "waiting-work.cjs must be included in each mode manifest; waiting-work.private.json must be captured after verified reconciliation and acknowledgement, with guard closed; no markers copied."
+}

@@ -1,0 +1,7 @@
+{
+  "originSha256": "8fadca4c3071d96c6a6f82c38f1a3af8dea825b470bfbafe62f189940f348cc1",
+  "resultSha256": "0eaedc66220d5c3a8db3b582267c8f0dcddea6aae93b0c69952d938f5c548d9d",
+  "patchSha256": "f6eff4c3a2243ef307207f746f615bfceb9a675b234dea96ad3667c21d2976d7",
+  "source": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/sequencer.py",
+  "scope": "Preserve initially closed guard on switch and recovery. No change to helper, proof expiry, nonce, process or DB ownership gates."
+}

@@ -36451,7 +36451,7 @@ async function buildContactTimelinePayload(
   };
 }
 
-async function buildCampaignListPayload(
+export async function buildCampaignListPayload(
   prisma: ReturnType<typeof getPrisma>,
   params: { clientId: string; limit: number }
 ) {
@@ -36548,6 +36548,21 @@ async function buildCampaignListPayload(
     clientId: params.clientId,
     campaignIds: Array.from(campaignIds),
   });
+  // A controller has no submissions of its own. Reconciled sets reuse the child's
+  // recipient read model; assignment replaces totals and cannot count a replay twice.
+  const receipts = await prisma.event.findMany({ where: { clientId: params.clientId,
+    eventName: 'campaign.accepted_failure.reconciled', OR: [{ messageId: { in: [...campaignIds] } },
+      ...[...campaignIds].map(id => ({ payloadJson: { path: ['bindings', 'parentCampaignId'], equals: id } }))] }, select: { payloadJson: true } });
+  for (const receipt of receipts) {
+    const payload = receipt.payloadJson as { bindings?: { campaignId?: string; parentCampaignId?: string } } | null;
+    const ids = payload?.bindings;
+    if (!ids?.campaignId || !ids.parentCampaignId) continue;
+    const child = await getCampaignById(ids.campaignId, params.clientId);
+    if (!child) continue;
+    const model = await buildCampaignRecipientReadModel(prisma, child, params.clientId);
+    campaignMetaMap.set(ids.campaignId, model.metaSummary);
+    if (campaignIds.has(ids.parentCampaignId)) campaignMetaMap.set(ids.parentCampaignId, model.metaSummary);
+  }
   return {
     ok: true,
     count: campaigns.length,
@@ -36555,6 +36570,9 @@ async function buildCampaignListPayload(
       const seedMode = campaignSeedModeMap.get(campaign.id);
       return {
         ...serializeCampaign(campaign),
+        progress: { ...serializeCampaign(campaign).progress,
+          failedCount: campaignMetaMap.get(campaign.id)?.totalFailed ?? 0,
+          pendingCount: Math.max(campaign.totalRecipients - campaign.sentCount - campaign.blockedCount - (campaignMetaMap.get(campaign.id)?.totalFailed ?? 0), 0) },
         executionQueue: queueMap.get(campaign.id) ?? null,
         selectionMode: seedMode?.selectionMode ?? "STATIC_RECIPIENTS",
         dynamicFilter: seedMode?.dynamicFilter ?? null,
@@ -36638,7 +36656,7 @@ async function buildCampaignExecutionQueueMap(
   return map;
 }
 
-async function buildCampaignExecutionBatchSummary(
+export async function buildCampaignExecutionBatchSummary(
   prisma: ReturnType<typeof getPrisma>,
   params: { clientId: string; campaignId: string }
 ) {
@@ -36685,6 +36703,11 @@ async function buildCampaignExecutionBatchSummary(
     clientId: params.clientId,
     campaignIds: childCampaignIds,
   });
+  const recipientModels = new Map<string, Awaited<ReturnType<typeof buildCampaignRecipientReadModel>>>();
+  for (const item of batch.campaigns) {
+    const child = await getCampaignById(item.campaignId, params.clientId);
+    if (child) recipientModels.set(child.id, await buildCampaignRecipientReadModel(prisma, child, params.clientId));
+  }
   const chunks = batch.campaigns.map((item) => {
     const queue = queueMap.get(item.campaignId) ?? null;
     return {
@@ -36695,6 +36718,7 @@ async function buildCampaignExecutionBatchSummary(
       recipientCount: item.recipientCount,
       sentCount: item.campaign.sentCount,
       blockedCount: item.campaign.blockedCount,
+      failedCount: recipientModels.get(item.campaignId)?.metaSummary.totalFailed ?? 0,
       totalRecipients: item.campaign.totalRecipients,
       queueStatus: queue?.status ?? null,
       queuePosition: queue?.position ?? null,
@@ -36706,6 +36730,8 @@ async function buildCampaignExecutionBatchSummary(
   const totalRecipients = chunks.reduce((sum, item) => sum + item.totalRecipients, 0);
   const sentCount = chunks.reduce((sum, item) => sum + item.sentCount, 0);
   const blockedCount = chunks.reduce((sum, item) => sum + item.blockedCount, 0);
+  const failedCount = chunks.reduce((sum, item) => sum + item.failedCount, 0);
+  const resultStatuses = [...recipientModels.values()].flatMap(item => item.enrichedMessagesMetaStatus);
   const completedChunks = chunks.filter((item) => item.status === "completed").length;
   const runningChunks = chunks.filter((item) => item.queueStatus === "running" || item.status === "sending").length;
   const queuedChunks = chunks.filter((item) => item.queueStatus === "queued" || item.status === "scheduled").length;
@@ -36724,11 +36750,14 @@ async function buildCampaignExecutionBatchSummary(
     chunkCount: batch.chunkCount || chunks.length,
     currentChunkIndex: batch.currentChunkIndex ?? null,
     failureReason: batch.failureReason ?? null,
+    metaSummary: summarizeCampaignMetaStatuses(resultStatuses),
+    messagesMetaStatus: resultStatuses,
     progress: {
       totalRecipients,
       sentCount,
       blockedCount,
-      pendingCount: Math.max(totalRecipients - sentCount - blockedCount, 0),
+      failedCount,
+      pendingCount: Math.max(totalRecipients - sentCount - blockedCount - failedCount, 0),
       completedChunks,
       runningChunks,
       queuedChunks,
@@ -36738,15 +36767,13 @@ async function buildCampaignExecutionBatchSummary(
   };
 }
 
-async function buildCampaignDetailPayload(
+async function buildCampaignRecipientReadModel(
   prisma: ReturnType<typeof getPrisma>,
-  params: { clientId: string; campaignId: string }
+  campaign: NonNullable<Awaited<ReturnType<typeof getCampaignById>>>, clientId: string
 ) {
-  const campaign = await getCampaignById(params.campaignId, params.clientId);
-  if (!campaign) return null;
   const outboundMessages = await prisma.outboundMessage.findMany({
     where: {
-      clientId: params.clientId,
+      clientId: clientId,
       type: "TEMPLATE",
       createdAt: { gte: campaign.createdAt },
     },
@@ -36766,7 +36793,7 @@ async function buildCampaignDetailPayload(
     .map(buildCampaignMetaStatusItem);
   const optOutBlockEvents = await prisma.event.findMany({
     where: {
-      clientId: params.clientId,
+      clientId: clientId,
       eventName: CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT,
       messageId: campaign.id,
     },
@@ -36781,7 +36808,7 @@ async function buildCampaignDetailPayload(
     .map((item) => buildCampaignOptOutStatusItem(item, campaign.templateName))
     .filter((item): item is CampaignMetaStatus => Boolean(item));
   const draftSeed = await buildCampaignDraftSeed(prisma, {
-    clientId: params.clientId,
+    clientId: clientId,
     campaignId: campaign.id,
     campaignName: campaign.name,
     templateName: campaign.templateName,
@@ -36789,7 +36816,7 @@ async function buildCampaignDetailPayload(
   });
   const importBlockEvents = await prisma.event.findMany({
     where: {
-      clientId: params.clientId,
+      clientId: clientId,
       eventName: "campaign.recipient.import_blocked",
       messageId: campaign.id,
     },
@@ -36863,20 +36890,31 @@ async function buildCampaignDetailPayload(
           resultItems,
         });
   const client = await prisma.client.findUnique({
-    where: { id: params.clientId },
+    where: { id: clientId },
     select: { clientKey: true },
   });
   const tenants = await getTenants();
   const resolvedStatuses = await resolveCrmBusinessStatuses({
     prisma,
-    clientId: params.clientId,
+    clientId: clientId,
     tenant: client ? tenants[client.clientKey] ?? null : null,
   });
   const enrichedMessagesMetaStatus = await enrichCampaignMetaStatusWithCurrentContacts(prisma, {
-    clientId: params.clientId,
+    clientId: clientId,
     statuses: visibleMessagesMetaStatus,
     crmStatuses: resolvedStatuses.statuses,
   });
+  return { draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus,
+    metaSummary: summarizeCampaignMetaStatuses(enrichedMessagesMetaStatus) };
+}
+
+export async function buildCampaignDetailPayload(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; campaignId: string }
+) {
+  const campaign = await getCampaignById(params.campaignId, params.clientId);
+  if (!campaign) return null;
+  const readModel = await buildCampaignRecipientReadModel(prisma, campaign, params.clientId);
   const queueMap = await buildCampaignExecutionQueueMap(prisma, {
     clientId: params.clientId,
     campaignIds: [campaign.id],
@@ -36891,12 +36929,20 @@ async function buildCampaignDetailPayload(
       ...serializeCampaign(campaign),
       executionQueue: queueMap.get(campaign.id) ?? null,
       executionBatch,
-      metaSummary: summarizeCampaignMetaStatuses(enrichedMessagesMetaStatus),
-      messagesMetaStatus: enrichedMessagesMetaStatus,
-      selectionMode: draftSeed.selectionMode,
-      dynamicFilter: draftSeed.dynamicFilter ?? null,
-      draftSeed: responseDraftSeed,
-      draftReview,
+      progress: {
+        ...serializeCampaign(campaign).progress,
+        failedCount: readModel.metaSummary.totalFailed,
+        pendingCount: Math.max(campaign.totalRecipients - campaign.sentCount - campaign.blockedCount - readModel.metaSummary.totalFailed, 0),
+        ...(executionBatch && !executionBatch.chunks.some(chunk => chunk.campaignId === campaign.id) ? executionBatch.progress : {}),
+      },
+      metaSummary: executionBatch && !executionBatch.chunks.some(chunk => chunk.campaignId === campaign.id)
+        ? executionBatch.metaSummary : readModel.metaSummary,
+      messagesMetaStatus: executionBatch && !executionBatch.chunks.some(chunk => chunk.campaignId === campaign.id)
+        ? executionBatch.messagesMetaStatus : readModel.enrichedMessagesMetaStatus,
+      selectionMode: readModel.draftSeed.selectionMode,
+      dynamicFilter: readModel.draftSeed.dynamicFilter ?? null,
+      draftSeed: readModel.responseDraftSeed,
+      draftReview: readModel.draftReview,
     },
   };
 }

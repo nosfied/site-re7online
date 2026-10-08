@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { readPrivateCampaignSeedFields } from './campaignSeedPrivacy.js';
 import { campaignRecipientEligibility } from './campaignEligibility.js';
+import { parseProviderStatusTimestamp } from './campaignDeliveryTruth.js';
 import { acknowledgeReconciledCampaignTask, campaignOperationsStatus } from './campaignOperations.js';
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -25,6 +26,7 @@ export async function dryRunAcceptedFailure(db: Db, b: AcceptedFailureBindings) 
   const job = await db.campaignExecutionJob.findFirst({ where: { id: b.jobId, clientId: b.clientId, campaignId: b.campaignId, batchId: b.batchId } });
   const link = await db.campaignExecutionBatchCampaign.findFirst({ where: { clientId: b.clientId, campaignId: b.campaignId, batchId: b.batchId } });
   requireThat(campaign && parent && batch && job && link, 'reconciliation_binding_mismatch');
+  requireThat(batch.idempotencyKey === `dynamic:${b.parentCampaignId}` && batch.sourceMode === 'DYNAMIC_CRM_FILTER', 'reconciliation_controller_binding_mismatch');
   requireThat(await db.campaignExecutionBatchCampaign.count({ where: { clientId: b.clientId, batchId: b.batchId } }) === 1, 'reconciliation_multiple_chunks_unsupported');
   const receipt = await db.event.findUnique({ where: { clientId_eventName_requestId: {
     clientId: b.clientId, eventName: 'campaign.accepted_failure.reconciled', requestId: `accepted-failure:${b.acceptedEventId}`,
@@ -59,7 +61,7 @@ export async function dryRunAcceptedFailure(db: Db, b: AcceptedFailureBindings) 
     if (i > 1) blocked.push({ position: i + 1, reason, waId: recipients[i] });
   }
   const plan = { bindings: b, messageId, metaMessageId: a.metaMessageId as string, acceptedAt: accepted.createdAt,
-    failedAt: webhook.createdAt, waId: accepted.waId!, blocked, validOutboundId: valid.id, sent: 1, failed: 1, blockedCount: 4,
+    failedAt: webhook.createdAt, providerFailedAt: parseProviderStatusTimestamp(w.timestamp), providerErrors: w.errors, waId: accepted.waId!, blocked, validOutboundId: valid.id, sent: 1, failed: 1, blockedCount: 4,
     evidenceHash: hash([accepted, webhook, snapshot, campaign, parent, batch, job, link]) };
   return { alreadyApplied: false as const, plan, planHash: hash(plan) };
 }
@@ -84,13 +86,14 @@ export async function applyAcceptedFailure(db: PrismaClient, b: AcceptedFailureB
     if (result.alreadyApplied) return result;
     requireThat(result.planHash === expectedPlanHash, 'reconciliation_plan_drift');
     const p = result.plan;
-    await tx.outboundMessage.create({ data: { clientId: b.clientId, waId: p.waId, messageId: p.messageId,
+    const reconciledOutbound = await tx.outboundMessage.create({ data: { clientId: b.clientId, waId: p.waId, messageId: p.messageId,
       metaMessageId: p.metaMessageId, channel: 'whatsapp', provider: 'meta', type: 'TEMPLATE', status: 'FAILED',
       createdAt: p.acceptedAt, errorBody: '131026: Message undeliverable',
-      rawPayload: { reconciliation: true, acceptedEventId: b.acceptedEventId, failedWebhookEventId: b.failedWebhookEventId } } });
+      rawPayload: { reconciliation: true, acceptedEventId: b.acceptedEventId, failedWebhookEventId: b.failedWebhookEventId,
+        metaStatus: { lastStatus: 'failed', lastStatusAt: p.providerFailedAt?.toISOString() ?? null, errors: p.providerErrors } } } });
     await tx.event.create({ data: { clientId: b.clientId, messageId: p.messageId,
       requestId: `accepted-failure-result:${b.acceptedEventId}`, eventName: 'campaign.message.failed',
-      payloadJson: { campaignId: b.campaignId, campaignRunId: b.runId, status: 131026, errorBody: 'Message undeliverable', providerAccepted: true, reconciliation: true, retryAllowed: false } } });
+      payloadJson: { campaignId: b.campaignId, campaignRunId: b.runId, status: 131026, errorBody: 'Message undeliverable', providerAccepted: true, reconciliation: true, retryAllowed: false, metaMessageId: p.metaMessageId, reconciledOutboundId: reconciledOutbound.id } } });
     for (const item of p.blocked) await tx.event.create({ data: { clientId: b.clientId, waId: item.waId,
       messageId: b.campaignId, requestId: `accepted-failure-block:${b.acceptedEventId}:${item.position}`,
       eventName: 'campaign.recipient.import_blocked', payloadJson: { campaignId: b.campaignId, reason: item.reason, recipient: item.waId, rowNumber: item.position, reconciliation: true, beforeProvider: true } } });
@@ -100,21 +103,58 @@ export async function applyAcceptedFailure(db: PrismaClient, b: AcceptedFailureB
     await tx.campaignExecutionBatch.update({ where: { id: b.batchId }, data: { status: 'failed', blockedCount: 4, completedAt: new Date(), failureReason: 'reconciled_meta_131026_no_retry' } });
     const receipt = await tx.event.create({ data: { clientId: b.clientId, messageId: b.campaignId,
       eventName: 'campaign.accepted_failure.reconciled', requestId: `accepted-failure:${b.acceptedEventId}`,
-      payloadJson: { bindings: b, planHash: expectedPlanHash, sent: 1, failed: 1, blocked: 4, guardRemainsClosed: true } } });
+      payloadJson: { bindings: b, planHash: expectedPlanHash, sent: 1, failed: 1, blocked: 4, guardRemainsClosed: true, reconciledOutboundId: reconciledOutbound.id, metaMessageId: p.metaMessageId } } });
     return { alreadyApplied: false, receiptId: receipt.id };
   }, { isolationLevel: 'Serializable', timeout: 15000 });
 }
 
-export async function acknowledgeAcceptedFailure(db: PrismaClient, b: AcceptedFailureBindings,
-  expectedTaskHash: string, actor: string) {
+export async function verifyAcceptedFailureReceipt(db: PrismaClient, b: AcceptedFailureBindings) {
   const receipt = await dryRunAcceptedFailure(db, b);
   requireThat(receipt.alreadyApplied, "reconciliation_receipt_not_durable");
-  const failed = await db.outboundMessage.findFirst({ where: { clientId: b.clientId,
-    messageId: `campaign.${b.campaignId}.2`, status: "FAILED" } });
-  requireThat(failed?.errorBody === "131026: Message undeliverable", "reconciliation_failed_result_missing");
-  requireThat(await db.campaign.count({ where: { clientId: b.clientId, id: { in: [b.campaignId, b.parentCampaignId] }, status: 'failed' } }) === 2 &&
-    await db.campaignExecutionJob.count({ where: { id: b.jobId, clientId: b.clientId, status: 'failed', failureReason: 'reconciled_meta_131026_no_retry' } }) === 1 &&
-    await db.campaignExecutionBatch.count({ where: { id: b.batchId, clientId: b.clientId, status: 'failed' } }) === 1, 'reconciliation_terminal_state_drift');
+  const valid = await db.outboundMessage.findFirst({ where: { id: b.validOutboundId, clientId: b.clientId, messageId: `campaign.${b.campaignId}.1`, status: 'SENT' } });
+  requireThat(valid, 'reconciliation_valid_send_drift');
+  const durable = await db.event.findFirstOrThrow({ where: { id: receipt.receiptId, clientId: b.clientId,
+    eventName: 'campaign.accepted_failure.reconciled', requestId: `accepted-failure:${b.acceptedEventId}` } });
+  const payload = record(durable.payloadJson);
+  requireThat(hash(payload.bindings) === hash(b) && payload.sent === 1 && payload.failed === 1 && payload.blocked === 4 &&
+    typeof payload.reconciledOutboundId === 'string' && typeof payload.metaMessageId === 'string' && payload.guardRemainsClosed === true &&
+    typeof payload.planHash === 'string' && /^[a-f0-9]{64}$/.test(payload.planHash), 'reconciliation_receipt_provenance_mismatch');
+  const accepted = await db.event.findFirstOrThrow({ where: { id: b.acceptedEventId, clientId: b.clientId,
+    messageId: `campaign.${b.campaignId}.2`, eventName: 'campaign.message.provider_accepted' } });
+  const webhook = await db.event.findFirstOrThrow({ where: { id: b.failedWebhookEventId, clientId: b.clientId, eventName: 'webhook.status.orphaned' } });
+  const a = record(accepted.payloadJson), w = record(webhook.payloadJson);
+  requireThat(a.campaignId === b.campaignId && a.campaignRunId === b.runId && a.metaMessageId === payload.metaMessageId &&
+    w.metaMessageId === payload.metaMessageId && w.status === 'failed' && w.reason === 'outbound_message_not_found' &&
+    Array.isArray(w.errors) && w.errors.some((e: any) => e.code === 131026), 'reconciliation_ack_provider_mismatch');
+  const failed = await db.outboundMessage.findFirst({ where: { id: payload.reconciledOutboundId, clientId: b.clientId,
+    messageId: `campaign.${b.campaignId}.2`, metaMessageId: payload.metaMessageId, status: 'FAILED', provider: 'meta', type: 'TEMPLATE' } });
+  const provenance = failed ? record(failed.rawPayload) : {};
+  requireThat(failed?.errorBody === '131026: Message undeliverable' && failed.waId === accepted.waId &&
+    failed.createdAt.getTime() === accepted.createdAt.getTime() && provenance.reconciliation === true &&
+    provenance.acceptedEventId === b.acceptedEventId && provenance.failedWebhookEventId === b.failedWebhookEventId,
+    'reconciliation_failed_result_missing');
+  const failureEvent = await db.event.findFirst({ where: { clientId: b.clientId, messageId: failed.messageId,
+    eventName: 'campaign.message.failed', requestId: `accepted-failure-result:${b.acceptedEventId}` } });
+  const f = failureEvent ? record(failureEvent.payloadJson) : {};
+  requireThat(f.metaMessageId === payload.metaMessageId && f.reconciledOutboundId === failed.id && f.campaignId === b.campaignId && f.campaignRunId === b.runId &&
+    f.providerAccepted === true && f.retryAllowed === false && f.status === 131026, 'reconciliation_failure_event_mismatch');
+  requireThat(await db.campaign.count({ where: { clientId: b.clientId, id: { in: [b.campaignId, b.parentCampaignId] },
+    status: 'failed', sentCount: 1, blockedCount: 4 } }) === 2 &&
+    await db.campaignExecutionJob.count({ where: { id: b.jobId, campaignId: b.campaignId, batchId: b.batchId, clientId: b.clientId,
+      status: 'failed', failureReason: 'reconciled_meta_131026_no_retry', leaseToken: null, leaseExpiresAt: null } }) === 1 &&
+    await db.campaignExecutionBatch.count({ where: { id: b.batchId, clientId: b.clientId, status: 'failed', blockedCount: 4 } }) === 1 &&
+    await db.campaignExecutionBatchCampaign.count({ where: { clientId: b.clientId, campaignId: b.campaignId, batchId: b.batchId, status: 'failed' } }) === 1,
+    'reconciliation_terminal_state_drift');
+  requireThat(await db.event.count({ where: { clientId: b.clientId, messageId: b.campaignId, eventName: 'campaign.recipient.import_blocked',
+    requestId: { in: [3, 4, 5, 6].map(position => `accepted-failure-block:${b.acceptedEventId}:${position}`) } } }) === 4, 'reconciliation_block_results_missing');
+  return { receiptId: receipt.receiptId, reconciledOutboundId: failed.id,
+    metaMessageIdSha256: crypto.createHash('sha256').update(payload.metaMessageId).digest('hex'),
+    sent: 1, failed: 1, blocked: 4, terminal: true };
+}
+
+export async function acknowledgeAcceptedFailure(db: PrismaClient, b: AcceptedFailureBindings,
+  expectedTaskHash: string, actor: string) {
+  const receipt = await verifyAcceptedFailureReceipt(db, b);
   return acknowledgeReconciledCampaignTask({ generation: b.guardGeneration, taskId: b.taskId,
     reference: { clientId: b.clientId, campaignId: b.campaignId, messageId: `campaign.${b.campaignId}.2` },
     expectedTaskHash, receiptId: receipt.receiptId, actor });

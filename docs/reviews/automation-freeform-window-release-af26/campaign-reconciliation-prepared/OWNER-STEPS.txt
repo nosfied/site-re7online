@@ -1,0 +1,90 @@
+REVIEW ONLY — NOT AUTHORIZATION TO EXECUTE
+Preparation: /opt/re7online/backups/converta-persistent/preparations/campaign-eligibility-reconciliation-20261008T150000Z
+API candidate: /opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008/apps/whatsapp-agent
+Return API: /opt/re7online/releases/afbb7455f320793e05a25875e8a5f13f98cabf90-api/apps/whatsapp-agent
+Worker: same current minimal reactive afbb; coordinate stop/start through V4, no rebuild/backport.
+Frontend: current corrected fa60 preserved, no stop/start.
+
+1. Reconfirm exclusive executor, guard closed/current generation, task hash,
+   tenant/run/outbound/webhook IDs and no lease. Verify package and fresh backup.
+   Never adjust bindings to accept drift. Preserve each previous private record.
+   READ-ONLY command (executed during preparation; repeat only at authorized execution):
+   P=/opt/re7online/backups/converta-persistent/preparations/campaign-eligibility-reconciliation-20261008T150000Z
+   python3 "$P/run-offline.py" --mode=dry-run
+   Reviewed planHash: bbf9226d6c284a792164f885c8798ffde5be853b964678846f39745a124863f0
+   Different hash or alreadyApplied requires inspecting the durable receipt and
+   state, not re-submission or edits to historical snapshots.
+
+2. ONLY AFTER SEPARATE RECONCILIATION AUTHORIZATION: archive execution gates,
+   enable reconciliationAuthorized only. windowAuthorized/openAuthorized stay false.
+   The current false gate intentionally rejects the following write commands:
+   python3 "$P/run-offline.py" --mode=apply-sql --plan-hash=bbf9226d6c284a792164f885c8798ffde5be853b964678846f39745a124863f0
+   python3 "$P/run-offline.py" --mode=verify-receipt
+   Expected: exact receipt/Outbound/Meta correlation, terminal=true, 1/1/4.
+   No provider, scheduler, inbound, CRM or runtime mutation is permitted by this CLI.
+
+3. ONLY AFTER RECEIPT VERIFICATION and fresh task-hash match:
+   python3 "$P/run-offline.py" --mode=ack-task --task-hash=520012618e55a5b683108405f3be58d0e7c54aa7236db9f2a213a7c51665451e --actor=Deifson
+   python3 "$P/run-offline.py" --mode=verify-receipt
+   Verify ledger history contains the complete original task and receipt.
+   Guard remains CLOSED; tasks is an empty object. If generation34 did not drift,
+   successful acknowledgement yields35. Do not force that number into a binding.
+   SQL and ledger are separate: receipt survives an interrupted acknowledgement.
+   Replay is idempotent, never a provider retry. No manual deletion of the task.
+
+4. POST-ACKNOWLEDGEMENT PREPARATION, not runnable as a window today:
+   A fresh operational root must use the existing incident-6683-v4 prefix.
+   Planned root: /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-20261008T150000Z
+   Build new switch/return/return-partial bindings from observed identities;
+   never copy proofs, certificates, intents or consumed markers.
+   Apply closed-guard-v4.patch to the hash-attested sequencer.
+   Apply waiting-work-v4.patch to the three hash-attested modes, and include
+   waiting-work.cjs as the 26th module in each scripts manifest.
+   Apply prepare-baselines-closed.patch to its attested baseline producer.
+   Keep helper and nine-command sudo rule unchanged.
+   Place run-offline.py, candidate-manifest.private.json,
+   reconciliation-bindings.private.json and source.config.private.json in the
+   new private root; preserve their hashes. Copy capture-waiting.py,
+   waiting-work.cjs and planned-waiting-ids.json there. Then, READ ONLY:
+   python3 /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-20261008T150000Z/capture-waiting.py /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-20261008T150000Z
+   This denies until receipt verified and ledger drained/closed. Only exact queued
+   out.14 is planned; any unknown job/group/campaign, unresolved lease or state
+   drift denies. Do not discard an unknown item to manufacture a snapshot.
+   Classifying queued work is NOT a process/DB/provider drain certificate.
+   Preserve identities, tree/socket exit certificates and zero-backends/locks
+   before API; prove V4 API ownership again before the same worker resumes.
+
+   Fresh baseline/policy generation and full window manifests depend on this
+   actual post-ack state. They have NOT been emitted or installed. Deifson's
+   restricted policy installation and inspect are required BEFORE containment;
+   final policy bytes/hashes must first be published for review. No generic sudo,
+   helper replacement or privilege extension is proposed.
+
+5. FUTURE AUTHORIZED V4 SEQUENCE:
+   complete baselines validation -> restricted policy/inspect -> fresh preflight
+   while already closed -> contain/control initiators -> stop pair ONCE -> prove
+   both owners/descendants/sockets exited -> zero DB backends/advisory locks ->
+   candidate API ONCE -> fresh V4 ownership -> same minimal worker ONCE ->
+   worker HTTP check compatible with nft -> renew bounded live capture ->
+   save/fallback -> unfence -> full HTTP/DB/session checks -> restore cron/boot.
+   Guard must remain CLOSED on success, abort and return. No automatic admission.
+   Frontend remains identified/preserved throughout. Do not restore DB dump.
+   At15min containment, escalate with real state; no bypass, automatic kill,
+   uncertain-start repetition or uncertain-message retry.
+
+   Before stop: divergence -> abort preserving closed admission.
+   After stop/API partial failure: existing return-partial/return after proven
+   exit, including fresh API-only DB ownership before return worker.
+   After unfence: inspect state, keep guard closed, capture fresh identities and
+   prepare/install the separate fixed contingency policy before re-containment.
+   Worker-absent branch requires the existing complete absence evidence; PID0
+   or a closed port is insufficient. Observer failure blocks successor start.
+
+6. GLOBAL QUEUE REVIEW AND SEPARATE CAS OPENING DECISION:
+   Out.13 must be terminal, no lease/task, exact receipt and 1/1/4 through actual
+   campaign/controller/batch models. Read all tenants, not only demo.
+   Reevaluate out.14 filter/eligible recipients/identity/opt-out/template/destination
+   and due time under corrected code. Any other waiting/running work is a new
+   decision. Scheduler tick does not authorize admission.
+   Opening requires an explicit owner decision and current generation CAS through
+   the existing setter. No opening command is enabled in this preparation.

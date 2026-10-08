@@ -1,0 +1,6 @@
+{
+  "originSha256": "a126003876c1d865d16725ba393856611525a9ea49875b37ebb595cf69deb696",
+  "resultSha256": "b5946bc8834806deb376d6aa6600e7d3d7e1d0bb5bd3ea93754f4c031a90eb75",
+  "patchSha256": "fd64aee04ad48e8ef91e2ae4602bd80399298a9b59fc640dc69db0ef39b75123",
+  "status": "prepared; imports query from final module rather than parsing removed SQL literal; full main requires actual post-acknowledgement capture; no productive invocation"
+}

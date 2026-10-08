@@ -1,0 +1,22 @@
+--- a/preparation-bindings.cjs
++++ b/preparation-bindings.cjs
+@@ -1,16 +1,10 @@
+ const fs = require('fs'), path = require('path'), assert = require('assert'), crypto = require('crypto');
+ const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+ module.exports = {
+-  sql: `SELECT json_build_object(
+-    'jobs',(SELECT count(*) FROM "CampaignExecutionJob" WHERE status IS DISTINCT FROM 'completed' OR "finishedAt" IS NULL),
+-    'groups',(SELECT count(*) FROM "CampaignExecutionBatch"),
+-    'leases',(SELECT count(*) FROM "TenantCampaignExecutionLease" WHERE "jobId" IS NOT NULL OR "expiresAt">=now()),
+-    'sendingScheduled',(SELECT count(*) FROM "Campaign" WHERE status IN ('sending','scheduled')),
+-    'flags',(SELECT COALESCE(json_agg("clientId" ORDER BY "clientId"),'[]') FROM "TenantOperationalConfig" WHERE config->'allowAutomationConversationsInInbox'='true'::jsonb),
+-    'connected',(SELECT COALESCE(json_agg(id ORDER BY id),'[]') FROM "ChannelAccount" WHERE provider='web_session' AND status='connected'),
+-    'auth',(SELECT COALESCE(json_agg(id ORDER BY id),'[]') FROM "ChannelAccountSecret" WHERE "secretKind"='baileysAuthState.v1'))`,
++  sql: require('./waiting-work.cjs').sql,
+   noWork(q) {
+-    assert(['jobs','groups','leases','sendingScheduled'].every(k => q[k] === 0), 'unclassified, pending, executing or unresolved work; stop');
++    const expected = JSON.parse(fs.readFileSync(path.join(__dirname, '../window/waiting-work.private.json')));
++    require('./waiting-work.cjs').noWork(q, expected);
+   },
+   baseline(dir, q) {
+     const b=JSON.parse(fs.readFileSync(path.join(dir,'baseline.private.json')));

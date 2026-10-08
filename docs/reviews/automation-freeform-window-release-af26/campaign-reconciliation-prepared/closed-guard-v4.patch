@@ -1,0 +1,40 @@
+--- a/window/sequencer.py
++++ b/window/sequencer.py
+@@ -190,6 +190,10 @@
+         before = call()
+         require(before.get('available') and not before.get('ledgerFault') and
+                 before.get('tasks') == [] and before.get('drained'), 'guard_not_restorable')
++        initial = validate_preparation(self.root)
++        if initial['guard']['open'] is False:
++            require(before['open'] is False, 'closed_guard_restoration_drift')
++            return before
+         if before['open']:
+             return before
+         call('POST', {'open': True, 'generation': before['generation'],
+@@ -423,7 +427,7 @@
+                 'baseline_supervision_drift')
+         require(initial['guard']['open'] == guard['open'] and
+                 initial['guard']['generation'] == guard['generation'], 'baseline_guard_drift')
+-        require(guard.get('open') and not guard.get('tasks') and
++        require(type(guard.get('open')) is bool and not guard.get('tasks') and
+                 not guard.get('ledgerFault'), 'guard_baseline_unexpected')
+         self.baseline = sequential({'guardGeneration': guard['generation'], 'apps': identities})
+         self.journal('baseline', generation=guard['generation'],
+@@ -439,7 +443,7 @@
+         self.b.node('switch', 'close.cjs')
+         guard = self.b.guard()
+         require(not guard['open'] and guard['generation'] ==
+-                self.baseline['guardGeneration'] + 1 and
++                self.baseline['guardGeneration'] + int(validate_preparation(self.root)['guard']['open']) and
+                 not guard['tasks'] and not guard.get('ledgerFault'),
+                 'guard_close_generation_drift')
+         require((self.root / 'switch' / 'drain-result.json').is_file(),
+@@ -503,7 +507,7 @@
+         self.action(mode, 'verify-unfenced')
+         self.b.node(mode, 'validate.cjs')
+         self.b.node(mode, 'open.cjs')
+-        require(self.b.guard()['open'], 'guard_not_reopened')
++        require(self.b.guard()['open'] == validate_preparation(self.root)['guard']['open'], 'guard_restoration_state_drift')
+         self.b.privileged('restore-controls')
+         self.action(mode, 'restore-controls')
+         self.b.privileged('check-absent')

@@ -1,0 +1,31 @@
+--- a/window/prepare_baselines.py
++++ b/window/prepare_baselines.py
+@@ -47,19 +47,22 @@
+     guard=lambda:json.loads(Path('/var/lib/re7/campaign-operations/state.json').read_text())
+     run=lambda args:subprocess.check_output(args,text=True,timeout=15)
+     initial=capture_operational(guard,run)
+-    require(initial['guard']['open'], 'baseline_guard_not_open')
++    require(initial['guard']['open'] is False and initial['guard']['tasks'] == 0 and initial['guard']['ledgerFault'] is False, 'baseline_recovery_guard_not_drained_closed')
+     apps=json.loads((root/'switch/return.config.private.json').read_text())['apps']
+     api=next(a for a in apps if a['name']=='re7-whatsapp-agent')
+     front=next(a for a in apps if a['name']=='re7-admin-front')
+     binding=json.loads((root/'window/db-owner-bindings.private.json').read_text())
+     parsed=urllib.parse.urlparse(api['env']['DATABASE_URL'])
+-    match=re.search(r'sql: `(.+?)`',(root/'switch/preparation-bindings.cjs').read_text(),re.S)
+-    require(match is not None and parsed.username and parsed.path.lstrip('/'), 'baseline_query_missing')
+-    sql="BEGIN READ ONLY; SET LOCAL statement_timeout='10s'; "+match.group(1)+'; ROLLBACK;'
++    require(parsed.username and parsed.path.lstrip('/'), 'baseline_database_binding_missing')
++    query=run([api['interpreter'], '-e', "process.stdout.write(require(process.argv[1]).sql)",
++               str(root/'switch/preparation-bindings.cjs')])
++    require(query.startswith('SELECT json_build_object('), 'baseline_query_missing')
++    sql="BEGIN READ ONLY; SET LOCAL statement_timeout='10s'; "+query+'; ROLLBACK;'
+     counts=json.loads(run(['docker','exec',binding['containerId'],'psql','-X','-U',urllib.parse.unquote(parsed.username),
+                           '-d',parsed.path.lstrip('/'),'-Atq','-v','ON_ERROR_STOP=1','-c',sql]).strip())
+-    require(all(type(counts.get(k))is int and counts[k]==0 for k in ('jobs','groups','leases','sendingScheduled')),
+-            'baseline_pending_work')
++    subprocess.run([api['interpreter'], '-e',
++                    "const fs=require('fs'),b=require(process.argv[1]);b.noWork(JSON.parse(fs.readFileSync(0,'utf8')))",
++                    str(root/'switch/preparation-bindings.cjs')], input=json.dumps(counts),text=True,check=True,timeout=15)
+     functional=capture_functional(counts,front['cwd'])
+     # Guard/systemd may change while SQL runs; reject rather than certify an incomplete sample.
+     second=capture_operational(guard,run)

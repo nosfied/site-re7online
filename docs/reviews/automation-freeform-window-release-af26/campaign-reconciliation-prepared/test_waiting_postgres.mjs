@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import {createRequire} from 'node:module';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+const require = createRequire(import.meta.url);
+const fixture=fs.mkdtempSync(path.join(os.tmpdir(),'waiting-bindings-'));fs.mkdirSync(path.join(fixture,'window'));fs.mkdirSync(path.join(fixture,'switch'));
+for(const name of ['preparation-bindings.cjs','waiting-work.cjs'])fs.copyFileSync(new URL(name,import.meta.url),path.join(fixture,'switch',name));
+const bindings=require(path.join(fixture,'switch/preparation-bindings.cjs'));const sql=bindings.sql;const noWork=(q)=>bindings.noWork(q);
+const {PrismaClient} = require(new URL('../../../../apps/whatsapp-agent/node_modules/@prisma/client/index.js',import.meta.url).pathname);
+const url=new URL(process.env.DATABASE_URL);
+assert.equal(url.hostname,'127.0.0.1');assert(url.pathname.startsWith('/re7_waiting_contract_'),'synthetic_database_required');
+const db=new PrismaClient();
+try {
+ const client=await db.client.create({data:{clientKey:'waiting-'+crypto.randomUUID(),name:'Synthetic waiting',profile:'business'}});
+ const campaign=await db.campaign.create({data:{clientId:client.id,name:'Synthetic waiting',templateName:'synthetic',status:'scheduled',scheduledAt:new Date('2027-01-01T00:00:00Z')}});
+ const batch=await db.campaignExecutionBatch.create({data:{clientId:client.id,name:'Synthetic waiting',sourceMode:'DYNAMIC_CRM_FILTER',status:'queued',idempotencyKey:'dynamic:'+campaign.id}});
+ const job=await db.campaignExecutionJob.create({data:{clientId:client.id,campaignId:campaign.id,batchId:batch.id,kind:'batch_chunk',status:'queued',eligibleAt:new Date('2027-01-01T00:00:00Z'),idempotencyKey:crypto.randomUUID()}});
+ const read=async()=>Object.values((await db.$queryRawUnsafe(sql))[0])[0];
+ const q=await read();const expected={version:1,guardMustRemainClosed:true,jobs:q.jobs,groups:q.groups,sendingScheduled:q.sendingScheduled,leases:0};
+ fs.writeFileSync(path.join(fixture,'window/waiting-work.private.json'),JSON.stringify(expected));
+ noWork(q);
+ const other=await db.client.create({data:{clientKey:'unknown-'+crypto.randomUUID(),name:'Synthetic unknown',profile:'business'}});
+ const unknown=await db.campaign.create({data:{clientId:other.id,name:'Unknown',templateName:'synthetic',status:'draft'}});
+ const rogue=await db.campaignExecutionJob.create({data:{clientId:other.id,campaignId:unknown.id,kind:'campaign',status:'queued',eligibleAt:new Date(),idempotencyKey:crypto.randomUUID()}});
+ assert.throws(()=>noWork({...q,jobs:[...q.jobs,{id:rogue.id,clientId:other.id,status:'queued',leaseToken:null,leaseExpiresAt:null}]},expected),/drift/);
+ const unknownSnapshot=await read();assert.throws(()=>noWork(unknownSnapshot,expected),/drift/);
+ await db.campaignExecutionJob.update({where:{id:rogue.id},data:{status:'failed',finishedAt:new Date()}});
+ noWork(await read(),expected);
+ await db.tenantCampaignExecutionLease.create({data:{clientId:client.id,jobId:job.id,leaseToken:crypto.randomUUID(),ownerId:'synthetic',expiresAt:new Date('2000-01-01T00:00:00Z')}});
+ const leaseSnapshot=await read();assert.throws(()=>noWork(leaseSnapshot,expected),/lease/);
+ await db.tenantCampaignExecutionLease.delete({where:{clientId:client.id}});
+ await db.campaignExecutionJob.update({where:{id:job.id},data:{status:'running'}});
+ const runningSnapshot=await read();assert.throws(()=>noWork(runningSnapshot,expected),/not_inactive/);
+ console.log(JSON.stringify({result:'PASS',scope:'real PostgreSQL read-only classifier query; synthetic fixture writes; no scheduler/provider',checks:['known waiting','unknown other tenant','terminal history','expired but unresolved lease','running job']}));
+}finally{await db.$disconnect()}

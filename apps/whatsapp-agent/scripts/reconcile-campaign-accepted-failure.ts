@@ -1,7 +1,7 @@
 // Offline administrative tool; defaults to read-only. Never starts providers/scheduler.
 import fs from 'node:fs';
 import { getPrisma } from '../src/db.js';
-import { dryRunAcceptedFailure, applyAcceptedFailure, acknowledgeAcceptedFailure, type AcceptedFailureBindings } from '../src/campaigns/campaignAcceptedFailureReconciliation.js';
+import { dryRunAcceptedFailure, applyAcceptedFailure, acknowledgeAcceptedFailure, verifyAcceptedFailureReceipt, type AcceptedFailureBindings } from '../src/campaigns/campaignAcceptedFailureReconciliation.js';
 import { sanitizeMailDeliveryError } from '../src/mail/canonicalMail.js';
 const args = process.argv.slice(2);
 const value = (key: string) => args.find(a => a.startsWith(`${key}=`))?.slice(key.length + 1);
@@ -13,14 +13,16 @@ for (const key of ['clientId', 'parentCampaignId', 'campaignId', 'batchId', 'job
 }
 if (!Number.isInteger(bindings.guardGeneration) || bindings.guardGeneration < 0) throw new Error('reconciliation_binding_invalid:guardGeneration');
 const mode = value('--mode') ?? 'dry-run';
-if (!['dry-run', 'apply-sql', 'ack-task'].includes(mode)) throw new Error('reconciliation_mode_invalid');
-if (mode !== 'dry-run' && !args.includes('--execute-authorized')) throw new Error('reconciliation_execution_not_authorized');
+if (!['dry-run', 'verify-receipt', 'apply-sql', 'ack-task'].includes(mode)) throw new Error('reconciliation_mode_invalid');
+if (!['dry-run', 'verify-receipt'].includes(mode) && !args.includes('--execute-authorized')) throw new Error('reconciliation_execution_not_authorized');
 const db = getPrisma();
 try {
   if (mode === 'dry-run') {
     const result = await dryRunAcceptedFailure(db, bindings);
     console.log(JSON.stringify(result.alreadyApplied ? result : { alreadyApplied: false, planHash: result.planHash,
       sent: result.plan.sent, failed: result.plan.failed, blocked: result.plan.blockedCount, providerCalls: 0, guardWrites: 0 }));
+  } else if (mode === 'verify-receipt') {
+    console.log(JSON.stringify(await verifyAcceptedFailureReceipt(db, bindings)));
   } else if (mode === 'apply-sql') {
     const digest = value('--plan-hash');
     if (!digest || !/^[a-f0-9]{64}$/.test(digest)) throw new Error('reconciliation_plan_hash_required');

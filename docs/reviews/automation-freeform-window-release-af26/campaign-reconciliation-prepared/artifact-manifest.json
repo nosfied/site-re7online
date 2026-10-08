@@ -1,0 +1,141 @@
+{
+  "baseApi": "afbb7455f320793e05a25875e8a5f13f98cabf90",
+  "sourceParent": "afc3e5a76bab6f9764c49d1d9af6978bdc9449be",
+  "files": [
+    {
+      "source": "apps/whatsapp-agent/src/campaigns/campaignAcceptedFailureReconciliation.test.ts",
+      "sourceBeforeSha256": null,
+      "sourceAfterSha256": "11e857e4685df02178f9785289d8c7b4af2e30f7d7943d3079eb294c4b335baf",
+      "compiled": "apps/whatsapp-agent/dist/campaigns/campaignAcceptedFailureReconciliation.test.js",
+      "compiledSha256": "1584c42a5b4b5da9301351cbde5043e529d3b1838988bad53cf1ece549ec50bf"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/campaigns/campaignAcceptedFailureReconciliation.ts",
+      "sourceBeforeSha256": null,
+      "sourceAfterSha256": "1146a3d0863ed6d560847e84afc1d8c8f1d97e04adf20037f03f9fd57e83920b",
+      "compiled": "apps/whatsapp-agent/dist/campaigns/campaignAcceptedFailureReconciliation.js",
+      "compiledSha256": "4c9877dbf4157f8db17cda5d05ab6c21984a296e0468e91205ff9fb305fa8435"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/campaigns/campaignAudiencePreview.ts",
+      "sourceBeforeSha256": "e45b44b395e54aa9b9475190822faf66a1a8abc20a1612bbc095175aa90addd6",
+      "sourceAfterSha256": "22ef5ebe71c7cf0b04cad460db10cabe0d31270e336bd385c603c5f54a03e463",
+      "compiled": "apps/whatsapp-agent/dist/campaigns/campaignAudiencePreview.js",
+      "compiledSha256": "a91113d9a7b11e4554bebd22410a5bb4c19029bd185fddc4649e66af5bc98aa8"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/campaigns/campaignEligibility.test.ts",
+      "sourceBeforeSha256": null,
+      "sourceAfterSha256": "022bedd2c1f95f7769d6e5fee060958e11cc4818276c497c529c166132227f31",
+      "compiled": "apps/whatsapp-agent/dist/campaigns/campaignEligibility.test.js",
+      "compiledSha256": "0da64a7b45b5568cfc60c011c5b665ae909d327133f3cf69fdf958f7f2992a07"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/campaigns/campaignEligibility.ts",
+      "sourceBeforeSha256": null,
+      "sourceAfterSha256": "0fa080878993be6157b38de3f17cd396980511ba4e3bfe7cecfe9ed10c07199b",
+      "compiled": "apps/whatsapp-agent/dist/campaigns/campaignEligibility.js",
+      "compiledSha256": "df6121058c4ad28cbd8d733c3b8be09dc50c8b709e82b91f8c4b1bd3914c6305"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/campaigns/campaignFailureDiagnostic.ts",
+      "sourceBeforeSha256": null,
+      "sourceAfterSha256": "63421d689462989f6bdecb2103c838417424ecb4e06c8ee178ff5d1379d7a918",
+      "compiled": "apps/whatsapp-agent/dist/campaigns/campaignFailureDiagnostic.js",
+      "compiledSha256": "28028d49d4139875e0a292ebd9d33db4f4b4001b12d8b51d6911d0f214fcd238"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/campaigns/campaignOperations.ts",
+      "sourceBeforeSha256": "42e68487b46b430f023b0e199c00af7f69a41d35cf4d87177bb64ce5021b3418",
+      "sourceAfterSha256": "bf61a2bd54847cd86824ed9f7031b7ed6b66381ddc8e19c7ab2cd76996039ab4",
+      "compiled": "apps/whatsapp-agent/dist/campaigns/campaignOperations.js",
+      "compiledSha256": "dd0b75541b7a3b9bddffb118ae02a6f5b503a0034b90e10cf84bd438f5890d5d"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/campaigns/campaignRecipientImport.ts",
+      "sourceBeforeSha256": "89c9e362a4bee0b014e4c512b2508b9f9324ec12dcdac46a67bea74239562456",
+      "sourceAfterSha256": "613a230b63d07229fabe50f77bd626187015dffbe0a97b4e230147acba5e830f",
+      "compiled": "apps/whatsapp-agent/dist/campaigns/campaignRecipientImport.js",
+      "compiledSha256": "5e9d0301f3d702eee2110949c63da329792615b90e1de7fd648be7c0c6aeee81"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/campaigns/campaignRunner.test.ts",
+      "sourceBeforeSha256": "89e6f8d2e78fb53dc0b0c20a8dc4cbabe67791e0491a251d3610d842c65e1d73",
+      "sourceAfterSha256": "457018bf0bf51424d88f7bd3e230f6065c3ab1eb428ddfd90a970a7f49ff9306",
+      "compiled": "apps/whatsapp-agent/dist/campaigns/campaignRunner.test.js",
+      "compiledSha256": "10be419e5aae520106dd026e237f514b3c0d95930913bbecb12502cd98efa44e"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/campaigns/campaignRunner.ts",
+      "sourceBeforeSha256": "bf420416ef7fcda945d4b86b8702561f024ac34cbd9937df25f1fda1acac5adc",
+      "sourceAfterSha256": "36242e0d52bd334a5df40d0dec6fc5e755b40ad33ee1c64b774c4dc6148e7d1e",
+      "compiled": "apps/whatsapp-agent/dist/campaigns/campaignRunner.js",
+      "compiledSha256": "7203fd3897c50b043858f6aaa86b01f1cbe1f2787e0c619e0507e9ab4ea0b065"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/crm/crmContactsReadModel.ts",
+      "sourceBeforeSha256": "0051b7a324df3effbf1f14c2df82f5629379810fdc06031864bcccc63ecc3d20",
+      "sourceAfterSha256": "c618ff1e4351d0781bfb609d5d05e6021a99aaca1dff4bf1bc53db4fc5b3bf57",
+      "compiled": "apps/whatsapp-agent/dist/crm/crmContactsReadModel.js",
+      "compiledSha256": "613a2df5b9f1a6673489ae60d20e9dc1590a15b417753d99eddc3dfaecd11c98"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/crm/crmWhatsappIdentity.ts",
+      "sourceBeforeSha256": "54ab53dad07d5b5026592316e72bd64529b3a398c769f04f792c295e05713be7",
+      "sourceAfterSha256": "2bdab685fb95ce4d27f243560f146cde9fe9c8809f46c99b0dd6733f54041c1b",
+      "compiled": "apps/whatsapp-agent/dist/crm/crmWhatsappIdentity.js",
+      "compiledSha256": "e12c47abf1b1a753fde915dcc933423749a95704828cecd142df473becc300cf"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/http/routes.ts",
+      "sourceBeforeSha256": "5c4cc1163aebb96036eccff5aa1bd0fa34227980d58e34b0c01536e7143a4b98",
+      "sourceAfterSha256": "b418e8d9acf1f7ecf8256e41c63dc540625d360b257f342171c7a9953a252b6d",
+      "compiled": "apps/whatsapp-agent/dist/http/routes.js",
+      "compiledSha256": "eb2271e9a872aa0ab48d760cbf4e30d7780b283d475000e1e608ae6c035f1fb7"
+    },
+    {
+      "source": "apps/whatsapp-agent/src/services/outboundTemplateService.ts",
+      "sourceBeforeSha256": "1c1e550c4a752552a323703887f71e40c3ee991fc23d0bddc3cca4a4515645fe",
+      "sourceAfterSha256": "4d35f436e2e833cf6f4652715d529b2538d58233c7a50665ae0f9aededb8410d",
+      "compiled": "apps/whatsapp-agent/dist/services/outboundTemplateService.js",
+      "compiledSha256": "ec667a27750ada47a092146a709981bc2f22891756b6d2a474f0757e02f657ab"
+    }
+  ],
+  "apiOverlaySha256": "241187ccf3e4543575ac5466537d351162d04e0e4fc10a8bfc0b2552b7c4d91e",
+  "schemaSha256": "7fec399ffbbeb4f2d002d128481f96c1aaebb3efb9d0a76f2ba129939c5b54bd",
+  "packageLockSha256": "f617d4f8c0f90bc8cb36dda100baec1e59ef1c9fc9a203c2e419e0b04725cdbb",
+  "workerPreserved": true,
+  "frontendPreserved": true,
+  "cliSha256": "a66fb312b3a0ffd32281ed00b8f6ddc84750e7e6eab9d346fdf6e6ea24e9a7bb",
+  "status": "API_AND_OFFLINE_CLI_STAGED_VERIFIED_NOT_DEPLOYED",
+  "candidateManifestSha256": "4fe74088465073e07269329a0c14267427c61173e04b65e85f7d847bd5b5263c",
+  "candidateFiles": 8820,
+  "candidateSymlinks": 11,
+  "backup": {
+    "dumpSha256": "231179c6970a1e41ac8d4d94408542267ac8a0034c73a7b23a943827b826e007",
+    "bytes": 31160314,
+    "restoreVerifiedAt": "2026-10-08T15:05:23.166804Z",
+    "tables": 70,
+    "finishedMigrations": 60,
+    "historicalRolledBackMigrations": 6,
+    "checksumMismatch": 0,
+    "temporaryDatabaseRemoved": true,
+    "isolatedServerStopped": true
+  },
+  "freshDryRun": {
+    "planHash": "bbf9226d6c284a792164f885c8798ffde5be853b964678846f39745a124863f0",
+    "alreadyApplied": false,
+    "sent": 1,
+    "failed": 1,
+    "blocked": 4,
+    "providerCalls": 0,
+    "guardWrites": 0
+  },
+  "preserved": {
+    "workerTarSha256": "8b67292578090a2f564e4a9bf399b002e667bba723c936859fc438aa1221f5c8",
+    "workerInstalledManifestVerified": true,
+    "helperSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "frontend": "fa60-corrected",
+    "schemaAndDependenciesChanged": false
+  }
+}
