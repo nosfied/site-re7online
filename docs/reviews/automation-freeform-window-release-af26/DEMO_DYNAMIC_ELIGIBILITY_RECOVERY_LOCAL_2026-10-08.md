@@ -1,5 +1,7 @@
 # Demo out.13 — elegibilidade e recuperação preparada
 
+**Atualização de execução08/10: DEPLOYED TECHNICALLY / OWNER FUNCTIONAL VALIDATION PENDING.** [Registro e evidência sanitizada](campaign-reconciliation-prepared/operational-composition-20261008/DEPLOYED_2026-10-08.md). APIa26 implantada; mesmo workerafbb e frontendfa60 preservados, closed35/out.14 aguardando. As seções anteriores de preparação/retorno abaixo são históricas; não houve nova reconciliação, abertura ou envio.
+
 Estado: **LOCAL VALIDATED / RECOVERY PREPARED / NOT DEPLOYED**. Nenhuma reconciliação, liberação de guarda, remoção de tarefa, submissão ou alteração de dados produtivos foi executada. API/worker afbb e frontend fa60 preservados. Reparo de setembro CLOSED e quatro registros históricos intocados.
 
 ## Contratos e causa

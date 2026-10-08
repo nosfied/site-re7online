@@ -1,0 +1,180 @@
+{
+  "api": "a26dbb0ed39f9484bbbb71c5e7c753d561f07b93",
+  "artifacts": {
+    "archivedPolicy": "7b8ef5c45edc237a144ec4718753ad53ec53609fc3ecdb5be39484127f604ff1",
+    "candidateCompleteManifest": "4fe74088465073e07269329a0c14267427c61173e04b65e85f7d847bd5b5263c",
+    "candidateFiles": 8820,
+    "candidateSymlinks": 11,
+    "helper": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "modeManifests": {
+      "return": "9c9caae4055eca26bc00d391e89e2d8c0fb9ac55b80d06dfeb4deeaf20801c9f",
+      "return-partial": "89fee9552871f242731b865d09c20076046353a386ec289a700f0e315f177b96",
+      "switch": "b0bf2b69f16d228805eb9b3b16a2eba6b6cea6fd0821e1f764b26651ea3a353b"
+    },
+    "policy": "38a20f3c9bba0dbf009cdf7db292c6b4a2f627200843f4a6f0fbbd7f505ddd4c",
+    "proofBindings": {
+      "backupManifestSha256": "b62bd64175c5423e70a2c71e79efd1159814ec2c2f780f64dd7de1daa79ae6d6",
+      "catalogObjects": 614,
+      "dumpBytes": 31723808,
+      "dumpSha256": "b891fab8378e9ccb110a904a5ee9101daa879ae316dff86cd58eb6cea3a0939f",
+      "restoreResultSha256": "9027a22b0a94cd0454847442059d7a924e02cff61672b9bc1f4bd6f722b438a4"
+    },
+    "sequencer": "df0ba9bd3ffee691b037c9bfa67cddbb553ffa94a3011ed2f7a36ad331a57d85",
+    "sequencerManifest": "9a38507e21c99a53cdad0c99cb0811c8a7bf5fcd7d28d4a94a511fd7ffa6b7bb"
+  },
+  "at": "2026-10-08T22:00:38.292034+00:00",
+  "authRecords": 5,
+  "backupDumpSha256": "b891fab8378e9ccb110a904a5ee9101daa879ae316dff86cd58eb6cea3a0939f",
+  "barrierAbsent": true,
+  "boot": [
+    "ActiveState=inactive",
+    "UnitFileState=enabled"
+  ],
+  "candidateStartRepeated": false,
+  "candidateStartsPerComponent": 1,
+  "connectedSessions": 4,
+  "containmentConfirmedAt": "2026-10-08T21:59:05.593394+00:00",
+  "containmentSeconds": 32.68313980102539,
+  "controlsCompleteAt": "2026-10-08T21:59:41.864575+00:00",
+  "cronCrontabBootPreserved": true,
+  "dbReadOnlyInventory": true,
+  "fiveGates": {
+    "artifactsVerified": false,
+    "discrepanciesResolved": false,
+    "ownerAuthorized": false,
+    "preflightReviewed": false,
+    "restoreVerified": false
+  },
+  "frontend": "fa60-corrected-preserved",
+  "functionalAcceptance": "PENDING; guard closed35/out.14 waiting; no test send",
+  "functionalOwnerAcceptance": "PENDING",
+  "globalBatches": 1,
+  "globalJobs": 1,
+  "guard": {
+    "generation": 35,
+    "open": false,
+    "tasks": 0
+  },
+  "healthHttpApiWorkerFrontend": true,
+  "helperPolicySudoersUnchanged": true,
+  "journalSummary": [
+    {
+      "action": "prepare-containment",
+      "event": "action_pass",
+      "mode": "switch",
+      "utc": 1791496744.3338916
+    },
+    {
+      "action": "contain",
+      "event": "action_pass",
+      "mode": "switch",
+      "utc": 1791496746.221032
+    },
+    {
+      "action": "stop-pair",
+      "event": "action_pass",
+      "mode": "switch",
+      "utc": 1791496755.6372948
+    },
+    {
+      "action": "start:re7-whatsapp-agent",
+      "event": "action_pass",
+      "mode": "switch",
+      "utc": 1791496758.0934632
+    },
+    {
+      "action": "start:re7-whatsapp-web-worker",
+      "event": "action_pass",
+      "mode": "switch",
+      "utc": 1791496761.8065162
+    },
+    {
+      "attempt": 1,
+      "event": "worker_capture_sample_denied",
+      "mode": "switch",
+      "reason": "worker_capture_churn",
+      "utc": 1791496768.3775263
+    },
+    {
+      "attempt": 2,
+      "event": "worker_capture_refreshed",
+      "mode": "switch",
+      "utc": 1791496772.157135
+    },
+    {
+      "action": "unfence",
+      "event": "action_pass",
+      "mode": "switch",
+      "utc": 1791496773.714089
+    },
+    {
+      "attempt": 1,
+      "event": "worker_capture_refreshed",
+      "mode": "switch",
+      "utc": 1791496778.0497591
+    },
+    {
+      "action": "verify-unfenced",
+      "event": "action_pass",
+      "mode": "switch",
+      "utc": 1791496778.7748725
+    },
+    {
+      "action": "restore-controls",
+      "event": "action_pass",
+      "mode": "switch",
+      "utc": 1791496781.719266
+    },
+    {
+      "event": "complete",
+      "mode": "switch",
+      "utc": 1791496781.8645751
+    }
+  ],
+  "leases": 0,
+  "out14Unchanged": true,
+  "ownerScreensRead": "PENDING",
+  "processes": {
+    "re7-admin-front": {
+      "pid": 3438948,
+      "restartCount": 0,
+      "status": "online",
+      "ticks": "2120147745"
+    },
+    "re7-whatsapp-agent": {
+      "pid": 3625739,
+      "restartCount": 0,
+      "status": "online",
+      "ticks": "2128115907"
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 3625960,
+      "restartCount": 0,
+      "status": "online",
+      "ticks": "2128116272"
+    }
+  },
+  "proxyVerified": true,
+  "receiptRead": {
+    "at": "2026-10-08T22:01:04.860874+00:00",
+    "postDeployReceiptRead": {
+      "blocked": 4,
+      "failed131026": 1,
+      "leases": 0,
+      "out14Waiting": 1,
+      "receiptCount": 1,
+      "validSent": 1
+    },
+    "productionWrites": false
+  },
+  "reconciliationAndGuardUnchanged": true,
+  "returnUsed": false,
+  "rootCaptureRefreshedAndRevalidated": true,
+  "savedFallbackEqual": true,
+  "savedSha256": "4fbb51fa592dd4beee0651828d535d077edd97de591f70267dd705fb19bbb57f",
+  "schedulerDisabledFlag": "false",
+  "sessionsAuthBaselineEqual": true,
+  "status": "DEPLOYED_TECHNICALLY_OWNER_VALIDATION_PENDING",
+  "unfencedConfirmedAt": "2026-10-08T21:59:38.276534+00:00",
+  "worker": "minimal-reactive-afbb-preserved"
+}
