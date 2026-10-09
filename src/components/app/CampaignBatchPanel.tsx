@@ -18,17 +18,35 @@ type Props = {
   statusLabel: (status: string) => string;
   queueLabel: (status: string | null, position: number | null) => string;
   sourceLabel: (source: string) => string;
+  failureLabel: (reason: string) => string | null;
+  variableSourceLabel: (source: string) => string;
+  renderDestination: (destination: NonNullable<CampaignItem["draftSeed"]>["returnDestination"]) => ReactNode;
 };
 
-// Only fields visible in the existing authorized detail are compared.
-function differences(common: CampaignItem, lot: CampaignItem) {
-  const fields: Array<[string, unknown, unknown]> = [
-    ["Modelo", common.templateName, lot.templateName],
-    ["Destino do retorno", common.draftSeed?.returnDestination, lot.draftSeed?.returnDestination],
-    ["Variáveis", common.draftSeed?.templateVariableMappings, lot.draftSeed?.templateVariableMappings],
-    ["Parâmetros", common.draftSeed?.templateParams, lot.draftSeed?.templateParams],
-  ];
-  return fields.filter(([, a, b]) => JSON.stringify(a) !== JSON.stringify(b));
+// Compare only the existing authorized fields; an absent parent is not a reason to hide a child value.
+function differences(common: CampaignItem, lot: CampaignItem, props: Props) {
+  const items: Array<{ label: string; content: ReactNode }> = [];
+  if (common.templateName !== lot.templateName) items.push({ label: "Modelo", content: lot.templateName || "Modelo não informado neste detalhe" });
+  if (JSON.stringify(common.draftSeed?.returnDestination) !== JSON.stringify(lot.draftSeed?.returnDestination)) {
+    items.push({ label: "Destino do retorno", content: props.renderDestination(lot.draftSeed?.returnDestination) });
+  }
+  if (JSON.stringify(common.draftSeed?.templateVariableMappings) !== JSON.stringify(lot.draftSeed?.templateVariableMappings)) {
+    const mappings = lot.draftSeed?.templateVariableMappings;
+    items.push({ label: "Variáveis", content: mappings?.length ? <ul className="grid gap-1">{mappings.map((mapping, index) =>
+      <li key={`${mapping.position}-${index}`}>
+        Variável {`{{${mapping.position}}}`} — {props.variableSourceLabel(mapping.source)}
+        {mapping.value !== undefined ? <>: {mapping.value || "(vazio)"}</> : null}
+        {mapping.fallback !== undefined ? <> · Alternativa: {mapping.fallback || "(vazio)"}</> : null}
+      </li>
+    )}</ul> : "Mapeamento não informado neste detalhe" });
+  }
+  if (JSON.stringify(common.draftSeed?.templateParams) !== JSON.stringify(lot.draftSeed?.templateParams)) {
+    const params = lot.draftSeed?.templateParams;
+    items.push({ label: "Parâmetros", content: params?.length ? <ul className="grid gap-1">{params.map((value, index) =>
+      <li key={index}>Variável {`{{${index + 1}}}`}: {value || "(vazio)"}</li>
+    )}</ul> : "Parâmetros não informados neste detalhe" });
+  }
+  return items;
 }
 
 export default function CampaignBatchPanel(props: Props) {
@@ -97,7 +115,7 @@ export default function CampaignBatchPanel(props: Props) {
           {props.renderActions()}
           <p className="text-xs text-white/70">Lotes concluídos: {batch.progress.completedChunks}/{batch.chunkCount} · Progresso: {pct}%</p>
           <div className="h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-cyan-300 transition-all duration-300" style={{ width: `${pct}%` }} /></div>
-          {batch.failureReason ? <p className="rounded bg-amber-900/20 p-2 text-amber-100">{batch.failureReason}</p> : null}
+          {batch.failureReason ? <p className="rounded bg-amber-900/20 p-2 text-amber-100">{props.failureLabel(batch.failureReason)}</p> : null}
           <div className="overflow-x-auto rounded border border-white/10">
             <table className="w-full min-w-[620px] text-sm">
               <thead className="bg-white/10 text-left text-xs uppercase text-white/65"><tr><th className="p-2">Lote</th><th className="p-2">Estado / fila</th><th className="p-2">Resultados</th><th className="p-2">Acesso</th></tr></thead>
@@ -107,15 +125,18 @@ export default function CampaignBatchPanel(props: Props) {
                     {expanded === chunk.campaignId ? "▾" : "▸"} {chunk.chunkIndex}/{batch.chunkCount} — {chunk.name}
                   </button></td>
                   <td className="p-2">{props.statusLabel(chunk.status)}<br /><span className="text-xs text-white/65">{props.queueLabel(chunk.queueStatus, chunk.queuePosition)}</span></td>
-                  <td className="p-2">{chunk.totalRecipients} destinatário(s) · {chunk.sentCount} processado(s) · {chunk.blockedCount} bloqueado(s)</td>
+                  <td className="p-2">{chunk.totalRecipients > 0 ? `${chunk.totalRecipients} materializado(s)` : `${chunk.recipientCount} previsto(s)`}
+                    {chunk.totalRecipients !== chunk.recipientCount ? <> · {chunk.totalRecipients > 0 ? `${chunk.recipientCount} previsto(s)` : "0 materializado(s)"}</> : null}
+                    {chunk.totalRecipients === 0 && (chunk.status === "draft" || chunk.status === "scheduled") ? <span className="block text-xs text-white/65">Aguardando materialização</span> : null}
+                    {" · "}{chunk.sentCount} processado(s) · {chunk.blockedCount} bloqueado(s)</td>
                   <td className="p-2"><button type="button" className="text-sky-200 underline" aria-label={`Abrir lote por ID ${chunk.chunkIndex}: ${chunk.name}`} onClick={() => props.openById(chunk.campaignId)}>Abrir lote por ID</button></td>
                 </tr>
                 {expanded === chunk.campaignId ? <tr id={`lot-${chunk.campaignId}`}><td colSpan={4} className="bg-black/15 p-3">
                   <div aria-label={`Dados exclusivos do lote ${chunk.chunkIndex}`} className="grid min-w-0 gap-3">
                     <p className="text-xs text-white/70">Início: {chunk.startedAt ? formatDateTime(chunk.startedAt) : "Aguardando"} · Fim: {chunk.finishedAt ? formatDateTime(chunk.finishedAt) : "Não concluído"}</p>
-                    {chunk.failureReason ? <p className="text-amber-100">{chunk.failureReason}</p> : null}
+                    {chunk.failureReason ? <p className="text-amber-100">{props.failureLabel(chunk.failureReason)}</p> : null}
                     {!current ? <p role="status">Carregando lote...</p> : current.error ? <div role="alert"><p>{current.error}</p><button type="button" className="mt-2 text-sky-200 underline" onClick={() => { cache.current.delete(expanded!); setLoaded(null); setRetry(n => n + 1); }}>Tentar leitura novamente</button></div> : current.detail ? <>
-                      {differences(campaign, current.detail).map(([label, , value]) => <div key={label}><p className="text-xs font-semibold text-white/70">{label} diferente do contexto comum</p><pre className="whitespace-pre-wrap break-all text-xs">{typeof value === "string" ? value : JSON.stringify(value ?? null, null, 2)}</pre></div>)}
+                      {differences(campaign, current.detail, props).map(({ label, content }) => <div key={label}><p className="text-xs font-semibold text-white/70">{label} diferente do contexto comum</p><div className="whitespace-pre-wrap break-words text-sm">{content}</div></div>)}
                       {current.detail.executionQueue ? <p className="text-xs text-white/70">Solicitado: {formatDateTime(current.detail.executionQueue.requestedAt)} · Elegível: {formatDateTime(current.detail.executionQueue.eligibleAt)}</p> : null}
                       {props.renderResults(current.detail.messagesMetaStatus ?? [])}
                     </> : null}

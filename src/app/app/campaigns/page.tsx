@@ -4496,6 +4496,19 @@ export default function AppCampaignsPage() {
                       statusLabel={getStatusLabel}
                       queueLabel={getCampaignQueueStatusLabel}
                       sourceLabel={getCampaignBatchSourceLabel}
+                      failureLabel={(reason) => {
+                        const friendly = getFriendlyCampaignError(reason);
+                        return friendly && friendly.summary !== reason ? friendly.summary : getCampaignOperationalReasonLabel(reason);
+                      }}
+                      variableSourceLabel={(source) => {
+                        const label = getVariableSourceLabel(source as TemplateVariableSource);
+                        return label === "Selecione" ? source || "Origem não informada" : label;
+                      }}
+                      renderDestination={(destination) => {
+                        if (!destination) return "Destino não informado neste detalhe";
+                        if (destination.type === "automated_flow") return <>Fluxo: {returnDestinations?.flows.find(flow => flow.id === destination.flowId)?.name || destination.flowId || "Não informado"}</>;
+                        return <>Setor: {returnDestinations?.departments.find(department => department.id === destination.departmentId)?.name || destination.departmentId || "Não informado"} · Fila: {destination.queueId || "Não especificada"}</>;
+                      }}
                       renderActions={() => (
 <div className="flex flex-wrap items-center gap-2">
 		                        {selectedCampaign.executionBatch!.status !== "paused" &&

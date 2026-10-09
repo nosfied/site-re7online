@@ -1,0 +1,24 @@
+{
+  "baseCommit": "170dc579ace58a3d851e36af3afd421f2ae5d793",
+  "scope": "frontend presentation only; NOT STAGED / NOT DEPLOYED",
+  "node": "20.20.0",
+  "next": "16.1.5",
+  "buildId": "8OqIZZxaW7_ogf6h7AVoe",
+  "files": [
+    {
+      "path": "src/app/app/campaigns/page.tsx",
+      "originSha256": "46eb9e21b3c6fda95e8197cced3caacc42894b6555771f3b5c4877438ac41191",
+      "resultSha256": "273e9d6d4fd6566b45f7b09ad720b460e1b223162d7fb7303d5161c508aafbaa"
+    },
+    {
+      "path": "src/components/app/CampaignBatchPanel.tsx",
+      "originSha256": "ed9fc9e224abcc674518a4d85d6a73562a73a810f289371b9f9884ae5671039a",
+      "resultSha256": "1e387a239d01c578f81b45331d3bbdb0ceacaf07c2cb77b9e2cb55fd72c31407"
+    },
+    {
+      "path": "tests/browser/campaignBatchUx.mjs",
+      "originSha256": "9a22695085cd24cba49d8f1c571195267410262cc30bf2c8c2bf264bb203d09d",
+      "resultSha256": "3a57df8182701b64e77bbff9a63cb6c92f918bd4950d76daa5751dd46c58880f"
+    }
+  ]
+}

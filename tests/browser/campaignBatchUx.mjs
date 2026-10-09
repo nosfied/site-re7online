@@ -18,7 +18,7 @@ const token = Buffer.from('{}').toString('base64url') + '.' + Buffer.from(JSON.s
 const session = { baseUrl: '/agent-api', token, user, features: { campaigns: true, crm: true, inbox: true, templates: true, browserPushNotifications: false }, profile: 'business' };
 const make = (id, status, scheduledAt = null) => ({ id, clientId: user.clientId, name: `Campanha local ${id}`, templateName: 'modelo_local', status, scheduledAt, totalRecipients: 2, sentCount: 0, blockedCount: 0, createdAt: '2026-10-06T12:00:00Z', updatedAt: '2026-10-06T12:00:00Z', progress: { totalRecipients: 2, sentCount: 0, blockedCount: 0, pendingCount: 2 }, messagesMetaStatus: [], metaSummary: { totalSent: 0, totalDelivered: 0, totalRead: 0, totalFailed: 0 } });
 const data={A:make('A','scheduled','2030-10-07T15:40:00Z'),P:make('P','completed'),S:make('S','completed'),C1:make('C1','completed'),C2:make('C2','failed'),C3:make('C3','completed'),I:make('I','completed'),J:make('J','completed')};
-const batch=(id,children)=>({id,name:'Conjunto '+id,sourceMode:'DYNAMIC_CRM_FILTER',status:'completed',chunkCount:children.length,totalRecipients:children.length,sentCount:1,blockedCount:1,progress:{totalRecipients:children.length,sentCount:1,blockedCount:children.length-1,pendingCount:0,completedChunks:children.length===1?1:children.length-1,runningChunks:0,queuedChunks:0,failedChunks:children.length>1?1:0},failureReason:children.length>1?'Resultado parcial preservado':null,chunks:children.map((id,i)=>({campaignId:id,name:'Nome igual de lote',status:data[id].status,chunkIndex:i+1,recipientCount:1,totalRecipients:1,sentCount:i===0?1:0,blockedCount:i===0?0:1,queueStatus:i===0?'completed':'failed',queuePosition:null,startedAt:'2030-10-07T15:40:00Z',finishedAt:'2030-10-07T15:41:00Z',failureReason:i===0?null:'Falha específica do lote'}))});
+const batch=(id,children)=>({id,name:'Conjunto '+id,sourceMode:'DYNAMIC_CRM_FILTER',status:'completed',chunkCount:children.length,totalRecipients:children.length,sentCount:1,blockedCount:1,progress:{totalRecipients:children.length,sentCount:1,blockedCount:children.length-1,pendingCount:0,completedChunks:children.length===1?1:children.length-1,runningChunks:0,queuedChunks:0,failedChunks:children.length>1?1:0},failureReason:children.length>1?'lease_recovery_required':null,chunks:children.map((id,i)=>({campaignId:id,name:'Nome igual de lote',status:data[id].status,chunkIndex:i+1,recipientCount:1,totalRecipients:1,sentCount:i===0?1:0,blockedCount:i===0?0:1,queueStatus:i===0?'completed':'failed',queuePosition:null,startedAt:'2030-10-07T15:40:00Z',finishedAt:'2030-10-07T15:41:00Z',failureReason:i===0?null:JSON.stringify({error:{code:131026,message:'Message undeliverable'}})}))});
 data.P.executionBatch=batch('multi',['C1','C2']);data.S.executionBatch=batch('single',['C3']);
 for(const [parent,ids] of [['P',['C1','C2']],['S',['C3']]])for(const id of ids){
  const item=data[id],chunk=data[parent].executionBatch.chunks.find(c=>c.campaignId===id);
@@ -27,9 +27,12 @@ for(const [parent,ids] of [['P',['C1','C2']],['S',['C3']]])for(const id of ids){
  item.progress={totalRecipients:1,sentCount:item.sentCount,blockedCount:item.blockedCount,pendingCount:0};
  item.messagesMetaStatus=[{waId:'fixture-'+id,contactName:'Resultado exclusivo '+id,phoneDisplay:'Número sintético',templateName:'modelo_local',status:id==='C2'?'failed':'sent',sentAt:'2030-10-07T15:40:00Z',error:id==='C2'?'131026 sintético':null}];
 }
-data.C2.templateName='modelo_divergente';data.C2.draftSeed={returnDestination:{type:'human_department',departmentId:'setor-exclusivo',queueId:'fila-exclusiva'},templateParams:['Valor exclusivo'],templateVariableMappings:[{position:'1',source:'FIXED',value:'Exclusivo'}]};
+data.C2.templateName='modelo_divergente';data.C2.draftSeed={returnDestination:{type:'human_department',departmentId:'setor-exclusivo',queueId:'fila-exclusiva'},templateParams:['Valor exclusivo'],templateVariableMappings:[{position:'1',source:'fixed',value:'Exclusivo'}]};
 for(const id of ['P','S']){data[id].selectionMode='DYNAMIC_CRM_FILTER';data[id].totalRecipients=data[id].executionBatch.progress.totalRecipients;data[id].sentCount=1;data[id].blockedCount=data[id].executionBatch.progress.blockedCount;data[id].progress={...data[id].executionBatch.progress};}
 data.I.name=data.J.name='Independentes com nome igual';
+data.W=make('W','scheduled','2030-10-07T15:40:00Z');data.WC=make('WC','scheduled','2030-10-07T15:40:00Z');
+const waiting=batch('waiting',['WC']);waiting.status='scheduled';waiting.failureReason=null;waiting.progress={totalRecipients:0,sentCount:0,blockedCount:0,pendingCount:0,completedChunks:0,runningChunks:0,queuedChunks:1,failedChunks:0};waiting.chunks[0]={...waiting.chunks[0],recipientCount:17,totalRecipients:0,sentCount:0,blockedCount:0,queueStatus:'queued',startedAt:null,finishedAt:null,failureReason:null};
+waiting.totalRecipients=17;data.W.totalRecipients=0;data.W.selectionMode='DYNAMIC_CRM_FILTER';data.W.executionBatch=waiting;data.WC.executionBatch=waiting;data.WC.totalRecipients=0;data.WC.messagesMetaStatus=[];
 const template={id:'template-local',name:'modelo_local',status:'approved',category:'UTILITY',language:'pt_BR',content:'Texto sem variavel',variables:[],canUseInCampaign:true};
 
 let held = null, holdId = null, failId = null, wrongTenantId = null; let epoch=1, active=0, maximum=0;
@@ -72,7 +75,7 @@ try {
       return await fulfill(requestId,{ok:true,campaign:data[id]});
     }
    }
-   if(route==='/app/campaigns/return-destinations')return await fulfill(requestId,{ok:true,departments:[{id:'dept',name:'Atendimento Geral',operationalReady:true}],flows:[]});
+   if(route==='/app/campaigns/return-destinations')return await fulfill(requestId,{ok:true,departments:[{id:'dept',name:'Atendimento Geral',operationalReady:true},{id:'setor-exclusivo',name:'Setor exclusivo legível',operationalReady:true}],flows:[{id:'fluxo-exclusivo',name:'Fluxo exclusivo legível'}]});
    if(route==='/app/crm/statuses')return await fulfill(requestId,{ok:true,settings:{crmBusinessStatuses:[{id:'FOLLOW_UP',label:'Follow-up',isActive:true,campaignEligible:true}]}});
    if(route==='/app/templates')return await fulfill(requestId,{ok:true,items:[template],count:1});
    if(route.startsWith('/app/agent-availability'))return await fulfill(requestId,{ok:true,availability:{available:false,status:'offline',userId:user.id},heartbeatIntervalMs:60000});
@@ -87,7 +90,7 @@ try {
  const body=()=>ev('document.body?.innerText||""');
  const dialog=()=>ev(`document.querySelector('[role="dialog"]')?.innerText||document.body.innerText`);
  const tick=()=>ev('window.__tickCampaign()');
- const click=async(text)=>{const ok=await ev(`(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()===${JSON.stringify(text)}||e.getAttribute('aria-label')===${JSON.stringify(text)}||(e.getAttribute('role')==='tab'&&e.textContent.trim().startsWith(${JSON.stringify(text)})));if(!b)return false;b.click();return true;})()`);assert(ok,'button '+text);};
+ const click=async(text)=>{const ok=await ev(`(()=>{const b=[...document.querySelectorAll('button')].filter(e=>e.getClientRects().length).find(e=>e.textContent.trim()===${JSON.stringify(text)}||e.getAttribute('aria-label')===${JSON.stringify(text)}||(e.getAttribute('role')==='tab'&&e.textContent.trim().startsWith(${JSON.stringify(text)})));if(!b)return false;b.click();return true;})()`);assert(ok,'button '+text);};
  const check=(name)=>{report.cases.push({name,result:'PASS'});console.log('PASS: '+name);};
  await send('Page.navigate',{url:local+'/app/campaigns'});
  await until(()=>ev(`document.querySelector('[aria-label="Ver detalhes da campanha Campanha local P"]')!==null`),'list');
@@ -95,19 +98,25 @@ try {
  await until(()=>ev(`document.querySelectorAll('tr[aria-label="Ver detalhes da campanha Independentes com nome igual"]').length===2`),'independent names');
  report.assetContract=await inspectFrontendAssets({ev,send,responses:assetResponses});assertFrontendAssetContract(report.assetContract);
  check('Real compiled CSS/JS HTTP, MIME and computed styles; independent equal names retained');
- const open=async(id)=>{await ev(`document.querySelector('[aria-label="Ver detalhes da campanha Campanha local ${id}"]').click()`);await until(()=>ev(`document.getElementById('batch-summary-${data[id].executionBatch.id}')!==null`),'batch '+id);};
+ const open=async(id)=>{await until(()=>ev(`document.querySelector('[aria-label="Ver detalhes da campanha Campanha local ${id}"]')!==null`),'visible campaign '+id);await ev(`document.querySelector('[aria-label="Ver detalhes da campanha Campanha local ${id}"]').click()`);await until(()=>ev(`document.getElementById('batch-summary-${data[id].executionBatch.id}')!==null`),'batch '+id);};
  const expand=async(index)=>{await ev(`document.querySelectorAll('[aria-label="Conjunto e lotes"] button[aria-expanded]')[${index}].click()`);};
  const releaseHeld=async(marker)=>{const value=held;held=null;active--;try{await fulfill(value.requestId,{ok:true,campaign:{...value.snapshot,messagesMetaStatus:[{...value.snapshot.messagesMetaStatus[0],contactName:marker}]}});}catch(error){if(error.message!=='Invalid InterceptionId.')throw error;report.cancelledLateResponses=(report.cancelledLateResponses||0)+1;}};
  const lotText=()=>ev(`document.querySelector('[aria-label^="Dados exclusivos do lote"]')?.innerText||''`);
- await open('P');assert.equal(await ev(`document.querySelectorAll('[aria-label="Totais do conjunto"]').length`),0,'aggregate cards once on controller');
+ await click('Agendadas');await open('W');
+ const waitingShot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(dir,'waiting.png'),Buffer.from(waitingShot.data,'base64'));
+ const pendingRow=await ev(`document.querySelector('[aria-label="Conjunto e lotes"] tbody tr')?.innerText`);assert(pendingRow.includes('17 previsto(s)'));assert(pendingRow.includes('0 materializado(s)'));assert(pendingRow.includes('Aguardando materialização'));check('Scheduled unmaterialized lot preserves 17 expected recipients distinct from zero materialized');await click('Fechar detalhe');
+ await click('Concluídas');await open('P');assert.equal(await ev(`document.querySelectorAll('[aria-label="Totais do conjunto"]').length`),0,'aggregate cards once on controller');
  const before=report.requests.length;await expand(0);await until(async()=> (await lotText()).includes('Resultado exclusivo C1'),'expanded first');
  assert.equal(report.requests.slice(before).filter(r=>r.route==='/app/campaigns/C2').length,0,'no loading unopened sibling');
  assert.equal(await ev(`document.querySelector('[role=\"dialog\"]')?.innerText.includes('Progresso do lote')`),false);
  check('Several lots: aggregate once; expansion stays on parent and only reads requested ID');
  data.C1.updatedAt='2030-10-07T15:43:00Z';data.C1.messagesMetaStatus[0].contactName='Resultado exclusivo C1 atualizado';await tick();await until(async()=> (await lotText()).includes('C1 atualizado'),'child version');check('Child list version invalidates expanded detail even with unchanged parent version');
  await expand(1);await until(async()=> (await lotText()).includes('Resultado exclusivo C2'),'expanded failure');
- const failed=await lotText();for(const label of ['modelo_divergente','setor-exclusivo','Valor exclusivo','131026','Falha específica'])assert(failed.includes(label),label);
- assert(!(await lotText()).includes('Resultado exclusivo C1'));check('Partial/failed results and divergent template, destination and variables preserved per row');
+ const failed=await lotText();for(const label of ['modelo_divergente','Setor exclusivo legível','Fila: fila-exclusiva','Valor exclusivo','131026','A Meta informou que a mensagem não pôde ser entregue','Valor fixo/manual'])assert(failed.includes(label),label);
+ assert(!failed.includes('Message undeliverable'));assert(!failed.includes('human_department'));assert(!failed.includes('templateVariableMappings'));assert.equal(await ev(`document.querySelector('[aria-label^="Dados exclusivos do lote"] pre')!==null`),false);assert(!(await dialog()).includes('lease_recovery_required'));assert((await dialog()).includes('A execução precisa de revisão operacional antes de continuar.'));
+ assert(!(await lotText()).includes('Resultado exclusivo C1'));check('Readable failure, named destination, labeled variables/parameters present only on child; no raw JSON');
+ const readableShot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(dir,'readable-failure.png'),Buffer.from(readableShot.data,'base64'));
+ data.C2.draftSeed.returnDestination={type:'automated_flow',flowId:'fluxo-exclusivo'};data.C2.updatedAt='2030-10-07T15:44:00Z';await tick();await until(async()=> (await lotText()).includes('Fluxo: Fluxo exclusivo legível'),'flow destination');check('Divergent automated-flow destination reuses loaded name, preserves child-only values');
  await click('Fechar detalhe');await open('S');await expand(0);await until(async()=> (await lotText()).includes('Resultado exclusivo C3'),'single lot');const cachedReads=report.requests.filter(r=>r.route==='/app/campaigns/C3').length;await expand(0);await expand(0);await until(async()=> (await lotText()).includes('Resultado exclusivo C3'),'reused row');assert.equal(report.requests.filter(r=>r.route==='/app/campaigns/C3').length,cachedReads);check('One-lot set uses the same expandable pattern; same-version reopen reuses detail');
  await click('Abrir lote por ID 1: Nome igual de lote');await until(()=>ev(`document.querySelector('[aria-label="Contexto do lote"]')!==null`),'direct child');
  assert.equal(await ev(`document.querySelector('[aria-label="Conjunto e lotes"] details').open`),false);await click('Abrir conjunto por ID');await until(()=>ev(`document.querySelector('[aria-label="Contexto do lote"]')===null`),'parent navigation');check('Child detail has own result/actions, explicit parent link and collapsed aggregate');

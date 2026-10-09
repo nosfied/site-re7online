@@ -1,0 +1,99 @@
+{
+  "scope": "real frontend/Chrome, controlled polling clock, simulated auth/API; no backend/provider",
+  "status": "PASS",
+  "cases": [
+    {
+      "name": "Real compiled CSS/JS HTTP, MIME and computed styles; independent equal names retained",
+      "result": "PASS"
+    },
+    {
+      "name": "Scheduled unmaterialized lot preserves 17 expected recipients distinct from zero materialized",
+      "result": "PASS"
+    },
+    {
+      "name": "Several lots: aggregate once; expansion stays on parent and only reads requested ID",
+      "result": "PASS"
+    },
+    {
+      "name": "Child list version invalidates expanded detail even with unchanged parent version",
+      "result": "PASS"
+    },
+    {
+      "name": "Readable failure, named destination, labeled variables/parameters present only on child; no raw JSON",
+      "result": "PASS"
+    },
+    {
+      "name": "Divergent automated-flow destination reuses loaded name, preserves child-only values",
+      "result": "PASS"
+    },
+    {
+      "name": "One-lot set uses the same expandable pattern; same-version reopen reuses detail",
+      "result": "PASS"
+    },
+    {
+      "name": "Child detail has own result/actions, explicit parent link and collapsed aggregate",
+      "result": "PASS"
+    },
+    {
+      "name": "Read failure confined to row; explicit read retry does not submit an action",
+      "result": "PASS"
+    },
+    {
+      "name": "Delayed lot response cannot cross selection/unmount boundary",
+      "result": "PASS"
+    },
+    {
+      "name": "Mismatched tenant detail rejected inline",
+      "result": "PASS"
+    },
+    {
+      "name": "Keyboard Enter/Space and aria-expanded/controls",
+      "result": "PASS"
+    },
+    {
+      "name": "Mobile 390px: styles present, row scrolling contained, controls accessible",
+      "result": "PASS"
+    },
+    {
+      "name": "Session change disposes reads/cache and discards delayed old tenant response",
+      "result": "PASS"
+    },
+    {
+      "name": "Direct child URL preserves own result and collapsible aggregate",
+      "result": "PASS"
+    },
+    {
+      "name": "No campaign mutation/provider request; detail concurrency at most two",
+      "result": "PASS"
+    }
+  ],
+  "maximumDetailConcurrency": 2,
+  "assetContract": {
+    "result": "PASS"
+  },
+  "build": {
+    "result": "PASS",
+    "node": "20.20.0",
+    "buildId": "8OqIZZxaW7_ogf6h7AVoe"
+  },
+  "lint": {
+    "result": "PASS",
+    "scope": "CampaignBatchPanel.tsx"
+  },
+  "targetedContract": {
+    "pass": 1,
+    "skipped": 29,
+    "fail": 0
+  },
+  "reusedEvidence": {
+    "contractAndReader": 39,
+    "scheduleAndGroupsBrowser": 13,
+    "relationReadsBrowser": 7,
+    "note": "Prior evidence preserved; not rerun or relabeled as new acceptance."
+  },
+  "limitations": [
+    "Synthetic API/auth and controlled polling; no backend/provider or production execution.",
+    "Queue name is not supplied by the existing destinations contract; explicit queue ID is preserved.",
+    "Full tsc has 22 pre-existing test diagnostics recorded in the original report; not claimed as PASS."
+  ]
+}
