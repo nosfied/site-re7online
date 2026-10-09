@@ -82,7 +82,7 @@
     }
   ],
   "mutations": 0,
-  "pendingOwner": "Final local cleanup: discard only unsaved composer; confirmation pending.",
+  "pendingOwner": null,
   "independentPending": [
     "natural multilote",
     "natural AUTO unavailability",
@@ -115,5 +115,10 @@
     ],
     "explanation": "shouldRefreshCampaign aceita scheduled/sending; shouldPoll ativa um timer de lista e detalhe de 3s. Novas campanhas posteriores ao baseline explicam polling possível, não comprovam ausência de excesso nas leituras adicionais.",
     "productionMutations": false
-  }
+  },
+  "finalLocalCleanup": {
+    "status": "PASS OWNER REPORTED",
+    "evidence": "Owner confirmou descartada após orientação para descartar somente formulário novo não salvo."
+  },
+  "roundStatus": "COMPLETED WITH DOCUMENTED LIMITS"
 }

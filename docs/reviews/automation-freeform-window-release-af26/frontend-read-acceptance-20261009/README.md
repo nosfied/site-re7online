@@ -30,7 +30,7 @@ Owner forneceu recorte Network com **cinco GETs do detalhe83f99… alternados co
 | Máximo2 complementar, lista grande/detalhe lento/falha, mudança de sessão ou resposta tardia | NOT EXERCISED nesta produção | Provas isoladas existentes preservadas; não houve injeção de falha nem troca de sessão nesta rodada |
 | Novo payload12:40→15:40Z e backend inalterado por edição | NOT EXERCISED por submissão | Contrato e provas existentes reutilizados; nenhuma submissão permitida. Leitura backend não comprova ausência de toda mutação por outros operadores |
 
-Não há FAIL funcional demonstrado nesta rodada. O relato inicial de leituras contínuas foi investigado e explicado quanto ao timer normal; não certifica que todas as requisições possíveis sejam necessárias. Fechamento final do formulário novo por descarte local solicitado; confirmação ainda pendente ao consolidar o registro. Não se deve salvar essa composição.
+Não há FAIL funcional demonstrado nesta rodada. O relato inicial de leituras contínuas foi investigado e explicado quanto ao timer normal; não certifica que todas as requisições possíveis sejam necessárias. Owner confirmou o descarte local final (“descartada”). Formulário novo encerrado sem salvar/agendar/enviar; rodada concluída com os limites acima.
 
 ## Pedido do owner ao arquiteto / backlog separado
 
