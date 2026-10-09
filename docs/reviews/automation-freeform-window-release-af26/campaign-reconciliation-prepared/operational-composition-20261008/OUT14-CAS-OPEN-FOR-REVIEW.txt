@@ -1,0 +1,17 @@
+PROCEDIMENTO PARA REVISÃO — NÃO EXECUTAR NESTA ETAPA
+Guarda observada: closed, geração35, tasks:{}, ledgerFault=false.
+A abertura é GLOBAL, não um bypass para apenas Demo. Out.14 está vencida e pode executar no próximo tick natural.
+
+1. Após revisão/autorização do owner, adquirir a execução exclusiva existente.
+2. Reconfirmar identidades APIa26/mínimoafbb/frontendfa60 e integridade/controles. Nenhuma janela/stop/start é necessária para o setter.
+3. Fazer inventário global PostgreSQL READ ONLY com limites/timeout/classificador efetivos. Plano esperado: somente job21c5b452-1eed-4229-a3dc-78aea84733fb queued/attempt0/sem lease, lote df8e7e5b-75dd-4381-93c9-488ec114744c scheduled, controlador44a209f2-fad6-4de5-8521-cd8ab07ae7b0; demais tenants sem execução pendente, dois drafts re7online sem jobs. Estado desconhecido, lease, execução ativa ou inventário incompleto bloqueiam.
+4. Reconfirmar público pelo filtro atual/normalização/resolvedores reais: Demo FOLLOW_UP, final4366/1 elegível/0 bloqueados; template data_exame approved/UTILITY permitido, variável1=22/01/2027, Atendimento Geral/Fila Geral e identidade vencedora não ambígua. Alteração material requer revisão, não adaptação automática.
+5. GET /admin/ops/campaign-execution, com autenticação legítima platform-superadmin pelo mecanismo existente e segredo mantido privado. Exigir available=true, open=false, generation=35, drained=true, tasks=[], ledgerFault=false; mesmo host e recoveryOnly=false. O HTTP usa lista de tasks; o ledger persistido usa objeto. Não reutilizar uma prova/nonce da janela nem alterar os cinco gates V4.
+6. SOMENTE APÓS AUTORIZAÇÃO: uma chamada POST ao mesmo endpoint pelo setter existente, com corpo exato abaixo e autenticação mantida privada:
+{"open":true,"generation":35,"reason":"owner-reviewed-out14-after-reconciliation-closed35"}
+Código real: routes.ts /admin/ops/campaign-execution -> setCampaignOperations(true,35,"platform-superadmin",reason). CAS da geração e auditoria sob lock existente; nenhuma edição direta do ledger/DB. A chamada e seu stdout/stderr/HTTP status devem ser preservados em evidência privada.
+7. Divergência, 409, timeout ou resultado incerto: guardar diagnóstico, NÃO repetir POST nem trocar generation automaticamente. Ler estado real antes de qualquer nova decisão. Resposta/GET devem comprovar open=true/generation36. Uma observação DB não se torna atômica com o CAS; o envio revalida tenant/identidade/exclusão/opt-out imediatamente antes do provider pelo contrato já implantado.
+8. Acompanhar o tick natural e execução vinculada ao mesmo job/lote/controlador/snapshot. A fila pode começar antes do GET seguinte; zero tarefas depois da abertura não é prova de drain. Não chamar Enviar agora, scheduler, materializador, replay, reconciliação ou provider por script para acelerar.
+9. Separar snapshot/eligibilidade/submissão/aceitação/entrega/falha e resultado terminal nos read models reais. Uma falha ou resultado incerto não autoriza segunda submissão. Eventual contenção/fechamento posterior exige avaliar o estado e o procedimento correspondente; este roteiro não implementa retorno/restart automático.
+
+Estado atual: NÃO EXECUTADO. Guarda permanece fechada35. Nenhuma abertura foi autorizada nesta auditoria.

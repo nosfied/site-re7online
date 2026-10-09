@@ -133,7 +133,8 @@
   ],
   "leases": 0,
   "out14Unchanged": true,
-  "ownerScreensRead": "PENDING",
+  "ownerScreensRead": "PASS; owner confirmation recorded in subsequent instruction",
+  "ownerScreensScope": "session/Inbox/CRM/Campaigns read-only; not functional campaign execution acceptance",
   "processes": {
     "re7-admin-front": {
       "pid": 3438948,

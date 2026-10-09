@@ -1,0 +1,280 @@
+{
+  "accountCaptureSha256": "8ac43227eeff560fa1ffe0f582ae1f230555ae7e7ccf55609e9a62a4148193fb",
+  "accountReadAtUtc": "2026-10-09T00:46:11.802Z",
+  "api": "a26dbb0ed39f9484bbbb71c5e7c753d561f07b93",
+  "audienceLimit": 1000,
+  "auditAtUtc": "2026-10-09T00:42:25.881Z",
+  "captureSha256": "2beec16f84f541902452959693b806ac193ba80bad9db831ea299c8a3b9bff44",
+  "casReadiness": {
+    "at": "2026-10-09T00:48:37.368785+00:00",
+    "available": true,
+    "drained": true,
+    "gatesFalse": true,
+    "generation": 35,
+    "identitiesPreserved": true,
+    "ledgerFault": false,
+    "open": false,
+    "recoveryOnly": false,
+    "singleHostBindingMatches": true,
+    "tasks": 0
+  },
+  "compiledSelectionFunctions": [
+    {
+      "name": "isRecord",
+      "sha256": "c671e7ad08afc3cd42edcac151999275189237773fe55b7e09c6b0e2e32b15ef"
+    },
+    {
+      "name": "extractComponents",
+      "sha256": "3596809f32ccb4d5c423b18ded6a2c3d7dd391ef98bd100156c1ace3a376df16"
+    },
+    {
+      "name": "extractComponentsByWaId",
+      "sha256": "253bf47bbd90481f7abe16195ac56a4e8745a2a8f3b5ae57175d263864de9560"
+    },
+    {
+      "name": "extractTemplateVariableMappings",
+      "sha256": "e47eeffe01001016cc17020cd480bd4876d1b350b3f2245619120da57686bfc3"
+    },
+    {
+      "name": "extractDynamicFilter",
+      "sha256": "667d7033174fa0d9350a29c38af1541380904a57c1a1ec40ba594df86cece52c"
+    },
+    {
+      "name": "extractScheduledCampaignSeed",
+      "sha256": "c900fdc23d848b6d95b02190443fb34bfb5083837f4f2dd7fb557eab9e4a297d"
+    },
+    {
+      "name": "resolveDynamicMappingValue",
+      "sha256": "9fd9c340b05f542913f5a021a95a5bd2ab03f52bf1cd4f327418c17b09d4b02a"
+    },
+    {
+      "name": "buildDynamicComponentsForLead",
+      "sha256": "4b447cf2ab9622c63f8aa08266973275b1ea8564ef625dc69901d9445eb2aa14"
+    },
+    {
+      "name": "normalizeCampaignRunRecipientWaId",
+      "sha256": "f03989fbe1e180d13ac737b11d977e6c4b0968fb9ef00ecfad386b6b503c7ba8"
+    },
+    {
+      "name": "getCampaignBlockedReasonLabel",
+      "sha256": "e9df94b0a2a52c9e5a28a22fe24d9580472fca3cc026da1841f0d5bd6200422b"
+    },
+    {
+      "name": "isAnonymizedCampaignMarker",
+      "sha256": "7b72f3fe176a9f8b3220819806c006b43ef70e506e37a38c5c08ab0030503304"
+    },
+    {
+      "name": "maskCampaignRecipientIdentifier",
+      "sha256": "9028acd7c4eaf3d40da754e717a8de03aaaaf9c0b2fa2dc471fecb071ccbedd7"
+    },
+    {
+      "name": "incrementCampaignBlockedReason",
+      "sha256": "5b5d26d47b79d4e74f982a086cdfccc98f0dc847da6982463ed8b0e9f00f42a9"
+    },
+    {
+      "name": "resolveCampaignDraftRecipientsFromLeadIds",
+      "sha256": "3d9b6a0ce18a65174e58dae89142d8b261aff3837fcfd13edc8780ff61409d5c"
+    },
+    {
+      "name": "resolveDynamicCampaignTestRecipients",
+      "sha256": "be3b5ed4cb538baa47bfec9743929e19b2d65ed3b1ff6144c120bea19540a193"
+    },
+    {
+      "boundary": "before await persistEvent",
+      "name": "resolveDynamicCampaignRecipientsForBatch:read-selection-prefix",
+      "originSha256": "91af02cccb4578a8e2870daa6c6f67eb6a9e7d0e8c6db0e28fa64c91d2ca2149",
+      "prefixSha256": "5312a9d70e5f1b20c53649d7d872c9591ac74460b810083eea3b32c61df63838"
+    }
+  ],
+  "compiledSourceHashes": {
+    "routes": "eb2271e9a872aa0ab48d760cbf4e30d7780b283d475000e1e608ae6c035f1fb7",
+    "runner": "7203fd3897c50b043858f6aaa86b01f1cbe1f2787e0c619e0507e9ab4ea0b065"
+  },
+  "globalInventory": [
+    {
+      "activeLeases": 0,
+      "drafts": 0,
+      "scheduledBatches": 0,
+      "tenant": "cra-pr",
+      "waitingJobs": 0
+    },
+    {
+      "activeLeases": 0,
+      "drafts": 0,
+      "scheduledBatches": 1,
+      "tenant": "demo-converta",
+      "waitingJobs": 1
+    },
+    {
+      "activeLeases": 0,
+      "drafts": 0,
+      "scheduledBatches": 0,
+      "tenant": "demo-prefeitura",
+      "waitingJobs": 0
+    },
+    {
+      "activeLeases": 0,
+      "drafts": 0,
+      "scheduledBatches": 0,
+      "tenant": "justa-advocacia",
+      "waitingJobs": 0
+    },
+    {
+      "activeLeases": 0,
+      "drafts": 0,
+      "scheduledBatches": 0,
+      "tenant": "lab-websession",
+      "waitingJobs": 0
+    },
+    {
+      "activeLeases": 0,
+      "drafts": 0,
+      "scheduledBatches": 0,
+      "tenant": "loadtest-prefeitura",
+      "waitingJobs": 0
+    },
+    {
+      "activeLeases": 0,
+      "drafts": 2,
+      "scheduledBatches": 0,
+      "tenant": "re7online",
+      "waitingJobs": 0
+    },
+    {
+      "activeLeases": 0,
+      "drafts": 0,
+      "scheduledBatches": 0,
+      "tenant": "secult-pe",
+      "waitingJobs": 0
+    },
+    {
+      "activeLeases": 0,
+      "drafts": 0,
+      "scheduledBatches": 0,
+      "tenant": "syer-rodrigues",
+      "waitingJobs": 0
+    },
+    {
+      "activeLeases": 0,
+      "drafts": 0,
+      "scheduledBatches": 0,
+      "tenant": "tendencia-modas",
+      "waitingJobs": 0
+    }
+  ],
+  "guard": {
+    "generation": 35,
+    "open": false,
+    "tasksCount": 0
+  },
+  "inventoryLimit": 1000,
+  "limitations": [
+    "This is current eligibility, not a durable materialization or an execution acceptance",
+    "Meta token/approval checked in persisted configuration; no provider validation",
+    "Opening global guard is separately authorized after fresh all-tenant inventory and same generation",
+    "No repair of historical runtime/flags; no claim or send"
+  ],
+  "metaConfiguration": {
+    "credentialPresent": true,
+    "credentialSource": "tenant_meta",
+    "metaPhoneNumberMatch": true,
+    "registeredPhoneNumberMatch": true,
+    "routing": {
+      "settings": {
+        "meta": {
+          "enabledForRouting": true
+        },
+        "webSession": {
+          "enabledForRouting": true
+        }
+      },
+      "source": "db"
+    }
+  },
+  "observerCodeHashes": {
+    "account-check.mjs": "4201b18907ab6f6c87bc23f0fb4e19864450c9b3eba982f55f2de837123f0d11",
+    "account-driver.private.py": "97e772514b79eea2e63c709f36ef5625d6d4998da89f5a079a99b7b8ff0e01a1",
+    "audit.mjs": "0405baa05d0ea127907047b1b8a7082300d34e50ed7e12899b6ad78c504b15bb",
+    "cas-readiness.private.py": "f4574f3c20228c5a15b1beca643fc141fa3fa7e94a766cfc2e4df56485c708e4",
+    "driver.private.py": "288abe1f2269ab0a17edde1882075bdac791c31d8da1a3fedce4ea0755e269bb"
+  },
+  "out14": {
+    "attempt": 0,
+    "batchId": "df8e7e5b-75dd-4381-93c9-488ec114744c",
+    "batchStatus": "scheduled",
+    "blockedCount": 0,
+    "campaignId": "44a209f2-fad6-4de5-8521-cd8ab07ae7b0",
+    "campaignStatus": "scheduled",
+    "contacts": 1,
+    "conversations": 1,
+    "destination": {
+      "department": "Atendimento Geral",
+      "queue": "Fila Geral",
+      "type": "human_department"
+    },
+    "draftSummary": {
+      "accepted": 1,
+      "blocked": 0,
+      "blockedByReason": [],
+      "duplicatesRemoved": 0,
+      "requested": 1
+    },
+    "effectiveWindowExpired": true,
+    "eligibleAtUtc": "2026-10-08T10:53:00.000Z",
+    "eligibleCount": 1,
+    "eligibleLast4": "4366",
+    "estimateSummary": {
+      "analyzed": 1,
+      "blocked": 0,
+      "blockedByReason": [],
+      "eligible": 1,
+      "total": 1,
+      "truncated": false
+    },
+    "filter": {
+      "crmBusinessStatusId": "FOLLOW_UP",
+      "version": 1
+    },
+    "identityResolverMatchedBy": "exact_conversation_waid",
+    "identityResolverReason": "resolved",
+    "jobId": "21c5b452-1eed-4229-a3dc-78aea84733fb",
+    "jobStatus": "queued",
+    "leads": 1,
+    "leaseAbsent": true,
+    "legacyUnscopedRuntime": 1,
+    "legacyWindowFlagsAreNotAuthorization": true,
+    "matchedCount": 1,
+    "outboundCount": 0,
+    "pastDue": true,
+    "runtimeMatchingWinner": 1,
+    "runtimesObserved": 2,
+    "scheduledAtUtc": "2026-10-08T10:53:00.000Z",
+    "selectionSetsEqual": true,
+    "snapshotCount": 0,
+    "statusLabel": "Follow-up",
+    "submissionEventsCount": 0,
+    "template": {
+      "category": "UTILITY",
+      "language": "pt_BR",
+      "name": "data_exame",
+      "status": "approved"
+    },
+    "tenant": "demo-converta",
+    "variableMappings": [
+      {
+        "position": "1",
+        "source": "fixed",
+        "value": "22/01/2027"
+      }
+    ]
+  },
+  "ownerConfirmation": "Owner confirmed session/screens following deployment; functional execution remains separate",
+  "previewTruncated": false,
+  "productionIdentitiesPreserved": true,
+  "providerCalls": 0,
+  "snapshotIsolation": "RepeatableRead; secondary account read separate transaction",
+  "snapshotOrCampaignWrites": 0,
+  "statementTimeoutMs": 10000,
+  "transactionReadOnly": "on",
+  "windowGatesFalse": true
+}
