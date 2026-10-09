@@ -1,0 +1,119 @@
+{
+  "scope": "owner-guided UI read-only and unsaved local composer editing",
+  "date": "2026-10-09",
+  "baselineAtFortaleza": "2026-10-09T12:47:05.732-03:00",
+  "demoCampaigns": {
+    "count": 65,
+    "completed": 47,
+    "failed": 3,
+    "cancelled": 15,
+    "scheduledOrSending": 0
+  },
+  "preservedComponents": {
+    "frontend": "fa60f0f6 corrected",
+    "api": "a26dbb0e",
+    "worker": "minimal reactive afbb"
+  },
+  "sourceContracts": [
+    "docs/saas/CAMPAIGN_COMPOSER_LIFECYCLE.md",
+    "docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md",
+    "docs/reviews/automation-freeform-window-release-af26/CAMPAIGN_SCHEDULE_AND_GROUPS_LOCAL_2026-10-07.md",
+    "docs/reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md"
+  ],
+  "reusedEvidence": {
+    "scheduleAndGroupsBrowser": "13 PASS, isolated exact tar, simulated APIs/auth",
+    "relationReadsBrowser": "7 PASS, simulated APIs, max 2 supplemental concurrent reads",
+    "productiveLayout": "owner previously confirmed; not reattributed to these cases"
+  },
+  "scenarios": [
+    {
+      "scenario": "fresh composer schedule isolated from selected campaign",
+      "status": "PASS OWNER REPORTED",
+      "input": "2026-10-10T12:40 local Fortaleza, no submission",
+      "evidence": "Owner respondeu pass ao passo de campo inicialmente vazio e valor local preservado por 10 segundos; sem polling ativo."
+    },
+    {
+      "scenario": "composer edits preserved during actual polling",
+      "status": "PASS OWNER REPORTED",
+      "reason": "Duas campanhas scheduled verificadas na leitura fresca; owner forneceu trecho com GETs alternados de detalhe/lista e confirmou campo local preservado no passo com espera de 12s. Não foi submetido payload de agendamento."
+    },
+    {
+      "scenario": "controller representation and accessible child details",
+      "status": "PASS OWNER REPORTED",
+      "existingParentId": "44a209f2-fad6-4de5-8521-cd8ab07ae7b0",
+      "existingChildId": "2ee0c590-69fa-4ecd-91f8-3633e7824c18",
+      "limit": "one child does not accept multilote execution",
+      "evidence": "Owner confirmou conjunto out.14 representado por uma linha, um lote, um entregue e abertura do detalhe do filho com mesmo destinatário sem mistura."
+    },
+    {
+      "scenario": "reuse of explicit relations and bounded supplemental reads",
+      "status": "PASS LIMITED TRACE / SUPPLEMENTAL CONCURRENCY NOT EXERCISED",
+      "limit": "backend list alone cannot attest frontend request counts; reuse isolated proof without relabeling",
+      "evidence": {
+        "initialObservedRequestsApproximate": 20,
+        "exactEndpointBreakdownVerified": false,
+        "maximumConcurrencyVerified": false,
+        "idleAdditionalReads": "Expected selected detail/list reads with two scheduled campaigns. No repeated unrelated relation detail in supplied excerpt; trace not exhaustive.",
+        "networkTrace": {
+          "detailId": "83f99b68-0da7-4db6-b4b9-a71e0876cb43",
+          "detailGets": 5,
+          "listGets": 5,
+          "listQuery": "campaigns?limit=100",
+          "httpStatuses": [
+            200
+          ],
+          "otherDetailGetsInProvidedTrace": 0,
+          "observedOrder": "detail/list alternating",
+          "intervalNotProvided": true,
+          "durationsAreNotPollingIntervals": true
+        }
+      }
+    },
+    {
+      "scenario": "unsaved composer discard/reset clears local schedule",
+      "status": "PASS OWNER REPORTED",
+      "evidence": "Owner confirmou horário vazio após descartar somente composer não salvo e reabrir modo dinâmico."
+    },
+    {
+      "scenario": "selection switch out14 to out13 preserves campaign-specific result truth",
+      "status": "PASS OWNER REPORTED",
+      "evidence": "Owner confirmou out13 com seis resultados: um enviado/entregue, um falhado e quatro bloqueados, sem conservar totais out14.",
+      "limit": "Leitura normal; não foi provocada resposta HTTP tardia nem corrida."
+    }
+  ],
+  "mutations": 0,
+  "pendingOwner": "Final local cleanup: discard only unsaved composer; confirmation pending.",
+  "independentPending": [
+    "natural multilote",
+    "natural AUTO unavailability",
+    "CRA-PR"
+  ],
+  "historicalsPreserved": true,
+  "architectBacklogRequest": {
+    "status": "OWNER REQUEST / REVIEW ONLY",
+    "request": "Revisar como padrão de Campanhas a repetição entre detalhe do conjunto e lote e o encadeamento de múltiplas telas; avaliar linhas expansíveis/ocultáveis com dados exclusivos dos lotes, preservando acesso por ID, ações, totais, resultados, RBAC e isolamento.",
+    "preserve": [
+      "totais e Result Truth",
+      "ações e acesso aos lotes por ID",
+      "RBAC e isolamento por tenant"
+    ],
+    "implementationAuthorized": false
+  },
+  "freshPollingDiagnostic": {
+    "atUtc": "2026-10-09T16:34:48.856Z",
+    "atFortaleza": "2026-10-09T13:34:48.856-03:00",
+    "count": 67,
+    "statuses": {
+      "scheduled": 2,
+      "completed": 47,
+      "failed": 3,
+      "cancelled": 15
+    },
+    "scheduledIds": [
+      "83f99b68-0da7-4db6-b4b9-a71e0876cb43",
+      "b019039e-0a89-4a42-9f33-c214323b888f"
+    ],
+    "explanation": "shouldRefreshCampaign aceita scheduled/sending; shouldPoll ativa um timer de lista e detalhe de 3s. Novas campanhas posteriores ao baseline explicam polling possível, não comprovam ausência de excesso nas leituras adicionais.",
+    "productionMutations": false
+  }
+}
