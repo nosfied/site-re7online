@@ -1,0 +1,139 @@
+{
+  "scope": "authorized CAS35→36 and natural out.14 execution; no deployment or forced dispatch",
+  "api": "a26dbb0ed39f9484bbbb71c5e7c753d561f07b93",
+  "worker": "minimal reactive afbb7455 unchanged",
+  "frontend": "fa60f0f6 corrected unchanged",
+  "guard": {
+    "postCount": 1,
+    "httpStatus": 200,
+    "confirmedAtUtc": "2026-10-09T01:04:10.988328+00:00",
+    "open": true,
+    "generation": 36,
+    "tasksAtFinalObservation": 0
+  },
+  "freshAuditAtUtc": "2026-10-09T01:03:16.743Z",
+  "tenants": 10,
+  "parentCampaignId": "44a209f2-fad6-4de5-8521-cd8ab07ae7b0",
+  "batchId": "df8e7e5b-75dd-4381-93c9-488ec114744c",
+  "childCampaignId": "2ee0c590-69fa-4ecd-91f8-3633e7824c18",
+  "recipientLast4": "4366",
+  "template": "data_exame",
+  "variable": "22/01/2027",
+  "destination": "Atendimento Geral / Fila Geral",
+  "snapshot": {
+    "id": "ef4166cc-53ff-460e-b049-af3a44b89dae",
+    "atUtc": "2026-10-09T01:04:20.173Z",
+    "matched": 1,
+    "eligible": 1,
+    "blocked": 0,
+    "chunks": 1
+  },
+  "submission": {
+    "eventId": "ca743087-af56-4fc1-88c4-621274db1494",
+    "atUtc": "2026-10-09T01:04:20.636Z",
+    "count": 1,
+    "transport": "meta"
+  },
+  "acceptance": {
+    "eventId": "edfa602b-6a35-45ff-bfd5-bcbe8ab16627",
+    "atUtc": "2026-10-09T01:04:21.516Z",
+    "count": 1,
+    "sameMetaMessageIdAsOutbound": true,
+    "outboundId": "57dc3467-aa24-4777-a457-e0175af4beb4"
+  },
+  "delivery": {
+    "readModel": "exact active API buildCampaignDetailPayload/controller batch summary",
+    "status": "delivered",
+    "atUtc": "2026-10-09T01:06:18.000Z",
+    "ownerReceiptConfirmed": true,
+    "ownerVariableConfirmed": true,
+    "readStatusObserved": false
+  },
+  "batch": {
+    "status": "completed",
+    "completedAtUtc": "2026-10-09T01:04:21.691Z",
+    "progress": {
+      "totalRecipients": 1,
+      "sentCount": 1,
+      "blockedCount": 0,
+      "pendingCount": 0,
+      "failedCount": 0,
+      "completedChunks": 1,
+      "runningChunks": 0,
+      "queuedChunks": 0,
+      "failedChunks": 0
+    },
+    "metaSummary": {
+      "totalSent": 0,
+      "totalDelivered": 1,
+      "totalRead": 0,
+      "totalFailed": 0,
+      "totalBlocked": 0,
+      "totalOptOut": 0,
+      "totalSkipped": 0,
+      "totalPending": 0
+    },
+    "jobs": [
+      {
+        "id": "21c5b452-1eed-4229-a3dc-78aea84733fb",
+        "status": "completed",
+        "attempt": 1,
+        "finishedAtUtc": "2026-10-09T01:04:20.272Z",
+        "leaseExpiredAtFinish": true
+      },
+      {
+        "id": "d9ab7de5-1f3d-4513-b35b-e3409431e134",
+        "status": "completed",
+        "attempt": 1,
+        "finishedAtUtc": "2026-10-09T01:04:21.642Z",
+        "leaseExpiredAtFinish": true
+      }
+    ]
+  },
+  "globalWaiting": 0,
+  "out13Preserved": {
+    "blocked": 4,
+    "failed131026": 1,
+    "leases": 0,
+    "out14Waiting": 0,
+    "receiptCount": 1,
+    "validSent": 1
+  },
+  "identitiesPreserved": {
+    "re7-admin-front": {
+      "pid": 3438948,
+      "ticks": "2120147745"
+    },
+    "re7-whatsapp-agent": {
+      "pid": 3625739,
+      "ticks": "2128115907"
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 3625960,
+      "ticks": "2128116272"
+    }
+  },
+  "noRestartNoDeployNoReconciliationNoRetry": true,
+  "evidenceSha256": {
+    "account-check.private.json": "d0a79eea66e5f57c0ba4c5b9058205b0726c1c9a0db866fae94ada86280b27ed",
+    "account-observer-result.private.json": "bbdc775727143d70a992f639dd942cc644adb7a16c905dae7f7d1fae75b1be13",
+    "capture.private.json": "9564f2692d25ab1753dbbaecf833becc3b726e02ce4848c3f7136fc5a06ad515",
+    "cas-after.private.json": "e873d784531e6421a1028358e77724ca300e118558f0c6489f54f6e020bdd41a",
+    "cas-intent.private.json": "ad2802c9b8c9feba8c56fc16383ea06e1f2e8cb49875ead9e1625ec025b1f294",
+    "cas-result.private.json": "1e0fcd0f041652eb5ab4f194c48e12052829611a9288f8d9e07c2469e4eff450",
+    "controls-after.private.json": "64d6dea56e030b5b53a2bb172f4b4109d5800eca440d8bf72197b8135d771f4c",
+    "global-inventory.private.json": "41da3362922291908f3e4d2c47ebf30fd7e02eecb6ef0ae57d489974639f6fec",
+    "natural-010540.private.json": "0c07f1c937cf5e20cf8c3a394043e17424029be75100bb124acc292d8b96e5a3",
+    "natural-010622.private.json": "9f9d8462ecc464f973127e3a612ed381ab6db09c0b9140432aa445f84e4e2a00",
+    "natural-diagnostic-010540.private.json": "1d0ed0a71a19de7e7c9bc37bf0d61da864ca1b4af8bde3f73949aad57c03fbe1",
+    "natural-diagnostic-010622.private.json": "cbbefbb811f2f62caf38798fdb196fde1fd0efe69051289954d019664c655800",
+    "observer-result.private.json": "10817c71e9ec15dd1efc7e406f63c71a0a75a8c0425fc01b4b4c40dcc57ad8d1"
+  },
+  "limits": [
+    "point-in-time inventory, not a prohibition on future authorized jobs",
+    "one eligible recipient and one chunk do not accept grouped campaigns or CRA-PR",
+    "no new inbound, claim or human reply exercised",
+    "historical runtimes remain intact",
+    "no indefinite polling; two bounded natural-result observations"
+  ]
+}

@@ -52,3 +52,6 @@ Após revisão: instalação exclusiva da política → reconferência imediata 
 ## Execução autorizada — 08/10
 
 A etapa de preparação acima é histórica. [Registro efetivo da implantação](DEPLOYED_2026-10-08.md): API corretiva implantada; frontend e mesmo worker preservados, guarda closed35/out.14 aguardando. Aceite funcional separado, sem abertura/envio.
+
+
+Atualização08/10: [abertura CAS35→36 e execução natural out.14](OUT14_CAS_EXECUTION_2026-10-08.md) concluídas: Meta accepted, DELIVERED e confirmação de recebimento/valor pelo owner. Fila global vazia na observação; reconciliação out.13 e componentes preservados. Relatórios anteriores de guarda fechada documentam seus respectivos checkpoints históricos.
