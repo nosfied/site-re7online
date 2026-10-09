@@ -36,3 +36,8 @@ Manter link explícito **“Abrir lote por ID”** e rota/URL existentes para ac
 ## Decisão concreta solicitada ao arquiteto
 
 Avaliar o padrão **resumo único do conjunto + dados exclusivos em linhas expansíveis**, mantendo link de detalhe por ID e agregado recolhível quando um filho é acessado diretamente. Delimitar quais cartões são globais e quais são exclusivos antes do delta. Nenhuma implementação está autorizada nesta etapa; não há build/teste/deploy a executar agora. Após decisão, validar sobre APIs simuladas um/vários filhos, parcial/falha, nomes iguais, links diretos, sessão/tenant e resposta antiga, preservando os aceites existentes sem novos envios.
+
+
+## Continuidade autorizada — 09/10/2026
+
+Owner autorizou a implementação frontend sobre4a910771. [Delta local, provas, hashes e limites](../campaign-batch-ux-20261009/README.md) substituem somente o estágio “proposta aguardando implementação”. O diagnóstico histórico acima foi preservado. Código para revisão, NOT DEPLOYED; nenhum aceite produtivo novo ou alteração de backend/tenant.

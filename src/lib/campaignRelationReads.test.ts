@@ -42,3 +42,47 @@ test("older list response cannot replace newer detail or version", async () => {
   h.reader.remember({ ...row("a"), executionBatch: batch }); h.pending[0].resolve(row("a")); await settle();
   assert.equal(h.reader.merge([row("a")])[0].executionBatch, batch);
 });
+
+test("supplementary and demand reads share two slots, cancelled HTTP retains its slot", async () => {
+  const h = harness(); h.reader.update([row("a"), row("b")]);
+  const controller = new AbortController();
+  const demand = h.reader.readDetail("lot", controller.signal);
+  assert.equal(h.pending.length, 2);
+  h.pending[0].resolve(row("a")); await settle();
+  assert.equal(h.pending[2].id, "lot");
+  const refused = assert.rejects(demand, { name: "AbortError" }); controller.abort(); await refused;
+  const next = h.reader.readDetail("next");
+  assert.equal(h.pending.length, 3, "abort cannot create a third actual HTTP read");
+  h.pending[2].resolve(row("lot")); await settle();
+  assert.equal(h.pending[3].id, "next");
+  h.pending[1].resolve(row("b")); h.pending[3].resolve(row("next"));
+  assert.equal((await next).id, "next"); h.reader.dispose();
+});
+test("cancel queued detail before submission; wrong tenant and ID reject", async () => {
+  const h = harness();
+  const a = h.reader.readDetail("a"), b = h.reader.readDetail("b");
+  const controller = new AbortController();
+  const queued = h.reader.readDetail("never", controller.signal);
+  const cancelled = assert.rejects(queued, { name: "AbortError" }); controller.abort(); await cancelled;
+  const wrongTenant = assert.rejects(a, /Identidade/), wrongId = assert.rejects(b, /Identidade/);
+  h.pending[0].resolve({ ...row("a"), clientId: "other" }); h.pending[1].resolve(row("wrong"));
+  await Promise.all([wrongTenant, wrongId]); await settle();
+  assert.equal(h.pending.length, 2); h.reader.dispose();
+});
+test("disposal rejects active and queued demand and cannot expose stale cached detail", async () => {
+  const h = harness(); const a = h.reader.readDetail("a"), b = h.reader.readDetail("b"), c = h.reader.readDetail("c");
+  const refusals = [a, b, c].map(value => assert.rejects(value, { name: "AbortError" }));
+  h.reader.remember({ ...row("cached"), executionBatch: null });
+  assert.equal(h.reader.peekDetail("cached")?.id, "cached");
+  h.reader.dispose(); await Promise.all(refusals); assert.equal(h.reader.peekDetail("cached"), null);
+  for (const request of h.pending) request.resolve(row(request.id)); await settle();
+  assert.equal(h.pending.length, 2);
+});
+test("cached demand detail is invalidated by list version without losing explicit relationship", () => {
+  const h = harness(); const item = { ...row("cached"), executionBatch: null };
+  h.reader.remember(item); assert.equal(h.reader.peekDetail("cached"), item);
+  h.reader.update([row("cached", "2")]); assert.equal(h.reader.peekDetail("cached"), null);
+  assert.equal(h.reader.detailVersion("cached"), "2|completed");
+  assert.equal(h.reader.detailVersion("unknown"), null);
+  h.reader.dispose();
+});

@@ -1,0 +1,571 @@
+{
+  "batch": {
+    "scope": "real frontend/Chrome, controlled polling clock, simulated auth/API; no backend/provider",
+    "status": "PASS",
+    "cases": [
+      {
+        "name": "Real compiled CSS/JS HTTP, MIME and computed styles; independent equal names retained",
+        "result": "PASS"
+      },
+      {
+        "name": "Several lots: aggregate once; expansion stays on parent and only reads requested ID",
+        "result": "PASS"
+      },
+      {
+        "name": "Child list version invalidates expanded detail even with unchanged parent version",
+        "result": "PASS"
+      },
+      {
+        "name": "Partial/failed results and divergent template, destination and variables preserved per row",
+        "result": "PASS"
+      },
+      {
+        "name": "One-lot set uses the same expandable pattern; same-version reopen reuses detail",
+        "result": "PASS"
+      },
+      {
+        "name": "Child detail has own result/actions, explicit parent link and collapsed aggregate",
+        "result": "PASS"
+      },
+      {
+        "name": "Read failure confined to row; explicit read retry does not submit an action",
+        "result": "PASS"
+      },
+      {
+        "name": "Delayed lot response cannot cross selection/unmount boundary",
+        "result": "PASS"
+      },
+      {
+        "name": "Mismatched tenant detail rejected inline",
+        "result": "PASS"
+      },
+      {
+        "name": "Keyboard Enter/Space and aria-expanded/controls",
+        "result": "PASS"
+      },
+      {
+        "name": "Mobile 390px: styles present, row scrolling contained, controls accessible",
+        "result": "PASS"
+      },
+      {
+        "name": "Session change disposes reads/cache and discards delayed old tenant response",
+        "result": "PASS"
+      },
+      {
+        "name": "Direct child URL preserves own result and collapsible aggregate",
+        "result": "PASS"
+      },
+      {
+        "name": "No campaign mutation/provider request; detail concurrency at most two",
+        "result": "PASS"
+      }
+    ],
+    "assetContract": {
+      "links": [
+        "http://127.0.0.1:3082/_next/static/chunks/64ec3d62bdaa41ef.css"
+      ],
+      "scripts": [
+        "http://127.0.0.1:3082/_next/static/chunks/10c0d82faf79c15e.js",
+        "http://127.0.0.1:3082/_next/static/chunks/25b80ac65d9d9cdb.js",
+        "http://127.0.0.1:3082/_next/static/chunks/6d7ff5f77aa84f18.js",
+        "http://127.0.0.1:3082/_next/static/chunks/e775375eb8c7d2bc.js",
+        "http://127.0.0.1:3082/_next/static/chunks/turbopack-fa9dc49ba51f9f65.js",
+        "http://127.0.0.1:3082/_next/static/chunks/247b823d0a772fa5.js",
+        "http://127.0.0.1:3082/_next/static/chunks/a84c8eae8db1c213.js",
+        "http://127.0.0.1:3082/_next/static/chunks/e5468abe6636ea83.js",
+        "http://127.0.0.1:3082/_next/static/chunks/a907184c7b6593c0.js",
+        "http://127.0.0.1:3082/_next/static/chunks/420095c84ca80f99.js",
+        "http://127.0.0.1:3082/_next/static/chunks/c9e83625ee4bb13e.js",
+        "http://127.0.0.1:3082/_next/static/chunks/8cd3d13464406cf4.js",
+        "http://127.0.0.1:3082/_next/static/chunks/ce7b9a7fdec1b55b.js"
+      ],
+      "sample": [
+        {
+          "tag": "DIV",
+          "class": "mx-auto flex w-full max-w-[1400px] flex-col gap-2.5",
+          "display": "flex",
+          "width": 1360
+        },
+        {
+          "tag": "DIV",
+          "class": "flex min-w-0 items-center justify-between gap-2 lg:flex lg:justify-center",
+          "display": "flex",
+          "width": 82
+        },
+        {
+          "tag": "BUTTON",
+          "class": "relative m-0 flex h-[82px] w-[195px] shrink-0 items-center justify-center overflow-visible p-0 sm:h-[95px] sm:w-[213px] lg:h-[66px] lg:w-[154px] min-[1441px]:h-[109px] min-[1441px]:w-[247px]",
+          "display": "flex",
+          "width": 154
+        },
+        {
+          "tag": "DIV",
+          "class": "flex min-w-0 items-center justify-end gap-2",
+          "display": "flex",
+          "width": 0
+        },
+        {
+          "tag": "DIV",
+          "class": "relative z-[70] flex min-w-0 shrink-0 justify-end",
+          "display": "flex",
+          "width": 0
+        },
+        {
+          "tag": "SPAN",
+          "class": "flex h-4 w-4 items-center justify-center rounded-full border border-current/25 bg-re7-sky/15 text-[11px] font-black leading-none",
+          "display": "flex",
+          "width": 0
+        }
+      ],
+      "computed": {
+        "display": "flex",
+        "gap": "24px",
+        "padding": "24px",
+        "fontSize": "14px",
+        "borderRadius": "16px"
+      },
+      "url": "/app/campaigns",
+      "viewport": {
+        "width": 1400,
+        "height": 1100
+      },
+      "html": {
+        "status": 200,
+        "mime": "text/html"
+      },
+      "assets": [
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/64ec3d62bdaa41ef.css",
+          "status": 200,
+          "mime": "text/css",
+          "requestId": "2306954.2",
+          "bytes": 187044,
+          "sha256": "1ddf8dca7f9965191239b7aef3b8ce92374ccf637ca421d3ad75a0cc964eab64",
+          "unexpandedTailwind": false
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/10c0d82faf79c15e.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.4"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/25b80ac65d9d9cdb.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.5"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/6d7ff5f77aa84f18.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.6"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/e775375eb8c7d2bc.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.7"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/turbopack-fa9dc49ba51f9f65.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.8"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/247b823d0a772fa5.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.9"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/a84c8eae8db1c213.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.10"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/e5468abe6636ea83.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.11"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/a907184c7b6593c0.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.12"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/420095c84ca80f99.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.13"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/c9e83625ee4bb13e.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.14"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/8cd3d13464406cf4.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.15"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/ce7b9a7fdec1b55b.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2306954.3"
+        }
+      ],
+      "faults": [],
+      "result": "PASS"
+    },
+    "maximumDetailConcurrency": 2,
+    "cancelledLateResponses": 1,
+    "mobile": {
+      "viewport": 390,
+      "panelWidth": 340,
+      "overflow": "auto",
+      "background": "rgba(8, 51, 68, 0.2)",
+      "font": "14px",
+      "buttonCount": 2
+    },
+    "mobileVisible": {
+      "first": {
+        "left": 47,
+        "right": 180.875
+      },
+      "direct": {
+        "left": 254.78125,
+        "right": 343
+      },
+      "scrollHeight": 262
+    },
+    "requestCount": 47,
+    "campaignMutationRequests": 0
+  },
+  "schedule": {
+    "scope": "real frontend/Chrome, controlled polling clock, simulated auth/API; no backend/provider",
+    "status": "PASS",
+    "cases": [
+      {
+        "name": "Automatic selected scheduled detail cannot fill new composer with modal closed",
+        "result": "PASS"
+      },
+      {
+        "name": "Composer typed local hour survives polling",
+        "result": "PASS"
+      },
+      {
+        "name": "Final dynamic payload 12:40 Fortaleza equals 15:40 UTC",
+        "result": "PASS"
+      },
+      {
+        "name": "Successful composition resets its scheduling state",
+        "result": "PASS"
+      },
+      {
+        "name": "Discard detects schedule edits and clears composer",
+        "result": "PASS"
+      },
+      {
+        "name": "Detail edits survive polling",
+        "result": "PASS"
+      },
+      {
+        "name": "Selection boundary clears previous detail time",
+        "result": "PASS"
+      },
+      {
+        "name": "Detail opening hydrates saved instant in civil Fortaleza time",
+        "result": "PASS"
+      },
+      {
+        "name": "Reopening explicitly rehydrates without leaking edits across boundaries",
+        "result": "PASS"
+      },
+      {
+        "name": "Final detail payload preserves 12:40 Fortaleza",
+        "result": "PASS"
+      },
+      {
+        "name": "Completed controllers represented once, independent equal names retained",
+        "result": "PASS"
+      },
+      {
+        "name": "Single child remains accessible with results and aggregate controls",
+        "result": "PASS"
+      },
+      {
+        "name": "Multiple children remain accessible by exact IDs",
+        "result": "PASS"
+      }
+    ],
+    "assetContract": {
+      "links": [
+        "http://127.0.0.1:3082/_next/static/chunks/64ec3d62bdaa41ef.css"
+      ],
+      "scripts": [
+        "http://127.0.0.1:3082/_next/static/chunks/10c0d82faf79c15e.js",
+        "http://127.0.0.1:3082/_next/static/chunks/25b80ac65d9d9cdb.js",
+        "http://127.0.0.1:3082/_next/static/chunks/6d7ff5f77aa84f18.js",
+        "http://127.0.0.1:3082/_next/static/chunks/e775375eb8c7d2bc.js",
+        "http://127.0.0.1:3082/_next/static/chunks/turbopack-fa9dc49ba51f9f65.js",
+        "http://127.0.0.1:3082/_next/static/chunks/247b823d0a772fa5.js",
+        "http://127.0.0.1:3082/_next/static/chunks/a84c8eae8db1c213.js",
+        "http://127.0.0.1:3082/_next/static/chunks/e5468abe6636ea83.js",
+        "http://127.0.0.1:3082/_next/static/chunks/a907184c7b6593c0.js",
+        "http://127.0.0.1:3082/_next/static/chunks/420095c84ca80f99.js",
+        "http://127.0.0.1:3082/_next/static/chunks/999d1c84f8c68036.js",
+        "http://127.0.0.1:3082/_next/static/chunks/8cd3d13464406cf4.js",
+        "http://127.0.0.1:3082/_next/static/chunks/ce7b9a7fdec1b55b.js"
+      ],
+      "sample": [
+        {
+          "tag": "DIV",
+          "class": "mx-auto flex w-full max-w-[1400px] flex-col gap-2.5",
+          "display": "flex",
+          "width": 1350
+        },
+        {
+          "tag": "DIV",
+          "class": "flex min-w-0 items-center justify-between gap-2 lg:flex lg:justify-center",
+          "display": "flex",
+          "width": 82
+        },
+        {
+          "tag": "BUTTON",
+          "class": "relative m-0 flex h-[82px] w-[195px] shrink-0 items-center justify-center overflow-visible p-0 sm:h-[95px] sm:w-[213px] lg:h-[66px] lg:w-[154px] min-[1441px]:h-[109px] min-[1441px]:w-[247px]",
+          "display": "flex",
+          "width": 154
+        },
+        {
+          "tag": "DIV",
+          "class": "flex min-w-0 items-center justify-end gap-2",
+          "display": "flex",
+          "width": 0
+        },
+        {
+          "tag": "DIV",
+          "class": "relative z-[70] flex min-w-0 shrink-0 justify-end",
+          "display": "flex",
+          "width": 0
+        },
+        {
+          "tag": "SPAN",
+          "class": "flex h-4 w-4 items-center justify-center rounded-full border border-current/25 bg-re7-sky/15 text-[11px] font-black leading-none",
+          "display": "flex",
+          "width": 0
+        }
+      ],
+      "computed": {
+        "display": "flex",
+        "gap": "24px",
+        "padding": "24px",
+        "fontSize": "14px",
+        "borderRadius": "16px"
+      },
+      "url": "/app/campaigns",
+      "viewport": {
+        "width": 1400,
+        "height": 1100
+      },
+      "html": {
+        "status": 200,
+        "mime": "text/html"
+      },
+      "assets": [
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/64ec3d62bdaa41ef.css",
+          "status": 200,
+          "mime": "text/css",
+          "requestId": "2297267.2",
+          "bytes": 187044,
+          "sha256": "1ddf8dca7f9965191239b7aef3b8ce92374ccf637ca421d3ad75a0cc964eab64",
+          "unexpandedTailwind": false
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/10c0d82faf79c15e.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.4"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/25b80ac65d9d9cdb.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.5"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/6d7ff5f77aa84f18.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.6"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/e775375eb8c7d2bc.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.7"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/turbopack-fa9dc49ba51f9f65.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.8"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/247b823d0a772fa5.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.9"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/a84c8eae8db1c213.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.10"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/e5468abe6636ea83.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.11"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/a907184c7b6593c0.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.12"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/420095c84ca80f99.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.13"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/999d1c84f8c68036.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.14"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/8cd3d13464406cf4.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.15"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/ce7b9a7fdec1b55b.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2297267.3"
+        }
+      ],
+      "faults": [],
+      "result": "PASS"
+    },
+    "requestCount": 33,
+    "campaignMutationRequests": 3
+  },
+  "relations": {
+    "scope": "real frontend/Chrome, controlled polling clock, simulated auth/API; no backend/provider",
+    "status": "PASS",
+    "cases": [
+      {
+        "name": "33 dynamic rows: bounded two reads, slow detail does not block other rows",
+        "result": "PASS"
+      },
+      {
+        "name": "Three unchanged updates do not refetch completed rows or immediate failures",
+        "result": "PASS"
+      },
+      {
+        "name": "List updates before held detail completes",
+        "result": "PASS"
+      },
+      {
+        "name": "Partial failure retries after cooldown without blocking list",
+        "result": "PASS"
+      },
+      {
+        "name": "Changed controller obtains children after snapshot",
+        "result": "PASS"
+      },
+      {
+        "name": "List omitting relationship preserves proven links",
+        "result": "PASS"
+      },
+      {
+        "name": "Session switch clears relations and rejects old detail",
+        "result": "PASS"
+      }
+    ],
+    "initial": {
+      "requests": 33,
+      "maximum": 2
+    },
+    "unchanged": {
+      "requests": 33,
+      "maximum": 2
+    },
+    "beforeSession": {
+      "requests": 35,
+      "maximum": 2
+    },
+    "newSession": {
+      "requests": 33,
+      "maximum": 2
+    },
+    "requestCount": 96,
+    "campaignMutationRequests": 0
+  },
+  "contracts": {
+    "status": "PASS",
+    "tests": 39,
+    "breakdown": {
+      "pageSourceContracts": 30,
+      "readerBehavior": 9
+    },
+    "node": "20.20.0"
+  },
+  "build": {
+    "status": "PASS",
+    "node": "20.20.0",
+    "next": "16.1.5",
+    "BUILD_ID": "HrRHebdPDqiNLwiNKXYN8",
+    "inputs": {
+      "package.json": "7e71eee9b14f4d3e76c7e59a3b83d09b5532c17edac010c84386b38117f66caa",
+      "package-lock.json": "add66bbb579b4c2424746ccd26b7a41ec24faecf77d324447b9f8b463c73726a",
+      "next.config.ts": "cb890f864314b47dc1c169dac389a664fbcca63472bf0b8caed4d64bafc135ad",
+      "postcss.config.mjs": "8c4071497479b4bb346d0ebb53b1bdeb555beb659512aaa0d6988d0d83ddeed5",
+      "tailwind.config.js": "3ec1b751b9ab840e40f0396246a7d1bd8b491fef9c4e64c58b71f6ba9bebe0a5",
+      "tsconfig.json": "5d57a78703db5b2571717aa45b40569296d0f7a585d91732e62464a5630df3ce"
+    }
+  },
+  "lint": {
+    "status": "PASS",
+    "paths": [
+      "src/components/app/CampaignBatchPanel.tsx",
+      "src/lib/campaignRelationReads.ts"
+    ]
+  },
+  "wideTypecheck": {
+    "status": "BASELINE_DIAGNOSTICS",
+    "count": 22,
+    "changedPathsDiagnostics": 0,
+    "paths": {
+      "src/components/app/ChatbotFlowBuilder.test.ts": 4,
+      "src/lib/appChatbotDataLoader.test.ts": 1,
+      "src/lib/appClientApi.test.ts": 12,
+      "src/lib/inboxRealtimeInvalidation.test.ts": 5
+    },
+    "note": "No changes to these files or their APIs; no baseline fixes in this scope."
+  }
+}

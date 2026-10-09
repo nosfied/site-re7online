@@ -41,7 +41,8 @@ test("campaigns require supervisor or admin in app navigation and direct page ac
   assert.ok(pageSource.includes('if (!session || campaignAccess !== "allowed" || !selectedCampaignId)'));
   assert.ok(pageSource.includes('if (!session || campaignAccess !== "allowed" || !shouldPoll) return;'));
   assert.ok(pageSource.includes("campaignSessionRef.current !== activeSession"));
-  assert.ok(pageSource.includes("getAppCampaign(activeSession, campaignId)"));
+  assert.ok(pageSource.includes("campaignRelations.current!.readDetail(campaignId)"));
+  assert.ok(pageSource.includes("detail.campaign.clientId !== activeSession.user.clientId"));
   assert.ok(pageSource.includes("refreshCampaignDetail(session, selectedCampaignId)"));
 });
 
@@ -264,17 +265,13 @@ test("campaign audience split is explicit and creates only static numbered draft
 });
 
 test("campaign detail exposes batch group progress without bypassing tenant queue", () => {
-  assert.ok(pageSource.includes("Conjunto de campanhas"));
-  assert.ok(pageSource.includes("getCampaignBatchSourceLabel(selectedCampaign.executionBatch.sourceMode)"));
-  assert.ok(pageSource.includes("dividido em lotes numerados. A fila do tenant executa um lote por vez."));
-  assert.ok(pageSource.includes("Destinatários do conjunto"));
-  assert.ok(pageSource.includes("Progresso do conjunto"));
-  assert.ok(pageSource.includes("Pausar conjunto"));
-  assert.ok(pageSource.includes("Retomar conjunto"));
-  assert.ok(pageSource.includes("Cancelar conjunto"));
-  assert.ok(pageSource.includes("selectedCampaign.executionBatch.chunks.map"));
-  assert.ok(pageSource.includes("getCampaignQueueStatusLabel(chunk.queueStatus, chunk.queuePosition)"));
-  assert.ok(pageSource.includes("As ações acima atuam no conjunto. Ações individuais abaixo continuam restritas ao lote selecionado."));
+  const batchSource = fs.readFileSync(path.join(process.cwd(), "src/components/app/CampaignBatchPanel.tsx"), "utf8");
+  assert.ok(pageSource.includes("<CampaignBatchPanel"));
+  for (const action of ["Pausar conjunto", "Retomar conjunto", "Cancelar conjunto"]) assert.ok(pageSource.includes(action));
+  assert.ok(pageSource.includes('handleCampaignBatchAction("pause")'));
+  assert.ok(batchSource.includes("props.renderActions()"));
+  assert.ok(batchSource.includes("props.queueLabel(chunk.queueStatus, chunk.queuePosition)"));
+  assert.ok(batchSource.includes("Abrir lote por ID"));
   assert.ok(campaignDraftsSource.includes("Este tenant já tem uma campanha em execução. Aguarde a fila liberar antes de testar ou iniciar outro envio."));
 });
 

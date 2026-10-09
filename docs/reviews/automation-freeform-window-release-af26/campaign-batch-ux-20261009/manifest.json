@@ -1,0 +1,47 @@
+{
+  "baseCommit": "4a910771c436d648465807de849d38311ff0a255",
+  "scope": "frontend only, local review, NOT DEPLOYED",
+  "files": {
+    "src/app/app/campaigns/page.tsx": {
+      "originSha256": "f4df2411c5ada94654a2fe231d87cfdc0a9af97c21ef7e33bf823817d3b2a65a",
+      "resultSha256": "46eb9e21b3c6fda95e8197cced3caacc42894b6555771f3b5c4877438ac41191"
+    },
+    "src/components/app/CampaignBatchPanel.tsx": {
+      "originSha256": null,
+      "resultSha256": "ed9fc9e224abcc674518a4d85d6a73562a73a810f289371b9f9884ae5671039a"
+    },
+    "src/lib/campaignRelationReads.ts": {
+      "originSha256": "d1f0d5ba02f39e21f5ddb1b5583815a0e8f7480b4dc1141e78f770a71a42f163",
+      "resultSha256": "c6aebb090e6c030b36b5e1785777575eadfbe76b8da712866d75f209f24e0b38"
+    },
+    "src/lib/campaignRelationReads.test.ts": {
+      "originSha256": "3d6acf3f0d514ca712be79fc53266b62dff32c2cede4592c2856f71eb924bf30",
+      "resultSha256": "7bf189fa1c82ce3f1874fc4e7eb7d2faafdd25a51b6aaa1b1b1f619b2c70f458"
+    },
+    "src/app/app/campaigns/campaignsPageContract.test.ts": {
+      "originSha256": "2a9156a1545a2f9e7ef411501af3afd349672315bebec13d1327f07c7a003f7e",
+      "resultSha256": "c4a9d99032c0e2a753676a72f6a6309142aba8c637d176ff4660b1eac8f20bc1"
+    },
+    "tests/browser/campaignBatchUx.mjs": {
+      "originSha256": null,
+      "resultSha256": "9a22695085cd24cba49d8f1c571195267410262cc30bf2c8c2bf264bb203d09d"
+    },
+    "tests/browser/campaignScheduleAndGroups.mjs": {
+      "originSha256": "a2b5c07e6da9fc05a2e8fe4dc2cc3c5570270a05b32bc0cf841d30c0c82377ab",
+      "resultSha256": "62ae9cd4ef86904930cd2d8e60202ccfb452966bfab03659f2bb99f7f9cc015b"
+    }
+  },
+  "build": {
+    "node": "20.20.0",
+    "next": "16.1.5",
+    "BUILD_ID": "HrRHebdPDqiNLwiNKXYN8",
+    "inputs": {
+      "package.json": "7e71eee9b14f4d3e76c7e59a3b83d09b5532c17edac010c84386b38117f66caa",
+      "package-lock.json": "add66bbb579b4c2424746ccd26b7a41ec24faecf77d324447b9f8b463c73726a",
+      "next.config.ts": "cb890f864314b47dc1c169dac389a664fbcca63472bf0b8caed4d64bafc135ad",
+      "postcss.config.mjs": "8c4071497479b4bb346d0ebb53b1bdeb555beb659512aaa0d6988d0d83ddeed5",
+      "tailwind.config.js": "3ec1b751b9ab840e40f0396246a7d1bd8b491fef9c4e64c58b71f6ba9bebe0a5",
+      "tsconfig.json": "5d57a78703db5b2571717aa45b40569296d0f7a585d91732e62464a5630df3ce"
+    }
+  }
+}

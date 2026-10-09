@@ -5,6 +5,7 @@ import { createCampaignRelationReads } from "@/lib/campaignRelationReads";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
+import CampaignBatchPanel from "@/components/app/CampaignBatchPanel";
 import {
   buildCampaignReuseState,
   getCampaignUserFacingError,
@@ -498,13 +499,6 @@ function getProgressPct(campaign: CampaignItem) {
   return Math.max(0, Math.min(Math.round((completed / campaign.totalRecipients) * 100), 100));
 }
 
-function getCampaignBatchProgressPct(campaign: CampaignItem) {
-  const batch = campaign.executionBatch;
-  if (!batch || batch.progress.totalRecipients <= 0) return 0;
-  const completed = batch.progress.sentCount + batch.progress.blockedCount;
-  return Math.max(0, Math.min(Math.round((completed / batch.progress.totalRecipients) * 100), 100));
-}
-
 function getCampaignBatchSourceLabel(sourceMode?: string | null) {
   if (sourceMode === "DYNAMIC_CRM_FILTER") return "CRM dinâmico";
   if (sourceMode === "CSV_IMPORT") return "Importação CSV";
@@ -773,6 +767,7 @@ export default function AppCampaignsPage() {
   const [selectedCampaignId, setSelectedCampaignIdState] = useState<string | null>(null);
   const [selectedCampaignSnapshot, setSelectedCampaign] = useState<CampaignItem | null>(null);
   const selectedCampaign = selectedCampaignSnapshot?.id === selectedCampaignId ? selectedCampaignSnapshot : null;
+  const selectedCampaignIsBatchController = Boolean(selectedCampaign?.executionBatch && !selectedCampaign.executionBatch.chunks.some(chunk => chunk.campaignId === selectedCampaign.id));
   const campaignReads = useRef(createCampaignReadGeneration());
   const selectedIdRef = useRef<string | null>(null);
   const campaignSessionRef = useRef<AppSession | null>(null);
@@ -899,6 +894,13 @@ export default function AppCampaignsPage() {
     };
   }, [session, handleUnauthorized]);
 
+  const readLotDetail = useCallback(async (id: string, signal: AbortSignal) => {
+    if (!session || campaignSessionRef.current !== session || !campaignRelations.current) throw new Error("Sessão indisponível para leitura do lote.");
+    return campaignRelations.current.readDetail(id, signal);
+  }, [session]);
+  const lotDetailVersion = useCallback((id: string) => campaignRelations.current?.detailVersion(id) ?? null, [session]);
+  const peekLotDetail = useCallback((id: string) => campaignRelations.current?.peekDetail(id) ?? null, [session]);
+
   const refreshCampaigns = useCallback(
     async (activeSession: AppSession, keepSelectedId?: string | null) => {
       const isCurrent = campaignReads.current.begin("list");
@@ -935,8 +937,8 @@ export default function AppCampaignsPage() {
       setRefreshingDetail(true);
       setDetailError(null);
       try {
-        const detail = await getAppCampaign(activeSession, campaignId);
-        if (!canApply() || detail.campaign.id !== campaignId) return null;
+        const detail = { campaign: await campaignRelations.current!.readDetail(campaignId) };
+        if (!canApply() || detail.campaign.id !== campaignId || detail.campaign.clientId !== activeSession.user.clientId) return null;
         setSelectedCampaign(detail.campaign);
         setCampaigns((prev) => prev.map((item) => (item.id === detail.campaign.id ? detail.campaign : item)));
         if (notify) {
@@ -990,6 +992,57 @@ export default function AppCampaignsPage() {
       setRefreshingList(false);
     }
   }, [handleUnauthorized, refreshCampaignDetail, refreshCampaigns, selectedCampaignId, session, showToast]);
+
+  const renderCampaignResultTable = (items: NonNullable<CampaignItem["messagesMetaStatus"]>) => (
+    <div className="max-w-full overflow-x-auto">
+                        <table className="w-full min-w-[780px] text-sm">
+                          <thead className="bg-white/10 text-left">
+                            <tr>
+                              <th className="px-3 py-2">Contato</th>
+                              <th className="px-3 py-2">Telefone</th>
+                              <th className="px-3 py-2">Situação CRM</th>
+                              <th className="px-3 py-2">Situação</th>
+                              <th className="px-3 py-2">Categoria</th>
+                              <th className="px-3 py-2">Entrega</th>
+                              <th className="px-3 py-2">Erro</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {items.map((item, index) => (
+                              <tr key={`${item.waId}-${item.conversationId ?? "conversation"}-${index}`} className="border-t border-white/10">
+                                <td className="px-3 py-2">{item.contactName || "Contato sem nome"}</td>
+                                <td className="px-3 py-2 font-mono text-xs">{item.phoneDisplay || formatCampaignRecipientReference(item.waId)}</td>
+                                <td className="px-3 py-2">{item.crmStatusLabel || item.crmStatus || "-"}</td>
+                                <td className="px-3 py-2">
+                                  <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getMetaStatusClasses(item.status)}`}>
+                                    {getCampaignResultEvidenceLabel(item) ?? getMetaStatusLabel(item.status)}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2">{getMetaTemplateCategoryUxLabel(item.pricingCategory)}</td>
+                                <td className="px-3 py-2 text-xs text-white/70">
+                                  {item.deliveredAt ? formatDateTime(item.deliveredAt) : "-"}
+                                </td>
+                                <td className="px-3 py-2 text-white/70">
+                                  {getFriendlyCampaignError(item.error)?.summary || "-"}
+                                  {getFriendlyCampaignError(item.error)?.detail ? (
+                                    <div className="mt-1 text-xs text-white/50">
+                                      {getFriendlyCampaignError(item.error)?.detail}
+                                    </div>
+                                  ) : null}
+                                </td>
+                              </tr>
+                            ))}
+                            {items.length === 0 ? (
+                              <tr>
+                                <td className="px-3 py-4 text-white/65" colSpan={7}>
+                                  Nenhum destinatário corresponde aos filtros.
+                                </td>
+                              </tr>
+                            ) : null}
+                          </tbody>
+                        </table>
+    </div>
+  );
 
   const defaultDraftName = useMemo(() => {
     const formatter = new Intl.DateTimeFormat("pt-BR", {
@@ -4353,11 +4406,11 @@ export default function AppCampaignsPage() {
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
                       <p className="text-[11px] uppercase tracking-wide text-white/60">Total</p>
-                      <p className="mt-1 font-semibold">{selectedCampaign.totalRecipients}</p>
+                      <p className="mt-1 font-semibold">{selectedCampaignIsBatchController ? selectedCampaign.executionBatch!.progress.totalRecipients : selectedCampaign.totalRecipients}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
                       <p className="text-[11px] uppercase tracking-wide text-white/60">Processadas</p>
-                      <p className="mt-1 font-semibold">{selectedCampaign.sentCount}</p>
+                      <p className="mt-1 font-semibold">{selectedCampaignIsBatchController ? selectedCampaign.executionBatch!.progress.sentCount : selectedCampaign.sentCount}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
                       <p className="text-[11px] uppercase tracking-wide text-white/60">Aceitas pelo provedor</p>
@@ -4377,7 +4430,7 @@ export default function AppCampaignsPage() {
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
                       <p className="text-[11px] uppercase tracking-wide text-white/60">Bloqueadas</p>
-                      <p className="mt-1 font-semibold text-orange-100">{selectedCampaign.blockedCount}</p>
+                      <p className="mt-1 font-semibold text-orange-100">{selectedCampaignIsBatchController ? selectedCampaign.executionBatch!.progress.blockedCount : selectedCampaign.blockedCount}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
                       <p className="text-[11px] uppercase tracking-wide text-white/60">Pendentes</p>
@@ -4430,27 +4483,24 @@ export default function AppCampaignsPage() {
 	                  ) : null}
 
 	                  {selectedCampaign.executionBatch ? (
-	                    <div className="grid gap-3 rounded-md border border-cyan-300/25 bg-cyan-950/20 p-3">
-	                      <div className="flex flex-wrap items-start justify-between gap-3">
-	                        <div>
-	                          <p className="text-sm font-semibold text-cyan-100">Conjunto de campanhas</p>
-	                          <p className="mt-1 text-xs text-cyan-100/75">
-	                            {getCampaignBatchSourceLabel(selectedCampaign.executionBatch.sourceMode)} dividido em lotes numerados. A fila do tenant executa um lote por vez.
-	                          </p>
-	                        </div>
-		                        <div className="flex flex-wrap gap-2">
-		                          <span className="rounded-full border border-cyan-300/30 bg-cyan-500/15 px-2.5 py-1 text-xs font-semibold text-cyan-100">
-		                            {selectedCampaign.executionBatch.name}
-		                          </span>
-		                          <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-semibold text-white/80">
-		                            {selectedCampaign.executionBatch.chunkCount} lote(s)
-		                          </span>
-		                        </div>
-		                      </div>
-		                      <div className="flex flex-wrap items-center gap-2">
-		                        {selectedCampaign.executionBatch.status !== "paused" &&
-		                        selectedCampaign.executionBatch.status !== "cancelled" &&
-		                        selectedCampaign.executionBatch.progress.completedChunks < selectedCampaign.executionBatch.chunkCount ? (
+                    <CampaignBatchPanel
+                      key={selectedCampaign.id}
+                      campaign={selectedCampaign}
+                      controllerId={campaigns.find(item => item.clientId === selectedCampaign.clientId && item.executionBatch?.id === selectedCampaign.executionBatch?.id && !selectedCampaign.executionBatch?.chunks.some(chunk => chunk.campaignId === item.id))?.id ?? null}
+                      readDetail={readLotDetail}
+                      peekDetail={peekLotDetail}
+                      detailVersion={lotDetailVersion}
+                      openById={openCampaignDetail}
+                      onUnauthorized={handleUnauthorized}
+                      renderResults={renderCampaignResultTable}
+                      statusLabel={getStatusLabel}
+                      queueLabel={getCampaignQueueStatusLabel}
+                      sourceLabel={getCampaignBatchSourceLabel}
+                      renderActions={() => (
+<div className="flex flex-wrap items-center gap-2">
+		                        {selectedCampaign.executionBatch!.status !== "paused" &&
+		                        selectedCampaign.executionBatch!.status !== "cancelled" &&
+		                        selectedCampaign.executionBatch!.progress.completedChunks < selectedCampaign.executionBatch!.chunkCount ? (
 		                          <button
 		                            type="button"
 		                            onClick={() => void handleCampaignBatchAction("pause")}
@@ -4460,7 +4510,7 @@ export default function AppCampaignsPage() {
 		                            {batchAction === "pause" ? "Pausando..." : "Pausar conjunto"}
 		                          </button>
 		                        ) : null}
-		                        {selectedCampaign.executionBatch.status === "paused" ? (
+		                        {selectedCampaign.executionBatch!.status === "paused" ? (
 		                          <button
 		                            type="button"
 		                            onClick={() => void handleCampaignBatchAction("resume")}
@@ -4470,8 +4520,8 @@ export default function AppCampaignsPage() {
 		                            {batchAction === "resume" ? "Retomando..." : "Retomar conjunto"}
 		                          </button>
 		                        ) : null}
-		                        {selectedCampaign.executionBatch.status !== "cancelled" &&
-		                        selectedCampaign.executionBatch.progress.completedChunks < selectedCampaign.executionBatch.chunkCount ? (
+		                        {selectedCampaign.executionBatch!.status !== "cancelled" &&
+		                        selectedCampaign.executionBatch!.progress.completedChunks < selectedCampaign.executionBatch!.chunkCount ? (
 		                          <button
 		                            type="button"
 		                            onClick={() => void handleCampaignBatchAction("cancel")}
@@ -4482,84 +4532,11 @@ export default function AppCampaignsPage() {
 		                          </button>
 		                        ) : null}
 		                      </div>
-		                      <div className="grid gap-2 sm:grid-cols-4">
-	                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
-	                          <p className="text-xs text-white/60">Destinatários do conjunto</p>
-	                          <p className="font-semibold">{selectedCampaign.executionBatch.progress.totalRecipients}</p>
-	                        </div>
-	                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
-	                          <p className="text-xs text-white/60">Processados</p>
-	                          <p className="font-semibold">{selectedCampaign.executionBatch.progress.sentCount}</p>
-	                        </div>
-	                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
-	                          <p className="text-xs text-white/60">Bloqueados</p>
-	                          <p className="font-semibold">{selectedCampaign.executionBatch.progress.blockedCount}</p>
-	                        </div>
-	                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
-	                          <p className="text-xs text-white/60">Lotes concluídos</p>
-	                          <p className="font-semibold">
-	                            {selectedCampaign.executionBatch.progress.completedChunks}/{selectedCampaign.executionBatch.chunkCount}
-	                          </p>
-	                        </div>
-	                      </div>
-	                      <div>
-	                        <div className="flex flex-wrap items-center justify-between gap-3">
-	                          <p className="text-xs uppercase tracking-wide text-white/60">Progresso do conjunto</p>
-	                          <p className="text-sm font-semibold">{getCampaignBatchProgressPct(selectedCampaign)}%</p>
-	                        </div>
-	                        <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/10">
-	                          <div
-	                            className="h-full rounded-full bg-cyan-300 transition-all duration-300"
-	                            style={{ width: `${getCampaignBatchProgressPct(selectedCampaign)}%` }}
-	                          />
-	                        </div>
-	                      </div>
-	                      {selectedCampaign.executionBatch.failureReason ? (
-	                        <p className="rounded-md border border-amber-300/25 bg-amber-900/20 p-2 text-xs text-amber-100">
-	                          {getCampaignOperationalReasonLabel(selectedCampaign.executionBatch.failureReason)}
-	                        </p>
-	                      ) : null}
-	                      <div className="overflow-auto rounded-md border border-white/10">
-	                        <table className="w-full min-w-[720px] text-sm">
-	                          <thead className="bg-white/10 text-left text-xs uppercase tracking-wide text-white/60">
-	                            <tr>
-	                              <th className="px-3 py-2">Lote</th>
-	                              <th className="px-3 py-2">Nome</th>
-	                              <th className="px-3 py-2">Estado</th>
-	                              <th className="px-3 py-2">Fila</th>
-	                              <th className="px-3 py-2">Destinatários</th>
-	                              <th className="px-3 py-2">Início efetivo</th>
-	                            </tr>
-	                          </thead>
-	                          <tbody>
-	                            {selectedCampaign.executionBatch.chunks.map((chunk) => (
-	                              <tr key={chunk.campaignId} className="border-t border-white/10">
-	                                <td className="px-3 py-2 font-semibold">
-	                                  {chunk.chunkIndex}/{selectedCampaign.executionBatch?.chunkCount ?? chunk.chunkIndex}
-	                                </td>
-	                                <td className="px-3 py-2">
-                                  <button type="button" className="text-sky-200 underline" onClick={() => openCampaignDetail(chunk.campaignId)} aria-label={`Ver lote ${chunk.chunkIndex}: ${chunk.name}`}>
-                                    {chunk.name}
-                                  </button>
-                                </td>
-	                                <td className="px-3 py-2">{getStatusLabel(chunk.status)}</td>
-	                                <td className="px-3 py-2">
-	                                  {getCampaignQueueStatusLabel(chunk.queueStatus, chunk.queuePosition)}
-	                                </td>
-	                                <td className="px-3 py-2">{chunk.totalRecipients || chunk.recipientCount}</td>
-	                                <td className="px-3 py-2">{chunk.startedAt ? formatDateTime(chunk.startedAt) : "Aguardando"}</td>
-	                              </tr>
-	                            ))}
-	                          </tbody>
-	                        </table>
-	                      </div>
-		                      <p className="text-xs text-cyan-100/75">
-		                        As ações acima atuam no conjunto. Ações individuais abaixo continuam restritas ao lote selecionado. Testes unitários usam a mesma exclusividade e não entram na fila.
-		                      </p>
-	                    </div>
-	                  ) : null}
+                      )}
+                    />
+                  ) : null}
 
-	                  {selectedCampaign.draftSeed?.selectionMode === "DYNAMIC_CRM_FILTER" ? (
+                  {selectedCampaign.draftSeed?.selectionMode === "DYNAMIC_CRM_FILTER" ? (
                     <div className="grid gap-3 rounded-md border border-emerald-300/25 bg-emerald-950/20 p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
@@ -4779,20 +4756,21 @@ export default function AppCampaignsPage() {
                     </div>
                   ) : null}
 
+                  {!selectedCampaignIsBatchController ? (
                   <div className="rounded-md border border-white/10 bg-white/5 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Progresso</p>
+                      <p className="text-xs uppercase tracking-wide text-white/60">{selectedCampaign.executionBatch ? "Progresso do lote" : "Progresso"}</p>
                       <p className="text-sm font-semibold">{getProgressPct(selectedCampaign)}%</p>
                     </div>
                     <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
                       <div className="h-full rounded-full bg-re7-sky transition-all duration-300" style={{ width: `${getProgressPct(selectedCampaign)}%` }} />
                     </div>
                   </div>
+                  ) : null}
 
                   <div className="grid gap-2 md:grid-cols-2">
                     <p><span className="text-white/70">Nome:</span> {selectedCampaign.name || "(sem nome)"}</p>
                     <p><span className="text-white/70">Modelo:</span> {selectedCampaign.templateName || "(sem modelo)"}</p>
-                    <p><span className="text-white/70">Total de destinatários:</span> {selectedCampaign.totalRecipients}</p>
                     <p>
                       <span className="text-white/70">Atualizada em:</span> {formatDateTime(selectedCampaign.updatedAt)}
                     </p>
@@ -4865,52 +4843,7 @@ export default function AppCampaignsPage() {
                       </div>
                     </div>
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[780px] text-sm">
-                          <thead className="bg-white/10 text-left">
-                            <tr>
-                              <th className="px-3 py-2">Contato</th>
-                              <th className="px-3 py-2">Telefone</th>
-                              <th className="px-3 py-2">Situação CRM</th>
-                              <th className="px-3 py-2">Situação</th>
-                              <th className="px-3 py-2">Categoria</th>
-                              <th className="px-3 py-2">Entrega</th>
-                              <th className="px-3 py-2">Erro</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredCampaignResultItems.map((item, index) => (
-                              <tr key={`${item.waId}-${item.conversationId ?? "conversation"}-${index}`} className="border-t border-white/10">
-                                <td className="px-3 py-2">{item.contactName || "Contato sem nome"}</td>
-                                <td className="px-3 py-2 font-mono text-xs">{item.phoneDisplay || formatCampaignRecipientReference(item.waId)}</td>
-                                <td className="px-3 py-2">{item.crmStatusLabel || item.crmStatus || "-"}</td>
-                                <td className="px-3 py-2">
-                                  <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getMetaStatusClasses(item.status)}`}>
-                                    {getCampaignResultEvidenceLabel(item) ?? getMetaStatusLabel(item.status)}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-2">{getMetaTemplateCategoryUxLabel(item.pricingCategory)}</td>
-                                <td className="px-3 py-2 text-xs text-white/70">
-                                  {item.deliveredAt ? formatDateTime(item.deliveredAt) : "-"}
-                                </td>
-                                <td className="px-3 py-2 text-white/70">
-                                  {getFriendlyCampaignError(item.error)?.summary || "-"}
-                                  {getFriendlyCampaignError(item.error)?.detail ? (
-                                    <div className="mt-1 text-xs text-white/50">
-                                      {getFriendlyCampaignError(item.error)?.detail}
-                                    </div>
-                                  ) : null}
-                                </td>
-                              </tr>
-                            ))}
-                            {filteredCampaignResultItems.length === 0 ? (
-                              <tr>
-                                <td className="px-3 py-4 text-white/65" colSpan={7}>
-                                  Nenhum destinatário corresponde aos filtros.
-                                </td>
-                              </tr>
-                            ) : null}
-                          </tbody>
-                        </table>
+                        {renderCampaignResultTable(filteredCampaignResultItems)}
                       </div>
                   </div>
                   ) : null}

@@ -56,3 +56,8 @@ AUTO normal reativo (sem indisponibilidade) também não consta como aceite prod
 ## Somente o próximo passo necessário
 
 **Revisão da proposta de UX com o arquiteto**, em [diagnóstico separado](UX_SET_BATCH_PROPOSAL.md), escolhendo a apresentação das informações exclusivas dos lotes antes de qualquer implementação. Não há próximo envio técnico necessário. Multilote/AUTO continuam aguardando caso natural informado; nenhum acompanhamento contínuo foi iniciado. CRA-PR permanece frente própria. Históricos/quatro registros/setembroCLOSED preservados.
+
+
+## Continuidade da UX — 09/10/2026
+
+Após autorização específica do owner, o [padrão conjunto/lote foi implementado localmente](../campaign-batch-ux-20261009/README.md), com build Node20 e provas isoladas. O próximo passo da UX passa a ser revisão independente do código/layout; não é nova validação produtiva nem implantação. A matriz de aceites, ocorrência natural de multilote/AUTO, CRA-PR e demais limites acima permanecem iguais.
