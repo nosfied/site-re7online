@@ -1,0 +1,262 @@
+{
+  "status": "PASS for performed preparatory checks; no window execution",
+  "exactTarBrowser": {
+    "status": "PASS",
+    "cases": [
+      {
+        "name": "Real compiled CSS/JS HTTP, MIME and computed styles; independent equal names retained",
+        "result": "PASS"
+      },
+      {
+        "name": "Scheduled unmaterialized lot preserves 17 expected recipients distinct from zero materialized",
+        "result": "PASS"
+      },
+      {
+        "name": "Several lots: aggregate once; expansion stays on parent and only reads requested ID",
+        "result": "PASS"
+      },
+      {
+        "name": "Child list version invalidates expanded detail even with unchanged parent version",
+        "result": "PASS"
+      },
+      {
+        "name": "Readable failure, named destination, labeled variables/parameters present only on child; no raw JSON",
+        "result": "PASS"
+      },
+      {
+        "name": "Divergent automated-flow destination reuses loaded name, preserves child-only values",
+        "result": "PASS"
+      },
+      {
+        "name": "One-lot set uses the same expandable pattern; same-version reopen reuses detail",
+        "result": "PASS"
+      },
+      {
+        "name": "Child detail has own result/actions, explicit parent link and collapsed aggregate",
+        "result": "PASS"
+      },
+      {
+        "name": "Read failure confined to row; explicit read retry does not submit an action",
+        "result": "PASS"
+      },
+      {
+        "name": "Delayed lot response cannot cross selection/unmount boundary",
+        "result": "PASS"
+      },
+      {
+        "name": "Mismatched tenant detail rejected inline",
+        "result": "PASS"
+      },
+      {
+        "name": "Keyboard Enter/Space and aria-expanded/controls",
+        "result": "PASS"
+      },
+      {
+        "name": "Mobile 390px: styles present, row scrolling contained, controls accessible",
+        "result": "PASS"
+      },
+      {
+        "name": "Session change disposes reads/cache and discards delayed old tenant response",
+        "result": "PASS"
+      },
+      {
+        "name": "Direct child URL preserves own result and collapsible aggregate",
+        "result": "PASS"
+      },
+      {
+        "name": "No campaign mutation/provider request; detail concurrency at most two",
+        "result": "PASS"
+      }
+    ],
+    "maximumDetailConcurrency": 2,
+    "assetContract": {
+      "links": [
+        "http://127.0.0.1:3082/_next/static/chunks/64ec3d62bdaa41ef.css"
+      ],
+      "scripts": [
+        "http://127.0.0.1:3082/_next/static/chunks/10c0d82faf79c15e.js",
+        "http://127.0.0.1:3082/_next/static/chunks/25b80ac65d9d9cdb.js",
+        "http://127.0.0.1:3082/_next/static/chunks/6d7ff5f77aa84f18.js",
+        "http://127.0.0.1:3082/_next/static/chunks/e775375eb8c7d2bc.js",
+        "http://127.0.0.1:3082/_next/static/chunks/turbopack-fa9dc49ba51f9f65.js",
+        "http://127.0.0.1:3082/_next/static/chunks/247b823d0a772fa5.js",
+        "http://127.0.0.1:3082/_next/static/chunks/a84c8eae8db1c213.js",
+        "http://127.0.0.1:3082/_next/static/chunks/e5468abe6636ea83.js",
+        "http://127.0.0.1:3082/_next/static/chunks/a907184c7b6593c0.js",
+        "http://127.0.0.1:3082/_next/static/chunks/420095c84ca80f99.js",
+        "http://127.0.0.1:3082/_next/static/chunks/5f19e85467a3e973.js",
+        "http://127.0.0.1:3082/_next/static/chunks/8cd3d13464406cf4.js",
+        "http://127.0.0.1:3082/_next/static/chunks/ce7b9a7fdec1b55b.js"
+      ],
+      "sample": [
+        {
+          "tag": "DIV",
+          "class": "mx-auto flex w-full max-w-[1400px] flex-col gap-2.5",
+          "display": "flex",
+          "width": 1360
+        },
+        {
+          "tag": "DIV",
+          "class": "flex min-w-0 items-center justify-between gap-2 lg:flex lg:justify-center",
+          "display": "flex",
+          "width": 82
+        },
+        {
+          "tag": "BUTTON",
+          "class": "relative m-0 flex h-[82px] w-[195px] shrink-0 items-center justify-center overflow-visible p-0 sm:h-[95px] sm:w-[213px] lg:h-[66px] lg:w-[154px] min-[1441px]:h-[109px] min-[1441px]:w-[247px]",
+          "display": "flex",
+          "width": 154
+        },
+        {
+          "tag": "DIV",
+          "class": "flex min-w-0 items-center justify-end gap-2",
+          "display": "flex",
+          "width": 0
+        },
+        {
+          "tag": "DIV",
+          "class": "relative z-[70] flex min-w-0 shrink-0 justify-end",
+          "display": "flex",
+          "width": 0
+        },
+        {
+          "tag": "SPAN",
+          "class": "flex h-4 w-4 items-center justify-center rounded-full border border-current/25 bg-re7-sky/15 text-[11px] font-black leading-none",
+          "display": "flex",
+          "width": 0
+        }
+      ],
+      "computed": {
+        "display": "flex",
+        "gap": "24px",
+        "padding": "24px",
+        "fontSize": "14px",
+        "borderRadius": "16px"
+      },
+      "url": "/app/campaigns",
+      "viewport": {
+        "width": 1400,
+        "height": 1100
+      },
+      "html": {
+        "status": 200,
+        "mime": "text/html"
+      },
+      "assets": [
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/64ec3d62bdaa41ef.css",
+          "status": 200,
+          "mime": "text/css",
+          "requestId": "2344294.2",
+          "bytes": 187044,
+          "sha256": "1ddf8dca7f9965191239b7aef3b8ce92374ccf637ca421d3ad75a0cc964eab64",
+          "unexpandedTailwind": false
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/10c0d82faf79c15e.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.4"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/25b80ac65d9d9cdb.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.5"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/6d7ff5f77aa84f18.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.6"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/e775375eb8c7d2bc.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.7"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/turbopack-fa9dc49ba51f9f65.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.8"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/247b823d0a772fa5.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.9"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/a84c8eae8db1c213.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.10"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/e5468abe6636ea83.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.11"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/a907184c7b6593c0.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.12"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/420095c84ca80f99.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.13"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/5f19e85467a3e973.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.14"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/8cd3d13464406cf4.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.15"
+        },
+        {
+          "url": "http://127.0.0.1:3082/_next/static/chunks/ce7b9a7fdec1b55b.js",
+          "status": 200,
+          "mime": "application/javascript",
+          "requestId": "2344294.3"
+        }
+      ],
+      "faults": [],
+      "result": "PASS"
+    }
+  },
+  "executed": [
+    "Clean tar extraction; complete manifest/modes/symlink confinement",
+    "Exact extracted Next16.1.5 runtime Node20.20.0",
+    "Processed CSS, served CSS HTTP/MIME/hash and browser computed styles",
+    "Remote inactive release integrity; complete candidate/return configuration-policy correspondence",
+    "Current identities/control/saved/fallback/guard/cron/boot preserved",
+    "Existing installed readers: two complete consistent samples each; policy/helper hash matches",
+    "Proposed window policy validated by installed observer schema; proposed permanent artifact roles checked"
+  ],
+  "reused": [
+    "Window/permanent launcher, PM2 save/resurrect/new daemon, surviving owner/process negatives from prior reviewed final integration",
+    "Functional schedule/conversion/reader tests and productive acceptances; not rerun or extended"
+  ],
+  "notExercised": [
+    "New root policy installation, new-policy live preflight and fresh exit gates",
+    "Candidate/return PM2 start on VPS, owner screens or new operational acceptance",
+    "Reboot of production, actual permanent-policy replacement/promotion"
+  ],
+  "limits": [
+    "Browser auth/API simulated; no backend/provider sends",
+    "No new DB backup/restore: frontend-only tar + immutable active return; no DB/auth delta",
+    "Brief authorized promotion/save handover is sequential, not atomic; unexpected daemon/reboot drift blocks window and requires observed-state recovery",
+    "Permanent policy must change after owner screen confirmation and before promotion; Deifson sudo session is a predeclared dependency"
+  ]
+}

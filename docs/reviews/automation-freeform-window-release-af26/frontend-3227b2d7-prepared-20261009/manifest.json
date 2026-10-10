@@ -1,0 +1,313 @@
+{
+  "candidateCommit": "3227b2d752110873f0eff4ee5253a6f06ca51549",
+  "status": "STAGED / PREPARED FOR POLICY REVIEW AND INSTALLATION / NOT DEPLOYED",
+  "preparation": "/opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-20261009T220400Z",
+  "artifact": {
+    "tarSha256": "9b54548e4a7763f5078ae0433aceb43a37567eccd988814dd82f2fab97229319",
+    "manifestSha256": "32349250b8bd73fe30c37d761d43a47185a2c9b33c9e4715f5a25265dd581f60",
+    "bytes": 184068857,
+    "buildId": "8OqIZZxaW7_ogf6h7AVoe",
+    "files": 23795,
+    "symlinks": 31,
+    "preservedStaticFiles": 241
+  },
+  "packageManifestPath": "/opt/re7online/releases/3227b2d752110873f0eff4ee5253a6f06ca51549-front/manifest.json",
+  "symlinks": [
+    {
+      "path": "node_modules/.bin/acorn",
+      "target": "../acorn/bin/acorn"
+    },
+    {
+      "path": "node_modules/.bin/autoprefixer",
+      "target": "../autoprefixer/bin/autoprefixer"
+    },
+    {
+      "path": "node_modules/.bin/baseline-browser-mapping",
+      "target": "../baseline-browser-mapping/dist/cli.js"
+    },
+    {
+      "path": "node_modules/.bin/browserslist",
+      "target": "../browserslist/cli.js"
+    },
+    {
+      "path": "node_modules/.bin/cssesc",
+      "target": "../cssesc/bin/cssesc"
+    },
+    {
+      "path": "node_modules/.bin/eslint",
+      "target": "../eslint/bin/eslint.js"
+    },
+    {
+      "path": "node_modules/.bin/js-yaml",
+      "target": "../js-yaml/bin/js-yaml.js"
+    },
+    {
+      "path": "node_modules/.bin/jsesc",
+      "target": "../jsesc/bin/jsesc"
+    },
+    {
+      "path": "node_modules/.bin/json5",
+      "target": "../json5/lib/cli.js"
+    },
+    {
+      "path": "node_modules/.bin/loose-envify",
+      "target": "../loose-envify/cli.js"
+    },
+    {
+      "path": "node_modules/.bin/nanoid",
+      "target": "../nanoid/bin/nanoid.cjs"
+    },
+    {
+      "path": "node_modules/.bin/napi-postinstall",
+      "target": "../napi-postinstall/lib/cli.js"
+    },
+    {
+      "path": "node_modules/.bin/next",
+      "target": "../next/dist/bin/next"
+    },
+    {
+      "path": "node_modules/.bin/node-which",
+      "target": "../which/bin/node-which"
+    },
+    {
+      "path": "node_modules/.bin/parser",
+      "target": "../@babel/parser/bin/babel-parser.js"
+    },
+    {
+      "path": "node_modules/.bin/qrcode",
+      "target": "../qrcode/bin/qrcode"
+    },
+    {
+      "path": "node_modules/.bin/resolve",
+      "target": "../resolve/bin/resolve"
+    },
+    {
+      "path": "node_modules/.bin/semver",
+      "target": "../semver/bin/semver.js"
+    },
+    {
+      "path": "node_modules/.bin/sucrase",
+      "target": "../sucrase/bin/sucrase"
+    },
+    {
+      "path": "node_modules/.bin/sucrase-node",
+      "target": "../sucrase/bin/sucrase-node"
+    },
+    {
+      "path": "node_modules/.bin/tailwind",
+      "target": "../tailwindcss/lib/cli.js"
+    },
+    {
+      "path": "node_modules/.bin/tailwindcss",
+      "target": "../tailwindcss/lib/cli.js"
+    },
+    {
+      "path": "node_modules/.bin/tsc",
+      "target": "../typescript/bin/tsc"
+    },
+    {
+      "path": "node_modules/.bin/tsserver",
+      "target": "../typescript/bin/tsserver"
+    },
+    {
+      "path": "node_modules/.bin/update-browserslist-db",
+      "target": "../update-browserslist-db/cli.js"
+    },
+    {
+      "path": "node_modules/@typescript-eslint/typescript-estree/node_modules/.bin/semver",
+      "target": "../semver/bin/semver.js"
+    },
+    {
+      "path": "node_modules/eslint-plugin-react/node_modules/.bin/resolve",
+      "target": "../resolve/bin/resolve"
+    },
+    {
+      "path": "node_modules/is-bun-module/node_modules/.bin/semver",
+      "target": "../semver/bin/semver.js"
+    },
+    {
+      "path": "node_modules/sharp/node_modules/.bin/semver",
+      "target": "../semver/bin/semver.js"
+    },
+    {
+      "path": "node_modules/tailwindcss/node_modules/.bin/jiti",
+      "target": "../jiti/bin/jiti.js"
+    },
+    {
+      "path": "node_modules/tsconfig-paths/node_modules/.bin/json5",
+      "target": "../json5/lib/cli.js"
+    }
+  ],
+  "sourceBuildEvidence": "../campaign-batch-ux-20261009/manifest.refinement.json",
+  "scripts": {
+    "frontend-check.py": {
+      "sha256": "fd9ac29c47967c3f70adad65ddaa93d6d908a7216e2f07a0bc3d9658201d2596",
+      "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/frontend-check.py"
+    },
+    "frontend-action.py": {
+      "sha256": "6bd9180c72d0013462ff8f5303974e776434b05a7c4c6f167796d7750abd80fa",
+      "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/frontend-action.py"
+    },
+    "launcher.cjs": {
+      "sha256": "131a92d08fe7c6484585ed0a1e18e1bf9f9a1851907337b02ae13ca99e110fef",
+      "reusedFrom": "docs/reviews/automation-freeform-window-release-af26/frontend-9f4cbe0f-prepared/launcher.cjs"
+    },
+    "bootstrap.cjs": {
+      "sha256": "0142c188b45fb37e29528ad62a966e5c450f3b7ba88da2d52d58c16313c292b3",
+      "reusedFrom": "docs/reviews/automation-freeform-window-release-af26/frontend-9f4cbe0f-prepared/bootstrap.cjs"
+    },
+    "socket_observation_client.py": {
+      "sha256": "130e4aba02b055d28ab4857375b43f5e1f79bf3dfe63604c3776d058df44607e",
+      "reusedFrom": "docs/reviews/automation-freeform-window-release-af26/frontend-fa60f0f6-prepared/socket_observation_client.py"
+    },
+    "socket_observation_contract.py": {
+      "sha256": "2f7e5aedb4cf3ecad8098eaf8521d0c7babb445f4a5ed2c274c42d1d395b90a3",
+      "reusedFrom": "docs/reviews/automation-freeform-window-release-af26/frontend-fa60f0f6-prepared/socket_observation_contract.py"
+    },
+    "permanent_observation_client.py": {
+      "sha256": "34dae9ac861aeb89c6787871a27dd244ca931ca1038163423efd9af2996cb374",
+      "reusedFrom": "docs/reviews/automation-freeform-window-release-af26/frontend-permanent-observer-20261007/permanent_observation_client.py"
+    },
+    "verify-package.py": {
+      "sha256": "2915e6101f710d2c5fef244eac0e873d36c5a04ca10b7d1733a76b9914291813",
+      "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/verify-package.py"
+    },
+    "verify-return.py": {
+      "sha256": "bb3ec93796bc1ab10fce77380b90e9848b4043ad8956700a56659a54c0385945",
+      "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/verify-return.py"
+    },
+    "check-css.py": {
+      "sha256": "43aa3bf261d2573114f1131a31053cfe7c37becd3c1bc7d7dd2318c1a60d494f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/check-css.py"
+    },
+    "check-served-css.py": {
+      "sha256": "607233dddd91d5d653ac853e1da6c5ff416f73dd524bfe1bbfec50d0d3cf06ee",
+      "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/check-served-css.py"
+    },
+    "check-preparation.py": {
+      "sha256": "440385f2ecac9a2c2d1d4d42b4e28931b3bc597dac47299559930a2e2161a389",
+      "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/check-preparation.py"
+    },
+    "check-permanent-policy.py": {
+      "sha256": "87e01a89f47026bb40a142137e53cc48a9576de241c3b2fe6b181c2eb2626f81",
+      "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/check-permanent-policy.py"
+    },
+    "install-window-policy.sh": {
+      "sha256": "02f257bd25f19228dfbd0939045bd01963c88aec4e956ff232e0d94b21a3d16c",
+      "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/install-window-policy.sh"
+    },
+    "install-permanent-policy.sh": {
+      "sha256": "b8f2096086e376049ba7d218cb1b465f962eca34562d057e4339d2bd15949f67",
+      "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/install-permanent-policy.sh"
+    },
+    "WINDOW-STEPS.txt": {
+      "sha256": "e77528dc70d1e3b7ba4f31ee59706bf1f1ae7a1c7628742bdc91c69d97081acf",
+      "path": "docs/reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/WINDOW-STEPS.txt"
+    }
+  },
+  "bindings": {
+    "active-base.config.private.cjs": "dea8abb08194052f432e58e613f0060567897b6d5b0082a6d565f77f5a884707",
+    "candidate.ecosystem.config.cjs": "8ee77674bc451e8d38594a460b717780ebecccc2c779e716d9df9e815ee7d68f",
+    "candidate.run.private.json": "5a05b665024d027bf14c25b86234ff3da1596bf0bf72b8d32e424fc553c23b27",
+    "candidate.tracked.config.cjs": "1eec52bb93e30b805fff7a86262697dc400c8e0cb4132ebd3eba11bc8cf66b10",
+    "daemon.private.json": "6dcd9381e13671c563c25b7a939d4497ab8780abdea602116a4f20012a74a1f9",
+    "execution-authorized": "2ed27c1421e6928dbe13dbfdb5c59e1045b30341fe7ebe05700006bc5ac572c0",
+    "fallback.preparation.private.json": "2788a999e24607ee52186637306a55dc329f898a8ac6ace9ed3241a4375f40da",
+    "installed-frontend-permanent-observer.py-read.private.json": "5a50f36b2e94be1e288946457b789ade007ea69fd21f5cefabd308f862275585",
+    "installed-frontend-socket-observer.py-read.private.json": "f47dbe74076666fdbd0405666cb1fd98f7492139c6a46b822e31ec312f53711c",
+    "installed-policy-reference.private.json": "a0b459c242aeac19b12cb5db985d98386656d45f6f5f38ddfa1747cab35043b5",
+    "live.private.json": "66ca531a82d0aba133fb7b2d3f48547a00c5de4622e125f66af0ad477be4af58",
+    "observer-policy.private.json": "e6c9adf9547f678ad133c4079170599fe32d7fc08c44917d53868124395314f4",
+    "permanent-installed-binding.private.json": "4689289ad33ed7ed1f47870dc21398567febf20de7c5eaf71db5a987b417c199",
+    "permanent-observer-binding.private.json": "9f873f0b939fe1988454ca59f57bc4ffccacd99db1ee77adc42b4582a4f7227b",
+    "permanent-policy.proposed.private.json": "573bcb3e78156d0f97dcd340c1e075556b8eca1c16fa2f5a59e6d30960c630eb",
+    "preparation-result.private.json": "7259ada9620ddfb028ed6ba117b5c4b717bc7616b99f5545e8c757cf75e081ff",
+    "return.ecosystem.config.cjs": "dea8abb08194052f432e58e613f0060567897b6d5b0082a6d565f77f5a884707",
+    "return.run.private.json": "e9e99d81711a4cdce0e2cfd97a5b8a3983333ff2426d47ae9c6c2ef633ba4106",
+    "return.tracked.config.cjs": "714a755fb964205c336a97f4ad40580c3c0c8b469246e392f4eba2445792566b",
+    "runtime.private.json": "700c389adf0320ea345c8ea8cb7bba55f6d14841b728b9162034f30c944fd24f",
+    "saved.preparation.private.json": "2788a999e24607ee52186637306a55dc329f898a8ac6ace9ed3241a4375f40da",
+    "socket-observer-binding.private.json": "d49c924ed94120ea8369671fc982ea1ebb3bdd0c59c2906d86541ef639aacbd0",
+    "source-read.preparation.private.json": "8f929f1f64b2e31c8d085a14da11fcb4bd620f06f64d59551da62ff2081ec67b"
+  },
+  "scriptsManifestSha256": "c00bacf5c10c183282564b4e68af31efde36bb876907a4facce260b6e49e3a88",
+  "bindingsManifestSha256": "118f8a74e8754ae82aa15ab8847dd8385ae792e2cc1576e68da4465a73e2aaf4",
+  "policies": {
+    "windowPolicySha256": "e6c9adf9547f678ad133c4079170599fe32d7fc08c44917d53868124395314f4",
+    "windowOldSha256": "6087f980ed58f084294f77dbca688c5cba9b39229d3c2b10daa35732ff74f7d4",
+    "permanentPolicySha256": "573bcb3e78156d0f97dcd340c1e075556b8eca1c16fa2f5a59e6d30960c630eb",
+    "permanentOldSha256": "24a78e7ebb6e92b56a6719a7234631ed11b8e93b657665817b6905a16a00add3"
+  },
+  "installedReaders": [
+    {
+      "helper": "frontend-socket-observer.py",
+      "helperSha256": "93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385",
+      "policySha256": "6087f980ed58f084294f77dbca688c5cba9b39229d3c2b10daa35732ff74f7d4",
+      "samples": 2
+    },
+    {
+      "helper": "frontend-permanent-observer.py",
+      "helperSha256": "976272ee36d6900111877c02ea6d0b72dc9dad705237c819a18861c47bfaec3d",
+      "policySha256": "24a78e7ebb6e92b56a6719a7234631ed11b8e93b657665817b6905a16a00add3",
+      "samples": 2
+    }
+  ],
+  "return": {
+    "release": "/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8",
+    "buildId": "wBXX8kmp5RuCHCYt_ot8X",
+    "manifestSha256": "378bb220d02e29e93ccd2edf4d83cb2e903912f5548dc498e28e6a4e914cd1bf",
+    "files": 22868,
+    "symlinks": 31,
+    "runtimeCacheFiles": 13
+  },
+  "observedAtUtc": "2026-10-10T11:34:01.091594+00:00",
+  "identities": [
+    {
+      "name": "re7-admin-front",
+      "pid": 3438948,
+      "startTicks": "2120147745",
+      "status": "online",
+      "pm_cwd": "/opt/re7online/releases/fa60f0f6443f3e0a129dc707021cffdc408af817-front-css-17bd5fb8",
+      "pm_exec_path": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-final-permanent-20261007T234000Z/launcher.cjs",
+      "exec_interpreter": "/usr/bin/node",
+      "restart_time": 0,
+      "exec_mode": "cluster_mode"
+    },
+    {
+      "name": "re7-whatsapp-agent",
+      "pid": 3625739,
+      "startTicks": "2128115907",
+      "status": "online",
+      "pm_cwd": "/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008/apps/whatsapp-agent",
+      "pm_exec_path": "/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008/apps/whatsapp-agent/dist/index.js",
+      "exec_interpreter": "/usr/bin/node",
+      "restart_time": 0,
+      "exec_mode": "fork_mode"
+    },
+    {
+      "name": "re7-whatsapp-web-worker",
+      "pid": 3625960,
+      "startTicks": "2128116272",
+      "status": "online",
+      "pm_cwd": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker",
+      "pm_exec_path": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker/dist/whatsapp-web-worker/src/index.js",
+      "exec_interpreter": "/usr/bin/node",
+      "restart_time": 0,
+      "exec_mode": "fork_mode"
+    }
+  ],
+  "daemon": {
+    "pid": 18676,
+    "ticks": "222727"
+  },
+  "guard": {
+    "open": true,
+    "generation": 36,
+    "tasks": {}
+  },
+  "gateFalse": true,
+  "noIntentsOrExitCaptures": true,
+  "preservedControl": "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-final-permanent-20261007T234000Z/candidate.run.private.json",
+  "savedSha256": "4fbb51fa592dd4beee0651828d535d077edd97de591f70267dd705fb19bbb57f",
+  "fallbackSha256": "4fbb51fa592dd4beee0651828d535d077edd97de591f70267dd705fb19bbb57f"
+}
