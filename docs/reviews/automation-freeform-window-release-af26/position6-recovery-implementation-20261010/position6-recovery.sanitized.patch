@@ -633,41 +633,23 @@ diff --git a/apps/whatsapp-agent/src/campaigns/campaignOperations.ts b/apps/what
 index b7e01468..acdbf4b5 100644
 --- a/apps/whatsapp-agent/src/campaigns/campaignOperations.ts
 +++ b/apps/whatsapp-agent/src/campaigns/campaignOperations.ts
-@@ -205,14 +205,20 @@ export function isCampaignMutation(method: string | undefined, pathname: string)
- 
- // Administrative recovery only. Caller must prove a durable reconciliation receipt.
- // Archive the full task in the fsynced ledger audit; never reopen admissions here.
+@@ -208 +208 @@ export function isCampaignMutation(method: string | undefined, pathname: string)
 -export function acknowledgeReconciledCampaignTask(params: {
 +function archiveReconciledCampaignTask(params: {
-   generation: number; taskId: string; reference: NonNullable<Task["reference"]>;
-   expectedTaskHash: string; receiptId: string; actor: string;
+@@ -211 +211 @@ export function acknowledgeReconciledCampaignTask(params: {
 -}) {
 +}, reason: "durable_failed_result_no_retry" | "durable_accepted_delivered_historical_crm_disposition_no_retry") {
-   if (!params.actor.trim() || !params.receiptId.trim()) throw new Error("reconciliation_actor_receipt_required");
-   locked(s => {
-     const prior = s.audit.find(a => a.action === "provider_reconciled" && a.receiptId === params.receiptId);
-     if (prior) {
+@@ -215,0 +216,6 @@ export function acknowledgeReconciledCampaignTask(params: {
 +      if (reason === "durable_accepted_delivered_historical_crm_disposition_no_retry") {
 +        const archived = prior.resolvedTask?.task;
 +        if (s.open || s.generation !== params.generation + 1 || Object.keys(s.tasks).length || pendingFault(filename()) ||
 +          prior.reason !== reason || !archived || JSON.stringify(archived.reference) !== JSON.stringify(params.reference) ||
 +          crypto.createHash("sha256").update(JSON.stringify(archived, (_key, item) => item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest("hex") !== params.expectedTaskHash) throw new Error("reconciliation_archived_result_drift");
 +      }
-       if (prior.resolvedTask?.id !== params.taskId) throw new Error("reconciliation_receipt_conflict");
-       return;
-     }
-@@ -225,10 +231,34 @@ export function acknowledgeReconciledCampaignTask(params: {
-       item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest("hex");
-     if (taskHash !== params.expectedTaskHash) throw new Error("reconciliation_task_drift");
-     s.generation++;
+@@ -228 +234 @@ export function acknowledgeReconciledCampaignTask(params: {
 -    s.audit.push({ action: "provider_reconciled", actor: params.actor, reason: "durable_failed_result_no_retry",
 +    s.audit.push({ action: "provider_reconciled", actor: params.actor, reason,
-       at: new Date().toISOString(), generation: s.generation, receiptId: params.receiptId,
-       resolvedTask: { id: params.taskId, task } });
-     delete s.tasks[params.taskId]; // Resolved task survives in audit; pending tasks are never discarded.
-   });
-   return campaignOperationsStatus();
- }
+@@ -234,0 +241,24 @@ export function acknowledgeReconciledCampaignTask(params: {
 +
 +// Existing FAILED131026 callers retain their exact reason and contract.
 +export function acknowledgeReconciledCampaignTask(params: Parameters<typeof archiveReconciledCampaignTask>[0]) {
@@ -1159,15 +1141,9 @@ diff --git a/apps/whatsapp-agent/src/http/routes.ts b/apps/whatsapp-agent/src/ht
 index 0bbe9558..c6d25114 100644
 --- a/apps/whatsapp-agent/src/http/routes.ts
 +++ b/apps/whatsapp-agent/src/http/routes.ts
-@@ -1,3 +1,4 @@
+@@ -0,0 +1 @@
 +import { extractMetaStatus, normalizeCampaignMessageStatus, stringifyCampaignError, isUtilityPricingCategory, isDeliveredForCampaignBilling, resolveCampaignBillingStatus, buildCampaignMetaStatusItem, buildCampaignSeedFallbackStatusItems, summarizeCampaignMetaStatuses, campaignRecipientIdentityCandidates, campaignRecipientIdentitiesMatch, campaignMetaStatusRank, campaignMetaStatusTime, pickCampaignRecipientStatus, buildCampaignRecipientResultStatuses } from "../campaigns/campaignRecipientResultTruth.js";
- import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from "../campaigns/campaignEligibility.js";
- import { reactiveRoutingDecision, type ReactiveRoutingDecision, revalidateReactiveSubmission } from "../whatsapp/reactiveOutboundPolicy.js";
- import { isAutomationConversation, resolveAutomationReadPermission } from "../inbox/automationAccess.js";
-@@ -29811,45 +29812,7 @@ type CampaignDraftRecipientResolution = {
-   }>;
- };
- 
+@@ -29814,39 +29815 @@ type CampaignDraftRecipientResolution = {
 -function extractMetaStatus(rawPayload: unknown) {
 -  const typed =
 -    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
@@ -1208,13 +1184,7 @@ index 0bbe9558..c6d25114 100644
 -  };
 -}
 +
- 
- function extractCampaignIdFromRawPayload(rawPayload: unknown) {
-   const typed =
-@@ -30597,108 +30560,21 @@ function incrementCampaignBlockedReason(
-   counts.set(reason, (counts.get(reason) ?? 0) + 1);
- }
- 
+@@ -30600,17 +30563 @@ function incrementCampaignBlockedReason(
 -function normalizeCampaignMessageStatus(
 -  lastStatus: string | null,
 -  fallbackStatus: string
@@ -1233,11 +1203,7 @@ index 0bbe9558..c6d25114 100644
 -  }
 -}
 +
- 
- function normalizeInboxMessageStatus(lastStatus: string | null, fallbackStatus: string) {
-   return normalizeCampaignMessageStatus(lastStatus, fallbackStatus).toUpperCase();
- }
- 
+@@ -30622,9 +30568,0 @@ function normalizeInboxMessageStatus(lastStatus: string | null, fallbackStatus:
 -function stringifyCampaignError(value: unknown) {
 -  if (!value) return null;
 -  if (typeof value === "string") return value;
@@ -1247,15 +1213,15 @@ index 0bbe9558..c6d25114 100644
 -    return String(value);
 -  }
 -}
- 
+@@ -30632,3 +30569,0 @@ function stringifyCampaignError(value: unknown) {
 -function isUtilityPricingCategory(value: string | null) {
 -  return (value ?? "").trim().toLowerCase() === "utility";
 -}
- 
+@@ -30636,3 +30570,0 @@ function isUtilityPricingCategory(value: string | null) {
 -function isDeliveredForCampaignBilling(status: CampaignMetaStatus["status"]) {
 -  return status === "delivered" || status === "read";
 -}
- 
+@@ -30640,21 +30571,0 @@ function isDeliveredForCampaignBilling(status: CampaignMetaStatus["status"]) {
 -function resolveCampaignBillingStatus(item: {
 -  status: CampaignMetaStatus["status"];
 -  pricingCategory: string | null;
@@ -1277,7 +1243,7 @@ index 0bbe9558..c6d25114 100644
 -    nonBillingReason: null,
 -  };
 -}
- 
+@@ -30662,40 +30573,5 @@ function resolveCampaignBillingStatus(item: {
 -function buildCampaignMetaStatusItem(item: {
 -  waId: string;
 -  messageId?: string | null;
@@ -1323,13 +1289,7 @@ index 0bbe9558..c6d25114 100644
 +
 +
 +
- 
- async function enrichCampaignMetaStatusWithCurrentContacts(
-   prisma: ReturnType<typeof getPrisma>,
-@@ -30759,198 +30635,21 @@ async function enrichCampaignMetaStatusWithCurrentContacts(
-   });
- }
- 
+@@ -30762,38 +30637,0 @@ async function enrichCampaignMetaStatusWithCurrentContacts(
 -function buildCampaignSeedFallbackStatusItems(
 -  campaign: {
 -    sentCount: number;
@@ -1368,7 +1328,7 @@ index 0bbe9558..c6d25114 100644
 -    };
 -  });
 -}
- 
+@@ -30801,44 +30638,0 @@ function buildCampaignSeedFallbackStatusItems(
 -function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMetaSummary {
 -  return items.reduce<CampaignMetaSummary>(
 -    (acc, item) => {
@@ -1413,18 +1373,18 @@ index 0bbe9558..c6d25114 100644
 -    }
 -  );
 -}
- 
+@@ -30846,3 +30639,0 @@ function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMet
 -function campaignRecipientIdentityCandidates(value: string) {
 -  return new Set(buildCrmWhatsappIdentityCandidates([value]));
 -}
- 
+@@ -30850,6 +30640,0 @@ function campaignRecipientIdentityCandidates(value: string) {
 -function campaignRecipientIdentitiesMatch(left: Set<string>, right: Set<string>) {
 -  for (const candidate of left) {
 -    if (right.has(candidate)) return true;
 -  }
 -  return false;
 -}
- 
+@@ -30857,21 +30641,0 @@ function campaignRecipientIdentitiesMatch(left: Set<string>, right: Set<string>)
 -function campaignMetaStatusRank(status: CampaignMetaStatus["status"]) {
 -  switch (status) {
 -    case "read":
@@ -1446,14 +1406,14 @@ index 0bbe9558..c6d25114 100644
 -      return 1;
 -  }
 -}
- 
+@@ -30879,6 +30642,0 @@ function campaignMetaStatusRank(status: CampaignMetaStatus["status"]) {
 -function campaignMetaStatusTime(item: CampaignMetaStatus) {
 -  const value = item.deliveredAt ?? item.sentAt;
 -  if (!value) return 0;
 -  const parsed = Date.parse(value);
 -  return Number.isNaN(parsed) ? 0 : parsed;
 -}
- 
+@@ -30886,8 +30643,0 @@ function campaignMetaStatusTime(item: CampaignMetaStatus) {
 -function pickCampaignRecipientStatus(items: CampaignMetaStatus[]) {
 -  return items.reduce((selected, item) => {
 -    const rankDifference = campaignMetaStatusRank(item.status) - campaignMetaStatusRank(selected.status);
@@ -1462,7 +1422,7 @@ index 0bbe9558..c6d25114 100644
 -    return selected;
 -  });
 -}
- 
+@@ -30895,10 +30644,0 @@ function pickCampaignRecipientStatus(items: CampaignMetaStatus[]) {
 -function buildCampaignRecipientResultStatuses(params: {
 -  campaign: { sentCount: number; blockedCount: number; status: string; templateName: string };
 -  seed: CampaignDraftSeed;
@@ -1473,7 +1433,7 @@ index 0bbe9558..c6d25114 100644
 -    item,
 -    candidates: campaignRecipientIdentityCandidates(item.waId),
 -  }));
- 
+@@ -30906,35 +30645,0 @@ function buildCampaignRecipientResultStatuses(params: {
 -  const visibleItems: CampaignMetaStatus[] = [];
 -  const consumedResultIndexes = new Set<number>();
 -  const consumedSeedIdentities: Set<string>[] = [];
@@ -1509,7 +1469,7 @@ index 0bbe9558..c6d25114 100644
 -      )
 -    );
 -  });
- 
+@@ -30942,12 +30647,6 @@ function buildCampaignRecipientResultStatuses(params: {
 -  indexedResults.forEach((result) => {
 -    if (consumedResultIndexes.has(result.index)) return;
 -    const matchingResults = indexedResults.filter(
@@ -1528,6 +1488,3 @@ index 0bbe9558..c6d25114 100644
 +
 +
 +
- 
- function formatCampaignNonBillingReason(value: string | null) {
-   switch (value) {

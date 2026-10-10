@@ -16,3 +16,5 @@ Na execução registrada, o banco novo foi criado e recebeu o schema vigente por
 Regressão diretamente afetada: `campaignAcceptedFailureReconciliation.test.ts` executada em DB sintético separado `re7_guard37_regression_20261010`, Node20 e mesmos providers fictícios. Um caso integrado passa pelo wrapper FAILED131026, read models, SQL real, receipt e replay. Essa fixture usa o produtor de provider sintético existente; não representa provider real.
 
 A suíte .6 roda SQL/ledger/CLI efetivos. Resultados de provider são fixtures armazenadas, não chamadas. EIO de archive é injeção explícita; rollback do trigger é PostgreSQL real. Não há teste de reboot, crash real, DB/ledger atomicidade ou aceite humano produtivo. Provas anteriores de prevenção/webhook/CRM continuam válidas nos seus próprios escopos.
+
+O patch sanitizado contém somente código/testes/CLI, com contexto zero. Para conferir sua aplicação sobre a origem e643ebbafaa851b1a0780d41eea0ea6c1079fce1 em checkout isolado, usar `git apply --check --unidiff-zero position6-recovery.sanitized.patch`. O manifesto de origem/resultado confirma os bytes; não aplicar sobre a produção ou preparação frontend.
