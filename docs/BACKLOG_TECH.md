@@ -1,5 +1,7 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**Frontend3227 — POLICY INSTALLATION BLOCKED / DENY BEFORE INSTALLATION (10/10,17:36Fortaleza).** [Resultado no relatório único](reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/README.md#continuidade-autorizada-para-políticapreflight--10102026-interrompida-antes-da-instalação): branch sincronizada7c5430a9; manifests e composição conferidos até `guard_drift`. Baseline aberta36/tasks{} diverge da guarda atual **fechada37/uma tarefa provider**, audit `uncertain_close/unfinished_child_requires_review` em12:40Fortaleza. Instalação não executada; política antiga6087… e permanente24a… preservadas, leitores atuais duas amostras consistentes; gatefalse, sem intents/capturas. Frontendfa60/APIa26/workerafbb mesmas identidades/restart0. Cron/boot posteriores ao ponto de recusa não reatestados. Próximo passo é revisar por leitura a tarefa e o fechamento antes de qualquer composição nova; não adaptar bindings, abrir guarda, reenviar ou reconciliar automaticamente. Preflight proposto NOT EXERCISED / NOT DEPLOYED. CSV e aceites anteriores permanecem separados.
+
 ## CRM — importação CSV com resultado desconhecido na interface e totais ambíguos — 10/10/2026
 
 **OPEN / AUDIT AND LOCAL IMPLEMENTATION REQUESTED / NOT IMPLEMENTED / NOT DEPLOYED.** Defeito relatado pelo owner em `syer-rodrigues`. Frente independente da release frontend3227 já preparada: não modificar seu tar, manifests, configurações, políticas, bindings, staging ou aceites para incluir esta correção.

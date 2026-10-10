@@ -121,3 +121,35 @@ bash /opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-2
 Exige decisão específica do owner e sudo em sua sessão; arquiva6087f980… e instalae6c9adf9…, mantendo helper/sudoers e `execution-authorized=false`. Não é autorização de instalação permanente, stop/start, promoção/save ou deploy. Somente após PASS desse preflight se avalia a janela. A política permanente proposta573bcb3e… permanece pendente para a fase posterior já descrita, sem instalar nesta rodada.
 
 Multilote natural, contingênciaAUTO e CRA-PR mantêm aceites separados; horários/CRM/CSV/dinâmica/out.14 e históricos não foram reabertos. APIa26/workerafbb/schema/auth/sessões/guarda/scheduler/cron/boot preservados. Nenhum envio ou criação de campanha.
+
+## Continuidade autorizada para política/preflight — 10/10/2026, interrompida antes da instalação
+
+**DENY BEFORE INSTALLATION / GUARD DRIFT / NOT DEPLOYED.** Branch sincronizada por fast-forward de f8cb4658 para `7c5430a9129de81a6df4e7ee152980239098ac9e`; delta remoto somente backlog CSV, preservado e separado. Sem rebuild/reempacotamento. A autorização desta etapa limita-se à política de janela e preflight, mantendo gatefalse; não autoriza política permanente, processos ou promoção/save.
+
+### Estado atual e causa precisa
+
+Leitura atual às **17:36:54 Fortaleza (20:36:54 UTC), 10/10/2026**. `check-preparation.py` recusou `RuntimeError: guard_drift`, na comparação integral do ledger com `live.private.json`. Antes da recusa, os manifests de scripts/bindings e as verificações de identidade/composição/políticas/saved-fallback anteriores à comparação passaram. A primeira execução do driver externo guardou apenas a exceção resumida; a causa foi então capturada diretamente do checker efetivo em stdout/stderr privados, sem alterar módulos ou bindings.
+
+| Campo | Baseline da preparação | Observação atual |
+|---|---|---|
+| Guarda | aberta | fechada |
+| Geração |36|37|
+| Tarefas |0|1, kind `provider`|
+| Audit | estado anterior | `uncertain_close`, motivo `unfinished_child_requires_review`, em10/10 às12:40:35 Fortaleza (15:40:35 UTC) |
+| Gate de execução |false|false|
+
+O fechamento ocorreu antes desta etapa; não foi provocado por esta auditoria. Uma tarefa de provider incompleta exige revisão própria: não atribuir causa a frontend/CSV nem concluir entrega/falha pelo ledger isolado. Não foi realizada investigação/reconciliação dessa tarefa ou chamada ao provider. A autorização de política não permite apagar tarefa, abrir guarda ou aceitar outro baseline automaticamente.
+
+### Conferências e preservação
+
+- Estado de instalação: arquivo histórico `frontend-socket-observer-policy.pre-3227b2d7-220400.json` **ausente**; nenhuma captura preparatória/saída e nenhum start-intent. Políticas root-owned, modo0600, sem symlink.
+- Política de janela continua **6087f980ed58f084294f77dbca688c5cba9b39229d3c2b10daa35732ff74f7d4**, propostae6c9… **não instalada**. Política permanente continua **24a78e7ebb6e92b56a6719a7234631ed11b8e93b657665817b6905a16a00add3**. Os dois leitores fixos retornaram hashes esperados, exit0 e duas amostras completas iguais; helpers/sudoers não alterados.
+- Frontendfa60 PID3438948/ticks2120147745; APIa26 PID3625739/ticks2128115907; workerafbb PID3625960/ticks2128116272, todos restart0, mesmas releases. Nenhum stop/start/restart, mudança de sessão/auth/DB/schema, guarda/scheduler/cron/boot/dump ou instalação foi executado por esta etapa.
+- Manifests de scripts/bindings passaram; contratos até o ponto `guard_drift` passaram. Cron/crontab/boot, que estão **depois** desse ponto no checker, não foram reatestados por essa execução; não usar o PASS histórico como conferência atual desses itens. Nenhuma evidência de alteração desses controles foi obtida, e nenhum deles foi modificado.
+- `install-window-policy.sh` **não executado**. Preflight sob política proposta e arquivamento de captura preparatória: **NOT EXERCISED**. Não entregar o bloco para execução enquanto a negativa persistir: ele recusaria antes da escrita root pela mesma validação.
+
+### Impedimento e próximo passo concreto
+
+O impedimento atual é operacional, não falta de senha: **guarda37 fechada com uma tarefa e baseline36 aberta/vazia**. Primeiro revisar por leitura a tarefa incompleta e o fechamento `uncertain_close`, em frente separada, preservando a evidência e sem reenviar/reconciliar/abrir automaticamente. Depois da definição do estado operacional esperado, submeter uma preparação/baseline concretamente revisados caso esse estado seja legitimamente diferente. Esta rodada não modifica bindings para fazer PASS nem decide essa mudança.
+
+Quando todos os requisitos forem novamente comprovados sob bindings revisados/autorizados, a instalação seguirá na sessão sudo do Deifson pelo bloco publicado, uma única vez. O acesso remoto atual dispõe apenas das leituras literais delegadas; não foi solicitada/capturada senha nem tentada instalação por sudo genérico. A autorização atual não se converte em autorização de nova composição, política permanente ou janela. Encerrada esta etapa com produção viva, gatefalse, política original e guarda37/tarefa preservadas. O defeito CSV, multilote/AUTO e CRA-PR permanecem separados.
