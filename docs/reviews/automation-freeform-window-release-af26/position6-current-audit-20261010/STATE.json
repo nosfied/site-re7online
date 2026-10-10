@@ -1,0 +1,149 @@
+{
+  "scope": "Bounded READ ONLY observations, not atomic FS+DB/heap/drain certificate.",
+  "snapshot": [
+    {
+      "at": "2026-10-10T21:45:52.853Z",
+      "read_only": "on",
+      "isolation": "repeatable read"
+    }
+  ],
+  "followupSnapshot": [
+    {
+      "at": "2026-10-10T21:52:30.642Z",
+      "read_only": "on"
+    }
+  ],
+  "ledger": {
+    "sha256": "a072223faacd2681a25696d422e6b67947c88ac6b9634d97382af4536580aacf",
+    "firstAt": "2026-10-10T21:45:52.278015+00:00",
+    "lastAt": "2026-10-10T21:52:30.781148+00:00",
+    "unchanged": true,
+    "open": false,
+    "generation": 37,
+    "taskId": "7d9902c0-4946-4250-8205-400e41be0941",
+    "taskSha256": "c91588a21bd6fbc8e85598e30b907f193388751dfadea56d9483c0bca9a9b979",
+    "kind": "provider",
+    "phase": "persisting",
+    "admissionGeneration": 36,
+    "startedAt": "2026-10-10T15:40:34.940Z",
+    "parentTaskPresent": false,
+    "reference": {
+      "clientId": "10a98bf4-1587-43e8-83d4-e3a48c5d79d9",
+      "campaignId": "94b5805b-5c6d-4c89-b047-959209261c21",
+      "messageId": "campaign.94b5805b-5c6d-4c89-b047-959209261c21.6"
+    },
+    "lockExists": false,
+    "uncertainExists": false,
+    "eachLedgerReadStatConsistent": true
+  },
+  "processes": [
+    {
+      "name": "re7-admin-front",
+      "pid": 3438948,
+      "startTicks": "2120147745",
+      "state": "S",
+      "status": "online",
+      "restarts": 0,
+      "release": "frontend fa60 corrigido"
+    },
+    {
+      "name": "re7-whatsapp-agent",
+      "pid": 3625739,
+      "startTicks": "2128115907",
+      "state": "S",
+      "status": "online",
+      "restarts": 0,
+      "release": "API a26"
+    },
+    {
+      "name": "re7-whatsapp-web-worker",
+      "pid": 3625960,
+      "startTicks": "2128116272",
+      "state": "S",
+      "status": "online",
+      "restarts": 0,
+      "release": "worker mínimo afbb"
+    }
+  ],
+  "daemon": {
+    "pid": 18676,
+    "ticks": "222727"
+  },
+  "bootIdSha256": "bfd925e8721d6425592e6546ea8d7023a02eeacbac81bd748c3bc916f4bd21b3",
+  "taskExecutorStillAlive": true,
+  "jobs": [
+    {
+      "id": "4865b05d-0969-465d-b112-873474f804fb",
+      "kind": "batch_chunk",
+      "status": "completed",
+      "attempt": 1,
+      "failureReason": null,
+      "leaseExpiresAt": "2026-10-10T15:40:24.859Z",
+      "leaseTokenPresent": true,
+      "leaseOwnerPresent": true,
+      "leaseOwnerSha256": "21a313da4d745748453a3adf0efdcd84a5932aaf4d1586c9f87ef24fc471748c"
+    },
+    {
+      "id": "1eb96f7f-50ae-4d5e-9124-411923945efb",
+      "kind": "batch_chunk",
+      "status": "queued",
+      "attempt": 1,
+      "failureReason": "operational_suspension",
+      "leaseExpiresAt": null,
+      "leaseTokenPresent": false,
+      "leaseOwnerPresent": false,
+      "leaseOwnerSha256": null
+    }
+  ],
+  "outboundCount": 5,
+  "position6OutboundByMessageOrMetaID": 0,
+  "position6GenericMessageCount": 0,
+  "position6UsageEventCount": 0,
+  "preservedOutbounds": [
+    {
+      "id": "872f3fb0-318a-43f8-aa33-e5e9662ec080",
+      "messageId": "campaign.94b5805b-5c6d-4c89-b047-959209261c21.1",
+      "completeRowSha256": "d4e5c784296ae3fa63973628d666eb6469814c9f9da2107d3c631994babb6535",
+      "matchesPreviousCapture": true,
+      "status": "SENT",
+      "providerStatus": "delivered"
+    },
+    {
+      "id": "acc76fe6-2b72-4358-80d5-ff09fabf202b",
+      "messageId": "campaign.94b5805b-5c6d-4c89-b047-959209261c21.2",
+      "completeRowSha256": "aefa7f8304514556eda8228fb3347466cba00d8f8b97560a408424f48d0717cc",
+      "matchesPreviousCapture": true,
+      "status": "SENT",
+      "providerStatus": "delivered"
+    },
+    {
+      "id": "01ed3f7e-7c25-49b3-b628-f75efe832b18",
+      "messageId": "campaign.94b5805b-5c6d-4c89-b047-959209261c21.3",
+      "completeRowSha256": "0949aa5f39e3f4550481b173377f05212f7c59fccc860b8d92c916539e7d9dfe",
+      "matchesPreviousCapture": true,
+      "status": "SENT",
+      "providerStatus": "delivered"
+    },
+    {
+      "id": "d16b6f2a-951c-4576-8a5f-5c0b4bfb0eab",
+      "messageId": "campaign.94b5805b-5c6d-4c89-b047-959209261c21.4",
+      "completeRowSha256": "1b562a160a65ae401800f5d315aa7f00015254f57d4fdf64f84e92f39b63cbf1",
+      "matchesPreviousCapture": true,
+      "status": "SENT",
+      "providerStatus": "delivered"
+    },
+    {
+      "id": "2a7472b8-29b3-47cf-accf-e84df7d5158f",
+      "messageId": "campaign.94b5805b-5c6d-4c89-b047-959209261c21.5",
+      "completeRowSha256": "743f9da17fac0d7e9de0341b105a4d68169e31de89eccd3a5d0240f69c6dabff",
+      "matchesPreviousCapture": true,
+      "status": "SENT",
+      "providerStatus": "delivered"
+    }
+  ],
+  "positions7to11": {
+    "outbounds": 0,
+    "submitStartedOrAcceptedEvents": 0,
+    "meaning": "No submission observed in retained sources; not provider-global proof."
+  }
+}

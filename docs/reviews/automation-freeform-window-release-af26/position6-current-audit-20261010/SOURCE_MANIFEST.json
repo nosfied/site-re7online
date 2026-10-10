@@ -1,0 +1,89 @@
+{
+  "baseCommit": "400b8b4bcf3fac2d1d5261b549febfd5a494f0eb",
+  "privateEvidence": [
+    {
+      "label": "capture-current.private.json",
+      "sha256": "256c42b49d44ec251c66814ae9bee7f68fcd764b1730ebfe27356841dcc86201"
+    },
+    {
+      "label": "sources-current.private.json",
+      "sha256": "e501a0eae5bf09939a419255d51873c7fe08f007f05849b8d937588bf6408e36"
+    },
+    {
+      "label": "extra-current.private.json",
+      "sha256": "ba6c333215fa66e4f49e70bc16ff3b58d20ddec1feccd6656871309985e07dd5"
+    },
+    {
+      "label": "provider-link-current.private.json",
+      "sha256": "244360566ba16d4bbd50f2c062dca41a9806a7e6bfe76c68ade7a2fc918fc98a"
+    }
+  ],
+  "auditedReaders": [
+    {
+      "label": "capture-readonly.py",
+      "sha256": "9363201cdd23425c433838e947432e74ca65875896be1dd65f4d1ee50efda16f"
+    },
+    {
+      "label": "query-current.cjs",
+      "sha256": "a54c3f7358a359743ccd1ece71d02c7b6bd9f76759ef945a5c12316025b8794b"
+    },
+    {
+      "label": "original-sources-readonly.py",
+      "sha256": "b4da40edaa39a605b559544de927186023ab95f206ad5c664408f7404b72ce5e"
+    },
+    {
+      "label": "query-original-extra.cjs",
+      "sha256": "dca908435d24038ebb4df986b452ff703aaca14560a219b0db8cb7f834c3f210"
+    },
+    {
+      "label": "query-provider-link.cjs",
+      "sha256": "e02a48350c78b4525f860e66a176ce6c8522156960253fcba302aaac7e0fb41b"
+    }
+  ],
+  "currentActiveCode": {
+    "dist/campaigns/campaignRunner.js": {
+      "sha256": "7203fd3897c50b043858f6aaa86b01f1cbe1f2787e0c619e0507e9ab4ea0b065",
+      "bytes": 83798,
+      "matchesHistoricalInspectedBytes": true
+    },
+    "dist/services/outboundTemplateService.js": {
+      "sha256": "ec667a27750ada47a092146a709981bc2f22891756b6d2a474f0757e02f657ab",
+      "bytes": 13790,
+      "matchesHistoricalInspectedBytes": true
+    },
+    "dist/campaigns/campaignSeedPrivacy.js": {
+      "sha256": "d63ef69c5d47119863e1356ef101dd42f830f4d851a317418551603405c627b8",
+      "bytes": 7366
+    },
+    "dist/storage/jsonFileStorage.js": {
+      "sha256": "55ef9f966427de71154787b019e290ce376c99c3d2f930c6c3578ad8d1827a21",
+      "bytes": 20421
+    },
+    "dist/storage/storageFactory.js": {
+      "sha256": "ebec769a94f38ef6a6cb58bc079859c5d9238c645df7d27988292b470639fe6e",
+      "bytes": 2333
+    },
+    "dist/storage/dualWriteStorage.js": {
+      "sha256": "184a3aa0a353941b36a1f89111035491f0190af233c957670162f7fa9b519cce",
+      "bytes": 39050
+    },
+    "dist/crm/crmContactUpsert.js": {
+      "sha256": "30234430b9ce501dfb5523c654d877cd0c54118a3d4ee62d3eaa9b31246f9949",
+      "bytes": 47640,
+      "matchesHistoricalInspectedBytes": true
+    },
+    "dist/crm/crmWhatsappIdentity.js": {
+      "sha256": "e12c47abf1b1a753fde915dcc933423749a95704828cecd142df473becc300cf",
+      "bytes": 4341,
+      "matchesHistoricalInspectedBytes": true
+    },
+    "dist/db/persist.js": {
+      "sha256": "c60906c6b02c974846a9d4ef790bf93021e246fadf4b88383076395eb25b723d",
+      "bytes": 20466,
+      "matchesHistoricalInspectedBytes": true
+    }
+  },
+  "privateDataPublished": false,
+  "productionMutation": false,
+  "buildsOrTestsRepeated": false
+}

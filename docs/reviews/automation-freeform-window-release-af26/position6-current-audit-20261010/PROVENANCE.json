@@ -1,0 +1,125 @@
+{
+  "hashMethod": "Files: SHA-256 exact bytes. Captured JSON records: UTF-8 json.dumps(sort_keys=True,separators=(comma,colon),ensure_ascii=True). Log lines: bytes excluding newline. Mutable files are captured sources, not immutable certificates.",
+  "originalAccount": {
+    "state": "PROVEN",
+    "sha256": "a2eea3a649c0e3569a913d6967cf2cf7c0c058f838dc283da91c9bde44b37ef2",
+    "sources": [
+      "transport JSON raw.senderPhoneNumberId",
+      "original sending/sent logs resolvedPhoneNumberId"
+    ],
+    "noCurrentConfigInference": true
+  },
+  "recipient": {
+    "state": "PROVEN",
+    "last4": "3736",
+    "length": 12,
+    "sha256": "9a8e55ade78321efceda436089cdf2bfdc23c7bfa5d76069195839bafcdceaee",
+    "sources": [
+      "original child seed .6",
+      "provider_accepted.waId",
+      "transport JSON to"
+    ],
+    "internationalCRMApproved": false
+  },
+  "seed": {
+    "eventId": "7cdbc3c9-3cce-4429-8aa9-1524636a561c",
+    "createdAt": "2026-10-10T15:40:24.831Z",
+    "recordSha256": "534220cda02fadad6728fa64f1e2b1102a8c6b1a83490a164d8885c517237048",
+    "payloadSha256": "a295aab0e58d5d42d78b12209f76937f70d3a5878b97f54114f669573c164b6b",
+    "decoderSha256": "d63ef69c5d47119863e1356ef101dd42f830f4d851a317418551603405c627b8",
+    "recipientCount": 11,
+    "componentsPosition6Present": true,
+    "componentsSha256": "fafc4385f618c879b99eeb3b79c47c02bed3cec0eb96532149b90eed53fd1d12",
+    "recipientRefPosition6Sha256": "bc5347e354ca9911bd373983c01857b5bfcd1ecc770ae108d6209cb1b0a80bd7",
+    "returnDestination": {
+      "type": "human_department",
+      "queueId": "cmsiyb2k200n94sdpu5khkee0",
+      "queueName": "Fila Geral",
+      "departmentId": "cmsiwk1o100014sdzl5cqd2ki",
+      "departmentName": "Atendimento Geral"
+    }
+  },
+  "dynamicSnapshot": {
+    "eventId": "a3429d22-11b2-490b-abc3-67c2fe436875",
+    "createdAt": "2026-10-10T15:40:24.733Z",
+    "recordSha256": "9f2b24068ed19de96a6607092c5f5dd138385854bdb41dd1407def84dea8be48",
+    "payloadSha256": "77afefa5f0d9d2d908126521ba4ec7416245b792fce28d76152958aaca680c01",
+    "position6AndComponentsMatchChild": true,
+    "persistedBatchSnapshotEventId": null,
+    "persistedBatchSnapshotHash": null,
+    "binding": "Explicit tenant/controller event and decrypted equality; no batch link invented."
+  },
+  "transportRecord": {
+    "fileSha256": "239cf991ce3a41b4f8d91d61874d7e69d64841a2c64659437b3f6a25617d48f1",
+    "recordSha256": "20de3b4c2736bef0ac22e520610c1230d637f50657ab4216d75cb91c388cad19",
+    "timestamp": "2026-10-10T15:40:35.454Z",
+    "status": "sent",
+    "templateName": "data_exame",
+    "language": "pt_BR",
+    "text": null,
+    "runId": "03856c7c-c390-419a-b2f3-758dd669e394",
+    "metaMessageIdSha256": "46979b261213be225ced7ed54a51223e0739b209cd5da761d8787a4478874823",
+    "requestIdSha256": "d441cf746c6ba5d16e9fc2a8860fcbaf04a4cf2a0d8be12776f3eee1e148a793"
+  },
+  "submissionLogs": [
+    {
+      "event": "outbound.template.sending",
+      "at": "2026-10-10T15:40:34.994Z",
+      "line": 4326,
+      "sha256": "4385dc6889c695d9304b85f006171d103599efeddf2eb3926233441548a12260"
+    },
+    {
+      "event": "outbound.template.sent",
+      "at": "2026-10-10T15:40:35.479Z",
+      "line": 4328,
+      "sha256": "221a1fb4757f37858083e4aee46bc1b1dc0131580e30e7703d279d78e108619b"
+    }
+  ],
+  "acceptedEvent": {
+    "id": "a0cdb650-c6f9-4741-85d6-c3b9099e9008",
+    "createdAt": "2026-10-10T15:40:35.501Z",
+    "acceptedAt": "2026-10-10T15:40:35.500Z",
+    "recordSha256": "69731d3105fccc798ea402ef5cd582156dd055cc6a5611b2828e20de9d50363a"
+  },
+  "providerStatuses": [
+    {
+      "id": "0938c7ee-500b-4877-a0b1-beceec2e5766",
+      "createdAt": "2026-10-10T15:40:44.443Z",
+      "recordSha256": "5e6d68f991c97274705e98b6be2692f8675bbb143f4cc24dc32aca9fb3d12c00",
+      "status": "sent",
+      "timestamp": "1791646843",
+      "pricing": {
+        "type": "regular",
+        "billable": true,
+        "category": "utility",
+        "pricing_model": "PMP"
+      }
+    },
+    {
+      "id": "64cebb0f-4d48-4c6b-9bf2-02e6f2ed69d4",
+      "createdAt": "2026-10-10T15:40:44.528Z",
+      "recordSha256": "347c19d3d6dbef57424996991ab720222ebc0f7d9fdae4646b52db6c673bdd74",
+      "status": "delivered",
+      "timestamp": "1791646843",
+      "pricing": {
+        "type": "regular",
+        "billable": true,
+        "category": "utility",
+        "pricing_model": "PMP"
+      }
+    }
+  ],
+  "body": {
+    "state": "EFFECTIVE_RENDERED_BODY_NOT_PRESERVED_IN_INSPECTED_SOURCES",
+    "transportText": null,
+    "originalRequestId": "cmth7k13c01y34sxa3n0elk0e",
+    "originalRequestCreatedAt": "2026-08-31T12:21:54.695Z",
+    "originalRequestRowSha256": "806753cecf1da37d407dfbe3775daa984464f9d1e83a2d36041bf4a2c57e02b7",
+    "requestedContentSha256": "359c1ee28e51cfecb72b52118100755bbfe21044ceb541cceb32e8aed3087767",
+    "warning": "Request content is not a versioned proof of templateForRendering at submission. Rendering occurs after the CRM failure."
+  },
+  "providerReturn": {
+    "known": "response.ok path, extracted MetaID, transport record, accepted event",
+    "fullHTTPResponseAndNumericStatus": "NOT_PRESERVED_IN_INSPECTED_SOURCES; do not invent HTTP 200"
+  }
+}

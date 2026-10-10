@@ -1,5 +1,7 @@
 # Guarda37 — reprodução local e proposta técnica, 10/10/2026
 
+**Continuidade de400b — [auditoria atual somente leitura e decisão de recuperação .6](../position6-current-audit-20261010/README.md).** Fontes originais/fences atuais conferidos; plano/CRM/ack seguem para revisão, semapply. Históricos e provas abaixo preservados.
+
 **Revisão posterior de162:** [fronteira webhook/CRM corrigida e provas novas](WEBHOOK_CRM_BOUNDARY_20261010.md); [checklist único .6](POSITION6_RECOVERY_CHECKLIST.md). Históricos abaixo preservados; sem apply/ack/deploy.
 
 **Continuidade local sobre85:** [implementação, provas e limites](IMPLEMENTATION_20261010.md). A descrição abaixo preserva a proposta/reprodução histórica. Prevenção agora implementada localmente; verificador/recibo .6 ensaiados, mas nenhum apply/ack/recuperação executado.
