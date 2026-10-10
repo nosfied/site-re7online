@@ -1,0 +1,89 @@
+{
+  "jobs": [
+    {
+      "clientKey": "demo-converta",
+      "status": "blocked",
+      "kind": "batch_chunk",
+      "count": 1,
+      "linked_lease": 1,
+      "expired_linked": 1,
+      "overdue": 1,
+      "earliest": "2026-10-09T17:00:00.000Z"
+    },
+    {
+      "clientKey": "demo-converta",
+      "status": "completed",
+      "kind": "batch_chunk",
+      "count": 8,
+      "linked_lease": 8,
+      "expired_linked": 8,
+      "overdue": 8,
+      "earliest": "2026-10-07T14:30:00.000Z"
+    },
+    {
+      "clientKey": "demo-converta",
+      "status": "completed",
+      "kind": "campaign",
+      "count": 7,
+      "linked_lease": 7,
+      "expired_linked": 7,
+      "overdue": 7,
+      "earliest": "2026-10-02T14:15:13.834Z"
+    },
+    {
+      "clientKey": "demo-converta",
+      "status": "completed",
+      "kind": "test_send",
+      "count": 1,
+      "linked_lease": 1,
+      "expired_linked": 1,
+      "overdue": 1,
+      "earliest": "2026-10-02T14:12:11.448Z"
+    },
+    {
+      "clientKey": "demo-converta",
+      "status": "queued",
+      "kind": "batch_chunk",
+      "count": 1,
+      "linked_lease": 0,
+      "expired_linked": 0,
+      "overdue": 1,
+      "earliest": "2026-10-10T15:40:24.152Z"
+    }
+  ],
+  "batches": [
+    {
+      "clientKey": "demo-converta",
+      "status": "running",
+      "count": 1,
+      "overdue": 1,
+      "earliest": "2026-10-10T15:40:00.000Z"
+    }
+  ],
+  "leases": [
+    {
+      "clientKey": "demo-converta",
+      "count": 1,
+      "expired": 1,
+      "linked": 0,
+      "earliest": "2026-10-10T15:40:35.539Z"
+    }
+  ],
+  "campaigns": [
+    {
+      "clientKey": "demo-converta",
+      "status": "sending",
+      "count": 2,
+      "schedule_overdue": 0
+    },
+    {
+      "clientKey": "re7online",
+      "status": "draft",
+      "count": 2,
+      "schedule_overdue": 0
+    }
+  ],
+  "atUtc": "2026-10-10T20:43:39.993Z",
+  "tenantCount": 10,
+  "scope": "READ ONLY snapshot; not a drain certificate"
+}
