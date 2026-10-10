@@ -45,8 +45,14 @@
   "driversSha256": {
     "run-admin.py": "72cda2d00ba4e8db6602c44cac7f668b34dbc6fb50576baa45184191ffdf4612",
     "inspect-current.py": "db7912318647e89484a0cdb2fbe6948e03ed38d54398b6320dc76dabd1caa1ba",
-    "capture-readonly.py": "9363201cdd23425c433838e947432e74ca65875896be1dd65f4d1ee50efda16f",
+    "capture-readonly.py": "0335fd24524465632cac4de4dfbc23cd755baf14917678309784915b55c17d0d",
     "query-current.cjs": "a54c3f7358a359743ccd1ece71d02c7b6bd9f76759ef945a5c12316025b8794b"
   },
-  "workerOrApiReleaseRebuilt": false
+  "workerOrApiReleaseRebuilt": false,
+  "captureEnvironmentFix": {
+    "origin": "dcbeea4804c6971b9888b658c87c2519081cc096",
+    "originalSha256": "9363201cdd23425c433838e947432e74ca65875896be1dd65f4d1ee50efda16f",
+    "manifestSha256": "1aafb7e678adb387c70302ae250c075d43a7ad4595e69ab608398b0bbda531fb",
+    "originalManifestSha256": "c1dcf790459c0d96858710a0a8ceaf3149fa81c8c7724ca694b3bd66cae882fa"
+  }
 }

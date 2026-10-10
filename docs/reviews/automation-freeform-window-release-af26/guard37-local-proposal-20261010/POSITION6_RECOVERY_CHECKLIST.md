@@ -49,3 +49,9 @@ Sem CLIapply/recovery SQL executado, ack, provider, reenvio, abertura, política
 Antes de qualquer apply/ack produtivo: revisão independente dos bytes/contrato C, autorização própria, execução exclusiva, backup/frescor/restore e leitura atual completa de ledger/ref/hash/lock/.uncertain/job/lease/global/fontes/CRM/status. Captura anterior não é atestado atual. Drift ou webhook novo nega; não substituir fontes ou bindings. SQL/ledger não atômicos: falha incerta exige inspeção, não retry automático.
 
 Disposição do job restante, abertura global e suporte internacional continuam decisões separadas. Frontend3227 preservado/pendente.
+
+## Continuidade dcbeea48 — requisito de capacidade/preservação
+
+Capture corrigido nega DB externo herdado sem fonte API original;6provas dirigidas e nova leitura READ ONLY preservadas. Duas amostras root completas sobre cinco arquivos, zero owners/incompletudes; políticas/manifests atuais no escopo identificado conferidos. Blob idêntico+índice completo off-host e extração isolada PASS. Ver [relatório único](../position6-operational-preparation-20261010/README.md) e [comandos futuros](../position6-operational-preparation-20261010/WITHDRAWAL_FOR_REVIEW.txt).
+
+**Capacidade ainda DENY / NO WITHDRAWAL / NO APPLY / NO ACK**. Autorizar retirada é decisão própria; atualizar owners/referências/margem antes de qualquer operação. Backup/restore anterior reutilizado, não frescor indefinido. Guard37/task/job, cinco Outbounds/WebCRM e .7–.11 preservados; nenhum requisito produtivo de recibo/disposição/usage/totais/ack considerado satisfeito por estes checks.

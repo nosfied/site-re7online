@@ -1,0 +1,43 @@
+REVIEW ONLY / NOT AUTHORIZED / NOT EXECUTED. No apply, ack, open or service change.
+Decision requested: withdraw only the four allowlisted redundant archives, retaining main/archive manifests and all operational evidence.
+Prerequisites: owner approves this exact removal and reference audit; off-host custodian reconfirms blob/index; current read validates production/guard37; no concurrent administrative operation. A reference needing an original pathname blocks removal. Do not alter bindings to accept drift.
+
+A — Off-host custodian, in the review worktree (READ ONLY):
+sha256sum local-evidence/position6-storage-preservation-20261010/content.private.tar.gz local-evidence/position6-storage-preservation-20261010/original-paths.private.json
+Expected:
+4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810  content.private.tar.gz
+2907e12c99b68f88fb1f38bcc0b75b233b3bd4f988adb4eebdbd6107d835c6a3  original-paths.private.json
+Extraction proof: STORAGE_PRESERVATION_RESULT.json. Keep private blob, index and extracted hashes off-host. Current copy is one physical off-host location, not a second independent disaster-recovery replica.
+
+B — ONLY AFTER SPECIFIC WITHDRAWAL AUTHORIZATION, Deifson's own deploy/sudo session:
+set -euo pipefail
+umask 077
+P=/dev/shm/re7-position6-operational-20261010T224151Z
+test "$(sha256sum "$P/withdraw-four-for-review-v2.py" | cut -d' ' -f1)" = f1fbee6c3da18f87e492151da64aa647041c74e413406fea5a7f972564df6383
+test "$(sha256sum "$P/storage-root-readonly-v2.py" | cut -d' ' -f1)" = 0afdad90bfac03f2b5d72bc94f311b64045e7ead4ca399e02704640dc0368d60
+test "$(sha256sum "$P/original-paths.private.json" | cut -d' ' -f1)" = 2907e12c99b68f88fb1f38bcc0b75b233b3bd4f988adb4eebdbd6107d835c6a3
+test ! -e "$P/withdrawal-decision.private.json"
+test ! -e "$P/withdrawal.stdout.private.log"
+test ! -e "$P/withdrawal.stderr.private.log"
+sudo -v
+set +e
+timeout 180 sudo -n /usr/bin/python3 -I -S "$P/withdraw-four-for-review-v2.py" --future-owner-authorized-withdraw-four > "$P/withdrawal.stdout.private.log" 2> "$P/withdrawal.stderr.private.log"
+WITHDRAWAL_EXIT=$?
+set -e
+printf '%s\n' "$WITHDRAWAL_EXIT" > "$P/withdrawal.exit.private.txt"
+printf 'WITHDRAWAL_EXIT=%s\n' "$WITHDRAWAL_EXIT"
+
+The driver holds the existing administrative flock, obtains TWO NEW root observations, rejects incompleteness/owners/drift, verifies fixed active policy hashes, guard/task ledger hash, identities, original index and exact file metadata. It then reobserves owners and rehashes EACH file immediately before unlink. It refuses symlink chains and fsyncs the parent after each unlink. No glob, directory removal, root delegate installation or PID/service action. Historical observer result is not reused. Timeout/drift after some withdrawals leaves an explicit partial result; DO NOT repeat. Inspect exact remaining paths/stdout/ledger first. The driver is reviewed source and syntax-checked; destructive execution has NOT been tested or executed in this preparation.
+
+C — Run even if B refuses/partially completes, with new output names; NO retry/removal:
+P=/dev/shm/re7-position6-operational-20261010T224151Z
+sudo -n df -B1 /opt/re7online /var/lib/re7 /var/lib/docker/volumes/postgres_wa_agent_pgdata/_data
+sudo -n df -i /opt/re7online /var/lib/re7
+(cd "$P" && sha256sum -c administrative.sha256)
+python3 "$P/inspect-current.py"
+test ! -e "$P/post-withdrawal-api-health.private.json"
+curl --fail --max-time 5 --silent --show-error http://127.0.0.1:3001/health > "$P/post-withdrawal-api-health.private.json"
+
+inspect-current creates a NEW private directory and records SQL READ ONLY, ledger before/after, global jobs/leases and process identities. A SQL error is a denial, not permission to retry mutations. Require closed37/task and existing five Outbounds unchanged, no .6 result/ack, same API/worker/frontend identities. Check current PG/PM2 error logs for writing errors and active sessions through existing legitimate read mechanisms. Confirm Inbox/CRM in owner's session WITHOUT sending. Obtain bounded SQL/PG filesystem capacity samples using the already audited capacity readers; measure available blocks to postgres/deploy, WAL growth/retention and margin against the 2033MiB planning floor (not a measured apply WAL bound). df alone is NOT CAPACITY PASS.
+
+Recheck main content.private.tar.gz hash and each of the four exact path statuses, preserve ALL manifests/journals/certificates/private indexes. If any path is open/deleted-but-held, space is not reclaimed yet; do not kill its owner. No deletion of WAL, prune, retention/config change or recovery SQL. Only after factual capacity audit can a separate apply/verify/ack decision be considered; no job resume or opening implied.

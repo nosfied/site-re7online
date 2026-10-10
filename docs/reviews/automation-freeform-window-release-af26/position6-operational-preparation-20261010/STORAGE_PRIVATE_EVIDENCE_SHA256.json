@@ -1,0 +1,70 @@
+{
+  "reference-roots.private.json": {
+    "sha256": "cc84517ef706655776a8867939f6eab9a1b6f5161da8770c5422b97626b7e2a0",
+    "bytes": 835
+  },
+  "storage-root-observation-v2.private.json": {
+    "sha256": "deedaa6993e2dc51940a67bb24ae950bb056b2a8a66ca2e6b56f10574fd4813e",
+    "bytes": 119709
+  },
+  "staging-update.json": {
+    "sha256": "c4f9226141d0eeafc36c5bffb29c5b606d19fa46269fb40efa817e2b49e6aa21",
+    "bytes": 419
+  },
+  "storage-root-observation.private.stderr": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "storage-root-observation-v2.private.stderr": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "original-paths.private.json": {
+    "sha256": "2907e12c99b68f88fb1f38bcc0b75b233b3bd4f988adb4eebdbd6107d835c6a3",
+    "bytes": 2494
+  },
+  "current-read.private.out": {
+    "sha256": "25f370a875a70e8b87a410bb131b595ea216f7bde39e50f52c9334cf566bc008",
+    "bytes": 157812
+  },
+  "live-references.private.json": {
+    "sha256": "fd2dd4969af0c03e86c770294b51bf502241bd9663c9f60f82108729d4d44522",
+    "bytes": 61374
+  },
+  "final-space-staging.json": {
+    "sha256": "bdfad63842bc01ee9f2c3eadf84ec4cb9acb2321e220de789ce879eda7e51f4b",
+    "bytes": 325
+  },
+  "archive-validation.json": {
+    "sha256": "6b795637b0cdfd47df70e8f89531f48a90fc579960a54b24e4d9873523524dfb",
+    "bytes": 430
+  },
+  "storage-root-observation.private.json": {
+    "sha256": "04805edb2458a290f16f063692f51269c8b05645045bdf79180d0bde771069d6",
+    "bytes": 119825
+  },
+  "storage-root-readonly.initial.py": {
+    "sha256": "87c6ed00ebf07a2709b2a6b97b9e22bb74ae21e33fc4bcb7de6ad84370155192",
+    "bytes": 4001
+  },
+  "extracted-files.private.json": {
+    "sha256": "3b401a50975f3bfec88cf582d6c5dc6a0cd948b7fa93d8803302063a49def022",
+    "bytes": 223219
+  },
+  "current-read.private.json": {
+    "sha256": "e36240d40c1f7a604b7799a12984f25075f1965a8ea1e7d6d6f4c931097c4821",
+    "bytes": 157663
+  },
+  "content.private.tar.gz": {
+    "sha256": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810",
+    "bytes": 479460086
+  },
+  "current-read.private.stderr": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "transfer-denied.empty": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  }
+}

@@ -52,3 +52,9 @@ Sequência necessária antes de qualquer limpeza, para decisão do owner/operado
 5. Só depois decidir SQL/ack separadamente. Sem mudança de guard37, tarefa/job, retenção, backup schedule, provider ou releases.
 
 Esta rodada **não transferiu nem removeu esses arquivos**. Sem comandos de exclusão automática. Se referência/proprietário impedir retirar cópia, preservar a negativa e revisar outro destino isolado ou capacidade adicional; não romper o vínculo para ganhar espaço.
+
+## Atualização dcbeea48 — preservação concluída, retirada ainda não executada
+
+Os parágrafos anteriores registram a captura histórica. A leitura root V2 agora completou duas amostras sem proprietários/incompletudes; políticas/manifests/referências identificadas foram conferidos, e blob+índice dos cinco caminhos foram preservados off-host com extração isolada. Ver [resultado completo](STORAGE_PRESERVATION_RESULT.json) e [relatório único](README.md#continuidade-dcbeea48--ambiente-observação-root-e-preservação-off-host). Nenhum arquivo foi excluído.
+
+[Comandos concretos de retirada para revisão](WITHDRAWAL_FOR_REVIEW.txt): somente quatro caminhos, cópia principal e todos os manifests/evidências preservados. Dependem de autorização própria, custódia off-host reconfirmada e observações frescas, sem adaptar bindings. Capacidade continua DENY:475.422.720bytes livres na última leitura;1.917.861.888bytes é liberação projetada. Nenhum apply/ack/abertura decorre da decisão sobre armazenamento.

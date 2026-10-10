@@ -23,8 +23,8 @@
   },
   "capture-readonly.py": {
     "template": "capture-readonly.py.in",
-    "templateSha256": "d6a88e40c2fa8afcd06d850aaa3be57c450cded3ff74424c2119ed25ff3f9d1b",
-    "preparedSha256": "9363201cdd23425c433838e947432e74ca65875896be1dd65f4d1ee50efda16f",
+    "templateSha256": "130f742de63250938b7b2add507e4b4baaf0ac7bd7d8280c2b015d5387fca388",
+    "preparedSha256": "0335fd24524465632cac4de4dfbc23cd755baf14917678309784915b55c17d0d",
     "bindingKeys": [
       "__PRIVATE_LEDGER_PATH__",
       "__PRIVATE_DEPLOY_HOME__"

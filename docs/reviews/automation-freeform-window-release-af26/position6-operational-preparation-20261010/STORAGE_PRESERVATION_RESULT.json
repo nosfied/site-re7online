@@ -1,0 +1,142 @@
+{
+  "origin": "dcbeea4804c6971b9888b658c87c2519081cc096",
+  "captureTests": {
+    "passed": 6,
+    "scope": "effective AST environment/connection boundary; external process sources injected; no database"
+  },
+  "staging": {
+    "result": "PASS",
+    "captureSha256": "0335fd24524465632cac4de4dfbc23cd755baf14917678309784915b55c17d0d",
+    "manifestSha256": "1aafb7e678adb387c70302ae250c075d43a7ad4595e69ab608398b0bbda531fb",
+    "originalCaptureSha256": "9363201cdd23425c433838e947432e74ca65875896be1dd65f4d1ee50efda16f",
+    "originalManifestSha256": "c1dcf790459c0d96858710a0a8ceaf3149fa81c8c7724ca694b3bd66cae882fa",
+    "files": 9,
+    "cliAndBundleChanged": false
+  },
+  "archiveValidation": {
+    "result": "PASS",
+    "tarSha256": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810",
+    "tarBytes": 479460086,
+    "members": 784,
+    "regularFiles": 765,
+    "logicalBytes": 492706460,
+    "extractedIndexSha256": "3b401a50975f3bfec88cf582d6c5dc6a0cd948b7fa93d8803302063a49def022",
+    "startedAt": 1791675230.0858684,
+    "finishedAt": 1791675235.9128344,
+    "applicationsExecuted": false,
+    "providersConnected": false
+  },
+  "originalPaths": {
+    "count": 5,
+    "indexSha256": "2907e12c99b68f88fb1f38bcc0b75b233b3bd4f988adb4eebdbd6107d835c6a3",
+    "sameBlob": true,
+    "distinctInodes": true,
+    "mainRetainedOnVps": true
+  },
+  "rootObservation": {
+    "result": "COMPLETE",
+    "samples": [
+      {
+        "at": 1791675380.195104,
+        "completedAt": 1791675392.5651326,
+        "owners": 0,
+        "incomplete": 0
+      },
+      {
+        "at": 1791675392.565213,
+        "completedAt": 1791675403.6764164,
+        "owners": 0,
+        "incomplete": 0
+      }
+    ],
+    "readerSha256": "0afdad90bfac03f2b5d72bc94f311b64045e7ead4ca399e02704640dc0368d60",
+    "policiesRead": 16,
+    "referencesRead": 248,
+    "initialDenialPreserved": "incomplete_observation; own closed directory FD reproduced"
+  },
+  "activePolicies": {
+    "frontend-socket-observer-policy.json": {
+      "sha256": "6087f980ed58f084294f77dbca688c5cba9b39229d3c2b10daa35732ff74f7d4",
+      "uid": 0,
+      "mode": 384
+    },
+    "frontend-permanent-observer-policy.json": {
+      "sha256": "24a78e7ebb6e92b56a6719a7234631ed11b8e93b657665817b6905a16a00add3",
+      "uid": 0,
+      "mode": 384
+    },
+    "incident-6683-window-policy.json": {
+      "sha256": "38a20f3c9bba0dbf009cdf7db292c6b4a2f627200843f4a6f0fbbd7f505ddd4c",
+      "uid": 0,
+      "mode": 384
+    }
+  },
+  "liveReferences": {
+    "roots": 8,
+    "files": 244,
+    "incomplete": 0,
+    "exactFourPathReferences": 0,
+    "limit": "direct files + window/switch/return/return-partial; no recursive scan of all releases"
+  },
+  "state": {
+    "at": "2026-10-10T23:33:33.004880+00:00",
+    "ledgerSha256": "a072223faacd2681a25696d422e6b67947c88ac6b9634d97382af4536580aacf",
+    "ledgerBeforeAfterEqual": true,
+    "generation": 37,
+    "open": false,
+    "queryExit": 0,
+    "processes": [
+      {
+        "name": "re7-admin-front",
+        "pid": 3438948,
+        "ticks": "2120147745",
+        "restarts": 0
+      },
+      {
+        "name": "re7-whatsapp-agent",
+        "pid": 3625739,
+        "ticks": "2128115907",
+        "restarts": 0
+      },
+      {
+        "name": "re7-whatsapp-web-worker",
+        "pid": 3625960,
+        "ticks": "2128116272",
+        "restarts": 0
+      }
+    ],
+    "outbounds": 5,
+    "tenants": 10,
+    "protectedComparisons": {
+      "outbounds": true,
+      "identity": true,
+      "jobs": true,
+      "batches": true,
+      "leases": true,
+      "accepted": true,
+      "providerEvents": true,
+      "seed": true
+    }
+  },
+  "capacity": "DENY until actual authorized withdrawal and fresh operational capacity audit",
+  "deletedFiles": 0,
+  "applied": false,
+  "acknowledged": false,
+  "deployed": false,
+  "finalSpaceAndStaging": {
+    "at": 1791675684.604513,
+    "deployAvailableBytes": 475422720,
+    "inodesAvailable": 6863902,
+    "manifestFiles": 9,
+    "stagingManifestSha256": "1aafb7e678adb387c70302ae250c075d43a7ad4595e69ab608398b0bbda531fb",
+    "rootV2EvidenceSha256": "deedaa6993e2dc51940a67bb24ae950bb056b2a8a66ca2e6b56f10574fd4813e",
+    "withdrawalNotExecuted": true
+  },
+  "withdrawalProposal": {
+    "stagedPath": "/dev/shm/re7-position6-operational-20261010T224151Z/withdraw-four-for-review-v2.py",
+    "sha256": "f1fbee6c3da18f87e492151da64aa647041c74e413406fea5a7f972564df6383",
+    "liveReferenceIndexSha256": "fd2dd4969af0c03e86c770294b51bf502241bd9663c9f60f82108729d4d44522",
+    "validation": "syntax only; NOT executed; not an installed delegate",
+    "previousProposalPreserved": true
+  }
+}

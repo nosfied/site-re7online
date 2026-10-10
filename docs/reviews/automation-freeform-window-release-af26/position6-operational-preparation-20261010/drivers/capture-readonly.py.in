@@ -19,8 +19,11 @@ for x in rows:
  if x['name']not in ['re7-whatsapp-agent','re7-whatsapp-web-worker','re7-admin-front']:continue
  info=proc(x['pid']);e=x['pm2_env'];info.update(name=x['name'],status=e['status'],restarts=e['restart_time'],pm_cwd=e['pm_cwd'],script=e['pm_exec_path'],build=e.get('RE7_CAMPAIGN_BUILD')or e.get('RE7_RELEASE_SHA'),created_at=e.get('created_at'));processes.append(info)
 query=sys.stdin.read();env=dict(os.environ);env['RE7_API_CWD']=cwd
+sourceKeys=('DATABASE_URL','CAMPAIGN_SEED_SECRET','CHANNEL_ACCOUNT_SECRET_KEY','APP_AUTH_SECRET')
+# Caller environment is never a configuration source for database/auth/decoding.
+for key in sourceKeys:env.pop(key,None)
 envdata=pathlib.Path('/proc',str(api['pid']),'environ').read_bytes().split(b'\0');liveEnv={x.split(b'=',1)[0].decode():x.split(b'=',1)[1].decode() for x in envdata if b'='in x}
-for key in ['DATABASE_URL','CAMPAIGN_SEED_SECRET','CHANNEL_ACCOUNT_SECRET_KEY','APP_AUTH_SECRET']:
+for key in sourceKeys:
  value=liveEnv.get(key)or api['pm2_env'].get(key)or api['pm2_env'].get('env',{}).get(key)
  if value:env[key]=value
 assert env.get('DATABASE_URL'),'db_url_missing_no_config_fallback'
