@@ -1,5 +1,40 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## CRM — importação CSV com resultado desconhecido na interface e totais ambíguos — 10/10/2026
+
+**OPEN / AUDIT AND LOCAL IMPLEMENTATION REQUESTED / NOT IMPLEMENTED / NOT DEPLOYED.** Defeito relatado pelo owner em `syer-rodrigues`. Frente independente da release frontend3227 já preparada: não modificar seu tar, manifests, configurações, políticas, bindings, staging ou aceites para incluir esta correção.
+
+### Evidência e limites
+
+- Arquivo com **993 linhas**: **880 elegíveis + 82 inválidas + 31 duplicadas = 993**.
+- Primeira confirmação: **879 criações + 1 atualização = 880 processadas**, sem falhas registradas.
+- Segunda tentativa: os mesmos **880 reconhecidos, sem alterações**. Esse resultado não autoriza retry automático nem prova idempotência em qualquer corrida.
+- Interface apresentou **“Não foi possível importar o CSV.”**, embora a API tenha concluído.
+- Espera do frontend limitada a **10 segundos**; etapa de gravação levou **pelo menos 32 segundos**. Hipótese de timeout sustentada pelo código e horários informados; **sem captura Network que confirme o cancelamento específico**. Não registrar abort observado nem rollback da API por inferência.
+- Interface não oferece progresso nem recupera o resumo quando perde a resposta. Prévia mostra até **200 linhas**, sem limitar a importação.
+- Evidência recebida do owner em 10/10/2026; correlacionar com código/auditoria existente na investigação. Não inventar IDs, timestamps exatos ou nova comprovação produtiva.
+
+### Escopo solicitado: auditoria, implementação local e revisão
+
+1. Auditar e reutilizar importação, componentes, contratos de resposta, auditoria/recibos existentes e regras de identidade. Delimitar correlação da operação por tenant e identidade inequívoca; não recuperar resultado por nome, telefone ou proximidade temporal isolados.
+2. Distinguir **falha comprovada**, **operação em execução** e **resultado ainda desconhecido**. Perda da resposta/timeout do cliente não significa falha ou cancelamento da gravação. Não sugerir ou iniciar nova importação enquanto a anterior puder estar em execução; recuperar seu resultado pela auditoria existente, com RBAC e isolamento.
+3. Definir acompanhamento de progresso/conclusão conforme os contratos existentes, inclusive reconexão/recuperação do resumo. Não fabricar percentual ou declarar conclusão sem evidência. Aumentar apenas o timeout não resolve arquivos maiores. Se os contratos atuais não suportarem o acompanhamento necessário, documentar o gap e a proposta mínima antes de ampliar escopo; nenhuma migration/schema autorizada por este item.
+4. Separar na prévia **linhas do arquivo, elegíveis, novos, existentes, inválidos e duplicados**; explicar categorias, sobreposições/subtotais e reconciliação. Existente não equivale necessariamente a atualizado: preservar a distinção entre atualizado e sem alterações no resultado.
+5. Rotular claramente **amostra de até 200 linhas** e informar o total analisado; não apresentar tamanho da amostra como quantidade importada nem limitar a operação à amostra.
+6. Distinguir **total de contatos do tenant**, **total encontrado pelos filtros** e **quantidade exibida na página**. Auditar a entidade efetiva do CRM e definir explicitamente o tratamento de excluídos/anonimizados, alinhando listagem e contagens aos mesmos predicados e permissões. Preservar anonimização, retenção, RBAC e isolamento entre tenants.
+
+### Critérios de revisão e validação local
+
+- Timeout/perda da resposta com operação concluída e com processamento parcial: estado correto, sem promessa de rollback integral ou retry cego.
+- Recuperação do resumo correspondente à mesma operação, inclusive falha comprovada, resultado desconhecido, saída/reentrada na tela e sessão antiga.
+- Arquivos acima de 200 linhas: amostra rotulada, importação integral e totais reconciliados; usar fixture sintética representativa de 993/880/82/31.
+- Novos/existentes/atualizados/sem alterações, inválidos e duplicados sem contagens enganosas.
+- Filtros e paginação, páginas vazias, excluídos e anonimizados: coerência entre totais e linhas visíveis.
+- Negativas de acesso, referência de operação de outro tenant e resposta tardia/antiga sem mistura de resultado.
+- Publicar correção e provas para revisão com alcance real dos testes, arquivos alterados, SHA e limitações. Atualizar este checkpoint sem apagar a evidência inicial.
+
+**Limites:** sem deploy, reimportação produtiva, reparo histórico, alteração de dados de `syer-rodrigues` ou nova operação produtiva nesta etapa. Produção viva preservada. A próxima decisão da release3227 continua exclusivamente política de janela + preflight preparatório, mantendo `execution-authorized=false`; política permanente permanece para a fase posterior.
+
 **Frontend3227 — CONTINUITY AUDIT PASS / WINDOW-POLICY PREFLIGHT PENDING / NOT DEPLOYED (10/10).** [Relatório único de continuidade](reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/README.md#auditoria-de-continuidade--10102026-referência-6a354ceb): referência6a354ceb e worktree reconciliadas; leitura nova11:20Fortaleza/14:20UTC, manifests/tar/políticas/bindings/identidades/controles íntegros, gatefalse. Frontendfa60 corrigido é o retorno efetivo; APIa26/workerafbb intactos/restart0. Duas amostras atuais consistentes sob políticas instaladas não atestam a proposta. Próxima decisão somente instalação da política de janela + preflight preparatório; política permanente após owner/pré-promoção continua dependência explícita, sem instalação agora. Instalação parcial, timeout/intent consumido e ledger incompleto exigem diagnóstico/estado real, sem replay/start repetido/bypass. Nenhum rebuild, suíte repetida, stop/start/deploy/save/envio/mutação produtiva. Históricos/aceites e pendências multilote/AUTO/CRA-PR preservados.
 
 **Frontend3227 — STAGED / POLICY REVIEW REQUIRED / NOT DEPLOYED (09–10/10).** [Preparação única, hashes e comandos](reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/README.md): build Node20 reaproveitado; tar9b54548e/BUILD_ID8Oq…,23.795arquivos/31links,16cenários Chrome sobre extração exata PASS; staging remoto/cfgs/bindings/retorno fa60 ativo íntegros, gates falsos. Helpers/sudoers inalterados; duas políticas propostas: janela antes do preflight e permanente após owner confirmar/pré-promoção. Não instalar agora; futura observação sob política nova pendente. APIcorretivaa26/workerafbb/guarda36/cron/boot/saved preservados. Multilote natural/AUTO/CRA-PR e aceites anteriores permanecem separados.
