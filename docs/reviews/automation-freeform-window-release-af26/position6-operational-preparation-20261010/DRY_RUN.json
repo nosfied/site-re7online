@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "mode": "dry-run",
+  "startedAtUtc": "2026-10-10T22:53:47.733550+00:00",
+  "finishedAtUtc": "2026-10-10T22:53:48.825286+00:00",
+  "exitCode": 0,
+  "timeout": false,
+  "resultSha256": "1fa2b7202355fe1baa53c0f5f31d6fb95871158995bf84022c892621858d7a8e",
+  "inputSha256": "d5d8dba7b6fcc7f2b7a9627410f42507517aac66881d7a636421f5f19e0be19b",
+  "syntheticProofPolicyPresent": false,
+  "result": {
+    "alreadyApplied": false,
+    "planHash": "7949aebe48874a811c0d1ef794496133818f982172a2452fdb538a2d0fc61011",
+    "decisionId": "owner-position6-e643ebba-historical-disposition-v1",
+    "submittedAfterRecovery": 6,
+    "deliveredReported": 6,
+    "pending": 5,
+    "providerCalls": 0
+  },
+  "mutationsExecuted": []
+}

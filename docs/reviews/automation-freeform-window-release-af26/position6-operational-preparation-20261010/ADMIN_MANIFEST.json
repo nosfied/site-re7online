@@ -1,0 +1,52 @@
+{
+  "origin": "c2623d976f12d3c5e1d4b8eb08b0e3261495cf39",
+  "runtime": {
+    "path": "/usr/bin/node",
+    "version": "v20.20.0",
+    "sha256": "d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e"
+  },
+  "prismaVersion": "6.19.2",
+  "schemaSourceSha256": "7fec399ffbbeb4f2d002d128481f96c1aaebb3efb9d0a76f2ba129939c5b54bd",
+  "generatedSchemaSha256": "75c32a1d4fa67626d991d89d0327749c7ca65edea02e969c5733fd2b2c0dc594",
+  "tarSha256": "09172dde1509b0dd3a8872efd6ab64b080cf1e5e69d1e676a19e344a70610715",
+  "tarBytes": 7866693,
+  "extractedBytes": 18354171,
+  "symlinks": 0,
+  "filesManifestSha256": "e1a32c16d2d0799d4bde724bceb7a6bc689c233258ee89f9a2360c602488a812",
+  "files": {
+    "build-metafile.json": "931c8b1f5319e5d6752f0f6fcb5033d699ccccef3685994927e42023f9b95b1c",
+    "node_modules/.prisma/client/default.js": "773f2836a698a5fe850cf320d1f849ca04e620e9b47f05816683260cba2b8b1c",
+    "node_modules/.prisma/client/index.js": "8b23066c295154c8e8095513635f4aedfe19d2d8edc8e744cb2c64e5ee251007",
+    "node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node": "a2924eab1c78a0a7bb67edac5738939fa10589ef073af5542f53812a22e4a7d8",
+    "node_modules/.prisma/client/package.json": "40f5540d0c8f3fc0734aaabe5ada732a427d2252c3e2fe3ecdd9bc370e9ac303",
+    "node_modules/.prisma/client/schema.prisma": "75c32a1d4fa67626d991d89d0327749c7ca65edea02e969c5733fd2b2c0dc594",
+    "node_modules/@prisma/client/default.js": "0cfff057c91fcb7559bd1a3bb4891404e455829ced5b18a87c9393ee1721ace4",
+    "node_modules/@prisma/client/package.json": "acc17715ab58dea33a110c85ff71e81bc80ac05a15fc590be23516d6c3807b74",
+    "node_modules/@prisma/client/runtime/library.js": "d3b39c8cb5863206a16cf8b255b1a1bf9ccaef1d18e4164002c9b21c3ffdd658",
+    "package.json": "c2f4e896588dc013537e3d52894166d8283d704f33f5129c222c2a092d537a77",
+    "reconcile-position6.mjs": "32e4eededcf3aaf64bce3cf37543d803739c7b9d0954f70aa831849514edf4a0"
+  },
+  "reviewedSourceInputs": {
+    "apps/whatsapp-agent/src/campaigns/position6ApprovedDisposition.ts": "8e31c6b5762868ba735fcb0522fb9a695d72baeeb5ac970dbfc3a09e0aa62fb0",
+    "apps/whatsapp-agent/src/campaigns/campaignDeliveryTruth.ts": "8fe4067fbd96c4d286c781f8867b30efe41ffa8cf437bca57c01a016c704b1c2",
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryReview.ts": "142f8856840f0d6043aad3df290dfcf05d3ad3c8822dbb2d1af1ed8999fcf04e",
+    "apps/whatsapp-agent/src/utils/waid.ts": "ba8c0b880ad7cd00731a9a68fa67fdaa0fc3edb05c05aff1f2e71199967e5876",
+    "apps/whatsapp-agent/src/crm/crmWhatsappIdentity.ts": "2bdab685fb95ce4d27f243560f146cde9fe9c8809f46c99b0dd6733f54041c1b",
+    "apps/whatsapp-agent/src/campaigns/campaignSeedPrivacy.ts": "e3dd3d12cb68b964b8b404929c799f0bcfdd401d8799c77a799469404b527dd8",
+    "apps/whatsapp-agent/src/billing/metaUsageLedger.ts": "03c7f947b03232b554583848d9590f71051c9d61ff1c78ef794423c19deee82f",
+    "apps/whatsapp-agent/src/billing/activeMessageBilling.ts": "0b339758f8de881b2d78548d0724e0e10a6b5ed2e7a5265bba04826480572a68",
+    "apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts": "12e92cbc516a6d531e635afc350bc0f617a2f0b5c295e6fd029085e21346da4b",
+    "apps/whatsapp-agent/src/campaigns/campaignOperations.ts": "73dcd5456ca48d93d6822637b0deaa69cba7c3c04b048e7672a3ae12bc63f3d6",
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.ts": "99487673e246eb6acb7cb5a05a57e6c57db44e124ee6ed14caa9012dbe16d57f",
+    "apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts": "9352968cf358c113d3255a0ee010922d00c7857eb41c1e4b64a88e1f9c48f4d9"
+  },
+  "staging": "/dev/shm/re7-position6-operational-20261010T224151Z",
+  "stagingDurableAcrossReboot": false,
+  "driversSha256": {
+    "run-admin.py": "72cda2d00ba4e8db6602c44cac7f668b34dbc6fb50576baa45184191ffdf4612",
+    "inspect-current.py": "db7912318647e89484a0cdb2fbe6948e03ed38d54398b6320dc76dabd1caa1ba",
+    "capture-readonly.py": "9363201cdd23425c433838e947432e74ca65875896be1dd65f4d1ee50efda16f",
+    "query-current.cjs": "a54c3f7358a359743ccd1ece71d02c7b6bd9f76759ef945a5c12316025b8794b"
+  },
+  "workerOrApiReleaseRebuilt": false
+}

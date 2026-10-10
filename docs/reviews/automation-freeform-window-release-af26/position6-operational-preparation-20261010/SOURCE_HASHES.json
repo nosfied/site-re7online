@@ -1,0 +1,50 @@
+{
+  "activeArtefactFiles": {
+    "dist/campaigns/campaignRunner.js": {
+      "sha256": "7203fd3897c50b043858f6aaa86b01f1cbe1f2787e0c619e0507e9ab4ea0b065",
+      "bytes": 83798
+    },
+    "dist/services/outboundTemplateService.js": {
+      "sha256": "ec667a27750ada47a092146a709981bc2f22891756b6d2a474f0757e02f657ab",
+      "bytes": 13790
+    },
+    "dist/campaigns/campaignSeedPrivacy.js": {
+      "sha256": "d63ef69c5d47119863e1356ef101dd42f830f4d851a317418551603405c627b8",
+      "bytes": 7366
+    },
+    "dist/storage/jsonFileStorage.js": {
+      "sha256": "55ef9f966427de71154787b019e290ce376c99c3d2f930c6c3578ad8d1827a21",
+      "bytes": 20421
+    },
+    "dist/storage/storageFactory.js": {
+      "sha256": "ebec769a94f38ef6a6cb58bc079859c5d9238c645df7d27988292b470639fe6e",
+      "bytes": 2333
+    },
+    "dist/storage/dualWriteStorage.js": {
+      "sha256": "184a3aa0a353941b36a1f89111035491f0190af233c957670162f7fa9b519cce",
+      "bytes": 39050
+    },
+    "dist/crm/crmContactUpsert.js": {
+      "sha256": "30234430b9ce501dfb5523c654d877cd0c54118a3d4ee62d3eaa9b31246f9949",
+      "bytes": 47640
+    },
+    "dist/crm/crmWhatsappIdentity.js": {
+      "sha256": "e12c47abf1b1a753fde915dcc933423749a95704828cecd142df473becc300cf",
+      "bytes": 4341
+    },
+    "dist/db/persist.js": {
+      "sha256": "c60906c6b02c974846a9d4ef790bf93021e246fadf4b88383076395eb25b723d",
+      "bytes": 20466
+    }
+  },
+  "originalMatchingLogLineSha256": [
+    "4385dc6889c695d9304b85f006171d103599efeddf2eb3926233441548a12260",
+    "221a1fb4757f37858083e4aee46bc1b1dc0131580e30e7703d279d78e108619b"
+  ],
+  "originalJsonFileSha256": "239cf991ce3a41b4f8d91d61874d7e69d64841a2c64659437b3f6a25617d48f1",
+  "originalJsonMatchedRecords": 1,
+  "originalInputSha256": "d5d8dba7b6fcc7f2b7a9627410f42507517aac66881d7a636421f5f19e0be19b",
+  "sourceAndProtectedBindingsVerifiedByDryRun": true,
+  "operationalArchiveSha256": "686a2e299fbb4cff6fb18a1fdf4196b0f0f638b37e56cd6d4efc80a05eac31e5",
+  "ledgerSha256": "a072223faacd2681a25696d422e6b67947c88ac6b9634d97382af4536580aacf"
+}

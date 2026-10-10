@@ -1,0 +1,9 @@
+{
+  "startedAt": "2026-10-10T22:47:15.575346+00:00",
+  "finishedAt": "2026-10-10T22:47:25.265303+00:00",
+  "exit": 0,
+  "bytes": 34920233,
+  "sha256": "c25cd5efcd3b965d90d48c1691b16529a68bfb14595f3951fc9ce60fd7dd903c",
+  "destination": "local private off-host; no VPS dump file",
+  "source": "same PostgreSQL container as live API, original role/db checked"
+}

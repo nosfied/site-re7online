@@ -1,0 +1,12 @@
+{
+  "startedAt": "2026-10-10T22:48:09.595346+00:00",
+  "finishedAt": "2026-10-10T22:48:16.221279+00:00",
+  "exit": 0,
+  "destination": "loopback local dedicated new DB; no app/provider/scheduler process",
+  "sourceDumpSha256": "c25cd5efcd3b965d90d48c1691b16529a68bfb14595f3951fc9ce60fd7dd903c",
+  "tableCount": 70,
+  "protectedRowsVerified": true,
+  "providerOrApplicationStarted": false,
+  "temporaryDatabaseRemoved": true,
+  "removalCatalogCount": 0
+}

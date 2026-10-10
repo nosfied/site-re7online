@@ -1,6 +1,22 @@
 # Posição .6 — checklist único para qualquer recuperação/ack futuro
 
-**LOCAL A/B/C VERIFIED / BLOCKED FOR PRODUCTIVE APPLY/ACK.** [Implementação aprovada somente para revisão local](../position6-recovery-implementation-20261010/README.md); [decisão histórica exata](../../../saas/POSITION6_HISTORICAL_CRM_DISPOSITION_2026-10-10.md). Atualizado pela [auditoria produtiva READ ONLY atual](../position6-current-audit-20261010/README.md), continuidade de400b8b4b. Fontes/hash em [PROVENANCE.json](../position6-current-audit-20261010/PROVENANCE.json); [estado/fences](../position6-current-audit-20261010/STATE.json). A tabela anterior de400b permanece no histórico Git; provas sintéticas e capturas antigas não foram convertidas em estado atual.
+**LOCAL A/B/C VERIFIED; OPERATIONAL DRY-RUN PASS / BLOCKED FOR PRODUCTIVE APPLY/ACK.** [Implementação aprovada somente para revisão local](../position6-recovery-implementation-20261010/README.md); [decisão histórica exata](../../../saas/POSITION6_HISTORICAL_CRM_DISPOSITION_2026-10-10.md). Atualizado pela [auditoria produtiva READ ONLY atual](../position6-current-audit-20261010/README.md), continuidade de400b8b4b. Fontes/hash em [PROVENANCE.json](../position6-current-audit-20261010/PROVENANCE.json); [estado/fences](../position6-current-audit-20261010/STATE.json). A tabela anterior de400b permanece no histórico Git; provas sintéticas e capturas antigas não foram convertidas em estado atual.
+
+## Pré-condições operacionais atuais — 10/10, 22:43–22:56 UTC
+
+**READ ONLY / BACKUP-RESTORE / PRODUCTIVE DRY-RUN PASS; NOT APPLIED / NOT ACKNOWLEDGED.** [Resultado consolidado](../position6-operational-preparation-20261010/README.md). Esta seção atualiza a condição operacional; as capturas e provas locais/históricas abaixo continuam datadas, sem substituir fonte ausente.
+
+| Requisito atual | Resultado / limite |
+|---|---|
+|Fences/ref/hash/processos|Closed37/provider-persisting/ref/taskHash, parent ausente; ledger consistente antes/depois, lock/.uncertain ausentes. APIa26/workerafbb/frontendfa60/daemon mesmos PID/start ticks/restart0. Não é drain nem certificado de callback vivo|
+|Fontes/protegidos|Input original SHA d5d8dba7…19b, sem syntheticProofPolicy; seed/snapshot/log/JSON/aceitação/SENT/DELIVERED e conta originais verificados pelos hashes aprovados. Cinco Outbounds e quatro coleções WebCRM íntegros; .6 sem Outbound/usage/recibo e .7–.11 sem submissão observada|
+|Backup/restore|Dump fresco 22:47UTC, c25cd5ef…903c; PostgreSQL local16.15, 70 tabelas e hashes protegidos verificados, banco temporário removido. SQL+FS não atômicos; dump privado fora da VPS por capacidade limitada|
+|Pacote/dry-run|CLI exato de c2623d97, Node20.20.0/Prisma6.19.2. Tar09172dde…715; PASS22:53:47–48UTC, planHash7949aebe48874a811c0d1ef794496133818f982172a2452fdb538a2d0fc61011. Plano6submitted/6DELIVERED reportados/5pending; são totais previstos, não apply|
+|Inventário global|Dez tenants: demo queued/attempt1/suspensão sem lease; running; lease de tenant expirado e 17 jobs terminais com lease expirado ainda ligado. Preservados; não limpar nem retomar|
+|Capacidade/frescor|~478MB livres na VPS. Pacote temporário em /dev/shm, perdido em reboot. Antes de mutação, rever margem disco/WAL, hashes, identidades, fontes e frescor; dry-run não atesta capacidade de commit|
+|SQL/recibo/ack|Continuam NÃO EXECUTADOS/NÃO AUTORIZADOS. Comandos separados concretos no relatório. Timeout/commit incerto exige inspeção READ ONLY SQL+ledger+recibo sem repetição automática. Normal CRM obrigatório, exceção somente .6|
+
+Frontend3227/prevenções API preservados e pendentes de implantação; guarda fechada/job suspenso, sem nova política ou abertura.
 
 | Requisito | Estado nesta rodada e condição restante |
 |---|---|

@@ -1,0 +1,187 @@
+{
+  "status": "READ_ONLY_STATE_CONFIRMED / NOT_APPLIED / NOT_ACKNOWLEDGED / NOT_DEPLOYED",
+  "origin": "c2623d976f12d3c5e1d4b8eb08b0e3261495cf39",
+  "captureUtc": {
+    "before": "2026-10-10T22:43:11.353034+00:00",
+    "after": "2026-10-10T22:56:03.199095+00:00",
+    "originalSourcesAfter": "2026-10-10T22:54:50.307186+00:00"
+  },
+  "guard": {
+    "open": false,
+    "generation": 37,
+    "tasks": 1,
+    "kind": "provider",
+    "phase": "persisting",
+    "parentPresent": false,
+    "taskId": "7d9902c0-4946-4250-8205-400e41be0941",
+    "taskHash": "c91588a21bd6fbc8e85598e30b907f193388751dfadea56d9483c0bca9a9b979",
+    "ledgerSha256": "a072223faacd2681a25696d422e6b67947c88ac6b9634d97382af4536580aacf",
+    "lock": false,
+    "uncertain": false,
+    "consistentBeforeAfter": true
+  },
+  "identities": [
+    {
+      "name": "re7-admin-front",
+      "pid": 3438948,
+      "startTicks": "2120147745",
+      "status": "online",
+      "restarts": 0
+    },
+    {
+      "name": "re7-whatsapp-agent",
+      "pid": 3625739,
+      "startTicks": "2128115907",
+      "status": "online",
+      "restarts": 0
+    },
+    {
+      "name": "re7-whatsapp-web-worker",
+      "pid": 3625960,
+      "startTicks": "2128116272",
+      "status": "online",
+      "restarts": 0
+    }
+  ],
+  "daemon": {
+    "pid": 18676,
+    "startTicks": "222727"
+  },
+  "scope": {
+    "tenant": "demo-converta",
+    "campaign": "out.15",
+    "clientId": "10a98bf4-1587-43e8-83d4-e3a48c5d79d9",
+    "childCampaignId": "94b5805b-5c6d-4c89-b047-959209261c21",
+    "parentCampaignId": "b019039e-0a89-4a42-9f33-c214323b888f",
+    "jobId": "1eb96f7f-50ae-4d5e-9124-411923945efb",
+    "position": 6
+  },
+  "result": {
+    "previousOutbounds": 5,
+    "position6Outbounds": 0,
+    "position6Usage": 0,
+    "position6Acceptance": 1,
+    "orphanWebhooks": [
+      "SENT",
+      "DELIVERED"
+    ],
+    "remainingPositionsWithoutSubmissionObserved": [
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "receiptCreated": false,
+    "humanReceiptConfirmed": false
+  },
+  "preservation": {
+    "atBefore": "2026-10-10T22:43:11.353034+00:00",
+    "atAfter": "2026-10-10T22:54:16.361404+00:00",
+    "ledgerUnchanged": true,
+    "processesUnchanged": true,
+    "daemonUnchanged": true,
+    "controlsUnchanged": true,
+    "bootUnchanged": true,
+    "crontabUnchanged": true,
+    "fiveOutboundsUnchanged": true,
+    "crmUnchanged": true,
+    "sourcesUnchanged": true,
+    "webhooksUnchanged": true,
+    "jobsUnchanged": true,
+    "globalUnchanged": true,
+    "noMarkers": true,
+    "ledgerConsistent": true
+  },
+  "global": {
+    "tenants": 10,
+    "jobs": [
+      {
+        "clientKey": "demo-converta",
+        "status": "blocked",
+        "kind": "batch_chunk",
+        "count": 1,
+        "linked_lease": 1,
+        "expired_linked": 1,
+        "overdue": 1,
+        "earliest": "2026-10-09T17:00:00.000Z"
+      },
+      {
+        "clientKey": "demo-converta",
+        "status": "completed",
+        "kind": "batch_chunk",
+        "count": 8,
+        "linked_lease": 8,
+        "expired_linked": 8,
+        "overdue": 8,
+        "earliest": "2026-10-07T14:30:00.000Z"
+      },
+      {
+        "clientKey": "demo-converta",
+        "status": "completed",
+        "kind": "campaign",
+        "count": 7,
+        "linked_lease": 7,
+        "expired_linked": 7,
+        "overdue": 7,
+        "earliest": "2026-10-02T14:15:13.834Z"
+      },
+      {
+        "clientKey": "demo-converta",
+        "status": "completed",
+        "kind": "test_send",
+        "count": 1,
+        "linked_lease": 1,
+        "expired_linked": 1,
+        "overdue": 1,
+        "earliest": "2026-10-02T14:12:11.448Z"
+      },
+      {
+        "clientKey": "demo-converta",
+        "status": "queued",
+        "kind": "batch_chunk",
+        "count": 1,
+        "linked_lease": 0,
+        "expired_linked": 0,
+        "overdue": 1,
+        "earliest": "2026-10-10T15:40:24.152Z"
+      }
+    ],
+    "batches": [
+      {
+        "clientKey": "demo-converta",
+        "status": "running",
+        "count": 1,
+        "overdue": 1,
+        "earliest": "2026-10-10T15:40:00.000Z"
+      }
+    ],
+    "leases": [
+      {
+        "clientKey": "demo-converta",
+        "count": 1,
+        "expired": 1,
+        "linked": 0,
+        "earliest": "2026-10-10T15:40:35.539Z"
+      }
+    ],
+    "drainCertified": false
+  },
+  "controlsSha256": {
+    "/home/deploy/.pm2/dump.pm2": "4fbb51fa592dd4beee0651828d535d077edd97de591f70267dd705fb19bbb57f",
+    "/home/deploy/.pm2/dump.pm2.bak": "4fbb51fa592dd4beee0651828d535d077edd97de591f70267dd705fb19bbb57f",
+    "/etc/cron.d/re7-converta-backup": "2e83a6778e25fe0a7edcaaea0178804ef5ce68821fe8f14da697665f7d9699fb",
+    "/usr/local/libexec/re7/incident-6683-window-control.py": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212"
+  },
+  "boot": "ActiveState=inactive\nUnitFileState=enabled\n",
+  "job": {
+    "status": "queued",
+    "attempt": 1,
+    "failureReason": "operational_suspension",
+    "leaseToken": null,
+    "leaseOwner": null,
+    "leaseExpiresAt": null
+  },
+  "batchStatus": "running",
+  "spaceAvailableBytes": 483053568
+}

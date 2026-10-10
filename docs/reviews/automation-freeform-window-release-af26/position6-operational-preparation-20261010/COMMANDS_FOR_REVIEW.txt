@@ -1,0 +1,50 @@
+PREPARAÇÃO CONFERIDA; APPLY-SQL / ACK-TASK NÃO AUTORIZADOS NESTA ETAPA.
+Executar futuramente apenas na sessão legítima deploy, após decisão própria.
+Não fornecer DATABASE_URL/segredos na linha de comando. Driver lê env original
+atestado da API; não importa entrypoint ou inicia provider/scheduler.
+Diretório tmpfs é temporário. Sua ausência ou drift nega; não recriar/repetir
+operações incertas por reflexo. Conferir frescor e margem de escrita SQL/WAL.
+
+A. Integridade da preparação e leitura atual, sem mutação de DB/ledger:
+set -euo pipefail
+P=/dev/shm/re7-position6-operational-20261010T224151Z
+test "$(sha256sum "$P/administrative.sha256" | cut -d' ' -f1)" = c1dcf790459c0d96858710a0a8ceaf3149fa81c8c7724ca694b3bd66cae882fa
+(cd "$P" && sha256sum -c administrative.sha256 && cd admin && sha256sum -c files.sha256)
+python3 "$P/inspect-current.py"
+# Conferir captura privada: identidades atuais/bindings exatos, closed37,
+# ref/taskHash, lock/.uncertain ausentes, job/leases/fontes/hashes/global.
+# A leitura não autoriza execução. Um dry-run fresco deve manter o plano:
+python3 "$P/run-admin.py" dry-run
+# Esta foi a única modalidade do CLI executada nesta rodada.
+
+B. APPLY SQL — SOMENTE APÓS AUTORIZAÇÃO FUTURA, execução exclusiva:
+python3 /dev/shm/re7-position6-operational-20261010T224151Z/run-admin.py apply-sql --execute-authorized --actor=Deifson --plan-hash=7949aebe48874a811c0d1ef794496133818f982172a2452fdb538a2d0fc61011
+# Se dry-run novo divergir, interromper; não trocar hash para obter PASS.
+# Driver/CLI usam outputs inéditos O_EXCL/0600; preservam os anteriores.
+
+C. VERIFICAR RECIBO — READ ONLY obrigatório após SQL e antes de ack:
+python3 /dev/shm/re7-position6-operational-20261010T224151Z/run-admin.py verify-receipt
+# Exige Outbound/MetaID original, disposiçãoCRM, usage/eventos, totais,
+# recibo e os hashes/ref exatos. Não basta exit0 de apply-sql.
+
+D. ACK TASK — SOMENTE AUTORIZAÇÃO FUTURA PRÓPRIA E RECIBO VERIFICADO:
+python3 /dev/shm/re7-position6-operational-20261010T224151Z/run-admin.py ack-task --execute-authorized --actor=Deifson
+# Archiva tarefa completa com razão accepted-delivered própria.
+# Esperado: closed38. Não setter/open/runner; job permanece suspenso.
+
+E. INSPEÇÃO DE ESTADO REAL/RESULTADO INCERTO — SEM REPETIR A OPERAÇÃO:
+python3 /dev/shm/re7-position6-operational-20261010T224151Z/inspect-current.py
+# Registro privado possui ledger antes/depois, lock/.uncertain, SQL com
+# Outbound/eventos/recibo/usage, CRM, job/leases/global e processos.
+# Após ack o driver de execução closed37 nega: NÃO adaptar bindings.
+# Inspecionar archive integral + recibo SQL + referência/hash, separadamente.
+# Timeout60s mata só CLI administrativo, nunca API/worker; transações têm
+# seus limites próprios. Perda de resposta não atesta rollback/commit.
+# Recibo ausente/incompleto, SQL parcial, marcador ou geração inesperada:
+# preservar e parar; nenhuma repetição automática de apply/ack ou envio.
+
+Hash do input original: d5d8dba7b6fcc7f2b7a9627410f42507517aac66881d7a636421f5f19e0be19b.
+Tar: 09172dde1509b0dd3a8872efd6ab64b080cf1e5e69d1e676a19e344a70610715.
+Hashes completos dos drivers/bytes: ADMIN_MANIFEST.json e administrative.sha256.
+Não instalar helper/sudoers/política, parar/reiniciar, aplicar restore produtivo,
+abrir guarda, terminalizar/retomar job ou enviar .7–.11 nestes comandos.
