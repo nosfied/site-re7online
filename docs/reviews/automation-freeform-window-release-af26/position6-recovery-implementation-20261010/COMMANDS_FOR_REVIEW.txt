@@ -1,0 +1,33 @@
+LOCAL PREPARATION ONLY — NÃO EXECUTAR CONTRA PRODUÇÃO NESTA AUTORIZAÇÃO.
+Input 0600 montado exclusivamente das capturas originais; SHA-256 d5d8dba7b6fcc7f2b7a9627410f42507517aac66881d7a636421f5f19e0be19b.
+DATABASE_URL, CAMPAIGN_OPERATIONS_FILE, CAMPAIGN_OPERATIONS_HOST_ID,
+CAMPAIGN_OPERATIONS_TOPOLOGY=single-host e segredo de decoder devem vir
+somente da sessão legítima autorizada. Não há fallback para configuração
+atual ou destinos vizinhos. O CLI não inicia scheduler/provider/entrypoint.
+
+Os caminhos abaixo são concretos do checkout LOCAL. Nenhum arquivo foi
+transferido para VPS; não são comandos de instalação/deploy. Antes de uma
+operação produtiva futura, revisar runtime/manifests/caminhos reais, backup
+fresco, ledger/job/global e autorização específica. Não transportar fixtures
+ou syntheticProofPolicy. Não adicionar essa propriedade ao input produtivo.
+
+1. Dry-run READ ONLY (produz hash do plano, sem autorização implícita):
+/tmp/re7-pm2-lab/node --import /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/apps/whatsapp-agent/node_modules/tsx/dist/loader.mjs /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts --input=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/local-evidence/position6-recovery-implementation-20261010/position6-input.private.json --input-sha256=d5d8dba7b6fcc7f2b7a9627410f42507517aac66881d7a636421f5f19e0be19b --mode=dry-run --output=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/local-evidence/position6-recovery-implementation-20261010/dry-run.private.json
+
+2. Apply SQL (somente em autorização futura própria; hash lido do dry-run,
+não inventado; journal/receipt persistidos separadamente):
+PLAN_HASH=$(python3 -c 'import json;print(json.load(open("/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/local-evidence/position6-recovery-implementation-20261010/dry-run.private.json"))["result"]["planHash"])')
+/tmp/re7-pm2-lab/node --import /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/apps/whatsapp-agent/node_modules/tsx/dist/loader.mjs /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts --input=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/local-evidence/position6-recovery-implementation-20261010/position6-input.private.json --input-sha256=d5d8dba7b6fcc7f2b7a9627410f42507517aac66881d7a636421f5f19e0be19b --mode=apply-sql --execute-authorized --actor=Deifson --plan-hash="$PLAN_HASH" --output=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/local-evidence/position6-recovery-implementation-20261010/apply.private.json
+
+3. Verify READ ONLY obrigatório após SQL, antes do ack:
+/tmp/re7-pm2-lab/node --import /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/apps/whatsapp-agent/node_modules/tsx/dist/loader.mjs /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts --input=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/local-evidence/position6-recovery-implementation-20261010/position6-input.private.json --input-sha256=d5d8dba7b6fcc7f2b7a9627410f42507517aac66881d7a636421f5f19e0be19b --mode=verify-receipt --output=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/local-evidence/position6-recovery-implementation-20261010/verify.private.json
+
+4. Ack C separado, somente após verificação/decisão autorizadas:
+/tmp/re7-pm2-lab/node --import /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/apps/whatsapp-agent/node_modules/tsx/dist/loader.mjs /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts --input=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/local-evidence/position6-recovery-implementation-20261010/position6-input.private.json --input-sha256=d5d8dba7b6fcc7f2b7a9627410f42507517aac66881d7a636421f5f19e0be19b --mode=ack-task --execute-authorized --actor=Deifson --output=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/local-evidence/position6-recovery-implementation-20261010/ack.private.json
+
+Não reutilizar filename de journal: CLI usa O_EXCL/0600/fsync; preserva
+originais e recusa arquivo existente. Divergência nega e não adapta bindings.
+Ack arquiva task integral e mantém closed38; NÃO chama setter/open/runner.
+Timeout/commit ou resposta incerta: somente leitura DB+ledger+recibo antes
+de decidir recuperação. Não repetir apply/ack por reflexo, não enviar .7–.11.
+Replay é prova local de idempotência, não instrução de retry produtivo.

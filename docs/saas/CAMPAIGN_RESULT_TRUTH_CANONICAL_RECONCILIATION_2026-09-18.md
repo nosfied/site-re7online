@@ -1,5 +1,7 @@
 # Campaign Result Truth - Canonical Reconciliation - 2026-09-18
 
+**Complemento local para revisão — 10/10/2026, recuperação .6.** [Implementação/provas](../reviews/automation-freeform-window-release-af26/position6-recovery-implementation-20261010/README.md). O leitor compartilhado preserva fatos explícitos do provider e, em `sending/scheduled`, representa posições do público conhecido ainda sem submissão/histórico como `pending/awaiting_processing`. Ausência não vira FAILED antes do término; posições explicitamente bloqueadas/falhadas e o fallback terminal mantêm seu contrato. Conjunto agrega filhos por vínculo explícito uma vez; não soma controller+filho. A disposição CRM histórica é restrita à [decisão exata .6](POSITION6_HISTORICAL_CRM_DISPOSITION_2026-10-10.md), sem alterar a obrigação CRM normal. Delta local, não implantado.
+
 Status: P1 CORRECTIVE VALIDATED LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY.
 
 ## Chronology

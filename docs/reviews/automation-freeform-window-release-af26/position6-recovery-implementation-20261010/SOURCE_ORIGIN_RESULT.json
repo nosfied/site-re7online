@@ -1,0 +1,54 @@
+{
+  "originCommit": "e643ebbafaa851b1a0780d41eea0ea6c1079fce1",
+  "files": [
+    {
+      "path": "apps/whatsapp-agent/src/campaigns/campaignOperations.ts",
+      "originSha256": "bf61a2bd54847cd86824ed9f7031b7ed6b66381ddc8e19c7ab2cd76996039ab4",
+      "originState": "versioned",
+      "resultSha256": "73dcd5456ca48d93d6822637b0deaa69cba7c3c04b048e7672a3ae12bc63f3d6"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/http/routes.ts",
+      "originSha256": "b418e8d9acf1f7ecf8256e41c63dc540625d360b257f342171c7a9953a252b6d",
+      "originState": "versioned",
+      "resultSha256": "ccf8eee93dd92b2fcc2423ec683c23f0f837087a61e0982e0e20ad51ce040ee6"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.ts",
+      "originSha256": null,
+      "originState": "new file",
+      "resultSha256": "99487673e246eb6acb7cb5a05a57e6c57db44e124ee6ed14caa9012dbe16d57f"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.test.ts",
+      "originSha256": null,
+      "originState": "new file",
+      "resultSha256": "f48d67e7f58fc62c0c1be9080e3d4286ea654fcab120ab5d9be63e774a95d1bb"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts",
+      "originSha256": null,
+      "originState": "new file",
+      "resultSha256": "12e92cbc516a6d531e635afc350bc0f617a2f0b5c295e6fd029085e21346da4b"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.test.ts",
+      "originSha256": null,
+      "originState": "new file",
+      "resultSha256": "9acdab55fc7ba07f7dc386c3b322288d49b87b34c8946c04c0d13bee4e4ca22b"
+    },
+    {
+      "path": "apps/whatsapp-agent/src/campaigns/position6ApprovedDisposition.ts",
+      "originSha256": null,
+      "originState": "new file",
+      "resultSha256": "8e31c6b5762868ba735fcb0522fb9a695d72baeeb5ac970dbfc3a09e0aa62fb0"
+    },
+    {
+      "path": "apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts",
+      "originSha256": null,
+      "originState": "new file",
+      "resultSha256": "9352968cf358c113d3255a0ee010922d00c7857eb41c1e4b64a88e1f9c48f4d9"
+    }
+  ],
+  "noFunctionalBuild": true
+}

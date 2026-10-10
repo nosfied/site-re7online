@@ -1,0 +1,1533 @@
+diff --git a/apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts b/apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts
+new file mode 100644
+index 00000000..67ffe543
+--- /dev/null
++++ b/apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts
+@@ -0,0 +1,61 @@
++// Offline administrative CLI. No app entrypoint, provider, scheduler or runner.
++import fs from "node:fs";
++import crypto from "node:crypto";
++import { PrismaClient } from "@prisma/client";
++import { dryRunPosition6, applyPosition6, verifyPosition6, acknowledgePosition6, type Position6RecoveryInput } from "../src/campaigns/campaignAcceptedDeliveryRecovery.js";
++const args = process.argv.slice(2);
++const allowed = ["--mode=", "--input=", "--input-sha256=", "--plan-hash=", "--actor=", "--output="];
++if (args.some(x => x !== "--execute-authorized" && !allowed.some(k => x.startsWith(k))))
++    throw Error("position6_cli_unknown_argument");
++const value = (key: string) => { const found = args.filter(x => x.startsWith(key + "=")); if (found.length > 1)
++    throw Error("position6_cli_duplicate_argument"); return found[0]?.slice(key.length + 1); };
++const mode = value("--mode") ?? "dry-run", inputFile = value("--input"), inputHash = value("--input-sha256"), outputFile = value("--output");
++if (!["dry-run", "apply-sql", "verify-receipt", "ack-task"].includes(mode) || !inputFile || !outputFile || !inputHash || !/^[a-f0-9]{64}$/.test(inputHash))
++    throw Error("position6_cli_mode_input_hash_output_required");
++if (["apply-sql", "ack-task"].includes(mode) && !args.includes("--execute-authorized"))
++    throw Error("position6_cli_execution_not_authorized");
++const stat = fs.lstatSync(inputFile);
++if (!stat.isFile() || stat.isSymbolicLink() || stat.mode & 0o077 || stat.size > 2 * 1024 * 1024)
++    throw Error("position6_cli_private_input_invalid");
++const raw = fs.readFileSync(inputFile);
++if (crypto.createHash("sha256").update(raw).digest("hex") !== inputHash)
++    throw Error("position6_cli_input_hash_mismatch");
++if (!process.env.DATABASE_URL)
++    throw Error("position6_cli_database_url_required_no_fallback");
++const fd = fs.openSync(outputFile, "wx", 0o600), input = JSON.parse(raw.toString("utf8")) as Position6RecoveryInput, db = new PrismaClient({ log: [] });
++try {
++    let result: unknown;
++    if (mode === "dry-run")
++        result = await dryRunPosition6(db, input);
++    else if (mode === "verify-receipt")
++        result = await verifyPosition6(db, input);
++    else if (mode === "apply-sql") {
++        const planHash = value("--plan-hash"), actor = value("--actor");
++        if (!planHash || !actor)
++            throw Error("position6_cli_plan_actor_required");
++        result = await applyPosition6(db, input, planHash, actor);
++    }
++    else {
++        const actor = value("--actor");
++        if (!actor)
++            throw Error("position6_cli_actor_required");
++        result = await acknowledgePosition6(db, input, actor);
++    }
++    fs.writeFileSync(fd, JSON.stringify({ mode, result, at: new Date().toISOString(), inputSha256: inputHash }) + "\n");
++    fs.fsyncSync(fd);
++    console.log(JSON.stringify({ mode, result, privateDiagnosticSaved: true, providerCalls: 0 }));
++}
++catch (error) {
++    const e = error as Error & {
++        code?: string;
++    };
++    const safe = e.message.startsWith("position6_") || e.message.startsWith("reconciliation_") || e.message.startsWith("accepted_delivery_") ? e.message : `${e.name}:${e.code ?? "unclassified"}`;
++    fs.writeFileSync(fd, JSON.stringify({ mode, error: { name: e.name, code: e.code ?? null, reason: safe }, at: new Date().toISOString(), inputSha256: inputHash }) + "\n");
++    fs.fsyncSync(fd);
++    console.error(safe);
++    process.exitCode = 1;
++}
++finally {
++    fs.closeSync(fd);
++    await db.$disconnect();
++}
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.test.ts b/apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.test.ts
+new file mode 100644
+index 00000000..0da8b1ef
+--- /dev/null
++++ b/apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.test.ts
+@@ -0,0 +1,308 @@
++import assert from "node:assert/strict";
++import crypto from "node:crypto";
++import fs from "node:fs";
++import os from "node:os";
++import path from "node:path";
++import test from "node:test";
++import { spawnSync } from "node:child_process";
++import { PrismaClient } from "@prisma/client";
++import { POSITION6_APPROVAL } from "./position6ApprovedDisposition.js";
++import { originalEvidenceHash as h, operationalProofHashes, dryRunPosition6, applyPosition6, verifyPosition6, acknowledgePosition6, type Position6RecoveryInput } from "./campaignAcceptedDeliveryRecovery.js";
++import { deliveryEvidenceHash } from "./campaignAcceptedDeliveryReview.js";
++import { campaignOperationsStatus, readCampaignReconciliationFence, acknowledgeReconciledCampaignTask } from "./campaignOperations.js";
++import { buildPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
++const url = new URL(process.env.DATABASE_URL || "");
++assert.equal(url.hostname, "127.0.0.1");
++assert.equal(url.pathname, "/re7_position6_recovery_20261010");
++assert.equal(process.version, "v20.20.0");
++const db = new PrismaClient({ log: [] });
++test.after(() => db.$disconnect());
++process.env.CAMPAIGN_OPERATIONS_TOPOLOGY = "single-host";
++process.env.CAMPAIGN_OPERATIONS_HOST_ID = fs.readFileSync("/etc/machine-id", "utf8").trim();
++process.env.CAMPAIGN_SEED_SECRET = "position6-synthetic-seed-only";
++let providerCalls = 0;
++globalThis.fetch = async () => { providerCalls++; throw Error("provider_forbidden_in_offline_recovery"); };
++const digest = (v: string) => crypto.createHash("sha256").update(v).digest("hex");
++async function fixture() {
++    // Entire database is a freshly created synthetic schema; exact case IDs are
++    // reused solely to exercise the production scope check, never real content.
++    await db.event.deleteMany();
++    await db.outboundMessage.deleteMany();
++    await db.tenantCampaignExecutionLease.deleteMany();
++    await db.campaignExecutionJob.deleteMany();
++    await db.campaignExecutionBatchCampaign.deleteMany();
++    await db.campaignExecutionBatch.deleteMany();
++    await db.campaign.deleteMany();
++    await db.conversationRuntimeState.deleteMany();
++    await db.conversation.deleteMany();
++    await db.lead.deleteMany();
++    await db.contact.deleteMany();
++    await db.client.deleteMany();
++    const b = { ...POSITION6_APPROVAL.scope, phoneNumberId: "synthetic-original-account", taskHash: "", preservedOutboundHashes: {} as Record<string, string> };
++    const root = fs.mkdtempSync(path.join(os.tmpdir(), "re7-position6-local-"));
++    process.env.CAMPAIGN_OPERATIONS_FILE = path.join(root, "state.json");
++    const instance = campaignOperationsStatus().instance;
++    const messageId = `campaign.${b.campaignId}.6`, metaMessageId = "synthetic-accepted-delivered-only", waId = "447700900123";
++    const task = { parent: "synthetic-parent", instance, build: "synthetic-build", generation: 36, kind: "provider", phase: "persisting", startedAt: "2026-10-10T15:40:34.940Z", reference: { clientId: b.clientId, campaignId: b.campaignId, messageId } };
++    b.taskHash = deliveryEvidenceHash(task);
++    const fence = { version: 1, hostId: process.env.CAMPAIGN_OPERATIONS_HOST_ID, open: false, generation: 37, tasks: { [b.taskId]: task }, audit: [] };
++    fs.writeFileSync(process.env.CAMPAIGN_OPERATIONS_FILE!, JSON.stringify(fence), { mode: 0o600 });
++    await db.client.create({ data: { id: b.clientId, clientKey: "demo-converta", name: "SYNTHETIC ONLY", profile: "business" } });
++    const campaign = await db.campaign.create({ data: { id: b.campaignId, clientId: b.clientId, name: "Synthetic child", templateName: "data_exame", status: "sending", totalRecipients: 11, sentCount: 5, createdAt: new Date("2026-10-10T15:40:24Z") } });
++    const parent = await db.campaign.create({ data: { id: b.parentCampaignId, clientId: b.clientId, name: "Synthetic parent", templateName: "data_exame", status: "sending", totalRecipients: 11, blockedCount: 244 } });
++    const batch = await db.campaignExecutionBatch.create({ data: { id: b.batchId, clientId: b.clientId, name: "Synthetic batch", sourceMode: "DYNAMIC_CRM_FILTER", status: "running", totalRecipients: 11, blockedCount: 244, chunkCount: 1, eligibleAt: new Date("2026-10-10T15:40:00Z"), idempotencyKey: `dynamic:${parent.id}`, metadata: { parentCampaignId: parent.id } } });
++    const link = await db.campaignExecutionBatchCampaign.create({ data: { id: b.linkId, clientId: b.clientId, campaignId: campaign.id, batchId: batch.id, chunkIndex: 1, recipientCount: 11, status: "scheduled" } });
++    const job = await db.campaignExecutionJob.create({ data: { id: b.jobId, clientId: b.clientId, campaignId: campaign.id, batchId: batch.id, kind: "batch_chunk", status: "queued", attempt: 1, eligibleAt: new Date("2026-10-10T15:40:24.152Z"), idempotencyKey: "synthetic", failureReason: "operational_suspension" } });
++    const crm = { contacts: [await db.contact.create({ data: { clientId: b.clientId, waId, provider: "web_session", channel: "whatsapp", channelAccountId: "synthetic-web", name: "synthetic" } })], leads: [await db.lead.create({ data: { tenantId: b.clientId, waId, provider: "web_session", channelAccountId: "synthetic-web" } })], conversations: [await db.conversation.create({ data: { clientId: b.clientId, waId, provider: "web_session", channelAccountId: "synthetic-web", lastInboundAt: new Date("2026-08-29T10:49:52Z"), windowExpiresAt: new Date("2026-08-30T10:49:52Z"), windowIsOpen: true } })], runtimes: [await db.conversationRuntimeState.create({ data: { clientId: b.clientId, waId, provider: "web_session", channelAccountId: "synthetic-web", mode: "HUMAN", assignedUserId: "synthetic-human", lastInboundAt: new Date("2026-08-29T10:49:52Z"), windowExpiresAt: new Date("2026-08-30T10:49:52Z"), windowIsOpen: true, version: 17 } })] };
++    const recipients = Array.from({ length: 11 }, (_, i) => i === 5 ? waId : `55419911000${String(i + 1).padStart(2, "0")}`), components = [{ type: "body" as const, parameters: [{ type: "text" as const, text: "SYNTHETIC VALUE" }] }];
++    const originalTimes = { intent: "2026-10-10T15:40:34.964Z", accepted: "2026-10-10T15:40:35.501Z", sent: "2026-10-10T15:40:44.443Z", delivered: "2026-10-10T15:40:44.528Z" };
++    const ev = (id: string, eventName: string, msg: string, payloadJson: any, time: string, wa: string | null = null) => db.event.create({ data: { id, clientId: b.clientId, eventName, messageId: msg, waId: wa, requestId: `synthetic:${id}`, payloadJson, createdAt: new Date(time) } });
++    const seed = await ev(b.seedEventId, "campaign.seed.saved", b.campaignId, { campaignId: b.campaignId, name: "Synthetic child", templateName: "data_exame", templateId: "synthetic-template", returnDestination: { type: "human_department", departmentId: "synthetic-general", queueId: "synthetic-queue" }, ...buildPrivateCampaignSeedFields({ clientId: b.clientId, waIds: recipients, componentsByWaId: { [waId]: components } }) }, "2026-10-10T15:40:24.831Z");
++    const snapshot = await ev(b.snapshotEventId, "campaign.dynamic_batch_snapshot.created", b.parentCampaignId, { campaignId: b.parentCampaignId, ...buildPrivateCampaignSeedFields({ clientId: b.clientId, waIds: recipients, componentsByWaId: { [waId]: components } }) }, "2026-10-10T15:40:24.733Z");
++    const intent = await ev(b.intentEventId, "campaign.message.submit_started", messageId, { campaignId: b.campaignId, campaignRunId: b.runId }, originalTimes.intent, waId);
++    const accepted = await ev(b.acceptedEventId, "campaign.message.provider_accepted", messageId, { campaignId: b.campaignId, campaignRunId: b.runId, acceptedAt: "2026-10-10T15:40:35.500Z", metaMessageId }, originalTimes.accepted, waId);
++    const sent = await ev(b.sentWebhookId, "webhook.status.orphaned", metaMessageId, { metaMessageId, status: "sent", timestamp: "1791646843", reason: "outbound_message_not_found", pricing: { category: "utility", billable: true, pricing_model: "PMP" } }, originalTimes.sent);
++    const delivered = await ev(b.deliveredWebhookId, "webhook.status.orphaned", metaMessageId, { metaMessageId, status: "delivered", timestamp: "1791646843", reason: "outbound_message_not_found", pricing: { category: "utility", billable: true, pricing_model: "PMP" } }, originalTimes.delivered);
++    const prior = [];
++    for (let n = 1; n <= 5; n++)
++        prior.push(await db.outboundMessage.create({ data: { clientId: b.clientId, messageId: `campaign.${b.campaignId}.${n}`, phoneNumberId: b.phoneNumberId, waId: recipients[n - 1], provider: "meta", channel: "whatsapp", type: "TEMPLATE", status: "SENT", bodyText: "Histórico sintético preservado", createdAt: new Date("2026-10-10T15:40:30Z"), rawPayload: { campaignId: b.campaignId, metaStatus: { lastStatus: "delivered", lastStatusAt: "2026-10-10T15:40:43.000Z" } } } }));
++    b.preservedOutboundHashes = Object.fromEntries(prior.map(x => [x.id, h(x)]));
++    const transportRecord = { direction: "outbound", messageId: metaMessageId, metaMessageId, to: waId, from: waId, timestamp: "2026-10-10T15:40:35.454Z", type: "template", text: null, templateName: "data_exame", language: "pt_BR", clientKey: "demo-converta", status: "sent", raw: { senderPhoneNumberId: b.phoneNumberId, requestId: "synthetic-request", rid: b.runId, metaMessageId } };
++    const log = { clientId: b.clientId, clientKey: "demo-converta", messageId, rid: b.runId, requestId: "synthetic-request", template: "data_exame", language: "pt_BR", resolvedPhoneNumberId: b.phoneNumberId };
++    const sendingLogLine = JSON.stringify({ ...log, event: "outbound.template.sending", timestamp: "2026-10-10T15:40:34.994Z" }), sentLogLine = JSON.stringify({ ...log, event: "outbound.template.sent", timestamp: "2026-10-10T15:40:35.479Z", metaMessageId });
++    const input: Position6RecoveryInput = { bindings: b, transportRecord, sendingLogLine, sentLogLine, syntheticProofPolicy: { taskHash: b.taskHash, metaMessageIdSha256: digest(metaMessageId), recipientSha256: digest(waId), accountSha256: digest(b.phoneNumberId), preservedOutboundHashes: b.preservedOutboundHashes, sources: { ...Object.fromEntries(Object.entries({ seed, snapshot, intent, accepted, sent, delivered }).map(([k, x]) => [k, h(x)])), transport: h(transportRecord), sendingLog: digest(sendingLogLine), sentLog: digest(sentLogLine) }, crmHashes: Object.fromEntries(Object.entries(crm).map(([k, rows]) => [k, Object.fromEntries(rows.map(x => [x.id, h(x)]))])), operationalHashes: operationalProofHashes({ campaign, parent, batch, link, job }) } };
++    return { input, prior, crm, root, messageId, metaMessageId, fence };
++}
++async function assertPreserved(f: Awaited<ReturnType<typeof fixture>>) { for (const row of f.prior)
++    assert.equal(h(await db.outboundMessage.findUniqueOrThrow({ where: { id: row.id } })), h(row)); for (const [k, rows] of Object.entries(f.crm))
++    for (const row of rows) {
++        const model = k === "contacts" ? db.contact : k === "leads" ? db.lead : k === "conversations" ? db.conversation : db.conversationRuntimeState;
++        assert.equal(h(await (model as any).findUniqueOrThrow({ where: { id: row.id } })), h(row));
++    } assert.equal(await db.outboundMessage.count({ where: { messageId: { in: [7, 8, 9, 10, 11].map(n => `campaign.${f.input.bindings.campaignId}.${n}`) } } }), 0); assert.equal(providerCalls, 0); }
++async function apply(f: Awaited<ReturnType<typeof fixture>>) { const dry = await dryRunPosition6(db, f.input); return applyPosition6(db, f.input, dry.planHash, "synthetic-owner"); }
++test("A/B/C: exact disposition, real SQL totals and closed ledger archive; replay before and after ack", async () => {
++    const f = await fixture(), before = fs.readFileSync(process.env.CAMPAIGN_OPERATIONS_FILE!);
++    const d = await dryRunPosition6(db, f.input);
++    assert.equal(d.alreadyApplied, false);
++    assert.equal(await db.outboundMessage.count(), 5);
++    assert.deepEqual(fs.readFileSync(process.env.CAMPAIGN_OPERATIONS_FILE!), before);
++    const applied = await applyPosition6(db, f.input, d.planHash, "synthetic-owner");
++    assert.equal(applied.alreadyApplied, false);
++    const verified = await verifyPosition6(db, f.input);
++    assert.equal(verified.totals.metaSummary.totalDelivered, 6);
++    assert.equal(verified.totals.metaSummary.totalPending, 5);
++    assert.deepEqual(verified.totals.progress, { totalRecipients: 11, sentCount: 6, blockedCount: 0, failedCount: 0, pendingCount: 5 });
++    const out = await db.outboundMessage.findFirstOrThrow({ where: { messageId: f.messageId } });
++    assert.equal(out.bodyText, null);
++    assert.equal((out.rawPayload as any).metaUsage.outboundMessageId,out.id);
++    for (const event of await db.event.findMany({where:{messageId:f.messageId,eventName:{in:["meta.usage.estimated","meta.usage.updated"]}}})) assert.equal((event.payloadJson as any).outboundMessageId,out.id);
++    assert.equal(out.status, "SENT");
++    assert.equal((out.rawPayload as any).metaStatus.lastStatus, "delivered");
++    assert.equal((out.rawPayload as any).httpStatus, null);
++    assert.equal((out.rawPayload as any).humanReceiptConfirmed, false);
++    const eventsBefore = await db.event.count();
++    for (let n = 0; n < 2; n++) {
++        assert.equal((await applyPosition6(db, f.input, d.planHash, "another-actor")).alreadyApplied, true);
++        assert.equal((await dryRunPosition6(db, f.input)).alreadyApplied, true);
++    }
++    assert.equal(await db.event.count(), eventsBefore);
++    assert.equal(await db.outboundMessage.count(), 6);
++    await assertPreserved(f);
++    const { buildCampaignDetailPayload, buildCampaignListPayload } = await import("../http/routes.js");
++    const childDetail = await buildCampaignDetailPayload(db, { clientId: f.input.bindings.clientId, campaignId: f.input.bindings.campaignId });
++    const parentDetail = await buildCampaignDetailPayload(db, { clientId: f.input.bindings.clientId, campaignId: f.input.bindings.parentCampaignId });
++    assert.equal((childDetail as any).campaign.metaSummary.totalDelivered, 6);
++    assert.equal((childDetail as any).campaign.metaSummary.totalPending, 5);
++    assert.equal((parentDetail as any).campaign.executionBatch.progress.sentCount, 6);
++    assert.equal((parentDetail as any).campaign.executionBatch.progress.pendingCount, 5);
++    const list = await buildCampaignListPayload(db, { clientId: f.input.bindings.clientId, limit: 100 });
++    assert.ok(list);
++    assert.equal(readCampaignReconciliationFence().generation, 37);
++    const ack = await acknowledgePosition6(db, f.input, "synthetic-owner");
++    assert.equal(ack.open, false);
++    assert.equal(ack.generation, 38);
++    const fence = readCampaignReconciliationFence();
++    assert.equal(Object.keys(fence.tasks).length, 0);
++    assert.equal(fence.audit[0].reason, "durable_accepted_delivered_historical_crm_disposition_no_retry");
++    assert.deepEqual(fence.audit[0].resolvedTask?.task, Object.values(f.fence.tasks)[0]);
++    assert.equal((await acknowledgePosition6(db, f.input, "synthetic-owner")).generation, 38);
++    assert.equal(readCampaignReconciliationFence().audit.length, 1);
++    assert.equal((await applyPosition6(db, f.input, d.planHash, "synthetic-owner")).alreadyApplied, true);
++    await assertPreserved(f);
++    assert.equal((await db.campaignExecutionJob.findUniqueOrThrow({ where: { id: f.input.bindings.jobId } })).status, "queued");
++    assert.equal((await db.campaignExecutionBatch.findUniqueOrThrow({ where: { id: f.input.bindings.batchId } })).status, "running");
++});
++test("unreceipted unique Outbound, pre-existing persistence and incompatible receipt deny; no extra writes", async () => {
++    const f = await fixture(), d = await dryRunPosition6(db, f.input);
++    await db.outboundMessage.create({ data: { clientId: f.input.bindings.clientId, messageId: f.messageId, waId: "other", type: "TEMPLATE", status: "FAILED" } });
++    await assert.rejects(applyPosition6(db, f.input, d.planHash, "owner"), /unreceipted_result_conflict/);
++    assert.equal(await db.event.count({ where: { eventName: "campaign.accepted_delivery.reconciled" } }), 0);
++    await db.outboundMessage.deleteMany({ where: { messageId: f.messageId } });
++    await db.event.create({ data: { clientId: f.input.bindings.clientId, messageId: f.messageId, eventName: "meta.usage.estimated", requestId: `position6:${f.input.bindings.acceptedEventId}:usage-sent`, payloadJson: { wrong: true } } });
++    await assert.rejects(applyPosition6(db, f.input, d.planHash, "owner"));
++    assert.equal(await db.outboundMessage.count(), 5);
++    await assertPreserved(f);
++});
++test("real SQL error at receipt insert rolls back Outbound, counters and every obligation", async () => {
++    const f = await fixture(), d = await dryRunPosition6(db, f.input);
++    await db.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION position6_test_fail_receipt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW."eventName"='campaign.accepted_delivery.reconciled' THEN RAISE EXCEPTION 'synthetic_receipt_sql_failure'; END IF; RETURN NEW; END $$`);
++    await db.$executeRawUnsafe(`CREATE TRIGGER position6_fail_receipt BEFORE INSERT ON "Event" FOR EACH ROW EXECUTE FUNCTION position6_test_fail_receipt()`);
++    try {
++        await assert.rejects(applyPosition6(db, f.input, d.planHash, "owner"), /synthetic_receipt_sql_failure/);
++    }
++    finally {
++        await db.$executeRawUnsafe(`DROP TRIGGER position6_fail_receipt ON "Event"`);
++        await db.$executeRawUnsafe(`DROP FUNCTION position6_test_fail_receipt()`);
++    }
++    assert.equal(await db.outboundMessage.count(), 5);
++    assert.equal((await db.campaign.findUniqueOrThrow({ where: { id: f.input.bindings.campaignId } })).sentCount, 5);
++    assert.equal(readCampaignReconciliationFence().generation, 37);
++    await assertPreserved(f);
++});
++test("failure after durable SQL before ledger archival keeps task; verify then ack without apply/resend", async () => {
++    const f = await fixture();
++    await apply(f);
++    const rename = fs.renameSync;
++    fs.renameSync = () => { throw Object.assign(Error("synthetic ledger EIO"), { code: "EIO" }); };
++    try {
++        await assert.rejects(acknowledgePosition6(db, f.input, "owner"), /synthetic ledger EIO/);
++    }
++    finally {
++        fs.renameSync = rename;
++    }
++    assert.equal(await db.outboundMessage.count(), 6);
++    assert.equal(readCampaignReconciliationFence().generation, 37);
++    assert.equal(Object.keys(readCampaignReconciliationFence().tasks).length, 1);
++    await verifyPosition6(db, f.input);
++    assert.equal((await acknowledgePosition6(db, f.input, "owner")).generation, 38);
++    await assertPreserved(f);
++});
++for (const scenario of ["tenant", "account", "task", "seed", "transport", "operational", "remaining", "contradictory_status", "crm"] as const)
++    test(`negative ${scenario} denies before SQL recovery and ledger mutation`, async () => {
++        const f = await fixture();
++        let input = structuredClone(f.input);
++        if (scenario === "tenant")
++            input.bindings.clientId = crypto.randomUUID();
++        if (scenario === "account")
++            input.bindings.phoneNumberId = "wrong-account";
++        if (scenario === "task")
++            input.bindings.taskHash = "0".repeat(64);
++        if (scenario === "seed")
++            await db.event.update({ where: { id: input.bindings.seedEventId }, data: { payloadJson: { wrong: true } } });
++        if (scenario === "transport")
++            input.transportRecord.raw.senderPhoneNumberId = "wrong-account";
++        if (scenario === "operational")
++            await db.campaignExecutionJob.update({ where: { id: input.bindings.jobId }, data: { leaseOwner: "unexpected-executor" } });
++        if (scenario === "remaining")
++            await db.event.create({ data: { clientId: input.bindings.clientId, eventName: "campaign.message.submit_started", messageId: `campaign.${input.bindings.campaignId}.7`, payloadJson: {} } });
++        if (scenario === "contradictory_status")
++            await db.event.create({ data: { clientId: input.bindings.clientId, eventName: "webhook.status.orphaned", messageId: f.metaMessageId, payloadJson: { metaMessageId: f.metaMessageId, status: "failed" } } });
++        if (scenario === "crm")
++            await db.conversationRuntimeState.update({ where: { id: f.crm.runtimes[0].id }, data: { version: 18, assignedUserId: "new-human" } });
++        await assert.rejects(dryRunPosition6(db, input));
++        assert.equal(await db.outboundMessage.count(), 5);
++        assert.equal(readCampaignReconciliationFence().generation, 37);
++        assert.equal(providerCalls, 0);
++    });
++for (const obligation of ["crm", "usage-sent", "usage-delivered", "sent", "billing", "receipt"] as const)
++    test(`ack denies missing or tampered ${obligation} obligation`, async () => {
++        const f = await fixture();
++        await apply(f);
++        await db.event.updateMany({ where: { requestId: `position6:${f.input.bindings.acceptedEventId}:${obligation}` }, data: { payloadJson: { tampered: true } } });
++        await assert.rejects(acknowledgePosition6(db, f.input, "owner"));
++        assert.equal(readCampaignReconciliationFence().generation, 37);
++        await assertPreserved(f);
++    });
++test("guard faults and archived task drift deny; existing FAILED131026 reason remains intact", async () => {
++    const f = await fixture();
++    fs.mkdirSync(process.env.CAMPAIGN_OPERATIONS_FILE! + ".uncertain");
++    await assert.rejects(dryRunPosition6(db, f.input), /fence_busy_or_uncertain/);
++    fs.rmdirSync(process.env.CAMPAIGN_OPERATIONS_FILE! + ".uncertain");
++    await apply(f);
++    await acknowledgePosition6(db, f.input, "owner");
++    const state = readCampaignReconciliationFence();
++    state.audit[0].reason = "durable_failed_result_no_retry";
++    fs.writeFileSync(process.env.CAMPAIGN_OPERATIONS_FILE!, JSON.stringify(state));
++    await assert.rejects(acknowledgePosition6(db, f.input, "owner"), /archived_task_drift/);
++    const failed = await fixture();
++    acknowledgeReconciledCampaignTask({ generation: 37, taskId: failed.input.bindings.taskId, expectedTaskHash: failed.input.bindings.taskHash, reference: { clientId: failed.input.bindings.clientId, campaignId: failed.input.bindings.campaignId, messageId: failed.messageId }, receiptId: "synthetic-failed-receipt", actor: "synthetic-old-contract" });
++    assert.equal(readCampaignReconciliationFence().audit[0].reason, "durable_failed_result_no_retry");
++});
++test("production approval refuses synthetic hashes when synthetic policy omitted", async () => { const f = await fixture(); const input = { ...f.input, syntheticProofPolicy: undefined }; await assert.rejects(dryRunPosition6(db, input), /binding_hash_mismatch/); assert.equal(await db.outboundMessage.count(), 5); });
++test("plan drift and open/generation/lock fences deny before apply or ack", async () => {
++    const f = await fixture(), dry = await dryRunPosition6(db, f.input);
++    await assert.rejects(applyPosition6(db, f.input, "0".repeat(64), "owner"), /plan_drift/);
++    assert.equal(await db.outboundMessage.count(), 5);
++    const file = process.env.CAMPAIGN_OPERATIONS_FILE!;
++    fs.mkdirSync(file + ".lock");
++    await assert.rejects(dryRunPosition6(db, f.input), /fence_busy_or_uncertain/);
++    fs.rmdirSync(file + ".lock");
++    await applyPosition6(db, f.input, dry.planHash, "owner");
++    fs.writeFileSync(file, JSON.stringify({ ...f.fence, open: true }));
++    await assert.rejects(acknowledgePosition6(db, f.input, "owner"), /guard_task_mismatch/);
++    fs.writeFileSync(file, JSON.stringify({ ...f.fence, generation: 39 }));
++    await assert.rejects(acknowledgePosition6(db, f.input, "owner"), /guard_task_mismatch/);
++    fs.writeFileSync(file, JSON.stringify(f.fence));
++    await verifyPosition6(db, f.input);
++    await assertPreserved(f);
++});
++test("tampered result, real totals and receipt Outbound link deny success acknowledgement", async () => {
++    const f = await fixture();
++    await apply(f);
++    const out = await db.outboundMessage.findFirstOrThrow({ where: { messageId: f.messageId } });
++    await db.outboundMessage.update({ where: { id: out.id }, data: { metaMessageId: "other-provider-id" } });
++    await assert.rejects(acknowledgePosition6(db, f.input, "owner"), /result_drift/);
++    await db.outboundMessage.update({ where: { id: out.id }, data: { metaMessageId: out.metaMessageId } });
++    await db.campaign.update({ where: { id: f.input.bindings.campaignId }, data: { sentCount: 5 } });
++    await assert.rejects(acknowledgePosition6(db, f.input, "owner"), /canonical_totals_drift/);
++    await db.campaign.update({ where: { id: f.input.bindings.campaignId }, data: { sentCount: 6 } });
++    const receipt = await db.event.findFirstOrThrow({ where: { eventName: "campaign.accepted_delivery.reconciled" } });
++    await db.event.update({ where: { id: receipt.id }, data: { payloadJson: { ...(receipt.payloadJson as any), reconciledOutboundId: crypto.randomUUID() } } });
++    await assert.rejects(acknowledgePosition6(db, f.input, "owner"), /receipt_drift/);
++    assert.equal(readCampaignReconciliationFence().generation, 37);
++    await assertPreserved(f);
++});
++test("offline CLI exact dry-run/apply/verify/ack subprocesses enforce authorization and private diagnostics", async () => {
++    const f = await fixture(), file = path.join(f.root, "input.private.json");
++    fs.writeFileSync(file, JSON.stringify(f.input), { mode: 0o600 });
++    const hash = digest(fs.readFileSync(file, "utf8"));
++    const script = new URL("../../scripts/reconcile-position6-accepted-delivery.ts", import.meta.url).pathname, loader = new URL("../../node_modules/tsx/dist/loader.mjs", import.meta.url).pathname;
++    const run = (mode: string, extra: string[] = []) => { const output = path.join(f.root, `cli-${mode}-${crypto.randomUUID()}.json`); const result = spawnSync(process.execPath, ["--import", loader, script, `--mode=${mode}`, `--input=${file}`, `--input-sha256=${hash}`, `--output=${output}`, ...extra], { env: { ...process.env }, encoding: "utf8", timeout: 20000 }); return { ...result, output }; };
++    const denied = run("apply-sql");
++    assert.notEqual(denied.status, 0);
++    assert.match(denied.stderr, /execution_not_authorized/);
++    assert.equal(await db.outboundMessage.count(), 5);
++    const dry = run("dry-run");
++    assert.equal(dry.status, 0, dry.stderr);
++    const plan = JSON.parse(fs.readFileSync(dry.output, "utf8")).result.planHash;
++    const applied = run("apply-sql", ["--execute-authorized", `--plan-hash=${plan}`, "--actor=synthetic-owner"]);
++    assert.equal(applied.status, 0, applied.stderr);
++    assert.equal(run("verify-receipt").status, 0);
++    const ack = run("ack-task", ["--execute-authorized", "--actor=synthetic-owner"]);
++    assert.equal(ack.status, 0, ack.stderr);
++    assert.equal(readCampaignReconciliationFence().generation, 38);
++    assert.equal(fs.statSync(ack.output).mode & 0o777, 0o600);
++    const replay = run("ack-task", ["--execute-authorized", "--actor=synthetic-owner"]);
++    assert.equal(replay.status, 0, replay.stderr);
++    assert.equal(readCampaignReconciliationFence().audit.length, 1);
++    await assertPreserved(f);
++    const bad = run("apply-sql", ["--execute-authorized", `--plan-hash=${"0".repeat(64)}`, "--actor=synthetic-owner"]);
++    assert.notEqual(bad.status, 0);
++    assert.equal(JSON.parse(fs.readFileSync(bad.output, "utf8")).error.reason, "position6_plan_drift");
++});
++
++test("synthetic approval denies another actual PostgreSQL database", async () => {
++ const f=await fixture();const otherUrl=new URL(process.env.DATABASE_URL!);otherUrl.pathname="/postgres";const other=new PrismaClient({datasources:{db:{url:otherUrl.toString()}}});
++ try {await assert.rejects(dryRunPosition6(other,f.input),/synthetic_policy_not_isolated/);} finally {await other.$disconnect();}
++ await assertPreserved(f);
++});
++
++test("concurrent SQL applies serialize or deny uniqueness; one durable result and receipt", async () => {
++    const f=await fixture(), dry=await dryRunPosition6(db,f.input);
++    const outcomes=await Promise.allSettled([applyPosition6(db,f.input,dry.planHash,"owner-A"),applyPosition6(db,f.input,dry.planHash,"owner-B")]);
++    assert.ok(outcomes.some(x=>x.status==="fulfilled"));
++    for(const x of outcomes) if(x.status==="rejected") assert.ok(["P2034","P2002"].includes(x.reason?.code),String(x.reason?.code));
++    assert.equal(await db.outboundMessage.count(),6);
++    assert.equal(await db.event.count({where:{eventName:"campaign.accepted_delivery.reconciled"}}),1);
++    await verifyPosition6(db,f.input);await assertPreserved(f);
++});
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.ts b/apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.ts
+new file mode 100644
+index 00000000..d1c8153c
+--- /dev/null
++++ b/apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.ts
+@@ -0,0 +1,244 @@
++import crypto from "node:crypto";
++import type { Prisma, PrismaClient } from "@prisma/client";
++import { POSITION6_APPROVAL } from "./position6ApprovedDisposition.js";
++import { deliveryEvidenceHash, inspectAcceptedDelivery, type DeliveryReviewBindings } from "./campaignAcceptedDeliveryReview.js";
++import { readPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
++import { shouldApplyProviderStatus } from "./campaignDeliveryTruth.js";
++import { buildMetaUsageEventPayload } from "../billing/metaUsageLedger.js";
++import { recordActiveMessageDeliveryIfNeeded } from "../billing/activeMessageBilling.js";
++import { buildCampaignMetaStatusItem, buildCampaignRecipientResultStatuses, summarizeCampaignMetaStatuses } from "./campaignRecipientResultTruth.js";
++import { readCampaignReconciliationFence, acknowledgeAcceptedDeliveredCampaignTask } from "./campaignOperations.js";
++type Tx = Prisma.TransactionClient;
++type Approval = typeof POSITION6_APPROVAL;
++export type Position6ProofPolicy = {
++    taskHash: string;
++    metaMessageIdSha256: string;
++    accountSha256: string;
++    recipientSha256: string;
++    sources: Record<string, string>;
++    crmHashes: Record<string, Record<string, string>>;
++    preservedOutboundHashes: Record<string, string>;
++    operationalHashes: Record<string, string>;
++};
++export type Position6RecoveryInput = {
++    bindings: DeliveryReviewBindings & {
++        seedEventId: string;
++        snapshotEventId: string;
++    };
++    transportRecord: Record<string, any>;
++    sendingLogLine: string;
++    sentLogLine: string;
++    // Synthetic hash policy is legal only on the specifically named local DB,
++    // checked using the connected PostgreSQL server, never just an env URL.
++    syntheticProofPolicy?: Position6ProofPolicy;
++};
++export const originalEvidenceHash = (v: unknown) => crypto.createHash("sha256").update(JSON.stringify(v, (_k, x) => x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(k => [k, x[k]])) : x).replace(/[\u0080-\uffff]/g, c => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"))).digest("hex");
++const digest = (v: string) => crypto.createHash("sha256").update(v).digest("hex");
++const rec = (v: unknown): Record<string, any> => v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, any> : {};
++function need(v: unknown, code: string): asserts v { if (!v)
++    throw Error(`position6_${code}`); }
++const JSON_VALUE = (v: unknown) => v as Prisma.InputJsonValue;
++const eventKey = (acceptedId: string, suffix: string) => `position6:${acceptedId}:${suffix}`;
++export function operationalProofHashes(v: {
++    campaign: any;
++    parent: any;
++    batch: any;
++    link: any;
++    job: any;
++}) {
++    const { sentCount: _s, updatedAt: _u, ...campaign } = v.campaign;
++    return Object.fromEntries(Object.entries({ ...v, campaign }).map(([k, x]) => [k, originalEvidenceHash(x)]));
++}
++async function policy(tx: Tx, input: Position6RecoveryInput): Promise<Position6ProofPolicy> {
++    for (const [k, v] of Object.entries(POSITION6_APPROVAL.scope))
++        need((input.bindings as any)[k] === v, `scope_mismatch:${k}`);
++    if (input.syntheticProofPolicy) {
++        const rows = await tx.$queryRaw<Array<{
++            db: string;
++            addr: string | null;
++        }>> `SELECT current_database() AS db,host(inet_server_addr()) AS addr`;
++        need(rows.length === 1 && rows[0].db === "re7_position6_recovery_20261010" && ["127.0.0.1", "::1"].includes(rows[0].addr ?? ""), "synthetic_policy_not_isolated");
++        return input.syntheticProofPolicy;
++    }
++    return POSITION6_APPROVAL;
++}
++async function lockScope(tx: Tx, b: Position6RecoveryInput["bindings"]) {
++    await tx.$executeRaw `SET LOCAL statement_timeout='8000ms'`;
++    await tx.$executeRaw `SET LOCAL lock_timeout='1000ms'`;
++    // Same client -> batch -> job ordering as existing reconciliation. No network/provider.
++    await tx.$queryRaw `SELECT id FROM "Client" WHERE id=${b.clientId}::uuid FOR UPDATE`;
++    await tx.$queryRaw `SELECT id FROM "CampaignExecutionBatch" WHERE id=${b.batchId} FOR UPDATE`;
++    await tx.$queryRaw `SELECT id FROM "CampaignExecutionJob" WHERE id=${b.jobId} FOR UPDATE`;
++}
++async function crmProof(tx: Tx, clientId: string, waId: string) {
++    const where = { clientId, OR: [{ waId }, { waIdCanonical: waId }] };
++    const result = { contacts: await tx.contact.findMany({ where: { clientId, waId }, orderBy: { id: "asc" }, take: 21 }), leads: await tx.lead.findMany({ where: { tenantId: clientId, OR: [{ waId }, { waIdCanonical: waId }, { phone: waId }] }, orderBy: { id: "asc" }, take: 21 }), conversations: await tx.conversation.findMany({ where, orderBy: { id: "asc" }, take: 21 }), runtimes: await tx.conversationRuntimeState.findMany({ where, orderBy: { id: "asc" }, take: 21 }) };
++    need(Object.values(result).every(rows => rows.length <= 20), "crm_observation_limit");
++    return Object.fromEntries(Object.entries(result).map(([k, rows]) => [k, Object.fromEntries(rows.map(r => [r.id, originalEvidenceHash(r)]))]));
++}
++async function inspect(tx: Tx, input: Position6RecoveryInput, guard: unknown) {
++    const p = await policy(tx, input), b = input.bindings;
++    need(b.taskHash === p.taskHash && deliveryEvidenceHash(b.preservedOutboundHashes) === deliveryEvidenceHash(p.preservedOutboundHashes), "binding_hash_mismatch");
++    const client = await tx.client.findUnique({ where: { id: b.clientId } });
++    need(client?.clientKey === "demo-converta", "tenant_mismatch");
++    const prior = await tx.outboundMessage.findMany({ where: { clientId: b.clientId, messageId: { in: [1, 2, 3, 4, 5].map(n => `campaign.${b.campaignId}.${n}`) } }, orderBy: { messageId: "asc" } });
++    need(prior.length === 5 && prior.every(r => originalEvidenceHash(r) === p.preservedOutboundHashes[r.id]), "preserved_outbound_drift");
++    // Reuse the existing exact task/provider/remaining-position/lease verifier.
++    const observedGuard = rec(guard);
++    let inspectionGuard = guard;
++    if (observedGuard.open === false && observedGuard.generation === 38 && Object.keys(rec(observedGuard.tasks)).length === 0) {
++        const archived = observedGuard.audit?.filter((x: any) => x.action === "provider_reconciled" && x.resolvedTask?.id === b.taskId);
++        need(archived?.length === 1 && archived[0].reason === "durable_accepted_delivered_historical_crm_disposition_no_retry" && deliveryEvidenceHash(archived[0].resolvedTask.task) === b.taskHash, "archived_task_drift");
++        // Read-only verification/replay of an explicitly archived successful result.
++        // Never used to admit work or adapt a current binding to another generation.
++        inspectionGuard = { open: false, generation: 37, tasks: { [b.taskId]: archived[0].resolvedTask.task } };
++    }
++    const reviewed = await inspectAcceptedDelivery(tx, { ...b, preservedOutboundHashes: Object.fromEntries(prior.map(r => [r.id, deliveryEvidenceHash(r)])) }, inspectionGuard);
++    need(digest(reviewed.metaMessageId) === p.metaMessageIdSha256 && digest(reviewed.waId) === p.recipientSha256 && digest(b.phoneNumberId) === p.accountSha256, "identity_account_mismatch");
++    const originals: Record<string, any> = {};
++    for (const [k, id] of Object.entries({ seed: b.seedEventId, snapshot: b.snapshotEventId, intent: b.intentEventId, accepted: b.acceptedEventId, sent: b.sentWebhookId, delivered: b.deliveredWebhookId })) {
++        const row = await tx.event.findFirst({ where: { id, clientId: b.clientId } });
++        need(row && originalEvidenceHash(row) === p.sources[k], `original_source_drift:${k}`);
++        originals[k] = row;
++    }
++    need(originals.seed.eventName === "campaign.seed.saved" && originals.seed.messageId === b.campaignId && rec(originals.seed.payloadJson).campaignId === b.campaignId, "seed_binding_mismatch");
++    need(originals.snapshot.eventName === "campaign.dynamic_batch_snapshot.created" && originals.snapshot.messageId === b.parentCampaignId && rec(originals.snapshot.payloadJson).campaignId === b.parentCampaignId, "snapshot_binding_mismatch");
++    const seed = rec(originals.seed.payloadJson), decoded = readPrivateCampaignSeedFields(seed), snapshot = readPrivateCampaignSeedFields(originals.snapshot.payloadJson);
++    need(decoded.recipients.length === 11 && snapshot.recipients.length === 11 && decoded.recipients[5] === reviewed.waId && snapshot.recipients[5] === reviewed.waId && deliveryEvidenceHash(decoded.componentsByWaId?.[reviewed.waId]) === deliveryEvidenceHash(snapshot.componentsByWaId?.[reviewed.waId]) && Array.isArray(decoded.componentsByWaId?.[reviewed.waId]), "execution_payload_mismatch");
++    const transport = input.transportRecord;
++    let sending: any, sent: any;
++    need(originalEvidenceHash(transport) === p.sources.transport && digest(input.sendingLogLine) === p.sources.sendingLog && digest(input.sentLogLine) === p.sources.sentLog, "transport_provenance_mismatch");
++    try {
++        sending = JSON.parse(input.sendingLogLine);
++        sent = JSON.parse(input.sentLogLine);
++    }
++    catch {
++        throw Error("position6_log_format_invalid");
++    }
++    for (const log of [sending, sent])
++        need(log.clientId === b.clientId && log.clientKey === "demo-converta" && log.messageId === reviewed.messageId && log.rid === b.runId && log.resolvedPhoneNumberId === b.phoneNumberId && log.template === seed.templateName && log.language === "pt_BR", "submission_log_binding_mismatch");
++    need(sending.event === "outbound.template.sending" && sent.event === "outbound.template.sent" && sent.metaMessageId === reviewed.metaMessageId, "submission_log_result_mismatch");
++    need(transport.clientKey === "demo-converta" && transport.direction === "outbound" && transport.type === "template" && transport.status === "sent" && transport.text === null && transport.to.replace(/^\+/, "") === reviewed.waId && transport.metaMessageId === reviewed.metaMessageId && transport.templateName === seed.templateName && transport.language === "pt_BR" && transport.raw?.rid === b.runId && transport.raw.senderPhoneNumberId === b.phoneNumberId && transport.raw.requestId === sent.requestId, "transport_record_binding_mismatch");
++    const dates = [sending.timestamp, transport.timestamp, sent.timestamp, reviewed.responseAt, reviewed.acceptedAt].map(v => Date.parse(v));
++    need(dates.every(Number.isFinite) && dates.every((v, i) => i === 0 || v >= dates[i - 1]), "original_timeline_mismatch");
++    const current = { campaign: await tx.campaign.findUniqueOrThrow({ where: { id: b.campaignId } }), parent: await tx.campaign.findUniqueOrThrow({ where: { id: b.parentCampaignId } }), batch: await tx.campaignExecutionBatch.findUniqueOrThrow({ where: { id: b.batchId } }), link: await tx.campaignExecutionBatchCampaign.findUniqueOrThrow({ where: { id: b.linkId } }), job: await tx.campaignExecutionJob.findUniqueOrThrow({ where: { id: b.jobId } }) };
++    need(deliveryEvidenceHash(operationalProofHashes(current)) === deliveryEvidenceHash(p.operationalHashes), "operational_source_drift");
++    need(current.campaign.totalRecipients === 11 && [5, 6].includes(current.campaign.sentCount) && current.campaign.blockedCount === 0 && current.parent.blockedCount === 244 && current.batch.blockedCount === 244, "counters_drift");
++    const crm = await crmProof(tx, b.clientId, reviewed.waId);
++    need(deliveryEvidenceHash(crm) === deliveryEvidenceHash(p.crmHashes), "crm_preservation_drift");
++    // Existing international Web identity is preserved; it is NOT a Meta window/account certificate.
++    const statuses = await tx.event.findMany({ where: { clientId: b.clientId, eventName: { in: ["webhook.status.orphaned", "webhook.status.updated"] }, OR: [{ messageId: reviewed.metaMessageId }, { payloadJson: { path: ["metaMessageId"], equals: reviewed.metaMessageId } }] }, take: 101 });
++    need(statuses.length === 2 && statuses.every(x => [b.sentWebhookId, b.deliveredWebhookId].includes(x.id)), "provider_status_inventory_drift");
++    need(shouldApplyProviderStatus({ currentStatus: "sent", currentStatusAt: rec(originals.sent.payloadJson).timestamp, incomingStatus: "delivered", incomingStatusAt: rec(originals.delivered.payloadJson).timestamp }), "status_monotonicity_mismatch");
++    const usage = buildMetaUsageEventPayload({ outboundMessageId: null, campaignId: b.campaignId, source: "campaign", messageKind: "template", templateName: seed.templateName, templateCategory: null, sentAt: reviewed.acceptedAt, currentDate: reviewed.acceptedAt, status: "sent", waId: reviewed.waId });
++    // Provider category is known; BR rate estimates and Meta window are not. No invented international cost.
++    const providerPricing = rec(rec(originals.delivered.payloadJson).pricing);
++    need(providerPricing.category === "utility" && providerPricing.billable === true && providerPricing.pricing_model === "PMP", "original_pricing_mismatch");
++    const plan = { version: 1, decisionId: POSITION6_APPROVAL.decisionId, bindings: b, messageId: reviewed.messageId, metaMessageId: reviewed.metaMessageId, waId: reviewed.waId, acceptedAt: reviewed.acceptedAt, responseAt: reviewed.responseAt, submitStartedAt: reviewed.submitStartedAt, transportRecordedAt: transport.timestamp, providerDeliveredAt: reviewed.providerDeliveredAt, templateName: seed.templateName, templateLang: "pt_BR", components: decoded.componentsByWaId![reviewed.waId], returnDestination: seed.returnDestination, sourceHashes: p.sources, crmHashes: crm, bodyText: null, bodyReason: "effective_rendered_body_not_preserved_in_original_sources", httpStatus: null, humanReceiptConfirmed: false, usage: { ...usage, metaCategory: "utility" as const, providerPricing }, usageDelivered: { ...usage, metaCategory: "utility" as const, deliveryStatus: "delivered" as const, deliveredAt: reviewed.providerDeliveredAt, providerPricing }, pendingPositions: [7, 8, 9, 10, 11] };
++    return { ...plan, planHash: deliveryEvidenceHash(plan), current, decoded, archivedReceiptId: observedGuard.generation === 38 ? observedGuard.audit.find((x: any) => x.action === "provider_reconciled" && x.resolvedTask?.id === b.taskId)?.receiptId : null };
++}
++type Inspected = Awaited<ReturnType<typeof inspect>>;
++function disposition(v: Inspected) { return { decisionId: v.decisionId, scope: v.bindings, crmMaterialized: false, returnApplied: false, identityExpansion: false, windowFabricated: false, reason: "historical_international_identity_outside_approved_crm_contract", bodyText: null, bodyReason: v.bodyReason, protectedRows: v.crmHashes }; }
++function rawResult(v: Inspected, outboundId: string) { return { source: "campaign", campaignId: v.bindings.campaignId, campaignRunId: v.bindings.runId, reconciliation: true, acceptedEventId: v.bindings.acceptedEventId, deliveredWebhookEventId: v.bindings.deliveredWebhookId, components: v.components, returnDestination: v.returnDestination, crmHistoricalDisposition: disposition(v), bodyProvenance: { reason: v.bodyReason, renderedBodyUnknown: true }, originalTimes: { submitStartedAt: v.submitStartedAt, transportRecordedAt: v.transportRecordedAt, responseAt: v.responseAt, acceptedAt: v.acceptedAt, createdAtSemantics: "reconstructed_from_original_acceptance_event" }, sourceHashes: v.sourceHashes, httpStatus: null, humanReceiptConfirmed: false, conversationId: null, deliveryConversationPending: false, metaUsage: { ...v.usageDelivered, outboundMessageId: outboundId }, metaStatus: { lastStatus: "delivered", lastStatusAt: v.providerDeliveredAt, metaMessageId: v.metaMessageId, pricingCategory: "utility", pricingBillable: true, pricingModel: "PMP", conversationId: null } }; }
++function resultData(v: Inspected, outboundId: string) { return { id: outboundId, clientId: v.bindings.clientId, phoneNumberId: v.bindings.phoneNumberId, channelAccountId: v.bindings.phoneNumberId, waId: v.waId, waIdCanonical: null, messageId: v.messageId, metaMessageId: v.metaMessageId, channel: "whatsapp", provider: "meta", type: "TEMPLATE" as const, status: "SENT" as const, bodyText: null, templateName: v.templateName, templateLang: v.templateLang, requestId: eventKey(v.bindings.acceptedEventId, "result"), errorBody: null, createdAt: new Date(v.acceptedAt), rawPayload: JSON_VALUE(rawResult(v, outboundId)) }; }
++async function totals(tx: Tx, v: Inspected) {
++    const rows = await tx.outboundMessage.findMany({ where: { clientId: v.bindings.clientId, messageId: { in: [1, 2, 3, 4, 5, 6].map(n => `campaign.${v.bindings.campaignId}.${n}`) } }, orderBy: { messageId: "asc" } });
++    const campaign = await tx.campaign.findUniqueOrThrow({ where: { id: v.bindings.campaignId } });
++    const statuses = buildCampaignRecipientResultStatuses({ campaign, seed: { recipients: v.decoded.recipients, templateName: v.templateName }, resultItems: rows.map(buildCampaignMetaStatusItem) });
++    const metaSummary = summarizeCampaignMetaStatuses(statuses);
++    const links = await tx.campaignExecutionBatchCampaign.findMany({ where: { clientId: v.bindings.clientId, batchId: v.bindings.batchId }, include: { campaign: true } });
++    need(links.length === 1 && links[0].campaignId === v.bindings.campaignId, "batch_read_model_membership_drift");
++    const progress = { totalRecipients: links.reduce((n, l) => n + l.campaign.totalRecipients, 0), sentCount: links.reduce((n, l) => n + l.campaign.sentCount, 0), blockedCount: links.reduce((n, l) => n + l.campaign.blockedCount, 0), failedCount: metaSummary.totalFailed, pendingCount: Math.max(campaign.totalRecipients - campaign.sentCount - campaign.blockedCount - metaSummary.totalFailed, 0) };
++    return { metaSummary, progress, controllerUsesChildMembership: true, audienceExcluded: v.current.batch.blockedCount };
++}
++function expectedEvents(v: Inspected, actor: string, outboundId?: string) {
++    return [
++        { eventName: "campaign.crm.historical_disposition", suffix: "crm", payload: disposition(v) },
++        { eventName: "campaign.message.sent", suffix: "sent", payload: { campaignId: v.bindings.campaignId, campaignRunId: v.bindings.runId, metaMessageId: v.metaMessageId, reconciledOutboundId: outboundId, providerAccepted: true, providerReportedStatus: "delivered", reconciliation: true, retryAllowed: false, crmMaterialized: false, humanReceiptConfirmed: false } },
++        { eventName: "meta.usage.estimated", suffix: "usage-sent", payload: { ...v.usage, outboundMessageId: outboundId } },
++        { eventName: "meta.usage.updated", suffix: "usage-delivered", payload: { ...v.usageDelivered, outboundMessageId: outboundId } },
++        { eventName: "billing.active_message.recovery_disposition", suffix: "billing", payload: { reason: "unknown_window", metaWindowAtSend: "unknown", monetaryChargeCreated: false, providerPricing: v.usageDelivered.providerPricing, crmDisposition: v.decisionId, sourceHashes: v.sourceHashes } },
++    ];
++}
++async function verify(tx: Tx, v: Inspected) {
++    const b = v.bindings, receipt = await tx.event.findUnique({ where: { clientId_eventName_requestId: { clientId: b.clientId, eventName: "campaign.accepted_delivery.reconciled", requestId: eventKey(b.acceptedEventId, "receipt") } } });
++    need(receipt && receipt.messageId === v.messageId && (!v.archivedReceiptId || v.archivedReceiptId === receipt.id), "receipt_missing");
++    const body = rec(receipt.payloadJson);
++    need(typeof body.actor === "string" && body.actor.trim(), "receipt_actor_missing");
++    const results = await tx.outboundMessage.findMany({ where: { clientId: b.clientId, OR: [{ messageId: v.messageId }, { metaMessageId: v.metaMessageId }, { externalMessageId: v.metaMessageId }] }, take: 3 });
++    need(results.length === 1, "result_ambiguous");
++    const out = results[0], expected = resultData(v, out.id);
++    need(Object.entries(expected).every(([k, val]) => deliveryEvidenceHash((out as any)[k]) === deliveryEvidenceHash(val)), "result_drift");
++    const events = await tx.event.findMany({ where: { clientId: b.clientId, messageId: v.messageId, eventName: { in: ["campaign.crm.historical_disposition", "campaign.message.sent", "meta.usage.estimated", "meta.usage.updated", "billing.active_message.recovery_disposition"] } }, take: 20 });
++    const obligations = expectedEvents(v, body.actor, out.id);
++    need(events.length === obligations.length && obligations.every(required => events.some(row => row.eventName === required.eventName && row.requestId === eventKey(b.acceptedEventId, required.suffix) && row.waId === v.waId && row.conversationId === null && deliveryEvidenceHash(row.payloadJson) === deliveryEvidenceHash(required.payload))), "required_persistence_drift");
++    need(await tx.event.count({ where: { clientId: b.clientId, messageId: v.messageId, eventName: "billing.active_message.delivered" } }) === 0, "unexpected_historical_charge");
++    const resultTotals = await totals(tx, v);
++    need(resultTotals.progress.totalRecipients === 11 && resultTotals.progress.sentCount === 6 && resultTotals.progress.failedCount === 0 && resultTotals.progress.blockedCount === 0 && resultTotals.progress.pendingCount === 5 && resultTotals.metaSummary.totalDelivered === 6 && resultTotals.metaSummary.totalPending === 5 && resultTotals.audienceExcluded === 244, "canonical_totals_drift");
++    const expectedReceipt = { version: 2, scope: "accepted_delivered_historical_crm_disposition", decisionId: v.decisionId, planHash: v.planHash, taskHash: b.taskHash, reference: { clientId: b.clientId, campaignId: b.campaignId, messageId: v.messageId }, reconciledOutboundId: out.id, resultHash: deliveryEvidenceHash(out), metaMessageIdSha256: digest(v.metaMessageId), sourceHashes: v.sourceHashes, crmDispositionId: events.find(x => x.eventName === "campaign.crm.historical_disposition")!.id, persistenceHashes: Object.fromEntries(events.map(x => [x.id, originalEvidenceHash(x)])), totals: resultTotals, actor: body.actor, guardRemainsClosed: true, retryAllowed: false, jobContinuationAuthorized: false };
++    need(deliveryEvidenceHash(body) === deliveryEvidenceHash(expectedReceipt), "receipt_drift");
++    return { receiptId: receipt.id, reconciledOutboundId: out.id, planHash: v.planHash, totals: resultTotals, ackEligible: true as const, jobContinuationAuthorized: false };
++}
++async function transaction<T>(db: PrismaClient, readonly: boolean, fn: (tx: Tx) => Promise<T>) { return db.$transaction(async (tx) => { if (readonly)
++    await tx.$executeRaw `SET TRANSACTION READ ONLY`; await tx.$executeRaw `SET LOCAL statement_timeout='8000ms'`; await tx.$executeRaw `SET LOCAL lock_timeout='1000ms'`; return fn(tx); }, { isolationLevel: readonly ? "RepeatableRead" : "Serializable", timeout: 15000, maxWait: 2000 }); }
++export async function dryRunPosition6(db: PrismaClient, input: Position6RecoveryInput) {
++    const fence = readCampaignReconciliationFence();
++    return transaction(db, true, async (tx) => {
++        const v = await inspect(tx, input, fence);
++        const receipt = await tx.event.findUnique({ where: { clientId_eventName_requestId: { clientId: input.bindings.clientId, eventName: "campaign.accepted_delivery.reconciled", requestId: eventKey(input.bindings.acceptedEventId, "receipt") } } });
++        if (receipt) {
++            const result = await verify(tx, v);
++            need(deliveryEvidenceHash(fence) === deliveryEvidenceHash(readCampaignReconciliationFence()), "fence_changed_during_read");
++            return { alreadyApplied: true, ...result };
++        }
++        need(!v.archivedReceiptId && v.current.campaign.sentCount === 5, "unreceipted_counter_drift");
++        need(await tx.outboundMessage.count({ where: { clientId: input.bindings.clientId, OR: [{ messageId: v.messageId }, { metaMessageId: v.metaMessageId }, { externalMessageId: v.metaMessageId }] } }) === 0, "unreceipted_result_conflict");
++        need(await tx.event.count({ where: { clientId: input.bindings.clientId, messageId: v.messageId, eventName: { in: expectedEvents(v, "dry-run").map(x => x.eventName) } } }) === 0, "unreceipted_persistence_conflict");
++        need(deliveryEvidenceHash(fence) === deliveryEvidenceHash(readCampaignReconciliationFence()), "fence_changed_during_read");
++        return { alreadyApplied: false, planHash: v.planHash, decisionId: v.decisionId, submittedAfterRecovery: 6, deliveredReported: 6, pending: 5, providerCalls: 0 };
++    });
++}
++export async function applyPosition6(db: PrismaClient, input: Position6RecoveryInput, planHash: string, actor: string) {
++    need(actor.trim() && /^[a-f0-9]{64}$/.test(planHash), "actor_plan_required");
++    const fence = readCampaignReconciliationFence();
++    return transaction(db, false, async (tx) => {
++        await lockScope(tx, input.bindings);
++        const v = await inspect(tx, input, fence);
++        need(v.planHash === planHash, "plan_drift");
++        const prior = await tx.event.findUnique({ where: { clientId_eventName_requestId: { clientId: input.bindings.clientId, eventName: "campaign.accepted_delivery.reconciled", requestId: eventKey(input.bindings.acceptedEventId, "receipt") } } });
++        if (prior) {
++            const result = await verify(tx, v);
++            need(deliveryEvidenceHash(fence) === deliveryEvidenceHash(readCampaignReconciliationFence()), "fence_changed_before_commit");
++            return { alreadyApplied: true, ...result };
++        }
++        need(!v.archivedReceiptId && v.current.campaign.sentCount === 5, "unreceipted_counter_drift");
++        need(await tx.outboundMessage.count({ where: { clientId: input.bindings.clientId, OR: [{ messageId: v.messageId }, { metaMessageId: v.metaMessageId }, { externalMessageId: v.metaMessageId }] } }) === 0, "unreceipted_result_conflict");
++        const out = await tx.outboundMessage.create({ data: resultData(v, crypto.randomUUID()) });
++        // Canonical billing predicate with real, account-scoped reads. A Web inbound is
++        // not borrowed as a Meta window certificate. unknown_window does not forgive debt.
++        const billing = await recordActiveMessageDeliveryIfNeeded({ prisma: { event: tx.event, conversation: { findFirst: (args: any) => tx.conversation.findFirst({ ...args, where: { AND: [args.where, { clientId: v.bindings.clientId, provider: "meta", channelAccountId: v.bindings.phoneNumberId }] } }) }, conversationRuntimeState: { findFirst: (args: any) => tx.conversationRuntimeState.findFirst({ ...args, where: { AND: [args.where, { clientId: v.bindings.clientId, provider: "meta", channelAccountId: v.bindings.phoneNumberId }] } }) } }, input: { outbound: out, deliveryStatus: "delivered", deliveredAt: new Date(v.providerDeliveredAt), pricingCategory: "utility", providerMessageId: v.metaMessageId } });
++        need(billing.ok && !billing.billable && billing.reason === "unknown_window", "billing_predicate_drift");
++        const events = [];
++        for (const item of expectedEvents(v, actor, out.id))
++            events.push(await tx.event.create({ data: { clientId: v.bindings.clientId, waId: v.waId, messageId: v.messageId, eventName: item.eventName, requestId: eventKey(v.bindings.acceptedEventId, item.suffix), payloadJson: JSON_VALUE(item.payload) } }));
++        await tx.campaign.update({ where: { id: v.bindings.campaignId }, data: { sentCount: 6 } });
++        const resultTotals = await totals(tx, v);
++        const body = { version: 2, scope: "accepted_delivered_historical_crm_disposition", decisionId: v.decisionId, planHash: v.planHash, taskHash: v.bindings.taskHash, reference: { clientId: v.bindings.clientId, campaignId: v.bindings.campaignId, messageId: v.messageId }, reconciledOutboundId: out.id, resultHash: deliveryEvidenceHash(out), metaMessageIdSha256: digest(v.metaMessageId), sourceHashes: v.sourceHashes, crmDispositionId: events[0].id, persistenceHashes: Object.fromEntries(events.map(x => [x.id, originalEvidenceHash(x)])), totals: resultTotals, actor, guardRemainsClosed: true, retryAllowed: false, jobContinuationAuthorized: false };
++        await tx.event.create({ data: { clientId: v.bindings.clientId, messageId: v.messageId, eventName: "campaign.accepted_delivery.reconciled", requestId: eventKey(v.bindings.acceptedEventId, "receipt"), payloadJson: JSON_VALUE(body) } });
++        need(deliveryEvidenceHash(fence) === deliveryEvidenceHash(readCampaignReconciliationFence()), "fence_changed_before_commit");
++        return { alreadyApplied: false, ...await verify(tx, v) };
++    });
++}
++export async function verifyPosition6(db: PrismaClient, input: Position6RecoveryInput) { const fence = readCampaignReconciliationFence(); return transaction(db, true, async (tx) => { const v = await inspect(tx, input, fence), result = await verify(tx, v); need(deliveryEvidenceHash(fence) === deliveryEvidenceHash(readCampaignReconciliationFence()), "fence_changed_during_verify"); return result; }); }
++export async function acknowledgePosition6(db: PrismaClient, input: Position6RecoveryInput, actor: string) {
++    need(actor.trim(), "actor_required");
++    const fence = readCampaignReconciliationFence();
++    return transaction(db, false, async (tx) => {
++        await lockScope(tx, input.bindings);
++        const v = await inspect(tx, input, fence), receipt = await verify(tx, v);
++        need(deliveryEvidenceHash(fence) === deliveryEvidenceHash(readCampaignReconciliationFence()), "fence_changed_before_ack");
++        const status = acknowledgeAcceptedDeliveredCampaignTask({ generation: 37, taskId: input.bindings.taskId, expectedTaskHash: input.bindings.taskHash, reference: { clientId: input.bindings.clientId, campaignId: input.bindings.campaignId, messageId: v.messageId }, receiptId: receipt.receiptId, actor });
++        need(status.available && status.open === false && status.generation === 38 && status.tasks.length === 0, "ack_state_uncertain_read_only_investigation_required");
++        return { ...receipt, open: false, generation: 38, jobContinuationAuthorized: false };
++    });
++}
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignOperations.ts b/apps/whatsapp-agent/src/campaigns/campaignOperations.ts
+index b7e01468..acdbf4b5 100644
+--- a/apps/whatsapp-agent/src/campaigns/campaignOperations.ts
++++ b/apps/whatsapp-agent/src/campaigns/campaignOperations.ts
+@@ -205,14 +205,20 @@ export function isCampaignMutation(method: string | undefined, pathname: string)
+ 
+ // Administrative recovery only. Caller must prove a durable reconciliation receipt.
+ // Archive the full task in the fsynced ledger audit; never reopen admissions here.
+-export function acknowledgeReconciledCampaignTask(params: {
++function archiveReconciledCampaignTask(params: {
+   generation: number; taskId: string; reference: NonNullable<Task["reference"]>;
+   expectedTaskHash: string; receiptId: string; actor: string;
+-}) {
++}, reason: "durable_failed_result_no_retry" | "durable_accepted_delivered_historical_crm_disposition_no_retry") {
+   if (!params.actor.trim() || !params.receiptId.trim()) throw new Error("reconciliation_actor_receipt_required");
+   locked(s => {
+     const prior = s.audit.find(a => a.action === "provider_reconciled" && a.receiptId === params.receiptId);
+     if (prior) {
++      if (reason === "durable_accepted_delivered_historical_crm_disposition_no_retry") {
++        const archived = prior.resolvedTask?.task;
++        if (s.open || s.generation !== params.generation + 1 || Object.keys(s.tasks).length || pendingFault(filename()) ||
++          prior.reason !== reason || !archived || JSON.stringify(archived.reference) !== JSON.stringify(params.reference) ||
++          crypto.createHash("sha256").update(JSON.stringify(archived, (_key, item) => item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest("hex") !== params.expectedTaskHash) throw new Error("reconciliation_archived_result_drift");
++      }
+       if (prior.resolvedTask?.id !== params.taskId) throw new Error("reconciliation_receipt_conflict");
+       return;
+     }
+@@ -225,10 +231,34 @@ export function acknowledgeReconciledCampaignTask(params: {
+       item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest("hex");
+     if (taskHash !== params.expectedTaskHash) throw new Error("reconciliation_task_drift");
+     s.generation++;
+-    s.audit.push({ action: "provider_reconciled", actor: params.actor, reason: "durable_failed_result_no_retry",
++    s.audit.push({ action: "provider_reconciled", actor: params.actor, reason,
+       at: new Date().toISOString(), generation: s.generation, receiptId: params.receiptId,
+       resolvedTask: { id: params.taskId, task } });
+     delete s.tasks[params.taskId]; // Resolved task survives in audit; pending tasks are never discarded.
+   });
+   return campaignOperationsStatus();
+ }
++
++// Existing FAILED131026 callers retain their exact reason and contract.
++export function acknowledgeReconciledCampaignTask(params: Parameters<typeof archiveReconciledCampaignTask>[0]) {
++  return archiveReconciledCampaignTask(params, "durable_failed_result_no_retry");
++}
++// Only the result-specific verifier may call this administrative primitive.
++export function acknowledgeAcceptedDeliveredCampaignTask(params: Parameters<typeof archiveReconciledCampaignTask>[0]) {
++  return archiveReconciledCampaignTask(params, "durable_accepted_delivered_historical_crm_disposition_no_retry");
++}
++// Observation only: no mkdir/lock/write, no masked-open defaults. Used by the
++// offline recovery verifier, not by runtime admissions or drain certification.
++export function readCampaignReconciliationFence() {
++  const file = filename();
++  if (fs.existsSync(`${file}.lock`) || pendingFault(file)) throw new Error("reconciliation_fence_busy_or_uncertain");
++  const first = fs.lstatSync(file); if (!first.isFile() || first.isSymbolicLink()) throw new Error("reconciliation_fence_file_invalid");
++  const raw = fs.readFileSync(file), second = fs.lstatSync(file);
++  const value = JSON.parse(raw.toString("utf8")) as State;
++  if (first.ino !== second.ino || first.mtimeMs !== second.mtimeMs || first.size !== second.size ||
++    !raw.equals(fs.readFileSync(file)) || fs.existsSync(`${file}.lock`) || pendingFault(file)) throw new Error("reconciliation_fence_read_incomplete");
++  if (value.version !== 1 || typeof value.open !== "boolean" || !Number.isInteger(value.generation) ||
++    !value.tasks || typeof value.tasks !== "object" || Array.isArray(value.tasks) || !Array.isArray(value.audit) ||
++    !validatedHostId() || value.hostId !== validatedHostId()) throw new Error("reconciliation_fence_schema_or_topology_invalid");
++  return value;
++}
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.test.ts b/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.test.ts
+new file mode 100644
+index 00000000..3059fdda
+--- /dev/null
++++ b/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.test.ts
+@@ -0,0 +1,16 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { buildCampaignRecipientResultStatuses, buildCampaignMetaStatusItem, summarizeCampaignMetaStatuses } from './campaignRecipientResultTruth.js';
++const recipients=['5541991234567','554198765432','5541991112233'];
++const seed={recipients,templateName:'synthetic'};
++for(const status of ['sending','scheduled']) test(`${status}: known audience pending, explicit failure remains failure`,()=>{
++ const failed=buildCampaignMetaStatusItem({waId:recipients[1],messageId:'synthetic.2',templateName:'synthetic',status:'FAILED',errorBody:'synthetic failure',rawPayload:null,createdAt:new Date('2026-10-10T00:00:00Z')});
++ const result=buildCampaignRecipientResultStatuses({campaign:{sentCount:0,blockedCount:0,status,templateName:'synthetic'},seed,resultItems:[failed]});
++ const summary=summarizeCampaignMetaStatuses(result);assert.equal(summary.totalFailed,1);assert.equal(summary.totalPending,2);assert.equal(result.length,3);
++});
++test('terminal missing history retains failure; aliases use existing candidates and do not duplicate',()=>{
++ const campaign={sentCount:0,blockedCount:0,status:'completed',templateName:'synthetic'};
++ const result=buildCampaignRecipientResultStatuses({campaign,seed,resultItems:[]});assert.equal(summarizeCampaignMetaStatuses(result).totalFailed,3);
++ const delivered=buildCampaignMetaStatusItem({waId:'554191234567',messageId:'synthetic.1',templateName:'synthetic',status:'SENT',errorBody:null,rawPayload:{metaStatus:{lastStatus:'delivered',lastStatusAt:'2026-10-10T00:00:00Z'}},createdAt:new Date('2026-10-10T00:00:00Z')});
++ const aliases=buildCampaignRecipientResultStatuses({campaign:{...campaign,status:'sending',sentCount:1},seed:{...seed,recipients:[recipients[0],'554191234567']},resultItems:[delivered]});assert.equal(aliases.length,1);assert.equal(aliases[0].status,'delivered');
++});
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts b/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts
+new file mode 100644
+index 00000000..8f17c4cd
+--- /dev/null
++++ b/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts
+@@ -0,0 +1,366 @@
++import type { Prisma } from "@prisma/client";
++import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
++type CampaignDraftSeed = { recipients: string[]; templateName: string };
++
++export type CampaignMetaStatus = {
++  waId: string;
++  leadId?: string | null;
++  contactName?: string | null;
++  phoneDisplay?: string | null;
++  crmStatus?: string | null;
++  crmStatusLabel?: string | null;
++  templateName: string | null;
++  status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
++  sentAt: string | null;
++  deliveredAt: string | null;
++  billable: boolean;
++  nonBillingReason: string | null;
++  pricingCategory: string | null;
++  pricingBillable: boolean | null;
++  pricingModel: string | null;
++  conversationId: string | null;
++  error: string | null;
++};
++
++export type CampaignMetaSummary = {
++  totalSent: number;
++  totalDelivered: number;
++  totalRead: number;
++  totalFailed: number;
++  totalBlocked: number;
++  totalOptOut: number;
++  totalSkipped: number;
++  totalPending: number;
++};
++
++export function extractMetaStatus(rawPayload: unknown) {
++  const typed =
++    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
++      ? (rawPayload as Record<string, unknown>)
++      : null;
++  const metaStatus =
++    typed?.metaStatus && typeof typed.metaStatus === "object" && !Array.isArray(typed.metaStatus)
++      ? (typed.metaStatus as Record<string, unknown>)
++      : null;
++  const webSessionStatus =
++    typed?.webSessionStatus && typeof typed.webSessionStatus === "object" && !Array.isArray(typed.webSessionStatus)
++      ? (typed.webSessionStatus as Record<string, unknown>)
++      : null;
++  return {
++    lastStatus:
++      typeof metaStatus?.lastStatus === "string"
++        ? metaStatus.lastStatus
++        : typeof webSessionStatus?.lastStatus === "string"
++          ? webSessionStatus.lastStatus
++          : null,
++    pricingCategory:
++      typeof metaStatus?.pricingCategory === "string" ? metaStatus.pricingCategory : null,
++    pricingBillable:
++      typeof metaStatus?.pricingBillable === "boolean" ? metaStatus.pricingBillable : null,
++    pricingModel: typeof metaStatus?.pricingModel === "string" ? metaStatus.pricingModel : null,
++    lastStatusAt:
++      typeof metaStatus?.lastStatusAt === "string"
++        ? metaStatus.lastStatusAt
++        : typeof webSessionStatus?.lastStatusAt === "string"
++          ? webSessionStatus.lastStatusAt
++          : null,
++    conversationId:
++      typeof metaStatus?.conversationId === "string" ? metaStatus.conversationId : null,
++    statusDetail: typeof metaStatus?.statusDetail === "string" ? metaStatus.statusDetail : null,
++    errorData:
++      metaStatus?.errorData && typeof metaStatus.errorData === "object" ? metaStatus.errorData : null,
++    errors: Array.isArray(metaStatus?.errors) ? metaStatus.errors : null,
++  };
++}
++
++export function normalizeCampaignMessageStatus(
++  lastStatus: string | null,
++  fallbackStatus: string
++): CampaignMetaStatus["status"] {
++  const value = (lastStatus || fallbackStatus || "").trim().toLowerCase();
++  switch (value) {
++    case "read":
++      return "read";
++    case "delivered":
++      return "delivered";
++    case "failed":
++      return "failed";
++    case "sent":
++    default:
++      return fallbackStatus === "FAILED" ? "failed" : "sent";
++  }
++}
++
++export function stringifyCampaignError(value: unknown) {
++  if (!value) return null;
++  if (typeof value === "string") return value;
++  try {
++    return JSON.stringify(value);
++  } catch {
++    return String(value);
++  }
++}
++
++export function isUtilityPricingCategory(value: string | null) {
++  return (value ?? "").trim().toLowerCase() === "utility";
++}
++
++export function isDeliveredForCampaignBilling(status: CampaignMetaStatus["status"]) {
++  return status === "delivered" || status === "read";
++}
++
++export function resolveCampaignBillingStatus(item: {
++  status: CampaignMetaStatus["status"];
++  pricingCategory: string | null;
++}) {
++  if (!isDeliveredForCampaignBilling(item.status)) {
++    return {
++      billable: false,
++      nonBillingReason: item.status === "failed" ? "failed" : "not_delivered",
++    };
++  }
++  if (!isUtilityPricingCategory(item.pricingCategory)) {
++    return {
++      billable: false,
++      nonBillingReason: "not_utility_category",
++    };
++  }
++  return {
++    billable: true,
++    nonBillingReason: null,
++  };
++}
++
++export function buildCampaignMetaStatusItem(item: {
++  waId: string;
++  messageId?: string | null;
++  templateName: string | null;
++  status: string;
++  errorBody: string | null;
++  rawPayload: Prisma.JsonValue | null;
++  createdAt?: Date | string | null;
++}): CampaignMetaStatus {
++  const metaStatus = extractMetaStatus(item.rawPayload);
++  const status = normalizeCampaignMessageStatus(metaStatus.lastStatus, item.status);
++  const billing = resolveCampaignBillingStatus({
++    status,
++    pricingCategory: metaStatus.pricingCategory,
++  });
++  const sentAt =
++    item.createdAt instanceof Date
++      ? item.createdAt.toISOString()
++      : typeof item.createdAt === "string"
++        ? item.createdAt
++        : null;
++  return {
++    waId: item.waId,
++    templateName: item.templateName,
++    status,
++    sentAt,
++    deliveredAt: isDeliveredForCampaignBilling(status) ? metaStatus.lastStatusAt : null,
++    billable: billing.billable,
++    nonBillingReason: billing.nonBillingReason,
++    pricingCategory: metaStatus.pricingCategory,
++    pricingBillable: metaStatus.pricingBillable,
++    pricingModel: metaStatus.pricingModel,
++    conversationId: metaStatus.conversationId,
++    error:
++      item.errorBody ||
++      metaStatus.statusDetail ||
++      stringifyCampaignError(metaStatus.errorData) ||
++      stringifyCampaignError(metaStatus.errors),
++  };
++}
++
++export function buildCampaignSeedFallbackStatusItems(
++  campaign: {
++    sentCount: number;
++    blockedCount: number;
++    status: string;
++    templateName: string;
++  },
++  seed: CampaignDraftSeed
++): CampaignMetaStatus[] {
++  const sentLimit = Math.max(campaign.sentCount || 0, 0);
++  const blockedLimit = sentLimit + Math.max(campaign.blockedCount || 0, 0);
++  return seed.recipients.map((waId, index) => {
++    const wasSent = index < sentLimit;
++    const wasBlockedOrFailed = !wasSent && index < blockedLimit;
++    return {
++      waId,
++      templateName: seed.templateName || campaign.templateName,
++      status: wasSent ? "sent" : !wasBlockedOrFailed && ["sending", "scheduled"].includes(campaign.status) ? "pending" : "failed",
++      sentAt: null,
++      deliveredAt: null,
++      billable: false,
++      nonBillingReason: wasSent
++        ? "status_unconfirmed"
++        : wasBlockedOrFailed
++          ? "failed_or_blocked"
++          : ["sending", "scheduled"].includes(campaign.status) ? "awaiting_processing" : "missing_individual_history",
++      pricingCategory: null,
++      pricingBillable: null,
++      pricingModel: null,
++      conversationId: null,
++      error: wasSent
++        ? "Status Meta detalhado indisponivel; exibido a partir do historico da campanha."
++        : wasBlockedOrFailed
++          ? "Envio bloqueado ou falhou; status Meta detalhado indisponivel."
++          : ["sending", "scheduled"].includes(campaign.status) ? "Destinatário aguardando processamento; nenhuma submissão individual comprovada." : "Envio individual nao encontrado no historico preservado.",
++    };
++  });
++}
++
++export function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMetaSummary {
++  return items.reduce<CampaignMetaSummary>(
++    (acc, item) => {
++      switch (item.status) {
++        case "read":
++          acc.totalRead += 1;
++          break;
++        case "delivered":
++          acc.totalDelivered += 1;
++          break;
++        case "opt_out":
++          acc.totalOptOut += 1;
++          break;
++        case "blocked":
++          acc.totalBlocked += 1;
++          break;
++        case "skipped":
++          acc.totalSkipped += 1;
++          break;
++        case "failed":
++          acc.totalFailed += 1;
++          break;
++        case "pending":
++          acc.totalPending += 1;
++          break;
++        case "sent":
++        default:
++          acc.totalSent += 1;
++          break;
++      }
++      return acc;
++    },
++    {
++      totalSent: 0,
++      totalDelivered: 0,
++      totalRead: 0,
++      totalFailed: 0,
++      totalBlocked: 0,
++      totalOptOut: 0,
++      totalSkipped: 0,
++      totalPending: 0,
++    }
++  );
++}
++
++export function campaignRecipientIdentityCandidates(value: string) {
++  return new Set(buildCrmWhatsappIdentityCandidates([value]));
++}
++
++export function campaignRecipientIdentitiesMatch(left: Set<string>, right: Set<string>) {
++  for (const candidate of left) {
++    if (right.has(candidate)) return true;
++  }
++  return false;
++}
++
++export function campaignMetaStatusRank(status: CampaignMetaStatus["status"]) {
++  switch (status) {
++    case "read":
++      return 8;
++    case "delivered":
++      return 7;
++    case "opt_out":
++      return 6;
++    case "blocked":
++      return 5;
++    case "failed":
++      return 4;
++    case "skipped":
++      return 3;
++    case "sent":
++      return 2;
++    case "pending":
++    default:
++      return 1;
++  }
++}
++
++export function campaignMetaStatusTime(item: CampaignMetaStatus) {
++  const value = item.deliveredAt ?? item.sentAt;
++  if (!value) return 0;
++  const parsed = Date.parse(value);
++  return Number.isNaN(parsed) ? 0 : parsed;
++}
++
++export function pickCampaignRecipientStatus(items: CampaignMetaStatus[]) {
++  return items.reduce((selected, item) => {
++    const rankDifference = campaignMetaStatusRank(item.status) - campaignMetaStatusRank(selected.status);
++    if (rankDifference > 0) return item;
++    if (rankDifference === 0 && campaignMetaStatusTime(item) > campaignMetaStatusTime(selected)) return item;
++    return selected;
++  });
++}
++
++export function buildCampaignRecipientResultStatuses(params: {
++  campaign: { sentCount: number; blockedCount: number; status: string; templateName: string };
++  seed: CampaignDraftSeed;
++  resultItems: CampaignMetaStatus[];
++}) {
++  const indexedResults = params.resultItems.map((item, index) => ({
++    index,
++    item,
++    candidates: campaignRecipientIdentityCandidates(item.waId),
++  }));
++
++  const visibleItems: CampaignMetaStatus[] = [];
++  const consumedResultIndexes = new Set<number>();
++  const consumedSeedIdentities: Set<string>[] = [];
++  params.seed.recipients.forEach((waId, index) => {
++    const seedCandidates = campaignRecipientIdentityCandidates(waId);
++    if (
++      consumedSeedIdentities.some((candidates) =>
++        campaignRecipientIdentitiesMatch(candidates, seedCandidates)
++      )
++    ) {
++      return;
++    }
++    consumedSeedIdentities.push(seedCandidates);
++    const matchingResults = indexedResults.filter(
++      (result) =>
++        !consumedResultIndexes.has(result.index) &&
++        campaignRecipientIdentitiesMatch(seedCandidates, result.candidates)
++    );
++    if (matchingResults.length) {
++      visibleItems.push(pickCampaignRecipientStatus(matchingResults.map((result) => result.item)));
++      matchingResults.forEach((result) => consumedResultIndexes.add(result.index));
++      return;
++    }
++    const fallbackSeed = { ...params.seed, recipients: [waId] };
++    const sentLimit = Math.max(params.campaign.sentCount || 0, 0);
++    const blockedLimit = sentLimit + Math.max(params.campaign.blockedCount || 0, 0);
++    const sentCount = index < sentLimit ? 1 : 0;
++    const blockedCount = index >= sentLimit && index < blockedLimit ? 1 : 0;
++    visibleItems.push(
++      ...buildCampaignSeedFallbackStatusItems(
++        { ...params.campaign, sentCount, blockedCount },
++        fallbackSeed
++      )
++    );
++  });
++
++  indexedResults.forEach((result) => {
++    if (consumedResultIndexes.has(result.index)) return;
++    const matchingResults = indexedResults.filter(
++      (candidate) =>
++        !consumedResultIndexes.has(candidate.index) &&
++        campaignRecipientIdentitiesMatch(result.candidates, candidate.candidates)
++    );
++    visibleItems.push(pickCampaignRecipientStatus(matchingResults.map((candidate) => candidate.item)));
++    matchingResults.forEach((candidate) => consumedResultIndexes.add(candidate.index));
++  });
++  return visibleItems;
++}
+diff --git a/apps/whatsapp-agent/src/campaigns/position6ApprovedDisposition.ts b/apps/whatsapp-agent/src/campaigns/position6ApprovedDisposition.ts
+new file mode 100644
+index 00000000..3049c85b
+--- /dev/null
++++ b/apps/whatsapp-agent/src/campaigns/position6ApprovedDisposition.ts
+@@ -0,0 +1,63 @@
++// Owner-approved historical disposition: exact case only; no international support expansion.
++export const POSITION6_APPROVAL = {
++    "decisionId": "owner-position6-e643ebba-historical-disposition-v1",
++    "scope": {
++        "clientId": "10a98bf4-1587-43e8-83d4-e3a48c5d79d9",
++        "campaignId": "94b5805b-5c6d-4c89-b047-959209261c21",
++        "parentCampaignId": "b019039e-0a89-4a42-9f33-c214323b888f",
++        "batchId": "d473aec1-8ffa-40b9-8bab-e6819153ae4c",
++        "linkId": "6c896fcd-d55c-4cf8-9aab-ca976413cc90",
++        "jobId": "1eb96f7f-50ae-4d5e-9124-411923945efb",
++        "runId": "03856c7c-c390-419a-b2f3-758dd669e394",
++        "taskId": "7d9902c0-4946-4250-8205-400e41be0941",
++        "intentEventId": "96f7b2c3-adc2-47f5-ac1c-5d8ba66b3d85",
++        "acceptedEventId": "a0cdb650-c6f9-4741-85d6-c3b9099e9008",
++        "sentWebhookId": "0938c7ee-500b-4877-a0b1-beceec2e5766",
++        "deliveredWebhookId": "64cebb0f-4d48-4c6b-9bf2-02e6f2ed69d4",
++        "seedEventId": "7cdbc3c9-3cce-4429-8aa9-1524636a561c",
++        "snapshotEventId": "a3429d22-11b2-490b-abc3-67c2fe436875"
++    },
++    "taskHash": "c91588a21bd6fbc8e85598e30b907f193388751dfadea56d9483c0bca9a9b979",
++    "metaMessageIdSha256": "46979b261213be225ced7ed54a51223e0739b209cd5da761d8787a4478874823",
++    "accountSha256": "a2eea3a649c0e3569a913d6967cf2cf7c0c058f838dc283da91c9bde44b37ef2",
++    "recipientSha256": "9a8e55ade78321efceda436089cdf2bfdc23c7bfa5d76069195839bafcdceaee",
++    "sources": {
++        "seed": "534220cda02fadad6728fa64f1e2b1102a8c6b1a83490a164d8885c517237048",
++        "snapshot": "9f2b24068ed19de96a6607092c5f5dd138385854bdb41dd1407def84dea8be48",
++        "intent": "7cb45a5d6bcc2d1d234f0b9d711ef18cf6bc39dd618737fb31f549755b4c8e7f",
++        "accepted": "69731d3105fccc798ea402ef5cd582156dd055cc6a5611b2828e20de9d50363a",
++        "sent": "5e6d68f991c97274705e98b6be2692f8675bbb143f4cc24dc32aca9fb3d12c00",
++        "delivered": "347c19d3d6dbef57424996991ab720222ebc0f7d9fdae4646b52db6c673bdd74",
++        "transport": "20de3b4c2736bef0ac22e520610c1230d637f50657ab4216d75cb91c388cad19",
++        "sendingLog": "4385dc6889c695d9304b85f006171d103599efeddf2eb3926233441548a12260",
++        "sentLog": "221a1fb4757f37858083e4aee46bc1b1dc0131580e30e7703d279d78e108619b"
++    },
++    "crmHashes": {
++        "contacts": {
++            "b2ab8ddc-1ef5-4de9-be01-302e27cd6724": "0c3b34bc1f4a8ef73ae60b11355f919f0d403c7e26cae2e07413a72df392d651"
++        },
++        "leads": {
++            "cmtdnrwpm004f4s7dv099zziv": "a79d1df3fdce7e18099b1293fd8ee6b363337b7f1afdb9d9dce2ea1271dfc0b4"
++        },
++        "conversations": {
++            "dee8fcb1-4f8b-4442-820b-47eef12a9576": "c65022c23abd2c7cbda3a23c3698bb56687748227276e32fc472aa52eb0687d9"
++        },
++        "runtimes": {
++            "122fa7f3-fedf-4d98-ae2d-bd68e65878db": "f971062cf64999efe393840682bd49665c99dbc3b1bfe726e40125453ad257b0"
++        }
++    },
++    "preservedOutboundHashes": {
++        "872f3fb0-318a-43f8-aa33-e5e9662ec080": "d4e5c784296ae3fa63973628d666eb6469814c9f9da2107d3c631994babb6535",
++        "acc76fe6-2b72-4358-80d5-ff09fabf202b": "aefa7f8304514556eda8228fb3347466cba00d8f8b97560a408424f48d0717cc",
++        "01ed3f7e-7c25-49b3-b628-f75efe832b18": "0949aa5f39e3f4550481b173377f05212f7c59fccc860b8d92c916539e7d9dfe",
++        "d16b6f2a-951c-4576-8a5f-5c0b4bfb0eab": "1b562a160a65ae401800f5d315aa7f00015254f57d4fdf64f84e92f39b63cbf1",
++        "2a7472b8-29b3-47cf-accf-e84df7d5158f": "743f9da17fac0d7e9de0341b105a4d68169e31de89eccd3a5d0240f69c6dabff"
++    },
++    "operationalHashes": {
++        "campaign": "6af05c8289f13a198162db4f20d73808acc398c96d543748b17f2cdf85eb7561",
++        "parent": "c211de7ba477d8b1175e42f2646ef18517bb0580e589aa013101ebce0ed818f3",
++        "batch": "543e98dcbf50bf3d97a2b0815970e8759f134bc6da8b7e94fce3f2daac4ee16a",
++        "link": "b44961c56b97607b2af0ba4198f3bd84fcbc280c33cf230e3fc74e5065b790ac",
++        "job": "c2c052f23e578a38af8846beaf4062b11c2a081a22588bd3c1c8a1d90de843d0"
++    }
++} as const;
+diff --git a/apps/whatsapp-agent/src/http/routes.ts b/apps/whatsapp-agent/src/http/routes.ts
+index 0bbe9558..c6d25114 100644
+--- a/apps/whatsapp-agent/src/http/routes.ts
++++ b/apps/whatsapp-agent/src/http/routes.ts
+@@ -1,3 +1,4 @@
++import { extractMetaStatus, normalizeCampaignMessageStatus, stringifyCampaignError, isUtilityPricingCategory, isDeliveredForCampaignBilling, resolveCampaignBillingStatus, buildCampaignMetaStatusItem, buildCampaignSeedFallbackStatusItems, summarizeCampaignMetaStatuses, campaignRecipientIdentityCandidates, campaignRecipientIdentitiesMatch, campaignMetaStatusRank, campaignMetaStatusTime, pickCampaignRecipientStatus, buildCampaignRecipientResultStatuses } from "../campaigns/campaignRecipientResultTruth.js";
+ import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from "../campaigns/campaignEligibility.js";
+ import { reactiveRoutingDecision, type ReactiveRoutingDecision, revalidateReactiveSubmission } from "../whatsapp/reactiveOutboundPolicy.js";
+ import { isAutomationConversation, resolveAutomationReadPermission } from "../inbox/automationAccess.js";
+@@ -29811,45 +29812,7 @@ type CampaignDraftRecipientResolution = {
+   }>;
+ };
+ 
+-function extractMetaStatus(rawPayload: unknown) {
+-  const typed =
+-    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+-      ? (rawPayload as Record<string, unknown>)
+-      : null;
+-  const metaStatus =
+-    typed?.metaStatus && typeof typed.metaStatus === "object" && !Array.isArray(typed.metaStatus)
+-      ? (typed.metaStatus as Record<string, unknown>)
+-      : null;
+-  const webSessionStatus =
+-    typed?.webSessionStatus && typeof typed.webSessionStatus === "object" && !Array.isArray(typed.webSessionStatus)
+-      ? (typed.webSessionStatus as Record<string, unknown>)
+-      : null;
+-  return {
+-    lastStatus:
+-      typeof metaStatus?.lastStatus === "string"
+-        ? metaStatus.lastStatus
+-        : typeof webSessionStatus?.lastStatus === "string"
+-          ? webSessionStatus.lastStatus
+-          : null,
+-    pricingCategory:
+-      typeof metaStatus?.pricingCategory === "string" ? metaStatus.pricingCategory : null,
+-    pricingBillable:
+-      typeof metaStatus?.pricingBillable === "boolean" ? metaStatus.pricingBillable : null,
+-    pricingModel: typeof metaStatus?.pricingModel === "string" ? metaStatus.pricingModel : null,
+-    lastStatusAt:
+-      typeof metaStatus?.lastStatusAt === "string"
+-        ? metaStatus.lastStatusAt
+-        : typeof webSessionStatus?.lastStatusAt === "string"
+-          ? webSessionStatus.lastStatusAt
+-          : null,
+-    conversationId:
+-      typeof metaStatus?.conversationId === "string" ? metaStatus.conversationId : null,
+-    statusDetail: typeof metaStatus?.statusDetail === "string" ? metaStatus.statusDetail : null,
+-    errorData:
+-      metaStatus?.errorData && typeof metaStatus.errorData === "object" ? metaStatus.errorData : null,
+-    errors: Array.isArray(metaStatus?.errors) ? metaStatus.errors : null,
+-  };
+-}
++
+ 
+ function extractCampaignIdFromRawPayload(rawPayload: unknown) {
+   const typed =
+@@ -30597,108 +30560,21 @@ function incrementCampaignBlockedReason(
+   counts.set(reason, (counts.get(reason) ?? 0) + 1);
+ }
+ 
+-function normalizeCampaignMessageStatus(
+-  lastStatus: string | null,
+-  fallbackStatus: string
+-): CampaignMetaStatus["status"] {
+-  const value = (lastStatus || fallbackStatus || "").trim().toLowerCase();
+-  switch (value) {
+-    case "read":
+-      return "read";
+-    case "delivered":
+-      return "delivered";
+-    case "failed":
+-      return "failed";
+-    case "sent":
+-    default:
+-      return fallbackStatus === "FAILED" ? "failed" : "sent";
+-  }
+-}
++
+ 
+ function normalizeInboxMessageStatus(lastStatus: string | null, fallbackStatus: string) {
+   return normalizeCampaignMessageStatus(lastStatus, fallbackStatus).toUpperCase();
+ }
+ 
+-function stringifyCampaignError(value: unknown) {
+-  if (!value) return null;
+-  if (typeof value === "string") return value;
+-  try {
+-    return JSON.stringify(value);
+-  } catch {
+-    return String(value);
+-  }
+-}
+ 
+-function isUtilityPricingCategory(value: string | null) {
+-  return (value ?? "").trim().toLowerCase() === "utility";
+-}
+ 
+-function isDeliveredForCampaignBilling(status: CampaignMetaStatus["status"]) {
+-  return status === "delivered" || status === "read";
+-}
+ 
+-function resolveCampaignBillingStatus(item: {
+-  status: CampaignMetaStatus["status"];
+-  pricingCategory: string | null;
+-}) {
+-  if (!isDeliveredForCampaignBilling(item.status)) {
+-    return {
+-      billable: false,
+-      nonBillingReason: item.status === "failed" ? "failed" : "not_delivered",
+-    };
+-  }
+-  if (!isUtilityPricingCategory(item.pricingCategory)) {
+-    return {
+-      billable: false,
+-      nonBillingReason: "not_utility_category",
+-    };
+-  }
+-  return {
+-    billable: true,
+-    nonBillingReason: null,
+-  };
+-}
+ 
+-function buildCampaignMetaStatusItem(item: {
+-  waId: string;
+-  messageId?: string | null;
+-  templateName: string | null;
+-  status: string;
+-  errorBody: string | null;
+-  rawPayload: Prisma.JsonValue | null;
+-  createdAt?: Date | string | null;
+-}): CampaignMetaStatus {
+-  const metaStatus = extractMetaStatus(item.rawPayload);
+-  const status = normalizeCampaignMessageStatus(metaStatus.lastStatus, item.status);
+-  const billing = resolveCampaignBillingStatus({
+-    status,
+-    pricingCategory: metaStatus.pricingCategory,
+-  });
+-  const sentAt =
+-    item.createdAt instanceof Date
+-      ? item.createdAt.toISOString()
+-      : typeof item.createdAt === "string"
+-        ? item.createdAt
+-        : null;
+-  return {
+-    waId: item.waId,
+-    templateName: item.templateName,
+-    status,
+-    sentAt,
+-    deliveredAt: isDeliveredForCampaignBilling(status) ? metaStatus.lastStatusAt : null,
+-    billable: billing.billable,
+-    nonBillingReason: billing.nonBillingReason,
+-    pricingCategory: metaStatus.pricingCategory,
+-    pricingBillable: metaStatus.pricingBillable,
+-    pricingModel: metaStatus.pricingModel,
+-    conversationId: metaStatus.conversationId,
+-    error:
+-      item.errorBody ||
+-      metaStatus.statusDetail ||
+-      stringifyCampaignError(metaStatus.errorData) ||
+-      stringifyCampaignError(metaStatus.errors),
+-  };
+-}
++
++
++
++
++
+ 
+ async function enrichCampaignMetaStatusWithCurrentContacts(
+   prisma: ReturnType<typeof getPrisma>,
+@@ -30759,198 +30635,21 @@ async function enrichCampaignMetaStatusWithCurrentContacts(
+   });
+ }
+ 
+-function buildCampaignSeedFallbackStatusItems(
+-  campaign: {
+-    sentCount: number;
+-    blockedCount: number;
+-    status: string;
+-    templateName: string;
+-  },
+-  seed: CampaignDraftSeed
+-): CampaignMetaStatus[] {
+-  const sentLimit = Math.max(campaign.sentCount || 0, 0);
+-  const blockedLimit = sentLimit + Math.max(campaign.blockedCount || 0, 0);
+-  return seed.recipients.map((waId, index) => {
+-    const wasSent = index < sentLimit;
+-    const wasBlockedOrFailed = !wasSent && index < blockedLimit;
+-    return {
+-      waId,
+-      templateName: seed.templateName || campaign.templateName,
+-      status: wasSent ? "sent" : "failed",
+-      sentAt: null,
+-      deliveredAt: null,
+-      billable: false,
+-      nonBillingReason: wasSent
+-        ? "status_unconfirmed"
+-        : wasBlockedOrFailed
+-          ? "failed_or_blocked"
+-          : "missing_individual_history",
+-      pricingCategory: null,
+-      pricingBillable: null,
+-      pricingModel: null,
+-      conversationId: null,
+-      error: wasSent
+-        ? "Status Meta detalhado indisponivel; exibido a partir do historico da campanha."
+-        : wasBlockedOrFailed
+-          ? "Envio bloqueado ou falhou; status Meta detalhado indisponivel."
+-          : "Envio individual nao encontrado no historico preservado.",
+-    };
+-  });
+-}
+ 
+-function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMetaSummary {
+-  return items.reduce<CampaignMetaSummary>(
+-    (acc, item) => {
+-      switch (item.status) {
+-        case "read":
+-          acc.totalRead += 1;
+-          break;
+-        case "delivered":
+-          acc.totalDelivered += 1;
+-          break;
+-        case "opt_out":
+-          acc.totalOptOut += 1;
+-          break;
+-        case "blocked":
+-          acc.totalBlocked += 1;
+-          break;
+-        case "skipped":
+-          acc.totalSkipped += 1;
+-          break;
+-        case "failed":
+-          acc.totalFailed += 1;
+-          break;
+-        case "pending":
+-          acc.totalPending += 1;
+-          break;
+-        case "sent":
+-        default:
+-          acc.totalSent += 1;
+-          break;
+-      }
+-      return acc;
+-    },
+-    {
+-      totalSent: 0,
+-      totalDelivered: 0,
+-      totalRead: 0,
+-      totalFailed: 0,
+-      totalBlocked: 0,
+-      totalOptOut: 0,
+-      totalSkipped: 0,
+-      totalPending: 0,
+-    }
+-  );
+-}
+ 
+-function campaignRecipientIdentityCandidates(value: string) {
+-  return new Set(buildCrmWhatsappIdentityCandidates([value]));
+-}
+ 
+-function campaignRecipientIdentitiesMatch(left: Set<string>, right: Set<string>) {
+-  for (const candidate of left) {
+-    if (right.has(candidate)) return true;
+-  }
+-  return false;
+-}
+ 
+-function campaignMetaStatusRank(status: CampaignMetaStatus["status"]) {
+-  switch (status) {
+-    case "read":
+-      return 8;
+-    case "delivered":
+-      return 7;
+-    case "opt_out":
+-      return 6;
+-    case "blocked":
+-      return 5;
+-    case "failed":
+-      return 4;
+-    case "skipped":
+-      return 3;
+-    case "sent":
+-      return 2;
+-    case "pending":
+-    default:
+-      return 1;
+-  }
+-}
+ 
+-function campaignMetaStatusTime(item: CampaignMetaStatus) {
+-  const value = item.deliveredAt ?? item.sentAt;
+-  if (!value) return 0;
+-  const parsed = Date.parse(value);
+-  return Number.isNaN(parsed) ? 0 : parsed;
+-}
+ 
+-function pickCampaignRecipientStatus(items: CampaignMetaStatus[]) {
+-  return items.reduce((selected, item) => {
+-    const rankDifference = campaignMetaStatusRank(item.status) - campaignMetaStatusRank(selected.status);
+-    if (rankDifference > 0) return item;
+-    if (rankDifference === 0 && campaignMetaStatusTime(item) > campaignMetaStatusTime(selected)) return item;
+-    return selected;
+-  });
+-}
+ 
+-function buildCampaignRecipientResultStatuses(params: {
+-  campaign: { sentCount: number; blockedCount: number; status: string; templateName: string };
+-  seed: CampaignDraftSeed;
+-  resultItems: CampaignMetaStatus[];
+-}) {
+-  const indexedResults = params.resultItems.map((item, index) => ({
+-    index,
+-    item,
+-    candidates: campaignRecipientIdentityCandidates(item.waId),
+-  }));
+ 
+-  const visibleItems: CampaignMetaStatus[] = [];
+-  const consumedResultIndexes = new Set<number>();
+-  const consumedSeedIdentities: Set<string>[] = [];
+-  params.seed.recipients.forEach((waId, index) => {
+-    const seedCandidates = campaignRecipientIdentityCandidates(waId);
+-    if (
+-      consumedSeedIdentities.some((candidates) =>
+-        campaignRecipientIdentitiesMatch(candidates, seedCandidates)
+-      )
+-    ) {
+-      return;
+-    }
+-    consumedSeedIdentities.push(seedCandidates);
+-    const matchingResults = indexedResults.filter(
+-      (result) =>
+-        !consumedResultIndexes.has(result.index) &&
+-        campaignRecipientIdentitiesMatch(seedCandidates, result.candidates)
+-    );
+-    if (matchingResults.length) {
+-      visibleItems.push(pickCampaignRecipientStatus(matchingResults.map((result) => result.item)));
+-      matchingResults.forEach((result) => consumedResultIndexes.add(result.index));
+-      return;
+-    }
+-    const fallbackSeed = { ...params.seed, recipients: [waId] };
+-    const sentLimit = Math.max(params.campaign.sentCount || 0, 0);
+-    const blockedLimit = sentLimit + Math.max(params.campaign.blockedCount || 0, 0);
+-    const sentCount = index < sentLimit ? 1 : 0;
+-    const blockedCount = index >= sentLimit && index < blockedLimit ? 1 : 0;
+-    visibleItems.push(
+-      ...buildCampaignSeedFallbackStatusItems(
+-        { ...params.campaign, sentCount, blockedCount },
+-        fallbackSeed
+-      )
+-    );
+-  });
+ 
+-  indexedResults.forEach((result) => {
+-    if (consumedResultIndexes.has(result.index)) return;
+-    const matchingResults = indexedResults.filter(
+-      (candidate) =>
+-        !consumedResultIndexes.has(candidate.index) &&
+-        campaignRecipientIdentitiesMatch(result.candidates, candidate.candidates)
+-    );
+-    visibleItems.push(pickCampaignRecipientStatus(matchingResults.map((candidate) => candidate.item)));
+-    matchingResults.forEach((candidate) => consumedResultIndexes.add(candidate.index));
+-  });
+-  return visibleItems;
+-}
++
++
++
++
++
++
+ 
+ function formatCampaignNonBillingReason(value: string | null) {
+   switch (value) {

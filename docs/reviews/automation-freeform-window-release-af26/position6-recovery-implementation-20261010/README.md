@@ -1,0 +1,42 @@
+# Out.15 / posição .6 — recuperação histórica A/B e contrato C
+
+**LOCAL VERIFIED / FOR INDEPENDENT REVIEW / NOT APPLIED / NOT ACKNOWLEDGED / NOT DEPLOYED.** Continuidade de e643ebbafaa851b1a0780d41eea0ea6c1079fce1, com disposição histórica aprovada pelo owner nesta rodada. [Decisão canônica](../../../saas/POSITION6_HISTORICAL_CRM_DISPOSITION_2026-10-10.md), [fontes originais](../position6-current-audit-20261010/PROVENANCE.json), [checklist único](../guard37-local-proposal-20261010/POSITION6_RECOVERY_CHECKLIST.md), [reprodução](REPRODUCE.md), [comandos offline preparados](COMMANDS_FOR_REVIEW.txt), [hashes](files.sha256).
+
+## Implementação e contratos
+
+A/B usa o verificador de aceitação/DELIVERED já existente, o decoder privado do seed, os eventos canônicos e o predicado de billing existente. O escopo é fixado em `position6ApprovedDisposition.ts`: tenant/child/parent/run/message .6, task/ref/hash, MetaID/conta/destinatário por hash, fontes originais, cinco Outbounds completos e quatro coleções CRM protegidas. Uma diferença exige nova auditoria; o CLI não adapta bindings. A política sintética aceita hashes diferentes **somente** no banco local nomeado `re7_position6_recovery_20261010`, confirmado pelo servidor PostgreSQL conectado e endereço loopback; mantém os IDs de escopo exatos. Não existe override produtivo ou suporte internacional novo.
+
+`campaignAcceptedDeliveryRecovery.ts` implementa quatro operações separadas. Dry-run e verify usam transação READ ONLY/REPEATABLE READ. Apply usa SERIALIZABLE e a ordem Client → batch → job; statement_timeout 8s, lock_timeout 1s, espera do pool 2s, transação 15s. Nenhum provider, runner, scheduler, entrypoint ou migration é executado.
+
+- Outbound único: `status:SENT` significa aceitação; `rawPayload.metaStatus.lastStatus:delivered` é o fato reportado pela Meta. Conta/MetaID/recipient/template/idioma/components/retorno vêm das fontes originais. `bodyText:null`, razão `effective_rendered_body_not_preserved_in_original_sources`, `httpStatus:null`, confirmação humana false. Não há texto fabricado nem código HTTP inferido.
+- `createdAt` é reconstruído da aceitação Event original 15:40:35.501 UTC / 12:40:35.501 Fortaleza. Payload preserva intent 15:40:34.964, JSON 35.454, resposta registrada 35.500 e entrega provider 15:40:43 UTC. Eventos de recuperação têm data atual de gravação, com tempos originais explícitos; não se fazem passar por eventos originalmente gravados.
+- Event `campaign.crm.historical_disposition`: decisão, referências/hash, CRM não materializado, retorno não aplicado, janela não fabricada e hashes dos Contact/Lead/Conversation/runtime Web. Esses registros não recebem escrita. CRM continua obrigatório nos caminhos normais; nenhum resolvedor internacional foi ampliado.
+- Event `campaign.message.sent` referencia o Outbound efetivo e a aceitação, sem retry. `meta.usage.estimated`/`updated` usam builder canônico e pricing original utility/PMP/billable. Custo/country/estimativa monetária permanecem desconhecidos; não se inventa taxa BR para número internacional.
+- Billing consulta DB com escopo Meta/conta original. O inbound Web antigo não é certificado de janela Meta. Predicado canônico retorna `unknown_window`; o Event `billing.active_message.recovery_disposition` registra essa pendência/fato, sem gerar cobrança e **sem perdoar dívida**. Não há afirmação de quitação ou janela aberta.
+- Recibo específico `campaign.accepted_delivery.reconciled`, versão 2, vincula Outbound completo, MetaID, fontes, disposição CRM, hashes de todos os eventos obrigatórios, totais, actor e task/ref/hash. Recibo incompleto ou alterado nega.
+
+Os leitores reais `buildCampaignDetailPayload` (filho e controlador), conjunto e lista foram exercitados no PostgreSQL sintético. Extração de funções puras para `campaignRecipientResultTruth.ts` evita resolvedor de totais paralelo. **Delta necessário de Result Truth:** ausência de histórico individual em campanha `sending/scheduled`, após posições já enviadas/bloqueadas, significa `pending/awaiting_processing`; anteriormente era exibida como `failed`. Fatos explícitos FAILED continuam FAILED; ausência em estados terminais preserva o fallback anterior. Não muda status persistido, scheduler, job, identidade ou audiência.
+
+Resultado verificado: seis Outbounds SENT, seis entregas reportadas, cinco posições pending sem submissão; total 11; child.sentCount 5→6 atribuído absolutamente, nunca incrementado no replay. Controller.sentCount permanece 0; agregado soma seus filhos uma vez. As 244 exclusões de audiência permanecem separadas, batch.blockedCount e controller.blockedCount intactos. Campanhas sending, lote running, vínculo scheduled e job queued/attempt1/operational_suspension permanecem.
+
+C chama o mecanismo canônico de arquivamento da tarefa com a razão verdadeira `durable_accepted_delivered_historical_crm_disposition_no_retry`, somente após verifier completo. Arquiva a tarefa integral em audit e mantém guarda fechada (37→38 no caso sintético), sem retomar job, lease, runner ou próximos destinatários. Wrapper FAILED131026 conserva `durable_failed_result_no_retry` e seu contrato; regressão existente passou. Replay C exige audit/recibo/task/hash/razão exatos, guarda fechada38 e nenhuma tarefa/falha.
+
+## Provas e limites
+
+[RESULTS.json](RESULTS.json) distingue os efeitos. **29/29 provas novas PASS**: 26 recuperação/CLI e 3 Result Truth; **1/1 regressão FAILED131026 PASS**; TypeScript noEmit PASS. Node 20.20.0 e PostgreSQL 16.15 reais locais. CLI testado em subprocessos reais. SQL trigger de falha faz rollback real de resultado, eventos, contador e recibo. Falha entre SQL e ledger é **injeção de EIO em fs.renameSync**, não evidência de crash/pane de disco real. Cada fixture contém somente dados sintéticos; nomes e IDs de caso fixos permitem testar o guard de escopo, mas os hashes de conteúdo são sintéticos e nunca completam lacunas produtivas.
+
+Duas aplicações concorrentes sobre o mesmo plano também foram ensaiadas em transações PostgreSQL reais: um único resultado/recibo, replay ou recusa controlada P2002/P2034, sem provider.
+
+Negativas: resultado/recibo incompatíveis, unicidade sem recibo, fonte/conta/tenant/tarefa alterados, CRM humano modificado, lease, posição pendente com intent, status posterior contraditório, eventos/usage/billing ausentes, Outbound ou totais adulterados, lock/.uncertain, guarda aberta/geração divergente, archive errado e override sintético em outro DB. Provider é proibido; chamadas observadas zero. Os cinco Outbounds e quatro registros CRM são rehashados; .7–.11 não recebem escrita/submissão. Provas anteriores não afetadas foram reutilizadas, não reatribuídas.
+
+SQL e ledger de filesystem **não formam uma transação atômica**. Receipt SQL já está durável antes do ack; o ack verifica sob locks SQL e arquivo canônico. EIO antes do archive deixa SQL durável e tarefa retida, permitindo novo verify e ack específico, sem repetir apply/envio. Falha de commit/resposta após archive exige leitura consistente de DB/ledger/receipt; não autoriza repetir operação incerta, abrir guarda ou fabricar sucesso. Nenhum atestado de drain/global queue é produzido por esta implementação.
+
+## Alcance executável
+
+API: leitores de Result Truth extraídos e fallback pending; módulo administrativo A/B/C e CLI, sem ligação ao runner normal. Worker mínimo e frontend não têm delta executável nesta rodada; tar/build/pacote frontend3227 preservados. Schema, migrations, providers, resolvedor internacional e persistências preventivas anteriores não mudaram. Não houve build funcional ou preparação de janela.
+
+## Próximo passo revisável
+
+Revisão independente dos bytes A/B/C e do tratamento `unknown_window`; depois autorização própria para captura fresca, backup/restore adequado, dry-run produtivo e eventual apply → verify → ack. A aprovação da disposição histórica **não autorizou** estas mutações. Input privado foi montado localmente somente com as fontes auditadas, sem acesso SSH/DB produtivo nesta rodada; não é estado/fence atual. Actor, ambiente autenticado, frescor de backup, execução exclusiva e inventário global precisam ser conferidos antes de uma operação futura. Não alterar hashes/bindings para aceitar drift.
+
+Produção não recebeu apply, ack, reenvio, abertura, retomada, instalação ou deploy. Estado produtivo mencionado continua sendo o observado na auditoria anterior, não reatestado aqui. Frontend3227 PRESERVED/PENDING; CSV/Syer, suporte internacional, CRA-PR, multilote/AUTO e setembro CLOSED permanecem separados.

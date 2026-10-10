@@ -205,14 +205,20 @@ export function isCampaignMutation(method: string | undefined, pathname: string)
 
 // Administrative recovery only. Caller must prove a durable reconciliation receipt.
 // Archive the full task in the fsynced ledger audit; never reopen admissions here.
-export function acknowledgeReconciledCampaignTask(params: {
+function archiveReconciledCampaignTask(params: {
   generation: number; taskId: string; reference: NonNullable<Task["reference"]>;
   expectedTaskHash: string; receiptId: string; actor: string;
-}) {
+}, reason: "durable_failed_result_no_retry" | "durable_accepted_delivered_historical_crm_disposition_no_retry") {
   if (!params.actor.trim() || !params.receiptId.trim()) throw new Error("reconciliation_actor_receipt_required");
   locked(s => {
     const prior = s.audit.find(a => a.action === "provider_reconciled" && a.receiptId === params.receiptId);
     if (prior) {
+      if (reason === "durable_accepted_delivered_historical_crm_disposition_no_retry") {
+        const archived = prior.resolvedTask?.task;
+        if (s.open || s.generation !== params.generation + 1 || Object.keys(s.tasks).length || pendingFault(filename()) ||
+          prior.reason !== reason || !archived || JSON.stringify(archived.reference) !== JSON.stringify(params.reference) ||
+          crypto.createHash("sha256").update(JSON.stringify(archived, (_key, item) => item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest("hex") !== params.expectedTaskHash) throw new Error("reconciliation_archived_result_drift");
+      }
       if (prior.resolvedTask?.id !== params.taskId) throw new Error("reconciliation_receipt_conflict");
       return;
     }
@@ -225,10 +231,34 @@ export function acknowledgeReconciledCampaignTask(params: {
       item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest("hex");
     if (taskHash !== params.expectedTaskHash) throw new Error("reconciliation_task_drift");
     s.generation++;
-    s.audit.push({ action: "provider_reconciled", actor: params.actor, reason: "durable_failed_result_no_retry",
+    s.audit.push({ action: "provider_reconciled", actor: params.actor, reason,
       at: new Date().toISOString(), generation: s.generation, receiptId: params.receiptId,
       resolvedTask: { id: params.taskId, task } });
     delete s.tasks[params.taskId]; // Resolved task survives in audit; pending tasks are never discarded.
   });
   return campaignOperationsStatus();
+}
+
+// Existing FAILED131026 callers retain their exact reason and contract.
+export function acknowledgeReconciledCampaignTask(params: Parameters<typeof archiveReconciledCampaignTask>[0]) {
+  return archiveReconciledCampaignTask(params, "durable_failed_result_no_retry");
+}
+// Only the result-specific verifier may call this administrative primitive.
+export function acknowledgeAcceptedDeliveredCampaignTask(params: Parameters<typeof archiveReconciledCampaignTask>[0]) {
+  return archiveReconciledCampaignTask(params, "durable_accepted_delivered_historical_crm_disposition_no_retry");
+}
+// Observation only: no mkdir/lock/write, no masked-open defaults. Used by the
+// offline recovery verifier, not by runtime admissions or drain certification.
+export function readCampaignReconciliationFence() {
+  const file = filename();
+  if (fs.existsSync(`${file}.lock`) || pendingFault(file)) throw new Error("reconciliation_fence_busy_or_uncertain");
+  const first = fs.lstatSync(file); if (!first.isFile() || first.isSymbolicLink()) throw new Error("reconciliation_fence_file_invalid");
+  const raw = fs.readFileSync(file), second = fs.lstatSync(file);
+  const value = JSON.parse(raw.toString("utf8")) as State;
+  if (first.ino !== second.ino || first.mtimeMs !== second.mtimeMs || first.size !== second.size ||
+    !raw.equals(fs.readFileSync(file)) || fs.existsSync(`${file}.lock`) || pendingFault(file)) throw new Error("reconciliation_fence_read_incomplete");
+  if (value.version !== 1 || typeof value.open !== "boolean" || !Number.isInteger(value.generation) ||
+    !value.tasks || typeof value.tasks !== "object" || Array.isArray(value.tasks) || !Array.isArray(value.audit) ||
+    !validatedHostId() || value.hostId !== validatedHostId()) throw new Error("reconciliation_fence_schema_or_topology_invalid");
+  return value;
 }

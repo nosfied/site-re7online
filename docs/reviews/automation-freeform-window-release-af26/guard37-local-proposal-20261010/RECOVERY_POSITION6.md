@@ -1,5 +1,7 @@
 # Recuperação específica proposed: posição .6 aceita e entregue, sem Outbound
 
+**Continuidade após decisão histórica do owner:** [A/B/C implementados e ensaiados localmente](../position6-recovery-implementation-20261010/README.md); [decisão canônica estritamente .6](../../../saas/POSITION6_HISTORICAL_CRM_DISPOSITION_2026-10-10.md). A proposta histórica abaixo permanece para rastreabilidade. Nenhum apply/ack produtivo foi autorizado ou executado.
+
 **Revisão posterior de162:** [fronteira webhook/CRM corrigida e provas novas](WEBHOOK_CRM_BOUNDARY_20261010.md); [checklist único .6](POSITION6_RECOVERY_CHECKLIST.md). Históricos abaixo preservados; sem apply/ack/deploy.
 
 **Continuidade local sobre85:** [implementação, provas e limites](IMPLEMENTATION_20261010.md). A descrição abaixo preserva a proposta/reprodução histórica. Prevenção agora implementada localmente; verificador/recibo .6 ensaiados, mas nenhum apply/ack/recuperação executado.

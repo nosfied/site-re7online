@@ -1,0 +1,38 @@
+{
+  "runtime": {
+    "node": "20.20.0",
+    "postgres": "16.15",
+    "scope": "local synthetic only"
+  },
+  "newRecoveryAndResultTruth": {
+    "tests": 29,
+    "pass": 29,
+    "fail": 0,
+    "recoveryAndCLI": 26,
+    "resultTruth": 3
+  },
+  "existingFailed131026Regression": {
+    "tests": 1,
+    "pass": 1
+  },
+  "typecheck": "PASS noEmit",
+  "effects": {
+    "SQL": "real isolated PostgreSQL",
+    "CLI": "real Node20 subprocesses",
+    "ledger": "real isolated filesystem/canonical archive",
+    "provider": "synthetic facts; outbound fetch prohibited; zero calls",
+    "rollback": "real PostgreSQL trigger error",
+    "SQLtoLedgerFailure": "injected fs.renameSync EIO; not a real crash",
+    "concurrentApply": "real PostgreSQL transactions; one result/receipt, replay or controlled P2002/P2034"
+  },
+  "production": {
+    "ssh": false,
+    "read": false,
+    "apply": false,
+    "ack": false,
+    "open": false,
+    "resume": false,
+    "deploy": false
+  },
+  "frontend3227": "PRESERVED/PENDING"
+}
