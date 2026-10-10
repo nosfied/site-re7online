@@ -1,0 +1,15 @@
+{
+  "reference": "309d865362216997a1ec85b9bbfd5ffb97778a7b",
+  "unchangedCausalSourceComparedTo": "a26dbb0ed39f9484bbbb71c5e7c753d561f07b93",
+  "execution": "Node20.20.0 + tsx source; no new build",
+  "sha256": {
+    "apps/whatsapp-agent/src/campaigns/campaignRunner.ts": "36242e0d52bd334a5df40d0dec6fc5e755b40ad33ee1c64b774c4dc6148e7d1e",
+    "apps/whatsapp-agent/src/campaigns/campaignEligibility.ts": "0fa080878993be6157b38de3f17cd396980511ba4e3bfe7cecfe9ed10c07199b",
+    "apps/whatsapp-agent/src/campaigns/campaignOperations.ts": "bf61a2bd54847cd86824ed9f7031b7ed6b66381ddc8e19c7ab2cd76996039ab4",
+    "apps/whatsapp-agent/src/campaigns/campaignOutboundConversation.ts": "2b21b12a43b74d09b974ea9ac3b2389986ff0292a319d1247b590d9b34087241",
+    "apps/whatsapp-agent/src/campaigns/campaignExecutionQueue.ts": "1012090fcc37392e0f643f46e994a3a838b8b0caf2c37e85a9ef2363949bbcd8",
+    "apps/whatsapp-agent/src/crm/crmWhatsappIdentity.ts": "2bdab685fb95ce4d27f243560f146cde9fe9c8809f46c99b0dd6733f54041c1b",
+    "apps/whatsapp-agent/src/crm/crmContactUpsert.ts": "6bda96e66f81a194fede5ed19d8c79a3d3f0437a1f00f4783d5f73f338835342",
+    "apps/whatsapp-agent/src/db/persist.ts": "a799ad09aed7b0ce6f25435c24dcf30205dc65733af9bec79d1d2fe30e5ab560"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "status": "INCIDENT_REPRODUCED",
+  "executedAtUtc": "2026-10-10T20:58:08Z",
+  "executedAtFortaleza": "2026-10-10T17:58:08-03:00",
+  "node": "20.20.0",
+  "postgres": "real isolated schema-only synthetic database",
+  "provider": "simulated fetch; no real provider",
+  "crmFailure": "real resolver; not injected",
+  "tests": {
+    "pass": 1,
+    "fail": 0,
+    "subtestDurationMs": 291.133712,
+    "tapDurationMs": 794.034144
+  },
+  "assertions": {
+    "submissions": 1,
+    "acceptedEvents": 1,
+    "outbounds": 0,
+    "contacts": 0,
+    "leads": 0,
+    "subsequentRecipientSubmissions": 0,
+    "taskPhase": "persisting",
+    "parentRemoved": true,
+    "guardOpen": false,
+    "jobStatus": "queued",
+    "attempt": 1,
+    "leaseFieldsNull": true,
+    "error": "Invalid WhatsApp number",
+    "stage": "crm_materialization",
+    "retryAllowed": false
+  },
+  "scopeLimit": "source via tsx, two synthetic recipients, no actual webhook replay, no production observation or preventive implementation"
+}

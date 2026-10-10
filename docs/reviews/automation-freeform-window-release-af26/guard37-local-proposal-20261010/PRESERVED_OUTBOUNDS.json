@@ -1,0 +1,31 @@
+{
+  "source": "prior READ ONLY snapshot 2026-10-10T20:43:39.993Z; not current certificate",
+  "hashMethod": "UTF-8 json.dumps(sort_keys=True,separators=(comma,colon)) over captured complete row",
+  "rows": [
+    {
+      "id": "872f3fb0-318a-43f8-aa33-e5e9662ec080",
+      "messageId": "campaign.94b5805b-5c6d-4c89-b047-959209261c21.1",
+      "capturedProjectionSha256": "d4e5c784296ae3fa63973628d666eb6469814c9f9da2107d3c631994babb6535"
+    },
+    {
+      "id": "acc76fe6-2b72-4358-80d5-ff09fabf202b",
+      "messageId": "campaign.94b5805b-5c6d-4c89-b047-959209261c21.2",
+      "capturedProjectionSha256": "aefa7f8304514556eda8228fb3347466cba00d8f8b97560a408424f48d0717cc"
+    },
+    {
+      "id": "01ed3f7e-7c25-49b3-b628-f75efe832b18",
+      "messageId": "campaign.94b5805b-5c6d-4c89-b047-959209261c21.3",
+      "capturedProjectionSha256": "0949aa5f39e3f4550481b173377f05212f7c59fccc860b8d92c916539e7d9dfe"
+    },
+    {
+      "id": "d16b6f2a-951c-4576-8a5f-5c0b4bfb0eab",
+      "messageId": "campaign.94b5805b-5c6d-4c89-b047-959209261c21.4",
+      "capturedProjectionSha256": "1b562a160a65ae401800f5d315aa7f00015254f57d4fdf64f84e92f39b63cbf1"
+    },
+    {
+      "id": "2a7472b8-29b3-47cf-accf-e84df7d5158f",
+      "messageId": "campaign.94b5805b-5c6d-4c89-b047-959209261c21.5",
+      "capturedProjectionSha256": "743f9da17fac0d7e9de0341b105a4d68169e31de89eccd3a5d0240f69c6dabff"
+    }
+  ]
+}
