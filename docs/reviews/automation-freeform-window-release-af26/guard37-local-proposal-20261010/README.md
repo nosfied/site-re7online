@@ -1,5 +1,7 @@
 # Guarda37 — reprodução local e proposta técnica, 10/10/2026
 
+**Revisão posterior de162:** [fronteira webhook/CRM corrigida e provas novas](WEBHOOK_CRM_BOUNDARY_20261010.md); [checklist único .6](POSITION6_RECOVERY_CHECKLIST.md). Históricos abaixo preservados; sem apply/ack/deploy.
+
 **Continuidade local sobre85:** [implementação, provas e limites](IMPLEMENTATION_20261010.md). A descrição abaixo preserva a proposta/reprodução histórica. Prevenção agora implementada localmente; verificador/recibo .6 ensaiados, mas nenhum apply/ack/recuperação executado.
 
 **INCIDENT REPRODUCED / PREVENTIVE CHANGE PROPOSED / RECOVERY NOT IMPLEMENTED OR EXECUTED.** Continuidade de `309d865362216997a1ec85b9bbfd5ffb97778a7b`. Nenhum acesso novo à VPS, provider real, retry, ack, abertura, instalação, deploy ou alteração de binding frontend nesta rodada. Guarda37/tarefa permanecem sob as evidências da [auditoria anterior](../guard37-provider-audit-20261010/README.md), não reatestadas como estado atual por este ensaio local.

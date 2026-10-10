@@ -1,0 +1,47 @@
+{
+  "baseCommit": "162edc792a944e9c7f45753b96519cbb83c7b8b8",
+  "status": "LOCAL_VERIFIED_NOT_DEPLOYED",
+  "node": "20.20.0",
+  "sql": "PostgreSQL16 real isolated synthetic only",
+  "files": {
+    "apps/whatsapp-agent/src/whatsapp/webhook.controller.ts": "f1873b55c6d29238834f544b3ac84b54a2467b2152b337099da85ab7ff4e3f6d",
+    "apps/whatsapp-agent/src/campaigns/campaignProviderStatusPersistence.ts": "d8b6ef2eed1668b25c7bbd51bd548893c932f2122133b2dc2286f2f138d1e622",
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedWebhookCrmBoundary.test.ts": "6629e6ebb7c4729b98501617e71decfcac50dc0eea4266fb73e5f7817ee09acc"
+  },
+  "controllerOriginSha256": "b7a6dc840912dcba558486813f2b95edf3a0ad99839e8365de52851e8b938bfe",
+  "proofs": {
+    "originExactBeforeDuringAfter": "3 expected FAIL: metaStatus absent",
+    "newTests": {
+      "pass": 5,
+      "fail": 0,
+      "durationMs": 1416.902057
+    },
+    "affectedRegressions": {
+      "pass": 2,
+      "fail": 0,
+      "skipped": 13
+    },
+    "olderProofs": "8 reused only in original scope",
+    "apiNode20NoEmit": "PASS"
+  },
+  "privateEvidenceHashes": {
+    "re7-guard37-webhook-boundary-origin.log": "84f886d12836e40f4f1ab5ab551cde415e6dc0e780a74a7688cd5e4905726147",
+    "re7-guard37-webhook-boundary-origin-exact.log": "7b6431ea0e749f4d2079bd8182155b3f29c02569667d1e5f20dc55b812197fda",
+    "re7-guard37-webhook-boundary-final.log": "0c059ea08dc7c9fe44b189e225073e7dcb0ff9f3b7858da5e769808956a52cc5",
+    "re7-guard37-webhook-boundary-final4.log": "9c5dea28c2d5305e7c5158760f39d28ee47b379baef5afd360b0c71865213595",
+    "re7-guard37-webhook-boundary-final5.log": "632dd615e109a766d141bca38236b5988ffbaa52e325a96d05b5d184e1c0f70a",
+    "re7-guard37-webhook-existing-regression.log": "0f5b90f08b66c1abf277c5eb99fed1e7c333919ff73420f9322bed6e5090ec7e",
+    "re7-guard37-webhook-human-regression.log": "24aa290c48543bbbb1e5d82a62d347cb237103920f0c05e34672b277f41328d3",
+    "re7-guard37-webhook-tsc-api-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "forbiddenActionsPerformed": [],
+  "recoveryPosition6": {
+    "apply": false,
+    "ack": false,
+    "ackEligible": false,
+    "checklist": "POSITION6_RECOVERY_CHECKLIST.md"
+  },
+  "frontend3227Changed": false,
+  "workerChanged": false,
+  "buildProduced": false
+}

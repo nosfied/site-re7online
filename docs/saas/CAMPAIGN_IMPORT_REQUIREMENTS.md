@@ -393,3 +393,8 @@ evidence. Opt-out/send-block evaluation must consider canonical Brazilian 12/13
 digit identity aliases, and reaction-only Meta webhooks are non-content events.
 `Campaign.sentCount` remains a legacy submitted/accepted counter, not
 delivered/read/final success truth.
+
+
+## Local status/CRM durability boundary — 2026-10-10 (not deployed)
+
+[Reviewed implementation and tests](../reviews/automation-freeform-window-release-af26/guard37-local-proposal-20261010/WEBHOOK_CRM_BOUNDARY_20261010.md): a known campaign provider status must be persisted monotonically to the matching tenant/account/MetaID Outbound before fallible CRM/Conversation materialization. CRM failure is a separate durable pending event, never delivered-status loss, materialization success, invented inbound/window, task cleanup or execution permission. Late enrichment must not overwrite a newer status. This does not expand international identity or make CRM optional; usage/result completion and success-specific acknowledgement remain separately required. Existing Result Truth, Brazilian aliases, human fences and blocked-before-provider distinctions are unchanged. No production apply, replay or acknowledgement in this review.

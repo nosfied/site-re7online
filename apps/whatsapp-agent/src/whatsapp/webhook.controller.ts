@@ -1,3 +1,5 @@
+import { persistCampaignProviderStatus } from "../campaigns/campaignProviderStatusPersistence.js";
+import { campaignFailureDiagnostic } from "../campaigns/campaignFailureDiagnostic.js";
 import { createReactiveBotTextOutboundMessage } from "./reactiveBotOutbound.js";
 import { updateRuntimeIfUnchanged } from "../conversation/runtimeWriteFence.js";
 import { IncomingMessage, ServerResponse } from "node:http";
@@ -3074,7 +3076,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           outbound.errorBody ||
           null;
 
-        const nextRawPayload = {
+        let nextRawPayload = {
           ...currentRaw,
           metaStatus: {
             lastStatus: item.status,
@@ -3115,6 +3117,29 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           typeof currentRaw.conversationId === "string" ? currentRaw.conversationId : null;
         const campaignId =
           typeof currentRaw.campaignId === "string" ? currentRaw.campaignId : null;
+        // Status truth must survive a later CRM error. This does not complete
+        // campaign persistence, clean the provider task or authorize continuation.
+        let durableStatusRaw: Prisma.JsonValue | undefined;
+        let durableStatus = outbound.status;
+        let durableErrorBody = outbound.errorBody;
+        if (campaignId) {
+          if (typeof phoneNumberId !== "string" || !phoneNumberId) {
+            throw new Error("campaign_provider_status_account_required");
+          }
+          const durable = await persistCampaignProviderStatus(prisma, {
+            id: outbound.id, clientId: outbound.clientId, metaMessageId: item.id,
+            phoneNumberId: outbound.phoneNumberId, webhookPhoneNumberId: phoneNumberId,
+            incomingStatus: item.status, incomingTimestamp: item.timestamp,
+            normalizedStatus, errorBody: statusErrorBody,
+            metaStatus: nextRawPayload.metaStatus as Prisma.InputJsonObject,
+          });
+          if (!durable) continue;
+          durableStatusRaw = durable.rawPayload;
+          durableStatus = durable.status;
+          durableErrorBody = durable.errorBody;
+          nextRawPayload = { ...nextRawPayload, ...(durable.rawPayload as Record<string, unknown>),
+            metaStatus: nextRawPayload.metaStatus };
+        }
         let materializedCampaignConversationId = conversationId;
         if (
           campaignId &&
@@ -3142,31 +3167,48 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               : null;
           const runtimeVersion = submitPayload?.runtimeVersionAtSubmission;
           const conversationUpdatedAt = submitPayload?.conversationUpdatedAtAtSubmission;
-          const materialized = client
-            ? await ensureCampaignOutboundConversation(prisma, {
-                clientId: outbound.clientId,
-                clientKey: client.clientKey,
-                waId: outbound.waId,
-                waIdCanonical: outbound.waIdCanonical,
-                phoneNumberId: outbound.phoneNumberId,
-                messageId: outbound.messageId ?? item.id,
-                campaignId,
-                campaignRunId,
-                templateName: outbound.templateName ?? "",
-                sentAt: new Date(normalizeStatusTimestamp(item.timestamp)),
-                submissionRuntimeVersion: runtimeVersion === null ||
-                  (typeof runtimeVersion === "number" && Number.isInteger(runtimeVersion) && runtimeVersion >= 0)
-                    ? runtimeVersion : undefined,
-                submissionConversationUpdatedAt: conversationUpdatedAt === null
-                  ? null
-                  : typeof conversationUpdatedAt === "string" && !Number.isNaN(Date.parse(conversationUpdatedAt))
-                    ? new Date(conversationUpdatedAt) : undefined,
-                source: "campaign",
-                conversationId: typeof currentRaw.previousConversationId === "string" ? currentRaw.previousConversationId : null,
-                returnDestination,
-              })
-            : null;
-          materializedCampaignConversationId = materialized?.conversationId ?? null;
+          try {
+            const materialized = client
+              ? await ensureCampaignOutboundConversation(prisma, {
+                  clientId: outbound.clientId,
+                  clientKey: client.clientKey,
+                  waId: outbound.waId,
+                  waIdCanonical: outbound.waIdCanonical,
+                  phoneNumberId: outbound.phoneNumberId,
+                  messageId: outbound.messageId ?? item.id,
+                  campaignId,
+                  campaignRunId,
+                  templateName: outbound.templateName ?? "",
+                  sentAt: new Date(normalizeStatusTimestamp(item.timestamp)),
+                  submissionRuntimeVersion: runtimeVersion === null ||
+                    (typeof runtimeVersion === "number" && Number.isInteger(runtimeVersion) && runtimeVersion >= 0)
+                      ? runtimeVersion : undefined,
+                  submissionConversationUpdatedAt: conversationUpdatedAt === null
+                    ? null
+                    : typeof conversationUpdatedAt === "string" && !Number.isNaN(Date.parse(conversationUpdatedAt))
+                      ? new Date(conversationUpdatedAt) : undefined,
+                  source: "campaign",
+                  conversationId: typeof currentRaw.previousConversationId === "string" ? currentRaw.previousConversationId : null,
+                  returnDestination,
+                })
+              : null;
+            materializedCampaignConversationId = materialized?.conversationId ?? null;
+          } catch (error) {
+            const diagnostic = campaignFailureDiagnostic(error);
+            await persistEvent({
+              clientId: outbound.clientId, messageId: outbound.messageId,
+              requestId: `webhook-campaign-crm-pending:${outbound.id}:${normalizedStatus}:${item.timestamp ?? "unknown"}`,
+              eventName: "webhook.campaign.crm_pending",
+              payloadJson: { campaignId, campaignRunId, outboundMessageId: outbound.id,
+                metaMessageId: item.id, status: item.status, timestamp: item.timestamp,
+                stage: "crm_materialization", providerStatusDurable: true,
+                materialized: false, retryAllowed: false, ...diagnostic,
+              },
+            });
+            logger.warn({ event: "webhook.campaign.crm_pending", clientId: outbound.clientId,
+              outboundMessageId: outbound.id, ...diagnostic });
+            continue;
+          }
         }
         const metaUsage = buildMetaUsageEventPayload({
           outboundMessageId: outbound.messageId,
@@ -3185,11 +3227,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           waIdCanonical: outbound.waIdCanonical,
         });
 
-        await prisma.outboundMessage.update({
-          where: { id: outbound.id },
-          data: {
-            status: normalizedStatus === "FAILED" ? MessageStatus.FAILED : outbound.status,
-            errorBody: normalizedStatus === "FAILED" ? statusErrorBody : outbound.errorBody,
+        const enrichment = {
+            status: normalizedStatus === "FAILED" ? MessageStatus.FAILED : durableStatus,
+            errorBody: normalizedStatus === "FAILED" ? statusErrorBody : durableErrorBody,
             rawPayload: {
               ...nextRawPayload,
               metaStatus: {
@@ -3200,8 +3240,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               metaUsage,
               conversationId: materializedCampaignConversationId,
             } as Prisma.InputJsonValue,
-          },
-        });
+        };
+        if (campaignId) {
+          const updated = await prisma.outboundMessage.updateMany({
+            where: { id: outbound.id, clientId: outbound.clientId, metaMessageId: item.id,
+              rawPayload: { equals: durableStatusRaw as Prisma.InputJsonValue } },
+            data: enrichment,
+          });
+          if (updated.count !== 1) continue;
+        } else {
+          await prisma.outboundMessage.update({ where: { id: outbound.id }, data: enrichment });
+        }
         await recordMetaUsageLedgerEvent({
           prisma,
           clientId: outbound.clientId,

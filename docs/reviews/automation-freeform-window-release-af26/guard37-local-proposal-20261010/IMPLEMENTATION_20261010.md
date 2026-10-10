@@ -1,5 +1,7 @@
 # Guarda37 — implementação preventiva local e revisão .6/frontend3227
 
+**Revisão posterior de162:** [fronteira webhook/CRM corrigida e provas novas](WEBHOOK_CRM_BOUNDARY_20261010.md); [checklist único .6](POSITION6_RECOVERY_CHECKLIST.md). Históricos abaixo preservados; sem apply/ack/deploy.
+
 **LOCAL IMPLEMENTED AND VERIFIED / FOR REVIEW / NOT DEPLOYED.** Continuidade de `85a4674811f87eb3297ce257c5f0b18e34a38bb4`. Nenhum SSH, leitura atual da VPS, provider real, envio, SQL de recuperação, ack, abertura, instalação ou janela. Estado produtivo não reatestado: as referências guarda37/provider persisting, API a26/worker afbb/frontend fa60 são históricas da auditoria anterior. As provas antigas permanecem válidas em seu escopo; o teste original do incidente deve ser executado na origem85, onde esperava zero Outbound, e não é uma regressão a ser tornada verde no código corrigido.
 
 ## Delta preventivo executável
