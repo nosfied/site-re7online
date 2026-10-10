@@ -68,3 +68,56 @@ Owner confirma sessão, layout, Inbox, CRM e campanhas existentes; lotes/falha/p
 Não há dump/restore novo nesta preparação **exclusiva frontend**: não altera DB/auth/schema e conserva release/config/dumps PM2 do retorno. Não importar procedimento de backup/parada coordenada backend para esta troca. Necessidade de backup DB adicional só se escopo mudar, o que não está autorizado.
 
 Aceites anteriores preservados. Multilote natural, contingênciaAUTO e CRA-PR continuam pendentes e separados. Sem staging/alteração de backend, envio, agendamento ou reparo histórico. Próximo passo: revisão concreta das duas políticas/roteiro e autorização da instalação de janela/preflight; só depois avaliar execução.
+
+## Auditoria de continuidade — 10/10/2026, referência 6a354ceb
+
+**CONTINUITY AUDIT PASS / WINDOW-POLICY PREFLIGHT PENDING / NOT DEPLOYED.** Leitura atual iniciada às **11:20:50 Fortaleza (14:20:50 UTC)**, com resultados preservados privadamente. A observação de 10/10 11:34 UTC permanece histórica e não foi reutilizada como atestado atual. Referência local/remota da branch reconfirmada: `6a354ceb2e286e542d7070845ed65d61daa9da4a`. Worktree de revisão sem alterações versionadas ao iniciar; checkout principal com trabalho preexistente permaneceu intacto.
+
+### Achados por gravidade
+
+- **Crítico/alto:** nenhum bloqueio novo demonstrado na composição examinada. Não equivale a aprovação da futura janela nem prova de recuperação de toda falha possível.
+- **Médio — dependência operacional explícita:** política permanente diferente da instalada; só pode ser substituída após confirmação owner, antes de promoção/save. Instalação parcial, ausência de sudo ou negativa do observador impedem promoção. Não há transação atômica entre política, promoção e dump. Deifson deve estar disponível para essa etapa previamente publicada; não descobrir a dependência com atendimento interrompido.
+- **Médio — comando incerto:** timeout do CLI PM2 pode deixar operação em andamento no daemon. O intent permanece consumido; prazo/erro não autorizam segundo start. Verificar estado efetivo e exigir saída fresca no ramo correspondente. Não anunciar a captura de diagnóstico como recuperação automática.
+- **Médio — prontidão/retorno:** falha de prontidão não certifica ausência. O retorno após intent exige `candidate-exited` novo, ledger suficiente, inventário, árvore, sockets e PM2; observação incompleta/sobrevivente nega. Se a falha for anterior à produção do ledger exigido, preservar evidências e escalar: não inventar identidade/certificado nem flexibilizar `journal()` para partir retorno. O ensaio anterior de saída precoce não prova toda falha possível antes do handshake.
+- **Baixo — documentação:** BACKLOG já registrava a preparação3227; RUNBOOK ainda iniciava pela implantação histórica fa60. Ambos passam a apontar à mesma preparação e ao retorno efetivo fa60 corrigido, preservando as entradas históricas e aceites. A referência antiga9f não é o retorno desta geração.
+
+### Conferências executadas
+
+| Verificação | Resultado e limite |
+|---|---|
+| HEAD remoto, branch e isolamento de trabalho | PASS; remoto/local iguais à referência auditada. Alterações do checkout principal não incorporadas. |
+| Manifesto público e tar local | PASS; hashes conferidos. Mesmo tar9b54548e; nenhum build, suíte ou empacotamento novo. |
+| 16scripts / 23bindings na VPS | PASS; manifests c00bacf5… / 118f8a74… iguais à referência. Gatefalse; nenhum start-intent ou captura de saída nova. |
+| Configurações base/ecosystem/tracked/run | PASS pelo checker efetivo e comparação integral, não apenas cwd/script. Parâmetros privados preservados. |
+| Políticas propostas e bindings | PASS para candidato/retorno, e conferência adicional explícita do papel source: release, entry, identidade da execução, caminho da captura e hash/BUILD_ID permanente. Binding contém exatamente a política proposta. Schema de janela validado pelo helper efetivo instalado. |
+| Pacote candidato e retorno remoto | PASS; manifesto completo/symlinks/imutáveis, tolerância documentada de cache do retorno. Sem iniciar candidato. |
+| Identidades produtivas | PASS; frontendfa60 PID3438948/ticks2120147745; APIa26 PID3625739/ticks2128115907; workerafbb PID3625960/ticks2128116272. Todos restart0. Daemon/boot conferidos pelos controles e pelos dois observadores. |
+| Guarda/crons/boot/saved/fallback | PASS pelo checker efetivo comparando baseline integral. Guarda aberta36/tasks{} preservada; sem escrita no ledger, DB/auth ou controles. |
+| Observadores atualmente instalados | PASS: chamadas sudo literais como deploy, helper/policy hashes atuais exatos, duas amostras completas retornadas e iguais em cada leitura; boot/daemon atuais compatíveis. Sem instalação, alteração de sudoers ou leitura root arbitrária. |
+| Preflight da política **proposta** | **NOT EXERCISED**. A política atual é outra; leituras atuais não podem substituir essa prova. |
+| Ida/retorno/promoção atuais | Revisão estática dos bytes finais e reutilização de provas anteriores; **não executados na VPS nesta rodada**. |
+
+O driver de auditoria encontrou inicialmente ausência de `window.lock` antes de qualquer conferência: diagnóstico arquivado, nenhuma alteração. A geração ainda não iniciou janela; a auditoria prosseguiu sob `preparation.lock` existente, não criou lock de janela/captura/intent nem adaptou bindings. Isso não certifica exclusividade de uma janela futura: `install-window-policy.sh` e WINDOW-STEPS adquirirão o lock próprio no momento previsto.
+
+### Instalação parcial e comandos com prazo
+
+1. Antes de executar o instalador, conferir script/binding/policy hashes, gatefalse, identidades e ausência do arquivo de arquivo histórico. Não executar agora.
+2. Se arquivo histórico surgir mas a política continuar antiga, arquivamento pode ter concluído e substituição não; preservar ambos e parar. Se política nova estiver instalada mas preflight falhar, não anunciar PASS nem voltar a executar o instalador inteiro: ele exige arquivo histórico ausente. Conferir hashes/cadeia/fase real e diagnóstico antes de definir a recuperação restrita.
+3. Política com hash inesperado, arquivo parcial ou cadeia insegura: nenhuma parada/promoção. Não sobrescrever para obter PASS. Helpers e sudoers ficam preservados.
+4. `frontend-action.py`: timeout15s por ação /40s no envelope de prontidão; stdout/stderr/exit e timeout em registro privado. Prontidão efetiva até30s/30tentativas, sem start adicional. Leitor root até10s; cada saída exige observação nova e recibo exclusivo. A recusa não libera repetição de start nem replay de captura.
+5. Comando humano de instalação pode esperar senha; somente na sessão sudo do owner. Não iniciar janela com essa dependência pendente. Ao falhar, preservar saída/erro/código; não repetir bloco completo cegamente.
+6. Ramo de retorno depende do estado observado: sem parada, apenas interromper; origem saída e sem intent candidato, retorno único; qualquer intent candidato, saída fresca antes do retorno. Retorno também tem intent/prontidão/saída próprios. Falha persistente exige comunicação/escalonamento, jamais bypass aos15min.
+
+### Acesso atual e próxima decisão
+
+Leituras executadas: SSH `deploy` para manifests, configurações, PM2/proc/guard/cron/boot/dump; sudo **somente** as duas chamadas literais existentes `/usr/bin/python3 -I -S /usr/local/libexec/re7/frontend-socket-observer.py` e `/usr/bin/python3 -I -S /usr/local/libexec/re7/frontend-permanent-observer.py`. Saídas completas privadas, incluindo erros, sem publicar configurações/credenciais/nonces. A conferência atual da capacidade literal passou; auditoria não executou `visudo` nem releu o conteúdo root-only dos sudoers. Essa conferência root de hashes/cadeia/visudo continua no bloco de instalação em sessão Deifson.
+
+**Única próxima ação proposta ao owner:** instalação exclusiva da política de janela + preflight preparatório, pelo bloco já publicado:
+
+```bash
+bash /opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-20261009T220400Z/install-window-policy.sh
+```
+
+Exige decisão específica do owner e sudo em sua sessão; arquiva6087f980… e instalae6c9adf9…, mantendo helper/sudoers e `execution-authorized=false`. Não é autorização de instalação permanente, stop/start, promoção/save ou deploy. Somente após PASS desse preflight se avalia a janela. A política permanente proposta573bcb3e… permanece pendente para a fase posterior já descrita, sem instalar nesta rodada.
+
+Multilote natural, contingênciaAUTO e CRA-PR mantêm aceites separados; horários/CRM/CSV/dinâmica/out.14 e históricos não foram reabertos. APIa26/workerafbb/schema/auth/sessões/guarda/scheduler/cron/boot preservados. Nenhum envio ou criação de campanha.
