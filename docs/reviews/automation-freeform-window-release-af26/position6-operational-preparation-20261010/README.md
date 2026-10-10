@@ -1,6 +1,18 @@
 # Out.15 / posição .6 — preparação operacional READ ONLY
 
-**READ ONLY AUDIT PASS / BACKUP + ISOLATED RESTORE PASS / PRODUCTIVE DRY-RUN PASS / NOT APPLIED / NOT ACKNOWLEDGED / NOT DEPLOYED.** Continuidade de `c2623d976f12d3c5e1d4b8eb08b0e3261495cf39`. Esta autorização permitiu backup, staging administrativo e dry-run; não autoriza SQL de recuperação, ack, abertura, retomada ou instalação. [Estado](STATE.json), [dry-run](DRY_RUN.json), [artefatos](ADMIN_MANIFEST.json), [fontes](SOURCE_HASHES.json), [comandos futuros](COMMANDS_FOR_REVIEW.txt), [checklist único](../guard37-local-proposal-20261010/POSITION6_RECOVERY_CHECKLIST.md).
+**READ ONLY AUDIT PASS / BACKUP + ISOLATED RESTORE PASS / PRODUCTIVE DRY-RUN PASS / CAPACITY DENY / NOT APPLIED / NOT ACKNOWLEDGED / NOT DEPLOYED.** Continuidade de `c2623d976f12d3c5e1d4b8eb08b0e3261495cf39`. Esta autorização permitiu backup, staging administrativo e dry-run; não autoriza SQL de recuperação, ack, abertura, retomada ou instalação. [Estado](STATE.json), [dry-run](DRY_RUN.json), [artefatos](ADMIN_MANIFEST.json), [fontes](SOURCE_HASHES.json), [comandos futuros](COMMANDS_FOR_REVIEW.txt), [checklist único](../guard37-local-proposal-20261010/POSITION6_RECOVERY_CHECKLIST.md).
+
+## Fechamento da revisão operacional — continuidade9f3dd601
+
+**Capacidade NÃO demonstrada; impedimento concreto no disco compartilhado PGDATA/WAL/ledger.** [Medições e orçamento](CAPACITY_REVIEW.json), [ação mínima concreta para revisão, sem execução](STORAGE_ACTION_FOR_REVIEW.md), [fontes dos quatro drivers e receita do bundle](drivers/README.md). Leitura23:05–23:11UTC/20:05–20:11Fortaleza em10/10; guarda37/tarefa/job, cinco Outbounds/CRM, identidades e staging íntegros. Manifest administrativo/tar/input conferidos; nenhum dry-run, backup/restore, build ou suíte funcional repetido.
+
+Usuários postgres/deploy têm~455–461MiB livres no `/dev/vda1`; PGDATA e pg_wal estão no mesmo volume, somente tablespaces padrão, ~6,86milhões de inodes livres. WAL80MiB, alvo flexível1GiB, sem slot/replica/archive observado; PGDATA não é o principal consumidor. A rotina vigente de snapshots já exige1GiB livre. Piso de planejamento proposto2.033MiB (arredondar2GiB), déficit1.648.414.720bytes; reserva SQL64MiB/ledger1MiB é orçamento, não medição ou hard bound. Waldelta15.885.063bytes em340,44s não é crescimento líquido/carga garantida. Logs delimitados sem erro de escrita não mudam DENY.
+
+Preparações históricas alocam22,9GiB. Cinco arquivos antigos idênticos479MB/nlink1; preservar blob/metadados off-host e retirar futuramente apenas quatro cópias redundantes poderia liberar1,786GiB. **Não executado, não autorizado e referências/proprietários ainda incompletos**:143processos ilegíveis, política root fora do escopo de leitura integral; saved/fallback sem referência direta não bastam. Nenhum WAL, snapshot, arquivo histórico, staging ou configuração foi limpo.
+
+Drivers foram publicados como templates reversíveis sem bindings/segredos. Renderer LOCAL reproduziu os quatro hashes preparados; binding alterado foi negado antes de saída. Lógica administrativa/de inspeção não mudou. Grafo original empacotado publicado/hash931c8b1f…5b1c; receita Node20.20.0/esbuild0.27.2 confere fontes/grafo/bundle32e4eede…4a0 antes de gravar em destino novo, **não foi executada para rebuild**. Syntax Python/Node20 somente; não atribuir a estas provas os testes produtivos anteriores.
+
+Backup22:47UTC/restore real preservados (24min07s na última captura), não certificado de frescor indefinido: outros writes produtivos continuam. Antes de futura mutação, resolver capacidade, rever RPO/frescor e estado; novos dados não podem ser cobertos por hash antigo. [Comandos finais separados](COMMANDS_FOR_REVIEW.txt) permanecem propostos/INEXECUTÁVEIS NESTA AUTORIZAÇÃO: apply/ack bloqueados, verify não substitui recibo inexistente. Frontend3227/prevençõesAPI pendentes; nenhum helper/política ou release alterado.
 
 ## Estado atual e preservação
 

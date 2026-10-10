@@ -1,0 +1,44 @@
+{
+  "run-admin.py": {
+    "template": "run-admin.py.in",
+    "templateSha256": "5687df8ab8650643c3dd85aa3443e34824b8de083db416fc1fdbab183469743d",
+    "preparedSha256": "72cda2d00ba4e8db6602c44cac7f668b34dbc6fb50576baa45184191ffdf4612",
+    "bindingKeys": [
+      "__PRIVATE_ROOT__",
+      "__PRIVATE_LEDGER_PATH__",
+      "__PRIVATE_IDENTITIES__",
+      "__PRIVATE_API_PID__",
+      "__PRIVATE_DAEMON_PID__",
+      "__PRIVATE_TASK_ID__",
+      "__PRIVATE_DEPLOY_HOME__"
+    ]
+  },
+  "inspect-current.py": {
+    "template": "inspect-current.py.in",
+    "templateSha256": "f74db59ba5662e5d23b947deb5a1d876f87867c0b67d5732bbfd83d22b476b71",
+    "preparedSha256": "db7912318647e89484a0cdb2fbe6948e03ed38d54398b6320dc76dabd1caa1ba",
+    "bindingKeys": [
+      "__PRIVATE_ROOT__"
+    ]
+  },
+  "capture-readonly.py": {
+    "template": "capture-readonly.py.in",
+    "templateSha256": "d6a88e40c2fa8afcd06d850aaa3be57c450cded3ff74424c2119ed25ff3f9d1b",
+    "preparedSha256": "9363201cdd23425c433838e947432e74ca65875896be1dd65f4d1ee50efda16f",
+    "bindingKeys": [
+      "__PRIVATE_LEDGER_PATH__",
+      "__PRIVATE_DEPLOY_HOME__"
+    ]
+  },
+  "query-current.cjs": {
+    "template": "query-current.cjs.in",
+    "templateSha256": "3076bd06c85cab80c88a21f945b1daa8bf1ab6fba153778648352f1b9b829e78",
+    "preparedSha256": "a54c3f7358a359743ccd1ece71d02c7b6bd9f76759ef945a5c12316025b8794b",
+    "bindingKeys": [
+      "__PRIVATE_CLIENT_ID__",
+      "__PRIVATE_CHILD_ID__",
+      "__PRIVATE_PARENT_ID__",
+      "__PRIVATE_SEED_ID__"
+    ]
+  }
+}

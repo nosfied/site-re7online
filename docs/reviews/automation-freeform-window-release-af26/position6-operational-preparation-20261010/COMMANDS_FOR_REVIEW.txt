@@ -1,3 +1,10 @@
+CAPACITY DENY — NÃO EXECUTAR APPLY/ACK. Revisão9f3dd601: disco PGDATA/WAL/ledger
+compartilhado abaixo do piso do backup; proposta de preservação off-host/retirada
+seletiva requer leitura root completa e autorização separadas. Nenhuma limpeza
+executada. Ver STORAGE_ACTION_FOR_REVIEW.md/CAPACITY_REVIEW.json/drivers/README.md.
+Os comandos abaixo preservam os bytes e continuam separados para revisão;
+nenhum flag execute-authorized substitui decisão de capacidade/autorização.
+
 PREPARAÇÃO CONFERIDA; APPLY-SQL / ACK-TASK NÃO AUTORIZADOS NESTA ETAPA.
 Executar futuramente apenas na sessão legítima deploy, após decisão própria.
 Não fornecer DATABASE_URL/segredos na linha de comando. Driver lê env original

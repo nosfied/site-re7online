@@ -1,6 +1,12 @@
 # Posição .6 — checklist único para qualquer recuperação/ack futuro
 
-**LOCAL A/B/C VERIFIED; OPERATIONAL DRY-RUN PASS / BLOCKED FOR PRODUCTIVE APPLY/ACK.** [Implementação aprovada somente para revisão local](../position6-recovery-implementation-20261010/README.md); [decisão histórica exata](../../../saas/POSITION6_HISTORICAL_CRM_DISPOSITION_2026-10-10.md). Atualizado pela [auditoria produtiva READ ONLY atual](../position6-current-audit-20261010/README.md), continuidade de400b8b4b. Fontes/hash em [PROVENANCE.json](../position6-current-audit-20261010/PROVENANCE.json); [estado/fences](../position6-current-audit-20261010/STATE.json). A tabela anterior de400b permanece no histórico Git; provas sintéticas e capturas antigas não foram convertidas em estado atual.
+**LOCAL A/B/C VERIFIED; OPERATIONAL DRY-RUN PASS / CAPACITY DENY / BLOCKED FOR PRODUCTIVE APPLY/ACK.** [Implementação aprovada somente para revisão local](../position6-recovery-implementation-20261010/README.md); [decisão histórica exata](../../../saas/POSITION6_HISTORICAL_CRM_DISPOSITION_2026-10-10.md). Atualizado pela [auditoria produtiva READ ONLY atual](../position6-current-audit-20261010/README.md), continuidade de400b8b4b. Fontes/hash em [PROVENANCE.json](../position6-current-audit-20261010/PROVENANCE.json); [estado/fences](../position6-current-audit-20261010/STATE.json). A tabela anterior de400b permanece no histórico Git; provas sintéticas e capturas antigas não foram convertidas em estado atual.
+
+## Revisão operacional restante — 23:05–23:11UTC / 20:05–20:11Fortaleza
+
+[Relatório atualizado](../position6-operational-preparation-20261010/README.md): drivers sanitizados/reversíveis e receita/grafo disponibilizados, hashes preparados íntegros. Capacidade **DENY**, PGDATA/WAL/ledger no mesmo disco com455–461MiB executáveis, abaixo do piso1GiB da rotina vigente. Orçamento proposto2.033MiB, déficit1.648.414.720bytes; não é hard bound do apply/carga. Reutilizados backup/restore/CLI/provas válidas, sem rebuild ou nova execução SQL/ack. Estado atual guarda37/tarefa/job/ref/hash/protegidos/processos/staging mantidos.
+
+Ação mínima proposta: preservar off-host conteúdo/metadados e retirar futuramente quatro cópias idênticas antigas, liberando estimados1,786GiB; **nenhuma remoção autorizada/executada**. Referências/proprietários não inteiramente observados (143PIDs ilegíveis/política root): leitura privilegiada específica e revisão/decisão antes de cleanup. Não limpar WAL/leases/tarefa nem modificar retenção. SQL/ack continuam bloqueados; backup antigo não cobre writes posteriores automaticamente. Frontend3227/prevençõesAPI preservados/pendentes.
 
 ## Pré-condições operacionais atuais — 10/10, 22:43–22:56 UTC
 

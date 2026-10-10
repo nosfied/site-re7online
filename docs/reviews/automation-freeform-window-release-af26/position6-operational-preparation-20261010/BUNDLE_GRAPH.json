@@ -1,0 +1,345 @@
+{
+  "inputs": {
+    "apps/whatsapp-agent/src/campaigns/position6ApprovedDisposition.ts": {
+      "bytes": 3980,
+      "imports": [],
+      "format": "esm"
+    },
+    "apps/whatsapp-agent/src/campaigns/campaignDeliveryTruth.ts": {
+      "bytes": 2071,
+      "imports": [],
+      "format": "esm"
+    },
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryReview.ts": {
+      "bytes": 8284,
+      "imports": [
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "apps/whatsapp-agent/src/campaigns/campaignDeliveryTruth.ts",
+          "kind": "import-statement",
+          "original": "./campaignDeliveryTruth.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "apps/whatsapp-agent/src/utils/waid.ts": {
+      "bytes": 1705,
+      "imports": [],
+      "format": "esm"
+    },
+    "apps/whatsapp-agent/src/crm/crmWhatsappIdentity.ts": {
+      "bytes": 4412,
+      "imports": [
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "apps/whatsapp-agent/src/utils/waid.ts",
+          "kind": "import-statement",
+          "original": "../utils/waid.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "apps/whatsapp-agent/src/campaigns/campaignSeedPrivacy.ts": {
+      "bytes": 7984,
+      "imports": [
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "apps/whatsapp-agent/src/crm/crmWhatsappIdentity.ts",
+          "kind": "import-statement",
+          "original": "../crm/crmWhatsappIdentity.js"
+        },
+        {
+          "path": "apps/whatsapp-agent/src/utils/waid.ts",
+          "kind": "import-statement",
+          "original": "../utils/waid.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "apps/whatsapp-agent/src/billing/metaUsageLedger.ts": {
+      "bytes": 10556,
+      "imports": [
+        {
+          "path": "@prisma/client",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "apps/whatsapp-agent/src/billing/activeMessageBilling.ts": {
+      "bytes": 10198,
+      "imports": [
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "@prisma/client",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "apps/whatsapp-agent/src/utils/waid.ts",
+          "kind": "import-statement",
+          "original": "../utils/waid.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts": {
+      "bytes": 11976,
+      "imports": [
+        {
+          "path": "apps/whatsapp-agent/src/crm/crmWhatsappIdentity.ts",
+          "kind": "import-statement",
+          "original": "../crm/crmWhatsappIdentity.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "apps/whatsapp-agent/src/campaigns/campaignOperations.ts": {
+      "bytes": 16504,
+      "imports": [
+        {
+          "path": "node:fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:url",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:async_hooks",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.ts": {
+      "bytes": 29661,
+      "imports": [
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "apps/whatsapp-agent/src/campaigns/position6ApprovedDisposition.ts",
+          "kind": "import-statement",
+          "original": "./position6ApprovedDisposition.js"
+        },
+        {
+          "path": "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryReview.ts",
+          "kind": "import-statement",
+          "original": "./campaignAcceptedDeliveryReview.js"
+        },
+        {
+          "path": "apps/whatsapp-agent/src/campaigns/campaignSeedPrivacy.ts",
+          "kind": "import-statement",
+          "original": "./campaignSeedPrivacy.js"
+        },
+        {
+          "path": "apps/whatsapp-agent/src/campaigns/campaignDeliveryTruth.ts",
+          "kind": "import-statement",
+          "original": "./campaignDeliveryTruth.js"
+        },
+        {
+          "path": "apps/whatsapp-agent/src/billing/metaUsageLedger.ts",
+          "kind": "import-statement",
+          "original": "../billing/metaUsageLedger.js"
+        },
+        {
+          "path": "apps/whatsapp-agent/src/billing/activeMessageBilling.ts",
+          "kind": "import-statement",
+          "original": "../billing/activeMessageBilling.js"
+        },
+        {
+          "path": "apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts",
+          "kind": "import-statement",
+          "original": "./campaignRecipientResultTruth.js"
+        },
+        {
+          "path": "apps/whatsapp-agent/src/campaigns/campaignOperations.ts",
+          "kind": "import-statement",
+          "original": "./campaignOperations.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts": {
+      "bytes": 3472,
+      "imports": [
+        {
+          "path": "node:fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "@prisma/client",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.ts",
+          "kind": "import-statement",
+          "original": "../src/campaigns/campaignAcceptedDeliveryRecovery.js"
+        }
+      ],
+      "format": "esm"
+    }
+  },
+  "outputs": {
+    "local-evidence/position6-operational-20261010T224151Z/admin-package/reconcile-position6.mjs": {
+      "imports": [
+        {
+          "path": "node:fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "@prisma/client",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "@prisma/client",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "@prisma/client",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:url",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:async_hooks",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "exports": [],
+      "entryPoint": "apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts",
+      "inputs": {
+        "apps/whatsapp-agent/scripts/reconcile-position6-accepted-delivery.ts": {
+          "bytesInOutput": 3100
+        },
+        "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryRecovery.ts": {
+          "bytesInOutput": 25907
+        },
+        "apps/whatsapp-agent/src/campaigns/position6ApprovedDisposition.ts": {
+          "bytesInOutput": 3649
+        },
+        "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryReview.ts": {
+          "bytesInOutput": 5618
+        },
+        "apps/whatsapp-agent/src/campaigns/campaignDeliveryTruth.ts": {
+          "bytesInOutput": 1884
+        },
+        "apps/whatsapp-agent/src/campaigns/campaignSeedPrivacy.ts": {
+          "bytesInOutput": 2009
+        },
+        "apps/whatsapp-agent/src/crm/crmWhatsappIdentity.ts": {
+          "bytesInOutput": 3670
+        },
+        "apps/whatsapp-agent/src/utils/waid.ts": {
+          "bytesInOutput": 318
+        },
+        "apps/whatsapp-agent/src/billing/metaUsageLedger.ts": {
+          "bytesInOutput": 5499
+        },
+        "apps/whatsapp-agent/src/billing/activeMessageBilling.ts": {
+          "bytesInOutput": 7706
+        },
+        "apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts": {
+          "bytesInOutput": 9476
+        },
+        "apps/whatsapp-agent/src/campaigns/campaignOperations.ts": {
+          "bytesInOutput": 9088
+        }
+      },
+      "bytes": 79013
+    }
+  }
+}

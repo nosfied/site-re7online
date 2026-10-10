@@ -1,0 +1,68 @@
+import datetime,fcntl,hashlib,json,os,stat,subprocess,sys,time
+from pathlib import Path
+ROOT=Path('__PRIVATE_ROOT__')
+INPUT_HASH='d5d8dba7b6fcc7f2b7a9627410f42507517aac66881d7a636421f5f19e0be19b'
+NODE_HASH='d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e'
+TASK='__PRIVATE_TASK_ID__'
+LEDGER=Path('__PRIVATE_LEDGER_PATH__')
+IDENTITIES=__PRIVATE_IDENTITIES__
+def digest(p):
+ with open(p,'rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
+def need(v,c):
+ if not v:raise RuntimeError(c)
+def now():return datetime.datetime.now(datetime.timezone.utc).isoformat()
+def identities():
+ for pid,ticks in IDENTITIES.items():
+  s=Path('/proc',str(pid),'stat').read_text().split(') ',1)[1].split()
+  need(s[19]==ticks and s[0] not in ('Z','X','x'),'administrative_identity_drift')
+ need(Path('__PRIVATE_DEPLOY_HOME__/.pm2/pm2.pid').read_text().strip()=='__PRIVATE_DAEMON_PID__','administrative_daemon_drift')
+def fence():
+ need(not os.path.lexists(str(LEDGER)+'.lock') and not os.path.lexists(str(LEDGER)+'.uncertain'),'administrative_ledger_marker_present')
+ raw=LEDGER.read_bytes();v=json.loads(raw)
+ need(v['open'] is False and v['generation']==37 and set(v['tasks'])=={TASK},'administrative_fence_drift')
+ need(v['tasks'][TASK]['phase']=='persisting' and v['tasks'][TASK]['kind']=='provider','administrative_task_drift')
+ return hashlib.sha256(raw).hexdigest()
+mode=sys.argv[1] if len(sys.argv)>1 else 'dry-run'
+need(mode in ('dry-run','apply-sql','verify-receipt','ack-task'),'administrative_mode_invalid')
+extra=sys.argv[2:]
+need(all(x=='--execute-authorized' or x.startswith('--actor=') or x.startswith('--plan-hash=') for x in extra),'administrative_argument_invalid')
+if mode in ('apply-sql','ack-task'):need('--execute-authorized' in extra,'administrative_mutation_not_authorized')
+os.umask(0o077)
+lock=os.open(ROOT/'administrative.lock',os.O_WRONLY|os.O_CREAT,0o600);fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+run=ROOT/('run-'+str(time.time_ns()));run.mkdir(mode=0o700)
+record={'mode':mode,'startedAt':now(),'applicationStarted':False,'providerCalls':0}
+try:
+ identities()
+ for line in (ROOT/'admin/files.sha256').read_text().splitlines():
+  expected,name=line.split('  ',1);p=ROOT/'admin'/name
+  need(not p.is_symlink() and p.is_file() and digest(p)==expected,'administrative_package_integrity_denied')
+ need(digest('/usr/bin/node')==NODE_HASH,'administrative_node_integrity_denied')
+ p=ROOT/'position6-input.private.json';s=p.lstat()
+ need(stat.S_ISREG(s.st_mode) and not s.st_mode&0o077 and digest(p)==INPUT_HASH,'administrative_input_integrity_denied')
+ need('syntheticProofPolicy' not in json.loads(p.read_text()),'administrative_synthetic_policy_denied')
+ # Durable result verification after ack is supported by the CLI, but this
+ # preparation stays bound to closed37 before any mutation authorization.
+ before=fence();record['ledgerBefore']=before
+ envitems=Path('/proc/__PRIVATE_API_PID__/environ').read_bytes().split(b'\0')
+ live={k.decode():v.decode() for item in envitems if b'=' in item for k,v in [item.split(b'=',1)]}
+ keys=('DATABASE_URL','APP_AUTH_SECRET','CAMPAIGN_SEED_SECRET','CHANNEL_ACCOUNT_SECRET_KEY','CAMPAIGN_OPERATIONS_FILE','CAMPAIGN_OPERATIONS_TOPOLOGY','CAMPAIGN_OPERATIONS_HOST_ID','CAMPAIGN_BUILD_ID')
+ env={k:live[k] for k in keys if k in live};env.update(PATH='/usr/bin:/bin',HOME='__PRIVATE_DEPLOY_HOME__',NODE_ENV='production')
+ need(env.get('DATABASE_URL') and env.get('CAMPAIGN_OPERATIONS_FILE')==str(LEDGER),'administrative_original_environment_missing')
+ cmd=['/usr/bin/node',str(ROOT/'admin/reconcile-position6.mjs'),'--mode='+mode,'--input='+str(p),'--input-sha256='+INPUT_HASH,'--output='+str(run/'result.private.json'),*extra]
+ with open(run/'stdout.private.log','xb') as out,open(run/'stderr.private.log','xb') as err:
+  try:
+   r=subprocess.run(cmd,cwd=ROOT/'admin',env=env,stdout=out,stderr=err,timeout=60)
+   record.update(exitCode=r.returncode,timeout=False)
+  except subprocess.TimeoutExpired:
+   record.update(exitCode=None,timeout=True)
+ identities()
+ if mode in ('dry-run','verify-receipt'):need(fence()==before,'administrative_readonly_ledger_drift')
+ record['finishedAt']=now()
+ need(record.get('exitCode')==0 and not record.get('timeout'),'administrative_cli_denied_inspect_private_result')
+ result=json.loads((run/'result.private.json').read_text());record['resultSha256']=digest(run/'result.private.json')
+ print(json.dumps({'status':'PASS','mode':mode,'privateRun':str(run),'result':result['result']}))
+except Exception as e:
+ record.update(finishedAt=now(),error=str(e));print(json.dumps({'status':'DENY','mode':mode,'reason':str(e),'privateRun':str(run)}));sys.exitCode=1
+finally:
+ with open(run/'execution.private.json','x') as f:json.dump(record,f);f.flush();os.fsync(f.fileno())
+ if record.get('error'):raise SystemExit(1)

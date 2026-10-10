@@ -1,0 +1,7 @@
+import os,subprocess,time,json,sys
+from pathlib import Path
+p=Path('__PRIVATE_ROOT__');os.umask(0o077)
+r=p/('inspection-'+str(time.time_ns()));r.mkdir(mode=0o700)
+with open(r/'capture.private.json','xb') as out,open(r/'stderr.private.log','xb') as err:
+ q=subprocess.run(['/usr/bin/python3',str(p/'capture-readonly.py')],input=(p/'query-current.cjs').read_bytes(),stdout=out,stderr=err,timeout=50)
+print(json.dumps({'exitCode':q.returncode,'privateDirectory':str(r),'mode':'READ_ONLY','noAutomaticRetry':True}));raise SystemExit(q.returncode)

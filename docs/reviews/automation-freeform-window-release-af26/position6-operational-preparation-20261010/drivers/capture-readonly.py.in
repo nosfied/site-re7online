@@ -1,0 +1,30 @@
+import datetime,hashlib,json,os,pathlib,subprocess,sys
+P=pathlib.Path('__PRIVATE_LEDGER_PATH__')
+def now():return datetime.datetime.now(datetime.timezone.utc).isoformat()
+def file(path,limit):
+ path=pathlib.Path(path)
+ if not path.exists():return {'path':str(path),'exists':False,'symlink':path.is_symlink()}
+ a=path.stat();assert a.st_size<=limit,'read_size_limit'
+ raw=path.read_bytes();b=path.stat()
+ return {'path':str(path),'exists':True,'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw),'consistent':(a.st_ino,a.st_mtime_ns,a.st_size)==(b.st_ino,b.st_mtime_ns,b.st_size),'contents':json.loads(raw),'stat':{'inode':b.st_ino,'mtime_ns':b.st_mtime_ns}}
+def ledger():return {'at':now(),'ledger':file(P,5*1024*1024),'lockExists':os.path.lexists(str(P)+'.lock'),'uncertainExists':os.path.lexists(str(P)+'.uncertain')}
+def proc(pid):
+ s=pathlib.Path('/proc',str(pid),'stat').read_text().split(') ',1)[1].split()
+ return {'pid':pid,'state':s[0],'ticks':s[19],'cwd':os.readlink('/proc/'+str(pid)+'/cwd')}
+first=ledger();daemonPid=int(pathlib.Path('__PRIVATE_DEPLOY_HOME__/.pm2/pm2.pid').read_text());daemon=proc(daemonPid);assert daemon['state']not in ['Z','X','x']
+rows=json.loads(subprocess.check_output(['__PRIVATE_DEPLOY_HOME__/.npm-global/bin/pm2','jlist'],timeout=5))
+apiRows=[x for x in rows if x['name']=='re7-whatsapp-agent'];assert len(apiRows)==1,'api_ambiguous'
+api=apiRows[0];cwd=api['pm2_env']['pm_cwd'];processes=[]
+for x in rows:
+ if x['name']not in ['re7-whatsapp-agent','re7-whatsapp-web-worker','re7-admin-front']:continue
+ info=proc(x['pid']);e=x['pm2_env'];info.update(name=x['name'],status=e['status'],restarts=e['restart_time'],pm_cwd=e['pm_cwd'],script=e['pm_exec_path'],build=e.get('RE7_CAMPAIGN_BUILD')or e.get('RE7_RELEASE_SHA'),created_at=e.get('created_at'));processes.append(info)
+query=sys.stdin.read();env=dict(os.environ);env['RE7_API_CWD']=cwd
+envdata=pathlib.Path('/proc',str(api['pid']),'environ').read_bytes().split(b'\0');liveEnv={x.split(b'=',1)[0].decode():x.split(b'=',1)[1].decode() for x in envdata if b'='in x}
+for key in ['DATABASE_URL','CAMPAIGN_SEED_SECRET','CHANNEL_ACCOUNT_SECRET_KEY','APP_AUTH_SECRET']:
+ value=liveEnv.get(key)or api['pm2_env'].get(key)or api['pm2_env'].get('env',{}).get(key)
+ if value:env[key]=value
+assert env.get('DATABASE_URL'),'db_url_missing_no_config_fallback'
+node=api['pm2_env'].get('exec_interpreter')or'/usr/bin/node'
+result=subprocess.run([node,'-e',query],cwd=cwd,env=env,capture_output=True,text=True,timeout=45)
+print(json.dumps({'atBefore':first,'daemon':daemon,'processes':processes,'queryExit':result.returncode,'queryStderr':result.stderr,'data':json.loads(result.stdout)if result.returncode==0 else None,'atAfter':ledger(),'finishedAt':now()}))
+if result.returncode:raise SystemExit(result.returncode)

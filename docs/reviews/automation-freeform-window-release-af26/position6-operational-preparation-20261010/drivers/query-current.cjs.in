@@ -1,0 +1,43 @@
+// Audited reader: only Prisma client/pure seed decoder; no app entrypoint/provider.
+const fs=require('fs'),crypto=require('crypto');
+const {PrismaClient}=require(process.env.RE7_API_CWD+'/node_modules/@prisma/client');
+if(!process.env.DATABASE_URL)throw Error('database_url_missing_no_fallback');
+const db=new PrismaClient({datasources:{db:{url:process.env.DATABASE_URL}},log:[]});
+const clientId='__PRIVATE_CLIENT_ID__',campaignId='__PRIVATE_CHILD_ID__',parentId='__PRIVATE_PARENT_ID__',messageId=`campaign.${campaignId}.6`;
+async function limited(model,where,take,orderBy={createdAt:'asc'}) {const v=await model.findMany({where,take:take+1,orderBy});if(v.length>take)throw Error('bounded_query_truncated');return v;}
+(async()=>{
+ const result=await db.$transaction(async tx=>{
+  await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');await tx.$executeRawUnsafe("SET LOCAL statement_timeout='8000ms'");await tx.$executeRawUnsafe("SET LOCAL lock_timeout='1000ms'");
+  const snapshot=await tx.$queryRawUnsafe("SELECT transaction_timestamp() AS at,current_setting('transaction_read_only') AS read_only,current_setting('transaction_isolation') AS isolation");
+  const schema=await tx.$queryRawUnsafe("SELECT table_name,column_name,data_type FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('Client','Campaign','CampaignMessage','CampaignExecutionBatch','CampaignExecutionBatchCampaign','CampaignExecutionJob','TenantCampaignExecutionLease','OutboundMessage','Event','TemplateRequest','Contact','Lead','Conversation','ConversationRuntimeState') ORDER BY table_name,ordinal_position");
+  const client=await tx.client.findUnique({where:{id:clientId},select:{id:true,clientKey:true,status:true}});
+  const campaign=await tx.campaign.findFirst({where:{id:campaignId,clientId}}),parent=await tx.campaign.findFirst({where:{id:parentId,clientId}});
+  const links=await limited(tx.campaignExecutionBatchCampaign,{clientId,campaignId},20,{chunkIndex:'asc'}),batchIds=links.map(x=>x.batchId);
+  const batches=await limited(tx.campaignExecutionBatch,{clientId,id:{in:batchIds}},20);
+  const jobs=await limited(tx.campaignExecutionJob,{clientId,OR:[{campaignId},{batchId:{in:batchIds}}]},30);
+  const leases=await limited(tx.tenantCampaignExecutionLease,{clientId},5,{expiresAt:'asc'});
+  const outbounds=await limited(tx.outboundMessage,{clientId,messageId:{startsWith:`campaign.${campaignId}.`}},30);
+  const events=await limited(tx.event,{clientId,OR:[{messageId:{in:[campaignId,parentId,messageId]}},{payloadJson:{path:['campaignId'],equals:campaignId}}]},250);
+  const accepted=events.find(x=>x.eventName==='campaign.message.provider_accepted'&&x.messageId===messageId);if(!accepted)throw Error('original_acceptance_missing');
+  const metaId=accepted.payloadJson?.metaMessageId;if(!metaId||!accepted.waId)throw Error('original_reference_missing');
+  const providerEvents=await limited(tx.event,{clientId,OR:[{messageId:metaId},{payloadJson:{path:['metaMessageId'],equals:metaId}}]},100);
+  const usage=await limited(tx.event,{clientId,eventName:{startsWith:'meta.usage.'},OR:[{messageId},{payloadJson:{path:['outboundMessageId'],equals:messageId}}]},50);
+  const seed=events.find(x=>x.id==='__PRIVATE_SEED_ID__');if(!seed)throw Error('original_seed_missing');
+  const templateRequests=await limited(tx.templateRequest,{clientId,name:campaign.templateName,createdAt:{lte:accepted.createdAt}},30);
+  const templateHistory=await limited(tx.event,{clientId,createdAt:{lte:accepted.createdAt},eventName:{contains:'template'},OR:[{payloadJson:{path:['templateId'],equals:seed.payloadJson.templateId}},{payloadJson:{path:['templateName'],equals:campaign.templateName}},{payloadJson:{path:['name'],equals:campaign.templateName}}]},100);
+  const identity={contacts:await limited(tx.contact,{clientId,waId:accepted.waId},20),leads:await limited(tx.lead,{tenantId:clientId,OR:[{waId:accepted.waId},{waIdCanonical:accepted.waId},{phone:accepted.waId}]},20),conversations:await limited(tx.conversation,{clientId,OR:[{waId:accepted.waId},{waIdCanonical:accepted.waId}]},20),runtimes:await limited(tx.conversationRuntimeState,{clientId,OR:[{waId:accepted.waId},{waIdCanonical:accepted.waId}]},20)};
+  const global={clients:await tx.client.findMany({select:{id:true,clientKey:true,status:true},orderBy:{clientKey:'asc'}}),
+   jobs:await tx.$queryRawUnsafe(`SELECT c."clientKey",j.status,j.kind,count(*)::int AS count,count(*) FILTER(WHERE j."leaseToken" IS NOT NULL OR j."leaseOwner" IS NOT NULL OR j."leaseExpiresAt" IS NOT NULL)::int AS linked_lease,count(*) FILTER(WHERE j."leaseExpiresAt"<=now())::int AS expired_linked,count(*) FILTER(WHERE j."eligibleAt"<=now())::int AS overdue,min(j."eligibleAt") AS earliest FROM "CampaignExecutionJob" j JOIN "Client" c ON c.id=j."clientId" WHERE j.status NOT IN ('completed','failed','blocked','cancelled') OR j."leaseToken" IS NOT NULL OR j."leaseOwner" IS NOT NULL OR j."leaseExpiresAt" IS NOT NULL GROUP BY 1,2,3 ORDER BY 1,2,3`),
+   batches:await tx.$queryRawUnsafe(`SELECT c."clientKey",b.status,count(*)::int AS count,count(*) FILTER(WHERE b."eligibleAt"<=now())::int AS overdue,min(b."eligibleAt") AS earliest FROM "CampaignExecutionBatch" b JOIN "Client" c ON c.id=b."clientId" WHERE b.status NOT IN ('completed','failed','blocked','cancelled') GROUP BY 1,2 ORDER BY 1,2`),
+   leases:await tx.$queryRawUnsafe(`SELECT c."clientKey",count(*)::int AS count,count(*) FILTER(WHERE l."expiresAt"<=now())::int AS expired,count(*) FILTER(WHERE l."jobId" IS NOT NULL)::int AS linked,min(l."expiresAt") AS earliest FROM "TenantCampaignExecutionLease" l JOIN "Client" c ON c.id=l."clientId" GROUP BY 1 ORDER BY 1`),
+   campaigns:await tx.$queryRawUnsafe(`SELECT c."clientKey",p.status,count(*)::int AS count,count(*) FILTER(WHERE p."scheduledAt"<=now())::int AS overdue FROM "Campaign" p JOIN "Client" c ON c.id=p."clientId" WHERE p.status NOT IN ('completed','failed','blocked','cancelled') GROUP BY 1,2 ORDER BY 1,2`)};
+  return{snapshot,schema,client,campaign,parent,links,batches,jobs,leases,outbounds,events,accepted,providerEvents,usage,seed,templateRequests,templateHistory,identity,global};
+ },{isolationLevel:'RepeatableRead',timeout:30000,maxWait:5000});
+ // Pure decoder's dependencies (crmWhatsappIdentity/waid) audited: declarations only.
+ const modulePath=process.env.RE7_API_CWD+'/dist/campaigns/campaignSeedPrivacy.js';
+ const {readPrivateCampaignSeedFields}=await import(modulePath);
+ const original=readPrivateCampaignSeedFields(result.seed.payloadJson);
+ const recipient=original.recipients[5];
+ result.decodedSeed={moduleSha256:crypto.createHash('sha256').update(fs.readFileSync(modulePath)).digest('hex'),recipientCount:original.recipients.length,position:6,recipient,recipientMatchesAcceptance:recipient===result.accepted.waId,components:original.componentsByWaId?.[recipient]??null,templateParams:result.seed.payloadJson.templateParams,returnDestination:result.seed.payloadJson.returnDestination};
+ console.log(JSON.stringify(result));
+})().catch(error=>{console.error(error.name+':'+error.code+':'+String(error.message).replace(/(?:postgres(?:ql)?|https?):\/\/[^\s]+/gi,'[redacted-url]'));process.exitCode=1;}).finally(()=>db.$disconnect());

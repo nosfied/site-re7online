@@ -1,0 +1,353 @@
+{
+  "status": "CAPACITY_DENY / NO_APPLY_NO_ACK / STORAGE_ACTION_REVIEW_REQUIRED",
+  "capturedUtc": {
+    "first": "2026-10-10T23:05:45.366660+00:00",
+    "firstSql": "2026-10-10T23:05:45.48657+00:00",
+    "second": "2026-10-10T23:11:25.644080+00:00",
+    "secondSql": "2026-10-10T23:11:25.930087+00:00",
+    "stateAfter": "2026-10-10T23:11:32.340236+00:00"
+  },
+  "filesystems": {
+    "dataDirectory": "/var/lib/postgresql/data",
+    "walDirectory": "/var/lib/postgresql/data/pg_wal",
+    "externalTablespaces": [],
+    "pgDataMounts": [
+      {
+        "type": "volume",
+        "source": "/var/lib/docker/volumes/postgres_wa_agent_pgdata/_data",
+        "destination": "/var/lib/postgresql/data"
+      }
+    ],
+    "postgresOsUid": 70,
+    "deployUid": 1000,
+    "postgresDfFirstAvailableBytes": 476815360,
+    "hostObservations": {
+      "first": {
+        "/var/lib/re7/campaign-operations": {
+          "resolved": "/var/lib/re7/campaign-operations",
+          "device": 64769,
+          "uid": 1000,
+          "blocks": 14962238,
+          "blockSize": 4096,
+          "availableBytes": 476815360,
+          "rootFreeBytes": 493592576,
+          "files": 7733248,
+          "availableInodes": 6863902,
+          "readable": true,
+          "writable": true
+        },
+        "/opt/re7online/backups/converta-persistent": {
+          "resolved": "/opt/re7online/backups/converta-persistent",
+          "device": 64769,
+          "uid": 1000,
+          "blocks": 14962238,
+          "blockSize": 4096,
+          "availableBytes": 476815360,
+          "rootFreeBytes": 493592576,
+          "files": 7733248,
+          "availableInodes": 6863902,
+          "readable": true,
+          "writable": true
+        },
+        "/opt/re7online/releases": {
+          "resolved": "/opt/re7online/releases",
+          "device": 64769,
+          "uid": 1000,
+          "blocks": 14962238,
+          "blockSize": 4096,
+          "availableBytes": 476815360,
+          "rootFreeBytes": 493592576,
+          "files": 7733248,
+          "availableInodes": 6863902,
+          "readable": true,
+          "writable": true
+        },
+        "/home/deploy/.pm2": {
+          "resolved": "/home/deploy/.pm2",
+          "device": 64769,
+          "uid": 1000,
+          "blocks": 14962238,
+          "blockSize": 4096,
+          "availableBytes": 476815360,
+          "rootFreeBytes": 493592576,
+          "files": 7733248,
+          "availableInodes": 6863902,
+          "readable": true,
+          "writable": true
+        },
+        "/dev/shm": {
+          "resolved": "/dev/shm",
+          "device": 26,
+          "uid": 1000,
+          "blocks": 251872,
+          "blockSize": 4096,
+          "availableBytes": 1005203456,
+          "rootFreeBytes": 1005203456,
+          "files": 251872,
+          "availableInodes": 251833,
+          "readable": true,
+          "writable": true
+        }
+      },
+      "second": {
+        "/var/lib/re7/campaign-operations": {
+          "resolved": "/var/lib/re7/campaign-operations",
+          "device": 64769,
+          "uid": 1000,
+          "blocks": 14962238,
+          "blockSize": 4096,
+          "availableBytes": 483340288,
+          "rootFreeBytes": 500117504,
+          "files": 7733248,
+          "availableInodes": 6863902,
+          "readable": true,
+          "writable": true
+        },
+        "/opt/re7online/backups/converta-persistent": {
+          "resolved": "/opt/re7online/backups/converta-persistent",
+          "device": 64769,
+          "uid": 1000,
+          "blocks": 14962238,
+          "blockSize": 4096,
+          "availableBytes": 483340288,
+          "rootFreeBytes": 500117504,
+          "files": 7733248,
+          "availableInodes": 6863902,
+          "readable": true,
+          "writable": true
+        },
+        "/opt/re7online/releases": {
+          "resolved": "/opt/re7online/releases",
+          "device": 64769,
+          "uid": 1000,
+          "blocks": 14962238,
+          "blockSize": 4096,
+          "availableBytes": 483340288,
+          "rootFreeBytes": 500117504,
+          "files": 7733248,
+          "availableInodes": 6863902,
+          "readable": true,
+          "writable": true
+        },
+        "/home/deploy/.pm2": {
+          "resolved": "/home/deploy/.pm2",
+          "device": 64769,
+          "uid": 1000,
+          "blocks": 14962238,
+          "blockSize": 4096,
+          "availableBytes": 483340288,
+          "rootFreeBytes": 500117504,
+          "files": 7733248,
+          "availableInodes": 6863902,
+          "readable": true,
+          "writable": true
+        },
+        "/dev/shm": {
+          "resolved": "/dev/shm",
+          "device": 26,
+          "uid": 1000,
+          "blocks": 251872,
+          "blockSize": 4096,
+          "availableBytes": 1005203456,
+          "rootFreeBytes": 1005203456,
+          "files": 251872,
+          "availableInodes": 251833,
+          "readable": true,
+          "writable": true
+        }
+      }
+    },
+    "sameUnderlyingDisk": true,
+    "containerPathsExitCode": 0,
+    "pgDataAllocatedKiB": 700336,
+    "systemReserveCountedAsAvailable": false,
+    "rootMount": {
+      "target": "/",
+      "source": "/dev/vda1",
+      "fstype": "ext4",
+      "options": "rw,relatime,discard,errors=remount-ro,commit=30"
+    },
+    "quotaMountOptionsObserved": []
+  },
+  "wal": {
+    "segmentBytes": 16777216,
+    "files": {
+      "count": 5,
+      "bytes": 83886080,
+      "oldest": "2026-10-10T22:40:20+00:00",
+      "newest": "2026-10-10T23:11:23+00:00"
+    },
+    "maxWalSizeMiB": 1024,
+    "minWalSizeMiB": 80,
+    "walKeepSizeMiB": 0,
+    "maxSlotWalKeepSize": "-1",
+    "slots": [],
+    "replication": [],
+    "archiveMode": "off",
+    "archiveFailedCount": 0,
+    "checkpointTimeoutSeconds": 300,
+    "statsResetUnchanged": true,
+    "observedSeconds": 340.443517,
+    "walBytesGenerated": 15885063,
+    "walBytesPerSecond": 46659.90746418003,
+    "netDiskUsedDeltaBytes": -6524928,
+    "maxWalSizeIsHardLimit": false,
+    "observedRateIsWorkloadBound": false
+  },
+  "operation": {
+    "knownWriteSurface": {
+      "blockSize": "8192",
+      "indexes": [
+        {
+          "relname": "Campaign",
+          "indexes": 5
+        },
+        {
+          "relname": "Event",
+          "indexes": 6
+        },
+        {
+          "relname": "OutboundMessage",
+          "indexes": 9
+        }
+      ],
+      "customTriggers": null
+    },
+    "expectedSqlChanges": {
+      "outboundInsert": 1,
+      "mandatoryEventInsert": 5,
+      "receiptEventInsert": 1,
+      "campaignCounterUpdate": 1
+    },
+    "sqlApplyWALMeasured": false,
+    "planningSqlReserveMiB": 64,
+    "planningLedgerReserveMiB": 1,
+    "ledgerCurrentBytes": 9480,
+    "ledgerSha256": "a072223faacd2681a25696d422e6b67947c88ac6b9634d97382af4536580aacf",
+    "customTriggerPresent": false
+  },
+  "budget": {
+    "routineExistingMinimumFreeMiB": 1024,
+    "walGrowthToSoftTargetMiB": 944,
+    "planningMinimumMiB": 2033,
+    "roundedReviewTargetMiB": 2048,
+    "availableBytes": 483340288,
+    "shortfallToPlanningMinimumBytes": 1648414720,
+    "shortfallToRoundedTargetBytes": 1664143360,
+    "planningBudgetIsCertificate": false,
+    "otherProductionWritesUnbounded": true
+  },
+  "errors": {
+    "pgLogSinceUtc": "2026-10-10T15:00:00Z",
+    "pgLogTailLineLimit": 1500,
+    "pgLogLinesObserved": 268,
+    "pgLogWriteErrorMatches": 0,
+    "pm2TailLimitBytes": 4194304,
+    "pm2WriteErrorMatches": 0,
+    "pm2ErrorLinesHaveGuaranteedTimestamps": false,
+    "kernelAndUnreadableHostLogsAudited": false
+  },
+  "consumption": {
+    "preparationsAllocatedKiB": 24000788,
+    "persistentBackupsReadableAllocatedKiB": 25285872,
+    "persistentBackupsReadComplete": false,
+    "releasesDuTimedOut": true,
+    "pgdataIsDominantCause": false,
+    "candidateSameHash": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810",
+    "candidateCopies": [
+      {
+        "path": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z/window/content.private.tar.gz",
+        "sha256": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810",
+        "bytes": 479460086,
+        "allocatedBytes": 479465472,
+        "inode": 2176456,
+        "links": 1,
+        "uid": 1000,
+        "mode": "0o664",
+        "consistent": true
+      },
+      {
+        "path": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z/window/backup-bindings-pre-postack-20261008T190208Z/window/content.private.tar.gz",
+        "sha256": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810",
+        "bytes": 479460086,
+        "allocatedBytes": 479465472,
+        "inode": 2176547,
+        "links": 1,
+        "uid": 1000,
+        "mode": "0o600",
+        "consistent": true
+      },
+      {
+        "path": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z/window/postack-backup-20261008T190208Z/backup/content.private.tar.gz",
+        "sha256": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810",
+        "bytes": 479460086,
+        "allocatedBytes": 479465472,
+        "inode": 2176535,
+        "links": 1,
+        "uid": 1000,
+        "mode": "0o664",
+        "consistent": true
+      },
+      {
+        "path": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z/window/postack-backup-20261008T202538Z/backup/content.private.tar.gz",
+        "sha256": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810",
+        "bytes": 479460086,
+        "allocatedBytes": 479465472,
+        "inode": 2176579,
+        "links": 1,
+        "uid": 1000,
+        "mode": "0o664",
+        "consistent": true
+      },
+      {
+        "path": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z/window/backup-bindings-pre-postack-20261008T202538Z/window/content.private.tar.gz",
+        "sha256": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810",
+        "bytes": 479460086,
+        "allocatedBytes": 479465472,
+        "inode": 2176591,
+        "links": 1,
+        "uid": 1000,
+        "mode": "0o664",
+        "consistent": true
+      }
+    ],
+    "candidateBytesReclaimableAfterApprovedOffHostPreservation": 1917861888,
+    "candidateReclaimProjectedAvailableBytes": 2401202176,
+    "candidateDescriptorsObservationComplete": false,
+    "unreadableProcessCount": 143,
+    "observedOpenCandidateDescriptors": 0,
+    "savedFallbackDirectReferences": 0
+  },
+  "procedures": {
+    "persistentBackup": {
+      "path": "/usr/local/sbin/re7-converta-backup",
+      "sha256": "179a9ab52ab155cfcba908628be0a8d24796c6f917829ad00054e690e2ad6f71",
+      "minimumFreeMiBDefault": 1024,
+      "retention": "7 daily / 4 weekly / 3 monthly, snapshots subtree only"
+    },
+    "otherScripts": {
+      "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/backup-data.sh": "32870c50972a68a81c03ff0ec6b6b7a11e79606931e0e6474615c721f5a5531f",
+      "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/backup-postgres.sh": "795d9906bbde658710e024bbe84afa9a30bd392ef8f5235b7580fa85ac2d5733"
+    }
+  },
+  "preservation": {
+    "ledgerUnchanged": true,
+    "identitiesUnchanged": true,
+    "markersAbsent": true,
+    "protectedDataUnchanged": true,
+    "finishedAt": "2026-10-10T23:11:32.340236+00:00"
+  },
+  "stagingIntegrityRechecked": true,
+  "backupRestoreReused": true,
+  "dryRunRepeated": false,
+  "mutationsExecuted": [],
+  "backupReused": {
+    "dumpSha256": "c25cd5efcd3b965d90d48c1691b16529a68bfb14595f3951fc9ce60fd7dd903c",
+    "finishedAtUtc": "2026-10-10T22:47:25.265303+00:00",
+    "ageSecondsAtLatestStateCapture": 1447.074933,
+    "restoreProofReused": true,
+    "coversSubsequentProductionWrites": false,
+    "freshDumpNeededForThisReadOnlyReview": false,
+    "freshnessAndRpoMustBeReassessedBeforeApply": true
+  }
+}
