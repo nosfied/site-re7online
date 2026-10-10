@@ -1,0 +1,51 @@
+{
+  "baseCommit": "85a4674811f87eb3297ce257c5f0b18e34a38bb4",
+  "status": "LOCAL_VERIFIED_FOR_REVIEW_NOT_DEPLOYED",
+  "node": "20.20.0",
+  "sql": "PostgreSQL16 synthetic only",
+  "productionAccess": false,
+  "apiOnly": true,
+  "workerChanged": false,
+  "sharedOutboundHelperChanged": false,
+  "genericAckChanged": false,
+  "schemaMigration": false,
+  "runnerOriginSha256": "36242e0d52bd334a5df40d0dec6fc5e755b40ad33ee1c64b774c4dc6148e7d1e",
+  "files": {
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryReview.test.ts": "ef8ff84204ac5aba4cc5692411ff5874806134c13e14c167179e14e0ae7c806c",
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedDeliveryReview.ts": "142f8856840f0d6043aad3df290dfcf05d3ad3c8822dbb2d1af1ed8999fcf04e",
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedFailureReconciliation.test.ts": "11e857e4685df02178f9785289d8c7b4af2e30f7d7943d3079eb294c4b335baf",
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedFailureReconciliation.ts": "1146a3d0863ed6d560847e84afc1d8c8f1d97e04adf20037f03f9fd57e83920b",
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedResult.test.ts": "3459784549c3ebf4f116efdf45ef5da4ccfaeb8ac71e66f4157e4145e119e101",
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedResult.ts": "678203459cf32252732314d6cba2fe5924c08771bbfb382c7bd52ca681184ab3",
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedResultRunner.test.ts": "d7463c6619e66f9a844c4af619078bd6ebb094da297b2620580c7f1a4e7fc4bc",
+    "apps/whatsapp-agent/src/campaigns/campaignAcceptedResultWebhook.test.ts": "b35952c64cf0aae54b6f07e8d890dfb7e2e108e1e68711f67872668a07aac967",
+    "apps/whatsapp-agent/src/campaigns/campaignRunner.ts": "66a3c4c6a87d418d0c132fffa4cebbfa4aced76a08859af8d1b5706a9fc2602f",
+    "docs/reviews/automation-freeform-window-release-af26/guard37-local-proposal-20261010/frontend_guard_contract_test.py": "81a7457aa26d07464a7c347f079fac3ff8798c364298b82a4e1d4752d314d604"
+  },
+  "proofs": {
+    "nodeTestsPassed": 10,
+    "nodeTestsFailed": 0,
+    "regressionSkipped": 14,
+    "frontendActualPredicate": "PASS synthetic input, not VPS preflight",
+    "apiNode20NoEmit": "PASS",
+    "rootFrontendTypecheck": "FAIL outside edited scope, not frontend validation"
+  },
+  "privateEvidenceHashes": {
+    "re7-guard37-delivery-tests-final.log": "80645e2dddf75babb393bca2f72ba69539fd501f68a768b533337636781395ac",
+    "re7-guard37-delivery-tests.log": "123003e2b7314d85990429028984a40375752e5b54a4493c090f349727ddba02",
+    "re7-guard37-prevention-tests.log": "f16c141f668492e5bf2b2ccadccc8f8bd75e1efce2195395202e9fdc2d65b032",
+    "re7-guard37-regression.log": "26a7eb7e59eab48411d1e4b210d2db2692480a1f2f9ffb395f9816d63538abae"
+  },
+  "recovery": {
+    "writerImplemented": false,
+    "receiptAndVerifierLocalTested": true,
+    "ackEligible": false,
+    "missing": [
+      "original .6 account/seed/rendering/return provenance",
+      "CRM reviewed disposition",
+      "usage and result event persistence",
+      "actual read model verification",
+      "success-specific acknowledgement review"
+    ]
+  }
+}

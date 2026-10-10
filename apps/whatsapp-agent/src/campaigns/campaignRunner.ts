@@ -1,3 +1,4 @@
+import { persistVerifiedAcceptedCampaignResult } from "./campaignAcceptedResult.js";
 import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from "./campaignEligibility.js";
 import { campaignFailureDiagnostic } from "./campaignFailureDiagnostic.js";
 import { campaignTask, campaignOperationsAreOpen, campaignProviderAttempt, CampaignOperationsClosed } from "./campaignOperations.js";
@@ -1753,22 +1754,9 @@ async function runCampaignInBackground(
               },
             });
           }
-          persistenceStage = "crm_materialization";
-          const conversationOutcome = await ensureCampaignOutboundCrmAttemptMaterialization(prisma, {
-            clientId: params.clientId,
-            waId,
-            waIdCanonical,
-            phoneNumberId,
-            messageId,
-            campaignId: params.campaignId,
-            campaignRunId,
-            templateName: params.templateName,
-            source: "campaign",
-            conversationId: resolvedRecipient.conversationId ?? null,
-          });
           const usagePayload = buildMetaUsageEventPayload({
             outboundMessageId: messageId,
-            conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+            conversationId: resolvedRecipient.conversationId ?? null,
             campaignId: params.campaignId,
             source: usageSource,
             messageKind: "template",
@@ -1781,14 +1769,12 @@ async function runCampaignInBackground(
             waIdCanonical,
           });
           persistenceStage = "outbound_persistence";
-          await persistOutboundMessage({
+          const outboundData = {
             clientId: params.clientId,
             phoneNumberId,
             waId,
             waIdCanonical,
             messageId,
-            type: MessageType.TEMPLATE,
-            status,
             bodyText: renderTemplateBody(templateForRendering?.content, components),
             templateName: params.templateName,
             templateLang: language,
@@ -1808,6 +1794,26 @@ async function runCampaignInBackground(
               metaUsage: usagePayload,
               returnDestination: resolvedReturnDestination,
             },
+          };
+          if (result.ok) {
+            await persistVerifiedAcceptedCampaignResult(prisma, {
+              ...outboundData, metaMessageId: result.metaMessageId ?? "",
+            });
+          } else {
+            await persistOutboundMessage({ ...outboundData, type: MessageType.TEMPLATE, status });
+          }
+          persistenceStage = "crm_materialization";
+          const conversationOutcome = await ensureCampaignOutboundCrmAttemptMaterialization(prisma, {
+            clientId: params.clientId,
+            waId,
+            waIdCanonical,
+            phoneNumberId,
+            messageId,
+            campaignId: params.campaignId,
+            campaignRunId,
+            templateName: params.templateName,
+            source: "campaign",
+            conversationId: resolvedRecipient.conversationId ?? null,
           });
           persistenceStage = "usage_persistence";
           await recordMetaUsageLedgerEvent({

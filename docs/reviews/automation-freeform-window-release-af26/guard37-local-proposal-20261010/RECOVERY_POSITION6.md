@@ -1,5 +1,7 @@
 # Recuperação específica proposed: posição .6 aceita e entregue, sem Outbound
 
+**Continuidade local sobre85:** [implementação, provas e limites](IMPLEMENTATION_20261010.md). A descrição abaixo preserva a proposta/reprodução histórica. Prevenção agora implementada localmente; verificador/recibo .6 ensaiados, mas nenhum apply/ack/recuperação executado.
+
 **CONTRATO PARA REVISÃO / NÃO É CLI APPLY, ACK OU AUTORIZAÇÃO PRODUTIVA.** Usa somente a captura da auditoria anterior. Uma eventual operação exige dry-run fresco, backup adequado e autorização específica; evidência de 10/10 não é binding atual por si só.
 
 ## Vínculos exatos e proveniência

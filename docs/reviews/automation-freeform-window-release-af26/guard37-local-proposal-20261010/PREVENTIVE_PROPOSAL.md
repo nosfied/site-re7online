@@ -1,5 +1,7 @@
 # Delta preventivo proposto — durabilidade antes de CRM
 
+**Continuidade local sobre85:** [implementação, provas e limites](IMPLEMENTATION_20261010.md). A descrição abaixo preserva a proposta/reprodução histórica. Prevenção agora implementada localmente; verificador/recibo .6 ensaiados, mas nenhum apply/ack/recuperação executado.
+
 **PROPOSTA PARA REVISÃO; NÃO IMPLEMENTADO.** São duas decisões separadas.
 
 ## 1. Proteger resultado aceito sem redefinir identidade
