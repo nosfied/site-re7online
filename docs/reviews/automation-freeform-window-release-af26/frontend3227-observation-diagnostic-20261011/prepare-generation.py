@@ -1,5 +1,23 @@
 from pathlib import Path
-import json,hashlib,subprocess,importlib.util,sys,os,time,fcntl
+import json,hashlib,subprocess,importlib.util,sys,os,time,fcntl,stat
+def ensure_receipts_directory(root, expected_uid=None):
+ """Create only the fixed receipt directory; never repair an existing divergence."""
+ uid=os.geteuid() if expected_uid is None else expected_uid
+ parent=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+ try:
+  try:os.mkdir('receipts-private',mode=0o700,dir_fd=parent)
+  except FileExistsError:pass
+  before=os.stat('receipts-private',dir_fd=parent,follow_symlinks=False)
+  if not stat.S_ISDIR(before.st_mode):raise RuntimeError('receipts_not_directory_or_symlink')
+  if before.st_uid!=uid:raise RuntimeError('receipts_owner_drift')
+  if stat.S_IMODE(before.st_mode)!=0o700:raise RuntimeError('receipts_mode_drift')
+  child=os.open('receipts-private',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent)
+  try:
+   after=os.fstat(child)
+   if (after.st_dev,after.st_ino,after.st_uid,after.st_mode)!=(before.st_dev,before.st_ino,before.st_uid,before.st_mode):raise RuntimeError('receipts_identity_drift')
+  finally:os.close(child)
+ finally:os.close(parent)
+
 P=Path('/opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-observation-v2-20261011T101500Z')
 O=Path('/opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-after-preventive-env-v2-20261011T002421Z')
 T=Path('/opt/re7online/releases/3227b2d752110873f0eff4ee5253a6f06ca51549-front')
@@ -16,6 +34,7 @@ for line in (I/'incoming.sha256').read_text().splitlines():
  sha,name=line.split('  ');assert h(I/name)==sha,'incoming_script_drift:'+name
 assert h('/usr/local/libexec/re7/frontend-socket-observer.py')=='93564f78ad2286621b465f713f82ac5d37d031518c92be9110dcf934412af385'
 P.mkdir(mode=0o700)
+ensure_receipts_directory(P)
 def write(n,value):
  p=P/n;assert not p.exists();p.write_text(json.dumps(value,sort_keys=True)+'\n');p.chmod(0o600)
 skip={'install-window-policy.sh','install-permanent-policy.sh','WINDOW-STEPS.txt','capture-frontend-phase.py','frontend_phase_contract.py'}
