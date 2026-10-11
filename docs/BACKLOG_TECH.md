@@ -1,5 +1,7 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**Frontend3227 — retorno fa60 confirmado pelo owner; candidato não iniciado (11/10 02:16 UTC / 10/10 23:16 Fortaleza).** [Registro](reviews/automation-freeform-window-release-af26/preventive-api-frontend3227-prepared-20261010/EXECUTION_2026-10-11.md): primeiro exited DENY ownership_observation_incomplete; segunda observação nova PASS, retorno fa60 único/HTTP/identidade/CSS PASS. Sem alteração de checker/binding ou bypass. API preventiva e worker afbb ativos, guarda fechada38/job suspenso. Política permanente/promoção/save do novo controle de retorno pendentes da sessão sudo de Deifson; confirmação das telas já registrada. Frontend3227 NOT DEPLOYED; aceite funcional API separado.
+
 **Execução consolidada em andamento — API preventiva DEPLOYED TECHNICALLY; frontend3227 NOT DEPLOYED (11/10 02:12 UTC / 10/10 23:12 Fortaleza).** [Registro factual](reviews/automation-freeform-window-release-af26/preventive-api-frontend3227-prepared-20261010/EXECUTION_2026-10-11.md): V4 complete/switch exit0, contenção28s, mesmo worker afbb retomado, frontend fa60 preservado, guarda fechada38 e job suspenso. Backup fresco off-host/restore isolado PASS. Baseline real pós-API PASS/gate frontend falso; política de janela frontend aguarda execução na sessão sudo de Deifson. Promoção frontend depende de confirmação owner. Sem envios/abertura/recuperação repetida; aceite funcional separado.
 
 

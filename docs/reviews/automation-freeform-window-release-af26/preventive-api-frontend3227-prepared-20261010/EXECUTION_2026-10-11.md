@@ -33,3 +33,13 @@ Capturador pós-API real PASS: `CONFIGURATIONS_POLICIES_IDENTITIES_AND_CONTROLS_
 Dependência atual: Deifson executar o instalador de política de janela frontend já autorizado. Somente após instalação/preflight PASS haverá a partida única do frontend3227. Política permanente/promoção/save/fallback frontend permanecem condicionados à confirmação do owner das telas. Nenhum envio, claim, agendamento, reparo, migration ou expansão internacional.
 
 CSV/Syer, CRA-PR, multilote, contingência AUTO e demais aceites independentes continuam separados. Setembro e recuperação .6 permanecem CLOSED.
+
+## Frontend — recusa observacional e retorno fa60
+
+Política de janela instalada por Deifson/preflight preparatório PASS: hash novo `c67cf7327f236b4ad12ce34b7eee22f5251d2720958f7646ecce26a32746e121`; anterior `6087f980ed58f084294f77dbca688c5cba9b39229d3c2b10daa35732ff74f7d4` arquivado. Helpers e sudoers preservados. Antes da parada: novos hashes/bindings, baseline pós-API, execução exclusiva e observação root PASS.
+
+Parada da origem em 11/10 02:14:57 UTC / 10/10 23:14:57 Fortaleza. Primeiro gate exited DENY: `socket_observer_read_denied`, causa original `ownership_observation_incomplete`. O observador não produziu amostra completa; não há evidência preservada que permita identificar qual processo/descritor mudou. Não atribuir a causa a sobrevivente ou permissão específica. Nenhum candidato foi iniciado.
+
+Segunda observação NOVA de saída PASS, dentro do limite de leituras; negativa anterior preservada. Selecionado retorno, não continuação da ida. Sem alteração de código/política/binding, exclusão de processos ou reutilização da observação preparatória. Delete, start-return único, ready-return, identidade/BUILD_ID e CSS estático PASS. Retorno fa60 pronto em 02:16:39 UTC / 23:16:39 Fortaleza; interrupção observada aproximada1min42s. Owner confirmou layout/sessão/Inbox/CRM/Campanhas funcionando. Candidato3227 permanece NOT DEPLOYED, sem start-intent.
+
+Leitura pós-retorno em 02:18:13 UTC: API4049504/ticks2146911015, worker4049657/ticks2146911319, frontend4051349/ticks2146939624, restart0 nos três. Health ok/db ok, boot inactive/enabled, guarda fechada38/tarefas vazias/markers ausentes, inventário congelado verificado pelo módulo efetivo. Política permanente e promoção/save/fallback do retorno estão pendentes da instalação na sessão sudo de Deifson, conforme comando já publicado e autorizado.
