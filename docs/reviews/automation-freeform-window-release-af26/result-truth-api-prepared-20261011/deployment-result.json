@@ -1,0 +1,204 @@
+{
+  "status": "DEPLOYED TECHNICALLY",
+  "runtimeRevision": "2ed9dccc490ad1bb9501f387efb09eebe574fef3",
+  "routesSha256": "0118b7d3d4a9ca619863b4dd6c52d41717f1454049e8112c974238836163402f",
+  "containmentBeginUtc": "2026-10-11T21:33:07.748446+00:00",
+  "unfencePassUtc": "2026-10-11T21:33:45.572125+00:00",
+  "completeUtc": "2026-10-11T21:33:49.251543+00:00",
+  "measuredContainmentSeconds": 37.823678,
+  "durationDefinition": "sequencer containment_begin to privileged unfence exit0; includes action overhead; not per-tenant request latency",
+  "sequenceExit": 0,
+  "returnUsed": false,
+  "starts": {
+    "api": 1,
+    "sameWorker": 1,
+    "return": 0
+  },
+  "processes": {
+    "re7-admin-front": {
+      "pid": 4121573,
+      "ticks": "2150012070",
+      "state": "S",
+      "parent": 18676
+    },
+    "re7-whatsapp-agent": {
+      "pid": 18413,
+      "ticks": "2153880211",
+      "state": "S",
+      "parent": 18676
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 18585,
+      "ticks": "2153880582",
+      "state": "S",
+      "parent": 18676
+    }
+  },
+  "frontendBuildId": "8OqIZZxaW7_ogf6h7AVoe",
+  "restarts": {
+    "re7-admin-front": 0,
+    "re7-whatsapp-agent": 0,
+    "re7-whatsapp-web-worker": 0
+  },
+  "healthDb": "PASS",
+  "sessionsAndAuthBaseline": "PASS",
+  "savedFallback": "PASS",
+  "cronBootScheduler": "PASS preserving baseline",
+  "barrierAbsent": true,
+  "guard": {
+    "generation": 38,
+    "open": false,
+    "tasks": 0
+  },
+  "jobSuspended": true,
+  "recoveryReceiptPreserved": true,
+  "resultTruth": {
+    "result": "POST_DEPLOY_RESULT_TRUTH_READ_ONLY_PASS",
+    "child": {
+      "sentCount": 6,
+      "totalRecipients": 11,
+      "blockedCount": 0,
+      "metaSummary": {
+        "totalSent": 0,
+        "totalDelivered": 6,
+        "totalRead": 0,
+        "totalFailed": 0,
+        "totalBlocked": 0,
+        "totalOptOut": 0,
+        "totalSkipped": 0,
+        "totalPending": 5
+      },
+      "progress": {
+        "totalRecipients": 11,
+        "sentCount": 6,
+        "blockedCount": 0,
+        "failedCount": 0,
+        "pendingCount": 5
+      }
+    },
+    "controller": {
+      "sentCount": 6,
+      "totalRecipients": 11,
+      "blockedCount": 0,
+      "metaSummary": {
+        "totalSent": 0,
+        "totalDelivered": 6,
+        "totalRead": 0,
+        "totalFailed": 0,
+        "totalBlocked": 0,
+        "totalOptOut": 0,
+        "totalSkipped": 0,
+        "totalPending": 5
+      },
+      "progress": {
+        "totalRecipients": 11,
+        "sentCount": 6,
+        "blockedCount": 0,
+        "failedCount": 0,
+        "pendingCount": 5,
+        "completedChunks": 0,
+        "runningChunks": 1,
+        "queuedChunks": 1,
+        "failedChunks": 0
+      }
+    },
+    "listChild": {
+      "sentCount": 6,
+      "totalRecipients": 11,
+      "blockedCount": 0,
+      "metaSummary": {
+        "totalSent": 0,
+        "totalDelivered": 6,
+        "totalRead": 0,
+        "totalFailed": 0,
+        "totalBlocked": 0,
+        "totalOptOut": 0,
+        "totalSkipped": 0,
+        "totalPending": 5
+      },
+      "progress": {
+        "totalRecipients": 11,
+        "sentCount": 6,
+        "blockedCount": 0,
+        "failedCount": 0,
+        "pendingCount": 5
+      }
+    },
+    "listController": {
+      "sentCount": 6,
+      "totalRecipients": 11,
+      "blockedCount": 0,
+      "metaSummary": {
+        "totalSent": 0,
+        "totalDelivered": 6,
+        "totalRead": 0,
+        "totalFailed": 0,
+        "totalBlocked": 0,
+        "totalOptOut": 0,
+        "totalSkipped": 0,
+        "totalPending": 5
+      },
+      "progress": {
+        "totalRecipients": 11,
+        "sentCount": 6,
+        "blockedCount": 0,
+        "failedCount": 0,
+        "pendingCount": 5
+      }
+    },
+    "repeatedListEqual": true,
+    "uniqueReportedDeliveries": 6,
+    "unsubmittedPositions": 5,
+    "receiptPreserved": true,
+    "jobSuspended": true
+  },
+  "ownerUiConfirmation": {
+    "result": "PASS",
+    "scope": "out.15 list \u2192 child/controller detail \u2192 new polling; six reported deliveries and five pending without duplication/mixing",
+    "confirmedAtUtc": "2026-10-11T21:41:58.724813+00:00",
+    "ownerObservation": "six reported deliveries / five pending, still sending",
+    "sendingStatus": "Expected preserved sending/running/queued with operationally suspended job and five unsubmitted positions; no authorization to resume or terminalize"
+  },
+  "fiveGatesFalse": true,
+  "permanentFrontendRead": "PASS two samples; policy/helper/launcher unchanged",
+  "diagnostics": [
+    {
+      "reason": "worker_capture_churn",
+      "attemptsDenied": 2,
+      "consistentAttemptPassed": 3,
+      "startsRepeated": false
+    },
+    {
+      "reason": "gates manifest serialization mismatch after closing",
+      "effect": "only JSON whitespace; original false bytes hash restored, intermediate version archived; full manifest passed afterwards"
+    }
+  ],
+  "backup": {
+    "applicationStarted": false,
+    "capturedUtc": "2026-10-11T21:25:56.016838+00:00",
+    "catalogObjects": 614,
+    "files": {
+      "controls-runtime.private.tar.gz": {
+        "bytes": 2418858,
+        "sha256": "28553120f6779fd12b26d6f0c34703a520bc61f07f8331b94df419365d0c8067"
+      },
+      "database.dump": {
+        "bytes": 36015652,
+        "sha256": "8c25745e14bea57a5d4d2963fc46e7056e112da7b960a26bd729bb6280717578"
+      }
+    },
+    "providers": 0,
+    "restoreReceiptOutboundsJobMigrationsMatch": true,
+    "scope": "Additional fresh pre-window custody proof; prepared bindings unchanged. Outbound transport status SENT; reported delivery belongs to canonical campaign results. DB/auth never restored in production.",
+    "tables": 70,
+    "temporaryDatabaseRemoved": true,
+    "verifiedUtc": "2026-10-11T21:31:45.844968+00:00"
+  },
+  "finalCapacityBytes": 2258395136,
+  "capacityFloorBytes": 2131755008,
+  "evidenceHashes": {
+    "final-current.private.json": "ae7bb60ea20e529be1f8be695540fef7384f9a297ebf4594c73eaccbc2cd93b1",
+    "deployed-final/window/sequencer.journal.jsonl": "6d64a7f1770bc67407ad62184f4f12c7a68a1a0a0b2c39d6d2cb9bc41f0f6981",
+    "deployed-final/post-result-truth.private.json": "53f028fa3ce89c8be896ae960a4aec683f81e95e1c545bb4d5fa4f77bce6f183"
+  }
+}

@@ -1,12 +1,14 @@
 {
   "files": {
     "COMMANDS_FOR_REVIEW.txt": "a6d07df0cc055a1ae6dd82dcb552132ce76843dcb3df1440151fe3cf71f66d47",
-    "README.md": "f68ad6b1dab19301a1cc7d806640eb1792a568120707b5359ef8104429769723",
+    "DEPLOYMENT_2026-10-11.md": "ffb7b0e808074779fbbaf2289f6204018dc6e255045563607ddd5407bc5107ff",
+    "README.md": "7082ea1006f193f66a79acdd04608a112fc02a03010378f03339c0fbb626a2a7",
     "api-comparison.public.json": "2ca183f47aee9b8ccdafdc2fefede17f24e46c5350b17f6029137cba46c38435",
     "backup-result.json": "67cdc97c7094dee2ee2c8af6698df34017efb6c8a185ba0ce50942ae73ccc2e6",
     "capacity-result.json": "b237d527243dd286d991468615383e61d5ec582c84073b60f7e7c17d5c001e3f",
     "capture-readonly.py": "474616cb30217f81d82d32fdf2476adef04e6c70035f9c5c5f72723825c36978",
     "check-immediate.py": "c657941d7b9075f0b9677d95d3ebf5ae6d451f597296a77e9e3a62c9b58676aa",
+    "deployment-result.json": "5a9bb00809bab9f96d63e4dd8b61adb288cd1bc671359ee74c2a64bc119e1d5e",
     "install-api-window-policy.sh": "0554745ee0a961326a920c172bb74ea53bcbc5aa206c78c4df5bc273ecfa60e0",
     "install-post-unfence-return-policy.sh": "2168da1bb8f9a1d6e84062205d3d3156c1cacdd4710e25905d28f4985de07003",
     "operational-hashes.json": "e85f0d7ce72cefd25305e210e3ac2ef977770c4cb3aced7daa4308578d3b1827",
@@ -18,5 +20,5 @@
     "validation.json": "5721eee7ac4f660df3cb3fd5c39ce8144edb6602038bcf9540f72bdb8168127d",
     "verify-package.py": "c48e2db5386ae3dd45e1eedbb69cc9e681343b1a1e3c9f350fa3bb5a949e5a08"
   },
-  "scope": "Only versioned sanitized preparation; private configurations, logs, tar and auth excluded."
+  "scope": "Only versioned sanitized preparation/outcome; private configurations, logs, tar and auth excluded."
 }

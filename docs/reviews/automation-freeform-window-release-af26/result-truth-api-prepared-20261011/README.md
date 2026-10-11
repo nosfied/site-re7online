@@ -1,5 +1,7 @@
 # Result Truth — preparação API, 11/10/2026
 
+**Estado atual: DEPLOYED TECHNICALLY (11/10,18:33 Fortaleza).** [Execução, verificação produtiva e aceite discriminado](DEPLOYMENT_2026-10-11.md). O registro de preparação abaixo é histórico e permanece íntegro.
+
 **PREPARED FOR INSTALLATION REVIEW / NOT INSTALLED / NOT DEPLOYED.** Correção funcional revisada em `2ed9dccc490ad1bb9501f387efb09eebe574fef3`. Esta tarefa autorizou staging e leituras delimitadas, não instalação root, gates verdadeiros, interrupção ou implantação. [Comandos concretos de instalação, execução, retorno e leitura posterior](COMMANDS_FOR_REVIEW.txt).
 
 ## Composição e proveniência
