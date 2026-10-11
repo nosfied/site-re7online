@@ -1,0 +1,120 @@
+{
+  "scope": "demo-converta / out.15 / child-run-message .6 only",
+  "implementation": "c2623d976f12d3c5e1d4b8eb08b0e3261495cf39",
+  "preparation": "255272622db244f05220c7201c02ff73d4ed96f3",
+  "status": "APPLIED / RECEIPT VERIFIED / TASK ACKNOWLEDGED / GUARD CLOSED38 / JOB SUSPENDED",
+  "administrativeManifestSha256": "1aafb7e678adb387c70302ae250c075d43a7ad4595e69ab608398b0bbda531fb",
+  "planHash": "7949aebe48874a811c0d1ef794496133818f982172a2452fdb538a2d0fc61011",
+  "steps": {
+    "dry-run": {
+      "startedAtUtc": "2026-10-11T00:12:05.874496+00:00",
+      "finishedAtUtc": "2026-10-11T00:12:07.579609+00:00",
+      "exitCode": 0,
+      "timeout": false,
+      "resultSha256": "bffa1f9a045329d944fcf45c8227861856f6767f5ad04799b0676672a31f284d"
+    },
+    "apply": {
+      "startedAtUtc": "2026-10-11T00:13:08.246771+00:00",
+      "finishedAtUtc": "2026-10-11T00:13:09.584324+00:00",
+      "exitCode": 0,
+      "timeout": false,
+      "resultSha256": "fbcb1d544efb0b69601412dfc91c920755cad4f2e64c46817a12eab65b94c617"
+    },
+    "verify": {
+      "startedAtUtc": "2026-10-11T00:13:26.461245+00:00",
+      "finishedAtUtc": "2026-10-11T00:13:27.576315+00:00",
+      "exitCode": 0,
+      "timeout": false,
+      "resultSha256": "56fca1097346e04c11877eb02afdb541eab25618868aeecc21bbcca628436ba2"
+    },
+    "ack": {
+      "startedAtUtc": "2026-10-11T00:13:46.717711+00:00",
+      "finishedAtUtc": "2026-10-11T00:13:47.731114+00:00",
+      "exitCode": 0,
+      "timeout": false,
+      "resultSha256": "752d13092b4f71d3cb39c985643317e5f0e7ced7555e12e4f8eaa7c3e4135b60"
+    }
+  },
+  "freshOffHostDump": {
+    "startedAt": "2026-10-11T00:10:54.038293+00:00",
+    "finishedAt": "2026-10-11T00:11:06.486135+00:00",
+    "exitCode": 0,
+    "bytes": 34984789,
+    "sha256": "7a9f265779edeedbc4b874d5367a5ef5ef6b20531527ea3d17abb059ef2373e5"
+  },
+  "operationalPreservation": {
+    "startedAt": "2026-10-11T00:11:06.605506+00:00",
+    "finishedAt": "2026-10-11T00:11:08.726113+00:00",
+    "exitCode": 0,
+    "bytes": 11391,
+    "sha256": "96da0a10edc9fce155f1ff500e7b46367c8f4a794b67c14d61373f6b577af679"
+  },
+  "restoreProof": "Existing successful isolated restore reused: unchanged pg_dump/container/schema/Prisma; new dump catalogue and hash checked, no production restore",
+  "receiptIdSha256": "017d631a21a97487631bbd430fe803909d15e1414ef7585f4dce438fda952640",
+  "reconciledOutboundIdSha256": "366b7e802afb4c180732ffe0565a723f3d9ac0ce543f58d10577166de7b19d9e",
+  "taskHash": "c91588a21bd6fbc8e85598e30b907f193388751dfadea56d9483c0bca9a9b979",
+  "archiveReason": "durable_accepted_delivered_historical_crm_disposition_no_retry",
+  "archivedTaskMatchesOriginalEntireTask": true,
+  "ledgerSha256After": "9e1a979932e4a22f8051046a4ce96e1ac5656723ba5ba4a57e1ef14f8e73a9e9",
+  "totals": {
+    "metaSummary": {
+      "totalSent": 0,
+      "totalDelivered": 6,
+      "totalRead": 0,
+      "totalFailed": 0,
+      "totalBlocked": 0,
+      "totalOptOut": 0,
+      "totalSkipped": 0,
+      "totalPending": 5
+    },
+    "progress": {
+      "totalRecipients": 11,
+      "sentCount": 6,
+      "blockedCount": 0,
+      "failedCount": 0,
+      "pendingCount": 5
+    },
+    "controllerUsesChildMembership": true,
+    "audienceExcluded": 244
+  },
+  "closedGeneration": 38,
+  "tasks": 0,
+  "jobContinuationAuthorized": false,
+  "previousFiveOutboundsAndCrmPreserved": true,
+  "positions7To11SubmissionObserved": false,
+  "bodyText": null,
+  "bodyReason": "Original rendered body unavailable; explicit approved historical disposition",
+  "httpStatus": null,
+  "humanReceiptConfirmed": false,
+  "crmIdentityCreated": false,
+  "crmWindowCreated": false,
+  "newProviderCalls": 0,
+  "healthDb": "PASS",
+  "processIdentitiesAndSessionRows": "unchanged",
+  "api": "a26",
+  "worker": "afbb minimum",
+  "frontend": "fa60",
+  "controlsAndInstalledHelpers": "unchanged",
+  "capacityPostBytes": 2415386624,
+  "walPostBytes": 83886080,
+  "preflightErrors": [],
+  "readOnlyDiagnosticNote": "Initial post-health SSH transport had no response and was interrupted; preserved; bounded reading passed. No mutation repeated. Local whole-providerEvents equality initially refused the approved campaign.message.sent insertion; original events unchanged and expected insertion confirmed.",
+  "notPerformed": [
+    "open",
+    "resume",
+    "resend",
+    "restart",
+    "migration",
+    "deploy"
+  ],
+  "pending": [
+    "Frontend3227 installation",
+    "Preventive API deployment",
+    "Separate decision on five remaining positions/job",
+    "CSV/Syer",
+    "International identity support",
+    "CRA-PR",
+    "Multilote",
+    "AUTO natural contingency"
+  ]
+}

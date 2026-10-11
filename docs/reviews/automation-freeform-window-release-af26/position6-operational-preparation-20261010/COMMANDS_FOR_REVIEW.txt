@@ -1,30 +1,23 @@
-CAPACITY DENY — NÃO EXECUTAR APPLY/ACK. Revisão9f3dd601: disco PGDATA/WAL/ledger
-compartilhado abaixo do piso do backup; proposta de preservação off-host/retirada
-seletiva requer leitura root completa e autorização separadas. Nenhuma limpeza
-executada. Ver STORAGE_ACTION_FOR_REVIEW.md/CAPACITY_REVIEW.json/drivers/README.md.
-Os comandos abaixo preservam os bytes e continuam separados para revisão;
-nenhum flag execute-authorized substitui decisão de capacidade/autorização.
-
-PREPARAÇÃO CONFERIDA; APPLY-SQL / ACK-TASK NÃO AUTORIZADOS NESTA ETAPA.
-Executar futuramente apenas na sessão legítima deploy, após decisão própria.
-Não fornecer DATABASE_URL/segredos na linha de comando. Driver lê env original
-atestado da API; não importa entrypoint ou inicia provider/scheduler.
-Diretório tmpfs é temporário. Sua ausência ou drift nega; não recriar/repetir
-operações incertas por reflexo. Conferir frescor e margem de escrita SQL/WAL.
+AUTORIZAÇÃO ATUAL — exclusivamente recuperação .6 de demo/out.15, implementação c2623d97 e preparação25527262.
+CAPACITY PASS datado23:55UTC10/10 não substitui reconferência imediata de capacidade/WAL/frescor.
+Histórico de DENY/comandos preservado em COMMANDS.before-authorization-25527262.txt.
+Manifesto administrativo vigente SHA-256 1aafb7e678adb387c70302ae250c075d43a7ad4595e69ab608398b0bbda531fb.
+Preflight + backup fresco off-host + dry-run devem passar antes de apply. Ack somente após verify completo.
+Nenhuma mudança de código/fontes/bindings; nenhuma abertura, retomada, reenvio, restart ou deploy.
 
 A. Integridade da preparação e leitura atual, sem mutação de DB/ledger:
 set -euo pipefail
 P=/dev/shm/re7-position6-operational-20261010T224151Z
-test "$(sha256sum "$P/administrative.sha256" | cut -d' ' -f1)" = c1dcf790459c0d96858710a0a8ceaf3149fa81c8c7724ca694b3bd66cae882fa
+test "$(sha256sum "$P/administrative.sha256" | cut -d' ' -f1)" = 1aafb7e678adb387c70302ae250c075d43a7ad4595e69ab608398b0bbda531fb
 (cd "$P" && sha256sum -c administrative.sha256 && cd admin && sha256sum -c files.sha256)
 python3 "$P/inspect-current.py"
 # Conferir captura privada: identidades atuais/bindings exatos, closed37,
 # ref/taskHash, lock/.uncertain ausentes, job/leases/fontes/hashes/global.
 # A leitura não autoriza execução. Um dry-run fresco deve manter o plano:
 python3 "$P/run-admin.py" dry-run
-# Esta foi a única modalidade do CLI executada nesta rodada.
+# Preservar saída nova; planHash esperado fixo abaixo. Divergência nega.
 
-B. APPLY SQL — SOMENTE APÓS AUTORIZAÇÃO FUTURA, execução exclusiva:
+B. APPLY SQL — AUTORIZADO após preflight/backup/dry-run exatos, execução exclusiva:
 python3 /dev/shm/re7-position6-operational-20261010T224151Z/run-admin.py apply-sql --execute-authorized --actor=Deifson --plan-hash=7949aebe48874a811c0d1ef794496133818f982172a2452fdb538a2d0fc61011
 # Se dry-run novo divergir, interromper; não trocar hash para obter PASS.
 # Driver/CLI usam outputs inéditos O_EXCL/0600; preservam os anteriores.
@@ -34,7 +27,7 @@ python3 /dev/shm/re7-position6-operational-20261010T224151Z/run-admin.py verify-
 # Exige Outbound/MetaID original, disposiçãoCRM, usage/eventos, totais,
 # recibo e os hashes/ref exatos. Não basta exit0 de apply-sql.
 
-D. ACK TASK — SOMENTE AUTORIZAÇÃO FUTURA PRÓPRIA E RECIBO VERIFICADO:
+D. ACK TASK — AUTORIZADO somente se C verificar integralmente o recibo:
 python3 /dev/shm/re7-position6-operational-20261010T224151Z/run-admin.py ack-task --execute-authorized --actor=Deifson
 # Archiva tarefa completa com razão accepted-delivered própria.
 # Esperado: closed38. Não setter/open/runner; job permanece suspenso.
@@ -55,3 +48,5 @@ Tar: 09172dde1509b0dd3a8872efd6ab64b080cf1e5e69d1e676a19e344a70610715.
 Hashes completos dos drivers/bytes: ADMIN_MANIFEST.json e administrative.sha256.
 Não instalar helper/sudoers/política, parar/reiniciar, aplicar restore produtivo,
 abrir guarda, terminalizar/retomar job ou enviar .7–.11 nestes comandos.
+
+RESULTADO: sequência consumida uma vez em10/10Fortaleza21:13; apply/verify/ackPASS, closed38. NÃO repetir comandos mutáveis: driver mantém fence37. Leitor inspect-current compatível38 preservado. Ver RECOVERY_APPLIED_RESULT.json.

@@ -1,6 +1,34 @@
 # Out.15 / posição .6 — preparação operacional READ ONLY
 
-**FOUR WITHDRAWN / CAPACITY PASS (piso observado, limites abaixo) / NOT APPLIED / NOT ACKNOWLEDGED / NOT DEPLOYED.** Continuidade de `c2623d976f12d3c5e1d4b8eb08b0e3261495cf39`. Esta autorização permitiu backup, staging administrativo e dry-run; não autoriza SQL de recuperação, ack, abertura, retomada ou instalação. [Estado](STATE.json), [dry-run](DRY_RUN.json), [artefatos](ADMIN_MANIFEST.json), [fontes](SOURCE_HASHES.json), [comandos futuros](COMMANDS_FOR_REVIEW.txt), [checklist único](../guard37-local-proposal-20261010/POSITION6_RECOVERY_CHECKLIST.md).
+**RECOVERY .6 APPLIED / RECEIPT VERIFIED / ACKNOWLEDGED / GUARD CLOSED38 / JOB SUSPENDED / NOT DEPLOYED.** Continuidade de `c2623d976f12d3c5e1d4b8eb08b0e3261495cf39`. Esta autorização permitiu backup, staging administrativo e dry-run; não autoriza SQL de recuperação, ack, abertura, retomada ou instalação. [Estado](STATE.json), [dry-run](DRY_RUN.json), [artefatos](ADMIN_MANIFEST.json), [fontes](SOURCE_HASHES.json), [comandos futuros](COMMANDS_FOR_REVIEW.txt), [checklist único](../guard37-local-proposal-20261010/POSITION6_RECOVERY_CHECKLIST.md).
+
+## Recuperação produtiva exclusiva .6 — concluída em 10/10 Fortaleza
+
+**APPLIED / RECEIPT VERIFIED / TASK ACKNOWLEDGED / GUARD CLOSED38 / JOB SUSPENDED.** Autorização do owner sobre implementação `c2623d97` e preparação `25527262`; nenhuma autorização de abertura ou retomada. [Resultado e horários](RECOVERY_APPLIED_RESULT.json), [índice privado off-host](RECOVERY_APPLIED_PRIVATE_EVIDENCE_SHA256.json). Histórico dos comandos preservado em [COMMANDS.before-authorization-25527262.txt](COMMANDS.before-authorization-25527262.txt); [comandos](COMMANDS_FOR_REVIEW.txt) reconciliados com o CAPACITY PASS datado e manifesto vigente **`1aafb7e678adb387c70302ae250c075d43a7ad4595e69ab608398b0bbda531fb`**. Código, fontes, CLI, bundle e bindings não mudaram.
+
+Preflight atual às **00:07:22UTC11/10 / 21:07:22Fortaleza10/10**, execução exclusiva: identidades, guarda37/task/ref/hash, markers ausentes, job/leases/inventário dos dez tenants, fontes originais, cinco Outbounds/WebCRM e ausência de submissão .7–.11 conferidos. Capacidade antes **2.409.181.184bytes**, WAL80MiB; não reutilizou o CAPACITY PASS anterior como atestado atual. Arquivo original das fontes foi novamente lido antes da mutação; o dry-run/verificador canônico conferiu proveniência exata contra a disposição aprovada.
+
+Backup fresco **00:10:54–00:11:06UTC11/10 / 21:10:54–21:11:06Fortaleza10/10**: **34.984.789bytes**, SHA-256 **`7a9f265779edeedbc4b874d5367a5ef5ef6b20531527ea3d17abb059ef2373e5`**, off-host0600, exit0. Estado operacional off-host SHA-256 **`96da0a10edc9fce155f1ff500e7b46367c8f4a794b67c14d61373f6b577af679`**. Catálogo do dump e leitura integral do tar operacional passaram; ferramentas/container/schema/Prisma iguais às provas anteriores, restore isolado reutilizado conforme autorização. **Não foi executado novo restore, nem restore produtivo.** SQL e ledger não constituem snapshot conjunto atomicamente.
+
+| Etapa | UTC11/10 | Fortaleza10/10 | Resultado |
+| --- | --- | --- | --- |
+| Dry-run fresco | 00:12:05–00:12:07 | 21:12:05–21:12:07 | exit0, plano exato, não aplicado previamente |
+| Apply SQL, uma vez | 00:13:08–00:13:09 | 21:13:08–21:13:09 | exit0, recibo durável |
+| Verify completo | 00:13:26–00:13:27 | 21:13:26–21:13:27 | exit0, ackEligible, continuidade negada |
+| Ack task, uma vez | 00:13:46–00:13:47 | 21:13:46–21:13:47 | exit0, closed38, zero tarefas ativas |
+| Inspeção compatível38 | 00:14:07 | 21:14:07 | SQL/ledger consistentes, arquivo integral e recibo exatos |
+
+**PlanHash fixo `7949aebe48874a811c0d1ef794496133818f982172a2452fdb538a2d0fc61011`** mantido. Resultado .6: Outbound aceito durável, `status:SENT` e `metaStatus:delivered` reportado com MetaID original, tempos/proveniência originais, `bodyText:null` com motivo explícito e `httpStatus:null`; sem inventar corpo ou confirmação humana. Disposição CRM histórica específica, usage/eventos, contador e recibo passaram pelo verificador integral antes do ack. Não criou identidade Meta, Contact/Lead/Conversation/runtime, janela ou destino humano; CRM Web permaneceu integralmente igual. A exceção continua limitada à .6; CRM permanece obrigatório no fluxo normal.
+
+Arquivo integral da tarefa preservado no audit fsynced canônico, **hash `c91588a21bd6fbc8e85598e30b907f193388751dfadea56d9483c0bca9a9b979`**, razão **`durable_accepted_delivered_historical_crm_disposition_no_retry`**, recibo/ref exatos. Leitor original compatível38 confirmou ledger igual antes/depois, sem lock/.uncertain; tarefa arquivada idêntica à original. Recibo SQL e arquivo integral foram também copiados off-host. Driver mutável permanece vinculado37 e não foi adaptado após ack.
+
+Read models revisados: **11 destinatários,6submitted/6DELIVERED reportados,5pending,0failed/blocked;244 excluídos da audiência**. A dimensão `metaSummary.totalSent:0` representa ausência de linhas no estado exclusivo SENT, pois as seis estão DELIVERED; `progress.sentCount:6` inclui as submissões. Sem dupla soma controlador/filho. Cinco Outbounds anteriores e seus hashes preservados; .7–.11 sem submissão, **job queued/operational_suspension**, lote/controller/child mantidos em seus estados não terminais. Nada terminalizado ou retomado.
+
+APIa26/worker mínimoafbb/frontendfa60/daemon mantiveram PID/start ticks/restart0. Saved/fallback, cron/boot, configurações e helpers/políticas intactos. Nove contas e estados de sessões iguais à leitura anterior, incluindo QR_REQUIRED histórico de agosto; sem consulta ao provider ou envio de teste. **Health/DB PASS às00:16:55UTC / 21:16:55Fortaleza**; manifesto administrativo e11arquivos internos passaram novamente. Capacidade pós-operação **2.415.386.624bytes**, WAL80MiB; orçamento datado, não garantia de carga máxima futura.
+
+Um transporte SSH de health não retornou resposta; foi interrompido e preservado, seguido somente de leitura com prazo30s que passou. Não atribuir causa produtiva sem evidência. Uma comparação local inicial de igualdade integral de providerEvents recusou a inserção esperada `campaign.message.sent`; os três originais estavam intactos e o quarto é o evento aprovado da reconciliação. Diagnóstico privado preservado; nenhuma mutação foi repetida. Dry-run/apply/verify/ack tiveram todos exit0 e timeoutfalse; stdout/stderr/result/exec copiados off-host.
+
+**Sem reenvio, abertura, retomada, restart, migration ou deploy.** Recuperação desta posição encerrada; decisão sobre cinco posições/job é separada. Frontend3227 e prevenção API permanecem PENDING/NOT DEPLOYED, artefatos preservados. CSV/Syer, suporte internacional, CRA-PR, multilote/AUTO e setembro CLOSED continuam separados.
 
 ## Retirada autorizada concluída — 10/10/2026
 
