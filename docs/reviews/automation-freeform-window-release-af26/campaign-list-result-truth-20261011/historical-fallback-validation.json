@@ -1,0 +1,38 @@
+{
+  "base": "99ad6b6b0fab42871eb9c0366b55d767d715da93",
+  "status": "LOCAL VALIDATED / REVIEW READY / NOT DEPLOYED",
+  "node": "20.20.0",
+  "postgresql": "16.15",
+  "typescript": {
+    "exitCode": 0,
+    "diagnostics": 0
+  },
+  "before": {
+    "realReader": true,
+    "expectedSent": 7,
+    "actualSent": 1,
+    "testFailure": "false/delivered/sentCount"
+  },
+  "after": {
+    "postgresqlTests": 10,
+    "passed": 10,
+    "newTest": 1,
+    "newTestVariants": "delivered, failed, blocked; both chunk orders; child/controller/list/detail/new list",
+    "browserCases": 4,
+    "browserResult": "PASS",
+    "historicalSent": 6,
+    "reportedDelivered": 1,
+    "aggregateSent": 7,
+    "pending": 0
+  },
+  "hashes": {
+    "apps/whatsapp-agent/src/http/routes.ts": "479f94eb1714ff5912782e0f2d3103000ba0a7e38bf5b6eb478c768d302c08b4",
+    "apps/whatsapp-agent/src/campaigns/campaignListResultTruth.test.ts": "7d2471285a8173849563ca189c04b1cbdeb0f972584559fe4b783fe9d9af572c",
+    "tests/browser/campaignListResultTruth.mjs": "1307fe3de2c227959cd0f679abf2c6d7c05f24b3d8a8fa4ee44d15066bcd90e8",
+    "/tmp/re7-list-truth-fallback-compiled/http/routes.js": "0118b7d3d4a9ca619863b4dd6c52d41717f1454049e8112c974238836163402f",
+    "/tmp/re7-list-truth-fallback-compiled/campaigns/campaignRecipientResultTruth.js": "43a23008d5ccf86cfe880b91edce3030d1fbc66deee2d17b4cc68aea6136bfe2"
+  },
+  "patchSha256": "973d31f3b8393e1e90b612810a7db3a999220cd891272e3b5648135a0e356d5d",
+  "unchanged": "canonical recipient status projection, frontend package/build, worker, tenant/RBAC/filter/pagination/bulk query paths",
+  "limitations": "Synthetic PostgreSQL and browser/auth/API only. No productive read, mutation, provider or deployment."
+}

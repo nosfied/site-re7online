@@ -174,3 +174,46 @@ test("unmaterialized child has known planned audience without invented results",
     assert.equal(detail!.campaign.executionBatch!.chunks[0].recipientCount, 11);
   }
 });
+
+test("historical fallback stays local to each execution, independent of child order and explicit failures", async () => {
+  const f = await fixture();
+  await db.outboundMessage.deleteMany({ where: { clientId: f.client.id } });
+  await db.event.deleteMany({ where: { clientId: f.client.id, messageId: f.child.id } });
+  await db.campaign.update({ where: { id: f.child.id }, data: { totalRecipients: 6, sentCount: 6 } });
+  await db.campaignExecutionBatchCampaign.updateMany({ where: { campaignId: f.child.id }, data: { recipientCount: 6 } });
+  await db.campaignExecutionBatch.update({ where: { id: f.batch.id }, data: { totalRecipients: 7 } });
+  const second = await db.campaign.create({ data: { clientId: f.client.id, name: "Explicit child", templateName: "synthetic", status: "completed", totalRecipients: 1, sentCount: 9 } });
+  await seed(f.client.id, second.id, [f.recipients[0]]);
+  await db.campaignExecutionBatchCampaign.create({ data: { clientId: f.client.id, batchId: f.batch.id, campaignId: second.id, chunkIndex: 2, recipientCount: 1 } });
+  const outbound = await db.outboundMessage.create({ data: { clientId: f.client.id, waId: f.recipients[0], type: "TEMPLATE", status: "SENT", messageId: `campaign.${second.id}.1`, rawPayload: { campaignId: second.id, metaStatus: { lastStatus: "delivered" } } } });
+  for (const reverse of [false, true]) {
+    if (reverse) {
+      await db.campaignExecutionBatchCampaign.updateMany({ where: { campaignId: f.child.id }, data: { chunkIndex: 3 } });
+      await db.campaignExecutionBatchCampaign.updateMany({ where: { campaignId: second.id }, data: { chunkIndex: 1 } });
+      await db.campaignExecutionBatchCampaign.updateMany({ where: { campaignId: f.child.id }, data: { chunkIndex: 2 } });
+    }
+    for (const outcome of ["delivered", "failed", "blocked"]) {
+      await db.outboundMessage.update({ where: { id: outbound.id }, data: { status: outcome === "delivered" ? "SENT" : "FAILED", rawPayload: { campaignId: second.id, metaStatus: { lastStatus: outcome === "blocked" ? "failed" : outcome } } } });
+      await db.event.deleteMany({ where: { clientId: f.client.id, eventName: "campaign.recipient.import_blocked" } });
+      if (outcome === "blocked") {
+        await db.outboundMessage.delete({ where: { id: outbound.id } });
+        await db.event.create({ data: { clientId: f.client.id, messageId: second.id, eventName: "campaign.recipient.import_blocked", payloadJson: { rowNumber: 1, reason: "recipient_anonymized", label: "Blocked before provider" } } });
+      }
+      const list = await buildCampaignListPayload(db, { clientId: f.client.id, limit: 100 });
+      const historical = list.items.find(item => item.id === f.child.id)!;
+      assert.equal(historical.sentCount, 6); assert.equal(historical.metaSummary.totalDelivered, 0);
+      const childDetail = await buildCampaignDetailPayload(db, { clientId: f.client.id, campaignId: f.child.id });
+      assert.equal(childDetail!.campaign.sentCount, 6); assert.deepEqual(childDetail!.campaign.messagesMetaStatus, []);
+      const expected = { sentCount: outcome === "delivered" ? 7 : 6, failedCount: outcome === "failed" ? 1 : 0, blockedCount: outcome === "blocked" ? 1 : 0, pendingCount: 0, totalRecipients: 7 };
+      const row = list.items.find(item => item.id === f.parent.id)!;
+      const detail = await buildCampaignDetailPayload(db, { clientId: f.client.id, campaignId: f.parent.id });
+      for (const item of [row, detail!.campaign]) for (const [key, value] of Object.entries(expected)) assert.equal(item.progress[key as keyof typeof expected], value, `${reverse}/${outcome}/${key}`);
+      assert.equal(row.metaSummary.totalDelivered, outcome === "delivered" ? 1 : 0);
+      assert.equal(detail!.campaign.executionBatch!.chunks.reduce((sum, item) => sum + item.sentCount, 0), expected.sentCount);
+      assert.equal(list.items.find(item => item.id === second.id)!.sentCount, outcome === "delivered" ? 1 : 0);
+      assert.deepEqual((await buildCampaignListPayload(db, { clientId: f.client.id, limit: 100 })).items, list.items);
+      if (!reverse && outcome === "delivered" && process.env.LIST_TRUTH_FALLBACK_BROWSER_FIXTURE) fs.writeFileSync(process.env.LIST_TRUTH_FALLBACK_BROWSER_FIXTURE, JSON.stringify({ list, detail, parentId: f.parent.id, childId: f.child.id, expectedSent: 7, expectedTotal: 7, expectedDelivered: 1, expectedPending: 0 }));
+      if (outcome === "blocked") await db.outboundMessage.create({ data: { id: outbound.id, clientId: f.client.id, waId: f.recipients[0], type: "TEMPLATE", status: "SENT", messageId: outbound.messageId, rawPayload: { campaignId: second.id, metaStatus: { lastStatus: "delivered" } } } });
+    }
+  }
+});

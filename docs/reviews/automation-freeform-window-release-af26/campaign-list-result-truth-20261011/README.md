@@ -66,3 +66,30 @@ Delta API de leitura, comum às três modalidades; não altera importação, exe
 Próximo passo: revisão independente do patch e das provas. **Produção ainda tem a projeção anterior**; esta publicação não encerra o FAIL produtivo da lista ou autoriza implantação. Uma futura decisão deve compor esse módulo sobre a API preventiva efetiva, preservando os deltas já aceitos, e então conferir as listas/detalhes existentes sem envio.
 
 Aceitação/webhook aceitos e frontend3227 concluído permanecem preservados. Recuperação.6/recibo/tarefa arquivada/guarda38/job suspenso/seis resultados/cinco sem submissão e setembro CLOSED não foram acessados ou alterados nesta tarefa. CSV/Syer, internacionais, agrupamento multilote, contingência AUTO e CRA-PR permanecem separados.
+
+
+## Complemento — fallback histórico por execução (base99ad6b6b)
+
+**LOCAL VALIDATED / REVIEW READY / NOT DEPLOYED.** A segunda projeção do resumo global descartava o fallback legítimo de um filho assim que outro filho tinha resultado explícito. O leitor completo admite esse formato: Campaign conserva total6/sentCount6, sem seed ou Outbound; sua projeção individual tem6 enviados e nenhum resultado Meta individual. Outro filho com total1, contador defasado9 e um delivered projeta1 enviado. O teste real PostgreSQL falhou no código99ad com controlador1 enviado em vez de7; portanto não é apenas uma fixture de resumo desconectada do leitor.
+
+O delta mínimo soma as projeções canônicas **de cada execução** em `campaignSetResultProjection`, usada pela lista e pelo detalhe. `sentCount`, `blockedCount`, `failedCount`, `pendingCount` e o público conhecido são aditivos por execução explicitamente vinculada ao tenant. Cada projeção usa o público materializado ou o `recipientCount` previsto já contratado. Sem filhos, conserva público previsto e pendência. Não reaplica a regra `hasResults` ao resumo global. O resumo Meta permanece agregado exclusivamente dos resultados individuais: **7 enviados,1 delivered,0 read,0 pending**, e nenhum Outbound/resultado individual inventado para os6 históricos. Um resultado explícito do próprio filho continua prevalecendo sobre seu contador de sucesso defasado.
+
+### Provas novas e diretamente afetadas
+
+- Node20.20.0 / PostgreSQL16.15 real isolado; compilação final exit0, zero diagnósticos. **10 testes PASS:** os9 testes de leitores afetados reexecutados e1 teste novo com6 combinações (duas ordens dos filhos × delivered/failed/blocked). Projeções dos filhos, controlador, lote, lista, detalhe e nova lista conferidas. O segundo filho tem contador9 para provar prevalência individual. Falha mantém6 enviados/1failed; bloqueio mantém6 enviados/1blocked; nenhuma dessas ocorrências elimina os6 históricos. Filho histórico conserva `messagesMetaStatus=[]` no detalhe e0delivered no resumo.
+- Regressões diretamente afetadas preservam isolamento, autenticação/permissões, paginação com controlador fora dos filhos, várias execuções/nomes iguais, recibos FAILED131026/delivered, público previsto não materializado e fontes agrupadas (até8 consultas para32 linhas). Nenhuma consulta nova foi acrescentada.
+- **4 cenários Chrome PASS** com APIs/auth simuladas alimentadas pelo leitor SQL: lista7/7 → detalhe com1entregue/0pendente → polling mantém7/7 → filtro Enviando mantém7/7. Pacote frontend3227 existente, BUILD_ID8OqIZZxaW7_ogf6h7AVoe, sem rebuild; CSS/JS/MIME/estilos reais conferidos. Smoke apenas parametrizado para os contadores deste cenário. Só GET.
+- Erros intermediários de tipagem do teste foram corrigidos; logs antes/depois e intermediários permanecem privados. Provas funcionais alheias à agregação foram reutilizadas, não reexecutadas ou atribuídas ao cenário novo.
+
+[Hashes e resultado](historical-fallback-validation.json) e [delta mínimo sobre99ad](historical-fallback.patch), aplicável com `git apply --unidiff-zero`. Os arquivos anteriores `validation.json` e `api-read-model.patch` permanecem como evidência da correção principal. O único compilado funcional alterado continua `http/routes.js`; canonical recipient truth e worker inalterados. Não há alteração frontend funcional.
+
+### Reprodução dirigida
+
+Reutilizar o banco sintético e o procedimento de compilação acima, com saída `/tmp/re7-list-truth-fallback-compiled` (ESM e dependências conferidas). A variável abaixo exporta somente a fixture sintética; não deve conter dados produtivos.
+
+```bash
+DATABASE_URL=postgresql://deifson-oliveira@127.0.0.1:55439/re7_list_truth_20261011 LIST_TRUTH_FALLBACK_BROWSER_FIXTURE=/tmp/re7-fallback-browser-fixture.json /tmp/re7-b9-node20.20.0 --test /tmp/re7-list-truth-fallback-compiled/campaigns/campaignListResultTruth.test.js
+/tmp/re7-b9-node20.20.0 tests/browser/campaignListResultTruth.mjs http://127.0.0.1:3082 /tmp/re7-fallback-browser-fixture.json
+```
+
+Produção não consultada nem alterada: guarda38/job suspenso, históricos/recibos, recuperação.6/setembro encerrados, aceitação/webhook aceitos e frontend3227 concluído preservados. Próximo passo somente revisão do complemento; nenhum deploy ou aceite produtivo novo. CSV/Syer, internacionais, multilote, AUTO e CRA-PR continuam separados.

@@ -1,5 +1,8 @@
 # Campaign Result Truth - Canonical Reconciliation - 2026-09-18
 
+**Result Truth — complemento local do fallback histórico (11/10), REVIEW READY / NOT DEPLOYED.** [Relatório e provas](../reviews/automation-freeform-window-release-af26/campaign-list-result-truth-20261011/README.md#complemento--fallback-histórico-por-execução-base99ad6b6b). Conjunto soma projeções canônicas por execução, sem reprojetar o resumo global:6 envios históricos sem resultados individuais +1delivered =7enviados, apenas1entrega reportada. Contador defasado de cada execução continua subordinado aos seus próprios resultados explícitos. Duas ordens dos filhos e falha/bloqueio PASS;10 provas de leitores PostgreSQL e4 cenários browser/polling PASS, Node20.20.0. Sem rebuild frontend, mudança worker ou consulta produtiva. Aceites e históricos anteriores preservados; produção aguarda revisão/decisão de implantação.
+
+
 **Complemento local — 11/10/2026, listagem.** [Correção/provas para revisão](../reviews/automation-freeform-window-release-af26/campaign-list-result-truth-20261011/README.md). `buildCampaignListPayload` e detalhe compartilham fontes e projeção: vínculos explícitos por tenant, cada execução uma vez, sem depender de FAILED131026 ou recibo delivered. `sentCount` deriva dos sucessos do leitor canônico; `metaSummary` conserva resultados individuais e pending. Público previsto (`plannedRecipientCount`) e materializado (`materializedRecipientCount`) são distintos; lote total0 conserva `recipientCount` previsto, sem fabricar status Meta. Bloqueios de execução permanecem em `blockedCount`; exclusões do conjunto em `audienceBlockedCount`/metadados do batch, sem apagar ou reescrever contadores históricos. Detalhe retorna os mesmos contadores de primeiro nível, pois atualiza a linha da lista durante polling. Leituras em grupos100/páginas1000, sem detalhe por linha, paginação/RBAC/tenant preservados.10 provas PostgreSQL e4 cenários de navegador PASS; **delta API local, NOT DEPLOYED**. Não constitui novo aceite produtivo ou envio.
 
 **Checkpoint produtivo — 11/10/2026.** [API preventiva implantada e aceite discriminado](../reviews/automation-freeform-window-release-af26/preventive-api-frontend3227-prepared-20261010/API_ACCEPTANCE_2026-10-11.md): detalhes filho/controlador e conjunto mostram6delivered+5pending sem duplicar; lista conserva contadores próprios do controlador e não agrega o recibo de entrega. Aceite Result Truth integral da LISTA segue limitado por essa divergência P2, sem mudança de estado/dado nesta auditoria. Status e notas locais anteriores abaixo são históricos; aceitação não equivale a entrega reportada nem confirmação humana.
@@ -26,6 +29,9 @@ intersection, scoped to the campaign tenant. No campaign-specific phone rule,
 historical rewrite, schema change or migration was added.
 
 ## Projection Contract
+
+Conjuntos agregam as projeções canônicas individuais por vínculo explícito e tenant, uma vez por execução. A autorização de fallback histórico é avaliada por execução: resultados explícitos de outro filho não a revogam. Resultados explícitos prevalecem sobre contadores defasados da própria execução. `metaSummary` conserva apenas os estados individuais; fallback de `sentCount` não cria Outbound, DELIVERED/READ ou confirmação humana. Público previsto e materializado e exclusões de seleção mantêm os contratos acima.
+
 
 - one current summary row is rendered per canonical campaign recipient;
 - real attempts remain persisted and inspectable; multiple attempts are not

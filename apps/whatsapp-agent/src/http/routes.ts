@@ -36217,16 +36217,25 @@ function campaignResultProjection(
 }
 
 function campaignSetResultProjection(
-  links: Array<{ campaign: { totalRecipients: number; sentCount: number; blockedCount: number }; recipientCount: number }>,
-  summary: CampaignMetaSummary,
+  links: Array<{ campaign: { id: string; totalRecipients: number; sentCount: number; blockedCount: number }; recipientCount: number }>,
+  summaryFor: (campaignId: string) => CampaignMetaSummary,
   plannedRecipientCount: number,
 ) {
-  const materializedRecipientCount = links.reduce((sum, link) => sum + link.campaign.totalRecipients, 0);
-  const executionAudience = links.reduce((sum, link) => sum + (link.campaign.totalRecipients || link.recipientCount), 0);
-  return campaignResultProjection({ totalRecipients: executionAudience || plannedRecipientCount,
-    sentCount: links.reduce((sum, link) => sum + link.campaign.sentCount, 0),
-    blockedCount: links.reduce((sum, link) => sum + link.campaign.blockedCount, 0),
-  }, summary, plannedRecipientCount, materializedRecipientCount);
+  // Fallback is authorized per execution. Another execution's explicit result
+  // must not suppress it or turn it into a reported provider outcome.
+  const projections = links.map(link => campaignResultProjection(
+    { ...link.campaign, totalRecipients: link.campaign.totalRecipients || link.recipientCount },
+    summaryFor(link.campaign.id), link.recipientCount || link.campaign.totalRecipients, link.campaign.totalRecipients,
+  ));
+  const sum = (key: keyof ReturnType<typeof campaignResultProjection>["progress"]) =>
+    projections.reduce((total, item) => total + item.progress[key], 0);
+  const totalRecipients = projections.length ? sum("totalRecipients") : plannedRecipientCount;
+  const sentCount = sum("sentCount"), blockedCount = sum("blockedCount");
+  return { totalRecipients, sentCount, blockedCount, plannedRecipientCount,
+    materializedRecipientCount: projections.reduce((total, item) => total + item.materializedRecipientCount, 0),
+    progress: { totalRecipients, sentCount, blockedCount, failedCount: sum("failedCount"),
+      pendingCount: projections.length ? sum("pendingCount") : plannedRecipientCount },
+  };
 }
 
 export async function buildCampaignListPayload(
@@ -36263,7 +36272,7 @@ export async function buildCampaignListPayload(
     const membership = batches.flatMap(item => item.campaigns).find(link => link.campaignId === campaign.id);
     const planned = batch ? batch.totalRecipients || children.reduce((sum, link) => sum + link.recipientCount, 0) || campaign.totalRecipients
       : membership?.recipientCount || campaign.totalRecipients;
-    const projection = batch ? campaignSetResultProjection(children, metaSummary, planned)
+    const projection = batch ? campaignSetResultProjection(children, id => models.get(id)!.metaSummary, planned)
       : campaignResultProjection({ ...campaign, totalRecipients: campaign.totalRecipients || planned }, metaSummary, planned, campaign.totalRecipients);
     return { ...serializeCampaign(campaign), ...projection,
       // Controller exclusions are selection evidence, not execution outcomes.
@@ -36416,7 +36425,7 @@ export async function buildCampaignExecutionBatchSummary(
   const totalRecipients = chunks.reduce((sum, item) => sum + item.totalRecipients, 0);
   const resultStatuses = [...recipientModels.values()].flatMap(item => item.enrichedMessagesMetaStatus);
   const metaSummary = summarizeCampaignMetaStatuses(resultStatuses);
-  const resultProjection = campaignSetResultProjection(batch.campaigns, metaSummary,
+  const resultProjection = campaignSetResultProjection(batch.campaigns, id => recipientModels.get(id)?.metaSummary ?? summarizeCampaignMetaStatuses([]),
     batch.totalRecipients || chunks.reduce((sum, item) => sum + item.recipientCount, 0) || (!membership ? params.plannedRecipientCount ?? 0 : 0));
   const completedChunks = chunks.filter((item) => item.status === "completed").length;
   const runningChunks = chunks.filter((item) => item.queueStatus === "running" || item.status === "sending").length;

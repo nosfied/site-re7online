@@ -1,0 +1,37 @@
+diff --git a/apps/whatsapp-agent/src/http/routes.ts b/apps/whatsapp-agent/src/http/routes.ts
+index 4379ebf4..353126c0 100644
+--- a/apps/whatsapp-agent/src/http/routes.ts
++++ b/apps/whatsapp-agent/src/http/routes.ts
+@@ -36220,2 +36220,2 @@ function campaignSetResultProjection(
+-  links: Array<{ campaign: { totalRecipients: number; sentCount: number; blockedCount: number }; recipientCount: number }>,
+-  summary: CampaignMetaSummary,
++  links: Array<{ campaign: { id: string; totalRecipients: number; sentCount: number; blockedCount: number }; recipientCount: number }>,
++  summaryFor: (campaignId: string) => CampaignMetaSummary,
+@@ -36224,6 +36224,15 @@ function campaignSetResultProjection(
+-  const materializedRecipientCount = links.reduce((sum, link) => sum + link.campaign.totalRecipients, 0);
+-  const executionAudience = links.reduce((sum, link) => sum + (link.campaign.totalRecipients || link.recipientCount), 0);
+-  return campaignResultProjection({ totalRecipients: executionAudience || plannedRecipientCount,
+-    sentCount: links.reduce((sum, link) => sum + link.campaign.sentCount, 0),
+-    blockedCount: links.reduce((sum, link) => sum + link.campaign.blockedCount, 0),
+-  }, summary, plannedRecipientCount, materializedRecipientCount);
++  // Fallback is authorized per execution. Another execution's explicit result
++  // must not suppress it or turn it into a reported provider outcome.
++  const projections = links.map(link => campaignResultProjection(
++    { ...link.campaign, totalRecipients: link.campaign.totalRecipients || link.recipientCount },
++    summaryFor(link.campaign.id), link.recipientCount || link.campaign.totalRecipients, link.campaign.totalRecipients,
++  ));
++  const sum = (key: keyof ReturnType<typeof campaignResultProjection>["progress"]) =>
++    projections.reduce((total, item) => total + item.progress[key], 0);
++  const totalRecipients = projections.length ? sum("totalRecipients") : plannedRecipientCount;
++  const sentCount = sum("sentCount"), blockedCount = sum("blockedCount");
++  return { totalRecipients, sentCount, blockedCount, plannedRecipientCount,
++    materializedRecipientCount: projections.reduce((total, item) => total + item.materializedRecipientCount, 0),
++    progress: { totalRecipients, sentCount, blockedCount, failedCount: sum("failedCount"),
++      pendingCount: projections.length ? sum("pendingCount") : plannedRecipientCount },
++  };
+@@ -36266 +36275 @@ export async function buildCampaignListPayload(
+-    const projection = batch ? campaignSetResultProjection(children, metaSummary, planned)
++    const projection = batch ? campaignSetResultProjection(children, id => models.get(id)!.metaSummary, planned)
+@@ -36419 +36428 @@ export async function buildCampaignExecutionBatchSummary(
+-  const resultProjection = campaignSetResultProjection(batch.campaigns, metaSummary,
++  const resultProjection = campaignSetResultProjection(batch.campaigns, id => recipientModels.get(id)?.metaSummary ?? summarizeCampaignMetaStatuses([]),
