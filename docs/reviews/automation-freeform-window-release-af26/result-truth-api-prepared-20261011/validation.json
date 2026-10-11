@@ -1,0 +1,76 @@
+{
+  "status": "PREPARED FOR INSTALLATION REVIEW / NOT INSTALLED / NOT DEPLOYED",
+  "node": "20.20.0",
+  "runtimeBuildReused": true,
+  "activeBaseCompiledFilesMatched": 441,
+  "compositionTests": {
+    "passed": 2,
+    "skipped": 8,
+    "cases": [
+      "six delivered plus five pending / list-detail-new list",
+      "historical fallback / both child orders / failed-blocked-delivered"
+    ],
+    "postgresql": "16.15 synthetic",
+    "providerCalls": 0
+  },
+  "reusedFunctionalProofs": {
+    "postgresqlReaders": 10,
+    "browserCases": 4,
+    "commit": "2ed9dccc490ad1bb9501f387efb09eebe574fef3",
+    "notRerunBroadSuites": true
+  },
+  "installerAdapter": {
+    "passed": 6,
+    "effects": "JSON shape predicate extracted from final installer; no root/system effects executed",
+    "negatives": [
+      "unproven absence",
+      "false alive without explicit absence",
+      "wrong hash",
+      "consumed phase"
+    ]
+  },
+  "productiveRead": {
+    "firstUtc": "2026-10-11T18:34:17.457903+00:00",
+    "identities": {
+      "re7-whatsapp-agent": {
+        "pid": 4049504,
+        "ticks": "2146911015",
+        "state": "S",
+        "parent": 18676
+      },
+      "re7-whatsapp-web-worker": {
+        "pid": 4049657,
+        "ticks": "2146911319",
+        "state": "S",
+        "parent": 18676
+      },
+      "re7-admin-front": {
+        "pid": 4121573,
+        "ticks": "2150012070",
+        "state": "S",
+        "parent": 18676
+      }
+    },
+    "guardGeneration": 38,
+    "guardOpen": false,
+    "tasks": 0,
+    "jobSuspended": true,
+    "leases": 0,
+    "savedFallbackPreserved": true,
+    "frontendBuildId": "8OqIZZxaW7_ogf6h7AVoe",
+    "healthDb": {
+      "result": "PASS",
+      "scope": "API health endpoint includes DB verification; full response retained privately"
+    },
+    "lastReadUtc": "2026-10-11T19:10:42.450621+00:00",
+    "availableBytesFinal": 2303193088,
+    "lastReadNotExitOrDrainCertificate": true
+  },
+  "policyInstalled": false,
+  "fiveGatesFalse": true,
+  "limits": [
+    "Full root600 policy and sudoers current hash require owner sudo check at future installation. Expected installed hashes anchored to prior verified installation; deploy stat permission refusal preserved.",
+    "No new PM2/nft/systemd lifecycle rehearsal: executable protocol bytes unchanged; existing proofs reused. New config/path correspondence checked on VPS without executing window.",
+    "Post-deploy reader and owner UI verification prepared, not executed against candidate in production."
+  ]
+}

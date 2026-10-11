@@ -1,0 +1,105 @@
+PREPARATION ONLY / NOT AUTHORIZED TO INSTALL OR EXECUTE BY THIS DOCUMENT.
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-result-truth-2ed9dccc-20261011T184000Z
+Return API: /opt/re7online/releases/campaign-preventive-a26-20261011T002421Z/apps/whatsapp-agent
+Candidate: /opt/re7online/releases/campaign-result-truth-2ed9dccc-20261011T184000Z/apps/whatsapp-agent
+Frontend3227 and same worker afbb preserved. Guard remains closed38 in all branches.
+Stop at divergence, partial install, consumed intent or uncertain result; preserve
+private stdout/stderr/exit. Never repeat start. No sends/replay/ack/open/resume.
+
+A. ONLY AFTER OWNER DECISION: INSTALL POLICY, DEIFSON'S SUDO SESSION
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-result-truth-2ed9dccc-20261011T184000Z
+python3 "$P/check-immediate.py"
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = 0554745ee0a961326a920c172bb74ea53bcbc5aa206c78c4df5bc273ecfa60e0
+bash "$P/install-api-window-policy.sh"
+# Only root policy changes. Helper8de and literal nine-command sudoers62b5 unchanged.
+# Exact installed old hash d3bd... is rechecked by sudo before archiving.
+# Expected POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE.
+# Archive/partial install/drift/timeout: inspect exact bytes and phase; never rerun.
+
+B. IMMEDIATE FUTURE WINDOW CHECKS, BEFORE ENABLING GATES
+python3 "$P/check-immediate.py" --after-policy-installed
+# Must additionally reconfirm capacity/WAL and backup freshness/RPO from runbook;
+# historical CAPACITY PASS is not an operational certificate. New backup, when
+# necessary, must follow canonical off-host/restore binding procedure, preserving
+# previous manifests. Do not silently mark restoreVerified on expired evidence.
+# Confirm global frozen inventory, receipt, archived task, five unsubmitted,
+# exact identities/configs/manifests, auth/session state and proxy/owner bindings.
+# ownerAuthorized means NEW OWNER EXECUTION DECISION, absent in this preparation.
+# No delegated preflight proof before sequencer's close step; current guard closed
+# makes close idempotent without generation change, open.cjs preserves closed.
+
+C. FUTURE EXECUTION ONCE, ONLY AFTER A/B REQUIREMENTS AND OWNER DECISION
+python3 - "$P" <<'CHECK'
+import json,hashlib,sys
+from pathlib import Path
+p=Path(sys.argv[1]);w=p/'window';sys.path.insert(0,str(w))
+from baseline_contract import validate_preparation
+from sequencer import Bridge
+validate_preparation(p)
+e=(w/'privileged-policy.sha256').read_text().strip()
+assert e=='620a119f931fff9f52c6403aa940ed31a5d1471bc2abdd6a1adee8d17e6ee62f'
+assert json.loads(Bridge(p).privileged('inspect'))=={'policySha256':e,'phase':None,'sourceProcessesAlive':True}
+f=w/'execution-gates.private.json';g=json.loads(f.read_text())
+assert set(g)=={'ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved'} and all(v is False for v in g.values())
+# These assertions require the evidence reviewed in A/B, never replace it.
+f.write_text(json.dumps({k:True for k in g},sort_keys=True)+'\n')
+CHECK
+python3 "$P/window/sequencer.py" "$P"
+# Sequencer owns exclusivity; one API and worker start per mode, new exit/DB/fence
+# proofs. It selects pre-stop abort, return-partial or return from actual state.
+# Never manually repeat stop/start or run another mode around a denial.
+# Guard38/job/receipt/archived task stay unchanged. Frontend never stopped.
+# At15min containment: communicate state/blocker/return; horizon is not a kill gate.
+
+D. POST-UNFENCE FAILURE ONLY: FRESH PREPARATION/POLICY REQUIRED
+C=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-result-truth-20261011T184000Z
+python3 "$P/window/prepare_post_unfence_return.py" "$P" "$C"
+# Run only at observed post-unfence failure after restored cron/boot, with no
+# return starts already consumed. Generator captures API/frontend/daemon actual,
+# live worker OR its explicit proven absence from pre-unfence capture including
+# descendants/sockets. DENY on survivor, substitute, ambiguity or unavailable observer.
+# Policy/hash/nonces/certificates are NEW; do not copy main attempt's proofs.
+# Deifson's availability for this policy-only installation is a prerequisite:
+bash "$P/install-post-unfence-return-policy.sh"
+# Future root archive:
+# /usr/local/libexec/re7/incident-6683-window-policy.failed-result-truth-2ed9dccc-184000.json
+# Installer verifies SOURCE620a and the generated new hash. It accepts only the
+# canonical strict inspect shape (live worker or explicit absent-proven); no relaxation.
+# Reconfirm backup/frozen/capacity and all five return requirements before flags:
+python3 - "$C" <<'CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);w=p/'window';sys.path.insert(0,str(w))
+from baseline_contract import validate_preparation
+from sequencer import Bridge
+validate_preparation(p,['return'])
+e=(w/'privileged-policy.sha256').read_text().strip();proposal=json.loads((w/'privileged-policy.private.json').read_text())
+expected={'policySha256':e,'phase':None,'sourceProcessesAlive':'absentWorker' not in proposal}
+if 'absentWorker' in proposal:
+ assert proposal['absentWorker']['status']=='absent-proven'
+ expected['sourceWorkerAbsent']=True
+assert json.loads(Bridge(p).privileged('inspect'))==expected
+f=w/'execution-gates.private.json';g=json.loads(f.read_text());assert len(g)==5 and all(x is False for x in g.values())
+f.write_text(json.dumps({k:True for k in g},sort_keys=True)+'\n')
+CHECK
+python3 "$C/window/sequencer.py" "$C" --post-unfence-return
+# Source-owner exit, sockets/backends/locks and new V4 owner-set proof precede
+# any successor. Return restores preventive API/same worker, never database/auth.
+
+E. POST-DEPLOY READ ONLY / CANDIDATE COMPLETE-SWITCH REQUIRED
+# Run only after complete/switch and actual candidate confirmed (return must NOT
+# be described as candidate deployed). Keep all diagnosis private and off-host.
+umask 077
+test ! -e "$P/post-result-truth.private.json"
+python3 "$P/capture-readonly.py" < "$P/post-read-models.cjs" > "$P/post-result-truth.private.json" 2> "$P/post-result-truth.private.stderr"
+# Require queryExit0/data.result POST_DEPLOY_RESULT_TRUTH_READ_ONLY_PASS;
+# child+controller+list6/11, metaDelivered6/pending5, repeated list equal, six unique
+# Outbounds, positions7–11 absent, original receipt/job/guard38 preserved.
+# Then legitimate owner session: Campaigns out.15 list -> detail -> next polling
+# maintains6 reported deliveries/5pending without duplicated results. No click
+# Enviar/Assumir, edits, new campaign or provider test. Record UI independently.
+# Confirm health/DB, worker/sessions, unchanged frontend BUILD_ID/CSS/controls,
+# guard closed38, cron/boot/scheduler, PM2 saved/fallback and nft absent.
+# Preserve private evidence off-host and publish sanitized outcome. API deployment
+# does not reopen campaigns or change prior scope of acceptance/webhook/CRM.

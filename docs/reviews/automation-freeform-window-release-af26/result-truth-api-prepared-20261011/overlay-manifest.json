@@ -1,0 +1,23 @@
+{
+  "baseRelease": "campaign-preventive-a26-20261011T002421Z",
+  "baseSourceCommit": "3ca5efed",
+  "review": "2ed9dccc490ad1bb9501f387efb09eebe574fef3",
+  "node": "20.20.0",
+  "files": [
+    {
+      "path": "src/http/routes.ts",
+      "sha256": "479f94eb1714ff5912782e0f2d3103000ba0a7e38bf5b6eb478c768d302c08b4",
+      "bytes": 1435913,
+      "originSha256": "ccf8eee93dd92b2fcc2423ec683c23f0f837087a61e0982e0e20ad51ce040ee6"
+    },
+    {
+      "path": "dist/http/routes.js",
+      "sha256": "0118b7d3d4a9ca619863b4dd6c52d41717f1454049e8112c974238836163402f",
+      "bytes": 1597641,
+      "originSha256": "d762c4457ee4b94df4d7f98f39034d71d4df5e3cb58f834b221b05306f39ae7b"
+    }
+  ],
+  "tarSha256": "af8406ad2bab480cf45be552eaab2817bfafd6939c34a8dca217107d27bf9637",
+  "tarBytes": 3041280,
+  "onlyRuntimeChanged": "dist/http/routes.js"
+}

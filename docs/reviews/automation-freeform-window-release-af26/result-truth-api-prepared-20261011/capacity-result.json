@@ -1,0 +1,20 @@
+{
+  "result": "PASS",
+  "firstUtc": "2026-10-11T18:36:46.042341+00:00",
+  "secondUtc": "2026-10-11T18:58:36.051427+00:00",
+  "floorBytes": 2131755008,
+  "availableDeployBytes": 2303778816,
+  "marginBytes": 172023808,
+  "availableInodes": 6858733,
+  "postgresFilesystemRead": true,
+  "walOnDiskBytes": 83886080,
+  "walGenerationBytes": 34910370,
+  "intervalSeconds": 1310.009086,
+  "walGenerationBytesPerSecond": 26648.952570699956,
+  "slots": null,
+  "replication": null,
+  "archiveMode": "off",
+  "maxWalSizeMiB": "1024",
+  "limits": "Short observed interval, flexible WAL target, shared filesystem; reconfirm before future window. No kernel/root-log attestation.",
+  "recentWriteErrorMatches": []
+}

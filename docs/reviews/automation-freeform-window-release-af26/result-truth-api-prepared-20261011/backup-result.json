@@ -1,0 +1,18 @@
+{
+  "atUtc": "2026-10-11T18:42:59.197889+00:00",
+  "catalogObjects": 614,
+  "controlsCapturedUtc": "2026-10-11T18:59:05.559447+00:00",
+  "files": {
+    "controls-runtime.private.tar.gz": {
+      "bytes": 2418710,
+      "sha256": "5f4d13dfdf105971bc120348722b010f730922fc6b6196ce7d4cdd19f84c9967"
+    },
+    "database.dump": {
+      "bytes": 35886045,
+      "sha256": "f28bf33cc610f15d004df697ba2c16da4a320f252726bf2afb9fda68717435a6"
+    }
+  },
+  "guardGeneration": 38,
+  "preparedAtUtc": "2026-10-11T18:59:59.474639+00:00",
+  "source": "Fresh off-host PostgreSQL dump and controls/runtime archive; restore isolated, no application"
+}
