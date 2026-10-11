@@ -90,3 +90,7 @@ Estimativa operacional, não garantia: interrupção API/worker cerca de1–3min
 Validação posterior técnica: versão/PID/ticks reais, ownership DB/locks, workerHTTP antes de unfence pelo caminho compatível com nft, health/DB completo depois, sessões observáveis, frontend CSS/BUILD_ID, guarda38/job/recibo/proteções, cron/boot/barreira ausente, saved=fallback e supervisão. Sem envio/claim/replay. Aceite funcional separado; internacional/CSV-Syer/CRA-PR/multilote/AUTO e cinco posições restantes continuam pendentes próprios. Setembro e recuperação .6 CLOSED.
 
 Branch de revisão sem auto-deploy: Vercel deploymentEnabled=false; CI push somente main/develop. Publicação inclui apenas arquivos versionados sanitizados; configurações, auth, ledger, nonces, logs, dump e tars privados fora do Git.
+
+## Aceite preventivo e Result Truth — 11/10/2026
+
+[Matriz final e leitura produtiva delimitada](API_ACCEPTANCE_2026-10-11.md): aceitação/webhook aceitos no alcance de ensaios revisados+bytes ativos, sem novo caso produtivo fabricado. Detalhes6delivered/5pending PASS; projeção da LISTA tem divergência P2 documentada e menor correção local proposta, não executada. Frontend3227/recuperação.6 concluídos, guarda38/job preservados.

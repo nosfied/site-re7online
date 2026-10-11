@@ -1,5 +1,7 @@
 # Campaign Result Truth - Canonical Reconciliation - 2026-09-18
 
+**Checkpoint produtivo — 11/10/2026.** [API preventiva implantada e aceite discriminado](../reviews/automation-freeform-window-release-af26/preventive-api-frontend3227-prepared-20261010/API_ACCEPTANCE_2026-10-11.md): detalhes filho/controlador e conjunto mostram6delivered+5pending sem duplicar; lista conserva contadores próprios do controlador e não agrega o recibo de entrega. Aceite Result Truth integral da LISTA segue limitado por essa divergência P2, sem mudança de estado/dado nesta auditoria. Status e notas locais anteriores abaixo são históricos; aceitação não equivale a entrega reportada nem confirmação humana.
+
 **Complemento local para revisão — 10/10/2026, recuperação .6.** [Implementação/provas](../reviews/automation-freeform-window-release-af26/position6-recovery-implementation-20261010/README.md). O leitor compartilhado preserva fatos explícitos do provider e, em `sending/scheduled`, representa posições do público conhecido ainda sem submissão/histórico como `pending/awaiting_processing`. Ausência não vira FAILED antes do término; posições explicitamente bloqueadas/falhadas e o fallback terminal mantêm seu contrato. Conjunto agrega filhos por vínculo explícito uma vez; não soma controller+filho. A disposição CRM histórica é restrita à [decisão exata .6](POSITION6_HISTORICAL_CRM_DISPOSITION_2026-10-10.md), sem alterar a obrigação CRM normal. Delta local, não implantado.
 
 Status: P1 CORRECTIVE VALIDATED LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY.
