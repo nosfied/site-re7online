@@ -1,0 +1,74 @@
+{
+  "scope": "Four exact redundant archives only; owner authorization eb4e4a90",
+  "withdrawalExit": 0,
+  "stderrBytes": 0,
+  "withdrawnPaths": 4,
+  "retainedMainPaths": 1,
+  "logicalBytesRemoved": 1917840344,
+  "allocatedBytesRemoved": 1917861888,
+  "offHostBlobSha256": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810",
+  "fivePathIndexSha256": "2907e12c99b68f88fb1f38bcc0b75b233b3bd4f988adb4eebdbd6107d835c6a3",
+  "extractedFilesVerified": 765,
+  "rootPostSamples": 2,
+  "ownersPerSample": [
+    0,
+    0
+  ],
+  "incompletePerSample": [
+    0,
+    0
+  ],
+  "administrativeFilesVerified": 9,
+  "currentReferencesVerified": 244,
+  "historicalReferencesVerified": 248,
+  "capacity": {
+    "result": "PASS",
+    "meaning": "Observed planning floor satisfied; not a hard bound, peak-load guarantee or apply authorization",
+    "sampleUtc": [
+      "2026-10-10T23:53:43.302348+00:00",
+      "2026-10-10T23:55:31.320036+00:00"
+    ],
+    "availableBytesPostgresAndDeployMinimum": 2399555584,
+    "planningFloorBytes": 2131755008,
+    "marginAboveFloorBytes": 267800576,
+    "availableInodes": 6863906,
+    "walBytesOnDisk": [
+      83886080,
+      83886080
+    ],
+    "walGeneratedDeltaBytes": 1155044,
+    "intervalSeconds": 108.017688,
+    "walGeneratedBytesPerSecond": 10693.100559604645,
+    "slots": 0,
+    "replicas": 0,
+    "archiveMode": "off",
+    "sqlReserveMiB": 64,
+    "sqlReserveIsMeasuredHardBound": false
+  },
+  "production": {
+    "api": "a26",
+    "worker": "afbb minimum",
+    "frontend": "fa60",
+    "identitiesUnchanged": true,
+    "guard": "closed37",
+    "providerTask": "persisting unchanged",
+    "lockAndUncertainPresent": false,
+    "fiveOutboundsPreserved": true,
+    "position6OutboundCreated": false,
+    "remainingFiveSubmissionObserved": false,
+    "job": "queued / operational_suspension",
+    "batch": "running",
+    "ownerReadOnlyInboxCrmConfirmation": "sim",
+    "apply": false,
+    "ack": false,
+    "open": false,
+    "restart": false,
+    "deploy": false
+  },
+  "tests": "Existing backup/isolated restore, dry-run and local tests reused; no rebuild or rerun",
+  "pending": [
+    "Separate authorization and immediate freshness/capacity/state check for apply/verify/ack",
+    "Frontend3227 and preventive API preserved, not deployed",
+    "CSV/Syer, international support, CRA-PR, multilote and AUTO remain separate"
+  ]
+}

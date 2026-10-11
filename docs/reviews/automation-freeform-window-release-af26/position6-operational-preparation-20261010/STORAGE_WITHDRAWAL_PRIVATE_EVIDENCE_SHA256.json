@@ -1,0 +1,130 @@
+{
+  "purpose": "Private evidence copied off-host; only filenames, sizes and digests published",
+  "files": [
+    {
+      "name": "after-state.private.json",
+      "bytes": 157664,
+      "sha256": "f2fe8a5fd286451c99bf6b0df051df8427f72fee03c240666109d753d295cebf"
+    },
+    {
+      "name": "after-state.private.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "api-health.private.json",
+      "bytes": 76,
+      "sha256": "fd5a34f3ae7801096dfef7cb7c69d5d7c9d15101f97530becefd2faa9a9c23b8"
+    },
+    {
+      "name": "before-state.private.json",
+      "bytes": 157664,
+      "sha256": "773b1cef3079426b6ee5ba07179f9e2c1e285fce47fa0cf6821615ee3eea6a12"
+    },
+    {
+      "name": "before-state.private.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "capacity-first.private.json",
+      "bytes": 14591,
+      "sha256": "27a4267e8bae86c649868c95fd926529920bcedc2e39f780b31f16bdb543593e"
+    },
+    {
+      "name": "capacity-first.private.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "capacity-second.private.json",
+      "bytes": 14591,
+      "sha256": "7cea64cd6e6329cc47c5bcc594e0414652b93ce5690e5741bf7ba07c8ef85cd2"
+    },
+    {
+      "name": "capacity-second.private.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "capacity-sql-first.private.json",
+      "bytes": 2377,
+      "sha256": "a4c5d1b1e32484c2230d32a8163fe213e150e10527c342fe7938770c3bc1ecf7"
+    },
+    {
+      "name": "capacity-sql-second.private.json",
+      "bytes": 2377,
+      "sha256": "88453137335647ebc1628e10efa55e5983f9c0111b90d8fb77dda8ed50e598ae"
+    },
+    {
+      "name": "final-integrity.private.json",
+      "bytes": 1278,
+      "sha256": "635ac4adbdb3f0e0fe711e56e58b07c22465a774680112ee4f1eedb859239ffa"
+    },
+    {
+      "name": "logs-sessions.private.json",
+      "bytes": 6894973,
+      "sha256": "b51c6ee806606fd99b66da604c2ee17e48ba0a88adb0f1204e4772daf10237de"
+    },
+    {
+      "name": "offhost-reconfirmation.json",
+      "bytes": 177,
+      "sha256": "e180d39f693aa79f305f44ea1039f515fac5519ab56b07772dc4eba448a3c369"
+    },
+    {
+      "name": "post-withdrawal-root-readonly.py",
+      "bytes": 2250,
+      "sha256": "298adde1f244cd4dfdb074ac170c7afb2dcc19959b2eead75bdfa4d4d89d5f15"
+    },
+    {
+      "name": "post-withdrawal-root.private.json",
+      "bytes": 2847,
+      "sha256": "701bd9d631ca10ede83d7dcb50bac10a09f765f48fd22a40f920f39a21c11fa0"
+    },
+    {
+      "name": "post-withdrawal-root.private.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "preconditions.private.json",
+      "bytes": 210,
+      "sha256": "f92d6fb1318998d02ca620db708a4609d3d692882f3aaadc0f0c4b8465150979"
+    },
+    {
+      "name": "session-state-readonly.cjs",
+      "bytes": 1633,
+      "sha256": "2e771be91256fe0f81edbabc7d8837695bc6f5078ade4a6f6e106218ab663b72"
+    },
+    {
+      "name": "session-state.private.json",
+      "bytes": 27071,
+      "sha256": "033e9ba0319b0876d4576a72744124e02450fcdb360af394dc36535b05e83cbb"
+    },
+    {
+      "name": "session-state.private.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "withdrawal-decision.private.json",
+      "bytes": 120581,
+      "sha256": "c4b61085dc33812f5afaeafd0a378207b55bef6a6dd98d6c62976a434fdb273b"
+    },
+    {
+      "name": "withdrawal.exit.private.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "name": "withdrawal.stderr.private.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "withdrawal.stdout.private.log",
+      "bytes": 358,
+      "sha256": "08a1ee524d4dc14ff84f420a2c7f6f55fd0004114d23edec6896910bc2211d51"
+    }
+  ]
+}

@@ -58,3 +58,6 @@ Esta rodada **não transferiu nem removeu esses arquivos**. Sem comandos de excl
 Os parágrafos anteriores registram a captura histórica. A leitura root V2 agora completou duas amostras sem proprietários/incompletudes; políticas/manifests/referências identificadas foram conferidos, e blob+índice dos cinco caminhos foram preservados off-host com extração isolada. Ver [resultado completo](STORAGE_PRESERVATION_RESULT.json) e [relatório único](README.md#continuidade-dcbeea48--ambiente-observação-root-e-preservação-off-host). Nenhum arquivo foi excluído.
 
 [Comandos concretos de retirada para revisão](WITHDRAWAL_FOR_REVIEW.txt): somente quatro caminhos, cópia principal e todos os manifests/evidências preservados. Dependem de autorização própria, custódia off-host reconfirmada e observações frescas, sem adaptar bindings. Capacidade continua DENY:475.422.720bytes livres na última leitura;1.917.861.888bytes é liberação projetada. Nenhum apply/ack/abertura decorre da decisão sobre armazenamento.
+
+
+RESULTADO POSTERIOR — retirada autorizada executada uma única vez, exit0; quatro caminhos ausentes/main intacto, duas observações root completas. CAPACITY PASS pelo piso observado e limites no README/STORAGE_WITHDRAWAL_RESULT.json. Blocos de retirada consumidos: não repetir. Proposta e comandos acima preservados como histórico. Apply/ack/abertura NÃO autorizados.
