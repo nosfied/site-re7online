@@ -1,0 +1,78 @@
+{
+  "base": "a26dbb0ed39f9484bbbb71c5e7c753d561f07b93",
+  "reviews": [
+    "400b8b4bcf3fac2d1d5261b549febfd5a494f0eb",
+    "3ca5efed"
+  ],
+  "node": "20.20.0",
+  "overlaySha256": "b4a9a856eac456bfc5172056baa110272e5596dcee015e4f7af185500c8070c7",
+  "overlayBytes": 4034560,
+  "files": [
+    {
+      "path": "src/campaigns/campaignRunner.ts",
+      "originSha256": "36242e0d52bd334a5df40d0dec6fc5e755b40ad33ee1c64b774c4dc6148e7d1e",
+      "sourceSha256": "66a3c4c6a87d418d0c132fffa4cebbfa4aced76a08859af8d1b5706a9fc2602f",
+      "review": "400b8b4bcf3fac2d1d5261b549febfd5a494f0eb",
+      "compiled": "dist/campaigns/campaignRunner.js",
+      "compiledSha256": "d88cdc241f28b786212580d01e389b2842d36ab2e17f9ede3f0a1fd8800bae12",
+      "sourceBytes": 77081,
+      "compiledBytes": 84140
+    },
+    {
+      "path": "src/campaigns/campaignAcceptedResult.ts",
+      "originSha256": null,
+      "sourceSha256": "678203459cf32252732314d6cba2fe5924c08771bbfb382c7bd52ca681184ab3",
+      "review": "400b8b4bcf3fac2d1d5261b549febfd5a494f0eb",
+      "compiled": "dist/campaigns/campaignAcceptedResult.js",
+      "compiledSha256": "ea6ae7fd49c9eb20af6ed0cb31ce14fcd53997fc527c0231ff514e837152f0dc",
+      "sourceBytes": 3124,
+      "compiledBytes": 2775
+    },
+    {
+      "path": "src/whatsapp/webhook.controller.ts",
+      "originSha256": "b7a6dc840912dcba558486813f2b95edf3a0ad99839e8365de52851e8b938bfe",
+      "sourceSha256": "f1873b55c6d29238834f544b3ac84b54a2467b2152b337099da85ab7ff4e3f6d",
+      "review": "400b8b4bcf3fac2d1d5261b549febfd5a494f0eb",
+      "compiled": "dist/whatsapp/webhook.controller.js",
+      "compiledSha256": "60d7c09b4a04cc940bb8a8bb884f544b088cc4d3edd55170bdb01d07920894bf",
+      "sourceBytes": 338739,
+      "compiledBytes": 446468
+    },
+    {
+      "path": "src/campaigns/campaignProviderStatusPersistence.ts",
+      "originSha256": null,
+      "sourceSha256": "d8b6ef2eed1668b25c7bbd51bd548893c932f2122133b2dc2286f2f138d1e622",
+      "review": "400b8b4bcf3fac2d1d5261b549febfd5a494f0eb",
+      "compiled": "dist/campaigns/campaignProviderStatusPersistence.js",
+      "compiledSha256": "639e7fa2aa7ae21cd09285e60e12c2f38f7dee114e9f9101662ab66ce7511d0e",
+      "sourceBytes": 2529,
+      "compiledBytes": 2313
+    },
+    {
+      "path": "src/http/routes.ts",
+      "originSha256": "b418e8d9acf1f7ecf8256e41c63dc540625d360b257f342171c7a9953a252b6d",
+      "sourceSha256": "ccf8eee93dd92b2fcc2423ec683c23f0f837087a61e0982e0e20ad51ce040ee6",
+      "review": "3ca5efed",
+      "compiled": "dist/http/routes.js",
+      "compiledSha256": "d762c4457ee4b94df4d7f98f39034d71d4df5e3cb58f834b221b05306f39ae7b",
+      "sourceBytes": 1432149,
+      "compiledBytes": 1595172
+    },
+    {
+      "path": "src/campaigns/campaignRecipientResultTruth.ts",
+      "originSha256": null,
+      "sourceSha256": "12e92cbc516a6d531e635afc350bc0f617a2f0b5c295e6fd029085e21346da4b",
+      "review": "3ca5efed",
+      "compiled": "dist/campaigns/campaignRecipientResultTruth.js",
+      "compiledSha256": "43a23008d5ccf86cfe880b91edce3030d1fbc66deee2d17b4cc68aea6136bfe2",
+      "sourceBytes": 11976,
+      "compiledBytes": 10787
+    }
+  ],
+  "schemaSha256": "7fec399ffbbeb4f2d002d128481f96c1aaebb3efb9d0a76f2ba129939c5b54bd",
+  "prismaGeneratedSchemaSha256": "75c32a1d4fa67626d991d89d0327749c7ca65edea02e969c5733fd2b2c0dc594",
+  "packageLockSha256": "f617d4f8c0f90bc8cb36dda100baec1e59ef1c9fc9a203c2e419e0b04725cdbb",
+  "originApp": "/opt/re7online/releases/campaign-eligibility-recovery-final-reviewed-20261008/apps/whatsapp-agent",
+  "workerChanged": false,
+  "frontTarSha256": "9b54548e4a7763f5078ae0433aceb43a37567eccd988814dd82f2fab97229319"
+}

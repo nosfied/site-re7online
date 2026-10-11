@@ -1,0 +1,21 @@
+{
+  "applicationStarted": false,
+  "atUtc": "2026-10-11T00:42:40.506159+00:00",
+  "dumpBytes": 35018004,
+  "dumpSha256": "5604e18dff4fa68bd21d4a21c23d087738e6cec8dfddea97807f9dc2df8e6d1c",
+  "migrationChecksumMismatches": [],
+  "migrationComparison": "restore_vs_live_database",
+  "preexistingRepositoryChecksumDifferences": [
+    "20260221090000_conv_runtime_state_shadow",
+    "20260312181201_add_lead_model",
+    "20260315190000_add_user_model",
+    "20260620200000_add_scheduling",
+    "20260623120000_add_audio_transcriptions"
+  ],
+  "providerCalls": 0,
+  "receiptVerified": true,
+  "result": "PASS",
+  "sixOutboundsVerified": true,
+  "tables": 70,
+  "temporaryDatabaseRemoved": true
+}

@@ -1,0 +1,1077 @@
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignRunner.ts b/apps/whatsapp-agent/src/campaigns/campaignRunner.ts
+index 551f7ea5..0abc81f5 100644
+--- a/apps/whatsapp-agent/src/campaigns/campaignRunner.ts
++++ b/apps/whatsapp-agent/src/campaigns/campaignRunner.ts
+@@ -1,3 +1,4 @@
++import { persistVerifiedAcceptedCampaignResult } from "./campaignAcceptedResult.js";
+ import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from "./campaignEligibility.js";
+ import { campaignFailureDiagnostic } from "./campaignFailureDiagnostic.js";
+ import { campaignTask, campaignOperationsAreOpen, campaignProviderAttempt, CampaignOperationsClosed } from "./campaignOperations.js";
+@@ -1753,22 +1754,9 @@ async function runCampaignInBackground(
+               },
+             });
+           }
+-          persistenceStage = "crm_materialization";
+-          const conversationOutcome = await ensureCampaignOutboundCrmAttemptMaterialization(prisma, {
+-            clientId: params.clientId,
+-            waId,
+-            waIdCanonical,
+-            phoneNumberId,
+-            messageId,
+-            campaignId: params.campaignId,
+-            campaignRunId,
+-            templateName: params.templateName,
+-            source: "campaign",
+-            conversationId: resolvedRecipient.conversationId ?? null,
+-          });
+           const usagePayload = buildMetaUsageEventPayload({
+             outboundMessageId: messageId,
+-            conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
++            conversationId: resolvedRecipient.conversationId ?? null,
+             campaignId: params.campaignId,
+             source: usageSource,
+             messageKind: "template",
+@@ -1781,14 +1769,12 @@ async function runCampaignInBackground(
+             waIdCanonical,
+           });
+           persistenceStage = "outbound_persistence";
+-          await persistOutboundMessage({
++          const outboundData = {
+             clientId: params.clientId,
+             phoneNumberId,
+             waId,
+             waIdCanonical,
+             messageId,
+-            type: MessageType.TEMPLATE,
+-            status,
+             bodyText: renderTemplateBody(templateForRendering?.content, components),
+             templateName: params.templateName,
+             templateLang: language,
+@@ -1808,6 +1794,26 @@ async function runCampaignInBackground(
+               metaUsage: usagePayload,
+               returnDestination: resolvedReturnDestination,
+             },
++          };
++          if (result.ok) {
++            await persistVerifiedAcceptedCampaignResult(prisma, {
++              ...outboundData, metaMessageId: result.metaMessageId ?? "",
++            });
++          } else {
++            await persistOutboundMessage({ ...outboundData, type: MessageType.TEMPLATE, status });
++          }
++          persistenceStage = "crm_materialization";
++          const conversationOutcome = await ensureCampaignOutboundCrmAttemptMaterialization(prisma, {
++            clientId: params.clientId,
++            waId,
++            waIdCanonical,
++            phoneNumberId,
++            messageId,
++            campaignId: params.campaignId,
++            campaignRunId,
++            templateName: params.templateName,
++            source: "campaign",
++            conversationId: resolvedRecipient.conversationId ?? null,
+           });
+           persistenceStage = "usage_persistence";
+           await recordMetaUsageLedgerEvent({
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignAcceptedResult.ts b/apps/whatsapp-agent/src/campaigns/campaignAcceptedResult.ts
+new file mode 100644
+index 00000000..4415306c
+--- /dev/null
++++ b/apps/whatsapp-agent/src/campaigns/campaignAcceptedResult.ts
+@@ -0,0 +1,41 @@
++import { MessageStatus, Prisma, type PrismaClient, type OutboundMessage } from "@prisma/client";
++
++type Accepted = { clientId: string; phoneNumberId?: string; waId: string; waIdCanonical: string;
++  messageId: string; metaMessageId: string; templateName: string; templateLang: string;
++  bodyText: string | null; requestId: string; rawPayload: Prisma.InputJsonObject };
++const canonical = (v: unknown): string => JSON.stringify(v, (_k, value) => value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.keys(value).sort().map(k => [k, value[k]])) : value);
++const object = (v: unknown): Record<string, unknown> => v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
++
++// Campaign-local durability boundary, after provider. Never writes an existing
++// result: a concurrent webhook's status/activity/provenance must remain intact.
++export function verifyAcceptedCampaignResult(row: OutboundMessage | null, p: Accepted) {
++  const raw = object(row?.rawPayload), meta = object(raw.metaStatus);
++  if (!row || row.clientId !== p.clientId || row.messageId !== p.messageId || row.metaMessageId !== p.metaMessageId ||
++      row.waId !== p.waId || row.waIdCanonical !== p.waIdCanonical || row.phoneNumberId !== (p.phoneNumberId ?? null) ||
++      (row.channel !== null && row.channel !== "whatsapp") || (row.provider !== null && row.provider !== "meta") ||
++      (row.channelAccountId !== null && row.channelAccountId !== (p.phoneNumberId ?? null)) ||
++      row.type !== "TEMPLATE" || row.templateName !== p.templateName || row.templateLang !== p.templateLang ||
++      row.bodyText !== p.bodyText || raw.source !== "campaign" || raw.campaignId !== p.rawPayload.campaignId ||
++      raw.campaignRunId !== p.rawPayload.campaignRunId ||
++      canonical(raw.components ?? null) !== canonical(p.rawPayload.components ?? null) ||
++      canonical(raw.returnDestination ?? null) !== canonical(p.rawPayload.returnDestination ?? null) ||
++      (row.status !== MessageStatus.SENT && !(row.status === MessageStatus.FAILED && meta.lastStatus === "failed" && meta.metaMessageId === p.metaMessageId))) {
++    throw new Error("campaign_accepted_result_mismatch");
++  }
++  return row;
++}
++
++export async function persistVerifiedAcceptedCampaignResult(db: PrismaClient, p: Accepted) {
++  if (!p.metaMessageId || !p.messageId) throw new Error("campaign_accepted_result_reference_required");
++  const where = { clientId_messageId: { clientId: p.clientId, messageId: p.messageId } };
++  const existing = await db.outboundMessage.findUnique({ where });
++  if (existing) return verifyAcceptedCampaignResult(existing, p);
++  try {
++    await db.outboundMessage.create({ data: { ...p, channel: "whatsapp", provider: "meta",
++      channelAccountId: p.phoneNumberId ?? null, type: "TEMPLATE", status: MessageStatus.SENT } });
++  } catch (error) {
++    if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
++    // A uniqueness conflict is not evidence of successful persistence.
++  }
++  return verifyAcceptedCampaignResult(await db.outboundMessage.findUnique({ where }), p);
++}
+diff --git a/apps/whatsapp-agent/src/whatsapp/webhook.controller.ts b/apps/whatsapp-agent/src/whatsapp/webhook.controller.ts
+index 21df7c94..ac7aec07 100644
+--- a/apps/whatsapp-agent/src/whatsapp/webhook.controller.ts
++++ b/apps/whatsapp-agent/src/whatsapp/webhook.controller.ts
+@@ -1,3 +1,5 @@
++import { persistCampaignProviderStatus } from "../campaigns/campaignProviderStatusPersistence.js";
++import { campaignFailureDiagnostic } from "../campaigns/campaignFailureDiagnostic.js";
+ import { createReactiveBotTextOutboundMessage } from "./reactiveBotOutbound.js";
+ import { updateRuntimeIfUnchanged } from "../conversation/runtimeWriteFence.js";
+ import { IncomingMessage, ServerResponse } from "node:http";
+@@ -3074,7 +3076,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+           outbound.errorBody ||
+           null;
+ 
+-        const nextRawPayload = {
++        let nextRawPayload = {
+           ...currentRaw,
+           metaStatus: {
+             lastStatus: item.status,
+@@ -3115,6 +3117,29 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+           typeof currentRaw.conversationId === "string" ? currentRaw.conversationId : null;
+         const campaignId =
+           typeof currentRaw.campaignId === "string" ? currentRaw.campaignId : null;
++        // Status truth must survive a later CRM error. This does not complete
++        // campaign persistence, clean the provider task or authorize continuation.
++        let durableStatusRaw: Prisma.JsonValue | undefined;
++        let durableStatus = outbound.status;
++        let durableErrorBody = outbound.errorBody;
++        if (campaignId) {
++          if (typeof phoneNumberId !== "string" || !phoneNumberId) {
++            throw new Error("campaign_provider_status_account_required");
++          }
++          const durable = await persistCampaignProviderStatus(prisma, {
++            id: outbound.id, clientId: outbound.clientId, metaMessageId: item.id,
++            phoneNumberId: outbound.phoneNumberId, webhookPhoneNumberId: phoneNumberId,
++            incomingStatus: item.status, incomingTimestamp: item.timestamp,
++            normalizedStatus, errorBody: statusErrorBody,
++            metaStatus: nextRawPayload.metaStatus as Prisma.InputJsonObject,
++          });
++          if (!durable) continue;
++          durableStatusRaw = durable.rawPayload;
++          durableStatus = durable.status;
++          durableErrorBody = durable.errorBody;
++          nextRawPayload = { ...nextRawPayload, ...(durable.rawPayload as Record<string, unknown>),
++            metaStatus: nextRawPayload.metaStatus };
++        }
+         let materializedCampaignConversationId = conversationId;
+         if (
+           campaignId &&
+@@ -3142,31 +3167,48 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+               : null;
+           const runtimeVersion = submitPayload?.runtimeVersionAtSubmission;
+           const conversationUpdatedAt = submitPayload?.conversationUpdatedAtAtSubmission;
+-          const materialized = client
+-            ? await ensureCampaignOutboundConversation(prisma, {
+-                clientId: outbound.clientId,
+-                clientKey: client.clientKey,
+-                waId: outbound.waId,
+-                waIdCanonical: outbound.waIdCanonical,
+-                phoneNumberId: outbound.phoneNumberId,
+-                messageId: outbound.messageId ?? item.id,
+-                campaignId,
+-                campaignRunId,
+-                templateName: outbound.templateName ?? "",
+-                sentAt: new Date(normalizeStatusTimestamp(item.timestamp)),
+-                submissionRuntimeVersion: runtimeVersion === null ||
+-                  (typeof runtimeVersion === "number" && Number.isInteger(runtimeVersion) && runtimeVersion >= 0)
+-                    ? runtimeVersion : undefined,
+-                submissionConversationUpdatedAt: conversationUpdatedAt === null
+-                  ? null
+-                  : typeof conversationUpdatedAt === "string" && !Number.isNaN(Date.parse(conversationUpdatedAt))
+-                    ? new Date(conversationUpdatedAt) : undefined,
+-                source: "campaign",
+-                conversationId: typeof currentRaw.previousConversationId === "string" ? currentRaw.previousConversationId : null,
+-                returnDestination,
+-              })
+-            : null;
+-          materializedCampaignConversationId = materialized?.conversationId ?? null;
++          try {
++            const materialized = client
++              ? await ensureCampaignOutboundConversation(prisma, {
++                  clientId: outbound.clientId,
++                  clientKey: client.clientKey,
++                  waId: outbound.waId,
++                  waIdCanonical: outbound.waIdCanonical,
++                  phoneNumberId: outbound.phoneNumberId,
++                  messageId: outbound.messageId ?? item.id,
++                  campaignId,
++                  campaignRunId,
++                  templateName: outbound.templateName ?? "",
++                  sentAt: new Date(normalizeStatusTimestamp(item.timestamp)),
++                  submissionRuntimeVersion: runtimeVersion === null ||
++                    (typeof runtimeVersion === "number" && Number.isInteger(runtimeVersion) && runtimeVersion >= 0)
++                      ? runtimeVersion : undefined,
++                  submissionConversationUpdatedAt: conversationUpdatedAt === null
++                    ? null
++                    : typeof conversationUpdatedAt === "string" && !Number.isNaN(Date.parse(conversationUpdatedAt))
++                      ? new Date(conversationUpdatedAt) : undefined,
++                  source: "campaign",
++                  conversationId: typeof currentRaw.previousConversationId === "string" ? currentRaw.previousConversationId : null,
++                  returnDestination,
++                })
++              : null;
++            materializedCampaignConversationId = materialized?.conversationId ?? null;
++          } catch (error) {
++            const diagnostic = campaignFailureDiagnostic(error);
++            await persistEvent({
++              clientId: outbound.clientId, messageId: outbound.messageId,
++              requestId: `webhook-campaign-crm-pending:${outbound.id}:${normalizedStatus}:${item.timestamp ?? "unknown"}`,
++              eventName: "webhook.campaign.crm_pending",
++              payloadJson: { campaignId, campaignRunId, outboundMessageId: outbound.id,
++                metaMessageId: item.id, status: item.status, timestamp: item.timestamp,
++                stage: "crm_materialization", providerStatusDurable: true,
++                materialized: false, retryAllowed: false, ...diagnostic,
++              },
++            });
++            logger.warn({ event: "webhook.campaign.crm_pending", clientId: outbound.clientId,
++              outboundMessageId: outbound.id, ...diagnostic });
++            continue;
++          }
+         }
+         const metaUsage = buildMetaUsageEventPayload({
+           outboundMessageId: outbound.messageId,
+@@ -3185,11 +3227,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+           waIdCanonical: outbound.waIdCanonical,
+         });
+ 
+-        await prisma.outboundMessage.update({
+-          where: { id: outbound.id },
+-          data: {
+-            status: normalizedStatus === "FAILED" ? MessageStatus.FAILED : outbound.status,
+-            errorBody: normalizedStatus === "FAILED" ? statusErrorBody : outbound.errorBody,
++        const enrichment = {
++            status: normalizedStatus === "FAILED" ? MessageStatus.FAILED : durableStatus,
++            errorBody: normalizedStatus === "FAILED" ? statusErrorBody : durableErrorBody,
+             rawPayload: {
+               ...nextRawPayload,
+               metaStatus: {
+@@ -3200,8 +3240,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+               metaUsage,
+               conversationId: materializedCampaignConversationId,
+             } as Prisma.InputJsonValue,
+-          },
+-        });
++        };
++        if (campaignId) {
++          const updated = await prisma.outboundMessage.updateMany({
++            where: { id: outbound.id, clientId: outbound.clientId, metaMessageId: item.id,
++              rawPayload: { equals: durableStatusRaw as Prisma.InputJsonValue } },
++            data: enrichment,
++          });
++          if (updated.count !== 1) continue;
++        } else {
++          await prisma.outboundMessage.update({ where: { id: outbound.id }, data: enrichment });
++        }
+         await recordMetaUsageLedgerEvent({
+           prisma,
+           clientId: outbound.clientId,
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignProviderStatusPersistence.ts b/apps/whatsapp-agent/src/campaigns/campaignProviderStatusPersistence.ts
+new file mode 100644
+index 00000000..961e464d
+--- /dev/null
++++ b/apps/whatsapp-agent/src/campaigns/campaignProviderStatusPersistence.ts
+@@ -0,0 +1,42 @@
++import { MessageStatus, Prisma, type PrismaClient } from '@prisma/client';
++import { shouldApplyProviderStatus } from './campaignDeliveryTruth.js';
++
++const object = (value: unknown): Record<string, unknown> =>
++  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
++
++/** Campaign-only boundary: provider truth is durable before fallible CRM work.
++ * Lock covers SQL only, never provider/CRM. Concurrent status observations are
++ * re-evaluated under the row lock with the canonical monotonic contract.
++ */
++export async function persistCampaignProviderStatus(db: PrismaClient, p: {
++  id: string; clientId: string; metaMessageId: string; phoneNumberId: string | null;
++  webhookPhoneNumberId: string; incomingStatus: string | null; incomingTimestamp: unknown;
++  normalizedStatus: string; errorBody: string | null; metaStatus: Prisma.InputJsonObject;
++}) {
++  return db.$transaction(async tx => {
++    await tx.$executeRaw(Prisma.sql`SELECT id FROM "OutboundMessage" WHERE id = ${p.id}::uuid FOR UPDATE`);
++    const row = await tx.outboundMessage.findUnique({ where: { id: p.id } });
++    if (!row || row.clientId !== p.clientId || row.metaMessageId !== p.metaMessageId ||
++        row.phoneNumberId !== p.phoneNumberId ||
++        (row.phoneNumberId !== null && row.phoneNumberId !== p.webhookPhoneNumberId) ||
++        (row.provider !== null && row.provider !== 'meta') ||
++        (row.channel !== null && row.channel !== 'whatsapp') ||
++        (row.channelAccountId !== null && row.channelAccountId !== p.webhookPhoneNumberId)) {
++      throw new Error('campaign_provider_status_identity_mismatch');
++    }
++    const raw = object(row.rawPayload), current = object(raw.metaStatus);
++    if (!shouldApplyProviderStatus({
++      currentStatus: typeof current.lastStatus === 'string' ? current.lastStatus : null,
++      currentStatusAt: current.lastStatusAt,
++      incomingStatus: p.incomingStatus, incomingStatusAt: p.incomingTimestamp,
++    })) return null;
++    return tx.outboundMessage.update({ where: { id: row.id }, data: {
++      status: p.normalizedStatus === 'FAILED' ? MessageStatus.FAILED : row.status,
++      errorBody: p.normalizedStatus === 'FAILED' ? p.errorBody : row.errorBody,
++      rawPayload: { ...raw, metaStatus: { ...p.metaStatus,
++        providerConversationId: p.metaStatus.conversationId ?? null,
++        conversationId: typeof raw.conversationId === 'string' ? raw.conversationId : null,
++      } } as Prisma.InputJsonObject,
++    } });
++  }, { maxWait: 5000, timeout: 10000 });
++}
+diff --git a/apps/whatsapp-agent/src/http/routes.ts b/apps/whatsapp-agent/src/http/routes.ts
+index 0bbe9558..c6d25114 100644
+--- a/apps/whatsapp-agent/src/http/routes.ts
++++ b/apps/whatsapp-agent/src/http/routes.ts
+@@ -1,3 +1,4 @@
++import { extractMetaStatus, normalizeCampaignMessageStatus, stringifyCampaignError, isUtilityPricingCategory, isDeliveredForCampaignBilling, resolveCampaignBillingStatus, buildCampaignMetaStatusItem, buildCampaignSeedFallbackStatusItems, summarizeCampaignMetaStatuses, campaignRecipientIdentityCandidates, campaignRecipientIdentitiesMatch, campaignMetaStatusRank, campaignMetaStatusTime, pickCampaignRecipientStatus, buildCampaignRecipientResultStatuses } from "../campaigns/campaignRecipientResultTruth.js";
+ import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from "../campaigns/campaignEligibility.js";
+ import { reactiveRoutingDecision, type ReactiveRoutingDecision, revalidateReactiveSubmission } from "../whatsapp/reactiveOutboundPolicy.js";
+ import { isAutomationConversation, resolveAutomationReadPermission } from "../inbox/automationAccess.js";
+@@ -29811,45 +29812,7 @@ type CampaignDraftRecipientResolution = {
+   }>;
+ };
+ 
+-function extractMetaStatus(rawPayload: unknown) {
+-  const typed =
+-    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+-      ? (rawPayload as Record<string, unknown>)
+-      : null;
+-  const metaStatus =
+-    typed?.metaStatus && typeof typed.metaStatus === "object" && !Array.isArray(typed.metaStatus)
+-      ? (typed.metaStatus as Record<string, unknown>)
+-      : null;
+-  const webSessionStatus =
+-    typed?.webSessionStatus && typeof typed.webSessionStatus === "object" && !Array.isArray(typed.webSessionStatus)
+-      ? (typed.webSessionStatus as Record<string, unknown>)
+-      : null;
+-  return {
+-    lastStatus:
+-      typeof metaStatus?.lastStatus === "string"
+-        ? metaStatus.lastStatus
+-        : typeof webSessionStatus?.lastStatus === "string"
+-          ? webSessionStatus.lastStatus
+-          : null,
+-    pricingCategory:
+-      typeof metaStatus?.pricingCategory === "string" ? metaStatus.pricingCategory : null,
+-    pricingBillable:
+-      typeof metaStatus?.pricingBillable === "boolean" ? metaStatus.pricingBillable : null,
+-    pricingModel: typeof metaStatus?.pricingModel === "string" ? metaStatus.pricingModel : null,
+-    lastStatusAt:
+-      typeof metaStatus?.lastStatusAt === "string"
+-        ? metaStatus.lastStatusAt
+-        : typeof webSessionStatus?.lastStatusAt === "string"
+-          ? webSessionStatus.lastStatusAt
+-          : null,
+-    conversationId:
+-      typeof metaStatus?.conversationId === "string" ? metaStatus.conversationId : null,
+-    statusDetail: typeof metaStatus?.statusDetail === "string" ? metaStatus.statusDetail : null,
+-    errorData:
+-      metaStatus?.errorData && typeof metaStatus.errorData === "object" ? metaStatus.errorData : null,
+-    errors: Array.isArray(metaStatus?.errors) ? metaStatus.errors : null,
+-  };
+-}
++
+ 
+ function extractCampaignIdFromRawPayload(rawPayload: unknown) {
+   const typed =
+@@ -30597,108 +30560,21 @@ function incrementCampaignBlockedReason(
+   counts.set(reason, (counts.get(reason) ?? 0) + 1);
+ }
+ 
+-function normalizeCampaignMessageStatus(
+-  lastStatus: string | null,
+-  fallbackStatus: string
+-): CampaignMetaStatus["status"] {
+-  const value = (lastStatus || fallbackStatus || "").trim().toLowerCase();
+-  switch (value) {
+-    case "read":
+-      return "read";
+-    case "delivered":
+-      return "delivered";
+-    case "failed":
+-      return "failed";
+-    case "sent":
+-    default:
+-      return fallbackStatus === "FAILED" ? "failed" : "sent";
+-  }
+-}
++
+ 
+ function normalizeInboxMessageStatus(lastStatus: string | null, fallbackStatus: string) {
+   return normalizeCampaignMessageStatus(lastStatus, fallbackStatus).toUpperCase();
+ }
+ 
+-function stringifyCampaignError(value: unknown) {
+-  if (!value) return null;
+-  if (typeof value === "string") return value;
+-  try {
+-    return JSON.stringify(value);
+-  } catch {
+-    return String(value);
+-  }
+-}
+ 
+-function isUtilityPricingCategory(value: string | null) {
+-  return (value ?? "").trim().toLowerCase() === "utility";
+-}
+ 
+-function isDeliveredForCampaignBilling(status: CampaignMetaStatus["status"]) {
+-  return status === "delivered" || status === "read";
+-}
+ 
+-function resolveCampaignBillingStatus(item: {
+-  status: CampaignMetaStatus["status"];
+-  pricingCategory: string | null;
+-}) {
+-  if (!isDeliveredForCampaignBilling(item.status)) {
+-    return {
+-      billable: false,
+-      nonBillingReason: item.status === "failed" ? "failed" : "not_delivered",
+-    };
+-  }
+-  if (!isUtilityPricingCategory(item.pricingCategory)) {
+-    return {
+-      billable: false,
+-      nonBillingReason: "not_utility_category",
+-    };
+-  }
+-  return {
+-    billable: true,
+-    nonBillingReason: null,
+-  };
+-}
+ 
+-function buildCampaignMetaStatusItem(item: {
+-  waId: string;
+-  messageId?: string | null;
+-  templateName: string | null;
+-  status: string;
+-  errorBody: string | null;
+-  rawPayload: Prisma.JsonValue | null;
+-  createdAt?: Date | string | null;
+-}): CampaignMetaStatus {
+-  const metaStatus = extractMetaStatus(item.rawPayload);
+-  const status = normalizeCampaignMessageStatus(metaStatus.lastStatus, item.status);
+-  const billing = resolveCampaignBillingStatus({
+-    status,
+-    pricingCategory: metaStatus.pricingCategory,
+-  });
+-  const sentAt =
+-    item.createdAt instanceof Date
+-      ? item.createdAt.toISOString()
+-      : typeof item.createdAt === "string"
+-        ? item.createdAt
+-        : null;
+-  return {
+-    waId: item.waId,
+-    templateName: item.templateName,
+-    status,
+-    sentAt,
+-    deliveredAt: isDeliveredForCampaignBilling(status) ? metaStatus.lastStatusAt : null,
+-    billable: billing.billable,
+-    nonBillingReason: billing.nonBillingReason,
+-    pricingCategory: metaStatus.pricingCategory,
+-    pricingBillable: metaStatus.pricingBillable,
+-    pricingModel: metaStatus.pricingModel,
+-    conversationId: metaStatus.conversationId,
+-    error:
+-      item.errorBody ||
+-      metaStatus.statusDetail ||
+-      stringifyCampaignError(metaStatus.errorData) ||
+-      stringifyCampaignError(metaStatus.errors),
+-  };
+-}
++
++
++
++
++
+ 
+ async function enrichCampaignMetaStatusWithCurrentContacts(
+   prisma: ReturnType<typeof getPrisma>,
+@@ -30759,198 +30635,21 @@ async function enrichCampaignMetaStatusWithCurrentContacts(
+   });
+ }
+ 
+-function buildCampaignSeedFallbackStatusItems(
+-  campaign: {
+-    sentCount: number;
+-    blockedCount: number;
+-    status: string;
+-    templateName: string;
+-  },
+-  seed: CampaignDraftSeed
+-): CampaignMetaStatus[] {
+-  const sentLimit = Math.max(campaign.sentCount || 0, 0);
+-  const blockedLimit = sentLimit + Math.max(campaign.blockedCount || 0, 0);
+-  return seed.recipients.map((waId, index) => {
+-    const wasSent = index < sentLimit;
+-    const wasBlockedOrFailed = !wasSent && index < blockedLimit;
+-    return {
+-      waId,
+-      templateName: seed.templateName || campaign.templateName,
+-      status: wasSent ? "sent" : "failed",
+-      sentAt: null,
+-      deliveredAt: null,
+-      billable: false,
+-      nonBillingReason: wasSent
+-        ? "status_unconfirmed"
+-        : wasBlockedOrFailed
+-          ? "failed_or_blocked"
+-          : "missing_individual_history",
+-      pricingCategory: null,
+-      pricingBillable: null,
+-      pricingModel: null,
+-      conversationId: null,
+-      error: wasSent
+-        ? "Status Meta detalhado indisponivel; exibido a partir do historico da campanha."
+-        : wasBlockedOrFailed
+-          ? "Envio bloqueado ou falhou; status Meta detalhado indisponivel."
+-          : "Envio individual nao encontrado no historico preservado.",
+-    };
+-  });
+-}
+ 
+-function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMetaSummary {
+-  return items.reduce<CampaignMetaSummary>(
+-    (acc, item) => {
+-      switch (item.status) {
+-        case "read":
+-          acc.totalRead += 1;
+-          break;
+-        case "delivered":
+-          acc.totalDelivered += 1;
+-          break;
+-        case "opt_out":
+-          acc.totalOptOut += 1;
+-          break;
+-        case "blocked":
+-          acc.totalBlocked += 1;
+-          break;
+-        case "skipped":
+-          acc.totalSkipped += 1;
+-          break;
+-        case "failed":
+-          acc.totalFailed += 1;
+-          break;
+-        case "pending":
+-          acc.totalPending += 1;
+-          break;
+-        case "sent":
+-        default:
+-          acc.totalSent += 1;
+-          break;
+-      }
+-      return acc;
+-    },
+-    {
+-      totalSent: 0,
+-      totalDelivered: 0,
+-      totalRead: 0,
+-      totalFailed: 0,
+-      totalBlocked: 0,
+-      totalOptOut: 0,
+-      totalSkipped: 0,
+-      totalPending: 0,
+-    }
+-  );
+-}
+ 
+-function campaignRecipientIdentityCandidates(value: string) {
+-  return new Set(buildCrmWhatsappIdentityCandidates([value]));
+-}
+ 
+-function campaignRecipientIdentitiesMatch(left: Set<string>, right: Set<string>) {
+-  for (const candidate of left) {
+-    if (right.has(candidate)) return true;
+-  }
+-  return false;
+-}
+ 
+-function campaignMetaStatusRank(status: CampaignMetaStatus["status"]) {
+-  switch (status) {
+-    case "read":
+-      return 8;
+-    case "delivered":
+-      return 7;
+-    case "opt_out":
+-      return 6;
+-    case "blocked":
+-      return 5;
+-    case "failed":
+-      return 4;
+-    case "skipped":
+-      return 3;
+-    case "sent":
+-      return 2;
+-    case "pending":
+-    default:
+-      return 1;
+-  }
+-}
+ 
+-function campaignMetaStatusTime(item: CampaignMetaStatus) {
+-  const value = item.deliveredAt ?? item.sentAt;
+-  if (!value) return 0;
+-  const parsed = Date.parse(value);
+-  return Number.isNaN(parsed) ? 0 : parsed;
+-}
+ 
+-function pickCampaignRecipientStatus(items: CampaignMetaStatus[]) {
+-  return items.reduce((selected, item) => {
+-    const rankDifference = campaignMetaStatusRank(item.status) - campaignMetaStatusRank(selected.status);
+-    if (rankDifference > 0) return item;
+-    if (rankDifference === 0 && campaignMetaStatusTime(item) > campaignMetaStatusTime(selected)) return item;
+-    return selected;
+-  });
+-}
+ 
+-function buildCampaignRecipientResultStatuses(params: {
+-  campaign: { sentCount: number; blockedCount: number; status: string; templateName: string };
+-  seed: CampaignDraftSeed;
+-  resultItems: CampaignMetaStatus[];
+-}) {
+-  const indexedResults = params.resultItems.map((item, index) => ({
+-    index,
+-    item,
+-    candidates: campaignRecipientIdentityCandidates(item.waId),
+-  }));
+ 
+-  const visibleItems: CampaignMetaStatus[] = [];
+-  const consumedResultIndexes = new Set<number>();
+-  const consumedSeedIdentities: Set<string>[] = [];
+-  params.seed.recipients.forEach((waId, index) => {
+-    const seedCandidates = campaignRecipientIdentityCandidates(waId);
+-    if (
+-      consumedSeedIdentities.some((candidates) =>
+-        campaignRecipientIdentitiesMatch(candidates, seedCandidates)
+-      )
+-    ) {
+-      return;
+-    }
+-    consumedSeedIdentities.push(seedCandidates);
+-    const matchingResults = indexedResults.filter(
+-      (result) =>
+-        !consumedResultIndexes.has(result.index) &&
+-        campaignRecipientIdentitiesMatch(seedCandidates, result.candidates)
+-    );
+-    if (matchingResults.length) {
+-      visibleItems.push(pickCampaignRecipientStatus(matchingResults.map((result) => result.item)));
+-      matchingResults.forEach((result) => consumedResultIndexes.add(result.index));
+-      return;
+-    }
+-    const fallbackSeed = { ...params.seed, recipients: [waId] };
+-    const sentLimit = Math.max(params.campaign.sentCount || 0, 0);
+-    const blockedLimit = sentLimit + Math.max(params.campaign.blockedCount || 0, 0);
+-    const sentCount = index < sentLimit ? 1 : 0;
+-    const blockedCount = index >= sentLimit && index < blockedLimit ? 1 : 0;
+-    visibleItems.push(
+-      ...buildCampaignSeedFallbackStatusItems(
+-        { ...params.campaign, sentCount, blockedCount },
+-        fallbackSeed
+-      )
+-    );
+-  });
+ 
+-  indexedResults.forEach((result) => {
+-    if (consumedResultIndexes.has(result.index)) return;
+-    const matchingResults = indexedResults.filter(
+-      (candidate) =>
+-        !consumedResultIndexes.has(candidate.index) &&
+-        campaignRecipientIdentitiesMatch(result.candidates, candidate.candidates)
+-    );
+-    visibleItems.push(pickCampaignRecipientStatus(matchingResults.map((candidate) => candidate.item)));
+-    matchingResults.forEach((candidate) => consumedResultIndexes.add(candidate.index));
+-  });
+-  return visibleItems;
+-}
++
++
++
++
++
++
+ 
+ function formatCampaignNonBillingReason(value: string | null) {
+   switch (value) {
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts b/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts
+new file mode 100644
+index 00000000..8f17c4cd
+--- /dev/null
++++ b/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts
+@@ -0,0 +1,366 @@
++import type { Prisma } from "@prisma/client";
++import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
++type CampaignDraftSeed = { recipients: string[]; templateName: string };
++
++export type CampaignMetaStatus = {
++  waId: string;
++  leadId?: string | null;
++  contactName?: string | null;
++  phoneDisplay?: string | null;
++  crmStatus?: string | null;
++  crmStatusLabel?: string | null;
++  templateName: string | null;
++  status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
++  sentAt: string | null;
++  deliveredAt: string | null;
++  billable: boolean;
++  nonBillingReason: string | null;
++  pricingCategory: string | null;
++  pricingBillable: boolean | null;
++  pricingModel: string | null;
++  conversationId: string | null;
++  error: string | null;
++};
++
++export type CampaignMetaSummary = {
++  totalSent: number;
++  totalDelivered: number;
++  totalRead: number;
++  totalFailed: number;
++  totalBlocked: number;
++  totalOptOut: number;
++  totalSkipped: number;
++  totalPending: number;
++};
++
++export function extractMetaStatus(rawPayload: unknown) {
++  const typed =
++    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
++      ? (rawPayload as Record<string, unknown>)
++      : null;
++  const metaStatus =
++    typed?.metaStatus && typeof typed.metaStatus === "object" && !Array.isArray(typed.metaStatus)
++      ? (typed.metaStatus as Record<string, unknown>)
++      : null;
++  const webSessionStatus =
++    typed?.webSessionStatus && typeof typed.webSessionStatus === "object" && !Array.isArray(typed.webSessionStatus)
++      ? (typed.webSessionStatus as Record<string, unknown>)
++      : null;
++  return {
++    lastStatus:
++      typeof metaStatus?.lastStatus === "string"
++        ? metaStatus.lastStatus
++        : typeof webSessionStatus?.lastStatus === "string"
++          ? webSessionStatus.lastStatus
++          : null,
++    pricingCategory:
++      typeof metaStatus?.pricingCategory === "string" ? metaStatus.pricingCategory : null,
++    pricingBillable:
++      typeof metaStatus?.pricingBillable === "boolean" ? metaStatus.pricingBillable : null,
++    pricingModel: typeof metaStatus?.pricingModel === "string" ? metaStatus.pricingModel : null,
++    lastStatusAt:
++      typeof metaStatus?.lastStatusAt === "string"
++        ? metaStatus.lastStatusAt
++        : typeof webSessionStatus?.lastStatusAt === "string"
++          ? webSessionStatus.lastStatusAt
++          : null,
++    conversationId:
++      typeof metaStatus?.conversationId === "string" ? metaStatus.conversationId : null,
++    statusDetail: typeof metaStatus?.statusDetail === "string" ? metaStatus.statusDetail : null,
++    errorData:
++      metaStatus?.errorData && typeof metaStatus.errorData === "object" ? metaStatus.errorData : null,
++    errors: Array.isArray(metaStatus?.errors) ? metaStatus.errors : null,
++  };
++}
++
++export function normalizeCampaignMessageStatus(
++  lastStatus: string | null,
++  fallbackStatus: string
++): CampaignMetaStatus["status"] {
++  const value = (lastStatus || fallbackStatus || "").trim().toLowerCase();
++  switch (value) {
++    case "read":
++      return "read";
++    case "delivered":
++      return "delivered";
++    case "failed":
++      return "failed";
++    case "sent":
++    default:
++      return fallbackStatus === "FAILED" ? "failed" : "sent";
++  }
++}
++
++export function stringifyCampaignError(value: unknown) {
++  if (!value) return null;
++  if (typeof value === "string") return value;
++  try {
++    return JSON.stringify(value);
++  } catch {
++    return String(value);
++  }
++}
++
++export function isUtilityPricingCategory(value: string | null) {
++  return (value ?? "").trim().toLowerCase() === "utility";
++}
++
++export function isDeliveredForCampaignBilling(status: CampaignMetaStatus["status"]) {
++  return status === "delivered" || status === "read";
++}
++
++export function resolveCampaignBillingStatus(item: {
++  status: CampaignMetaStatus["status"];
++  pricingCategory: string | null;
++}) {
++  if (!isDeliveredForCampaignBilling(item.status)) {
++    return {
++      billable: false,
++      nonBillingReason: item.status === "failed" ? "failed" : "not_delivered",
++    };
++  }
++  if (!isUtilityPricingCategory(item.pricingCategory)) {
++    return {
++      billable: false,
++      nonBillingReason: "not_utility_category",
++    };
++  }
++  return {
++    billable: true,
++    nonBillingReason: null,
++  };
++}
++
++export function buildCampaignMetaStatusItem(item: {
++  waId: string;
++  messageId?: string | null;
++  templateName: string | null;
++  status: string;
++  errorBody: string | null;
++  rawPayload: Prisma.JsonValue | null;
++  createdAt?: Date | string | null;
++}): CampaignMetaStatus {
++  const metaStatus = extractMetaStatus(item.rawPayload);
++  const status = normalizeCampaignMessageStatus(metaStatus.lastStatus, item.status);
++  const billing = resolveCampaignBillingStatus({
++    status,
++    pricingCategory: metaStatus.pricingCategory,
++  });
++  const sentAt =
++    item.createdAt instanceof Date
++      ? item.createdAt.toISOString()
++      : typeof item.createdAt === "string"
++        ? item.createdAt
++        : null;
++  return {
++    waId: item.waId,
++    templateName: item.templateName,
++    status,
++    sentAt,
++    deliveredAt: isDeliveredForCampaignBilling(status) ? metaStatus.lastStatusAt : null,
++    billable: billing.billable,
++    nonBillingReason: billing.nonBillingReason,
++    pricingCategory: metaStatus.pricingCategory,
++    pricingBillable: metaStatus.pricingBillable,
++    pricingModel: metaStatus.pricingModel,
++    conversationId: metaStatus.conversationId,
++    error:
++      item.errorBody ||
++      metaStatus.statusDetail ||
++      stringifyCampaignError(metaStatus.errorData) ||
++      stringifyCampaignError(metaStatus.errors),
++  };
++}
++
++export function buildCampaignSeedFallbackStatusItems(
++  campaign: {
++    sentCount: number;
++    blockedCount: number;
++    status: string;
++    templateName: string;
++  },
++  seed: CampaignDraftSeed
++): CampaignMetaStatus[] {
++  const sentLimit = Math.max(campaign.sentCount || 0, 0);
++  const blockedLimit = sentLimit + Math.max(campaign.blockedCount || 0, 0);
++  return seed.recipients.map((waId, index) => {
++    const wasSent = index < sentLimit;
++    const wasBlockedOrFailed = !wasSent && index < blockedLimit;
++    return {
++      waId,
++      templateName: seed.templateName || campaign.templateName,
++      status: wasSent ? "sent" : !wasBlockedOrFailed && ["sending", "scheduled"].includes(campaign.status) ? "pending" : "failed",
++      sentAt: null,
++      deliveredAt: null,
++      billable: false,
++      nonBillingReason: wasSent
++        ? "status_unconfirmed"
++        : wasBlockedOrFailed
++          ? "failed_or_blocked"
++          : ["sending", "scheduled"].includes(campaign.status) ? "awaiting_processing" : "missing_individual_history",
++      pricingCategory: null,
++      pricingBillable: null,
++      pricingModel: null,
++      conversationId: null,
++      error: wasSent
++        ? "Status Meta detalhado indisponivel; exibido a partir do historico da campanha."
++        : wasBlockedOrFailed
++          ? "Envio bloqueado ou falhou; status Meta detalhado indisponivel."
++          : ["sending", "scheduled"].includes(campaign.status) ? "Destinatário aguardando processamento; nenhuma submissão individual comprovada." : "Envio individual nao encontrado no historico preservado.",
++    };
++  });
++}
++
++export function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMetaSummary {
++  return items.reduce<CampaignMetaSummary>(
++    (acc, item) => {
++      switch (item.status) {
++        case "read":
++          acc.totalRead += 1;
++          break;
++        case "delivered":
++          acc.totalDelivered += 1;
++          break;
++        case "opt_out":
++          acc.totalOptOut += 1;
++          break;
++        case "blocked":
++          acc.totalBlocked += 1;
++          break;
++        case "skipped":
++          acc.totalSkipped += 1;
++          break;
++        case "failed":
++          acc.totalFailed += 1;
++          break;
++        case "pending":
++          acc.totalPending += 1;
++          break;
++        case "sent":
++        default:
++          acc.totalSent += 1;
++          break;
++      }
++      return acc;
++    },
++    {
++      totalSent: 0,
++      totalDelivered: 0,
++      totalRead: 0,
++      totalFailed: 0,
++      totalBlocked: 0,
++      totalOptOut: 0,
++      totalSkipped: 0,
++      totalPending: 0,
++    }
++  );
++}
++
++export function campaignRecipientIdentityCandidates(value: string) {
++  return new Set(buildCrmWhatsappIdentityCandidates([value]));
++}
++
++export function campaignRecipientIdentitiesMatch(left: Set<string>, right: Set<string>) {
++  for (const candidate of left) {
++    if (right.has(candidate)) return true;
++  }
++  return false;
++}
++
++export function campaignMetaStatusRank(status: CampaignMetaStatus["status"]) {
++  switch (status) {
++    case "read":
++      return 8;
++    case "delivered":
++      return 7;
++    case "opt_out":
++      return 6;
++    case "blocked":
++      return 5;
++    case "failed":
++      return 4;
++    case "skipped":
++      return 3;
++    case "sent":
++      return 2;
++    case "pending":
++    default:
++      return 1;
++  }
++}
++
++export function campaignMetaStatusTime(item: CampaignMetaStatus) {
++  const value = item.deliveredAt ?? item.sentAt;
++  if (!value) return 0;
++  const parsed = Date.parse(value);
++  return Number.isNaN(parsed) ? 0 : parsed;
++}
++
++export function pickCampaignRecipientStatus(items: CampaignMetaStatus[]) {
++  return items.reduce((selected, item) => {
++    const rankDifference = campaignMetaStatusRank(item.status) - campaignMetaStatusRank(selected.status);
++    if (rankDifference > 0) return item;
++    if (rankDifference === 0 && campaignMetaStatusTime(item) > campaignMetaStatusTime(selected)) return item;
++    return selected;
++  });
++}
++
++export function buildCampaignRecipientResultStatuses(params: {
++  campaign: { sentCount: number; blockedCount: number; status: string; templateName: string };
++  seed: CampaignDraftSeed;
++  resultItems: CampaignMetaStatus[];
++}) {
++  const indexedResults = params.resultItems.map((item, index) => ({
++    index,
++    item,
++    candidates: campaignRecipientIdentityCandidates(item.waId),
++  }));
++
++  const visibleItems: CampaignMetaStatus[] = [];
++  const consumedResultIndexes = new Set<number>();
++  const consumedSeedIdentities: Set<string>[] = [];
++  params.seed.recipients.forEach((waId, index) => {
++    const seedCandidates = campaignRecipientIdentityCandidates(waId);
++    if (
++      consumedSeedIdentities.some((candidates) =>
++        campaignRecipientIdentitiesMatch(candidates, seedCandidates)
++      )
++    ) {
++      return;
++    }
++    consumedSeedIdentities.push(seedCandidates);
++    const matchingResults = indexedResults.filter(
++      (result) =>
++        !consumedResultIndexes.has(result.index) &&
++        campaignRecipientIdentitiesMatch(seedCandidates, result.candidates)
++    );
++    if (matchingResults.length) {
++      visibleItems.push(pickCampaignRecipientStatus(matchingResults.map((result) => result.item)));
++      matchingResults.forEach((result) => consumedResultIndexes.add(result.index));
++      return;
++    }
++    const fallbackSeed = { ...params.seed, recipients: [waId] };
++    const sentLimit = Math.max(params.campaign.sentCount || 0, 0);
++    const blockedLimit = sentLimit + Math.max(params.campaign.blockedCount || 0, 0);
++    const sentCount = index < sentLimit ? 1 : 0;
++    const blockedCount = index >= sentLimit && index < blockedLimit ? 1 : 0;
++    visibleItems.push(
++      ...buildCampaignSeedFallbackStatusItems(
++        { ...params.campaign, sentCount, blockedCount },
++        fallbackSeed
++      )
++    );
++  });
++
++  indexedResults.forEach((result) => {
++    if (consumedResultIndexes.has(result.index)) return;
++    const matchingResults = indexedResults.filter(
++      (candidate) =>
++        !consumedResultIndexes.has(candidate.index) &&
++        campaignRecipientIdentitiesMatch(result.candidates, candidate.candidates)
++    );
++    visibleItems.push(pickCampaignRecipientStatus(matchingResults.map((candidate) => candidate.item)));
++    matchingResults.forEach((candidate) => consumedResultIndexes.add(candidate.index));
++  });
++  return visibleItems;
++}

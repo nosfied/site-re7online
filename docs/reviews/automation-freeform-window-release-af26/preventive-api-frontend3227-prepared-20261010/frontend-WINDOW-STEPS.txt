@@ -1,0 +1,95 @@
+PREPARATION / REVIEW ONLY. No stop/start/policy installation authorized in this stage.
+P=/opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-after-preventive-env-v2-20261011T002421Z
+PM=/home/deploy/.npm-global/bin/pm2
+
+POLICY / PREPARATORY PREFLIGHT (future specific installation authorization):
+bash /opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-after-preventive-env-v2-20261011T002421Z/install-window-policy.sh
+# Owner's sudo session only; archive exact old window policy. No helper/sudoers change.
+# Checks both manifests, exact configurations, root chain/hashes, CSS and return.
+# before obtains NEW two-sample root read. Archive the preparatory source capture.
+# Keep execution-authorized=false. Denial/partial installation stops this phase.
+# Permanent policy stays unchanged: active control remains automatically recoverable.
+
+AFTER VERIFIED API SWITCH ONLY:
+python3 /opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-after-preventive-env-v2-20261011T002421Z/capture-frontend-phase.py
+test -s /opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-after-preventive-env-v2-20261011T002421Z/phase-after-api-complete.private.json
+# Preserves phase-before-api; generates true phase-after-api baseline and binding manifest.
+# Refusal/partial write forbids frontend stop. No future PID is invented.
+
+WINDOW (requires separate approval; exclusivity/no daemon/boot or baseline drift):
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-after-preventive-env-v2-20261011T002421Z
+PM=/home/deploy/.npm-global/bin/pm2
+exec 9>"$P/window.lock"
+flock -n 9
+(cd "$P" && sha256sum -c scripts.sha256 && sha256sum -c bindings.sha256)
+python3 "$P/check-preparation.py"
+python3 "$P/frontend-action.py" before
+# Fresh root observation; never reuse the archived preparatory capture.
+printf 'true\n' > "$P/execution-authorized"
+python3 "$P/frontend-action.py" stop
+python3 "$P/frontend-action.py" exited
+python3 "$P/frontend-action.py" delete
+python3 "$P/frontend-action.py" start-candidate
+python3 "$P/frontend-action.py" ready-candidate
+python3 "$P/frontend-action.py" candidate
+python3 "$P/check-css.py" /opt/re7online/releases/3227b2d752110873f0eff4ee5253a6f06ca51549-front
+# Exactly one start-intent. Readiness <=30s/30 attempts; stdout/stderr/exit private.
+# Check actual CSS HTTP after readiness:
+python3 "$P/check-served-css.py"
+# REQUEST OWNER CONFIRMATION: layout/session/Inbox/CRM/Campaigns/read-only batch detail.
+# No messages/campaigns/config writes. No promotion without owner's confirmation.
+# AFTER confirmation, Deifson's sudo session executes the prepublished policy-only block:
+bash "$P/install-permanent-policy.sh"
+# Exact permanent policy archive/new hash + fresh restricted reader. No new sudo rule.
+# Old active launcher/binding were not altered. If this step denies, do not promote/save.
+python3 "$P/frontend-action.py" enable-supervision-candidate
+python3 "$P/frontend-action.py" supervised-candidate
+"$PM" save
+cp /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+python3 "$P/frontend-action.py" supervised-candidate
+printf 'false\n' > "$P/execution-authorized"
+# Compare saved/fallback config/control to candidate.tracked.config.cjs; preserve
+# all control/launcher/journal generations while referenced by active/saved/return.
+# Verify API/worker PIDs/ticks/configs, guard/scheduler/cron/boot and sessions preserved.
+
+RETURN (select by observed stage, never repeat candidate start):
+# Before source stop: gatefalse, preserve diagnostic. No return start.
+# If source stopped, still obtain exited before a successor. Unknown/survivor blocks.
+# After source exit and candidate start-intent NEVER created: skip stop/candidate-exited.
+# After ANY candidate start-intent, including early death:
+python3 "$P/frontend-action.py" stop
+python3 "$P/frontend-action.py" candidate-exited
+# NEW root observation; require ledger/tree/socket/PM2 absence, no listener/additional
+# owner, no reused PID/zombie/incomplete read. Closed port/PID zero alone insufficient.
+python3 "$P/frontend-action.py" delete
+python3 "$P/frontend-action.py" start-return
+python3 "$P/frontend-action.py" ready-return
+python3 "$P/frontend-action.py" return
+# Return is the EFFECTIVELY ACTIVE fa60 corrected, not historical9f.
+# Owner confirms restored layout/session/Inbox/CRM/Campaigns before promotion/save.
+# If permanent policy remains old, run install-permanent-policy.sh after confirmation.
+# If it is ALREADY the newed28 policy, do NOT reinstall/rearchive; run:
+python3 "$P/check-permanent-policy.py"
+python3 "$P/frontend-action.py" enable-supervision-return
+python3 "$P/frontend-action.py" supervised-return
+"$PM" save
+cp /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+python3 "$P/frontend-action.py" supervised-return
+printf 'false\n' > "$P/execution-authorized"
+# Return start fails: stop once + return-exited NEW observation; no repeat start.
+# Escalate at15min from stop; communicate state/diagnostic. No timeout bypass/kill.
+
+POLICY / PERMANENT SUPERVISION:
+# Window roles bind current daemon/boot and three controls. Drift denies; fresh
+# reviewed preparation required. New exit observations on source/candidate/return.
+# Permanent policy binds artifacts and discovers current boot/daemon on reboot,
+# with fresh incarnation nonce/control/journal. No consumed window certificate.
+# Restrictive reader failure prevents application fork and records diagnostic.
+# During this PREPARATION the old active policy/control/dump remain untouched.
+# A new permanent policy is indispensable before promotion of either new control.
+# Deifson must be available for this sudo-only step; it is not discovered after failure.
+# Partial root installation: preserve/report exact hashes/state, do not retry blindly.
+# Helpers/sudoers never change. No removal of referenced staging/active return.
+# API/worker/guard/scheduler/cron/boot/DB/auth untouched throughout frontend window.
+# No containment nft, backend stop, sends or repairs in this frontend-only procedure.

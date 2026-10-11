@@ -1,0 +1,32 @@
+[
+  {
+    "compiled": "dist/campaigns/campaignRunner.js",
+    "imports": [],
+    "nonLiteralRequireExpressions": []
+  },
+  {
+    "compiled": "dist/campaigns/campaignAcceptedResult.js",
+    "imports": [],
+    "nonLiteralRequireExpressions": []
+  },
+  {
+    "compiled": "dist/whatsapp/webhook.controller.js",
+    "imports": [],
+    "nonLiteralRequireExpressions": []
+  },
+  {
+    "compiled": "dist/campaigns/campaignProviderStatusPersistence.js",
+    "imports": [],
+    "nonLiteralRequireExpressions": []
+  },
+  {
+    "compiled": "dist/http/routes.js",
+    "imports": [],
+    "nonLiteralRequireExpressions": []
+  },
+  {
+    "compiled": "dist/campaigns/campaignRecipientResultTruth.js",
+    "imports": [],
+    "nonLiteralRequireExpressions": []
+  }
+]

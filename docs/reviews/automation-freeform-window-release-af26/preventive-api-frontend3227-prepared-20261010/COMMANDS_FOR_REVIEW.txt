@@ -1,0 +1,115 @@
+REVIEW ONLY / NOT AUTHORIZED TO EXECUTE IN THIS PREPARATION.
+No helpers/sudoers change. Deifson must be present for the three policy-only
+installations and any fresh post-unfence recovery policy.
+Stop at the first denial. Preserve stdout/stderr/exit privately. Never repeat a
+start-intent, policy archive, consumed proof or uncertain SQL/ledger action.
+
+A. FUTURE API POLICY INSTALLATION (Deifson's sudo session; password never in chat)
+bash /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-preventive-env-v2-20261011T002421Z/install-api-window-policy.sh
+Expected POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE.
+If archive already exists or installation is partial: inspect exact root helper/
+policy/rule hashes and phase, preserve diagnostic, stop. Do not rerun or overwrite.
+
+B. READS IMMEDIATELY BEFORE THE FUTURE API WINDOW
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-preventive-env-v2-20261011T002421Z
+python3 "$P/verify-api-package.py"
+python3 "$P/window/ecosystem_contract.py" validate "$P"
+python3 "$P/window/baseline_contract.py" "$P"
+for mode in switch return return-partial; do (cd "$P/$mode" && sha256sum -c scripts.sha256); done
+# Read actual env/cwd/script/interpreter for all three current PM2 entries,
+# validate exact frozen global inventory/receipt/guard/archived acknowledgement,
+# proxy live exe/package/topology, sessions, active locks/backends, cron/boot/dumps,
+# disk available to postgres/deploy + WAL and backup age/RPO. Save limited diagnostics.
+# Do not generate a delegated preflight proof ahead of the sequencer's close step.
+# Do not refresh bindings to accept divergence. Denial requires reviewed preparation.
+
+C. API EXECUTION (only after consolidated owner decision and all B requirements)
+python3 - "$P" <<'CHECK'
+import hashlib,json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);w=p/'window';sys.path.insert(0,str(w))
+from baseline_contract import validate_preparation
+from sequencer import Bridge
+validate_preparation(p)
+expected=(w/'privileged-policy.sha256').read_text().strip()
+assert expected=='d3bd2043dfe56354165938075f03f6f180bf085b139b34f9c5abfd42adb4b6f7'
+assert json.loads(Bridge(p).privileged('inspect'))=={'policySha256':expected,'phase':None,'sourceProcessesAlive':True}
+g=w/'execution-gates.private.json';v=json.loads(g.read_text())
+assert set(v)=={'ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved'} and all(x is False for x in v.values())
+# Each flag below asserts a requirement already reviewed in A/B; not a substitute.
+g.write_text(json.dumps({k:True for k in v},sort_keys=True)+'\n')
+CHECK
+python3 "$P/window/sequencer.py" "$P"
+# Sequencer owns global + attempt locks. It handles fenced abort/partial/full return.
+# Source guard already closed38: close.cjs is idempotent, no CAS/open/new generation.
+# Check complete/switch + correct actual candidate; return means API remains a26.
+# Never proceed to frontend phase if API success certificate is absent.
+# Worker only stopped/restarted by V4 for DB ownership; no functional worker change.
+
+D. POST-UNFENCE API FAILURE (only when sequencer reports this observed stage)
+# Keep guard closed38. Save complete private diagnosis; no restart to test.
+C=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-preventive-20261011T002421Z
+python3 "$P/window/prepare_post_unfence_return.py" "$P" "$C"
+# Generator obtains fresh actual API/frontend/daemon and worker capture OR reviewed
+# proven absence of last worker (PID/ticks/release/tree/sockets/capture provenance).
+# It must produce FRESH_RETURN_PREPARATION_PASS, new policy/hash and false gates.
+# Deifson installs fresh policy; bytes depend on actual failure identities:
+bash "$P/install-post-unfence-return-policy.sh"
+# Exact new hash read from generator's privileged-policy.sha256; inspect checks it.
+# All gate prerequisites including backup/frozen state must be rechecked for C.
+# Explicitly approve all five already-authorized return requirements, only after PASS:
+python3 - "$C" <<'CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);w=p/'window';sys.path.insert(0,str(w))
+from baseline_contract import validate_preparation
+from sequencer import Bridge
+validate_preparation(p,['return'])
+e=(w/'privileged-policy.sha256').read_text().strip()
+assert json.loads(Bridge(p).privileged('inspect'))=={'policySha256':e,'phase':None,'sourceProcessesAlive':True}
+f=w/'execution-gates.private.json';v=json.loads(f.read_text())
+assert set(v)=={'ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved'} and all(x is False for x in v.values())
+f.write_text(json.dumps({k:True for k in v},sort_keys=True)+'\n')
+CHECK
+python3 "$C/window/sequencer.py" "$C" --post-unfence-return
+# New containment/exit/db certificates/owner-set proof precede successors. Helper
+# unavailable, survivor/substitute, ambiguous identity or incomplete observation DENY.
+# No fresh policy installation guessed during downtime: Deifson is required here.
+
+E. FRONTEND PHASE BASELINE (only after API complete/switch)
+F=/opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-after-preventive-env-v2-20261011T002421Z
+python3 "$F/capture-frontend-phase.py"
+test -s "$F/phase-after-api-complete.private.json"
+# Archives phase-before-api; fresh actual API/worker IDs + saved/fallback, preserved
+# frontend/daemon/boot/guard/cron. Partial capture/denial forbids frontend stop.
+# Do not substitute success expectations after a V4 return. Keep gate false.
+
+F. FRONTEND WINDOW POLICY + PREPARATORY PREFLIGHT (Deifson's sudo session)
+bash "$F/install-window-policy.sh"
+# Old policy archived, helpers/rules unchanged; fresh source preparatory root capture
+# archived, execution-authorized=false. Never reuse it in any exit gate.
+
+G. FRONTEND EXECUTION + PROMOTION/RETURN
+# Use full exact staged WINDOW-STEPS.txt (published as frontend-WINDOW-STEPS.txt).
+# Steps are sequential, not one pasted unconditional shell block:
+#  - exclusive lock, fresh before/root, gate true;
+#  - stop source once, new exited gate, delete, start candidate once;
+#  - bounded readiness <=30s/30 attempts, identity and served-CSS checks;
+#  - OWNER read-only confirmation of layout/session/Inbox/CRM/Campaigns;
+#  - only then Deifson runs:
+bash "$F/install-permanent-policy.sh"
+#  - enable-supervision-candidate, supervised-candidate, PM2 save/fallback;
+#  - gate false and preserved-component checks.
+# Failure: select exact return branch in WINDOW-STEPS.txt by intent/stage.
+# Any candidate intent -> stop once -> candidate-exited NEW root read -> single
+# start-return fa60 -> readiness/identity/CSS -> OWNER check -> promotion/save.
+# If permanent policy already changed do not reinstall; check-permanent-policy.py.
+# Source/candidate/return survivors or incomplete observations block successor.
+
+H. COMPLETION
+# Confirm effective versions, owner-visible screens, DB/sessions/controlHTTP,
+# guard closed38/task archive/receipt/job suspension/five unsubmitted positions,
+# preserved frontend during API, API/worker during frontend, restored cron/boot/nft,
+# saved/fallback equality and active launcher/policy references.
+# Escalate at15min from containment/stop; no bypass/kill/automatic guard opening.
+# No send/claim/replay/repair/ack/job resume. Technical deploy != functional acceptance.

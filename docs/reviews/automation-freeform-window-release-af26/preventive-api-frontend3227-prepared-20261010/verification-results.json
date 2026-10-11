@@ -1,0 +1,86 @@
+{
+  "node": "20.20.0",
+  "compiledTests": [
+    {
+      "test": "accepted",
+      "exitCode": 0,
+      "compiled": [
+        "campaignAcceptedResult.test.js"
+      ]
+    },
+    {
+      "test": "webhook",
+      "exitCode": 0,
+      "compiled": [
+        "campaignAcceptedWebhookCrmBoundary.test.js"
+      ]
+    },
+    {
+      "test": "truth",
+      "exitCode": 0,
+      "compiled": [
+        "campaignRecipientResultTruth.test.js"
+      ]
+    }
+  ],
+  "compiledRuntimeFilesIdentical": 264,
+  "frozenWork": {
+    "postgresqlReal": true,
+    "compiledProducerReal": true,
+    "negativeInjections": 18,
+    "providers": false
+  },
+  "frontendPhaseBoundary": {
+    "syntheticNegativeCases": 8,
+    "earlyActualProducerDenied": true,
+    "actualPostDeploymentCapture": "NOT EXERCISED: requires future successful API window"
+  },
+  "pm2Environment": {
+    "realNode": "20.20.0",
+    "realPM2": "6.0.14",
+    "mode": "cluster_mode",
+    "effectiveV4Checker": true,
+    "positiveAndWrongProjectionNegative": true
+  },
+  "liveRead": {
+    "utcStart": "2026-10-11T01:40:19.717449+00:00",
+    "utcEnd": "2026-10-11T01:40:22.351487+00:00",
+    "processes": [
+      {
+        "name": "re7-admin-front",
+        "pid": 3438948,
+        "ticks": "2120147745",
+        "restarts": 0
+      },
+      {
+        "name": "re7-whatsapp-agent",
+        "pid": 3625739,
+        "ticks": "2128115907",
+        "restarts": 0
+      },
+      {
+        "name": "re7-whatsapp-web-worker",
+        "pid": 3625960,
+        "ticks": "2128116272",
+        "restarts": 0
+      }
+    ],
+    "guardOpen": false,
+    "guardGeneration": 38,
+    "tasks": 0,
+    "markers": [
+      false,
+      false
+    ],
+    "gates": {
+      "artifactsVerified": false,
+      "discrepanciesResolved": false,
+      "ownerAuthorized": false,
+      "preflightReviewed": false,
+      "restoreVerified": false
+    },
+    "availableBytes": 2357350400,
+    "availableInodes": 6861333
+  },
+  "scope": "preparation only, no installation/start/provider/recovery"
+}
