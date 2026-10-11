@@ -1,0 +1,99 @@
+{
+  "status": "LOCAL VALIDATED / REVIEW READY / NOT DEPLOYED",
+  "baseCommit": "2c28e6e7de1e5372e1804d16d45c638774d81a8f",
+  "runtime": "Node 20.20.0",
+  "database": "PostgreSQL 16.15, synthetic localhost database only",
+  "build": {
+    "command": "tsc -p apps/whatsapp-agent/tsconfig.json --outDir /tmp/re7-list-truth-compiled",
+    "exitCode": 0,
+    "diagnostics": 0
+  },
+  "proofs": {
+    "baselineRegression": {
+      "result": "EXPECTED FAIL",
+      "expectedSentCount": 6,
+      "actualSentCount": 0,
+      "baselineSourceSha256": "ccf8eee93dd92b2fcc2423ec683c23f0f837087a61e0982e0e20ad51ce040ee6"
+    },
+    "newPostgresTests": {
+      "pass": 9,
+      "fail": 0
+    },
+    "existingFailed131026Regression": {
+      "pass": 1,
+      "fail": 0
+    },
+    "browser": {
+      "status": "PASS",
+      "cases": [
+        {
+          "name": "Initial list presents six results / eleven recipients from actual synthetic SQL projection",
+          "result": "PASS"
+        },
+        {
+          "name": "Detail merges into the table without reverting counts; six reported delivered and five pending",
+          "result": "PASS"
+        },
+        {
+          "name": "New polling retains correct counters after detail",
+          "result": "PASS"
+        },
+        {
+          "name": "Existing sending filter preserves projected counts",
+          "result": "PASS"
+        }
+      ],
+      "apiRequests": 11,
+      "methods": [
+        "GET"
+      ],
+      "unexpected": 0,
+      "exceptions": 0,
+      "assets": {
+        "result": "PASS",
+        "computed": {
+          "display": "flex",
+          "gap": "24px",
+          "padding": "24px",
+          "fontSize": "14px",
+          "borderRadius": "16px"
+        },
+        "faults": []
+      },
+      "assetReadinessBudgetMs": 10000,
+      "initialIncompleteAssetObservations": 0
+    }
+  },
+  "files": {
+    "apps/whatsapp-agent/src/http/routes.ts": "b3efda9f79774251fc18b7c386d18772ed6b877711ea043ed3ab279a4a9dabb6",
+    "apps/whatsapp-agent/src/campaigns/campaignListResultTruth.test.ts": "2db4bcd24eacf7b37838fce9297d1dc8ef0fba7c10a1a85bfd504163e2751f7c",
+    "tests/browser/campaignListResultTruth.mjs": "b5f91c18488a74cdf5f94f6dbebb68899c34ca75d7e264936f2a697921842cf1"
+  },
+  "compiled": {
+    "http/routes.js": "af8b12ad469ad461394087a35a7af857c90ec770f0d7874cadd5ae0a7f88951b",
+    "campaigns/campaignRecipientResultTruth.js": "43a23008d5ccf86cfe880b91edce3030d1fbc66deee2d17b4cc68aea6136bfe2"
+  },
+  "reusedFrontend": {
+    "sourceCommit": "3227b2d7",
+    "tarSha256": "9b54548e4a7763f5078ae0433aceb43a37567eccd988814dd82f2fab97229319",
+    "BUILD_ID": "8OqIZZxaW7_ogf6h7AVoe",
+    "rebuild": false
+  },
+  "productionReadOrMutation": false,
+  "functionalDelta": {
+    "api": [
+      "http/routes.js"
+    ],
+    "workerMinimum": [],
+    "frontend": [],
+    "schema": []
+  },
+  "limits": [
+    "No productive acceptance of the corrected payload yet",
+    "No new sender, webhook, scheduler, reconciliation or recovery test in production",
+    "Local query bound is <=8 SQL reads for 2 and 32 rows; not a production load benchmark",
+    "Known planned audience is distinct from materialized audience and individual provider outcomes"
+  ],
+  "patchSha256": "b6b0a6c264a02467647f73f577a817af0e405c0d4cadbcd6c4ddaf00712fb909",
+  "patchFormat": "git diff --unified=0; apply with git apply --unidiff-zero against exact baseline source"
+}

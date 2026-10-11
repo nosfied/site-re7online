@@ -1,5 +1,7 @@
 # API preventiva — aceite discriminado, 11/10/2026
 
+**Complemento de revisão local — 11/10.** [Correção do FAIL da lista, hashes e provas](../campaign-list-result-truth-20261011/README.md):10 provas PostgreSQL isolado e4 cenários de browser/PASS em Node20. Lista/detalhe/polling agora projetam6delivered+5pending por vínculo explícito, com público previsto/materializado separado, sem dependência de recibo ou consulta de detalhe por linha. Ajuste somente API/read models; frontend3227 e worker preservados. **NOT DEPLOYED:** a matriz produtiva abaixo continua válida no estado observado; critério3 tem solução local pronta para revisão, mas não aceite produtivo do payload corrigido. Critérios1/2 não foram reabertos nem reatribuídos aos novos testes. Nenhuma nova leitura/mutação produtiva nesta tarefa.
+
 **ACEITAÇÃO/WEBHOOK: ACEITOS NO ALCANCE DAS PROVAS REVISADAS E DOS BYTES ATIVOS. RESULT TRUTH: PASS NOS DETALHES, PENDÊNCIA ESPECÍFICA NA LISTAGEM.** API permanece DEPLOYED TECHNICALLY; não afirmar aceite integral de todas as apresentações. Frontend3227 concluído/owner confirmou telas; recuperação.6 e setembro CLOSED preservados.
 
 Referência inicial `d7b89f6c51073be5c356381095dd75b8012f1780`. Nenhum envio, webhook sintético/replay produtivo, abertura, retomada, alteração de dados/configuração, instalação ou restart. Não houve build ou repetição de testes: provas existentes reutilizadas no seu alcance original.

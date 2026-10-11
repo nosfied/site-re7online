@@ -36150,144 +36150,128 @@ async function buildContactTimelinePayload(
   };
 }
 
+// Page-scoped sources: the list reuses the recipient projector without loading
+// CRM presentation or querying a detail for every row. Never truncate outcomes.
+type CampaignReadSources = {
+  outboundMessages: Array<{ waId: string; messageId: string | null; templateName: string | null;
+    status: string; errorBody: string | null; rawPayload: Prisma.JsonValue | null; createdAt: Date }>;
+  events: Array<{ messageId: string | null; waId: string | null; eventName: string;
+    payloadJson: Prisma.JsonValue | null; createdAt: Date }>;
+};
+
+async function loadCampaignReadSources(prisma: ReturnType<typeof getPrisma>, clientId: string, ids: string[]) {
+  const sources: CampaignReadSources = { outboundMessages: [], events: [] };
+  // Bound predicates and SQL pages; all pages are consumed, not silently capped.
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const group = ids.slice(offset, offset + 100);
+    let cursor: string | undefined;
+    do {
+      const page: Array<CampaignReadSources["outboundMessages"][number] & { id: string }> = await prisma.outboundMessage.findMany({
+        where: { clientId, type: "TEMPLATE", OR: group.flatMap(id => [
+          { rawPayload: { path: ["campaignId"], equals: id } },
+          { messageId: { startsWith: `campaign.${id}.` } },
+        ]) },
+        orderBy: { id: "asc" }, take: 1000,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        select: { id: true, waId: true, messageId: true, templateName: true,
+          status: true, errorBody: true, rawPayload: true, createdAt: true },
+      });
+      sources.outboundMessages.push(...page);
+      cursor = page.length === 1000 ? page[page.length - 1].id : undefined;
+    } while (cursor);
+    cursor = undefined;
+    do {
+      const page: Array<CampaignReadSources["events"][number] & { id: string }> = await prisma.event.findMany({
+        where: { clientId, messageId: { in: group }, eventName: { in: [
+          "campaign.seed.saved", CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT, "campaign.recipient.import_blocked",
+        ] } },
+        orderBy: { id: "asc" }, take: 1000,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        select: { id: true, messageId: true, waId: true, eventName: true, payloadJson: true, createdAt: true },
+      });
+      sources.events.push(...page);
+      cursor = page.length === 1000 ? page[page.length - 1].id : undefined;
+    } while (cursor);
+  }
+  return sources;
+}
+
+function campaignResultProjection(
+  campaign: { totalRecipients: number; sentCount: number; blockedCount: number },
+  summary: CampaignMetaSummary,
+  plannedRecipientCount = campaign.totalRecipients,
+  materializedRecipientCount = campaign.totalRecipients,
+) {
+  const knownSuccesses = summary.totalSent + summary.totalDelivered + summary.totalRead;
+  const explicitBlocked = summary.totalBlocked + summary.totalOptOut + summary.totalSkipped;
+  const hasResults = knownSuccesses + explicitBlocked + summary.totalFailed + summary.totalPending > 0;
+  const sentCount = hasResults ? knownSuccesses : campaign.sentCount;
+  const blockedCount = Math.max(campaign.blockedCount, explicitBlocked);
+  const totalRecipients = Math.max(campaign.totalRecipients,
+    sentCount + explicitBlocked + summary.totalFailed + summary.totalPending);
+  return {
+    totalRecipients, sentCount, blockedCount, plannedRecipientCount, materializedRecipientCount,
+    progress: { totalRecipients, sentCount, blockedCount, failedCount: summary.totalFailed,
+      pendingCount: Math.max(summary.totalPending, totalRecipients - sentCount - blockedCount - summary.totalFailed, 0) },
+  };
+}
+
+function campaignSetResultProjection(
+  links: Array<{ campaign: { totalRecipients: number; sentCount: number; blockedCount: number }; recipientCount: number }>,
+  summary: CampaignMetaSummary,
+  plannedRecipientCount: number,
+) {
+  const materializedRecipientCount = links.reduce((sum, link) => sum + link.campaign.totalRecipients, 0);
+  const executionAudience = links.reduce((sum, link) => sum + (link.campaign.totalRecipients || link.recipientCount), 0);
+  return campaignResultProjection({ totalRecipients: executionAudience || plannedRecipientCount,
+    sentCount: links.reduce((sum, link) => sum + link.campaign.sentCount, 0),
+    blockedCount: links.reduce((sum, link) => sum + link.campaign.blockedCount, 0),
+  }, summary, plannedRecipientCount, materializedRecipientCount);
+}
+
 export async function buildCampaignListPayload(
   prisma: ReturnType<typeof getPrisma>,
   params: { clientId: string; limit: number }
 ) {
   const campaigns = await listCampaigns({ clientId: params.clientId, limit: params.limit });
-  const campaignIds = new Set(campaigns.map((item) => item.id));
-  const oldestCreatedAt = campaigns.reduce<Date | null>((min, item) => {
-    if (!min || item.createdAt < min) return item.createdAt;
-    return min;
-  }, null);
-  const outboundMessages =
-    oldestCreatedAt && campaignIds.size > 0
-      ? await prisma.outboundMessage.findMany({
-          where: {
-            clientId: params.clientId,
-            type: "TEMPLATE",
-            createdAt: { gte: oldestCreatedAt },
-          },
-          select: {
-            waId: true,
-            messageId: true,
-            templateName: true,
-            status: true,
-            errorBody: true,
-            rawPayload: true,
-          },
-        })
-      : [];
-  const campaignMetaMap = new Map<string, CampaignMetaSummary>();
-  for (const outbound of outboundMessages) {
-    const outboundCampaignId = resolveOutboundCampaignId(outbound);
-    if (!outboundCampaignId || !campaignIds.has(outboundCampaignId)) continue;
-    const nextItem = buildCampaignMetaStatusItem(outbound);
-    const current = campaignMetaMap.get(outboundCampaignId) ?? {
-      totalSent: 0,
-      totalDelivered: 0,
-      totalRead: 0,
-      totalFailed: 0,
-      totalBlocked: 0,
-      totalOptOut: 0,
-      totalSkipped: 0,
-      totalPending: 0,
-    };
-    switch (nextItem.status) {
-      case "read":
-        current.totalRead += 1;
-        break;
-      case "delivered":
-        current.totalDelivered += 1;
-        break;
-      case "opt_out":
-        current.totalOptOut += 1;
-        break;
-      case "failed":
-        current.totalFailed += 1;
-        break;
-      case "sent":
-      default:
-        current.totalSent += 1;
-        break;
-    }
-    campaignMetaMap.set(outboundCampaignId, current);
-  }
-  const seedEvents =
-    campaignIds.size > 0
-      ? await prisma.event.findMany({
-          where: {
-            clientId: params.clientId,
-            eventName: "campaign.seed.saved",
-            messageId: { in: Array.from(campaignIds) },
-          },
-          orderBy: { createdAt: "desc" },
-          select: { messageId: true, payloadJson: true },
-        })
-      : [];
-  const campaignSeedModeMap = new Map<
-    string,
-    {
-      selectionMode: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
-      dynamicFilter: CampaignDynamicCrmFilter | null;
-    }
-  >();
-  for (const event of seedEvents) {
-    if (!event.messageId || campaignSeedModeMap.has(event.messageId)) continue;
-    const payload =
-      event.payloadJson && typeof event.payloadJson === "object" && !Array.isArray(event.payloadJson)
-        ? (event.payloadJson as Record<string, unknown>)
-        : {};
-    campaignSeedModeMap.set(event.messageId, {
-      selectionMode: normalizeCampaignSelectionMode(payload.selectionMode),
-      dynamicFilter: extractCampaignDynamicCrmFilter(payload.dynamicFilter),
-    });
-  }
-  const queueMap = await buildCampaignExecutionQueueMap(prisma, {
-    clientId: params.clientId,
-    campaignIds: Array.from(campaignIds),
+  if (!campaigns.length) return { ok: true, count: 0, items: [] };
+  const ids = campaigns.map(item => item.id);
+  const batches = await prisma.campaignExecutionBatch.findMany({
+    where: { clientId: params.clientId, OR: [
+      { idempotencyKey: { in: ids.map(id => `dynamic:${id}`) } },
+      { campaigns: { some: { clientId: params.clientId, campaignId: { in: ids } } } },
+    ] },
+    include: { campaigns: { where: { clientId: params.clientId, campaign: { clientId: params.clientId } },
+      include: { campaign: true }, orderBy: { chunkIndex: "asc" } } },
   });
-  // A controller has no submissions of its own. Reconciled sets reuse the child's
-  // recipient read model; assignment replaces totals and cannot count a replay twice.
-  const receipts = await prisma.event.findMany({ where: { clientId: params.clientId,
-    eventName: 'campaign.accepted_failure.reconciled', OR: [{ messageId: { in: [...campaignIds] } },
-      ...[...campaignIds].map(id => ({ payloadJson: { path: ['bindings', 'parentCampaignId'], equals: id } }))] }, select: { payloadJson: true } });
-  for (const receipt of receipts) {
-    const payload = receipt.payloadJson as { bindings?: { campaignId?: string; parentCampaignId?: string } } | null;
-    const ids = payload?.bindings;
-    if (!ids?.campaignId || !ids.parentCampaignId) continue;
-    const child = await getCampaignById(ids.campaignId, params.clientId);
-    if (!child) continue;
-    const model = await buildCampaignRecipientReadModel(prisma, child, params.clientId);
-    campaignMetaMap.set(ids.campaignId, model.metaSummary);
-    if (campaignIds.has(ids.parentCampaignId)) campaignMetaMap.set(ids.parentCampaignId, model.metaSummary);
-  }
-  return {
-    ok: true,
-    count: campaigns.length,
-    items: campaigns.map((campaign) => {
-      const seedMode = campaignSeedModeMap.get(campaign.id);
-      return {
-        ...serializeCampaign(campaign),
-        progress: { ...serializeCampaign(campaign).progress,
-          failedCount: campaignMetaMap.get(campaign.id)?.totalFailed ?? 0,
-          pendingCount: Math.max(campaign.totalRecipients - campaign.sentCount - campaign.blockedCount - (campaignMetaMap.get(campaign.id)?.totalFailed ?? 0), 0) },
-        executionQueue: queueMap.get(campaign.id) ?? null,
-        selectionMode: seedMode?.selectionMode ?? "STATIC_RECIPIENTS",
-        dynamicFilter: seedMode?.dynamicFilter ?? null,
-        metaSummary: campaignMetaMap.get(campaign.id) ?? {
-          totalSent: 0,
-          totalDelivered: 0,
-          totalRead: 0,
-          totalFailed: 0,
-          totalBlocked: 0,
-          totalOptOut: 0,
-          totalSkipped: 0,
-          totalPending: 0,
-        },
-      };
-    }),
-  };
+  const scoped = new Map(campaigns.map(item => [item.id, item]));
+  for (const batch of batches) for (const link of batch.campaigns) scoped.set(link.campaignId, link.campaign);
+  const sources = await loadCampaignReadSources(prisma, params.clientId, [...scoped.keys()]);
+  const models = new Map<string, Awaited<ReturnType<typeof buildCampaignRecipientReadModel>>>();
+  for (const campaign of scoped.values()) models.set(campaign.id,
+    await buildCampaignRecipientReadModel(prisma, campaign, params.clientId, sources));
+  const queueMap = await buildCampaignExecutionQueueMap(prisma, { clientId: params.clientId, campaignIds: ids });
+  return { ok: true, count: campaigns.length, items: campaigns.map(campaign => {
+    const model = models.get(campaign.id)!;
+    const batch = batches.find(item => item.idempotencyKey === `dynamic:${campaign.id}`
+      && !item.campaigns.some(link => link.campaignId === campaign.id));
+    // Explicit tenant-scoped membership, never receipts, names or recipients.
+    const children = batch ? [...new Map(batch.campaigns.map(link => [link.campaignId, link])).values()] : [];
+    const metaSummary = batch
+      ? summarizeCampaignMetaStatuses(children.flatMap(link => models.get(link.campaignId)!.enrichedMessagesMetaStatus))
+      : model.metaSummary;
+    const membership = batches.flatMap(item => item.campaigns).find(link => link.campaignId === campaign.id);
+    const planned = batch ? batch.totalRecipients || children.reduce((sum, link) => sum + link.recipientCount, 0) || campaign.totalRecipients
+      : membership?.recipientCount || campaign.totalRecipients;
+    const projection = batch ? campaignSetResultProjection(children, metaSummary, planned)
+      : campaignResultProjection({ ...campaign, totalRecipients: campaign.totalRecipients || planned }, metaSummary, planned, campaign.totalRecipients);
+    return { ...serializeCampaign(campaign), ...projection,
+      // Controller exclusions are selection evidence, not execution outcomes.
+      audienceBlockedCount: batch ? batch.blockedCount : null,
+      executionQueue: queueMap.get(campaign.id) ?? null,
+      selectionMode: model.draftSeed.selectionMode, dynamicFilter: model.draftSeed.dynamicFilter ?? null,
+      metaSummary };
+  }) };
 }
 
 async function buildCampaignExecutionQueueMap(
@@ -36357,7 +36341,7 @@ async function buildCampaignExecutionQueueMap(
 
 export async function buildCampaignExecutionBatchSummary(
   prisma: ReturnType<typeof getPrisma>,
-  params: { clientId: string; campaignId: string }
+  params: { clientId: string; campaignId: string; plannedRecipientCount?: number }
 ) {
   const membership = await prisma.campaignExecutionBatchCampaign.findUnique({
     where: {
@@ -36380,6 +36364,7 @@ export async function buildCampaignExecutionBatchSummary(
     },
     include: {
       campaigns: {
+        where: { clientId: params.clientId, campaign: { clientId: params.clientId } },
         include: {
           campaign: {
             select: {
@@ -36409,14 +36394,16 @@ export async function buildCampaignExecutionBatchSummary(
   }
   const chunks = batch.campaigns.map((item) => {
     const queue = queueMap.get(item.campaignId) ?? null;
+    const summary = recipientModels.get(item.campaignId)?.metaSummary ?? summarizeCampaignMetaStatuses([]);
+    const projection = campaignResultProjection(item.campaign, summary);
     return {
       campaignId: item.campaignId,
       name: item.campaign.name,
       status: item.campaign.status,
       chunkIndex: item.chunkIndex,
       recipientCount: item.recipientCount,
-      sentCount: item.campaign.sentCount,
-      blockedCount: item.campaign.blockedCount,
+      sentCount: projection.sentCount,
+      blockedCount: projection.blockedCount,
       failedCount: recipientModels.get(item.campaignId)?.metaSummary.totalFailed ?? 0,
       totalRecipients: item.campaign.totalRecipients,
       queueStatus: queue?.status ?? null,
@@ -36427,10 +36414,10 @@ export async function buildCampaignExecutionBatchSummary(
     };
   });
   const totalRecipients = chunks.reduce((sum, item) => sum + item.totalRecipients, 0);
-  const sentCount = chunks.reduce((sum, item) => sum + item.sentCount, 0);
-  const blockedCount = chunks.reduce((sum, item) => sum + item.blockedCount, 0);
-  const failedCount = chunks.reduce((sum, item) => sum + item.failedCount, 0);
   const resultStatuses = [...recipientModels.values()].flatMap(item => item.enrichedMessagesMetaStatus);
+  const metaSummary = summarizeCampaignMetaStatuses(resultStatuses);
+  const resultProjection = campaignSetResultProjection(batch.campaigns, metaSummary,
+    batch.totalRecipients || chunks.reduce((sum, item) => sum + item.recipientCount, 0) || (!membership ? params.plannedRecipientCount ?? 0 : 0));
   const completedChunks = chunks.filter((item) => item.status === "completed").length;
   const runningChunks = chunks.filter((item) => item.queueStatus === "running" || item.status === "sending").length;
   const queuedChunks = chunks.filter((item) => item.queueStatus === "queued" || item.status === "scheduled").length;
@@ -36445,18 +36432,16 @@ export async function buildCampaignExecutionBatchSummary(
     effectiveStartedAt: batch.effectiveStartedAt?.toISOString() ?? null,
     completedAt: batch.completedAt?.toISOString() ?? null,
     totalRecipients: batch.totalRecipients || totalRecipients,
-    blockedCount: batch.blockedCount || blockedCount,
+    blockedCount: batch.blockedCount || resultProjection.blockedCount,
     chunkCount: batch.chunkCount || chunks.length,
     currentChunkIndex: batch.currentChunkIndex ?? null,
     failureReason: batch.failureReason ?? null,
-    metaSummary: summarizeCampaignMetaStatuses(resultStatuses),
+    metaSummary,
+    plannedRecipientCount: resultProjection.plannedRecipientCount,
+    materializedRecipientCount: resultProjection.materializedRecipientCount,
     messagesMetaStatus: resultStatuses,
     progress: {
-      totalRecipients,
-      sentCount,
-      blockedCount,
-      failedCount,
-      pendingCount: Math.max(totalRecipients - sentCount - blockedCount - failedCount, 0),
+      ...resultProjection.progress,
       completedChunks,
       runningChunks,
       queuedChunks,
@@ -36468,41 +36453,15 @@ export async function buildCampaignExecutionBatchSummary(
 
 async function buildCampaignRecipientReadModel(
   prisma: ReturnType<typeof getPrisma>,
-  campaign: NonNullable<Awaited<ReturnType<typeof getCampaignById>>>, clientId: string
+  campaign: NonNullable<Awaited<ReturnType<typeof getCampaignById>>>, clientId: string,
+  sources?: CampaignReadSources
 ) {
-  const outboundMessages = await prisma.outboundMessage.findMany({
-    where: {
-      clientId: clientId,
-      type: "TEMPLATE",
-      createdAt: { gte: campaign.createdAt },
-    },
-    orderBy: { createdAt: "asc" },
-    select: {
-      waId: true,
-      messageId: true,
-      templateName: true,
-      status: true,
-      errorBody: true,
-      rawPayload: true,
-      createdAt: true,
-    },
-  });
+  const loaded = sources ?? await loadCampaignReadSources(prisma, clientId, [campaign.id]);
+  const outboundMessages = loaded.outboundMessages.filter(item => resolveOutboundCampaignId(item) === campaign.id);
   const messagesMetaStatus = outboundMessages
     .filter((item) => resolveOutboundCampaignId(item) === campaign.id)
     .map(buildCampaignMetaStatusItem);
-  const optOutBlockEvents = await prisma.event.findMany({
-    where: {
-      clientId: clientId,
-      eventName: CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT,
-      messageId: campaign.id,
-    },
-    orderBy: { createdAt: "asc" },
-    select: {
-      waId: true,
-      payloadJson: true,
-      createdAt: true,
-    },
-  });
+  const optOutBlockEvents = loaded.events.filter(item => item.messageId === campaign.id && item.eventName === CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT);
   const optOutMetaStatus = optOutBlockEvents
     .map((item) => buildCampaignOptOutStatusItem(item, campaign.templateName))
     .filter((item): item is CampaignMetaStatus => Boolean(item));
@@ -36512,16 +36471,9 @@ async function buildCampaignRecipientReadModel(
     campaignName: campaign.name,
     templateName: campaign.templateName,
     outboundMessages,
+    persistedSeed: loaded.events.filter(item => item.messageId === campaign.id && item.eventName === "campaign.seed.saved").sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null,
   });
-  const importBlockEvents = await prisma.event.findMany({
-    where: {
-      clientId: clientId,
-      eventName: "campaign.recipient.import_blocked",
-      messageId: campaign.id,
-    },
-    orderBy: { createdAt: "asc" },
-    select: { payloadJson: true, createdAt: true },
-  });
+  const importBlockEvents = loaded.events.filter(item => item.messageId === campaign.id && item.eventName === "campaign.recipient.import_blocked");
   const importBlockedMetaStatus: CampaignMetaStatus[] = importBlockEvents.map((event) => {
     const payload =
       event.payloadJson && typeof event.payloadJson === "object" && !Array.isArray(event.payloadJson)
@@ -36588,6 +36540,8 @@ async function buildCampaignRecipientReadModel(
           seed: draftSeed,
           resultItems,
         });
+  if (sources) return { draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus: visibleMessagesMetaStatus,
+    metaSummary: summarizeCampaignMetaStatuses(visibleMessagesMetaStatus) };
   const client = await prisma.client.findUnique({
     where: { id: clientId },
     select: { clientKey: true },
@@ -36621,21 +36575,27 @@ export async function buildCampaignDetailPayload(
   const executionBatch = await buildCampaignExecutionBatchSummary(prisma, {
     clientId: params.clientId,
     campaignId: campaign.id,
+    plannedRecipientCount: campaign.totalRecipients,
   });
+  const isController = executionBatch && !executionBatch.chunks.some(chunk => chunk.campaignId === campaign.id);
+  const summary = isController ? executionBatch.metaSummary : readModel.metaSummary;
+  const membership = executionBatch?.chunks.find(chunk => chunk.campaignId === campaign.id);
+  const planned = membership?.recipientCount || campaign.totalRecipients;
+  const projection = isController
+    ? { totalRecipients: executionBatch.progress.totalRecipients, sentCount: executionBatch.progress.sentCount,
+        blockedCount: executionBatch.progress.blockedCount, progress: executionBatch.progress,
+        plannedRecipientCount: executionBatch.plannedRecipientCount || campaign.totalRecipients,
+        materializedRecipientCount: executionBatch.materializedRecipientCount }
+    : campaignResultProjection({ ...campaign, totalRecipients: campaign.totalRecipients || planned }, summary, planned, campaign.totalRecipients);
   return {
     ok: true,
     campaign: {
       ...serializeCampaign(campaign),
       executionQueue: queueMap.get(campaign.id) ?? null,
       executionBatch,
-      progress: {
-        ...serializeCampaign(campaign).progress,
-        failedCount: readModel.metaSummary.totalFailed,
-        pendingCount: Math.max(campaign.totalRecipients - campaign.sentCount - campaign.blockedCount - readModel.metaSummary.totalFailed, 0),
-        ...(executionBatch && !executionBatch.chunks.some(chunk => chunk.campaignId === campaign.id) ? executionBatch.progress : {}),
-      },
-      metaSummary: executionBatch && !executionBatch.chunks.some(chunk => chunk.campaignId === campaign.id)
-        ? executionBatch.metaSummary : readModel.metaSummary,
+      ...projection,
+      audienceBlockedCount: isController ? executionBatch.blockedCount : null,
+      metaSummary: summary,
       messagesMetaStatus: executionBatch && !executionBatch.chunks.some(chunk => chunk.campaignId === campaign.id)
         ? executionBatch.messagesMetaStatus : readModel.enrichedMessagesMetaStatus,
       selectionMode: readModel.draftSeed.selectionMode,
@@ -38373,6 +38333,7 @@ async function buildCampaignDraftSeed(
     campaignId: string;
     campaignName: string;
     templateName: string;
+    persistedSeed?: { payloadJson: Prisma.JsonValue | null } | null;
     outboundMessages: Array<{
       waId: string;
       messageId?: string | null;
@@ -38383,7 +38344,7 @@ async function buildCampaignDraftSeed(
     }>;
   }
 ): Promise<CampaignDraftSeed> {
-  const persistedSeed = await prisma.event.findFirst({
+  const persistedSeed = "persistedSeed" in params ? params.persistedSeed : await prisma.event.findFirst({
     where: {
       clientId: params.clientId,
       eventName: "campaign.seed.saved",
