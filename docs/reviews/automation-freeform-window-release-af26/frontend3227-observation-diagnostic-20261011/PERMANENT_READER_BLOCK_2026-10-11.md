@@ -37,3 +37,7 @@ bash "$I/install-permanent-reader-binding-for-review.sh"
 ```
 
 Senha apenas na sessão sudo do owner. Esperado`PERMANENT_READER_HASH_POLICY_UPDATED_LIVE_READ_PASS_NO_PROMOTION`. Não repetir instalador de janela, preflight preparatório ou start. Após PASS e identidade confirmada: enable-supervision-candidate → supervised-candidate → pm2 save → fallback → supervised-candidate → gatefalse → leitura final/registro. Em DENY final, inspecionar o estado/binding antes de qualquer retorno; certificados de saída continuam necessários para um sucessor. A15min desde parada comunicar estado/impedimento; não bypass/kill. O3227 atende tráfego enquanto a promoção está impedida; não declarar implantação concluída.
+
+## Resolução autorizada e comprovada
+
+Owner aprovou o delta e executou o instalador33255a13; campo único/arquivamento/root600/visudo e leitura permanente real PASS. Promoção e saved/fallback concluídos sem nova partida. [Encerramento e evidências](EXECUTION_2026-10-11.md). Este documento preserva o bloqueio e a proposta históricos; não descreve mais o estado ativo.

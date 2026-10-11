@@ -135,3 +135,7 @@ Leitura pós-preflight: 10:39:49–10:39:51UTC /07:39:49–07:39:51Fortaleza: AP
 ## Janela frontend: ida técnica e bloqueio pré-promoção
 
 [Resultado intermediário, causa reader_integrity e proposta restrita](PERMANENT_READER_BLOCK_2026-10-11.md):3227 serve e owner confirmou telas; save/promoção bloqueados pela dependência readerSha256 da política permanente. Não repetir leitura/hash incompatível ou start. Precisa decidir o campo único proposto; políticas ainda não alteradas. Declaração anterior de política permanente compatível estava incompleta.
+
+## Encerramento da janela autorizada
+
+**DEPLOYED TECHNICALLY / OWNER UI CONFIRMED.** [Registro final, políticas/hashes, supervisão/saved/fallback, estado preservado e limites](EXECUTION_2026-10-11.md). Bloqueio reader_integrity acima foi resolvido pela correção restrita explicitamente aprovada; originais e todos os diagnósticos preservados. Gatefalse, API/worker e guarda38/job intactos.
