@@ -1,5 +1,7 @@
 # Preparação consolidada: API preventiva sobre a26 + frontend3227
 
+Registro atual da execução autorizada: [EXECUTION_2026-10-11.md](EXECUTION_2026-10-11.md). A preparação histórica abaixo permanece preservada.
+
 **PREPARED FOR REVIEW / NOT DEPLOYED.** Continuidade de `8f2e6024fb354eea8adabe79dc42e351d1cd74fd`. Produção permanece API a26 / worker mínimo afbb / frontend fa60 corrigido. Não houve instalação privilegiada, contenção, stop/start, promoção/save, abertura, envio ou nova recuperação histórica. Todos os gates continuam falsos.
 
 ## Escopo e fontes
