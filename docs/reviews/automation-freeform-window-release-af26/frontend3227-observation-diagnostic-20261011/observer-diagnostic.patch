@@ -1,0 +1,59 @@
+--- installed-observer-93564f78.py
++++ proposed-observer-c885486f.py
+@@ -22,0 +23,13 @@
++
++class OwnershipObservationError(RuntimeError):
++    """Safe context only: never serialize environment, cmdline, cwd or file content."""
++    def __init__(self, reason, context, original):
++        super().__init__(reason)
++        number = getattr(original, 'errno', None)
++        self.diagnostic = {
++            'reason': reason, 'stage': context['stage'], 'pid': context['pid'],
++            'startTicks': context['startTicks'], 'fd': context['fd'],
++            'originalError': {'type': type(original).__name__, 'errno': number,
++                              'strerror': os.strerror(number) if type(number) is int else None}}
++
++
+@@ -104,0 +118,2 @@
++        pid = int(folder.name)
++        context = {'stage': 'process_identity', 'pid': pid, 'startTicks': None, 'fd': None}
+@@ -106 +120,0 @@
+-            pid = int(folder.name)
+@@ -107,0 +122 @@
++            context['startTicks'] = q['ticks']
+@@ -108,0 +124 @@
++            context['stage'] = 'process_fd_list'
+@@ -110,0 +127 @@
++                context.update(stage='process_fd_readlink', fd=fd.name)
+@@ -113 +130 @@
+-                except FileNotFoundError:
++                except FileNotFoundError as original:
+@@ -115 +132,3 @@
+-                    require(pid == os.getpid(), 'fd_observation_incomplete')
++                    if pid != os.getpid():
++                        raise OwnershipObservationError('fd_observation_incomplete', context, original)
++            context.update(stage='process_environ', fd=None)
+@@ -116,0 +136 @@
++            context['stage'] = 'process_cmdline'
+@@ -117,0 +138 @@
++            context['stage'] = 'process_cwd'
+@@ -127,4 +148,4 @@
+-        except PermissionError:
+-            raise RuntimeError('ownership_observation_permission_denied')
+-        except (FileNotFoundError, ProcessLookupError):
+-            raise RuntimeError('ownership_observation_incomplete')
++        except PermissionError as original:
++            raise OwnershipObservationError('ownership_observation_permission_denied', context, original) from original
++        except (FileNotFoundError, ProcessLookupError) as original:
++            raise OwnershipObservationError('ownership_observation_incomplete', context, original) from original
+@@ -177,0 +199,7 @@
++
++def report_denial(error):
++    print('frontend_socket_observation_denied:' + str(error), file=sys.stderr)
++    if isinstance(error, OwnershipObservationError):
++        print(json.dumps({'observationDiagnostic': error.diagnostic}, sort_keys=True), file=sys.stderr)
++
++
+@@ -182 +210 @@
+-        print('frontend_socket_observation_denied:' + str(error), file=sys.stderr)
++        report_denial(error)

@@ -1,0 +1,31 @@
+--- consumed-check-preparation.py
++++ new-check-preparation.py
+@@ -1,7 +1,7 @@
+ """Read-only preparation/configuration contract; no starts or policy writes."""
+ import hashlib,importlib.util,json,os,subprocess,sys
+ from pathlib import Path
+-P=Path('/opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-after-preventive-env-v2-20261011T002421Z')
++P=Path('/opt/re7online/backups/converta-persistent/preparations/frontend-3227b2d7-observation-v2-20261011T101500Z')
+ def need(v,why):
+  if not v:raise RuntimeError(why)
+ def cfg(n):return json.loads((P/n).read_text().split('module.exports = ',1)[1].rstrip(';\n'))
+@@ -15,7 +15,12 @@
+ w=json.loads((P/'socket-observer-binding.private.json').read_text());pb=json.loads((P/'permanent-observer-binding.private.json').read_text())
+ need(sha(P/'observer-policy.private.json')==w['policySha256'],'window_policy_bytes')
+ need(sha(P/'permanent-policy.proposed.private.json')==pb['policySha256'],'permanent_policy_bytes')
+-need(sha('/usr/local/libexec/re7/frontend-socket-observer.py')==w['helperSha256'],'window_helper')
++if sys.argv[1:]==['--proposed-observer']:
++ need(sha('/usr/local/libexec/re7/frontend-socket-observer.py')==json.loads((P/'installed-policy-reference.private.json').read_text())['helperSha256'],'installed_original_window_helper')
++ need(sha(P/'observer.py')==w['helperSha256'],'proposed_window_helper')
++else:
++ need(not sys.argv[1:],'unknown_preparation_mode')
++ need(sha('/usr/local/libexec/re7/frontend-socket-observer.py')==w['helperSha256'],'window_helper')
+ need(sha('/usr/local/libexec/re7/frontend-permanent-observer.py')==pb['helperSha256'],'permanent_helper')
+ base=cfg('active-base.config.private.cjs')
+ for label in ['candidate','return']:
+@@ -32,4 +37,4 @@
+ need(sha('/etc/cron.d/re7-converta-backup')==old['backupCronSha256'],'backup_cron_drift')
+ need(subprocess.check_output(['crontab','-l'],text=True)==old['crontab'],'crontab_drift')
+ need(subprocess.check_output(['systemctl','show','pm2-deploy.service','--property=ActiveState,UnitFileState'],text=True)==old['boot'],'boot_drift')
+-print('CONFIGURATIONS_POLICIES_IDENTITIES_AND_CONTROLS_PASS_GATES_FALSE')
++print('PROPOSED_OBSERVER_COMPOSITION_PASS_NOT_INSTALLED_GATES_FALSE' if sys.argv[1:] else 'CONFIGURATIONS_POLICIES_IDENTITIES_AND_CONTROLS_PASS_GATES_FALSE')
