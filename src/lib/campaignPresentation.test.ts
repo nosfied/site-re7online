@@ -91,3 +91,10 @@ test("list groups only explicit same-tenant children, preserving incomplete rela
   const child = { ...item("child1"), executionBatch: parent.executionBatch };
   assert.deepEqual(campaignListRepresentatives([child, item("child2")]).map(x=>x.id), ["child1", "child2"]);
 });
+
+test("pause request keeps the existing polling alive until the current call settles",()=>{
+ assert.equal(shouldRefreshCampaign({status:"paused",executionState:{state:"user_pause_requested"}}),true);
+ assert.equal(shouldRefreshCampaign({status:"paused",executionState:{state:"user_paused"}}),false);
+ assert.equal(shouldRefreshCampaign({status:"cancelled",executionState:{state:"uncertain"}}),true);
+ assert.equal(shouldRefreshCampaign({status:"cancelled",executionState:{state:"cancelled"}}),false);
+});

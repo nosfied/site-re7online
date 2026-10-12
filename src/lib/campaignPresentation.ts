@@ -1,6 +1,7 @@
+import type { CampaignExecutionPresentation } from "./whatsappAdminApi";
 import { getCampaignStatusUxLabel } from "./appUxLabels";
 
-type CampaignLifecycle = { status: string; scheduledAt?: string | null };
+type CampaignLifecycle = { status: string; scheduledAt?: string | null; executionState?: CampaignExecutionPresentation };
 
 // This is a presentation of the persisted contract, not a new execution state.
 export function isImmediateCampaignQueued(campaign: CampaignLifecycle) {
@@ -11,13 +12,28 @@ export function getCampaignListStatus(campaign: CampaignLifecycle) {
   return isImmediateCampaignQueued(campaign) ? "sending" : campaign.status;
 }
 
+export function getCampaignExecutionLabel(state?: CampaignExecutionPresentation["state"]) {
+  switch (state) {
+    case "processing": return "Processando";
+    case "user_pause_requested": return "Pausa solicitada — aguardando a operação atual";
+    case "user_paused": return "Pausada pelo usuário";
+    case "operational_suspension": return "Suspensa operacionalmente";
+    case "uncertain": return "Resultado incerto — revisão necessária";
+    case "unconfirmed": return "Processamento não confirmado";
+    case "cancelled": return "Cancelada — envios restantes encerrados";
+    default: return null;
+  }
+}
+
 export function getCampaignPresentationLabel(campaign: CampaignLifecycle) {
+  const operational = getCampaignExecutionLabel(campaign.executionState?.state);
+  if (operational && (campaign.executionState?.state !== "unconfirmed" || campaign.status === "sending")) return operational;
   return isImmediateCampaignQueued(campaign) ? "Na fila de envio" : getCampaignStatusUxLabel(campaign.status);
 }
 
 export function shouldRefreshCampaign(campaign: CampaignLifecycle) {
   // Future schedules must also be observed when the scheduler starts them.
-  return campaign.status === "scheduled" || campaign.status === "sending";
+  return campaign.status === "scheduled" || campaign.status === "sending" || ["user_pause_requested", "uncertain", "processing"].includes(campaign.executionState?.state ?? "");
 }
 
 // Same generation invalidation used by previews: no cache or operational state.

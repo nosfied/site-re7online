@@ -68,6 +68,7 @@ import {
   campaignListRepresentatives,
   getCampaignListStatus,
   getCampaignPresentationLabel,
+  getCampaignExecutionLabel,
   isImmediateCampaignQueued,
   shouldRefreshCampaign,
 } from "@/lib/campaignPresentation";
@@ -110,7 +111,7 @@ type CampaignStatusFilter =
 type CampaignCenterTab = "create" | "drafts" | "sending" | "scheduled" | "completed" | "blocked" | "all";
 type CampaignCreationPanel = "audience" | "csv" | "manual";
 type RecipientSelectionMode = "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
-type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "blocked" | "failed" | "pending";
+type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "blocked" | "failed" | "pending" | "not_submitted";
 type CampaignResultItem = NonNullable<CampaignItem["messagesMetaStatus"]>[number];
 type CsvGenericFieldKey = `field${number}`;
 
@@ -541,6 +542,8 @@ function getMetaStatusClasses(status: string) {
 
 function getMetaStatusLabel(status: string) {
   switch (status) {
+    case "not_submitted":
+      return "Não enviada";
     case "read":
       return "Lida";
     case "delivered":
@@ -562,6 +565,8 @@ function getMetaStatusLabel(status: string) {
 }
 
 function getCampaignConfidence(campaign: CampaignItem) {
+  const executionLabel = getCampaignExecutionLabel(campaign.executionState?.state);
+  if (executionLabel) return { label: executionLabel, icon: "INFO", classes: campaign.executionState?.state === "uncertain" ? "campaign-panel-danger" : "campaign-panel-warning" };
   if (campaign.executionQueue?.status === "queued") {
     return {
       label: campaign.executionQueue.position
@@ -628,6 +633,8 @@ function getCampaignConfidence(campaign: CampaignItem) {
 }
 
 function getCampaignQueueLabel(campaign: CampaignItem) {
+  const operational = getCampaignExecutionLabel(campaign.executionState?.state);
+  if (operational) return operational;
   const queue = campaign.executionQueue;
   if (!queue) return null;
   if (queue.status === "queued") {
@@ -1707,6 +1714,7 @@ export default function AppCampaignsPage() {
       { id: "blocked" as const, label: "Bloqueadas" },
       { id: "failed" as const, label: "Falhas" },
       { id: "pending" as const, label: "Pendentes" },
+      { id: "not_submitted" as const, label: "Não enviados" },
     ]) {
       if (
         existing.has(option.id) ||
@@ -4382,16 +4390,16 @@ export default function AppCampaignsPage() {
                 className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-white/15 bg-re7-navy text-white shadow-2xl"
                 onClick={(event) => event.stopPropagation()}
               >
-                <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
                     <div>
                       <h2 className="text-sm font-semibold">Detalhe da campanha</h2>
                       <p className="mt-1 text-xs text-white/55">
                       Acompanhe público, processamento e resultado sem interromper a execução.
                       </p>
                     </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
                     {selectedCampaign ? (
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClasses(selectedCampaign.status)}`}>
+                      <span className={`inline-flex max-w-full break-words rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClasses(selectedCampaign.status)}`}>
                         {getCampaignPresentationLabel(selectedCampaign)}
                       </span>
                     ) : null}
@@ -4455,8 +4463,8 @@ export default function AppCampaignsPage() {
                       <p className="mt-1 font-semibold text-orange-100">{selectedCampaignIsBatchController ? selectedCampaign.executionBatch!.progress.blockedCount : selectedCampaign.blockedCount}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-wide text-white/60">Pendentes</p>
-                      <p className="mt-1 font-semibold">{selectedCampaign.progress.pendingCount}</p>
+                      <p className="text-[11px] uppercase tracking-wide text-white/60">{selectedCampaign.executionState?.state === "cancelled" ? "Não enviados" : "Pendentes"}</p>
+                      <p className="mt-1 font-semibold">{selectedCampaign.executionState?.state === "cancelled" ? (selectedCampaign.progress.notSubmittedCount ?? 0) : selectedCampaign.progress.pendingCount}</p>
                     </div>
                   </div>
 

@@ -1,0 +1,66 @@
+{
+  "baseRelease": "campaign-result-truth-2ed9dccc-20261011T184000Z",
+  "baseSource": "207880593e6f32a1628df0a15df2b1fa80b49e4e",
+  "node": "20.20.0",
+  "files": [
+    {
+      "path": "src/campaigns/campaignEligibility.ts",
+      "sha256": "369c6bafed65731a0a0f824c5a7351b218ecc9c0dbf25eb3f5437699c94e5838",
+      "bytes": 4640,
+      "originSha256": "0fa080878993be6157b38de3f17cd396980511ba4e3bfe7cecfe9ed10c07199b"
+    },
+    {
+      "path": "dist/campaigns/campaignEligibility.js",
+      "sha256": "cc246cedfc4ab8d0d1e51d32a41645d3d368c8f816efbae2f0bdce3bf34c6930",
+      "bytes": 4298,
+      "originSha256": "df6121058c4ad28cbd8d733c3b8be09dc50c8b709e82b91f8c4b1bd3914c6305"
+    },
+    {
+      "path": "src/campaigns/campaignRecipientResultTruth.ts",
+      "sha256": "c53ea2fb04b343d91ebf80f94ac42e907d8851c2b1207a9d50dd186dee18fd65",
+      "bytes": 12694,
+      "originSha256": "12e92cbc516a6d531e635afc350bc0f617a2f0b5c295e6fd029085e21346da4b"
+    },
+    {
+      "path": "dist/campaigns/campaignRecipientResultTruth.js",
+      "sha256": "420e3023032202e30dc26fcf2190005a803f7b827307d46c1c0ca8d66c23f82a",
+      "bytes": 11405,
+      "originSha256": "43a23008d5ccf86cfe880b91edce3030d1fbc66deee2d17b4cc68aea6136bfe2"
+    },
+    {
+      "path": "src/http/routes.ts",
+      "sha256": "b67b733ce5061d37ddf1e4766fc20e0ccd196a6fbe5e1119b195a6055e055309",
+      "bytes": 1438469,
+      "originSha256": "479f94eb1714ff5912782e0f2d3103000ba0a7e38bf5b6eb478c768d302c08b4"
+    },
+    {
+      "path": "dist/http/routes.js",
+      "sha256": "20554aa90c0e0efb5496784e5ca4672c2a8f3583812f399a1c6fe92716025443",
+      "bytes": 1600820,
+      "originSha256": "0118b7d3d4a9ca619863b4dd6c52d41717f1454049e8112c974238836163402f"
+    },
+    {
+      "path": "src/campaigns/campaignExecutionPresentation.ts",
+      "sha256": "1e53a81701f7225ad94a05885e0441a0e3b04033acfd8942839d7959f0cf87f2",
+      "bytes": 2592,
+      "originSha256": null
+    },
+    {
+      "path": "dist/campaigns/campaignExecutionPresentation.js",
+      "sha256": "0f65704113715d855d89b707a8e90387bc4b32b0bbdbd246b87609fe94f4f6d3",
+      "bytes": 2051,
+      "originSha256": null
+    }
+  ],
+  "tarSha256": "b90ca705063a7101516c4f3df54f1ebf6f23de850107433f5d3ced066cdd57ae",
+  "tarBytes": 3102720,
+  "unchanged": [
+    "acceptedResult",
+    "webhook",
+    "worker-afbb",
+    "schema",
+    "dependencies",
+    "auth"
+  ],
+  "notDeployed": true
+}

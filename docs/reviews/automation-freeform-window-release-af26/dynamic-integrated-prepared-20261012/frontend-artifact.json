@@ -1,0 +1,9 @@
+{
+  "tarSha256": "74a2ac2fcf93b32623fa2e0dfa857d1792cfd503e1f46cee09e6f94f3ca2216f",
+  "manifestSha256": "e0c66407d0b56748547d0d03f7a2b1b88d63a75cadde22f8cc8bbd03bac4054b",
+  "bytes": 178428455,
+  "buildId": "dFvS6tFEaWQsSIIn3P702",
+  "files": 23803,
+  "symlinks": 31,
+  "preservedStaticFiles": 304
+}

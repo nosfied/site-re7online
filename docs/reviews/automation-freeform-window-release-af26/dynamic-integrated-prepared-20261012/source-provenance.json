@@ -1,0 +1,16 @@
+{
+  "base": "f16bcad186abbe5313ea6df0052a97826b4b2e07",
+  "patchSha256": "7852324cd530d448e9e0ef614156b4fa56c1f41adc8c8f9340ad62f5eb7e1504",
+  "files": {
+    "apps/whatsapp-agent/src/campaigns/campaignExecutionPresentation.ts": "1e53a81701f7225ad94a05885e0441a0e3b04033acfd8942839d7959f0cf87f2",
+    "apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts": "c53ea2fb04b343d91ebf80f94ac42e907d8851c2b1207a9d50dd186dee18fd65",
+    "apps/whatsapp-agent/src/http/routes.ts": "b67b733ce5061d37ddf1e4766fc20e0ccd196a6fbe5e1119b195a6055e055309",
+    "src/app/app/campaigns/page.tsx": "46a24924cdda846b9169b586429c4fe1bb23f6b6228c8291c41f7233a4f6f519",
+    "src/components/app/CampaignBatchPanel.tsx": "f653d3666fbce065e613ec1d41404dd71ba81cfe8a2cf1b63c23ab8e4f90b2ec",
+    "src/lib/campaignPresentation.ts": "ac7531ac6633270458ae7ea513f09cec864be680fcac393b4a48dd4f644a65f1",
+    "src/lib/whatsappAdminApi.ts": "8871333ba011c3f4c6336679c949e9ced2854c3630caa923d9120d2d24d4dc49"
+  },
+  "reusedEligibilitySourceSha256": "369c6bafed65731a0a0f824c5a7351b218ecc9c0dbf25eb3f5437699c94e5838",
+  "scope": "source delta only; private logs/configs/tars excluded",
+  "applyRequires": "git apply --unidiff-zero on the stated base; no operational apply"
+}

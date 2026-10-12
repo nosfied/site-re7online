@@ -11,6 +11,7 @@ import { processDueScheduledCampaigns, setCampaignBatchMaterializationHookForTes
 const url = new URL(process.env.DATABASE_URL!);
 assert.equal(url.hostname, "127.0.0.1");
 assert.match(url.pathname, /^\/re7_dynamic_parity_/);
+process.env.CAMPAIGN_SEED_SECRET = "synthetic-audience-parity-only";
 const db = getPrisma();
 test.after(() => db.$disconnect());
 const statuses = ["NEW", "NURTURE"].map(id => ({ id, label: id, isActive: true, campaignEligible: true, isSystem: true }));

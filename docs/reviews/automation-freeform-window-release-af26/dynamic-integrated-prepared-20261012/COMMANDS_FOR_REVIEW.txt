@@ -1,0 +1,25 @@
+STATUS: NOT DEPLOYED / CAPACITY DENY / NO OPERATIONAL INSTALLATION OR WINDOW COMMAND IS AUTHORIZED HERE.
+Run from the existing review worktree. These commands verify local bytes only.
+
+set -euo pipefail
+D=docs/reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012
+P=local-evidence/dynamic-integrated-20261012/post-reboot
+test "$(sha256sum "$P/api-artifact/api-overlay.tar" | cut -d' ' -f1)" = b90ca705063a7101516c4f3df54f1ebf6f23de850107433f5d3ced066cdd57ae
+test "$(sha256sum "$P/frontend-artifact/frontend-dynamic-integrated.tar.gz" | cut -d' ' -f1)" = 74a2ac2fcf93b32623fa2e0dfa857d1792cfd503e1f46cee09e6f94f3ca2216f
+python3 "$D/verify-overlay.py" "$P/api-artifact/api-overlay.tar" "$D/api-overlay-manifest.json"
+python3 "$D/verify-frontend.py" "$P/frontend-artifact/package" e0c66407d0b56748547d0d03f7a2b1b88d63a75cadde22f8cc8bbd03bac4054b
+
+READ-ONLY historical cancellation preflight, never an apply:
+The existing private wrapper sets the attested input/hash module paths. Audit it first. The canonical capture clears inherited DB/auth/decoder variables and uses original active API sources. Output contains sensitive evidence; no JSON in chat/Git. Use a NEW output path once, and stop on failure. A capture is not a drain certificate or authority to cancel.
+
+set -euo pipefail
+umask 077
+P=local-evidence/dynamic-integrated-20261012
+O="$P/out15-future-preflight.private.json"
+test ! -e "$O"
+test ! -e "$O.stderr"
+ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 deploy@admin.re7online.com 'python3 /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-result-truth-2ed9dccc-20261011T184000Z/capture-readonly.py' < "$P/close-query-v2-wrapper.cjs" > "$O" 2> "$O.stderr"
+
+Historical apply is NOT included. After new compatible API/frontend and separate owner decision, use the existing authenticated UI cancellation for batch d473aec1-8ffa-40b9-8bab-e6819153ae4c once, then READ ONLY verify-after with fresh receipt/event/state observations. Do not rerun POST after timeout or uncertainty. Keep guard closed38; no ack/resume/open.
+
+INSTALLATION/DEPLOYMENT: BLOCKED BY CAPACITY. No new operational policy/control generation exists. Future concrete installer blocks require staging, fresh identities/manifests/baselines and policy root-hash comparison. Existing consumed preparation must not be reused. See README phase sequence and return compatibility boundary; no placeholders masquerade as executable commands.

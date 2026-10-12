@@ -1,3 +1,5 @@
+import type { CampaignMetaStatus, CampaignMetaSummary } from "../campaigns/campaignRecipientResultTruth.js";
+import { projectCampaignJobExecution, aggregateCampaignExecution, type CampaignExecutionPresentation } from "../campaigns/campaignExecutionPresentation.js";
 import { extractMetaStatus, normalizeCampaignMessageStatus, stringifyCampaignError, isUtilityPricingCategory, isDeliveredForCampaignBilling, resolveCampaignBillingStatus, buildCampaignMetaStatusItem, buildCampaignSeedFallbackStatusItems, summarizeCampaignMetaStatuses, campaignRecipientIdentityCandidates, campaignRecipientIdentitiesMatch, campaignMetaStatusRank, campaignMetaStatusTime, pickCampaignRecipientStatus, buildCampaignRecipientResultStatuses } from "../campaigns/campaignRecipientResultTruth.js";
 import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from "../campaigns/campaignEligibility.js";
 import { reactiveRoutingDecision, type ReactiveRoutingDecision, revalidateReactiveSubmission } from "../whatsapp/reactiveOutboundPolicy.js";
@@ -29694,37 +29696,6 @@ function serializeCampaign(campaign: {
   };
 }
 
-type CampaignMetaStatus = {
-  waId: string;
-  leadId?: string | null;
-  contactName?: string | null;
-  phoneDisplay?: string | null;
-  crmStatus?: string | null;
-  crmStatusLabel?: string | null;
-  templateName: string | null;
-  status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
-  sentAt: string | null;
-  deliveredAt: string | null;
-  billable: boolean;
-  nonBillingReason: string | null;
-  pricingCategory: string | null;
-  pricingBillable: boolean | null;
-  pricingModel: string | null;
-  conversationId: string | null;
-  error: string | null;
-};
-
-type CampaignMetaSummary = {
-  totalSent: number;
-  totalDelivered: number;
-  totalRead: number;
-  totalFailed: number;
-  totalBlocked: number;
-  totalOptOut: number;
-  totalSkipped: number;
-  totalPending: number;
-};
-
 type CampaignDraftSeed = {
   name: string;
   templateId?: string | null;
@@ -36156,7 +36127,7 @@ async function buildContactTimelinePayload(
 // CRM presentation or querying a detail for every row. Never truncate outcomes.
 type CampaignReadSources = {
   outboundMessages: Array<{ waId: string; messageId: string | null; templateName: string | null;
-    status: string; errorBody: string | null; rawPayload: Prisma.JsonValue | null; createdAt: Date }>;
+    status: string; metaMessageId: string | null; errorBody: string | null; rawPayload: Prisma.JsonValue | null; createdAt: Date }>;
   events: Array<{ messageId: string | null; waId: string | null; eventName: string;
     payloadJson: Prisma.JsonValue | null; createdAt: Date }>;
 };
@@ -36176,7 +36147,7 @@ async function loadCampaignReadSources(prisma: ReturnType<typeof getPrisma>, cli
         orderBy: { id: "asc" }, take: 1000,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
         select: { id: true, waId: true, messageId: true, templateName: true,
-          status: true, errorBody: true, rawPayload: true, createdAt: true },
+          status: true, metaMessageId: true, errorBody: true, rawPayload: true, createdAt: true },
       });
       sources.outboundMessages.push(...page);
       cursor = page.length === 1000 ? page[page.length - 1].id : undefined;
@@ -36184,9 +36155,9 @@ async function loadCampaignReadSources(prisma: ReturnType<typeof getPrisma>, cli
     cursor = undefined;
     do {
       const page: Array<CampaignReadSources["events"][number] & { id: string }> = await prisma.event.findMany({
-        where: { clientId, messageId: { in: group }, eventName: { in: [
-          "campaign.seed.saved", CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT, "campaign.recipient.import_blocked",
-        ] } },
+        where: { clientId, eventName: { in: [
+          "campaign.seed.saved", CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT, "campaign.recipient.import_blocked", "campaign.message.provider_accepted",
+        ] }, OR: [{ messageId: { in: group } }, ...group.map(id => ({ eventName: "campaign.message.provider_accepted", payloadJson: { path: ["campaignId"], equals: id } }))] },
         orderBy: { id: "asc" }, take: 1000,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
         select: { id: true, messageId: true, waId: true, eventName: true, payloadJson: true, createdAt: true },
@@ -36206,15 +36177,16 @@ function campaignResultProjection(
 ) {
   const knownSuccesses = summary.totalSent + summary.totalDelivered + summary.totalRead;
   const explicitBlocked = summary.totalBlocked + summary.totalOptOut + summary.totalSkipped;
-  const hasResults = knownSuccesses + explicitBlocked + summary.totalFailed + summary.totalPending > 0;
+  const notSubmittedCount = summary.totalNotSubmitted ?? 0;
+  const hasResults = knownSuccesses + explicitBlocked + summary.totalFailed + summary.totalPending + notSubmittedCount > 0;
   const sentCount = hasResults ? knownSuccesses : campaign.sentCount;
   const blockedCount = Math.max(campaign.blockedCount, explicitBlocked);
   const totalRecipients = Math.max(campaign.totalRecipients,
-    sentCount + explicitBlocked + summary.totalFailed + summary.totalPending);
+    sentCount + explicitBlocked + summary.totalFailed + summary.totalPending + notSubmittedCount);
   return {
     totalRecipients, sentCount, blockedCount, plannedRecipientCount, materializedRecipientCount,
-    progress: { totalRecipients, sentCount, blockedCount, failedCount: summary.totalFailed,
-      pendingCount: Math.max(summary.totalPending, totalRecipients - sentCount - blockedCount - summary.totalFailed, 0) },
+    progress: { totalRecipients, sentCount, blockedCount, failedCount: summary.totalFailed, notSubmittedCount,
+      pendingCount: Math.max(summary.totalPending, totalRecipients - sentCount - blockedCount - summary.totalFailed - notSubmittedCount, 0) },
   };
 }
 
@@ -36236,7 +36208,7 @@ function campaignSetResultProjection(
   return { totalRecipients, sentCount, blockedCount, plannedRecipientCount,
     materializedRecipientCount: projections.reduce((total, item) => total + item.materializedRecipientCount, 0),
     progress: { totalRecipients, sentCount, blockedCount, failedCount: sum("failedCount"),
-      pendingCount: projections.length ? sum("pendingCount") : plannedRecipientCount },
+      pendingCount: projections.length ? sum("pendingCount") : plannedRecipientCount, notSubmittedCount: sum("notSubmittedCount") },
   };
 }
 
@@ -36258,10 +36230,10 @@ export async function buildCampaignListPayload(
   const scoped = new Map(campaigns.map(item => [item.id, item]));
   for (const batch of batches) for (const link of batch.campaigns) scoped.set(link.campaignId, link.campaign);
   const sources = await loadCampaignReadSources(prisma, params.clientId, [...scoped.keys()]);
+  const queueMap = await buildCampaignExecutionQueueMap(prisma, { clientId: params.clientId, campaignIds: [...scoped.keys()] });
   const models = new Map<string, Awaited<ReturnType<typeof buildCampaignRecipientReadModel>>>();
   for (const campaign of scoped.values()) models.set(campaign.id,
-    await buildCampaignRecipientReadModel(prisma, campaign, params.clientId, sources));
-  const queueMap = await buildCampaignExecutionQueueMap(prisma, { clientId: params.clientId, campaignIds: ids });
+    await buildCampaignRecipientReadModel(prisma, campaign, params.clientId, sources, queueMap.get(campaign.id)?.executionState));
   return { ok: true, count: campaigns.length, items: campaigns.map(campaign => {
     const model = models.get(campaign.id)!;
     const batch = batches.find(item => item.idempotencyKey === `dynamic:${campaign.id}`
@@ -36279,6 +36251,8 @@ export async function buildCampaignListPayload(
     return { ...serializeCampaign(campaign), ...projection,
       // Controller exclusions are selection evidence, not execution outcomes.
       audienceBlockedCount: batch ? batch.blockedCount : null,
+      executionState: batch ? aggregateCampaignExecution(children.map(link => models.get(link.campaignId)?.observedExecutionState ?? queueMap.get(link.campaignId)?.executionState ?? { state: "unconfirmed" }), batch.status)
+        : model.observedExecutionState ?? queueMap.get(campaign.id)?.executionState ?? aggregateCampaignExecution([], campaign.status),
       executionQueue: queueMap.get(campaign.id) ?? null,
       selectionMode: model.draftSeed.selectionMode, dynamicFilter: model.draftSeed.dynamicFilter ?? null,
       metaSummary };
@@ -36290,6 +36264,7 @@ async function buildCampaignExecutionQueueMap(
   params: { clientId: string; campaignIds: string[] }
 ) {
   const map = new Map<string, {
+    executionState: CampaignExecutionPresentation;
     jobId: string;
     status: string;
     kind: string;
@@ -36313,7 +36288,7 @@ async function buildCampaignExecutionQueueMap(
     },
     include: {
       batch: {
-        select: { id: true, name: true, status: true, chunkCount: true },
+        select: { id: true, clientId: true, name: true, status: true, chunkCount: true },
       },
     },
     orderBy: [{ createdAt: "desc" }, { sequence: "desc" }, { id: "desc" }],
@@ -36328,9 +36303,13 @@ async function buildCampaignExecutionQueueMap(
     take: 5000,
   });
   const queuePositionByJobId = new Map(queued.map((job, index) => [job.id, index + 1]));
+  const tenantLease = await prisma.tenantCampaignExecutionLease.findUnique({ where: { clientId: params.clientId } });
+  const observedAt = new Date();
   for (const job of jobs) {
     if (!job.campaignId || map.has(job.campaignId)) continue;
+    const scopedBatch = job.batch?.clientId === params.clientId ? job.batch : null;
     map.set(job.campaignId, {
+      executionState: job.batch && !scopedBatch ? { state: "uncertain" } : projectCampaignJobExecution({ ...job, leaseConfirmed: Boolean(tenantLease && tenantLease.jobId === job.id && tenantLease.leaseToken === job.leaseToken && tenantLease.ownerId === job.leaseOwner && tenantLease.expiresAt > observedAt) }, scopedBatch?.status, observedAt),
       jobId: job.id,
       status: job.status,
       kind: job.kind,
@@ -36340,11 +36319,11 @@ async function buildCampaignExecutionQueueMap(
       finishedAt: job.finishedAt?.toISOString() ?? null,
       failureReason: job.failureReason ?? null,
       position: job.status === "queued" ? queuePositionByJobId.get(job.id) ?? null : null,
-      batchId: job.batchId ?? null,
-      batchStatus: job.batch?.status ?? null,
-      batchName: job.batch?.name ?? null,
+      batchId: scopedBatch?.id ?? null,
+      batchStatus: scopedBatch?.status ?? null,
+      batchName: scopedBatch?.name ?? null,
       chunkIndex: job.chunkIndex ?? null,
-      chunkCount: job.batch?.chunkCount ?? null,
+      chunkCount: scopedBatch?.chunkCount ?? null,
     });
   }
   return map;
@@ -36401,7 +36380,7 @@ export async function buildCampaignExecutionBatchSummary(
   const recipientModels = new Map<string, Awaited<ReturnType<typeof buildCampaignRecipientReadModel>>>();
   for (const item of batch.campaigns) {
     const child = await getCampaignById(item.campaignId, params.clientId);
-    if (child) recipientModels.set(child.id, await buildCampaignRecipientReadModel(prisma, child, params.clientId));
+    if (child) recipientModels.set(child.id, await buildCampaignRecipientReadModel(prisma, child, params.clientId, undefined, queueMap.get(child.id)?.executionState));
   }
   const chunks = batch.campaigns.map((item) => {
     const queue = queueMap.get(item.campaignId) ?? null;
@@ -36417,6 +36396,7 @@ export async function buildCampaignExecutionBatchSummary(
       blockedCount: projection.blockedCount,
       failedCount: recipientModels.get(item.campaignId)?.metaSummary.totalFailed ?? 0,
       totalRecipients: item.campaign.totalRecipients,
+      executionState: recipientModels.get(item.campaignId)?.observedExecutionState ?? queue?.executionState ?? aggregateCampaignExecution([], item.campaign.status),
       queueStatus: queue?.status ?? null,
       queuePosition: queue?.position ?? null,
       startedAt: queue?.startedAt ?? null,
@@ -36430,13 +36410,14 @@ export async function buildCampaignExecutionBatchSummary(
   const resultProjection = campaignSetResultProjection(batch.campaigns, id => recipientModels.get(id)?.metaSummary ?? summarizeCampaignMetaStatuses([]),
     batch.totalRecipients || chunks.reduce((sum, item) => sum + item.recipientCount, 0) || (!membership ? params.plannedRecipientCount ?? 0 : 0));
   const completedChunks = chunks.filter((item) => item.status === "completed").length;
-  const runningChunks = chunks.filter((item) => item.queueStatus === "running" || item.status === "sending").length;
-  const queuedChunks = chunks.filter((item) => item.queueStatus === "queued" || item.status === "scheduled").length;
+  const runningChunks = chunks.filter((item) => ["processing", "user_pause_requested"].includes(item.executionState.state)).length;
+  const queuedChunks = chunks.filter((item) => item.executionState.state === "queued").length;
   const failedChunks = chunks.filter((item) => item.status === "failed" || item.queueStatus === "failed").length;
   return {
     id: batch.id,
     name: batch.name,
     sourceMode: batch.sourceMode,
+    executionState: aggregateCampaignExecution(chunks.map(item => item.executionState), batch.status),
     status: batch.status,
     requestedAt: batch.requestedAt?.toISOString() ?? null,
     eligibleAt: batch.eligibleAt?.toISOString() ?? null,
@@ -36455,6 +36436,8 @@ export async function buildCampaignExecutionBatchSummary(
       ...resultProjection.progress,
       completedChunks,
       runningChunks,
+      suspendedChunks: chunks.filter(item => item.executionState.state === "operational_suspension").length,
+      uncertainChunks: chunks.filter(item => item.executionState.state === "uncertain").length,
       queuedChunks,
       failedChunks,
     },
@@ -36465,9 +36448,15 @@ export async function buildCampaignExecutionBatchSummary(
 async function buildCampaignRecipientReadModel(
   prisma: ReturnType<typeof getPrisma>,
   campaign: NonNullable<Awaited<ReturnType<typeof getCampaignById>>>, clientId: string,
-  sources?: CampaignReadSources
+  sources?: CampaignReadSources, executionState?: CampaignExecutionPresentation
 ) {
   const loaded = sources ?? await loadCampaignReadSources(prisma, clientId, [campaign.id]);
+  const pendingAcceptance = loaded.events.some(event => {
+    if (event.eventName !== "campaign.message.provider_accepted") return false;
+    const payload = event.payloadJson as Record<string, unknown> | null;
+    return payload?.campaignId === campaign.id && !loaded.outboundMessages.some(out => out.messageId === event.messageId && (typeof payload.metaMessageId !== "string" || out.metaMessageId === payload.metaMessageId));
+  });
+  const observedExecutionState = pendingAcceptance && executionState?.state === "operational_suspension" ? { state: "uncertain" as const } : executionState;
   const outboundMessages = loaded.outboundMessages.filter(item => resolveOutboundCampaignId(item) === campaign.id);
   const messagesMetaStatus = outboundMessages
     .filter((item) => resolveOutboundCampaignId(item) === campaign.id)
@@ -36547,11 +36536,11 @@ async function buildCampaignRecipientReadModel(
     isDraftLikeCampaign
       ? [...optOutMetaStatus, ...importBlockedMetaStatus]
       : buildCampaignRecipientResultStatuses({
-          campaign,
+          campaign: { ...campaign, cancellationConfirmed: observedExecutionState?.state === "cancelled" },
           seed: draftSeed,
           resultItems,
         });
-  if (sources) return { draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus: visibleMessagesMetaStatus,
+  if (sources) return { observedExecutionState, draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus: visibleMessagesMetaStatus,
     metaSummary: summarizeCampaignMetaStatuses(visibleMessagesMetaStatus) };
   const client = await prisma.client.findUnique({
     where: { id: clientId },
@@ -36568,7 +36557,7 @@ async function buildCampaignRecipientReadModel(
     statuses: visibleMessagesMetaStatus,
     crmStatuses: resolvedStatuses.statuses,
   });
-  return { draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus,
+  return { observedExecutionState, draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus,
     metaSummary: summarizeCampaignMetaStatuses(enrichedMessagesMetaStatus) };
 }
 
@@ -36578,11 +36567,11 @@ export async function buildCampaignDetailPayload(
 ) {
   const campaign = await getCampaignById(params.campaignId, params.clientId);
   if (!campaign) return null;
-  const readModel = await buildCampaignRecipientReadModel(prisma, campaign, params.clientId);
   const queueMap = await buildCampaignExecutionQueueMap(prisma, {
     clientId: params.clientId,
     campaignIds: [campaign.id],
   });
+  const readModel = await buildCampaignRecipientReadModel(prisma, campaign, params.clientId, undefined, queueMap.get(campaign.id)?.executionState);
   const executionBatch = await buildCampaignExecutionBatchSummary(prisma, {
     clientId: params.clientId,
     campaignId: campaign.id,
@@ -36603,6 +36592,7 @@ export async function buildCampaignDetailPayload(
     campaign: {
       ...serializeCampaign(campaign),
       executionQueue: queueMap.get(campaign.id) ?? null,
+      executionState: isController ? executionBatch.executionState : readModel.observedExecutionState ?? queueMap.get(campaign.id)?.executionState ?? aggregateCampaignExecution([], campaign.status),
       executionBatch,
       ...projection,
       audienceBlockedCount: isController ? executionBatch.blockedCount : null,

@@ -1,5 +1,8 @@
 # Dynamic CRM-filter Campaign Scheduling
 
+**Complemento local12/10 — audiência/suspensão, para revisão, NOT DEPLOYED.** [Entrega integrada](../reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/README.md). Prévia e materialização reutilizam elegibilidade lifecycle operacional; PROVISIONAL não é consentimento ACTIVE. Mudança de filtro/modalidade invalida a geração da prévia sem cap artificial. Expansão dinâmica depende do filtro efetivamente salvo, não da intenção histórica não registrada. A suspensão é projetada por job/lease tenant-scoped e não altera scheduler/status. Cancelar envios restantes usa ação canônica e classifica ausência comprovada como não enviada, sem fabricar falha Meta. Produção out.15 permanece suspensa/guarda38 fechada; implantação e cancelamento produtivo exigem decisões próprias.
+
+
 ## Current production clarification — 12/10/2026
 
 Dynamic scheduling is deployed; the earlier local-only checkpoint below is historical. Individual controlled acceptance does not accept every later dynamic audience. [out.13→out.15 audit](../reviews/automation-freeform-window-release-af26/dynamic-audience-continuity-20261011/README.md) establishes NEW persisted in out.15, seven PROVISIONAL identities incorrectly admitted by the campaign gate, and no historical UI estimate. The local correction is reviewed separately and NOT DEPLOYED.

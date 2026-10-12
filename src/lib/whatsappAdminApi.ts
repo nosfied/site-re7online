@@ -508,7 +508,10 @@ export type LeadNoteItem = {
   createdAt: string;
 };
 
+export type CampaignExecutionPresentation = { state: "processing" | "queued" | "user_pause_requested" | "user_paused" | "operational_suspension" | "uncertain" | "cancelled" | "terminal" | "unconfirmed" | "not_started" };
+
 export type CampaignItem = {
+  executionState?: CampaignExecutionPresentation;
   id: string;
   clientId: string;
   templateId?: string | null;
@@ -526,8 +529,10 @@ export type CampaignItem = {
     sentCount: number;
     blockedCount: number;
     pendingCount: number;
+    notSubmittedCount?: number;
   };
   executionQueue?: {
+    executionState?: CampaignExecutionPresentation;
     jobId: string;
     status: string;
     kind: string;
@@ -544,6 +549,7 @@ export type CampaignItem = {
     chunkCount: number | null;
   } | null;
   executionBatch?: {
+    executionState?: CampaignExecutionPresentation;
     id: string;
     name: string;
     sourceMode: string;
@@ -562,12 +568,16 @@ export type CampaignItem = {
       sentCount: number;
       blockedCount: number;
       pendingCount: number;
+      notSubmittedCount?: number;
       completedChunks: number;
       runningChunks: number;
+      suspendedChunks?: number;
+      uncertainChunks?: number;
       queuedChunks: number;
       failedChunks: number;
     };
     chunks: Array<{
+      executionState?: CampaignExecutionPresentation;
       campaignId: string;
       name: string;
       status: string;
@@ -592,6 +602,7 @@ export type CampaignItem = {
     totalOptOut: number;
     totalSkipped: number;
     totalPending: number;
+    totalNotSubmitted?: number;
   };
   selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
   dynamicFilter?: {
@@ -606,7 +617,7 @@ export type CampaignItem = {
     crmStatus?: string | null;
     crmStatusLabel?: string | null;
     templateName: string | null;
-    status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
+    status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out" | "not_submitted";
     sentAt: string | null;
     deliveredAt: string | null;
     billable: boolean;

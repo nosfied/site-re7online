@@ -1,5 +1,14 @@
 # Campaign Result Truth - Canonical Reconciliation - 2026-09-18
 
+## Complemento local 12/10/2026 — suspensão e cancelamento sem submissão
+
+[Implementação integrada para revisão](../reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/README.md), NOT DEPLOYED. `executionState` é projeção dos jobs/leases do tenant, não estado persistido novo ou exposição do ledger: processamento exige lease completa e confirmação correspondente do tenant; pausa solicitada/efetiva, suspensão operacional e incerteza são distintos. Aceitação registrada sem Outbound compatível na mesma execução/messageId/MetaID exige revisão, mesmo com job parado. Detalhe, conjunto, lista e polling devem concordar sem inferir atividade apenas de `Campaign.status=sending`.
+
+Cancelamento canônico comprovado e ausência de submissão/resultados explícitos podem produzir **not_submitted / cancelled_before_submission** no read model. Esse estado não é FAILED Meta, cobrança ou novo registro individual. Sem confirmação da saída/cancelamento, permanece pending/revisão; fallback histórico SENT é preservado somente por execução autorizada. `metaSummary.totalNotSubmitted` e `progress.notSubmittedCount` são separados de falhas/bloqueios/pending. Total materializado pode permanecer11 com seis entregas reportadas e cinco não enviadas; exclusões de seleção244 são evidência distinta. Nenhuma concordância de contadores valida a intenção do público.
+
+A API/frontend anteriores são incompatíveis com apresentação após esse cancelamento: implantação conjunta e decisão histórica separada precedem qualquer apply. Rollback posterior exige leitor compatível; não desfazer dados nem fabricar falhas para adaptar o retorno. CRM/status monotônico/aliases/isolamento e obrigação CRM normal permanecem intactos.
+
+
 **Result Truth — complemento local do fallback histórico (11/10), REVIEW READY / NOT DEPLOYED.** [Relatório e provas](../reviews/automation-freeform-window-release-af26/campaign-list-result-truth-20261011/README.md#complemento--fallback-histórico-por-execução-base99ad6b6b). Conjunto soma projeções canônicas por execução, sem reprojetar o resumo global:6 envios históricos sem resultados individuais +1delivered =7enviados, apenas1entrega reportada. Contador defasado de cada execução continua subordinado aos seus próprios resultados explícitos. Duas ordens dos filhos e falha/bloqueio PASS;10 provas de leitores PostgreSQL e4 cenários browser/polling PASS, Node20.20.0. Sem rebuild frontend, mudança worker ou consulta produtiva. Aceites e históricos anteriores preservados; produção aguarda revisão/decisão de implantação.
 
 

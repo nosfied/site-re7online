@@ -1,0 +1,19 @@
+{
+  "result": "DENY",
+  "at": "2026-10-12T15:19:39Z",
+  "availableDeployBytes": 2219524096,
+  "requiredFreeBytes": 3026829863,
+  "shortfallBytes": 807359015,
+  "components": {
+    "productionReserveBytes": 2131755008,
+    "frontendTarBytes": 178428455,
+    "frontendAllocatedBytes": 660594688,
+    "apiBaseWithoutSharedDependenciesBytes": 36171776,
+    "apiOverlayBytes": 3102720,
+    "controlsBudgetBytes": 16777216
+  },
+  "limits": "dated observation; postgres sample and WAL checked separately; no deletion authorized; no executable operational generation rendered",
+  "availablePostgresBytes": 2219470848,
+  "postgresAt": "2026-10-12T15:21:33Z",
+  "minimumAvailableBytes": 2219470848
+}

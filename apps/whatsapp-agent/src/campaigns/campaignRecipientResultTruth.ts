@@ -10,7 +10,7 @@ export type CampaignMetaStatus = {
   crmStatus?: string | null;
   crmStatusLabel?: string | null;
   templateName: string | null;
-  status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
+  status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out" | "not_submitted";
   sentAt: string | null;
   deliveredAt: string | null;
   billable: boolean;
@@ -31,6 +31,7 @@ export type CampaignMetaSummary = {
   totalOptOut: number;
   totalSkipped: number;
   totalPending: number;
+  totalNotSubmitted?: number;
 };
 
 export function extractMetaStatus(rawPayload: unknown) {
@@ -178,6 +179,7 @@ export function buildCampaignSeedFallbackStatusItems(
     blockedCount: number;
     status: string;
     templateName: string;
+    cancellationConfirmed?: boolean;
   },
   seed: CampaignDraftSeed
 ): CampaignMetaStatus[] {
@@ -189,7 +191,7 @@ export function buildCampaignSeedFallbackStatusItems(
     return {
       waId,
       templateName: seed.templateName || campaign.templateName,
-      status: wasSent ? "sent" : !wasBlockedOrFailed && ["sending", "scheduled"].includes(campaign.status) ? "pending" : "failed",
+      status: wasSent ? "sent" : !wasBlockedOrFailed && campaign.status === "cancelled" ? (campaign.cancellationConfirmed ? "not_submitted" : "pending") : !wasBlockedOrFailed && ["sending", "scheduled"].includes(campaign.status) ? "pending" : "failed",
       sentAt: null,
       deliveredAt: null,
       billable: false,
@@ -197,7 +199,7 @@ export function buildCampaignSeedFallbackStatusItems(
         ? "status_unconfirmed"
         : wasBlockedOrFailed
           ? "failed_or_blocked"
-          : ["sending", "scheduled"].includes(campaign.status) ? "awaiting_processing" : "missing_individual_history",
+          : campaign.status === "cancelled" ? (campaign.cancellationConfirmed ? "cancelled_before_submission" : "cancelled_result_requires_review") : ["sending", "scheduled"].includes(campaign.status) ? "awaiting_processing" : "missing_individual_history",
       pricingCategory: null,
       pricingBillable: null,
       pricingModel: null,
@@ -206,7 +208,7 @@ export function buildCampaignSeedFallbackStatusItems(
         ? "Status Meta detalhado indisponivel; exibido a partir do historico da campanha."
         : wasBlockedOrFailed
           ? "Envio bloqueado ou falhou; status Meta detalhado indisponivel."
-          : ["sending", "scheduled"].includes(campaign.status) ? "Destinatário aguardando processamento; nenhuma submissão individual comprovada." : "Envio individual nao encontrado no historico preservado.",
+          : campaign.status === "cancelled" ? (campaign.cancellationConfirmed ? "Envios restantes encerrados sem submissão individual." : "Execução cancelada; resultado individual ainda exige revisão.") : ["sending", "scheduled"].includes(campaign.status) ? "Destinatário aguardando processamento; nenhuma submissão individual comprovada." : "Envio individual nao encontrado no historico preservado.",
     };
   });
 }
@@ -233,6 +235,9 @@ export function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): Camp
         case "failed":
           acc.totalFailed += 1;
           break;
+        case "not_submitted":
+          acc.totalNotSubmitted = (acc.totalNotSubmitted ?? 0) + 1;
+          break;
         case "pending":
           acc.totalPending += 1;
           break;
@@ -252,6 +257,7 @@ export function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): Camp
       totalOptOut: 0,
       totalSkipped: 0,
       totalPending: 0,
+      totalNotSubmitted: 0,
     }
   );
 }
@@ -306,7 +312,7 @@ export function pickCampaignRecipientStatus(items: CampaignMetaStatus[]) {
 }
 
 export function buildCampaignRecipientResultStatuses(params: {
-  campaign: { sentCount: number; blockedCount: number; status: string; templateName: string };
+  campaign: { sentCount: number; blockedCount: number; status: string; templateName: string; cancellationConfirmed?: boolean };
   seed: CampaignDraftSeed;
   resultItems: CampaignMetaStatus[];
 }) {

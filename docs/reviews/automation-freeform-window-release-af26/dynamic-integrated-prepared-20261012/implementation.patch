@@ -1,0 +1,304 @@
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignExecutionPresentation.ts b/apps/whatsapp-agent/src/campaigns/campaignExecutionPresentation.ts
+new file mode 100644
+index 00000000..051a3978
+--- /dev/null
++++ b/apps/whatsapp-agent/src/campaigns/campaignExecutionPresentation.ts
+@@ -0,0 +1,26 @@
++/** Read-only projection of tenant-scoped jobs. Never reads the global ledger. */
++export type CampaignExecutionState = "processing" | "queued" | "user_pause_requested" | "user_paused" | "operational_suspension" | "uncertain" | "cancelled" | "terminal" | "unconfirmed" | "not_started";
++export type CampaignExecutionPresentation = { state: CampaignExecutionState };
++type JobObservation = { status: string; failureReason?: string | null; leaseToken?: string | null; leaseOwner?: string | null; leaseExpiresAt?: Date | null; leaseConfirmed?: boolean };
++export function projectCampaignJobExecution(job: JobObservation, batchStatus?: string | null, now = new Date()): CampaignExecutionPresentation {
++  if (job.status === "needs_review" || batchStatus === "needs_review") return { state: "uncertain" };
++  const hasLease = Boolean(job.leaseToken || job.leaseOwner || job.leaseExpiresAt);
++  const validLease = Boolean(job.leaseToken && job.leaseOwner && job.leaseExpiresAt && job.leaseExpiresAt > now && job.leaseConfirmed === true);
++  if (job.status === "running") return { state: !validLease ? "uncertain" : batchStatus === "paused" ? "user_pause_requested" : "processing" };
++  if (["queued", "paused"].includes(job.status) && hasLease) return { state: "uncertain" };
++  if (job.status === "queued" && job.failureReason === "operational_suspension") return { state: "operational_suspension" };
++  if (job.status === "paused" || batchStatus === "paused") return { state: "user_paused" };
++  if (job.status === "queued") return { state: "queued" };
++  if (job.status === "cancelled") return { state: hasLease ? "uncertain" : "cancelled" };
++  if (["completed", "failed", "blocked"].includes(job.status)) return { state: "terminal" };
++  return { state: "unconfirmed" };
++}
++export function aggregateCampaignExecution(presentations: CampaignExecutionPresentation[], status: string): CampaignExecutionPresentation {
++  const states = presentations.map(item => item.state);
++  if (status === "needs_review") return { state: "uncertain" };
++  for (const state of ["uncertain", "user_pause_requested", "processing", "operational_suspension", "unconfirmed", "user_paused", "queued"] as const) if (states.includes(state)) return { state };
++  if (status === "cancelled") return { state: states.length ? "cancelled" : "uncertain" };
++  if (status === "paused") return { state: "user_paused" };
++  if (["completed", "failed", "blocked"].includes(status)) return { state: "terminal" };
++  return { state: states.length ? "terminal" : status === "draft" ? "not_started" : status === "scheduled" ? "queued" : "unconfirmed" };
++}
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts b/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts
+index 8f17c4cd..97540d55 100644
+--- a/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts
++++ b/apps/whatsapp-agent/src/campaigns/campaignRecipientResultTruth.ts
+@@ -13 +13 @@ export type CampaignMetaStatus = {
+-  status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
++  status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out" | "not_submitted";
+@@ -33,0 +34 @@ export type CampaignMetaSummary = {
++  totalNotSubmitted?: number;
+@@ -180,0 +182 @@ export function buildCampaignSeedFallbackStatusItems(
++    cancellationConfirmed?: boolean;
+@@ -192 +194 @@ export function buildCampaignSeedFallbackStatusItems(
+-      status: wasSent ? "sent" : !wasBlockedOrFailed && ["sending", "scheduled"].includes(campaign.status) ? "pending" : "failed",
++      status: wasSent ? "sent" : !wasBlockedOrFailed && campaign.status === "cancelled" ? (campaign.cancellationConfirmed ? "not_submitted" : "pending") : !wasBlockedOrFailed && ["sending", "scheduled"].includes(campaign.status) ? "pending" : "failed",
+@@ -200 +202 @@ export function buildCampaignSeedFallbackStatusItems(
+-          : ["sending", "scheduled"].includes(campaign.status) ? "awaiting_processing" : "missing_individual_history",
++          : campaign.status === "cancelled" ? (campaign.cancellationConfirmed ? "cancelled_before_submission" : "cancelled_result_requires_review") : ["sending", "scheduled"].includes(campaign.status) ? "awaiting_processing" : "missing_individual_history",
+@@ -209 +211 @@ export function buildCampaignSeedFallbackStatusItems(
+-          : ["sending", "scheduled"].includes(campaign.status) ? "Destinatário aguardando processamento; nenhuma submissão individual comprovada." : "Envio individual nao encontrado no historico preservado.",
++          : campaign.status === "cancelled" ? (campaign.cancellationConfirmed ? "Envios restantes encerrados sem submissão individual." : "Execução cancelada; resultado individual ainda exige revisão.") : ["sending", "scheduled"].includes(campaign.status) ? "Destinatário aguardando processamento; nenhuma submissão individual comprovada." : "Envio individual nao encontrado no historico preservado.",
+@@ -235,0 +238,3 @@ export function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): Camp
++        case "not_submitted":
++          acc.totalNotSubmitted = (acc.totalNotSubmitted ?? 0) + 1;
++          break;
+@@ -254,0 +260 @@ export function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): Camp
++      totalNotSubmitted: 0,
+@@ -309 +315 @@ export function buildCampaignRecipientResultStatuses(params: {
+-  campaign: { sentCount: number; blockedCount: number; status: string; templateName: string };
++  campaign: { sentCount: number; blockedCount: number; status: string; templateName: string; cancellationConfirmed?: boolean };
+diff --git a/apps/whatsapp-agent/src/http/routes.ts b/apps/whatsapp-agent/src/http/routes.ts
+index 154ac8e5..0ca695d2 100644
+--- a/apps/whatsapp-agent/src/http/routes.ts
++++ b/apps/whatsapp-agent/src/http/routes.ts
+@@ -0,0 +1,2 @@
++import type { CampaignMetaStatus, CampaignMetaSummary } from "../campaigns/campaignRecipientResultTruth.js";
++import { projectCampaignJobExecution, aggregateCampaignExecution, type CampaignExecutionPresentation } from "../campaigns/campaignExecutionPresentation.js";
+@@ -29697,31 +29698,0 @@ function serializeCampaign(campaign: {
+-type CampaignMetaStatus = {
+-  waId: string;
+-  leadId?: string | null;
+-  contactName?: string | null;
+-  phoneDisplay?: string | null;
+-  crmStatus?: string | null;
+-  crmStatusLabel?: string | null;
+-  templateName: string | null;
+-  status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
+-  sentAt: string | null;
+-  deliveredAt: string | null;
+-  billable: boolean;
+-  nonBillingReason: string | null;
+-  pricingCategory: string | null;
+-  pricingBillable: boolean | null;
+-  pricingModel: string | null;
+-  conversationId: string | null;
+-  error: string | null;
+-};
+-
+-type CampaignMetaSummary = {
+-  totalSent: number;
+-  totalDelivered: number;
+-  totalRead: number;
+-  totalFailed: number;
+-  totalBlocked: number;
+-  totalOptOut: number;
+-  totalSkipped: number;
+-  totalPending: number;
+-};
+-
+@@ -36159 +36130 @@ type CampaignReadSources = {
+-    status: string; errorBody: string | null; rawPayload: Prisma.JsonValue | null; createdAt: Date }>;
++    status: string; metaMessageId: string | null; errorBody: string | null; rawPayload: Prisma.JsonValue | null; createdAt: Date }>;
+@@ -36179 +36150 @@ async function loadCampaignReadSources(prisma: ReturnType<typeof getPrisma>, cli
+-          status: true, errorBody: true, rawPayload: true, createdAt: true },
++          status: true, metaMessageId: true, errorBody: true, rawPayload: true, createdAt: true },
+@@ -36187,3 +36158,3 @@ async function loadCampaignReadSources(prisma: ReturnType<typeof getPrisma>, cli
+-        where: { clientId, messageId: { in: group }, eventName: { in: [
+-          "campaign.seed.saved", CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT, "campaign.recipient.import_blocked",
+-        ] } },
++        where: { clientId, eventName: { in: [
++          "campaign.seed.saved", CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT, "campaign.recipient.import_blocked", "campaign.message.provider_accepted",
++        ] }, OR: [{ messageId: { in: group } }, ...group.map(id => ({ eventName: "campaign.message.provider_accepted", payloadJson: { path: ["campaignId"], equals: id } }))] },
+@@ -36209 +36180,2 @@ function campaignResultProjection(
+-  const hasResults = knownSuccesses + explicitBlocked + summary.totalFailed + summary.totalPending > 0;
++  const notSubmittedCount = summary.totalNotSubmitted ?? 0;
++  const hasResults = knownSuccesses + explicitBlocked + summary.totalFailed + summary.totalPending + notSubmittedCount > 0;
+@@ -36213 +36185 @@ function campaignResultProjection(
+-    sentCount + explicitBlocked + summary.totalFailed + summary.totalPending);
++    sentCount + explicitBlocked + summary.totalFailed + summary.totalPending + notSubmittedCount);
+@@ -36216,2 +36188,2 @@ function campaignResultProjection(
+-    progress: { totalRecipients, sentCount, blockedCount, failedCount: summary.totalFailed,
+-      pendingCount: Math.max(summary.totalPending, totalRecipients - sentCount - blockedCount - summary.totalFailed, 0) },
++    progress: { totalRecipients, sentCount, blockedCount, failedCount: summary.totalFailed, notSubmittedCount,
++      pendingCount: Math.max(summary.totalPending, totalRecipients - sentCount - blockedCount - summary.totalFailed - notSubmittedCount, 0) },
+@@ -36239 +36211 @@ function campaignSetResultProjection(
+-      pendingCount: projections.length ? sum("pendingCount") : plannedRecipientCount },
++      pendingCount: projections.length ? sum("pendingCount") : plannedRecipientCount, notSubmittedCount: sum("notSubmittedCount") },
+@@ -36260,0 +36233 @@ export async function buildCampaignListPayload(
++  const queueMap = await buildCampaignExecutionQueueMap(prisma, { clientId: params.clientId, campaignIds: [...scoped.keys()] });
+@@ -36263,2 +36236 @@ export async function buildCampaignListPayload(
+-    await buildCampaignRecipientReadModel(prisma, campaign, params.clientId, sources));
+-  const queueMap = await buildCampaignExecutionQueueMap(prisma, { clientId: params.clientId, campaignIds: ids });
++    await buildCampaignRecipientReadModel(prisma, campaign, params.clientId, sources, queueMap.get(campaign.id)?.executionState));
+@@ -36281,0 +36254,2 @@ export async function buildCampaignListPayload(
++      executionState: batch ? aggregateCampaignExecution(children.map(link => models.get(link.campaignId)?.observedExecutionState ?? queueMap.get(link.campaignId)?.executionState ?? { state: "unconfirmed" }), batch.status)
++        : model.observedExecutionState ?? queueMap.get(campaign.id)?.executionState ?? aggregateCampaignExecution([], campaign.status),
+@@ -36292,0 +36267 @@ async function buildCampaignExecutionQueueMap(
++    executionState: CampaignExecutionPresentation;
+@@ -36316 +36291 @@ async function buildCampaignExecutionQueueMap(
+-        select: { id: true, name: true, status: true, chunkCount: true },
++        select: { id: true, clientId: true, name: true, status: true, chunkCount: true },
+@@ -36330,0 +36306,2 @@ async function buildCampaignExecutionQueueMap(
++  const tenantLease = await prisma.tenantCampaignExecutionLease.findUnique({ where: { clientId: params.clientId } });
++  const observedAt = new Date();
+@@ -36332,0 +36310 @@ async function buildCampaignExecutionQueueMap(
++    const scopedBatch = job.batch?.clientId === params.clientId ? job.batch : null;
+@@ -36333,0 +36312 @@ async function buildCampaignExecutionQueueMap(
++      executionState: job.batch && !scopedBatch ? { state: "uncertain" } : projectCampaignJobExecution({ ...job, leaseConfirmed: Boolean(tenantLease && tenantLease.jobId === job.id && tenantLease.leaseToken === job.leaseToken && tenantLease.ownerId === job.leaseOwner && tenantLease.expiresAt > observedAt) }, scopedBatch?.status, observedAt),
+@@ -36343,3 +36322,3 @@ async function buildCampaignExecutionQueueMap(
+-      batchId: job.batchId ?? null,
+-      batchStatus: job.batch?.status ?? null,
+-      batchName: job.batch?.name ?? null,
++      batchId: scopedBatch?.id ?? null,
++      batchStatus: scopedBatch?.status ?? null,
++      batchName: scopedBatch?.name ?? null,
+@@ -36347 +36326 @@ async function buildCampaignExecutionQueueMap(
+-      chunkCount: job.batch?.chunkCount ?? null,
++      chunkCount: scopedBatch?.chunkCount ?? null,
+@@ -36404 +36383 @@ export async function buildCampaignExecutionBatchSummary(
+-    if (child) recipientModels.set(child.id, await buildCampaignRecipientReadModel(prisma, child, params.clientId));
++    if (child) recipientModels.set(child.id, await buildCampaignRecipientReadModel(prisma, child, params.clientId, undefined, queueMap.get(child.id)?.executionState));
+@@ -36419,0 +36399 @@ export async function buildCampaignExecutionBatchSummary(
++      executionState: recipientModels.get(item.campaignId)?.observedExecutionState ?? queue?.executionState ?? aggregateCampaignExecution([], item.campaign.status),
+@@ -36433,2 +36413,2 @@ export async function buildCampaignExecutionBatchSummary(
+-  const runningChunks = chunks.filter((item) => item.queueStatus === "running" || item.status === "sending").length;
+-  const queuedChunks = chunks.filter((item) => item.queueStatus === "queued" || item.status === "scheduled").length;
++  const runningChunks = chunks.filter((item) => ["processing", "user_pause_requested"].includes(item.executionState.state)).length;
++  const queuedChunks = chunks.filter((item) => item.executionState.state === "queued").length;
+@@ -36439,0 +36420 @@ export async function buildCampaignExecutionBatchSummary(
++    executionState: aggregateCampaignExecution(chunks.map(item => item.executionState), batch.status),
+@@ -36457,0 +36439,2 @@ export async function buildCampaignExecutionBatchSummary(
++      suspendedChunks: chunks.filter(item => item.executionState.state === "operational_suspension").length,
++      uncertainChunks: chunks.filter(item => item.executionState.state === "uncertain").length,
+@@ -36468 +36451 @@ async function buildCampaignRecipientReadModel(
+-  sources?: CampaignReadSources
++  sources?: CampaignReadSources, executionState?: CampaignExecutionPresentation
+@@ -36470,0 +36454,6 @@ async function buildCampaignRecipientReadModel(
++  const pendingAcceptance = loaded.events.some(event => {
++    if (event.eventName !== "campaign.message.provider_accepted") return false;
++    const payload = event.payloadJson as Record<string, unknown> | null;
++    return payload?.campaignId === campaign.id && !loaded.outboundMessages.some(out => out.messageId === event.messageId && (typeof payload.metaMessageId !== "string" || out.metaMessageId === payload.metaMessageId));
++  });
++  const observedExecutionState = pendingAcceptance && executionState?.state === "operational_suspension" ? { state: "uncertain" as const } : executionState;
+@@ -36550 +36539 @@ async function buildCampaignRecipientReadModel(
+-          campaign,
++          campaign: { ...campaign, cancellationConfirmed: observedExecutionState?.state === "cancelled" },
+@@ -36554 +36543 @@ async function buildCampaignRecipientReadModel(
+-  if (sources) return { draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus: visibleMessagesMetaStatus,
++  if (sources) return { observedExecutionState, draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus: visibleMessagesMetaStatus,
+@@ -36571 +36560 @@ async function buildCampaignRecipientReadModel(
+-  return { draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus,
++  return { observedExecutionState, draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus,
+@@ -36581 +36569,0 @@ export async function buildCampaignDetailPayload(
+-  const readModel = await buildCampaignRecipientReadModel(prisma, campaign, params.clientId);
+@@ -36585,0 +36574 @@ export async function buildCampaignDetailPayload(
++  const readModel = await buildCampaignRecipientReadModel(prisma, campaign, params.clientId, undefined, queueMap.get(campaign.id)?.executionState);
+@@ -36605,0 +36595 @@ export async function buildCampaignDetailPayload(
++      executionState: isController ? executionBatch.executionState : readModel.observedExecutionState ?? queueMap.get(campaign.id)?.executionState ?? aggregateCampaignExecution([], campaign.status),
+diff --git a/src/app/app/campaigns/page.tsx b/src/app/app/campaigns/page.tsx
+index 4d5b3e53..57e1d2fd 100644
+--- a/src/app/app/campaigns/page.tsx
++++ b/src/app/app/campaigns/page.tsx
+@@ -70,0 +71 @@ import {
++  getCampaignExecutionLabel,
+@@ -113 +114 @@ type RecipientSelectionMode = "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
+-type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "blocked" | "failed" | "pending";
++type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "blocked" | "failed" | "pending" | "not_submitted";
+@@ -543,0 +545,2 @@ function getMetaStatusLabel(status: string) {
++    case "not_submitted":
++      return "Não enviada";
+@@ -564,0 +568,2 @@ function getCampaignConfidence(campaign: CampaignItem) {
++  const executionLabel = getCampaignExecutionLabel(campaign.executionState?.state);
++  if (executionLabel) return { label: executionLabel, icon: "INFO", classes: campaign.executionState?.state === "uncertain" ? "campaign-panel-danger" : "campaign-panel-warning" };
+@@ -630,0 +636,2 @@ function getCampaignQueueLabel(campaign: CampaignItem) {
++  const operational = getCampaignExecutionLabel(campaign.executionState?.state);
++  if (operational) return operational;
+@@ -1709,0 +1717 @@ export default function AppCampaignsPage() {
++      { id: "not_submitted" as const, label: "Não enviados" },
+@@ -4385 +4393 @@ export default function AppCampaignsPage() {
+-                <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
++                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
+@@ -4392 +4400 @@ export default function AppCampaignsPage() {
+-                  <div className="flex shrink-0 items-center gap-2">
++                  <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+@@ -4394 +4402 @@ export default function AppCampaignsPage() {
+-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClasses(selectedCampaign.status)}`}>
++                      <span className={`inline-flex max-w-full break-words rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClasses(selectedCampaign.status)}`}>
+@@ -4458,2 +4466,2 @@ export default function AppCampaignsPage() {
+-                      <p className="text-[11px] uppercase tracking-wide text-white/60">Pendentes</p>
+-                      <p className="mt-1 font-semibold">{selectedCampaign.progress.pendingCount}</p>
++                      <p className="text-[11px] uppercase tracking-wide text-white/60">{selectedCampaign.executionState?.state === "cancelled" ? "Não enviados" : "Pendentes"}</p>
++                      <p className="mt-1 font-semibold">{selectedCampaign.executionState?.state === "cancelled" ? (selectedCampaign.progress.notSubmittedCount ?? 0) : selectedCampaign.progress.pendingCount}</p>
+diff --git a/src/components/app/CampaignBatchPanel.tsx b/src/components/app/CampaignBatchPanel.tsx
+index a4c07f52..d6e7a940 100644
+--- a/src/components/app/CampaignBatchPanel.tsx
++++ b/src/components/app/CampaignBatchPanel.tsx
+@@ -5,0 +6 @@ import { formatDateTime } from "@/lib/whatsappAdminApi";
++import { getCampaignExecutionLabel } from "@/lib/campaignPresentation";
+@@ -110 +111 @@ export default function CampaignBatchPanel(props: Props) {
+-          <p className="text-xs text-cyan-100/75">{props.sourceLabel(batch.sourceMode)} · {batch.chunkCount} lote(s) · {props.statusLabel(batch.status)}</p>
++          <p className="text-xs text-cyan-100/75">{props.sourceLabel(batch.sourceMode)} · {batch.chunkCount} lote(s) · {getCampaignExecutionLabel(batch.executionState?.state) ?? props.statusLabel(batch.status)}</p>
+@@ -113 +114 @@ export default function CampaignBatchPanel(props: Props) {
+-            <div><dt>Bloqueados</dt><dd>{batch.progress.blockedCount}</dd></div><div><dt>Pendentes</dt><dd>{batch.progress.pendingCount}</dd></div>
++            <div><dt>Bloqueados</dt><dd>{batch.progress.blockedCount}</dd></div><div><dt>{batch.executionState?.state === "cancelled" ? "Não enviados" : "Pendentes"}</dt><dd>{batch.executionState?.state === "cancelled" ? (batch.progress.notSubmittedCount ?? 0) : batch.progress.pendingCount}</dd></div>
+@@ -127 +128 @@ export default function CampaignBatchPanel(props: Props) {
+-                  <td className="p-2">{props.statusLabel(chunk.status)}<br /><span className="text-xs text-white/65">{props.queueLabel(chunk.queueStatus, chunk.queuePosition)}</span></td>
++                  <td className="p-2">{getCampaignExecutionLabel(chunk.executionState?.state) ?? props.statusLabel(chunk.status)}{getCampaignExecutionLabel(chunk.executionState?.state) ? null : <><br /><span className="text-xs text-white/65">{props.queueLabel(chunk.queueStatus, chunk.queuePosition)}</span></>}</td>
+diff --git a/src/lib/campaignPresentation.ts b/src/lib/campaignPresentation.ts
+index 8317f6a5..0a377fe5 100644
+--- a/src/lib/campaignPresentation.ts
++++ b/src/lib/campaignPresentation.ts
+@@ -0,0 +1 @@
++import type { CampaignExecutionPresentation } from "./whatsappAdminApi";
+@@ -3 +4 @@ import { getCampaignStatusUxLabel } from "./appUxLabels";
+-type CampaignLifecycle = { status: string; scheduledAt?: string | null };
++type CampaignLifecycle = { status: string; scheduledAt?: string | null; executionState?: CampaignExecutionPresentation };
+@@ -13,0 +15,13 @@ export function getCampaignListStatus(campaign: CampaignLifecycle) {
++export function getCampaignExecutionLabel(state?: CampaignExecutionPresentation["state"]) {
++  switch (state) {
++    case "processing": return "Processando";
++    case "user_pause_requested": return "Pausa solicitada — aguardando a operação atual";
++    case "user_paused": return "Pausada pelo usuário";
++    case "operational_suspension": return "Suspensa operacionalmente";
++    case "uncertain": return "Resultado incerto — revisão necessária";
++    case "unconfirmed": return "Processamento não confirmado";
++    case "cancelled": return "Cancelada — envios restantes encerrados";
++    default: return null;
++  }
++}
++
+@@ -14,0 +29,2 @@ export function getCampaignPresentationLabel(campaign: CampaignLifecycle) {
++  const operational = getCampaignExecutionLabel(campaign.executionState?.state);
++  if (operational && (campaign.executionState?.state !== "unconfirmed" || campaign.status === "sending")) return operational;
+@@ -20 +36 @@ export function shouldRefreshCampaign(campaign: CampaignLifecycle) {
+-  return campaign.status === "scheduled" || campaign.status === "sending";
++  return campaign.status === "scheduled" || campaign.status === "sending" || ["user_pause_requested", "uncertain", "processing"].includes(campaign.executionState?.state ?? "");
+diff --git a/src/lib/whatsappAdminApi.ts b/src/lib/whatsappAdminApi.ts
+index 94b13b01..aa5479a7 100644
+--- a/src/lib/whatsappAdminApi.ts
++++ b/src/lib/whatsappAdminApi.ts
+@@ -510,0 +511,2 @@ export type LeadNoteItem = {
++export type CampaignExecutionPresentation = { state: "processing" | "queued" | "user_pause_requested" | "user_paused" | "operational_suspension" | "uncertain" | "cancelled" | "terminal" | "unconfirmed" | "not_started" };
++
+@@ -511,0 +514 @@ export type CampaignItem = {
++  executionState?: CampaignExecutionPresentation;
+@@ -528,0 +532 @@ export type CampaignItem = {
++    notSubmittedCount?: number;
+@@ -530,0 +535 @@ export type CampaignItem = {
++    executionState?: CampaignExecutionPresentation;
+@@ -546,0 +552 @@ export type CampaignItem = {
++    executionState?: CampaignExecutionPresentation;
+@@ -564,0 +571 @@ export type CampaignItem = {
++      notSubmittedCount?: number;
+@@ -566,0 +574,2 @@ export type CampaignItem = {
++      suspendedChunks?: number;
++      uncertainChunks?: number;
+@@ -570,0 +580 @@ export type CampaignItem = {
++      executionState?: CampaignExecutionPresentation;
+@@ -594,0 +605 @@ export type CampaignItem = {
++    totalNotSubmitted?: number;
+@@ -609 +620 @@ export type CampaignItem = {
+-    status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
++    status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out" | "not_submitted";

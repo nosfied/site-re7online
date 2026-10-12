@@ -1,0 +1,97 @@
+{
+  "scope": "hashes only; private originals excluded from Git",
+  "evidence": {
+    "database-fresh.private.dump": {
+      "sha256": "14f8e4730fb02d619455f531a1773177c2cd71d5231e297c37977918f29bf8d7",
+      "bytes": 36824466
+    },
+    "controls-runtime.private.tar.gz": {
+      "sha256": "6d1e7e4e99f98efe8c0b72c3182af929d10234e9340635356c6424cb2aa09581",
+      "bytes": 11177
+    },
+    "out15-close-input.private.json": {
+      "sha256": "600ad3569fd28a9999adc2457f2f13e5f4201ebd985d232fcd94f669f8a6c0e2",
+      "bytes": 1834
+    },
+    "close-preflight-current-v2.private.json": {
+      "sha256": "82b2c63d9b085245b80de8c5a35ecb9cc460d0525f2641ad86eff016ad23ad65",
+      "bytes": 23576
+    },
+    "close-restored-canonical.private.json": {
+      "sha256": "5fb6e6a2c7decaef4fe18a504ccdf02ec8b4b50e8477163e2776131d25ddb4a6",
+      "bytes": 1157
+    },
+    "close-restored-after.private.json": {
+      "sha256": "9352a2907f0db012bbf05666a4cdc42be0040fa038df9dd2b9e332b8f8c06256",
+      "bytes": 802
+    },
+    "post-reboot/operational-final.private.log": {
+      "sha256": "4b942c0381bb208a00f1c4e85eb391846502dda10861b7384c7bbb6b30dbd78b",
+      "bytes": 2471
+    },
+    "post-reboot/api-build-v2.private.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "post-reboot/frontend-build-v2.private.log": {
+      "sha256": "a198800d229c2bd131d7690fb34aab1004e7ae894114d5f8656280d1d76a3a65",
+      "bytes": 3144
+    },
+    "post-reboot/frontend-unit-v2.private.log": {
+      "sha256": "3c618717b64d5951578a9f2757e254ccd88533decef0fbe140474aaaba453a8b",
+      "bytes": 461
+    },
+    "post-reboot/browser-final.private.log": {
+      "sha256": "9c887bd3b6fdcd6a6cd3084e6dd3ddc638d2a9aa685157a1df4bc46ec5f26cef",
+      "bytes": 1103
+    },
+    "post-reboot/package-verification.private.log": {
+      "sha256": "8de7b42a2c91f5329bc71d55da998ff6259f11f2e97813c67ef54f36c264fa38",
+      "bytes": 88
+    },
+    "post-reboot/browser-preview.private.log": {
+      "sha256": "df2b3eacbea1ce1d7f99f2e86c086e09059608a9dab1e5d2a792a504d3a5a299",
+      "bytes": 700
+    },
+    "post-reboot/production-read.private.json": {
+      "sha256": "ec2c6309173e15161fd0c69e7a2038f7edc903c8109ee04b5215d28368e228dc",
+      "bytes": 51035
+    },
+    "post-reboot/capacity-current.private.log": {
+      "sha256": "fcf29f42f5289747115843ae5a148408dc8256b47b7d43850006daca4f8bea92",
+      "bytes": 302
+    },
+    "post-reboot/capacity-postgres-current.private.log": {
+      "sha256": "952fe9304face2b5a9fb11863136dc30baf0a193d4f4555542d083e5e1db47b7",
+      "bytes": 166
+    },
+    "post-reboot/api-artifact/api-overlay.tar": {
+      "sha256": "b90ca705063a7101516c4f3df54f1ebf6f23de850107433f5d3ced066cdd57ae",
+      "bytes": 3102720
+    },
+    "post-reboot/frontend-artifact/frontend-dynamic-integrated.tar.gz": {
+      "sha256": "74a2ac2fcf93b32623fa2e0dfa857d1792cfd503e1f46cee09e6f94f3ca2216f",
+      "bytes": 178428455
+    },
+    "post-reboot/exact-api-tests.private.log": {
+      "sha256": "f162b214c67c5ca740e85bcb277d86be6383e38cc69a86590f636c2bbb438be7",
+      "bytes": 2471
+    },
+    "post-reboot/exact-composition.private.json": {
+      "sha256": "09e38962de84f994c59d154071d03a486d1ad3f5a13bb9ed8dfebe2f5c3e9a46",
+      "bytes": 444
+    },
+    "post-reboot/lint.private.log": {
+      "sha256": "531e1fbc34bbcc657dd9d852852333855ada50ab3f98273cfe6b6de87d67bb87",
+      "bytes": 1004
+    },
+    "post-reboot/lint-baseline.private.txt": {
+      "sha256": "ccffb31b95e0e46621658dfd41e67bec97cf842763953dc423a4b9de30340bc8",
+      "bytes": 145
+    },
+    "post-reboot/active-dist.private.tar": {
+      "sha256": "49f2550fa6024ac39bf4325442e8105eaabe4a8fabd256357079880e7f4711c1",
+      "bytes": 8120320
+    }
+  }
+}
