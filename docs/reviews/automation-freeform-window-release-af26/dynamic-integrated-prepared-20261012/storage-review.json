@@ -1,0 +1,68 @@
+{
+  "result": "COMPLETE_READ_ONLY",
+  "rootObservationSha256": "b0af5d143cf00e2d5aa5704e7cf09d3249927d3a6e01690f1e2d6fdb47bcd4c2",
+  "readerSha256": "2cd7f25e96e9a4fcd796a4f06dde59c288945c3eccb2345c34e35982ef6d0e49",
+  "indexSha256": "39b5b962e0465e8d115a8b95e29b0e8bda6bd5356fcd9323fac923fad64e984f",
+  "samples": 2,
+  "owners": [
+    0,
+    0
+  ],
+  "incomplete": [
+    0,
+    0
+  ],
+  "referencesScanned": 4174,
+  "redundantPathReferences": 0,
+  "custody": {
+    "result": "PASS",
+    "blobSha256": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810",
+    "bytes": 479460086,
+    "tarMembers": 784,
+    "extractedFilesReverified": 765,
+    "indexSha256": "39b5b962e0465e8d115a8b95e29b0e8bda6bd5356fcd9323fac923fad64e984f",
+    "recoverableAllocatedBytes": 958939136,
+    "removed": false
+  },
+  "withdrawalAuthorized": false,
+  "withdrawalExecuted": false,
+  "policies": {
+    "/usr/local/libexec/re7/frontend-socket-observer-policy.json": "7a9615f9685cc818d0b4254908d3fea482d056207b8bb81e420ce7367bbfd472",
+    "/usr/local/libexec/re7/frontend-permanent-observer-policy.json": "3519d4b1ed13fe5d0639df4735314b5f674d3a4f991b48e72511d4f6c5c44391",
+    "/usr/local/libexec/re7/incident-6683-window-policy.json": "620a119f931fff9f52c6403aa940ed31a5d1471bc2abdd6a1adee8d17e6ee62f"
+  },
+  "withdrawDriverSha256": "ba8f0bdc6e97e85632ff124ce430d6a72035f4ad32c620b22e329827f10dc379",
+  "postReaderSha256": "e9851a2660a0e4797625cfba57fb58bfba8857a40c11a1812583ad805f227a06",
+  "proposedRecoverableBytes": 958939136,
+  "actualCapacity": {
+    "result": "DENY",
+    "at": "2026-10-12T15:56:46Z",
+    "availableDeployBytes": 2238144512,
+    "requiredFreeBytes": 3063001639,
+    "shortfallBytes": 824857127,
+    "components": {
+      "productionReserveBytes": 2131755008,
+      "frontendTarBytes": 178428455,
+      "frontendAllocatedBytes": 660594688,
+      "apiBaseWithoutSharedDependenciesBytes": 36171776,
+      "apiOverlayBytes": 3102720,
+      "controlsBudgetBytes": 16777216,
+      "postCancellationCompatibleApiReturnBytes": 36171776
+    },
+    "limits": "CAPACITY DENY actual; projected margin is not reclaimed space or operational PASS; current WAL and future staging need reconfirmation",
+    "availablePostgresBytes": 2238144512,
+    "postgresAt": "2026-10-12T15:21:33Z",
+    "minimumAvailableBytes": 2238144512,
+    "proposedReclaimBytes": 958939136,
+    "reviewReferenceShortfallBytes": 807412263,
+    "reviewReferenceNote": "Reference supplied by review; actual dated raw samples and new calculation retained separately.",
+    "projectedAvailableBytes": 3197083648,
+    "projectedMarginBytes": 134082009,
+    "budgetFitsNow": false,
+    "capacityCertified": false
+  },
+  "referenceLimits": "4174 bounded files in preparations/PM2/root libexec; explicit paths/relative paths; not a certificate of absence from arbitrary external programs",
+  "localHistoricalBasenameReferences": 9,
+  "historicalReferencesPreservedOnVps": true,
+  "historicalReferenceIndexSha256": "c375eb3e4d06aabab84561157e1be1adbef26c22840e934710986434c527de98"
+}

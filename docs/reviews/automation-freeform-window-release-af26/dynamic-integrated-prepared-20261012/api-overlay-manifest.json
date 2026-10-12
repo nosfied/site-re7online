@@ -29,14 +29,14 @@
     },
     {
       "path": "src/http/routes.ts",
-      "sha256": "b67b733ce5061d37ddf1e4766fc20e0ccd196a6fbe5e1119b195a6055e055309",
-      "bytes": 1438469,
+      "sha256": "e811d913fc584aeb715fb15d0b0fb9c1eda9302ed46b4c550784711a5085c2c2",
+      "bytes": 1438501,
       "originSha256": "479f94eb1714ff5912782e0f2d3103000ba0a7e38bf5b6eb478c768d302c08b4"
     },
     {
       "path": "dist/http/routes.js",
-      "sha256": "20554aa90c0e0efb5496784e5ca4672c2a8f3583812f399a1c6fe92716025443",
-      "bytes": 1600820,
+      "sha256": "41f7f15814d7f45429d489e81588a76f2383a3acd01c54813335418a11bec715",
+      "bytes": 1600854,
       "originSha256": "0118b7d3d4a9ca619863b4dd6c52d41717f1454049e8112c974238836163402f"
     },
     {
@@ -52,7 +52,7 @@
       "originSha256": null
     }
   ],
-  "tarSha256": "b90ca705063a7101516c4f3df54f1ebf6f23de850107433f5d3ced066cdd57ae",
+  "tarSha256": "6033ac56931c47edaa01301fc3537a8012368bb33fe1d423c99e84ed1dde33a5",
   "tarBytes": 3102720,
   "unchanged": [
     "acceptedResult",

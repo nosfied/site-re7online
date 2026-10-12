@@ -1,0 +1,8 @@
+{
+  "base": "cf55655b2079222d9fbcb021de566545a47d3000",
+  "patchSha256": "fb406da401904d29f115adc0e7789fc81ac6a3932b69dbd7b570d4edc89a3a2c",
+  "changedRuntimeOnly": "dist/http/routes.js",
+  "currentApiTarSha256": "6033ac56931c47edaa01301fc3537a8012368bb33fe1d423c99e84ed1dde33a5",
+  "frontendTarUnchanged": "74a2ac2fcf93b32623fa2e0dfa857d1792cfd503e1f46cee09e6f94f3ca2216f",
+  "applyRequires": "git apply --unidiff-zero on stated base, source-only; no production apply"
+}

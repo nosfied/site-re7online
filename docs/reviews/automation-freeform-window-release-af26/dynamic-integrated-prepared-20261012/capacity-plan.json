@@ -1,19 +1,27 @@
 {
   "result": "DENY",
-  "at": "2026-10-12T15:19:39Z",
-  "availableDeployBytes": 2219524096,
-  "requiredFreeBytes": 3026829863,
-  "shortfallBytes": 807359015,
+  "at": "2026-10-12T15:56:46Z",
+  "availableDeployBytes": 2238144512,
+  "requiredFreeBytes": 3063001639,
+  "shortfallBytes": 824857127,
   "components": {
     "productionReserveBytes": 2131755008,
     "frontendTarBytes": 178428455,
     "frontendAllocatedBytes": 660594688,
     "apiBaseWithoutSharedDependenciesBytes": 36171776,
     "apiOverlayBytes": 3102720,
-    "controlsBudgetBytes": 16777216
+    "controlsBudgetBytes": 16777216,
+    "postCancellationCompatibleApiReturnBytes": 36171776
   },
-  "limits": "dated observation; postgres sample and WAL checked separately; no deletion authorized; no executable operational generation rendered",
-  "availablePostgresBytes": 2219470848,
+  "limits": "CAPACITY DENY actual; projected margin is not reclaimed space or operational PASS; current WAL and future staging need reconfirmation",
+  "availablePostgresBytes": 2238144512,
   "postgresAt": "2026-10-12T15:21:33Z",
-  "minimumAvailableBytes": 2219470848
+  "minimumAvailableBytes": 2238144512,
+  "proposedReclaimBytes": 958939136,
+  "reviewReferenceShortfallBytes": 807412263,
+  "reviewReferenceNote": "Reference supplied by review; actual dated raw samples and new calculation retained separately.",
+  "projectedAvailableBytes": 3197083648,
+  "projectedMarginBytes": 134082009,
+  "budgetFitsNow": false,
+  "capacityCertified": false
 }

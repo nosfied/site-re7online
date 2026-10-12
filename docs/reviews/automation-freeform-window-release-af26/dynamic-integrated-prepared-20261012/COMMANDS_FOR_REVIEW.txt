@@ -1,12 +1,15 @@
+CURRENT: revised acceptance boundary / concrete two-file withdrawal proposal in STORAGE_WITHDRAWAL_FOR_REVIEW.md. Withdrawal and deploy NOT AUTHORIZED here. Compatible operational return must be staged before historical cancel.
+
 STATUS: NOT DEPLOYED / CAPACITY DENY / NO OPERATIONAL INSTALLATION OR WINDOW COMMAND IS AUTHORIZED HERE.
 Run from the existing review worktree. These commands verify local bytes only.
 
 set -euo pipefail
 D=docs/reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012
 P=local-evidence/dynamic-integrated-20261012/post-reboot
-test "$(sha256sum "$P/api-artifact/api-overlay.tar" | cut -d' ' -f1)" = b90ca705063a7101516c4f3df54f1ebf6f23de850107433f5d3ced066cdd57ae
+A=local-evidence/dynamic-integrated-20261012/continuation-cf55655b/api-artifact-v2
+test "$(sha256sum "$A/api-overlay.tar" | cut -d' ' -f1)" = 6033ac56931c47edaa01301fc3537a8012368bb33fe1d423c99e84ed1dde33a5
 test "$(sha256sum "$P/frontend-artifact/frontend-dynamic-integrated.tar.gz" | cut -d' ' -f1)" = 74a2ac2fcf93b32623fa2e0dfa857d1792cfd503e1f46cee09e6f94f3ca2216f
-python3 "$D/verify-overlay.py" "$P/api-artifact/api-overlay.tar" "$D/api-overlay-manifest.json"
+python3 "$D/verify-overlay.py" "$A/api-overlay.tar" "$D/api-overlay-manifest.json"
 python3 "$D/verify-frontend.py" "$P/frontend-artifact/package" e0c66407d0b56748547d0d03f7a2b1b88d63a75cadde22f8cc8bbd03bac4054b
 
 READ-ONLY historical cancellation preflight, never an apply:

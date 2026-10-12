@@ -1,0 +1,53 @@
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignOperationalPresentation.test.ts b/apps/whatsapp-agent/src/campaigns/campaignOperationalPresentation.test.ts
+index 4f247edd..a00376c3 100644
+--- a/apps/whatsapp-agent/src/campaigns/campaignOperationalPresentation.test.ts
++++ b/apps/whatsapp-agent/src/campaigns/campaignOperationalPresentation.test.ts
+@@ -11,0 +12 @@ import { createServer } from "node:http";
++import { pathToFileURL } from "node:url";
+@@ -106,0 +108,15 @@ test("real list/detail/polling show suspended child/controller and canonical can
++ const returnRoot=process.env.RE7_COMPATIBLE_RETURN_ROOT;
++ if(returnRoot){
++  assert.ok(path.isAbsolute(returnRoot)&&returnRoot.endsWith("/compatible-return/apps/whatsapp-agent"));
++  const readers=await import(pathToFileURL(path.join(returnRoot,"dist/http/routes.js")).href);
++  const returnDb=await import(pathToFileURL(path.join(returnRoot,"dist/db.js")).href);
++  returnDb.setPrismaForTesting(db);
++  try{
++   for(const row of(await readers.buildCampaignListPayload(db,{clientId:f.client.id,limit:100})).items){assertSix(row);assert.equal(row.executionState.state,"cancelled");const detail=(await readers.buildCampaignDetailPayload(db,{clientId:f.client.id,campaignId:row.id})).campaign;assertSix(detail);}
++   const returnControl=await import(pathToFileURL(path.join(returnRoot,"dist/campaigns/campaignBatchControl.js")).href);
++   const denial=await returnControl.applyCampaignExecutionBatchAction(db,{...action,action:"resume",requestId:"return-deny-resume"});assert.equal(denial.ok,false);assert.equal(denial.status,409);assert.equal(denial.error,"campaign_batch_not_resumable");
++   const returnQueue=await import(pathToFileURL(path.join(returnRoot,"dist/campaigns/campaignExecutionQueue.js")).href);
++   assert.equal(await returnQueue.claimNextCampaignExecutionJob(db,{ownerId:"compatible-return",leaseMs:30000}),null);
++   assert.equal(await preserved(),before,"compatible return cannot change six results or manufacture submissions");
++  }finally{returnDb.setPrismaForTesting(undefined);}
++ }
+@@ -130,0 +147,22 @@ test("foreign batch metadata cannot leak through a tenant-owned malformed job",a
++
++
++test("known acceptance remains uncertain across canonical cancellation in list detail and lot",async()=>{
++ const f=await fixture();await db.campaignExecutionJob.create({data:{clientId:f.client.id,batchId:f.batch.id,campaignId:f.child.id,kind:"batch_chunk",status:"queued",attempt:1,failureReason:"operational_suspension",idempotencyKey:"cancel-known-acceptance",eligibleAt:new Date(0)}});
++ const messageId=`campaign.${f.child.id}.7`;
++ await db.event.create({data:{clientId:f.client.id,messageId,eventName:"campaign.message.provider_accepted",payloadJson:{campaignId:f.child.id,metaMessageId:"synthetic-cancel-accepted"}}});
++ assert.deepEqual(await applyCampaignExecutionBatchAction(db,{clientId:f.client.id,batchId:f.batch.id,action:"cancel",userId:"synthetic",requestId:"cancel-known"}),{ok:true});
++ async function check(){
++  const rows=(await buildCampaignListPayload(db,{clientId:f.client.id,limit:100})).items;
++  for(const item of rows){assert.equal(item.status,"cancelled");assert.equal(item.executionState.state,"uncertain");assertSix(item);assert.equal(item.progress.notSubmittedCount,0);}
++  for(const id of [f.parent.id,f.child.id]){
++   const item=(await buildCampaignDetailPayload(db,{clientId:f.client.id,campaignId:id}))!.campaign;
++   assert.equal(item.executionState.state,"uncertain");assertSix(item);assert.equal(item.progress.notSubmittedCount,0);
++   assert.ok(item.executionBatch);assert.equal(item.executionBatch.executionState.state,"uncertain");assert.equal(item.executionBatch.chunks[0].executionState.state,"uncertain");
++  }
++ }
++ await check();
++ await db.outboundMessage.create({data:{clientId:f.client.id,waId:f.recipients[6],messageId,metaMessageId:"different-meta-id",type:"TEMPLATE",status:"SENT",rawPayload:{campaignId:f.child.id}}});
++ for(const row of(await buildCampaignListPayload(db,{clientId:f.client.id,limit:100})).items){assert.equal(row.executionState.state,"uncertain");assert.equal(row.progress.notSubmittedCount,0);}
++ await db.outboundMessage.deleteMany({where:{clientId:f.client.id,messageId}});
++ await check();assert.equal(providerCalls,0);
++});
+diff --git a/apps/whatsapp-agent/src/http/routes.ts b/apps/whatsapp-agent/src/http/routes.ts
+index 0ca695d2..8366c12a 100644
+--- a/apps/whatsapp-agent/src/http/routes.ts
++++ b/apps/whatsapp-agent/src/http/routes.ts
+@@ -36459 +36459,2 @@ async function buildCampaignRecipientReadModel(
+-  const observedExecutionState = pendingAcceptance && executionState?.state === "operational_suspension" ? { state: "uncertain" as const } : executionState;
++  // A cancelled executor is not evidence that an accepted submission never happened.
++  const observedExecutionState = pendingAcceptance ? { state: "uncertain" as const } : executionState;

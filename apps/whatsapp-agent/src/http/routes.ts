@@ -36456,7 +36456,8 @@ async function buildCampaignRecipientReadModel(
     const payload = event.payloadJson as Record<string, unknown> | null;
     return payload?.campaignId === campaign.id && !loaded.outboundMessages.some(out => out.messageId === event.messageId && (typeof payload.metaMessageId !== "string" || out.metaMessageId === payload.metaMessageId));
   });
-  const observedExecutionState = pendingAcceptance && executionState?.state === "operational_suspension" ? { state: "uncertain" as const } : executionState;
+  // A cancelled executor is not evidence that an accepted submission never happened.
+  const observedExecutionState = pendingAcceptance ? { state: "uncertain" as const } : executionState;
   const outboundMessages = loaded.outboundMessages.filter(item => resolveOutboundCampaignId(item) === campaign.id);
   const messagesMetaStatus = outboundMessages
     .filter((item) => resolveOutboundCampaignId(item) === campaign.id)

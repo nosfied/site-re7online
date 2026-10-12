@@ -1,0 +1,15 @@
+{
+  "role": "post-cancellation-compatible-operational-return",
+  "baseRelease": "campaign-result-truth-2ed9dccc-20261011T184000Z",
+  "overlayTarSha256": "6033ac56931c47edaa01301fc3537a8012368bb33fe1d423c99e84ed1dde33a5",
+  "frontendReturn": "same new frontend validated tar; old3227 only before historical cancel",
+  "worker": "afbb unchanged",
+  "runtimeModules": {
+    "http/routes.js": "41f7f15814d7f45429d489e81588a76f2383a3acd01c54813335418a11bec715",
+    "campaigns/campaignEligibility.js": "cc246cedfc4ab8d0d1e51d32a41645d3d368c8f816efbae2f0bdce3bf34c6930",
+    "campaigns/campaignRecipientResultTruth.js": "420e3023032202e30dc26fcf2190005a803f7b827307d46c1c0ca8d66c23f82a",
+    "campaigns/campaignExecutionPresentation.js": "0f65704113715d855d89b707a8e90387bc4b32b0bbdbd246b87609fe94f4f6d3"
+  },
+  "semanticRollback": false,
+  "notDeployed": true
+}

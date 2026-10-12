@@ -9,6 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createServer } from "node:http";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
 import { setPrismaForTesting } from "../db.js";
@@ -104,6 +105,21 @@ test("real list/detail/polling show suspended child/controller and canonical can
  assert.equal((await db.campaignExecutionJob.findUniqueOrThrow({where:{id:job.id}})).status,"cancelled");assert.equal((await db.campaignExecutionBatch.findUniqueOrThrow({where:{id:f.batch.id}})).status,"cancelled");
  assert.equal((await db.campaignExecutionBatchCampaign.findFirstOrThrow({where:{batchId:f.batch.id}})).status,"cancelled");
  for(let tick=0;tick<2;tick++)for(const row of(await buildCampaignListPayload(db,{clientId:f.client.id,limit:100})).items){assertSix(row);assert.equal(row.status,"cancelled");assert.equal(row.executionState.state,"cancelled");const detail=(await buildCampaignDetailPayload(db,{clientId:f.client.id,campaignId:row.id}))!.campaign;assertSix(detail);assert.equal(detail.executionState.state,"cancelled");}
+ const returnRoot=process.env.RE7_COMPATIBLE_RETURN_ROOT;
+ if(returnRoot){
+  assert.ok(path.isAbsolute(returnRoot)&&returnRoot.endsWith("/compatible-return/apps/whatsapp-agent"));
+  const readers=await import(pathToFileURL(path.join(returnRoot,"dist/http/routes.js")).href);
+  const returnDb=await import(pathToFileURL(path.join(returnRoot,"dist/db.js")).href);
+  returnDb.setPrismaForTesting(db);
+  try{
+   for(const row of(await readers.buildCampaignListPayload(db,{clientId:f.client.id,limit:100})).items){assertSix(row);assert.equal(row.executionState.state,"cancelled");const detail=(await readers.buildCampaignDetailPayload(db,{clientId:f.client.id,campaignId:row.id})).campaign;assertSix(detail);}
+   const returnControl=await import(pathToFileURL(path.join(returnRoot,"dist/campaigns/campaignBatchControl.js")).href);
+   const denial=await returnControl.applyCampaignExecutionBatchAction(db,{...action,action:"resume",requestId:"return-deny-resume"});assert.equal(denial.ok,false);assert.equal(denial.status,409);assert.equal(denial.error,"campaign_batch_not_resumable");
+   const returnQueue=await import(pathToFileURL(path.join(returnRoot,"dist/campaigns/campaignExecutionQueue.js")).href);
+   assert.equal(await returnQueue.claimNextCampaignExecutionJob(db,{ownerId:"compatible-return",leaseMs:30000}),null);
+   assert.equal(await preserved(),before,"compatible return cannot change six results or manufacture submissions");
+  }finally{returnDb.setPrismaForTesting(undefined);}
+ }
  assert.equal(await db.outboundMessage.count({where:{clientId:f.client.id}}),6);assert.equal(providerCalls,0);
 });
 test("foreign action cannot close batch; cancel during live execution requires review, never claims completion",async()=>{
@@ -127,4 +143,26 @@ test("tenant accepted event without a compatible durable result projects uncerta
 test("foreign batch metadata cannot leak through a tenant-owned malformed job",async()=>{
  const a=await fixture(),b=await fixture();await db.campaignExecutionJob.create({data:{clientId:a.client.id,campaignId:a.child.id,batchId:b.batch.id,kind:"batch_chunk",status:"queued",idempotencyKey:"foreign-batch-link",eligibleAt:new Date(0)}});
  const row=(await buildCampaignListPayload(db,{clientId:a.client.id,limit:100})).items.find(x=>x.id===a.child.id)!;assert.equal(row.executionState.state,"uncertain");assert.equal(row.executionQueue!.batchName,null);assert.equal(row.executionQueue!.batchId,null);assert.equal(row.executionQueue!.batchStatus,null);assertSix(row);
+});
+
+
+test("known acceptance remains uncertain across canonical cancellation in list detail and lot",async()=>{
+ const f=await fixture();await db.campaignExecutionJob.create({data:{clientId:f.client.id,batchId:f.batch.id,campaignId:f.child.id,kind:"batch_chunk",status:"queued",attempt:1,failureReason:"operational_suspension",idempotencyKey:"cancel-known-acceptance",eligibleAt:new Date(0)}});
+ const messageId=`campaign.${f.child.id}.7`;
+ await db.event.create({data:{clientId:f.client.id,messageId,eventName:"campaign.message.provider_accepted",payloadJson:{campaignId:f.child.id,metaMessageId:"synthetic-cancel-accepted"}}});
+ assert.deepEqual(await applyCampaignExecutionBatchAction(db,{clientId:f.client.id,batchId:f.batch.id,action:"cancel",userId:"synthetic",requestId:"cancel-known"}),{ok:true});
+ async function check(){
+  const rows=(await buildCampaignListPayload(db,{clientId:f.client.id,limit:100})).items;
+  for(const item of rows){assert.equal(item.status,"cancelled");assert.equal(item.executionState.state,"uncertain");assertSix(item);assert.equal(item.progress.notSubmittedCount,0);}
+  for(const id of [f.parent.id,f.child.id]){
+   const item=(await buildCampaignDetailPayload(db,{clientId:f.client.id,campaignId:id}))!.campaign;
+   assert.equal(item.executionState.state,"uncertain");assertSix(item);assert.equal(item.progress.notSubmittedCount,0);
+   assert.ok(item.executionBatch);assert.equal(item.executionBatch.executionState.state,"uncertain");assert.equal(item.executionBatch.chunks[0].executionState.state,"uncertain");
+  }
+ }
+ await check();
+ await db.outboundMessage.create({data:{clientId:f.client.id,waId:f.recipients[6],messageId,metaMessageId:"different-meta-id",type:"TEMPLATE",status:"SENT",rawPayload:{campaignId:f.child.id}}});
+ for(const row of(await buildCampaignListPayload(db,{clientId:f.client.id,limit:100})).items){assert.equal(row.executionState.state,"uncertain");assert.equal(row.progress.notSubmittedCount,0);}
+ await db.outboundMessage.deleteMany({where:{clientId:f.client.id,messageId}});
+ await check();assert.equal(providerCalls,0);
 });

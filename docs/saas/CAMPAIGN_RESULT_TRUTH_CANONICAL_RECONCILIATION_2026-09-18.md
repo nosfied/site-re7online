@@ -1,5 +1,8 @@
 # Campaign Result Truth - Canonical Reconciliation - 2026-09-18
 
+**Complemento cf55655b — fronteira cancelamento, local validado/NOT DEPLOYED.** [Provas e retorno compatível](../reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/README.md). Aceitação registrada sem Outbound compatível mantém uncertain em qualquer estado, inclusive jobcancelled, lista/detalhe/lote. Cancelamento do executor não comprova ausência de submissão. Enquanto essa fronteira estiver incompleta, não produzir not_submitted para a execução. A ação histórica exige fonte/ausência de submissão e vínculos conferidos, sem usar estado cancelled isoladamente. Após cancelamento específico comprovado, retorno deve conservar leitores compatíveis com não enviados e negativa resume/claim; API2ed/frontend3227 antigos somente antes dessa ação. Sem SQL/contadores/provider produtivos alterados.
+
+
 ## Complemento local 12/10/2026 — suspensão e cancelamento sem submissão
 
 [Implementação integrada para revisão](../reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/README.md), NOT DEPLOYED. `executionState` é projeção dos jobs/leases do tenant, não estado persistido novo ou exposição do ledger: processamento exige lease completa e confirmação correspondente do tenant; pausa solicitada/efetiva, suspensão operacional e incerteza são distintos. Aceitação registrada sem Outbound compatível na mesma execução/messageId/MetaID exige revisão, mesmo com job parado. Detalhe, conjunto, lista e polling devem concordar sem inferir atividade apenas de `Campaign.status=sending`.
