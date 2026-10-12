@@ -1,0 +1,14 @@
+{
+  "result": "PASS",
+  "cases": [
+    "ok",
+    "fail",
+    "timeout",
+    "missing",
+    "overwrite_denied",
+    "symlink_denied",
+    "mode_denied"
+  ],
+  "scope": "synthetic local subprocess outputs; no production failure/retry/credential rotation",
+  "rawContentPrinted": false
+}

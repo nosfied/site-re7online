@@ -1,5 +1,7 @@
 # Audiência dinâmica: correção integrada e encerramento sem envio — 12/10/2026
 
+**Atualização: encerramento canônico da out.15 concluído; segurança separada aberta.** [Resultado e certificado](out15-closure-20261012/RESULT_2026-10-12.md). Histórico de implantação/preparação abaixo preservado.
+
 ## Estado corrente — implantação concluída e encerramento pendente de decisão
 
 **DEPLOYED TECHNICALLY / OWNER UI READ CONFIRMED.** [Registro consolidado com tempos/versões/hashes/gates/limites](deployed-20261012/DEPLOYED_2026-10-12.md). API/worker/frontend implantados,saved=fallback,supervisãosemrestart,gatesfalse. Guard38closed/jobsuspenso/seisreportados/cincosemsubmissão e .6 preservados. [Retorno compatível preparado,não instalado](deployed-20261012/COMPATIBLE_RETURN_FOR_REVIEW.txt) / [procedimento concreto de encerramento somente para decisão](deployed-20261012/OUT15_CLOSURE_FOR_REVIEW.md). Nenhumcancelamento/envio/abertura/retomadaexecutado. IncidenteOPEN,legitimidadeout.15nãoaceita;frentesencerradaspreservadas. Ocorrência de output privado registrada separadamente no relatório, sem reproduzir valores ou alterar credenciais.

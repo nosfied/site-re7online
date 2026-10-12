@@ -1,0 +1,292 @@
+{
+  "status": "CLOSED_BY_CANONICAL_BATCH_CANCEL_OWNER_UI_CONFIRMED",
+  "scope": {
+    "tenantId": "10a98bf4-1587-43e8-83d4-e3a48c5d79d9",
+    "batchId": "d473aec1-8ffa-40b9-8bab-e6819153ae4c",
+    "controllerId": "b019039e-0a89-4a42-9f33-c214323b888f",
+    "childId": "94b5805b-5c6d-4c89-b047-959209261c21",
+    "jobId": "1eb96f7f-50ae-4d5e-9124-411923945efb"
+  },
+  "planHash": "ce1afa3887e934bb505c385f0509c47c38dbd0468445be453cde000636e9194f",
+  "cancelEvent": {
+    "id": "a1d104c1-8daa-482c-9c4f-8ccd52bf466d",
+    "eventName": "campaign.batch.cancel",
+    "createdAt": "2026-10-12T19:57:22.247Z"
+  },
+  "cancelledAtUtc": "2026-10-12T19:57:22.221Z",
+  "cancelledAtFortaleza": "2026-10-12T16:57:22.221-03:00",
+  "verifiedAtUtc": "2026-10-12T20:34:41.920547+00:00",
+  "closure": {
+    "job": {
+      "id": "1eb96f7f-50ae-4d5e-9124-411923945efb",
+      "clientId": "10a98bf4-1587-43e8-83d4-e3a48c5d79d9",
+      "campaignId": "94b5805b-5c6d-4c89-b047-959209261c21",
+      "batchId": "d473aec1-8ffa-40b9-8bab-e6819153ae4c",
+      "status": "cancelled",
+      "attempt": 1,
+      "failureReason": "batch_cancelled",
+      "finishedAt": "2026-10-12T19:57:22.221",
+      "leaseToken": null,
+      "leaseOwner": null,
+      "leaseExpiresAt": null
+    },
+    "batch": {
+      "id": "d473aec1-8ffa-40b9-8bab-e6819153ae4c",
+      "clientId": "10a98bf4-1587-43e8-83d4-e3a48c5d79d9",
+      "status": "cancelled",
+      "completedAt": "2026-10-12T19:57:22.221"
+    },
+    "links": [
+      {
+        "id": "6c896fcd-d55c-4cf8-9aab-ca976413cc90",
+        "clientId": "10a98bf4-1587-43e8-83d4-e3a48c5d79d9",
+        "batchId": "d473aec1-8ffa-40b9-8bab-e6819153ae4c",
+        "campaignId": "94b5805b-5c6d-4c89-b047-959209261c21",
+        "status": "cancelled",
+        "recipientCount": 11
+      }
+    ],
+    "campaigns": [
+      {
+        "id": "94b5805b-5c6d-4c89-b047-959209261c21",
+        "clientId": "10a98bf4-1587-43e8-83d4-e3a48c5d79d9",
+        "status": "cancelled"
+      },
+      {
+        "id": "b019039e-0a89-4a42-9f33-c214323b888f",
+        "clientId": "10a98bf4-1587-43e8-83d4-e3a48c5d79d9",
+        "status": "cancelled"
+      }
+    ],
+    "cancelEvents": 1,
+    "results": 6,
+    "uniqueMetaIds": 6,
+    "reported": 6,
+    "remainingResults": 0,
+    "remainingAccepted": 0
+  },
+  "readModels": {
+    "result": "POST_CLOSURE_CANONICAL_READ_MODELS_PASS",
+    "child": {
+      "status": "cancelled",
+      "sentCount": 6,
+      "totalRecipients": 11,
+      "blockedCount": 0,
+      "metaSummary": {
+        "totalSent": 0,
+        "totalDelivered": 6,
+        "totalRead": 0,
+        "totalFailed": 0,
+        "totalBlocked": 0,
+        "totalOptOut": 0,
+        "totalSkipped": 0,
+        "totalPending": 0,
+        "totalNotSubmitted": 5
+      },
+      "progress": {
+        "totalRecipients": 11,
+        "sentCount": 6,
+        "blockedCount": 0,
+        "failedCount": 0,
+        "notSubmittedCount": 5,
+        "pendingCount": 0
+      }
+    },
+    "controller": {
+      "status": "cancelled",
+      "sentCount": 6,
+      "totalRecipients": 11,
+      "blockedCount": 0,
+      "metaSummary": {
+        "totalSent": 0,
+        "totalDelivered": 6,
+        "totalRead": 0,
+        "totalFailed": 0,
+        "totalBlocked": 0,
+        "totalOptOut": 0,
+        "totalSkipped": 0,
+        "totalPending": 0,
+        "totalNotSubmitted": 5
+      },
+      "progress": {
+        "totalRecipients": 11,
+        "sentCount": 6,
+        "blockedCount": 0,
+        "failedCount": 0,
+        "pendingCount": 0,
+        "notSubmittedCount": 5,
+        "completedChunks": 0,
+        "runningChunks": 0,
+        "suspendedChunks": 0,
+        "uncertainChunks": 0,
+        "queuedChunks": 0,
+        "failedChunks": 0
+      }
+    },
+    "listChild": {
+      "status": "cancelled",
+      "sentCount": 6,
+      "totalRecipients": 11,
+      "blockedCount": 0,
+      "metaSummary": {
+        "totalSent": 0,
+        "totalDelivered": 6,
+        "totalRead": 0,
+        "totalFailed": 0,
+        "totalBlocked": 0,
+        "totalOptOut": 0,
+        "totalSkipped": 0,
+        "totalPending": 0,
+        "totalNotSubmitted": 5
+      },
+      "progress": {
+        "totalRecipients": 11,
+        "sentCount": 6,
+        "blockedCount": 0,
+        "failedCount": 0,
+        "notSubmittedCount": 5,
+        "pendingCount": 0
+      }
+    },
+    "listController": {
+      "status": "cancelled",
+      "sentCount": 6,
+      "totalRecipients": 11,
+      "blockedCount": 0,
+      "metaSummary": {
+        "totalSent": 0,
+        "totalDelivered": 6,
+        "totalRead": 0,
+        "totalFailed": 0,
+        "totalBlocked": 0,
+        "totalOptOut": 0,
+        "totalSkipped": 0,
+        "totalPending": 0,
+        "totalNotSubmitted": 5
+      },
+      "progress": {
+        "totalRecipients": 11,
+        "sentCount": 6,
+        "blockedCount": 0,
+        "failedCount": 0,
+        "pendingCount": 0,
+        "notSubmittedCount": 5
+      }
+    },
+    "repeatedListEqual": true,
+    "readScope": "list/detail/new-list in one RepeatableRead snapshot; real frontend polling confirmed separately"
+  },
+  "guard": {
+    "open": false,
+    "generation": 38,
+    "tasks": {}
+  },
+  "apiGates": {
+    "artifactsVerified": false,
+    "discrepanciesResolved": false,
+    "ownerAuthorized": false,
+    "preflightReviewed": false,
+    "restoreVerified": false
+  },
+  "frontendGate": false,
+  "components": [
+    {
+      "name": "re7-whatsapp-agent",
+      "pid": 186864,
+      "ticks": "2161308560",
+      "cwd": "/opt/re7online/releases/campaign-dynamic-5b3cf3af-20261012T170000Z/apps/whatsapp-agent",
+      "restarts": 0
+    },
+    {
+      "name": "re7-whatsapp-web-worker",
+      "pid": 187037,
+      "ticks": "2161308947",
+      "cwd": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker",
+      "restarts": 0
+    },
+    {
+      "name": "re7-admin-front",
+      "pid": 188897,
+      "ticks": "2161347676",
+      "cwd": "/opt/re7online/releases/frontend-dynamic-5b3cf3af-20261012T170000Z",
+      "restarts": 0
+    }
+  ],
+  "backup": {
+    "atUtc": "2026-10-12T19:48:36.746205+00:00",
+    "catalogEntries": 614,
+    "custody": "off-host owner workstation/private mode600",
+    "dumpBytes": 37167798,
+    "dumpSha256": "a31b5a9f6ce7a8d9be1e87ca85861097b64080714c14aedcb1fa0dfccac3de9f",
+    "restoreProofReusedSha256": "a7f5a72d6417f72ba38e1db22d91fdcf4bbf5f410285f51f5989cd6b2595ab6b",
+    "restoreScope": "prior real PG16 restore; tools/schema unchanged, fresh dump catalog readable; no new production restore",
+    "rpo": "fresh dump snapshot precedes cancellation; later unrelated writes not covered; operational evidence captured separately"
+  },
+  "protectedComparison": {
+    "baseline": "fresh dump prior to owner cancellation",
+    "protected": {
+      "contact": {
+        "count": 265,
+        "sha256": "d5ddd0d67c7179a6c32eb7f9831e782b5b592a3d1d1dcfa64c898f780197afd7"
+      },
+      "conversation": {
+        "count": 247,
+        "sha256": "c0b597070fbe02ad72e06d4000e038b2bb3ac5fdaf7097e6fc7630f5306a7fc3"
+      },
+      "conversationRuntimeState": {
+        "count": 16,
+        "sha256": "3daeb33bcf8999246f38f9581db71d36fff10b7cd281ecfe26f5ff3d03fa4ddb"
+      },
+      "lead": {
+        "count": 272,
+        "sha256": "7957a377f47a5caa80fda87e864014c1b968065bef5ab2d828fb569a5156e66a"
+      },
+      "outbounds": {
+        "count": 6,
+        "sha256": "0ebd5f8f0f2eaa78f231d5b96ccfff511d46cfb12e7645d3d8447beba4d49da7"
+      },
+      "usageDispositionReceipt": {
+        "count": 20,
+        "sha256": "558acf08108a261cb8d13bbd9448ddfe150ee7562ba4af03dc2de7b94edc74ca"
+      }
+    },
+    "result": "PASS",
+    "temporaryDatabaseRemoved": true
+  },
+  "capacity": {
+    "minimumDeployPostgresBytes": 2242355200,
+    "requiredFloorBytes": 2131755008,
+    "marginBytes": 110600192,
+    "result": "PASS_DATED",
+    "walBytes": 83886080,
+    "slots": 0
+  },
+  "policy": {
+    "installed": "a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e",
+    "archived": "11283078071d5658bd0a5b91075b1465312be893def1a078457a5b39420fd53c",
+    "helpersAndSudoersUnchanged": true,
+    "phase": null,
+    "standbyReturnExecuted": false
+  },
+  "historicalSelection": {
+    "matches": 255,
+    "materialized": 11,
+    "blocked": 244,
+    "unchangedSnapshotVerified": true,
+    "originalAudienceAccepted": false
+  },
+  "ownerUiReadConfirmation": "tudo certo; list/detail/polling",
+  "securityFollowup": "OPEN_SEPARATE_NO_ROTATION",
+  "hashes": {
+    "originalPrivateCertificate": "c4e9d3e14c5ddc16fd982f2e123dfa6b6a04b11fa124b2fd54ada9eb8525c112",
+    "offHostEvidenceArchive": "8a8eca97b4d9a2c2c50059438dd9e0af22746fcf7c715c4d07eaa400da40945e",
+    "finalClosureRead": "b15ea6cc92924a82b7d1f511674fabdca1452cc0b30bebe2665a2d1de30dd8dd",
+    "postReadModels": "d80bd3b3940c783250682f55d6d407cf4349a1724a6479de44c782803765a8b5",
+    "backup": "a31b5a9f6ce7a8d9be1e87ca85861097b64080714c14aedcb1fa0dfccac3de9f"
+  },
+  "limits": [
+    "provider reported delivery is not a new human receipt",
+    "no sending/open/resume/retry/manualSQL/deploy/return performed",
+    "security transcript reach and external credential validity not fully known"
+  ]
+}
