@@ -1,7 +1,7 @@
 {
   "files": {
     "COMMANDS_FOR_REVIEW.txt": "a6d07df0cc055a1ae6dd82dcb552132ce76843dcb3df1440151fe3cf71f66d47",
-    "DEPLOYMENT_2026-10-11.md": "ffb7b0e808074779fbbaf2289f6204018dc6e255045563607ddd5407bc5107ff",
+    "DEPLOYMENT_2026-10-11.md": "42532b63c4b8d94750e43ab005c1e496f54b45b6386d83e5dca722996cbdbcb6",
     "README.md": "7082ea1006f193f66a79acdd04608a112fc02a03010378f03339c0fbb626a2a7",
     "api-comparison.public.json": "2ca183f47aee9b8ccdafdc2fefede17f24e46c5350b17f6029137cba46c38435",
     "backup-result.json": "67cdc97c7094dee2ee2c8af6698df34017efb6c8a185ba0ce50942ae73ccc2e6",
@@ -20,5 +20,6 @@
     "validation.json": "5721eee7ac4f660df3cb3fd5c39ce8144edb6602038bcf9540f72bdb8168127d",
     "verify-package.py": "c48e2db5386ae3dd45e1eedbb69cc9e681343b1a1e3c9f350fa3bb5a949e5a08"
   },
-  "scope": "Only versioned sanitized preparation/outcome; private configurations, logs, tar and auth excluded."
+  "scope": "Only versioned sanitized preparation/outcome; private configurations, logs, tar and auth excluded.",
+  "historicalManifest": "public-artifacts.before-audience-clarification-20788059.json"
 }

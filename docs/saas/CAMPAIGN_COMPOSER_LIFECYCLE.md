@@ -1,5 +1,11 @@
 # Campaign Composer Lifecycle
 
+## Audience preview boundary — local correction 12/10/2026
+
+The user changing CRM query/status/channel/conversation filter or recipient mode invalidates the existing preview request generation, estimate/error/page and loading state. Late responses from the previous generation cannot repopulate it. This reuses the existing request-generation mechanism; no polling layer or persisted state is added. Programmatic reuse and reset retain their explicit boundaries and restored selections. Zero estimate remains valid for dynamic scheduling after a matching preview.
+
+[out.15 audit and six browser proofs](../reviews/automation-freeform-window-release-af26/dynamic-audience-continuity-20261011/README.md): the stale preview defect is reproduced locally; its occurrence in the original historical campaign is not proven. Saved dynamic filters and immutable execution snapshots remain distinct from the transient estimate. Correction NOT DEPLOYED.
+
 Status: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO DEPLOY.
 
 ## Permanent invariant

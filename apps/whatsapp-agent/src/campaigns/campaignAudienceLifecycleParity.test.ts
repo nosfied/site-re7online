@@ -1,0 +1,69 @@
+import "./campaignOperationsTestSupport.js";
+import assert from "node:assert/strict";
+import crypto from "node:crypto";
+import test from "node:test";
+import { getPrisma } from "../db.js";
+import { buildCampaignAudiencePreviewPayload } from "./campaignAudiencePreview.js";
+import { campaignRecipientEligibility } from "./campaignEligibility.js";
+import { buildPrivateCampaignSeedFields, readPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
+import { processDueScheduledCampaigns, setCampaignBatchMaterializationHookForTests } from "./campaignRunner.js";
+
+const url = new URL(process.env.DATABASE_URL!);
+assert.equal(url.hostname, "127.0.0.1");
+assert.match(url.pathname, /^\/re7_dynamic_parity_/);
+const db = getPrisma();
+test.after(() => db.$disconnect());
+const statuses = ["NEW", "NURTURE"].map(id => ({ id, label: id, isActive: true, campaignEligible: true, isSystem: true }));
+
+test("dynamic NEW preview and real snapshot exclude provisional lifecycle without limiting audience to one", async t => {
+  const now = new Date("2030-10-10T15:40:00Z"), clientId = crypto.randomUUID(), other = crypto.randomUUID();
+  const clientKey = `audience-parity-${clientId}`;
+  for (const [id,key] of [[clientId,clientKey],[other,`other-${other}`]]) await db.client.create({data:{id,clientKey:key,name:"Synthetic",profile:"business",features:{campaigns:true}}});
+  await db.tenantOperationalConfig.create({data:{clientId,config:{crmBusinessStatuses:statuses}}});
+  const waIds = Array.from({length:11},(_,i)=>`554199210${String(i+1).padStart(4,"0")}`);
+  waIds[5] = "12025550106"; // Existing international normalizer is preserved, not expanded.
+  const provisional = new Set([2,5,6,7,8,9,10]);
+  for (const [i,waId] of waIds.entries()) {
+    await db.lead.create({data:{tenantId:clientId,waId,waIdCanonical:waId,phone:waId,name:`Synthetic ${i}`,channel:"whatsapp",status:"NEW"}});
+    if(i!==1) await db.contact.create({data:{clientId,waId,channel:"whatsapp",lifecycle:provisional.has(i)?"PROVISIONAL":"ACTIVE"}});
+  }
+  await db.lead.createMany({data:Array.from({length:240},(_,i)=>({tenantId:clientId,waId:`anon:subject:synthetic${i}`,waIdCanonical:`anon:subject:synthetic${i}`,name:"Usuario anonimizado",status:"NEW"}))});
+  await db.lead.createMany({data:Array.from({length:3},(_,i)=>({tenantId:clientId,waId:`ig:synthetic:${i}`,channel:"instagram",status:"NEW"}))});
+  const excluded="5541992199999";
+  await db.lead.create({data:{tenantId:clientId,waId:excluded,phone:excluded,channel:"whatsapp",status:"NEW"}});
+  await db.contact.create({data:{clientId,waId:excluded,channel:"whatsapp",operationallyExcludedAt:now}});
+  await db.lead.create({data:{tenantId:other,waId:waIds[0],channel:"whatsapp",status:"NEW"}});
+  await db.contact.create({data:{clientId:other,waId:waIds[0],channel:"whatsapp",lifecycle:"PROVISIONAL"}});
+  const preview=await buildCampaignAudiencePreviewPayload(db,{clientId,query:{status:"NEW",limit:100},statuses,now});
+  const expected=waIds.filter((_,i)=>!provisional.has(i));
+  assert.equal(preview.summary.eligible,4);
+  assert.deepEqual(new Set(preview.items.map(x=>x.leadId)),new Set((await db.lead.findMany({where:{tenantId:clientId,waId:{in:expected}},select:{id:true}})).map(x=>x.id)));
+  const originalFetch=globalThis.fetch;let providers=0;
+  globalThis.fetch=async()=>{providers++;throw Error("provider_forbidden");};
+  t.after(()=>{globalThis.fetch=originalFetch;setCampaignBatchMaterializationHookForTests(null);});
+  const template=await db.template.create({data:{clientId,name:"synthetic_parity",category:"UTILITY",language:"pt_BR",status:"approved",content:"Synthetic"}});
+  const parent=await db.campaign.create({data:{clientId,templateId:template.id,templateName:template.name,name:"Synthetic dynamic",status:"scheduled",scheduledAt:now}});
+  await db.event.create({data:{clientId,messageId:parent.id,eventName:"campaign.seed.saved",requestId:`synthetic:${parent.id}`,payloadJson:{selectionMode:"DYNAMIC_CRM_FILTER",dynamicFilter:{version:1,crmBusinessStatusId:"NEW"},templateId:template.id,templateName:template.name,templateParams:[],templateVariableMappings:[],source:"dynamic_crm_filter",...buildPrivateCampaignSeedFields({clientId,waIds:[]})}}});
+  const batch=await db.campaignExecutionBatch.create({data:{clientId,name:parent.name,sourceMode:"DYNAMIC_CRM_FILTER",status:"scheduled",requestedAt:now,eligibleAt:now,chunkCount:0,idempotencyKey:`dynamic:${parent.id}`,metadata:{parentCampaignId:parent.id,clientKey}}});
+  await db.event.create({data:{clientId,messageId:parent.id,eventName:"campaign.batch.controller.created",requestId:`controller:${parent.id}`,payloadJson:{campaignId:parent.id,batchId:batch.id,sourceMode:"DYNAMIC_CRM_FILTER"}}});
+  await db.campaignExecutionJob.create({data:{clientId,batchId:batch.id,kind:"batch_chunk",status:"queued",eligibleAt:now,idempotencyKey:`materialize:${batch.id}`}});
+  setCampaignBatchMaterializationHookForTests(phase=>{if(phase==="after_snapshot")throw Error("synthetic_snapshot_only");});
+  await assert.rejects(processDueScheduledCampaigns({now,limit:1}),/synthetic_snapshot_only/);
+  const event=await db.event.findFirstOrThrow({where:{clientId,messageId:parent.id,eventName:"campaign.dynamic_batch_snapshot.created"}});
+  const payload=event.payloadJson as Record<string,unknown>;
+  assert.equal(payload.matchedCount,255);assert.equal(payload.eligibleCount,4);assert.equal(payload.blockedCount,251);
+  assert.deepEqual(new Set(readPrivateCampaignSeedFields(payload).recipients),new Set(expected));
+  const blocked=payload.blocked as Array<{reason:string}>;
+  assert.equal(blocked.filter(x=>x.reason==="provisional_contact").length,7);
+  assert.equal(blocked.filter(x=>x.reason==="anonymized_contact").length,240);
+  assert.equal(blocked.filter(x=>x.reason==="operationally_excluded_contact").length,1);
+  assert.equal(blocked.filter(x=>x.reason==="non_whatsapp_channel").length,3);
+  assert.equal(providers,0);assert.equal(await db.outboundMessage.count({where:{clientId}}),0);
+  assert.equal(await db.campaignExecutionBatchCampaign.count({where:{batchId:batch.id}}),0);
+  for(const i of provisional) assert.equal(await campaignRecipientEligibility(db,clientId,[waIds[i]]),"provisional_contact","old immutable snapshot denied by shared gate");
+  assert.equal(await campaignRecipientEligibility(db,clientId,[waIds[0]]),null,"other tenant provisional cannot deny this tenant");
+  await db.contact.updateMany({where:{clientId,waId:waIds[0]},data:{lifecycle:"PROVISIONAL"}});
+  assert.equal(await campaignRecipientEligibility(db,clientId,[waIds[0],"554192100001"]),"provisional_contact","approved BR aliases share lifecycle exclusion");
+  const alternate=await buildCampaignAudiencePreviewPayload(db,{clientId,query:{status:"NURTURE",limit:100},statuses,now});
+  assert.equal(alternate.summary.eligible,0,"different status does not reuse NEW population");
+});

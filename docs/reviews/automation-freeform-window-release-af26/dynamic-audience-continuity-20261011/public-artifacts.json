@@ -1,0 +1,17 @@
+{
+  "basisCommit": "207880593e6f32a1628df0a15df2b1fa80b49e4e",
+  "files": {
+    "AUDIENCE_PROVENANCE.json": "7f5e498a57917c830668d6500abcd9e8939e5456251b6b2c84a497e069073345",
+    "PATCH_MANIFEST.json": "561f242a38e9fb646100bc9274e5a02be8a01e6448f6adfcd87ad875b6a31b80",
+    "PRIVATE_EVIDENCE_SHA256.json": "8296818a42c4e86f9b7b5c52427bc10df3c0cb5c1e6713bb65e0339ec222cca3",
+    "README.md": "61366816937ff72edbccd78f107e16e3e6907ed01ad9c342f40fced729223f1b",
+    "RESULTS.json": "5fe5a1ede320ebf22597d0450a5d8c5cd038ab33f4f062cdb6c34a983f9462c8",
+    "minimal.patch": "2c2e3d30d9907a85a94f704979b0d20a84a3c87c72f648fc70e8251745b0d12a",
+    "query-audience.cjs": "18c45c143ec61832e2ea88eaa59afd19bbd1cbedf5fcf776fb47b833d1f92b89",
+    "query-contact-origins.cjs": "da776ed53bce02911e355bd2fcd05349bfc236fe7799475ee81e94c64c316bad",
+    "query-final-preservation.cjs": "5d77b49b39d3e48cbc6bfeda710efbfa7b1e2e6f67167e3e737a285e99ff7e40",
+    "query-optout.cjs": "569145e58aa823a38314ba1d6493441a578de77683606b34f56b2e4e60542a82",
+    "query-origins.cjs": "a2c957f9829cbb9f8729a07b161331ea355263f56a379c5abbadeb21c33cbfc0",
+    "query-preview.cjs": "6c25cfe8341eb9b9f1fe2f6b6c2aee5eb2a899b96f776bd04ce7415f46d7e5ca"
+  }
+}

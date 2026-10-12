@@ -1,0 +1,28 @@
+{
+  "sourceHead": "207880593e6f32a1628df0a15df2b1fa80b49e4e",
+  "activeRuntime": {
+    "dist/campaigns/campaignSeedPrivacy.js": "d63ef69c5d47119863e1356ef101dd42f830f4d851a317418551603405c627b8",
+    "dist/campaigns/campaignRunner.js": "d88cdc241f28b786212580d01e389b2842d36ab2e17f9ede3f0a1fd8800bae12",
+    "dist/campaigns/campaignEligibility.js": "df6121058c4ad28cbd8d733c3b8be09dc50c8b709e82b91f8c4b1bd3914c6305",
+    "dist/campaigns/campaignAudiencePreview.js": "a91113d9a7b11e4554bebd22410a5bb4c19029bd185fddc4649e66af5bc98aa8",
+    "dist/crm/crmContactsReadModel.js": "613a2df5b9f1a6673489ae60d20e9dc1590a15b417753d99eddc3dfaecd11c98",
+    "dist/crm/crmWhatsappIdentity.js": "e12c47abf1b1a753fde915dcc933423749a95704828cecd142df473becc300cf",
+    "dist/http/routes.js": "0118b7d3d4a9ca619863b4dd6c52d41717f1454049e8112c974238836163402f"
+  },
+  "localRuntime": {
+    "campaigns/campaignEligibility.js": "cc246cedfc4ab8d0d1e51d32a41645d3d368c8f816efbae2f0bdce3bf34c6930",
+    "http/routes.js": "d69e8dffbd7a2f02e7ef1e4604985b5396ece8fd5fa0927be39205b9afb81beb"
+  },
+  "sources": {
+    "apps/whatsapp-agent/src/campaigns/campaignEligibility.ts": "369c6bafed65731a0a0f824c5a7351b218ecc9c0dbf25eb3f5437699c94e5838",
+    "apps/whatsapp-agent/src/http/routes.ts": "480a7e0ff6356f95419d099fdbf49e3b1a958e04ff991be1780da97bf22f8d53",
+    "src/app/app/campaigns/page.tsx": "75127ea1d8e66e5d05c8594f6c5a31b8fbe07a8d366e3b0c04ecb10f156dab9c",
+    "apps/whatsapp-agent/src/campaigns/campaignAudienceLifecycleParity.test.ts": "0ffcd7d917f60a134f140d9083ce7823ee6990134963446458c1f5285962af03",
+    "tests/browser/campaignDynamicAudienceBoundary.mjs": "2d087789853ca6e89fcb2f1e4904d51eae5b3d48ca3076555e5a58a074ff4974"
+  },
+  "frontendLocalBuildId": "-5PN0MnEoAjOiNAcO0t6o",
+  "frontendActivePreservedBuildId": "8OqIZZxaW7_ogf6h7AVoe",
+  "activeTarSha256": "9b54548e4a7763f5078ae0433aceb43a37567eccd988814dd82f2fab97229319",
+  "noPackageOrStageOrDeploy": true,
+  "node": "20.20.0"
+}

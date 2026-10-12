@@ -30039,6 +30039,8 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
 
 function getCampaignBlockedReasonLabel(reason: CampaignDraftBlockedReason) {
   switch (reason) {
+    case "provisional_contact":
+      return "Contato pendente de consentimento";
     case "anonymized_contact":
       return "Contato anonimizado";
     case "operationally_excluded_contact":

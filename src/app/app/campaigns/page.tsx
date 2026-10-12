@@ -2050,6 +2050,28 @@ export default function AppCampaignsPage() {
     }));
   };
 
+  // User edits invalidate the existing preview generation. Reuse/reset keep
+  // their explicit boundaries and do not lose the restored recipient selection.
+  const invalidateAudiencePreview = () => {
+    audienceRequestGenerationRef.current += 1;
+    setAudiencePreview(null);
+    setAudiencePreviewError(null);
+    setAudiencePage(1);
+    setLoadingAudiencePreview(false);
+    setCampaignReusePreviewState("idle");
+  };
+
+  const updateAudienceFilters = (patch: Partial<AudiencePreviewFilters>) => {
+    invalidateAudiencePreview();
+    setAudienceFilters((previous) => ({ ...previous, ...patch }));
+  };
+
+  const updateAudienceRecipientMode = (mode: typeof audienceRecipientMode) => {
+    if (mode === audienceRecipientMode) return;
+    invalidateAudiencePreview();
+    setAudienceRecipientMode(mode);
+  };
+
   const copyTextToClipboard = async (text: string) => {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -3356,14 +3378,14 @@ export default function AppCampaignsPage() {
               <div className="inline-flex overflow-hidden rounded-md border border-white/15 text-sm">
                 <button
                   type="button"
-                  onClick={() => setAudienceRecipientMode("STATIC_RECIPIENTS")}
+                  onClick={() => updateAudienceRecipientMode("STATIC_RECIPIENTS")}
                   className={`px-3 py-2 font-semibold ${audienceRecipientMode === "STATIC_RECIPIENTS" ? "bg-re7-sky text-slate-950" : "bg-white/5 text-white/75 hover:bg-white/10"}`}
                 >
                   Destinatários fixos
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAudienceRecipientMode("DYNAMIC_CRM_FILTER")}
+                  onClick={() => updateAudienceRecipientMode("DYNAMIC_CRM_FILTER")}
                   className={`px-3 py-2 font-semibold ${audienceRecipientMode === "DYNAMIC_CRM_FILTER" ? "bg-re7-sky text-slate-950" : "bg-white/5 text-white/75 hover:bg-white/10"}`}
                 >
                   Filtro dinâmico do CRM
@@ -3379,7 +3401,7 @@ export default function AppCampaignsPage() {
                 value={audienceFilters.q}
                 disabled={audienceRecipientMode === "DYNAMIC_CRM_FILTER"}
                 onChange={(event) =>
-                  setAudienceFilters((prev) => ({ ...prev, q: event.target.value }))
+                  updateAudienceFilters({ q: event.target.value })
                 }
                 placeholder="Nome, empresa ou telefone mascarado"
               />
@@ -3390,7 +3412,7 @@ export default function AppCampaignsPage() {
                 className={DARK_SELECT_CLASS}
                 value={audienceFilters.status}
                 onChange={(event) =>
-                  setAudienceFilters((prev) => ({ ...prev, status: event.target.value }))
+                  updateAudienceFilters({ status: event.target.value })
                 }
               >
                 <option value="">Todos os status</option>
@@ -3408,7 +3430,7 @@ export default function AppCampaignsPage() {
                 value={audienceFilters.channel}
                 disabled={audienceRecipientMode === "DYNAMIC_CRM_FILTER"}
                 onChange={(event) =>
-                  setAudienceFilters((prev) => ({ ...prev, channel: event.target.value }))
+                  updateAudienceFilters({ channel: event.target.value })
                 }
               >
                 <option value="all">Todos</option>
@@ -3425,7 +3447,7 @@ export default function AppCampaignsPage() {
                 value={audienceFilters.hasConversation}
                 disabled={audienceRecipientMode === "DYNAMIC_CRM_FILTER"}
                 onChange={(event) =>
-                  setAudienceFilters((prev) => ({ ...prev, hasConversation: event.target.value as AudiencePreviewFilters["hasConversation"] }))
+                  updateAudienceFilters({ hasConversation: event.target.value as AudiencePreviewFilters["hasConversation"] })
                 }
               >
                 <option value="all">Todos</option>

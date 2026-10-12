@@ -3,6 +3,7 @@ import { buildCrmWhatsappIdentityCandidates, isAnonymizedMarker, normalizeCrmWha
 import { normalizeWaIdDigits } from "../utils/waid.js";
 import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
 import { filterOptedOutCampaignRecipients } from "./optOutRegistry.js";
+import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
 
 export function normalizeCampaignRecipientIdentity(value: unknown) {
   const raw = String(value ?? "").trim();
@@ -15,11 +16,11 @@ export function normalizeCampaignRecipientIdentity(value: unknown) {
 }
 
 export type EligibilityReason = "anonymized_contact" | "invalid_whatsapp_identity" |
-  "operationally_excluded_contact" | "active_send_blocked" | "non_whatsapp_channel" | "identity_conflict";
+  "operationally_excluded_contact" | "active_send_blocked" | "non_whatsapp_channel" | "identity_conflict" | "provisional_contact";
 export function crmOperationalBlockedReason(item: {
   isAnonymized: boolean; isOperationallyExcluded: boolean; activeOptOut: boolean;
   channel?: string | null;
-}): Exclude<EligibilityReason, "invalid_whatsapp_identity" | "identity_conflict"> | null {
+}): Exclude<EligibilityReason, "invalid_whatsapp_identity" | "identity_conflict" | "provisional_contact"> | null {
   if (item.isAnonymized) return "anonymized_contact";
   if (item.isOperationallyExcluded) return "operationally_excluded_contact";
   if (item.activeOptOut) return "active_send_blocked";
@@ -52,11 +53,12 @@ export async function campaignRecipientEligibility(prisma: PrismaClient, clientI
   if (leads.some(l => l.channel && l.channel.toLowerCase() !== "whatsapp")) return "non_whatsapp_channel";
   const contacts = await prisma.contact.findMany({ where: { clientId, OR: [
     { waId: { in: candidates } }, { externalUserRef: { in: candidates } }, { legacyWaId: { in: candidates } },
-  ] }, select: { waId: true, name: true, externalUserHash: true, channel: true, operationallyExcludedAt: true } });
+  ] }, select: { waId: true, name: true, externalUserHash: true, channel: true, lifecycle: true, operationallyExcludedAt: true } });
   if (contacts.some(c => [c.waId, c.name, c.externalUserHash].some(isAnonymizedMarker))) return "anonymized_contact";
   if (contacts.some(c => (c.channel ?? "whatsapp").toLowerCase() !== "whatsapp")) return "non_whatsapp_channel";
   const excluded = await loadOperationallyExcludedWaIds(prisma, { clientId, waIds: candidates });
   if (excluded.size) return "operationally_excluded_contact";
+  if (contacts.some(c => !isOperationalContactLifecycle(c.lifecycle))) return "provisional_contact";
   const optOut = await filterOptedOutCampaignRecipients(prisma, { clientId, waIds: identities });
   return optOut.blocked.length ? "active_send_blocked" : null;
 }

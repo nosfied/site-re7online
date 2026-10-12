@@ -1,0 +1,69 @@
+diff --git a/apps/whatsapp-agent/src/campaigns/campaignEligibility.ts b/apps/whatsapp-agent/src/campaigns/campaignEligibility.ts
+index 605a0706..c2d55bd6 100644
+--- a/apps/whatsapp-agent/src/campaigns/campaignEligibility.ts
++++ b/apps/whatsapp-agent/src/campaigns/campaignEligibility.ts
+@@ -5,0 +6 @@ import { filterOptedOutCampaignRecipients } from "./optOutRegistry.js";
++import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
+@@ -18 +19 @@ export type EligibilityReason = "anonymized_contact" | "invalid_whatsapp_identit
+-  "operationally_excluded_contact" | "active_send_blocked" | "non_whatsapp_channel" | "identity_conflict";
++  "operationally_excluded_contact" | "active_send_blocked" | "non_whatsapp_channel" | "identity_conflict" | "provisional_contact";
+@@ -22 +23 @@ export function crmOperationalBlockedReason(item: {
+-}): Exclude<EligibilityReason, "invalid_whatsapp_identity" | "identity_conflict"> | null {
++}): Exclude<EligibilityReason, "invalid_whatsapp_identity" | "identity_conflict" | "provisional_contact"> | null {
+@@ -55 +56 @@ export async function campaignRecipientEligibility(prisma: PrismaClient, clientI
+-  ] }, select: { waId: true, name: true, externalUserHash: true, channel: true, operationallyExcludedAt: true } });
++  ] }, select: { waId: true, name: true, externalUserHash: true, channel: true, lifecycle: true, operationallyExcludedAt: true } });
+@@ -59,0 +61 @@ export async function campaignRecipientEligibility(prisma: PrismaClient, clientI
++  if (contacts.some(c => !isOperationalContactLifecycle(c.lifecycle))) return "provisional_contact";
+diff --git a/apps/whatsapp-agent/src/http/routes.ts b/apps/whatsapp-agent/src/http/routes.ts
+index 353126c0..154ac8e5 100644
+--- a/apps/whatsapp-agent/src/http/routes.ts
++++ b/apps/whatsapp-agent/src/http/routes.ts
+@@ -30041,0 +30042,2 @@ function getCampaignBlockedReasonLabel(reason: CampaignDraftBlockedReason) {
++    case "provisional_contact":
++      return "Contato pendente de consentimento";
+diff --git a/src/app/app/campaigns/page.tsx b/src/app/app/campaigns/page.tsx
+index 75794794..4d5b3e53 100644
+--- a/src/app/app/campaigns/page.tsx
++++ b/src/app/app/campaigns/page.tsx
+@@ -2052,0 +2053,22 @@ export default function AppCampaignsPage() {
++  // User edits invalidate the existing preview generation. Reuse/reset keep
++  // their explicit boundaries and do not lose the restored recipient selection.
++  const invalidateAudiencePreview = () => {
++    audienceRequestGenerationRef.current += 1;
++    setAudiencePreview(null);
++    setAudiencePreviewError(null);
++    setAudiencePage(1);
++    setLoadingAudiencePreview(false);
++    setCampaignReusePreviewState("idle");
++  };
++
++  const updateAudienceFilters = (patch: Partial<AudiencePreviewFilters>) => {
++    invalidateAudiencePreview();
++    setAudienceFilters((previous) => ({ ...previous, ...patch }));
++  };
++
++  const updateAudienceRecipientMode = (mode: typeof audienceRecipientMode) => {
++    if (mode === audienceRecipientMode) return;
++    invalidateAudiencePreview();
++    setAudienceRecipientMode(mode);
++  };
++
+@@ -3359 +3381 @@ export default function AppCampaignsPage() {
+-                  onClick={() => setAudienceRecipientMode("STATIC_RECIPIENTS")}
++                  onClick={() => updateAudienceRecipientMode("STATIC_RECIPIENTS")}
+@@ -3366 +3388 @@ export default function AppCampaignsPage() {
+-                  onClick={() => setAudienceRecipientMode("DYNAMIC_CRM_FILTER")}
++                  onClick={() => updateAudienceRecipientMode("DYNAMIC_CRM_FILTER")}
+@@ -3382 +3404 @@ export default function AppCampaignsPage() {
+-                  setAudienceFilters((prev) => ({ ...prev, q: event.target.value }))
++                  updateAudienceFilters({ q: event.target.value })
+@@ -3393 +3415 @@ export default function AppCampaignsPage() {
+-                  setAudienceFilters((prev) => ({ ...prev, status: event.target.value }))
++                  updateAudienceFilters({ status: event.target.value })
+@@ -3411 +3433 @@ export default function AppCampaignsPage() {
+-                  setAudienceFilters((prev) => ({ ...prev, channel: event.target.value }))
++                  updateAudienceFilters({ channel: event.target.value })
+@@ -3428 +3450 @@ export default function AppCampaignsPage() {
+-                  setAudienceFilters((prev) => ({ ...prev, hasConversation: event.target.value as AudiencePreviewFilters["hasConversation"] }))
++                  updateAudienceFilters({ hasConversation: event.target.value as AudiencePreviewFilters["hasConversation"] })

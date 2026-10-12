@@ -1,0 +1,41 @@
+{
+  "status": "LOCAL_CORRECTIONS_VALIDATED_NOT_DEPLOYED",
+  "historicalAudience": "NOT_ACCEPTED",
+  "savedFilter": "NEW",
+  "snapshot": {
+    "matched": 255,
+    "eligibleRecorded": 11,
+    "blockedRecorded": 244
+  },
+  "operationalDefect": {
+    "provisionalContactsWronglyAdmitted": 7,
+    "eligibleUnderExistingLifecycleContract": 4,
+    "ownerControlledAudienceAuthorized": false
+  },
+  "postgresCompiled": {
+    "tests": 1,
+    "pass": 1,
+    "originalModuleNegative": "EXPECTED_FAIL_11_VS_4",
+    "finalSnapshot": {
+      "matched": 255,
+      "eligible": 4,
+      "blocked": 251
+    },
+    "providerCalls": 0
+  },
+  "chromeFinal": {
+    "cases": 6,
+    "pass": 6,
+    "apis": "SIMULATED",
+    "productionMutation": false
+  },
+  "compilation": {
+    "node": "20.20.0",
+    "apiExit": 0,
+    "frontendExit": 0,
+    "computedStyles": "PASS"
+  },
+  "historicalUiCause": "UNKNOWN_NO_ORIGINAL_ESTIMATE_OWNER_DOES_NOT_RECALL",
+  "production": "READ_ONLY_CLOSED38_JOB_SUSPENDED_SIX_RESULTS_FIVE_UNSUBMITTED",
+  "scope": "No stage/deploy/recovery/open/resume/send"
+}

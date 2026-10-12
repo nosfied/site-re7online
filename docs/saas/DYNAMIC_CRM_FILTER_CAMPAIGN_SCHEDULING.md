@@ -1,5 +1,13 @@
 # Dynamic CRM-filter Campaign Scheduling
 
+## Current production clarification — 12/10/2026
+
+Dynamic scheduling is deployed; the earlier local-only checkpoint below is historical. Individual controlled acceptance does not accept every later dynamic audience. [out.13→out.15 audit](../reviews/automation-freeform-window-release-af26/dynamic-audience-continuity-20261011/README.md) establishes NEW persisted in out.15, seven PROVISIONAL identities incorrectly admitted by the campaign gate, and no historical UI estimate. The local correction is reviewed separately and NOT DEPLOYED.
+
+The canonical operational predicate permits a legacy Lead without Contact, but a matching Contact must be ACTIVE (`isOperationalContactLifecycle`). Campaign preview, selection/materialization and final provider eligibility must share that condition, together with same-tenant identity, anonymity, exclusion and opt-out. A saved CRM status matches a population; it is not proof of owner authorization for every contact. Snapshot remains immutable: new rejection must not rewrite historical results or resume a suspended execution. International identity support is separate and is not widened here.
+
+Current grouped implementation has a 5000 matched-Lead guardrail and chunks of1000. The legacy standalone implementation still has1000; both fail overflow explicitly. Preview counts after operational filtering differ from raw matched-Lead count; zero eligible estimate can legitimately precede a dynamic scheduled execution. Changing the user filter/mode invalidates its transient preview and old response generation; a new estimate must correspond to the saved filter.
+
 Status: OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED.
 
 This note records the local implementation of the dynamic CRM-filter scheduling
