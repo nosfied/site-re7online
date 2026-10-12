@@ -1,6 +1,51 @@
 # Audiência dinâmica: correção integrada e encerramento sem envio — 12/10/2026
 
-## Estado corrente — continuação cf55655b (12/10/2026)
+## Estado corrente — retirada autorizada e staging integrado (12/10/2026)
+
+**WITHDRAWAL COMPLETE / CAPACITY PASS DATADO / INACTIVE STAGING VERIFIED FOR REVIEW / NOT INSTALLED / NOT DEPLOYED.** [Comandos concretos](COMMANDS_FOR_REVIEW.txt), [hashes e evidências sanitizadas](staging-result-20261012.json), [fontes operacionais revisáveis](operational-20261012/). A retirada de5b3 foi consumida; não repetir seus blocos. Nenhum candidato iniciou, nenhuma política foi instalada, nenhuma reconciliação/cancelamento/abertura ocorreu. Gates API cincofalse e frontendfalse.
+
+### Retirada, capacidade e custódia
+
+Owner executou B/C: WITHDRAWAL_EXIT0/POST_EXIT0. Driver retirou exclusivamente as duas cópias literais autorizadas,958.939.136B alocados. Main íntegra, diretórios/manifests/journals/releases/retornos/WAL preservados. Observações novas do driver e do leitor posterior: duas amostras completas, owners0/incomplete0; ambos os caminhos ausentes. Recibo/logs/leituras foram copiados off-host e hasheados. Blob idêntico/índice/extracao canônicos reconfirmados antes da retirada; não é uma segunda réplica de desastre independente.
+
+12/10 16:53:11UTC/13:53:11Fortaleza: mínimo deploy/PostgreSQL3.183.091.712B para orçamento3.063.001.639B, margem120.090.073B. **Depois de staging**,17:46:23UTC/14:46:23Fortaleza: deploy2.259.599.360B/PostgreSQL2.259.595.264B; mínimo2.259.595.264B, piso2.131.755.008B, margem127.840.256B. WAL83.886.080B/5arquivos,0slots; inodes amplamente disponíveis. Health API/DBok. Logs delimitados anteriores sem ERROR/FATAL/PANIC/write failure. Não atribuir a variação líquida de df integralmente à retirada: produção continuou escrevendo e o staging consumiu espaço. PASS de preparação datado, não certificado da futura janela. Espaço é estreito: não duplicar dependências ou novos tars/archives no host; reconferir capacidade/WAL/crescimento antes da decisão e da contenção.
+
+### Backup fresco e estado preservado
+
+Dump PostgreSQL off-host SHA9fb3feba8bc961afccca07d8363ac3812582511edbb3e076a9dacff61d8681e7/37.017.185B, concluído17:17:38UTC/14:17:38Fortaleza. Archive operacional/auth/data SHA8f8fc4aad1a7be1ec1cc4fdadee6fd4e32b65761c02939db39138897345c7aa6/2.420.674B, concluído17:27:25UTC/14:27:25Fortaleza;438membros. O campo atUtc do manifesto17:33 registra geração do manifesto, **não frescor do dump**. Usar o horário anterior da captura/custódia real acima e o RPO canônico; renovar se vencido na futura execução, preservando esta geração de prova.
+
+Restore PostgreSQL16 isolado exit0/614objetos/70tabelas; seis resultados, zero Outbound.7–.11 e jobqueued/attempt1/operational_suspension/semlease conferidos. Banco temporário removido; aplicação/scheduler/provider não iniciados. Checksums das migrations confrontados com as fontes da API ativa, sem divergência. Prova de restore inicial incompleta foi preservada antes de completar campos obrigatórios verificáveis; hashes/proofs/manifests correspondentes foram regenerados. Nenhum dado produtivo alterado por essas conferências.
+
+Leitura integrada17:45:46UTC/14:45:46Fortaleza: IMMEDIATE_READS_PASS_GUARD38_PRESERVED; todos os manifests/baselines/inventário global congelado/proxy/configurações/PIDs/startticks/cron/boot/saved/fallback passaram. API2ed/workerafbb/frontend3227/daemon preservados, guarda38fechada/tasks{}, job suspenso, seis resultados, recibo/disposição.6 e cinco sem submissão intactos. Leitura não é drain nem certificado de saída; testes funcionais/provas de entrega não foram repetidos. Sessões/auth foram conferidos por baseline; confirmação humana de telas pertence à futura janela.
+
+### Staging e políticas
+
+API: incident-6683-v4-dynamic-5b3cf3af-20261012T170000Z; candidata campaign-dynamic-5b3cf3af-20261012T170000Z. Sobre a base ativa2ed, overlay6033ac56931c47edaa01301fc3537a8012368bb33fe1d423c99e84ed1dde33a5;1.895arquivos/2symlinks/6.944dependências. Somente quatro módulos runtime e fontes correspondentes;schema/auth/aceitação/webhook/dependências preservados. Retorno pré-cancelamento à API2ed íntegra. Retorno compatível próprio campaign-dynamic-compatible-return-5b3cf3af-20261012T170000Z possui inventário/bytes iguais à candidata e dependências compartilhadas conferidas. Mesmo workerafbb: parada/partida coordenada futura por exigência V4, sem delta funcional/rebuild.
+
+Frontend: frontend-dynamic-5b3cf3af-20261012T170000Z; tar EXATO74a2ac2fcf93b32623fa2e0dfa857d1792cfd503e1f46cee09e6f94f3ca2216f,BUILD_IDdFvS6tFEaWQsSIIn3P702,manifestoe0c66407d0b56748547d0d03f7a2b1b88d63a75cadde22f8cc8bbd03bac4054b. Extração remota completa23.803arquivos/31symlinks. Tar/build/provas Chrome11+6 anteriores reutilizados; nenhum rebuild/reteste amplo. CSS processado efetivamente referenciado64ec3d62bdaa41ef.css/hash1ddf8dca7f9965191239b7aef3b8ce92374ccf637ca421d3ad75a0cc964eab64; mesmo CSS validado, não presume arquivo novo por build novo. Controles/nonces de ida/retorno novos, nenhum intent/journal/certificado copiado. Retorno ao3227 ativo conserva release, controle permanente, journals e saved/fallback.
+
+Propostas (não instaladas): V4 11283078071d5658bd0a5b91075b1465312be893def1a078457a5b39420fd53c; frontendjanela576f25f2bd8563a741336361d6dabe11760fc1693696fb247a88bba68061c1e4; permanente5ee8622d9499a38aab740bec02aaed9fa2732d9981505f915215e39b2d9eae3e. Helpers8de/c885/976 e sudoers literais permanecem iguais. Instalações futuras exigem Deifson na sessão sudo; arquivos root600 atuais/archive/integridade exigem conferência real antes da troca. Nenhuma nova delegação é necessária.
+
+### Negativas preservadas e limites operacionais
+
+- `run_release`: preparador reutilizado manteve TARGET3227; checker arquivado e único literal corrigido para candidata real. Controles/nonces não recriados; continua negando identidade divergente. Preparador canônico publicado inclui a referência correta.
+- `policy_already_exists`: cópia de entradas do V4 incluiu política histórica. Bytes copiados/manifests arquivados; gerador passou a excluir políticas históricas e criou proposta nova. Nenhuma política copiada foi instalada ou considerada prova fresca.
+- `NameError: time`: falha restrita à emissão final de metadata do continuador, após verificar pacote e gerar propostas. Diagnóstico preservado; finalizador publicou metadata sem recriar controles ou tocar produção.
+- contrato de restore recusou campos ausentes `applicationStarted`/`migrationChecksumMismatches`. Relatório anterior preservado; sem defaults no consumidor. Completado pela cadeia observada sem aplicação e leitura real dos checksums; nova conferência integrada PASS.
+
+Sintaxe/checks dos drivers/instaladores e quatro compilados Node20.20.0 conferidos. Efeitos de contenção/start/stop/nft/systemd/promoção e ausência de sobreviventes da **nova geração** NOT EXERCISED: observar somente na futura execução autorizada; não reatribuir ensaios antigos. Não houve instalação parcial root.
+
+### Próxima decisão e dependências
+
+Revisar pacote e comandos, depois decisão própria de implantação API→frontend. Antes da parada API: leitura/custódia/RPO/capacidade e hashes root frescos, instalação V4 por Deifson, inspectfaseNone, fivegatesfalse antes de habilitação. Sequenciador canônico faz fechamento→prova→preflight, observações novas/ownershipDB, renovação limitada de capture/unfence e diagnóstico privado, sem startrepetido. Retornos pré-stop/parcial/completo por estado real; pós-unfence somente gerador/política frescos e owner sudo disponível. Guarda38/job suspenso em todos os ramos.
+
+**Frontend baseline pós-API é dependência explícita:** capturador preparado só aceita complete/switch e os certificados reais API/worker; originais pré-API são arquivados nesta geração. Recusa bloqueia instalação/parada frontend. Depois instalar política janela, preflightpreparatório arquivado e before novo na janela; saída root nova, partida única/readiness30s,BUILD_ID/CSSservido. Owner confirma layout/sessão/Inbox/CRM/Campanhas/lote antes da política permanente/promoção/save/fallback. Retorno3227 segue gatesnovos, sem repetir partidas.
+
+**Cancelamento histórico NÃO PREPARED/AUTHORIZED para executar nesta rodada.** Bytes do retorno compatível estão staged/verificados, mas suas identidades/política de execução têm de ser capturadas da composição efetivamente implantada, antes da decisão de cancelamento. Não inventar PIDs futuros nem reaproveitar política pré-cancelamento. Se essa fase faltar, bloquear cancelamento; API2ed/frontend3227 anteriores não são retorno compatível depois dele. Nenhuma cinco posições foi retomada/terminalizada. Incidente permanece OPEN até implantação/aceite e encerramento específico aprovado; legitimidade do público out.15 não é resolvida por quatro elegíveis ou contadores concordantes.
+
+CSV/Syer, internacional,CRA-PR,multilote/AUTO naturais permanecem separados. Recuperação.6/setembro CLOSED;frontend3227 anterior e aceites anteriores preservados. Preferência de janela sem humanos não dispensa conferência de atendimento/automações.
+
+## Histórico preservado — continuação cf55655b (12/10/2026)
 
 **CORREÇÃO LOCAL VALIDADA / STORAGE ACTION READY FOR REVIEW / NOT DEPLOYED.** Capacidade real continua insuficiente, mas há caminho concreto: [dois caminhos, custódia, comandos A/B/C e limites](STORAGE_WITHDRAWAL_FOR_REVIEW.md). Retirada ainda NÃO AUTORIZADA/NÃO EXECUTADA; staging integrado/políticas de janela ainda não são PREPARED FOR INSTALLATION. Proposta libera958.939.136B sem retirar main, releases, retornos, diretórios, WAL ou evidências. Próxima ação executável para decisão do owner: revisar e autorizar exclusivamente essa retirada. Sua execução e CAPACITY comprovado precedem staging/geração operacional; não reutilizar certificado root preparatório.
 

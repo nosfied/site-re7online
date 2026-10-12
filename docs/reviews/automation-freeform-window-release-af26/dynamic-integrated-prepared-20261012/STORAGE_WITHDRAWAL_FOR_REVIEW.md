@@ -1,5 +1,7 @@
 # Proposta concreta de capacidade — somente para revisão
 
+**CONSUMIDO EM12/10: retirada autorizada/executada exit0,post0; não repetir A/B/C.** [Resultado factual e staging](README.md). Conteúdo abaixo preservado como proposta histórica, não autorização de nova retirada.
+
 Estado: READ-ONLY AUDIT COMPLETE / CUSTODY VERIFIED / WITHDRAWAL NOT AUTHORIZED OR EXECUTED.
 
 Manter no host: /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-ecosystem-20261008T211000Z/window/content.private.tar.gz. Manter todas as releases ativas/referenciadas, retornos, diretórios, manifests, journals, capturas, WAL e evidências. As quatro retiradas antigas de outubro são consumidas e não fazem parte desta proposta.

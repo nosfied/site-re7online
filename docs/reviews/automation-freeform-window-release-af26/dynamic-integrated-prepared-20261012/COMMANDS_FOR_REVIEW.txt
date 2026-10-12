@@ -1,28 +1,141 @@
-CURRENT: revised acceptance boundary / concrete two-file withdrawal proposal in STORAGE_WITHDRAWAL_FOR_REVIEW.md. Withdrawal and deploy NOT AUTHORIZED here. Compatible operational return must be staged before historical cancel.
+PREPARATION ONLY / NOT AUTHORIZED TO INSTALL OR EXECUTE BY THIS DOCUMENT.
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-dynamic-5b3cf3af-20261012T170000Z
+Return API: /opt/re7online/releases/campaign-result-truth-2ed9dccc-20261011T184000Z/apps/whatsapp-agent
+Candidate: /opt/re7online/releases/campaign-dynamic-5b3cf3af-20261012T170000Z/apps/whatsapp-agent
+Frontend3227 and same worker afbb preserved. Guard remains closed38 in all branches.
+Stop at divergence, partial install, consumed intent or uncertain result; preserve
+private stdout/stderr/exit. Never repeat start. No sends/replay/ack/open/resume.
 
-STATUS: NOT DEPLOYED / CAPACITY DENY / NO OPERATIONAL INSTALLATION OR WINDOW COMMAND IS AUTHORIZED HERE.
-Run from the existing review worktree. These commands verify local bytes only.
-
+A. ONLY AFTER OWNER DECISION: INSTALL POLICY, DEIFSON'S SUDO SESSION
 set -euo pipefail
-D=docs/reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012
-P=local-evidence/dynamic-integrated-20261012/post-reboot
-A=local-evidence/dynamic-integrated-20261012/continuation-cf55655b/api-artifact-v2
-test "$(sha256sum "$A/api-overlay.tar" | cut -d' ' -f1)" = 6033ac56931c47edaa01301fc3537a8012368bb33fe1d423c99e84ed1dde33a5
-test "$(sha256sum "$P/frontend-artifact/frontend-dynamic-integrated.tar.gz" | cut -d' ' -f1)" = 74a2ac2fcf93b32623fa2e0dfa857d1792cfd503e1f46cee09e6f94f3ca2216f
-python3 "$D/verify-overlay.py" "$A/api-overlay.tar" "$D/api-overlay-manifest.json"
-python3 "$D/verify-frontend.py" "$P/frontend-artifact/package" e0c66407d0b56748547d0d03f7a2b1b88d63a75cadde22f8cc8bbd03bac4054b
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-dynamic-5b3cf3af-20261012T170000Z
+python3 "$P/check-immediate.py"
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = c79f810f58363bf3b99edb5d5bf8948f609291351869354b6a3bdd7af61ce258
+bash "$P/install-api-window-policy.sh"
+# Only root policy changes. Helper8de and literal nine-command sudoers62b5 unchanged.
+# Exact installed old hash 620a119f931fff9f52c6403aa940ed31a5d1471bc2abdd6a1adee8d17e6ee62f is rechecked by sudo before archiving.
+# Expected POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE.
+# Archive/partial install/drift/timeout: inspect exact bytes and phase; never rerun.
 
-READ-ONLY historical cancellation preflight, never an apply:
-The existing private wrapper sets the attested input/hash module paths. Audit it first. The canonical capture clears inherited DB/auth/decoder variables and uses original active API sources. Output contains sensitive evidence; no JSON in chat/Git. Use a NEW output path once, and stop on failure. A capture is not a drain certificate or authority to cancel.
+B. IMMEDIATE FUTURE WINDOW CHECKS, BEFORE ENABLING GATES
+python3 "$P/check-immediate.py" --after-policy-installed
+# Must additionally reconfirm capacity/WAL and backup freshness/RPO from runbook;
+# historical CAPACITY PASS is not an operational certificate. New backup, when
+# necessary, must follow canonical off-host/restore binding procedure, preserving
+# previous manifests. Do not silently mark restoreVerified on expired evidence.
+# Confirm global frozen inventory, receipt, archived task, five unsubmitted,
+# exact identities/configs/manifests, auth/session state and proxy/owner bindings.
+# ownerAuthorized means NEW OWNER EXECUTION DECISION, absent in this preparation.
+# No delegated preflight proof before sequencer's close step; current guard closed
+# makes close idempotent without generation change, open.cjs preserves closed.
 
-set -euo pipefail
-umask 077
-P=local-evidence/dynamic-integrated-20261012
-O="$P/out15-future-preflight.private.json"
-test ! -e "$O"
-test ! -e "$O.stderr"
-ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 deploy@admin.re7online.com 'python3 /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-result-truth-2ed9dccc-20261011T184000Z/capture-readonly.py' < "$P/close-query-v2-wrapper.cjs" > "$O" 2> "$O.stderr"
+C. FUTURE EXECUTION ONCE, ONLY AFTER A/B REQUIREMENTS AND OWNER DECISION
+python3 - "$P" <<'CHECK'
+import json,hashlib,sys
+from pathlib import Path
+p=Path(sys.argv[1]);w=p/'window';sys.path.insert(0,str(w))
+from baseline_contract import validate_preparation
+from sequencer import Bridge
+validate_preparation(p)
+e=(w/'privileged-policy.sha256').read_text().strip()
+assert e=='11283078071d5658bd0a5b91075b1465312be893def1a078457a5b39420fd53c'
+assert json.loads(Bridge(p).privileged('inspect'))=={'policySha256':e,'phase':None,'sourceProcessesAlive':True}
+f=w/'execution-gates.private.json';g=json.loads(f.read_text())
+assert set(g)=={'ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved'} and all(v is False for v in g.values())
+# These assertions require the evidence reviewed in A/B, never replace it.
+f.write_text(json.dumps({k:True for k in g},sort_keys=True)+'\n')
+CHECK
+python3 "$P/window/sequencer.py" "$P"
+# Sequencer owns exclusivity; one API and worker start per mode, new exit/DB/fence
+# proofs. It selects pre-stop abort, return-partial or return from actual state.
+# Never manually repeat stop/start or run another mode around a denial.
+# Guard38/job/receipt/archived task stay unchanged. Frontend never stopped.
+# At15min containment: communicate state/blocker/return; horizon is not a kill gate.
 
-Historical apply is NOT included. After new compatible API/frontend and separate owner decision, use the existing authenticated UI cancellation for batch d473aec1-8ffa-40b9-8bab-e6819153ae4c once, then READ ONLY verify-after with fresh receipt/event/state observations. Do not rerun POST after timeout or uncertainty. Keep guard closed38; no ack/resume/open.
+D. POST-UNFENCE FAILURE ONLY: FRESH PREPARATION/POLICY REQUIRED
+C=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-dynamic-20261012T170000Z
+python3 "$P/window/prepare_post_unfence_return.py" "$P" "$C"
+# Run only at observed post-unfence failure after restored cron/boot, with no
+# return starts already consumed. Generator captures API/frontend/daemon actual,
+# live worker OR its explicit proven absence from pre-unfence capture including
+# descendants/sockets. DENY on survivor, substitute, ambiguity or unavailable observer.
+# Policy/hash/nonces/certificates are NEW; do not copy main attempt's proofs.
+# Deifson's availability for this policy-only installation is a prerequisite:
+bash "$P/install-post-unfence-return-policy.sh"
+# Future root archive:
+# /usr/local/libexec/re7/incident-6683-window-policy.failed-dynamic-5b3cf3af-170000.json
+# Installer verifies SOURCE620a and the generated new hash. It accepts only the
+# canonical strict inspect shape (live worker or explicit absent-proven); no relaxation.
+# Reconfirm backup/frozen/capacity and all five return requirements before flags:
+python3 - "$C" <<'CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);w=p/'window';sys.path.insert(0,str(w))
+from baseline_contract import validate_preparation
+from sequencer import Bridge
+validate_preparation(p,['return'])
+e=(w/'privileged-policy.sha256').read_text().strip();proposal=json.loads((w/'privileged-policy.private.json').read_text())
+expected={'policySha256':e,'phase':None,'sourceProcessesAlive':'absentWorker' not in proposal}
+if 'absentWorker' in proposal:
+ assert proposal['absentWorker']['status']=='absent-proven'
+ expected['sourceWorkerAbsent']=True
+assert json.loads(Bridge(p).privileged('inspect'))==expected
+f=w/'execution-gates.private.json';g=json.loads(f.read_text());assert len(g)==5 and all(x is False for x in g.values())
+f.write_text(json.dumps({k:True for k in g},sort_keys=True)+'\n')
+CHECK
+python3 "$C/window/sequencer.py" "$C" --post-unfence-return
+# Source-owner exit, sockets/backends/locks and new V4 owner-set proof precede
+# any successor. Return restores preventive API/same worker, never database/auth.
 
-INSTALLATION/DEPLOYMENT: BLOCKED BY CAPACITY. No new operational policy/control generation exists. Future concrete installer blocks require staging, fresh identities/manifests/baselines and policy root-hash comparison. Existing consumed preparation must not be reused. See README phase sequence and return compatibility boundary; no placeholders masquerade as executable commands.
+E. AFTER API COMPLETE/SWITCH ONLY: NEW FRONTEND BASELINE
+python3 /opt/re7online/backups/converta-persistent/preparations/frontend-dynamic-5b3cf3af-20261012T170000Z/capture-frontend-phase.py
+# Must return FRONTEND_PHASE_AFTER_API_VERIFIED_GATES_FALSE. No baseline adaptation
+# following API return/denial. Originals are archived inside this new generation.
+# Then Deifson's sudo session, only after future consolidated owner authorization:
+P=/opt/re7online/backups/converta-persistent/preparations/frontend-dynamic-5b3cf3af-20261012T170000Z
+test "$(sha256sum "$P/install-window-policy.sh" | cut -d' ' -f1)" = 2ccffe1d27bca68de6ad91c2915640b79e16eef6ae8a18b84b231e3c6d94c6d9
+bash "$P/install-window-policy.sh"
+# Requires existing reader c885/policy7a; archives root policy. Helper/sudoers unchanged.
+# Bounded preparatory preflight <=3/45s; preserve capture. Does not authorize stop.
+# Then execute WINDOW-STEPS.txt under frontend lock only after fresh before and
+# current capacity/backup/identities revalidated. One start, <=30s readiness.
+# Owner must confirm layout/session/Inbox/CRM/Campaigns/list/lots before promotion.
+
+F. PERMANENT POLICY / PROMOTION — OWNER CONFIRMATION FIRST
+P=/opt/re7online/backups/converta-persistent/preparations/frontend-dynamic-5b3cf3af-20261012T170000Z
+test "$(sha256sum "$P/install-permanent-policy.sh" | cut -d' ' -f1)" = f82221c937787f1f01791f8223e086ad5727082efa5445b8cd82f4cc8f8f121e
+bash "$P/install-permanent-policy.sh"
+# This policy changes artifact roles only, preserving current diagnostic reader
+# c885 and existing root helper976/literal sudoers. Archive source3519 once.
+python3 "$P/check-permanent-policy.py"
+python3 "$P/frontend-action.py" enable-supervision-candidate
+python3 "$P/frontend-action.py" supervised-candidate
+/home/deploy/.npm-global/bin/pm2 save
+cp /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+printf 'false\n' > "$P/execution-authorized"
+# RETURN3227: WINDOW-STEPS stage-specific fresh source/candidate-exited gates,
+# one return start. After restored screens, if permanent policy is STILL3519,
+# execute the above permanent installer ONCE for return role; if already5ee862,
+# run only check-permanent-policy. Any other hash/partial state DENY. Owner sudo
+# reads the full root hash to select the branch, never rerun the installer blindly.
+# Then enable-supervision-return/supervised-return/save/fallback/gatefalse as published.
+# Failure of return start requires new return-exited and escalation; no second start.
+
+G. HISTORICAL CANCELLATION / COMPATIBLE RETURN — SEPARATE FUTURE DECISION
+# No cancellation or resume authorized by this preparation. Before any cancellation,
+# bind a fresh canonical V4 generation to the THEN-effective API and frontend, with
+# target /opt/re7online/releases/campaign-dynamic-compatible-return-5b3cf3af-20261012T170000Z/apps/whatsapp-agent
+# and preserved NEW frontend /opt/re7online/releases/frontend-dynamic-5b3cf3af-20261012T170000Z.
+# Full compatible API inventory already matches candidate; frontend same immutable
+# tar serves this return. Future PIDs/exit proofs cannot be fabricated today.
+# Old API2ed/frontend3227 return is prohibited after confirmed historical cancellation.
+# If fresh compatible controls/policy are not verified, cancellation remains BLOCKED.
+
+H. POST-DEPLOY READ ONLY
+# API active dist hashes = overlay manifest; worker unchanged; frontend BUILD_ID
+# dFvS6tFEaWQsSIIn3P702 and CSS64ec hash1ddf verified via published guards.
+# Owner legitimate session: list -> detail -> polling out.15 remains six reported
+# deliveries/five pending; operational suspension visible; no send/claim/edit.
+# Reconfirm guard closed38/tasks{}, suspended job/no lease, receipt/disposition,
+# five unsubmitted, auth/sessions, health/DB, cron/boot/scheduler, saved=fallback,
+# permanent supervision and no nft barrier. Escalate at15min, never bypass a gate.

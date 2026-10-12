@@ -1,0 +1,139 @@
+{
+  "status": "INACTIVE_STAGING_VERIFIED_NOT_INSTALLED_NOT_DEPLOYED",
+  "withdrawal": {
+    "driverSha256": "ba8f0bdc6e97e85632ff124ce430d6a72035f4ad32c620b22e329827f10dc379",
+    "exit": 0,
+    "postExit": 0,
+    "allocatedBytesRemoved": 958939136,
+    "samples": 2,
+    "owners": [
+      0,
+      0
+    ],
+    "incomplete": [
+      0,
+      0
+    ],
+    "mainPreserved": true,
+    "withdrawalReceiptSha256": "6e3515f7543753f3a6315745af4641ec83cd33817162b2836c2155d46c84e7f3",
+    "postObservationSha256": "e350b9741ec923e22d4f13c4da4b34f11ab6bbef0b3e12f90fbd48ec3f219470"
+  },
+  "capacityBeforeStaging": {
+    "result": "CAPACITY_PASS_FOR_INACTIVE_STAGING",
+    "atUtc": "2026-10-12T16:53:11Z",
+    "atFortaleza": "2026-10-12 13:53:11",
+    "minimumDeployPostgresBytes": 3183091712,
+    "requiredFreeBeforeStagingBytes": 3063001639,
+    "marginBytes": 120090073,
+    "allocatedBytesWithdrawn": 958939136,
+    "walBytes": 83886080,
+    "walFiles": 5,
+    "slots": 0,
+    "inodesFree": 6858638,
+    "postgresWriteErrorsInBoundedLog": 0,
+    "guardGeneration": 38,
+    "guardOpen": false,
+    "limits": "dated; includes compatible API return budget, WAL reserve and operational floor; reconfirm during and after staging and before future window; no deployment or drain certificate"
+  },
+  "capacityAfterStaging": {
+    "atUtc": "2026-10-12T17:46:23Z",
+    "availableDeployBytes": 2259599360,
+    "availablePostgresBytes": 2259595264,
+    "minimumAvailableBytes": 2259595264,
+    "productionReserveBytes": 2131755008,
+    "remainingMarginBytes": 127840256,
+    "walBytes": 83886080,
+    "walFiles": 5,
+    "replicationSlots": 0,
+    "result": "PASS_FOR_PREPARATION_DATETIME_ONLY"
+  },
+  "backup": {
+    "dumpSha256": "9fb3feba8bc961afccca07d8363ac3812582511edbb3e076a9dacff61d8681e7",
+    "dumpBytes": 37017185,
+    "dumpCompletedOffHostUtc": "2026-10-12T17:17:38.479421+00:00",
+    "controlsSha256": "8f8fc4aad1a7be1ec1cc4fdadee6fd4e32b65761c02939db39138897345c7aa6",
+    "controlsBytes": 2420674,
+    "controlsCompletedOffHostUtc": "2026-10-12T17:27:25.676498+00:00",
+    "restoreTables": 70,
+    "catalogObjects": 614,
+    "restoreResultSha256": "4cd194e5a0a5c00ac58fc34f0b9cf9277cf61eef6de01fb1dbe23f7f36aed7c4",
+    "temporaryDatabaseRemoved": true,
+    "migrationChecksumsVerified": 60,
+    "restoreProviderCalls": 0,
+    "controlsArchiveMembers": 438
+  },
+  "api": {
+    "apiManifestSha256": "42fdd2e373c2b77520199cc5ff26f4752d2c86e73ecd8ef239829dd3ff556189",
+    "atUtc": "2026-10-12T17:39:37.210033+00:00",
+    "backupManifestSha256": "2cff0f740c1522cb8a9852acb1812a5704ec56bacf7a9e0376dd550e2160b006",
+    "gatesFalse": true,
+    "helperSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "installApiPolicySha256": "c79f810f58363bf3b99edb5d5bf8948f609291351869354b6a3bdd7af61ce258",
+    "installedPolicyCurrentHashRequiresOwnerSudo": true,
+    "modeManifests": {
+      "return": "4b3a76cd2c524a74793792aeaa17ccfd66ead1eb0ee98432ffd5d28a2ee00414",
+      "return-partial": "1a40c93c2bcebee71b9138e072007f9df0d05ccf2a548c375901482f8dcae033",
+      "switch": "8447b0a56b7201b80122117fe189bc72bd03805fb6550db12a8fac9b14e152de"
+    },
+    "noIntentsOrCertificates": true,
+    "policySha256": "11283078071d5658bd0a5b91075b1465312be893def1a078457a5b39420fd53c",
+    "postUnfenceInstallerSha256": "6e650057747ff97bb1259c45ae9037ee257ea9a294209a9d55f52ed8e111f262",
+    "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-dynamic-5b3cf3af-20261012T170000Z",
+    "restoreResultSha256": "4cd194e5a0a5c00ac58fc34f0b9cf9277cf61eef6de01fb1dbe23f7f36aed7c4",
+    "sequencerManifestSha256": "697caa73a67d9284f972e450538f921fbdf3782f6ed5e94c71e64fa871db16e5",
+    "sequencerSha256": "df0ba9bd3ffee691b037c9bfa67cddbb553ffa94a3011ed2f7a36ad331a57d85",
+    "sourceInstalledPolicyExpectedSha256": "620a119f931fff9f52c6403aa940ed31a5d1471bc2abdd6a1adee8d17e6ee62f",
+    "status": "PREPARED_FOR_REVIEW_NOT_INSTALLED_NOT_DEPLOYED",
+    "verifyPackageSha256": "edeee653a9e2c75097d2e0eb1abcb9ce2f6a52a37db27c3fda8bea471ff81ed4"
+  },
+  "frontend": {
+    "at": 1791826863.465438,
+    "gatesFalse": true,
+    "started": false,
+    "policiesInstalled": false,
+    "needsPostApiPhaseCapture": true,
+    "windowPolicySha256": "576f25f2bd8563a741336361d6dabe11760fc1693696fb247a88bba68061c1e4",
+    "permanentPolicySha256": "5ee8622d9499a38aab740bec02aaed9fa2732d9981505f915215e39b2d9eae3e",
+    "scriptsSha256": "03e35e13a7648b8d5afcb847ba01edf61ee13f9ffe779c4cf9a094dfd85c4d04",
+    "bindingsSha256": "56d9c6881ff33088696c052eac9c71f1a6982ad5cdaa33105912325dc8870b97",
+    "installWindowSha256": "2ccffe1d27bca68de6ad91c2915640b79e16eef6ae8a18b84b231e3c6d94c6d9",
+    "installPermanentSha256": "f82221c937787f1f01791f8223e086ad5727082efa5445b8cd82f4cc8f8f121e",
+    "checkerSha256": "9165f564b96615dbc83605caefbf5b11ba4fe7a8eb53c2924095154f4db5e7dd",
+    "tarSha256": "74a2ac2fcf93b32623fa2e0dfa857d1792cfd503e1f46cee09e6f94f3ca2216f",
+    "BUILD_ID": "dFvS6tFEaWQsSIIn3P702"
+  },
+  "immutableArtifacts": {
+    "apiOverlaySha256": "6033ac56931c47edaa01301fc3537a8012368bb33fe1d423c99e84ed1dde33a5",
+    "frontendTarSha256": "74a2ac2fcf93b32623fa2e0dfa857d1792cfd503e1f46cee09e6f94f3ca2216f",
+    "frontendManifestSha256": "e0c66407d0b56748547d0d03f7a2b1b88d63a75cadde22f8cc8bbd03bac4054b"
+  },
+  "sourcePublishedSha256": {
+    "capture-frontend-phase.py": "13e320bd106f46a5882e2c4ba76cd539202d2fdcf34e18e91562673b93c21af0",
+    "complete-restore-proof.py": "37a0d353f5f222d94902aa30e8e15aba844083bccf9b710081fce5c97c9091d6",
+    "check-immediate.py": "df4e5ce6c394e31f82624c31a0da59b742b4f13432c80a8a867f5d6321fdb34d",
+    "finalize-api.py": "8e5d76cca7cbd159f23444d8c74c467c2549e526c98548f6029ad89f1bd39e87",
+    "install-permanent-policy.template.sh": "09452feebe59143a39404a0226b81078ba4296fd3515a46085c0c4f485e19eab",
+    "finalize-frontend.py": "533e08c2676d92e1399f524037a2d26b836322c424221de10ba1947e6e0fbdd1",
+    "verify-api-package.py": "edeee653a9e2c75097d2e0eb1abcb9ce2f6a52a37db27c3fda8bea471ff81ed4",
+    "install-api-window-policy.sh": "c79f810f58363bf3b99edb5d5bf8948f609291351869354b6a3bdd7af61ce258",
+    "prepare-api-generation.py": "abc2ec42a376027ba238d330fbf9e4c517fc01f8ea58370c387ee3775d2dffc2",
+    "frontend_phase_contract.py": "1541e12a2e60b9db38b75e22f7489d85462fad0d43f3955b24d81e4a5832acff",
+    "frontend-WINDOW-STEPS.txt": "3e95ae4350d4a9668634ae1ba974e1b170f76f99a2ed40031991edae6805030a",
+    "prepare-frontend-generation.py": "3d76bb61b2f2a63b25b321e47215c94e0b6824a3cf4e8bfb8e25dd501839249d",
+    "install-permanent-policy.sh": "f82221c937787f1f01791f8223e086ad5727082efa5445b8cd82f4cc8f8f121e",
+    "install-post-unfence-return-policy.sh": "6e650057747ff97bb1259c45ae9037ee257ea9a294209a9d55f52ed8e111f262",
+    "install-window-policy.sh": "2ccffe1d27bca68de6ad91c2915640b79e16eef6ae8a18b84b231e3c6d94c6d9",
+    "install-window-policy.template.sh": "37d44d9919152da742273cc509d3e00d70027abfaaf83ce2f7d4eb7acdd6a1b3",
+    "frontend-check.py": "9165f564b96615dbc83605caefbf5b11ba4fe7a8eb53c2924095154f4db5e7dd"
+  },
+  "privateArchives": {
+    "beforeFinalProofSha256": "887baa6d8abc0cbb172b68a11b2e678b9533d04713f66d27c9aa2055e79e6c1c",
+    "finalSha256": "fd9aa636366baade1cd558a5aef082ec31e0bf9d5e1f6474fd00500a326551a0"
+  },
+  "limits": [
+    "No policy installed, no start/stop, no drain or exit certificate",
+    "Post-API frontend baseline must be captured from actual complete/switch before frontend policy installation",
+    "Post-cancellation compatible return requires fresh binding to then-effective API/frontend before any historical cancellation; staged immutable compatible API bytes verified",
+    "Backup manifest atUtc is generation timestamp; freshness must use earlier actual dump completion above"
+  ]
+}
