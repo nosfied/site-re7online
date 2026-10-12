@@ -64,7 +64,7 @@ python3 "$P/window/prepare_post_unfence_return.py" "$P" "$C"
 bash "$P/install-post-unfence-return-policy.sh"
 # Future root archive:
 # /usr/local/libexec/re7/incident-6683-window-policy.failed-dynamic-5b3cf3af-170000.json
-# Installer verifies SOURCE620a and the generated new hash. It accepts only the
+# Installer verifies installed policy11283078071d5658bd0a5b91075b1465312be893def1a078457a5b39420fd53c and the generated new hash. It accepts only the
 # canonical strict inspect shape (live worker or explicit absent-proven); no relaxation.
 # Reconfirm backup/frozen/capacity and all five return requirements before flags:
 python3 - "$C" <<'CHECK'
