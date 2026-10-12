@@ -1,0 +1,192 @@
+{
+  "status": "DEPLOYED_TECHNICALLY_OWNER_UI_READ_CONFIRMED",
+  "baseAuthorizationSha": "abf3f46441be9d45abd3b8ef17c37f471deb55ec",
+  "commentCorrectionSha": "972f4734d51253b6f45e5c03611a0910809f6f5b",
+  "apiContainment": {
+    "enteredUtc": "2026-10-12T18:11:11.257756+00:00",
+    "removedUtc": "2026-10-12T18:11:46.672161+00:00",
+    "seconds": 35.414,
+    "completeSwitch": true,
+    "returnUsed": false,
+    "sequenceExit": 0
+  },
+  "frontendInterruption": {
+    "stopIssuedUtc": "2026-10-12T18:17:52.723057+00:00",
+    "readinessKnownPassedByUtc": "2026-10-12T18:17:59.467222+00:00",
+    "upperObservedIntervalSeconds": 6.744,
+    "scope": "stop-issued through readiness completed before candidate validation; no continuous HTTP sampling",
+    "startupAttempts": 1,
+    "readinessProbeAttempts": 2,
+    "returnUsed": false
+  },
+  "active": {
+    "atUtc": "2026-10-12T19:17:01.592114+00:00",
+    "processes": [
+      {
+        "name": "re7-whatsapp-agent",
+        "pid": 186864,
+        "ticks": "2161308560",
+        "cwd": "/opt/re7online/releases/campaign-dynamic-5b3cf3af-20261012T170000Z/apps/whatsapp-agent",
+        "restarts": 0
+      },
+      {
+        "name": "re7-whatsapp-web-worker",
+        "pid": 187037,
+        "ticks": "2161308947",
+        "cwd": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker",
+        "restarts": 0
+      },
+      {
+        "name": "re7-admin-front",
+        "pid": 188897,
+        "ticks": "2161347676",
+        "cwd": "/opt/re7online/releases/frontend-dynamic-5b3cf3af-20261012T170000Z",
+        "restarts": 0
+      }
+    ],
+    "frontendBuild": "dFvS6tFEaWQsSIIn3P702",
+    "savedSha256": "48510399ad79abe89ecfb9b53bdfffb75f7045e0229342e66d50649c3202c7ec",
+    "fallbackSha256": "48510399ad79abe89ecfb9b53bdfffb75f7045e0229342e66d50649c3202c7ec",
+    "guardSha256": "9e1a979932e4a22f8051046a4ce96e1ac5656723ba5ba4a57e1ef14f8e73a9e9",
+    "boot": "ActiveState=inactive\nUnitFileState=enabled\n",
+    "barrierAbsent": true,
+    "health": {
+      "ok": true,
+      "db": "ok",
+      "uptime": 3937,
+      "timestamp": "2026-10-12T19:17:01.223Z"
+    },
+    "apiGates": {
+      "artifactsVerified": false,
+      "discrepanciesResolved": false,
+      "ownerAuthorized": false,
+      "preflightReviewed": false,
+      "restoreVerified": false
+    },
+    "frontendGate": false,
+    "availableMinimumBytes": 2245120000
+  },
+  "policiesVerifiedByOwner": {
+    "v4": "11283078071d5658bd0a5b91075b1465312be893def1a078457a5b39420fd53c",
+    "frontendWindow": "576f25f2bd8563a741336361d6dabe11760fc1693696fb247a88bba68061c1e4",
+    "permanent": "5ee8622d9499a38aab740bec02aaed9fa2732d9981505f915215e39b2d9eae3e"
+  },
+  "helpersUnchanged": {
+    "v4": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "window": "c885486f0a34c15f6b2a66af311eb151bc66f8d22c9790c35ae729dff1cbad30",
+    "permanent": "976272ee36d6900111877c02ea6d0b72dc9dad705237c819a18861c47bfaec3d"
+  },
+  "backup": {
+    "atUtc": "2026-10-12T17:59:40.608768+00:00",
+    "controlsCapturedUtc": "2026-10-12T18:01:29.698747+00:00",
+    "preparedAtUtc": "2026-10-12T18:03:03.042627+00:00",
+    "catalogObjects": 614,
+    "guardGeneration": 38,
+    "source": "Fresh off-host dump and canonical operational/auth capture; exact live API source; no productive restore",
+    "files": {
+      "database.dump": {
+        "sha256": "a0ff0d346e4599b1cd5e44d996d2a0105ccd068258695fad2d8527252d7162c4",
+        "bytes": 37049394
+      },
+      "controls-runtime.private.tar.gz": {
+        "sha256": "1dda8b8c7f77aedfd248bd7c04e3badea8eb385f98447e1d2fe7bd646ed24483",
+        "bytes": 2420679
+      }
+    }
+  },
+  "globalInventory": {
+    "queryExit": 0,
+    "at": "2026-10-12T19:07:40.039758+00:00",
+    "ledgerConsistent": true,
+    "standbyDeniedBeforeClosure": true
+  },
+  "closurePreflight": {
+    "queryExit": 0,
+    "at": "2026-10-12T18:34:49.088814+00:00",
+    "planHash": "ce1afa3887e934bb505c385f0509c47c38dbd0468445be453cde000636e9194f",
+    "applyAuthorized": false,
+    "preserveResults": 6,
+    "notSubmittedAfterConfirmedCancel": 5
+  },
+  "compatibleStandby": {
+    "adminSourceSha256": {
+      "hash.mjs": "a083d9c23ae243dab3c7a4f722cfc8f8335d61cda6683b428529da3f98a67b83",
+      "input.private.json": "600ad3569fd28a9999adc2457f2f13e5f4201ebd985d232fcd94f669f8a6c0e2",
+      "reader-v2.cjs": "3abcbb95ac5a77d58b1f76d2e570a5b46b24a526e6014984bf628022b6818e13"
+    },
+    "atUtc": "2026-10-12T18:47:42.742704+00:00",
+    "availableMinimumBytes": 2220810240,
+    "beforeClosureObservedFrozen": true,
+    "certificateDriverSha256": "a049cee2fc99e86b32c85cf6a5e435bb3d7ce9920dc9dfae70546a5e6afec074",
+    "closurePlanHash": "ce1afa3887e934bb505c385f0509c47c38dbd0468445be453cde000636e9194f",
+    "compatibleArtifactSha256": "13f6d1890f718e9349debaf674ad67a9da8c6facebc83f5332fb84fdf63f261a",
+    "gatesFalse": true,
+    "helperSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "installSha256": "c23d122bc25e95c17867da71dcc2c2a3035825dcd198941fda8a039e8e4679ab",
+    "intentCount": 0,
+    "modeManifests": {
+      "return": "d535890199ef562ccdf8e9ab53e22fb19b73dacadb38e9949126935caaadcadd",
+      "return-partial": "b39559d41f12f8a6f7fa5f55774c4fd0d3fd99c167fbfed2d07d79e3dcb8d1f5",
+      "switch": "56ac8b2dad2a6dc63cc4f024eec6b12316d4eab2a508ebc2ff86c871e543b74f"
+    },
+    "policyInstalled": false,
+    "policySha256": "a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e",
+    "requiresFreshClosureCertificate": true,
+    "sequencerManifestSha256": "3dbed8bc011b007a10b7420249b8c354e5c6fb332f24f8fa7356fd6a1f459835",
+    "sequencerSha256": "df0ba9bd3ffee691b037c9bfa67cddbb553ffa94a3011ed2f7a36ad331a57d85",
+    "sourceFrontend": "/opt/re7online/releases/frontend-dynamic-5b3cf3af-20261012T170000Z",
+    "sourceInstalledPolicySha256": "11283078071d5658bd0a5b91075b1465312be893def1a078457a5b39420fd53c",
+    "sourcePolicySha256": "11283078071d5658bd0a5b91075b1465312be893def1a078457a5b39420fd53c",
+    "sourceProcesses": {
+      "re7-admin-front": {
+        "pid": 188897,
+        "ticks": "2161347676"
+      },
+      "re7-whatsapp-agent": {
+        "pid": 186864,
+        "ticks": "2161308560"
+      },
+      "re7-whatsapp-web-worker": {
+        "pid": 187037,
+        "ticks": "2161308947"
+      }
+    },
+    "started": false,
+    "status": "POST_CLOSURE_STANDBY_PREPARED_NOT_INSTALLED_NOT_EXECUTABLE_BEFORE_VERIFIED_CLOSURE",
+    "targetCompatibleApi": "/opt/re7online/releases/campaign-dynamic-compatible-return-5b3cf3af-20261012T170000Z/apps/whatsapp-agent",
+    "verifyPackageSha256": "46e4d4cb0ee9a3f0ea35d1026688e0db239c660d8b8044c6f1d5ef0d00b310ad"
+  },
+  "newOperationalProof": {
+    "result": "PASS",
+    "actualProducer": "applyCampaignExecutionBatchAction",
+    "actualReader": "PostgreSQL/read.sqlFor",
+    "beforeClosureDenied": true,
+    "afterCanonicalClosurePassed": true,
+    "negatives": [
+      "missing_certificate",
+      "active_job",
+      "linked_lease",
+      "tenant",
+      "unpaired_acceptance"
+    ],
+    "results": 6,
+    "reported": 6,
+    "remaining": 0,
+    "providerCalls": 0
+  },
+  "privateEvidenceHashes": {
+    "offHostArchive": "a3c3d4af112364cecd87a958ca74831bf8a5f8f193178eb0990115d16c9119fe",
+    "finalTechnical": "bbce59d6ee00b6fdcf5a40c82e6f758f65e29b89c71a20e0b27dfeb10bba2690",
+    "finalInventory": "ebdef3222b4cd285eb3350e830438c3820038e613b474e3cf8ee1d4eccbfbce0",
+    "freshDump": "a0ff0d346e4599b1cd5e44d996d2a0105ccd068258695fad2d8527252d7162c4",
+    "initialControlsDenied": "58503d60ebbeb3b7461f82ae98430a4d59848f860369a1abff9d4b779543cd33",
+    "freshControls": "1dda8b8c7f77aedfd248bd7c04e3badea8eb385f98447e1d2fe7bd646ed24483"
+  },
+  "limits": [
+    "No productive cancel, sends, open, resume, ack or migration",
+    "Current job queued operational_suspension; six reported/five pending",
+    "Post-close compatible policy is not installed and requires explicit owner decision; all gates false",
+    "Sensitive configuration was accidentally emitted in one tool output, not Git/public report; credentials preserved, separate security follow-up required",
+    "Local negative parser cases are not real production failures; standby stop/start/nft effects not exercised"
+  ]
+}

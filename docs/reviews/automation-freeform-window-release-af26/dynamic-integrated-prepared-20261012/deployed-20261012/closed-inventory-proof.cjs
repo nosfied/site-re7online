@@ -1,0 +1,15 @@
+const fs=require('node:fs'),assert=require('node:assert/strict'),url=require('node:url');
+const root=process.argv[2],cwd=process.argv[3],e=JSON.parse(fs.readFileSync(root+'/expected.private.json'));
+const {PrismaClient}=require(cwd+'/node_modules/@prisma/client');const read=require(root+'/switch/closed-waiting-work.cjs');const db=new PrismaClient();let providers=0;global.fetch=()=>{providers++;throw Error('provider_forbidden')};
+(async()=>{const query=()=>db.$transaction(async tx=>{await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');await tx.$executeRawUnsafe("SET LOCAL statement_timeout='8s'");await tx.$executeRawUnsafe("SET LOCAL TIME ZONE 'UTC'");const rows=await tx.$queryRawUnsafe(read.sqlFor(e));return rows[0].json_build_object;});
+const proof={mode:'READ_ONLY',stage:'VERIFY_AFTER_CANONICAL_CANCEL',planHash:e.closurePlanHash,plan:{preserveResults:6,notSubmitted:5,guardRemainsClosed38:true,providerCalls:0}};
+const before=await query();assert.throws(()=>read.closed(before,e,proof),/closure_job_incomplete/);
+const {applyCampaignExecutionBatchAction}=await import(url.pathToFileURL(cwd+'/dist/campaigns/campaignBatchControl.js'));
+const applied=await applyCampaignExecutionBatchAction(db,{clientId:e.scope.clientId,batchId:e.scope.batchId,action:'cancel',userId:'isolated-contract-proof',requestId:'standby-closed-inventory-proof'});assert.equal(applied.ok,true);
+const q=await query();read.closed(q,e,proof);
+assert.throws(()=>read.closed(q,e,null),/closure_certificate_missing/);
+const active=structuredClone(q);active.jobs.push({...before.jobs.find(j=>j.id===e.scope.jobId),status:'running'});assert.throws(()=>read.closed(active,e,proof),/closure_active_or_unknown_job/);
+const lease=structuredClone(q);lease.leases=1;assert.throws(()=>read.closed(lease,e,proof),/closure_linked_lease/);
+const wrong=structuredClone(q);wrong.closure.job.clientId='00000000-0000-0000-0000-000000000000';assert.throws(()=>read.closed(wrong,e,proof),/closure_job_incomplete/);
+const ambiguous=structuredClone(q);ambiguous.closure.remainingAccepted=1;assert.throws(()=>read.closed(ambiguous,e,proof),/closure_results_or_acceptance/);
+assert.equal(providers,0);console.log(JSON.stringify({result:'PASS',actualProducer:'applyCampaignExecutionBatchAction',actualReader:'PostgreSQL/read.sqlFor',beforeClosureDenied:true,afterCanonicalClosurePassed:true,negatives:['missing_certificate','active_job','linked_lease','tenant','unpaired_acceptance'],results:q.closure.results,reported:q.closure.reported,remaining:q.closure.remainingResults,providerCalls:providers}));})().catch(e=>{console.error(e.name+':'+e.message);process.exitCode=1}).finally(()=>db.$disconnect());

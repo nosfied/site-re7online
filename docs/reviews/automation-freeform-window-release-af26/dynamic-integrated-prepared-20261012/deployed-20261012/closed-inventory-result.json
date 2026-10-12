@@ -1,0 +1,18 @@
+{
+  "result": "PASS",
+  "actualProducer": "applyCampaignExecutionBatchAction",
+  "actualReader": "PostgreSQL/read.sqlFor",
+  "beforeClosureDenied": true,
+  "afterCanonicalClosurePassed": true,
+  "negatives": [
+    "missing_certificate",
+    "active_job",
+    "linked_lease",
+    "tenant",
+    "unpaired_acceptance"
+  ],
+  "results": 6,
+  "reported": 6,
+  "remaining": 0,
+  "providerCalls": 0
+}

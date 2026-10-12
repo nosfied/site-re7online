@@ -1,6 +1,10 @@
 # Audiência dinâmica: correção integrada e encerramento sem envio — 12/10/2026
 
-## Estado corrente — retirada autorizada e staging integrado (12/10/2026)
+## Estado corrente — implantação concluída e encerramento pendente de decisão
+
+**DEPLOYED TECHNICALLY / OWNER UI READ CONFIRMED.** [Registro consolidado com tempos/versões/hashes/gates/limites](deployed-20261012/DEPLOYED_2026-10-12.md). API/worker/frontend implantados,saved=fallback,supervisãosemrestart,gatesfalse. Guard38closed/jobsuspenso/seisreportados/cincosemsubmissão e .6 preservados. [Retorno compatível preparado,não instalado](deployed-20261012/COMPATIBLE_RETURN_FOR_REVIEW.txt) / [procedimento concreto de encerramento somente para decisão](deployed-20261012/OUT15_CLOSURE_FOR_REVIEW.md). Nenhumcancelamento/envio/abertura/retomadaexecutado. IncidenteOPEN,legitimidadeout.15nãoaceita;frentesencerradaspreservadas. Ocorrência de output privado registrada separadamente no relatório, sem reproduzir valores ou alterar credenciais.
+
+## Histórico preservado — retirada autorizada e staging integrado (12/10/2026)
 
 **WITHDRAWAL COMPLETE / CAPACITY PASS DATADO / INACTIVE STAGING VERIFIED FOR REVIEW / NOT INSTALLED / NOT DEPLOYED.** [Comandos concretos](COMMANDS_FOR_REVIEW.txt), [hashes e evidências sanitizadas](staging-result-20261012.json), [fontes operacionais revisáveis](operational-20261012/). A retirada de5b3 foi consumida; não repetir seus blocos. Nenhum candidato iniciou, nenhuma política foi instalada, nenhuma reconciliação/cancelamento/abertura ocorreu. Gates API cincofalse e frontendfalse.
 

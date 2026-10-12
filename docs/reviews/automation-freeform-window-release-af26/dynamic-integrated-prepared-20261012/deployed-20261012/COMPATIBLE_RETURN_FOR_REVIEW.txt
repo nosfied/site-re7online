@@ -1,0 +1,54 @@
+PREPARED FOR REVIEW ONLY: NOT AUTHORIZED TO INSTALL THIS NEW POLICY OR EXECUTE RETURN.
+C=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-dynamic-compatible-20261012T184200Z
+No cancellation, open, resume, sends, migration, restore or generic ack by this file.
+
+A. FUTURE OWNER SUDO: POLICY ONLY, BEFORE APPROVED HISTORICAL ACTION
+set -euo pipefail
+C=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-dynamic-compatible-20261012T184200Z
+python3 "$C/verify-package.py"
+test "$(sha256sum "$C/install-api-window-policy.sh" | cut -d' ' -f1)" = c23d122bc25e95c17867da71dcc2c2a3035825dcd198941fda8a039e8e4679ab
+bash "$C/install-api-window-policy.sh"
+# Archives policy112830 into /usr/local/libexec/re7/incident-6683-window-policy.pre-compatible-184200.json.
+# Proposed policy a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e; root600; helper8de/sudoers62b5 unchanged.
+# Expected POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE. Identity drift/partial/archive exists DENY.
+# This installs standby policy only; job remains suspended/guard38closed.
+
+B. FUTURE SPECIFIC CLOSURE VERIFICATION ONLY AFTER AUTHORIZED CANONICAL CANCEL
+# Future owner performs one UI Cancelar conjunto, exactbatch d473aec1-8ffa-40b9-8bab-e6819153ae4c.
+# No script/API mutation is performed by the following reader:
+test "$(sha256sum "$C/certify-closure.py" | cut -d' ' -f1)" = a049cee2fc99e86b32c85cf6a5e435bb3d7ce9920dc9dfae70546a5e6afec074
+python3 "$C/certify-closure.py"
+# Original input600ad/source3abc/hashmodulea083 pinned, legitimate active API datasource.
+# SQL READONLY + timeouts, durable six/hash/receipt/snapshot/CRMDispo, canonical cancelled
+# scopes + event, five zero results/unpaired-acceptances, global inventory and guard38.
+# Only complete PASS writes closure-verified.private.json; gates remainfalse.
+# Timeout/drift/partial: preserve outputs and inspect, no automatic second POST/certification.
+
+C. COMPATIBLE RETURN ONLY IF NEEDED AND SEPARATELY AUTHORIZED
+# Reconfirm current PIDs/ticks/daemon, capacity/WAL, backup/RPO/custody, package,
+# all29files/mode, JSON/ecosystem, ownership/proxy, no survivor and rootpolicy/hash.
+# Closure certificate must exist and live SQL noWork must PASS. Missing means DENY.
+python3 - "$C" <<'CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);w=p/'window';sys.path.insert(0,str(w))
+from baseline_contract import validate_preparation
+from sequencer import Bridge
+validate_preparation(p)
+e=(w/'privileged-policy.sha256').read_text().strip()
+assert e=="a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e"
+assert json.loads(Bridge(p).privileged('inspect'))=={'policySha256':e,'phase':None,'sourceProcessesAlive':True}
+f=w/'execution-gates.private.json';g=json.loads(f.read_text());assert len(g)==5 and all(v is False for v in g.values())
+# Enable only with the reviewed CURRENT evidence and future owner execution decision.
+f.write_text(json.dumps({k:True for k in g},sort_keys=True)+'\n')
+CHECK
+python3 "$C/window/sequencer.py" "$C"
+# switch here means active-newAPI -> independently staged compatible-newAPI.
+# Partial/full failure returns to active-newAPI, ALSO semantically compatible.
+# Both preserve same worker/newfrontend, guard38closed/cancelled terminal job/6+5.
+# Source exit/DBownership/new sockets/capture/unfence/controls gates remain canonical.
+# NEVER use old2ed/oldfrontend3227 after historical cancellation.
+# Post-unfence uncertainty requires fresh preparation/policy from actual identities;
+# do not reuse this policy/proofs or start another successor without exit evidence.
+# At15min communicate state and blocker; no bypass. If identity changes before use,
+# generate a NEW reviewed standby, do not adapt this generation.
