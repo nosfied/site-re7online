@@ -1,0 +1,81 @@
+{
+  "result": "AUTH_WINDOW_BLOCKED_BEFORE_INSTALLATION",
+  "atUtc": "2026-10-12T23:21:17.233146+00:00",
+  "reason": "saved_reference_drift",
+  "observedDumpSha256": "48510399ad79abe89ecfb9b53bdfffb75f7045e0229342e66d50649c3202c7ec",
+  "inheritedDumpSha256": "50af61753bd6d4a370f47f7ad5ade47e48bbc0f60ccc15c5bbfa1474509b1e5d",
+  "pm2Modes": [
+    "0600",
+    "0600"
+  ],
+  "contentOwnerPreserved": true,
+  "rootPolicyInstalled": "a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e",
+  "proposedPolicyNotInstalled": "7234446434d016df8fca6b1d46ae071364fbdf944a0fcf0801d146abaa5a6a46",
+  "authValuesRotated": 0,
+  "starts": 0,
+  "guard": {
+    "open": false,
+    "generation": 38,
+    "tasks": {}
+  },
+  "identities": [
+    {
+      "name": "re7-whatsapp-agent",
+      "pid": 186864,
+      "restarts": 0
+    },
+    {
+      "name": "re7-whatsapp-web-worker",
+      "pid": 187037,
+      "restarts": 0
+    },
+    {
+      "name": "re7-admin-front",
+      "pid": 188897,
+      "restarts": 0
+    }
+  ],
+  "capacity": {
+    "minimumAvailableBytes": 2232520704,
+    "authCapacityPass": true,
+    "wal": {
+      "walBytes": 83886080,
+      "slots": 0
+    }
+  },
+  "backup": {
+    "controls-runtime.private.tar.gz": {
+      "bytes": 2421151,
+      "sha256": "21f3ece1c8655610885b7bca6c098a681b7fe712bfd82771c3e9317708071e62"
+    },
+    "database.dump": {
+      "bytes": 37337106,
+      "sha256": "6f64c9a1792ccdd1d08f44e8e91b78d6b29d35cff3ddd872ba4fce5ba954a585"
+    }
+  },
+  "renewedProofs": {
+    "result": "FRESH_OFF_HOST_BACKUP_RESTORE_PROOFS_RENEWED_GATES_FALSE_INSTALLERS_UNCHANGED",
+    "manifests": {
+      "switch": "69cff3418f4822b290ca3a253ede3b80e9fcedb76ea11633ebe03db72b78ad74",
+      "return": "257c69eb85895609ef0efe809bb1ff43de73f75d0d379506b69346a80ef4442e",
+      "return-partial": "cda4e82a64d0944a9b160e04a9c0075e4ddaabc1384dcf63ed04e836132137b4"
+    },
+    "backupManifestSha256": "c3522b788daf5e8a1fec250e9eb78daded0235a8ade28e16a52d81b9ae3bc26b",
+    "restoreSha256": "d21a14530b0d72cd50a983b5d262a76e5dbcf0c2f854412e6b7b30dee10b4e6a"
+  },
+  "seedProof": {
+    "node": "20.20.0",
+    "syntheticCases": 4,
+    "historicalFields": 147,
+    "historicalEvents": 126,
+    "originalHashesPreserved": true,
+    "productionIntegration": false
+  },
+  "privateOwnerInstructions": 5,
+  "derivedChannelRows": 11,
+  "webRows": 5,
+  "telegramIdentifiedPrivately": true,
+  "bankGenerationPrepared": false,
+  "bankBlocker": "auth did not run; no post-auth identities exist",
+  "fullContainment": false
+}

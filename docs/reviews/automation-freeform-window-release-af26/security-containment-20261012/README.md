@@ -59,3 +59,6 @@ OpenAI Docs confirmou gestão de permissões por projeto e exclusão da chave de
 PostgreSQL16 documenta ALTER ROLE e restrições do arquivo de senha. O driver usa libpq/SCRAM para não inserir plaintext na SQL e a prova TCP é separada do trust local. [ALTER ROLE](https://www.postgresql.org/docs/16/sql-alterrole.html), [arquivo de senha](https://www.postgresql.org/docs/16/libpq-pgpass.html).
 
 As páginas oficiais Meta de access tokens/basic settings não puderam ser obtidas nesta consulta. Não usei fontes secundárias para presumir reset/revogação/escopo: o roteiro exige a confirmação do efeito no console do ativo exato, em custódia privada.
+
+
+Continuidade autorizada12/10: [bloqueio pré-instalação, efeitos reais e preparação restante](AUTH_EXECUTION_2026-10-12.md). Esse resultado substitui o estado corrente anterior; hashes/históricos preservados.

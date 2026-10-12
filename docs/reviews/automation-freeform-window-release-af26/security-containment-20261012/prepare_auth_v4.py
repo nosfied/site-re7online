@@ -1,6 +1,7 @@
 """Preparation-only new V4 generation, same functional bytes, three new auth values. No installation/control."""
 from pathlib import Path
 import copy,datetime,fcntl,hashlib,json,os,shutil,subprocess,sys
+from saved_reference_capture import capture_pair
 os.umask(0o077)
 BASE=Path('/opt/re7online/backups/converta-persistent/preparations')
 O=BASE/'incident-6683-v4-dynamic-compatible-20261012T184200Z'
@@ -29,9 +30,13 @@ for config in [target,returned]:
 P.mkdir(mode=0o700);W.mkdir(mode=0o700)
 put(W/'execution-gates.private.json',{k:False for k in ['ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved']});(P/'execution-authorized').write_text('false\n')
 wm=json.loads((O/'window/sequencer-manifest.json').read_text());skip={'initial.private.json','privileged-policy.private.json','privileged-policy.sha256','mode-manifest-v4.json','preserved-frontend-config.private.json','mode-names.private.json','execution-gates.private.json','sequencer-manifest.json'}
+skip.update({'saved-dump.pm2.private.json','saved-dump.pm2.bak.private.json'})
 for name,digest in wm['filesSha256'].items():
  f=O/'window'/name;assert h(f)==digest,'source_manifest_drift'
  if name not in skip:(W/name).write_bytes(f.read_bytes().replace(str(O).encode(),str(P).encode()))
+# New generations must preserve real references; never repair an existing denied preparation.
+capture_pair([Path('/home/deploy/.pm2/dump.pm2'),Path('/home/deploy/.pm2/dump.pm2.bak')],
+             [W/'saved-dump.pm2.private.json',W/'saved-dump.pm2.bak.private.json'])
 # The existing closure certificate is durable historical evidence, not an exit proof or nonce.
 assert not (W/'closure-verified.private.json').exists();shutil.copyfile(O/'window/closure-verified.private.json',W/'closure-verified.private.json')
 from baseline_contract import capture_operational,capture_functional,validate_preparation
