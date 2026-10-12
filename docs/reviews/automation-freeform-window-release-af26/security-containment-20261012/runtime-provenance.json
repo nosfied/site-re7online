@@ -1,0 +1,16 @@
+{
+  "nodeVersion": "20.20.0",
+  "nodeBinarySha256": "d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e",
+  "postgresMajor": 16,
+  "libpq": "system16 native SCRAM",
+  "canonicalModules": {
+    "channels/channelAccountSecretCrypto.js": "7e245c304f44f387212b4dfafc3a19290b64f7c0ec84de60fcee7919d21bd624",
+    "auth/mfaService.js": "9f7b89f2189e8f35e2e9b895332434d3be3c172ba3b0783a1d591e7c86fa68a0",
+    "publicApi/publicApiWebhookService.js": "0d91bc25b8bbea50e171151e46804448f304699f324cf25ed63cbee3544228f0",
+    "channels/messengerOutbound.js": "7e8e07b9df4b76d9185f2074c4f83f9358300213b878e077f67a197100d96876",
+    "auth/clientAuth.js": "c37beae3f00610d7a850ec7a102e48c27cccff2323bcab1ef6b54982a0c9c9e8",
+    "auth/sessionPolicy.js": "aa58b912fc67b212534cf34a59668b69f840894554fc62592395fcc15c47040e"
+  },
+  "noRebuild": true,
+  "noRuntimeChanges": true
+}

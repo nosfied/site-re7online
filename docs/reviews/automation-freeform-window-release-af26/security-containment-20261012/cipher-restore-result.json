@@ -1,0 +1,28 @@
+{
+  "result": "PASS",
+  "families": [
+    {
+      "model": "channelAccountSecret",
+      "rows": 11,
+      "unreadable": 1,
+      "strictPlanDenied": true
+    },
+    {
+      "model": "mfaTotpSecret",
+      "rows": 0,
+      "unreadable": 0,
+      "strictPlanDenied": false
+    },
+    {
+      "model": "webhookEndpoint",
+      "rows": 0,
+      "unreadable": 0,
+      "strictPlanDenied": false
+    }
+  ],
+  "referenceRoundtripCount": 341,
+  "actualBackupRestored": true,
+  "providerCalls": 0,
+  "productionMutations": 0,
+  "scope": "READ_ONLY restored backup; prospective key only; strict invalid legacy row remains blocking"
+}

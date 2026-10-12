@@ -1,0 +1,14 @@
+{
+  "result": "PASS",
+  "node": "20.20.0",
+  "checks": [
+    "channel_canonical_roundtrip_wrong_key_and_malformed_denied",
+    "mfa_canonical_roundtrip_wrong_key_and_malformed_denied",
+    "webhook_canonical_roundtrip_wrong_key_and_malformed_denied",
+    "externalRefs_canonical_roundtrip_wrong_key_and_malformed_denied",
+    "old_session_rejected_new_session_valid_expected_logout",
+    "real_worker_http_old_missing_auth_rejected_new_auth_health200_provider0"
+  ],
+  "providerCalls": 0,
+  "scope": "isolated canonical compiled functions and worker HTTP; no productive rotation or webhook"
+}

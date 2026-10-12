@@ -1,0 +1,11 @@
+{
+  "result": "PASS",
+  "checks": [
+    "normal",
+    "exit_denied",
+    "sql_uncertain",
+    "verify_denied"
+  ],
+  "scope": "adapter contract callbacks; SQL/ownership effects simulated here, real SCRAM SQL separately tested",
+  "productionExecuted": false
+}

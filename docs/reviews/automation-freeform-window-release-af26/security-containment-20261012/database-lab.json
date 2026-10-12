@@ -1,0 +1,14 @@
+{
+  "result": "PASS",
+  "postgresVersion": "16",
+  "checks": [
+    "old_password_new_tcp_connection_denied",
+    "new_password_new_tcp_connection_pass",
+    "already_open_old_session_survives_not_revocation",
+    "transaction_rollback_preserves_cipher",
+    "tenant_and_original_cipher_CAS_no_cross_tenant_write"
+  ],
+  "schema": "synthetic fixture only",
+  "productionMutations": 0,
+  "temporaryServerStopped": true
+}

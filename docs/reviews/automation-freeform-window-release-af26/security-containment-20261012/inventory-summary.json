@@ -1,0 +1,20 @@
+{
+  "result": "PRIVATE_14_VALUE_INVENTORY_CONSUMERS_ISSUERS_REVOCATION_PREPARED",
+  "categories": {
+    "database": 1,
+    "session": 1,
+    "cipher": 3,
+    "external": 5,
+    "oauth_state": 1,
+    "verification": 1,
+    "internal": 2
+  },
+  "uniqueSecretValues": 13,
+  "consoleDependentSlots": 5,
+  "externalScopeVerified": false,
+  "duplicateTenantAdminReplicaCount": 0,
+  "duplicateTenantMetaReplicaCount": 0,
+  "additionalPotentialSecretFieldCount": 0,
+  "seedCipherDependency": "channel_key",
+  "wholeSecurityContainmentClaimed": false
+}

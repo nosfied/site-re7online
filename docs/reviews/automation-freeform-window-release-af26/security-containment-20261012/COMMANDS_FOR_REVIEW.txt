@@ -1,0 +1,122 @@
+REVIEW ONLY. NO CURRENT INSTALL/CHMOD/ROTATION/REVOKE/RESTART AUTHORIZED.
+Campaign out15 CLOSED; guard38 CLOSED; no open/resume/send or old credential rollback.
+
+A. FIRST AUTH WAVE: EXACT INACTIVE V4 GENERATION, REQUIRES OWNER INSTALL+WINDOW DECISION
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-auth-v2-20261012T223100Z
+# Reconfirm current min(deploy/PG), WAL/growth/inodes, backup/RPO/custody and isolated restore evidence.
+# New fresh inventory/baselines/identities/controls and root hashes MUST match; drift denies.
+# Source installed rootpolicy a2ff; proposed723444; helper8de/sudoers62b5 unchanged.
+# Reconfirm complete29 files/mode, JSON/ecosystem and same API/worker/untouched frontend.
+# Five gates and execution-authorized=false; no previous starts/exits/nonces reused.
+set -euo pipefail
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-auth-v2-20261012T223100Z
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = 188a588daf7b097836d4acb04171664951eb3ac6bd4cd9d991d953bfae447fca
+# FUTURE owner session sudo only, once, after approval and all fresh checks:
+bash "$P/install-api-window-policy.sh"
+# Expected POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE.
+# Archive previous policy at /usr/local/libexec/re7/incident-6683-window-policy.pre-security-auth-v2-20261012-223100.json.
+# No installer repetition on DENY/timeout/partial. No helper/sudoers/permanent-policy update.
+
+B. FUTURE AUTH EXECUTION ONLY AFTER APPROVED WINDOW AND SEALED CURRENT EVIDENCE
+# Use canonical five-gate admission; do not run just because this review file exists.
+# Each true gate requires its independent CURRENT evidence + actual owner execution decision.
+python3 - "$P" <<'CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);sys.path.insert(0,str(p/'window'))
+from baseline_contract import validate_preparation
+from sequencer import Bridge
+validate_preparation(p)
+e='7234446434d016df8fca6b1d46ae071364fbdf944a0fcf0801d146abaa5a6a46'
+assert json.loads(Bridge(p).privileged('inspect'))=={'policySha256':e,'phase':None,'sourceProcessesAlive':True}
+f=p/'window/execution-gates.private.json';g=json.loads(f.read_text());assert len(g)==5 and all(v is False for v in g.values())
+# Only the FUTURE approved operator may reach this write after checking all evidence.
+f.write_text(json.dumps({k:True for k in g},sort_keys=True)+'\n')
+CHECK
+umask 077
+python3 "$P/window/sequencer.py" "$P"
+# Single source exit/API+same worker start pair, canonical fresh owner/DB/socket/capture/unfence gates.
+# Auth changed means all old app JWTs invalid: owner logs in freshly, confirms UI READ ONLY.
+# Worker GET health validates new control header; old token401. No messages/webhook simulation.
+# Return full/partial uses NEW auth values in existing functional return; never old exposed values.
+# Completion: health/DB, controls, saved/fallback, guard38/tasks{}, gatesfalse, same frontend.
+# Existing policy for frontend permanent reader remains compatible: same frontend release/entry/BUILD_ID.
+# Post-unfence failure requires canonical fresh preparation/policy from real identities; owner sudo.
+# 15min containment: communicate/escalate; do not repeat starts/reopen guard by timeout.
+
+C. EXACT MINIMAL PM2 PERMISSION FIX, SEPARATE FUTURE APPROVAL; BEFORE AUTH SAVE
+# Driver prepared in reviewed administrative source bundle; current production files unchanged.
+# Use a fresh permissions-only inventory if hashes changed; do not edit the older inventory to pass.
+python3 secure_saved.py --inventory inventory-permissions.private.json
+# Only after future approval, once:
+python3 secure_saved.py --inventory inventory-permissions.private.json --future-owner-authorized-apply
+# Exactly /home/deploy/.pm2/dump.pm2 and dump.pm2.bak -> mode600; same contents/owner.
+# Preserve private archive before fix. Future saves must inherit umask077 and validate saved/fallback.
+# No directory chmod, broader sudo, dump replacement, daemon restart or secret printing.
+
+D. PRIVATE OWNER INPUT: NO VALUES IN CHAT/COMMANDS
+# A prepared private form has five external slots with issuer/asset/scope/expiry/reset evidence.
+# Owner obtains console replacements from matching Meta Apps/Business/system-user and OpenAI project.
+# Never reset app first just to fill the form: Meta identity ciphertext341 requires old key escrow
+# and verified conversion/adapter plan before destructive reset. Record actual old-revocation state.
+python3 prepare_rotation.py import-owner --package package-v2 --input owner-replacements.private.json
+# Empty/old/weak values or missing issuer/scope/expiry evidence deny; no network or revocation.
+# OpenAI owner: project API Keys/service account, permission scope equal/minimum required, create,
+# validate allowed read-only capability or console evidence, then revoke old after cutover.
+# Meta owner: exact issuer/app and asset relationships private; confirm reset immediate effect,
+# regenerate affected system-user/page/business tokens as necessary across tenants.
+# Verify string: API+Meta webhook console synchronized; no synthetic production callback.
+# OAuth state pending flows restart; no tenant transport/settings changed to obtain PASS.
+
+E. DATABASE: CONCRETE SQL/CONFIG/RECEIPT PROPOSAL, NOT CURRENTLY EXECUTABLE
+# Sealed private proposal already contains role-change.private.sql, new URL in both app configs,
+# credential-hook.private.json, expected SCRAM verifier hash and SAME role privileges.
+# Fresh DB V4 generation after auth captures actual source IDs/env, not old223100 bindings.
+# Preserve current source code and use new credentials in all successor/return configs.
+# Integrate reviewed credential_sequencer.py + credential_boundary.py into that NEW generation;
+# manifest pins adapter/plan/SQL. Draft applyAuthorized=false is a hard denial.
+# Render uses official libpq locally, never plaintext PASSWORD in SQL or argv:
+python3 database_plan.py --management-connection-file management-connection.private.json --password-file database-password.private.json --output role-change.private.sql
+# After FUTURE specific approval+sealed DB preparation only, canonical boundary:
+# closed38 -> containment -> source exit/owner/socket/locks proved -> SQL intent -> ALTER ROLE
+# -> durable verifier+same privileges -> new TCP success + old TCP denial -> ONE successor pair.
+# No SQL mutation before that boundary, no start if commit/verification uncertain.
+# NO EXECUTABLE BANK WINDOW COMMAND PUBLISHED YET: the actual post-auth generation
+# does not exist until the auth outcome/source identities are observed. The concrete
+# adapter, SQL and config proposals are supplied for review; a NEW sealed generation
+# and its absolute command will be issued from the real state, never placeholder PIDs.
+# This cannot run on the auth preparation (missing DB hook/SQL, targets still old DB credential).
+# SQL failure/timeout: inspect role verifier, SQL receipt, ledger/control markers without retry.
+# Do not restore old exposed password. Repair forward or same code with verified new credentials.
+# Keep initialization/recovery configuration in sync: Docker init password is currently old.
+# Existing persistent container does not require PG restart to ALTER ROLE; actual Config.Env cannot
+# be silently edited. New recovery initializer must use new credential before any future recreation.
+# Backups: current Docker pg_dump uses local trust; local mode must get new datasource/password file.
+# Read-only tools obtain values from active legitimate API or newly sealed bindings; old packages
+# remain historical and must not be used as resurrection/runtime configs.
+# Finish: canonical save/fallback with new URL,600/umask077; fresh connection test and off-host dump.
+
+F. CIPHER/DERIVED CREDENTIAL PHASE: BLOCKED BY REAL CONTRACTS, NO BLIND KEY CHANGE
+# Local planner can produce only an all-row, verified plan. Current channel family denies legacy row.
+# Exact LOCAL review command (current channel plan EXPECTED DENY before partial output):
+local-evidence/secult-node20-20260929/node-v20.20.0-linux-x64/bin/node docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher_plan.cjs local-evidence/security-containment-20261012/cipher-inventory-v2.stdout.private local-evidence/security-containment-20261012/package-v2/original-values.private.json local-evidence/security-containment-20261012/package-v2/new-values.private.json local-evidence/dynamic-integrated-20261012/post-reboot/api-exact-composition/apps/whatsapp-agent/dist channel local-evidence/security-containment-20261012/channel-plan-for-review.private.json
+# Node is exact20.20.0; relative canonical module root must be resolved to absolute by the planner. Never Node22 substitution.
+# MFA/webhook row counts0 verified; future nonzero rows require complete canonical roundtrips.
+# Messenger/Telegram identity refs341: conversion plan + old key escrow, same plaintext/tenant,
+# no new identities/runtime/window, then actual new app secret at stopped/fenced boundary.
+# CHANNEL key also reads147 immutable seed fields across126 events. Current API has one key,
+# no epoch decoder. Do NOT rewrite receipt-linked historical payloads or keep compromised key
+# as the key for new seeds. Versioned read-only legacy decoder/new-write key design needs review
+# and a new API artifact before this phase can execute; no migration presumed.
+# Enabled Telegram malformed row: exact account/secret/hash in private disposition plan. Restore
+# only from valid original source or owner canonical /app/telegram/bots/<id>/rotate-token;
+# <id> comes from PRIVATE binding, not phone suffix/name. No repair is executed now.
+# Channel key decrypts4 Meta tokens+1 Telegram token+5 Web auth states: reencrypt != revoke.
+# Owner must decide actual derived-token revocation and authorized Web re-pairing availability.
+# No disconnect, provider request, message or key replacement in this preparation.
+
+G. GLOBAL STOP CONDITIONS
+# Unknown issuer/scope/expiry; different source; consumed intent; incomplete observation; unsafe mode;
+# invalid ciphertext; missing historical decoder; insufficient phase budget; root policy mismatch:
+# DENY that phase, retain diagnostics/custody. Do not bypass, improvise keys or edit old bindings.
+# Out15 CLOSED, ledger38 CLOSED, six historical results/receipt retained; no campaign open/resume.

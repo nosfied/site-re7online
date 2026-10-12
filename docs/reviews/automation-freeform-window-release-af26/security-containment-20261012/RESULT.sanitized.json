@@ -1,0 +1,241 @@
+{
+  "status": "PREPARED_FOR_REVIEW_AUTH_WAVE_CONCRETE_WHOLE14_GATED_NOT_ROTATED",
+  "campaign": "OUT15_CLOSED_2e8dc9ea_SCOPE_UNCHANGED",
+  "security": "OPEN",
+  "guard": {
+    "open": false,
+    "generation": 38,
+    "tasks": {}
+  },
+  "inventory": {
+    "result": "PRIVATE_14_VALUE_INVENTORY_CONSUMERS_ISSUERS_REVOCATION_PREPARED",
+    "categories": {
+      "database": 1,
+      "session": 1,
+      "cipher": 3,
+      "external": 5,
+      "oauth_state": 1,
+      "verification": 1,
+      "internal": 2
+    },
+    "uniqueSecretValues": 13,
+    "consoleDependentSlots": 5,
+    "externalScopeVerified": false,
+    "duplicateTenantAdminReplicaCount": 0,
+    "duplicateTenantMetaReplicaCount": 0,
+    "additionalPotentialSecretFieldCount": 0,
+    "seedCipherDependency": "channel_key",
+    "wholeSecurityContainmentClaimed": false
+  },
+  "authPreparation": {
+    "result": "AUTH_V4_PREPARED_NOT_INSTALLED_NOT_EXECUTED",
+    "atUtc": "2026-10-12T22:17:53.599524+00:00",
+    "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-auth-v2-20261012T223100Z",
+    "policySha256": "7234446434d016df8fca6b1d46ae071364fbdf944a0fcf0801d146abaa5a6a46",
+    "installerSha256": "188a588daf7b097836d4acb04171664951eb3ac6bd4cd9d991d953bfae447fca",
+    "sourceInstalledPolicySha256": "a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e",
+    "modeManifests": {
+      "switch": "766d597bb7ed3b32473052ed3dfc583e28d3bf966dce76c8eee3e0f9bb73e39e",
+      "return": "66f1d3334a1ab408cf182799551299c33f991eb7044fb0403728e81867c8d83a",
+      "return-partial": "11e9be48a4e338a9d8e2aaeb684f7a1d2a9eec77d441dc1d005ba8d169325136"
+    },
+    "expectedLogout": true,
+    "safeReturnUsesNewAuthValues": true,
+    "helpersSudoersUnchanged": true,
+    "frontendPreserved": true,
+    "gatesFalse": true,
+    "sourceIdentityBound": {
+      "re7-admin-front": {
+        "pid": 188897,
+        "ticks": "2161347676"
+      },
+      "re7-whatsapp-agent": {
+        "pid": 186864,
+        "ticks": "2161308560"
+      },
+      "re7-whatsapp-web-worker": {
+        "pid": 187037,
+        "ticks": "2161308947"
+      }
+    },
+    "minimumAvailableBytes": 2201706496,
+    "backupFreshnessMustBeRenewedBeforeExecution": true,
+    "changedRuntimeFiles": [],
+    "pendingPhases": [
+      "external_owner_console",
+      "database_password",
+      "cipher_invalid_legacy_row"
+    ]
+  },
+  "finalState": {
+    "result": "CURRENT_AUTH_UNCHANGED_PREPARATION_INACTIVE_READ_ONLY_PASS",
+    "atUtc": "2026-10-12T22:58:22.866291+00:00",
+    "guard": {
+      "open": false,
+      "generation": 38,
+      "tasks": {}
+    },
+    "installedPolicy": {
+      "policySha256": "a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e",
+      "phase": null,
+      "sourceProcessesAlive": true
+    },
+    "authProposedPolicy": "7234446434d016df8fca6b1d46ae071364fbdf944a0fcf0801d146abaa5a6a46",
+    "identities": [
+      {
+        "name": "re7-whatsapp-agent",
+        "pid": 186864,
+        "restarts": 0
+      },
+      {
+        "name": "re7-whatsapp-web-worker",
+        "pid": 187037,
+        "restarts": 0
+      },
+      {
+        "name": "re7-admin-front",
+        "pid": 188897,
+        "restarts": 0
+      }
+    ],
+    "healthDbOk": true,
+    "savedMatchesFallback": true,
+    "savedMode": "0o664",
+    "fallbackMode": "0o600",
+    "minimumAvailableBytes": 2233253888,
+    "authAdditionalBudget": 4194304,
+    "authCapacityPass": true,
+    "wal": {
+      "walBytes": 83886080,
+      "slots": 0
+    },
+    "gatesFalse": true,
+    "starts": 0,
+    "rotationExecuted": false,
+    "rootInstallExecuted": false
+  },
+  "proofs": {
+    "node20Local": {
+      "result": "PASS",
+      "node": "20.20.0",
+      "checks": [
+        "channel_canonical_roundtrip_wrong_key_and_malformed_denied",
+        "mfa_canonical_roundtrip_wrong_key_and_malformed_denied",
+        "webhook_canonical_roundtrip_wrong_key_and_malformed_denied",
+        "externalRefs_canonical_roundtrip_wrong_key_and_malformed_denied",
+        "old_session_rejected_new_session_valid_expected_logout",
+        "real_worker_http_old_missing_auth_rejected_new_auth_health200_provider0"
+      ],
+      "providerCalls": 0,
+      "scope": "isolated canonical compiled functions and worker HTTP; no productive rotation or webhook"
+    },
+    "postgres16Local": {
+      "result": "PASS",
+      "postgresVersion": "16",
+      "checks": [
+        "old_password_new_tcp_connection_denied",
+        "new_password_new_tcp_connection_pass",
+        "already_open_old_session_survives_not_revocation",
+        "transaction_rollback_preserves_cipher",
+        "tenant_and_original_cipher_CAS_no_cross_tenant_write"
+      ],
+      "schema": "synthetic fixture only",
+      "productionMutations": 0,
+      "temporaryServerStopped": true
+    },
+    "restoredBackupCipher": {
+      "result": "PASS",
+      "families": [
+        {
+          "model": "channelAccountSecret",
+          "rows": 11,
+          "unreadable": 1,
+          "strictPlanDenied": true
+        },
+        {
+          "model": "mfaTotpSecret",
+          "rows": 0,
+          "unreadable": 0,
+          "strictPlanDenied": false
+        },
+        {
+          "model": "webhookEndpoint",
+          "rows": 0,
+          "unreadable": 0,
+          "strictPlanDenied": false
+        }
+      ],
+      "referenceRoundtripCount": 341,
+      "actualBackupRestored": true,
+      "providerCalls": 0,
+      "productionMutations": 0,
+      "scope": "READ_ONLY restored backup; prospective key only; strict invalid legacy row remains blocking"
+    },
+    "seedAudit": {
+      "events": 126,
+      "cipherFields": 147,
+      "unreadable": 0,
+      "historicalModified": false
+    }
+  },
+  "cipherSources": {
+    "channels/channelAccountSecretCrypto.js": "7e245c304f44f387212b4dfafc3a19290b64f7c0ec84de60fcee7919d21bd624",
+    "auth/mfaService.js": "9f7b89f2189e8f35e2e9b895332434d3be3c172ba3b0783a1d591e7c86fa68a0",
+    "publicApi/publicApiWebhookService.js": "0d91bc25b8bbea50e171151e46804448f304699f324cf25ed63cbee3544228f0",
+    "channels/messengerOutbound.js": "7e8e07b9df4b76d9185f2074c4f83f9358300213b878e077f67a197100d96876",
+    "auth/clientAuth.js": "c37beae3f00610d7a850ec7a102e48c27cccff2323bcab1ef6b54982a0c9c9e8",
+    "auth/sessionPolicy.js": "aa58b912fc67b212534cf34a59668b69f840894554fc62592395fcc15c47040e"
+  },
+  "permissionAudit": {
+    "samples": 2,
+    "completeConsistent": true,
+    "savedMode": "664",
+    "fallbackMode": "600",
+    "homeMode": "750",
+    "pm2DirectoryMode": "775",
+    "effectiveReadKnownUsers": [
+      "deploy",
+      "root"
+    ],
+    "noProductionChmod": true,
+    "proposal": "only two files mode600; future saves umask077"
+  },
+  "budgets": {
+    "observedMinimumBytes": 2233253888,
+    "canonicalFloorBytes": 2131755008,
+    "authAdditionalBytes": 4194304,
+    "authMarginAfterBudgetBytes": 97304576,
+    "authPass": true,
+    "cipherBudgetPass": false,
+    "cipherReason": "actual final plan, legacy disposition, historical decoder and WAL budget pending; no universal PASS from df"
+  },
+  "custody": {
+    "administrativePrivateArchiveSha256": "9b7b7fe451cb4755848af680c7258851a3e2c4683afd4c42649c2ccdb0de4048",
+    "authStagePrivateArchiveSha256": "db28093856c3060637567827a8f90d4bab6f8d486f9bbf0f9d348cf48648b561",
+    "encryptedKeyEscrowSha256": "d9fadfbc0e8665bc1de3d5c5a05c2c74c61cee1f306d5d74722b6095dfec19a7",
+    "recoveryKeySeparate": true,
+    "privateInventoryPublic": false,
+    "administrativePrivateArchiveBytes": 44849,
+    "administrativeDriversManifestSha256": "eab1c1d7d392ae562a22b77984536a8cea4241f4d9143cba5f2442b7680ea2a7",
+    "finalExtractionAndProposalManifestPass": true
+  },
+  "hardDependencies": [
+    "owner console asset/scope/expiry/reset proof for five external slots",
+    "new actual DB baseline and sealed integration of candidate adapter after auth outcome",
+    "enabled Telegram malformed cipher row canonical recovery/approved disposition",
+    "versioned legacy seed decoder contract preserving147 immutable fields and receipt hashes",
+    "derived Meta/Telegram tokens and five Web pairing states need explicit containment decision",
+    "fresh RPO/custody/minimum space/WAL and identities before future execution"
+  ],
+  "productionActions": {
+    "rotation": false,
+    "revocation": false,
+    "restart": false,
+    "savedChmod": false,
+    "policyInstall": false,
+    "openGuard": false,
+    "resumeJob": false,
+    "messages": 0,
+    "schemaMigration": false
+  }
+}

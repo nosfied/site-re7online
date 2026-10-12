@@ -1,5 +1,7 @@
 # Exposição de configuração — ocorrência separada, acompanhamento aberto
 
+**Continuidade preparada:** [inventário, propostas privadas, autenticação V4, banco, cifragem, permissões e comandos](../../security-containment-20261012/README.md). Campanha permanece encerrada; segurança aberta. A auditoria inicial abaixo é histórica e seus limites permanecem.
+
 ## Evidência e alcance
 
 Durante a janela anterior, uma leitura não estruturada de JSON privado em linha única fez aparecer configuração sensível no output de uma ferramenta da sessão do agente. Isso foi reconhecido pelo operador e consta do relatório a87d4f4a. Não foi publicação no Git; **não equivale a contenção nem invalidação das credenciais**. Não há prova suficiente aqui para reconstruir exatamente o trecho truncado exibido, quem acessou/exportou o transcript, sua retenção ou todas as cópias. Não declarar ausência de acesso indevido ou retirar registros históricos para presumir contenção.

@@ -1,0 +1,11 @@
+{
+  "result": "PASS",
+  "cases": [
+    "normal",
+    "not_drained",
+    "commit_timeout",
+    "receipt_denied",
+    "replay"
+  ],
+  "scope": "local callback contract only; production V4 adapter/DB-owner/socket effects not executed"
+}
