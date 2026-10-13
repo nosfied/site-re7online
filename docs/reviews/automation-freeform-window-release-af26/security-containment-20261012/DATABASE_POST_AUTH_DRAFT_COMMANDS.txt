@@ -1,0 +1,19 @@
+DRAFT ONLY — NOT AUTHORIZED FOR INSTALLATION OR EXECUTION.
+Generation /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-database-v2-20261013T004500Z.
+Policy a9f838ee4b71da2f6b4a08cc5ae8c299be8c72c061bb8898ed17cceeb9b45baa.
+Installer 9f13d3fa50d1fb65581b6abbae42e9ca685ba963d7c317c15099232bc32f3911.
+Expected installed policy093a; helper8de/sudoers62b5 unchanged; archive is new and must be absent.
+applyAuthorized=false and five gatesfalse. NO ALTER ROLE performed.
+
+Preparation reads only, in exclusive execution after fresh live-state review:
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-database-v2-20261013T004500Z
+python3 "$P/verify-package.py"
+python3 "$P/window/ecosystem_contract.py" validate "$P"
+python3 "$P/window/baseline_contract.py" "$P"
+(cd "$P/switch" && sha256sum -c scripts.sha256)
+(cd "$P/return" && sha256sum -c scripts.sha256)
+(cd "$P/return-partial" && sha256sum -c scripts.sha256)
+
+DO NOT RUN installer/credential_sequencer yet. Resolve pre-commit abort vs VERIFIED post-commit return, administrative consumers and fresh role/HBA/budget/RPO first. See AUTH_V3_EXECUTION_2026-10-13.md.
+Uncertain credential commit: inspect durable verifier/SQL/private receipt/ledger; no successor, repeat ALTER or automatic old credential return.
+Preserve partialv1 and all auth consumed intents/receipts.

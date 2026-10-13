@@ -1,3 +1,7 @@
+CONSUMED ONCE — AUTH3 COMPLETE/SWITCH. DO NOT REPLAY A/B. See AUTH_V3_EXECUTION_2026-10-13.md.
+Original review manifest379e preserved; authorized backup renewal82fa recorded in execution report.
+
+HISTORICAL REVIEWED COMMANDS:
 REVIEW BEFORE INSTALLATION. AUTH ZERO ROTATIONS. DO NOT USE GENERATION223100.
 New generation /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-auth-v3-20261012T234100Z.
 Guard38 CLOSED; out15 CLOSED. Helpers/sudoers/frontend unchanged. No DB/provider/cipher rotation.

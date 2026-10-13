@@ -1,0 +1,145 @@
+{
+  "status": "AUTH_THREE_VALUES_ROTATED_TECHNICALLY_AND_OWNER_CONFIRMED",
+  "security": "OPEN",
+  "generation": "incident-6683-v4-security-auth-v3-20261012T234100Z",
+  "policySha256": "093a04831663d5d348ea4d5546d3aedb7f37ba2d5b76a17352aef65e447310b7",
+  "installerSha256": "f9edbd489ab3c99f9914ca6509ca0d676500ca3ffec1abc5b17a0da5de8b278d",
+  "renewedPreparationManifestSha256": "82fa1154c2ca3cd99cc2d296ed4f65bd7be388a3b9069f3ce7c5f5e66af13005",
+  "containmentUtc": "2026-10-13T00:31:29.841860+00:00",
+  "completeUtc": "2026-10-13T00:32:22.995426+00:00",
+  "containmentSeconds": 53.154,
+  "sequenceExitCode": 0,
+  "automaticRetry": false,
+  "starts": {
+    "api": 1,
+    "sameMinimalWorker": 1,
+    "frontend": 0
+  },
+  "returnExecuted": false,
+  "guard": {
+    "generation": 38,
+    "open": false,
+    "tasks": 0
+  },
+  "gatesFalse": true,
+  "markerAbsent": true,
+  "ledgerSha256": "9e1a979932e4a22f8051046a4ce96e1ac5656723ba5ba4a57e1ef14f8e73a9e9",
+  "apps": {
+    "re7-admin-front": {
+      "pid": 188897,
+      "identity": {
+        "state": "S",
+        "ticks": "2161347676"
+      },
+      "status": "online",
+      "cwd": "/opt/re7online/releases/frontend-dynamic-5b3cf3af-20261012T170000Z",
+      "restarts": 0
+    },
+    "re7-whatsapp-agent": {
+      "pid": 243332,
+      "identity": {
+        "state": "S",
+        "ticks": "2163590583"
+      },
+      "status": "online",
+      "cwd": "/opt/re7online/releases/campaign-dynamic-compatible-return-5b3cf3af-20261012T170000Z/apps/whatsapp-agent",
+      "restarts": 0
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 243529,
+      "identity": {
+        "state": "S",
+        "ticks": "2163591155"
+      },
+      "status": "online",
+      "cwd": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker",
+      "restarts": 0
+    }
+  },
+  "saved": [
+    {
+      "name": "dump.pm2",
+      "sha256": "849893e2dec844e043613d98d606f930be08a44705d07da1c75da2a3e4b1d6ca",
+      "mode": "0600"
+    },
+    {
+      "name": "dump.pm2.bak",
+      "sha256": "849893e2dec844e043613d98d606f930be08a44705d07da1c75da2a3e4b1d6ca",
+      "mode": "0600"
+    }
+  ],
+  "capacitySamples": [
+    {
+      "atUtc": "2026-10-13T00:38:38.581962+00:00",
+      "minAvailableBytes": 2181595136,
+      "wal": {
+        "walBytes": 83886080,
+        "slots": 0
+      }
+    },
+    {
+      "atUtc": "2026-10-13T00:38:40.816221+00:00",
+      "minAvailableBytes": 2181599232,
+      "wal": {
+        "walBytes": 83886080,
+        "slots": 0
+      }
+    }
+  ],
+  "serviceAuth": {
+    "newAdmin": 200,
+    "oldAdmin": 401,
+    "newWorker": 200,
+    "oldWorker": 401
+  },
+  "ownerConfirmed": {
+    "oldSessionLoggedOut": true,
+    "newLoginAndReadOnlyScreens": true
+  },
+  "backup": {
+    "capturedUtc": "2026-10-13T00:15:51.688768+00:00",
+    "bytes": 37383860,
+    "sha256": "cbb75eec5c6ec830af9ebf848caab31e09a079794db781181fafb0dcdceece30",
+    "restore": "PASS",
+    "tables": 70,
+    "catalogObjects": 614,
+    "migrations": 60,
+    "temporaryDatabaseRemoved": true
+  },
+  "custody": {
+    "authSha256": "86a2dec81dc03f3a2604b6638f249c9d08a7f296492e2263fd6cac97397ce64a",
+    "bankSha256": "09888ec12bbdd49abb6828f120d32d05d2ddc151f9cf8c88bb446a23d9bc1f7c",
+    "isolatedExtractionValidated": true
+  },
+  "bankDraft": {
+    "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-database-v2-20261013T004500Z",
+    "policySha256": "a9f838ee4b71da2f6b4a08cc5ae8c299be8c72c061bb8898ed17cceeb9b45baa",
+    "installerSha256": "9f13d3fa50d1fb65581b6abbae42e9ca685ba963d7c317c15099232bc32f3911",
+    "modeManifests": {
+      "switch": "217cbf81c8ed42f41039966d75f25e8280b9ba6f3bacb5db77c8827783599ffe",
+      "return": "05b61640807eb6eeedba1463be5dd761c5bef579633c5cfda9363bf80afe76d8",
+      "return-partial": "a10cc6d264eb3ad8245771264ea6e0c7f6c918fb19f3f2a45edfca67512ac10a"
+    },
+    "applyAuthorized": false,
+    "sourceIdentityBound": {
+      "re7-admin-front": {
+        "pid": 188897,
+        "ticks": "2161347676"
+      },
+      "re7-whatsapp-agent": {
+        "pid": 243332,
+        "ticks": "2163590583"
+      },
+      "re7-whatsapp-web-worker": {
+        "pid": 243529,
+        "ticks": "2163591155"
+      }
+    }
+  },
+  "limits": [
+    "No DB/provider/cipher rotation",
+    "Bank draft not approved for installation or execution",
+    "Capacity is dated, requires fresh verification for bank decision",
+    "Out15 CLOSED; audience not accepted; guard release separate"
+  ]
+}
