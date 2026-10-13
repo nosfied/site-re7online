@@ -27,3 +27,13 @@ Histórico de atribuições desta identidade: uma linha, hoje13/10,10:10:59.666F
 Conclusão: bot encaminhou para atendimento humano fora do expediente e fila aguardava atribuição; atribuição efetiva comprovada hoje, rótulos agora coerentes. Alegação de Assumir por Anna na sexta permanece não confirmada. Menor continuação, se a equipe sustentar a ação: obter horário/protocolo da tentativa e correlacionar sem repetir atendimento, alterar estado ou reenviar. Mensagem para o grupo foi apenas redigida para encaminhamento pelo owner; nenhum envio por ferramenta.
 
 Uma consulta histórica inicial foi recusada por campoisActive inexistente em Queue; diagnóstico preservado, SQLREADONLY sem efeito. Após conferir schema, consulta completa chegou a exit0 e aos dados acima. Não foi introduzido default para o campo nem feita mutação/repair.
+
+## Janela de24h — conferência13/10,14:30Fortaleza
+
+Leitura READ ONLY atual17:30:18UTC: lastInboundAt10/10,02:12:15UTC = sexta09/10,23:12:15Fortaleza; windowExpiresAt11/10,02:12:15UTC = sábado10/10,23:12:15Fortaleza. Nenhum inbound posterior no histórico dessa identidade. IN_PROGRESS/atribuição13/10 permanece. Últimos inboundsproviderweb_session/semphoneNumberId: não houve consulta à Meta nem certificação de sua sessão/conta. Distinguir prazo registrado no Converta de observação remota da Business Platform.
+
+windowIsOpentrue está persistido, mas não significa prazo vigente: helper canônico isInboxFreeformWindowOpen requer booleantrue e expiresAt válido maior que now. Prazo observado já expirou. Assumir/transferir, protocolo, mensagens do bot e horário de expediente não renovaram o timestamp. Nenhuma alteração para tornar a janela aberta.
+
+A [política oficial WhatsApp Business Platform](https://whatsappbusiness.com/policy/), seção2, estabelece janela24h reiniciada por mensagem do usuário; fora dela, mensagens pela API exigem templates aprovados. Template enviado pela empresa, por si só, não é inbound do cliente. Não confundir atendimento ainda aberto com possibilidade de texto livre pela Meta, nem apresentar Web como contingência autorizada ou garantia de janela Meta. Mensagem para o grupo apenas sugerida; nenhum envio/provider/alteração de modalidade.
+
+A consulta preliminar usou receivedAt, inexistente em InboundMessage, e foi negada; original/diagnóstico preservados. Consulta final usou createdAt do schema efetivo; o horário canônico da mensagem veio de runtime.lastInboundAt, não foi substituído pelo horário de persistência. Não houve mutação.
