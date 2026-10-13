@@ -1,0 +1,83 @@
+{
+  "status": "AUDIT_COMPLETE_AS_DATED_ALLOWLIST_FOR_REVIEW_NO_WITHDRAWAL",
+  "rootObservation": {
+    "startedUtc": "2026-10-13T11:42:40.277580+00:00",
+    "finishedUtc": "2026-10-13T11:45:47.323211+00:00",
+    "entries": 914686,
+    "referenceFiles": 5758,
+    "symlinks": 14817,
+    "samples": 2,
+    "incomplete": [
+      0,
+      0
+    ],
+    "candidateOwners": [
+      0,
+      0
+    ]
+  },
+  "accounting": {
+    "uniqueRootAllocatedBytes": 59127242752,
+    "hardlinkInodesWithMultiplePaths": 900,
+    "topLevelCrossCategoryHardlinkInodes": 0,
+    "cacheReclaimBytes": 2762080256,
+    "archiveReclaimBytes": 1868783616,
+    "totalProjectedReclaimBytes": 4630863872,
+    "postFreeFloorBytes": 6468665344,
+    "bankBudgetBytes": 2173698048,
+    "newBankCapacityPass": false,
+    "latestCapacity": {
+      "beforeUtc": "2026-10-13T12:41:39.714371+00:00",
+      "afterUtc": "2026-10-13T12:41:40.051001+00:00",
+      "deployAvailableBytes": 2076680192,
+      "postgresAvailableBytes": 2076680192,
+      "minimumAvailableBytes": 2076680192,
+      "removed": false
+    },
+    "projectedAvailableBytes": 6707544064,
+    "projectedMarginOverBankBudgetBytes": 4533846016
+  },
+  "scope": {
+    "protectedRoots": 120,
+    "protectedReferenceHashes": 3948,
+    "criticalControlPaths": 182,
+    "releaseDirectories": 29,
+    "releaseDirectoriesConservativelyProtected": 22,
+    "otherReleaseDirectoriesNotAuthorizedForRemoval": 7,
+    "relativeHistoricalBasenameReferences": 27
+  },
+  "custody": {
+    "location": "owner private persistent directory outside Git and temporary worktrees",
+    "archiveSha256": "3f4affa2d3135756687d95d41912b221163f82585937db7a561518ed95721fe0",
+    "archiveBytes": 467189826,
+    "cacheArchiveSha256": "8bf3419ba2ca8dba8753ef5a58940d5bb3b3d32f59a950e42220795fa5be2940",
+    "cacheArchiveBytes": 773063490,
+    "historicalTarMembers": 759,
+    "historicalRegularFiles": 740,
+    "cacheEntries": 6007,
+    "cacheRegularFiles": 2763,
+    "cacheContentAddressChecks": 1728,
+    "isolatedExtraction": "PASS; original cache modes reconstructed locally after safe tar filter stripped write permissions",
+    "physicalOffHostReplicaCount": 1,
+    "finalOwnerManifestSha256": "4e3a272329aa72f7b4a9f2924d8c549553ee0815b29929a4736db53c8c463d32",
+    "primaryOwnerManifestSha256": "07badfeab98c4737c045927751e00a320338782bab7af6bfa72ea5362d22b806"
+  },
+  "planSha256": "73002641728a9967e54e37e42f597a7d3661be18dde88e1342731e189148e7ab",
+  "driverSha256": "0f85b527c819a24663913855a402319e9eca647fcd1b638bdcb0213abda27c01",
+  "postReaderSha256": "f1cab41eb4f08b7be934c2c7a8c5a981649dbfedd004ae3e060e2c3f98e59c21",
+  "tests": {
+    "local": 13,
+    "actualFilesystemMutations": "synthetic temporary fixtures only",
+    "mocked": "privileged UID, productive guard/control state, capacity and ownership callbacks in local chain tests",
+    "productiveDriverExecution": false
+  },
+  "preserved": {
+    "guardGeneration": 38,
+    "guardOpen": false,
+    "out15": "CLOSED",
+    "auth": "COMPLETED; NEWauth preserved",
+    "bank": "BLOCKED UNTIL REAL CAPACITY PASS",
+    "policiesInstalled": false,
+    "withdrawalExecuted": false
+  }
+}

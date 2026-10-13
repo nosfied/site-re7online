@@ -1,98 +1,79 @@
 {
-  "utc": "2026-10-13T10:33:07.923042+00:00",
-  "policySha256": "59043f47c01965eb56a61a6900d9e0c6325204d3d3f151c62be5078f7d0ef63f",
-  "installerSha256": "94b73d105405696b4ac0996f23b1b9eeef3bdbe250a68982c9b9f78bb4dd6e58",
-  "checkerSha256": "7e08a0297b7d3b3392ba2112ebad6322c087cb821aa6d5f741b11b34b15b723d",
-  "modeManifests": {
-    "switch": "15cd1ac34df58ea4bfc4493b717cb455a41a922a985cfc3f599c5383af8999a9",
-    "return": "2bca1402fe88c1fb93d3bf8b1e70518f2192b68e327b5c8cda189d24671e8d91",
-    "return-partial": "d0541d4a39ffefb20fd73f3ed517213fe5c0d89276fbd48f8cb50178ffc04e49",
-    "return-before-commit": "71d4842466fafb61178c5bafae0edf56ed9bcef2f94969f5b18127f2830ee5bd"
-  },
-  "windowManifestSha256": "f98e49d4c760b6488745a3663e1771e4eab927b1211f977ba96419203fc80caf",
-  "allocatedBytes": 2887680,
-  "minimumBytes": 2104283136,
-  "gateFalse": true,
-  "intents": 0,
-  "guard": {
-    "open": false,
-    "generation": 38
-  },
-  "status": "COMPOSITION_COMPLETE_FOR_REVIEW_CAPACITY_DENY_NOT_READY_FOR_EXECUTION",
-  "budgetBytes": 2173698048,
-  "deficitBytes": 69414912,
-  "auth": "COMPLETE_PRESERVED_NOT_REPEATED",
-  "productionPasswordChanges": 0,
-  "installedPolicies": 0,
-  "processRestarts": 0,
-  "frontendPreserved": true,
-  "sourceIdentityBound": {
-    "re7-admin-front": {
-      "pid": 188897,
-      "ticks": "2161347676"
-    },
-    "re7-whatsapp-agent": {
-      "pid": 243332,
-      "ticks": "2163590583"
-    },
-    "re7-whatsapp-web-worker": {
-      "pid": 243529,
-      "ticks": "2163591155"
-    }
-  },
-  "originalVerifierTcpProof": "PASSED_ON_VPS_BEFORE_BUDGET_DENY",
-  "fullRoleAttributesBound": true,
   "backup": {
-    "atUtc": "2026-10-13T01:14:04.496961+00:00",
+    "atUtc": "2026-10-13T13:38:28.673478+00:00",
+    "captureDurationSeconds": 14.597,
     "catalogObjects": 614,
-    "controlsCapturedUtc": "2026-10-13T01:16:57.342619+00:00",
+    "catalogScope": "pg_restore TOC entries",
+    "controlsCapturedUtc": "2026-10-13T13:39:29.803854+00:00",
     "files": {
       "controls-runtime.private.tar.gz": {
         "bytes": 9948,
         "sha256": "7f0bc68705cb8b019830bb07545edb3e70b8cab99da8474ec200620ce79bb65e"
       },
       "database.dump": {
-        "bytes": 37431420,
-        "sha256": "44b3ce6124f4f47fa8d65292c38e1b76ed86fe723d673cbe0232b2f26f4a3e2a"
+        "bytes": 38155885,
+        "sha256": "dcf70a43e5292a90c7e40963dc8b61fa4b98fb01236c40ecbbaf1b306621a418"
       }
     },
     "guardGeneration": 38,
-    "preparedAtUtc": "2026-10-13T01:17:58.195031+00:00",
-    "source": "fresh direct off-host pg_dump and exact control tar; capture time from stream completion, not manifest creation"
+    "publicRelations": 399,
+    "source": "fresh direct off-host pg_dump under canonical backup lock; actual stream completion, not manifest timestamp"
+  },
+  "backupFreshnessRequiredImmediatelyBeforeExecution": true,
+  "custodyManifestSha256": "5784e68edebe1d9c6eee64efadd0ce33fd831a7b5044d3f1b3111f32d9d7ace5",
+  "executionAuthorized": false,
+  "gatesFalse": true,
+  "hashes": {
+    "checkerSha256": "7e08a0297b7d3b3392ba2112ebad6322c087cb821aa6d5f741b11b34b15b723d",
+    "gateFalse": true,
+    "installed": false,
+    "installerSha256": "17a92e66104c88d83a2e4335aa16a3dee156c0f7c70076d07d7725593b2978f3",
+    "modeManifests": {
+      "return": "68351ee8c58fb73edc514404b9c9c99704ac2896ec2a070ee3acaf86528dcac9",
+      "return-before-commit": "2d51bef589d131b268af28bffc44affa591b141e9c65a6b3971278775f4acefe",
+      "return-partial": "3bdba12cb486fac20c7c165f15075d48d28bf602ac4e1f3832d8a3d8aaaf8d63",
+      "switch": "86f1afa6331a67d222275d2c14f59b95ef8c07c8cddfdd54ddb9ab27aa87fb47"
+    },
+    "outerManifestSha256": "ba3cf51014e4ad45c23b9410c7b137e3869eea73c7d50ceccffea789fd544f50",
+    "policySha256": "9c7b44d58c96d0aa1dd9f6b7d790d810407e3ea364b01a748473c06928efff4c",
+    "result": "FRESH_BANK_PREPARATION_SEALED_READS_PASS_GATES_FALSE",
+    "windowManifestSha256": "7fd144e907564573a42ab59a521ea8a8b08644eccb5c6130be5bf3c526147643",
+    "wrapperSha256": "f18307d74491bdb53ed0f1d75186cfeb5473a86b0c0347872b9d48ab3d0eb3b1"
+  },
+  "newAuthPreserved": true,
+  "ownerDecisionRequired": true,
+  "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-database-final-v4-20261013T140000Z",
+  "reads": {
+    "budgetBytes": 2173698048,
+    "guardGeneration": 38,
+    "limits": "Backup RPO/custody, capacity/WAL and fresh exit/ownership proofs must be reconfirmed for execution",
+    "minimumAvailableBytes": 6657581056,
+    "originalVerifierAndConnectionsProven": true,
+    "policyInstalledChecked": false,
+    "proxyInventoryBaselinePreserved": true,
+    "result": "DATABASE_PREPARATION_READS_PASS_GATES_FALSE",
+    "utc": "2026-10-13T14:16:28.589512+00:00"
   },
   "restore": {
     "applicationStarted": false,
-    "capturedUtc": "2026-10-13T01:14:04.496961+00:00",
+    "capturedUtc": "2026-10-13T13:38:28.673478+00:00",
     "catalogObjects": 614,
-    "dumpBytes": 37431420,
-    "dumpSha256": "44b3ce6124f4f47fa8d65292c38e1b76ed86fe723d673cbe0232b2f26f4a3e2a",
+    "catalogScope": "pg_restore TOC entries; publicRelationCount separately compared to live schema",
+    "dumpBytes": 38155885,
+    "dumpSha256": "dcf70a43e5292a90c7e40963dc8b61fa4b98fb01236c40ecbbaf1b306621a418",
+    "isolatedLocalOnly": true,
     "migrationChecksumMismatches": [],
     "migrationChecksumsVerified": 60,
+    "migrationRowsVerified": 66,
     "pgRestoreExitCode": 0,
     "providerCalls": 0,
+    "publicRelationCount": 399,
+    "restoredUtc": "2026-10-13T13:44:45.647435+00:00",
     "result": "PASS",
     "tables": 70,
     "temporaryDatabaseRemoved": true
   },
-  "backupFreshnessAtPublication": "NOT_ATTESTED; actual capture01:14UTC is historical; renew canonically before window",
-  "custodySha256": "947e5cb9a9ea6ec8f0a182ac765cb57913ec59acf4830153a6a93209ffa7fa17",
-  "sourceHashes": {
-    "credential_sequencer.py": "e0905821de2ec4db2a240de1117ab5cea4558bc6c45427600b7e4d43a9f2597d",
-    "credential_boundary.py": "b93edbc2f75df95617523f9fcb717a3c2d49c51b0472f85325cd078306d2dd42",
-    "database_composition.py": "2188b8fece750a934bbea34ba1834da8f23ab30253f456ae1f64ad8899de7c3d",
-    "database_consumers.py": "7cc9e0721cb4b39e206a92f75dddcb9890bf86e9e1c99992544c84747079ca15",
-    "database_inspection.py": "7610cf039cba331a8defee127883548dafeb3b581048efbfd595f00d71fe95b5"
-  },
-  "capacityRemediationProposal": {
-    "rootDisk": "/dev/vda",
-    "filesystem": "/dev/vda1 ext4",
-    "currentDiskBytes": 64424509440,
-    "proposedDiskBytes": 66571993088,
-    "additionalBytes": 2147483648,
-    "executed": false
-  },
-  "preparationReviewSha256": "aff7558d2a0a55d7d138f87c1c67acfa5e225b8a4292ed4461fdaec24f3005dc",
-  "freshReturnWrapperSha256": "f18307d74491bdb53ed0f1d75186cfeb5473a86b0c0347872b9d48ab3d0eb3b1",
-  "finalSealedCustodySha256": "e1a6327637f52dfbd56388a914b681fa42aba6f081fca448b7e8b964388a2392",
-  "finalSealedCustodyExtraction": "PASS"
+  "result": "DATABASE_V4_FINAL_PREPARED_FOR_REVIEW_NOT_INSTALLED_NOT_EXECUTED",
+  "reusedFunctionalBuildsAndTests": true,
+  "sourceRootPolicySha256": "093a04831663d5d348ea4d5546d3aedb7f37ba2d5b76a17352aef65e447310b7"
 }

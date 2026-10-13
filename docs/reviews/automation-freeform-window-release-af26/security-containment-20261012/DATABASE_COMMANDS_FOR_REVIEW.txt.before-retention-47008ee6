@@ -1,0 +1,72 @@
+BLOCKED BY CAPACITY — REVIEW ONLY. NO POLICY INSTALLATION OR SQL AUTHORIZED.
+Generation: /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-database-final-v4-20261013T103000Z
+Policy59043f47c01965eb56a61a6900d9e0c6325204d3d3f151c62be5078f7d0ef63f
+Installer94b73d105405696b4ac0996f23b1b9eeef3bdbe250a68982c9b9f78bb4dd6e58
+Checker7e08a0297b7d3b3392ba2112ebad6322c087cb821aa6d5f741b11b34b15b723d
+Current root policy expected093a04831663d5d348ea4d5546d3aedb7f37ba2d5b76a17352aef65e447310b7.
+Helpers/sudoers unchanged. Owner sudo installation requires archive absent and exact old root hashes/ownership/chain/modes/visudo, per published installer.
+
+A. FUTURE INSTALLATION — only after capacity remediation authorized/executed and real PASS,
+   fresh backup/RPO/off-host custody/restore proof and execution decision for this exact packet.
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-database-final-v4-20261013T103000Z
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = aff7558d2a0a55d7d138f87c1c67acfa5e225b8a4292ed4461fdaec24f3005dc
+(cd "$P" && sha256sum -c preparation-review.sha256)
+python3 "$P/check-immediate.py" "$P"
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = 94b73d105405696b4ac0996f23b1b9eeef3bdbe250a68982c9b9f78bb4dd6e58
+bash "$P/install-api-window-policy.sh"
+python3 "$P/check-immediate.py" "$P" --after-policy-installed
+# Expected POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE.
+# Any drift/partial/archive exists: preserve, no repeat installer.
+
+B. FUTURE SINGLE DB SEQUENCE — not executable under the current preparation authorization.
+# Reconfirm all source/daemon/backup/RPO/custody/SQL/proxy/sessions/guard38/CLOSED/inventory/role/HBA;
+# min(deploy/PG)>=2173698048 and WAL/growth. Preparation reads are not exit/ownership certificates.
+python3 - "$P" <<'CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);sys.path.insert(0,str(p/'window'))
+from baseline_contract import validate_preparation
+from sequencer import Bridge
+validate_preparation(p,['switch','return','return-partial','return-before-commit'])
+assert json.loads(Bridge(p).privileged('inspect'))=={'policySha256':'59043f47c01965eb56a61a6900d9e0c6325204d3d3f151c62be5078f7d0ef63f','phase':None,'sourceProcessesAlive':True}
+f=p/'window/execution-gates.private.json';g=json.loads(f.read_text());assert len(g)==5 and all(v is False for v in g.values())
+# Reach only with owner execution decision and fresh evidence for each gate.
+f.write_text(json.dumps({k:True for k in g},sort_keys=True)+'\n')
+CHECK
+python3 "$P/window/credential_sequencer.py" "$P" --future-owner-authorized-execute
+# One sequence; one ALTER intent; one API/same worker start. No frontend/PG restart.
+# Before ALTER original verified: canonical prestop/return-before-commit OLDDB+NEWauth.
+# VERIFIED after commit: return/return-partial NEWDB+NEWauth.
+# Any intent+uncertain receipt: preserve barriers/diagnostics, no replay/start/password restore.
+# Escalate15min containment; owner available for fresh-policy contingency installation.
+
+C. UNCERTAIN COMMIT — explicit inspection, never retry B/ALTER.
+python3 "$P/window/database_inspection.py" "$P" --action inspect
+# If VERIFIED, only under explicit operator recovery decision:
+python3 "$P/window/database_inspection.py" "$P" --action record-verified --future-owner-authorized-recovery
+python3 "$P/window/database_inspection.py" "$P" --action recover-verified --future-owner-authorized-recovery
+# If ORIGINAL_VERIFIED, mutually exclusive alternative under explicit operator recovery decision:
+python3 "$P/window/database_inspection.py" "$P" --action record-original --future-owner-authorized-recovery
+python3 "$P/window/database_inspection.py" "$P" --action recover-original --future-owner-authorized-recovery
+# Do not run both alternatives. Any drift/unknown status/receipt/intents/survivor denies.
+# These actions are proposed, NOT executed/authorized now. No ALTER in inspection/recovery driver.
+# Ambiguous successor intent: observation/fresh canonical return, no repetition of start.
+
+D. POST-UNFENCE CONTINGENCY
+# Fresh canonical generation only, using actual identities and NEWDB+NEWauth after VERIFIED:
+R=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-security-database-YYYYMMDDTHHMMSSZ
+python3 "$P/prepare-database-post-unfence-v2.py" "$P" "$R"
+# Generated policy/installer hash inspected; owner sudo restricted installation before return.
+# Do not reuse consumed source certificates. Verify DB receipt/classification still VERIFIED;
+# never invoke credential_sequencer switch again or restore OLDDB.
+# Guard38 remains CLOSED, no jobs/campaigns/ack/recovery history touched.
+
+E. POST-DEPLOY READS
+# Verify complete/switch or completed return; NEWDB TCP accepts, OLDDB P1000, full attrs/HBA/data stable;
+# six delivered/five not sent out15CLOSED/CRM/usage/receipt, guard38closed/tasks{};
+# frontend/session JWT unchanged, owner legitimate read-only screens; API↔worker NEWauth;
+# same worker code, DB/health/proxy, saved/fallback600 with NEWDB after VERIFIED, cron/boot/supervision,
+# barrier absent, five gatesfalse. Restore gates only after factual completion; never hide an uncertain intent.
+# No provider, send, campaign open/resume, claim, migration or crypto/externals rotation.

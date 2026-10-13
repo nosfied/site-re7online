@@ -1,83 +1,99 @@
 {
-  "status": "AUDIT_COMPLETE_AS_DATED_ALLOWLIST_FOR_REVIEW_NO_WITHDRAWAL",
-  "rootObservation": {
-    "startedUtc": "2026-10-13T11:42:40.277580+00:00",
-    "finishedUtc": "2026-10-13T11:45:47.323211+00:00",
-    "entries": 914686,
-    "referenceFiles": 5758,
-    "symlinks": 14817,
-    "samples": 2,
-    "incomplete": [
-      0,
-      0
-    ],
-    "candidateOwners": [
-      0,
-      0
-    ]
-  },
-  "accounting": {
-    "uniqueRootAllocatedBytes": 59127242752,
-    "hardlinkInodesWithMultiplePaths": 900,
-    "topLevelCrossCategoryHardlinkInodes": 0,
-    "cacheReclaimBytes": 2762080256,
-    "archiveReclaimBytes": 1868783616,
-    "totalProjectedReclaimBytes": 4630863872,
-    "postFreeFloorBytes": 6468665344,
-    "bankBudgetBytes": 2173698048,
-    "newBankCapacityPass": false,
-    "latestCapacity": {
-      "beforeUtc": "2026-10-13T12:41:39.714371+00:00",
-      "afterUtc": "2026-10-13T12:41:40.051001+00:00",
-      "deployAvailableBytes": 2076680192,
-      "postgresAvailableBytes": 2076680192,
-      "minimumAvailableBytes": 2076680192,
-      "removed": false
+  "allocatedBytesReleased": 4630863872,
+  "auth": "NEWauth preserved; completed",
+  "authorizationCommit": "47008ee6710c8903b0c0feb79c0da0efd8ab7d85",
+  "backup": {
+    "atUtc": "2026-10-13T13:38:28.673478+00:00",
+    "captureDurationSeconds": 14.597,
+    "catalogObjects": 614,
+    "catalogScope": "pg_restore TOC entries",
+    "controlsCapturedUtc": "2026-10-13T13:39:29.803854+00:00",
+    "files": {
+      "controls-runtime.private.tar.gz": {
+        "bytes": 9948,
+        "sha256": "7f0bc68705cb8b019830bb07545edb3e70b8cab99da8474ec200620ce79bb65e"
+      },
+      "database.dump": {
+        "bytes": 38155885,
+        "sha256": "dcf70a43e5292a90c7e40963dc8b61fa4b98fb01236c40ecbbaf1b306621a418"
+      }
     },
-    "projectedAvailableBytes": 6707544064,
-    "projectedMarginOverBankBudgetBytes": 4533846016
-  },
-  "scope": {
-    "protectedRoots": 120,
-    "protectedReferenceHashes": 3948,
-    "criticalControlPaths": 182,
-    "releaseDirectories": 29,
-    "releaseDirectoriesConservativelyProtected": 22,
-    "otherReleaseDirectoriesNotAuthorizedForRemoval": 7,
-    "relativeHistoricalBasenameReferences": 27
-  },
-  "custody": {
-    "location": "owner private persistent directory outside Git and temporary worktrees",
-    "archiveSha256": "3f4affa2d3135756687d95d41912b221163f82585937db7a561518ed95721fe0",
-    "archiveBytes": 467189826,
-    "cacheArchiveSha256": "8bf3419ba2ca8dba8753ef5a58940d5bb3b3d32f59a950e42220795fa5be2940",
-    "cacheArchiveBytes": 773063490,
-    "historicalTarMembers": 759,
-    "historicalRegularFiles": 740,
-    "cacheEntries": 6007,
-    "cacheRegularFiles": 2763,
-    "cacheContentAddressChecks": 1728,
-    "isolatedExtraction": "PASS; original cache modes reconstructed locally after safe tar filter stripped write permissions",
-    "physicalOffHostReplicaCount": 1,
-    "finalOwnerManifestSha256": "4e3a272329aa72f7b4a9f2924d8c549553ee0815b29929a4736db53c8c463d32",
-    "primaryOwnerManifestSha256": "07badfeab98c4737c045927751e00a320338782bab7af6bfa72ea5362d22b806"
-  },
-  "planSha256": "73002641728a9967e54e37e42f597a7d3661be18dde88e1342731e189148e7ab",
-  "driverSha256": "0f85b527c819a24663913855a402319e9eca647fcd1b638bdcb0213abda27c01",
-  "postReaderSha256": "f1cab41eb4f08b7be934c2c7a8c5a981649dbfedd004ae3e060e2c3f98e59c21",
-  "tests": {
-    "local": 13,
-    "actualFilesystemMutations": "synthetic temporary fixtures only",
-    "mocked": "privileged UID, productive guard/control state, capacity and ownership callbacks in local chain tests",
-    "productiveDriverExecution": false
-  },
-  "preserved": {
     "guardGeneration": 38,
-    "guardOpen": false,
-    "out15": "CLOSED",
-    "auth": "COMPLETED; NEWauth preserved",
-    "bank": "BLOCKED UNTIL REAL CAPACITY PASS",
-    "policiesInstalled": false,
-    "withdrawalExecuted": false
-  }
+    "publicRelations": 399,
+    "source": "fresh direct off-host pg_dump under canonical backup lock; actual stream completion, not manifest timestamp"
+  },
+  "backupRpoRequiresImmediateReconfirmationAtFutureExecution": true,
+  "bankSeal": {
+    "checkerSha256": "7e08a0297b7d3b3392ba2112ebad6322c087cb821aa6d5f741b11b34b15b723d",
+    "gateFalse": true,
+    "installed": false,
+    "installerSha256": "17a92e66104c88d83a2e4335aa16a3dee156c0f7c70076d07d7725593b2978f3",
+    "modeManifests": {
+      "return": "68351ee8c58fb73edc514404b9c9c99704ac2896ec2a070ee3acaf86528dcac9",
+      "return-before-commit": "2d51bef589d131b268af28bffc44affa591b141e9c65a6b3971278775f4acefe",
+      "return-partial": "3bdba12cb486fac20c7c165f15075d48d28bf602ac4e1f3832d8a3d8aaaf8d63",
+      "switch": "86f1afa6331a67d222275d2c14f59b95ef8c07c8cddfdd54ddb9ab27aa87fb47"
+    },
+    "outerManifestSha256": "ba3cf51014e4ad45c23b9410c7b137e3869eea73c7d50ceccffea789fd544f50",
+    "policySha256": "9c7b44d58c96d0aa1dd9f6b7d790d810407e3ea364b01a748473c06928efff4c",
+    "result": "FRESH_BANK_PREPARATION_SEALED_READS_PASS_GATES_FALSE",
+    "windowManifestSha256": "7fd144e907564573a42ab59a521ea8a8b08644eccb5c6130be5bf3c526147643",
+    "wrapperSha256": "f18307d74491bdb53ed0f1d75186cfeb5473a86b0c0347872b9d48ab3d0eb3b1"
+  },
+  "cacheRootPreserved": true,
+  "databaseCredential": "original effective; not changed",
+  "finishedUtc": "2026-10-13T13:36:16.693460+00:00",
+  "guardClosedGeneration": 38,
+  "latestBankReads": {
+    "budgetBytes": 2173698048,
+    "guardGeneration": 38,
+    "limits": "Backup RPO/custody, capacity/WAL and fresh exit/ownership proofs must be reconfirmed for execution",
+    "minimumAvailableBytes": 6657581056,
+    "originalVerifierAndConnectionsProven": true,
+    "policyInstalledChecked": false,
+    "proxyInventoryBaselinePreserved": true,
+    "result": "DATABASE_PREPARATION_READS_PASS_GATES_FALSE",
+    "utc": "2026-10-13T14:16:28.589512+00:00"
+  },
+  "offHostCustodyManifestSha256": "5784e68edebe1d9c6eee64efadd0ce33fd831a7b5044d3f1b3111f32d9d7ace5",
+  "out15": "CLOSED",
+  "ownerScreensConfirmed": true,
+  "physicalOffHostReplicas": 1,
+  "postCacheEntries": 1,
+  "postCapacityPass": true,
+  "postHealthCode": 0,
+  "postMinimumAvailableBytes": 6675718144,
+  "postSamplesComplete": true,
+  "principalPreserved": true,
+  "removedFiles": 2767,
+  "removedHistoricalFiles": 4,
+  "removedIndexedCacheFiles": 2763,
+  "removedIndexedEmptyCacheDirectories": 3243,
+  "requiredPostFreeBytes": 6468665344,
+  "restore": {
+    "applicationStarted": false,
+    "capturedUtc": "2026-10-13T13:38:28.673478+00:00",
+    "catalogObjects": 614,
+    "catalogScope": "pg_restore TOC entries; publicRelationCount separately compared to live schema",
+    "dumpBytes": 38155885,
+    "dumpSha256": "dcf70a43e5292a90c7e40963dc8b61fa4b98fb01236c40ecbbaf1b306621a418",
+    "isolatedLocalOnly": true,
+    "migrationChecksumMismatches": [],
+    "migrationChecksumsVerified": 60,
+    "migrationRowsVerified": 66,
+    "pgRestoreExitCode": 0,
+    "providerCalls": 0,
+    "publicRelationCount": 399,
+    "restoredUtc": "2026-10-13T13:44:45.647435+00:00",
+    "result": "PASS",
+    "tables": 70,
+    "temporaryDatabaseRemoved": true
+  },
+  "result": "WITHDRAWAL_COMPLETE_CAPACITY_PASS_BANK_PREPARED_FOR_REVIEW",
+  "retentionAutomationEnabled": false,
+  "rotationOrPolicyInstallationExecuted": false,
+  "seconds": 60.669061,
+  "startedUtc": "2026-10-13T13:35:16.024399+00:00",
+  "withdrawalExecutedOnce": true,
+  "withdrawalReplayAllowed": false
 }

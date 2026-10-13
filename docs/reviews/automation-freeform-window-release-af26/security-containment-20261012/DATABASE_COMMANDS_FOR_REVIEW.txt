@@ -1,7 +1,9 @@
-BLOCKED BY CAPACITY — REVIEW ONLY. NO POLICY INSTALLATION OR SQL AUTHORIZED.
-Generation: /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-database-final-v4-20261013T103000Z
-Policy59043f47c01965eb56a61a6900d9e0c6325204d3d3f151c62be5078f7d0ef63f
-Installer94b73d105405696b4ac0996f23b1b9eeef3bdbe250a68982c9b9f78bb4dd6e58
+CAPACITY PASS AS DATED — REVIEW ONLY. NO POLICY INSTALLATION OR SQL AUTHORIZED.
+Backup captured 2026-10-13T13:38:28.673478Z; final reads 14:16:28Z.
+Reconfirm capacity/WAL/RPO/custody immediately before any future execution; this is not an exit certificate.
+Generation: /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-database-final-v4-20261013T140000Z
+Policy9c7b44d58c96d0aa1dd9f6b7d790d810407e3ea364b01a748473c06928efff4c
+Installer17a92e66104c88d83a2e4335aa16a3dee156c0f7c70076d07d7725593b2978f3
 Checker7e08a0297b7d3b3392ba2112ebad6322c087cb821aa6d5f741b11b34b15b723d
 Current root policy expected093a04831663d5d348ea4d5546d3aedb7f37ba2d5b76a17352aef65e447310b7.
 Helpers/sudoers unchanged. Owner sudo installation requires archive absent and exact old root hashes/ownership/chain/modes/visudo, per published installer.
@@ -10,11 +12,11 @@ A. FUTURE INSTALLATION — only after capacity remediation authorized/executed a
    fresh backup/RPO/off-host custody/restore proof and execution decision for this exact packet.
 set -euo pipefail
 umask 077
-P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-database-final-v4-20261013T103000Z
-test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = aff7558d2a0a55d7d138f87c1c67acfa5e225b8a4292ed4461fdaec24f3005dc
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-database-final-v4-20261013T140000Z
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = ba3cf51014e4ad45c23b9410c7b137e3869eea73c7d50ceccffea789fd544f50
 (cd "$P" && sha256sum -c preparation-review.sha256)
 python3 "$P/check-immediate.py" "$P"
-test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = 94b73d105405696b4ac0996f23b1b9eeef3bdbe250a68982c9b9f78bb4dd6e58
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = 17a92e66104c88d83a2e4335aa16a3dee156c0f7c70076d07d7725593b2978f3
 bash "$P/install-api-window-policy.sh"
 python3 "$P/check-immediate.py" "$P" --after-policy-installed
 # Expected POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE.
@@ -30,7 +32,7 @@ p=Path(sys.argv[1]);sys.path.insert(0,str(p/'window'))
 from baseline_contract import validate_preparation
 from sequencer import Bridge
 validate_preparation(p,['switch','return','return-partial','return-before-commit'])
-assert json.loads(Bridge(p).privileged('inspect'))=={'policySha256':'59043f47c01965eb56a61a6900d9e0c6325204d3d3f151c62be5078f7d0ef63f','phase':None,'sourceProcessesAlive':True}
+assert json.loads(Bridge(p).privileged('inspect'))=={'policySha256':'9c7b44d58c96d0aa1dd9f6b7d790d810407e3ea364b01a748473c06928efff4c','phase':None,'sourceProcessesAlive':True}
 f=p/'window/execution-gates.private.json';g=json.loads(f.read_text());assert len(g)==5 and all(v is False for v in g.values())
 # Reach only with owner execution decision and fresh evidence for each gate.
 f.write_text(json.dumps({k:True for k in g},sort_keys=True)+'\n')
