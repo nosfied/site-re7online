@@ -1,5 +1,8 @@
 # Preparação de contenção de credenciais — 12/10/2026
 
+**Continuidade 13/10 — expansão PREPARADA PARA DECISÃO, não executada:** DigitalOcean confirmado por DMI; Basic Regular80GiB/4GiB/2vCPU US$24/mês (catálogo, +US$6 se atualRegular18), exige desligamento/boot. 62GiB não é opção comprovada. [Roteiro, preservação GPT, custos/limites e dependências](DATABASE_CAPACITY_FOR_REVIEW.md). Banco continua CAPACITY DENY; leitura root integral depende da sessão sudo, fatura/opção regional e snapshot recuperável dependem do console. NEWauth/out15CLOSED/guard38 e artefatos preservados; após reboot exigir geração/bindings reais novos e backup/RPO fresco, sem editar geração antiga.
+
+
 **ESTADO CORRENTE: AUTH3 CONCLUÍDA; banco composição final revisável/CAPACITY DENY; segurança OPEN.** [Relatório único bancário, comandos e proposta de expansão](DATABASE_FINAL_PREPARATION_2026-10-13.md). Nenhuma rotação DB ou instalação executada. Próxima decisão é capacidade; não solicitar janela bancária enquanto houver déficit. Guarda38fechada/out15CLOSED preservados.
 
 **Checkpoint histórico — auth concluída e draft anterior:**

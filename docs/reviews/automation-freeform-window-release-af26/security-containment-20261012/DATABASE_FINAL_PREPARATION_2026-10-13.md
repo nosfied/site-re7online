@@ -1,5 +1,8 @@
 # Banco — composição final revisável; CAPACITY DENY
 
+**Continuidade 13/10 — expansão PREPARADA PARA DECISÃO, não executada:** DigitalOcean confirmado por DMI; Basic Regular80GiB/4GiB/2vCPU US$24/mês (catálogo, +US$6 se atualRegular18), exige desligamento/boot. 62GiB não é opção comprovada. [Roteiro, preservação GPT, custos/limites e dependências](DATABASE_CAPACITY_FOR_REVIEW.md). Banco continua CAPACITY DENY; leitura root integral depende da sessão sudo, fatura/opção regional e snapshot recuperável dependem do console. NEWauth/out15CLOSED/guard38 e artefatos preservados; após reboot exigir geração/bindings reais novos e backup/RPO fresco, sem editar geração antiga.
+
+
 **Auth concluída, não repetida. Segurança OPEN.** Geração final `incident-6683-v4-security-database-final-v4-20261013T103000Z`; todos os scripts/configurações/consumidores e quatro modos materializados e preservados off-host. **Não pronta para execução:** orçamento bancário negado. Nenhuma senha produtiva alterada, política instalada, serviço reiniciado, campanha aberta ou histórico reparado. [Hashes/estado](DATABASE_FINAL_RESULT.sanitized.json), [comandos condicionais](DATABASE_COMMANDS_FOR_REVIEW.txt), [proposta concreta de capacidade](DATABASE_CAPACITY_FOR_REVIEW.md), [ensaios](DATABASE_FINAL_LAB.sanitized.json).
 
 ## Fronteira e retornos
