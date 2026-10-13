@@ -53,3 +53,13 @@ O primeiro leitor de hash usava igualdade integral de stat, que incluía atime a
 Ainda não foi gerado/staged um driver de retirada desta allowlist. Não apresentar as primitivas em COMMANDS como bloco autorizado/executável nem usar o driver consumido47008ee6. As categorias secundárias e o driver de retirada seguem após a prioridade bancária; a auditoria não exige ou autoriza excluir antes das17h15. Mudança de identidades/política na janela bancária deverá ser tratada como estado novo em outra preparação revisada, não drift adaptado numa tentativa existente.
 
 Manifesto adicional da custódia integral: `4fc6e2fa851d73f20843d683a67e46459edda7bdf349f0b0c875728c6ade2c23`,12 arquivos adicionais, uma réplica física. Índices/fontes/evidências e caminhos de recuperação completos privados; nenhum valor de configuração foi publicado.
+
+## Decisão do owner após revisão de b2ac1bfd —13/10
+
+Allowlist dos nove caminhos e custódia preservadas; **nenhuma exclusão autorizada**. Janela bancária17h15Fortaleza permanece prioritária. Até sua execução, somente preparação que não dispute CPU/I/O/locks nem altere requisitos: esta continuidade é documental, sem novas leituras produtivas ou cópias. As observações anteriores continuam datadas, sem renovação implícita.
+
+Após o resultado real da fase banco, preparar geração própria de driver/input vinculada às identidades, política e credencial DB efetivamente vigentes, preservando NEWauth. NEWDB somente poderá ser tratada como efetiva após commit VERIFIED; em resultado incerto, o protocolo bancário de inspeção/decisão precede a preparação de retirada. Nunca presumir sucesso da rotação ou restaurar credencial exposta.
+
+Reutilizar hashes/custódia que continuem válidos, reconfirmar referências, proprietários, metadados e dependências compartilhadas. Retirada recursiva deverá operar somente os membros indexados das sete releases: lstat/O_NOFOLLOW, sem seguir os sete symlinks externos `.data`, sem alcançar seus destinos. Dois pacotes permanecem alvos literais próprios. Não reutilizar drivers/intents consumidos do primeiro lote.
+
+Entrega posterior exigida: driver/input e hashes novos, comandos restritos, dry-run e verificações posteriores inclusive em recusa/parcial/timeout, para decisão concreta de retirada. Preparações, logs e snapshot root permanecem fora da allowlist e serão auditados separadamente, sem descarte por idade/tamanho. Reconfirmar capacidade/WAL e requisitos bancários antes de qualquer retirada futura. Out.15CLOSED, guarda38 fechada, controles e retornos preservados.

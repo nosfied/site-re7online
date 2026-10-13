@@ -80,5 +80,14 @@
     "e8ebd776ba7c92cc9013fefb29035eae3ab1af4e",
     "worker-bf5f1d76-f06d49cb-042e386a",
     "worker-bf5f1d76-f06d49cb-91230f88"
-  ]
+  ],
+  "ownerReview": {
+    "auditCommit": "b2ac1bfdc805b597eff8853b979cdca213a9e586",
+    "withdrawalAuthorized": false,
+    "allowlistPreserved": true,
+    "nextPreparation": "after_actual_database_phase_result",
+    "bindActualIdentitiesPolicyAndCredential": true,
+    "externalDataSymlinksNeverFollowed": 7,
+    "beforeBank": "noncompeting_preparation_only"
+  }
 }
