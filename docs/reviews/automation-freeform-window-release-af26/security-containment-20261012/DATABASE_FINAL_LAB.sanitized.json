@@ -1,0 +1,79 @@
+{
+  "result": "PASS",
+  "scenarios": [
+    {
+      "scenario": "precommit_failure",
+      "result": "PASS",
+      "alterCalls": 0,
+      "privilegesAndDataPreserved": true
+    },
+    {
+      "scenario": "committed",
+      "result": "PASS",
+      "alterCalls": 1,
+      "privilegesAndDataPreserved": true
+    },
+    {
+      "scenario": "successor_failure",
+      "result": "PASS",
+      "alterCalls": 1,
+      "privilegesAndDataPreserved": true
+    },
+    {
+      "scenario": "timeout_committed",
+      "result": "PASS",
+      "alterCalls": 1,
+      "privilegesAndDataPreserved": true
+    },
+    {
+      "scenario": "timeout_original",
+      "result": "PASS",
+      "alterCalls": 1,
+      "privilegesAndDataPreserved": true
+    },
+    {
+      "scenario": "sql_rollback_original",
+      "result": "PASS",
+      "alterCalls": 1,
+      "privilegesAndDataPreserved": true
+    },
+    {
+      "scenario": "catalog_guard_denial",
+      "result": "PASS",
+      "alterCalls": 1,
+      "privilegesAndDataPreserved": true
+    },
+    {
+      "scenario": "survivor_denial",
+      "result": "PASS",
+      "alterCalls": 0,
+      "privilegesAndDataPreserved": true
+    },
+    {
+      "scenario": "privilege_drift",
+      "result": "PASS",
+      "alterCalls": 0,
+      "privilegesAndDataPreserved": true
+    },
+    {
+      "scenario": "receipt_conflict",
+      "result": "PASS",
+      "alterCalls": 1,
+      "privilegesAndDataPreserved": true
+    }
+  ],
+  "canonicalSequencerSourceSha256": "df0ba9bd3ffee691b037c9bfa67cddbb553ffa94a3011ed2f7a36ad331a57d85",
+  "patchedSequencerSha256": "f0bb2f92537e464a8a8fc48fbfa6a287894ffc4677a8ccc6fa0b5900798cfa42",
+  "postgres": "16 real isolated SCRAM",
+  "externalEffectsSimulated": [
+    "PM2/processes",
+    "nft",
+    "cron",
+    "HTTP readiness"
+  ],
+  "timeout": "real 15s subprocess timeout after PostgreSQL commit; transport result held by wrapper",
+  "productionMutations": 0,
+  "temporaryServerStopped": true,
+  "tcpRuntime": "Node20.20.0/Prisma existing dependencies",
+  "tcpProof": "one SELECT1 READ ONLY transaction per observation; P1000 definite denial, all other errors incomplete"
+}

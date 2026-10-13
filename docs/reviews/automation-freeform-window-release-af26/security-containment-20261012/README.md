@@ -1,6 +1,10 @@
 # Preparação de contenção de credenciais — 12/10/2026
 
-**ESTADO CORRENTE: AUTH3 EXECUTADA/CONFIRMADA; SECURITY OPEN.** [Execução, evidências e draft bancário pós-auth](AUTH_V3_EXECUTION_2026-10-13.md). Guard38closed, out15CLOSED, cinco gatesfalse. Banco/providers/cifragem não rotacionados; banco draft selado não autoriza instalação/ALTER ROLE. Próxima ação e impedimentos bancários discriminados no relatório, sem reabrir auth concluída.
+**ESTADO CORRENTE: AUTH3 CONCLUÍDA; banco composição final revisável/CAPACITY DENY; segurança OPEN.** [Relatório único bancário, comandos e proposta de expansão](DATABASE_FINAL_PREPARATION_2026-10-13.md). Nenhuma rotação DB ou instalação executada. Próxima decisão é capacidade; não solicitar janela bancária enquanto houver déficit. Guarda38fechada/out15CLOSED preservados.
+
+**Checkpoint histórico — auth concluída e draft anterior:**
+
+**Estado anteriormente vigente: AUTH3 EXECUTADA/CONFIRMADA; SECURITY OPEN.** [Execução, evidências e draft bancário pós-auth](AUTH_V3_EXECUTION_2026-10-13.md). Guard38closed, out15CLOSED, cinco gatesfalse. Banco/providers/cifragem não rotacionados; banco draft selado não autoriza instalação/ALTER ROLE. Próxima ação e impedimentos bancários discriminados no relatório, sem reabrir auth concluída.
 
 **Checkpoint histórico — pacote antes da execução:**
 
