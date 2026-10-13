@@ -1,0 +1,52 @@
+AUDIT/PRESERVATION ONLY. No withdrawal authorization. Do not run the consumed lot again.
+Exact candidate file allowlist:
+/opt/re7online/releases/flow-e8ebd776.tar.gz
+  SHA256 a4a3baf9c6a83a4f7abf5e4d110376b9f9328914da65453c9e82a49687877f2f
+/opt/re7online/releases/frontend-a1cc380e.tar.gz
+  SHA256 aa8cfdd1c30d6dd4fa6dca57bff1c2057689a2aa5123436affcb012d6937763d
+
+READ ONLY source validation:
+sha256sum /opt/re7online/releases/flow-e8ebd776.tar.gz /opt/re7online/releases/frontend-a1cc380e.tar.gz
+stat -c '%d %i %h %s %b %u %g %a %Y %n' /opt/re7online/releases/flow-e8ebd776.tar.gz /opt/re7online/releases/frontend-a1cc380e.tar.gz
+
+Recovery proof commands, ONLY in a fresh isolated private directory, from owner-private custody:
+sha256sum -c files.sha256
+# Destination must be absent; tar member paths/links must first be validated against the private index.
+# Do not overwrite releases or restore old configuration/secrets.
+# Extraction already validated locally; no application/provider started.
+tar -tzf flow-e8ebd776.tar.gz > flow-members.private.txt
+tar -tzf frontend-a1cc380e.tar.gz > frontend-members.private.txt
+mkdir -m 700 flow-isolated frontend-isolated
+tar --no-same-owner -xzf flow-e8ebd776.tar.gz -C flow-isolated
+tar --no-same-owner -xzf frontend-a1cc380e.tar.gz -C frontend-isolated
+
+PROPOSED FUTURE REMOVAL PRIMITIVES (not executable as a standalone procedure):
+# Canonical sealed driver must first validate custody, literal allowlist/input SHA, current references,
+# exact inode/dev/type/nlink/metadata/content, two complete privileged owner observations, identities,
+# guard38/no markers, installed policies, PM2 saved/fallback, bank modes/deps, capacity/WAL/RPO.
+# Lock + exclusive intent + fresh individual recheck immediately before each anchored unlink.
+# Only the following literal unlink targets can be admitted; directories/releases are excluded:
+# anchored_unlink('/opt/re7online/releases/flow-e8ebd776.tar.gz', indexed_metadata)
+# anchored_unlink('/opt/re7online/releases/frontend-a1cc380e.tar.gz', indexed_metadata)
+# Reuse canonical anchored_unlink with O_NOFOLLOW parent chain, fstat/hash recheck and parent fsync.
+# Future driver/input generation remains pending; no reuse of consumed first-lot controls/certificates.
+# Post-read in denial/partial/timeout; preserve/export intent/receipt/diagnostics; no automatic replay.
+# Bank change may invalidate policy/process bindings: prepare a fresh reviewed lot afterward.
+
+Seven additional candidate release roots, NOT recursive shell deletion targets:
+/opt/re7online/releases/03f930e5453efd313a91a16de3e22057a0573d9c
+/opt/re7online/releases/a1cc380eddcd1467b8e0d3a8e405f82689a25b3d
+/opt/re7online/releases/a3d16d4bdc4b143deeb6b66d4e963b0b4b3f216b
+/opt/re7online/releases/campaign-eligibility-recovery-reviewed-20261008
+/opt/re7online/releases/e8ebd776ba7c92cc9013fefb29035eae3ab1af4e
+/opt/re7online/releases/worker-bf5f1d76-f06d49cb-042e386a
+/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88
+Private exact member index/hash required; never traverse .data links. No rm -rf/glob/prune.
+Full custody SHA256 eaa1d3e711746b0bc3b2b0b1fb1b0d86f8eb0624162eacea02bf8749d15bf22e
+Index SHA256 dd40e573610caf3ad39eac827ce1a1b428be7d2a74227f1bb39b55c5dfdfc55f
+READ ONLY custody validation:
+sha256sum -c full-releases.files.sha256
+gzip -t historical-releases-fast.tar.gz
+# Full restoration was verified in isolation: regular files first; symlinks last; no symlink traversal.
+# Do not run archived apps or restore exposed secrets. No production recovery is authorized.
+# Sealed withdrawal driver/input remain a concrete pending prerequisite after bank priority.

@@ -1,0 +1,84 @@
+{
+  "result": "AUDIT_NINE_ROOTS_CUSTODY_VERIFIED_NO_WITHDRAWAL",
+  "allocatedNineRoots": 4456800256,
+  "externalLinkedInodes": 0,
+  "symlinksNotDereferenced": 172,
+  "rootSamples": 2,
+  "rootIncomplete": [
+    0,
+    0
+  ],
+  "rootOwners": [
+    6,
+    6
+  ],
+  "ownerCategory": "custody_tar",
+  "allowlistCandidateFiles": [
+    {
+      "path": "/opt/re7online/releases/flow-e8ebd776.tar.gz",
+      "size": 51991906,
+      "blocks": 101560,
+      "sha256": "a4a3baf9c6a83a4f7abf5e4d110376b9f9328914da65453c9e82a49687877f2f",
+      "extraction": "PASS",
+      "disposition": "CANDIDATE_NOT_AUTHORIZED"
+    },
+    {
+      "path": "/opt/re7online/releases/frontend-a1cc380e.tar.gz",
+      "size": 26471174,
+      "blocks": 51704,
+      "sha256": "aa8cfdd1c30d6dd4fa6dca57bff1c2057689a2aa5123436affcb012d6937763d",
+      "extraction": "PASS",
+      "disposition": "CANDIDATE_NOT_AUTHORIZED"
+    }
+  ],
+  "allowlistAllocated": 78471168,
+  "sevenReleasesAllocated": 4378329088,
+  "bankReadUtc": "2026-10-13T18:32:13.978382+00:00",
+  "minimumAvailableBytes": 6674800640,
+  "bankBudgetBytes": 2173698048,
+  "guardGeneration": 38,
+  "gatesFalse": true,
+  "custodyManifestSha256": "c6c8bf350351a8357a55a341488ca32689186c9bfe2374235096aa50bb3c0ed8",
+  "custodyReplicas": 1,
+  "pending": [
+    "sealed_future_withdrawal_driver_and_input",
+    "fresh_revalidation_after_bank_window",
+    "preparation_package_hashes_and_custody",
+    "root_snapshot_and_log_retention"
+  ],
+  "postCustodyOwners": [
+    0,
+    0
+  ],
+  "postCustodyIncomplete": [
+    0,
+    0
+  ],
+  "postCustodyUtcEpochs": [
+    1791917108.3210268,
+    1791917108.4383843
+  ],
+  "archive": {
+    "result": "ARCHIVE_AND_ISOLATED_EXTRACTION_PASS",
+    "bytes": 1544456898,
+    "sha256": "eaa1d3e711746b0bc3b2b0b1fb1b0d86f8eb0624162eacea02bf8749d15bf22e",
+    "members": 140758,
+    "symlinks": 172,
+    "noApplicationStarted": true,
+    "sourceHashesCompared": true,
+    "originalFilesVerified": 125939,
+    "sourceHashesSha256": "c92f32ffda35b7201f6a84c8da51828b61e4492fd6d8f05d40ad643e6f7b7096",
+    "indexSha256": "dd40e573610caf3ad39eac827ce1a1b428be7d2a74227f1bb39b55c5dfdfc55f"
+  },
+  "candidateAllocated": 4456800256,
+  "fullCustodyManifestSha256": "4fc6e2fa851d73f20843d683a67e46459edda7bdf349f0b0c875728c6ade2c23",
+  "candidateReleaseRoots": [
+    "03f930e5453efd313a91a16de3e22057a0573d9c",
+    "a1cc380eddcd1467b8e0d3a8e405f82689a25b3d",
+    "a3d16d4bdc4b143deeb6b66d4e963b0b4b3f216b",
+    "campaign-eligibility-recovery-reviewed-20261008",
+    "e8ebd776ba7c92cc9013fefb29035eae3ab1af4e",
+    "worker-bf5f1d76-f06d49cb-042e386a",
+    "worker-bf5f1d76-f06d49cb-91230f88"
+  ]
+}

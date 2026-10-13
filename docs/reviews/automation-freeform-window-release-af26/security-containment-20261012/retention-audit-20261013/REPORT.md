@@ -54,3 +54,7 @@ Bloco B só após nova autorização explícita: uma invocação com `--owner-au
 Bloco C obrigatório inclusive DENY/parcial/timeout: leitor posterior separado, principal hash, quatro paths, entradas restantes/novas do cache, duas observações completas inclusive inodes já retirados mas abertos, min dos dois executores/health/controles. Copiar recibos/diagnósticos off-host; conferir WAL/DB/out15/dumps/serviços pelo leitor canônico e sessão legítima apenas em leitura. Timeout ou incerto: inspecionar, não repetir B nem apagar intent. Sucesso da retirada não autoriza banco: renovar RPO/dump/custódia e revisar janela bancária vigente com estado real.
 
 [Comandos separados](COMMANDS_FOR_REVIEW.txt). Próximo passo concreto: **decisão sobre estes cinco caminhos**, com preflight fresco e verificações posteriores. Sem expansão e sem limpeza automática. Segurança OPEN/providers/banco/cifragem continuam separados; out.15 não foi reaberta.
+
+## Continuidade do segundo lote,13/10
+
+[Auditoria atual, custódia integral e limites](SECOND_LOT_2026-10-13.md). Nove raízes4.456.800.256B alocados; nenhuma retirada. A janela bancária17h15 mantém prioridade; não repetir o lote consumido.
