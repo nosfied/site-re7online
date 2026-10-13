@@ -1,0 +1,74 @@
+{
+  "authorizationScope": "generation 140000 A/B; uncertain C inspect only; recovery requires explicit classification decision",
+  "custody": {
+    "actualBackupCapturedUtc": "2026-10-13T13:38:28.673478+00:00",
+    "files": 247,
+    "freshRpoForFutureWindow": false,
+    "manifestSha256": "5784e68edebe1d9c6eee64efadd0ce33fd831a7b5044d3f1b3111f32d9d7ace5",
+    "originalsPreserved": true,
+    "result": "OFFHOST_CUSTODY_RECONFIRMED"
+  },
+  "executionNotBeforeFortaleza": "2026-10-13T17:15:00-03:00",
+  "executionNotBeforeUtc": "2026-10-13T20:15:00Z",
+  "gatesFalse": true,
+  "generation": "incident-6683-v4-security-database-final-v4-20261013T140000Z",
+  "initialChecks": {
+    "budgetBytes": 2173698048,
+    "guardGeneration": 38,
+    "limits": "Backup RPO/custody, capacity/WAL and fresh exit/ownership proofs must be reconfirmed for execution",
+    "minimumAvailableBytes": 6680715264,
+    "originalVerifierAndConnectionsProven": true,
+    "policyInstalledChecked": false,
+    "proxyInventoryBaselinePreserved": true,
+    "result": "DATABASE_PREPARATION_READS_PASS_GATES_FALSE",
+    "utc": "2026-10-13T14:32:13.804050+00:00"
+  },
+  "initialHbaWal": {
+    "atUtc": "2026-10-13T14:34:06.517588+00:00",
+    "hbaUnchanged": true,
+    "policyInstalledChecked": false,
+    "result": "INITIAL_BANK_HBA_WAL_CONSUMERS_READ_PASS",
+    "rotationExecuted": false,
+    "samples": [
+      {
+        "deployAvailableBytes": 6670143488,
+        "minimumAvailableBytes": 6670143488,
+        "postgresAvailableBytes": 6670143488,
+        "utc": "2026-10-13T14:34:06.962486+00:00",
+        "wal": {
+          "archiveMode": "off",
+          "bytes": 184549376,
+          "slots": 0
+        }
+      },
+      {
+        "deployAvailableBytes": 6670143488,
+        "minimumAvailableBytes": 6670139392,
+        "postgresAvailableBytes": 6670139392,
+        "utc": "2026-10-13T14:34:09.239519+00:00",
+        "wal": {
+          "archiveMode": "off",
+          "bytes": 184549376,
+          "slots": 0
+        }
+      }
+    ]
+  },
+  "installerSha256": "17a92e66104c88d83a2e4335aa16a3dee156c0f7c70076d07d7725593b2978f3",
+  "oldAuthReactivationPermitted": false,
+  "oldDbRestorationAfterVerifiedPermitted": false,
+  "policyInstallationExecuted": false,
+  "policySha256": "9c7b44d58c96d0aa1dd9f6b7d790d810407e3ea364b01a748473c06928efff4c",
+  "remainingDependencies": [
+    "time>=17:15 Fortaleza",
+    "owner sudo available",
+    "fresh backup/restore custody and RPO",
+    "immediate identities/inventory/role/HBA/capacity/WAL",
+    "root hashes/archive absence/installation inspect",
+    "execution one-use gates"
+  ],
+  "remoteHeadConfirmed": "4c2fdbf2057e1545e0ebfa2881d5309e0ac1d927",
+  "result": "INITIAL_PRE_WINDOW_READS_PASS_NOT_EXECUTED",
+  "rotationExecuted": false,
+  "timeChangeByOwner": "17:15 replaces earlier after18 instruction"
+}

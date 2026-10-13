@@ -1,3 +1,7 @@
+# OWNER AUTHORIZATION RECORDED 13/10: A/B for generation140000; containment not before17:15Fortaleza.
+# C inspect only after uncertainty; record/recover require explicit decision.
+# Initial reads are dated; renew backup/RPO/custody and reconfirm all requirements immediately.
+# Original publication/review text and executable bytes preserved below.
 CAPACITY PASS AS DATED — REVIEW ONLY. NO POLICY INSTALLATION OR SQL AUTHORIZED.
 Backup captured 2026-10-13T13:38:28.673478Z; final reads 14:16:28Z.
 Reconfirm capacity/WAL/RPO/custody immediately before any future execution; this is not an exit certificate.
