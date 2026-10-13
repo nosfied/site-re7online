@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
 import { normalizeWaIdDigits } from "../utils/waid.js";
+import { encryptEpochSeed, newSeedMetadata, readEpochSeed, seedWriteEpoch, type SeedReadContext } from "./campaignSeedEpoch.js";
 
 const CIPHER_PREFIX = "v1:";
 const CAMPAIGN_SEED_SECRET_REF = "CAMPAIGN_SEED_SECRET|CHANNEL_ACCOUNT_SECRET_KEY|APP_AUTH_SECRET";
@@ -89,9 +90,11 @@ export function buildPrivateCampaignSeedFields(params: {
 }): Prisma.JsonObject {
   const recipients = params.waIds.map((waId) => String(waId ?? "").trim()).filter(Boolean);
   const componentsByWaId = params.componentsByWaId ?? {};
-  const recipientsCiphertext = encryptSeedJson(recipients);
+  const epoch = seedWriteEpoch();
+  const metadata = epoch ? newSeedMetadata(params.clientId, epoch) : null;
+  const recipientsCiphertext = metadata ? encryptEpochSeed(recipients, metadata, "recipientsCiphertext") : encryptSeedJson(recipients);
   const componentsCiphertext =
-    Object.keys(componentsByWaId).length > 0 ? encryptSeedJson(componentsByWaId) : null;
+    Object.keys(componentsByWaId).length > 0 ? (metadata ? encryptEpochSeed(componentsByWaId, metadata, "componentsByWaIdCiphertext") : encryptSeedJson(componentsByWaId)) : null;
   if (!recipientsCiphertext || (Object.keys(componentsByWaId).length > 0 && !componentsCiphertext)) {
     throw new Error("campaign_seed_encryption_key_missing");
   }
@@ -102,11 +105,12 @@ export function buildPrivateCampaignSeedFields(params: {
     recipientsCiphertext,
     componentsByWaId: undefined,
     componentsByWaIdCiphertext: componentsCiphertext ?? undefined,
-    encryptionKeyRef: CAMPAIGN_SEED_SECRET_REF,
+    encryptionKeyRef: metadata ? "CAMPAIGN_SEED_SECRET:" + metadata.epoch : CAMPAIGN_SEED_SECRET_REF,
+    ...(metadata ? { seedEncryption: metadata } : {}),
   };
 }
 
-export function readPrivateCampaignSeedFields(payload: unknown): {
+export function readPrivateCampaignSeedFields(payload: unknown, context?: SeedReadContext): {
   recipients: string[];
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
 } {
@@ -114,6 +118,21 @@ export function readPrivateCampaignSeedFields(payload: unknown): {
     payload && typeof payload === "object" && !Array.isArray(payload)
       ? (payload as Record<string, unknown>)
       : {};
+  const strict = Boolean(seedWriteEpoch()) || Boolean(record.seedEncryption) ||
+    [record.recipientsCiphertext, record.componentsByWaIdCiphertext].some(v => typeof v === "string" && v.startsWith("v2:"));
+  if (strict) {
+    if ((record.recipients !== undefined && parseStringArray(record.recipients).length > 0) || record.componentsByWaId !== undefined) {
+      throw new Error("campaign_seed_plaintext_fallback_denied");
+    }
+    const decoded = readEpochSeed(record, "recipientsCiphertext", context);
+    if (!Array.isArray(decoded) || !decoded.every(v => typeof v === "string")) throw new Error("campaign_seed_recipients_invalid");
+    const recipients = parseStringArray(decoded);
+    const components = record.componentsByWaIdCiphertext === undefined ? undefined : readEpochSeed(record, "componentsByWaIdCiphertext", context);
+    if (components !== undefined && (!components || typeof components !== "object" || Array.isArray(components))) {
+      throw new Error("campaign_seed_components_invalid");
+    }
+    return { recipients, componentsByWaId: components as Record<string, CampaignTemplateComponents> | undefined };
+  }
   const decryptedRecipients = parseStringArray(decryptSeedJson(record.recipientsCiphertext));
   const legacyRecipients = parseStringArray(record.recipients);
   const componentsRaw = decryptSeedJson(record.componentsByWaIdCiphertext) ?? record.componentsByWaId;
@@ -159,7 +178,7 @@ export function removeCampaignSeedSubjectReferences(params: {
   removedLeadIds: number;
 } {
   const record = getSeedRecord(params.payload);
-  const privateSeed = readPrivateCampaignSeedFields(record);
+  const privateSeed = readPrivateCampaignSeedFields(record, { clientId: params.clientId });
   const identityCandidates = buildSeedIdentityCandidateSet(params.identityCandidates);
   const leadIdsToRemove = new Set(params.leadIds?.map((value) => String(value ?? "").trim()).filter(Boolean) ?? []);
   const shouldRemoveRecipient = (recipient: string) => {

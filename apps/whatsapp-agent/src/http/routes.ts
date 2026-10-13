@@ -29947,13 +29947,13 @@ function extractCampaignDynamicCrmFilter(input: unknown): CampaignDynamicCrmFilt
   return { version: 1, crmBusinessStatusId };
 }
 
-function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null {
+function extractCampaignDraftSeed(rawPayload: unknown, clientId: string): CampaignDraftSeed | null {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
   const typed = rawPayload as Record<string, unknown>;
   const name = typeof typed.name === "string" ? typed.name : null;
   const templateId = typeof typed.templateId === "string" ? typed.templateId : null;
   const templateName = typeof typed.templateName === "string" ? typed.templateName : null;
-  const privateSeed = readPrivateCampaignSeedFields(typed);
+  const privateSeed = readPrivateCampaignSeedFields(typed, { clientId });
   const recipients = privateSeed.recipients
     .map((value) => normalizeWaId(value))
     .filter((value): value is string => Boolean(value));
@@ -38355,7 +38355,7 @@ async function buildCampaignDraftSeed(
     orderBy: { createdAt: "desc" },
     select: { payloadJson: true },
   });
-  const parsedSeed = extractCampaignDraftSeed(persistedSeed?.payloadJson);
+  const parsedSeed = extractCampaignDraftSeed(persistedSeed?.payloadJson, params.clientId);
   if (parsedSeed) {
     return parsedSeed;
   }

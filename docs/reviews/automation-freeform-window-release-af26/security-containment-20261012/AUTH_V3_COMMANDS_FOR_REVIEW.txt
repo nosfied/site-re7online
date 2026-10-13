@@ -1,0 +1,54 @@
+REVIEW BEFORE INSTALLATION. AUTH ZERO ROTATIONS. DO NOT USE GENERATION223100.
+New generation /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-auth-v3-20261012T234100Z.
+Guard38 CLOSED; out15 CLOSED. Helpers/sudoers/frontend unchanged. No DB/provider/cipher rotation.
+
+A. OWNER SUDO INSTALLATION — ONLY AFTER REVIEW AND IMMEDIATE PRECONDITIONS
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-auth-v3-20261012T234100Z
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = 379e7d403c6d33420ca3248c3c43a9908ae4179bac9419dbb4801264f9505273
+(cd "$P" && sha256sum -c preparation-review.sha256)
+python3 "$P/check-immediate.py"
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = f9edbd489ab3c99f9914ca6509ca0d676500ca3ffec1abc5b17a0da5de8b278d
+bash "$P/install-api-window-policy.sh"
+# Archive previous a2ff at /usr/local/libexec/re7/incident-6683-window-policy.pre-security-auth-v3-20261012T234100Z.json.
+# Root proposal093a; owner root checks old a2ff/helper8de/sudoers62b5/root chain/modes/visudo.
+# Expected POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE. Password ONLY in owner's sudo session.
+# Any partial/existing archive/DENY/timeout: preserve and inspect, no repeat installer.
+
+B. SINGLE CANONICAL AUTH SEQUENCE — NOT EXECUTED BY THIS PREPARATION TASK
+# Requires review of this new package, installation PASS and current requirements ALL satisfied.
+# Reconfirm source IDs/daemon, global SQL/inventory/proxy, closed38/tasks{}, controls/sessions,
+# off-host backup freshness/RPO/restore proof, min(deploy/PG)>=2131755008+4194304 and WAL/growth.
+# A preparation read is not an exit/drain certificate. No expired proof or historical intent reused.
+python3 "$P/check-immediate.py" --after-policy-installed
+python3 - "$P" <<'CHECK'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);sys.path.insert(0,str(p/'window'))
+from baseline_contract import validate_preparation
+from sequencer import Bridge
+validate_preparation(p)
+assert json.loads(Bridge(p).privileged('inspect'))=={'policySha256':'093a04831663d5d348ea4d5546d3aedb7f37ba2d5b76a17352aef65e447310b7','phase':None,'sourceProcessesAlive':True}
+f=p/'window/execution-gates.private.json';g=json.loads(f.read_text())
+assert len(g)==5 and all(v is False for v in g.values())
+# Only operator with reviewed approved package + fresh independent evidence may reach this write.
+f.write_text(json.dumps({k:True for k in g},sort_keys=True)+'\n')
+CHECK
+umask 077
+python3 "$P/window/sequencer.py" "$P"
+# Exactly one sequence. Fresh source exit/DB ownership proof; one API and same worker start.
+# Full/partial recoveries are canonical sequencer paths, all target auth values NEW.
+# No old auth restore, no second start or bypass on uncertain result. Escalate15min containment.
+# Post-unfence recovery requires fresh canonical generation/policy from actual identities;
+# use window/prepare_post_unfence_return.py per canonical runbook, owner installs generated hash
+# before the return. Do not improvise old PIDs or replay this preparation.
+# End: guard38closed/out15closed; health/DB/new owner login and old session denial,
+# new worker control health/old token401 (no message), same frontend, supervision/cron/boot restored,
+# saved/fallback600 with umask077, barrier absent, gatesfalse. Existing chmod NOT repeated.
+
+C. NO SEED/TELEGRAM OPERATIONS IN THIS AUTH GENERATION
+# Local seed sources are review-only and are NOT in the unchanged functional auth artifact.
+# Dedicated seed key/authorization/epoch need their own reviewed cipher release and final policy.
+# Telegram unused/future per owner; preserve invalid row, do not demand BotFather or activate it.
+# No channel reset, Web disconnect/re-pairing, DB rotation, send, campaign open or resume.

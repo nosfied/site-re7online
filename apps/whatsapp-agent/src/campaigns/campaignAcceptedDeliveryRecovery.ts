@@ -103,7 +103,7 @@ async function inspect(tx: Tx, input: Position6RecoveryInput, guard: unknown) {
     }
     need(originals.seed.eventName === "campaign.seed.saved" && originals.seed.messageId === b.campaignId && rec(originals.seed.payloadJson).campaignId === b.campaignId, "seed_binding_mismatch");
     need(originals.snapshot.eventName === "campaign.dynamic_batch_snapshot.created" && originals.snapshot.messageId === b.parentCampaignId && rec(originals.snapshot.payloadJson).campaignId === b.parentCampaignId, "snapshot_binding_mismatch");
-    const seed = rec(originals.seed.payloadJson), decoded = readPrivateCampaignSeedFields(seed), snapshot = readPrivateCampaignSeedFields(originals.snapshot.payloadJson);
+    const seed = rec(originals.seed.payloadJson), decoded = readPrivateCampaignSeedFields(seed, { clientId: b.clientId }), snapshot = readPrivateCampaignSeedFields(originals.snapshot.payloadJson, { clientId: b.clientId });
     need(decoded.recipients.length === 11 && snapshot.recipients.length === 11 && decoded.recipients[5] === reviewed.waId && snapshot.recipients[5] === reviewed.waId && deliveryEvidenceHash(decoded.componentsByWaId?.[reviewed.waId]) === deliveryEvidenceHash(snapshot.componentsByWaId?.[reviewed.waId]) && Array.isArray(decoded.componentsByWaId?.[reviewed.waId]), "execution_payload_mismatch");
     const transport = input.transportRecord;
     let sending: any, sent: any;

@@ -1,3 +1,5 @@
+**Checkpoint atual:** owner declarou Telegram fora de uso e frente futura. Não exigir BotFather, ativação ou recredenciamento nesta preparação. Linha inválida permanece preservada e bloqueia o plano integral de cifragem até disposição específica revisada; não omitir para PASS. Integração local do decoder em campaignSeedPrivacy e callers foi concluída com147campos126eventos originais imutáveis; não está implantada nem incluída no pacote auth. [Contrato/resultado atual](AUTH_V3_PREPARATION_2026-10-12.md#seed-integração-local-aos-caminhos-canônicos). O texto anterior abaixo é histórico quando divergir deste checkpoint; não autoriza rotação.
+
 # Cifragem: dados, backups e limites concretos
 
 **NOT ROTATED.** Módulos canônicos de canal/MFA/webhook e referências de identidade têm hashes idênticos ao runtime ativo. Rodados em Node20.20.0 sem entrypoint/provider. Funções existentes AES-GCM foram reaproveitadas; nenhuma alteração global, schema ou migration.

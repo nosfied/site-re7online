@@ -247,9 +247,9 @@ function extractComponentsByWaId(value: unknown): Record<string, CampaignTemplat
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
-function extractSeedPayload(payload: unknown): ExistingSeed {
+function extractSeedPayload(payload: unknown, clientId: string): ExistingSeed {
   if (!isRecord(payload)) return { recipients: [] };
-  const privateSeed = readPrivateCampaignSeedFields(payload);
+  const privateSeed = readPrivateCampaignSeedFields(payload, { clientId });
   const recipients = privateSeed.recipients
     .map((value) => normalizeOptOutWaId(value)?.waIdCanonical ?? "")
     .filter(Boolean);
@@ -272,7 +272,7 @@ async function getExistingSeed(
     orderBy: { createdAt: "desc" },
     select: { payloadJson: true },
   });
-  return extractSeedPayload(event?.payloadJson);
+  return extractSeedPayload(event?.payloadJson, params.clientId);
 }
 
 export async function resolveCampaignImportTemplate(

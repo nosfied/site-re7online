@@ -1,0 +1,109 @@
+{
+  "result": "AUTH_V4_PREPARED_NOT_INSTALLED_NOT_EXECUTED",
+  "atUtc": "2026-10-12T23:40:56.845465+00:00",
+  "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-auth-v3-20261012T234100Z",
+  "policySha256": "093a04831663d5d348ea4d5546d3aedb7f37ba2d5b76a17352aef65e447310b7",
+  "installerSha256": "f9edbd489ab3c99f9914ca6509ca0d676500ca3ffec1abc5b17a0da5de8b278d",
+  "sourceInstalledPolicySha256": "a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e",
+  "modeManifests": {
+    "switch": "98e907389c4b9e406894c3163383127ba9ae2517ee9543a876ccd3776909d5cc",
+    "return": "9a087317b9813b60e08bd858cd0f8300cd5afbd0fc706a2a514016995b382d0f",
+    "return-partial": "76283d86f3494189f4a2b1d03083ee8bba92adc6ef2cfaaacc0e5b46bcf76ad8"
+  },
+  "sourceIdentityBound": {
+    "re7-admin-front": {
+      "pid": 188897,
+      "ticks": "2161347676"
+    },
+    "re7-whatsapp-agent": {
+      "pid": 186864,
+      "ticks": "2161308560"
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 187037,
+      "ticks": "2161308947"
+    }
+  },
+  "expectedLogout": true,
+  "safeReturnUsesNewAuthValues": true,
+  "frontendPreserved": true,
+  "gatesFalse": true,
+  "changedRuntimeFiles": [],
+  "reviewManifest": {
+    "result": "NEW_AUTH_PREPARATION_READ_CHECKS_STAGED_GATES_FALSE",
+    "reviewManifestSha256": "379e7d403c6d33420ca3248c3c43a9908ae4179bac9419dbb4801264f9505273",
+    "checkImmediateSha256": "3b79715cff6e3c1a833e6f4e6fa008e21bed0ae6b5c5add010875171edf4b4db"
+  },
+  "offHostArchiveSha256": "ab4d706f7f2c8d7787aaac6e54664dfa74acab74d4efc6cfcb7376858262f675",
+  "offHostArchiveBytes": 707117,
+  "completePreparatorySqlProxy": {
+    "result": "PREPARATORY_SQL_PROXY_CURRENT_CAPTURE_PASS",
+    "atUtc": "2026-10-12T23:53:35.915569+00:00",
+    "captureSha256": "58397934ed36dd82455c399a1e254c8807cd23206889ba718895324b05e5d893",
+    "noDrainOrExitCertificate": true
+  },
+  "final": {
+    "atUtc": "2026-10-12T23:52:03.834631+00:00",
+    "guard": {
+      "open": false,
+      "generation": 38,
+      "tasks": {}
+    },
+    "identities": [
+      {
+        "name": "re7-whatsapp-agent",
+        "pid": 186864,
+        "restarts": 0
+      },
+      {
+        "name": "re7-whatsapp-web-worker",
+        "pid": 187037,
+        "restarts": 0
+      },
+      {
+        "name": "re7-admin-front",
+        "pid": 188897,
+        "restarts": 0
+      }
+    ],
+    "savedMode": "0o600",
+    "fallbackMode": "0o600",
+    "minimumAvailableBytes": 2230255616,
+    "authCapacityPass": true,
+    "wal": {
+      "walBytes": 83886080,
+      "slots": 0
+    }
+  },
+  "authRotations": 0,
+  "installed": false,
+  "starts": 0,
+  "canonicalSeedIntegration": {
+    "node": "20.20.0",
+    "events": 126,
+    "fields": 147,
+    "originalPayloadHashesPreserved": true,
+    "readAndWriteCanonical": true,
+    "noProductionIntegrationDeployed": true,
+    "providerCalls": 0,
+    "databaseWrites": 0,
+    "sources": {
+      "campaigns/campaignSeedEpoch.ts": "2e1efd8ed81c87b4ba0e8b0e8d65e8de153ebd156ca7bc88af8d391619ffad18",
+      "campaigns/campaignSeedEpoch.test.ts": "63227a4a4a6655235abd805ce18cabb506416e9790dec060f565ca33dcf26021",
+      "campaigns/campaignSeedPrivacy.ts": "dfa74ea8607d77e9a482810aedd8517a22ca68ceec63be696efc565de735db1a",
+      "campaigns/campaignRunner.ts": "287cd49dd1474eaff4e7c11203d11023f94ac4e84e00523fa56be14efafe6d69",
+      "campaigns/campaignRecipientImport.ts": "dd298b8ba238b84b05e24951dafe2a9dc7215acd7150be71a443faeb023dac19",
+      "campaigns/campaignAcceptedFailureReconciliation.ts": "131d31e6669c8291c61641751c5fa8550b05c560b916c2af1ebaeb83690d39eb",
+      "campaigns/campaignAcceptedDeliveryRecovery.ts": "0afa332af0757174c3ff25fc3188279a8e7461b6d61710948b1f8489c5f4dab3",
+      "http/routes.ts": "03419228ea48802d3bf695261b280d492c518128d300a6a4a9c9db8dfba955c7",
+      "privacy/privacyRetentionService.ts": "2c25696a6e3a85dd41795f17b8eb15c51d8c25ddc2351e9bb45ee55dc12ad3cc"
+    }
+  },
+  "limits": [
+    "Fresh execution requirements must be reobserved before containment",
+    "Backup captured2026-10-12T23:14:55UTC with isolated restore reused by verified immutable schema/tools",
+    "Proposed policy not installed; owner sudo dependency",
+    "Local seed delta not included in auth runtime artifacts",
+    "Telegram unused/future per owner; invalid row still blocks full cipher plan until specific disposition"
+  ]
+}

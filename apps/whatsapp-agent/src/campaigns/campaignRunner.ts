@@ -325,12 +325,12 @@ function extractDynamicFilter(value: unknown): ScheduledCampaignSeed["dynamicFil
   return { version: 1, crmBusinessStatusId };
 }
 
-function extractScheduledCampaignSeed(value: unknown): ScheduledCampaignSeed | null {
+function extractScheduledCampaignSeed(value: unknown, clientId: string): ScheduledCampaignSeed | null {
   if (!isRecord(value)) return null;
   const selectionMode =
     value.selectionMode === "DYNAMIC_CRM_FILTER" ? "DYNAMIC_CRM_FILTER" : "STATIC_RECIPIENTS";
   const dynamicFilter = extractDynamicFilter(value.dynamicFilter);
-  const privateSeed = readPrivateCampaignSeedFields(value);
+  const privateSeed = readPrivateCampaignSeedFields(value, { clientId });
   const recipients = privateSeed.recipients.map((item) => String(item ?? "").trim()).filter(Boolean);
   if (selectionMode === "STATIC_RECIPIENTS" && recipients.length === 0) return null;
   if (selectionMode === "DYNAMIC_CRM_FILTER" && !dynamicFilter) return null;
@@ -394,7 +394,7 @@ async function getExistingDynamicSnapshot(
     select: { payloadJson: true },
   });
   if (!event) return null;
-  const privateSeed = readPrivateCampaignSeedFields(event.payloadJson);
+  const privateSeed = readPrivateCampaignSeedFields(event.payloadJson, { clientId: params.clientId });
   return {
     recipients: privateSeed.recipients.map((item) => String(item ?? "").trim()).filter(Boolean),
     componentsByWaId: extractComponentsByWaId(privateSeed.componentsByWaId),
@@ -549,7 +549,7 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
     } } });
     if (!event) return null;
     const payload = isRecord(event.payloadJson) ? event.payloadJson : {};
-    const saved = readPrivateCampaignSeedFields(payload);
+    const saved = readPrivateCampaignSeedFields(payload, { clientId: params.clientId });
     if (saved.recipients.length !== Number(payload.eligibleCount)) return { ok: false as const, reason: "batch_snapshot_unreadable" };
     return { ok: true as const, recipients: saved.recipients, componentsByWaId: saved.componentsByWaId,
       blockedCount: Number(payload.blockedCount ?? 0), matchedCount: Number(payload.matchedCount ?? 0), statusLabel: String(payload.statusLabel ?? "") };
@@ -764,7 +764,7 @@ async function materializeDynamicBatchJob(params: {
     orderBy: { createdAt: "desc" },
     select: { payloadJson: true },
   });
-  const seed = extractScheduledCampaignSeed(seedEvent?.payloadJson);
+  const seed = extractScheduledCampaignSeed(seedEvent?.payloadJson, params.job.clientId);
   if (!seed || seed.selectionMode !== "DYNAMIC_CRM_FILTER") {
     await finishCampaignExecutionJob({
       clientId: params.job.clientId,
@@ -1041,7 +1041,7 @@ async function processDueScheduledCampaignsAdmitted(params: { now?: Date; limit?
       orderBy: { createdAt: "desc" },
       select: { payloadJson: true },
     });
-    const seed = extractScheduledCampaignSeed(seedEvent?.payloadJson);
+    const seed = extractScheduledCampaignSeed(seedEvent?.payloadJson, campaign.clientId);
     if (!seed) {
       await prisma.campaign.update({
         where: { id: campaign.id },

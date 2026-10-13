@@ -1,3 +1,5 @@
+HISTÓRICO/SUPERSEDED: geração223100 NEGADA por saved_reference_drift. NÃO INSTALAR/EXECUTAR seus blocos A/B. Usar somente AUTH_V3_PREPARATION_2026-10-12.md e AUTH_V3_COMMANDS_FOR_REVIEW.txt após revisão. Hashes/evidências anteriores preservados.
+
 # Primeira fase: assinatura de sessão e autenticação interna
 
 **PREPARED FOR OWNER REVIEW / NOT INSTALLED / NOT EXECUTED.** Geração inativa `/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-auth-v2-20261012T223100Z`, capturada22:17:53UTC/19:17:53Fortaleza. A preparação223000 incompleta foi preservada; não instalar/executar/reutilizar.

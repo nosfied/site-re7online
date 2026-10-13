@@ -51,7 +51,7 @@ export async function dryRunAcceptedFailure(db: Db, b: AcceptedFailureBindings) 
     webhook.createdAt >= accepted.createdAt, 'reconciliation_provider_correlation_mismatch');
   requireThat(valid.status === 'SENT', 'reconciliation_valid_send_mismatch');
   requireThat(!await db.outboundMessage.findFirst({ where: { clientId: b.clientId, messageId } }), 'reconciliation_outbound_already_exists');
-  const recipients = readPrivateCampaignSeedFields(record(snapshot.payloadJson)).recipients;
+  const recipients = readPrivateCampaignSeedFields(record(snapshot.payloadJson), { clientId: b.clientId }).recipients;
   requireThat(recipients.length === 6 && valid.waId === recipients[0] && accepted.waId === recipients[1], 'reconciliation_snapshot_mismatch');
   requireThat(await db.event.count({ where: { clientId: b.clientId, eventName: 'campaign.message.submit_started', messageId: { startsWith: `campaign.${b.campaignId}.` } } }) === 2, 'reconciliation_unexpected_submission');
   const blocked: Array<{ position: number; reason: string; waId: string }> = [];

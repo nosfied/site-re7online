@@ -1,5 +1,9 @@
 # Preparação de contenção de credenciais — 12/10/2026
 
+**ESTADO CORRENTE: SECURITY OPEN; AUTH BLOQUEADA PARA EXECUÇÃO, ZERO ROTAÇÕES. Dumps600 concluídos; preparação auth v3 NOVA completa PARA REVISÃO, NOT INSTALLED.** [Relatório consolidado atual](AUTH_V3_PREPARATION_2026-10-12.md), [política/instalador/hashes](AUTH_V3_RESULT.sanitized.json), [blocos A/B novos](AUTH_V3_COMMANDS_FOR_REVIEW.txt). A geração223100 permanece recusada e não deve ser instalada/executada. A nova234100 resolveu a captura PM2 e passou na conferência completa SQL/proxy; gatesfalse/guard38closed/out15CLOSED e produção preservada. Helpers/sudoers iguais; próxima ação é revisão deste pacote, seguida da instalação restrita/precondições frescas, não execução automática. Telegram é frente futura sem uso declarado, linha inválida preservada como dependência específica da cifragem; sem BotFather/ativação/Webdisconnect. Integração seed canônica é LOCAL/NOT DEPLOYED e não está no artefato auth reutilizado.
+
+## Histórico da preparação c3ef43dd — não usar como estado corrente
+
 **SECURITY OPEN / PREPARED FOR REVIEW; NOT ROTATED, NOT REVOKED, NOT RESTARTED.** Out.15 permanece CLOSED no alcance de 2e8dc9ea, sem aceite retroativo da audiência; guarda38 fechada. [Comandos e fases](COMMANDS_FOR_REVIEW.txt), [resultados/hashes](RESULT.sanitized.json), [políticas/limites da primeira fase](AUTH_V4_FOR_REVIEW.md) e [matriz de cifragem](CIPHER_RECOVERY_FOR_REVIEW.md). Nenhuma nova investigação de audiência, envio ou cancelamento.
 
 ## Inventário e dependências reais

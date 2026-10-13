@@ -363,14 +363,14 @@ function getJsonRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-function campaignSeedReferencesSubject(payloadJson: unknown, params: { leadIds: string[]; identityKeys: string[] }) {
+function campaignSeedReferencesSubject(payloadJson: unknown, params: { clientId: string; leadIds: string[]; identityKeys: string[] }) {
   const record = getJsonRecord(payloadJson);
   const leadIds = Array.isArray(record.leadIds)
     ? record.leadIds.map((value) => String(value ?? "").trim()).filter(Boolean)
     : [];
   if (leadIds.some((leadId) => params.leadIds.includes(leadId))) return true;
   const candidateSet = new Set(buildPrivacyIdentityKeys(params.identityKeys));
-  const privateSeed = readPrivateCampaignSeedFields(record);
+  const privateSeed = readPrivateCampaignSeedFields(record, { clientId: params.clientId });
   return privateSeed.recipients.some((recipient) =>
     buildPrivacyIdentityKeys([recipient]).some((candidate) => candidateSet.has(candidate))
   );

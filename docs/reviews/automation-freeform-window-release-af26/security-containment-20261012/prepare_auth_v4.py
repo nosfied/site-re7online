@@ -1,11 +1,18 @@
 """Preparation-only new V4 generation, same functional bytes, three new auth values. No installation/control."""
 from pathlib import Path
-import copy,datetime,fcntl,hashlib,json,os,shutil,subprocess,sys
+import argparse,copy,datetime,fcntl,hashlib,json,os,re,shutil,subprocess,sys
 from saved_reference_capture import capture_pair
 os.umask(0o077)
 BASE=Path('/opt/re7online/backups/converta-persistent/preparations')
 O=BASE/'incident-6683-v4-dynamic-compatible-20261012T184200Z'
-P=BASE/'incident-6683-v4-security-auth-v2-20261012T223100Z';W=P/'window'
+args=argparse.ArgumentParser()
+args.add_argument('--generation',required=True)
+args.add_argument('--backup-source',required=True)
+args=args.parse_args()
+assert re.fullmatch(r'incident-6683-v4-security-auth-v3-\d{8}T\d{6}Z',args.generation),'new_auth_generation_required'
+P=BASE/args.generation;W=P/'window'
+BACKUP=Path(args.backup_source).resolve()
+assert BACKUP.parent==BASE and BACKUP.name.startswith('incident-6683-v4-'),'backup_source_denied'
 INPUT=Path('/dev/shm/re7-security-auth-values-20261012.private.json')
 h=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def put(p,v):
@@ -31,12 +38,20 @@ P.mkdir(mode=0o700);W.mkdir(mode=0o700)
 put(W/'execution-gates.private.json',{k:False for k in ['ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved']});(P/'execution-authorized').write_text('false\n')
 wm=json.loads((O/'window/sequencer-manifest.json').read_text());skip={'initial.private.json','privileged-policy.private.json','privileged-policy.sha256','mode-manifest-v4.json','preserved-frontend-config.private.json','mode-names.private.json','execution-gates.private.json','sequencer-manifest.json'}
 skip.update({'saved-dump.pm2.private.json','saved-dump.pm2.bak.private.json'})
+skip.update({'backup-manifest.private.json','restore-result.json'})
 for name,digest in wm['filesSha256'].items():
  f=O/'window'/name;assert h(f)==digest,'source_manifest_drift'
  if name not in skip:(W/name).write_bytes(f.read_bytes().replace(str(O).encode(),str(P).encode()))
 # New generations must preserve real references; never repair an existing denied preparation.
 capture_pair([Path('/home/deploy/.pm2/dump.pm2'),Path('/home/deploy/.pm2/dump.pm2.bak')],
              [W/'saved-dump.pm2.private.json',W/'saved-dump.pm2.bak.private.json'])
+for n in ['backup-manifest.private.json','restore-result.json']:
+ raw=(BACKUP/'window'/n).read_bytes()
+ assert h(BACKUP/'window'/n)==json.loads((BACKUP/'window/sequencer-manifest.json').read_text())['filesSha256'][n],'backup_source_manifest_drift'
+ (W/n).write_bytes(raw)
+backup=json.loads((W/'backup-manifest.private.json').read_text());restore=json.loads((W/'restore-result.json').read_text())
+assert restore['result']=='PASS' and restore['temporaryDatabaseRemoved'] and restore['applicationStarted']is False and restore['providerCalls']==0
+assert restore['dumpSha256']==backup['files']['database.dump']['sha256'] and not restore['migrationChecksumMismatches']
 # The existing closure certificate is durable historical evidence, not an exit proof or nonce.
 assert not (W/'closure-verified.private.json').exists();shutil.copyfile(O/'window/closure-verified.private.json',W/'closure-verified.private.json')
 from baseline_contract import capture_operational,capture_functional,validate_preparation
@@ -52,13 +67,18 @@ for mode in ['switch','return','return-partial']:
  for n in names:
   if n not in ['baseline.private.json','candidate.config.private.json','return.config.private.json','candidate.ecosystem.config.cjs','return.ecosystem.config.cjs']:(d/n).write_bytes((O/mode/n).read_bytes().replace(str(O).encode(),str(P).encode()))
  put(d/'baseline.private.json',functional);put(d/'candidate.config.private.json',target if mode=='switch'else returned);put(d/'return.config.private.json',source if mode=='switch'else target);generate_mode(d)
+ (d/'backup-manifest.json').write_bytes((W/'backup-manifest.private.json').read_bytes())
+ proof=json.loads((d/'proof-bindings.private.json').read_text())
+ proof.update(backupManifestSha256=h(W/'backup-manifest.private.json'),restoreResultSha256=h(W/'restore-result.json'),dumpSha256=restore['dumpSha256'],dumpBytes=restore['dumpBytes'],catalogObjects=backup['catalogObjects'])
+ put_path=d/'proof-bindings.private.json';put_path.write_text(json.dumps(proof,sort_keys=True,separators=(',',':'))+'\n')
  (d/'scripts.sha256').write_text(''.join(h(d/n)+'  '+n+'\n'for n in names));modefiles[mode]=names
 put(W/'mode-names.private.json',modefiles);put(W/'mode-manifest-v4.json',{'modeFiles':{m:{n:h(P/m/n)for n in ns}for m,ns in modefiles.items()},'modeManifests':{m:h(P/m/'scripts.sha256')for m in modefiles}})
 put(W/'sequencer-manifest.json',{'preparation':str(P),'status':'AUTH_ROTATION_PREPARED_FOR_REVIEW_ONLY_NOT_INSTALLED','filesSha256':{f.name:h(f)for f in W.iterdir()if f.is_file()and f.name not in ['execution-gates.private.json','mode-names.private.json']}})
 for n in ['compatible-artifact.private.json','verify-package.py']:(P/n).write_bytes((O/n).read_bytes().replace(str(O).encode(),str(P).encode()))
 validate_preparation(P);subprocess.run(['python3',str(W/'prepare_policy.py'),str(P)],stdout=subprocess.DEVNULL,check=True,timeout=30)
 sha=(W/'privileged-policy.sha256').read_text().strip();m=json.loads((W/'sequencer-manifest.json').read_text());m['filesSha256'].update({n:h(W/n)for n in ['privileged-policy.private.json','privileged-policy.sha256']});(W/'sequencer-manifest.json').write_text(json.dumps(m,sort_keys=True)+'\n')
-install=(O/'install-api-window-policy.sh').read_text().replace(str(O),str(P)).replace('a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e',sha).replace('11283078071d5658bd0a5b91075b1465312be893def1a078457a5b39420fd53c','a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e').replace('incident-6683-window-policy.pre-compatible-184200.json','incident-6683-window-policy.pre-security-auth-v2-20261012-223100.json');(P/'install-api-window-policy.sh').write_text(install)
+archive='incident-6683-window-policy.pre-'+args.generation.removeprefix('incident-6683-v4-')+'.json'
+install=(O/'install-api-window-policy.sh').read_text().replace(str(O),str(P)).replace('a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e',sha).replace('11283078071d5658bd0a5b91075b1465312be893def1a078457a5b39420fd53c','a2ffdb7783100ef34248a38bc732558c2bbe60a4f0b177c4e1ade7fede09433e').replace('incident-6683-window-policy.pre-compatible-184200.json',archive);(P/'install-api-window-policy.sh').write_text(install)
 for root,dirs,files in os.walk(P):
  for n in files:(Path(root)/n).chmod(0o600)
 free=os.statvfs(BASE).f_bavail*os.statvfs(BASE).f_frsize;pgfree=int(subprocess.check_output(['docker','exec','--user','70','wa-agent-postgres','df','-B1','/var/lib/postgresql/data'],text=True,timeout=10).splitlines()[-1].split()[3]);assert min(free,pgfree)>2131755008+4194304,'auth_staging_capacity_denied'

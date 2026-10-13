@@ -1,0 +1,19 @@
+{
+  "result": "LOCAL_CANONICAL_SEED_INTEGRATION_PASS",
+  "node": "20.20.0",
+  "canonicalIntegrationTest": 1,
+  "existingAffectedSeedTests": 3,
+  "savedCaptureTests": 3,
+  "typecheck": "PASS --noEmit",
+  "originalEvents": 126,
+  "originalCipherFields": 147,
+  "originalPayloadHashesPreserved": true,
+  "newCiphertextsOnlyInMemory": true,
+  "providerCalls": 0,
+  "databaseWrites": 0,
+  "deployed": false,
+  "scope": "reader/writer canonical modules and scoped call sites; not whole cipher rotation or deployment",
+  "privateDriverSha256": "6aeab7288abbaad42b28d5fd8be160b2da99f558c5880932f98ad074285bb7ab",
+  "privateCaptureStdoutSha256": "060756cd2902743fc6ca3d1576137a5e77087134b0a2ea500da511c22adcfd4b",
+  "privateCaptureReceiptSha256": "723867b46f2b726b4d7e1ce2c48d64a708e449be597813433bf5ed836651f845"
+}

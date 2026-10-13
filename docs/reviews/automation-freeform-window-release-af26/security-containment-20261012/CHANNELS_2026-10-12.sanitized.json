@@ -1,0 +1,432 @@
+{
+  "observedUtc": "2026-10-12T23:42:01.245Z",
+  "tenants": [
+    {
+      "tenantAlias": "T01",
+      "persistedTelegramFlags": {
+        "telegram": false,
+        "telegramInbound": false,
+        "telegramOutbound": false
+      },
+      "accounts": [],
+      "activity30Days": [],
+      "effectiveTelegram": {
+        "telegram": false,
+        "telegramInbound": false,
+        "telegramOutbound": false
+      },
+      "clientStatus": "ACTIVE"
+    },
+    {
+      "tenantAlias": "T02",
+      "persistedTelegramFlags": {},
+      "accounts": [
+        {
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "enabled": true,
+          "runtimeEnabled": true,
+          "inboundPersistenceEnabled": true,
+          "outboundEnabled": true,
+          "status": "connected"
+        }
+      ],
+      "activity30Days": [
+        {
+          "table": "InboundMessage",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 6,
+          "latest": "2026-10-12T11:37:35.135Z"
+        },
+        {
+          "table": "InboundMessage",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 52,
+          "latest": "2026-10-12T11:37:58.771Z"
+        },
+        {
+          "table": "OutboundMessage",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 113,
+          "latest": "2026-10-10T15:40:35.501Z"
+        },
+        {
+          "table": "OutboundMessage",
+          "channel": "whatsapp",
+          "provider": "meta_cloud",
+          "count": 1,
+          "latest": "2026-09-15T19:38:33.007Z"
+        },
+        {
+          "table": "OutboundMessage",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 85,
+          "latest": "2026-10-12T11:37:55.503Z"
+        },
+        {
+          "table": "Conversation",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 22,
+          "latest": "2026-10-07T16:33:00.865Z"
+        },
+        {
+          "table": "Conversation",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 11,
+          "latest": "2026-10-12T11:37:34.481Z"
+        }
+      ],
+      "effectiveTelegram": {
+        "telegram": false,
+        "telegramInbound": false,
+        "telegramOutbound": false
+      },
+      "clientStatus": "ACTIVE"
+    },
+    {
+      "tenantAlias": "T03",
+      "persistedTelegramFlags": {
+        "telegram": true,
+        "telegramInbound": true
+      },
+      "accounts": [
+        {
+          "channel": "telegram",
+          "provider": "telegram",
+          "enabled": true,
+          "runtimeEnabled": false,
+          "inboundPersistenceEnabled": false,
+          "outboundEnabled": false,
+          "status": "connected"
+        },
+        {
+          "channel": "telegram",
+          "provider": "telegram",
+          "enabled": true,
+          "runtimeEnabled": true,
+          "inboundPersistenceEnabled": true,
+          "outboundEnabled": false,
+          "status": "connected"
+        }
+      ],
+      "activity30Days": [],
+      "effectiveTelegram": {
+        "telegram": true,
+        "telegramInbound": true,
+        "telegramOutbound": false
+      },
+      "clientStatus": "ACTIVE"
+    },
+    {
+      "tenantAlias": "T04",
+      "persistedTelegramFlags": {},
+      "accounts": [],
+      "activity30Days": [
+        {
+          "table": "InboundMessage",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 163,
+          "latest": "2026-10-12T19:35:42.134Z"
+        },
+        {
+          "table": "OutboundMessage",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 194,
+          "latest": "2026-10-12T19:34:51.839Z"
+        },
+        {
+          "table": "Conversation",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 43,
+          "latest": "2026-10-12T19:32:23.112Z"
+        }
+      ],
+      "effectiveTelegram": {
+        "telegram": false,
+        "telegramInbound": false,
+        "telegramOutbound": false
+      },
+      "clientStatus": "ACTIVE"
+    },
+    {
+      "tenantAlias": "T05",
+      "persistedTelegramFlags": {},
+      "accounts": [
+        {
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "enabled": true,
+          "runtimeEnabled": true,
+          "inboundPersistenceEnabled": true,
+          "outboundEnabled": true,
+          "status": "connected"
+        }
+      ],
+      "activity30Days": [
+        {
+          "table": "InboundMessage",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 2025,
+          "latest": "2026-10-10T02:12:16.322Z"
+        },
+        {
+          "table": "OutboundMessage",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 2307,
+          "latest": "2026-10-10T02:12:20.253Z"
+        },
+        {
+          "table": "Conversation",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 65,
+          "latest": "2026-10-10T02:09:58.386Z"
+        }
+      ],
+      "effectiveTelegram": {
+        "telegram": false,
+        "telegramInbound": false,
+        "telegramOutbound": false
+      },
+      "clientStatus": "ACTIVE"
+    },
+    {
+      "tenantAlias": "T06",
+      "persistedTelegramFlags": {
+        "telegram": false,
+        "telegramInbound": false,
+        "telegramOutbound": false
+      },
+      "accounts": [
+        {
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "enabled": true,
+          "runtimeEnabled": true,
+          "inboundPersistenceEnabled": true,
+          "outboundEnabled": true,
+          "status": "connected"
+        }
+      ],
+      "activity30Days": [
+        {
+          "table": "InboundMessage",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 5,
+          "latest": "2026-10-09T22:03:36.235Z"
+        },
+        {
+          "table": "InboundMessage",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 1013,
+          "latest": "2026-10-12T18:04:18.815Z"
+        },
+        {
+          "table": "OutboundMessage",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 1026,
+          "latest": "2026-10-12T18:04:19.447Z"
+        },
+        {
+          "table": "Conversation",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 3,
+          "latest": "2026-10-09T20:58:12.617Z"
+        },
+        {
+          "table": "Conversation",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 53,
+          "latest": "2026-10-12T18:02:15.645Z"
+        }
+      ],
+      "effectiveTelegram": {
+        "telegram": false,
+        "telegramInbound": false,
+        "telegramOutbound": false
+      },
+      "clientStatus": "ACTIVE"
+    },
+    {
+      "tenantAlias": "T07",
+      "persistedTelegramFlags": {},
+      "accounts": [
+        {
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "enabled": true,
+          "runtimeEnabled": true,
+          "inboundPersistenceEnabled": true,
+          "outboundEnabled": false,
+          "status": "disconnected"
+        }
+      ],
+      "activity30Days": [],
+      "effectiveTelegram": {
+        "telegram": false,
+        "telegramInbound": false,
+        "telegramOutbound": false
+      },
+      "clientStatus": "ACTIVE"
+    },
+    {
+      "tenantAlias": "T08",
+      "persistedTelegramFlags": {},
+      "accounts": [
+        {
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "enabled": true,
+          "runtimeEnabled": true,
+          "inboundPersistenceEnabled": true,
+          "outboundEnabled": true,
+          "status": "connected"
+        }
+      ],
+      "activity30Days": [
+        {
+          "table": "InboundMessage",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 149,
+          "latest": "2026-09-30T16:48:34.624Z"
+        },
+        {
+          "table": "OutboundMessage",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 172,
+          "latest": "2026-09-30T16:48:35.656Z"
+        },
+        {
+          "table": "Conversation",
+          "channel": "whatsapp",
+          "provider": "web_session",
+          "count": 9,
+          "latest": "2026-09-30T00:33:52.895Z"
+        }
+      ],
+      "effectiveTelegram": {
+        "telegram": false,
+        "telegramInbound": false,
+        "telegramOutbound": false
+      },
+      "clientStatus": "ACTIVE"
+    },
+    {
+      "tenantAlias": "T09",
+      "persistedTelegramFlags": {},
+      "accounts": [
+        {
+          "channel": "messenger",
+          "provider": "meta",
+          "enabled": true,
+          "runtimeEnabled": true,
+          "inboundPersistenceEnabled": true,
+          "outboundEnabled": true,
+          "status": "connected"
+        },
+        {
+          "channel": "instagram",
+          "provider": "meta",
+          "enabled": true,
+          "runtimeEnabled": true,
+          "inboundPersistenceEnabled": true,
+          "outboundEnabled": true,
+          "status": "connected"
+        }
+      ],
+      "activity30Days": [
+        {
+          "table": "InboundMessage",
+          "channel": "instagram",
+          "provider": "meta",
+          "count": 1,
+          "latest": "2026-09-24T22:16:25.699Z"
+        },
+        {
+          "table": "InboundMessage",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 3,
+          "latest": "2026-10-09T23:40:36.508Z"
+        },
+        {
+          "table": "Conversation",
+          "channel": "instagram",
+          "provider": "meta",
+          "count": 1,
+          "latest": "2026-09-24T22:16:27.579Z"
+        },
+        {
+          "table": "Conversation",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 2,
+          "latest": "2026-10-03T14:27:30.622Z"
+        }
+      ],
+      "effectiveTelegram": {
+        "telegram": false,
+        "telegramInbound": false,
+        "telegramOutbound": false
+      },
+      "clientStatus": "ACTIVE"
+    },
+    {
+      "tenantAlias": "T10",
+      "persistedTelegramFlags": {},
+      "accounts": [],
+      "activity30Days": [
+        {
+          "table": "InboundMessage",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 13,
+          "latest": "2026-10-12T13:31:16.313Z"
+        },
+        {
+          "table": "OutboundMessage",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 13,
+          "latest": "2026-10-12T13:31:18.118Z"
+        },
+        {
+          "table": "Conversation",
+          "channel": "whatsapp",
+          "provider": "meta",
+          "count": 4,
+          "latest": "2026-10-08T12:34:52.883Z"
+        }
+      ],
+      "effectiveTelegram": {
+        "telegram": false,
+        "telegramInbound": false,
+        "telegramOutbound": false
+      },
+      "clientStatus": "ACTIVE"
+    }
+  ],
+  "ownerDeclaredTelegramFutureUnused": true,
+  "windowDays": 30,
+  "limits": "Stored activity only; not evidence of human use; no provider queried; no activation or recredentialing",
+  "effectiveFeaturesObservedUtc": "2026-10-12T23:50:09.587Z",
+  "effectiveFeaturesCompiledSha256": "d6783e5cfada966cce34358b8e0fecef353677c12dcdab1b5e4977a694374e23"
+}

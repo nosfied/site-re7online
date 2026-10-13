@@ -1,3 +1,5 @@
+HISTÓRICO/SUPERSEDED: geração223100 NEGADA por saved_reference_drift. NÃO INSTALAR/EXECUTAR seus blocos A/B. Usar somente AUTH_V3_PREPARATION_2026-10-12.md e AUTH_V3_COMMANDS_FOR_REVIEW.txt após revisão. Hashes/evidências anteriores preservados.
+
 REVIEW ONLY. NO CURRENT INSTALL/CHMOD/ROTATION/REVOKE/RESTART AUTHORIZED.
 Campaign out15 CLOSED; guard38 CLOSED; no open/resume/send or old credential rollback.
 
