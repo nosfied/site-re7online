@@ -1,0 +1,17 @@
+# SECULT — divergência percebida na Inbox, final1215
+
+**READ ONLY AUDIT / CURRENT OPERATION IN_PROGRESS / UI CAUSE NOT YET CONFIRMED.** Tenant secult-pe; não alterar atendimento, responsável, CRM, janela ou históricos. A janela bancária17h15 e seus gatesfalse permanecem separados.
+
+Captura consistente SQL REPEATABLE READ READ ONLY13/10,16:25:15UTC /13:25:15Fortaleza. Um Contact ativo, uma Conversation e um runtime para a identidade completa correlacionada do contato indicado; não houve deduplicação por sufixo. Runtime HUMAN/IN_PROGRESS/handoffACTIVE, assignedUserId e assignedTo coerentes, chatbotActivefalse, closedAtnull. Conversation não excluída/anonimizada. Nenhum segundo atendimento encontrado no escopo completo de identidade do tenant.
+
+Segunda leitura delimitada16:27:48UTC /13:27:48Fortaleza confirmou uma atribuição13/10,13:10:59.666UTC /10:10:59.666Fortaleza, destinatário SUPERVISOR ativo. Evento conversation.transferred às13:10:59.716UTC registra IN_PROGRESS e o mesmo responsável. Lead possui statusNEW e não foi atualizado por esta auditoria. Conteúdo das mensagens, senhas, tokens e ambiente não foram consultados/publicados. Somente metadados operacionais, rótulos e referências necessários.
+
+O compilado routes.js efetivo SHA41f7f15814d7f45429d489e81588a76f2383a3acd01c54813335418a11bec715 corresponde aos manifests da API dinâmica/retorno compatível já publicada. Contrato lista: loadInboxConversationStatesFromDb lê runtime por clientId+identidades completas; serializeConversationOperationalFields promove WAITING atribuído para IN_PROGRESS. FiltroWAITING compara status operacional. Não executar entrypoint, provider ou código de recuperação.
+
+Frontend: getConversationModeLabel usa HUMAN ou handoffactive/pending para o rótulo “Atendimento humano”; getConversationStatusLabelForItem separa o status operacional. Para a linha observada, resultado esperado é “Atendimento humano • Em atendimento”. O nome do modo sozinho não prova atendimento assumido. O LeadNEW é situação CRM separada; configuração DB crmBusinessStatusesnull, fallbackJSON não auditado e não usado para inferir o rótulo visual.
+
+Há mecanismo explícito de preservação de seleção: mergeConversationsPreservingStableOrder mantém preserveMissingIdentities mesmo quando a API filtrada deixa de devolver a conversa. Uma conversa selecionada pode permanecer visível fora do filtro; isso é hipótese compatível com o relato, não prova da causa histórica. A atualização do detalhe aplica payload operacional próprio. Não houve captura da resposta HTTP do navegador nem screenshot desta ocorrência.
+
+Foi solicitado ao owner recarregar somente em leitura e localizar “Aguardando atendimento” (cabeçalho, lista/filtro ou CRM). Essa informação/resposta efetiva será necessária se a divergência persistir. Não declarar bug de persistência, cache ou CRM comprovado; não reparar o banco por aparência. Menor próximo passo: correlacionar o elemento e seu payload/status sem ações mutáveis.
+
+Limites operacionais preservados: primeira consulta chegou ao SQL mas o leitor falhou no decode do JSON multiline; captura posterior corrigiu apenas a leitura do output, sem alterar dados. Uma tentativa posterior recusou DNS e foi preservada. Leitura inicial de rótulos CRM não encaminhou stdin e gerou zero bytes, nunca considerada PASS; leitura completa subsequente com docker exec-i retornou statusesnull. Capturas privadas600/diretório700, consultas com statement/lock timeout; nenhum envio, claim, transferência, alteração de status/configuração ou restart.
