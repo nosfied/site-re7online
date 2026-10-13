@@ -1,0 +1,58 @@
+{
+  "result": "PREPARATION_DRY_RUN_POST_PASS_NO_REMOVAL",
+  "generation": "retention-second-nine-v2-20261013T214500Z",
+  "inputSha256": "c41170f62b01912e9a73c05746d9ee04940fceb848147112304319bacbaf2d31",
+  "literalRoots": [
+    "/opt/re7online/releases/03f930e5453efd313a91a16de3e22057a0573d9c",
+    "/opt/re7online/releases/a1cc380eddcd1467b8e0d3a8e405f82689a25b3d",
+    "/opt/re7online/releases/a3d16d4bdc4b143deeb6b66d4e963b0b4b3f216b",
+    "/opt/re7online/releases/campaign-eligibility-recovery-reviewed-20261008",
+    "/opt/re7online/releases/e8ebd776ba7c92cc9013fefb29035eae3ab1af4e",
+    "/opt/re7online/releases/flow-e8ebd776.tar.gz",
+    "/opt/re7online/releases/frontend-a1cc380e.tar.gz",
+    "/opt/re7online/releases/worker-bf5f1d76-f06d49cb-042e386a",
+    "/opt/re7online/releases/worker-bf5f1d76-f06d49cb-91230f88"
+  ],
+  "entries": 140758,
+  "allocatedPotentialBytes": 4456800256,
+  "removedCount": 0,
+  "samples": [
+    {
+      "atUtc": "2026-10-13T21:47:20.819626+00:00",
+      "owners": 0,
+      "incomplete": 0
+    },
+    {
+      "atUtc": "2026-10-13T21:47:21.166728+00:00",
+      "owners": 0,
+      "incomplete": 0
+    }
+  ],
+  "minimumAvailableBytes": 6516224000,
+  "requiredPostFreeBytes": 6468665344,
+  "guardClosedGeneration": 38,
+  "out15": "CLOSED",
+  "newAuthNewDbPreserved": true,
+  "postReceiptSha256": "954c6a7b05674c7eb2bff6696f8d1dce23ad613c68019af455eb1272ff4f303f",
+  "dryReceiptSha256": "2b6a256e76faa289a98b77032cfbb0a42f28abd0aaa538b750cbf46d61608fcc",
+  "withdrawalAuthorized": false,
+  "automaticRetry": false,
+  "security": "OPEN_EXTERNAL_ENCRYPTION",
+  "originalPreparationDeniedPreserved": true,
+  "rootDaemonPreexistedSinceUtc": "2026-09-15T23:40:19.200000+00:00",
+  "custodyEvidenceManifestSha256": "cb24c40ca66d3458318e50ecf3ceca0c6db3e95d09e3c9752f6521c98f9cf3e3",
+  "custodyEvidenceFiles": 44,
+  "productionDryDriverSha256": "856cc229334c7c49fda217d5935eb7fb9b193d8ebace0ebb0b38adfb361757d4",
+  "finalDriverSha256": "10f25ecc43a0edd749d2091fd076f17176defb072539d02740f38db1240156c4",
+  "finalDriverPrivilegedExecution": false,
+  "tests": {
+    "priorDirectedTests": 24,
+    "finalObservationDeltaTests": 4,
+    "functionalBuildSuitesRepeated": false
+  },
+  "finalDeltaCustodyManifestSha256": "e399e7a5294c1602ee9a15506a08800a6d26ee076bcb14f7e3fc3ab14b01b498",
+  "finalDeltaCustodyFiles": 9,
+  "finalStagedBytesVerified": true,
+  "removalIntentAbsent": true,
+  "identicalCanonicalFunctions": 15
+}

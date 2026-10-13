@@ -6,7 +6,10 @@
     "unfenceResultUtc": "2026-10-13T20:47:46.618499+00:00",
     "completeUtc": "2026-10-13T20:47:50.375429+00:00",
     "conservativeInterruptionSeconds": 37.198,
-    "containmentToCompleteSeconds": 40.955
+    "containmentToCompleteSeconds": 40.955,
+    "authorizationChangeMeaning": "Waiting restriction removed; actual containment began after originally agreed 17:15 Fortaleza",
+    "preinstallationCheckUtc": "2026-10-13T20:42:21+00:00",
+    "installationFinalInspectUtc": "2026-10-13T20:44:07.937767+00:00"
   },
   "oneSequence": true,
   "automaticRetry": false,

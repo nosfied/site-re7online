@@ -1,0 +1,22 @@
+--- withdraw.py
++++ withdraw-final.py
+@@ -175,0 +176,7 @@
++class ObservationDenied(AssertionError):
++ def __init__(self,stage,samples):
++  super().__init__(stage);self.stage=stage;self.observations=samples
++
++def require_observation(stage,samples):
++ if any(q['owners']or q['incomplete']for q in samples):raise ObservationDenied(stage,samples)
++
+@@ -180 +187 @@
+- samples=[observe(plan),observe(plan)];assert all(not q['owners']and not q['incomplete']for q in samples),'ownership_or_incomplete'
++ samples=[observe(plan),observe(plan)];require_observation('ownership_or_incomplete',samples)
+@@ -187 +194 @@
+-   validate_state(plan);sample=observe(plan);assert not sample['owners']and not sample['incomplete'],'root_owner_or_incomplete'
++   validate_state(plan);sample=observe(plan);require_observation('root_owner_or_incomplete',[sample])
+@@ -210 +217 @@
+- sample=observe(plan)
++ sample=observe(plan);require_observation('post_owner_or_incomplete',[sample])
+@@ -226 +233 @@
+-   exclusive_json(folder/('denial-'+str(time.time_ns())+'.private.json'),{'at':time.time(),'errorClass':type(e).__name__,'reason':str(e)if isinstance(e,AssertionError)else None,'errno':getattr(e,'errno',None),'noAutomaticRetry':True})
++   exclusive_json(folder/('denial-'+str(time.time_ns())+'.private.json'),{'at':time.time(),'errorClass':type(e).__name__,'reason':str(e)if isinstance(e,AssertionError)else None,'errno':getattr(e,'errno',None),'stage':getattr(e,'stage',None),'observations':getattr(e,'observations',None),'noAutomaticRetry':True})

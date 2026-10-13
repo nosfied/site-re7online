@@ -1,0 +1,92 @@
+FOR REVIEW ONLY — NO WITHDRAWAL AUTHORIZATION RECORDED.
+Auth/database completed. Do not reexecute bank140000 or the consumed first withdrawal.
+Literal roots: SECOND_WITHDRAWAL_PREPARATION.sanitized.json (seven directories + two archives).
+Never follow the seven .data links. No recursive shell removal, glob deletion, prune, WAL/log cleanup.
+
+A0 — PRIVATE OFF-HOST CUSTODY, before any future authorized B:
+# On owner's local machine. No application or productive restore starts.
+set -euo pipefail
+umask 077
+C=/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/retention-second-lot-20261013T181800Z
+test "$(sha256sum "$C/full-releases.files.sha256" | cut -d' ' -f1)" = 4fc6e2fa851d73f20843d683a67e46459edda7bdf349f0b0c875728c6ade2c23
+test "$(sha256sum "$C/files.sha256" | cut -d' ' -f1)" = c6c8bf350351a8357a55a341488ca32689186c9bfe2374235096aa50bb3c0ed8
+test ! -e "$C/review-validation-next.private.log"
+(cd "$C" && sha256sum -c files.sha256 && sha256sum -c full-releases.files.sha256) > "$C/review-validation-next.private.log"
+gzip -t "$C/historical-releases-fast.tar.gz"
+# Preserve indexed safe extraction proof, metadata/symlinks and125939 content hashes.
+# One physical off-host replica; loss of custody denies withdrawal.
+
+A1 — VPS BYTES + DURABLE PREPARATORY RECEIPT, no new dry-run invocation:
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/retention-second-nine-v2-20261013T214500Z
+test "$(sha256sum "$P/withdraw-final.py" | cut -d' ' -f1)" = 10f25ecc43a0edd749d2091fd076f17176defb072539d02740f38db1240156c4
+test "$(sha256sum "$P/input.private.json" | cut -d' ' -f1)" = c41170f62b01912e9a73c05746d9ee04940fceb848147112304319bacbaf2d31
+python3 -B -I -S - "$P/export-private/dry-run.private.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+assert v['result']=='DRY_RUN_PASS' and v['removedCount']==0
+assert len(v['observations'])==2 and all(not x['owners'] and not x['incomplete'] for x in v['observations'])
+assert v['allocatedPotential']==4456800256
+print('DURABLE_PREPARATORY_DRY_RUN_PASS_NO_REMOVAL')
+PY
+# The driver revalidates all memberships/hashes, private references, process identities, boot,
+# guard38/no markers, current DB receipt/verifier/attributes/policy, capacity and fresh root samples
+# before creating its intent. Preparatory owner samples are not reused as certificates.
+# Drift denies. Do not regenerate/change this input to force PASS.
+
+B — ONLY AFTER EXPLICIT OWNER AUTHORIZATION OF THIS PACKAGE:
+# Existing owner's sudo session. No new delegation.
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/retention-second-nine-v2-20261013T214500Z
+test "$(sha256sum "$P/withdraw-final.py" | cut -d' ' -f1)" = 10f25ecc43a0edd749d2091fd076f17176defb072539d02740f38db1240156c4
+test "$(sha256sum "$P/input.private.json" | cut -d' ' -f1)" = c41170f62b01912e9a73c05746d9ee04940fceb848147112304319bacbaf2d31
+test ! -e "$P/withdrawal.intent.private.json"
+test ! -L "$P/withdrawal.intent.private.json"
+test ! -e "$P/withdrawal.receipt.private.json"
+test ! -e "$P/apply-result.private.json"
+test ! -e "$P/apply.stdout.private"
+test ! -e "$P/apply.stderr.private"
+sudo -v
+set +e
+timeout 900 sudo -n /usr/bin/nice -n 15 /usr/bin/python3 -B -I -S "$P/withdraw-final.py" --plan "$P/input.private.json" --plan-sha256 c41170f62b01912e9a73c05746d9ee04940fceb848147112304319bacbaf2d31 --owner-authorized-apply > "$P/apply.stdout.private" 2> "$P/apply.stderr.private"
+WITHDRAWAL_EXIT=$?
+printf '%s\n' "$WITHDRAWAL_EXIT" > "$P/apply.exit.private.txt"
+printf 'WITHDRAWAL_EXIT=%s\n' "$WITHDRAWAL_EXIT"
+set -e
+# Preserve exit/stdout/stderr/intent/journal/partial/receipt; B MUST NOT be repeated.
+# Even WITHDRAWAL_EXIT=0 requires C and independent receipt inspection.
+
+C — REQUIRED AFTER B, including DENY, partial or timeout; read-only:
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/retention-second-nine-v2-20261013T214500Z
+test ! -e "$P/after-apply.stdout.private"
+test ! -e "$P/after-apply.stderr.private"
+set +e
+timeout 120 sudo -n /usr/bin/python3 -B -I -S "$P/withdraw-final.py" --plan "$P/input.private.json" --plan-sha256 c41170f62b01912e9a73c05746d9ee04940fceb848147112304319bacbaf2d31 --post-read > "$P/after-apply.stdout.private" 2> "$P/after-apply.stderr.private"
+POST_EXIT=$?
+printf 'POST_EXIT=%s\n' "$POST_EXIT"
+set -e
+# Reader verifies protected refs/processes/guard/policy/DB, indexed remaining paths,
+# FDs/mappings and min(deploy/PostgreSQL), floor6468665344B.
+# Require exact input-bound WITHDRAWAL_COMPLETE receipt, all nine roots absent,
+# zero remaining members/owners/incomplete and protected refs/main copy intact.
+# Journal fsync every256 items; after interruption inspect FS, not journal alone.
+# Export root-owned600 intent/receipt/journal/partial/denial/post-* files privately via owner sudo;
+# never print raw files. Post filenames include timestamp. Verify off-host transfer hashes.
+# Recheck WAL/write errors, PostgreSQL/health, sessions/screens in reading, saved/fallback600,
+# guard38/out15CLOSED/six results/five not-submitted/CRM/usage/receipt and NEWauth+NEWDB.
+# WAL: BEGIN READ ONLY; SET LOCAL statement_timeout='8s'; SET LOCAL lock_timeout='1s';
+# SELECT sum(size) FROM pg_ls_waldir(); SELECT count(*) FROM pg_replication_slots; ROLLBACK;
+# Health: curl --fail --max-time 5 --silent --show-error http://127.0.0.1:3001/health > unique.private.json
+# Reconfirm backup/RPO/custody before any later security/operational action.
+# No automatic replay, rebinding, process control, rotation, guard opening or resumption.
+
+ARCHIVED RECOVERY, separate authorization required:
+# Use owner-private custody/index and proven recipe in SECOND_LOT_2026-10-13.md.
+# Extract regular members into a fresh isolated directory and validate every content hash,
+# numeric owner/mode/index. Symlinks last; never traverse them or their .data destinations.
+# Never start archived apps or restore revoked secrets. Recompose with current NEWauth+NEWDB,
+# current dependencies and reviewed policies/controls before any separately authorized use.

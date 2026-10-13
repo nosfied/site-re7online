@@ -67,3 +67,7 @@ Entrega posterior exigida: driver/input e hashes novos, comandos restritos, dry-
 ## Fase banco efetivamente concluída
 
 [Resultado verificado/owner confirmado](../DATABASE_EXECUTION_2026-10-13.md): política9c7b44, API410272/start2170884687, worker410428/start2170885045, frontend188897 preservado, NEWDB+NEWauth e dumps600 efetivos. Esta auditoria anterior não é observação fresca pós-banco nem driver de retirada pronto. Allowlist/custódia mantidas e nenhuma exclusão; geração/input novos devem selar esses controles atuais e a conexão administrativa canônica ativada, com revalidação atual antes do dry-run.
+
+## Continuidade pós-banco — preparação v2 concluída, sem retirada
+
+[Driver/input, dry-run e limites](SECOND_WITHDRAWAL_PREPARATION_2026-10-13.md). Inputc41170f6/driver856cc229, duas amostras root novas owners0/incomplete0;140.758 membros preservados/zero remoções. Nove raízes4.456.800.256B potenciais, mínimo6.516.224.000B datado. Geração211000 recusada por contexto PM2 root preservada; v2 captura deploy e valida kernel/configuração. [Comandos A0/A1/B/C para decisão](SECOND_WITHDRAWAL_COMMANDS_FOR_REVIEW.txt); **B não autorizado**. Preparações/logs/snapshot root fora da allowlist; auditoria secundária e retenção classificadas no novo relatório. Auth/banco concluídos, NEWauth+NEWDB/guarda38/out15CLOSED preservados; segurança externa/cifragem OPEN.
