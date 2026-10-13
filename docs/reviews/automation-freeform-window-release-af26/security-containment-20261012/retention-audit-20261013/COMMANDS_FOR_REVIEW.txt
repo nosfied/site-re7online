@@ -1,0 +1,69 @@
+# Comandos para revisão — NOT AUTHORIZED FOR WITHDRAWAL
+# Preparação final: /dev/shm/re7-retention-withdrawal-final-20261013T124500Z
+# Não executar B nesta tarefa. Sem instalar políticas/helpers ou alterar sudoers.
+
+# A0 — custódia off-host na máquina do owner (somente leitura)
+set -euo pipefail
+umask 077
+O=/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/retention-custody-20261013T120000Z
+test "$(sha256sum "$O/historical-blob.stdout.private" | cut -d' ' -f1)" = 3f4affa2d3135756687d95d41912b221163f82585937db7a561518ed95721fe0
+test "$(sha256sum "$O/npm-cache-archive.stdout.private" | cut -d' ' -f1)" = 8bf3419ba2ca8dba8753ef5a58940d5bb3b3d32f59a950e42220795fa5be2940
+F=/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/retention-final-review-20261013T124500Z
+test "$(sha256sum "$F/final.files.sha256" | cut -d' ' -f1)" = 4e3a272329aa72f7b4a9f2924d8c549553ee0815b29929a4736db53c8c463d32
+(cd "$F" && sha256sum -c final.files.sha256)
+# Não enviar arquivos privados ao chat.
+
+# A1 — futura sessão deploy/sudo: dry-run fresco, sem remoção
+set -euo pipefail
+umask 077
+P=/dev/shm/re7-retention-withdrawal-final-20261013T124500Z
+test "$(sha256sum "$P/withdraw-reviewed.py" | cut -d' ' -f1)" = 0f85b527c819a24663913855a402319e9eca647fcd1b638bdcb0213abda27c01
+test "$(sha256sum "$P/post-review.py" | cut -d' ' -f1)" = f1cab41eb4f08b7be934c2c7a8c5a981649dbfedd004ae3e060e2c3f98e59c21
+test "$(sha256sum "$P/withdrawal-plan-final.private.json" | cut -d' ' -f1)" = 73002641728a9967e54e37e42f597a7d3661be18dde88e1342731e189148e7ab
+test ! -e "$P/withdrawal.intent.private.json"
+test ! -e "$P/dry-run.private.json"
+sudo -v
+flock -n "$P/withdrawal.lock" timeout 180 sudo -n /usr/bin/python3 -I -S "$P/withdraw-reviewed.py" --plan "$P/withdrawal-plan-final.private.json" --plan-sha256 73002641728a9967e54e37e42f597a7d3661be18dde88e1342731e189148e7ab
+# Exigir DRY_RUN_PASS. DENY: preservar diagnóstico; não editar input/bindings nem repetir automaticamente.
+
+# B — somente após autorização específica sobre estes bytes/cinco caminhos
+# Mesma sessão; conferir A0/A1 e requisitos imediatamente antes.
+set -euo pipefail
+umask 077
+P=/dev/shm/re7-retention-withdrawal-final-20261013T124500Z
+test "$(sha256sum "$P/withdraw-reviewed.py" | cut -d' ' -f1)" = 0f85b527c819a24663913855a402319e9eca647fcd1b638bdcb0213abda27c01
+test "$(sha256sum "$P/post-review.py" | cut -d' ' -f1)" = f1cab41eb4f08b7be934c2c7a8c5a981649dbfedd004ae3e060e2c3f98e59c21
+test "$(sha256sum "$P/withdrawal-plan-final.private.json" | cut -d' ' -f1)" = 73002641728a9967e54e37e42f597a7d3661be18dde88e1342731e189148e7ab
+test ! -e "$P/withdrawal.intent.private.json"
+test ! -e "$P/apply-result.private.json"
+test ! -e "$P/withdrawal.receipt.private.json"
+test ! -e "$P/withdrawal.stdout.private"
+test ! -e "$P/withdrawal.stderr.private"
+sudo -v
+set +e
+flock -n "$P/withdrawal.lock" timeout 180 sudo -n /usr/bin/python3 -I -S "$P/withdraw-reviewed.py" --plan "$P/withdrawal-plan-final.private.json" --plan-sha256 73002641728a9967e54e37e42f597a7d3661be18dde88e1342731e189148e7ab --owner-authorized-apply > "$P/withdrawal.stdout.private" 2> "$P/withdrawal.stderr.private"
+WITHDRAWAL_EXIT=$?
+set -e
+printf 'WITHDRAWAL_EXIT=%s\n' "$WITHDRAWAL_EXIT"
+# Nunca repetir B. Timeout/parcial/incerto preserva intent/recibo; executar C independentemente.
+
+# C — leitura posterior obrigatória, inclusive DENY/timeout/parcial
+set -euo pipefail
+umask 077
+P=/dev/shm/re7-retention-withdrawal-final-20261013T124500Z
+test "$(sha256sum "$P/post-review.py" | cut -d' ' -f1)" = f1cab41eb4f08b7be934c2c7a8c5a981649dbfedd004ae3e060e2c3f98e59c21
+test ! -e "$P/post-readonly.private.json"
+timeout 90 sudo -n /usr/bin/python3 -I -S "$P/post-review.py" --plan "$P/withdrawal-plan-final.private.json" --plan-sha256 73002641728a9967e54e37e42f597a7d3661be18dde88e1342731e189148e7ab
+# Copiar recibos/intent/diagnósticos off-host pela sessão sudo legítima se forem root-owned;
+# jamais compartilhar conteúdo privado no chat. Não remover markers.
+# Conferir WAL/erros/DB, min executor deploy/postgres, quatro paths/main/cache,
+# out15/recibo/usage/CRM/dumps/identidades/cron/boot pelo capturador canônico READ ONLY.
+# Conferir atendimento/sessão habitual apenas em leitura, sem salvar ou enviar.
+# Banco continua bloqueado até CAPACITY PASS + dump/RPO/custódia novos e revisão da fase.
+
+# Recuperação de históricos — proposta, não executar
+# Restaurar somente o blob idêntico em caminho literal de arquivo retirado,
+# modo/owner/grupo/timestamps pelo índice, rehash e registrar novo inode/ctime real.
+# Não executar controls consumidos nem ativar configs/segredos históricos.
+# Cache: conferir tar/índice, extrair isoladamente e recuperar somente _cacache,
+# preservando numeric owners/ACL/xattrs/modos; não alterar node_modules ou PM2.

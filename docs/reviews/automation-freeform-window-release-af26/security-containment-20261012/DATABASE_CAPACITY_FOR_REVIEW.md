@@ -1,5 +1,7 @@
 # Disco raiz — preparação para decisão, não executada (13/10/2026)
 
+**DECISÃO CORRENTE: expansão adiada; priorizar [lote de retenção auditado](retention-audit-20261013/REPORT.md). Nenhuma contratação ou expansão autorizada/executada.**
+
 Banco permanece **CAPACITY DENY / EXECUTION BLOCKED**. Auth concluída/NEWauth preservada; out.15 CLOSED, guarda38 fechada. Nenhuma compra, expansão, parada, reboot, instalação, ALTER ROLE ou exclusão executada. Artefatos bancários v4 e provas válidas preservados.
 
 ## Provedor e decisão concreta

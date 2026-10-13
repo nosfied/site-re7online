@@ -1,5 +1,9 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**ESTADO CORRENTE — retenção auditada; lote de cinco caminhos PARA REVISÃO / NÃO RETIRADO; banco CAPACITY DENY; auth concluída; out.15 CLOSED; guarda38 fechada.** [Inventário root completo, custódia e proposta4,63GB](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/REPORT.md). Expansão adiada. Cache+quatro blobs idênticos, main/manifests/journals/releases/retornos/segredos preservados.13 testes locais do driver e custódia verificada; driver produtivo não executado, nenhuma retirada. Próxima decisão: autorizar este lote com dry-run fresco e leitura posterior; depois renovar RPO/custódia e conferir capacidade bancária. Segurança OPEN, sem nova rotação/instalação.
+
+**Checkpoint histórico — expansão preparada antes da priorização da retenção:**
+
 **Continuidade 13/10 — expansão PREPARADA PARA DECISÃO, não executada:** DigitalOcean confirmado por DMI; Basic Regular80GiB/4GiB/2vCPU US$24/mês (catálogo, +US$6 se atualRegular18), exige desligamento/boot. 62GiB não é opção comprovada. [Roteiro, preservação GPT, custos/limites e dependências](reviews/automation-freeform-window-release-af26/security-containment-20261012/DATABASE_CAPACITY_FOR_REVIEW.md). Banco continua CAPACITY DENY; leitura root integral depende da sessão sudo, fatura/opção regional e snapshot recuperável dependem do console. NEWauth/out15CLOSED/guard38 e artefatos preservados; após reboot exigir geração/bindings reais novos e backup/RPO fresco, sem editar geração antiga.
 
 **Checkpoint histórico — composição bancária anterior à identificação do provedor:**

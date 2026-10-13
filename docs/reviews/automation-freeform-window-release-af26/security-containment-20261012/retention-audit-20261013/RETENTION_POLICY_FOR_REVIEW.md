@@ -1,0 +1,16 @@
+# Política proposta de retenção operacional — sem ativação
+
+Separar dados/evidências dos tenants dos pacotes executáveis. Esta política não muda RetentionConfig, LGPD, schema, status, logs ou cron. Dados/SQL/WAL/mídias/sessões/recibos/usage/CRM/segredos são excluídos da limpeza operacional genérica.
+
+- ACTIVE: release e geração que sustentam processo, launcher/bootstrap, observador, journal e PM2 live/saved/fallback ficam no host enquanto houver referência. Um launcher em preparação consumida ainda pode ser dependência permanente.
+- STANDBY: manter retorno compatível completo e sua cadeia de dependências/configurações válidas NEWauth; após VERIFIED banco, retornos deverão conter NEWDB. Nunca reativar segredo revogado para voltar a uma release.
+- READY/REVIEW: preservar preparação bancária final, artefatos/manifests/provas e dependências até encerramento ou substituição revisada. Gates falsos não tornam arquivos dispensáveis.
+- CONSUMED/REFUSED: preservar controles, journals, nonces consumidos, manifests e diagnósticos. Um pacote grande só sai após não ser raiz/dependência ativa/standby/ready, zero owners por duas observações completas, hash/inode/nlink/FS conferidos, custódia off-host íntegra e extração/receita testadas. Não reutilizar controles consumidos. Idade sozinha não autoriza retirar.
+- CACHE: npm `_cacache` é reconstruível e não é node_modules/PM2. Limite proposto1GiB para disparar relatório/revisão, não timer/prune. Mudanças/membros novos/FDs bloqueiam lote selado. Este lote preserva uma cópia integral off-host e mantém a raiz; nunca usar npm cache clean com config/destino presumido.
+- TEMPORÁRIOS: /tmp,/dev/shm,/run podem sustentar journals, certificados, ferramentas ou controles; descobrir referências primeiro. Tmpfs não libera o filesystem raiz. Sem find por idade, glob ou limpeza de todo diretório.
+- LOGS: logrotate existente weekly/rotate4 global e daily/rotate14 Nginx; journald arquivo consultado sem limite explícito ativo. Não truncar/vacuum ou ajustar retenção nesta rodada. Limites efetivos/drop-ins e preservação de segurança precisam de proposta própria antes de retirar logs.
+- BACKUPS: produtor existente tem defaults7daily/4weekly/3monthly para snapshots; não aplicar essa regra automaticamente a preparations, nem somar grupos sobrepostos. Preservar RPO/custódia/restore. Retenção de dados/evidências deve seguir obrigação do tenant e do incidente; manter cópias executáveis duplicadas no host não é a mesma obrigação.
+
+Registro administrativo proposto por geração: finalidade, estado, raízes/dependências, referência live/saved/fallback, hashes/inodes/allocated, locator privado off-host acessível ao owner, prova de restauração, decisão e recibo de retirada. Um sidecar registra a retirada sem reescrever manifests históricos. Nenhuma rotina automática ativada.
+
+Capacidade: manter piso bancário integral mais4GiB adicional neste lote; após qualquer staging, medir min(deploy/PostgreSQL), WAL/crescimento/inodes e orçamento da próxima operação. Inventário único por inode evita duplicar hardlinks; symlinks exigem preservar o destino. Alerta/proposta manual antes de novo staging que consuma o piso. Futuras automatizações só depois de revisão própria, sem atingir dados de tenants ou evidências de segurança.
