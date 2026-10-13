@@ -1,6 +1,6 @@
 # Janela bancária autorizada — 13/10/2026
 
-**AUTHORIZATION RECORDED / INITIAL READS PASS / NOT INSTALLED / NOT EXECUTED.** Owner autorizou A/B da geração140000 publicada em4c2fdbf2. Posteriormente ajustou o início de depois18h para **17h15 Fortaleza /20h15UTC,13/10**. Não iniciar contenção antes desse horário. A sessão sudo legítima do owner é dependência para instalação root-owned; autorização não precisa ser solicitada novamente. Não há agendamento de comando no host nem daemon novo; aguardar disponibilidade real para conduzir a sequência.
+**AUTHORIZATION RECORDED / INITIAL READS PASS / NOT INSTALLED / NOT EXECUTED.** Owner autorizou A/B da geração140000 publicada em4c2fdbf2. Posteriormente ajustou o início de depois18h para **17h15 Fortaleza /20h15UTC,13/10**. Esse limite foi posteriormente antecipado pelo owner para agora,13/10; não é necessário esperar17h15. As pré-condições continuam obrigatórias. A sessão sudo legítima do owner é dependência para instalação root-owned; autorização não precisa ser solicitada novamente. Não há agendamento de comando no host nem daemon novo; aguardar disponibilidade real para conduzir a sequência.
 
 ## Conferências feitas agora
 
@@ -23,3 +23,17 @@ Intent/commit incerto: nenhum sucessor/replay automático; apenas `database_insp
 Após conclusão: nova conexão TCP aceita/antiga P1000, atributos/HBA/data preservados, health/DB, API↔worker NEWauth, frontend/sessões/telas, consumidores administrativos e spec Docker de recuperação selados, backup operacional via trust local sem senha, PM2 saved/fallback600/umask077, supervisão/cron/boot, barreiraausente/gatesfalse. Guard38closed/out15CLOSED/seis resultados/cinco não enviados/CRM/usage/recibo intactos. Sem envio, claim, abertura, retomada, migration, restart PostgreSQL/frontend ou recriação Docker.
 
 [Dados/hashes das conferências iniciais](DATABASE_WINDOW_INITIAL_2026-10-13.sanitized.json). [Procedimento A/B/C/D/E](DATABASE_COMMANDS_FOR_REVIEW.txt). Resultado/duração/SHA remoto da execução serão acrescentados depois dos fatos. Segurança externa/cifragem permanecem OPEN; não declarar contenção completa após banco.
+
+## Continuidade autorizada — início antecipado pelo owner
+
+Owner antecipou a janela; disponibilidade deploy/sudo confirmada. Antes de A: preparação integral/checker passou20:42:21UTC/17:42:21Fortaleza, mínimo deploy/PostgreSQL6.729.486.336B, verificador original e conexões conferidos, quatro modos/SQL/proxy/consumidores/identidades preservados. Zero contenção/ALTER/partidas até esta conferência. Guarda38closed/out15CLOSED, gatesfalse.
+
+Backup real capturado20:03:13UTC/17:03:13Fortaleza,38.816.516B, SHA28dd4c40960919c420e8d7d7bec9b9d1aa7915b2dfb186fe3be172635a81a0e8; controles privados7f0bc687… inalterados. Custódia off-host permanente manifesto c26710301a7290b94c6332f6f831e77bf73599677731c384a0174fa88fa621e1. Integridade do arquivo completo decodificada,614 entradas TOC; schema fingerprint ee41ec5a… exatamente igual, migrations/checksums/70tabelas preservados. Reutilizada expressamente a restauração isolada anterior PG16, sem afirmar nova restauração desse dump. Primeira chamada local pg_restore sem destino explícito recusada; diagnóstico preservado, correção usa --file com ambiente mínimo, sem conectar banco.
+
+WAL96MiB,slots0/archiveoff e nenhum erro de escrita no escopo delimitado consultado. Apenas provas/manifests de backup foram renovados, originais arquivados; outer manifest atual44e09f3c8f808d76454678e881f942b3ec2b7706952fb601cfb2cd1eca082935. Política9c7b44 e instalador17a92e inalterados; configs/controles/nonces/identidades não foram adaptados. RPO é calculado pelo capture real20:03, não pelo horário dos manifests; reconferir imediatamente antes da contenção.
+
+Bloco A conduzido à sessão sudo do owner; aguardando resultado efetivo antes de B. Não declarar política instalada ou DBrotacionada por existência de pacote/documentação. Qualquer recusa/parcial/uncertain bloqueia repetição e exige preservação/inspeção.
+
+## Resultado efetivo
+
+[Execução concluída, métricas, recibos e limites](DATABASE_EXECUTION_2026-10-13.md). Complete/switch17:47:50Fortaleza, interrupção37,198s; NEWDB verificada, OLDDB rejeitada, owner confirmou sessão/telas. Geração consumida, não repetir A/B. Segurança externa/cifragem permanece OPEN; guarda38 fechada.

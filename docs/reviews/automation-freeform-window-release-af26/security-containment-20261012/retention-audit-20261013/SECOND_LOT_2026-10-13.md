@@ -63,3 +63,7 @@ Após o resultado real da fase banco, preparar geração própria de driver/inpu
 Reutilizar hashes/custódia que continuem válidos, reconfirmar referências, proprietários, metadados e dependências compartilhadas. Retirada recursiva deverá operar somente os membros indexados das sete releases: lstat/O_NOFOLLOW, sem seguir os sete symlinks externos `.data`, sem alcançar seus destinos. Dois pacotes permanecem alvos literais próprios. Não reutilizar drivers/intents consumidos do primeiro lote.
 
 Entrega posterior exigida: driver/input e hashes novos, comandos restritos, dry-run e verificações posteriores inclusive em recusa/parcial/timeout, para decisão concreta de retirada. Preparações, logs e snapshot root permanecem fora da allowlist e serão auditados separadamente, sem descarte por idade/tamanho. Reconfirmar capacidade/WAL e requisitos bancários antes de qualquer retirada futura. Out.15CLOSED, guarda38 fechada, controles e retornos preservados.
+
+## Fase banco efetivamente concluída
+
+[Resultado verificado/owner confirmado](../DATABASE_EXECUTION_2026-10-13.md): política9c7b44, API410272/start2170884687, worker410428/start2170885045, frontend188897 preservado, NEWDB+NEWauth e dumps600 efetivos. Esta auditoria anterior não é observação fresca pós-banco nem driver de retirada pronto. Allowlist/custódia mantidas e nenhuma exclusão; geração/input novos devem selar esses controles atuais e a conexão administrativa canônica ativada, com revalidação atual antes do dry-run.

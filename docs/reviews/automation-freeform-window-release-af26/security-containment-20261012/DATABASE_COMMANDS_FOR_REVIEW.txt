@@ -1,3 +1,7 @@
+CONSUMED 13/10/2026 — complete/switch VERIFIED. DO NOT RERUN A/B/ALTER/STARTS.
+Active: NEWDB+NEWauth; guard38 CLOSED. Original commands below are historical.
+See DATABASE_EXECUTION_2026-10-13.md for receipt/custody/current state.
+
 # OWNER AUTHORIZATION RECORDED 13/10: A/B for generation140000; containment not before17:15Fortaleza.
 # C inspect only after uncertainty; record/recover require explicit decision.
 # Initial reads are dated; renew backup/RPO/custody and reconfirm all requirements immediately.

@@ -1,0 +1,80 @@
+{
+  "result": "DATABASE_ROTATED_VERIFIED_OWNER_CONFIRMED",
+  "generation": "incident-6683-v4-security-database-final-v4-20261013T140000Z",
+  "timing": {
+    "containmentBeginUtc": "2026-10-13T20:47:09.420659+00:00",
+    "unfenceResultUtc": "2026-10-13T20:47:46.618499+00:00",
+    "completeUtc": "2026-10-13T20:47:50.375429+00:00",
+    "conservativeInterruptionSeconds": 37.198,
+    "containmentToCompleteSeconds": 40.955
+  },
+  "oneSequence": true,
+  "automaticRetry": false,
+  "returnExecuted": false,
+  "postgresRestarted": false,
+  "frontendRestarted": false,
+  "newCredentialsVerified": true,
+  "oldTcpRejected": true,
+  "newAuthPreserved": true,
+  "hbaUnchanged": true,
+  "roleAttributesAndPrivilegesUnchanged": true,
+  "guardClosedGeneration": 38,
+  "out15": "CLOSED",
+  "reportedDeliveries": 6,
+  "notSubmittedPositions": 5,
+  "gatesFalse": true,
+  "savedFallbackMode": 600,
+  "savedHashes": {
+    "dump.pm2": "3ddec68385ba02fd39d5592baf33e413d92e9b102dbdf6051afebe64aba427c1",
+    "dump.pm2.bak": "3ddec68385ba02fd39d5592baf33e413d92e9b102dbdf6051afebe64aba427c1"
+  },
+  "apps": {
+    "re7-admin-front": {
+      "pid": 188897,
+      "ticks": "2161347676",
+      "cwd": "/opt/re7online/releases/frontend-dynamic-5b3cf3af-20261012T170000Z"
+    },
+    "re7-whatsapp-agent": {
+      "pid": 410272,
+      "ticks": "2170884687",
+      "cwd": "/opt/re7online/releases/campaign-dynamic-compatible-return-5b3cf3af-20261012T170000Z/apps/whatsapp-agent"
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 410428,
+      "ticks": "2170885045",
+      "cwd": "/opt/re7online/releases/worker-minimal-reactive-afbb7455-verified/apps/whatsapp-web-worker"
+    }
+  },
+  "ownerSessionScreensConfirmed": true,
+  "capacitySamples": [
+    {
+      "utc": "2026-10-13T20:53:36.478807+00:00",
+      "deployAvailableBytes": 6685220864,
+      "postgresAvailableBytes": 6685220864,
+      "minimumAvailableBytes": 6685220864,
+      "wal": {
+        "bytes": 100663296,
+        "slots": 0,
+        "archiveMode": "off"
+      }
+    },
+    {
+      "utc": "2026-10-13T20:53:38.720820+00:00",
+      "deployAvailableBytes": 6685220864,
+      "postgresAvailableBytes": 6685220864,
+      "minimumAvailableBytes": 6685220864,
+      "wal": {
+        "bytes": 100663296,
+        "slots": 0,
+        "archiveMode": "off"
+      }
+    }
+  ],
+  "backupSha256": "28dd4c40960919c420e8d7d7bec9b9d1aa7915b2dfb186fe3be172635a81a0e8",
+  "backupCapturedUtc": "2026-10-13T20:03:13.242889+00:00",
+  "restoreProofReused": true,
+  "finalArchiveSha256": "27e360f3c6d287c5a382ab767a9baf9ed5ae44d4cf5a264ef3710dd27cfc3e2b",
+  "custodyManifestSha256": "0a2861e5971b748a1269644ce9eda7433291aa4a2dda3e9ce19cc7effc4c904d",
+  "securityStatus": "OPEN_EXTERNAL_AND_ENCRYPTION",
+  "secondWithdrawalAuthorized": false
+}
