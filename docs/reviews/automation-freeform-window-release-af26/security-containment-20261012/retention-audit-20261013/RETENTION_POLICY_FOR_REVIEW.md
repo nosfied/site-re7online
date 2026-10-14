@@ -1,4 +1,6 @@
-# Política proposta de retenção operacional — sem ativação
+# Proposta histórica de retenção operacional — incorporada à documentação canônica
+
+Em14/10/2026 os princípios/procedimentos foram incorporados ao [runbook canônico](../../../../RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente), [Change Policy](../../../../saas/CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional), [baseline](../../../../saas/OPERATIONAL_BASELINE.md#capacidade-e-retenção-operacional) e [checklist](../../../../saas/RELEASE_CHECKLIST.md#retenção-de-releases-e-preparações). As propostas/datados abaixo são a proveniência das auditorias, não política paralela vigente. Valores de margem são específicos do lote; nenhuma rotina automática foi ativada.
 
 Separar dados/evidências dos tenants dos pacotes executáveis. Esta política não muda RetentionConfig, LGPD, schema, status, logs ou cron. Dados/SQL/WAL/mídias/sessões/recibos/usage/CRM/segredos são excluídos da limpeza operacional genérica.
 

@@ -66,3 +66,11 @@ Bloco C obrigatório inclusive DENY/parcial/timeout: leitor posterior separado, 
 ## Continuidade pós-banco — preparação v2 concluída, sem retirada
 
 [Driver/input, dry-run e limites](SECOND_WITHDRAWAL_PREPARATION_2026-10-13.md). Inputc41170f6/driver856cc229, duas amostras root novas owners0/incomplete0;140.758 membros preservados/zero remoções. Nove raízes4.456.800.256B potenciais, mínimo6.516.224.000B datado. Geração211000 recusada por contexto PM2 root preservada; v2 captura deploy e valida kernel/configuração. [Comandos A0/A1/B/C para decisão](SECOND_WITHDRAWAL_COMMANDS_FOR_REVIEW.txt); **B não autorizado**. Preparações/logs/snapshot root fora da allowlist; auditoria secundária e retenção classificadas no novo relatório. Auth/banco concluídos, NEWauth+NEWDB/guarda38/out15CLOSED preservados; segurança externa/cifragem OPEN.
+
+## Integração canônica da retenção —14/10/2026
+
+A proposta histórica foi incorporada aos [princípios](../../../../saas/CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional), [runbook](../../../../RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente), [capacidade](../../../../saas/OPERATIONAL_BASELINE.md#capacidade-e-retenção-operacional) e [checklist](../../../../saas/RELEASE_CHECKLIST.md#retenção-de-releases-e-preparações). Reutilizadas auditorias/custódia/provas dos lotes anteriores, sem novas leituras produtivas ou alteração dos manifests selados.
+
+Auditoria dos preparadores auth/banco/frontend/API registrou cinco correções preventivas com evidência de código e critérios de aceite no [backlog](../../../../BACKLOG_TECH.md#retenção-operacional--integração-preventiva-dos-preparadores). Nenhum preparador consumido foi alterado. Rotina `scripts/operational-retention-report.py`: LOCAL READ ONLY/dry-run para revisão, nove testes dirigidos PASS; links novos/diff conferidos. Não coleta SQL/WAL/owners nem autoriza retirada. Integração aos preparadores, execução semanal na VPS e alertas automáticos NÃO implantados. Revisão semanal/pós-janela documentada, sem cron.
+
+Terceiro lote permanece preparado/sem apply; nenhum novo arquivo produtivo retirado. NEWauth+NEWDB, out.15 CLOSED e guarda38 fechada preservados. Segurança externa/cifragem permanece OPEN. Hashes desta entrega pertencem ao novo commit documental; manifests/recibos históricos permanecem íntegros.

@@ -8,6 +8,28 @@ Padronizar o nivel de validacao antes de commit, deploy e promocao de releases.
 
 Toda mudanca deve ser classificada antes de ser entregue.
 
+## Princípios permanentes de retenção operacional
+
+Antes de copiar, buildar ou compactar, comparar conteúdo existente por hash, runtime,
+compatibilidade e dependências. Reutilizar bytes e provas válidos quando o contrato
+permitir; registrar motivo e orçamento de cada nova cópia volumosa. Não introduzir
+hardlinks ou symlinks em preparação selada sem revisão do contrato e dos destinos.
+
+Cada geração tem finalidade, responsável, estado e encerramento explícitos. Histórico
+não implica permanência de todos os executáveis na VPS. Preservar componentes ativos,
+retorno compatível e dependências; classificar o restante para custódia verificável,
+acessível ao owner, sem alterar manifests históricos. Retirada tem índice/recibo próprio.
+Retenção de dados, contratos e evidências dos tenants é obrigação distinta da retenção
+de pacotes executáveis; esta regra não altera retenção LGPD, logs, snapshots ou segredos.
+
+A revisão é semanal e obrigatória após janela, recusa, substituição ou encerramento.
+Preparação sem orçamento medido e retirada sem autorização específica não avançam.
+Idade não autoriza exclusão; prune genérico e replay de resultado incerto são proibidos.
+O procedimento único está no [runbook](../RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente),
+com [capacidade](OPERATIONAL_BASELINE.md#capacidade-e-retenção-operacional)
+e [checklist](RELEASE_CHECKLIST.md#retenção-de-releases-e-preparações).
+Documentação publicada não significa rotina implantada ou limpeza automática ativa.
+
 ## Tipo A - Correcao Visual
 
 Exemplos:

@@ -36,6 +36,35 @@ Antes de executar, classificar a mudanca conforme `docs/saas/CHANGE_POLICY.md`:
 - Se tocar automacao/IA, rodar `npm run evaluation:replay` em `apps/whatsapp-agent`.
 - Se tocar canais, rodar testes focados de canais/webhooks quando aplicavel.
 
+## Retenção de releases e preparações
+
+Aplicar os [princípios](CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional),
+[capacidade](OPERATIONAL_BASELINE.md#capacidade-e-retenção-operacional) e
+[runbook](../RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente) antes dos builds
+indicados abaixo: build não é obrigação quando o compilado compatível já foi provado.
+O procedimento canônico específico de troca tem precedência sobre exemplos genéricos
+pull/build/reload deste checklist; estes não autorizam janela nem reutilização de intent.
+
+- Antes de copiar/buildar/compactar: hashes, runtime/dependências, artefatos/provas
+  reutilizáveis, justificativa de cópia volumosa e revisão de qualquer novo link.
+- Registrar geração em sidecar privado: finalidade, owner/responsável, estado,
+  hashes, raízes/referências transitivas, bytes únicos, custódia/restore e retorno.
+- Antes/depois de staging: capacidade por executor/filesystem, WAL/crescimento,
+  inodes, orçamento/reserva aplicável, observações e limites datados.
+- Após complete, DENY, substituição ou encerramento: classificar imediatamente
+  host obrigatório versus arquivável; gates falsos e estado consumido não dispensam
+  launcher/controles dependentes. Preservar originais e diagnósticos da recusa.
+- Conferir retorno compatível, segredos vigentes, PM2 live/saved/fallback,
+  boot/cron/Nginx/helpers/políticas e dependências compartilhadas.
+- Material arquivável exige custódia acessível ao owner e restauração isolada
+  verificável. Não modificar manifest histórico para refletir retirada.
+- Eventual retirada: allowlist literal revisada, driver/input selados próprios,
+  observações completas frescas, intent/recibo e inspeção inclusive em falha.
+- Registrar revisão semanal e pós-janela, pendências, responsável e próxima data;
+  relatório local não é certificado produtivo nem autorização de exclusão.
+- Logs/snapshots/dados de tenant obedecem seus contratos próprios; não aplicar
+  retenção de executáveis ou exclusão por idade a essas categorias.
+
 ## Backend
 
 Diretorio:

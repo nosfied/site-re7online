@@ -300,3 +300,36 @@ Nao executar carga nesta sprint.
 1. Abrir `78O.1 - Inbox Read Query Path Investigation` para investigar p95 `2.085,30 ms` em `20 VUs`.
 2. Manter `OPERATIONAL_BASELINE.md` atualizado em toda mudanca de VPS, swap, PM2, PostgreSQL, build, HA ou laboratorio de carga.
 3. Continuar build sequencial backend -> frontend enquanto a VPS permanecer nessa classe de memoria.
+
+## Capacidade e retenção operacional
+
+Regra permanente; as fotografias datadas acima continuam históricas. Seguir os
+[princípios](CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional) e o
+[procedimento único](../RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente).
+
+Antes e depois de staging, registrar UTC/Fortaleza, filesystem real de cada raiz,
+PGDATA, pg_wal, tablespaces e ledger; bytes disponíveis aos executores deploy e
+PostgreSQL, inodes, crescimento observado, slots/retenção/archive de WAL e erros de
+escrita recentes. Amostra ausente, concorrente ou incompleta não recebe PASS integral.
+Usar mínimo deploy/PostgreSQL quando compartilham filesystem; em filesystems distintos,
+validar separadamente cada orçamento, sem somar espaço não intercambiável.
+
+Contabilizar alocação única por (filesystem/device,inode), usando blocos alocados;
+hardlinks não multiplicam conteúdo recuperável. Registrar nlink e aliases fora do
+escopo: remover um nome com outro link preservado não libera o conteúdo. Symlink é
+objeto distinto; não percorrer destino externo. Reflinks, compressão ou snapshots
+compartilhados exigem medição própria: st_blocks não prova recuperação exclusiva.
+
+O orçamento identifica fonte/versão da reserva canônica, operação, candidato,
+retorno completo, backup/RPO, crescimento/WAL no horizonte da janela e evidências.
+Não duplicar rubricas sobrepostas nem reduzir reserva para obter PASS. Piso bancário,
+reserva auth, margem de 4GiB do primeiro lote e piso pós-retirada6.468.665.344B são
+valores datados de fases/lotes, não um mínimo universal para todas as gerações.
+
+Gatilhos manuais: bloquear novo staging se disponível menos orçamento não preservar
+reserva aplicável; revisão imediata se forecast de crescimento/WAL atingir a reserva
+antes da próxima revisão semanal, se inodes ameaçarem o orçamento, houver erro de
+escrita ou observação incompleta. Cache npm acima de1GiB dispara relatório/revisão,
+não prune. Registrar limiar, horizonte, taxa/amostras e responsável por operação;
+sem série de crescimento, declarar lacuna e medir antes de atestar folga durável.
+Não há cron, alerta automático ou política de exclusão ativados por este documento.

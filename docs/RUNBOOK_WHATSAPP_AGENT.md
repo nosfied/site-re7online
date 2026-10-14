@@ -1,5 +1,7 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**Integração permanente de retenção14/10:** [princípios](saas/CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional), [procedimento](RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente) e [checklist](saas/RELEASE_CHECKLIST.md#retenção-de-releases-e-preparações) publicados; rotina somente local para revisão, sem cron/limpeza ativados. Auditoria de preparadores e critérios no [backlog](BACKLOG_TECH.md#retenção-operacional--integração-preventiva-dos-preparadores). Estado operacional e próxima decisão do terceiro lote abaixo preservados.
+
 **ESTADO CORRENTE — TERCEIRO LOTE PREPARADO/PASS PARA REVISÃO; ZERO RETIRADAS NOVAS.** [23 arquivos duplicados, grafo/custódia/input/comandos](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/THIRD_WITHDRAWAL_PREPARATION_2026-10-14.md). Potencial8.816.578.560B alocados;11 nomes mantidos, hardlinksfa60 zero recuperação; diretórios/manifests/journals/recibos/logs/snapshots fora da allowlist. Driver e1380546/input77503f96 próprios, selo e dry-run09:23UTC/06:23Fortaleza14/10 PASS,owners0/incomplete0,removedCount0; sem intent. Custódia off-host10 conteúdos/34 metadados+extração verificados; diagnósticos/timeouts anteriores preservados, grafo12s fora da VPS. Capacidade09:29UTC mínimo deploy/PostgreSQL10.531.876.864B,WAL80MiB,healthDBok. NEWauth+NEWDB/API410272/worker410428/frontend188897/dumps600/boot/cron/política9c7b44 preservados,gatesfalse,guarda38closed,out15CLOSED/seis entregas/cinco não enviadas. Próxima decisão: autorização exclusiva dos23 literais pelo novo A0/A1/B/C,nenhum apply agora. Segundo lote/banco/auth consumidos,não repetir. Segurança externa/cifragem OPEN; retenção automática apenas proposta.
 
 **CHECKPOINT HISTÓRICO — AUTH/BANCO CONCLUÍDOS; SEGUNDO LOTE CONSUMIDO E VERIFICADO; SEGURANÇA EXTERNA/CIFRAGEM OPEN.** [Resultado, negativas e auditoria restante](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/SECOND_WITHDRAWAL_RESULT_2026-10-13.md). Nove raízes/140.758 membros retirados uma vez,4.456.800.256B alocados; inspeção complementar mesmos bytes confirmou owners0/incomplete0 e zero restantes, preservando DENY original por reutilização de inode. CAPACITY PASS datado: mínimo deploy/PostgreSQL10.905.092.096B às00:38UTC14/10 (21:38Fortaleza13/10), WAL112MiB. NEWauth+NEWDB/identidades/saved-fallback600/boot-cron-supervisão preservados, gatesfalse, guarda38closed/out15CLOSED, seis entregas/cinco não enviadas; owner confirmou telas. Não repetir B/auth/banco. Auditoria restante root COMPLETE,17.062 entradas,dez grupos idênticos; preparações/logs/snapshots SEM nova allowlist. Próximo passo: fechar referências/custódia e propor lote literal de duplicados, sem exclusão automática. Revisão observacional pendente: identidade de geração de inode e referência explícita ao fallback .bak; nenhum patch produtivo nesta etapa.
@@ -2429,3 +2431,83 @@ O [executor sequencial V4](reviews/automation-freeform-window-release-af26/INCID
 ## 10/10/2026 — posição .6: captura corrigida e preservação para decisão
 
 Continuidade dcbeea48: [relatório único](reviews/automation-freeform-window-release-af26/position6-operational-preparation-20261010/README.md), com6provas dirigidas de ambiente, leitura SQL limitada, duas amostras root completas e preservação off-host do blob+índice dos cinco caminhos. Nenhuma exclusão/apply/ack/abertura/restart/deploy. Guarda37/tarefa/job e cinco Outbounds/CRM preservados; APIa26/workerafbb/frontendfa60 mesmos PID/start ticks. Capacidade continua DENY (475.422.720bytes na última leitura); revisar somente retirada das quatro cópias redundantes, com revalidação fresca individual e pós-auditoria. Mantidos originais/manifests e recusa inicial do coletor; corrigido FD de coleta sem excluir processos. Driver destrutivo só syntax-check, não execução comprovada. SQL/ack dependem de decisão separada e frescor/margem atuais. Frontend3227/prevençõesAPI permanecem pendentes; CSV/Syer, internacional, CRA-PR, multilote/AUTO separados, setembroCLOSED.
+
+## Retenção operacional permanente
+
+Fonte normativa única do procedimento; princípios em
+[Change Policy](saas/CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional),
+medição em [Operational Baseline](saas/OPERATIONAL_BASELINE.md#capacidade-e-retenção-operacional)
+e gates de preparação no [Release Checklist](saas/RELEASE_CHECKLIST.md#retenção-de-releases-e-preparações).
+Reutiliza a [proposta e auditorias de retenção](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/RETENTION_POLICY_FOR_REVIEW.md),
+sem criar política de dados ou rotina automática paralela.
+
+### Registro e encerramento de geração
+
+Responsável operacional prepara e mantém um sidecar privado, fora dos manifests
+selados: ID, finalidade, estado ACTIVE/STANDBY/READY/REVIEW/CONSUMED/REFUSED/SUPERSEDED,
+responsável e owner decisor, hashes/runtime, raízes/dependências, origem de cópias e
+justificativa, bytes únicos por filesystem, live/saved/fallback, custódia, prova de
+extração/recuperação, decisão, intent/recibo e próxima revisão. Publicar apenas resumo
+sanitizado. Ao concluir/recusar/substituir, classificar no mesmo encerramento:
+
+- Necessário no host: ativo, retorno compatível completo, preparação vigente e suas
+  dependências transitivas (inclui launcher em geração consumida).
+- Arquivável: bytes executáveis históricos sem vínculo, com custódia comprovada;
+  propor retirada separada. Manter controles/manifests/journals/recibos e evidências
+  obrigatórias, salvo revisão própria de seu contrato.
+- Não resolvido: referências, obrigação de evidência ou custódia incompletas;
+  manter e registrar lacuna/responsável, sem classificar como recuperável.
+
+Custódia off-host deve ser permanente, privada, acessível ao owner, com conteúdo,
+índice dos nomes/metadados/links, hashes, receita e extração isolada comprovadas.
+Informar número real de réplicas e limites (inode/ctime/birth não são restauráveis
+por tar). Temporário local não é custódia durável. Dados/evidências de tenant não
+são eliminados pela retirada de um pacote. Manifests históricos permanecem intactos;
+índice e recibo de retirada indicam nomes ausentes e recuperação exige novos bindings.
+
+### Revisão semanal e após cada janela
+
+Responsável operacional agenda manualmente uma revisão a cada sete dias; registrar
+última/próxima data e owner. Fazer também após toda janela, recusa, substituição e
+encerramento. Antes de nova cópia/build/tar, conferir artefatos existentes e orçamento.
+Executar inventário delimitado READ ONLY com timeout/limites e saída privada: metadados,
+hardlinks/FS, referências transitivas, processos/cwd/FD/mappings, symlinks, PM2
+live/saved/fallback, boot/systemd/cron/Nginx, helpers/políticas, manifests/launchers/journals.
+Não invocar PM2 como root para descobrir estado nem importar entrypoint, scheduler ou
+provider. Captura deve respeitar contexto do usuário e provar identidade/consistência.
+Observação parcial não recebe PASS. Hashing/grafo pesado pode ser ensaiado off-host
+com fontes exatas e lacunas declaradas; não competir com janela prioritária.
+
+A [rotina local](../scripts/README.md#operational-retention-reportpy) inventaria apenas
+raízes locais explícitas e produz relatório/dry-run de revisão. Não coleta SQL/root/WAL,
+não resolve o grafo produtivo, não autoriza retirada nem certifica capacidade. Associar
+as capturas canônicas frescas para concluir os gates; registrar lacunas, candidatos
+explicados e motivos de manter. Nesta publicação ela é LOCAL PARA REVISÃO, sem
+instalação na VPS, cron ou automação. Correções de integração estão no
+[backlog](BACKLOG_TECH.md#retenção-operacional--integração-preventiva-dos-preparadores).
+
+### Retirada sob revisão específica
+
+Priorizar cache/temporários e cópias redundantes verificadas; idade/tamanho sozinhos
+não autorizam nada. Logs e snapshots seguem políticas efetivas próprias, não prune
+ou truncamento genéricos. Procedimento obrigatório:
+
+1. Allowlist literal de membros/raízes; bytes alocados recuperáveis, finalidade,
+   referências transitivas, compartilhamento, risco, custódia e dependências protegidas.
+2. Hash/metadata/owner/nlink/FS, custódia e restauração conferidos; budget/capacidade
+   por executor e WAL/crescimento frescos. Observações completas em duas amostras,
+   incluindo executor, arquivos abertos já retirados e mappings; inode reutilizado
+   exige identidade por tipo/geração/target sustentada. Ambiguidade/permissão nega.
+3. Driver/input próprios selados, dry-run e autorização do lote. Revalidar antes do
+   intent e por raiz. Não seguir links externos nem modificar controles para PASS.
+4. Uma execução; intent/recibo preservados. Timeout/parcial/incerto: inspeção sem replay,
+   sem limpar marcador ou ampliar allowlist. Preservar negativas e diagnósticos.
+5. Inspeção posterior inclusive em recusa; conferir membros, principals/dependências,
+   owners/incompletudes, bytes efetivos/espaço disponível, WAL/DB/health/sessões,
+   saved/fallback/controles. Copiar recibos/diagnósticos off-host e atualizar sidecar.
+   Nenhuma conclusão pela saída do shell isolada.
+
+Estado de implantação desta regra: documentação e rotina local publicadas para revisão;
+preparadores atuais não possuem integração uniforme. Terceiro lote segue somente
+PREPARADO; auth/banco e lotes anteriores concluídos não serão repetidos. NEWauth+NEWDB,
+out.15 CLOSED e guarda38 fechada preservados; segurança externa/cifragem OPEN.
