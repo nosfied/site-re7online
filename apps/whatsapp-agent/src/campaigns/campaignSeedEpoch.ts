@@ -72,8 +72,20 @@ function historicalPolicy() {
   let policy;
   try { policy = JSON.parse(bytes.toString("utf8")); }
   catch { throw new Error("campaign_seed_historical_policy_format_denied"); }
-  requireThat(policy && policy.version === 1 && Number.isFinite(policy.expiresAt) && Date.now() < policy.expiresAt &&
-    Array.isArray(policy.entries), "campaign_seed_historical_policy_expired_or_invalid");
+  requireThat(policy && Array.isArray(policy.entries), "campaign_seed_historical_policy_expired_or_invalid");
+  if (policy.version === 1) {
+    requireThat(Number.isFinite(policy.expiresAt) && Date.now() < policy.expiresAt,
+      "campaign_seed_historical_policy_expired_or_invalid");
+  } else {
+    // A distinct sealed population contract, never reinterpret an expired v1 grant.
+    requireThat(policy.version === 2 && policy.authorization === "SEALED_IMMUTABLE_POPULATION" &&
+      policy.retirement === "EXPLICIT_DISPOSITION" && policy.expiresAt === undefined &&
+      Number.isInteger(policy.populationCount) && policy.populationCount > 0 &&
+      policy.populationCount === policy.entries.length &&
+      typeof policy.sourceSnapshotSha256 === "string" && /^[a-f0-9]{64}$/.test(policy.sourceSnapshotSha256) &&
+      typeof policy.reviewReference === "string" && policy.reviewReference.length > 0 &&
+      policy.inventorySha256 === hash(JSON.stringify(policy.entries)), "campaign_seed_historical_population_invalid");
+  }
   requireThat(policy.entries.every((e: Record<string, unknown>) => e && typeof e === "object" &&
     typeof e.clientId === "string" && e.clientId && typeof e.eventId === "string" && e.eventId &&
     (e.field === "recipientsCiphertext" || e.field === "componentsByWaIdCiphertext") &&
@@ -82,11 +94,6 @@ function historicalPolicy() {
   const secret = process.env.CAMPAIGN_SEED_HISTORICAL_SECRET;
   requireThat(secret && policy.keySha256 === hash(secret.trim()), "campaign_seed_historical_key_drift");
   return { policy, secret };
-}
-export function assertSeedEpochWriteAuthorized() {
-  // The legacy population remains present. Deny new writes when its sealed
-  // authorization expires; v2 reads do not depend on this authorization.
-  historicalPolicy();
 }
 export function readEpochSeed(record: Record<string, unknown>, field: Field, context?: SeedReadContext) {
   const raw = record[field];

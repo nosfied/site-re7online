@@ -1,0 +1,14 @@
+{
+  "result": "PERMANENT_FINAL_REVIEW_CUSTODY_HASH_REUSE_PASS",
+  "logicalFiles": 51,
+  "identicalContentsReused": 41,
+  "additionalAllocatedBytes": 29409280,
+  "indexSha256": "ab9cc6b7f1f2777040892467b6b3d5f33f57d516d445614b6f700c1d3959171e",
+  "indexFile": "custody-index-final.private.json",
+  "previousCustodyIndexPreserved": true,
+  "recoveryRecipeIncluded": true,
+  "directory700Files600": true,
+  "noHardlinksOrSymlinksIntroduced": true,
+  "productionMutations": 0,
+  "atUtc": "2026-10-14T17:51:46.800006+00:00"
+}

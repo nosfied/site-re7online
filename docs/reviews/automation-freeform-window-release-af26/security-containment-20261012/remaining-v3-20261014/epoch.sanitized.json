@@ -1,0 +1,15 @@
+{
+  "result": "COMPLETE_CANDIDATE_AND_COMPATIBLE_RETURN_EPOCH_PROOF_PASS",
+  "events": 126,
+  "fields": 147,
+  "historicalPayloadsUnchanged": true,
+  "expiryDeniesLegacyRead": true,
+  "expiryDeniesNewWrites": false,
+  "v2ReadsRemainAvailableAfterLegacyExpiry": true,
+  "sealedPopulationReadAvailableWithoutPeriodicRenewal": true,
+  "writersIndependentOfHistoricalGrant": true,
+  "policyProposedSha256": "95eda044e469fe458d07fbdf5ec416aea7861873550f7db2ec1c7f0127d43d62",
+  "productionPolicyApproved": false,
+  "providerCalls": 0,
+  "dbWrites": 0
+}

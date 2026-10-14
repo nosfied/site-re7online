@@ -1,0 +1,18 @@
+{
+  "result": "KNOWN_SUBSTITUTE_PREPARATION_NO_PROVIDER_OR_CREATION",
+  "projectOwnerReported": "Default",
+  "newSubstituteCreated": false,
+  "originalKeyRecordBound": false,
+  "getModelsOrSupportIsMandatory": false,
+  "configuredConsumers": [
+    "re7-whatsapp-agent"
+  ],
+  "configuredDoesNotProveWorkerRuntimeUse": true,
+  "successorsAndReturns": "known substitute after activation, NEWauth+NEWDB preserved",
+  "savedFallbackAndBoot": "must carry substitute on canonical save, owner600 and umask077",
+  "revocation": "sufficient binding OR explicit decision covering inventory/unknown consumers; not authorized now",
+  "authBankRepeated": false,
+  "productionMutations": 0,
+  "workerHasConfiguredOpenaiKey": false,
+  "workerKeyNotAdded": true
+}

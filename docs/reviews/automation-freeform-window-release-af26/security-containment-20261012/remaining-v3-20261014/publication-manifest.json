@@ -1,0 +1,118 @@
+{
+  "scope": "public-review-code-and-sanitized-proofs",
+  "secretValueScan": "PASS",
+  "tests": {
+    "openaiSubstitute": 5,
+    "v4Adapter": 9,
+    "postgresSqlReadonlyVerify": "PASS",
+    "compiledEpoch147": "PASS",
+    "compiledContract": "PASS"
+  },
+  "entries": [
+    {
+      "path": "COMMANDS_FOR_REVIEW.txt",
+      "sha256": "71ad8c0e1d6a90658a3b5ea1de22833e4f6f8b8838416d821359f067229286e6",
+      "bytes": 3709
+    },
+    {
+      "path": "REVIEW.md",
+      "sha256": "b1f07d8ecd616231a1507545f7fd566c99fcad008397a4d4c5dd02b33fdbb189",
+      "bytes": 15846
+    },
+    {
+      "path": "cipher_consumers.py",
+      "sha256": "9457be5fe69c8c1604e22adaaf1ea79ea824fc56b99ce841a5589071012b43e2",
+      "bytes": 3092
+    },
+    {
+      "path": "cipher_sql.py",
+      "sha256": "06b88e1a03372d1df2c73addf066789f310cbabe3724db36f09f4e6bb41a33e4",
+      "bytes": 654
+    },
+    {
+      "path": "cipher_v4.py",
+      "sha256": "4c326772f845f9a89fd7f0e81e624130eec903c6a28da6317b260733b0696ec9",
+      "bytes": 6851
+    },
+    {
+      "path": "cipher_verify.py",
+      "sha256": "926cb6202d78840576b08f5fe098abd57930bcfc6a13be733b1cfebf3ed991a8",
+      "bytes": 4553
+    },
+    {
+      "path": "compose_local.py",
+      "sha256": "ff3382335ab2423af210f12b131c0f1251892c21b40e68852a227aad7592bcca",
+      "bytes": 5275
+    },
+    {
+      "path": "custody.sanitized.json",
+      "sha256": "868e8da65944d9b3dc2db70988512d630447fb5cad8f4b24dc9ad46407b08bee",
+      "bytes": 521
+    },
+    {
+      "path": "epoch.sanitized.json",
+      "sha256": "436f81373ba0acd66576db318c7d125ce3822d4b8cd31f6af52dfc9d606cd9e4",
+      "bytes": 548
+    },
+    {
+      "path": "openai.sanitized.json",
+      "sha256": "9b1c7ae0c72a3d0c4a98d7e6c7c60b958aecedd7aa6d6fc76e95419297d02066",
+      "bytes": 748
+    },
+    {
+      "path": "openai_substitute.py",
+      "sha256": "def69035e838bc4209b283daea412160dfa13389b87497a53453986c7ed3315c",
+      "bytes": 2504
+    },
+    {
+      "path": "postgres.sanitized.json",
+      "sha256": "cde44c962e66f12e5bdaf21ff11aca365ec21dce6a4177b26896c2ed355b5271",
+      "bytes": 675
+    },
+    {
+      "path": "runtime.sanitized.json",
+      "sha256": "30ec012bb449b3ac2e9cb570ec8bf26c06581e22fdda726fc204aaa3bfdabe8f",
+      "bytes": 733
+    },
+    {
+      "path": "seal_local_v4.py",
+      "sha256": "72d2d7fc9d882889cf38bd6bb724d3070cc90e3d31230543772216bc5bae18bd",
+      "bytes": 9097
+    },
+    {
+      "path": "test_cipher_postgres.py",
+      "sha256": "11f101bf381b66d53c5ff0562da9b32bb04f7d040542504afc483bff80cd7925",
+      "bytes": 7807
+    },
+    {
+      "path": "test_cipher_v4.py",
+      "sha256": "f5d2f7ff5b02e228ede7a365809874112a7b75028145be934ee08354411551fe",
+      "bytes": 9172
+    },
+    {
+      "path": "test_openai_substitute.py",
+      "sha256": "ac6892368e89a88a11bfe70e1df3430de503a2ea7efb0bfe6121e5f6347741b3",
+      "bytes": 2377
+    },
+    {
+      "path": "v4-tests.sanitized.json",
+      "sha256": "6d7d3bc7539047459a5eeaa458e44e5a23e0b30ddc8956c189cb4edb8ed0a987",
+      "bytes": 518
+    },
+    {
+      "path": "v4.sanitized.json",
+      "sha256": "65194c6e7354ec0d4bef84e756cc36f0591198872c0ef619a69ef2166abdbfc0",
+      "bytes": 1106
+    },
+    {
+      "path": "verify_epoch_compiled.mjs",
+      "sha256": "ed5ab3fb4b84a05a7cb4951776ee24d2845efa4460e686ff9f986542843f6eb1",
+      "bytes": 5182
+    }
+  ],
+  "responsible": "Deifson Oliveira",
+  "lastReview": "2026-10-14",
+  "nextReview": "2026-10-21",
+  "executionAuthorized": false,
+  "productionMutations": 0
+}

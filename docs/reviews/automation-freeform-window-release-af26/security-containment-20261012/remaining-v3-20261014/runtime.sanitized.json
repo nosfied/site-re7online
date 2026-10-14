@@ -1,0 +1,18 @@
+{
+  "result": "LOCAL_DERIVED_COMPLETE_COMPOSITION_PASS",
+  "artifactSha256": "36f51ebef7bf74f6efc90088254b1a806f427ee4f614ce9e0802b37d281a80cb",
+  "sourceArtifactSha256": "06f136d77e136231face3d4eb5c422598978f7971a3c1ae32773a80540dcc7b5",
+  "files": 446,
+  "preservedFromReviewedArtifact": 444,
+  "sourceSha256": {
+    "campaignSeedEpoch": "2b0d4032ad8cf65bc3f733d804e095faeb96e6b1d9c3f0cd56b89e4e0f17532b",
+    "campaignSeedPrivacy": "dfa74ea8607d77e9a482810aedd8517a22ca68ceec63be696efc565de735db1a"
+  },
+  "allocatedBytes": 26497024,
+  "dependenciesReusedEntries": 6944,
+  "historicalCaptureIsCurrentCertificate": false,
+  "executionAuthorized": false,
+  "gatesFalse": true,
+  "workerChanged": false,
+  "frontendChanged": false
+}

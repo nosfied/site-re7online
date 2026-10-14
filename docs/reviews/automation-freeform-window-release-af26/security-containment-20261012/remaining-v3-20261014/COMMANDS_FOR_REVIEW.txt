@@ -1,0 +1,48 @@
+ESCOPO LOCAL: nenhum comando produtivo, provider real, criação ou revogação.
+Worktree review/campaign-recovery-20260926; Node20.20.0 previamente atestado.
+Não repetir composição/provas já válidas por rotina. Reprodução usa saídas NOVAS700.
+
+Provas afetadas:
+python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v3-20261014/test_openai_substitute.py
+python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v3-20261014/test_cipher_v4.py
+python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v3-20261014/test_cipher_postgres.py
+O último cria cluster PG16 sintético /tmp, Unix socket, TCP rejeitado, sem providers.
+
+Reprodução de composição local nova (não buscar estado produtivo ou ajustar TTL):
+python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v3-20261014/compose_local.py SAIDA_NOVA_PRIVADA_700
+Gates: hash do tar pai,446 membros, compatibilidade/dependências, fontes e orçamento
+ANTES de copiar/compilar. Somente dois módulos; 444 preservados do candidato anterior.
+Exigir tar36f51ebef7bf74f6efc90088254b1a806f427ee4f614ce9e0802b37d281a80cb
+para a composição já preparada; uma nova reprodução deve conferir seu manifesto
+integral, não substituir automaticamente esse hash (tar inclui metadados de geração).
+
+Prova147 campos no compilado, sem SQL/provider:
+"$NODE20" docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v3-20261014/verify_epoch_compiled.mjs "$PWD" CANDIDATO_LOCAL_CONFERIDO PROVA_NOVA_PRIVADA_700
+A política produzida é proposta v2 selada, não autorização produtiva. Nunca instalar22/10.
+
+Selo V4 local novo, gatesfalse:
+python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v3-20261014/seal_local_v4.py SAIDA_NOVA_PRIVADA_700
+Geração preparada vigente: local-evidence/security-v3-v4-review-final-guarded-20261014.
+Conferir v4.sanitized.json, cipher-adapter-manifest.private.json e quatro modeFiles.
+Nenhum driver possui CLI de apply/start nesta publicação.
+
+Inspeção READ ONLY proposta: CipherDriver.classify(plan, planHash), usando o SQL
+cipher-readonly.private.sql selado e transporte que será fixado na NOVA geração V4.
+Não rodar contra produção nesta etapa; o teste PG fornece transporte isolado real.
+Intent incerto: somente classify e inspeção SQL/ledger/recibo, sem apply/replay/start.
+ORIGINAL_VERIFIED/VERIFIED observados não autorizam, por si, recuperação: decisão
+explícita e receipt canônico precedem a continuação correspondente.
+
+OpenAI: openai_substitute.plan(source_raw, issuance_raw, record_raw, provenance, project_id)
+usa bytes privados de emissão conhecida/registro e configurações. Sem consulta
+GET/models obrigatória e sem busca de recibo antigo. Substituta ainda não criada.
+Nenhuma decisão de revogação é emitida pelo planner. Consumer divergente/ID errado
+ou proveniência incompleta negam. Candidato/retorno preservam NEWauth+NEWDB e NEWopenAI.
+
+Ordem futura para decisão (não executar):
+revisar grant/disposição -> preparar baseline/capacidade/WAL/backup/restore frescos ->
+gerar nova V4/política/hashes -> instalar mediante autorização -> saída/DB ownership ->
+SQL único -> verify READ ONLY -> receipt -> consumidores/modo -> start único ->
+readiness/147/canais/controles -> saved/fallback600 -> guarda38 fechada/gatesfalse.
+Retorno pré-commit conserva chave efetiva e NEWauth+NEWDB; pós-VERIFIED só NEWcipher.
+OpenAI substituição/revogação são fases independentes, não condição do decoder local.

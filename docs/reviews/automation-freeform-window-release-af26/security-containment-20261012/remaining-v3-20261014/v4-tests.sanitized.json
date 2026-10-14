@@ -1,0 +1,14 @@
+{
+  "result": "LOCAL_V4_CIPHER_BOUNDARY_TESTS_PASS",
+  "tests": 9,
+  "canonicalV4StartAndRecoveryExercised": true,
+  "syntheticBridgeAndSqlState": true,
+  "realPostgresVerifierSeparateProof": "postgres.sanitized.json",
+  "uncertainCommitBlocksSuccessorAndReplay": true,
+  "beforeCommitOriginalReturnRequiresInspection": true,
+  "verifiedReturnUsesNewCipher": true,
+  "guard38ClosedThroughout": true,
+  "newAuthNewDbPreserved": true,
+  "productionProcessesOrProviders": 0,
+  "hookExecutionFalseDeniesBeforeSql": true
+}

@@ -44,7 +44,20 @@ test("canonical seed reader/writer: scoped immutable historical read and dedicat
     assert.throws(()=>readPrivateCampaignSeedFields({...historical,recipients:["plaintext"]},{clientId:"tenant-a"}),/fallback_denied/);
     setPolicy({...policy,expiresAt:Date.now()-1});
     assert.throws(()=>readPrivateCampaignSeedFields(historical,{clientId:"tenant-a"}),/expired_or_invalid/);
-    assert.throws(()=>buildPrivateCampaignSeedFields({clientId:"tenant-a",waIds:[]}),/expired_or_invalid/);
+    const independent=buildPrivateCampaignSeedFields({clientId:"tenant-a",waIds:["5541999990003"]});
+    assert.deepEqual(readPrivateCampaignSeedFields(independent,{clientId:"tenant-a"}).recipients,["5541999990003"]);
+    delete process.env.CAMPAIGN_SEED_HISTORICAL_POLICY_FILE;
+    delete process.env.CAMPAIGN_SEED_HISTORICAL_POLICY_SHA256;
+    assert.equal((buildPrivateCampaignSeedFields({clientId:"tenant-a",waIds:[]}).recipientsCiphertext as string).startsWith("v2:"),true);
+    process.env.CAMPAIGN_SEED_HISTORICAL_POLICY_FILE=file;
+    const population={version:2,authorization:"SEALED_IMMUTABLE_POPULATION",retirement:"EXPLICIT_DISPOSITION",
+      keySha256:policy.keySha256,entries:policy.entries,populationCount:1,
+      inventorySha256:hash(JSON.stringify(policy.entries)),sourceSnapshotSha256:"a".repeat(64),reviewReference:"synthetic-local-review"};
+    setPolicy(population);
+    const clock=Date.now;try{Date.now=()=>Date.UTC(2099,0,1);assert.deepEqual(readPrivateCampaignSeedFields(historical,{clientId:"tenant-a"}).recipients,["5541999990001"]);}finally{Date.now=clock;}
+    for(const invalid of [{...population,expiresAt:Date.now()+60000},{...population,populationCount:2},{...population,inventorySha256:"b".repeat(64)},{...population,reviewReference:""}]){
+      setPolicy(invalid);assert.throws(()=>readPrivateCampaignSeedFields(historical,{clientId:"tenant-a"}),/population_invalid/);
+    }
     assert.deepEqual(readPrivateCampaignSeedFields(fresh,{clientId:"tenant-a"}).recipients,["5541999990002"]);
     setPolicy(policy);process.env.CAMPAIGN_SEED_HISTORICAL_POLICY_SHA256="0".repeat(64);
     assert.throws(()=>readPrivateCampaignSeedFields(historical,{clientId:"tenant-a"}),/integrity_denied/);
