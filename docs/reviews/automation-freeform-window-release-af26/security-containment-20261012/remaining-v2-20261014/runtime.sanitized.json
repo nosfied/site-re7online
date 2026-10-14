@@ -1,0 +1,41 @@
+{
+  "result": "COMPLETE_COMPILED_API_AND_SHARED_COMPATIBLE_RETURN_LOCAL_PASS",
+  "artifactSha256": "06f136d77e136231face3d4eb5c422598978f7971a3c1ae32773a80540dcc7b5",
+  "files": 446,
+  "allocatedStagingBytes": 26497024,
+  "dependenciesIndexSha256": "8013536a0cc5149b4517f1b99af87e2666f36c7664223fe9a2b393098202a149",
+  "dependencyEntries": 6944,
+  "return": "same immutable compiled artifact, separately bound return configuration; no second executable copy",
+  "budget": {
+    "root": {
+      "phase": "decoder-epoch-and-channel-local-review",
+      "reserveSource": "retained operational floor2131755008 plus explicit new independent rubrics; this is a proposal, not a window gate",
+      "canonicalReserveBytes": 2131755008,
+      "stagingBytes": 67108864,
+      "returnBytes": 4194304,
+      "backupBytes": 5231345664,
+      "walGrowthBytes": 1073741824,
+      "evidenceBytes": 268435456,
+      "nonOverlappingRubrics": true
+    }
+  },
+  "dumpBoundBytes": 3152019456,
+  "restoreBoundBytes": 2079326208,
+  "capacity": [
+    {
+      "minimumAvailableBytes": 18471538688,
+      "shortfallBytes": 0,
+      "projectedAvailableBytes": 18471538688,
+      "projectedMarginBytes": 9694957568,
+      "budgetFitsNow": true,
+      "capacityCertified": false,
+      "filesystem": "root",
+      "phase": "decoder-epoch-and-channel-local-review",
+      "reserveSource": "retained operational floor2131755008 plus explicit new independent rubrics; this is a proposal, not a window gate"
+    }
+  ],
+  "productionWindowReady": false,
+  "gatesFalse": true,
+  "workerChanged": false,
+  "frontendChanged": false
+}

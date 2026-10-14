@@ -1,0 +1,15 @@
+{
+  "result": "OPENAI_CURRENT_CONFIG_AND_EXPOSURE_CUSTODY_MATCH_PROJECT_BINDING_DENY",
+  "configuredMatchesExposureInventory": true,
+  "ownerReportedProject": "Default",
+  "ownerReportedKeyName": "re7online-whatsapp-agent-prod",
+  "ownerReportedStatus": "Active",
+  "ownerReportedOwner": "Deifson Oliveira",
+  "ownerReportedPermissions": "All",
+  "jsonDocumentsScanned": 3566,
+  "skippedOutside4MiBOrTypeScope": 19,
+  "exactProjectKeyIdBound": false,
+  "revocationAuthorized": false,
+  "ownerHasOriginalIssuanceReceipt": false,
+  "alternative": "one authorized readonly models challenge plus issuer request-id/key-id correlation; not executed"
+}

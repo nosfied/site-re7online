@@ -1,0 +1,11 @@
+{
+  "result": "CURRENT_PRIVATE_CIPHER_INVENTORY_READONLY_CAPTURED",
+  "channelEncrypted": 11,
+  "channelFailed": 1,
+  "externalRefs": 341,
+  "seedEvents": 126,
+  "completeEncryptedSeedPopulationChecked": true,
+  "providerCalls": 0,
+  "collectorSourceSha256": "4dfdd69b2b6cfa09e65780f7fe1da2c47df5a4445d93d150e521f866caebf244",
+  "captureSha256": "c77df87a10735dea7c78d259f3753d70a3e5b6d6b165ac50099f9bf43f82c11a"
+}

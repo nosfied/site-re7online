@@ -1,0 +1,151 @@
+{
+  "scope": "public-local-review-files-only",
+  "entries": [
+    {
+      "path": "COMMANDS_FOR_REVIEW.txt",
+      "sha256": "302d87481729dd1484fb781d0e6274fb35cc048753d8706c23d58b3002d0e5db",
+      "bytes": 3929
+    },
+    {
+      "path": "REVIEW.md",
+      "sha256": "1b68843c41d450ff7c41798d980d799fee9b9db1f20b6069187edd2a1d049028",
+      "bytes": 11501
+    },
+    {
+      "path": "capture_cipher_current.py",
+      "sha256": "ce599f1da86eb86a45f0f65d0c6a22bb912b1c584ca119f36acbbcd1742dbece",
+      "bytes": 5474
+    },
+    {
+      "path": "capture_preparation_readonly.py",
+      "sha256": "518b1d89f05509277c67eec3a4ef0e5d9887b0702908921ce8f08379cb0dfc43",
+      "bytes": 5522
+    },
+    {
+      "path": "channel-plan.sanitized.json",
+      "sha256": "caf2fc634d27558f75460b9e67eb900af0d44c06673630c5d5cd7599bbe69229",
+      "bytes": 525
+    },
+    {
+      "path": "channel_fixture.cjs",
+      "sha256": "9267b9079c4bd4bbb0a99759237fed5da94ce9dcdce7fc498a562575dce3213e",
+      "bytes": 3540
+    },
+    {
+      "path": "channel_plan_v2.cjs",
+      "sha256": "bc0c82e4f8d8b7ffcf30375b1e963a8efe5b00229f1dc3edd0d2796d410f5eb5",
+      "bytes": 2714
+    },
+    {
+      "path": "channel_transaction.py",
+      "sha256": "42d76d45b58cd840daf493212350953e8111b98d6deb3745fdcfe1f2bc2a29df",
+      "bytes": 5939
+    },
+    {
+      "path": "cipher-boundary.sanitized.json",
+      "sha256": "3723d643428f95ce274ad2ea348ba3596697e4440078e5e816c01dd3884cdece",
+      "bytes": 1013
+    },
+    {
+      "path": "cipher-current.sanitized.json",
+      "sha256": "b6c8e168283c881d6cbf50d45e51e5f4aca55b96dde1d5386e4a7b431d073ac1",
+      "bytes": 415
+    },
+    {
+      "path": "compiled-delta.sanitized.json",
+      "sha256": "a03f6d3aeb14f5de324782772a714306ad2ad8771da8ddc1f1d126ada7438609",
+      "bytes": 1679
+    },
+    {
+      "path": "custody.sanitized.json",
+      "sha256": "a1307f01e896238a49a2475663f5d55d4427abbdf8c4ca1ab39bd3541a73a6bd",
+      "bytes": 515
+    },
+    {
+      "path": "dependency_test_loader.mjs",
+      "sha256": "959efd984e3ddfc90fead4ffa9ab9ac8a1aad1e252ae1752e1ddaab41bf00940",
+      "bytes": 464
+    },
+    {
+      "path": "epoch.sanitized.json",
+      "sha256": "5e6e0369d5522fe0dc44cfb8520f15d966490faaac3869d0626393d14eadf474",
+      "bytes": 484
+    },
+    {
+      "path": "openai.sanitized.json",
+      "sha256": "ded8e24a0b763d5a65a1839fa4ea652ee39f94c885d4b0427333f1aab784b044",
+      "bytes": 646
+    },
+    {
+      "path": "openai_binding.py",
+      "sha256": "cfe8da4a9f8d2a6e0d5e51189ed80339d84f5dd8da238e8d74f964646b2978ad",
+      "bytes": 2412
+    },
+    {
+      "path": "openai_readonly_challenge.py",
+      "sha256": "7f2656e078d36af49c6714231b8ba9e19555dd013c023eed29fa50150b48b4b1",
+      "bytes": 4405
+    },
+    {
+      "path": "postgres.sanitized.json",
+      "sha256": "768d540deb9f559f0c7165a5d1e680a0dc9e31d430e0a2c6c7ab242038cce06c",
+      "bytes": 582
+    },
+    {
+      "path": "prepare_channel_local.cjs",
+      "sha256": "66d9c3a1e8ec9f3bae57d1b316f697e793a08348cd454fd3c201a34dfc13000c",
+      "bytes": 4808
+    },
+    {
+      "path": "prepare_complete_runtime.py",
+      "sha256": "d2cbd43f9193a8dc44743df3e2b9af5848278e05b80c1283378e9e9b4fa5ab7e",
+      "bytes": 13685
+    },
+    {
+      "path": "roles-and-gates.sanitized.json",
+      "sha256": "eaaeee10743f25918b55936cf78939e3f997b01432559845246a9e7b55e46611",
+      "bytes": 1267
+    },
+    {
+      "path": "runtime.sanitized.json",
+      "sha256": "c62e1a4f3e58c5fbb6b10b5904146ac72ecc8e3ed8c8b2390a61d294a56fe8e5",
+      "bytes": 1597
+    },
+    {
+      "path": "sealed-gates.sanitized.json",
+      "sha256": "306e4290cf0ed7b6ae1389cdd07cd7959fd32da7d627f3b811a7f9ac5afcbec0",
+      "bytes": 759
+    },
+    {
+      "path": "test_channel_postgres.py",
+      "sha256": "ff25172cb17f4a30c219e4b9baab6fd5671d7a3d1db72a0ffa4ea0a5ffaad592",
+      "bytes": 6118
+    },
+    {
+      "path": "test_openai_binding.py",
+      "sha256": "07482d2f6e1105816d5d472722cfafba9ca47c05e6fab3de0f3caea893598b99",
+      "bytes": 3007
+    },
+    {
+      "path": "test_runtime_gates.py",
+      "sha256": "d9e42fbe30f669af7ac6149239dabe9220f9ae411a648518e98a2c362111aab6",
+      "bytes": 1257
+    },
+    {
+      "path": "verify_epoch_compiled.mjs",
+      "sha256": "1ca22fe365c0e469037ac6aaa6b217a427e162bb9bf5cfb6d40f21c01dcefdce",
+      "bytes": 4713
+    }
+  ],
+  "secretValueScan": "PASS",
+  "productionMutations": 0,
+  "tests": {
+    "openaiMock": 3,
+    "runtimeGate": 2,
+    "postgresContract": "PASS",
+    "compiledEpoch": "PASS",
+    "typecheck": "PASS"
+  },
+  "nextReview": "2026-10-21",
+  "responsible": "Deifson Oliveira"
+}

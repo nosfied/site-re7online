@@ -1,0 +1,17 @@
+const fs=require('fs'),assert=require('assert/strict'),path=require('path');
+const {planChannel,sha}=require('./channel_plan_v2.cjs');
+(async()=>{
+ const root=path.resolve(process.argv[2]),out=path.resolve(process.argv[3]);
+ const {encryptChannelAccountSecret:enc,decryptChannelAccountSecret:dec}=await import(root+'/local-evidence/dynamic-integrated-20261012/post-reboot/api-exact-composition/apps/whatsapp-agent/dist/channels/channelAccountSecretCrypto.js');
+ const old='synthetic-channel-old-'.repeat(4),next='synthetic-channel-new-'.repeat(4),accounts=[],rows=[];
+ for(let i=0;i<11;i++){const id='synthetic-account-'+i,clientId=i%2?'11111111-1111-4111-8111-111111111111':'22222222-2222-4222-8222-222222222222';accounts.push({id,clientId,channel:i===10?'TELEGRAM':'WHATSAPP_WEB',provider:'synthetic',displayName:'synthetic-only',channelAccountId:'synthetic-external-'+i,externalAccountIds:null,externalBusinessId:null,metadata:{synthetic:true},enabled:true,automationEnabled:false,runtimeEnabled:false,inboundPersistenceEnabled:false,outboundEnabled:false,aiEnabled:false,handoffEnabled:false,status:'pending',tokenStatus:'missing',createdAt:'2026-10-01T00:00:00.000Z',updatedAt:'2026-10-01T00:00:00.000Z'});rows.push({id:'synthetic-secret-'+i,channelAccountId:id,secretKind:'auth',secretHash:'synthetic-hash-'+i,secretCiphertext:i===10?'v1:invalid:invalid:invalid':enc('synthetic-token-'+i,old),encryptionKeyRef:'CHANNEL_ACCOUNT_SECRET_KEY',status:'active',createdAt:'2026-10-01T00:00:00.000Z',updatedAt:'2026-10-01T00:00:00.000Z'});}
+ const snapshot={data:{groups:[{model:'channelAccountSecret',rows}],accounts},sourceSha256:sha('synthetic-original-source')};const r=rows[10];
+ const disposition={contract:'PRESERVE_OPAQUE_HISTORICAL_NO_ACTIVATION',scope:'LOCAL_REVIEW_ONLY_NOT_PRODUCTION_APPROVAL',clientId:accounts[10].clientId,accountId:r.channelAccountId,secretId:r.id,canonicalAccountSha256:sha(JSON.stringify(accounts[10])),canonicalRowSha256:sha(JSON.stringify(r)),ciphertextSha256:sha(r.secretCiphertext),sourceSnapshotSha256:snapshot.sourceSha256,sourceDataSha256:sha(JSON.stringify(snapshot.data)),sourceBindingSha256:sha('synthetic-binding-source'),ownerDeclaredFutureUnused:true};
+ const seal=sha(JSON.stringify(disposition)),plan=planChannel(snapshot,disposition,seal,old,next,dec,enc);
+ for(const field of ['clientId','accountId','canonicalAccountSha256','canonicalRowSha256','ciphertextSha256','sourceSnapshotSha256','sourceBindingSha256']){let bad={...disposition,[field]:'wrong'};assert.throws(()=>planChannel(snapshot,bad,sha(JSON.stringify(bad)),old,next,dec,enc));}
+ assert.throws(()=>planChannel(snapshot,disposition,'0'.repeat(64),old,next,dec,enc));
+ const bad=structuredClone(snapshot);bad.data.groups[0].rows[0].secretCiphertext='v1:invalid:invalid:invalid';const d={...disposition,sourceDataSha256:sha(JSON.stringify(bad.data))};assert.throws(()=>planChannel(bad,d,sha(JSON.stringify(d)),old,next,dec,enc),/unreadable/);
+ for(const c of plan.changes)assert.equal(dec(c.nextCiphertext,next),'synthetic-token-'+Number(c.id.split('-').at(-1)));
+ fs.writeFileSync(out+'/fixture-plan.private.json',JSON.stringify(plan),{flag:'wx',mode:0o600});fs.writeFileSync(out+'/fixture-accounts.private.json',JSON.stringify(accounts),{flag:'wx',mode:0o600});
+ console.log(JSON.stringify({result:'CHANNEL_CANONICAL_FIXTURE_AND_NEGATIVES_PASS',converted:10,opaqueRetained:1,negativeCases:9,providerCalls:0}));
+})().catch(e=>{console.error(JSON.stringify({result:'CHANNEL_FIXTURE_DENY',errorClass:e.name}));process.exitCode=1});

@@ -1,0 +1,25 @@
+{
+  "result": "REVIEW_ONLY_PRE_POST_CIPHER_CONFIG_BOUNDARIES",
+  "profiles": {
+    "candidate": {
+      "preCipher": "1a38e83408038f66be87074f962b91f5526c29d52f7ae0ca4da0a6762e429964",
+      "postCipher": "01e1196e1705b3d36b8818d036f4a3162cfb0a61d7117125dd4bc649ad7135e9"
+    },
+    "return-compatible": {
+      "preCipher": "a46293bc59291885120c5ccc44364fa63c38650711b435d4ed07190e4731030e",
+      "postCipher": "8693a359b1f5a9753d49496c9b9fff6399399c6108c86c66b0c68f854d0a0cb8"
+    }
+  },
+  "oldExposedChannelKeyRestoredAfterCommit": false,
+  "newAuthNewDbPreserved": true,
+  "seedDedicatedDistinctFromPlannedCipherKeys": true,
+  "productionAuthorized": false,
+  "sqlPlanHash": "4abcbeb2b3136d823803d32a86b4271a4fba99eb6382574d0ec3edadad7916e0",
+  "sqlSha256": "e1aa19b468a59f078edf49fd995f525c5ed6f17f6a82228bb0b3eb2bc239dbcf",
+  "sqlBytes": 14686305,
+  "opaqueRetained": 1,
+  "readableConverted": 10,
+  "all147OriginalFieldsReconfirmed": true,
+  "oldPlansPreserved": true,
+  "receiptsScopedPerTenant": true
+}

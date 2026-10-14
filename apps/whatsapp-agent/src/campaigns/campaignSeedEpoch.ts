@@ -53,17 +53,7 @@ function decrypt(raw: string, secret: string | undefined, authenticated?: Buffer
     return JSON.parse(Buffer.concat([d.update(bytes), d.final()]).toString("utf8")) as unknown;
   } catch { throw new Error("campaign_seed_cipher_authentication_denied"); }
 }
-export function readEpochSeed(record: Record<string, unknown>, field: Field, context?: SeedReadContext) {
-  const raw = record[field];
-  requireThat(context?.clientId, "campaign_seed_context_missing");
-  requireThat(typeof raw === "string", "campaign_seed_cipher_missing");
-  if (raw.startsWith("v2:")) {
-    const m = record.seedEncryption as Metadata | undefined;
-    requireThat(m?.version === 2 && m.clientId === context.clientId &&
-      typeof m.seedId === "string" && /^[a-f0-9-]{36}$/.test(m.seedId) && m.epoch === seedWriteEpoch(), "campaign_seed_epoch_binding_denied");
-    return decrypt(raw, process.env.CAMPAIGN_SEED_SECRET, aad(m, field));
-  }
-  requireThat(raw.startsWith("v1:"), "campaign_seed_cipher_version_denied");
+function historicalPolicy() {
   const file = process.env.CAMPAIGN_SEED_HISTORICAL_POLICY_FILE;
   const expected = process.env.CAMPAIGN_SEED_HISTORICAL_POLICY_SHA256;
   requireThat(file && path.isAbsolute(file) && expected, "campaign_seed_historical_policy_missing");
@@ -91,6 +81,25 @@ export function readEpochSeed(record: Record<string, unknown>, field: Field, con
     typeof e.ciphertextSha256 === "string" && /^[a-f0-9]{64}$/.test(e.ciphertextSha256)), "campaign_seed_historical_entry_invalid");
   const secret = process.env.CAMPAIGN_SEED_HISTORICAL_SECRET;
   requireThat(secret && policy.keySha256 === hash(secret.trim()), "campaign_seed_historical_key_drift");
+  return { policy, secret };
+}
+export function assertSeedEpochWriteAuthorized() {
+  // The legacy population remains present. Deny new writes when its sealed
+  // authorization expires; v2 reads do not depend on this authorization.
+  historicalPolicy();
+}
+export function readEpochSeed(record: Record<string, unknown>, field: Field, context?: SeedReadContext) {
+  const raw = record[field];
+  requireThat(context?.clientId, "campaign_seed_context_missing");
+  requireThat(typeof raw === "string", "campaign_seed_cipher_missing");
+  if (raw.startsWith("v2:")) {
+    const m = record.seedEncryption as Metadata | undefined;
+    requireThat(m?.version === 2 && m.clientId === context.clientId &&
+      typeof m.seedId === "string" && /^[a-f0-9-]{36}$/.test(m.seedId) && m.epoch === seedWriteEpoch(), "campaign_seed_epoch_binding_denied");
+    return decrypt(raw, process.env.CAMPAIGN_SEED_SECRET, aad(m, field));
+  }
+  requireThat(raw.startsWith("v1:"), "campaign_seed_cipher_version_denied");
+  const { policy, secret } = historicalPolicy();
   const matches = policy.entries.filter((e: Record<string, unknown>) => e.clientId === context.clientId &&
     e.field === field && e.payloadSha256 === hash(JSON.stringify(record)) && e.ciphertextSha256 === hash(raw));
   requireThat(matches.length === 1 && typeof matches[0].eventId === "string" && matches[0].eventId,

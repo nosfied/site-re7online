@@ -1,0 +1,13 @@
+{
+  "result": "LOCAL_CHANNEL_PLAN_WITH_OPAQUE_DISPOSITION_PASS_NOT_APPLIED",
+  "convertedLegible": 10,
+  "retainedOpaque": 1,
+  "inventoryCount": 11,
+  "dispositionSeal": "0e7876eb068c29ab9e160cc2e2b3a783ffb8bb46d47eab9d9cba3bcdac62a187",
+  "planHash": "4abcbeb2b3136d823803d32a86b4271a4fba99eb6382574d0ec3edadad7916e0",
+  "originalCipherModuleSha256": "7e245c304f44f387212b4dfafc3a19290b64f7c0ec84de60fcee7919d21bd624",
+  "providerCalls": 0,
+  "sqlWrites": 0,
+  "plaintextSerialized": false,
+  "productionApproved": false
+}

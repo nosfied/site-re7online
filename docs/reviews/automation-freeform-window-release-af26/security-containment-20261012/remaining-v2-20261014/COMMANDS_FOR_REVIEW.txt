@@ -1,0 +1,46 @@
+ESCOPO: comandos LOCAIS revisáveis. Não são autorização de produção.
+Executar a partir do worktree review/campaign-recovery-20260926.
+Não repetir composição já válida; estes comandos documentam reprodução em saída NOVA.
+NODE20 é o executável Node20.20.0 previamente conferido. Nunca importar entrypoint.
+
+1. Provas dirigidas (OpenAI usa mocks; PostgreSQL cria cluster isolado sem provider):
+python3 -m unittest discover -s docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v2-20261014 -p test_openai_binding.py
+python3 -m unittest discover -s docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v2-20261014 -p test_runtime_gates.py
+python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v2-20261014/test_channel_postgres.py
+
+2. Artefato existente: conferir sem reconstruir.
+sha256sum local-evidence/security-complete-runtime-20261014/api-seed-epoch.tar
+Exigir 06f136d77e136231face3d4eb5c422598978f7971a3c1ae32773a80540dcc7b5.
+Confrontar os446 membros com runtime-manifest.private.json; não extrair sobre produção.
+Custódia: conferir custody-index.private.json e recuperar em diretório NOVO700,
+negando membro absoluto, '..', links ou conjunto distinto do índice.
+Não imprimir o manifesto/configuração privada. Retorno usa o mesmo tar em cwd distinto.
+
+3. Composição futura, somente após capturas canônicas novas:
+python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v2-20261014/prepare_complete_runtime.py CAPTURES_PRIVADAS BASE_ATIVA_ATESTADA OVERLAY_REVISADO SAIDA_NOVA_700 CAPTURE_SHA_CONFERIDO DEPENDENCY_SHA_CONFERIDO
+As posições são argumentos privados, não env segredos. Capturas desta entrega
+vencem após3600s; não substituir timestamp/hash para reaproveitar selo vencido.
+--verify-existing inspeciona saída existente sem copiar, também exige captura fresca.
+
+4. Plano canal local em saída NOVA700, Node20.20.0:
+"$NODE20" docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v2-20261014/prepare_channel_local.cjs "$PWD" SAIDA_NOVA_700 SNAPSHOT_ORIGINAL_PRIVADO_CONFERIDO
+Para o plano preparado, exigir 4abcbeb2b3136d823803d32a86b4271a4fba99eb6382574d0ec3edadad7916e0.
+channel_transaction.render gera SQL de revisão; não há apply produtivo nesta entrega.
+SQL final privado: channel-apply.tenant-receipts-final.review-only.private.sql.
+Exigir hash/bytes publicados em cipher-boundary.sanitized.json.
+
+5. Consulta OpenAI PROPOSTA, NÃO executada, exige autorização própria:
+python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v2-20261014/openai_readonly_challenge.py --source FONTE_API_PRIVADA_ABSOLUTA --source-sha256 SHA_FRESCO_CONFERIDO --output DIRETORIO_NOVO_PRIVADO_700 --owner-authorized-readonly-challenge
+Uma invocação, timeout10s, intent/recibo exclusivos. Sem segredo no argumento/env.
+200 != vínculo com ID. Owner correlaciona request-ID/UTC com ID de chave+projeto
+pelo emissor e registro independente do console. Sem resposta comprovante: OPEN.
+Timeout/erro/incerteza: preservar receipt/intent, sem replay automático/revogação.
+
+6. Sequência operacional futura, ainda sem comandos de apply autorizados:
+aprovar disposição/grant -> integrar hooks V4 e nova geração/políticas propostas ->
+fechar referências/root/retorno -> backup/RPO/custódia/restore -> preflight fresco ->
+janela decoder com retorno compatível -> verificar147 legados e escrita v2 ->
+fronteira SQL cifragem/verify -> sucessores com NEWcipher -> health/leitura/saved/fallback.
+Antes de commit: chave ainda efetiva+NEWauth+NEWDB. VERIFIED: NEWcipher somente.
+Incerto: inspeção/decisão explícita, nunca replay ou OLDcipher reativado.
+Nenhum start/SQL/helper/política acima deve ser inferido como autorizado agora.

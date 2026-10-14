@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
 import { normalizeWaIdDigits } from "../utils/waid.js";
-import { encryptEpochSeed, newSeedMetadata, readEpochSeed, seedWriteEpoch, type SeedReadContext } from "./campaignSeedEpoch.js";
+import { assertSeedEpochWriteAuthorized, encryptEpochSeed, newSeedMetadata, readEpochSeed, seedWriteEpoch, type SeedReadContext } from "./campaignSeedEpoch.js";
 
 const CIPHER_PREFIX = "v1:";
 const CAMPAIGN_SEED_SECRET_REF = "CAMPAIGN_SEED_SECRET|CHANNEL_ACCOUNT_SECRET_KEY|APP_AUTH_SECRET";
@@ -91,6 +91,7 @@ export function buildPrivateCampaignSeedFields(params: {
   const recipients = params.waIds.map((waId) => String(waId ?? "").trim()).filter(Boolean);
   const componentsByWaId = params.componentsByWaId ?? {};
   const epoch = seedWriteEpoch();
+  if (epoch) assertSeedEpochWriteAuthorized();
   const metadata = epoch ? newSeedMetadata(params.clientId, epoch) : null;
   const recipientsCiphertext = metadata ? encryptEpochSeed(recipients, metadata, "recipientsCiphertext") : encryptSeedJson(recipients);
   const componentsCiphertext =

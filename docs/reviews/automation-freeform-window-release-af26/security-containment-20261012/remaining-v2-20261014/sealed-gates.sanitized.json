@@ -1,0 +1,20 @@
+{
+  "result": "SEALED_CAPTURES_SOURCE_IDENTITY_BUDGET_DEPENDENCIES_AND_EXISTING_ARTIFACT_PASS",
+  "dependencyLinksClosed": 10,
+  "artifactSha256": "06f136d77e136231face3d4eb5c422598978f7971a3c1ae32773a80540dcc7b5",
+  "artifactCopiedAgain": false,
+  "capacity": [
+    {
+      "minimumAvailableBytes": 18471538688,
+      "shortfallBytes": 0,
+      "projectedAvailableBytes": 18471538688,
+      "projectedMarginBytes": 9694957568,
+      "budgetFitsNow": true,
+      "capacityCertified": false,
+      "filesystem": "root",
+      "phase": "decoder-epoch-and-channel-local-review",
+      "reserveSource": "retained operational floor2131755008 plus explicit new independent rubrics; this is a proposal, not a window gate"
+    }
+  ],
+  "executionAuthorized": false
+}

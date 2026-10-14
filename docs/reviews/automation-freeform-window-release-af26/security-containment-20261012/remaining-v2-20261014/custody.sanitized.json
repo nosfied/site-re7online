@@ -1,0 +1,14 @@
+{
+  "result": "PERMANENT_OFF_HOST_CUSTODY_VERIFIED",
+  "files": 48,
+  "allocatedBytes": 80793600,
+  "indexSha256": "192e0225051aa63814baaa19118a12f188fc76dcd5676c57f82ea33fd53f1d1c",
+  "tarHashVerified": true,
+  "isolatedExtractionPreviouslyVerified": true,
+  "custodyTar446MemberHashesVerified": true,
+  "availableBytesToOwner": 246085578752,
+  "dumpRestoreBudgetFitsOffHost": true,
+  "physicalIndependentReplicaClaimed": false,
+  "ownerDirectory700Files600": true,
+  "atUtc": "2026-10-14T16:55:19.772832+00:00"
+}

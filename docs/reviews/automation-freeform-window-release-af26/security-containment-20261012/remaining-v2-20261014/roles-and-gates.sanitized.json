@@ -1,0 +1,25 @@
+{
+  "generation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-seed-review-20261014",
+  "purpose": "LOCAL_REVIEW_NOT_INSTALLED",
+  "artifactSha256": "06f136d77e136231face3d4eb5c422598978f7971a3c1ae32773a80540dcc7b5",
+  "sourceConfigSha256": "bce14f1895c53c0e378e558c9d78dd560b66d7450d1176265251e290833d4d33",
+  "candidateConfigSha256": "1a38e83408038f66be87074f962b91f5526c29d52f7ae0ca4da0a6762e429964",
+  "returnConfigSha256": "a46293bc59291885120c5ccc44364fa63c38650711b435d4ed07190e4731030e",
+  "historicalPolicyProposedSha256": "b9a42d2f785b83e8a5b8c5b9745822d9450c4a23924baac19f30ed11e22f1bbc",
+  "activationRequiresMinimumPolicyLifetimeSeconds": 604800,
+  "expiresAtProposedUtc": "2026-10-22T21:00:00Z",
+  "expiryApproved": false,
+  "globalOperationalReferenceClosureVerified": false,
+  "executionAuthorized": false,
+  "gates": {
+    "artifactsVerified": false,
+    "discrepanciesResolved": false,
+    "ownerAuthorized": false,
+    "preflightReviewed": false,
+    "restoreVerified": false
+  },
+  "runtimeBuildMarker": "seed-epoch-review-06f136d77e13",
+  "configurationRevision": "v3-distinct-compatible-return-cwd-same-immutable-artifact",
+  "scriptWasAbsolute": true,
+  "returnIsAlternativeDecoderImplementation": false
+}

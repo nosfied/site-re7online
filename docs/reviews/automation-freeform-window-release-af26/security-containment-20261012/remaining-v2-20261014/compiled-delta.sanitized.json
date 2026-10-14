@@ -1,0 +1,47 @@
+{
+  "activeBaseCompiledIndexSha256": "2c806c2233461c71d98d5d782f4b7b549551512e1b376eefe62472db8664b08f",
+  "artifactSha256": "06f136d77e136231face3d4eb5c422598978f7971a3c1ae32773a80540dcc7b5",
+  "preservedFiles": 439,
+  "changedOrAdded": [
+    {
+      "path": "dist/campaigns/campaignAcceptedFailureReconciliation.js",
+      "sha256": "28174584a4f6701f97e32b331242c11d27d76747262d9e970501181b7a1f139a",
+      "bytes": 15477
+    },
+    {
+      "path": "dist/campaigns/campaignRecipientImport.js",
+      "sha256": "265560afce8c8d4f7018c4588b764ef62aeff860b315bdd8b71e555ad7ec9bb8",
+      "bytes": 34184
+    },
+    {
+      "path": "dist/campaigns/campaignRunner.js",
+      "sha256": "6f8ddbb0cbdae8ab755cece930887570ee5b875a59edab50a5c3499962a28922",
+      "bytes": 84266
+    },
+    {
+      "path": "dist/campaigns/campaignSeedEpoch.js",
+      "sha256": "c35a84a179cd034e2d786534f12f10dde11a5f3e10a2e6627d990f8043b90cf0",
+      "bytes": 6007
+    },
+    {
+      "path": "dist/campaigns/campaignSeedPrivacy.js",
+      "sha256": "f215b5b873c2942ac4a7437235f4df516437090f0197dcc2c1107fe630f4526b",
+      "bytes": 9141
+    },
+    {
+      "path": "dist/http/routes.js",
+      "sha256": "27b689d964b389c56dd46c3027c38c36931eaa1afaf450a11a0fdef990a0eaa0",
+      "bytes": 1600895
+    },
+    {
+      "path": "dist/privacy/privacyRetentionService.js",
+      "sha256": "0d68c63fa287a688744eb21dc2316c5fb93d4a9a6229c4b274fa3588b4ea677a",
+      "bytes": 48328
+    }
+  ],
+  "fullIndexSha256": "13734edb0f2fd9c75bc0e78af41402cd9b8a45cdf05715590af430aab5d7c64b",
+  "configurationIncludedInPublicArtifact": false,
+  "dependenciesCopied": false,
+  "workerChanged": false,
+  "frontendChanged": false
+}

@@ -44,6 +44,8 @@ test("canonical seed reader/writer: scoped immutable historical read and dedicat
     assert.throws(()=>readPrivateCampaignSeedFields({...historical,recipients:["plaintext"]},{clientId:"tenant-a"}),/fallback_denied/);
     setPolicy({...policy,expiresAt:Date.now()-1});
     assert.throws(()=>readPrivateCampaignSeedFields(historical,{clientId:"tenant-a"}),/expired_or_invalid/);
+    assert.throws(()=>buildPrivateCampaignSeedFields({clientId:"tenant-a",waIds:[]}),/expired_or_invalid/);
+    assert.deepEqual(readPrivateCampaignSeedFields(fresh,{clientId:"tenant-a"}).recipients,["5541999990002"]);
     setPolicy(policy);process.env.CAMPAIGN_SEED_HISTORICAL_POLICY_SHA256="0".repeat(64);
     assert.throws(()=>readPrivateCampaignSeedFields(historical,{clientId:"tenant-a"}),/integrity_denied/);
     setPolicy(policy);fs.chmodSync(file,0o644);

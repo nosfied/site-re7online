@@ -1,0 +1,14 @@
+{
+  "result": "COMPLETE_CANDIDATE_AND_COMPATIBLE_RETURN_EPOCH_PROOF_PASS",
+  "events": 126,
+  "fields": 147,
+  "historicalPayloadsUnchanged": true,
+  "expiryDeniesLegacyRead": true,
+  "expiryDeniesNewWrites": true,
+  "v2ReadsRemainAvailableAfterLegacyExpiry": true,
+  "explicitRenewalTestEntriesUnchanged": true,
+  "policyProposedSha256": "b9a42d2f785b83e8a5b8c5b9745822d9450c4a23924baac19f30ed11e22f1bbc",
+  "productionPolicyApproved": false,
+  "providerCalls": 0,
+  "dbWrites": 0
+}
