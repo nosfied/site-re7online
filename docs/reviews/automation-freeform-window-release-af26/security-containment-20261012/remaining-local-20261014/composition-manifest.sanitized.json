@@ -1,0 +1,72 @@
+{
+  "result": "LOCAL_SCOPED_SEED_OVERLAY_PASS_NOT_DEPLOYABLE",
+  "sourceRevision": "b2a73dabe377474db625459d89ab5e5b7563ce12",
+  "baseCompiledIndexSha256": "2c806c2233461c71d98d5d782f4b7b549551512e1b376eefe62472db8664b08f",
+  "baseCompiledFiles": 443,
+  "node": "20.20.0",
+  "compilerSha256": "3ae902c92cc44dace175c0e69e13a4b0899f6983c6121d76b9ab8dd5795e7675",
+  "changes": [
+    {
+      "path": "dist/campaigns/campaignAcceptedFailureReconciliation.js",
+      "baseSha256": "4c9877dbf4157f8db17cda5d05ab6c21984a296e0468e91205ff9fb305fa8435",
+      "candidateSha256": "28174584a4f6701f97e32b331242c11d27d76747262d9e970501181b7a1f139a",
+      "oldSourceSha256": "1146a3d0863ed6d560847e84afc1d8c8f1d97e04adf20037f03f9fd57e83920b",
+      "newSourceSha256": "131d31e6669c8291c61641751c5fa8550b05c560b916c2af1ebaeb83690d39eb",
+      "compiledDeltaSha256": "473345b98945fd5c8caec14587d9a2b8f651fe2143e0b6172aec9a3468ea64e7"
+    },
+    {
+      "path": "dist/campaigns/campaignRecipientImport.js",
+      "baseSha256": "5e9d0301f3d702eee2110949c63da329792615b90e1de7fd648be7c0c6aeee81",
+      "candidateSha256": "265560afce8c8d4f7018c4588b764ef62aeff860b315bdd8b71e555ad7ec9bb8",
+      "oldSourceSha256": "613a230b63d07229fabe50f77bd626187015dffbe0a97b4e230147acba5e830f",
+      "newSourceSha256": "dd298b8ba238b84b05e24951dafe2a9dc7215acd7150be71a443faeb023dac19",
+      "compiledDeltaSha256": "b80c2d8c9b830c81a385deb51b8738c4fe518c624245498aacdec77073e5c122"
+    },
+    {
+      "path": "dist/campaigns/campaignRunner.js",
+      "baseSha256": "d88cdc241f28b786212580d01e389b2842d36ab2e17f9ede3f0a1fd8800bae12",
+      "candidateSha256": "6f8ddbb0cbdae8ab755cece930887570ee5b875a59edab50a5c3499962a28922",
+      "oldSourceSha256": "66a3c4c6a87d418d0c132fffa4cebbfa4aced76a08859af8d1b5706a9fc2602f",
+      "newSourceSha256": "287cd49dd1474eaff4e7c11203d11023f94ac4e84e00523fa56be14efafe6d69",
+      "compiledDeltaSha256": "2eefbe7332a693cdeaef2618474a9bb2d03a33c0a1fb5bebaa47986d6b15aa85"
+    },
+    {
+      "path": "dist/campaigns/campaignSeedPrivacy.js",
+      "baseSha256": "d63ef69c5d47119863e1356ef101dd42f830f4d851a317418551603405c627b8",
+      "candidateSha256": "4cca9fec0b33d4d42fb6c2734785fd5e828fc7df58c26c03e0176dae7b3fd1a8",
+      "oldSourceSha256": "e3dd3d12cb68b964b8b404929c799f0bcfdd401d8799c77a799469404b527dd8",
+      "newSourceSha256": "dfa74ea8607d77e9a482810aedd8517a22ca68ceec63be696efc565de735db1a",
+      "compiledDeltaSha256": "6f03c9d84541d02872c2bf02b54b012570cb46d7d329a1cf4a959a2263628b00"
+    },
+    {
+      "path": "dist/http/routes.js",
+      "baseSha256": "41f7f15814d7f45429d489e81588a76f2383a3acd01c54813335418a11bec715",
+      "candidateSha256": "27b689d964b389c56dd46c3027c38c36931eaa1afaf450a11a0fdef990a0eaa0",
+      "oldSourceSha256": "e811d913fc584aeb715fb15d0b0fb9c1eda9302ed46b4c550784711a5085c2c2",
+      "newSourceSha256": "03419228ea48802d3bf695261b280d492c518128d300a6a4a9c9db8dfba955c7",
+      "compiledDeltaSha256": "f7667759dc9b2bcb7c885d3bdec8b8df04fe6044ec79e4e3ceedbd8755af4794"
+    },
+    {
+      "path": "dist/privacy/privacyRetentionService.js",
+      "baseSha256": "873eba9e1002838654fecfc4c6e2b6daf91e7dce7d419e47ba7d6fc75e74bf81",
+      "candidateSha256": "0d68c63fa287a688744eb21dc2316c5fb93d4a9a6229c4b274fa3588b4ea677a",
+      "oldSourceSha256": "33d36d97e189442baa65a357544ef274d6ac31ce5cdf5a7b0ccd21cb72c14740",
+      "newSourceSha256": "2c25696a6e3a85dd41795f17b8eb15c51d8c25ddc2351e9bb45ee55dc12ad3cc",
+      "compiledDeltaSha256": "c7eeda64d3249b4673cc6ee34037af4b894908c3994aa3dc61228cb65d4d26d9"
+    },
+    {
+      "path": "dist/campaigns/campaignSeedEpoch.js",
+      "candidateSha256": "7ca0f2ad9b2484dcd34f8808d1826040cdd3a26f302e2c1340b7ec6bcd35a7a6",
+      "newSourceSha256": "2e1efd8ed81c87b4ba0e8b0e8d65e8de153ebd156ca7bc88af8d391619ffad18"
+    }
+  ],
+  "preservedCompiledEntries": 437,
+  "preservedIndexSha256": "4dc4371a617ad5e3ba89f810e89251426172a5e530102694dbc7b38c6fa15f11",
+  "dependenciesCopied": false,
+  "configurationChanged": false,
+  "workerChanged": false,
+  "frontendChanged": false,
+  "executionAuthorized": false,
+  "administrativeRecoveryModule": "campaignAcceptedDeliveryRecovery absent from active base; reviewed source context preserved separately, not introduced into runtime",
+  "limits": "Active kernel/config identity proven by dated post-bank capture; fresh final package/config/return bindings still required."
+}

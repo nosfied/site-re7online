@@ -1,0 +1,12 @@
+{
+  "result": "SPECIFIC_TELEGRAM_DISPOSITION_PROPOSED_NOT_APPLIED",
+  "sourceBindingSha256": "17c6796f9d0748d7f3654c93cfc3f14dcb01ed9eaa5a2cfc4a9bafd683153a8f",
+  "draftSha256": "d73ae935153ae452e02e62e84d50ebc19b7594a2505170134984550bffcd90cf",
+  "originalRowSha256": "410b86e63326fcde9a16f76db4f7694eb15327d13d16e2f1940faae14c5fa6e9",
+  "ownerDeclaredFutureUnused": true,
+  "rowPreserved": true,
+  "newTokenRequiredForReview": false,
+  "decryptionSuccessClaimed": false,
+  "approvalRequired": true,
+  "strictChannelPlannerStillDenied": true
+}

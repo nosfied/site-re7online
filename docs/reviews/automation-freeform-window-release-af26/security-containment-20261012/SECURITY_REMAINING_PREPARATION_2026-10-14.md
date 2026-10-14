@@ -4,6 +4,10 @@
 não repetir geração140000/auth3. Out.15CLOSED/guarda38 fechada. A recusa parcial do
 terceiro lote preserva3 arquivos e não impede preparação offline; não autoriza rotações.
 
+## Continuidade local revisável
+
+[Composição/147 campos, disposição Telegram, primeira credencial e orçamento](remaining-local-20261014/REVIEW.md). Owner informou projeto OpenAI Default, duas chaves/uma revogada; próximo passo somente conferir proprietário/permissões e vínculo privadamente, sem criar/revogar. Formulário anterior permanece evidência de partida, não substitui orientação. Overlay local sete módulos, política histórica não prorrogada, dedicado reutilizado; não implantado. Telegram opaco preservado: proposta específica, planner estrito integral ainda DENY. Terceiro lote CONSUMED/PARTIAL20/3, sem certificado completo; não é dependência para segurança.
+
 ## Trabalho concreto realizado
 
 Base canônica pós-banco copiada privadamente do candidato140000, após comparação
@@ -69,7 +73,7 @@ API e autorização operacional própria. Nenhuma policy/backend/adapters novos 
 Reset/invalidação externa e eventual Web recredenciamento podem afetar atendimento;
 logout auth já concluído não é pendência. Telegram continua futuro.
 
-Próxima ação concreta: owner completar somente as referências/evidências/substitutas
-externas no formulário privado, sem reset/revogação ainda; revisar disposição Telegram
-e composição/decoder. Segurança não está contida por ter os valores fora do Git,
+Próxima ação concreta: owner conferir somente proprietário/permissões/vínculo da chave
+OpenAI não revogada no projeto Default, pela orientação vinculada acima e custódia
+privada; em paralelo revisar disposição Telegram e overlay/retorno compatível. Segurança não está contida por ter os valores fora do Git,
 por liberar disco ou por concluir auth/banco. Revisão21/10 antecipada após mudanças.

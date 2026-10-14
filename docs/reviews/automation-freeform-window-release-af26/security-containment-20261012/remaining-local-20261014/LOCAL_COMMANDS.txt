@@ -1,0 +1,12 @@
+LOCAL ONLY. No SSH/install/provider/SQL/app entrypoint. Run from the review worktree.
+mkdir -m 700 local-evidence/security-seed-review-next
+python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-local-20261014/compose_seed_overlay.py --root . --base local-evidence/dynamic-integrated-20261012/post-reboot/api-exact-composition/apps/whatsapp-agent --output local-evidence/security-seed-review-next --node local-evidence/secult-node20-20260929/node-v20.20.0-linux-x64/bin/node
+python3 -m unittest discover -s docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-local-20261014 -p test_compose_seed_overlay.py
+
+Proof invocation on prepared ESM local overlay (package.json type=module is test metadata):
+SEED_TEST_OVERLAY=local-evidence/security-seed-review-next SEED_TEST_BASE=local-evidence/dynamic-integrated-20261012/post-reboot/api-exact-composition/apps/whatsapp-agent local-evidence/secult-node20-20260929/node-v20.20.0-linux-x64/bin/node --no-warnings --experimental-loader ./docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-local-20261014/compiled_overlay_loader.mjs docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-local-20261014/verify_compiled_seeds.mjs . local-evidence/security-seed-review-next
+
+Do not reuse an output directory containing proof-policy.private.json.
+The proof policy is two minutes/local only, not an operational policy or approval.
+On denial preserve diagnostics; fix the demonstrated local cause before a new staging.
+No production command is authorized or supplied by these local commands.
