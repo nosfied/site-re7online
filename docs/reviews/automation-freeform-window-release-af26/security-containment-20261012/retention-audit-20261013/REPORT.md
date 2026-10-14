@@ -100,3 +100,7 @@ preparadores históricos, gerações/manifestos consumidos e custódias preserva
 Revisão21/10 mantida. Nenhuma instalação/read novo na VPS, cron, rebuild funcional,
 exclusão ou janela. Terceiro lote preparado; segurança externa/cifragem OPEN segue
 separadamente, NEWauth+NEWDB/out.15CLOSED/guarda38 preservados.
+
+## 14/10 — terceiro lote consumido/parcial, sem certificado completo
+
+[Resultado/diagnóstico/capacidade/custódia](THIRD_WITHDRAWAL_RESULT_2026-10-14.md).20 retirados uma vez/8.130.785.280B,3 mantidos,ObservationDenied stat_before/PID529658,zeroowners/uma incompletude. C passou; não repetir B ou adaptar77503f96. Custódia/sidecar próprios,manifests históricos intactos; NEWauth+NEWDB/out15CLOSED/guarda38/serviços preservados,owner confirmou. Segurança externa/cifragem retomada offline e OPEN; nenhuma nova retirada/instalação/rotação.

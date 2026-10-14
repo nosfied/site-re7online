@@ -1,0 +1,43 @@
+{
+  "result": "THIRD_WITHDRAWAL_PARTIAL_DENY_CONSUMED",
+  "removedFiles": 20,
+  "remainingFiles": 3,
+  "allocatedRemovedBytes": 8130785280,
+  "allocatedRemainingBytes": 685793280,
+  "minimumAvailableBytesC": 18661822464,
+  "netAvailableIncreaseA1ToC": 8132751360,
+  "secondsIntentToPartial": 486.157,
+  "intentAt": 1791975793.6882427,
+  "partialAt": 1791976279.844997,
+  "postAt": 1791976299.3528268,
+  "remainingPaths": [
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9-capture-20261005T143500Z/window/worker-minimal-b9-v3.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z/window/worker-minimal-b9-v3.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/automation-20260929T220203Z/content.private.tar.gz"
+  ],
+  "postOwners": 0,
+  "postIncomplete": 0,
+  "completeCertificate": false,
+  "newAuthNewDbPreserved": true,
+  "guardGeneration": 38,
+  "out15Preserved": true,
+  "noAutomaticRetry": true,
+  "ownerSessionsScreensConfirmed": true,
+  "capacityLatestMinimumBytes": 18659729408,
+  "capacityLatestAtUtc": "2026-10-14T11:22:53.812173+00:00",
+  "walBytes": 83886080,
+  "recentWriteErrors": 0,
+  "custodyManifestSha256": "0df05c1859e4ec086085f70b0ae3ba419ff8f0d30c7e41de5503083a3bcf959f",
+  "certificateStatus": "NOT_CERTIFIED_NO_WITHDRAWAL_COMPLETE_RECEIPT",
+  "denial": {
+    "stage": "root_owner_or_incomplete",
+    "operation": "stat_before",
+    "pid": 529658,
+    "ticks": null,
+    "errno": 2,
+    "errorClass": "FileNotFoundError",
+    "owners": 0,
+    "incomplete": 1,
+    "specificProcessOrigin": "UNKNOWN"
+  }
+}

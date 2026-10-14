@@ -1,0 +1,25 @@
+{
+  "generation": "retention-third-files-final-20261014T050000Z",
+  "purpose": "withdraw23literalredundantarchivefiles",
+  "state": "CONSUMED",
+  "operationResult": "PARTIAL_DENY",
+  "responsible": "Deifson Oliveira",
+  "reviewedDriverSha256": "e1380546fb91072c4730482fb47c7f5dc6983efda6b4cfbaa332f003d84692bf",
+  "inputSha256": "77503f964007ba1fcb4d8a61d9286fdc4c7202f070aa19cc2fc14884ee8894a4",
+  "lastReview": "2026-10-14",
+  "nextReview": "2026-10-21",
+  "reviewEarlierAfterChanges": true,
+  "custody": "owner offhost retention-third-execution-20261014T105622Z",
+  "classifications": {
+    "removed20": "ARCHIVED_OFFHOST_INDEXED_NO_HOST_REBUILD",
+    "remaining3": "HOST_REQUIRED_PENDING_NEW_REVIEW_NO_REPLAY",
+    "preserved11andActiveDependencies": "HOST_REQUIRED",
+    "controlsManifestsJournalsIntentPartialDiagnostics": "HOST_REQUIRED_AND_OFFHOST_EVIDENCE"
+  },
+  "historicalManifestsChanged": false,
+  "completeCertificate": false,
+  "securityExternalEncryption": "OPEN",
+  "newAuthNewDbPreserved": true,
+  "guardClosedGeneration": 38,
+  "out15": "CLOSED"
+}
