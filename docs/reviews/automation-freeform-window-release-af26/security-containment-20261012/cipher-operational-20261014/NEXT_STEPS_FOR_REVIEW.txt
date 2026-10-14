@@ -1,0 +1,26 @@
+GERAÇÃO DENY: incident-6683-v4-security-cipher-20261014T180000Z.
+Não executar install/start/apply/verify-as-PASS; não editar input67e57724… ou grant95eda.
+Não repetir a captura/dump recusados automaticamente. Código compilado36f51ebe… é reutilizável.
+
+Nova preparação proposta, a integrar/ensaiar antes de produção:
+1. Conferir leitor canônico, fonte API/kernel NEWauth+NEWDB, controle/root/markers,
+   global inventory e lock canônico de backup; umask077, saída nova privada700.
+2. Uma conexão legítima: BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+   SET LOCAL statement_timeout e idle_in_transaction_session_timeout limitados;
+   SELECT pg_export_snapshot(); manter o holder e inventário delimitado na mesma TX.
+3. pg_dump -Fc --snapshot=ID_EXPORTADO com role/database e transporte canônicos,
+   sem senha em argv/stdout; dados somente off-host privado. Nenhum -j arbitrário.
+   Timeout/erro: preservar diagnósticos, ROLLBACK holder; nenhum retry automático.
+4. Terminar holder após dump/inventário; comparar SHA/index e restaurar isoladamente.
+   Verificar10 conversões+opaca+147/v2 e recibos; linha TG exata/mesmo grant95eda.
+5. Estado efetivo novamente: CAS estrito; diferença nega. Backup snapshot não certifica
+   que Web deixou de atualizar. Não adaptar fonte selada nem substituir o planHash.
+6. Só com coerência/PASS gerar nova V4 quatro modos, consumidores/perfis, rootpolicy,
+   instalador e retorno pós-unfence fresco pelo contrato vigente. Fonte9c7b44 consumida,
+   helper8de/regra62b5 iguais. Arquivar política antiga; não reaproveitar seu phase file.
+7. Publicar hashes/comandos antes de solicitar execução. Todos os gates ficam false.
+
+Nenhum comando produtivo concreto de instalação/SQL/start é publicado como pronto:
+seu input/restore foi negado. Grant/disposição aprovados são desenho/preparação somente.
+Não rodar novamente restore_boundary.py nessa geração; ela conserva a recusa.
+OpenAI: reutilizar remaining-v3/openai_substitute.py e seu roteiro, emissão ainda não criada.

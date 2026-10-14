@@ -1,0 +1,35 @@
+{
+  "result": "ISOLATED_RESTORE_CAS_INSPECTION",
+  "verifierCounts": {
+    "mfaCount": 0,
+    "webhookCount": 0,
+    "inventoryTotal": 11,
+    "original": 9,
+    "current": 1,
+    "opaque": 1,
+    "receiptCount": 0,
+    "receiptsExact": 0
+  },
+  "changedRows": [
+    {
+      "channel": "whatsapp",
+      "secretChangedFields": [
+        "secretCiphertext",
+        "updatedAt"
+      ],
+      "accountChangedFields": [],
+      "opaque": false
+    },
+    {
+      "channel": "whatsapp",
+      "secretChangedFields": [
+        "secretCiphertext",
+        "updatedAt"
+      ],
+      "accountChangedFields": [],
+      "opaque": false
+    }
+  ],
+  "productionWrites": 0,
+  "applyExecuted": false
+}

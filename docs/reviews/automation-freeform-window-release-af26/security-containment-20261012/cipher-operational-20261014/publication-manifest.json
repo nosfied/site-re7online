@@ -1,0 +1,58 @@
+{
+  "status": "DENY_NOT_WINDOW_PACKAGE",
+  "privateValueScan": "PASS",
+  "productionDataControlMutations": 0,
+  "executionAuthorized": false,
+  "files": [
+    {
+      "path": "DESIGN_DECISION.json",
+      "sha256": "b9de87f3ce2ee74b8b4c549e80fe0ba6298aee0e619d2ebdfb091d318893dcce",
+      "bytes": 573
+    },
+    {
+      "path": "NEXT_STEPS_FOR_REVIEW.txt",
+      "sha256": "4443007eb095a42c5b5bca895a94c04a375b439213df8dfb4332f417b952cf52",
+      "bytes": 2066
+    },
+    {
+      "path": "REPORT.md",
+      "sha256": "14ea7f1bac83ea0ef91b0754e0b83dada2274502a947e11fc694d617364742d6",
+      "bytes": 8951
+    },
+    {
+      "path": "cas-denial.sanitized.json",
+      "sha256": "d082fdca94d53bc2a3d63b830fc73d51c3ece8e859fb25d11a7f7638e48338fa",
+      "bytes": 691
+    },
+    {
+      "path": "custody.sanitized.json",
+      "sha256": "a35e665be7520d25b3e8eea1d8f00a185cdbaa4c50592f6c0faac44f605c4134",
+      "bytes": 632
+    },
+    {
+      "path": "dump.sanitized.json",
+      "sha256": "08bd2aa63f2753eabe34f88172180c5d596de0e6f9fc4a5e49ba103b0eb8421a",
+      "bytes": 406
+    },
+    {
+      "path": "inventory.sanitized.json",
+      "sha256": "67e48174a8d241332df3b9532e7c6bdd65e086151719a10cf7819739feaa60aa",
+      "bytes": 415
+    },
+    {
+      "path": "restore.sanitized.json",
+      "sha256": "b5eae2dbdae4273a58b430235fbaa4b8d6f74ed701eea8f2f819708bdfe2efaa",
+      "bytes": 413
+    },
+    {
+      "path": "restore_boundary.py",
+      "sha256": "7bd4fd106db094d1bd74aa3a53851a1b32f92da9e79cf07841f97161d885d723",
+      "bytes": 6754
+    },
+    {
+      "path": "result.sanitized.json",
+      "sha256": "4212fbbade9f4526ae2798bdbbc39fa3c6723d210a0ada2586a05c421017a5f8",
+      "bytes": 1414
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "source": "owner design approval after d92a74fc on 2026-10-14",
+  "scope": "PREPARATION_ONLY_NO_INSTALL_SQL_KEY_CHANGE",
+  "grantContract": "SEALED_IMMUTABLE_POPULATION/EXPLICIT_DISPOSITION",
+  "grantSha256": "95eda044e469fe458d07fbdf5ec416aea7861873550f7db2ec1c7f0127d43d62",
+  "fields": 147,
+  "calendarExpiry": false,
+  "automaticPopulationExpansion": false,
+  "v2Independent": true,
+  "telegramContract": "PRESERVE_OPAQUE_HISTORICAL_NO_ACTIVATION",
+  "approvedOpaqueBytesAndAccountMatchCurrent": true,
+  "telegramActivated": false,
+  "executionAuthorized": false
+}

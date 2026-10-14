@@ -1,0 +1,14 @@
+{
+  "result": "PERMANENT_OFF_HOST_BACKUP_AND_DENIAL_CUSTODY_PASS",
+  "files": 33,
+  "allocatedBytes": 77864960,
+  "indexSha256": "9fc2b8af87f2bd2e0eab81d20bbe624e44097c870eff0d76b8f959f934421715",
+  "dumpSha256": "6c5354ea95ab3eef87d8731d2004d5409da5d42632678ac3f560fd41beeafd73",
+  "dumpRestoredLocally": true,
+  "cipherConversionCertificate": false,
+  "directory700Files600": true,
+  "sourcesAndDenialsPreserved": true,
+  "atUtc": "2026-10-14T18:58:37.121661+00:00",
+  "recipe": "verify index/dump SHA then restore in NEW isolated Unix-only PG16; no provider/entrypoint; this CAS input remains DENY",
+  "productionMutations": 0
+}

@@ -1,0 +1,13 @@
+{
+  "result": "FRESH_DUMP_RESTORE_AND_147_EPOCH_PASS_CIPHER_BOUNDARY_DENY",
+  "tables": 70,
+  "migrationRows": 66,
+  "historicalFields": 147,
+  "v2ReadWrite": true,
+  "planApplied": false,
+  "cipherBoundary": "DENY_actual_web_drift",
+  "dumpSha256": "6c5354ea95ab3eef87d8731d2004d5409da5d42632678ac3f560fd41beeafd73",
+  "providerCalls": 0,
+  "productionWrites": 0,
+  "atUtc": "2026-10-14T18:32:11.868461+00:00"
+}

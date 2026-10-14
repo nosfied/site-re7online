@@ -1,0 +1,11 @@
+{
+  "result": "FRESH_OFF_HOST_DUMP_CAPTURED",
+  "exitCode": 0,
+  "startedAtUtc": "2026-10-14T18:07:32.530445+00:00",
+  "completedAtUtc": "2026-10-14T18:07:52.801995+00:00",
+  "bytes": 40261687,
+  "sha256": "6c5354ea95ab3eef87d8731d2004d5409da5d42632678ac3f560fd41beeafd73",
+  "source": "canonical local-trust pg_dump inside active PostgreSQL container",
+  "providerCalls": 0,
+  "productionDataWrites": 0
+}
