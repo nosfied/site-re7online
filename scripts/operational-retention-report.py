@@ -87,6 +87,34 @@ def inventory(roots, max_entries=100000, seconds=30):
     }
 
 
+def private_output_directory(path, expected_uid=None):
+    """Hold the validated directory FD; never chmod/repair a divergent destination."""
+    path = Path(os.path.abspath(path))
+    uid = os.geteuid() if expected_uid is None else expected_uid
+    if path.resolve() != path:
+        raise ValueError('output_parent_symlink')
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        value = os.fstat(fd)
+        if value.st_uid != uid or stat.S_IMODE(value.st_mode) != 0o700:
+            raise ValueError('output_parent_owner_or_mode')
+        current = path.lstat()
+        if (value.st_dev, value.st_ino) != (current.st_dev, current.st_ino):
+            raise ValueError('output_parent_identity_drift')
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def ensure_new_output(fd, name):
+    try:
+        os.stat(name, dir_fd=fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    raise ValueError('output_already_exists')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', action='append', required=True)
@@ -105,11 +133,25 @@ def main():
     if any(output.is_relative_to(r) for r in roots):
         parser.error('output must be outside inventoried roots')
     os.umask(0o077)
-    report = inventory(roots, args.max_entries, args.seconds)
-    fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, 'w') as f:
-        json.dump(report, f, sort_keys=True)
-        f.write('\n')
+    directory = private_output_directory(output.parent)
+    try:
+        ensure_new_output(directory, output.name)
+        report = inventory(roots, args.max_entries, args.seconds)
+        # Recheck path binding and permissions after capture; use the held FD to write.
+        check = private_output_directory(output.parent)
+        try:
+            a, b = os.fstat(directory), os.fstat(check)
+            if (a.st_dev, a.st_ino) != (b.st_dev, b.st_ino):
+                raise ValueError('output_parent_identity_drift')
+        finally:
+            os.close(check)
+        fd = os.open(output.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                     0o600, dir_fd=directory)
+        with os.fdopen(fd, 'w') as f:
+            json.dump(report, f, sort_keys=True)
+            f.write('\n')
+    finally:
+        os.close(directory)
     print(json.dumps({k: report[k] for k in ('mode', 'entries', 'metadataCompleteWithinBudget',
                      'uniqueAllocatedBytes', 'withdrawalAuthorized')}))
     return 0 if report['metadataCompleteWithinBudget'] else 2

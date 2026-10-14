@@ -1,5 +1,7 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**Revisão de retenção —14/10/2026:** responsável operacional **Deifson Oliveira (owner/operador de janela)**; apoio de manutenção dos preparadores: Codex nesta revisão. Última revisão **14/10/2026** (local/documental; não nova amostra produtiva); próxima revisão semanal **21/10/2026**, antecipada após janela/recusa/substituição/encerramento. Versão futura local dos cinco gates e validação de destino privado em [scripts](../scripts/README.md#operational_preparation_reviewpy), para revisão; ligação aos preparadores produtivos NÃO concluída, nenhum cron ativo. Terceiro lote preparado, sem retirada autorizada. NEWauth+NEWDB, out.15 CLOSED, guarda38 fechada; **segurança externa/cifragem OPEN**, próxima decisão de contenção permanece separada e acompanhada no relatório de segurança.
+
 **Integração permanente de retenção14/10:** [princípios](saas/CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional), [procedimento](RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente) e [checklist](saas/RELEASE_CHECKLIST.md#retenção-de-releases-e-preparações) publicados; rotina somente local para revisão, sem cron/limpeza ativados. Auditoria de preparadores e critérios no [backlog](BACKLOG_TECH.md#retenção-operacional--integração-preventiva-dos-preparadores). Estado operacional e próxima decisão do terceiro lote abaixo preservados.
 
 **ESTADO CORRENTE — TERCEIRO LOTE PREPARADO/PASS PARA REVISÃO; ZERO RETIRADAS NOVAS.** [23 arquivos duplicados, grafo/custódia/input/comandos](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/THIRD_WITHDRAWAL_PREPARATION_2026-10-14.md). Potencial8.816.578.560B alocados;11 nomes mantidos, hardlinksfa60 zero recuperação; diretórios/manifests/journals/recibos/logs/snapshots fora da allowlist. Driver e1380546/input77503f96 próprios, selo e dry-run09:23UTC/06:23Fortaleza14/10 PASS,owners0/incomplete0,removedCount0; sem intent. Custódia off-host10 conteúdos/34 metadados+extração verificados; diagnósticos/timeouts anteriores preservados, grafo12s fora da VPS. Capacidade09:29UTC mínimo deploy/PostgreSQL10.531.876.864B,WAL80MiB,healthDBok. NEWauth+NEWDB/API410272/worker410428/frontend188897/dumps600/boot/cron/política9c7b44 preservados,gatesfalse,guarda38closed,out15CLOSED/seis entregas/cinco não enviadas. Próxima decisão: autorização exclusiva dos23 literais pelo novo A0/A1/B/C,nenhum apply agora. Segundo lote/banco/auth consumidos,não repetir. Segurança externa/cifragem OPEN; retenção automática apenas proposta.
@@ -2511,3 +2513,17 @@ Estado de implantação desta regra: documentação e rotina local publicadas pa
 preparadores atuais não possuem integração uniforme. Terceiro lote segue somente
 PREPARADO; auth/banco e lotes anteriores concluídos não serão repetidos. NEWauth+NEWDB,
 out.15 CLOSED e guarda38 fechada preservados; segurança externa/cifragem OPEN.
+
+### Versão futura de integração local dos preparadores
+
+Revisão14/10/2026: [contrato/comandos](../scripts/README.md#operational_preparation_reviewpy).
+O coordenador local reutiliza calculador/grafo/captura consistente por hashes e
+conecta inventário, capacidade, decisões de cópia, classificação e revisão no sidecar.
+Output exige diretório do executor700 antes da captura; fonte/export600, arquivo novo600,
+nenhuma correção automática. Foram executados24 testes locais, sem build funcional.
+
+Nenhum adapter produtivo foi instalado/acionado: capturas/frescor/roots produtivos
+não podem ser substituídos por input sintético. Integração local revisável distingue-se
+da integração aos pontos de copy/staging/fechamento, ainda pendente no backlog.
+Owner Deifson responsável pela revisão manual21/10/2026 ou após janela; não há cron.
+Não altera a decisão pendente do terceiro lote nem encerra segurança externa/cifragem.

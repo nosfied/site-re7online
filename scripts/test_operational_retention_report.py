@@ -75,6 +75,35 @@ class InventoryTests(unittest.TestCase):
         self.assertFalse(report['reviewCandidates'][0]['withdrawalEligible'])
         self.assertIsNone(report['capacityPass'])
 
+    def test_bad_output_mode_denied_before_capture(self):
+        outdir = self.base / 'public'; outdir.mkdir(mode=0o755)
+        with patch.object(sys, 'argv', ['report', '--root', str(self.root),
+                         '--output', str(outdir / 'new.json'), '--dry-run']), \
+             patch.object(m, 'inventory') as capture:
+            with self.assertRaises(ValueError):
+                m.main()
+            capture.assert_not_called()
+        self.assertEqual(list(outdir.iterdir()), [])
+
+    def test_wrong_owner_denied_before_capture(self):
+        with patch.object(sys, 'argv', ['report', '--root', str(self.root),
+                         '--output', str(self.base / 'new.json'), '--dry-run']), \
+             patch.object(m.os, 'geteuid', return_value=os.geteuid() + 1), \
+             patch.object(m, 'inventory') as capture:
+            with self.assertRaises(ValueError):
+                m.main()
+            capture.assert_not_called()
+        self.assertFalse((self.base / 'new.json').exists())
+
+    def test_output_owner_mismatch_denied(self):
+        with self.assertRaises(ValueError):
+            m.private_output_directory(self.base, expected_uid=os.geteuid() + 1)
+
+    def test_output_symlink_denied(self):
+        link = self.base / 'link'; link.symlink_to(self.root)
+        with self.assertRaises(ValueError):
+            m.private_output_directory(link)
+
     def test_cli_preserves_existing_report_and_sources(self):
         (self.root / 'source').write_text('kept')
         out = self.base / 'report.json'

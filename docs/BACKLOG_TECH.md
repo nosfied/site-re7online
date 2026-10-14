@@ -1,5 +1,7 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**Revisão de retenção —14/10/2026:** responsável operacional **Deifson Oliveira (owner/operador de janela)**; apoio de manutenção dos preparadores: Codex nesta revisão. Última revisão **14/10/2026** (local/documental; não nova amostra produtiva); próxima revisão semanal **21/10/2026**, antecipada após janela/recusa/substituição/encerramento. Versão futura local dos cinco gates e validação de destino privado em [scripts](../scripts/README.md#operational_preparation_reviewpy), para revisão; ligação aos preparadores produtivos NÃO concluída, nenhum cron ativo. Terceiro lote preparado, sem retirada autorizada. NEWauth+NEWDB, out.15 CLOSED, guarda38 fechada; **segurança externa/cifragem OPEN**, próxima decisão de contenção permanece separada e acompanhada no relatório de segurança.
+
 **Integração permanente de retenção14/10:** [princípios](saas/CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional), [procedimento](RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente) e [checklist](saas/RELEASE_CHECKLIST.md#retenção-de-releases-e-preparações) publicados; rotina somente local para revisão, sem cron/limpeza ativados. Auditoria de preparadores e critérios no [backlog](BACKLOG_TECH.md#retenção-operacional--integração-preventiva-dos-preparadores). Estado operacional e próxima decisão do terceiro lote abaixo preservados.
 
 **ESTADO CORRENTE — TERCEIRO LOTE PREPARADO/PASS PARA REVISÃO; ZERO RETIRADAS NOVAS.** [23 arquivos duplicados, grafo/custódia/input/comandos](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/THIRD_WITHDRAWAL_PREPARATION_2026-10-14.md). Potencial8.816.578.560B alocados;11 nomes mantidos, hardlinksfa60 zero recuperação; diretórios/manifests/journals/recibos/logs/snapshots fora da allowlist. Driver e1380546/input77503f96 próprios, selo e dry-run09:23UTC/06:23Fortaleza14/10 PASS,owners0/incomplete0,removedCount0; sem intent. Custódia off-host10 conteúdos/34 metadados+extração verificados; diagnósticos/timeouts anteriores preservados, grafo12s fora da VPS. Capacidade09:29UTC mínimo deploy/PostgreSQL10.531.876.864B,WAL80MiB,healthDBok. NEWauth+NEWDB/API410272/worker410428/frontend188897/dumps600/boot/cron/política9c7b44 preservados,gatesfalse,guarda38closed,out15CLOSED/seis entregas/cinco não enviadas. Próxima decisão: autorização exclusiva dos23 literais pelo novo A0/A1/B/C,nenhum apply agora. Segundo lote/banco/auth consumidos,não repetir. Segurança externa/cifragem OPEN; retenção automática apenas proposta.
@@ -3759,7 +3761,7 @@ Rotina local READ ONLY para revisão; NÃO implantada na VPS/cron. Terceiro lote
 PREPARADO sem autorização de retirada; estado corrente operacional no início permanece.
 Responsável: manutenção dos preparadores/operador de janela; decisão de ativação: owner.
 
-| Correção preventiva pendente | Evidência no código auditado | Critério de aceite |
+| Correção preventiva (integração produtiva pendente) | Evidência no código auditado | Critério de aceite |
 | --- | --- | --- |
 | Gate de reutilização e justificativa antes de cópia volumosa | `dynamic-integrated-prepared-20261012/operational-20261012/prepare-api-generation.py` verifica overlay/base/deps, mas `copytree(B,app)` e `copytree(app,COMPAT)` não registram decisão de reutilização/justificativa por cópia | Comparar hashes/runtime/contrato antes de copiar; registrar motivo quando candidato/retorno precisam de objetos separados; negativo sem capacidade; não mudar links em geração selada |
 | Medição uniforme por executores/filesystem e alocação única | O preparador API usa `statvfs(B)` e soma tamanhos; `frontend3227-observation-diagnostic-20261011/prepare-generation.py` usa apenas espaço do origin; `security-containment-20261012/prepare_database_final.py` já usa mínimo deploy/PG, porém sem registro uniforme de alocação/growth | Reutilizar medidor canônico mínimo deploy/PG; mapear FS e orçamento antes/depois; testar menor PG, hardlink, symlink externo, FS distintos, crescimento/WAL e observação incompleta; não universalizar valores de fase |
@@ -3771,3 +3773,27 @@ Escopo dos caminhos acima: `docs/reviews/automation-freeform-window-release-af26
 Não alterar os preparadores históricos/selados para atender estes critérios: implementar
 em versão futura revisável e geração nova. Não reconstruir artefatos válidos, mudar
 retenção de tenants ou encerrar segurança pela publicação desta documentação.
+
+### Avanço local dos cinco gates —14/10/2026
+
+`operational_preparation_review.py` é versão futura integrada LOCALMENTE, com reutilização
+por hash dos componentes existentes. Cobertura dirigida: artefato/runtime/dependências/
+contrato e justificativa/link revisado; mínimo deploy/PG e FS distintos/WAL/frescor/
+rubricas; sidecar/fechamento com dependência consumida e custódia; grafo transitivo/
+fonte ausente/hash/contexto PM2/PID-ticks; relatório integrado e revisão até sete dias.
+Rotina de relatório agora nega diretório de outro owner, modo diferente de700,
+symlink, identidade divergente e output existente antes da captura; sem chmod corretivo.
+
+**24 testes locais PASS** (13 inventário/destino +11 versão futura). Não são provas
+produtivas nem reexecução das suites funcionais. Novo código/sidecars apenas locais;
+preparadores históricos e seus manifests permanecem byte a byte preservados.
+
+Pendência de integração concreta: conectar estes gates ANTES de cada copy/build/tar
+nos futuros preparadores API/frontend e ao fechamento auth/banco, consumindo as
+capturas canônicas realmente atuais e sidecar específico; ensaiar cada adapter antes
+de gerar uma nova preparação. Validar orçamento antes da mutação, reportar medições
+posteriores no encerramento e negar fonte/identidade incompleta. O wrapper local
+não executa essas cópias nem foi ligado aos sequenciadores existentes. Responsável
+operacional Deifson Oliveira; revisão21/10/2026 ou após a próxima janela. Cron e
+limpeza automática dependem de decisão própria. Segurança externa/cifragem OPEN,
+terceiro lote sem apply; não deslocar estas pendências ao declarar avanço documental.

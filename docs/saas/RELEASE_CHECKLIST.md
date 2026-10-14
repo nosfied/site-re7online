@@ -625,3 +625,13 @@ Todo deploy deve registrar:
 - smoke inbox: OK/falhou/nao executado
 - shadow compare WhatsApp: OK/falhou/nao executado
 - pendencias
+
+## Gate futuro local de preparação — para revisão
+
+[Contrato/comandos](../../scripts/README.md#operational_preparation_reviewpy): sidecar
+novo, output executor700 validado antes da captura, fonte/input privados600 e hashes
+fixos. Testes dirigidos locais24 PASS em14/10/2026. A integração dos cinco gates ao
+coordenador local não significa instalação nos preparadores produtivos. Antes de
+usar em geração futura, adaptar os pontos ANTES das cópias e no fechamento, provar
+capturas canônicas/frescor e validar o adapter específico. Nenhum manifest histórico,
+intent consumido ou preparação existente deve ser editado para atender o gate.

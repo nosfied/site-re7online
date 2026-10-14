@@ -74,3 +74,18 @@ A proposta histórica foi incorporada aos [princípios](../../../../saas/CHANGE_
 Auditoria dos preparadores auth/banco/frontend/API registrou cinco correções preventivas com evidência de código e critérios de aceite no [backlog](../../../../BACKLOG_TECH.md#retenção-operacional--integração-preventiva-dos-preparadores). Nenhum preparador consumido foi alterado. Rotina `scripts/operational-retention-report.py`: LOCAL READ ONLY/dry-run para revisão, nove testes dirigidos PASS; links novos/diff conferidos. Não coleta SQL/WAL/owners nem autoriza retirada. Integração aos preparadores, execução semanal na VPS e alertas automáticos NÃO implantados. Revisão semanal/pós-janela documentada, sem cron.
 
 Terceiro lote permanece preparado/sem apply; nenhum novo arquivo produtivo retirado. NEWauth+NEWDB, out.15 CLOSED e guarda38 fechada preservados. Segurança externa/cifragem permanece OPEN. Hashes desta entrega pertencem ao novo commit documental; manifests/recibos históricos permanecem íntegros.
+
+## Gates futuros locais e destino privado —14/10/2026
+
+Revisão posterior a de9faa27: destino executor700/sem symlink validado antes da
+captura; FD mantido e vínculo conferido antes de escrever600, sem corrigir destino.
+Treze provas inventário/destino e onze provas do coordenador futuro: **24 PASS**.
+Novo coordenador local reutiliza três componentes exatos, sem modificar suas fontes,
+e cobre os cinco gates (reuso, capacidade, ciclo de vida, referências, relatório).
+[Contrato, limites e comandos](../../../../../scripts/README.md#operational_preparation_reviewpy).
+Integração aos adapters produtivos ainda pendente; nenhum serviço/cron instalado,
+nenhuma captura ou mutação produtiva nesta tarefa. Preflight sintético não certifica
+raízes/owners/frescor reais. Históricos/manifests/custódia e preparação do terceiro
+lote preservados, sem apply. Responsável operacional Deifson Oliveira; última revisão
+local14/10/2026, próxima21/10/2026 ou pós-janela. NEWauth+NEWDB/out.15CLOSED/guarda38
+mantidos; segurança externa/cifragem OPEN segue no relatório de segurança.
