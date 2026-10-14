@@ -1,0 +1,25 @@
+{
+  "result": "CAPTURE_RESTORE_PASS_PREPARATION_DENY_FRESH_CAS",
+  "filesSha256": {
+    "state.sanitized.json": "9a7cc76c815fcd1034f6a119e71cf3e0e0dcbccdea83efe50ad474bbd1b034fc",
+    "root.sanitized.json": "4b5090719e76efd4c925103a3c10951d77d6fd76402a018c9c4bc99f11419641",
+    "ENV_REFERENCE_RECONCILIATION_FOR_REVIEW.md": "2552ea15c457421984ea573a930f2c371061913153682b27c7ec20a09f68c744",
+    "test_transport_failure.py": "1f60beb21ddb3c1f630cf4790aa23c38592874423f8fda690d45e47729d3a98f",
+    "holder-paged.cjs": "3d681a7fceee1d5351549d32891195bf6c9b0085604f94d60086c09bfb44c1c5",
+    "capture.sanitized.json": "fd553904271be08b4a398b471148c0aebad45b8b89d512b221ffd65aec2aadbd",
+    "cas-drift.sanitized.json": "9fd8e47c7ba1d8422984b066a471f13fe7023e59fdc17964eb6522e62ecae3ad",
+    "env.sanitized.json": "db09890a436f4787e1cb3d068e0eac44f9ec1f6ed273d454d17a1d21791bb0e1",
+    "COMMANDS_FOR_REVIEW.txt": "946cc6a5a285ef4d2656340bfca84316a94914f1b1d242b14d8f1d896b87e7b9",
+    "custody.sanitized.json": "8483c7e85565144f5b7ec9c3520d6fd733e3ef3d9ef99175cee61f844b1352c1",
+    "REPORT.md": "83327700a23852be615c4eebeb93dbc6e44d40af53362a9157230517a7d6a134",
+    "holder.cjs": "56e3b5af674ca86b800f1f5083378b007184cc77a4d56ae80bde8784c2254fe1",
+    "transport.py": "b19c665c23cb5636ff3f038800a0b60ee651aea8e86d077a6af3b456a943ef69",
+    "capture_reviewed_once.py": "f4a71b1ccfe3389d0756d2df074ba4dd2c610756c73ce5b6579b293d027d9c8a",
+    "restore.sanitized.json": "404ea97cda4f53bee2ad06706facb25ba1d826bd7af1aba72009ab8f342aad6b"
+  },
+  "privateValueScan": "PASS",
+  "runtimeBuilds": 0,
+  "productionSqlMutations": 0,
+  "policiesInstalled": 0,
+  "sourcePlanRewritten": false
+}

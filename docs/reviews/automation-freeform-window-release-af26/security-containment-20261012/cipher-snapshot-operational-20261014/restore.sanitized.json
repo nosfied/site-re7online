@@ -1,0 +1,19 @@
+{
+  "result": "ACTUAL_SHARED_PRODUCTION_SNAPSHOT_ISOLATED_RESTORE_CIPHER_PASS",
+  "dumpSha256": "d85908a917818068ee0a1b3c37713b581f00f882ad7605c7a477fbbef02af1e3",
+  "dumpBytes": 40682634,
+  "converted": 10,
+  "opaquePreserved": 1,
+  "historicalFields": 147,
+  "v2Independent": true,
+  "planHash": "5eb082e2359127373952d5b669cd4d74a48d75775eb624dd1ef3b0ea371a13fe",
+  "replayAdditionalEvents": 0,
+  "schemaTables": 70,
+  "migrationRows": 66,
+  "applicationStarted": false,
+  "providerCalls": 0,
+  "productionWrites": 0,
+  "temporaryDatabaseRemoved": false,
+  "databaseRetainedStoppedForEvidence": true,
+  "ownershipAclRestored": false
+}

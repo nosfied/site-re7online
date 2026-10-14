@@ -1,0 +1,50 @@
+{
+  "result": "BOUND_BINDING_DRIFT_INSPECTION_NO_REPLAN",
+  "inspectedRows": 11,
+  "changed": 4,
+  "differences": [
+    {
+      "rowFields": [
+        "secretHash",
+        "secretCiphertext",
+        "updatedAt"
+      ],
+      "accountFields": [
+        "metadata",
+        "updatedAt"
+      ]
+    },
+    {
+      "rowFields": [
+        "secretCiphertext",
+        "updatedAt"
+      ],
+      "accountFields": []
+    },
+    {
+      "rowFields": [
+        "secretHash",
+        "secretCiphertext",
+        "updatedAt"
+      ],
+      "accountFields": [
+        "metadata",
+        "updatedAt"
+      ]
+    },
+    {
+      "rowFields": [
+        "secretHash",
+        "secretCiphertext",
+        "updatedAt"
+      ],
+      "accountFields": [
+        "metadata",
+        "updatedAt"
+      ]
+    }
+  ],
+  "planRewritten": false,
+  "causeAttributed": false,
+  "recaptureForStability": false
+}

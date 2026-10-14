@@ -1,0 +1,23 @@
+ESTADO: DENY_FRESH_CAS_DRIFT. SEM INSTALADOR OU JANELA LIBERADOS.
+Captura cipher-shared-snapshot-20261014T214100Z concluída/consumida.
+Não executar novamente capture_reviewed_once.py, não reutilizar o namespace212400Z recusado,
+não reaplicar o plano5eb082e2, não mudar input/gates paraPASS.
+
+Fontes executadas: holder-paged.cjs + transport.py, Node/Prisma existentes + docker pg_dump,
+mesmo role/database NEWDB via fontes legítimas; backup.lock, sem sudo/install/stop.
+A preparação incident-6683-v4-security-cipher-snapshot-20261014T214100Z contém apenas
+estado/lifecycle DENY/execution-authorized=false/cinco gatesfalse. Não é V4 completa.
+
+Comandos de instalação/apply/retorno NÃO EMITIDOS: CAS original7/11 bloqueou a montagem.
+Futuros comandos exigem outra decisão explícita de protocolo/fonte e geração não consumida;
+manter CAS antes da janela/após fence e não recapturar automaticamente para obter estabilidade.
+
+Inspeção/documentos disponíveis: captura/restore/denials/root/CAS/estado e env originais
+no cofre privado cipher-shared-snapshot-20261014. Conferir índice/hashes sem imprimir valores.
+Restauração: PG16 novo isolado, Unix socket/TCP desabilitado, pg_restore --no-owner --no-acl,
+sem app/provider; reader compilado36f51ebe/grant95eda e plano selado original da imagem.
+Restore desta tarefa está convertido/verificado e parado: não iniciar outro apply sobre ele.
+Driver nega replay após VERIFIED; idempotência SQL só foi ensaiada localmente.
+
+Reconciliação.env: plano privado seletivo PARA REVISÃO; sem apply.
+Não alterar root/site.env, workspace.env, saved/fallback ou Docker por esta publicação.

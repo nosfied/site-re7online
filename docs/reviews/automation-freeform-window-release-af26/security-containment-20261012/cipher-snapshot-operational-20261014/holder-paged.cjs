@@ -1,0 +1,27 @@
+// READ ONLY, private stdout. Plaintexts are never serialized.
+const {PrismaClient}=require(process.env.RE7_API_CWD+'/node_modules/@prisma/client');const fs=require('node:fs'),assert=require('node:assert/strict'),crypto=require('node:crypto');const db=new PrismaClient({log:[]});global.fetch=()=>{throw Error('provider_forbidden')};global.setInterval=()=>{throw Error('executor_forbidden')};console.log=console.info=()=>{};
+(async()=>{
+const root=process.env.RE7_API_CWD+'/dist/';const channel=await import(root+'channels/channelAccountSecretCrypto.js'),mfa=await import(root+'auth/mfaService.js'),webhook=await import(root+'publicApi/publicApiWebhookService.js'),messenger=await import(root+'channels/messengerOutbound.js');
+const data=await db.$transaction(async tx=>{await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');await tx.$executeRawUnsafe("SET LOCAL statement_timeout='8s'");await tx.$executeRawUnsafe("SET LOCAL lock_timeout='1s'");await tx.$executeRawUnsafe("SET LOCAL idle_in_transaction_session_timeout='180s'");const groups=[];
+for(const[model,field,decode,key,where]of[['channelAccountSecret','secretCiphertext',channel.decryptChannelAccountSecret,'CHANNEL_ACCOUNT_SECRET_KEY',{}],['mfaTotpSecret','secretCiphertext',mfa.decryptMfaSecret,'MFA_SECRET_ENCRYPTION_KEY',{}],['webhookEndpoint','signingSecretCiphertext',webhook.decryptWebhookSigningSecret,'WEBHOOK_SECRET_ENCRYPTION_KEY',{}]]){
+ const count=await tx[model].count({where});assert(count<=1000,'bounded_cipher_inventory_exceeded');const rows=await tx[model].findMany({where,take:1001,orderBy:{id:'asc'}});assert.equal(rows.length,count);const encrypted=rows.filter(r=>r[field]);const failed=encrypted.filter(r=>decode(r[field],process.env[key])===null).length;groups.push({model,field,key,count,encrypted:encrypted.length,decryptFailed:failed,rows});
+}
+const refs=[];for(const model of ['contact','lead','conversation','conversationRuntimeState','inboundMessage','outboundMessage','contactChannelIdentity']){
+ const where={externalUserRef:{startsWith:'enc:v1:'}};const n=await tx[model].count({where});assert(n<=2000,'bounded_external_ref_inventory_exceeded');const rows=await tx[model].findMany({where,take:2001,orderBy:{id:'asc'}});assert.equal(rows.length,n);refs.push({model,count:n,decryptFailed:rows.filter(r=>messenger.decryptMessengerExternalUserRef(r.externalUserRef,process.env.META_APP_SECRET)===null).length,rows});
+}
+const accounts=await tx.channelAccount.findMany({take:101,orderBy:{id:'asc'}});assert(accounts.length<=100,'bounded_account_inventory_exceeded');
+const seeds=[];let last=null,pages=0,totalEvents=0;
+while(true){assert(pages++<600,'event_page_bound');
+ const predicate="jsonb_typeof(\"payloadJson\"->'recipientsCiphertext')='string' OR jsonb_typeof(\"payloadJson\"->'componentsByWaIdCiphertext')='string'";
+ const sql=`WITH page AS MATERIALIZED (SELECT id,\"clientId\",\"payloadJson\" FROM \"Event\" ${last?'WHERE id > $1::uuid':''} ORDER BY id LIMIT 1000) SELECT count(*)::int AS n,(SELECT id::text FROM page ORDER BY id DESC LIMIT 1) AS last,COALESCE(jsonb_agg(jsonb_build_object('id',id,'clientId',\"clientId\",'payloadJson',\"payloadJson\") ORDER BY id) FILTER (WHERE ${predicate}),'[]'::jsonb) AS seeds FROM page`;
+ const rows=last?await tx.$queryRawUnsafe(sql,last):await tx.$queryRawUnsafe(sql);const r=rows[0];totalEvents+=r.n;seeds.push(...r.seeds);assert(seeds.length<=126,'seed_population_expanded');if(r.n<1000)break;assert(r.last&&r.last!==last,'event_page_cursor_drift');last=r.last;
+}
+assert.equal(seeds.length,126,'seed_population_drift');
+const identity=await tx.$queryRawUnsafe(`SELECT json_build_object('database',current_database(),'databaseOid',(SELECT oid FROM pg_database WHERE datname=current_database()),'user',session_user,'serverVersion',current_setting('server_version_num'),'systemIdentifier',(SELECT system_identifier::text FROM pg_control_system())) AS identity`);
+const exported=await tx.$queryRawUnsafe('SELECT pg_export_snapshot() AS snapshot,pg_backend_pid() AS pid');
+const wait=new Promise((resolve,reject)=>{process.stdin.once('data',b=>b.toString().trim()==='release'?resolve():reject(Error('holder_aborted')));process.stdin.once('end',()=>reject(Error('holder_stdin_closed')))});
+const files=['channels/channelAccountSecretCrypto.js','auth/mfaService.js','publicApi/publicApiWebhookService.js','channels/messengerOutbound.js','auth/clientAuth.js','auth/sessionPolicy.js'];const modules=Object.fromEntries(files.map(f=>[f,crypto.createHash('sha256').update(fs.readFileSync(root+f)).digest('hex')]));
+process.stdout.write(JSON.stringify({protocol:'SNAPSHOT_HOLDER_READY',identity:identity[0].identity,snapshot:exported[0].snapshot,pid:exported[0].pid,inventory:{mode:'READ_ONLY_PRIVATE_SHARED_SNAPSHOT',data:{groups,externalRefs:refs,accounts,seeds},modules,providerCalls:0,plainValuesSerialized:false}})+'\n');
+await wait;return{released:true};},{isolationLevel:'RepeatableRead',timeout:180000,maxWait:2000});
+process.stdout.write(JSON.stringify({protocol:'SNAPSHOT_HOLDER_RELEASED',readOnly:true})+'\n');
+})().catch(e=>{process.stderr.write(JSON.stringify({errorClass:e.name,code:e.code||null})+'\n');process.exitCode=1}).finally(()=>db.$disconnect());

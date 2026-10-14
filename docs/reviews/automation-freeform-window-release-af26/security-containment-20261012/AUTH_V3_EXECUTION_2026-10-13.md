@@ -35,3 +35,7 @@ As cinco substitutas externas, Telegram futuro/linha inválida, estados Web deri
 ## Complemento de aceite — console interno,14/10
 
 [Auditoria de acesso administrativo](admin-console-access-20261014/REPORT.md): credencial ADMIN_TOKEN ativa/NEWauth aprovado e GET local/proxy200 comprovados; owner confirmou origem converta e saída canônica. O aceite original de novo login/Inbox/CRM/Campanhas referia-se à sessão JWT do tenant e não discriminava reconexão do console X-Admin-Token. Arquivo atual disponibilizado somente no cofre privado; após orientação de reconexão/reload, owner confirmou “sim, funcionou com o token indicado”. Aceite específico do console recuperado/concluído, sem identificar retrospectivamente o valor antes armazenado. Não repetir a rotação auth ou restaurar valores anteriores. Esta ressalva não desfaz a execução técnica concluída.
+
+## Referências legadas — limite auditado14/10
+
+[Auditoria posterior.env](cipher-snapshot-operational-20261014/ENV_REFERENCE_RECONCILIATION_FOR_REVIEW.md) identificou referências OLDauth/OLDDB em arquivos de projeto/VPS, embora processos e saved/fallback mantenham os valores novos. O aceite de runtime/controle/login/console continua concluído; não implica que todo loader dotenv legado tenha sido reconciliado. Originals e plano seletivo foram preservados, sem alteração ou nova rotação.

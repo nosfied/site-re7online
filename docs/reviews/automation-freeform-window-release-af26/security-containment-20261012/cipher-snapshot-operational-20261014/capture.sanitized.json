@@ -1,0 +1,21 @@
+{
+  "result": "CANONICAL_LOCK_SHARED_SNAPSHOT_CAPTURE_COMPLETE",
+  "startedUtc": "2026-10-14T21:40:36.589514+00:00",
+  "finishedUtc": "2026-10-14T21:40:57.145236+00:00",
+  "identityChannelsEqual": true,
+  "inventorySha256": "52d666e5fab18805e9cce5ec4454c52dc0439ca4d18cbcb0ace3023c925eebe2",
+  "dumpSha256": "d85908a917818068ee0a1b3c37713b581f00f882ad7605c7a477fbbef02af1e3",
+  "dumpBytes": 40682634,
+  "holderAliveUntilDumpComplete": true,
+  "canonicalLock": "/opt/re7online/backups/converta-persistent/backup.lock",
+  "lockMetadata": {
+    "uid": 1000,
+    "gid": 1000,
+    "mode": 416,
+    "dev": 64769,
+    "ino": 791422
+  },
+  "automaticRetry": false,
+  "providerCalls": 0,
+  "readOnly": true
+}

@@ -1,0 +1,16 @@
+{
+  "result": "FINAL_READONLY_PROTECTED_STATE_PASS",
+  "utc": "2026-10-14T23:05:26.348718+00:00",
+  "identitiesPreserved": true,
+  "guard38Closed": true,
+  "markersAbsent": true,
+  "frozenSqlBaselineAndNoWork": true,
+  "minimumAvailableBytes": 18479755264,
+  "deployAvailableBytes": 18479759360,
+  "postgresAvailableBytes": 18479755264,
+  "walBytes": 83886080,
+  "sourceConfigurationsUnchanged": true,
+  "sourceConsumerReceiptAndOut15ClosureHistoricalEvidencePreserved": true,
+  "sqlMutations": 0,
+  "limits": "no clock freshness or CAS override; current cipher plan remains denied"
+}

@@ -1,0 +1,13 @@
+{
+  "result": "SHARED_SNAPSHOT_AND_ENV_PRIVATE_CUSTODY_VERIFIED",
+  "indexSha256": "f61953e3b370fd82898f493e56df4dc24b7847e53aea236315155fd02c3a2170",
+  "files": 78,
+  "uniqueObjects": 51,
+  "uniqueBytes": 237825040,
+  "envOriginalsPreserved": 3,
+  "envReconciliationPreparedNotApplied": true,
+  "files600Directories700": true,
+  "ownerAccessible": true,
+  "independentPhysicalReplica": false,
+  "allObjectsReadAndVerified": true
+}
