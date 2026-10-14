@@ -89,3 +89,14 @@ raízes/owners/frescor reais. Históricos/manifests/custódia e preparação do 
 lote preservados, sem apply. Responsável operacional Deifson Oliveira; última revisão
 local14/10/2026, próxima21/10/2026 ou pós-janela. NEWauth+NEWDB/out.15CLOSED/guarda38
 mantidos; segurança externa/cifragem OPEN segue no relatório de segurança.
+
+## Integração preventiva dos adapters futuros concluída localmente —14/10/2026
+
+[Entrega/código/provas/comandos](PREPARER_INTEGRATION_2026-10-14.md).
+API/frontend passam pelo gate antes de operações; auth/banco registram encerramento
+por journal/recibo canônicos. **38 testes locais PASS**; dois formatos históricos
+reais lidos apenas para compatibilidade, sem novo certificado de fase. Coordenador,
+preparadores históricos, gerações/manifestos consumidos e custódias preservados.
+Revisão21/10 mantida. Nenhuma instalação/read novo na VPS, cron, rebuild funcional,
+exclusão ou janela. Terceiro lote preparado; segurança externa/cifragem OPEN segue
+separadamente, NEWauth+NEWDB/out.15CLOSED/guarda38 preservados.

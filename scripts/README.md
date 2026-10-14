@@ -107,3 +107,76 @@ revisão humana e prova produtiva canônica continuam indispensáveis. Estatíst
 não comprovam espaço recuperável exclusivo de reflinks/snapshots. Esta versão integra
 os gates LOCALMENTE; ligação aos pontos de staging/encerramento API/frontend/auth/banco
 é trabalho futuro revisado, em novas gerações. Sem cron ativo.
+
+## `operational_preparers_v3.py`
+
+**Conexão concluída aos adapters futuros, validada LOCALMENTE — não instalada na VPS.**
+Versão nova, separada dos preparadores históricos. Importa o coordenador de7bd069e7
+por hash fixo, sem reescrever esse arquivo ou os componentes reutilizados.
+
+Entrypoints `prepare_api`/`prepare_frontend`: lock local exclusivo, gate completo,
+sidecar `before.private.json`, intent próprio de operações e novo gate antes de cada
+copy/build/tar. Fontes, orçamento, identidade ou referências incompletos negam antes
+da primeira cópia. Drift entre operações preserva a geração parcial e bloqueia a
+próxima operação. Geração existente não é reutilizada. REUSE impede cópia/build/tar
+redundantes. CLI permite só copiar arquivos compilados aprovados e empacotar nomes
+literais locais; não possui runner funcional de build. A fronteira Python de build
+foi ensaiada com hook sintético (negativa impede sua chamada), sem build funcional.
+Nenhum entrypoint/PM2/provider/scheduler/SSH ou sequenciador é importado/executado.
+
+Entrypoints `close_auth`/`close_database`: gate de capturas/coordenador, leitura do
+journal canônico e sidecar novo de encerramento. CONSUMED exige `complete`, geração38
+e ausência de falha posterior; banco exige recibo VERIFIED/NEWDB sem reativação OLDDB
+com planHash exato. Dependências alcançadas, launcher consumido e evidências seguem
+HOST_REQUIRED; histórico com custódia/restore comprovados pode ser ARCHIVABLE_FOR_REVIEW.
+Sem custódia fica UNRESOLVED. Não autoriza retorno, retirada, ALTER ROLE ou reexecução.
+Estados REFUSED/SUPERSEDED exigem disposição explícita; não são sucesso de rotação.
+
+```bash
+sha256sum -c scripts/operational_preparers_v3.sha256
+python3 -B -m unittest discover -s scripts -p test_operational_preparers_v3.py
+python3 -B scripts/operational_preparers_v3.py --adapter api --input /custodia/privada/api-adapter-input.private.json --input-sha256 SHA_REVISADO --output /custodia/privada/futuras-geracoes --local-only
+python3 -B scripts/operational_preparers_v3.py --adapter frontend --input /custodia/privada/frontend-adapter-input.private.json --input-sha256 SHA_REVISADO --output /custodia/privada/futuras-geracoes --local-only
+python3 -B scripts/operational_preparers_v3.py --adapter auth --input /custodia/privada/auth-closure-input.private.json --input-sha256 SHA_REVISADO --output /custodia/privada/auth-closure-novo.private.json --local-only
+python3 -B scripts/operational_preparers_v3.py --adapter database --input /custodia/privada/db-closure-input.private.json --input-sha256 SHA_REVISADO --output /custodia/privada/db-closure-novo.private.json --local-only
+```
+
+Os comandos são contratos de uso em **ambiente local isolado**, não blocos prontos de
+janela produtiva. Não existe input produtivo novo selado por esta tarefa. `--output`
+é pai privado700 para staging ou arquivo novo em pai700 para encerramento. Recusa antes de copiar registra REFUSED em sidecar próprio no pai; seu nome
+impede reutilizar a geração negada. Recusa/parcial: conservar stdout e diretório/intent; não repetir nem modificar input para obter PASS.
+Não criar inputs por edição de baselines históricas para fazer capturas coincidir.
+
+Input adicional ao coordenador anterior:
+
+- `review`: input do coordenador (estado READY/REVIEW para preparar, CONSUMED/
+  REFUSED/SUPERSEDED para encerrar), fontes originais/dependências/runtime e revisão.
+- `captureBindings` contém exatamente `contextObservation` e `capacitySamples`:
+  cada entrada fixa capturePath/sha256/valuePointer/timePointer. Ponteiros JSON
+  selecionam fatos dos exports canônicos existentes; os campos correspondentes
+  fornecidos em `review` são substituídos pelos bytes capturados, sem adaptação para
+  PASS. É preciso haver as duas observações completas/identidades no export original;
+  se o reader não as registrou, não inventar nem duplicar uma observação.
+- `maxCaptureAgeSeconds`: limite explícito até3600s, verificado contra relógio atual
+  antes de cada operação. Timestamp ISO com timezone ou epoch original. Campo
+  ausente, hash/proprietário/modo divergente, futuro ou vencido nega. Contexto/frescor
+  de fixtures não é certificado produtivo; CLI rejeita relógio sintético.
+- `savedFallback`: dois exports privados600 com role saved/fallback, capturePath e
+  hash. Os mesmos hashes precisam integrar raízes/fontes originais do grafo nos
+  caminhos canônicos dump.pm2/dump.pm2.bak. Leitor reutilizado observa cada fonte
+  duas vezes; o adapter não invoca PM2 de root e não copia config para console.
+- `operations`: kind copy/build/tar, name único, artifactIndex no plano de reuso,
+  reason, allocatedBudgetBytes, e linkContractReviewed se houver novos links.
+  Copy fixa source/sourceSha256/target literal; tar fixa members/memberSha256/target
+  literais. A cópia densa é orçada antes do primeiro efeito, inclusive fonte sparse.
+  Reuso de compilado não autoriza nova cópia sem justificativa/contrato.
+- `closure`: generationPath da fase (nome igual ao review.generation), journal
+  com capturePath/hash/originalPath exato window/sequencer.journal.jsonl; banco
+  inclui databaseReceipt com originalPath da mesma fase e expectedPlanSha256. Journal/recibo de fase concluída podem ser históricos para
+  classificar aquela fase; contexto/capacidade/referências exigem capturas atuais.
+
+Registro posterior mede alocação local incluindo evidências, nega orçamento excedido
+e preserva parcial. Não equivale a medição posterior deploy/PostgreSQL: executá-la
+pelo procedimento canônico quando uma geração remota futura for autorizada. Bases
+reais permanecem externas/privadas; importação de seu formato/hash não atesta presença
+atual. Logs, controles, segredos, tenants e terceiros não entram em allowlist aqui.

@@ -635,3 +635,15 @@ coordenador local não significa instalação nos preparadores produtivos. Antes
 usar em geração futura, adaptar os pontos ANTES das cópias e no fechamento, provar
 capturas canônicas/frescor e validar o adapter específico. Nenhum manifest histórico,
 intent consumido ou preparação existente deve ser editado para atender o gate.
+
+## Adapters futuros conectados —14/10/2026
+
+Usar [versão nova revisável](../../scripts/README.md#operational_preparers_v3py) para
+as futuras fronteiras API/frontend e encerramento auth/banco; código conectado e
+validado LOCALMENTE (14 provas +24 regressões). Preservar preparadores anteriores.
+Antes de usar em geração remota: hashes originais, capturas atuais completas,
+roots/transitivos/saved/fallback, budget por executor e fonte da reserva; não
+substituir fatos por campos autoafirmados ou preencher lacuna com fixture. Sidecar
+novo registra gates, propósito/owner, estado e classificação; negativa impede
+copy/build/tar, parcial exige inspeção sem replay. Encerramento exige journal/recibo.
+Revisão semanal21/10 e antecipação pós-mudança mantidas; nenhuma rotina na VPS/cron.

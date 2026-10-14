@@ -1,5 +1,7 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**Integração preventiva —14/10/2026:** adapters FUTUROS API/frontend e encerramento auth/banco conectados ao coordenador, [código/provas/comandos](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/PREPARER_INTEGRATION_2026-10-14.md), **38 testes locais PASS**. Conexão de código concluída localmente para revisão; NÃO instalada na VPS, sem cron ou nova janela. Responsável Deifson; revisão21/10 antecipada após mudanças conforme o runbook. Terceiro lote preparado, sem exclusão autorizada. NEWauth+NEWDB, out.15 CLOSED, guarda38 fechada; **segurança externa/cifragem OPEN**, decisão de contenção separada continua na sequência ativa.
+
 **Revisão de retenção —14/10/2026:** responsável operacional **Deifson Oliveira (owner/operador de janela)**; apoio de manutenção dos preparadores: Codex nesta revisão. Última revisão **14/10/2026** (local/documental; não nova amostra produtiva); próxima revisão semanal **21/10/2026**, antecipada após janela/recusa/substituição/encerramento. Versão futura local dos cinco gates e validação de destino privado em [scripts](../scripts/README.md#operational_preparation_reviewpy), para revisão; ligação aos preparadores produtivos NÃO concluída, nenhum cron ativo. Terceiro lote preparado, sem retirada autorizada. NEWauth+NEWDB, out.15 CLOSED, guarda38 fechada; **segurança externa/cifragem OPEN**, próxima decisão de contenção permanece separada e acompanhada no relatório de segurança.
 
 **Integração permanente de retenção14/10:** [princípios](saas/CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional), [procedimento](RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente) e [checklist](saas/RELEASE_CHECKLIST.md#retenção-de-releases-e-preparações) publicados; rotina somente local para revisão, sem cron/limpeza ativados. Auditoria de preparadores e critérios no [backlog](BACKLOG_TECH.md#retenção-operacional--integração-preventiva-dos-preparadores). Estado operacional e próxima decisão do terceiro lote abaixo preservados.
@@ -3788,7 +3790,7 @@ symlink, identidade divergente e output existente antes da captura; sem chmod co
 produtivas nem reexecução das suites funcionais. Novo código/sidecars apenas locais;
 preparadores históricos e seus manifests permanecem byte a byte preservados.
 
-Pendência de integração concreta: conectar estes gates ANTES de cada copy/build/tar
+**Checkpoint histórico7bd069e7 — superado pela integração local v3 descrita abaixo:** conectar estes gates ANTES de cada copy/build/tar
 nos futuros preparadores API/frontend e ao fechamento auth/banco, consumindo as
 capturas canônicas realmente atuais e sidecar específico; ensaiar cada adapter antes
 de gerar uma nova preparação. Validar orçamento antes da mutação, reportar medições
@@ -3797,3 +3799,19 @@ não executa essas cópias nem foi ligado aos sequenciadores existentes. Respons
 operacional Deifson Oliveira; revisão21/10/2026 ou após a próxima janela. Cron e
 limpeza automática dependem de decisão própria. Segurança externa/cifragem OPEN,
 terceiro lote sem apply; não deslocar estas pendências ao declarar avanço documental.
+
+### Adapters futuros conectados — revisão14/10/2026
+
+[Entrega completa](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/PREPARER_INTEGRATION_2026-10-14.md).
+Os cinco itens acima agora têm conexões executáveis nas versões futuras: reuso e
+justificativa por recipe; orçamento uniforme antes das operações; captura por
+hash/frescor/identidade e grafo; sidecar antes/pós-staging; fechamento auth/banco
+classificando dependências/custódia. **Conexão local de código concluída** —14 provas
+específicas +24 regressões PASS. Nenhum preparador antigo foi alterado.
+
+Próxima ação: revisão dos novos adapters/contratos e uso em uma geração futura
+explicitamente autorizada, com capturas canônicas atuais. Isso é uma decisão de uso/
+instalação, não implementação ainda faltante do coordenador. Não existe cron ativo,
+input produtivo novo ou autorização de retirada do terceiro lote. Responsável Deifson,
+revisão21/10 ou pós-mudança antecipada; segurança externa/cifragem OPEN segue no fluxo
+separado de contenção. Auth/banco/out.15 encerrados não serão reexecutados.

@@ -1,0 +1,23 @@
+{
+  "scope": "local_adapter_integration_only",
+  "newAdapterTestsPassed": 14,
+  "directedRegressionTestsPassed": 24,
+  "totalPassed": 38,
+  "historicalPreparersChanged": false,
+  "productionReadPerformed": false,
+  "productionMutationPerformed": false,
+  "functionalBuildPerformed": false,
+  "thirdLotExecuted": false,
+  "nextWeeklyReview": "2026-10-21",
+  "securityExternalEncryption": "OPEN",
+  "adapters": [
+    "prepare_api",
+    "prepare_frontend",
+    "close_auth",
+    "close_database"
+  ],
+  "historicalSchemaReads": {
+    "authJournalSha256": "390104ea79de699d25d393942ed04ee1c9cc6c65991b18f9a414d00bab453f18",
+    "dbJournalSha256": "2bf1a5483b7fac6b54199664db5793ea2e44aec542fa21844654b86b2fa8547a"
+  }
+}

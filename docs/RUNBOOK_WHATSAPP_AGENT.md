@@ -1,5 +1,7 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**Integração preventiva —14/10/2026:** adapters FUTUROS API/frontend e encerramento auth/banco conectados ao coordenador, [código/provas/comandos](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/PREPARER_INTEGRATION_2026-10-14.md), **38 testes locais PASS**. Conexão de código concluída localmente para revisão; NÃO instalada na VPS, sem cron ou nova janela. Responsável Deifson; revisão21/10 antecipada após mudanças conforme o runbook. Terceiro lote preparado, sem exclusão autorizada. NEWauth+NEWDB, out.15 CLOSED, guarda38 fechada; **segurança externa/cifragem OPEN**, decisão de contenção separada continua na sequência ativa.
+
 **Revisão de retenção —14/10/2026:** responsável operacional **Deifson Oliveira (owner/operador de janela)**; apoio de manutenção dos preparadores: Codex nesta revisão. Última revisão **14/10/2026** (local/documental; não nova amostra produtiva); próxima revisão semanal **21/10/2026**, antecipada após janela/recusa/substituição/encerramento. Versão futura local dos cinco gates e validação de destino privado em [scripts](../scripts/README.md#operational_preparation_reviewpy), para revisão; ligação aos preparadores produtivos NÃO concluída, nenhum cron ativo. Terceiro lote preparado, sem retirada autorizada. NEWauth+NEWDB, out.15 CLOSED, guarda38 fechada; **segurança externa/cifragem OPEN**, próxima decisão de contenção permanece separada e acompanhada no relatório de segurança.
 
 **Integração permanente de retenção14/10:** [princípios](saas/CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional), [procedimento](RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente) e [checklist](saas/RELEASE_CHECKLIST.md#retenção-de-releases-e-preparações) publicados; rotina somente local para revisão, sem cron/limpeza ativados. Auditoria de preparadores e critérios no [backlog](BACKLOG_TECH.md#retenção-operacional--integração-preventiva-dos-preparadores). Estado operacional e próxima decisão do terceiro lote abaixo preservados.
@@ -2527,3 +2529,18 @@ não podem ser substituídos por input sintético. Integração local revisável
 da integração aos pontos de copy/staging/fechamento, ainda pendente no backlog.
 Owner Deifson responsável pela revisão manual21/10/2026 ou após janela; não há cron.
 Não altera a decisão pendente do terceiro lote nem encerra segurança externa/cifragem.
+
+### Uso dos adapters futuros de preparação e encerramento
+
+[Contrato/comandos](../scripts/README.md#operational_preparers_v3py),
+[provas/limites](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/PREPARER_INTEGRATION_2026-10-14.md).
+Versões novas conectam o gate antes de copy/build/tar e ao fechamento auth/banco.
+Não executar entrypoints históricos para importar essas regras; novos inputs/capturas
+não adaptam bindings consumidos. Arquivo privado700/600 e hashes selados são requisitos;
+relógio/frescor reais antes de cada passo, REFUSED/DENY e parciais preservados.
+
+Encerramento exige journal canônico e recibo VERIFIED quando aplicável, não resposta
+da UI ou formato parecido. Classificação não libera allowlist. Uso remoto exige seu
+procedimento específico; LOCAL_PREPARED não autoriza janela e medição local posterior
+não atesta espaço PostgreSQL/WAL atual. Cron/exclusão automática permanecem inativos.
+Não reexecutar auth/banco/out.15; segurança externa/cifragem continua OPEN.
