@@ -1,0 +1,35 @@
+ESCOPO: LOCAL SOMENTE. NÃO EXECUTAR NA VPS. SEM INSTALAÇÃO OU JANELA AUTORIZADA.
+CWD: worktree review/campaign-recovery-20260926, fontes publicadas neste commit.
+H=docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/snapshot-local-20261014
+
+Reprodução dirigida em pasta local NOVA700 (não repetir sobre a prova concluída):
+  umask 077
+  python3 -B "$H/test_snapshot.py" --evidence-dir /tmp/re7-snapshot-proof-UNIQUE
+A pasta precisa estar ausente; não apaga/ressela outputs existentes. Exige Node20.20.0,
+PG16 e dump original6c5354ea... privado já conservado. Apenas sockets Unix locais.
+--resume-local é ferramenta de diagnóstico do laboratório, não replay automático;
+após conversão concluída, a exigência de igualdade original do restore nega.
+
+Cinco regressões dirigidas, usando o cluster LOCAL preservado/parado:
+  python3 -B "$H/test_transport.py"
+Não conecta produção, não executa dump nem aplicação.
+
+Composição local em diretório vazio700, certificado existente obrigatório:
+  python3 -B "$H/prepare_v4.py" /tmp/re7-cipher-v4-review-UNIQUE
+Propostas offline em outro diretório vazio700:
+  python3 -B "$H/prepare_policy_review.py" /tmp/re7-policy-review-UNIQUE /tmp/re7-cipher-v4-review-UNIQUE
+Confere hashes do dump/inventário/plano/SQL e usa apenas NEWauth+NEWDB da fonte selada.
+Não instalar a proposta; montagem operacional/baseline atuais ainda não certificadas.
+
+Sequência futura, CONDICIONADA A NOVA AUTORIZAÇÃO EXPRESSA:
+  1. Leitura/preparação: acesso existente, lock canônico, fontes legítimas e mesma
+     identidade DB; snapshot READ ONLY exportado → inventário → pg_dump --snapshot;
+     manter holder e lock até fim; custódia; restore/CAS; negativa sem recaptura automática.
+  2. Montagem canônica nova: baseline atual/saved/fallback/controles, quatro modos,
+     políticas/instalador, manifests, capacidade/WAL/RPO; todos gates falsos. Revisão.
+  3. Somente após autorização própria: instalação owner → preflight → única sequência
+     cipher V4 → SQL verify → consumidores → sucessor; inspeção em resultado incerto.
+     ORIGINAL_VERIFIED admite retorno pré-commit; VERIFIED admite somente NEWcipher;
+     intent incerto bloqueia ambos até classificação/decisão. Sem ALTER ROLE/auth repetidos.
+Não existe bloco produtivo A/B liberado nesta publicação. Não usar a geração180000,
+140000 consumida ou d92 como janela. Não preencher a montagem faltante com certificados antigos.

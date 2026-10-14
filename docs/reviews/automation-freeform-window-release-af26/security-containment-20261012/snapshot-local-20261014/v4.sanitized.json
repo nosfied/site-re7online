@@ -1,0 +1,26 @@
+{
+  "result": "FOUR_MODE_SNAPSHOT_CERTIFIED_LOCAL_REVIEW_PACKAGE",
+  "artifactSha256": "36f51ebef7bf74f6efc90088254b1a806f427ee4f614ce9e0802b37d281a80cb",
+  "adapterManifestSha256": "59bae7c50b292a8fca590e30173de47e20a6ad41b94fadc4a10fd0d6c7cc1fa5",
+  "hookSha256": "3a4bfb91ca12150eacf8fe711b4edb72bd6b59f4eb46e0012e77db9a88af8caf",
+  "planHash": "20a9509cb87f30ed6681e539e9a2699c52813e2a36955d0cabfffc6d99d1e80e",
+  "sqlSha256": "6d8647d75b59ce859f49acbee870e90fa2d1860bd58a63137faa5014c2b747ff",
+  "readonlySqlSha256": "741617cdad5f4a8428ff89396d4579f06f1631ec291683208b7d86879e8e5bf6",
+  "policyProposalSha256": "95eda044e469fe458d07fbdf5ec416aea7861873550f7db2ec1c7f0127d43d62",
+  "modes": [
+    "switch",
+    "return",
+    "return-partial",
+    "return-before-commit"
+  ],
+  "fiveGatesFalse": true,
+  "executionAuthorized": false,
+  "freshProductionBaselineRequired": true,
+  "windowReady": false,
+  "newAuthNewDbPreserved": true,
+  "frontendUnchanged": true,
+  "opaqueRetained": 1,
+  "convertedPlanned": 10,
+  "openaiSubstitutionIndependentAndNotIncluded": true,
+  "allocatedPackageBytes": 51941376
+}

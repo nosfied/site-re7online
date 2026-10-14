@@ -1,0 +1,54 @@
+{
+  "result": "LOCAL_SHARED_SNAPSHOT_FULL_RESTORE_AND_CIPHER_PASS",
+  "sourceDumpSha256": "6c5354ea95ab3eef87d8731d2004d5409da5d42632678ac3f560fd41beeafd73",
+  "coherentDumpSha256": "773e59ee6a7ccec1d63c8a92f1b8257297b1988b0056004afed9e59ffc38119a",
+  "inventorySha256": "1c93c84bea9c11c9594c46c2a8a9bc8200b066f5818f09ed2673e8c84cd3cc08",
+  "inventoryEqualsRestoredDump": true,
+  "concurrentLocalWriterPermitted": true,
+  "freshCasAfterWriter": "DENY",
+  "converted": 10,
+  "opaquePreserved": 1,
+  "historicalFields": 147,
+  "historicalPayloadsPreserved": true,
+  "v2Independent": true,
+  "replayAdditionalEvents": 0,
+  "failureCases": [
+    {
+      "case": "dump-timeout",
+      "stage": "dump",
+      "reason": "dump_timeout"
+    },
+    {
+      "case": "dump-error",
+      "stage": "dump",
+      "reason": "dump_failed"
+    },
+    {
+      "case": "inventory-error",
+      "stage": "inventory",
+      "reason": "snapshot_query_failed"
+    },
+    {
+      "case": "holder-death",
+      "stage": "dump",
+      "reason": "snapshot_query_failed"
+    },
+    {
+      "case": "identity-drift",
+      "stage": "holder",
+      "reason": "source_identity_drift"
+    }
+  ],
+  "lockReleasedAfterFailure": true,
+  "outputNegatives": 3,
+  "planHash": "20a9509cb87f30ed6681e539e9a2699c52813e2a36955d0cabfffc6d99d1e80e",
+  "productionConnections": 0,
+  "providerCalls": 0,
+  "applicationStarted": false,
+  "limits": "local source restored from dated production dump; no fresh production snapshot/certificate",
+  "transportDirectedTests": 5,
+  "finalTransportMultiStatementVerified": true,
+  "canonicalBackupLock": "/opt/re7online/backups/converta-persistent/backup.lock",
+  "canonicalLockSourceSha256": "179a9ab52ab155cfcba908628be0a8d24796c6f917829ad00054e690e2ad6f71",
+  "status": "LOCAL VALIDATED / NOT DEPLOYED"
+}

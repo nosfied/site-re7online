@@ -1,0 +1,13 @@
+{
+  "result": "PRIVATE_OFF_HOST_CONTENT_ADDRESSED_CUSTODY_VERIFIED",
+  "indexSha256": "fbe65572f788fbd1cd8e22cec3df83f1a0550c9dfd063011cee008ae6ff7c9ed",
+  "indexedFiles": 80,
+  "uniqueObjects": 57,
+  "uniqueContentBytes": 137429609,
+  "ownerAccessible": true,
+  "files600Directories700": true,
+  "notIndependentPhysicalReplica": true,
+  "allIndexedContentsReadAndVerified": true,
+  "postgresDataPreservedLocallyNotCopied": true,
+  "noVpsOperations": true
+}

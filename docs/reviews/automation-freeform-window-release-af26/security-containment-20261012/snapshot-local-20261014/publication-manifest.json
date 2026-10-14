@@ -1,0 +1,20 @@
+{
+  "status": "LOCAL_VALIDATED_NOT_DEPLOYED",
+  "filesSha256": {
+    "policy.sanitized.json": "5d27add46ba84b2950fc6bb373c5de7fb2310a751e11f3b6aa8d8d3c9eb3b79c",
+    "v4.sanitized.json": "212e227bf31d9d941211b56b561a2aa4516da9fcf0e11ed017afb4b7a81e9add",
+    "snapshot_capture.py": "13f82a6d6ee32b9c44b89ac8021520ebb3eebfade4f1810fc95368b0131cd2ba",
+    "test_transport.py": "ffc81923f45bbd18ed73129117e2b98bc8c3048842f61793b03513a64b336a39",
+    "COMMANDS_FOR_REVIEW.txt": "7ceca5458f35572c3573f26cb1a2207af1cfc18ca8fc1905e6c43199b34241ac",
+    "test_snapshot.py": "2603a531f3dd15813096c4a93dbe1fbb4bde2b7f99b4301031180acb4648c3e9",
+    "proof.sanitized.json": "3281a58d8a3e3ccfb72cc4236ddd138b5940afa51737e110577fe938d80bcb92",
+    "custody.sanitized.json": "66c952df4fd1378c5ddd52dd47f8f6c405c40194bdf607aaba7c183c0e493800",
+    "prepare_v4.py": "4c7b47f2ae3045eb5038700fa6ee33223bafde77d91a5f892dc34661bd3f6257",
+    "REPORT.md": "cead28bf5c2d8a8aca7dea72a81457fd2d8306588e9aaac2ce1b3a8d18b19701",
+    "prepare_policy_review.py": "fc5f4002cb4fa803affef2af87d8f259baf2ad2124e111742f2a501c7b62a21e"
+  },
+  "privateValueScan": "PASS",
+  "vpsOperations": 0,
+  "functionalBuilds": 0,
+  "productionWindowReady": false
+}
