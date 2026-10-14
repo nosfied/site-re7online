@@ -1,5 +1,7 @@
 # Segundo lote — auditoria delimitada, sem retirada
 
+**Estado corrente: [segundo lote consumido, retirada e capacidade verificadas](SECOND_WITHDRAWAL_RESULT_2026-10-13.md). Não repetir B. Auditoria restante somente leitura, sem novas exclusões. Registros abaixo preservados como históricos.**
+
 Banco140000 e janela17h15 têm prioridade. O lote47008ee6 está consumido e não foi repetido. Esta rodada não instala políticas, não altera gates, não remove arquivos nem muda processos/credenciais. AuthNEW, out.15CLOSED e guarda38 fechada preservados.
 
 ## Medição atual e vínculos

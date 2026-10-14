@@ -1,5 +1,7 @@
 # Retenção — auditoria e lote concreto para revisão (13/10/2026)
 
+**Estado corrente: [segundo lote consumido, retirada e capacidade verificadas](SECOND_WITHDRAWAL_RESULT_2026-10-13.md). Não repetir B. Auditoria restante somente leitura, sem novas exclusões. Registros abaixo preservados como históricos.**
+
 **Estado corrente:** [retirada concluída, CAPACITY PASS datado e preparação bancária renovada](WITHDRAWAL_RESULT_2026-10-13.md). O inventário e decisões abaixo são históricos.
 
 **AUDIT COMPLETE AS DATED / ALLOWLIST FOR REVIEW / NOT WITHDRAWN.** Expansão do Droplet adiada. Banco continua bloqueado até CAPACITY PASS real; auth concluída/NEWauth, out.15 CLOSED, guarda38 fechada e produção preservados. Nenhuma compra, shutdown, resize, exclusão, chmod produtivo, política, restart ou rotação executada. [Dados sanitizados/hashes](RESULT.sanitized.json), [política proposta](RETENTION_POLICY_FOR_REVIEW.md).

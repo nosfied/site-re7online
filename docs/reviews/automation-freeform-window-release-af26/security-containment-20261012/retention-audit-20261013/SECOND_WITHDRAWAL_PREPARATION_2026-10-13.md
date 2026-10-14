@@ -1,5 +1,7 @@
 # Segundo lote pós-banco — preparação e limites
 
+**Estado corrente: [segundo lote consumido, retirada e capacidade verificadas](SECOND_WITHDRAWAL_RESULT_2026-10-13.md). Não repetir B. Auditoria restante somente leitura, sem novas exclusões. Registros abaixo preservados como históricos.**
+
 **PREPARAÇÃO SOMENTE. Nenhuma exclusão autorizada ou executada.** Auth/banco concluídos; NEWauth+NEWDB preservados, out.15 CLOSED e guarda38 fechada. Nove raízes da [allowlist auditada](SECOND_LOT_2026-10-13.md), potencial único **4.456.800.256B**. Preparações, logs e snapshot root continuam fora dela. A geração bancária140000 e o primeiro lote consumido não podem ser reexecutados.
 
 ## Recusa e correção do contexto observacional

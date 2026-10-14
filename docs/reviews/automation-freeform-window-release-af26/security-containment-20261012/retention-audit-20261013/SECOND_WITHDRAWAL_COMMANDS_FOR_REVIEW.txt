@@ -1,3 +1,5 @@
+CONSUMED — B executado uma única vez. NÃO REEXECUTAR. Resultado: SECOND_WITHDRAWAL_RESULT_2026-10-13.md. Comandos históricos preservados abaixo.
+
 FOR REVIEW ONLY — NO WITHDRAWAL AUTHORIZATION RECORDED.
 Auth/database completed. Do not reexecute bank140000 or the consumed first withdrawal.
 Literal roots: SECOND_WITHDRAWAL_PREPARATION.sanitized.json (seven directories + two archives).
