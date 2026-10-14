@@ -1,0 +1,32 @@
+LOCAL ONLY — no productive window or process-control command is emitted.
+Run from the review worktree. These tests do not contain production credentials.
+
+python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-volatile-protocol-20261014/test_scope.py
+python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-volatile-protocol-20261014/test_env_selective_review.py
+
+Completed PostgreSQL proof (do not run routinely; databases/evidence preserved):
+RE7_LAB_SUFFIX=-v5 python3 docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-volatile-protocol-20261014/test_locked_plan.py
+The suffix is consumed. A necessary future rerun requires a fresh local evidence namespace.
+
+Review API integration point, NOT a VPS executable:
+locked_plan.phase(pinned_query, approved_population_and_opaque_binding,
+                 fresh_writer_exit_db_ownership_fence_guard38_newauth_newdb_proof,
+                 owner_private_directory700, NEW_phase_id,
+                 canonical_crypto_plan_builder, canonical_SQL_body)
+Before containment no phase() invocation is permitted. One pinned SQL connection
+must span lock/read/seal/CAS/commit. Source/plan/intent are new, bound to approved
+scope and the sealed disposition. Existing refused plan is never edited.
+
+Review BEFORE any new operational generation:
+- Explicitly approve the source-renewal phase/fields and transaction/time limits.
+- Integrate it into a NEW V4 adapter after verified exit/DB ownership, not eligible()
+  as an opportunistic replacement for an ORIGINAL_VERIFIED failure.
+- Seal policies, four modes, consumers, root bindings and dedicated reader/epoch.
+- Publish installer bytes/hashes and exact invocation for the new generation.
+- Reconfirm productive writer coverage and RPO/capacity/WAL under express scope.
+No installer/stop/start/apply command is available from this local-only package.
+
+.env proposals: local-evidence/env-selective-review-20261014/
+legacy-api.proposal.private.env (four names), legacy-worker.proposal.private.env
+(three names). Do NOT cat them or copy/apply to VPS. Compare only hashes and the
+sanitized effects table. Review future cron/tools effects before any application.

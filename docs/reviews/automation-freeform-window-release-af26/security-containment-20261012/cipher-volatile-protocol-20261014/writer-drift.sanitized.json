@@ -1,0 +1,31 @@
+{
+  "result": "EXISTING_PRIVATE_BINDINGS_PAYLOAD_COMPARISON",
+  "changed": [
+    {
+      "secretKind": "baileysAuthState.v1",
+      "readableBoth": true,
+      "samePlaintext": false,
+      "hashChanged": true
+    },
+    {
+      "secretKind": "baileysAuthState.v1",
+      "readableBoth": true,
+      "samePlaintext": true,
+      "hashChanged": false
+    },
+    {
+      "secretKind": "baileysAuthState.v1",
+      "readableBoth": true,
+      "samePlaintext": false,
+      "hashChanged": true
+    },
+    {
+      "secretKind": "baileysAuthState.v1",
+      "readableBoth": true,
+      "samePlaintext": false,
+      "hashChanged": true
+    }
+  ],
+  "historyActorProven": false,
+  "newProductionRead": false
+}

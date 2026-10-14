@@ -1,0 +1,73 @@
+{
+  "state": "LOCAL_VALIDATED_NOT_DEPLOYED_NOT_WINDOW_READY",
+  "files": [
+    {
+      "name": "COMMANDS_FOR_REVIEW.txt",
+      "sha256": "1e2018eebb9721e20148c4bcf9b1aa664e3e8a6ce79dd81fcc9e86bfbd64befd",
+      "bytes": 2272
+    },
+    {
+      "name": "REPORT.md",
+      "sha256": "9ed8fa9bf8037d7d74eae30ab3f5d9eab4dc6bebc334b2cf813efa40c4558f5c",
+      "bytes": 13693
+    },
+    {
+      "name": "env-proposal.sanitized.json",
+      "sha256": "e96cb272c36b6c34b774ccd272dddfad262a8207fed66e6fdf5695063342d5d5",
+      "bytes": 1566
+    },
+    {
+      "name": "env_selective_review.py",
+      "sha256": "d262c67527940c7690a5e7c884ec813a73106ceb7b5467733835a14caf3b89d7",
+      "bytes": 1846
+    },
+    {
+      "name": "local-test.sanitized.json",
+      "sha256": "ebedf3e2257d35b3b596a8bcd355d13d6c171ae127e3d5e40e0107d17d24e03e",
+      "bytes": 860
+    },
+    {
+      "name": "locked_plan.py",
+      "sha256": "1031ee6e005b1bb1861b039473e827115760ae57752808c2dc3db1ac00699511",
+      "bytes": 6053
+    },
+    {
+      "name": "renew_local.cjs",
+      "sha256": "94f514b39f4b603a9db627f07d0022b420878c59fc4a6aff7eb80f2bedb3e4a9",
+      "bytes": 2404
+    },
+    {
+      "name": "test_env_selective_review.py",
+      "sha256": "cec9cd137e9f552e7dbf19225bdf3c6f67eaaf5ad3946e1bc1bf0a6d3bfdbcb2",
+      "bytes": 1194
+    },
+    {
+      "name": "test_locked_plan.py",
+      "sha256": "916a5d4dc2c11c18e9b9d414df458e8dec3e86adcdd84f3233a76f731af9ad77",
+      "bytes": 10097
+    },
+    {
+      "name": "test_scope.py",
+      "sha256": "06cc0a313c7927403f56d00e8b40efe0db9803df62873b61ef0355bd45a4c6eb",
+      "bytes": 1852
+    },
+    {
+      "name": "writer-drift.sanitized.json",
+      "sha256": "0de89cbc6ae08dc50b59172fa4bd5a3915730f4037ee27f011a034afc4f1675f",
+      "bytes": 703
+    },
+    {
+      "name": "writer-sources.sanitized.json",
+      "sha256": "34d7018cc7e5b6c9ab88fc97bda2b79a42f434e0d61547b4880d4c9c001888ab",
+      "bytes": 2056
+    }
+  ],
+  "previousGenerationPreserved": "DENY_FRESH_CAS_DRIFT",
+  "productionConnections": 0,
+  "executionAuthorized": false,
+  "writerCoverageGate": false,
+  "operationalFourModesGate": false,
+  "rootPolicyInstallerGate": false,
+  "actualSnapshotRestoreReused": true,
+  "grant": "95eda044e469fe458d07fbdf5ec416aea7861873550f7db2ec1c7f0127d43d62"
+}

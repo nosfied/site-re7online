@@ -1,0 +1,43 @@
+{
+  "result": "SELECTIVE_ENV_PROPOSALS_ONLY",
+  "consumers": [
+    {
+      "consumer": "legacy-api",
+      "changedVariables": [
+        "ADMIN_TOKEN",
+        "APP_AUTH_SECRET",
+        "DATABASE_URL",
+        "WHATSAPP_WEB_WORKER_CONTROL_TOKEN"
+      ],
+      "applyAuthorized": false,
+      "restartPerformed": false,
+      "effects": "Next dotenv consumers may regain SQL access. Review cron/tools separately before activation.",
+      "originalSha256": "2454d1b2fe80d1318eb311805b0a82f082874648a835c5b99256c2ee42d595e3",
+      "proposalSha256": "dfb8b91df4612e10c176fec39ef2527a5818cc7c319352bac4d77a965bd30215",
+      "sourcePath": "/opt/re7online/site-re7online/apps/whatsapp-agent/.env",
+      "owner": 1000,
+      "group": 1000,
+      "mode": 384,
+      "applicationPerformed": false
+    },
+    {
+      "consumer": "legacy-worker",
+      "changedVariables": [
+        "APP_AUTH_SECRET",
+        "DATABASE_URL",
+        "WHATSAPP_WEB_WORKER_CONTROL_TOKEN"
+      ],
+      "applyAuthorized": false,
+      "restartPerformed": false,
+      "effects": "Next dotenv consumers may regain SQL access. Review cron/tools separately before activation.",
+      "originalSha256": "59c13512baeca686bfe5773230b846f5d963e589e34bf24b3db005aac9246e8e",
+      "proposalSha256": "6a319e259e844f53b391c2bb26cd5bb5f97c976aeb1792edb32efa49b6f65d1f",
+      "sourcePath": "/opt/re7online/site-re7online/apps/whatsapp-web-worker/.env",
+      "owner": 1000,
+      "group": 1000,
+      "mode": 384,
+      "applicationPerformed": false
+    }
+  ],
+  "localUnknownFieldsPreserved": true
+}

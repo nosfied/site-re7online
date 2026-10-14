@@ -1,0 +1,38 @@
+{
+  "result": "ARCHIVED_ATTESTED_RUNTIME_WRITER_CODE_AUDIT",
+  "freshProductionRead": false,
+  "files": [
+    {
+      "path": "local-evidence/security-v3-runtime-20261014/return-extracted/dist/web-session/webSessionAuthStore.js",
+      "sha256": "ac8e39b617be9c0636f96560644ef20dd637d830b26d740752b6d5fd7a24a806"
+    },
+    {
+      "path": "local-evidence/security-v3-runtime-20261014/return-extracted/dist/web-session/webSessionConnectionRuntime.js",
+      "sha256": "a8d991e69772bcb43c429e473af4fe530e86f3564054b2dc361a18240ff6cc08"
+    },
+    {
+      "path": "local-evidence/security-v3-runtime-20261014/return-extracted/dist/web-session/webSessionConnectionAdmin.js",
+      "sha256": "c9097a2dabcedecc30ffaee84f2e00618295379c077f2a50451162947c6fa002"
+    },
+    {
+      "path": "local-evidence/security-v3-runtime-20261014/return-extracted/dist/channels/channelAccountPersistence.js",
+      "sha256": "f9ea9da18d9cba289ccd7e4e63b716bd8e5b28294f196389ba69f08db0a7c478"
+    },
+    {
+      "path": "local-evidence/freeform-window-gate-worker-20261001/worker-minimal/source/apps/whatsapp-web-worker/dist/whatsapp-web-worker/src/index.js",
+      "sha256": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd"
+    },
+    {
+      "path": "local-evidence/freeform-window-gate-worker-20261001/worker-minimal/source/apps/whatsapp-web-worker/dist/whatsapp-web-worker/src/whatsappWebSessionWorker.js",
+      "sha256": "796597dbfd629354f458db7b0176d6f93b238f1243cb20600d49ec180478b393"
+    },
+    {
+      "path": "local-evidence/freeform-window-gate-worker-20261001/worker-minimal/source/apps/whatsapp-web-worker/dist/whatsapp-web-worker/src/web-session/baileysAuthState.js",
+      "sha256": "2535cd086bc4c9ee46327a77b6ccbbe86d1b9e348751a36b7abeca12c04dbcc2"
+    },
+    {
+      "path": "local-evidence/freeform-window-gate-worker-20261001/worker-minimal/source/apps/whatsapp-web-worker/dist/whatsapp-web-worker/src/web-session/dedicatedPgAdvisoryLock.js",
+      "sha256": "e078f5933004343c61000f438e4d2f38a01561367c0b35a1bad5f413ceed45a8"
+    }
+  ]
+}

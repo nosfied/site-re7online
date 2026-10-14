@@ -24,3 +24,7 @@ Antes de mudança, as três cópias originais foram preservadas fora da VPS com 
 Revisão necessária antes de aplicação: efeito por cron/script e sua autoridade, higiene do ambiente herdado, wrappers legítimos, calendário de jobs, casos de ausência/duplicação/quotes e atomicidade/rollback de referência (nunca OLDauth/OLDDB). Backup original não é retorno de segredo revogado. Primeiro verificar conexão READ ONLY/no mensagem; jobs mutáveis ou providers não recebem autorização indireta. Não apagar arquivos, reativar senha exposta, resetar serviços ou substituir variáveis desconhecidas.
 
 Pendência de segurança operacional específica: migrar loaders legados para perfil selado/guardado, negar credencial obsoleta antes de conexão/provider e entregar referência privada atual ao owner em toda rotação. Auth/banco **concluídos**, porém a atualização dessas referências legadas não estava abrangida pelo aceite dos processos/GET/TCP/backup trust; esse limite está registrado, sem esconder a lacuna.
+
+## Complemento local seletivo
+
+[Renderer/provas e duas propostas privadas por consumidor](../cipher-volatile-protocol-20261014/REPORT.md). Sete assignments conhecidas derivadas do perfil pós-banco; hash original/CAS/duplicação/escopo/encoding negam. Não aplicado, sem restart ou reativação de cron. Worker mínimo afbb preservado foi auditado e importa dotenv/config; arquivo.env ausente no cwd ativo, perfil selado/kernel continuam fontes efetivas. Não copiar credenciais produtivas para variáveis locais de finalidade desconhecida.
