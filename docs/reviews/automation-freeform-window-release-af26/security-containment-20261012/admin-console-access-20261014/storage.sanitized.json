@@ -1,0 +1,12 @@
+{
+  "result": "CANONICAL_ADMIN_STORAGE_401_LOGOUT_RECONNECT_PASS",
+  "node": "20.20.0",
+  "rememberModes": 2,
+  "tenantJwtPreserved": true,
+  "supportReturnPreserved": true,
+  "onlyThreeAdminKeysRemoved": true,
+  "requestsGetOnly": true,
+  "syntheticOnly": true,
+  "productionChanges": 0,
+  "realBrowserProof": "owner_confirmed_logout_and_working_reconnection_with_indicated_current_token"
+}

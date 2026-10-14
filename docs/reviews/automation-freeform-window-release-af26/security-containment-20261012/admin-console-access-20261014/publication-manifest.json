@@ -1,0 +1,12 @@
+{
+  "state": "ADMIN_CONSOLE_RECOVERED",
+  "filesSha256": {
+    "connection-readonly.test.ts": "79a37fee0295298ccaeeda71a05d142122f619fd280af49ff78295c8d91c1abf",
+    "REPORT.md": "a298419fc18b8ec9547debdad2bc61cce2e33218980615f0290b5cbef0eacf47",
+    "storage.sanitized.json": "10de590b7ca97291d74b06b7094b3d0465bf7d8f81d6ceb6dd2e9d8e71ef141a",
+    "live.sanitized.json": "4b2b0cd38da056014d24db4c63aaa130238e4941ea82b0f60949f15998c89b25"
+  },
+  "privateValueScan": "PASS",
+  "runtimeChanges": 0,
+  "snapshot87d2f431StateUnchanged": "LOCAL_VALIDATED_NOT_DEPLOYED"
+}

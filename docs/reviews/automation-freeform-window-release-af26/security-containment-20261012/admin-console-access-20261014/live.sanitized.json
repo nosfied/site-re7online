@@ -1,0 +1,44 @@
+{
+  "result": "ADMIN_CONSOLE_ACCESS_RECOVERED_NEW_AUTH_PRESERVED",
+  "utc": "2026-10-14T20:59:09.926627+00:00",
+  "apiIdentityPreserved": true,
+  "newAuthMatchesApproved": {
+    "ADMIN_TOKEN": true,
+    "APP_AUTH_SECRET": true,
+    "WHATSAPP_WEB_WORKER_CONTROL_TOKEN": true
+  },
+  "adminGet": [
+    {
+      "route": "api_local",
+      "status": 200,
+      "ok": true,
+      "db": true
+    },
+    {
+      "route": "frontend_same_origin_proxy",
+      "status": 200,
+      "ok": true,
+      "db": true
+    }
+  ],
+  "frontendUnauthenticatedHtml": {
+    "http": 200,
+    "connectionFormServed": false,
+    "adminTokenInHtml": false
+  },
+  "guard38Preserved": true,
+  "configurationPrinted": false,
+  "headersPrinted": false,
+  "tokensPrinted": false,
+  "mutations": 0,
+  "limits": "browser storage cannot be inspected through server; owner reconnection confirmation required",
+  "ownerLogoutWorked": true,
+  "ownerCorrectOriginConfirmed": true,
+  "ownerReconnectAndReload": "OWNER_CONFIRMED_WORKING_WITH_INDICATED_TOKEN",
+  "historicalBrowserCredential": "UNKNOWN_not_captured_before_owner_logout",
+  "runtimeChanges": 0,
+  "snapshotState": "87d2f431_LOCAL_VALIDATED_NOT_DEPLOYED",
+  "ownerConfirmation": "sim, funcionou com o token indicado.",
+  "ownerPreviouslyConsultedDotenv": true,
+  "specificDotenvPathAndContents": "NOT_IDENTIFIED_NOT_CLAIMED"
+}
