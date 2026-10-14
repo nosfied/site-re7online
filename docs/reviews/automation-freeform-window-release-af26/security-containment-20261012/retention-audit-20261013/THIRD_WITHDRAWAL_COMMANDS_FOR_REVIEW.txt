@@ -1,0 +1,92 @@
+TERCEIRO LOTE — PARA REVISÃO. NENHUMA EXCLUSÃO AUTORIZADA.
+Geração própria final; segundo lote/banco/auth consumidos não são reexecutados.
+23 caminhos literais em third-withdrawal/literal-files.json; nenhum diretório, log ou snapshot.
+A0/A1 são leituras; B somente após autorização explícita do owner sobre este pacote.
+Nenhuma instalação de política/helper/sudoers necessária. B/C usam a sessão sudo legítima.
+Não alterar input77503f96 para aceitar drift, não repetir B automaticamente, manter intent/journal.
+
+A0 — custódia off-host no computador do owner (somente leitura; não repetir extração válida):
+set -euo pipefail
+umask 077
+D=/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/retention-third-files-20261014T030000Z
+test "$(sha256sum "$D/files.sha256" | cut -d' ' -f1)" = d50c06e19630024ad8961520e4a51781c2e7bfc61e52124250d4618e6f38b94e
+(cd "$D" && sha256sum -c files.sha256)
+test "$(sha256sum "$D/historical-blobs.private.tar" | cut -d' ' -f1)" = d34fd3a2b8d121f28c7b70df069c2833998e0987b01258faa1182c34dbae1bb4
+test "$(sha256sum "$D/historical-index.v2.private.json" | cut -d' ' -f1)" = eb2b7f05518d394bdd8d98b13817f2b603737a10cb48a5511d16d49a3a179f20
+printf 'OFFHOST_CUSTODY_PASS_NO_REMOVAL\n'
+
+A1 — VPS, conferências frescas sem repetir dry-run preparatório:
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/retention-third-files-final-20261014T050000Z
+Q=/dev/shm/re7-third-reviewed-execution-20261014T120000Z
+test "$(sha256sum "$P/withdraw.py" | cut -d' ' -f1)" = e1380546fb91072c4730482fb47c7f5dc6983efda6b4cfbaa332f003d84692bf
+test "$(sha256sum "$P/ownership.py" | cut -d' ' -f1)" = e191fd69354af9573ecabebc16b0ea678ff34fe3a5e28b26f7b1c7144c8010ee
+test "$(sha256sum "$P/literal-files.json" | cut -d' ' -f1)" = 6a58dde530d3dfcd3a7dfa8ae8579fb410bb59bc70c6a5a2e71a108178a431c6
+test "$(sha256sum "$P/input.private.json" | cut -d' ' -f1)" = 77503f964007ba1fcb4d8a61d9286fdc4c7202f070aa19cc2fc14884ee8894a4
+test ! -e "$P/withdrawal.intent.private.json" && test ! -L "$P/withdrawal.intent.private.json"
+test ! -e "$P/withdrawal.receipt.private.json"
+test ! -e "$Q" && test ! -L "$Q"
+mkdir -m 700 "$Q"
+sudo -v
+set +e
+timeout 240 sudo -n /usr/bin/nice -n 15 /usr/bin/python3 -B -I -S "$P/withdraw.py" --plan "$P/input.private.json" --plan-sha256 77503f964007ba1fcb4d8a61d9286fdc4c7202f070aa19cc2fc14884ee8894a4 --post-read > "$Q/a1.stdout.private" 2> "$Q/a1.stderr.private"
+A1_EXIT=$?
+set -e
+printf 'A1_EXIT=%s\n' "$A1_EXIT"
+cat "$Q/a1.stdout.private"
+test "$A1_EXIT" -eq 0
+sudo -n /usr/bin/python3 -B -I -S - "$P" <<'PY_GATE'
+import json,sys,re,stat
+from pathlib import Path
+p=Path(sys.argv[1]);files=[q for q in p.iterdir() if re.fullmatch(r'post-[0-9]+\.private\.json',q.name)]
+assert files,'post_receipt_absent'
+f=max(files,key=lambda q:int(q.name.split('-')[1].split('.')[0]));m=f.lstat()
+assert stat.S_ISREG(m.st_mode) and m.st_uid==0 and stat.S_IMODE(m.st_mode)==0o600,'post_type_owner_mode'
+v=json.loads(f.read_text());o=v['observation']
+assert v['result']=='POST_READ_COMPLETE' and v['remainingEntries']==23 and v['nonDirectoryMetadataDrift']==0,'post_membership_drift'
+assert v['capacityPass'] and v['minimumAvailableBytes']>=6468665344 and not v['receiptExists'],'post_capacity_or_receipt'
+assert not o['owners'] and not o['incomplete'],'post_incomplete'
+print('A1_CURRENT_STATE_PASS_NO_APPLY')
+PY_GATE
+# Em recusa/timeout, preservar/exportar e interromper; NÃO B, NÃO replay.
+
+B/C — SOMENTE DEPOIS DA AUTORIZAÇÃO EXPLÍCITA E A0/A1 PASS. NÃO EXECUTAR AGORA.
+# Na mesma sessão/variáveis P e Q. B obtém duas observações novas e revalida por arquivo.
+test ! -e "$P/withdrawal.intent.private.json" && test ! -L "$P/withdrawal.intent.private.json"
+test ! -e "$Q/b.stdout.private"
+test ! -e "$Q/b.stderr.private"
+test ! -e "$Q/c.stdout.private"
+test ! -e "$Q/c.stderr.private"
+sudo -v
+set +e
+timeout 900 sudo -n /usr/bin/nice -n 15 /usr/bin/python3 -B -I -S "$P/withdraw.py" --plan "$P/input.private.json" --plan-sha256 77503f964007ba1fcb4d8a61d9286fdc4c7202f070aa19cc2fc14884ee8894a4 --owner-authorized-apply > "$Q/b.stdout.private" 2> "$Q/b.stderr.private"
+B_EXIT=$?
+printf 'B_EXIT=%s\n' "$B_EXIT"
+printf '%s\n' "$B_EXIT" > "$Q/b.exit.private.txt"
+# C sempre depois de B invocado, inclusive DENY/parcial/timeout. Sem repetição de B.
+timeout 240 sudo -n /usr/bin/python3 -B -I -S "$P/withdraw.py" --plan "$P/input.private.json" --plan-sha256 77503f964007ba1fcb4d8a61d9286fdc4c7202f070aa19cc2fc14884ee8894a4 --post-read > "$Q/c.stdout.private" 2> "$Q/c.stderr.private"
+C_EXIT=$?
+printf 'C_EXIT=%s\n' "$C_EXIT"
+cat "$Q/b.stdout.private" "$Q/c.stdout.private"
+set -e
+for F in "$P/withdrawal.intent.private.json" "$P/withdrawal.receipt.private.json" "$P/partial.private.json" "$P/removals.private.jsonl" "$P"/post-*.private.json "$P"/denial-*.private.json; do
+ if sudo -n test -f "$F"; then
+  sudo -n test ! -L "$F"
+  N=${F##*/}
+  test ! -e "$Q/$N"
+  sudo -n cat "$F" > "$Q/$N"
+ fi
+done
+# Copiar Q off-host privadamente antes de qualquer continuação, inclusive recusa/parcial.
+# Só com B/C completos, verificar certificado exato:
+test "$(sha256sum "$P/verify-result.py" | cut -d' ' -f1)" = 79ebff3e641631fe600b225d9a6dc90d5834b8895fe80585e61a31a832cc979c
+timeout 30 sudo -n /usr/bin/python3 -B -I -S "$P/verify-result.py" --plan "$P/input.private.json" --plan-sha256 77503f964007ba1fcb4d8a61d9286fdc4c7202f070aa19cc2fc14884ee8894a4 > "$Q/certificate.stdout.private" 2> "$Q/certificate.stderr.private"
+
+Conclusão exige: WITHDRAWAL_COMPLETE/input exato23; journal único/conjunto literal23;
+post fresco após recibo,23 ausentes,zero restantes/drift/owners/incomplete,piso6.468.665.344B;
+principais/109 links/controles/NEWauth+NEWDB/guarda38 preservados e sem erro de escrita/WAL.
+Conferir health/DB,sessões/telas,saved/fallback600,out15CLOSED,sixreported/fivenotsubmitted.
+Retenção automática permanece proposta; nenhum restart/rotação/envio/abertura.
+Incerteza: somente inspecionar estado/recibo/journal/FDs, sem limpar intent ou repetir B.
+Qualquer necessidade de nova política/identidade/credencial nega este input e exige nova preparação.

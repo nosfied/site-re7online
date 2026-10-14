@@ -1,5 +1,7 @@
 # Retenção — auditoria e lote concreto para revisão (13/10/2026)
 
+**Estado corrente: [terceiro lote preparado, sem retirada](THIRD_WITHDRAWAL_PREPARATION_2026-10-14.md). Segundo lote concluído/consumido; não repetir. Segurança externa/cifragem OPEN.**
+
 **Estado corrente: [segundo lote consumido, retirada e capacidade verificadas](SECOND_WITHDRAWAL_RESULT_2026-10-13.md). Não repetir B. Auditoria restante somente leitura, sem novas exclusões. Registros abaixo preservados como históricos.**
 
 **Estado corrente:** [retirada concluída, CAPACITY PASS datado e preparação bancária renovada](WITHDRAWAL_RESULT_2026-10-13.md). O inventário e decisões abaixo são históricos.

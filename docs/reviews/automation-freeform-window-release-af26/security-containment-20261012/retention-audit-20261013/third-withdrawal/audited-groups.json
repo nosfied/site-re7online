@@ -1,0 +1,126 @@
+[
+  {
+    "sha256": "4c2fb0caf834ce0c2c9e628c82bf80bba669effd68ea521245a936cfc34c6810",
+    "paths": [
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T173300Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-postack-20261008T170600Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T173800Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-ecosystem-20261008T211000Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/campaign-eligibility-reconciliation-20261008T150000Z/reconciliation-authorized-20261008/backup/content.private.tar.gz"
+    ],
+    "copies": 6,
+    "apparentBytesEach": 479460086,
+    "uniqueAllocatedBytes": 2876792832,
+    "withdrawalApproved": false
+  },
+  {
+    "sha256": "0d9c16cb978ec560d7b47f4c56e5417cb16d5a0cace2ca4c09d0cbbc53c56ee2",
+    "paths": [
+      "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/whatsapp-agent-return.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/activation-20261002T182720Z/whatsapp-agent-return.private.tar.gz"
+    ],
+    "copies": 2,
+    "apparentBytesEach": 103120990,
+    "uniqueAllocatedBytes": 206249984,
+    "withdrawalApproved": false
+  },
+  {
+    "sha256": "d806e3ac7746f3c62a77012d10e9ba34072ac8a127ef339a174e3b78e0d59246",
+    "paths": [
+      "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/admin-front-return.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/activation-20261002T182720Z/admin-front-return.private.tar.gz"
+    ],
+    "copies": 2,
+    "apparentBytesEach": 276813828,
+    "uniqueAllocatedBytes": 553631744,
+    "withdrawalApproved": false
+  },
+  {
+    "sha256": "8de30ca43412fde5d03112d6805e6cbb54a585136d15a1f334df7f95944b05d7",
+    "paths": [
+      "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/whatsapp-web-worker-return.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/activation-20261002T182720Z/whatsapp-web-worker-return.private.tar.gz"
+    ],
+    "copies": 2,
+    "apparentBytesEach": 96023039,
+    "uniqueAllocatedBytes": 192053248,
+    "withdrawalApproved": false
+  },
+  {
+    "sha256": "3f4affa2d3135756687d95d41912b221163f82585937db7a561518ed95721fe0",
+    "paths": [
+      "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/v4-20261003/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/v4-20261003/window/backup-window-20261003T121329Z/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-pm2-20261003T235000Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T163000Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-20261004T194000Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-20261003T150000Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-20261005T025100Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-pm2fix-20261004T005800Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9-capture-20261005T143500Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T165710Z/window/content.private.tar.gz"
+    ],
+    "copies": 11,
+    "apparentBytesEach": 467189826,
+    "uniqueAllocatedBytes": 5139152896,
+    "withdrawalApproved": false
+  },
+  {
+    "sha256": "6b9bfae57e011fba21c17627d22c430859eb08ae248f380328081e5feb8e3111",
+    "paths": [
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb-baseline-20261006T020000Z/window/backup-preserved-before-window-20261006T130000Z/content.private.tar.gz"
+    ],
+    "copies": 2,
+    "apparentBytesEach": 474298001,
+    "uniqueAllocatedBytes": 948604928,
+    "withdrawalApproved": false
+  },
+  {
+    "sha256": "8b67292578090a2f564e4a9bf399b002e667bba723c936859fc438aa1221f5c8",
+    "paths": [
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-reactive-afbb7455.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb-baseline-20261006T020000Z/window/worker-reactive-afbb7455.tar.gz"
+    ],
+    "copies": 2,
+    "apparentBytesEach": 111230501,
+    "uniqueAllocatedBytes": 222461952,
+    "withdrawalApproved": false
+  },
+  {
+    "sha256": "9b375dffca78425e7193e2e73b3c3692a951dc9f638c1c73790cfd3c5e32dac2",
+    "paths": [
+      "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z/frontend-fa60f0f6.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60f0f6-20261007T171104Z/frontend-fa60f0f6.tar.gz"
+    ],
+    "copies": 2,
+    "apparentBytesEach": 174112557,
+    "uniqueAllocatedBytes": 174112768,
+    "withdrawalApproved": false
+  },
+  {
+    "sha256": "236c1d502df5767eb7cde726ce0d7ae7c6e8200489cac4d09a417b08d98c0e98",
+    "paths": [
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-20261005T025100Z/window/worker-minimal-b9-v3.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9-capture-20261005T143500Z/window/worker-minimal-b9-v3.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z/window/worker-minimal-b9-v3.tar.gz"
+    ],
+    "copies": 3,
+    "apparentBytesEach": 112035359,
+    "uniqueAllocatedBytes": 336113664,
+    "withdrawalApproved": false
+  },
+  {
+    "sha256": "413083a841d50f4d85dab34fc8a708fcb6cbd67299fc9b5bf240e7c41d645097",
+    "paths": [
+      "/opt/re7online/backups/converta-persistent/preparations/runtime-fix-20260930T020103Z/content.private.tar.gz",
+      "/opt/re7online/backups/converta-persistent/preparations/automation-20260929T220203Z/content.private.tar.gz"
+    ],
+    "copies": 2,
+    "apparentBytesEach": 461711466,
+    "uniqueAllocatedBytes": 923435008,
+    "withdrawalApproved": false
+  }
+]

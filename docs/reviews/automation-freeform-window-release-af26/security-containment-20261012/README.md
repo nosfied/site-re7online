@@ -1,5 +1,7 @@
 # Preparação de contenção de credenciais — 12/10/2026
 
+**Retenção14/10 — [terceiro lote preparado para revisão](retention-audit-20261013/THIRD_WITHDRAWAL_PREPARATION_2026-10-14.md),23 arquivos/8,82GB potenciais,input próprio e dry-run PASS; nenhuma nova exclusão. Auth/banco concluídos,NEWauth+NEWDB;out15CLOSED/guarda38closed. Segurança externa/cifragem OPEN.**
+
 **Retenção — estado atual:** [segundo lote consumido e verificado](retention-audit-20261013/SECOND_WITHDRAWAL_RESULT_2026-10-13.md),4.456.800.256B alocados retirados; CAPACITY PASS datado10,90GB mínimos. NEWauth+NEWDB e produção preservados. Preparações/logs/snapshots apenas auditados; nenhuma nova retirada autorizada. Segurança externa/cifragem permanece OPEN.
 
 **ESTADO CORRENTE — AUTH3 E BANCO CONCLUÍDOS/VERIFIED; SECURITY OPEN EXTERNA/CIFRAGEM.** [Resultado e limites](DATABASE_EXECUTION_2026-10-13.md). Geração140000 consumida uma vez, complete/switch13/10,17:47:50Fortaleza; interrupção conservadora37,198s. NEWDB TCP aceito/OLDDB rejeitado, NEWauth preservada; API410272/worker410428, frontend188897 e daemon intactos; HBA/atributos/healthDB/sessões/telas confirmados. Saved/fallback600, barreira ausente, cinco gatesfalse/execfalse; guarda38closed/out15CLOSED/seis resultados/cinco não enviados preservados. Não repetir instalação/ALTER/start/retirada consumida. Próxima preparação autorizada: driver/input novos do segundo lote com identidades/política/NEWDB efetivos; nenhuma exclusão autorizada. Segurança externa/cifragem e liberação da guarda permanecem decisões separadas.

@@ -1,0 +1,42 @@
+{
+  "withdrawPaths": [
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T173300Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-postack-20261008T170600Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T174500Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-scheduled-20261008T173800Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/campaign-eligibility-reconciliation-20261008T150000Z/reconciliation-authorized-20261008/backup/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/activation-20261002T182720Z/whatsapp-agent-return.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/activation-20261002T182720Z/admin-front-return.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/activation-20261002T182720Z/whatsapp-web-worker-return.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/v4-20261003/window/backup-window-20261003T121329Z/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-pm2-20261003T235000Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T163000Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-20261004T194000Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-20261003T150000Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-20261005T025100Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-pm2fix-20261004T005800Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9-capture-20261005T143500Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-sequenced-20261003T165710Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb-baseline-20261006T020000Z/window/backup-preserved-before-window-20261006T130000Z/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb-baseline-20261006T020000Z/window/worker-reactive-afbb7455.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9-capture-20261005T143500Z/window/worker-minimal-b9-v3.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-absent-20261005T121000Z/window/worker-minimal-b9-v3.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/automation-20260929T220203Z/content.private.tar.gz"
+  ],
+  "preservePaths": [
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-campaign-eligibility-ecosystem-20261008T211000Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/whatsapp-agent-return.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/admin-front-return.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/whatsapp-web-worker-return.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/freeform-window-af26/v4-20261003/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/content.private.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-reactive-afbb7455-20261006T010000Z/window/worker-reactive-afbb7455.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60-observed-20261007T194628Z/frontend-fa60f0f6.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/frontend-fa60f0f6-20261007T171104Z/frontend-fa60f0f6.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-hybrid-b9b58177-20261005T025100Z/window/worker-minimal-b9-v3.tar.gz",
+    "/opt/re7online/backups/converta-persistent/preparations/runtime-fix-20260930T020103Z/content.private.tar.gz"
+  ],
+  "allocatedRecoverableBytes": 8816578560,
+  "noRemovalAuthorized": true
+}
