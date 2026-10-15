@@ -1,5 +1,7 @@
 # Decisão consolidada por credencial — avaliação de risco, sem execução
 
+**ROTAÇÕES ADIADAS POR ACEITAÇÃO DO OWNER —15/10/2026.** [Registro explícito sobre a matriz b1d41b33](OWNER_ACCEPTANCE_2026-10-15.md), revisão21/10/2026 ou antes pelos gatilhos. A fundamentação abaixo fica preservada; a decisão de adiar já foi tomada. P0/A/B e resets suspensos; não há revogação ou contenção completa.
+
 [Alcance e evidências preservados](REPORT.md). Esta revisão substitui a classificação anterior de “rotação necessária” baseada apenas na presença do segredo no contexto do modelo. **O envio ao provedor autorizado é um fato sobre o tratamento do dado; isoladamente, não demonstra acesso não autorizado, comprometimento da conta ou obrigação de rotação.** A inadequação de imprimir configurações permanece registrada, sem transformar essa falha em prova de abuso.
 
 Separação das conclusões:
@@ -66,6 +68,6 @@ A documentação oficial de [produção](https://developers.openai.com/api/docs/
 
 ## Registro mínimo de aceitação
 
-Uma decisão consolidada pode listar todas as categorias adiadas, impactos evitados, alcance conhecido, incertezas aceitas, owner e próxima revisão já programada, com os gatilhos acima. Aceitar risco não equivale a afirmar que nada aconteceu ou que a conta não retém dados. Não publicar valores, IDs de organizações/projetos/chaves ou nova coleta de emissão. **Nenhuma aceitação foi registrada pelo owner por esta publicação.**
+Uma decisão consolidada pode listar todas as categorias adiadas, impactos evitados, alcance conhecido, incertezas aceitas, owner e próxima revisão já programada, com os gatilhos acima. Aceitar risco não equivale a afirmar que nada aconteceu ou que a conta não retém dados. Não publicar valores, IDs de organizações/projetos/chaves ou nova coleta de emissão. **Aceitação explícita registrada posteriormente no documento OWNER_ACCEPTANCE_2026-10-15.md, referenciada acima.**
 
 P0/A/B e resets seguem suspensos até decisão explícita. Pacotes, R0 DENY/ack, evidências, NEWauth+NEWDB+NEWcipher, crons, produção, guarda38 e out.15 CLOSED preservados. Responsável operacional Deifson; revisão15/10/próxima21/10, antecipar por fato relevante.

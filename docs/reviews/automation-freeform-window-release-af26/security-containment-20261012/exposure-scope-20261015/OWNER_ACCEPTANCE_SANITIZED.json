@@ -1,0 +1,20 @@
+{
+  "status": "ROTAÇÕES ADIADAS POR ACEITAÇÃO DO OWNER",
+  "decisionDate": "2026-10-15",
+  "reviewedMatrixCommit": "b1d41b33057f1f323e65a65cc07fe22ab4402c33",
+  "decisionSource": "explicit_owner_instruction_in_session",
+  "deferredCategories": [
+    "OpenAI",
+    "Meta/state",
+    "WhatsApp/verificação",
+    "Web Push"
+  ],
+  "reevaluateOn": "2026-10-21",
+  "earlierReevaluation": "documented_triggers",
+  "p0abSuspended": true,
+  "externalResetsSuspended": true,
+  "backupRenewalForPreparationAuthorized": false,
+  "credentialsRevokedByDecision": false,
+  "containmentComplete": false,
+  "productionActionsAuthorized": false
+}

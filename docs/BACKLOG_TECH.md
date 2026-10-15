@@ -1,5 +1,10 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**ROTAÇÕES ADIADAS POR ACEITAÇÃO DO OWNER —15/10/2026:** [aceite explícito da matriz b1d41b33](reviews/automation-freeform-window-release-af26/security-containment-20261012/exposure-scope-20261015/OWNER_ACCEPTANCE_2026-10-15.md). OpenAI, Meta/state, WhatsApp/verificação e Web Push adiados para reavaliação21/10/2026, ou antes pelos gatilhos registrados. Segurança OPEN, sem declarar revogação/contenção completa; P0/A/B e resets suspensos, pacotes/evidências preservados e nenhum backup apenas para essa preparação. NEWauth+NEWDB+NEWcipher, ambos crons, produção, guarda38/out.15 CLOSED preservados. Backlog funcional retomado independentemente; Prisma42PASS/typecheck permanece LOCAL/NOT DEPLOYED, sem.env/retenção.
+
+
+**Próximo trabalho funcional:** [prioridade canônica e unidade local de entrega](reviews/automation-freeform-window-release-af26/FUNCTIONAL_RESUMPTION_2026-10-15.md): campanhas/CRM e aceite Utility/CRA; iniciar pelo contrato de resultado/progresso da importação CSV e totais coerentes. Reusar correção Prisma42PASS como não regressão, sem reexecutar fases concluídas ou reabilitar retenção. Ainda não é correção CSV entregue.
+
 **Decisão de risco revisada — sem execução,15/10:** [matriz consolidada](reviews/automation-freeform-window-release-af26/security-containment-20261012/exposure-scope-20261015/CREDENTIAL_DECISIONS.md). Presença no contexto do provedor autorizado não comprova obrigação de rotação; trocas pendentes externas/state/verificação/Web Push podem ser adiadas mediante aceitação do owner. Nenhuma obrigação adicional demonstrada ou aceitação presumida. Gatilhos concretos de urgência e controles opcionais separados; não exigir ausência absoluta de acesso. P0/A/B e resets continuam suspensos; fases concluídas, pacotes, evidências e custódia local16PASS preservados. Sem novas buscas extensas, backups, mudanças de conta ou produção.
 
 
@@ -9,7 +14,7 @@ A suspensão acima prevalece sobre os roteiros e checkpoints anteriores abaixo.
 
 Pendências desta revisão, sem execução produtiva:
 
-- Avaliar/registrar decisão individual na matriz, incluindo Web Push e variantes legadas do.env. Aceite: categoria, evidência, incertezas, impacto e responsável; substituição não equivale a revogação. Não reabrir auth/banco/cifragem.
+- CONCLUÍDO registro de aceitação do owner para adiar OpenAI/Meta/state/WhatsApp/verificação/Web Push; reavaliar21/10 ou pelos gatilhos. Variantes legadas do.env permanecem delimitadas na matriz, sem aplicação. Não reabrir auth/banco/cifragem.
 - Custódia v2 implementada/LOCAL VALIDATED, não integrada à geração operacional. Aceite futuro: preservar bytes originais desde o produtor, publicar código/hashes de nova integração revisável, ensaiar transporte legítimo e conferir pacote concreto; não editar ack histórico ou consumir novamente R0.
 - Alcance Gemini e permissões: manter incerteza de destino remoto/leitores históricos; nenhuma exclusão de logs, alteração de configuração ou reset automático. Aceite de eventual contenção futura requer escopo e autorização próprios.
 

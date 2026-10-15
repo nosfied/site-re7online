@@ -1,5 +1,8 @@
 # Segurança externa/cifragem — preparação retomada após retirada parcial
 
+**ROTAÇÕES ADIADAS POR ACEITAÇÃO DO OWNER —15/10/2026:** [aceite explícito da matriz b1d41b33](exposure-scope-20261015/OWNER_ACCEPTANCE_2026-10-15.md). OpenAI, Meta/state, WhatsApp/verificação e Web Push adiados para reavaliação21/10/2026, ou antes pelos gatilhos registrados. Segurança OPEN, sem declarar revogação/contenção completa; P0/A/B e resets suspensos, pacotes/evidências preservados e nenhum backup apenas para essa preparação. NEWauth+NEWDB+NEWcipher, ambos crons, produção, guarda38/out.15 CLOSED preservados. Backlog funcional retomado independentemente; Prisma42PASS/typecheck permanece LOCAL/NOT DEPLOYED, sem.env/retenção.
+
+
 **Decisão de risco revisada — sem execução,15/10:** [matriz consolidada](exposure-scope-20261015/CREDENTIAL_DECISIONS.md). Presença no contexto do provedor autorizado não comprova obrigação de rotação; trocas pendentes externas/state/verificação/Web Push podem ser adiadas mediante aceitação do owner. Nenhuma obrigação adicional demonstrada ou aceitação presumida. Gatilhos concretos de urgência e controles opcionais separados; não exigir ausência absoluta de acesso. P0/A/B e resets continuam suspensos; fases concluídas, pacotes, evidências e custódia local16PASS preservados. Sem novas buscas extensas, backups, mudanças de conta ou produção.
 
 
