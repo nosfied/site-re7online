@@ -1,3 +1,9 @@
+HISTÓRICO / B CONSUMED — DO NOT REPEAT A OR B.
+See WINDOW_RESULT_2026-10-15.md. Installed policy b6a584; prestop restored,
+NO_FINAL_PLAN, no SQL conversion, gatesfalse, guard38. The backup/proof manifests
+were renewed with originals archived; current review hash1a40f727….
+The commands below preserve the reviewed historical procedure, not replay authority.
+
 PREPARATION VALIDATED FOR REVIEW / NOT INSTALLED / NOT WINDOW READY.
 V9 remains DENY, unchanged. V10 is already staged inactive; do not repeat extraction.
 Archive 6d7ebf9a8bb143f0b0b5419749387529c8b4579d017dec39302cd7b1b132fd76

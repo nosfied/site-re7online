@@ -1,0 +1,18 @@
+{
+  "bElapsedSeconds": 8.721167176961899,
+  "bInvocations": 1,
+  "backupSha256": "025e337cf3aee0178a3360807ac1f281b04593936776b1515fbad912dabb05c1",
+  "barrierAbsent": true,
+  "cipherSQLApplied": false,
+  "classificationC": "NO_FINAL_PLAN",
+  "containmentUpperBoundSeconds": 3.496579,
+  "failureReason": "restore_not_verified",
+  "gatesFalse": true,
+  "healthDbWorkerAdminFrontendSavedSupervisionFrozenSql": "PASS",
+  "ownerFunctionalConfirmation": true,
+  "policyInstalledSha256": "b6a58431c989a36eebdfa9e443118a7e15fbe0229d102cd896f91d3d193f818d",
+  "processesStoppedOrStarted": false,
+  "result": "B_FAILED_PRESTOP_RESTORED_CIPHER_NOT_DEPLOYED",
+  "reviewManifestAfterRpo": "1a40f727ed46d0c04cd5ac7facb8ca2ec451dca741f3fc83ec2d2e2679e02022",
+  "security": "OPEN"
+}

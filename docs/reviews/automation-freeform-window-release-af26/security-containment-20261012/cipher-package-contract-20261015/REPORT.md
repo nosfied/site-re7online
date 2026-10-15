@@ -1,5 +1,7 @@
 # Correção integrada produtor/consumidor — 14/10/2026 Fortaleza
 
+**Resultado real da janela15/10:** [B consumido, falha pré-parada, restauração comprovada; cifragem não implantada](WINDOW_RESULT_2026-10-15.md). Política b6 instalada; `ops.stop` rejeitou o contrato de restore retido aceito pelo checker. A declaração de auditoria integral abaixo foi insuficiente para esse consumidor. Preservar v10; não repetir A/B.
+
 **PREPARATION VALIDATED FOR REVIEW / NOT INSTALLED / NOT WINDOW READY.** Nova geração `incident-6683-v4-security-cipher-contract-v10-20261015T021500Z` conferida **com seus bytes concretos na VPS**, três referências imutáveis não vazias e verificadores canônicos. V9 permanece DENY, intacta; não a corrigimos em campo, não instalamos política, não paramos processos e não aplicamos SQL. Nenhuma nova sessão sudo do owner foi solicitada; só o observador NOPASSWD já existente foi usado em leitura.
 
 [Roteiro A0/A/B/C/D para revisão](COMMANDS_FOR_REVIEW.txt), [provas sanitizadas](PROOFS_SANITIZED.json). A autorização anterior da v9 não autoriza executar esta nova janela.
