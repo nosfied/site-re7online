@@ -1,0 +1,161 @@
+{
+  "producer.sanitized.json": {
+    "result": "LOCAL_ENGINEERING_COMPOSITION_NOT_WINDOW_READY",
+    "reviewSha256": "4bb21d25e22a0d55010979b9200631930300d509fadb1c138d1e4ab2f774cb7b",
+    "changedFiles": 17,
+    "modes": 4,
+    "productionEffects": false
+  },
+  "sequence.sanitized.json": {
+    "result": "INTEGRATED_CONTROL_SEQUENCE_LOCAL_PASS",
+    "cases": [
+      {
+        "mode": "switch",
+        "stage": "unapproved_composition",
+        "accepted": false
+      },
+      {
+        "mode": "switch",
+        "stage": "complete_admission_main",
+        "accepted": true,
+        "priorReadOnlyFactsReused": true,
+        "newControlsActuallyVerified": true
+      },
+      {
+        "mode": "switch",
+        "stage": "preflight_then_actual_prestop",
+        "accepted": true,
+        "helper8deActualAbortBranch": true
+      },
+      {
+        "mode": "switch",
+        "stage": "actual_sequencer_and_delegated_finish",
+        "accepted": true,
+        "helper8deActualRestoreBranch": true
+      },
+      {
+        "mode": "return",
+        "stage": "unapproved_composition",
+        "accepted": false
+      },
+      {
+        "mode": "return",
+        "stage": "complete_admission_main",
+        "accepted": true,
+        "priorReadOnlyFactsReused": true,
+        "newControlsActuallyVerified": true
+      },
+      {
+        "mode": "return",
+        "stage": "preflight_then_actual_prestop",
+        "accepted": true,
+        "helper8deActualAbortBranch": true
+      },
+      {
+        "mode": "return",
+        "stage": "actual_sequencer_and_delegated_finish",
+        "accepted": true,
+        "helper8deActualRestoreBranch": true
+      },
+      {
+        "mode": "return-partial",
+        "stage": "unapproved_composition",
+        "accepted": false
+      },
+      {
+        "mode": "return-partial",
+        "stage": "complete_admission_main",
+        "accepted": true,
+        "priorReadOnlyFactsReused": true,
+        "newControlsActuallyVerified": true
+      },
+      {
+        "mode": "return-partial",
+        "stage": "preflight_then_actual_prestop",
+        "accepted": true,
+        "helper8deActualAbortBranch": true
+      },
+      {
+        "mode": "return-partial",
+        "stage": "actual_sequencer_and_delegated_finish",
+        "accepted": true,
+        "helper8deActualRestoreBranch": true
+      },
+      {
+        "mode": "return-before-commit",
+        "stage": "unapproved_composition",
+        "accepted": false
+      },
+      {
+        "mode": "return-before-commit",
+        "stage": "complete_admission_main",
+        "accepted": true,
+        "priorReadOnlyFactsReused": true,
+        "newControlsActuallyVerified": true
+      },
+      {
+        "mode": "return-before-commit",
+        "stage": "preflight_then_actual_prestop",
+        "accepted": true,
+        "helper8deActualAbortBranch": true
+      },
+      {
+        "mode": "return-before-commit",
+        "stage": "actual_sequencer_and_delegated_finish",
+        "accepted": true,
+        "helper8deActualRestoreBranch": true
+      }
+    ],
+    "caseCount": 16,
+    "completeCandidate": true,
+    "realAdmissionMain": true,
+    "externalPreparatoryChain": "prior real READ ONLY response reused plus actual new controls/hash checks",
+    "notExercised": [
+      "fresh production root/RPO/SQL-proxy",
+      "pre-unfence process/network/nonce gates retained from previous proofs",
+      "cipher SQL or successor starts"
+    ],
+    "productionEffects": false
+  },
+  "negatives.sanitized.json": {
+    "result": "DIRECTED_NEGATIVES_PASS",
+    "cases": [
+      "generated_header_only_accepted",
+      "deploy_body",
+      "system_body",
+      "deploy_absent",
+      "duplicate_source",
+      "switch/ops.py",
+      "return/delegated.py",
+      "return-partial/ops.py",
+      "return-before-commit/delegated.py",
+      "window/scheduled_controls.py",
+      "source_mode",
+      "source_owner",
+      "source_symlink",
+      "system_not_restored"
+    ],
+    "caseCount": 14,
+    "productionEffects": false
+  },
+  "sourceUnchanged": true,
+  "compositionAllocatedBytes": 9207808,
+  "indexSha256": "9dfb6d0853e17ecfc1a6b6886c193007c0fbafb83871eebfa8496abecfec1a8c",
+  "publicDeltaSha256": "20b6cc04a861d00cc5f6ebddb826b3d88b0dc6d46c818d4895aed2ed430588b2",
+  "audit": {
+    "result": "PRISMA_POLICY_READ_ONLY_AUDIT",
+    "utc": "2026-10-15T12:29:03.523492+00:00",
+    "sqlSha256": "ff0421ad7ba465a0396e5cf6ff45d90b4fb1e13471c9d197e4de263116e5f2b9",
+    "sqlReadOnly": true,
+    "retentionFunctionExecuted": false,
+    "dotenvSourced": false,
+    "mutations": false
+  },
+  "envProposalTests": {
+    "result": "SELECTIVE_ENV_PROPOSAL_LOCAL_PASS",
+    "cases": 4,
+    "originalUnchanged": true,
+    "applyAuthorized": false,
+    "secretsPrinted": false
+  }
+}

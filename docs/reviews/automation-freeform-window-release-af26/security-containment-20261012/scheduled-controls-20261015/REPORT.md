@@ -1,5 +1,8 @@
 # Recuperação restrita dos controles agendados — 15/10/2026
 
+**Continuidade local:** [integração completa dos controles e auditoria Prisma](../controls-prisma-integration-20261015/REPORT.md),34 provas locais/deltas e limites. Resultado consumido da restauração permanece íntegro; nenhuma repetição.
+
+
 **ESTADO CORRENTE: CONSUMED / RESTORED — [resultado e certificado de15/10](RESULT_2026-10-15.md).** Aplicação única autorizada sobre195965a7 concluída, recibo exato/seis entradas/inspeção RESTORED/dois crons/custódia/owner PASS. Não repetir aplicação ou A/B v13. Cifragem suspensa.
 
 **Histórico da preparação anterior à autorização:** PREPARADA PARA REVISÃO / CHECK READ ONLY REAL PASS / NÃO APLICADA naquele momento. Não repetir A/B da v13. Política15b instalada, fase null, cinco gatesfalse/executionfalse, API410272/worker410428/frontend188897, NEWauth+NEWDB, console, out.15 CLOSED e guarda38 fechada preservados. Nenhuma instalação privilegiada, edição.env, restauração de cron, execução manual de job, backup novo, stop/start ou SQL mutável nesta tarefa.

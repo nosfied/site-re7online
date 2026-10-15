@@ -1,0 +1,320 @@
+--- source/read-preparatory.py
++++ future/read-preparatory.py
+@@ -9,0 +10,4 @@
++ stage='scheduled_controls_before'
++ from scheduled_controls import ScheduledControls
++ ScheduledControls(P/'window', lambda args: subprocess.check_output(args,text=True,stderr=subprocess.PIPE,timeout=10)).verify('before');passed.append(stage)
++ stage='complete_checker'
+--- source/return-before-commit/ops.py
++++ future/return-before-commit/ops.py
+@@ -414,0 +415,5 @@
++    def scheduled(self):
++        sys.path.insert(0, str(self.window))
++        from scheduled_controls import ScheduledControls
++        return ScheduledControls(self.window, self.d.run)
++
+@@ -415,0 +421 @@
++        self.scheduled().verify('before')
+@@ -431,0 +438 @@
++        self.scheduled().verify('contained')
+@@ -454,0 +462 @@
++        self.scheduled().verify('before')
+--- source/return-before-commit/delegated.py
++++ future/return-before-commit/delegated.py
+@@ -88,0 +89 @@
++        ops.Controls(root, driver).scheduled().verify('before')
+@@ -326,0 +328 @@
++        self.scheduled().verify('before')
+@@ -374,0 +377 @@
++        self.scheduled().known()
+@@ -401,3 +404 @@
+-        self.d.run(['crontab', '-'], (self.window / 'deploy.crontab.before').read_text())
+-        ops.require(self.d.run(['crontab', '-l']).encode() ==
+-                    (self.window / 'deploy.crontab.before').read_bytes(), 'cron_restore_failed')
++        self.scheduled().restore_deploy()
+@@ -435 +436 @@
+-            pass  # Read-only absence proof; no backup/control/process mutation.
++            control.scheduled().verify('before')
+--- source/window/sequencer.py
++++ future/window/sequencer.py
+@@ -176,0 +177,4 @@
++
++    def scheduled_controls(self):
++        from scheduled_controls import ScheduledControls
++        return ScheduledControls(self.window, lambda args, text=None: self.run(args, input_text=text))
+@@ -436,0 +441 @@
++        self.b.scheduled_controls().verify('before')
+@@ -515,0 +521 @@
++        self.b.scheduled_controls().verify('before')
+@@ -549,0 +556,2 @@
++            scheduled = self.b.scheduled_controls()
++            scheduled.known()  # Deny unknown controls before the privileged recovery effect.
+@@ -550,0 +559 @@
++            scheduled.restore_deploy()
+--- source/return-partial/ops.py
++++ future/return-partial/ops.py
+@@ -414,0 +415,5 @@
++    def scheduled(self):
++        sys.path.insert(0, str(self.window))
++        from scheduled_controls import ScheduledControls
++        return ScheduledControls(self.window, self.d.run)
++
+@@ -415,0 +421 @@
++        self.scheduled().verify('before')
+@@ -431,0 +438 @@
++        self.scheduled().verify('contained')
+@@ -454,0 +462 @@
++        self.scheduled().verify('before')
+--- source/return-partial/delegated.py
++++ future/return-partial/delegated.py
+@@ -88,0 +89 @@
++        ops.Controls(root, driver).scheduled().verify('before')
+@@ -326,0 +328 @@
++        self.scheduled().verify('before')
+@@ -374,0 +377 @@
++        self.scheduled().known()
+@@ -401,3 +404 @@
+-        self.d.run(['crontab', '-'], (self.window / 'deploy.crontab.before').read_text())
+-        ops.require(self.d.run(['crontab', '-l']).encode() ==
+-                    (self.window / 'deploy.crontab.before').read_bytes(), 'cron_restore_failed')
++        self.scheduled().restore_deploy()
+@@ -435 +436 @@
+-            pass  # Read-only absence proof; no backup/control/process mutation.
++            control.scheduled().verify('before')
+--- source/return/ops.py
++++ future/return/ops.py
+@@ -414,0 +415,5 @@
++    def scheduled(self):
++        sys.path.insert(0, str(self.window))
++        from scheduled_controls import ScheduledControls
++        return ScheduledControls(self.window, self.d.run)
++
+@@ -415,0 +421 @@
++        self.scheduled().verify('before')
+@@ -431,0 +438 @@
++        self.scheduled().verify('contained')
+@@ -454,0 +462 @@
++        self.scheduled().verify('before')
+--- source/return/delegated.py
++++ future/return/delegated.py
+@@ -88,0 +89 @@
++        ops.Controls(root, driver).scheduled().verify('before')
+@@ -326,0 +328 @@
++        self.scheduled().verify('before')
+@@ -374,0 +377 @@
++        self.scheduled().known()
+@@ -401,3 +404 @@
+-        self.d.run(['crontab', '-'], (self.window / 'deploy.crontab.before').read_text())
+-        ops.require(self.d.run(['crontab', '-l']).encode() ==
+-                    (self.window / 'deploy.crontab.before').read_bytes(), 'cron_restore_failed')
++        self.scheduled().restore_deploy()
+@@ -435 +436 @@
+-            pass  # Read-only absence proof; no backup/control/process mutation.
++            control.scheduled().verify('before')
+--- source/switch/ops.py
++++ future/switch/ops.py
+@@ -414,0 +415,5 @@
++    def scheduled(self):
++        sys.path.insert(0, str(self.window))
++        from scheduled_controls import ScheduledControls
++        return ScheduledControls(self.window, self.d.run)
++
+@@ -415,0 +421 @@
++        self.scheduled().verify('before')
+@@ -431,0 +438 @@
++        self.scheduled().verify('contained')
+@@ -454,0 +462 @@
++        self.scheduled().verify('before')
+--- source/switch/delegated.py
++++ future/switch/delegated.py
+@@ -88,0 +89 @@
++        ops.Controls(root, driver).scheduled().verify('before')
+@@ -326,0 +328 @@
++        self.scheduled().verify('before')
+@@ -374,0 +377 @@
++        self.scheduled().known()
+@@ -401,3 +404 @@
+-        self.d.run(['crontab', '-'], (self.window / 'deploy.crontab.before').read_text())
+-        ops.require(self.d.run(['crontab', '-l']).encode() ==
+-                    (self.window / 'deploy.crontab.before').read_bytes(), 'cron_restore_failed')
++        self.scheduled().restore_deploy()
+@@ -435 +436 @@
+-            pass  # Read-only absence proof; no backup/control/process mutation.
++            control.scheduled().verify('before')
+--- source/window/scheduled_controls.py
++++ future/window/scheduled_controls.py
+@@ -0,0 +1,56 @@
++"""One fail-closed contract for deploy AND system scheduled controls.
++
++Future consumers only. No CLI, automatic repair, PM2, SQL, dotenv or provider calls.
++The caller owns the canonical operation lock. Partial recovery has no retry here.
++"""
++import hashlib
++import os
++import stat
++from pathlib import Path
++
++SYSTEM_CRON = '/etc/cron.d/re7-converta-backup'
++
++def require(value, reason):
++    if not value:
++        raise RuntimeError(reason)
++
++def private_bytes(path):
++    path=Path(path); st=path.lstat()
++    require(stat.S_ISREG(st.st_mode) and st.st_uid==os.getuid() and
++            stat.S_IMODE(st.st_mode)==0o600 and st.st_nlink==1 and not path.is_symlink(),
++            'scheduled_control_source_type_owner_mode')
++    return path.read_bytes()
++
++class ScheduledControls:
++    def __init__(self, window, run):
++        self.window=Path(window); self.run=run
++        self.expected={kind:{phase:private_bytes(self.window/(prefix+'.'+suffix))
++                            for phase,suffix in [('before','before'),('contained','window')]}
++                       for kind,prefix in [('deploy','deploy.crontab'),('system','re7-converta-backup')]}
++
++    def observe(self):
++        # Separate reads and separate results: supervision or nft never substitute for either cron.
++        return {'deploy':self.run(['crontab','-l']).encode(),
++                'system':self.run(['cat',SYSTEM_CRON]).encode()}
++
++    def known(self):
++        actual=self.observe()
++        for kind in ('deploy','system'):
++            require(actual[kind] in self.expected[kind].values(), kind+'_cron_unknown_state')
++        return actual
++
++    def verify(self, phase):
++        require(phase in ('before','contained'), 'scheduled_control_phase_invalid')
++        actual=self.observe()
++        for kind in ('deploy','system'):
++            require(actual[kind]==self.expected[kind][phase], kind+'_cron_'+phase+'_drift')
++        return {kind:hashlib.sha256(actual[kind]).hexdigest() for kind in ('deploy','system')}
++
++    def restore_deploy(self):
++        # Root helper must restore system cron first. Never re-enable a third/unknown crontab.
++        actual=self.known()
++        require(actual['system']==self.expected['system']['before'], 'system_cron_not_restored')
++        if actual['deploy']!=self.expected['deploy']['before']:
++            self.run(['crontab','-'],self.expected['deploy']['before'].decode())
++        # A failed install or failed read propagates; no success receipt/journal may precede this.
++        return self.verify('before')
+--- source/conductor/admit_gates.py
++++ future/conductor/admit_gates.py
+@@ -0,0 +1,61 @@
++"""Explicit owner-authorized gate admission. All five proofs checked before any gate changes.
++Does not install, contain, stop, start, apply SQL or open guard. Failure is not retried.
++"""
++import datetime,fcntl,hashlib,json,os,stat,subprocess,sys
++from pathlib import Path
++from check_root_capture import check as root_check
++POLICY='15b91a2a41708a1ef0ee8a499fd51f892298561d0d73dbbfb05ceb3fe285899f'
++REVIEW='4bb21d25e22a0d55010979b9200631930300d509fadb1c138d1e4ab2f774cb7b'
++REQUIRED={'scheduled_controls_before','complete_checker','source_readability_scope_historical147','consumer_before_and_contained_contract_only','active_config_identity','saved_fallback600','guard_supervision_false_gates','frozen_sql_baselines_four_proof_bindings','capacity_wal_sql_inventory','proxy_canonical_observer','health_db'}
++def b_run(args,text=None):
++ return subprocess.check_output(args,input=text,text=True,stderr=subprocess.PIPE,timeout=10)
++def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
++def read(p):
++ s=p.lstat();assert stat.S_ISREG(s.st_mode)and not p.is_symlink()and s.st_nlink==1 and s.st_uid==os.getuid()and stat.S_IMODE(s.st_mode)==0o600,'private_evidence_path_drift'
++ return json.loads(p.read_text())
++def write(p,v):
++ fd=os.open(p,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
++ with os.fdopen(fd,'w')as f:json.dump(v,f,sort_keys=True);f.flush();os.fsync(f.fileno())
++APPROVAL_COMMIT=None  # future explicit authorization, absent in this engineering composition
++def main(p,inputs,output,decision):
++ assert type(APPROVAL_COMMIT)is str and len(APPROVAL_COMMIT)==40,'future_window_authorization_absent'
++ assert decision=='--owner-authorized-future-controls','explicit_owner_decision_required';p=Path(p);i=Path(inputs);q=Path(output);os.umask(0o077);q.mkdir(mode=0o700)
++ sys.path[:0]=[str(p/'window'),str(p/'switch')]
++ from sequencer import Bridge
++ from locked_driver import Driver
++ from restore_contract import validate
++ with(p.parent/'.incident-6683-window.lock').open('a+')as lock:
++  fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
++  assert sha(p/'preparation-review.sha256')==REVIEW,'review_hash_changed'
++  gates=read(p/'window/execution-gates.private.json');expected={'ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved'}
++  assert set(gates)==expected and all(v is False for v in gates.values())and(p/'execution-authorized').read_text().strip()=='false','gate_or_authorization_already_consumed'
++  assert not any((p/'window/seal-current').iterdir())and not list(p.glob('*/owner-request-*.json'))and not list(p.glob('*/start-intent-*.json')),'generation_consumed'
++  from scheduled_controls import ScheduledControls
++  cron=ScheduledControls(p/'window',lambda args,text=None: b_run(args,text)).verify('before')
++  root=root_check(p,i/'root.private.json',i/'root-baseline.private.json')
++  r=read(i/'backup-result.private.json');custody=read(i/'custody-ack.private.json');lab=read(i/'lab-current.private.json')
++  now=datetime.datetime.now(datetime.timezone.utc);age=(now-datetime.datetime.fromisoformat(r['startedUtc'])).total_seconds();assert 0<=age<3600,'actual_backup_RPO_expired'
++  assert r['result']=='FRESH_READONLY_BACKUP_PASS'and r['backupLockHeld']is True and r['newCipherPlanGenerated']is False,'backup_frontier_invalid'
++  assert custody['result']=='OFFHOST_CUSTODY_VERIFIED'and custody['dumpSha256']==r['dumpSha256']and custody['receiptSha256']==sha(i/'backup-result.private.json')and custody['labObservedSha256']==sha(i/'lab-current.private.json'),'custody_not_bound'
++  assert sha(Path(r['remoteDirectory'])/'database.dump')==r['dumpSha256'],'remote_backup_changed'
++  assert lab['result']=='CERTIFIED_LAB_RETAINED_STOPPED_CONFIRMED'and lab['temporaryDatabaseRemoved']is False and lab['proofSha256']==sha(p/'window/original-restore-proof.private.json'),'certified_lab_not_preserved'
++  restores=[validate(p/m)for m in ('switch','return','return-partial','return-before-commit')]
++  assert read(p/'window/backup-compatibility.private.json')==r,'renewed_backup_not_bound'
++  b=Bridge(p);inspection=json.loads(b.privileged('inspect'));assert inspection=={'policySha256':POLICY,'phase':None,'sourceProcessesAlive':True},'installed_policy_not_ready'
++  b.privileged('check-absent')
++  # Complete current canonical chain while gates are still false. Failure stops admission.
++  run=q/'current-chain-private'
++  with(q/'chain.stdout.private').open('x')as out,(q/'chain.stderr.private').open('x')as err:subprocess.run(['python3','-B',str(p/'read-preparatory.py'),str(p),str(run)],stdout=out,stderr=err,check=True,timeout=90)
++  chain=read(run/'result.private.json');assert set(chain['gatesPassed'])==REQUIRED and chain['result']=='PREPARATORY_CHAIN_PASS_NOT_EXECUTION_AUTHORIZED'and chain['gatesRemainFalse']is True,'canonical_preflight_incomplete'
++  assert chain['reviewManifestSha256']==REVIEW and chain['minimumAvailableBytes']>=8794603520 and chain['walBytes']>=0,'capacity_or_manifest_drift'
++  # Actual source process identity, writer/readability/147 scope is rechecked by this chain.
++  proof={'ownerAuthorized':{'approvedCommit':APPROVAL_COMMIT,'explicitDecision':decision,'ownerSudoAvailable':True},'artifactsVerified':{'reviewSha256':REVIEW,'currentChainSha256':sha(run/'result.private.json')},'restoreVerified':{'fourModeResults':restores,'backupReceiptSha256':sha(i/'backup-result.private.json'),'custodySha256':sha(i/'custody-ack.private.json'),'labObservedSha256':sha(i/'lab-current.private.json')},'preflightReviewed':{'rootCaptureSha256':root['captureSha256'],'rootBaselineSha256':root['baselineSha256'],'installedPolicy':inspection,'currentChainSha256':sha(run/'result.private.json')},'discrepanciesResolved':{'unknownWriters':0,'rootIncomplete':0,'immutableSourcesAndFrozenInventory':'canonical chain PASS','freshExitAndCASStillRequiredDuringB':True}}
++  assert set(proof)==expected
++  write(q/'admission.intent.private.json',{'reviewSha256':REVIEW,'proofs':proof,'automaticRetry':False})
++  for f,value in [(p/'window/execution-gates.private.json',{k:True for k in gates}),(p/'execution-authorized',True)]:
++   temp=f.with_name(f.name+'.gate-admission.tmp');fd=os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
++   with os.fdopen(fd,'w')as stream:stream.write(json.dumps(value)+'\n'if isinstance(value,dict)else'true\n');stream.flush();os.fsync(stream.fileno())
++   os.replace(temp,f)
++  write(q/'admission.receipt.private.json',{'result':'FIVE_GATES_ADMITTED','proofs':proof,'intentSha256':sha(q/'admission.intent.private.json'),'reviewSha256':REVIEW,'backupCapturedUtc':r['startedUtc'],'currentChainSha256':sha(run/'result.private.json')})
++  print(json.dumps({'result':'FIVE_GATES_ADMITTED','reviewSha256':REVIEW,'minimumAvailableBytes':chain['minimumAvailableBytes'],'walBytes':chain['walBytes'],'backupAgeSeconds':age,'noContainmentExecuted':True}))
++if __name__=='__main__':main(*sys.argv[1:])
+--- source/conductor/check_root_capture.py
++++ future/conductor/check_root_capture.py
+@@ -0,0 +1,25 @@
++"""Read-only acceptance of fresh owner root capture against approved writer audit."""
++import datetime,hashlib,json,os,stat,sys
++from pathlib import Path
++SOURCE='15b91a2a41708a1ef0ee8a499fd51f892298561d0d73dbbfb05ceb3fe285899f'
++POLICY='/usr/local/libexec/re7/incident-6683-window-policy.json'
++def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
++def check(p,capture,baseline):
++ p=Path(p);f=Path(capture);s=f.lstat();assert stat.S_ISREG(s.st_mode)and not f.is_symlink()and s.st_uid==os.getuid()and stat.S_IMODE(s.st_mode)==0o600
++ r=json.loads(f.read_text());old=json.loads(Path(baseline).read_text());v=json.loads((p/'window/writer-consumers.private.json').read_text())
++ assert sha(baseline)==v['sourceRootEvidenceSha256'],'approved_root_reference_drift'
++ assert r['result']=='WRITER_ROOT_REFERENCE_READ'and not r['incomplete']and r['mutations']==0,'root_observation_incomplete'
++ age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(r['atUtc'])).total_seconds();assert 0<=age<600,'root_observation_expired'
++ a={x['path']:x for x in old['files']};b={x['path']:x for x in r['files']};assert set(a)==set(b),'root_file_population_drift'
++ for n,e in b.items():
++  assert (e['uid'],e['gid'],e['mode'])==(a[n]['uid'],a[n]['gid'],a[n]['mode'])and e['uid']==0 and not(e['mode']&0o022),'root_file_metadata_drift'
++  assert e['sha256']==(SOURCE if n==POLICY else a[n]['sha256']),'root_file_hash_drift'
++ expected={x['path']:(x['uid'],x['mode'])for x in old['chain']};current={x['path']:(x['uid'],x['mode'])for x in r['chain']};assert current==expected and all(uid==0 and not(mode&0o022)for uid,mode in current.values()),'root_chain_drift'
++ from cron_root_contract import verify_cron_capture
++ verify_cron_capture(p,r['cron'],old['cron'])
++ known={(x['pid'],x['ticks'])for x in old['processes']if not x.get('noUserspaceWriter')}
++ unexpected=[x for x in r['processes']if 'node'in x['comm'].lower()and(x['pid'],x['ticks'])not in known]
++ assert not unexpected,'unknown_node_writer_identity'
++ assert v['knownCipherWriters']==['re7-whatsapp-agent','re7-whatsapp-web-worker']and v['unknownScheduledCipherWriters']==[],'writer_contract_drift'
++ return {'result':'FRESH_ROOT_WRITER_REFERENCES_SOURCE_15B_PASS','captureSha256':sha(capture),'baselineSha256':sha(baseline),'capturedUtc':r['atUtc'],'files':len(b),'cronReferences':len(r['cron']),'incomplete':0,'unknownNodeWriters':0,'noMutation':True}
++if __name__=='__main__':print(json.dumps(check(*sys.argv[1:]),sort_keys=True))
+--- source/conductor/cron_root_contract.py
++++ future/conductor/cron_root_contract.py
+@@ -0,0 +1,23 @@
++"""Exact cron sources, separating generated Debian spool headers from installed body."""
++import hashlib,re
++from pathlib import Path
++DEPLOY='/var/spool/cron/crontabs/deploy'
++SYSTEM='/etc/cron.d/re7-converta-backup'
++def spool_body(raw):
++ lines=raw.splitlines(keepends=True)
++ if len(lines)<3 or not lines[0].startswith('# DO NOT EDIT THIS FILE - edit the master and reinstall.') or not re.fullmatch(r'# \(.+ installed on .+\)\n',lines[1]) or not lines[2].startswith('# (Cron version -- '):raise RuntimeError('cron_spool_header_unrecognized')
++ return ''.join(lines[3:])
++def verify_cron_capture(root,current,baseline):
++ root=Path(root);a={x['path']:x for x in current};b={x['path']:x for x in baseline}
++ if len(a)!=len(current)or len(b)!=len(baseline)or set(a)!=set(b):raise RuntimeError('cron_source_population_changed')
++ if DEPLOY not in a or SYSTEM not in a:raise RuntimeError('canonical_cron_source_missing')
++ for path,e in a.items():
++  raw=e['rawPrivate']
++  if hashlib.sha256(raw.encode()).hexdigest()!=e['sha256']:raise RuntimeError('cron_capture_hash_invalid')
++  if path==DEPLOY:
++   expected=(root/'window/deploy.crontab.before').read_text()
++   if spool_body(raw)!=expected or spool_body(b[path]['rawPrivate'])!=expected:raise RuntimeError('deploy_cron_functional_drift')
++  elif path==SYSTEM:
++   if raw!=(root/'window/re7-converta-backup.before').read_text()or e['sha256']!=b[path]['sha256']:raise RuntimeError('system_cron_functional_drift')
++  elif e['sha256']!=b[path]['sha256']:raise RuntimeError('other_scheduled_source_changed')
++ return {'deployBefore':True,'systemBefore':True,'otherCronReferencesUnchanged':True}

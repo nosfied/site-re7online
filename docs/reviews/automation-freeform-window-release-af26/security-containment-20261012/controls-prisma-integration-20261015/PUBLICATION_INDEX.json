@@ -1,0 +1,18 @@
+{
+  "filesSha256": {
+    "prepare_future.py": "15dcd90e4c85bc905995fd594c8f369b70f3c700790731aa4e64ae522523960c",
+    "propose_env.py": "2562767253623c21cc1c5eaa9b2608305c7e86b4ac003103a2494792ebd661a1",
+    "test_negatives.py": "1e08ff4339ef3068f2a77f1e628df57956450e869e66db324ca808a7643d805d",
+    "test_env_proposal.py": "3338196f915760bdb5e665396a708d98a178afc255b861d895e4d8b7d952cda6",
+    "cron_root_contract.py": "faa73f76d114f01b2f58c1b21f3293d15ea9d5712ce111c496b4951a48ddcb2b",
+    "PROOFS_SANITIZED.json": "a55c5d112d1cdcce4bca35020e9f953b963f2cc76cb92f846adfee314b1516a0",
+    "audit_prisma.py": "37cb7a2eed44936845d27525b6daa8fdbc879323caad175db02546b3ae398e20",
+    "prisma_audit.sql": "ff0421ad7ba465a0396e5cf6ff45d90b4fb1e13471c9d197e4de263116e5f2b9",
+    "REPORT.md": "af89c8374c523d4611021beb5fee00e5c616e6c2aff42c045dd6aafc2e9c2301",
+    "COMMANDS_LOCAL_FOR_REVIEW.txt": "57b762c99ad0c1192dae0924b71a4b735e208981edb19cde87a6cc7c7ddbbe09",
+    "INTEGRATED_FUTURE.patch": "20b6cc04a861d00cc5f6ebddb826b3d88b0dc6d46c818d4895aed2ed430588b2",
+    "test_sequence.py": "155fe0f7053ea32a0a1f721c1d7291507bfbc1e9559268abdd016a903e54b1e3"
+  },
+  "privateValuesScan": "PASS",
+  "notDeployed": true
+}

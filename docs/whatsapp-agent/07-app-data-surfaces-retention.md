@@ -1,5 +1,8 @@
 # Superficies do /app, dados carregados e retencao LGPD
 
+**Auditoria operacional15/10/2026:** [fonte Prisma efetiva, dez políticas e limites](../reviews/automation-freeform-window-release-af26/security-containment-20261012/controls-prisma-integration-20261015/REPORT.md). Fonte implantada33d36d97: política persistida de90d em nove tenants/365d em um; SELECT READ ONLY não executa o job. O comando global não exige closedAt e a expansão por identidade pode atingir registros além da semente elegível. `--dry-run` executa getOrCreateRetentionConfig/upsert: não usá-lo como leitor puro. `.env` legado não contém NEWDB; sua atualização reabilitaria acessos e exige revisão seletiva dos efeitos, sem execução de retenção nesta etapa. Horário do cron legado03:30UTC corresponde a00:30Fortaleza. Preservar políticas existentes; este diagnóstico não autoriza mudança de retenção dos tenants.
+
+
 Este documento registra a auditoria feita em 2026-04-30 nas telas do portal
 do cliente (`/app`) do Converta / WhatsApp Agent, apos os ajustes de LGPD,
 soft delete, limpeza controlada do tenant de teste e fallback de campanhas.

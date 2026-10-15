@@ -1,0 +1,16 @@
+SOMENTE ENGENHARIA LOCAL. Nenhum comando VPS/aplicação/instalação autorizado aqui.
+Executar na worktree review/campaign-recovery-20260926. Nunca apontar output para v13 produtiva.
+
+B=docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/controls-prisma-integration-20261015
+S=local-evidence/cipher-v13-authorized-20261015/renewed-package/incident-6683-v4-security-cipher-restore-v13-20261015T100500Z
+E=local-evidence/controls-prisma-integration-20261015/engineering-composition/incident-6683-v4-security-cipher-restore-v13-20261015T100500Z
+R=/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/scheduled-controls-recovery-20261015/after-application/scheduled-controls-recovery-20261015T121000Z/apply-private/restore.receipt.private.json
+
+# Já executado; exige destino novo. Não executar sobre output existente.
+python3 -B "$B/prepare_future.py" "$S" "$E" "$R"
+# Ensaios locais, sem efeitos de sistema. Provas privadas concretas são necessárias.
+python3 -B "$B/test_sequence.py" "$E"
+python3 -B "$B/test_negatives.py" "$E"
+
+Propostas .env: renderização privada via propose_env.py; origem privada/profilha selada/hash completo e destino novo. Não há comando de aplicação, source/export ou crontab nesta entrega.
+Auditoria Prisma já executada: SQL READ ONLY anexado. Não invocar retention:run ou --dry-run. Não repetir recuperação121000, A/B v13, backup ou restore por rotina.
