@@ -1,0 +1,21 @@
+{
+  "filesSha256": {
+    "associated_read.py": "fa595240b5ed0c99c87c56368c848af78e904a8788fe4c17603dfa238b314871",
+    "test_independence.py": "5662ca30e0158f090ff2c4f91e5656403e17ce479d089079279e938ce861f48a",
+    "PRISMA_SCOPE_SANITIZED.json": "ff227ae1b58c45a04a3a61e3fd12ed865e17cf64ce52be3512a7d68efc445068",
+    "PROOFS_SANITIZED.json": "8d3a7b67ac328f98af543e0755aecde8b47878da1dc45659dd99c9b216418db6",
+    "test_refresh.py": "e211fc91b56c814144d2913e38ce0a493a9e78d755f1d6d0ee9b5180877cc832",
+    "COMMANDS_FOR_REVIEW.txt": "74d914a04f04b82f2bee4289ed00065da1c68ad7487053d29abf361cb74f9d73",
+    "prepare_operational.py": "b39530ff0112c084d09ba57c6f06e8f1237fd05826b7ffa6c87d4e59b629885f",
+    "prisma_identity_read.py": "305f812f188cb5827f65857d9fa9f8d675cecbb30200354ea9465de3a2967a35",
+    "certify_review.py": "d68622b470b92e54606fa6118ca14c02819c0cc1a4bc55ee25277a782056a116",
+    "REPORT.md": "bb0c80f2129773888318f10dcfe1782e2a5f5ee56bb4ea12edb538bac14be81d",
+    "refresh_proofs.py": "34227bf8e16ac8b0d3dfacfb19eb49da55b743d4c2a2898c8936de8bb0b983c8",
+    "test_operational_sequence.py": "74699f12e7eec0552ec9f0b32c4580060c7a5502aada471de68df6f905497e37",
+    "canonical_identity_read.py": "7c0001408d73bedf61d1bb4c3eb9f19de64846e59eba82c98dc6d80499b14bc2",
+    "analyze_identity.py": "1552fc4dd4b883915aede7b1dc7be9f84ec7dcc7dd47f7590dd5b76ca7add71f"
+  },
+  "privateValuesAndIdentityScan": "PASS",
+  "generationNotInstalled": true,
+  "noWindowAuthorized": true
+}

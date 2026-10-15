@@ -1,0 +1,273 @@
+{
+  "package": {
+    "generation": "incident-6683-v4-security-cipher-controls-v14-20261015T130000Z",
+    "policySha256": "fa113e5259850f7b23188b81cd5279c2a95c318154a3b0737da7251b1064f251",
+    "installerSha256": "b3d242fc92ccf60275ec0f875e5c2530f565981519e0d243b4fb8035eae9376f",
+    "reviewSha256": "181fd96666a72c2d80b84d9a6a56812cf6763a8867810755c0f78038d024deea",
+    "executionAuthorized": false,
+    "state": "INACTIVE_AWAITING_CONCRETE_VALIDATION",
+    "archiveSha256": "66f886c232a875cfde93ebcde31670fdf3cb75fd9962cb2fc907258a7092fcde",
+    "archiveBytes": 5956237,
+    "packageIndexSha256": "139a92de89ca775df7f9fa64236a1d6b729976c512de83bd9d4a21071e0324fc",
+    "allocatedBytes": 9265152
+  },
+  "certification": {
+    "result": "CONCRETE_GENERATION_CERTIFIED_FOR_REVIEW_NOT_WINDOW_READY",
+    "generation": "incident-6683-v4-security-cipher-controls-v14-20261015T130000Z",
+    "archiveSha256": "66f886c232a875cfde93ebcde31670fdf3cb75fd9962cb2fc907258a7092fcde",
+    "indexSha256": "139a92de89ca775df7f9fa64236a1d6b729976c512de83bd9d4a21071e0324fc",
+    "reviewSha256": "181fd96666a72c2d80b84d9a6a56812cf6763a8867810755c0f78038d024deea",
+    "actualChainUtc": "2026-10-15T13:39:10.144675+00:00",
+    "realReadGates": [
+      "scheduled_controls_before",
+      "complete_checker",
+      "source_readability_scope_historical147",
+      "consumer_before_and_contained_contract_only",
+      "active_config_identity",
+      "saved_fallback600",
+      "guard_supervision_false_gates",
+      "frozen_sql_baselines_four_proof_bindings",
+      "capacity_wal_sql_inventory",
+      "proxy_canonical_observer",
+      "health_db"
+    ],
+    "minimumAvailableBytes": 18275205120,
+    "walBytes": 150994944,
+    "notExecuted": [
+      "root600_440_hash_reconfirmation",
+      "fresh_backup_RPO_renewal",
+      "installed_new_policy_inspect",
+      "fence_and_writer_exit",
+      "exclusive_DB_zero_after_exit",
+      "seal_current_CAS_SQL_commit",
+      "successor_start_and_postdeployment_validation"
+    ],
+    "installation": false,
+    "executionAuthorized": false
+  },
+  "sequence": {
+    "result": "INTEGRATED_CONTROL_SEQUENCE_LOCAL_PASS",
+    "cases": [
+      {
+        "mode": "switch",
+        "stage": "unapproved_composition",
+        "accepted": false
+      },
+      {
+        "mode": "switch",
+        "stage": "complete_admission_main",
+        "accepted": true,
+        "priorReadOnlyFactsReused": true,
+        "newControlsActuallyVerified": true
+      },
+      {
+        "mode": "switch",
+        "stage": "preflight_then_actual_prestop",
+        "accepted": true,
+        "helper8deActualAbortBranch": true
+      },
+      {
+        "mode": "switch",
+        "stage": "actual_sequencer_and_delegated_finish",
+        "accepted": true,
+        "helper8deActualRestoreBranch": true
+      },
+      {
+        "mode": "return",
+        "stage": "unapproved_composition",
+        "accepted": false
+      },
+      {
+        "mode": "return",
+        "stage": "complete_admission_main",
+        "accepted": true,
+        "priorReadOnlyFactsReused": true,
+        "newControlsActuallyVerified": true
+      },
+      {
+        "mode": "return",
+        "stage": "preflight_then_actual_prestop",
+        "accepted": true,
+        "helper8deActualAbortBranch": true
+      },
+      {
+        "mode": "return",
+        "stage": "actual_sequencer_and_delegated_finish",
+        "accepted": true,
+        "helper8deActualRestoreBranch": true
+      },
+      {
+        "mode": "return-partial",
+        "stage": "unapproved_composition",
+        "accepted": false
+      },
+      {
+        "mode": "return-partial",
+        "stage": "complete_admission_main",
+        "accepted": true,
+        "priorReadOnlyFactsReused": true,
+        "newControlsActuallyVerified": true
+      },
+      {
+        "mode": "return-partial",
+        "stage": "preflight_then_actual_prestop",
+        "accepted": true,
+        "helper8deActualAbortBranch": true
+      },
+      {
+        "mode": "return-partial",
+        "stage": "actual_sequencer_and_delegated_finish",
+        "accepted": true,
+        "helper8deActualRestoreBranch": true
+      },
+      {
+        "mode": "return-before-commit",
+        "stage": "unapproved_composition",
+        "accepted": false
+      },
+      {
+        "mode": "return-before-commit",
+        "stage": "complete_admission_main",
+        "accepted": true,
+        "priorReadOnlyFactsReused": true,
+        "newControlsActuallyVerified": true
+      },
+      {
+        "mode": "return-before-commit",
+        "stage": "preflight_then_actual_prestop",
+        "accepted": true,
+        "helper8deActualAbortBranch": true
+      },
+      {
+        "mode": "return-before-commit",
+        "stage": "actual_sequencer_and_delegated_finish",
+        "accepted": true,
+        "helper8deActualRestoreBranch": true
+      }
+    ],
+    "caseCount": 16,
+    "completeCandidate": true,
+    "realAdmissionMain": true,
+    "externalPreparatoryChain": "prior real READ ONLY response reused plus actual new controls/hash checks",
+    "notExercised": [
+      "fresh production root/RPO/SQL-proxy",
+      "pre-unfence process/network/nonce gates retained from previous proofs",
+      "cipher SQL or successor starts"
+    ],
+    "productionEffects": false
+  },
+  "recovery": {
+    "result": "REAL_RECOVERY_BOUNDARY_OPERATIONS_PASS",
+    "cases": [
+      {
+        "classification": "ORIGINAL_VERIFIED",
+        "commitResponseLost": false,
+        "planChanges": 10,
+        "sqlReplayed": false,
+        "recoveryExecutedLocally": true
+      },
+      {
+        "classification": "VERIFIED",
+        "commitResponseLost": true,
+        "planChanges": 10,
+        "sqlReplayed": false,
+        "recoveryExecutedLocally": true
+      },
+      {
+        "classification": "UNCERTAIN",
+        "commitResponseLost": false,
+        "planChanges": 10,
+        "sqlReplayed": false,
+        "recoveryExecutedLocally": false
+      }
+    ],
+    "caseCount": 3,
+    "completeCandidateAndPlan": true,
+    "productionEffects": false,
+    "notExercised": "canonical sequencer finish/root nonce exchange in production"
+  },
+  "negatives": {
+    "result": "DIRECTED_NEGATIVES_PASS",
+    "cases": [
+      "generated_header_only_accepted",
+      "deploy_body",
+      "system_body",
+      "deploy_absent",
+      "duplicate_source",
+      "switch/ops.py",
+      "return/delegated.py",
+      "return-partial/ops.py",
+      "return-before-commit/delegated.py",
+      "window/scheduled_controls.py",
+      "source_mode",
+      "source_owner",
+      "source_symlink",
+      "system_not_restored"
+    ],
+    "caseCount": 14,
+    "productionEffects": false
+  },
+  "independence": {
+    "result": "INDEPENDENCE_AND_POST_RETURN_DEPENDENCY_PASS",
+    "cases": 2,
+    "authDatabaseComparisons": 96,
+    "runtimeInventoryUnchanged": true,
+    "cronBytesUnchanged": true,
+    "actualPostReturnCopyLoop": true,
+    "fullPostUnfencePreparationNotExercised": true,
+    "productionEffects": false
+  },
+  "observationalComparison": {
+    "canonicalExtraRows": 0,
+    "metadataDriftBetweenObservations": 0,
+    "singleGlobalSnapshot": false,
+    "coreCapturedUtc": "2026-10-15T13:36:06.021985+00:00",
+    "canonicalCapturedUtc": "2026-10-15T13:45:15.068225+00:00"
+  },
+  "sourcePolicyInspect": {
+    "policySha256": "15b91a2a41708a1ef0ee8a499fd51f892298561d0d73dbbfb05ceb3fe285899f",
+    "phase": null,
+    "sourceProcessesAlive": true
+  },
+  "refreshPlan": {
+    "result": "V14_PROOF_RENEWAL_LOCAL_PASS",
+    "cases": 4,
+    "validRpoClockSimulated": true,
+    "oldRestoreRetainedStopped": true,
+    "fourModesAndAdmissionCoherent": true,
+    "actualApplyOnIsolatedCopy": true,
+    "externalCheckerProcessSimulated": true,
+    "productionEffects": false
+  },
+  "storageSourceHashes": {
+    "src/storage/runtimeStorage.ts": "cd388a01ab23f471bffa3e080e0a9b41fbf02ba1f1611dc2e6c3dc4aa27b045d",
+    "src/storage/storageFactory.ts": "5a3d2127535728d7d09e2aa13ae6be08227b4ff476d43af583ac16c66f0c4813",
+    "src/storage/jsonFileStorage.ts": "6bf72d6e1197aaafa7a7c3996bb7f376c55f4d5420487184bceceedd9d6d2d01",
+    "src/storage/dualWriteStorage.ts": "9a473545c33f0c0ac2894f747023f0d363669588e6d8e819314bdf176db28ee1",
+    "src/utils/waid.ts": "ba8c0b880ad7cd00731a9a68fa67fdaa0fc3edb05c05aff1f2e71199967e5876",
+    "src/config/env.ts": "02e82da5cb58d8b74306b233ff45b2cd55143ae71d7172267aea3ed475ec670d",
+    "prisma/schema.prisma": "68386944afbd6a4c55fc2d9ae35769481937c44344b7a14fa6931069e52b56bd"
+  },
+  "relatedRecordsReadOnly": {
+    "rows": [],
+    "readOnly": "on",
+    "capturedUtc": "2026-10-15T13:41:36.696002+00:00"
+  },
+  "canonicalIdentityReceipt": {
+    "result": "CANONICAL_IDENTITY_NEIGHBORHOOD_SELECT_PASS",
+    "capturedUtc": "2026-10-15T13:45:15.068225+00:00",
+    "helperSources": {
+      "/opt/re7online/site-re7online/apps/whatsapp-agent/dist/crm/crmWhatsappIdentity.js": "2d8049abc17216f58ac88ae9cbef4a9f11d6ca1c92a2fc9b38112b10dd263fd6",
+      "/opt/re7online/site-re7online/apps/whatsapp-agent/dist/utils/waid.js": "7d290d5b8ab0f84a678a489fd3d26436e83489df111bbb318c2559337f0b64ee"
+    },
+    "counts": {
+      "InboundMessage": 8,
+      "ConversationRuntimeState": 2,
+      "Event": 34,
+      "Lead": 2,
+      "Conversation": 2,
+      "OutboundMessage": 6
+    },
+    "authorizesAnonymization": false
+  }
+}

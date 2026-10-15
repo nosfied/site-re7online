@@ -1,0 +1,53 @@
+{
+  "result": "IDENTITY_SCOPE_READ_ONLY_CONSOLIDATED",
+  "coreCapturedUtc": "2026-10-15T13:36:06.021985+00:00",
+  "originalCutoff": "2026-07-17T12:29:03.400907+00:00",
+  "readerDenialPreserved": "seed_population_two_not_assumed_one",
+  "canonicalExtraRows": 0,
+  "snapshotsSeparate": true,
+  "retentionExecuted": false,
+  "legacyEnvChanged": false,
+  "effectiveStorageFromLegacyProfile": "postgres",
+  "runtimeCleanupDeletesRuntimeRows": true,
+  "seeds": [
+    {
+      "alias": "NEWLY_AGED",
+      "counts": {
+        "conversations": 1,
+        "events": 29,
+        "inbound": 7,
+        "leads": 1,
+        "metrics": 1,
+        "notes": 1,
+        "outbound": 5,
+        "runtime": 1,
+        "seed": 1
+      },
+      "mode": "HUMAN",
+      "status": "WAITING",
+      "handoff": "ACTIVE",
+      "assigned": false,
+      "closed": false,
+      "eligibleAtPreviousCutoff": false
+    },
+    {
+      "alias": "ORIGINAL",
+      "counts": {
+        "conversations": 1,
+        "events": 5,
+        "inbound": 1,
+        "leads": 1,
+        "metrics": 1,
+        "outbound": 1,
+        "runtime": 1,
+        "seed": 1
+      },
+      "mode": "BOT",
+      "status": null,
+      "handoff": "NONE",
+      "assigned": false,
+      "closed": false,
+      "eligibleAtPreviousCutoff": true
+    }
+  ]
+}

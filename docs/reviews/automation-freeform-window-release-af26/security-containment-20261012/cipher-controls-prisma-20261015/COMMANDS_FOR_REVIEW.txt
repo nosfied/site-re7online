@@ -1,0 +1,94 @@
+PROPOSTA PARA REVISÃO — nenhuma instalação, admissão, B, C1/C2 ou D autorizada nesta tarefa.
+Geração v14 própria; v13/A/B e recuperação121000 consumidas não se repetem.
+
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-cipher-controls-v14-20261015T130000Z
+# A0 já concluído UMA VEZ: transferência, extração nova e índice integral.
+# Arquivo66f886c232a875cfde93ebcde31670fdf3cb75fd9962cb2fc907258a7092fcde
+# Índice139a92de89ca775df7f9fa64236a1d6b729976c512de83bd9d4a21071e0324fc
+# Não repetir extração nem sobrescrever diretório. Verificar os bytes existentes.
+
+# Gates preparatórios correntes:11 PASS READ ONLY; NÃO RPO/execução.
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = 181fd96666a72c2d80b84d9a6a56812cf6763a8867810755c0f78038d024deea
+(cd "$P" && sha256sum -c preparation-review.sha256)
+python3 -B "$P/verify-package.py"
+# A cadeia READ ONLY já executada; repetir somente por frescor/alteração com output privado novo.
+# Não invocar retention:run nem --dry-run.
+
+ANTES DE EVENTUAL A/B: decisão própria de janela + owner sudo, backup/RPO<1h pela
+captura real/backup.lock/custódia/lab retido e schema/tooling/fronteira. Reutilizar
+restore válido, NÃO marcar temporaryDatabaseRemoved=true. Renovar coerentemente
+quatro backup-manifest/proof-bindings, restore-contract/compatibility e manifests,
+conductor REVIEW e índice/arquivo externos; arquivar originais e certificar de novo.
+O review hash desta publicação então muda: publicar os novos hashes ANTES de A.
+Não existe autorização de editar plano/selagem/CAS para aceitar drift.
+Piso min(deploy,PostgreSQL)>=8794603520B; conferir WAL/crescimento/erros/retorno.
+Root600/440/helper8de/regra62b5/fonte15b/chains, saved/fallback600,
+crons before separados, identidades/writers/SQL/proxy e controles atuais completos.
+
+# I deve ser o diretório PRIVADO NOVO produzido pela renovação canônica, com
+# backup-result/custody-ack/lab-current/root-baseline originais e root capture NOVA.
+# NÃO executar o apply histórico da v13: seu review fixo é incompatível.
+# Adapter FUTURO novo (externo ao pacote; bytes desta revisão): refresh_proofs.py
+# SHA 34227bf8e16ac8b0d3dfacfb19eb49da55b743d4c2a2898c8936de8bb0b983c8
+# Componente canônico PURO reutilizado: cipher-v13-execution-20261015/renew_proofs.py
+# SHA 5884557a99057780dd45d67050935bd90cf1e7cb90f4839c46d0cc858db5e5e4
+# Depois de backup/custódia NOVOS, conferir os dois hashes no diretório privado de
+# ferramentas da revisão; F e C são esses arquivos literais. J é output NOVO.
+# Este comando é preparação de provas, NÃO autorizado/executado nesta tarefa:
+# python3 -B "$F" "$P" "$I/backup-result.private.json" "$I/custody-ack.private.json" "$C" 5884557a99057780dd45d67050935bd90cf1e7cb90f4839c46d0cc858db5e5e4 "$J"
+# Preserva originais/intent; recompõe quatro bindings/conductor/index; nunca altera
+# grant/população/cifras. Parcial/timeout => inspeção, sem replay. Em seguida exigir
+# novo arquivo/hash, cadeia real READ ONLY e certificação integral, publicando os
+# novos hashes antes de A. Não aplicar esta ferramenta ao source/geração consumida.
+# A captura root fonte15b ocorre ANTES da instalação e deve continuar fresca<600s.
+# O root checker não aceita trocar a fonte pela política nova para obter PASS.
+python3 -B "$P/conductor/check_root_capture.py" "$P" "$I/root.private.json" "$I/root-baseline.private.json"
+
+A. SOMENTE após revisão dos hashes renovados e decisão explícita futura:
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = b3d242fc92ccf60275ec0f875e5c2530f565981519e0d243b4fb8035eae9376f
+bash "$P/install-api-window-policy.sh"
+# Fonte15b arquivada em pre-security-cipher-controls-v14-20261015T130000Z.json;
+# destino fa113e52. Helpers/sudoers iguais. Recusa => preservar/inspecionar, não B.
+
+# ADMISSÃO CANÔNICA EXPLÍCITA dos cinco gates, nenhum bool manual.
+# REVIEWED_AUTHORIZED_COMMIT é o SHA40 da decisão FUTURA de revisão/autorização,
+# não um valor assumido por este documento. I traz todas as provas atuais.
+# Q é saída privada NOVA, pai700/owner correto; não repetir intent consumido.
+python3 -B "$P/conductor/admit_gates.py" "$P" "$I" "$Q" "--owner-authorized-future-controls:$REVIEWED_AUTHORIZED_COMMIT"
+# Exige: root fonte15b pré-A fresco + inspect políticaNOVA pós-A; RPO real<1h;
+# custódia/dump/lab e quatro restores; cadeia REAL11gates/cronbefore/capacidade;
+# cinco gates false/execfalse/sem selagem/intents. Só PASS admite uma vez.
+
+B. SOMENTE após FIVE_GATES_ADMITTED e decisão de janela, uma execução:
+python3 -B "$P/window/locked_cli.py" "$P"
+# Saída/ownership → seal-current-under-lock → fonte/plano/hash/intent novos →
+# CAS integral mesma transação → commit → VERIFIED → sucessores compatíveis.
+# Campos Web renováveis estritamente delimitados; população/grant/TG intocados.
+# Nenhum SQL/start consumido é repetido. NEWauth+NEWDB em todos os caminhos.
+
+C. SOMENTE INSPEÇÃO em incerteza; preservar evidências e apresentar classificação:
+python3 -B "$P/window/locked_cli.py" "$P" --inspect-readonly
+# NO_FINAL_PLAN/UNCERTAIN/ambiguidade/drift bloqueiam sucessor/replay.
+
+C1. DECISÃO EXPLÍCITA ORIGINAL_VERIFIED, mutuamente exclusiva de C2:
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action record-original --operator-decision ORIGINAL_VERIFIED
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action recover-original --operator-decision ORIGINAL_VERIFIED
+# Retorno pré-commit com reader compatível; NEWauth+NEWDB; sem replay SQL/start.
+
+C2. DECISÃO EXPLÍCITA VERIFIED, inclusive commit com resposta perdida provado:
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action record-verified --operator-decision VERIFIED
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action recover-verified --operator-decision VERIFIED
+# NEWcipher exclusivamente; nunca C1/OLDcipher após VERIFIED. Lock/provas frescos.
+
+D. SOMENTE preparação fresca pós-unfence se necessária; não executada aqui:
+R=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-cipher-v14-post-return-20261015
+python3 -B "$P/window/prepare_compatible_post_return.py" "$P" "$R"
+# VERIFIED atual, identidades reais novas, política/bindings/gates próprios;
+# scheduled_controls.py incluído. Revisão/instalação/decisão próprias, sem replay.
+# Não predeclarar seus hashes/identidades futuros nem executar retorno standby.
+
+ACEITE POSTERIOR de futura janela:10 cifras/Telegramopaco/147/v2/recibos;
+Web reconectado sem mensagens; API/worker/DB; frontend/sessões/console;
+NEWauth+NEWDB, saved/fallback600, boot/supervisão e AMBOS crons before;
+barreira ausente, cinco gatesfalse/execfalse, guarda38closed/out15CLOSED.
+Nenhuma.env/credencial externa/Telegram/envio/abertura integra esse roteiro.
