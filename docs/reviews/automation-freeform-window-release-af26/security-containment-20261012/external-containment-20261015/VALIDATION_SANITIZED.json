@@ -1,0 +1,13 @@
+{
+  "consumerSlots": 5,
+  "credentialCreationChangeRevocation": 0,
+  "functionalTestsReusedNotRepeated": true,
+  "historicalExternalRefs": 341,
+  "localLinksValid": true,
+  "privateDerivedIdentityReferences": 11,
+  "productionChanges": 0,
+  "providerAuthenticatedCalls": 0,
+  "publicSecretMatches": 0,
+  "result": "DOCUMENTARY_PREPARATION_VALIDATED_NOT_EXECUTED",
+  "valuesCompared": 16
+}

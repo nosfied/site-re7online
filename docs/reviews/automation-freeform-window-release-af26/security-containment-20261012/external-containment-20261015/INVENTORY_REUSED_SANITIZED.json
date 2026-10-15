@@ -1,0 +1,95 @@
+{
+  "baseCommit": "2c9a8dd3559258549cf32727fc207643eb946921",
+  "configuredConsumerBySlot": [
+    {
+      "consumers": [
+        "re7-whatsapp-agent"
+      ],
+      "slot": "OPENAI_API_KEY"
+    },
+    {
+      "consumers": [
+        "re7-whatsapp-agent"
+      ],
+      "slot": "WHATSAPP_ACCESS_TOKEN"
+    },
+    {
+      "consumers": [
+        "re7-whatsapp-agent"
+      ],
+      "slot": "META_INSTAGRAM_BUSINESS_LOGIN_APP_SECRET"
+    },
+    {
+      "consumers": [
+        "re7-whatsapp-agent"
+      ],
+      "slot": "META_INSTAGRAM_APP_SECRET"
+    },
+    {
+      "consumers": [
+        "re7-whatsapp-agent"
+      ],
+      "slot": "META_APP_SECRET"
+    }
+  ],
+  "credentialsCreatedChangedRevoked": 0,
+  "effectiveVariableNamesInAttestedApiProfile": {
+    "businessLoginAppId": "META_INSTAGRAM_BUSINESS_LOGIN_APP_ID",
+    "businessLoginSecret": "META_INSTAGRAM_BUSINESS_LOGIN_APP_SECRET",
+    "oauthState": "META_INSTAGRAM_BUSINESS_LOGIN_STATE_SECRET",
+    "passiveWebhookVerify": "WHATSAPP_VERIFY_TOKEN"
+  },
+  "externalCountsAreDatedNotFreshInventory": true,
+  "externalReferenceSnapshotSha256": "ea5d1191ce45781c0ffed272fa68ac570c128de620ed324256c1917ab081029d",
+  "externalRefsHistoricalCount": 341,
+  "externalRefsHistoricalGroups": [
+    {
+      "model": "contact",
+      "rows": 14
+    },
+    {
+      "model": "lead",
+      "rows": 14
+    },
+    {
+      "model": "conversation",
+      "rows": 14
+    },
+    {
+      "model": "conversationRuntimeState",
+      "rows": 14
+    },
+    {
+      "model": "inboundMessage",
+      "rows": 197
+    },
+    {
+      "model": "outboundMessage",
+      "rows": 75
+    },
+    {
+      "model": "contactChannelIdentity",
+      "rows": 13
+    }
+  ],
+  "functionalBuildsTestsRepeated": 0,
+  "futureWindowReady": false,
+  "productionReadsThisTask": 0,
+  "protectedVariables": [
+    "APP_AUTH_SECRET",
+    "ADMIN_TOKEN",
+    "WHATSAPP_WEB_WORKER_CONTROL_TOKEN",
+    "DATABASE_URL",
+    "CHANNEL_ACCOUNT_SECRET_KEY",
+    "MFA_SECRET_ENCRYPTION_KEY",
+    "WEBHOOK_SECRET_ENCRYPTION_KEY",
+    "CAMPAIGN_SEED_SECRET",
+    "CAMPAIGN_SEED_HISTORICAL_SECRET",
+    "CAMPAIGN_SEED_WRITE_EPOCH",
+    "CAMPAIGN_SEED_HISTORICAL_POLICY_FILE",
+    "CAMPAIGN_SEED_HISTORICAL_POLICY_SHA256"
+  ],
+  "providerAuthenticatedRequests": 0,
+  "result": "EXTERNAL_CONTAINMENT_PLAN_REVIEW_ONLY",
+  "sourceConfigSha256": "dffb3c6f8b5be260b42b4668a6dbae36d15df431cf29668f55ec43ea10f80724"
+}
