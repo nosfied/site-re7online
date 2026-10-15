@@ -1,0 +1,93 @@
+REVIEW ONLY — NO INSTALLATION, CONTAINMENT OR WINDOW AUTHORIZED IN THIS TASK.
+V9/v10 CONSUMED/DENY preserved. Do not repeat their A/B or repair bindings.
+V11/V12 intermediate candidates preserved. V13 is inactive, canonical read PASS.
+
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-cipher-restore-v13-20261015T100500Z
+Archive SHA256 1e2d010b457fafe98e9ece0496843e00db4e943c5f99a0bd47e3d80dc3fe6e23 (5924546 bytes)
+Review SHA256 3b8f4c77e4d7454321da33f09857ad46345474309ef9534a2a55ad34cf135fcd
+Policy proposed 15b91a2a41708a1ef0ee8a499fd51f892298561d0d73dbbfb05ceb3fe285899f
+Installer proposed 722ae81d542bb5c7a50d0820e9133d219c1b058a92f3891232ade3a213589d56
+Installed SOURCE policy b6a58431c989a36eebdfa9e443118a7e15fbe0229d102cd896f91d3d193f818d
+Helper8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212 and literal sudoers62b5a2ac1d56b013f6db4bb8180b0637b985786214f4bc3ce0e5f8d3f7c5111a unchanged.
+
+A0. READ ONLY, already passed; renew only for a concrete freshness/change requirement.
+No repeat extraction. No old inspect expected to PASS: installed b6 phase is consumed.
+umask 077
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = 3b8f4c77e4d7454321da33f09857ad46345474309ef9534a2a55ad34cf135fcd
+(cd "$P" && sha256sum -c preparation-review.sha256)
+python3 -B "$P/verify-package.py"
+for M in switch return return-partial return-before-commit; do
+  python3 -B -I -S "$P/window/restore_contract.py" "$P/$M"
+done
+# Complete real read chain, only if required; use an absent private output path:
+Q=/dev/shm/re7-v13-review-$(date -u +%Y%m%dT%H%M%SZ)
+test ! -e "$Q" && test ! -L "$Q"
+python3 -B "$P/read-preparatory.py" "$P" "$Q"
+# No installation/fence/exit/SQL/start is invoked. Do not repeat a DENY automatically.
+
+FUTURE WINDOW PREREQUISITES, NOT SATISFIED BY THIS DOCUMENT:
+- Explicit owner window decision and sudo availability.
+- Actual RPO capture time/backup.lock/custody + schema/tooling/frontier compatibility.
+  Existing capture05:43:48 Fortaleza15/10; current publication does not renew RPO.
+  Renew by canonical procedure when required, preserving original proofs; all FOUR
+  backup/proof bindings AND restore-contract/compatibility references must be
+  regenerated/reviewed coherently. A review hash changes after that operation.
+  Never modify cipher source/plan/CAS to accept drift or call a stale review current.
+- min(deploy,PostgreSQL)>=8794603520B, WAL/growth and complete return budget.
+- Fresh identities/writer coverage/SQL/proxy/current controls/inventory; no drift.
+- Fresh root source b6, helper/sudoers hash/owner/mode/chains and archive absence.
+  Old helper inspect rejects phase_already_exists by design; do not delete phase.
+- Retained/stopped lab evidence valid; do not set temporaryDatabaseRemoved=true.
+- Gates remain false until all actual requirements and owner authority established.
+
+A. FUTURE RESTRICTED OWNER INSTALLER — NOT EXECUTED/AUTHORIZED HERE.
+# Reconfirm CURRENT reviewed manifest (hash above applies to this exact publication).
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = 722ae81d542bb5c7a50d0820e9133d219c1b058a92f3891232ade3a213589d56
+python3 -B "$P/verify-package.py"
+bash "$P/install-api-window-policy.sh"
+# Archives root b6 at pre-security-cipher-restore-v13-20261015T100500Z.json,
+# installs only 15b91a2a, verifies installed bytes/inspect and five false gates.
+# No helper/sudoers change. Error/partial/timeout => inspect/preserve, no installer replay.
+
+B. FUTURE SINGLE SEQUENCE — NOT EXECUTED/AUTHORIZED HERE.
+# Enable execution-authorized/five gates ONLY through the reviewed owner procedure
+# after ALL requirements above; current false gates intentionally make this DENY.
+python3 -B "$P/window/locked_cli.py" "$P"
+# Real Operations stop/start, same shared restore proof. Fresh exit/DB ownership,
+# explicit seal-current-under-lock, new source/plan/hash/intent, full CAS, commit,
+# VERIFIED before successors. No repeated SQL/start; NEWauth+NEWDB always preserved.
+
+C. INSPECTION ONLY after uncertainty; NEVER automatically choose C1/C2:
+python3 -B "$P/window/locked_cli.py" "$P" --inspect-readonly
+# NO_FINAL_PLAN/ambiguous/mismatched source/intent/receipt => no C1/C2/replay/start.
+# Present exact classification/evidence to operator for explicit mutually exclusive decision.
+
+C1. ONLY with explicit ORIGINAL_VERIFIED decision, matching plan/intent/fresh observation:
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action record-original --operator-decision ORIGINAL_VERIFIED
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action recover-original --operator-decision ORIGINAL_VERIFIED
+# Original cipher still effective, compatible reader, NEWauth+NEWDB. No SQL replay.
+
+C2. ONLY with explicit VERIFIED decision, including response-lost commit proven durable:
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action record-verified --operator-decision VERIFIED
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action recover-verified --operator-decision VERIFIED
+# NEWcipher exclusively. Never C1/OLDcipher after VERIFIED. Lock, classification,
+# exact provenance and one-use intent checked again. No SQL/start replay.
+
+D. POST-UNFENCE RETURN, future preparation/decision required, not execution here:
+R=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-cipher-v13-post-return-20261015T100500Z
+python3 -B "$P/window/prepare_compatible_post_return.py" "$P" "$R"
+# Requires actual VERIFIED/new-epoch proof and actual successor identities. Captures
+# fresh return controls/root policy in a NEW generation; new hash/policy installation
+# and explicit corresponding decision required. Cannot predeclare its future hashes.
+# Shared restore proof/support files copied; target stays compatible NEWcipher.
+# Do not execute return by reusing the original window policy or consumed certificates.
+
+LOCAL REPRODUCTION, complete private candidate required (no secrets on stdout):
+# From repository worktree, set C to local-evidence/<generation above>.
+D=docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/restore-contract-20261015
+python3 -B "$D/test_concrete.py" "$C"
+python3 -B "$D/test_preconditions.py" "$C"
+python3 -B "$D/test_delegated.py" "$C"
+python3 -B "$D/test_recovery.py" "$C"
+# Full archive/read-receipt comparison: certify.py C archive readReceipt fourProofFiles.
+# No productive CLI action is used by local tests. System effects are substituted.

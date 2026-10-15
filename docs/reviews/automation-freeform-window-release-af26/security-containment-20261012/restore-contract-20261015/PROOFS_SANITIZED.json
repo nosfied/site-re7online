@@ -1,0 +1,914 @@
+{
+  "result": "ALL_AFFECTED_LOCAL_PROOFS_PASS",
+  "totalCases": 170,
+  "suites": [
+    {
+      "caseCount": 64,
+      "cases": [
+        {
+          "accepted": true,
+          "mode": "switch",
+          "restore": "retained_valid"
+        },
+        {
+          "accepted": true,
+          "mode": "return",
+          "restore": "retained_valid"
+        },
+        {
+          "accepted": true,
+          "mode": "return-partial",
+          "restore": "retained_valid"
+        },
+        {
+          "accepted": true,
+          "mode": "return-before-commit",
+          "restore": "retained_valid"
+        },
+        {
+          "accepted": true,
+          "mode": "switch",
+          "restore": "removed_valid"
+        },
+        {
+          "accepted": true,
+          "mode": "return",
+          "restore": "removed_valid"
+        },
+        {
+          "accepted": true,
+          "mode": "return-partial",
+          "restore": "removed_valid"
+        },
+        {
+          "accepted": true,
+          "mode": "return-before-commit",
+          "restore": "removed_valid"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "missing"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "missing"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "missing"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "missing"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "invalid"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "invalid"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "invalid"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "invalid"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "schema"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "schema"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "schema"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "schema"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "tooling"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "tooling"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "tooling"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "tooling"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "lab_running"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "lab_running"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "lab_running"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "lab_running"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "migration"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "migration"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "migration"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "migration"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "proof"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "proof"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "proof"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "proof"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "mode_permission"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "mode_permission"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "mode_permission"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "mode_permission"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "type"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "type"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "type"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "type"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "symlink"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "symlink"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "symlink"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "symlink"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "binding_hash"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "binding_hash"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "binding_hash"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "binding_hash"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "absent_field"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "absent_field"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "absent_field"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "absent_field"
+        },
+        {
+          "accepted": false,
+          "mode": "switch",
+          "restore": "bool_type"
+        },
+        {
+          "accepted": false,
+          "mode": "return",
+          "restore": "bool_type"
+        },
+        {
+          "accepted": false,
+          "mode": "return-partial",
+          "restore": "bool_type"
+        },
+        {
+          "accepted": false,
+          "mode": "return-before-commit",
+          "restore": "bool_type"
+        },
+        {
+          "accepted": false,
+          "boundary": "UNCERTAIN",
+          "mode": "switch"
+        },
+        {
+          "accepted": false,
+          "boundary": "ORIGINAL_VERIFIED",
+          "mode": "return"
+        },
+        {
+          "accepted": false,
+          "boundary": "VERIFIED",
+          "mode": "return-before-commit"
+        },
+        {
+          "accepted": false,
+          "restore": "owner_divergence"
+        }
+      ],
+      "fullCandidate": true,
+      "productionEffects": false,
+      "result": "CONCRETE_OPERATIONS_RESTORE_PASS"
+    },
+    {
+      "result": "REAL_PRECONDITIONS_PASS",
+      "cases": [
+        {
+          "mode": "switch",
+          "stage": "stop",
+          "negative": "guard"
+        },
+        {
+          "mode": "switch",
+          "stage": "stop",
+          "negative": "containment"
+        },
+        {
+          "mode": "switch",
+          "stage": "stop",
+          "negative": "unknown_process"
+        },
+        {
+          "mode": "switch",
+          "stage": "stop",
+          "negative": "config"
+        },
+        {
+          "mode": "switch",
+          "stage": "stop",
+          "negative": "db_owner"
+        },
+        {
+          "mode": "switch",
+          "stage": "stop",
+          "negative": "survivor"
+        },
+        {
+          "mode": "switch",
+          "stage": "stop",
+          "negative": "socket_survivor"
+        },
+        {
+          "mode": "switch",
+          "stage": "stop",
+          "negative": "missing_front"
+        },
+        {
+          "mode": "switch",
+          "stage": "stop",
+          "negative": "recovery_binding"
+        },
+        {
+          "mode": "switch",
+          "stage": "start",
+          "negative": "certificate"
+        },
+        {
+          "mode": "switch",
+          "stage": "start",
+          "negative": "generation"
+        },
+        {
+          "mode": "switch",
+          "stage": "start",
+          "negative": "owner_order"
+        },
+        {
+          "mode": "switch",
+          "stage": "start",
+          "negative": "front_identity"
+        },
+        {
+          "mode": "switch",
+          "stage": "start",
+          "negative": "artifact"
+        },
+        {
+          "mode": "switch",
+          "stage": "start",
+          "negative": "auth_binding"
+        },
+        {
+          "mode": "switch",
+          "stage": "start",
+          "negative": "db_owner"
+        },
+        {
+          "mode": "switch",
+          "stage": "start",
+          "negative": "epoch_uncertain"
+        },
+        {
+          "mode": "switch",
+          "stage": "start",
+          "negative": "start_consumed"
+        },
+        {
+          "mode": "return",
+          "stage": "stop",
+          "negative": "guard"
+        },
+        {
+          "mode": "return",
+          "stage": "stop",
+          "negative": "containment"
+        },
+        {
+          "mode": "return",
+          "stage": "stop",
+          "negative": "unknown_process"
+        },
+        {
+          "mode": "return",
+          "stage": "stop",
+          "negative": "config"
+        },
+        {
+          "mode": "return",
+          "stage": "stop",
+          "negative": "db_owner"
+        },
+        {
+          "mode": "return",
+          "stage": "stop",
+          "negative": "survivor"
+        },
+        {
+          "mode": "return",
+          "stage": "stop",
+          "negative": "socket_survivor"
+        },
+        {
+          "mode": "return",
+          "stage": "stop",
+          "negative": "missing_front"
+        },
+        {
+          "mode": "return",
+          "stage": "stop",
+          "negative": "recovery_binding"
+        },
+        {
+          "mode": "return",
+          "stage": "start",
+          "negative": "certificate"
+        },
+        {
+          "mode": "return",
+          "stage": "start",
+          "negative": "generation"
+        },
+        {
+          "mode": "return",
+          "stage": "start",
+          "negative": "owner_order"
+        },
+        {
+          "mode": "return",
+          "stage": "start",
+          "negative": "front_identity"
+        },
+        {
+          "mode": "return",
+          "stage": "start",
+          "negative": "artifact"
+        },
+        {
+          "mode": "return",
+          "stage": "start",
+          "negative": "auth_binding"
+        },
+        {
+          "mode": "return",
+          "stage": "start",
+          "negative": "db_owner"
+        },
+        {
+          "mode": "return",
+          "stage": "start",
+          "negative": "epoch_uncertain"
+        },
+        {
+          "mode": "return",
+          "stage": "start",
+          "negative": "start_consumed"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "stop",
+          "negative": "guard"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "stop",
+          "negative": "containment"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "stop",
+          "negative": "unknown_process"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "stop",
+          "negative": "config"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "stop",
+          "negative": "db_owner"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "stop",
+          "negative": "survivor"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "stop",
+          "negative": "socket_survivor"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "stop",
+          "negative": "missing_front"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "stop",
+          "negative": "recovery_binding"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "start",
+          "negative": "certificate"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "start",
+          "negative": "generation"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "start",
+          "negative": "owner_order"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "start",
+          "negative": "front_identity"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "start",
+          "negative": "artifact"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "start",
+          "negative": "auth_binding"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "start",
+          "negative": "db_owner"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "start",
+          "negative": "epoch_uncertain"
+        },
+        {
+          "mode": "return-partial",
+          "stage": "start",
+          "negative": "start_consumed"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "stop",
+          "negative": "guard"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "stop",
+          "negative": "containment"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "stop",
+          "negative": "unknown_process"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "stop",
+          "negative": "config"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "stop",
+          "negative": "db_owner"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "stop",
+          "negative": "survivor"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "stop",
+          "negative": "socket_survivor"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "stop",
+          "negative": "missing_front"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "stop",
+          "negative": "recovery_binding"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "start",
+          "negative": "certificate"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "start",
+          "negative": "generation"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "start",
+          "negative": "owner_order"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "start",
+          "negative": "front_identity"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "start",
+          "negative": "artifact"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "start",
+          "negative": "auth_binding"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "start",
+          "negative": "db_owner"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "start",
+          "negative": "epoch_uncertain"
+        },
+        {
+          "mode": "return-before-commit",
+          "stage": "start",
+          "negative": "start_consumed"
+        },
+        {
+          "stage": "close_then_preflight",
+          "validRestore": true
+        },
+        {
+          "stage": "close_then_preflight",
+          "validRestore": false
+        },
+        {
+          "stage": "diagnostic_unique",
+          "priorPreserved": true
+        },
+        {
+          "stage": "finish_exact_mode",
+          "mode": "switch",
+          "allOtherModesForbidden": true
+        },
+        {
+          "stage": "finish_exact_mode",
+          "mode": "return",
+          "allOtherModesForbidden": true
+        },
+        {
+          "stage": "finish_exact_mode",
+          "mode": "return-partial",
+          "allOtherModesForbidden": true
+        },
+        {
+          "stage": "finish_exact_mode",
+          "mode": "return-before-commit",
+          "allOtherModesForbidden": true
+        }
+      ],
+      "caseCount": 79,
+      "productionEffects": false
+    },
+    {
+      "result": "REAL_DELEGATED_CLI_CONTROLS_PASS",
+      "cases": [
+        {
+          "consumer": "delegated.main request preflight",
+          "mode": "switch",
+          "validRestore": true,
+          "productionEffect": false
+        },
+        {
+          "consumer": "delegated.main request preflight",
+          "mode": "switch",
+          "validRestore": false,
+          "productionEffect": false
+        },
+        {
+          "consumer": "DelegatedControls.prepare",
+          "mode": "switch",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.enter",
+          "mode": "switch",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.unfence",
+          "mode": "switch",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.finish",
+          "mode": "switch",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "delegated.main request preflight",
+          "mode": "return",
+          "validRestore": true,
+          "productionEffect": false
+        },
+        {
+          "consumer": "delegated.main request preflight",
+          "mode": "return",
+          "validRestore": false,
+          "productionEffect": false
+        },
+        {
+          "consumer": "DelegatedControls.prepare",
+          "mode": "return",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.enter",
+          "mode": "return",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.unfence",
+          "mode": "return",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.finish",
+          "mode": "return",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "delegated.main request preflight",
+          "mode": "return-partial",
+          "validRestore": true,
+          "productionEffect": false
+        },
+        {
+          "consumer": "delegated.main request preflight",
+          "mode": "return-partial",
+          "validRestore": false,
+          "productionEffect": false
+        },
+        {
+          "consumer": "DelegatedControls.prepare",
+          "mode": "return-partial",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.enter",
+          "mode": "return-partial",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.unfence",
+          "mode": "return-partial",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.finish",
+          "mode": "return-partial",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "delegated.main request preflight",
+          "mode": "return-before-commit",
+          "validRestore": true,
+          "productionEffect": false
+        },
+        {
+          "consumer": "delegated.main request preflight",
+          "mode": "return-before-commit",
+          "validRestore": false,
+          "productionEffect": false
+        },
+        {
+          "consumer": "DelegatedControls.prepare",
+          "mode": "return-before-commit",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.enter",
+          "mode": "return-before-commit",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.unfence",
+          "mode": "return-before-commit",
+          "validRestore": false,
+          "effectsReached": false
+        },
+        {
+          "consumer": "DelegatedControls.finish",
+          "mode": "return-before-commit",
+          "validRestore": false,
+          "effectsReached": false
+        }
+      ],
+      "caseCount": 24,
+      "namespaceRelocatedOnlyForIsolatedTest": true,
+      "productionEffects": false
+    },
+    {
+      "result": "REAL_RECOVERY_BOUNDARY_OPERATIONS_PASS",
+      "cases": [
+        {
+          "classification": "ORIGINAL_VERIFIED",
+          "commitResponseLost": false,
+          "planChanges": 10,
+          "sqlReplayed": false,
+          "recoveryExecutedLocally": true
+        },
+        {
+          "classification": "VERIFIED",
+          "commitResponseLost": true,
+          "planChanges": 10,
+          "sqlReplayed": false,
+          "recoveryExecutedLocally": true
+        },
+        {
+          "classification": "UNCERTAIN",
+          "commitResponseLost": false,
+          "planChanges": 10,
+          "sqlReplayed": false,
+          "recoveryExecutedLocally": false
+        }
+      ],
+      "caseCount": 3,
+      "completeCandidateAndPlan": true,
+      "productionEffects": false,
+      "notExercised": "canonical sequencer finish/root nonce exchange in production"
+    }
+  ]
+}

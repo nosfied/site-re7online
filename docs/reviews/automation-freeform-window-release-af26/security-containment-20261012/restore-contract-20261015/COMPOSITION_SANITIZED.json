@@ -1,0 +1,508 @@
+{
+  "newRuntimeBuild": false,
+  "changed": [
+    {
+      "path": "verify-package.py",
+      "sourceSha256": "d8128a3395caf114e8698af7b401a21bd6466080d6b51d6fe54d0fbda6d8affb",
+      "candidateSha256": "797ffb39d9bf5762f3d7477be3c7a506df49de144d812b65e58cb3c83c9e74e7"
+    },
+    {
+      "path": "install-api-window-policy.sh",
+      "sourceSha256": "bfc016e75154b26a7f364ab5f1f6423c744dcbe4e41a1587c79ad039380fbd76",
+      "candidateSha256": "722ae81d542bb5c7a50d0820e9133d219c1b058a92f3891232ade3a213589d56"
+    },
+    {
+      "path": "lifecycle.private.json",
+      "sourceSha256": "5567d807fd8398f28f57337fa6b3f6a61522bcfbfdf85e173a9bd0f64e8f410b",
+      "candidateSha256": "d2202fe556c3a0052df423e864dfc2ed173fa9766ecf8c74c2282966492c5aba"
+    },
+    {
+      "path": "preparation-review.sha256",
+      "sourceSha256": "059a4196d7f824c1662f7a7f62192d8ba5aaf5fe43d4072761aa050e1085bd29",
+      "candidateSha256": "3b8f4c77e4d7454321da33f09857ad46345474309ef9534a2a55ad34cf135fcd"
+    },
+    {
+      "path": "return-before-commit/baseline_contract.py",
+      "sourceSha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+      "candidateSha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    {
+      "path": "return-before-commit/scripts.sha256",
+      "sourceSha256": "bccc27c80023be7648727b10a50892324aa8b19cafad400a39bc2bb8475c1e8d",
+      "candidateSha256": "56d386320e87396ca37496c3194a3f1486f280a40b8e4432c4813ced21aadefe"
+    },
+    {
+      "path": "return-before-commit/return.ecosystem.config.cjs",
+      "sourceSha256": "a66ff03c9b730dec724806858626cad0a37bd9df8db97df9e446aefff540ddf6",
+      "candidateSha256": "d8113d6f8dcfd7f3053daec9c7df9460127959f154e4ed58ddead4af00d98fb7"
+    },
+    {
+      "path": "return-before-commit/candidate.config.private.json",
+      "sourceSha256": "5768cff830942b11875db00393d130647ec0f697d21ccc4c34feca33614efea4",
+      "candidateSha256": "96f494ecf39287b62bf774b4673b7b7e64b0b15f4fc255469de23cbab61ba8ec"
+    },
+    {
+      "path": "return-before-commit/preparation-bindings.cjs",
+      "sourceSha256": "2eb970e43d97afe54210243f60a33fc3a91aa7017a9c1780738568bff84d356d",
+      "candidateSha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    {
+      "path": "return-before-commit/backup-manifest.json",
+      "sourceSha256": "139f053268b2b8247c4663ac1dbd56413d5bb9bd39681af236da324f384ec059",
+      "candidateSha256": "cb53804d6890ca2c25318591b50c5e1077c3483787ce51329b0bcea1202e4bde"
+    },
+    {
+      "path": "return-before-commit/return.config.private.json",
+      "sourceSha256": "edee7b7da3344ababf88597ac80f1d1a26112804c526d4cd2f199ba02d6c9919",
+      "candidateSha256": "e44775cd6e95687a44be7a1533e40ad3fb46c0113d09a7458b03345a0aa25726"
+    },
+    {
+      "path": "return-before-commit/ops.py",
+      "sourceSha256": "cac883b12ac12bfc64bbfc777a1687548a3caba42bafe0f9ab43738e64b1a4b8",
+      "candidateSha256": "f4ead533f69c586a4e5d298d984eae617711ab6ef09763e393b2860d40f10db8"
+    },
+    {
+      "path": "return-before-commit/proof-bindings.private.json",
+      "sourceSha256": "364709c82b0c91fc57eeaaa8167b93753567e4a9d8e7ec8cbde69c59ff31457c",
+      "candidateSha256": "27fd69409dd983d2b05d6532a4033b4642e46e5adecb6715932bd935fe7b7df8"
+    },
+    {
+      "path": "return-before-commit/execution-check.cjs",
+      "sourceSha256": "ac9b88d3f6c8fd45b43c3a9a64b34d5e197ae5cf63d245c6e076440cc7c24070",
+      "candidateSha256": "64f94b5fb4d94fb4e78d5971881859fb12d3d73c257a7b68367fff27d8066ba1"
+    },
+    {
+      "path": "return-before-commit/delegated.py",
+      "sourceSha256": "5eaf004200055c83173efdba651e8791f87c6ec2e738b12b3aae518ab5755174",
+      "candidateSha256": "2c7b9dfd35e3a159deb302e491392ac372f1dd31180df31691a519779b3fa2b7"
+    },
+    {
+      "path": "return-before-commit/read-state.py",
+      "sourceSha256": "bfafab2e27f0b77f41c74a5a189bc9b35dcaad399f81fa0084d047c1543f5e45",
+      "candidateSha256": "cee890a75797a496e855016d6f1a36f76b95ad35d525b9db6bd9dd29a33aab46"
+    },
+    {
+      "path": "return-before-commit/candidate.ecosystem.config.cjs",
+      "sourceSha256": "7fdae9585c2f6a0902a7b04882a9c722a66c26047ca07d6721846c75796423a3",
+      "candidateSha256": "4a6ab80fa9e5181ae55b420a631415593565e7668fd88a4a9bfcf083e7647b4e"
+    },
+    {
+      "path": "window/mode-manifest-v4.json",
+      "sourceSha256": "6e3fc1e9513ce9577a386d768147b9c68e0a54326f59cab8a90d29b65dd466b7",
+      "candidateSha256": "95f6f58308512f78783867bd65e62ccc9d2d7fccd7abc1d2202f03670486a9e7"
+    },
+    {
+      "path": "window/baseline_contract.py",
+      "sourceSha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+      "candidateSha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    {
+      "path": "window/consumers-before.config.private.json",
+      "sourceSha256": "5768cff830942b11875db00393d130647ec0f697d21ccc4c34feca33614efea4",
+      "candidateSha256": "96f494ecf39287b62bf774b4673b7b7e64b0b15f4fc255469de23cbab61ba8ec"
+    },
+    {
+      "path": "window/locked-hook.private.json",
+      "sourceSha256": "d524ff77936dc251e36b50c61df862f4fab0ce98be479a9fb1532b3c77ac183d",
+      "candidateSha256": "d14f1ccf1142b7c9eb585f8a6e02ecc2dfcc0bea193b20426b4b5f8284b0c393"
+    },
+    {
+      "path": "window/locked_driver.py",
+      "sourceSha256": "e1f74743187fbc5f25b9a0ebd12d4a334b9a44d8554f773670282ba12583035b",
+      "candidateSha256": "75c9ac0c1597bf154986629efe3faefc3af33243faa450bf242ec31d416bf4b6"
+    },
+    {
+      "path": "window/prepare_compatible_post_return.py",
+      "sourceSha256": "ba71253425b34421d653251c7d4964fd5fc283de587e5209f447b8abd7eb256d",
+      "candidateSha256": "699bc5385646758fb40bc98973312130f750e99e71749e2fa8007a420977801b"
+    },
+    {
+      "path": "window/sequencer-manifest.json",
+      "sourceSha256": "66aa3be9491272121243a02d2a1051e7fd146c6d3e42f798fda0e714bcb6b235",
+      "candidateSha256": "0b1de8bdacc1b7cd1206c4d280936d5bce5da9f19ff4d72a6706c050bd4d39d0"
+    },
+    {
+      "path": "window/privileged-policy.sha256",
+      "sourceSha256": "078da233bbb83f98c7c87c69bcd351cc7e05f88acd78f2de45083a7cde5c0ff8",
+      "candidateSha256": "2551e5248da996c261c744a3f1bd6ee5f23af12c4942b5d2caae99212e9c38c7"
+    },
+    {
+      "path": "window/recovery_actions.py",
+      "sourceSha256": "31ad5d6dd672033477a239878f3f8c1d8fc6a94dbca26c53c03fa8eda2e37d0f",
+      "candidateSha256": "b91b229e147fcd48aa24605872509217406d83ffc84b4141edd1cc575b364e73"
+    },
+    {
+      "path": "window/restore-result.json",
+      "sourceSha256": "8bdbadb8be1fe11900cbea50a80fd057f87df9c7ac3d86ac3eec6a9dffaac4b9",
+      "candidateSha256": "c2935e277c573cd21b49a2acbd38bf1650ed942518a6b292da4b72f1ee1fc6cf"
+    },
+    {
+      "path": "window/consumers-after.config.private.json",
+      "sourceSha256": "edee7b7da3344ababf88597ac80f1d1a26112804c526d4cd2f199ba02d6c9919",
+      "candidateSha256": "e44775cd6e95687a44be7a1533e40ad3fb46c0113d09a7458b03345a0aa25726"
+    },
+    {
+      "path": "window/sequencer.py",
+      "sourceSha256": "f0bb2f92537e464a8a8fc48fbfa6a287894ffc4677a8ccc6fa0b5900798cfa42",
+      "candidateSha256": "5dbcc9d9202753ea90b319e8b80917ed196fd56e37e1342c9eefef01ad329463"
+    },
+    {
+      "path": "window/privileged-policy.private.json",
+      "sourceSha256": "b6a58431c989a36eebdfa9e443118a7e15fbe0229d102cd896f91d3d193f818d",
+      "candidateSha256": "15b91a2a41708a1ef0ee8a499fd51f892298561d0d73dbbfb05ceb3fe285899f"
+    },
+    {
+      "path": "window/cipher-consumers.private.json",
+      "sourceSha256": "cba5354c1e752d4318e1e358b29d84793a1b1d1f57d34667d15e30b2def990a7",
+      "candidateSha256": "58ac4bd12640065cd5a05a660f8d41e7773a6e2297acc8c3f334d7fd3393efff"
+    },
+    {
+      "path": "window/backup-manifest.private.json",
+      "sourceSha256": "139f053268b2b8247c4663ac1dbd56413d5bb9bd39681af236da324f384ec059",
+      "candidateSha256": "cb53804d6890ca2c25318591b50c5e1077c3483787ce51329b0bcea1202e4bde"
+    },
+    {
+      "path": "return-partial/baseline_contract.py",
+      "sourceSha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+      "candidateSha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    {
+      "path": "return-partial/scripts.sha256",
+      "sourceSha256": "45db2b6e7dbd4cfa8476bf09b85ac0cb76c5216e43396ca121d3c4a31ed167b2",
+      "candidateSha256": "96b6e7778787712b9bb6385fce368da6590f6c48d9779f427cf72e38f12c5897"
+    },
+    {
+      "path": "return-partial/return.ecosystem.config.cjs",
+      "sourceSha256": "a66ff03c9b730dec724806858626cad0a37bd9df8db97df9e446aefff540ddf6",
+      "candidateSha256": "d8113d6f8dcfd7f3053daec9c7df9460127959f154e4ed58ddead4af00d98fb7"
+    },
+    {
+      "path": "return-partial/candidate.config.private.json",
+      "sourceSha256": "edee7b7da3344ababf88597ac80f1d1a26112804c526d4cd2f199ba02d6c9919",
+      "candidateSha256": "e44775cd6e95687a44be7a1533e40ad3fb46c0113d09a7458b03345a0aa25726"
+    },
+    {
+      "path": "return-partial/preparation-bindings.cjs",
+      "sourceSha256": "2eb970e43d97afe54210243f60a33fc3a91aa7017a9c1780738568bff84d356d",
+      "candidateSha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    {
+      "path": "return-partial/backup-manifest.json",
+      "sourceSha256": "139f053268b2b8247c4663ac1dbd56413d5bb9bd39681af236da324f384ec059",
+      "candidateSha256": "cb53804d6890ca2c25318591b50c5e1077c3483787ce51329b0bcea1202e4bde"
+    },
+    {
+      "path": "return-partial/return.config.private.json",
+      "sourceSha256": "edee7b7da3344ababf88597ac80f1d1a26112804c526d4cd2f199ba02d6c9919",
+      "candidateSha256": "e44775cd6e95687a44be7a1533e40ad3fb46c0113d09a7458b03345a0aa25726"
+    },
+    {
+      "path": "return-partial/ops.py",
+      "sourceSha256": "cac883b12ac12bfc64bbfc777a1687548a3caba42bafe0f9ab43738e64b1a4b8",
+      "candidateSha256": "f4ead533f69c586a4e5d298d984eae617711ab6ef09763e393b2860d40f10db8"
+    },
+    {
+      "path": "return-partial/proof-bindings.private.json",
+      "sourceSha256": "364709c82b0c91fc57eeaaa8167b93753567e4a9d8e7ec8cbde69c59ff31457c",
+      "candidateSha256": "27fd69409dd983d2b05d6532a4033b4642e46e5adecb6715932bd935fe7b7df8"
+    },
+    {
+      "path": "return-partial/execution-check.cjs",
+      "sourceSha256": "ac9b88d3f6c8fd45b43c3a9a64b34d5e197ae5cf63d245c6e076440cc7c24070",
+      "candidateSha256": "64f94b5fb4d94fb4e78d5971881859fb12d3d73c257a7b68367fff27d8066ba1"
+    },
+    {
+      "path": "return-partial/delegated.py",
+      "sourceSha256": "5eaf004200055c83173efdba651e8791f87c6ec2e738b12b3aae518ab5755174",
+      "candidateSha256": "2c7b9dfd35e3a159deb302e491392ac372f1dd31180df31691a519779b3fa2b7"
+    },
+    {
+      "path": "return-partial/read-state.py",
+      "sourceSha256": "bfafab2e27f0b77f41c74a5a189bc9b35dcaad399f81fa0084d047c1543f5e45",
+      "candidateSha256": "cee890a75797a496e855016d6f1a36f76b95ad35d525b9db6bd9dd29a33aab46"
+    },
+    {
+      "path": "return-partial/candidate.ecosystem.config.cjs",
+      "sourceSha256": "a66ff03c9b730dec724806858626cad0a37bd9df8db97df9e446aefff540ddf6",
+      "candidateSha256": "d8113d6f8dcfd7f3053daec9c7df9460127959f154e4ed58ddead4af00d98fb7"
+    },
+    {
+      "path": "return/baseline_contract.py",
+      "sourceSha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+      "candidateSha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    {
+      "path": "return/scripts.sha256",
+      "sourceSha256": "552cac44dc32f1084d61083c032d4edf1b2946d0a7c11faa24c6f113587b58fd",
+      "candidateSha256": "aff7f2eb093a9665befeaa83e7cadbe095f43d862a187296ca3257a5b48099e9"
+    },
+    {
+      "path": "return/return.ecosystem.config.cjs",
+      "sourceSha256": "a66ff03c9b730dec724806858626cad0a37bd9df8db97df9e446aefff540ddf6",
+      "candidateSha256": "d8113d6f8dcfd7f3053daec9c7df9460127959f154e4ed58ddead4af00d98fb7"
+    },
+    {
+      "path": "return/candidate.config.private.json",
+      "sourceSha256": "edee7b7da3344ababf88597ac80f1d1a26112804c526d4cd2f199ba02d6c9919",
+      "candidateSha256": "e44775cd6e95687a44be7a1533e40ad3fb46c0113d09a7458b03345a0aa25726"
+    },
+    {
+      "path": "return/preparation-bindings.cjs",
+      "sourceSha256": "2eb970e43d97afe54210243f60a33fc3a91aa7017a9c1780738568bff84d356d",
+      "candidateSha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    {
+      "path": "return/backup-manifest.json",
+      "sourceSha256": "139f053268b2b8247c4663ac1dbd56413d5bb9bd39681af236da324f384ec059",
+      "candidateSha256": "cb53804d6890ca2c25318591b50c5e1077c3483787ce51329b0bcea1202e4bde"
+    },
+    {
+      "path": "return/return.config.private.json",
+      "sourceSha256": "edee7b7da3344ababf88597ac80f1d1a26112804c526d4cd2f199ba02d6c9919",
+      "candidateSha256": "e44775cd6e95687a44be7a1533e40ad3fb46c0113d09a7458b03345a0aa25726"
+    },
+    {
+      "path": "return/ops.py",
+      "sourceSha256": "cac883b12ac12bfc64bbfc777a1687548a3caba42bafe0f9ab43738e64b1a4b8",
+      "candidateSha256": "f4ead533f69c586a4e5d298d984eae617711ab6ef09763e393b2860d40f10db8"
+    },
+    {
+      "path": "return/proof-bindings.private.json",
+      "sourceSha256": "364709c82b0c91fc57eeaaa8167b93753567e4a9d8e7ec8cbde69c59ff31457c",
+      "candidateSha256": "27fd69409dd983d2b05d6532a4033b4642e46e5adecb6715932bd935fe7b7df8"
+    },
+    {
+      "path": "return/execution-check.cjs",
+      "sourceSha256": "ac9b88d3f6c8fd45b43c3a9a64b34d5e197ae5cf63d245c6e076440cc7c24070",
+      "candidateSha256": "64f94b5fb4d94fb4e78d5971881859fb12d3d73c257a7b68367fff27d8066ba1"
+    },
+    {
+      "path": "return/delegated.py",
+      "sourceSha256": "5eaf004200055c83173efdba651e8791f87c6ec2e738b12b3aae518ab5755174",
+      "candidateSha256": "2c7b9dfd35e3a159deb302e491392ac372f1dd31180df31691a519779b3fa2b7"
+    },
+    {
+      "path": "return/read-state.py",
+      "sourceSha256": "bfafab2e27f0b77f41c74a5a189bc9b35dcaad399f81fa0084d047c1543f5e45",
+      "candidateSha256": "cee890a75797a496e855016d6f1a36f76b95ad35d525b9db6bd9dd29a33aab46"
+    },
+    {
+      "path": "return/candidate.ecosystem.config.cjs",
+      "sourceSha256": "a66ff03c9b730dec724806858626cad0a37bd9df8db97df9e446aefff540ddf6",
+      "candidateSha256": "d8113d6f8dcfd7f3053daec9c7df9460127959f154e4ed58ddead4af00d98fb7"
+    },
+    {
+      "path": "switch/baseline_contract.py",
+      "sourceSha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+      "candidateSha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    {
+      "path": "switch/scripts.sha256",
+      "sourceSha256": "303885f4cc290ead38f84be90ae6d8f0b6fac7abfe35b0e7378f671410e1e038",
+      "candidateSha256": "b774f286d2cd4e1e40f829bbee9d1888fd3e9467c4047d994435eec8f3de1de6"
+    },
+    {
+      "path": "switch/candidate.config.private.json",
+      "sourceSha256": "edee7b7da3344ababf88597ac80f1d1a26112804c526d4cd2f199ba02d6c9919",
+      "candidateSha256": "e44775cd6e95687a44be7a1533e40ad3fb46c0113d09a7458b03345a0aa25726"
+    },
+    {
+      "path": "switch/preparation-bindings.cjs",
+      "sourceSha256": "2eb970e43d97afe54210243f60a33fc3a91aa7017a9c1780738568bff84d356d",
+      "candidateSha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    {
+      "path": "switch/backup-manifest.json",
+      "sourceSha256": "139f053268b2b8247c4663ac1dbd56413d5bb9bd39681af236da324f384ec059",
+      "candidateSha256": "cb53804d6890ca2c25318591b50c5e1077c3483787ce51329b0bcea1202e4bde"
+    },
+    {
+      "path": "switch/ops.py",
+      "sourceSha256": "cac883b12ac12bfc64bbfc777a1687548a3caba42bafe0f9ab43738e64b1a4b8",
+      "candidateSha256": "f4ead533f69c586a4e5d298d984eae617711ab6ef09763e393b2860d40f10db8"
+    },
+    {
+      "path": "switch/proof-bindings.private.json",
+      "sourceSha256": "364709c82b0c91fc57eeaaa8167b93753567e4a9d8e7ec8cbde69c59ff31457c",
+      "candidateSha256": "27fd69409dd983d2b05d6532a4033b4642e46e5adecb6715932bd935fe7b7df8"
+    },
+    {
+      "path": "switch/execution-check.cjs",
+      "sourceSha256": "ac9b88d3f6c8fd45b43c3a9a64b34d5e197ae5cf63d245c6e076440cc7c24070",
+      "candidateSha256": "64f94b5fb4d94fb4e78d5971881859fb12d3d73c257a7b68367fff27d8066ba1"
+    },
+    {
+      "path": "switch/delegated.py",
+      "sourceSha256": "5eaf004200055c83173efdba651e8791f87c6ec2e738b12b3aae518ab5755174",
+      "candidateSha256": "2c7b9dfd35e3a159deb302e491392ac372f1dd31180df31691a519779b3fa2b7"
+    },
+    {
+      "path": "switch/read-state.py",
+      "sourceSha256": "bfafab2e27f0b77f41c74a5a189bc9b35dcaad399f81fa0084d047c1543f5e45",
+      "candidateSha256": "cee890a75797a496e855016d6f1a36f76b95ad35d525b9db6bd9dd29a33aab46"
+    },
+    {
+      "path": "switch/candidate.ecosystem.config.cjs",
+      "sourceSha256": "a66ff03c9b730dec724806858626cad0a37bd9df8db97df9e446aefff540ddf6",
+      "candidateSha256": "d8113d6f8dcfd7f3053daec9c7df9460127959f154e4ed58ddead4af00d98fb7"
+    }
+  ],
+  "added": [
+    {
+      "path": "read-preparatory.py",
+      "sha256": "7513c97da6bf808e86e164f411f4bff5deac32bd786fbd9fdf213845947343c0"
+    },
+    {
+      "path": "window/backup-compatibility.private.json",
+      "sha256": "345519a5ce10e7975340f8ab56af0fd8afb83f4b5bc8884fc2ae917bfcc1ad65"
+    },
+    {
+      "path": "window/restore_contract.py",
+      "sha256": "af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b"
+    },
+    {
+      "path": "window/original-restore-proof.private.json",
+      "sha256": "8bdbadb8be1fe11900cbea50a80fd057f87df9c7ac3d86ac3eec6a9dffaac4b9"
+    },
+    {
+      "path": "window/restore-contract.private.json",
+      "sha256": "0a704ea292969cb2088fa39aeb210cb3321d6b80b2d2c18f3cebdbb7fdef747f"
+    }
+  ],
+  "preserved": [
+    "runtime-inventory.private.json",
+    "execution-authorized",
+    "return-before-commit/start-one.py",
+    "return-before-commit/ecosystem_contract.py",
+    "return-before-commit/close.cjs",
+    "return-before-commit/open.cjs",
+    "return-before-commit/restore-controls.py",
+    "return-before-commit/baseline.private.json",
+    "return-before-commit/stop-pair.py",
+    "return-before-commit/contain.py",
+    "return-before-commit/waiting-work-frozen.cjs",
+    "return-before-commit/waiting-work.cjs",
+    "return-before-commit/recover-partial.py",
+    "return-before-commit/privileged_output.py",
+    "return-before-commit/db_owner_set_observer.py",
+    "return-before-commit/validate.cjs",
+    "return-before-commit/unfence.py",
+    "return-before-commit/plan.private.json",
+    "return-before-commit/db_owner_set_gate.py",
+    "window/ecosystem_contract.py",
+    "window/saved-dump.pm2.private.json",
+    "window/observed-inventory.private.json",
+    "window/locked_phase.py",
+    "window/privileged.py",
+    "window/privileged-observer-output.patch",
+    "window/observed-before-closure.private.json",
+    "window/channel_transaction.py",
+    "window/locked_v4.py",
+    "window/deploy.crontab.before",
+    "window/saved-dump.pm2.bak.private.json",
+    "window/database_inspection.py",
+    "window/locked_plan.py",
+    "window/cipher_verify.py",
+    "window/cipher_start_gate.py",
+    "window/automation-fence.nft",
+    "window/re7-converta-backup.window",
+    "window/closure-verified.private.json",
+    "window/frontend-build-env.private.json",
+    "window/waiting-work.before-closure.private.json",
+    "window/package_contract.py",
+    "window/scope-1792026753289012475.private.stderr",
+    "window/privileged_output.py",
+    "window/database_composition.py",
+    "window/approved-scope.private.json",
+    "window/current_plan.cjs",
+    "window/db-owner-bindings.private.json",
+    "window/re7-incident-6683-window.sudoers.proposed",
+    "window/locked_transport.cjs",
+    "window/waiting-work.private.json",
+    "window/historical-population.private.json",
+    "window/source.config.private.json",
+    "window/render_sudoers.py",
+    "window/writer_coverage.py",
+    "window/absent-worker-return.patch",
+    "window/canonical-post-unfence-return.py",
+    "window/pinned_transport.py",
+    "window/execution-gates.private.json",
+    "window/baseline-contract.patch",
+    "window/prepare_baselines.py",
+    "window/credential_boundary.py",
+    "window/re7-converta-backup.before",
+    "window/deploy.crontab.window",
+    "window/preserved-frontend-config.private.json",
+    "window/prepare_policy.py",
+    "window/writer-consumers.private.json",
+    "window/initial.private.json",
+    "window/mode-names.private.json",
+    "window/cipher_consumers.py",
+    "window/path-bindings.private.json",
+    "window/database_consumers.py",
+    "window/locked_cli.py",
+    "return-partial/start-one.py",
+    "return-partial/ecosystem_contract.py",
+    "return-partial/close.cjs",
+    "return-partial/open.cjs",
+    "return-partial/restore-controls.py",
+    "return-partial/baseline.private.json",
+    "return-partial/stop-pair.py",
+    "return-partial/contain.py",
+    "return-partial/waiting-work-frozen.cjs",
+    "return-partial/waiting-work.cjs",
+    "return-partial/recover-partial.py",
+    "return-partial/privileged_output.py",
+    "return-partial/db_owner_set_observer.py",
+    "return-partial/validate.cjs",
+    "return-partial/unfence.py",
+    "return-partial/plan.private.json",
+    "return-partial/db_owner_set_gate.py",
+    "return/start-one.py",
+    "return/ecosystem_contract.py",
+    "return/close.cjs",
+    "return/open.cjs",
+    "return/restore-controls.py",
+    "return/baseline.private.json",
+    "return/stop-pair.py",
+    "return/contain.py",
+    "return/waiting-work-frozen.cjs",
+    "return/waiting-work.cjs",
+    "return/recover-partial.py",
+    "return/privileged_output.py",
+    "return/db_owner_set_observer.py",
+    "return/validate.cjs",
+    "return/unfence.py",
+    "return/plan.private.json",
+    "return/db_owner_set_gate.py",
+    "switch/start-one.py",
+    "switch/ecosystem_contract.py",
+    "switch/close.cjs",
+    "switch/open.cjs",
+    "switch/restore-controls.py",
+    "switch/return.ecosystem.config.cjs",
+    "switch/baseline.private.json",
+    "switch/stop-pair.py",
+    "switch/contain.py",
+    "switch/waiting-work-frozen.cjs",
+    "switch/waiting-work.cjs",
+    "switch/recover-partial.py",
+    "switch/privileged_output.py",
+    "switch/return.config.private.json",
+    "switch/db_owner_set_observer.py",
+    "switch/validate.cjs",
+    "switch/unfence.py",
+    "switch/plan.private.json",
+    "switch/db_owner_set_gate.py"
+  ],
+  "excludedFromNewCopy": [
+    "window/__pycache__/sequencer.cpython-312.pyc",
+    "window/__pycache__/locked_v4.cpython-312.pyc",
+    "window/__pycache__/baseline_contract.cpython-312.pyc",
+    "window/__pycache__/ecosystem_contract.cpython-312.pyc"
+  ],
+  "sourceGeneration": "incident-6683-v4-security-cipher-contract-v10-20261015T021500Z",
+  "candidateGeneration": "incident-6683-v4-security-cipher-restore-v13-20261015T100500Z",
+  "runtimeInventoryUnchanged": true,
+  "profileDeltaOnlyNamespace": true
+}

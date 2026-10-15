@@ -1,0 +1,41 @@
+{
+  "archiveBytes": 5924546,
+  "archiveSha256": "1e2d010b457fafe98e9ece0496843e00db4e943c5f99a0bd47e3d80dc3fe6e23",
+  "canonicalReadUtc": "2026-10-15T09:51:42.538344+00:00",
+  "containment": false,
+  "executionAuthorized": false,
+  "gatesPassed": [
+    "complete_checker",
+    "source_readability_scope_historical147",
+    "consumer_before_and_contained_contract_only",
+    "active_config_identity",
+    "saved_fallback600",
+    "guard_supervision_false_gates",
+    "frozen_sql_baselines_four_proof_bindings",
+    "capacity_wal_sql_inventory",
+    "proxy_canonical_observer",
+    "health_db"
+  ],
+  "generation": "incident-6683-v4-security-cipher-restore-v13-20261015T100500Z",
+  "installation": false,
+  "installedSourcePolicySha256": "b6a58431c989a36eebdfa9e443118a7e15fbe0229d102cd896f91d3d193f818d",
+  "installerSha256": "722ae81d542bb5c7a50d0820e9133d219c1b058a92f3891232ade3a213589d56",
+  "localDirectedCases": 170,
+  "minimumAvailableBytes": 18376777728,
+  "newRuntimeBuild": false,
+  "notExecuted": [
+    "root600_440_hash_reconfirmation",
+    "fresh_backup_RPO_renewal",
+    "installed_new_policy_inspect",
+    "fence_and_writer_exit",
+    "exclusive_DB_zero_after_exit",
+    "seal_current_CAS_SQL_commit",
+    "successor_start_and_postdeployment_validation"
+  ],
+  "policySha256": "15b91a2a41708a1ef0ee8a499fd51f892298561d0d73dbbfb05ceb3fe285899f",
+  "result": "EXACT_COMPLETE_PREPARATION_VALIDATED_FOR_REVIEW_NOT_INSTALLED_NOT_WINDOW_READY",
+  "reviewManifestSha256": "3b8f4c77e4d7454321da33f09857ad46345474309ef9534a2a55ad34cf135fcd",
+  "sqlMutation": false,
+  "walBytes": 83886080,
+  "windowManifestSha256": "0b1de8bdacc1b7cd1206c4d280936d5bce5da9f19ff4d72a6706c050bd4d39d0"
+}
