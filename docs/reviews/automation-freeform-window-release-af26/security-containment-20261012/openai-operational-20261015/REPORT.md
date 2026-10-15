@@ -1,5 +1,8 @@
 # OpenAI — pacote operacional preparado para decisão
 
+**Decisão de risco revisada — sem execução,15/10:** [matriz consolidada](../exposure-scope-20261015/CREDENTIAL_DECISIONS.md). Presença no contexto do provedor autorizado não comprova obrigação de rotação; trocas pendentes externas/state/verificação/Web Push podem ser adiadas mediante aceitação do owner. Nenhuma obrigação adicional demonstrada ou aceitação presumida. Gatilhos concretos de urgência e controles opcionais separados; não exigir ausência absoluta de acesso. P0/A/B e resets continuam suspensos; fases concluídas, pacotes, evidências e custódia local16PASS preservados. Sem novas buscas extensas, backups, mudanças de conta ou produção.
+
+
 **Estado corrente — SECURITY OPEN / P0/A/B E RESETS EXTERNOS SUSPENSOS,15/10:** [alcance sanitizado e matriz por credencial](../exposure-scope-20261015/REPORT.md).14 slots completos no registro local,9 no tool output truncado OpenAI; VAPID privado adicional local; Gemini recebeu antes um.env por didOpen com5 credenciais coincidentes, sem transmissão ao Google comprovada. Sem evidência de acesso não autorizado nem prova de ausência absoluta. NEWauth+NEWDB+NEWcipher já diferentes dos originais; não repetir fases concluídas. [Custódia v2 local](../receipt-custody-v2-20261015/REPORT.md):16 ensaios PASS com bytes originais, cadeia real sobre171 arquivos/quatro modos e relógio histórico/transferência simulados; não implantada. R0 DENY/ack/pacote originais intactos; sem backup novo, captura root ou ativação. Ambos crons/produção/guarda38/out.15 CLOSED preservados. Deifson; revisão15/10/próxima21/10, antecipar após mudanças.
 
 A suspensão acima prevalece sobre os roteiros e checkpoints anteriores abaixo.
