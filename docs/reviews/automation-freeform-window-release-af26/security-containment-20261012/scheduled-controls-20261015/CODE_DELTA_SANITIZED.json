@@ -1,0 +1,77 @@
+{
+  "status": "LOCAL_CODE_DELTA_NOT_OPERATIONAL_GENERATION",
+  "files": [
+    {
+      "path": "window/sequencer.py",
+      "sourceSha256": "5dbcc9d9202753ea90b319e8b80917ed196fd56e37e1342c9eefef01ad329463",
+      "newSha256": "4d01f4ef75569c13c4e4def84c942c60aa2f9855c4790fe760a0d23b1eb716be",
+      "sourceOrigin": "window/sequencer.py"
+    },
+    {
+      "path": "read-preparatory.py",
+      "sourceSha256": "7513c97da6bf808e86e164f411f4bff5deac32bd786fbd9fdf213845947343c0",
+      "newSha256": "2b3b1909e47bfe2ad14e5db5775655499ddb24a29ac0304936ef821d98a110c0",
+      "sourceOrigin": "read-preparatory.py"
+    },
+    {
+      "path": "conductor/admit_gates.py",
+      "sourceSha256": "30398ea0f6236d8b77793e123eef0ba07b697b0f8d3c2053dfc76a232634bbd5",
+      "newSha256": "308bbe87e392a8cf8878ee555f4b55bfe9bd8feec27b322a8decf6e923d5bcd8",
+      "sourceOrigin": "cipher-v13-execution-20261015/admit_gates.py"
+    },
+    {
+      "path": "switch/ops.py",
+      "sourceSha256": "f4ead533f69c586a4e5d298d984eae617711ab6ef09763e393b2860d40f10db8",
+      "newSha256": "5bf5c78e8f8e50d6ae0d37fd1fbc23f666f1b08c2b52778a8d8e930cf057d678",
+      "sourceOrigin": "switch/ops.py"
+    },
+    {
+      "path": "switch/delegated.py",
+      "sourceSha256": "2c7b9dfd35e3a159deb302e491392ac372f1dd31180df31691a519779b3fa2b7",
+      "newSha256": "88a94d47c512df3055f70e63e0f1e58c2286ab995ad2b4c1c9da15bbce601909",
+      "sourceOrigin": "switch/delegated.py"
+    },
+    {
+      "path": "return/ops.py",
+      "sourceSha256": "f4ead533f69c586a4e5d298d984eae617711ab6ef09763e393b2860d40f10db8",
+      "newSha256": "5bf5c78e8f8e50d6ae0d37fd1fbc23f666f1b08c2b52778a8d8e930cf057d678",
+      "sourceOrigin": "return/ops.py"
+    },
+    {
+      "path": "return/delegated.py",
+      "sourceSha256": "2c7b9dfd35e3a159deb302e491392ac372f1dd31180df31691a519779b3fa2b7",
+      "newSha256": "88a94d47c512df3055f70e63e0f1e58c2286ab995ad2b4c1c9da15bbce601909",
+      "sourceOrigin": "return/delegated.py"
+    },
+    {
+      "path": "return-partial/ops.py",
+      "sourceSha256": "f4ead533f69c586a4e5d298d984eae617711ab6ef09763e393b2860d40f10db8",
+      "newSha256": "5bf5c78e8f8e50d6ae0d37fd1fbc23f666f1b08c2b52778a8d8e930cf057d678",
+      "sourceOrigin": "return-partial/ops.py"
+    },
+    {
+      "path": "return-partial/delegated.py",
+      "sourceSha256": "2c7b9dfd35e3a159deb302e491392ac372f1dd31180df31691a519779b3fa2b7",
+      "newSha256": "88a94d47c512df3055f70e63e0f1e58c2286ab995ad2b4c1c9da15bbce601909",
+      "sourceOrigin": "return-partial/delegated.py"
+    },
+    {
+      "path": "return-before-commit/ops.py",
+      "sourceSha256": "f4ead533f69c586a4e5d298d984eae617711ab6ef09763e393b2860d40f10db8",
+      "newSha256": "5bf5c78e8f8e50d6ae0d37fd1fbc23f666f1b08c2b52778a8d8e930cf057d678",
+      "sourceOrigin": "return-before-commit/ops.py"
+    },
+    {
+      "path": "return-before-commit/delegated.py",
+      "sourceSha256": "2c7b9dfd35e3a159deb302e491392ac372f1dd31180df31691a519779b3fa2b7",
+      "newSha256": "88a94d47c512df3055f70e63e0f1e58c2286ab995ad2b4c1c9da15bbce601909",
+      "sourceOrigin": "return-before-commit/delegated.py"
+    },
+    {
+      "path": "window/scheduled_controls.py",
+      "sourceSha256": null,
+      "newSha256": "9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39",
+      "sourceOrigin": "window/scheduled_controls.py"
+    }
+  ]
+}

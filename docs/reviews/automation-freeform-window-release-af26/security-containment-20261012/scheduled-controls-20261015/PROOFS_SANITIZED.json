@@ -1,0 +1,477 @@
+{
+  "futureConsumers": {
+    "result": "REAL_SCHEDULED_CONTROL_CONSUMERS_PASS",
+    "caseCount": 46,
+    "cases": [
+      {
+        "consumer": "Sequencer.recover(prestop)",
+        "deploy": "contained",
+        "system": "contained",
+        "failure": null,
+        "accepted": true
+      },
+      {
+        "consumer": "Sequencer.recover(prestop)",
+        "deploy": "before",
+        "system": "before",
+        "failure": null,
+        "accepted": true
+      },
+      {
+        "consumer": "Sequencer.recover(prestop)",
+        "deploy": "contained",
+        "system": "before",
+        "failure": null,
+        "accepted": true
+      },
+      {
+        "consumer": "Sequencer.recover(prestop)",
+        "deploy": "before",
+        "system": "contained",
+        "failure": null,
+        "accepted": true
+      },
+      {
+        "consumer": "Sequencer.recover(prestop)",
+        "deploy": "unknown",
+        "system": "contained",
+        "failure": null,
+        "accepted": false
+      },
+      {
+        "consumer": "Sequencer.recover(prestop)",
+        "deploy": "contained",
+        "system": "unknown",
+        "failure": null,
+        "accepted": false
+      },
+      {
+        "consumer": "Sequencer.recover(prestop)",
+        "deploy": "contained",
+        "system": "contained",
+        "failure": "root",
+        "accepted": false
+      },
+      {
+        "consumer": "Sequencer.recover(prestop)",
+        "deploy": "contained",
+        "system": "contained",
+        "failure": "install_before",
+        "accepted": false
+      },
+      {
+        "consumer": "Sequencer.recover(prestop)",
+        "deploy": "contained",
+        "system": "contained",
+        "failure": "response_lost",
+        "accepted": false
+      },
+      {
+        "consumer": "Sequencer.recover(prestop)",
+        "deploy": "contained",
+        "system": "contained",
+        "failure": "readback",
+        "accepted": false
+      },
+      {
+        "consumer": "Sequencer.close_then_preflight",
+        "deploy": "contained",
+        "system": "before",
+        "accepted": false
+      },
+      {
+        "consumer": "Sequencer.close_then_preflight",
+        "deploy": "before",
+        "system": "contained",
+        "accepted": false
+      },
+      {
+        "consumer": "Sequencer.close_then_preflight",
+        "deploy": "unknown",
+        "system": "before",
+        "accepted": false
+      },
+      {
+        "consumer": "Sequencer.close_then_preflight",
+        "deploy": "before",
+        "system": "unknown",
+        "accepted": false
+      },
+      {
+        "consumer": "read-preparatory entrypoint",
+        "deploy": "before",
+        "system": "before",
+        "reachedUnchangedChecker": true
+      },
+      {
+        "consumer": "read-preparatory entrypoint",
+        "deploy": "contained",
+        "system": "before",
+        "reachedUnchangedChecker": false
+      },
+      {
+        "consumer": "read-preparatory entrypoint",
+        "deploy": "before",
+        "system": "contained",
+        "reachedUnchangedChecker": false
+      },
+      {
+        "consumer": "read-preparatory entrypoint",
+        "deploy": "unknown",
+        "system": "before",
+        "reachedUnchangedChecker": false
+      },
+      {
+        "consumer": "read-preparatory entrypoint",
+        "deploy": "before",
+        "system": "unknown",
+        "reachedUnchangedChecker": false
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "switch",
+        "deploy": "before",
+        "system": "before",
+        "accepted": true
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "switch",
+        "deploy": "contained",
+        "system": "before",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "switch",
+        "deploy": "before",
+        "system": "contained",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "switch",
+        "deploy": "contained",
+        "system": "before",
+        "accepted": true
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "switch",
+        "deploy": "contained",
+        "system": "contained",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "switch",
+        "deploy": "unknown",
+        "system": "before",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "return",
+        "deploy": "before",
+        "system": "before",
+        "accepted": true
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "return",
+        "deploy": "contained",
+        "system": "before",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "return",
+        "deploy": "before",
+        "system": "contained",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "return",
+        "deploy": "contained",
+        "system": "before",
+        "accepted": true
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "return",
+        "deploy": "contained",
+        "system": "contained",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "return",
+        "deploy": "unknown",
+        "system": "before",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "return-partial",
+        "deploy": "before",
+        "system": "before",
+        "accepted": true
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "return-partial",
+        "deploy": "contained",
+        "system": "before",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "return-partial",
+        "deploy": "before",
+        "system": "contained",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "return-partial",
+        "deploy": "contained",
+        "system": "before",
+        "accepted": true
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "return-partial",
+        "deploy": "contained",
+        "system": "contained",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "return-partial",
+        "deploy": "unknown",
+        "system": "before",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "return-before-commit",
+        "deploy": "before",
+        "system": "before",
+        "accepted": true
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "return-before-commit",
+        "deploy": "contained",
+        "system": "before",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.prepare",
+        "mode": "return-before-commit",
+        "deploy": "before",
+        "system": "contained",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "return-before-commit",
+        "deploy": "contained",
+        "system": "before",
+        "accepted": true
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "return-before-commit",
+        "deploy": "contained",
+        "system": "contained",
+        "accepted": false
+      },
+      {
+        "consumer": "DelegatedControls.finish",
+        "mode": "return-before-commit",
+        "deploy": "unknown",
+        "system": "before",
+        "accepted": false
+      },
+      {
+        "consumer": "ScheduledControls source",
+        "variant": "mode",
+        "accepted": false
+      },
+      {
+        "consumer": "ScheduledControls source",
+        "variant": "absent",
+        "accepted": false
+      },
+      {
+        "consumer": "ScheduledControls source",
+        "variant": "symlink",
+        "accepted": false
+      }
+    ],
+    "completeCandidate": true,
+    "installedHelper8deAbortBranchExecutedLocally": true,
+    "productionEffects": false
+  },
+  "restrictedDriver": {
+    "result": "RESTRICTED_RESTORE_DRIVER_LOCAL_PASS",
+    "caseCount": 28,
+    "cases": [
+      {
+        "variant": "exact gate contract five_false",
+        "accepted": true,
+        "installCalls": 0
+      },
+      {
+        "variant": "exact gate contract empty",
+        "accepted": false,
+        "installCalls": 0
+      },
+      {
+        "variant": "exact gate contract missing",
+        "accepted": false,
+        "installCalls": 0
+      },
+      {
+        "variant": "exact gate contract extra",
+        "accepted": false,
+        "installCalls": 0
+      },
+      {
+        "variant": "exact gate contract true",
+        "accepted": false,
+        "installCalls": 0
+      },
+      {
+        "variant": "exact gate contract string",
+        "accepted": false,
+        "installCalls": 0
+      },
+      {
+        "variant": "exact gate contract list",
+        "accepted": false,
+        "installCalls": 0
+      },
+      {
+        "variant": "success",
+        "accepted": true,
+        "installCalls": 1,
+        "automaticRetry": false
+      },
+      {
+        "variant": "CAS",
+        "accepted": false,
+        "installCalls": 0,
+        "automaticRetry": false
+      },
+      {
+        "variant": "precondition",
+        "accepted": false,
+        "installCalls": 0,
+        "automaticRetry": false
+      },
+      {
+        "variant": "before_install",
+        "accepted": false,
+        "installCalls": 1,
+        "automaticRetry": false
+      },
+      {
+        "variant": "response_lost",
+        "accepted": false,
+        "installCalls": 1,
+        "automaticRetry": false
+      },
+      {
+        "variant": "partial",
+        "accepted": false,
+        "installCalls": 1,
+        "automaticRetry": false
+      },
+      {
+        "variant": "postcondition",
+        "accepted": false,
+        "installCalls": 1,
+        "automaticRetry": false
+      },
+      {
+        "variant": "check",
+        "installCalls": 0,
+        "accepted": true
+      },
+      {
+        "variant": "extra_line",
+        "accepted": false
+      },
+      {
+        "variant": "wrong_schedule",
+        "accepted": false
+      },
+      {
+        "variant": "changed_command",
+        "accepted": false
+      },
+      {
+        "variant": "missing_entry",
+        "accepted": false
+      },
+      {
+        "variant": "exact CLI --check",
+        "installCalls": 0,
+        "accepted": true
+      },
+      {
+        "variant": "exact CLI --owner-authorized-restore",
+        "installCalls": 1,
+        "accepted": true
+      },
+      {
+        "variant": "exact CLI --inspect",
+        "installCalls": 0,
+        "accepted": true
+      },
+      {
+        "variant": "CLI negative hash",
+        "accepted": false,
+        "installCalls": 0
+      },
+      {
+        "variant": "CLI negative plan_mode",
+        "accepted": false,
+        "installCalls": 0
+      },
+      {
+        "variant": "CLI negative owner",
+        "accepted": false,
+        "installCalls": 0
+      },
+      {
+        "variant": "CLI negative root_executor",
+        "accepted": false,
+        "installCalls": 0
+      },
+      {
+        "variant": "CLI negative output_mode",
+        "accepted": false,
+        "installCalls": 0
+      },
+      {
+        "variant": "CLI negative existing_output",
+        "accepted": false,
+        "installCalls": 0
+      }
+    ],
+    "canonicalEntries": 6,
+    "completeOriginalLines": 29,
+    "productionEffects": false
+  },
+  "totalCases": 74,
+  "notExercised": [
+    "production crontab install",
+    "production root control restore",
+    "cipher window/SQL/start",
+    "unchanged full crypto proof suite not repeated"
+  ]
+}

@@ -1,0 +1,120 @@
+RECUPERAÇÃO RESTRITA DE CRONTAB DEPLOY — PARA DECISÃO, NÃO APLICADA
+
+Não é A/B da v13; não executar os instaladores nem o sequenciador de cifragem.
+Aplicação abaixo depende de revisão/decisão expressa. Executar como deploy,
+não root; não exige sudo nem troca de política/helper. Nenhum job será chamado.
+
+Pacote já transferido INATIVO, com CHECK READ ONLY PASS às09:03:19Fortaleza15/10:
+/opt/re7online/backups/converta-persistent/preparations/scheduled-controls-recovery-20261015T121000Z
+
+Driver: ac23f0ebbc00cba6b0a9f2935de0661b07f6d4f626241020c1c306ecde32e12e
+Módulo: 9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39
+Input: 694d3fa6aba98d80e062f9fc4bb27f8c7ebd53b53a95fef054f246a52a84bc7d
+FILES.sha256: 53ce7684c164109cf05be4dd39d8875fc7e65977f368e23f2865bef626c509f9
+
+1. CONFERÊNCIA DAS PROVAS EXISTENTES — NÃO REPETE --check
+
+set -euo pipefail
+umask 077
+R=/opt/re7online/backups/converta-persistent/preparations/scheduled-controls-recovery-20261015T121000Z
+test "$(sha256sum "$R/FILES.sha256" | cut -d' ' -f1)" = 53ce7684c164109cf05be4dd39d8875fc7e65977f368e23f2865bef626c509f9
+(cd "$R" && sha256sum -c FILES.sha256)
+python3 -B - "$R/check-private/check.receipt.private.json" <<'CHECK'
+import json,os,stat,sys
+from pathlib import Path
+p=Path(sys.argv[1]);s=p.lstat()
+assert stat.S_ISREG(s.st_mode)and not p.is_symlink()and s.st_uid==os.getuid()and stat.S_IMODE(s.st_mode)==0o600
+v=json.loads(p.read_text())
+assert v['result']=='RESTRICTED_CRON_CHECK_PASS_NO_APPLY'and v['entries']==6
+assert v['planSha256']=='694d3fa6aba98d80e062f9fc4bb27f8c7ebd53b53a95fef054f246a52a84bc7d'
+print('EXISTING_RESTRICTED_READ_ONLY_CHECK_VERIFIED')
+CHECK
+
+2. APLICAÇÃO ÚNICA + INSPEÇÃO C, SOMENTE APÓS DECISÃO
+
+O driver faz conferências FRESCAS sob lock canônico antes do intent:
+pacote v13 intacto/reviewa7,15b phaseNone/fontes vivas, NEWauth+NEWDB/perfis,
+processos/ticks, guard38, barreira ausente, dumps600, supervisão,16 fontes
+(inclui.env intocado), cron sistema before e crontab deploy window literal.
+Instala exclusivamente before, diferença exata das seis linhas originalmente ativas.
+Preserva as duas linhas duplicadas03:15; não muda.env nem políticas de retenção.
+Recusa próximo aos minutos críticos. Não manter outra sessão editando crontab.
+
+Em DENY/parcial/timeout: não repetir comando de aplicação, não apagar intent,
+não restaurar manualmente e não executar jobs. A inspeção deve ocorrer mesmo assim.
+
+set -euo pipefail
+umask 077
+R=/opt/re7online/backups/converta-persistent/preparations/scheduled-controls-recovery-20261015T121000Z
+test "$(sha256sum "$R/FILES.sha256" | cut -d' ' -f1)" = 53ce7684c164109cf05be4dd39d8875fc7e65977f368e23f2865bef626c509f9
+(cd "$R" && sha256sum -c FILES.sha256)
+test ! -e "$R/apply-private" && test ! -L "$R/apply-private"
+test ! -e "$R/inspection-private" && test ! -L "$R/inspection-private"
+test ! -e "$R/owner-apply.stdout.private" && test ! -L "$R/owner-apply.stdout.private"
+test ! -e "$R/owner-apply.stderr.private" && test ! -L "$R/owner-apply.stderr.private"
+test ! -e "$R/owner-inspection.stdout.private" && test ! -L "$R/owner-inspection.stdout.private"
+test ! -e "$R/owner-inspection.stderr.private" && test ! -L "$R/owner-inspection.stderr.private"
+set -o noclobber
+set +e
+timeout 180 python3 -B "$R/restore_deploy_cron.py" --plan "$R/recovery-plan.private.json" --plan-sha256 694d3fa6aba98d80e062f9fc4bb27f8c7ebd53b53a95fef054f246a52a84bc7d --evidence-dir "$R/apply-private" --owner-authorized-restore > "$R/owner-apply.stdout.private" 2> "$R/owner-apply.stderr.private"
+RESTORE_EXIT=$?
+printf 'RESTORE_EXIT=%s\n' "$RESTORE_EXIT"
+printf '%s\n' "$RESTORE_EXIT" > "$R/owner-apply.exit.private.txt"
+timeout 180 python3 -B "$R/restore_deploy_cron.py" --plan "$R/recovery-plan.private.json" --plan-sha256 694d3fa6aba98d80e062f9fc4bb27f8c7ebd53b53a95fef054f246a52a84bc7d --evidence-dir "$R/inspection-private" --inspect > "$R/owner-inspection.stdout.private" 2> "$R/owner-inspection.stderr.private"
+INSPECTION_EXIT=$?
+printf 'INSPECTION_EXIT=%s\n' "$INSPECTION_EXIT"
+cat "$R/owner-apply.stdout.private" "$R/owner-inspection.stdout.private"
+set -e
+
+Sucesso exige RESTORE_EXIT=0, INSPECTION_EXIT=0, recibo exato
+RESTRICTED_DEPLOY_CRON_RESTORED (planHash publicado,restoredEntries6,checks)
+e inspeção classificação RESTORED. Sem recibo não declarar conclusão pelo texto
+do utilitário/UI. Resposta perdida pode deixar before instalado mas sem certificado:
+classificar e apresentar evidência, sem nova chamada crontab automática.
+
+3. C ISOLADO — APENAS SE NÃO FOI ALCANÇADO PELO BLOCO ACIMA
+
+Nunca repetir C se inspection-private já existe; preservar e analisar seus arquivos.
+Não contém restore/apply e não executa A/B v13.
+
+set -euo pipefail
+umask 077
+R=/opt/re7online/backups/converta-persistent/preparations/scheduled-controls-recovery-20261015T121000Z
+test ! -e "$R/inspection-private" && test ! -L "$R/inspection-private"
+test "$(sha256sum "$R/FILES.sha256" | cut -d' ' -f1)" = 53ce7684c164109cf05be4dd39d8875fc7e65977f368e23f2865bef626c509f9
+(cd "$R" && sha256sum -c FILES.sha256)
+python3 -B "$R/restore_deploy_cron.py" --plan "$R/recovery-plan.private.json" --plan-sha256 694d3fa6aba98d80e062f9fc4bb27f8c7ebd53b53a95fef054f246a52a84bc7d --evidence-dir "$R/inspection-private" --inspect
+
+4. EXPORTAÇÃO PRIVADA POSTERIOR NO COMPUTADOR DO OWNER
+
+Não enviar esses arquivos ao chat. Não sobrescrever custódia inicial/check.
+Copiar o diretório inteiro inclui intent/recibos/diagnósticos existentes em qualquer
+resultado e preserva as negativas. Comando no computador do owner, não na VPS:
+
+set -euo pipefail
+umask 077
+D=/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/scheduled-controls-recovery-20261015/after-application
+test ! -e "$D" && test ! -L "$D"
+mkdir -m 700 "$D"
+scp -p -r deploy@admin.re7online.com:/opt/re7online/backups/converta-persistent/preparations/scheduled-controls-recovery-20261015T121000Z "$D/"
+python3 -B - "$D" <<'INDEX'
+import hashlib,json,os,sys
+from pathlib import Path
+p=Path(sys.argv[1]);rows=[]
+for f in p.rglob('*'):
+ assert not f.is_symlink()
+ if f.is_dir():f.chmod(0o700)
+ elif f.is_file():
+  f.chmod(0o600);rows.append({'path':str(f.relative_to(p)),'bytes':f.stat().st_size,'sha256':hashlib.sha256(f.read_bytes()).hexdigest()})
+with(p/'index.private.json').open('x')as f:json.dump({'files':rows,'source':'VPS existing private evidence','automaticRetry':False},f,indent=2)
+os.chmod(p/'index.private.json',0o600)
+print('PRIVATE_POST_OPERATION_CUSTODY_INDEXED')
+INDEX
+
+VALIDAÇÃO FUNCIONAL / LIMITES
+Após certificado: sessão/console/Inbox/CRM/Campanhas somente leitura, out.15
+Cancelada6 entregas/5 não enviadas, sem enviar, assumir, retomar ou cancelar outra vez.
+Não provocar execução dos jobs: conferir próximos registros naturais separadamente.
+Retenção Prisma permanece com credencial.env obsoleta e falha conhecida; a restauração
+do agendamento não prova saúde desse consumidor. Segurança externa/cifragem OPEN.
+Não reexecutar backup, alterar.env, PM2, políticas, tenants ou guarda para este lote.

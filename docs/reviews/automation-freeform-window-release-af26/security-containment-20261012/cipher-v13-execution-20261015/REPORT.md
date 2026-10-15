@@ -1,5 +1,7 @@
 # Janela v13 autorizada — 15/10/2026
 
+**Continuidade separada:** [recuperação restrita de cron preparada/READ ONLY PASS; não aplicada](../scheduled-controls-20261015/REPORT.md). Mantém esta recusa e a v13 intocadas; não executar A/B. Correção preventiva local e cron Prisma com.env obsoleto discriminados no relatório corrente.
+
 **DENY ANTES DA CONTENÇÃO / POLÍTICA INSTALADA / B NÃO EXECUTADO / CIPHER NOT DEPLOYED.** Owner autorizou política15b91a/instalador722ae8 e declarou disponibilidade agora, sem uso humano. NEWauth+NEWDB, frontend, out.15 CLOSED e guarda38 preservados. Qualquer recusa anterior à contenção interrompe a tentativa; nenhuma adaptação de campo/input para PASS. v10 consumida não é usada; sem nova extração da v13.
 
 

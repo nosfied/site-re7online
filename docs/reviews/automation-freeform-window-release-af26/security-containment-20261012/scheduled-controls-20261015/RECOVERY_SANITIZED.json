@@ -1,0 +1,99 @@
+{
+  "state": "RESTRICTED_RECOVERY_STAGED_READ_ONLY_PASS_NOT_APPLIED",
+  "generation": "scheduled-controls-recovery-20261015T121000Z",
+  "capsule": {
+    "result": "RESTRICTED_CRON_CAPSULE_LOCAL_FOR_REVIEW",
+    "planSha256": "694d3fa6aba98d80e062f9fc4bb27f8c7ebd53b53a95fef054f246a52a84bc7d",
+    "files": {
+      "recovery-plan.private.json": "694d3fa6aba98d80e062f9fc4bb27f8c7ebd53b53a95fef054f246a52a84bc7d",
+      "restore_deploy_cron.py": "ac23f0ebbc00cba6b0a9f2935de0661b07f6d4f626241020c1c306ecde32e12e",
+      "scheduled_controls.py": "9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39"
+    },
+    "manifestSha256": "53ce7684c164109cf05be4dd39d8875fc7e65977f368e23f2865bef626c509f9",
+    "productionEffects": false,
+    "previousReadOnlyCapsulePreserved": "scheduled-controls-recovery-20261015T115500Z"
+  },
+  "checkObservedUtc": "2026-10-15T12:03:19.478343+00:00",
+  "checkResult": "RESTRICTED_CRON_CHECK_PASS_NO_APPLY",
+  "currentControlsChecks": {
+    "NEWauthNEWDBSealedProfilesUnchanged": true,
+    "gatesFalse": true,
+    "guard38Closed": true,
+    "healthDb": "ok",
+    "protectedIdentitiesMatch": true,
+    "savedFallback600": true,
+    "systemCronBefore": true
+  },
+  "captureUtc": "2026-10-15T10:35:29.896247+00:00",
+  "timezone": "Etc/UTC",
+  "disabledEntries": 6,
+  "distinctDueMinutesUTC": [
+    "03:00",
+    "03:15",
+    "03:20",
+    "03:30",
+    "04:00"
+  ],
+  "missedScheduledOccurrencesSinceV10ContainmentAtObservation": 0,
+  "affectedPeriodStartUtc": "2026-10-15T08:53:24.239071+00:00",
+  "nextDueUtc": "2026-10-16T03:00:00+00:00",
+  "nextDueFortaleza": "2026-10-16T00:00:00-03:00",
+  "dotenvVariableComparison": [
+    {
+      "name": "ADMIN_TOKEN",
+      "matchesCurrent": false
+    },
+    {
+      "name": "APP_AUTH_SECRET",
+      "matchesCurrent": false
+    },
+    {
+      "name": "WHATSAPP_WEB_WORKER_CONTROL_TOKEN",
+      "matchesCurrent": false
+    }
+  ],
+  "databaseDotenv": {
+    "sameEndpoint": true,
+    "sameUser": true,
+    "samePassword": false
+  },
+  "noCredentialValueOutput": true,
+  "journalCoverageLimited": true,
+  "sourceFiles": [
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/package.json",
+      "sha256": "d968890f27879de853c618523f93e62c9ed73f0e3d7c6a7b62267e853af3791e"
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/backup-data.sh",
+      "sha256": "32870c50972a68a81c03ff0ec6b6b7a11e79606931e0e6474615c721f5a5531f"
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/cleanup-local-media.mjs",
+      "sha256": "bd6c1ec6e018deb677447456411b1008c4a3bf9646e8d9d929d8abc930432bc9"
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/run-retention.ts",
+      "sha256": "ce40dd0131d77e57b56601897fb2707656f1872ec80e6463811b0e03c2721754"
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/src/privacy/privacyRetentionService.ts",
+      "sha256": "33d36d97e189442baa65a357544ef274d6ac31ce5cdf5a7b0ccd21cb72c14740"
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/backup-postgres.sh",
+      "sha256": "795d9906bbde658710e024bbe84afa9a30bd392ef8f5235b7580fa85ac2d5733"
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/backup-postgres-with-alert.sh",
+      "sha256": "eb4c3b3e082f9d0bc4bec02dce472a3cf3a9a0ed72b46af3433c1373715afac9"
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/postgres-backup-alert.ts",
+      "sha256": "32cfc64e9202662ecc629ed5965d7a6456315c629a104ef8ed67c1eedd7c647d"
+    }
+  ],
+  "productionMutation": false,
+  "capsuleBytes": 26786,
+  "capsuleAllocatedBytes": 40960
+}
