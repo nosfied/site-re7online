@@ -1,5 +1,8 @@
 # Contenção externa — plano concreto para revisão,15/10/2026
 
+**Estado corrente — OpenAI,15/10:** [emissão privada e perfis restritos para revisão](../openai-restricted-preparation-20261015/REPORT.md). Metadados completos; SAME_ID_RENAMED por comparação privada dos IDs, data sem horário inventado; fonte/retornos concretos locais validados, somente API.OPENAI_API_KEY muda.15 provas PASS; chave distinta, retorno pós-ativação com substituta; NEWauth+NEWDB+NEWcipher/worker/frontend/crons/out.15 CLOSED/guarda38 preservados. Sem autenticação no provedor/ativação/revogação/restart. Não confundir perfis com geração V4 pronta: faltam limites/modelos e composição operacional nova/quatro modos/frescor/revisão própria. Registro antigo ainda não vinculado, revogação separada. Segurança externa/risco histórico OPEN. Deifson; última revisão15/10/próxima21/10, antecipar após mudança.
+
+
 **PREPARATION ONLY / NOT EXECUTED / NOT WINDOW READY.** Base2c9a8dd3559258549cf32727fc207643eb946921: auth/banco/decoder+cifragem/console/out.15 concluídos. Nenhuma nova captura produtiva, chamada autenticada a provider, criação/troca/revogação, build, restart, instalação ou SQL nesta preparação. [Proveniência/inventário reutilizado](INVENTORY_REUSED_SANITIZED.json). [Ações do owner, uma por vez](OWNER_SEQUENCE.md).
 
 ## Escopo e fonte efetiva

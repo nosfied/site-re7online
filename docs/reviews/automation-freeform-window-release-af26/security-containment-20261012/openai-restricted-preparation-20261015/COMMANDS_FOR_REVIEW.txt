@@ -1,0 +1,12 @@
+ESCOPO: local READ ONLY. Não é A/B de produção. Nenhum comando de ativação/revogação autorizado ou publicado.
+
+# ThinkPad: conferir os perfis já preparados, sem regenerar ou sobrescrever
+(
+R=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/openai-restricted-preparation-20261015
+python3 -B "$R/verify_profiles.py" --profiles /home/deifson-oliveira/DEIFSON/re7-private-retention-custody/openai-restricted-preparation-20261015/profiles
+)
+Esperado PRIVATE_PROFILES_VERIFIED_NOT_ACTIVATED. Em DENY não sobrescrever ou preparar outra fonte para PASS.
+
+record_issuance_v2.py e prepare_restricted.py já foram consumidos nesta preparação local; não repetir coleta/gravação nem recriar chave. Seus códigos/testes são publicados para revisão. Hashes de código em PUBLIC_FILES_SHA256.json. Credenciais/IDs e índices privados não devem ser impressos.
+
+Instalação, admissão, ativação, validação autenticada e recuperação exigem pacote operacional novo e decisão futura. Não reutilizar A/B/C/D da cifragem consumida. Não há comando de revogação antiga nesta preparação.

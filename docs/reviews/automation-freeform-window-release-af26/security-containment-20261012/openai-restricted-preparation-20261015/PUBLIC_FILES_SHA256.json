@@ -1,0 +1,11 @@
+{
+  "COMMANDS_FOR_REVIEW.txt": "c968ab9df99f31e8066b97869ab69db6d6b985fa7409a914134c4d9cdf5f4e16",
+  "REPORT.md": "8a42153b27c282b0010ba88725f5187ea14e97453433377c69b86286e10f66de",
+  "prepare_restricted.py": "5f68897a658dae6e88662573c7081ae55cbc49d2473087928c0041dd78d38a7b",
+  "record_issuance.py": "af7a9d408994b8473fa9ce21a839bb4886ef6abebc5caf74140f642666924264",
+  "record_issuance_v2.py": "e6bcce1d6f389e322c63f3d6873430bd39e23af1aeb515e9c1dc41ca15da1b2f",
+  "test_prepare_restricted.py": "194eed1f1c3d68e9a123cb19c9cdac3ad756b9a4c66a659d2704e028ffd094a6",
+  "test_record_issuance.py": "d99395ab3f811bc7db043259590b2ccea22cdf73536d773837704ac7c6c20dca",
+  "test_record_issuance_v2.py": "92d5f37bfbf91bb68215ab30510c590df81154c7d5ce2d5f419bb6b3e5e9a81f",
+  "verify_profiles.py": "31f4bb0d1600e883288446ac9b62b8d7adfca7edecdc79d629f44e48460c8677"
+}

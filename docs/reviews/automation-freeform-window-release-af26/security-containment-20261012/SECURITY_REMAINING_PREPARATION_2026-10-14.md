@@ -1,5 +1,8 @@
 # Segurança externa/cifragem — preparação retomada após retirada parcial
 
+**Estado corrente — OpenAI,15/10:** [emissão privada e perfis restritos para revisão](openai-restricted-preparation-20261015/REPORT.md). Metadados completos; SAME_ID_RENAMED por comparação privada dos IDs, data sem horário inventado; fonte/retornos concretos locais validados, somente API.OPENAI_API_KEY muda.15 provas PASS; chave distinta, retorno pós-ativação com substituta; NEWauth+NEWDB+NEWcipher/worker/frontend/crons/out.15 CLOSED/guarda38 preservados. Sem autenticação no provedor/ativação/revogação/restart. Não confundir perfis com geração V4 pronta: faltam limites/modelos e composição operacional nova/quatro modos/frescor/revisão própria. Registro antigo ainda não vinculado, revogação separada. Segurança externa/risco histórico OPEN. Deifson; última revisão15/10/próxima21/10, antecipar após mudança.
+
+
 **Estado corrente15/10 — contenção externa preparada para revisão:** [sequência por provedor, responsabilidades do owner e gates](external-containment-20261015/PLAN_FOR_REVIEW.md). Auth/banco/decoder+cifragem v14/console/out.15 concluídos. Nenhuma nova rotação ou janela autorizada. As instruções antigas abaixo são proveniência; não reabrir fases concluídas, exigir recibo OpenAI inexistente ou tratar cifragem v14 como pendente.
 
 **Atualização15/10 — fase decoder/cifragem v14 concluída/consumida:** [resultado e riscos residuais](cipher-v14-execution-20261015/REPORT.md). Não repetir janela ou tratar a troca ativa como pendente. Permanecem contenção externa, risco dos ciphertexts históricos, Telegram opaco futuro e propostas.env seletivas não aplicadas. Prisma local não implantado. NEWauth+NEWDB+NEWcipher ativos, guarda38fechada/out15CLOSED.
