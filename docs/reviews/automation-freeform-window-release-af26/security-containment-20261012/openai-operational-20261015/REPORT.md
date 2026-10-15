@@ -1,5 +1,7 @@
 # OpenAI — pacote operacional preparado para decisão
 
+**Atualização R0 de15/10: DENY antes da atualização dos bindings.** [Resultado, causa e hashes efetivos](R0_RESULT_2026-10-15.md). Backup/custódia/restore retido conferidos;171 arquivos inalterados. Sem novo review ou autorização de P0/A/B. O estado abaixo é o checkpoint anterior à tentativa R0.
+
 Estado: **OPERATIONAL PACKAGE PREPARED / INACTIVE STAGING READ ONLY PASS / NOT INSTALLED / NOT ACTIVATED**. Não é WINDOW READY com provas vencidas. Geração `incident-6683-v4-security-openai-v4-20261015T203000Z`. Nenhuma autorização de janela decorre deste relatório. [Comandos integrais](COMMANDS_FOR_REVIEW.txt), [provas sanitizadas](PROOFS_SANITIZED.json) e [matriz dos consumidores](MATRIX.md).
 
 ## Escopo e evidência

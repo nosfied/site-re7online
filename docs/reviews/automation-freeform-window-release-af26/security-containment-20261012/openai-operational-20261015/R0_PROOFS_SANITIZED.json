@@ -1,0 +1,35 @@
+{
+  "ackMatchesOriginalReceipt": false,
+  "ackMatchesReserializedLocalReceipt": true,
+  "backup": {
+    "backupLockHeld": true,
+    "catalogObjects": 614,
+    "dumpBytes": 42483312,
+    "dumpSha256": "9bcbf2fd50da0d2f7a1d3ed3af69b8568d1d71550e1069b1b1f34fca6c9c7b8f",
+    "durationSeconds": 12.41822848469019,
+    "finishedUtc": "2026-10-15T20:38:14.363314+00:00",
+    "schemaDigest": "142a2b61fd5a366bb770bd4274d6cdf7f0850808d26f4e03b7cdf4ffe7acd71d",
+    "startedUtc": "2026-10-15T20:38:01.945091+00:00"
+  },
+  "changedOriginalFiles": [],
+  "dumpShaOnHostMatches": true,
+  "executionAuthorized": "false",
+  "executionIntentExists": false,
+  "gates": {
+    "artifactsVerified": false,
+    "discrepanciesResolved": false,
+    "ownerAuthorized": false,
+    "preflightReviewed": false,
+    "restoreVerified": false
+  },
+  "noAutomaticRetry": true,
+  "observedUtc": "2026-10-15T20:50:10.353464+00:00",
+  "originalFilesCompared": 171,
+  "originalReceiptSha256": "27c8cbcb5a067378f293ceffd303a0ef37501b232dc56e4e176c1de62625fe3b",
+  "receiptSemanticallyEqual": true,
+  "remoteReceiptMatchesFetched": true,
+  "renewalDirectoryExists": false,
+  "result": "R0_DENY_CUSTODY_RECEIPT_BYTE_BINDING",
+  "reviewSha256": "e01d05c9d314d52de1b08bdfa65dc56d8ff5aa0757f51d053d87aa2ce8ceb366",
+  "rootCaptureExists": false
+}
