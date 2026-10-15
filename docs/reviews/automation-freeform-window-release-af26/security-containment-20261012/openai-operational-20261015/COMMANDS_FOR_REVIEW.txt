@@ -1,0 +1,168 @@
+PARA DECISÃO / NÃO EXECUTAR POR ESTA PUBLICAÇÃO.
+Geração incident-6683-v4-security-openai-v4-20261015T203000Z.
+Staging de171 arquivos JÁ extraído e conferido na VPS. Não repetir extração.
+Só a variável OPENAI_API_KEY da API muda. Sem revogação, .env, Prisma, SQL mutável, mensagem, abertura da guarda, restart de PG/frontend.
+
+BYTES FIXOS PARA REVISÃO
+arquivo privado 0e87d1e538fa9b351cc1da66d1f6e75e86f7d01b8c588a407fccbc512e7fa5ae
+índice privado 1e1a601b4f6212b24351bb89ad70ea7ca3bdfba763d1a5db2e02a7cc7ee626a6
+review atual e01d05c9d314d52de1b08bdfa65dc56d8ff5aa0757f51d053d87aa2ce8ceb366
+política proposta e2695c3dbfc318d56966cd5037f6bb036070f43bc9e355d4dacca088aa8925a4
+instalador b12603250d6d4acc5dc1b50fe94a1204631c7bbd4c6692b7ee8a47f4caa047ad
+fonte root fa113e5259850f7b23188b81cd5279c2a95c318154a3b0737da7251b1064f251
+helper8de/regra62b preservados.
+
+0. CONFERÊNCIA ATUAL READ ONLY, já concluída; repetir só por frescor/alteração.
+(
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = e01d05c9d314d52de1b08bdfa65dc56d8ff5aa0757f51d053d87aa2ce8ceb366
+python3 -B "$P/verify-package.py"
+python3 -B "$P/window/check_current.py" "$P" before
+)
+Negativa interrompe; não adaptar perfis ou bindings. Este bloco não é autorização P0/A/B.
+
+R0. RENOVAÇÃO PREPARATÓRIA FUTURA: só quando houver horário efetivo/decisão, sem gastar RPO aguardando revisão.
+Backup atual histórico expirado; root direto ainda não capturado. Código/política/instalador finais permanecem fixos. Provas novas alteram review: republicar novo hash antes de A, preservando originais.
+
+No ThinkPad, transferir apenas as duas ferramentas públicas de revisão, uma vez:
+(
+set -euo pipefail
+R=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/openai-operational-20261015
+test "$(sha256sum "$R/capture_backup.py" | cut -d' ' -f1)" = 23ad960e7646a471533c3f3b7752133d43044fb4f557abd5f1ac3aca3eafa0c3
+ssh -o BatchMode=yes deploy@admin.re7online.com 'umask 077; test ! -e /dev/shm/re7-openai-reviewed-tools-20261015 && mkdir -m 700 /dev/shm/re7-openai-reviewed-tools-20261015'
+scp -q "$R/capture_backup.py" deploy@admin.re7online.com:/dev/shm/re7-openai-reviewed-tools-20261015/
+)
+Na VPS como deploy, sem sudo e sem executar jobs históricos:
+(
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z
+I=/dev/shm/re7-openai-window-input-20261015
+T=/dev/shm/re7-openai-reviewed-tools-20261015
+test ! -e "$I" && test ! -L "$I"
+mkdir -m 700 "$I"
+test "$(sha256sum "$T/capture_backup.py" | cut -d' ' -f1)" = 23ad960e7646a471533c3f3b7752133d43044fb4f557abd5f1ac3aca3eafa0c3
+timeout 180 python3 -B "$T/capture_backup.py" "$P" > "$I/backup-result.private.json" 2> "$I/backup.stderr.private"
+)
+Falha/timeout: preservar dump parcial/recibos, sem repetição automática e sem A.
+
+No ThinkPad, custódia/íntegra/catálogo e laboratório retido/parado sem novo restore:
+(
+set -euo pipefail
+umask 077
+R=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/openai-operational-20261015
+D=/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/openai-operational-20261015
+I=/dev/shm/re7-openai-window-input-20261015
+test ! -e "$D/backup-result.new.private.json"
+scp -q deploy@admin.re7online.com:"$I/backup-result.private.json" "$D/backup-result.new.private.json"
+test "$(sha256sum "$R/custody_backup_local.py" | cut -d' ' -f1)" = cbd0d1017a345d2f466d73e789dc430caf3999a3a8341766dc15611bddc924d4
+python3 -B "$R/custody_backup_local.py" --receipt "$D/backup-result.new.private.json" --out "$D/rpo-window-20261015"
+scp -q "$D/rpo-window-20261015/custody-ack.private.json" "$D/rpo-window-20261015/lab-current.private.json" deploy@admin.re7online.com:"$I/"
+)
+Na VPS, atualizar SOMENTE as provas da geração NOVA; nunca executar apply da v13/v14 consumida:
+(
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z
+I=/dev/shm/re7-openai-window-input-20261015
+J=/opt/re7online/backups/converta-persistent/preparations/openai-rpo-renewal-v4-20261015
+python3 -B "$P/refresh_proofs.py" "$P" "$I/backup-result.private.json" "$I/custody-ack.private.json" "$J" e01d05c9d314d52de1b08bdfa65dc56d8ff5aa0757f51d053d87aa2ce8ceb366
+python3 -B "$P/verify-package.py"
+sha256sum "$P/preparation-review.sha256" "$P/install-api-window-policy.sh" "$P/window/privileged-policy.private.json"
+)
+PARAR para publicar/conferir novo review SHA. Não preencher esse hash automaticamente a partir do arquivo e tratá-lo como aprovação. Política/instalador devem continuare269/b126. Nenhum temporaryDatabaseRemoved=true.
+
+P0. VALIDAÇÃO FUNCIONAL FUTURA, explicitamente autorizada, antes de instalação/contenção.
+Duas chamadas sintéticas faturáveis, SDK atual, nenhum envio WhatsApp, sem dados de cliente. HTTP de modelos/health não satisfaz.
+(
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z
+: "${REVIEWED_RENEWED_MANIFEST_SHA256:?Usar somente o hash renovado publicado e revisado antes da janela}"
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = "$REVIEWED_RENEWED_MANIFEST_SHA256"
+python3 -B "$P/window/validate_provider.py" "$P" before --owner-authorized-synthetic-provider-validation
+)
+Exigir OPENAI_FUNCTIONAL_ENDPOINTS_PASS dos dois métodos. Recusa/timeout: não repetir P0 nem A/B; inspecionar privadamente. Não alterar modelos/permissões/limites existentes.
+
+A. SOMENTE com autorização FUTURA do owner para instalação, chamadas e interrupção, disponibilidade sudo e requisitos atuais.
+Este bloco captura root por último; fonte precisa ter menos de600s na admissão/B. RPO<3600s pela captura real. Não repetir A.
+(
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z
+I=/dev/shm/re7-openai-window-input-20261015
+: "${REVIEWED_RENEWED_MANIFEST_SHA256:?Hash renovado revisado obrigatório}"
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = "$REVIEWED_RENEWED_MANIFEST_SHA256"
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = b12603250d6d4acc5dc1b50fe94a1204631c7bbd4c6692b7ee8a47f4caa047ad
+python3 -B "$P/verify-package.py"
+python3 -B "$P/window/check_current.py" "$P" before
+python3 - "$I/backup-result.private.json" <<'RPO'
+import datetime,json,sys
+r=json.load(open(sys.argv[1]));age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(r['startedUtc'])).total_seconds()
+assert r['result']=='FRESH_READONLY_BACKUP_PASS'and 0<=age<3600
+print('ACTUAL_BACKUP_RPO_PASS')
+RPO
+test ! -e "$I/root.private.json" && test ! -L "$I/root.private.json"
+sudo -v
+timeout 45 sudo -n /usr/bin/python3 -B -I -S "$P/window/root_readonly.py" > "$I/root.private.json" 2> "$I/root.private.stderr"
+bash "$P/install-api-window-policy.sh"
+)
+Exigir POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE. Recusa interrompe antes da admissão/B. Helpers/sudoers não são instalados.
+
+ADMISSÃO CANÔNICA, sem bool manual, somente após A PASS:
+(
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z
+I=/dev/shm/re7-openai-window-input-20261015
+Q=/dev/shm/re7-openai-gate-admission-v4-20261015
+: "${REVIEWED_AUTHORIZED_COMMIT:?SHA40 de decisão FUTURA explícita do owner}"
+: "${REVIEWED_RENEWED_MANIFEST_SHA256:?Hash renovado revisado obrigatório}"
+python3 -B "$P/window/admit_gates.py" "$P" "$I" "$Q" "$REVIEWED_RENEWED_MANIFEST_SHA256" "$REVIEWED_AUTHORIZED_COMMIT"
+)
+Só FIVE_GATES_ADMITTED permite B. Falha/partial/timeout não autoriza ajustes ou repetição.
+
+B. ÚNICO, após FIVE_GATES_ADMITTED e decisão de janela; capturar somente em evidências privadas novas.
+(
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z
+E=/dev/shm/re7-openai-b-evidence-v4-20261015
+test ! -e "$E" && test ! -L "$E"
+mkdir -m 700 "$E"
+OPENAI_B_STARTED=$(date -u +%s)
+set +e
+timeout 900 python3 -B "$P/window/openai_cli.py" "$P" > "$E/b.stdout.private" 2> "$E/b.stderr.private"
+B_EXIT=$?
+OPENAI_B_FINISHED=$(date -u +%s)
+printf 'B_ELAPSED_SECONDS=%s\n' "$((OPENAI_B_FINISHED-OPENAI_B_STARTED))"
+printf 'B_EXIT=%s
+' "$B_EXIT"
+python3 -B "$P/window/openai_cli.py" "$P" --inspect-readonly > "$E/inspection.private.json" 2> "$E/inspection.private.stderr"
+printf 'INSPECTION_EXIT=%s
+' "$?"
+set -e
+)
+Não imprimir stderr/configs, não repetir B. Preservar intents/start markers mesmo sem retorno ao terminal. Sucesso exige recibo OPENAI_COMPLETE_NEW_KEY, probe posterior dos dois endpoints, controles restabelecidos/gatesfalse + aceite owner.
+
+C. SOMENTE inspeção em recusa/resultado incerto; não inicia sucessor nem replay:
+python3 -B /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z/window/openai_cli.py /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z --inspect-readonly
+UNCERTAIN_SELECTION/UNCERTAIN_START ou estado divergente => parar e apresentar evidências.
+
+C1. DECISÃO EXPLÍCITA separada, somente ORIGINAL_LIVE/ORIGINAL_STOPPED antes da seleção:
+python3 -B /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z/window/openai_cli.py /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z --operator-recover ORIGINAL
+Preserva credencial ainda efetiva e NEWauth+NEWDB+NEWcipher. Sem retomada de SQL/intent/start consumido.
+
+C2. DECISÃO EXPLÍCITA separada, somente NEW_LIVE/NEW_PARTIAL/NEW_STOPPED com seleção íntegra e fence presente:
+python3 -B /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z/window/openai_cli.py /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z --operator-recover NEW
+Todos os sucessores/retornos usam a substituta. Não repete probe consumido sem recibo nem start ambíguo. Sem fallback automático para a chave exposta.
+
+D. ENCERRAMENTO/RETORNO PÓS-UNFENCE:
+python3 -B /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z/window/check_current.py /opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z after
+Exigir ambos crons, saved/fallback600, boot/supervisão, barreira ausente/gatesfalse, healthDB e recibos dos probes, NEWauth+NEWDB+NEWcipher/reader/worker/frontend. Owner confere sessão/console/Inbox/CRM/Campanhas e out15:Cancelada/seis entregas/cinco não enviadas, sem enviar/salvar/assumir/retomar.
+Depois de unfence, C1/C2 não substituem geração/política/identidades novas e decisão própria. O retorno funcional preparado conserva a substituta e é igual ao perfil candidato; esta troca não publica retorno com a chave antiga. Não fazer restart só para executar um retorno idêntico.
+Copiar intent/journal/recibos/diagnósticos privadamente off-host; classificar CONSUMED/COMPLETE ou PARTIAL conforme resultado real, sem alterar manifests históricos ou apagar intents.
+
+REVOGAÇÃO ANTIGA: nenhum comando nesta publicação. Decisão separada exige vínculo do registro antigo ou decisão explícita baseada no inventário dos usos. Sem reset Meta/outros providers/cifragem/limpeza.
