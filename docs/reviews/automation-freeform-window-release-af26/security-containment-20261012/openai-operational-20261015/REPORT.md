@@ -1,5 +1,10 @@
 # OpenAI — pacote operacional preparado para decisão
 
+**Estado corrente — SECURITY OPEN / P0/A/B E RESETS EXTERNOS SUSPENSOS,15/10:** [alcance sanitizado e matriz por credencial](../exposure-scope-20261015/REPORT.md).14 slots completos no registro local,9 no tool output truncado OpenAI; VAPID privado adicional local; Gemini recebeu antes um.env por didOpen com5 credenciais coincidentes, sem transmissão ao Google comprovada. Sem evidência de acesso não autorizado nem prova de ausência absoluta. NEWauth+NEWDB+NEWcipher já diferentes dos originais; não repetir fases concluídas. [Custódia v2 local](../receipt-custody-v2-20261015/REPORT.md):16 ensaios PASS com bytes originais, cadeia real sobre171 arquivos/quatro modos e relógio histórico/transferência simulados; não implantada. R0 DENY/ack/pacote originais intactos; sem backup novo, captura root ou ativação. Ambos crons/produção/guarda38/out.15 CLOSED preservados. Deifson; revisão15/10/próxima21/10, antecipar após mudanças.
+
+A suspensão acima prevalece sobre os roteiros e checkpoints anteriores abaixo.
+
+
 **Atualização R0 de15/10: DENY antes da atualização dos bindings.** [Resultado, causa e hashes efetivos](R0_RESULT_2026-10-15.md). Backup/custódia/restore retido conferidos;171 arquivos inalterados. Sem novo review ou autorização de P0/A/B. O estado abaixo é o checkpoint anterior à tentativa R0.
 
 Estado: **OPERATIONAL PACKAGE PREPARED / INACTIVE STAGING READ ONLY PASS / NOT INSTALLED / NOT ACTIVATED**. Não é WINDOW READY com provas vencidas. Geração `incident-6683-v4-security-openai-v4-20261015T203000Z`. Nenhuma autorização de janela decorre deste relatório. [Comandos integrais](COMMANDS_FOR_REVIEW.txt), [provas sanitizadas](PROOFS_SANITIZED.json) e [matriz dos consumidores](MATRIX.md).

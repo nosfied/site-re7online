@@ -1,0 +1,146 @@
+{
+  "absenceOfUnauthorizedAccessProven": false,
+  "callId": "call_pVi84hOpyU5n75lFnVaugcBm",
+  "callUtc": "2026-10-12T18:38:11.806Z",
+  "configurationChanged": false,
+  "currentConfig": {
+    "analyticsExplicitlyConfigured": false,
+    "authApiKeyPresent": false,
+    "authOAuthTokenFieldsPresent": true,
+    "customModelProvidersConfigured": false,
+    "customOtelConfigured": false,
+    "model": "gpt-6.1-sol"
+  },
+  "eventBlobSha256": {
+    "81765": "2b1ecaaab98d74bb377c3dc6a8964f50526fe5451cd4432a3bfccc78b270e944",
+    "81766": "e18aa8052f00dec5f901edc12970eb5fdeb51bbe72ffe90b62f83f6d1b84d632",
+    "81768": "4206b66b05eff3ca8d8bbac9e815a6c2bc9c33e17118fe6e6a161839281244c8"
+  },
+  "gemini": {
+    "event": "textDocument/didOpen",
+    "exactMatchingSlotNames": [
+      "ADMIN_TOKEN",
+      "META_APP_SECRET",
+      "OPENAI_API_KEY",
+      "WHATSAPP_ACCESS_TOKEN",
+      "WHATSAPP_VERIFY_TOKEN"
+    ],
+    "line": 9,
+    "lineSha256": "e1dc618be26c2cae2c20127dbc3075d07a8c9e3751ead3c9b9b8f62ef7e22703",
+    "localTimeFromLog": "2026-10-12T12:04:24.283524",
+    "otherCredentialFieldsEqualPostCipherProfile": {
+      "APP_AUTH_SECRET": false,
+      "DATABASE_URL": false
+    },
+    "otherCredentialFieldsPresent": [
+      "APP_AUTH_SECRET",
+      "DATABASE_URL"
+    ],
+    "remoteTransmissionProven": false,
+    "sourceFile": "apps/whatsapp-agent/.env"
+  },
+  "historyDeleted": false,
+  "localFullOutput": {
+    "additionalPrivateVapidFieldPresent": true,
+    "bytes": 16508,
+    "dbAndRolloutEqual": true,
+    "distinctOriginalSlotValues": 13,
+    "sha256": "df01cc1e416c2f3dc1178e6e9886db5d74441ae6b0dd67811313ef833b1f04cd",
+    "slots": [
+      "ADMIN_TOKEN",
+      "APP_AUTH_SECRET",
+      "WHATSAPP_WEB_WORKER_CONTROL_TOKEN",
+      "DATABASE_URL",
+      "CHANNEL_ACCOUNT_SECRET_KEY",
+      "MFA_SECRET_ENCRYPTION_KEY",
+      "WEBHOOK_SECRET_ENCRYPTION_KEY",
+      "META_APP_SECRET",
+      "META_INSTAGRAM_APP_SECRET",
+      "META_INSTAGRAM_BUSINESS_LOGIN_APP_SECRET",
+      "META_INSTAGRAM_BUSINESS_LOGIN_STATE_SECRET",
+      "OPENAI_API_KEY",
+      "WHATSAPP_ACCESS_TOKEN",
+      "WHATSAPP_VERIFY_TOKEN"
+    ]
+  },
+  "modelToolOutput": {
+    "bytes": 9306,
+    "completeMatchingSlots": [
+      "ADMIN_TOKEN",
+      "APP_AUTH_SECRET",
+      "DATABASE_URL",
+      "CHANNEL_ACCOUNT_SECRET_KEY",
+      "MFA_SECRET_ENCRYPTION_KEY",
+      "META_APP_SECRET",
+      "META_INSTAGRAM_APP_SECRET",
+      "META_INSTAGRAM_BUSINESS_LOGIN_APP_SECRET",
+      "META_INSTAGRAM_BUSINESS_LOGIN_STATE_SECRET"
+    ],
+    "scope": "recorded_model_input_not_packet_capture",
+    "sha256": "d9976092a5852897a35cf45202046ff544a6052f5e0a1acad3bae99dc750bd48",
+    "truncated": true
+  },
+  "observedUtc": "2026-10-15T23:02:49.354674+00:00",
+  "outputUtc": "2026-10-12T18:38:11.963Z",
+  "permissionsCurrent": {
+    "codexDirectory": {
+      "gid": 1000,
+      "hardlinks": 19,
+      "mode": "0o775",
+      "symlink": false,
+      "uid": 1000
+    },
+    "geminiLog": {
+      "gid": 1000,
+      "hardlinks": 1,
+      "mode": "0o664",
+      "symlink": false,
+      "uid": 1000
+    },
+    "historyDb": {
+      "gid": 1000,
+      "hardlinks": 1,
+      "mode": "0o644",
+      "symlink": false,
+      "uid": 1000
+    },
+    "home": {
+      "gid": 1000,
+      "hardlinks": 51,
+      "mode": "0o750",
+      "symlink": false,
+      "uid": 1000
+    },
+    "rollout": {
+      "gid": 1000,
+      "hardlinks": 1,
+      "mode": "0o664",
+      "symlink": false,
+      "uid": 1000
+    }
+  },
+  "productionAccess": false,
+  "result": "SANITIZED_LOCAL_EXPOSURE_SCOPE_AUDIT",
+  "retainedPostCipherProfileComparison": {
+    "equalsOriginal": {
+      "ADMIN_TOKEN": false,
+      "APP_AUTH_SECRET": false,
+      "CHANNEL_ACCOUNT_SECRET_KEY": false,
+      "DATABASE_URL": false,
+      "META_APP_SECRET": true,
+      "META_INSTAGRAM_APP_SECRET": true,
+      "META_INSTAGRAM_BUSINESS_LOGIN_APP_SECRET": true,
+      "META_INSTAGRAM_BUSINESS_LOGIN_STATE_SECRET": true,
+      "MFA_SECRET_ENCRYPTION_KEY": false,
+      "OPENAI_API_KEY": true,
+      "WEBHOOK_SECRET_ENCRYPTION_KEY": false,
+      "WEB_PUSH_VAPID_PRIVATE_KEY": true,
+      "WHATSAPP_ACCESS_TOKEN": true,
+      "WHATSAPP_VERIFY_TOKEN": true,
+      "WHATSAPP_WEB_WORKER_CONTROL_TOKEN": false
+    },
+    "freshLiveCapture": false
+  },
+  "sessionId": "01a0defe-3126-7dc2-8f24-a4b5c46fc43a",
+  "unauthorizedAccessProven": false
+}

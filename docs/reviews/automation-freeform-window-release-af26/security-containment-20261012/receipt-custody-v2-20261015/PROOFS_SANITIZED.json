@@ -1,0 +1,19 @@
+{
+  "catalogAndStoppedLabChecksReal": true,
+  "concreteFourModeUpdater": true,
+  "deployed": false,
+  "historicalClockInjected": true,
+  "historicalDenialReproducedOnlyInLocalClone": true,
+  "liveHostChecksNotExercised": true,
+  "networkCalls": 0,
+  "newBackup": false,
+  "newHelperSha256": "28829d37bf8bae5d641406b62499c51e57051e6d43a1637d32d6bfdbe42db4db",
+  "oldHelperSha256": "cbd0d1017a345d2f466d73e789dc430caf3999a3a8341766dc15611bddc924d4",
+  "producerBytesComparedToHistoricalOriginal": true,
+  "producerSerializerFromOriginalAst": true,
+  "productionWrites": false,
+  "result": "LOCAL_RECEIPT_BYTE_CHAIN_PASS",
+  "testSha256": "bb647122013be04473ba7fcd08b57a51bb1831bffb9a2c94cf6bfab4a5d99c6f",
+  "tests": 16,
+  "transferSimulatedLocalOnly": true
+}
