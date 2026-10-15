@@ -1,0 +1,152 @@
+PREPARATION VALIDATED FOR REVIEW / NOT INSTALLED / NOT WINDOW READY.
+V9 remains DENY, unchanged. V10 is already staged inactive; do not repeat extraction.
+Archive 6d7ebf9a8bb143f0b0b5419749387529c8b4579d017dec39302cd7b1b132fd76
+Review manifest 059a4196d7f824c1662f7a7f62192d8ba5aaf5fe43d4072761aa050e1085bd29
+Owner private custody: cipher-contract-v10-20261014, package+index+canonical receipts.
+
+A0. READ ONLY review of EXISTING generation; no copy/install/containment:
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-cipher-contract-v10-20261015T021500Z
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = 059a4196d7f824c1662f7a7f62192d8ba5aaf5fe43d4072761aa050e1085bd29
+(cd "$P" && sha256sum -c preparation-review.sha256)
+python3 -B "$P/verify-package.py"
+# This checker now executes canonical CipherConsumers.verify('before') with the
+# three REAL immutable references (uid/mode/type/hash), not an empty fixture.
+# Complete read chain already executed at2026-10-15T02:06:09.055798Z; renew only
+# for actual freshness/drift, with a NEW private evidence output directory.
+# Future execution still requires actual RPO renewal and fresh root600/440 hashes,
+# installed-policy inspect, writer exit/DB ownership and owner window decision.
+
+REVIEW ONLY. New generation audited inactive. A/B/C/D NOT AUTHORIZED by this correction task; do not reuse the v9 window authorization.
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-cipher-contract-v10-20261015T021500Z
+Runtime reused: /opt/re7online/releases/security-epoch-v3-36f51ebe-20261015T001500Z/apps/whatsapp-agent
+Policyb6a58431c989a36eebdfa9e443118a7e15fbe0229d102cd896f91d3d193f818d
+Installer bfc016e75154b26a7f364ab5f1f6423c744dcbe4e41a1587c79ad039380fbd76
+Installed root policy remains9c7b44d58c96d0aa1dd9f6b7d790d810407e3ea364b01a748473c06928efff4c.
+
+0. READ ONLY review, no plan/intent:
+python3 "$P/verify-package.py"
+python3 - "$P" <<'SCOPE'
+import sys
+from pathlib import Path
+p=Path(sys.argv[1]);sys.path.insert(0,str(p/'window'))
+from sequencer import Bridge
+from locked_driver import Driver
+Driver(Bridge(p)).check_scope()
+assert (p/'execution-authorized').read_text().strip()=='false'
+assert not any((p/'window/seal-current').iterdir())
+print('CURRENT_SCOPE_READABILITY_HISTORICAL147_PASS_NO_PLAN')
+SCOPE
+
+RPO prerequisite BEFORE A/B: renew by canonical backup.lock procedure if freshness
+requires it; preserve originals, update ONLY backup/proof manifests by that procedure.
+Measure actual capture start, never generation suffix or manifest publication time.
+Concrete dump-only renewal (does NOT produce/refresh a cipher plan):
+Q=/opt/re7online/backups/converta-persistent/preparations/cipher-rpo-REPLACE_WITH_ACTUAL_UTC
+umask 077
+test ! -e "$Q" && test ! -L "$Q"
+mkdir -m700 "$Q"
+date -u +%FT%TZ > "$Q/capture-start.private.txt"
+flock -n /opt/re7online/backups/converta-persistent/backup.lock timeout 120 docker exec -e 'PGOPTIONS=-c default_transaction_read_only=on -c statement_timeout=120000 -c lock_timeout=5000' wa-agent-postgres pg_dump -U wa_agent -d whatsapp_agent -Fc > "$Q/database.dump" 2> "$Q/dump.private.stderr"
+sha256sum "$Q/database.dump" > "$Q/database.dump.sha256"
+docker exec -i wa-agent-postgres pg_restore --list < "$Q/database.dump" > "$Q/catalog.private.txt"
+# Capture/check actual schema+migration fingerprint, copy privately to permanent
+# owner custody, verify checksum/extraction. Reuse restore proof ONLY if tooling/
+# schema/frontier remain equal; otherwise targeted isolated restore required.
+# Preserve previous backup/proof manifests before publishing new hashes.
+# Standalone renewal is a coherent pg_dump image; it is NOT a shared inventory
+# snapshot or a source plan. Final source is obtained only by the fenced phase.
+
+A. FUTURE OWNER SUDO INSTALLATION — explicit window decision required first.
+# Reconfirm capacity min(deploy/PG)>=8794603520 (canonical reserve + conservative transfer/extraction margin), WAL/growth, backup/RPO/custody,
+# SQL/proxy/frozen inventory/identities/guard38/boot/cron/saved/fallback600.
+set -euo pipefail
+umask 077
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = bfc016e75154b26a7f364ab5f1f6423c744dcbe4e41a1587c79ad039380fbd76
+python3 "$P/verify-package.py"
+# Owner sudo: check helper8de/rule62b5/installed9c7/root chain/modes/visudo/archive
+# exactly as installer; archive original bytes. Helper/sudoers never replaced.
+bash "$P/install-api-window-policy.sh"
+# Expected POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE.
+# Partial/drift/archive already exists: preserve evidence, NO installer replay.
+
+B. FUTURE SINGLE CANONICAL SEQUENCE — NOT AUTHORIZED NOW.
+# With explicit owner window decision and fresh proof of EVERY requirement:
+python3 - "$P" <<'GATES'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]);sys.path.insert(0,str(p/'window'))
+from sequencer import Bridge
+from baseline_contract import validate_preparation
+from locked_driver import Driver
+validate_preparation(p,['switch','return','return-partial','return-before-commit'])
+assert json.loads(Bridge(p).privileged('inspect'))=={'policySha256':'b6a58431c989a36eebdfa9e443118a7e15fbe0229d102cd896f91d3d193f818d','phase':None,'sourceProcessesAlive':True}
+Driver(Bridge(p)).check_scope()
+f=p/'window/execution-gates.private.json';g=json.loads(f.read_text());assert len(g)==5 and all(v is False for v in g.values())
+# Enable only after RPO/custody/WAL/current references and owner authority are proven.
+f.write_text(json.dumps({k:True for k in g})+'\n')
+(p/'execution-authorized').write_text('true\n')
+GATES
+python3 "$P/window/locked_cli.py" "$P"
+# V4 contain/stop -> FRESH exit/DB zero -> same-session locked seal/current source/
+# new plan/hash/intent/CAS/commit -> receipt VERIFIED -> start once API/same worker.
+# After VERIFIED every canonical start also enforces cipher_start_gate at ops.start.
+# New writers/unknown owner/control/identity/population drift: DENY. No input repair.
+# Frontend unchanged. No PG restart/Telegram activation/guard opening.
+# Containment escalation15min; SQL lock1s, statement10s, phase hard deadline30s.
+
+C. INSPECTION / EXPLICIT RECOVERY — future operator decision required.
+# After any uncertain result: never repeat B, seal-current, SQL, or a consumed start.
+# Preserve stdout/stderr, source/plan/phase intent, commit intent/receipt, journal and
+# recovery baseline privately. Inspection itself takes the canonical exclusive lock.
+python3 "$P/window/locked_cli.py" "$P" --inspect-readonly
+# Output is classification+planSha256 only. NO_FINAL_PLAN/DENY/unknown, changed
+# classification, ambiguous start, missing baseline or incomplete proof: stop.
+# This command does NOT authorize recovery. Operator must explicitly choose ONE
+# of C1/C2 after reviewing the fresh classification and corresponding evidence.
+# Never run both branches. No receipt overwrite, no input/binding adjustment.
+
+C1. Operator explicitly decides ORIGINAL_VERIFIED; pre-commit only.
+set -euo pipefail
+umask 077
+python3 "$P/window/locked_cli.py" "$P" --recovery-action record-original --operator-decision ORIGINAL_VERIFIED
+python3 "$P/window/locked_cli.py" "$P" --recovery-action recover-original --operator-decision ORIGINAL_VERIFIED
+# First invocation reclassifies under lock and records the exact plan/intent-bound
+# original observation. Second invocation reclassifies again, requires that receipt,
+# writes one-use recovery intent, and uses return-before-commit exclusively.
+# Compatible reader+NEWauth+NEWDB, DB credential unchanged, original cipher only
+# while ORIGINAL_VERIFIED remains proven. Existing VERIFIED receipt denies C1.
+# Existing original observation: do NOT repeat record; inspect, then an explicit
+# operator decision may run only recover-original if no recovery intent/start consumed.
+
+C2. Operator explicitly decides VERIFIED; NEWcipher exclusively.
+set -euo pipefail
+umask 077
+# After lost COMMIT response, with NO existing credential-commit receipt:
+python3 "$P/window/locked_cli.py" "$P" --recovery-action record-verified --operator-decision VERIFIED
+python3 "$P/window/locked_cli.py" "$P" --recovery-action recover-verified --operator-decision VERIFIED
+# If the exact durable VERIFIED receipt ALREADY exists: do NOT repeat record-verified;
+# inspect first, review, then run only recover-verified with explicit decision.
+# Fresh canonical classification+receipt required. Original observation forbids C2.
+# Uses canonical return/return-partial according to observed processes, fresh
+# exit/DB ownership proofs and NEWcipher+NEWauth+NEWDB; never OLDcipher.
+# Both recover invocations deny any prior recovery intent or consumed target start.
+# A failed recovery preserves its intent and diagnostics: inspection/decision only,
+# no replay. If source CAS classification is DENY, no in-place recovery authorized.
+# After successful unfence with legitimate Web evolution use D, never fabricate C.
+
+D. POST-UNFENCE RETURN — fresh identities/policy/nonce, NEWcipher/NEWauth/NEWDB only.
+R=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-return-cipher-REPLACE_WITH_ACTUAL_UTC
+python3 "$P/window/prepare_compatible_post_return.py" "$P" "$R"
+# Read-only preparer requires original durable VERIFIED receipt and current NEW epoch.
+# Fresh policy/installer SHA is emitted; verify generated bytes/root current policy,
+# owner installs $R/install-compatible-return-policy.sh after review/authorization.
+# Enable fresh gates only after fresh inspect and actual RPO/capacity proof.
+python3 "$R/window/locked_cli.py" "$R" --post-unfence-return
+# Never copy old exit/start certificates or execute seal-current in fresh return.
+# Durable SQL receipt is referenced by hash as historical evidence, not new intent.
+
+After completion: current New epoch legibility+original receipt+historical147/v2,
+API/worker health/control/DB, frontend/sessions, new saved/fallback600, cron/boot,
+barrier absent, frozen out15 CLOSED+guard38, gatesfalse. No provider/message tests.
+Archive diagnostics privately and update lifecycle/retention ledger without editing
+historical manifests. .env proposals remain separate, not executed by these blocks.
