@@ -1,0 +1,19 @@
+{
+  "affectedEntries": 3,
+  "containmentStarted": false,
+  "errorClass": "KeyError",
+  "fiveGatesFalse": true,
+  "guardGeneration": 38,
+  "inactivePackageCheck": "PASS",
+  "installationStarted": false,
+  "interruptionSeconds": 0,
+  "localReproductionPassed": true,
+  "missingField": "immutable[].mode",
+  "newBackupCaptured": false,
+  "newSnapshotCaptured": false,
+  "noAutomaticRetry": true,
+  "postDenialHealthDb": "PASS",
+  "result": "DENY",
+  "sqlMutation": false,
+  "stage": "consumers"
+}

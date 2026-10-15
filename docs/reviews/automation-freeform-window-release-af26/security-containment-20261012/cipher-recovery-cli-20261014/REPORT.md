@@ -1,5 +1,7 @@
 # Recuperação explícita da cifragem V4 — revisão operacional
 
+**Estado atual após autorização:** [v9 DENY na conferência operacional de consumidores](AUTHORIZED_ATTEMPT_DENY_2026-10-14.md). A0/checker PASS; instalação/contenção bloqueadas, zero interrupção. Três referências sem mode exigido; geração/input preservados. A certificação local abaixo é histórica e não equivale a elegibilidade operacional produtiva.
+
 **LOCAL VALIDATED / NOT DEPLOYED.** Lacuna do CLI corrigida em nova geração completa `incident-6683-v4-security-cipher-recovery-v9-20261015T025000Z`. A v7 publicada em 3f3d1a6e e os drafts locais permanecem íntegros. Esta tarefa não acessou nem escreveu na VPS, não instalou política, não conteve processos e não reaplicou SQL. A geração v9 está no cofre privado do owner, com extração local conferida; transferência inativa e checker na VPS são requisitos explícitos de A0, antes de qualquer A/B.
 
 [Roteiro integral A0/A/B/C/D](COMMANDS_FOR_REVIEW.txt). Não há autorização de janela. Os cinco gates e execution-authorized permanecem falsos, seal-current vazio, sem intent/recibo de operação. O sufixo da geração identifica o pacote; não representa horário de captura de backup ou leitura produtiva.
