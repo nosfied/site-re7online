@@ -1,0 +1,43 @@
+{
+  "result": "V13_RENEWED_PACKAGE_CERTIFIED_PENDING_OWNER_ROOT_INSTALLATION",
+  "generation": "incident-6683-v4-security-cipher-restore-v13-20261015T100500Z",
+  "archiveSha256": "176ce1c813585d222635e3dcd05f6ce4011f5d86d2594d28937a44b588c47d42",
+  "archiveBytes": 5950324,
+  "reviewManifestSha256": "a7b17b6a2218876b325da3b24e97b5264b7e19c5dc8adc3bb7d58c51dd6fc095",
+  "windowManifestSha256": "668ccf7d7b964144aef8aae8e8e20927aa0a219bfc8fba81afe3d84eb180e374",
+  "policySha256": "15b91a2a41708a1ef0ee8a499fd51f892298561d0d73dbbfb05ceb3fe285899f",
+  "installerSha256": "722ae81d542bb5c7a50d0820e9133d219c1b058a92f3891232ade3a213589d56",
+  "installedSourcePolicySha256": "b6a58431c989a36eebdfa9e443118a7e15fbe0229d102cd896f91d3d193f818d",
+  "canonicalReadUtc": "2026-10-15T10:09:38.643656+00:00",
+  "minimumAvailableBytes": 18334789632,
+  "walBytes": 83886080,
+  "gatesPassed": [
+    "complete_checker",
+    "source_readability_scope_historical147",
+    "consumer_before_and_contained_contract_only",
+    "active_config_identity",
+    "saved_fallback600",
+    "guard_supervision_false_gates",
+    "frozen_sql_baselines_four_proof_bindings",
+    "capacity_wal_sql_inventory",
+    "proxy_canonical_observer",
+    "health_db"
+  ],
+  "localDirectedCases": 170,
+  "notExecuted": [
+    "root600_440_hash_reconfirmation",
+    "installed_new_policy_inspect",
+    "fence_and_writer_exit",
+    "exclusive_DB_zero_after_exit",
+    "seal_current_CAS_SQL_commit",
+    "successor_start_and_postdeployment_validation"
+  ],
+  "newRuntimeBuild": false,
+  "installation": false,
+  "containment": false,
+  "sqlMutation": false,
+  "executionAuthorized": false,
+  "backupCapturedUtc": "2026-10-15T10:03:24.180160+00:00",
+  "proofCodeUnchangedCasesReused": 170,
+  "freshRpoRenewed": true
+}
