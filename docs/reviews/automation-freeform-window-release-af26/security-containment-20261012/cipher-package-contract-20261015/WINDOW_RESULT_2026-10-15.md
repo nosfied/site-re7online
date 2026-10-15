@@ -1,5 +1,7 @@
 # Janela v10 — 15/10/2026, Fortaleza
 
+**Errata15/10, inspeção v13:** a afirmação de restauração integral dos controles abaixo não é sustentada para o crontab deploy. A leitura posterior encontrou seis entradas comentadas, perfil window exato; o caminho abort-prestop restaura o cron de sistema/barreira/boot, mas não esse crontab. Preservar tempos/evidências originais:3,497s limita contenção de admissão, não a persistência do cron. [Diagnóstico e estado corrente](../cipher-v13-execution-20261015/REPORT.md). Nenhuma correção produtiva foi aplicada nesta inspeção.
+
 **B CONSUMED / FAILED BEFORE PROCESS EXIT / PRESTOP RESTORED / CIPHER NOT DEPLOYED.** Política b6a584 instalada; B invocado uma única vez. A recusa `restore_not_verified` ocorreu em `ops.stop`, antes de qualquer parada. C classificou `NO_FINAL_PLAN`, sem autorização de replay/sucessor. Não houve plano final, intent/recibo de commit ou conversão; API410272, worker410428 e frontend188897 preservaram os mesmos PIDs/start ticks. Gates fechados, barreira ausente e owner confirmou sessões/telas funcionando. **Não repetir A/B nem utilizar C1/C2 sem plano correspondente.**
 
 ## Causa e alcance da falha de preparação

@@ -1,6 +1,21 @@
 # Janela v13 autorizada — 15/10/2026
 
-**PREPARAÇÃO RENOVADA E RECERTIFICADA; A/B AINDA NÃO EXECUTADOS.** Owner autorizou política15b91a/instalador722ae8 e declarou disponibilidade agora, sem uso humano. NEWauth+NEWDB, frontend, out.15 CLOSED e guarda38 preservados. Qualquer recusa anterior à contenção interrompe a tentativa; nenhuma adaptação de campo/input para PASS. v10 consumida não é usada; sem nova extração da v13.
+**DENY ANTES DA CONTENÇÃO / POLÍTICA INSTALADA / B NÃO EXECUTADO / CIPHER NOT DEPLOYED.** Owner autorizou política15b91a/instalador722ae8 e declarou disponibilidade agora, sem uso humano. NEWauth+NEWDB, frontend, out.15 CLOSED e guarda38 preservados. Qualquer recusa anterior à contenção interrompe a tentativa; nenhuma adaptação de campo/input para PASS. v10 consumida não é usada; sem nova extração da v13.
+
+
+## Resultado da tentativa e divergência efetiva
+
+A captura root de **07:21:58.126940 Fortaleza** negou `scheduled_writer_sources_changed`. A tentativa está interrompida: não executar novamente A, não admitir gates e não executar B. A saída enviada contém a recusa e também a conclusão posterior do instalador; não se infere pelo transcript quantas execuções ocorreram. A inspeção efetiva confirmou política15b instalada, fase null, fontes vivas, cinco gatesfalse/executionfalse, zero entradas de selagem, marcas de parada, solicitações ownership ou intents de start. API410272, worker410428 e frontend188897 preservados; health/DB ok, barreira ausente, guarda38 fechada e dumps600. [Resultado sanitizado](DENIAL_SANITIZED.json).
+
+A divergência não é apenas cabeçalho gerado: `/var/spool/cron/crontabs/deploy` tem seis entradas antes ativas agora comentadas, além do comentário de instalação. A leitura canônica `crontab -l` corresponde **exatamente** a `window/deploy.crontab.window`, não a `deploy.crontab.before`; SHA atual55fe793569d4221face0b54b3f3de1eae408ed0b0eadc45d7db80e810e9f37d1. A população dos arquivos cron permaneceu igual. O cabeçalho registra instalação08:53:24 UTC, compatível com a contenção v10 às05:53:24 Fortaleza; o timestamp sozinho não identifica o executor histórico.
+
+A auditoria estática confirma uma lacuna real: `sequencer.recover(prestop)` chama `abort-prestop` e restaura a guarda; o helper desse caminho restaura `/etc/cron.d/re7-converta-backup`, nft e boot, mas **não restaura o crontab deploy**. A inspeção atual não prova que todos os controles foram restaurados na v10. A declaração anterior foi excessiva e recebe errata no relatório original. Não confundir o limite anterior3,497s da contenção de admissão com duração do crontab: a restauração integral deste último não foi demonstrada. Não houve contenção, parada ou conversão nesta tentativa v13.
+
+Escape de cobertura: a cadeia preparatória verificava supervisão/guarda e contratos de consumidores, porém não comparava o crontab efetivo com `before`; os testes de recuperação não exigiam essa pós-condição no caminho real pré-parada. O novo checker root detectou o estado divergente antes de B. Não corrigir a baseline nem aceitar o perfil `window` como normal para passar. A v13 e seus inputs/checker/provas ficam intactos.
+
+Pendência concreta: preparar correção futura do caminho pré-parada para restaurar e certificar os controles deploy e sistema separadamente; exercitar a recuperação real com efeitos de sistema substituídos, inclusive erro parcial. Adicionar comparação canônica de ambos os crons à admissão e à inspeção final, além dos hashes root. Preparar recuperação restrita dos controles atuais com preservação privada e decisão própria, sem repetir B/SQL/start ou trocar o input. **Nenhuma restauração de cron foi executada por esta inspeção.** A política15b permanece instalada e sem fase; não retornar à b6 por conveniência. A autorização desta tentativa não será reutilizada automaticamente. Captura root existente, stderr, inspeção de estado e crontab efetivo foram copiados privadamente off-host para custódia permanente do owner, arquivos600/diretório700, com índice de hashes/bytes e conferência integral; não se afirma réplica física independente do computador do owner.
+
+Backup/restore/RPO renovados e suas provas válidas permanecem preservados; não repetir captura para corrigir este problema de controles. Segurança externa/cifragem OPEN; NEWauth+NEWDB, console, frontend, out.15 CLOSED e guarda38 preservados. O aceite de sessões anterior não prova execução dos jobs cron. Responsável Deifson; revisão15/10/próxima21/10 antecipada após mudanças.
 
 ## RPO e pacote concreto
 
@@ -16,7 +31,7 @@
 
 ## Admissão explícita dos cinco gates, antes de B
 
-Comando canônico desta execução, **somente após A PASS e disponibilidade confirmada**:
+Comando publicado antes da recusa, **NÃO EXECUTAR nesta tentativa interrompida**:
 
 ```bash
 P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-cipher-restore-v13-20261015T100500Z
@@ -36,4 +51,4 @@ Admit script SHA `30398ea0f6236d8b77793e123eef0ba07b697b0f8d3c2053dfc76a232634bb
 
 Saída e DBzero/CAS não são certificados antecipadamente por esses gates; são obrigatórios dentro de B, após contenção. O script reexecuta a cadeia canônica ainda com gatesfalse, vincula cada prova por hash e só então grava true/execution-authorized. Qualquer partial na admissão interrompe sem B. A única partida da sequência usa `python3 -B "$P/window/locked_cli.py" "$P"`; resultado incerto permite apenas C READ ONLY e decisão explícita correspondente, sem replay/OLDcipher após VERIFIED.
 
-Próxima ação: owner executa A com root/writers frescos e hashes; depois conferir o recibo, admitir gates e executar B uma vez. Resultado/duração e validações finais serão registrados aqui. Segurança externa e risco histórico OPEN; auth/banco/console/out.15 concluídos, sem aplicação.env/externas/Telegram/envio/abertura. Responsável Deifson; revisão15/10/próxima21/10 antecipada após mudanças.
+Estado final: tentativa interrompida pela recusa; inspeção/custódia e pendências acima substituem a próxima ação A/B anteriormente publicada.
