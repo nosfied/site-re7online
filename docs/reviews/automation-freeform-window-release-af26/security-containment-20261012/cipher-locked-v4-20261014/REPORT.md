@@ -1,5 +1,7 @@
 # Preparação cifragem V4 com selagem transacional — para revisão
 
+**Continuidade após revisão3f3d1a6e:** o CLI desta v7 permanece preservado. A lacuna de recuperação é resolvida somente na [nova geração recovery-v9, com A/B/C/D e provas](../cipher-recovery-cli-20261014/REPORT.md). As conferências e fatos abaixo são o checkpoint histórico da v7; não executar seus métodos internos como comando operacional.
+
 **Preparação operacional NOVA montada e conferida na VPS; NOT INSTALLED / NOT EXECUTED.** Geração `incident-6683-v4-security-cipher-locked-v7-20261015T011500Z`. Quatro modos completos, mesmo worker afbb, frontend preservado, configurações JSON/ecosystem/manifests, política/instalador, consumidores e retorno compatível. Cinco gatesfalse/executionfalse; diretório seal-current vazio, nenhum plano final/intent/SQL mutável produzido. Auth/banco/console/out15 concluídos; NEWauth+NEWDB/guarda38 preservados. Segurança externa/cifragem OPEN.
 
 [Comandos concretos](COMMANDS_FOR_REVIEW.txt). **Não executar A/B/D nesta autorização de preparação.** RPO/capacidade/referências/ownership/saída frescos e decisão da janela continuam requisitos antes da execução; preparação não é certificado de saída.

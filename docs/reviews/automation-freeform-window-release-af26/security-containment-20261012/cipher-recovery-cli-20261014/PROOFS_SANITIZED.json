@@ -1,0 +1,21 @@
+{
+  "canonicalProcessActions": "isolated FakeBridge only",
+  "classifications": [
+    "ORIGINAL_VERIFIED",
+    "VERIFIED"
+  ],
+  "cliTests": 18,
+  "cliTestsResult": "PASS",
+  "localGenerationCheck": "PASS",
+  "lostCommitResponseDatabaseReused": true,
+  "productionConnections": 0,
+  "productionFilesWritten": false,
+  "proofsReused": true,
+  "result": "EXACT_RECOVERY_CLI_PG16_PASS",
+  "sealCallsAfterFailure": 0,
+  "snapshotRestoreReused": true,
+  "sqlClassification": "canonical READ ONLY verification_sql",
+  "sqlMutationExecuted": false,
+  "status": "LOCAL VALIDATED / NOT DEPLOYED",
+  "vpsCheckerForNewGeneration": "NOT_RUN"
+}
