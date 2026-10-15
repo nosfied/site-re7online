@@ -1,3 +1,4 @@
+import { executeCrmImportOperation, readCrmImportOperation, CrmImportOperationError } from "../crm/crmCsvImportOperation.js";
 import type { CampaignMetaStatus, CampaignMetaSummary } from "../campaigns/campaignRecipientResultTruth.js";
 import { projectCampaignJobExecution, aggregateCampaignExecution, type CampaignExecutionPresentation } from "../campaigns/campaignExecutionPresentation.js";
 import { extractMetaStatus, normalizeCampaignMessageStatus, stringifyCampaignError, isUtilityPricingCategory, isDeliveredForCampaignBilling, resolveCampaignBillingStatus, buildCampaignMetaStatusItem, buildCampaignSeedFallbackStatusItems, summarizeCampaignMetaStatuses, campaignRecipientIdentityCandidates, campaignRecipientIdentitiesMatch, campaignMetaStatusRank, campaignMetaStatusTime, pickCampaignRecipientStatus, buildCampaignRecipientResultStatuses } from "../campaigns/campaignRecipientResultTruth.js";
@@ -442,7 +443,6 @@ import {
   updateCrmLeadStatus,
 } from "../crm/crmContactMutations.js";
 import {
-  confirmCrmContactCsvImport,
   CrmContactUpsertError,
   inspectCrmContactCsvImport,
   previewCrmContactCsvImport,
@@ -11461,7 +11461,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             clientKey: client.clientKey,
             clientStatus: client.status,
           });
-      const payload = await buildCrmContactsPayload(prisma, {
+      const payload = await prisma.$transaction(async tx => {
+        const filtered = await buildCrmContactsPayload(tx as unknown as typeof prisma, {
         clientId: client.id,
         query: isAgentRole(clientAuth.role) ? { ...query, hasConversation: null, operationalStatus: null } : query,
         statuses: resolvedStatuses.statuses,
@@ -11469,6 +11470,11 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
         includeCampaignRelationships: getFeatures(client).campaigns,
       });
+        const scope = await buildCrmContactsPayload(tx as unknown as typeof prisma, {
+          clientId: client.id, query: { operationalStatus: isAgentRole(clientAuth.role) ? null : query.operationalStatus }, statuses: resolvedStatuses.statuses,
+        });
+        return { ...filtered, totals: { tenantVisible: scope.pagination.total, filtered: filtered.pagination.total, pageCount: filtered.items.length } };
+      }, { isolationLevel: "RepeatableRead", maxWait: 1000, timeout: 15000 });
       json(res, 200, isAgentRole(clientAuth.role) ? stripCrmHistoryFromContactsPayload(payload) : payload);
     } catch (error) {
       logger.error({
@@ -11649,8 +11655,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
   }
 
   if (
-    req.method === "POST" &&
-    (pathname === "/app/crm/contacts/import/preview" || pathname === "/app/crm/contacts/import/confirm")
+    (req.method === "GET" && /^\/app\/crm\/contacts\/import\/operations\/[^/]+$/.test(pathname)) ||
+    (req.method === "POST" &&
+    (pathname === "/app/crm/contacts/import/preview" || pathname === "/app/crm/contacts/import/confirm"))
   ) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -11675,10 +11682,14 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           client,
           userId: clientAuth.userId,
           capability: "crm",
-          endpoint: isConfirm ? "/app/crm/contacts/import/confirm" : "/app/crm/contacts/import/preview",
+          endpoint: req.method === "GET" ? "/app/crm/contacts/import/operations/:operationId" : isConfirm ? "/app/crm/contacts/import/confirm" : "/app/crm/contacts/import/preview",
           requestId,
         }))
       ) {
+        return;
+      }
+      if (req.method === "GET") {
+        json(res,200,await readCrmImportOperation(prisma,client.id,decodeURIComponent(pathname.split("/").pop()!)));
         return;
       }
 	      const body = (await readJsonBody(req, res)) as Record<string, unknown> | null;
@@ -11698,7 +11709,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
 	        tenant: tenants[client.clientKey] ?? null,
 	      });
 	      const payload = isConfirm
-	        ? await confirmCrmContactCsvImport(prisma, {
+	        ? await executeCrmImportOperation(prisma, {
+            operationId: typeof body.operationId === "string" ? body.operationId : "",
 	            clientId: client.id,
 	            csvText,
 		            mapping: {
@@ -11728,8 +11740,11 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
 		            },
 	            crmStatuses: resolvedStatuses.statuses,
 	          });
-      json(res, 200, payload);
+      json(res, 200, "status" in payload && payload.summary ? { ...payload.summary, ...payload } : payload);
     } catch (error) {
+      if (error instanceof CrmImportOperationError) {
+        json(res,error.status,{ error: { code: error.code, message: "Consulte a operação de importação antes de tentar novamente." }, operationId: error.operationId }); return;
+      }
       if (error instanceof CrmContactUpsertError) {
         json(res, error.status, {
           ...httpError(error.code, error.message),

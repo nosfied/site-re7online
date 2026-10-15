@@ -1,0 +1,94 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { randomUUID } from "node:crypto";
+import { PrismaClient } from "@prisma/client";
+import { executeCrmImportOperation as execute, readCrmImportOperation as read, IMPORT_EVENTS, CrmImportOperationError } from "./crmCsvImportOperation.js";
+import { previewCrmContactCsvImport, upsertCrmContact } from "./crmContactUpsert.js";
+import { buildCrmContactsPayload } from "./crmContactsReadModel.js";
+const url = new URL(process.env.DATABASE_URL || "");
+assert.equal(url.hostname,"127.0.0.1"); assert.equal(url.port,"55781"); assert.equal(url.pathname,"/retention_lab");
+const db = new PrismaClient(); const clients: string[] = [];
+const phone = (n: number) => `55849${10000000+n}`;
+async function fixture(csv = `phone,name\n${phone(1)},Synthetic`) {
+ const clientId=randomUUID();clients.push(clientId);await db.client.create({data:{id:clientId,clientKey:clientId,name:"synthetic CSV"}});
+ return {clientId,operationId:randomUUID(),actorUserId:randomUUID(),requestId:randomUUID(),csvText:csv,mapping:{phoneColumn:"phone",nameColumn:"name"}};
+}
+function intercept(onCreate:(data:any,run:()=>Promise<any>)=>Promise<any>,afterCommit=false) {
+ return new Proxy(db,{get(target,key){
+  if(key!=="$transaction"){const value=(target as any)[key];return typeof value==="function"?value.bind(target):value;}
+  return async(work:any,options:any)=>{
+   let terminal=false;
+   const result=await target.$transaction(async tx=>work(new Proxy(tx,{get(t,k){
+    if(k!=="event")return (t as any)[k];
+    return new Proxy(t.event,{get(e,p){if(p!=="create")return (e as any)[p];return async(args:any)=>{
+     if(args.data.eventName===IMPORT_EVENTS.finished)terminal=true;
+     return onCreate(args.data,()=>t.event.create(args));
+    };}});
+   }})),options);
+   if(afterCommit&&terminal)throw new Error("synthetic lost commit response");return result;
+  };
+ }});
+}
+test.after(async()=>{
+ for(const clientId of clients){await db.event.deleteMany({where:{clientId}});await db.lead.deleteMany({where:{tenantId:clientId}});await db.contactChannelIdentity.deleteMany({where:{clientId}});await db.contact.deleteMany({where:{clientId}});await db.client.delete({where:{id:clientId}});}
+ await db.$disconnect();
+});
+test("993 =880 eligible+82 invalid+31 duplicates;879 new+1 updated;recover summary without writes",async()=>{
+ const rows=Array.from({length:880},(_,i)=>`${phone(i)},Imported ${i}`);
+ const p=await fixture(['phone,name',...rows,...Array.from({length:82},(_,i)=>`invalid${i},Invalid`),...rows.slice(0,31)].join('\n'));
+ await upsertCrmContact(db,{clientId:p.clientId,input:{phone:phone(879),name:"Before"},actorUserId:p.actorUserId,requestId:randomUUID(),source:"crm_manual",audit:false});
+ const preview=await previewCrmContactCsvImport(db,p);assert.equal(preview.totalRows,993);assert.equal(preview.readyToImport,880);assert.equal(preview.invalidRows,82);assert.equal(preview.duplicatesInFile,31);assert.equal(preview.rows.length,200);assert.equal(preview.sample.truncated,true);
+ const result=await execute(db,p);assert.equal(result.status,"COMPLETED");const s=result.summary!;
+ assert.equal(s.received,993);assert.equal(s.created,879);assert.equal(s.updated,1);assert.equal(s.unchanged,0);assert.equal(s.invalid,82);assert.equal(s.duplicates,31);
+ assert.equal(s.created+s.updated+s.unchanged+s.invalid+s.invalidCrmStatuses+s.duplicates+s.excludedContacts+s.provisionalContacts+s.identityConflicts+s.failed,993);
+ const before=await db.event.count({where:{clientId:p.clientId}});assert.deepEqual((await read(db,p.clientId,p.operationId)).summary,s);assert.deepEqual((await execute(db,p)).summary,s);assert.equal(await db.event.count({where:{clientId:p.clientId}}),before);
+ const next=await execute(db,{...p,operationId:randomUUID()});assert.equal(next.summary?.unchanged,880);assert.equal(next.summary?.created,0);
+ await assert.rejects(()=>execute(db,{...p,csvText:p.csvText+'\n'+phone(9999)+',Changed'}),(e:unknown)=>e instanceof CrmImportOperationError&&e.code==='import_operation_payload_mismatch');
+});
+test("invalid CSV proven failed before rows;missing operation remains UNKNOWN",async()=>{
+ const p=await fixture('');assert.equal((await execute(db,p)).status,"FAILED");assert.equal(await db.contact.count({where:{clientId:p.clientId}}),0);assert.equal((await read(db,p.clientId,randomUUID())).status,"UNKNOWN");
+});
+test("row+audit+progress atomic;second row failure leaves first committed UNKNOWN;no replay;tenant isolated",async()=>{
+ const p=await fixture(`phone,name\n${phone(1)},One\n${phone(2)},Two`);let once=false;
+ const wrapped=intercept(async(data,run)=>{if(data.eventName===IMPORT_EVENTS.row&&data.payloadJson.rowNumber===3&&!once){once=true;throw new Error('synthetic ledger unavailable');}return run();});
+ const result=await execute(wrapped,p);assert.equal(result.status,"UNKNOWN");assert.equal(result.progress?.processed,1);assert.equal(await db.contact.count({where:{clientId:p.clientId}}),1);assert.equal(await db.event.count({where:{clientId:p.clientId,eventName:'crm.contact.created'}}),1);
+ const before=await db.event.count({where:{clientId:p.clientId}});assert.equal((await execute(db,p)).status,"UNKNOWN");assert.equal(await db.event.count({where:{clientId:p.clientId}}),before);
+ await assert.rejects(()=>execute(db,{...p,operationId:randomUUID()}),(e:unknown)=>e instanceof CrmImportOperationError&&e.code==='import_unresolved');
+ const other=await fixture();assert.equal((await read(db,other.clientId,p.operationId)).status,"UNKNOWN");assert.equal((await execute(db,other)).status,"COMPLETED");
+});
+test("concurrent duplicate reads progress;different operation denied;delayed original completes once",async()=>{
+ const p=await fixture();let release!:()=>void,entered!:()=>void;const gate=new Promise<void>(r=>release=r),ready=new Promise<void>(r=>entered=r);
+ const wrapped=intercept(async(data,run)=>{if(data.eventName===IMPORT_EVENTS.row){entered();await gate;}return run();});
+ const running=execute(wrapped,p);await ready;
+ try{assert.equal((await execute(db,p)).status,"PROCESSING");await assert.rejects(()=>execute(db,{...p,operationId:randomUUID()}),(e:unknown)=>e instanceof CrmImportOperationError&&e.operationId===p.operationId);}finally{release();}
+ assert.equal((await running).status,"COMPLETED");assert.equal(await db.contact.count({where:{clientId:p.clientId}}),1);
+});
+test("lost final commit response recovered as COMPLETED from durable receipt",async()=>{
+ const p=await fixture();const result=await execute(intercept(async(_d,run)=>run(),true),p);assert.equal(result.status,"COMPLETED");assert.equal(result.summary?.created,1);assert.equal((await read(db,p.clientId,p.operationId)).summary?.created,1);
+});
+test("stale processing is UNKNOWN without failed/rollback receipt",async()=>{
+ const p=await fixture();await db.event.create({data:{clientId:p.clientId,eventName:IMPORT_EVENTS.started,requestId:p.operationId,payloadJson:{inputHash:'synthetic'},createdAt:new Date('2020-01-01')}});const r=await read(db,p.clientId,p.operationId);assert.equal(r.status,"UNKNOWN");assert.equal(r.summary,null);
+});
+test("read model counts beyond old candidate cap;empty page retains filtered total;other tenant empty",async()=>{
+ const p=await fixture();await db.lead.createMany({data:Array.from({length:4105},(_,i)=>({tenantId:p.clientId,waId:phone(i),name:i<4100?'Synthetic':'Target',status:'NEW'}))});
+ const list=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{page:1,limit:50},statuses:[]});assert.equal(list.pagination.total,4105);assert.equal(list.items.length,50);
+ const filtered=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{q:'Target',page:2,limit:50},statuses:[]});assert.equal(filtered.pagination.total,5);assert.equal(filtered.items.length,0);
+ const other=await fixture();assert.equal((await buildCrmContactsPayload(db,{clientId:other.clientId,query:{},statuses:[]})).pagination.total,0);
+});
+test("only control receipts gain critical protection; no tenant policy changed; recovered errors omit CSV identities",async()=>{
+ const {classifyEventRetentionPolicy}=await import('../events/eventRetentionPolicy.js');
+ for(const name of Object.values(IMPORT_EVENTS))assert.equal(classifyEventRetentionPolicy(name),'CRITICAL');
+ assert.equal(classifyEventRetentionPolicy('crm.contact.import.summary'),'OPERATIONAL');
+ const p=await fixture(`phone,name\ninvalid-example,Synthetic private name\n${phone(2)},Other`);const r=await execute(db,p);assert.equal(r.status,'COMPLETED');
+ assert.ok(r.summary?.errors.length);assert.equal(r.summary?.errors[0].phoneDisplay,null);assert.ok(!JSON.stringify(r.summary).includes('Synthetic private name'));assert.ok(!JSON.stringify(r.summary).includes('invalid-example'));
+});
+test("exclusion racing classification rechecks each row and reconciles late skips",async()=>{
+ const p=await fixture(`phone,name\n${phone(11)},Changed one\n${phone(12)},Must preserve`);
+ for(const n of [11,12])await upsertCrmContact(db,{clientId:p.clientId,input:{phone:phone(n),name:'Before'},actorUserId:p.actorUserId,requestId:randomUUID(),source:'crm_manual',audit:false});
+ let once=false;
+ const wrapped=intercept(async(data,run)=>{
+  if(data.eventName===IMPORT_EVENTS.row&&!once){once=true;await db.contact.updateMany({where:{clientId:p.clientId,waId:phone(12)},data:{operationallyExcludedAt:new Date()}});}return run();
+ });
+ const result=await execute(wrapped,p);assert.equal(result.status,'COMPLETED');assert.equal(result.summary?.updated,1);assert.equal(result.summary?.excludedContacts,1);assert.equal(result.summary?.readyToImport,2);
+ const protectedContact=await db.contact.findFirstOrThrow({where:{clientId:p.clientId,waId:phone(12)}});assert.equal(protectedContact.name,'Before');assert.ok(protectedContact.operationallyExcludedAt);
+});

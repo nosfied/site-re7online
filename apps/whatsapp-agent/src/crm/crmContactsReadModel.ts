@@ -549,7 +549,31 @@ function buildLeadWhere(params: {
   };
 }
 
-export async function buildCrmContactsPayload(
+// Scan bounded projection batches under the caller's snapshot, counting the same visible entities as the page.
+export async function buildCrmContactsPayload(prisma: PrismaClient, params: Parameters<typeof buildCrmContactsBatch>[1]): Promise<CrmContactsPayload> {
+  const project = async (reader: PrismaClient) => {
+    if (params.audienceAnalysisLimit) {
+      const { scanned: _scanned, ...result } = await buildCrmContactsBatch(reader, params); return result;
+    }
+    const page = normalizePage(params.query.page), limit = normalizeLimit(params.query.limit);
+    const start = (page - 1) * limit; let total = 0, offset = 0;
+    const items: CrmContactListItem[] = []; let result: CrmContactsPayload;
+    while (true) {
+      const { scanned, ...batch } = await buildCrmContactsBatch(reader, { ...params, candidateOffset: offset, query: { ...params.query, page: 1 } });
+      result = batch;
+      for (const item of batch.items) { if (total >= start && items.length < limit) items.push(item); total += 1; }
+      offset += scanned;
+      if (scanned < 500) break;
+    }
+    const totalPages = total ? Math.ceil(total / limit) : 0;
+    return { ...result!, items, pagination: { page, limit, total, totalPages, hasNextPage: page < totalPages, hasPreviousPage: page > 1 } };
+  };
+  if (typeof prisma.$transaction === "function") return prisma.$transaction(tx => project(tx as unknown as PrismaClient),
+    { isolationLevel: "RepeatableRead", maxWait: 1000, timeout: 15000 });
+  return project(prisma); // A transaction client already supplied by the HTTP reader has no nested transaction method.
+}
+
+async function buildCrmContactsBatch(
   prisma: PrismaClient,
   params: {
     clientId: string;
@@ -565,8 +589,9 @@ export async function buildCrmContactsPayload(
     includeAnonymized?: boolean;
     includeCampaignRelationships?: boolean;
     audienceAnalysisLimit?: number;
+    candidateOffset?: number;
   }
-): Promise<CrmContactsPayload> {
+): Promise<CrmContactsPayload & { scanned: number }> {
   const q = normalizeOptionalText(params.query.q);
   const status = normalizeStatus(params.query.status);
   const channel = normalizeChannel(params.query.channel);
@@ -576,7 +601,7 @@ export async function buildCrmContactsPayload(
   const updatedFromDate = parseDateFilter(params.query.updatedFrom);
   const updatedToDate = parseDateFilter(params.query.updatedTo);
   const page = normalizePage(params.query.page);
-  const limit = params.audienceAnalysisLimit ? Math.min(5000, Math.max(1, params.audienceAnalysisLimit)) : normalizeLimit(params.query.limit);
+  const limit = params.candidateOffset !== undefined ? 500 : params.audienceAnalysisLimit ? Math.min(5000, Math.max(1, params.audienceAnalysisLimit)) : normalizeLimit(params.query.limit);
   const statusLabelById = buildStatusLabelMap(params.statuses);
   const includeAnonymized = params.includeAnonymized === true;
   const requiresPostFilter = true;
@@ -590,11 +615,9 @@ export async function buildCrmContactsPayload(
     updatedTo: updatedToDate,
   });
 
-  const candidateTake = params.audienceAnalysisLimit ? limit :
-    requiresPostFilter
-      ? Math.min(MAX_LIMIT * 20, Math.max(limit * page * 4, limit))
-      : limit;
-  const candidateSkip = requiresPostFilter ? 0 : (page - 1) * limit;
+  // Post-filters define visibility; never label a candidate prefix as the total.
+  const candidateTake = params.candidateOffset !== undefined ? 500 : params.audienceAnalysisLimit ? limit : undefined;
+  const candidateSkip = params.candidateOffset ?? (requiresPostFilter ? 0 : (page - 1) * limit);
 
   const [totalBeforePostFilter, leads] = await Promise.all([
     prisma.lead.count({ where: baseWhere }),
@@ -630,6 +653,7 @@ export async function buildCrmContactsPayload(
   if (leads.length === 0) {
     return {
       ok: true,
+      scanned: leads.length,
       filters: {
         q,
         status,
@@ -986,6 +1010,7 @@ export async function buildCrmContactsPayload(
 
   return {
     ok: true,
+    scanned: leads.length,
     filters: {
       q,
       status,

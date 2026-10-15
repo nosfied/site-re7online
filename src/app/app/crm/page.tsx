@@ -8,6 +8,8 @@ import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
   AppApiError,
+  AppCrmImportOperation,
+  fetchAppCrmImportOperation,
   AppCrmContactDetailResponse,
   AppHiddenBlockingConversation,
   AppCrmContactImportConfirmResponse,
@@ -40,6 +42,8 @@ import {
 import { hasCapability } from "@/lib/appFeatures";
 import { getAppErrorUxMessage, getChannelUxLabel, getConversationStatusUxLabel } from "@/lib/appUxLabels";
 import { formatUserDisplayName } from "@/lib/userDisplayName";
+
+import { importRecoveryKey, importIsTerminal, importOperationMessage, mergeImportObservation } from "@/lib/crmImportRecovery";
 
 const PAGE_LIMIT = 50;
 const PERSISTENT_CRM_NOTICES = new Set([
@@ -1268,6 +1272,7 @@ function CreateContactModal({
 }
 
 function CsvImportModal({
+  recoveryKey, onStatus,
   onClose,
   onInspect,
   onPreview,
@@ -1276,7 +1281,9 @@ function CsvImportModal({
 		  onClose: () => void;
 		  onInspect: (payload: { csvText: string }) => Promise<AppCrmContactImportInspectResponse>;
 		  onPreview: (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmContactImportPreviewResponse>;
-		  onConfirm: (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmContactImportConfirmResponse>;
+		  recoveryKey: string;
+      onStatus: (operationId: string) => Promise<AppCrmImportOperation>;
+      onConfirm: (payload: { operationId: string; csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmImportOperation>;
 		}) {
 		  type CsvMappingField = keyof AppCrmContactCsvMapping;
 		  const initialMappingTouched: Record<CsvMappingField, boolean> = {
@@ -1300,6 +1307,38 @@ function CsvImportModal({
   const [inspection, setInspection] = useState<AppCrmContactImportInspectResponse | null>(null);
   const [preview, setPreview] = useState<AppCrmContactImportPreviewResponse | null>(null);
   const [summary, setSummary] = useState<AppCrmContactImportConfirmResponse | null>(null);
+  const [operationId, setOperationId] = useState<string | null>(null);
+  const [operation, setOperation] = useState<AppCrmImportOperation | null>(null);
+  const statusSeq = useRef(0);
+  const submitIntent = useRef<string | null>(null);
+  useEffect(() => {
+    try { const id = localStorage.getItem(recoveryKey); submitIntent.current = id; setOperationId(id); }
+    catch { setLocalError("Não foi possível consultar a referência da importação neste navegador."); }
+    return () => { statusSeq.current += 1; };
+  }, [recoveryKey]);
+  const recover = useCallback(async (id: string) => {
+    const seq = ++statusSeq.current;
+    try {
+      const result = await onStatus(id);
+      if (seq !== statusSeq.current) return;
+      setOperation(current => mergeImportObservation(current, result));
+      if (result.summary) setSummary(result.summary);
+    } catch {
+      if (seq !== statusSeq.current) return;
+      setOperation(current => mergeImportObservation(current, { ok: true, operationId: id, status: "UNKNOWN", summary: null, progress: null }));
+    }
+  }, [onStatus]);
+  useEffect(() => {
+    if (!operationId || importIsTerminal(operation)) return;
+    let cancelled = false, count = 0; let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      await recover(operationId);
+      if (!cancelled && ++count < 60) timer = setTimeout(poll, 2000);
+    };
+    void poll();
+    return () => { cancelled = true; clearTimeout(timer); statusSeq.current += 1; };
+  }, [operationId, operation?.status, recover]);
+
 	  const [inspectLoading, setInspectLoading] = useState(false);
 	  const [previewLoading, setPreviewLoading] = useState(false);
 	  const [importLoading, setImportLoading] = useState(false);
@@ -1511,18 +1550,28 @@ function CsvImportModal({
   };
 
   const runConfirm = async () => {
-    if (!csvText.trim() || !preview) return;
-    setImportLoading(true);
-    setLocalError(null);
+    if (!csvText.trim() || !preview || operationId || submitIntent.current) return;
     try {
-      const response = await onConfirm({ csvText, mapping });
-      setSummary(response);
+      const prior = localStorage.getItem(recoveryKey);
+      if (prior) { submitIntent.current = prior; setOperationId(prior); return; }
+    } catch { setLocalError("Não foi possível preservar a referência da importação."); return; }
+    submitIntent.current = "preparing";
+    const id = crypto.randomUUID();
+    // Persist intent before the POST. Failed storage must prevent submission.
+    try { localStorage.setItem(recoveryKey, id); } catch { setLocalError("Não foi possível preservar a referência desta importação. Nenhum envio iniciado."); submitIntent.current = null; return; }
+    submitIntent.current = id;
+    setOperationId(id); setImportLoading(true); setLocalError(null);
+    try {
+      const result = await onConfirm({ operationId: id, csvText, mapping });
+      statusSeq.current += 1; setOperation(current => mergeImportObservation(current, result));
+      if (result.summary) setSummary(result.summary);
     } catch (err) {
-      const typed = err as AppApiError;
-      setLocalError(normalizeAppErrorMessage(typed, "Não foi possível importar o CSV."));
-    } finally {
-      setImportLoading(false);
-    }
+      // A 409 may identify the same tenant's unresolved earlier operation.
+      const payload = (err as AppApiError).payload as { operationId?: string } | undefined;
+      const blocked = payload?.operationId;
+      if (typeof blocked === "string") { statusSeq.current += 1; submitIntent.current = blocked; localStorage.setItem(recoveryKey, blocked); setOperation(null); setSummary(null); setOperationId(blocked); }
+      else setOperation(current => mergeImportObservation(current, { ok: true, operationId: id, status: "UNKNOWN", summary: null, progress: null }));
+    } finally { setImportLoading(false); }
   };
 
   const errorRows = summary?.errors ?? preview?.sampleErrors ?? [];
@@ -1536,8 +1585,8 @@ function CsvImportModal({
   ].filter(Boolean).join(" | "));
   const previewReady = Boolean(preview && !reportVisible);
   const previewMappingDirty = Boolean(preview && !reportVisible && previewMappingKey !== mappingKey);
-  const previewButtonDisabled = !csvText.trim() || !phoneColumn.trim() || inspectLoading || previewLoading || importLoading || reportVisible || (Boolean(preview) && !previewMappingDirty);
-  const confirmButtonDisabled = !preview || reportVisible || inspectLoading || previewLoading || importLoading || previewMappingDirty || preview.readyToImport === 0;
+  const previewButtonDisabled = Boolean(operationId) || !csvText.trim() || !phoneColumn.trim() || inspectLoading || previewLoading || importLoading || reportVisible || (Boolean(preview) && !previewMappingDirty);
+  const confirmButtonDisabled = Boolean(operationId) || !preview || reportVisible || inspectLoading || previewLoading || importLoading || previewMappingDirty || preview.readyToImport === 0;
   const totalReportFailures = summary ? (summary.failed ?? 0) + summary.invalid + (summary.invalidCrmStatuses ?? 0) : 0;
 
   const renderIssueTable = (
@@ -1627,7 +1676,7 @@ function CsvImportModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-3 py-4 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <button type="button" aria-label={reportVisible ? "Fechar importação" : "Cancelar importação"} className="absolute inset-0 cursor-default disabled:cursor-wait" onClick={onClose} disabled={loading} />
+      <button type="button" aria-label={operationId ? "Fechar acompanhamento" : "Fechar importação"} className="absolute inset-0 cursor-default disabled:cursor-wait" onClick={onClose} disabled={loading} />
       <section className="theme-bg relative grid max-h-[calc(100vh-2rem)] w-full max-w-3xl grid-rows-[auto_1fr] overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
         <header className="theme-surface-strong border-b p-4">
           <h2 className="text-lg font-bold text-white">Importar CSV</h2>
@@ -1644,30 +1693,39 @@ function CsvImportModal({
                 type="file"
                 accept=".csv,text/csv"
                 onChange={(event) => void readFile(event.target.files?.[0] ?? null)}
-                disabled={loading || reportVisible}
+                disabled={loading || reportVisible || Boolean(operationId)}
                 className="theme-input rounded-md border p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
               />
 	            </div>
+                {operationId ? <div role="status" className="rounded-md border p-3 text-sm">
+                  <p>{operation ? importOperationMessage(operation) : "Consultando a operação registrada..."}</p>
+                  <button type="button" onClick={() => void recover(operationId)}>Consultar resultado</button>
+                  {importIsTerminal(operation) ? <button type="button" onClick={() => {
+                    statusSeq.current += 1; submitIntent.current = null;
+                    localStorage.removeItem(recoveryKey); setOperationId(null); setOperation(null); setSummary(null);
+                    setCsvText(""); setPreview(null); setInspection(null);
+                  }}>Preparar outra importação</button> : null}
+                </div> : null}
             {(inspection || preview) && !reportVisible ? (
               <div className="grid gap-3 rounded-md border border-white/10 bg-slate-950/20 p-3">
 		                <div className="grid gap-3 sm:grid-cols-3">
 	                  <label className="grid gap-1.5 text-sm">
 	                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do telefone</span>
-	                    <select value={phoneColumn} onChange={(event) => updatePhoneColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+	                    <select value={phoneColumn} onChange={(event) => updatePhoneColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
                       <option value="">Selecionar coluna</option>
                       {headers.map((header) => <option key={header} value={header}>{header}</option>)}
                     </select>
                   </label>
                   <label className="grid gap-1.5 text-sm">
                     <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do nome</span>
-                    <select value={nameColumn} onChange={(event) => updateNameColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+                    <select value={nameColumn} onChange={(event) => updateNameColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
                       <option value="">Sem nome</option>
 	                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 	                    </select>
 	                  </label>
 	                  <label className="grid gap-1.5 text-sm">
 	                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Situação no CRM</span>
-	                    <select value={crmSituationColumn} onChange={(event) => updateCrmSituationColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+	                    <select value={crmSituationColumn} onChange={(event) => updateCrmSituationColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
 	                      <option value="">Preservar/default</option>
 	                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 	                    </select>
@@ -1676,28 +1734,28 @@ function CsvImportModal({
 		                <div className="grid gap-3 sm:grid-cols-4">
 		                  <label className="grid gap-1.5 text-sm">
 		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Empresa</span>
-		                    <select value={companyColumn} onChange={(event) => updateCompanyColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                    <select value={companyColumn} onChange={(event) => updateCompanyColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
 		                      <option value="">Preservar</option>
 		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 		                    </select>
 		                  </label>
 		                  <label className="grid gap-1.5 text-sm">
 		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Cidade</span>
-		                    <select value={cityColumn} onChange={(event) => updateCityColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                    <select value={cityColumn} onChange={(event) => updateCityColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
 		                      <option value="">Preservar</option>
 		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 		                    </select>
 		                  </label>
 		                  <label className="grid gap-1.5 text-sm">
 		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">E-mail</span>
-		                    <select value={emailColumn} onChange={(event) => updateEmailColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                    <select value={emailColumn} onChange={(event) => updateEmailColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
 		                      <option value="">Preservar</option>
 		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 		                    </select>
 		                  </label>
 		                  <label className="grid gap-1.5 text-sm">
 		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Serviço / interesse</span>
-		                    <select value={serviceColumn} onChange={(event) => updateServiceColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                    <select value={serviceColumn} onChange={(event) => updateServiceColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
 		                      <option value="">Preservar</option>
 		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 		                    </select>
@@ -1720,7 +1778,7 @@ function CsvImportModal({
                       <p className="mt-1 text-lg font-semibold text-white">{preview.totalRows}</p>
                     </div>
                     <div className="rounded-md border border-emerald-400/30 bg-emerald-900/20 p-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100/75">Prontas</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100/75">Elegíveis na prévia</p>
                       <p className="mt-1 text-lg font-semibold text-emerald-100">{preview.readyToImport}</p>
                     </div>
                     <div className="rounded-md border border-amber-400/30 bg-amber-900/20 p-3">
@@ -1729,7 +1787,7 @@ function CsvImportModal({
                     </div>
                     <div className="rounded-md border border-red-400/30 bg-red-900/20 p-3">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-red-100/75">Bloqueadas</p>
-                      <p className="mt-1 text-lg font-semibold text-red-100">{preview.invalidRows + (preview.invalidCrmStatuses ?? 0) + (preview.excludedContacts ?? 0) + (preview.provisionalContacts ?? 0) + (preview.identityConflicts ?? 0)}</p>
+                      <p className="mt-1 text-lg font-semibold text-red-100">{preview.invalidRows + (preview.excludedContacts ?? 0) + (preview.provisionalContacts ?? 0) + (preview.identityConflicts ?? 0)}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
                       <p className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Novos contatos</p>
@@ -1744,11 +1802,13 @@ function CsvImportModal({
                       <p className="mt-1 text-lg font-semibold text-white">{preview.unchanged ?? 0}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-                      <p className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Consolidados</p>
+                      <p className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Já existentes</p>
                       <p className="mt-1 text-lg font-semibold text-white">{preview.existingContacts}</p>
                     </div>
                   </div>
 	                ) : null}
+                {preview ? <p className="theme-soft text-sm">Amostra de até 200 linhas: {preview.rows?.length ?? 0} de {preview.readyToImport} elegíveis. A importação considera todas as linhas elegíveis. Elegíveis = novos + atualizações + sem alteração; existentes = atualizações + sem alteração (subtotal).</p> : null}
+
 	                {preview?.rows?.length ? (
 	                  <div className="overflow-x-auto rounded-md border border-white/10">
 			                    <table className="w-full min-w-[900px] text-left text-sm">
@@ -1810,7 +1870,7 @@ function CsvImportModal({
                     <p className="mt-1 text-lg font-semibold text-white">{summary.unchanged ?? 0}</p>
                   </div>
                   <div className="rounded-md border border-emerald-100/20 bg-emerald-950/20 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-50/70">Prontos</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-50/70">Elegíveis na conferência</p>
                     <p className="mt-1 text-lg font-semibold text-white">{summary.readyToImport}</p>
                   </div>
                   <div className="rounded-md border border-emerald-100/20 bg-emerald-950/20 p-3">
@@ -1823,7 +1883,7 @@ function CsvImportModal({
                   </div>
                 </div>
                 <div className="text-xs text-emerald-50/80">
-	                  Duplicados: {summary.duplicates} · Status inválido: {summary.invalidCrmStatuses ?? 0} · Fora da operação: {summary.excludedContacts ?? 0} · Já associados: {summary.provisionalContacts ?? 0} · Conflitos: {summary.identityConflicts ?? 0}
+	                  Duplicados: {summary.duplicates} · Telefone inválido: {summary.invalid} · Status inválido: {summary.invalidCrmStatuses ?? 0} · Fora da operação: {summary.excludedContacts ?? 0} · Já associados: {summary.provisionalContacts ?? 0} · Conflitos: {summary.identityConflicts ?? 0}
                 </div>
                 {renderIssueTable(summary.errors ?? [], { tone: "emerald", truncated: summary.truncatedErrors })}
               </div>
@@ -1833,7 +1893,7 @@ function CsvImportModal({
             ) : null}
             <div className="flex flex-wrap justify-end gap-2">
               <button type="button" onClick={onClose} disabled={loading} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
-                {reportVisible ? "Fechar" : "Cancelar"}
+                {operationId ? "Fechar acompanhamento" : reportVisible ? "Fechar" : "Cancelar"}
               </button>
               {!reportVisible ? (
                 <button
@@ -2313,16 +2373,26 @@ export default function AppCrmContactsPage() {
   );
 
 		  const confirmCsvImport = useCallback(
-		    async (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => {
+		    async (payload: { operationId: string; csvText: string; mapping: AppCrmContactCsvMapping }) => {
 	      if (!session) throw new Error("Sessão indisponível.");
 	      const response = await confirmAppCrmContactCsvImport(session, payload);
-	      setNotice(`Importação concluída: ${response.created} criado(s), ${response.updated} atualizado(s), ${response.unchanged ?? 0} sem alteração.`);
-      setPage(1);
-      await loadContacts(session, 1);
+	      if (response.status === "COMPLETED" && response.summary) {
+        setNotice(`Importação concluída: ${response.summary.created} criado(s), ${response.summary.updated} atualizado(s), ${response.summary.unchanged ?? 0} sem alteração.`);
+        setPage(1);
+        try { await loadContacts(session, 1); } catch { setError("Importação concluída; não foi possível atualizar a lista agora."); }
+      }
       return response;
     },
     [loadContacts, session]
   );
+
+  const recoverCsvImport = useCallback(async (id: string) => {
+    if (!session) throw new Error("Sessão indisponível.");
+    return fetchAppCrmImportOperation(session, id);
+  }, [session]);
+  useEffect(() => {
+    try { if (session && canManageCrmContacts && localStorage.getItem(importRecoveryKey(session))) setCsvModalOpen(true); } catch { /* Modal will explain storage failure; never submit without intent. */ }
+  }, [session, canManageCrmContacts]);
 
   const copyReference = useCallback(async (value: string) => {
     if (!value) {
@@ -2472,7 +2542,7 @@ export default function AppCrmContactsPage() {
             <div className="flex flex-wrap items-center gap-3">
               <span>
                 {contacts
-                  ? `${formatNumber(contacts.pagination.total)} contato(s) encontrados`
+                  ? `${formatNumber(contacts.totals?.tenantVisible ?? contacts.pagination.total)} contatos no escopo; ${formatNumber(contacts.pagination.total)} encontrados; ${contacts.items.length} nesta página`
                   : "Carregando contatos"}
               </span>
               <span className="text-xs theme-soft">Registros anonimizados ficam ocultos por padrão.</span>
@@ -2640,6 +2710,9 @@ export default function AppCrmContactsPage() {
       ) : null}
       {csvModalOpen && canManageCrmContacts ? (
         <CsvImportModal
+          key={session ? importRecoveryKey(session) : "none"}
+          recoveryKey={session ? importRecoveryKey(session) : "none"}
+          onStatus={recoverCsvImport}
           onClose={() => setCsvModalOpen(false)}
           onInspect={inspectCsvImport}
           onPreview={previewCsvImport}

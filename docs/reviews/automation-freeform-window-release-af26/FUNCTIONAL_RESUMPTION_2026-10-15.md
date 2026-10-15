@@ -1,5 +1,8 @@
 # Retomada funcional — prioridade e próximo trabalho local
 
+**Atualização15/10 — CSV LOCAL VALIDATED / FOR REVIEW / NOT DEPLOYED:** [entrega,67 provas e limites](crm-csv-operation-20261015/REPORT.md), [contrato canônico](../../saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md). A auditoria abaixo registra o diagnóstico anterior; a implementação agora reutiliza Event para admissão/progresso/terminal por operação e tenant, sem migration, recupera timeout sem replay e distingue total/filtro/página. Próximo trabalho concreto: revisão do delta e da interface, orçamento dos recibos/contagens e plano seletivo API/frontend. Não repetir Prisma42, suites/builds válidos, reimportação histórica ou fases operacionais concluídas.
+
+
 **Segurança externa: ROTAÇÕES ADIADAS POR ACEITAÇÃO DO OWNER.** [Aceite explícito da matriz b1d41b33 e revisão21/10](security-containment-20261012/exposure-scope-20261015/OWNER_ACCEPTANCE_2026-10-15.md). P0/A/B e resets continuam suspensos; pacotes/evidências preservados. Não renovar backup apenas para essa preparação. A decisão libera o foco de engenharia funcional, sem declarar segurança encerrada.
 
 ## Prioridade canônica
@@ -31,4 +34,4 @@ Antes de qualquer proposta futura de implantação seletiva, delimitar o delta f
 
 ## Estado e limites
 
-Esta entrega registra aceite/prioridade e a próxima unidade de trabalho; **não afirma que o defeito CSV foi corrigido**. Nenhum deploy, alteração de código funcional, SQL produtivo, acesso à VPS, `.env`, reativação de retenção, mensagem ou abertura da guarda. Não foi gerada nova preparação de janela, backup ou execução dos pacotes externos. NEWauth+NEWDB+NEWcipher/reader, ambos crons, produção e out.15 CLOSED preservados. Próxima entrega local: contrato/delta CSV e provas dirigidas para revisão, separado de eventual autorização produtiva.
+O checkpoint inicial abaixo foi sucedido pela implementação CSV local e provas vinculadas acima. O defeito permanece sem correção produtiva/aceite visual. Nenhum deploy, SQL produtivo, acesso à VPS, `.env`, reativação de retenção, mensagem ou abertura da guarda. Não foi gerada nova preparação de janela, backup ou execução dos pacotes externos. NEWauth+NEWDB+NEWcipher/reader, ambos crons, produção e out.15 CLOSED preservados. Próxima entrega local: contrato/delta CSV e provas dirigidas para revisão, separado de eventual autorização produtiva.

@@ -508,7 +508,8 @@ export type AppCrmContactImportPreviewResponse = {
 	  created?: number;
 	  updated?: number;
 	  unchanged?: number;
-	  rows?: Array<{
+	  sample?: { limit: number; displayed: number; eligible: number; truncated: boolean };
+  rows?: Array<{
 		    rowNumber: number;
 		    name: string | null;
 		    company?: string | null;
@@ -581,6 +582,12 @@ export type AppCrmContactImportConfirmResponse = {
   truncatedErrors?: boolean;
 };
 
+export type AppCrmImportOperation = {
+  ok: true; operationId: string; status: "PROCESSING" | "COMPLETED" | "FAILED" | "UNKNOWN";
+  reason?: string | null; summary: AppCrmContactImportConfirmResponse | null;
+  progress: { classification: Record<string, number> | null; processed: number; counts: Record<string, number> } | null;
+};
+
 export type AppCrmContactsResponse = {
   ok: true;
   filters: {
@@ -601,6 +608,7 @@ export type AppCrmContactsResponse = {
     hasNextPage: boolean;
     hasPreviousPage: boolean;
   };
+  totals?: { tenantVisible: number; filtered: number; pageCount: number };
   items: AppCrmContactItem[];
   generatedAt: string;
 };
@@ -4839,12 +4847,16 @@ export async function previewAppCrmContactCsvImport(
 
 export async function confirmAppCrmContactCsvImport(
   session: AppSession,
-  payload: { csvText: string; mapping?: AppCrmContactCsvMapping | null }
-): Promise<AppCrmContactImportConfirmResponse> {
+  payload: { operationId: string; csvText: string; mapping?: AppCrmContactCsvMapping | null }
+): Promise<AppCrmImportOperation> {
   return requestAppJson(session, "/app/crm/contacts/import/confirm", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function fetchAppCrmImportOperation(session: AppSession, operationId: string): Promise<AppCrmImportOperation> {
+  return requestAppJson(session, `/app/crm/contacts/import/operations/${encodeURIComponent(operationId)}`);
 }
 
 export async function updateAppCrmContactBasics(

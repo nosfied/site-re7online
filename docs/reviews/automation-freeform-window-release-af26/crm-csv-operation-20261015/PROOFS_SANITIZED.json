@@ -1,0 +1,181 @@
+{
+  "status": "LOCAL_VALIDATED_NOT_DEPLOYED",
+  "date": "2026-10-15",
+  "distinctPassingCases": 67,
+  "casesByLayer": {
+    "postgres": 9,
+    "http": 21,
+    "upsert": 27,
+    "readModelSourceContracts": 2,
+    "eventPolicy": 3,
+    "client": 5
+  },
+  "evidence": [
+    {
+      "name": "re7-csv-pg-final.log",
+      "sha256": "f83db933a914c4ddd0547ab6ba7d336c2ec87f663d4792311ace7fbffb26623b",
+      "bytes": 1961,
+      "tap": {
+        "tests": 8,
+        "pass": 8,
+        "fail": 0,
+        "skipped": 0
+      },
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-exclusion-race.log",
+      "sha256": "5e5dbf861d06d8ce6ab48fa3a3360c1b1ccd0a20211600023d0853a3a79506ce",
+      "bytes": 2475,
+      "tap": {
+        "tests": 9,
+        "pass": 1,
+        "fail": 0,
+        "skipped": 8
+      },
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-http-tests.log",
+      "sha256": "48a0962613ccff5e7c68142d235313f7e9ec6aa5991ccbba236d0b776557b00f",
+      "bytes": 12564,
+      "tap": {
+        "tests": 21,
+        "pass": 21,
+        "fail": 0,
+        "skipped": 0
+      },
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-http-final.log",
+      "sha256": "64470b87a8d74a9539ed2fa54877af300e9a4599dd98e291b2010454c8a704f2",
+      "bytes": 5890,
+      "tap": {
+        "tests": 21,
+        "pass": 4,
+        "fail": 0,
+        "skipped": 17
+      },
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-upsert-final.log",
+      "sha256": "809b869342d3081748096411eecd26060886c714aa50eca1b64d88d2d7aafc42",
+      "bytes": 5436,
+      "tap": {
+        "tests": 27,
+        "pass": 27,
+        "fail": 0,
+        "skipped": 0
+      },
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-read-contract-final.log",
+      "sha256": "70b3d29e9ff3e9717ea79bbe5555f0782bec3405fbdbafb2a3530435f5906292",
+      "bytes": 486,
+      "tap": {
+        "tests": 2,
+        "pass": 2,
+        "fail": 0,
+        "skipped": 0
+      },
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-event-policy-final.log",
+      "sha256": "06903dc388fad13564fa805a6ee0f9b793f0cf1b5a4fe817939d49dd48b2d652",
+      "bytes": 668,
+      "tap": {
+        "tests": 3,
+        "pass": 3,
+        "fail": 0,
+        "skipped": 0
+      },
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-client-final.log",
+      "sha256": "e6e85ae48eb32594a47dddf955c323d52749ac3787b93fe9929e226efc59be84",
+      "bytes": 1342,
+      "tap": {
+        "tests": 5,
+        "pass": 5,
+        "fail": 0,
+        "skipped": 0
+      },
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-back-types-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tap": null,
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-front-sources-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tap": null,
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-front-test-types-v2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tap": null,
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-front-types.log",
+      "sha256": "ffe35672305bd3b0f406edfca28eace7c166424830306b7022b1dc1914a4f163",
+      "bytes": 6009,
+      "tap": null,
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-client-review-final.log",
+      "sha256": "6a38da1ef6aff82bde1ff35254154cb76ec30879f867516bf285b29b759371ad",
+      "bytes": 243,
+      "tap": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "skipped": 0
+      },
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-front-published-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tap": null,
+      "containsProductionValues": false
+    },
+    {
+      "name": "re7-csv-client-published-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tap": null,
+      "containsProductionValues": false
+    }
+  ],
+  "typechecks": {
+    "backend": "PASS",
+    "frontendProductionSources": "PASS",
+    "newClientTest": "PASS",
+    "frontendAllExistingTests": "PREEXISTING_ERRORS_OUTSIDE_DELTA"
+  },
+  "browserRendered": false,
+  "labStopped": true,
+  "prisma42TestsReusedNotRepeated": true,
+  "migration": false,
+  "deploy": false,
+  "vpsAccess": false,
+  "realImport": false,
+  "retentionExecuted": false,
+  "envChanged": false,
+  "guardOpened": false
+}

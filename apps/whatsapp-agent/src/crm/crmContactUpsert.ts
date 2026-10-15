@@ -1208,7 +1208,8 @@ export async function previewCrmContactCsvImport(
 	    created: classification.readyRows.length,
 	    updated: updatedRows,
 	    unchanged: unchangedRows,
-	    rows: previewRows,
+	    sample: { limit: 200, displayed: previewRows.length, eligible: importableRows.length, truncated: importableRows.length > previewRows.length },
+    rows: previewRows,
 	    sampleErrors: classification.issues.slice(0, CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT).map((issue) => ({
 	      ...issue,
 	      code: normalizeImportIssueReason(issue.reason),
@@ -1217,6 +1218,19 @@ export async function previewCrmContactCsvImport(
     truncatedErrors: classification.issues.length > CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT,
   };
 }
+
+export type CrmImportOutcome = "created" | "updated" | "unchanged" | "excludedContacts" | "provisionalContacts" | "identityConflicts" | "failed";
+export function crmImportOutcome(input: CrmContactUpsertParams, result: Awaited<ReturnType<typeof upsertCrmContact>>): CrmImportOutcome {
+  if (result.createdContact || result.createdLead) return "created";
+  const fields = ["name", "company", "city", "email", "service"] as const;
+  return fields.some(k => input.input[k] != null && input.input[k] !== result.previousLead?.[k]) ||
+    (input.crmStatusId != null && input.crmStatusId !== result.previousLead?.status) ? "updated" : "unchanged";
+}
+export type CrmImportHooks = {
+  classified: (counts: Record<string, number>) => Promise<void>;
+  upsert: (params: CrmContactUpsertParams, rowNumber: number) => ReturnType<typeof upsertCrmContact>;
+  rejected: (rowNumber: number, outcome: CrmImportOutcome) => Promise<void>;
+};
 
 export async function confirmCrmContactCsvImport(
   prisma: PrismaClient,
@@ -1228,6 +1242,7 @@ export async function confirmCrmContactCsvImport(
 	    actorUserId: string;
 	    requestId: string;
 	    audit?: boolean;
+    operationHooks?: CrmImportHooks;
 	  }
 	) {
 	  const classification = await classifyCrmContactImportRows(prisma, params);
@@ -1244,9 +1259,14 @@ export async function confirmCrmContactCsvImport(
 	    normalizedPhoneDisplay: issue.normalizedPhone,
 	  }));
 	  const importableRows = [...classification.readyRows, ...classification.existingActiveRows];
-	  for (const row of importableRows) {
+	  await params.operationHooks?.classified({ received: classification.parsed.rows.length,
+    eligible: importableRows.length, invalid: classification.issues.filter(x => x.reason === "invalid_phone").length,
+    invalidCrmStatuses: classification.issues.filter(x => x.reason === "invalid_crm_status").length,
+    duplicates: classification.issues.filter(x => x.reason === "duplicate_in_file").length,
+    excludedContacts, provisionalContacts, identityConflicts });
+  for (const row of importableRows) {
 	    try {
-		      const result = await upsertCrmContact(prisma, {
+		      const upsertParams: CrmContactUpsertParams = {
 		        clientId: params.clientId,
 		        input: {
 		          phone: row.phone,
@@ -1261,20 +1281,13 @@ export async function confirmCrmContactCsvImport(
 	        source: "crm_import",
 	        crmStatusId: row.crmStatusId,
 	        audit: params.audit,
-	      });
-	      if (result.createdContact || result.createdLead) created += 1;
-	      else if (
-	        [
-		          row.name !== null && row.name !== result.previousLead?.name,
-		          row.company !== null && row.company !== result.previousLead?.company,
-		          row.city !== null && row.city !== result.previousLead?.city,
-		          row.email !== null && row.email !== result.previousLead?.email,
-		          row.service !== null && row.service !== result.previousLead?.service,
-		          row.crmStatusId !== null && row.crmStatusId !== result.previousLead?.status,
-	        ].some(Boolean)
-	      ) updated += 1;
-	      else unchanged += 1;
-	    } catch (error) {
+	      };
+      const result = params.operationHooks ? await params.operationHooks.upsert(upsertParams, row.rowNumber) : await upsertCrmContact(prisma, upsertParams);
+	      const outcome = crmImportOutcome(upsertParams, result);
+      if (outcome === "created") created += 1;
+      else if (outcome === "updated") updated += 1;
+      else unchanged += 1;
+    } catch (error) {
       if (error instanceof CrmContactUpsertError) {
         if (error.code === "contact_operationally_excluded") excludedContacts += 1;
         else if (error.code === "contact_already_provisional") provisionalContacts += 1;
@@ -1295,6 +1308,10 @@ export async function confirmCrmContactCsvImport(
 	            crmStatusLabel: row.crmStatusLabel,
 	          });
 	        }
+        await params.operationHooks?.rejected(row.rowNumber,
+          error.code === "contact_operationally_excluded" ? "excludedContacts" :
+          error.code === "contact_already_provisional" ? "provisionalContacts" :
+          error.code === "identity_conflict" ? "identityConflicts" : "failed");
         continue;
       }
       if (getPrismaErrorCode(error) === "P2002") {
@@ -1312,12 +1329,13 @@ export async function confirmCrmContactCsvImport(
 	          crmStatusId: row.crmStatusId,
 	          crmStatusLabel: row.crmStatusLabel,
 	        });
+        await params.operationHooks?.rejected(row.rowNumber, "identityConflicts");
         continue;
       }
       throw error;
     }
   }
-  if (params.audit !== false) {
+  if (params.audit !== false && !params.operationHooks) {
     await persistEvent({
       clientId: params.clientId,
       requestId: `${CRM_CONTACT_IMPORT_SUMMARY_EVENT}:${params.requestId}`,

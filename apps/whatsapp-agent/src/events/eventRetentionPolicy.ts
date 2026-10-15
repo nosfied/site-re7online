@@ -1,6 +1,13 @@
 export type EventRetentionCategory = "CRITICAL" | "OPERATIONAL" | "NOISE";
 
 const CRITICAL_EXACT_EVENTS = new Set([
+  // Import admission/row receipts are execution controls, not compactable CRM telemetry.
+  // Deleting them would permit replay or erase proof of partial commits.
+  "crm.contact.import.started",
+  "crm.contact.import.classified",
+  "crm.contact.import.row",
+  "crm.contact.import.finished",
+  "crm.contact.import.uncertain",
   "conversation.deleted",
   "conversation.anonymized",
   "conversation.assigned",

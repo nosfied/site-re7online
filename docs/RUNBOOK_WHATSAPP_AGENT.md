@@ -1,5 +1,12 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## Importação CSV CRM — revisão local 15/10/2026
+
+[Contrato canônico de operação/contagens](saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md) e [entrega local/provas](reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/REPORT.md): LOCAL VALIDATED / NOT DEPLOYED. Timeout não autoriza repetir POST ou presumir rollback; consultar somente a referência da mesma operação/tenant. UNKNOWN exige inspeção e decisão explícita, sem retomar ou apagar controle. Reentrada recupera resumo terminal; amostra até 200 não limita importação. Total visível permitido, filtrado e página são entidades distintas, sujeitas ao mesmo RBAC/exclusão/anonimização.
+
+Próxima etapa é revisão de código/interface e plano coordenado API/frontend, incluindo POST com UUID e orçamento da auditoria. Não executar importação produtiva para testar. Prisma42PASS segue local/não implantado; não executar retention:run ou --dry-run, alterar .env ou reabilitar retenção. NEWauth+NEWDB+NEWcipher, crons, out.15 CLOSED e guarda38 preservados. Rotações externas adiadas por aceite do owner, reavaliação21/10 ou gatilhos; P0/A/B e resets suspensos.
+
+
 **ROTAÇÕES ADIADAS POR ACEITAÇÃO DO OWNER —15/10/2026:** [aceite explícito da matriz b1d41b33](reviews/automation-freeform-window-release-af26/security-containment-20261012/exposure-scope-20261015/OWNER_ACCEPTANCE_2026-10-15.md). OpenAI, Meta/state, WhatsApp/verificação e Web Push adiados para reavaliação21/10/2026, ou antes pelos gatilhos registrados. Segurança OPEN, sem declarar revogação/contenção completa; P0/A/B e resets suspensos, pacotes/evidências preservados e nenhum backup apenas para essa preparação. NEWauth+NEWDB+NEWcipher, ambos crons, produção, guarda38/out.15 CLOSED preservados. Backlog funcional retomado independentemente; Prisma42PASS/typecheck permanece LOCAL/NOT DEPLOYED, sem.env/retenção.
 
 

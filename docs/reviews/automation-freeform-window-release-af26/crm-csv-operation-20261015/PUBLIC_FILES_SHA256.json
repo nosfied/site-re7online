@@ -1,0 +1,22 @@
+{
+  "apps/whatsapp-agent/src/crm/crmContactUpsert.ts": "cd690398414186c4f4f8af6840ba1c13f63cfecc7df0e0548400c5a6df5e8a24",
+  "apps/whatsapp-agent/src/crm/crmContactsReadModel.ts": "da0365d50f3c67d3fae567ffb49117db4b0f6840f4af687d4b4af8568d7252b1",
+  "apps/whatsapp-agent/src/crm/crmCsvImportOperation.postgres.test.ts": "722bf1e811867e9ff6003a5ecc90a444ebe4fd3cbe76ea4d66cf804e4583d5ae",
+  "apps/whatsapp-agent/src/crm/crmCsvImportOperation.ts": "66e83d779a08de292e0a470fa11b4056c6d48b9b9d30662ee184d17a58030ea7",
+  "apps/whatsapp-agent/src/events/eventRetentionPolicy.ts": "03791f05f68575a86bbeddd491a619adeddecf7102ed8d3000df51ceb217aad4",
+  "apps/whatsapp-agent/src/http/crmCapabilityRoutes.test.ts": "7836d3a82be7be86dc1945bf5b3c241746cc0ba98df741cb6babb25f594c0e23",
+  "apps/whatsapp-agent/src/http/routes.ts": "fcfd5e77f52e3014071aa5f4257f5e0e52a24f31fd9379d561a25b09b3c985e5",
+  "docs/BACKLOG_TECH.md": "bc7902c53b9750d2d2604d98b534ac6aeebd48875224d3102feb037be84083dd",
+  "docs/RUNBOOK_WHATSAPP_AGENT.md": "9a1629d86ef8f8d85ebd59e9127d14261746e56ec596429db8a768421f92ded6",
+  "docs/reviews/automation-freeform-window-release-af26/FUNCTIONAL_RESUMPTION_2026-10-15.md": "0f413d2cc683c782d8cd829744036b06bab9b225ec534833c6d92a25092e412f",
+  "docs/reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/PROOFS_SANITIZED.json": "6594bd7cee622ee992fdf447c1506b6a08fb2fe75b92c401e72c4d7e6c09873b",
+  "docs/reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/REPORT.md": "0b284a3c1898a20d8ff663ccd306b395bbc4548e9a9f9b66fc28c555d0bff8d2",
+  "docs/reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/REVIEW_COMMANDS.md": "942c9ce3ac82a7eebac21c9611fa750106a41469ae1f205c0e9c5640a6f4b53a",
+  "docs/reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/tsconfig.client-test.json": "5b793a9413b495c1f72baeb1c52186dbaafbf446a6cad5c175e7900b21b57f21",
+  "docs/reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/tsconfig.sources.json": "9f2988e440cb7d02bb131e6657f76758e944bd72671f52d70cee6d56250b8ba1",
+  "docs/saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md": "2c1912fb66f300dac3c787e57f7c514734f47a840f59e2e2c3913cf558356de7",
+  "src/app/app/crm/page.tsx": "74a7ee1560428114829c6aa04646de14ca0eef3f20dcdbadb43b46e0d5758964",
+  "src/lib/appClientApi.ts": "d5438903ea0ccc1e4ba48f31783cfdd2c3c291dc42a55a0bfe039abf5403aa0b",
+  "src/lib/crmImportRecovery.test.ts": "1e4d01274176925e6fd5acff4bdb9a653658c0fcdfffbfa17b20be0156cbb686",
+  "src/lib/crmImportRecovery.ts": "00440ef7f635670b3f77dd2117670d719c20112276e36948bcadf190bd70fe8b"
+}

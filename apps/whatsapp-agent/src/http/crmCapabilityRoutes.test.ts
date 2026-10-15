@@ -846,6 +846,7 @@ test("CRM CSV import previews without mutation and confirms idempotently", async
     invalid: number;
     duplicates: number;
   }>("POST", "/app/crm/contacts/import/confirm", businessSupervisor, {
+    operationId: crypto.randomUUID(),
     csvText,
     mapping: { phoneColumn: "numero", nameColumn: "nome" },
   });
@@ -862,7 +863,7 @@ test("CRM CSV import previews without mutation and confirms idempotently", async
     "POST",
     "/app/crm/contacts/import/confirm",
     businessSupervisor,
-    { csvText, mapping: { phoneColumn: "numero", nameColumn: "nome" } }
+    { operationId: crypto.randomUUID(), csvText, mapping: { phoneColumn: "numero", nameColumn: "nome" } }
   );
   assert.equal(repeat.status, 200);
   assert.equal(repeat.body.ok, true);
@@ -2086,4 +2087,23 @@ test("RBAC remains enforced separately from CRM capability", async () => {
   const response = await request<ErrorPayload>("GET", "/app/crm/settings", businessAgent);
   assert.equal(response.status, 403);
   assert.equal(getErrorCode(response.body), "forbidden");
+});
+
+
+test("CSV operation recovery enforces tenant, role, payload binding and no replay", async () => {
+  const operationId = crypto.randomUUID();
+  const payload = { operationId, csvText: "phone,name\n5584912349999,Synthetic recovery", mapping: { phoneColumn: "phone", nameColumn: "name" } };
+  const unauth = await fetch(`${baseUrl}/app/crm/contacts/import/operations/${operationId}`);
+  assert.equal(unauth.status,401);
+  assert.equal((await request("GET",`/app/crm/contacts/import/operations/${operationId}`,businessAgent)).status,403);
+  const started = await request<{ status: string; summary: unknown }>("POST","/app/crm/contacts/import/confirm",businessSupervisor,payload);
+  assert.equal(started.status,200);assert.equal(started.body.status,"COMPLETED");
+  const before = await prisma.event.count({where:{clientId:businessClientId}});
+  const recovered = await request<{ status: string; summary: unknown }>("GET",`/app/crm/contacts/import/operations/${operationId}`,businessSupervisor);
+  assert.equal(recovered.body.status,"COMPLETED");assert.deepEqual(recovered.body.summary,started.body.summary);
+  const replay = await request<{ summary: unknown }>("POST","/app/crm/contacts/import/confirm",businessSupervisor,payload);
+  assert.deepEqual(replay.body.summary,started.body.summary);assert.equal(await prisma.event.count({where:{clientId:businessClientId}}),before);
+  const foreign = await request<{status:string;summary:unknown}>("GET",`/app/crm/contacts/import/operations/${operationId}`,overrideAdmin);
+  assert.equal(foreign.status,200);assert.equal(foreign.body.status,"UNKNOWN");assert.equal(foreign.body.summary,null);
+  assert.equal((await request("POST","/app/crm/contacts/import/confirm",businessSupervisor,{...payload,csvText:payload.csvText+"\n5584912348888,Other"})).status,409);
 });
