@@ -1,0 +1,31 @@
+{
+  "state": "PREPARED_FOR_REVIEW_NOT_INSTALLED_NOT_EXECUTED",
+  "stage": {
+    "result": "CIPHER_LOCKED_INACTIVE_STAGE_PACKAGE_PASS",
+    "preparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-cipher-locked-v7-20261015T011500Z",
+    "runtime": "/opt/re7online/releases/security-epoch-v3-36f51ebe-20261015T001500Z/apps/whatsapp-agent",
+    "policySha256": "6e0649a64312ccf8318c0bed678febf1fea151281348f3fc85a2bed1c8f566a4",
+    "installerSha256": "d887864d60f204e378b55a46b8f907fca5d6debb17f568bcf09415e83504d724",
+    "minimumAvailableBytes": 18432376832,
+    "gateFalse": true,
+    "installed": false,
+    "started": false
+  },
+  "currentRead": {
+    "result": "LOCKED_PREPARATION_CURRENT_SCOPE_READABILITY_IDENTITIES_GATES_PASS",
+    "utc": "2026-10-15T01:12:35.242050+00:00",
+    "population": 11,
+    "readableConvertedFamilies": 10,
+    "opaquePreserved": 1,
+    "scopePlanIntentNotWritten": true,
+    "authDbPreserved": true,
+    "guard38Closed": true,
+    "frontendPreserved": true,
+    "healthPass": true,
+    "productionMutations": 0
+  },
+  "fiveGatesFalse": true,
+  "freshRpoRequiredBeforeContainment": true,
+  "finalPlanIntentAbsent": true,
+  "sourceDenialPreserved": true
+}

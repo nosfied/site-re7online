@@ -1,6 +1,8 @@
 # Snapshot produtivo coerente certificado; preparação DENY por CAS — 14/10/2026
 
-**Continuidade corrente:** [auditoria dos writers, protocolo concorrente LOCAL VALIDATED/NOT DEPLOYED e propostas.env](../cipher-volatile-protocol-20261014/REPORT.md). Recomendação: contenção/saída de todos os writers + fase explícita selada sob locks na mesma sessão; nenhum novo snapshot ou janela nesta entrega. A negativa abaixo permanece íntegra.
+**Continuidade vigente:** [nova geração locked-v7 integrada e conferida PARA REVISÃO, sem execução](../cipher-locked-v4-20261014/REPORT.md). Os diagnósticos/provas e a negativa214100 abaixo permanecem históricos íntegros.
+
+**Checkpoint anterior preservado:** [auditoria dos writers, protocolo concorrente LOCAL VALIDATED/NOT DEPLOYED e propostas.env](../cipher-volatile-protocol-20261014/REPORT.md). Recomendação: contenção/saída de todos os writers + fase explícita selada sob locks na mesma sessão; nenhum novo snapshot ou janela nesta entrega. A negativa abaixo permanece íntegra.
 
 **Snapshot/restore: PASS. Preparação V4: DENY_FRESH_CAS_DRIFT / NOT WINDOW READY.** A captura autorizada integrou inventário e pg_dump na mesma transação/snapshot READ ONLY sob o lock canônico. O restore isolado certificou dez conversões, Telegram opaco,147 históricos e v2. Depois, quatro bindings divergiram: o CAS negou e o plano não foi alterado. Não instalar ou executar envelopes offline anteriores; nenhum apply/deploy/stop/start, mudança de chave ou política produtiva nesta tarefa. Auth/banco/console aceitos; NEWauth+NEWDB preservados. Out15CLOSED/guarda38 e segurança externa/cifragem OPEN permanecem.
 

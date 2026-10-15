@@ -1,5 +1,7 @@
 # Cifragem volátil: protocolo para revisão, LOCAL VALIDATED / NOT DEPLOYED
 
+**Continuidade:** desenho aprovado e [integrado à geração nova locked-v7 PARA REVISÃO](../cipher-locked-v4-20261014/REPORT.md), sem instalação ou janela. Esta prova local permanece válida e histórica.
+
 Continuidade de0636ac71. **Recomendado: saída comprovada de todos os writers + selagem explícita das linhas atuais sob locks, na mesma conexão que aplica o CAS e a conversão.** Não reutilizar o plano recusado5eb como plano vigente. Esta entrega valida a engenharia local; não gera nem autoriza outra janela V4. Geração214100 permanece DENY, manifests/recibos/inputs intactos. Nenhuma conexão/captura produtiva, stop/start, SQL produtivo, instalação ou mudança de credencial nesta tarefa.
 
 ## Writers e limites históricos

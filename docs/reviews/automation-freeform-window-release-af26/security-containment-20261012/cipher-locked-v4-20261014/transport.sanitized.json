@@ -1,0 +1,1 @@
+{"result": "PINNED_NODE20_PG16_PRIVATE_TRANSPORT_PASS", "sameBackendAcrossQueries": true, "boundedLargeResponse": true, "identityDriftDenied": true, "deadlineDenied": true, "sourceRestoreReused": true, "productionConnections": 0, "providers": 0}

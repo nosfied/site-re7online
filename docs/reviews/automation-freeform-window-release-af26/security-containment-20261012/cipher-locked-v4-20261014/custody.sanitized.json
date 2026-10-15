@@ -1,0 +1,9 @@
+{
+  "result": "FINAL_V7_CUSTODY_REHASH_EXTRACTION_PASS",
+  "archiveSha256": "085720aaa4d6b6249e8e482f6ea4b21ff16c0646745f5aa1cbb813afd7601b65",
+  "archiveBytes": 8990720,
+  "indexSha256": "50f9509cdf91289b4d1671d1d02bc0d0e78b1842c10e2c22f2a80306858c9f72",
+  "files": 6,
+  "independentPhysicalReplica": false,
+  "policyInstalled": false
+}

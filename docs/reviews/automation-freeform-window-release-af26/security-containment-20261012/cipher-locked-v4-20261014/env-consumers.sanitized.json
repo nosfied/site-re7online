@@ -1,0 +1,52 @@
+{
+  "state": "PROPOSALS_SEPARATE_NOT_APPLIED",
+  "actualSourceFiles": [
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/package.json",
+      "sha256": "d968890f27879de853c618523f93e62c9ed73f0e3d7c6a7b62267e853af3791e",
+      "exists": true
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/run-retention.ts",
+      "sha256": "ce40dd0131d77e57b56601897fb2707656f1872ec80e6463811b0e03c2721754",
+      "exists": true
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/cleanup-local-media.mjs",
+      "sha256": "bd6c1ec6e018deb677447456411b1008c4a3bf9646e8d9d929d8abc930432bc9",
+      "exists": true
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/backup-postgres.sh",
+      "sha256": "795d9906bbde658710e024bbe84afa9a30bd392ef8f5235b7580fa85ac2d5733",
+      "exists": true
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/backup-postgres-with-alert.sh",
+      "sha256": "eb4c3b3e082f9d0bc4bec02dce472a3cf3a9a0ed72b46af3433c1373715afac9",
+      "exists": true
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/scripts/postgres-backup-alert.ts",
+      "sha256": "32cfc64e9202662ecc629ed5965d7a6456315c629a104ef8ed67c1eedd7c647d",
+      "exists": true
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/src/privacy/privacyRetentionService.ts",
+      "sha256": "33d36d97e189442baa65a357544ef274d6ac31ce5cdf5a7b0ccd21cb72c14740",
+      "exists": true
+    }
+  ],
+  "newDbReenables": [
+    "retention:run Prisma anonymization/deletion/update when old credential was sole obstacle",
+    "administrative/manual scripts using the same dotenv loader"
+  ],
+  "notReenabledByDatabaseUrl": [
+    "media:cleanup filesystem only",
+    "Docker pg_dump local trust"
+  ],
+  "potentialExternalSideEffect": [
+    "backup alerts SMTP"
+  ],
+  "noScriptExecuted": true
+}
