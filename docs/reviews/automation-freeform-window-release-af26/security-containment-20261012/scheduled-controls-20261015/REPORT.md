@@ -1,6 +1,8 @@
 # Recuperação restrita dos controles agendados — 15/10/2026
 
-**PREPARADA PARA REVISÃO / CHECK READ ONLY REAL PASS / NÃO APLICADA. Cifragem suspensa.** Não repetir A/B da v13. Política15b instalada, fase null, cinco gatesfalse/executionfalse, API410272/worker410428/frontend188897, NEWauth+NEWDB, console, out.15 CLOSED e guarda38 fechada preservados. Nenhuma instalação privilegiada, edição.env, restauração de cron, execução manual de job, backup novo, stop/start ou SQL mutável nesta tarefa.
+**ESTADO CORRENTE: CONSUMED / RESTORED — [resultado e certificado de15/10](RESULT_2026-10-15.md).** Aplicação única autorizada sobre195965a7 concluída, recibo exato/seis entradas/inspeção RESTORED/dois crons/custódia/owner PASS. Não repetir aplicação ou A/B v13. Cifragem suspensa.
+
+**Histórico da preparação anterior à autorização:** PREPARADA PARA REVISÃO / CHECK READ ONLY REAL PASS / NÃO APLICADA naquele momento. Não repetir A/B da v13. Política15b instalada, fase null, cinco gatesfalse/executionfalse, API410272/worker410428/frontend188897, NEWauth+NEWDB, console, out.15 CLOSED e guarda38 fechada preservados. Nenhuma instalação privilegiada, edição.env, restauração de cron, execução manual de job, backup novo, stop/start ou SQL mutável nesta tarefa.
 
 [Comandos concretos](COMMANDS_FOR_REVIEW.txt), [evidência sanitizada](RECOVERY_SANITIZED.json), [provas locais](PROOFS_SANITIZED.json), [matriz de consumidores](MATRIX.md), [delta preventivo](FUTURE_CONTROLS.patch).
 
@@ -53,6 +55,6 @@ Pré-parada: prova as identidades originais, nega qualquer cron desconhecido **a
 
 Escape anterior: recovery estava coberto por mocks de restauração e inspeção parcial de nft/boot, sem pós-condição explícita do crontab deploy. Agora o teste executa `Sequencer.recover(prestop)` e a ação `abort-prestop` do helper8de reais (somente I/O/root/processos substituídos), inclusive propagação de falhas, e o consumidor final `DelegatedControls.finish` real em cada modo com configurações completas.
 
-## Estado corrente
+## Estado histórico antes da aplicação
 
-Aplicação da recuperação **aguarda revisão/decisão**. Nenhum job foi executado manualmente ou cron reabilitado. Cifragem suspensa; não repetir A/B, renovar backup ou emitir outra janela para contornar o problema. Custódia privada permanente com conteúdo/índice/hashes/receita dos controles, plano, código, provas e recibo READ ONLY; não é réplica física independente do computador do owner. Auth/banco/console/out.15 concluídos; segurança externa/cifragem OPEN e risco histórico mantidos. Responsável operacional Deifson; última revisão15/10/próxima21/10, antecipada após mudanças.
+Aplicação então aguardava revisão/decisão; foi posteriormente autorizada e concluída conforme [resultado corrente](RESULT_2026-10-15.md). Nenhum job foi executado manualmente ou cron reabilitado. Cifragem suspensa; não repetir A/B, renovar backup ou emitir outra janela para contornar o problema. Custódia privada permanente com conteúdo/índice/hashes/receita dos controles, plano, código, provas e recibo READ ONLY; não é réplica física independente do computador do owner. Auth/banco/console/out.15 concluídos; segurança externa/cifragem OPEN e risco histórico mantidos. Responsável operacional Deifson; última revisão15/10/próxima21/10, antecipada após mudanças.

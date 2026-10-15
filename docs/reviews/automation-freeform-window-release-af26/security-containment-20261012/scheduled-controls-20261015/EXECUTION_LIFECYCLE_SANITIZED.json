@@ -1,0 +1,27 @@
+{
+  "generation": "scheduled-controls-recovery-20261015T121000Z",
+  "state": "CONSUMED_RESTORED",
+  "operation": "RESTORE_ONLY_SIX_ORIGINALLY_ACTIVE_DEPLOY_ENTRIES",
+  "owner": "Deifson",
+  "lastReview": "2026-10-15",
+  "nextWeeklyReview": "2026-10-21",
+  "hostRequired": [
+    "fixed driver/input/manifests plus consumed intent/receipts prevent replay",
+    "sealed source v13/current policy15b references and protected runtime remain untouched"
+  ],
+  "offhostCustody": [
+    "complete pre/post/inspection evidence and hashes",
+    "source audit and local directed proofs/recipe"
+  ],
+  "archiveEligibleAfterReferenceReview": [
+    "preparatory source captures/code previews; evidence remains in verified custody"
+  ],
+  "withdrawalAuthorized": false,
+  "automaticCleanup": false,
+  "historicalManifestsModified": false,
+  "remainingSeparate": [
+    "Prisma dotenv consumer correction",
+    "future preventive controls integration",
+    "external/cipher security OPEN; cipher execution suspended"
+  ]
+}
