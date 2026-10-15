@@ -1,0 +1,123 @@
+{
+  "AExecutions": 1,
+  "BExecutions": 1,
+  "activeBytes": {
+    "dependencyLinks": 2,
+    "entrypointSha256": {
+      "re7-whatsapp-agent": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+      "re7-whatsapp-web-worker": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd"
+    },
+    "noBuildOrDeployRepeated": true,
+    "result": "ACTIVE_BYTES_COMPLETE_CONTRACT_PASS",
+    "runtimeFiles": 446,
+    "utc": "2026-10-15T15:16:46.140523+00:00"
+  },
+  "apiStarts": 1,
+  "authorizedCommit": "d03aa2a8d4feec198b2b2dd4fa9d4ffc9255a0ea",
+  "barrierAbsent": true,
+  "bothCronsRestored": true,
+  "canonicalAdmissionExecutions": 1,
+  "canonicalCompleteMode": "switch",
+  "capacity": {
+    "minimumAvailableBytes": 18043473920,
+    "utc": "2026-10-15T15:14:21.457498+00:00",
+    "walBytesObserved": 268435456
+  },
+  "commitReceipt": {
+    "intentSha256": "be256ad78c9ef14afcdef1c359240038dd910c1c0f3aa39fa987bd0abada0fa7",
+    "planSha256": "d5abbaa78e5f9f44febd5bd3852839359b600f101ce5a1b7de4515d44628dbf3",
+    "verification": {
+      "oldCredentialReactivation": false,
+      "result": "VERIFIED",
+      "usesNewCredentials": true
+    }
+  },
+  "consumed": true,
+  "consumedArchiveSha256": "dd3873927aaa94f697fcf4319740f6b488f813e95ae39a2444985d355ad79ed4",
+  "crmUsageReceiptPreservedByFrozenBaseline": true,
+  "externalSecurityAndHistoricalCiphertextRiskOpen": true,
+  "finalControls": {
+    "allFiveGatesFalse": true,
+    "executionAuthorized": false,
+    "generationConsumed": true,
+    "noProcessOrDataChange": true,
+    "planSha256": "d5abbaa78e5f9f44febd5bd3852839359b600f101ce5a1b7de4515d44628dbf3",
+    "result": "COMPLETED_GENERATION_GATES_CLOSED",
+    "utc": "2026-10-15T15:11:54.178428+00:00"
+  },
+  "finalPublicationHealth": {
+    "executionAuthorized": false,
+    "gatesFalse": true,
+    "guardClosedGeneration": 38,
+    "healthDb": true,
+    "noRestarts": true,
+    "result": "FINAL_HEALTH_GUARD_IDENTITIES_GATES_PASS",
+    "sameSuccessorAndFrontendIdentities": true,
+    "utc": "2026-10-15T17:23:36.903684+00:00"
+  },
+  "frontendIdentityPreserved": true,
+  "generation": "incident-6683-v4-security-cipher-controls-v14-20261015T130000Z",
+  "guardClosedGeneration": 38,
+  "historicalEvents": 126,
+  "historicalFields": 147,
+  "historicalPayloadsUnchanged": true,
+  "newauthNewdbPreserved": true,
+  "noMessagesTested": true,
+  "out15ClosedPreserved": true,
+  "ownerUiConfirmed": true,
+  "prismaDeployed": false,
+  "processes": {
+    "re7-admin-front": {
+      "pid": 188897,
+      "status": "online"
+    },
+    "re7-whatsapp-agent": {
+      "pid": 774414,
+      "status": "online"
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 774607,
+      "status": "online"
+    }
+  },
+  "recoveryC1C2OrDExecuted": false,
+  "result": "CIPHER_V14_COMPLETE_VERIFIED_OWNER_UI_ACCEPTED",
+  "retainedOpaqueTelegram": true,
+  "runtimeReads": {
+    "historicalEvents": 126,
+    "historicalFieldsReadable": 147,
+    "noDatabaseWrite": true,
+    "noMessage": true,
+    "result": "ACTIVE_RUNTIME_HISTORICAL_AND_V2_READ_PASS",
+    "v2InMemoryRoundtrip": true,
+    "v2IndependentOfLegacyGrant": true,
+    "wrongTenantDenied": true
+  },
+  "savedFallbackFinal": {
+    "apiWorkerConfiguredValuesMatchTarget": true,
+    "apiWorkerEnvironmentComparisons": 240,
+    "bothCronsRestored": true,
+    "fallbackSha256": "fbaa15cabc6cf15cd61c27d9b47014bcf9e21a63d4d2894685b1de597cb44287",
+    "frontendAllOriginalSavedFieldsPreservedExceptAxmMonitor": true,
+    "frontendSavedEnvironmentUnchanged": true,
+    "noRestartSaveOrRepairRepeated": true,
+    "originalComparisonDenialPreserved": true,
+    "result": "SAVED_FALLBACK_AND_BOTH_CRONS_FINAL_PASS",
+    "savedFallback600": true,
+    "savedSha256": "fbaa15cabc6cf15cd61c27d9b47014bcf9e21a63d4d2894685b1de597cb44287",
+    "utc": "2026-10-15T17:22:09.636029+00:00"
+  },
+  "sixReportedDeliveredFiveNotSubmitted": true,
+  "timing": {
+    "bDurationSeconds": 64.31534521281719,
+    "bFinishedUtc": "2026-10-15T15:09:29.628890+00:00",
+    "bStartedUtc": "2026-10-15T15:08:25.313050+00:00",
+    "containmentBeginToRootUnfenceSeconds": 53.090487480163574,
+    "guardClosedToCompleteSeconds": 59.380287885665894,
+    "httpContinuouslyMeasured": false,
+    "stopBeginToUnfencedVerifiedSeconds": 51.67776608467102
+  },
+  "webPreviouslyConnectedReconnected": 4,
+  "webPreviouslyDisconnectedUnchanged": 1,
+  "workerStarts": 1
+}
