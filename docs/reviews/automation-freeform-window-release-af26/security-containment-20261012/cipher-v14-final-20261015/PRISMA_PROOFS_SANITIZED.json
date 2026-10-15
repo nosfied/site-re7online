@@ -1,0 +1,11 @@
+{
+  "result": "PRISMA_LOCAL_VALIDATED_NOT_DEPLOYED",
+  "node": "20.20.0",
+  "postgresql": "16.15",
+  "distinctTestsPassed": 42,
+  "failedFinalTests": 0,
+  "typecheck": "PASS_NO_EMIT",
+  "productionRetentionCliExecuted": false,
+  "databaseProfile": "isolated localhost:55781/retention_lab",
+  "postgresLabStopped": true
+}

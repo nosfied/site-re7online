@@ -185,3 +185,9 @@ console.log({
 
 await prisma.$disconnect();
 ```
+
+## Delta local de retenção automática — 15/10/2026, não implantado
+
+[Implementação e provas para revisão](../reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-v14-final-20261015/PRISMA_LOCAL.md). A antiguidade de uma conversa não autoriza a operação explícita por titular. O patch automático limita alterações a Conversation+Message por conversationId/tenant e runtime único compatível; identidades compartilhadas/ambíguas e perfil não PostgreSQL negam. Contact/CCI/Lead/notas/Inbound/Outbound/eventos/metrics/Assignment anteriores permanecem preservados. Runtime vira tombstone sem remoção física/cascata. HUMAN, IN_PROGRESS, atribuição, fila, handoff ACTIVE/PENDING e atividade recente protegem o candidato. BOT WAITING isolado não demonstra atendimento humano.
+
+Prévia apenas SELECT, sem criar política default ou auditar execução. Execução futura revalida política/identidade/atividade sob locks+Serializable e CAS; item e auditoria são atômicos, conflito nega sem replay. A operação manual explícita por titular mantém seu alcance contratado e testes anteriores.42 provas locais PASS; nenhuma alteração de políticas, retenção dos tenants, dados produtivos ou.env nesta entrega. Revisão e implantação seletiva são decisões separadas da cifragem.

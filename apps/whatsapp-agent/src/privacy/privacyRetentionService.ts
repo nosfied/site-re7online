@@ -1,6 +1,7 @@
+import { inspectRetentionCandidate, retainConversation, retentionConversationSelect } from "./conversationRetention.js";
 import { ConversationOperationalStatus, Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
-import { normalizeWaId } from "../config/env.js";
+import { env, normalizeWaId } from "../config/env.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
@@ -1279,7 +1280,8 @@ async function executeRetentionForClient(
     dryRun?: boolean;
   }
 ) {
-  const retention = await getOrCreateRetentionConfig(prisma, params.clientId);
+  const storedRetention = await prisma.retentionConfig.findUnique({ where: { clientId: params.clientId } });
+  const retention = storedRetention ?? { retentionDays: 90 };
   const cutoff = new Date(Date.now() - retention.retentionDays * 24 * 60 * 60 * 1000);
   const conversations = await prisma.conversation.findMany({
     where: {
@@ -1291,59 +1293,38 @@ async function executeRetentionForClient(
       AND: [{ OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lt: cutoff } }] }],
     },
     orderBy: { createdAt: "asc" },
-    select: { id: true, waId: true, waIdCanonical: true, deletedAt: true, anonymizedAt: true },
+    select: retentionConversationSelect,
   });
 
-  if (params.dryRun) {
-    return {
-      retentionDays: retention.retentionDays,
-      cutoff: cutoff.toISOString(),
-      deletedConversations: conversations.length,
-      softDeletedConversations: conversations.length,
-      anonymizedConversations: conversations.length,
-      dryRun: true,
-    };
-  }
-
+  const skippedReasons: Record<string, number> = {};
   let softDeletedConversations = 0;
   let anonymizedConversations = 0;
   for (const conversation of conversations) {
-    try {
-      const anonymized = await anonymizeConversationPrivacyData(prisma, {
-        clientId: params.clientId,
-        clientKey: params.clientKey,
-        conversation,
-        userId: params.userId,
-        requestId: `${params.requestId}:retention:anonymize:${conversation.id}`,
-      });
-      anonymizedConversations += anonymized.anonymized.conversation;
-      const softDeleted = await deleteConversationPrivacyData(prisma, {
-        clientId: params.clientId,
-        clientKey: params.clientKey,
-        conversation,
-        userId: params.userId,
-        requestId: `${params.requestId}:retention:${conversation.id}`,
-        audit: false,
-      });
-      softDeletedConversations += Math.max(
-        softDeleted.deleted.softDeletedConversations,
-        anonymized.anonymized.conversation
-      );
-      logger.info({
-        event: "privacy.retention.item_anonymized",
-        clientId: params.clientId,
-        conversationId: conversation.id,
-      });
-    } catch (error) {
-      logger.error({
-        event: "privacy.retention.failed",
-        clientId: params.clientId,
-        conversationId: conversation.id,
-        message: (error as Error).message,
-      });
-      throw error;
+    if (env.STORAGE_MODE !== "postgres") { skippedReasons.storage_profile_unproven = (skippedReasons.storage_profile_unproven ?? 0) + 1; continue; }
+    if (params.dryRun) {
+      const plan = await inspectRetentionCandidate(prisma, conversation, cutoff);
+      if (plan.reason) skippedReasons[plan.reason] = (skippedReasons[plan.reason] ?? 0) + 1;
+      else anonymizedConversations += 1;
+      continue;
     }
+    const result = await retainConversation(prisma, {
+      candidate: conversation, cutoff, storageMode: env.STORAGE_MODE, retentionDays: retention.retentionDays, clientKey: params.clientKey,
+      audit: async (tx, conversationId) => {
+        await persistPrivacyAuditEvent(tx, {
+          clientId: params.clientId, conversationId, requestId: `${params.requestId}:retention:${conversationId}`,
+          eventName: "conversation.anonymized",
+          payload: buildPrivacyAuditPayload({ userId: params.userId, clientId: params.clientId, conversationId,
+            action: "conversation.anonymized", details: { scope: "conversation_retention_only", sharedIdentityRecordsPreserved: true } }) as Prisma.InputJsonValue,
+        });
+      },
+    });
+    if (result.retained) { softDeletedConversations += 1; anonymizedConversations += 1; }
+    else skippedReasons[result.reason] = (skippedReasons[result.reason] ?? 0) + 1;
   }
+  const preservedRelatedRecords = ["Contact", "ContactChannelIdentity", "Lead", "LeadNote", "InboundMessage", "OutboundMessage", "identity-only Event", "ConversationMetrics", "ConversationAssignment"];
+  if (params.dryRun) return { retentionDays: retention.retentionDays, cutoff: cutoff.toISOString(),
+    deletedConversations: anonymizedConversations, softDeletedConversations: anonymizedConversations,
+    anonymizedConversations, skippedReasons, preservedRelatedRecords, configurationStored: !!storedRetention, dryRun: true };
   const payload = buildPrivacyAuditPayload({
     userId: params.userId,
     clientId: params.clientId,
@@ -1365,6 +1346,7 @@ async function executeRetentionForClient(
   });
   logger.info({ event: "retention.executed", ...payload });
   return {
+    skippedReasons, preservedRelatedRecords, configurationStored: !!storedRetention,
     retentionDays: retention.retentionDays,
     cutoff: cutoff.toISOString(),
     deletedConversations: softDeletedConversations,

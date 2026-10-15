@@ -1,3 +1,4 @@
+import { env } from "../config/env.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -30,10 +31,11 @@ test("normalizeRetentionDays accepts configured bounds", () => {
 });
 
 test("executePrivacyRetention dry-run does not mutate retention targets", async () => {
+  const beforeMode = env.STORAGE_MODE; env.STORAGE_MODE = "postgres";
   let mutationCalled = false;
   const prisma = {
     retentionConfig: {
-      async upsert() {
+      async findUnique() {
         return { retentionDays: 90 };
       },
     },
@@ -41,7 +43,8 @@ test("executePrivacyRetention dry-run does not mutate retention targets", async 
       async findMany() {
         return [
           {
-            id: "conversation-1",
+            id: "conversation-1", clientId: "client-1", channel: null, provider: null, channelAccountId: null, externalUserHash: null,
+            createdAt: new Date("2020-01-01"), updatedAt: new Date("2020-01-01"), lastInboundAt: null, lastOutboundAt: null,
             waId: "558499999999",
             waIdCanonical: "558499999999",
             deletedAt: null,
@@ -54,6 +57,14 @@ test("executePrivacyRetention dry-run does not mutate retention targets", async 
         return { count: 1 };
       },
     },
+    conversationRuntimeState: { async findMany() { return [{
+      id: "runtime-1", clientId: "client-1", waId: "558499999999", waIdCanonical: "558499999999",
+      channel: null, provider: null, channelAccountId: null, externalUserHash: null,
+      mode: "BOT", status: "CLOSED", handoffStatus: "NONE", assignedUserId: null,
+      assignedTo: null, assignedAt: null, queueId: null, updatedAt: new Date("2020-01-01"),
+      lastInboundAt: null, lastOutboundAt: null,
+    }]; } },
+    message: { async findFirst() { return null; } },
     event: {
       async create() {
         mutationCalled = true;
@@ -75,6 +86,7 @@ test("executePrivacyRetention dry-run does not mutate retention targets", async 
   assert.equal(mutationCalled, false);
   assert.equal(result.dryRun, true);
   assert.equal(result.anonymizedConversations, 1);
+  env.STORAGE_MODE = beforeMode;
 });
 
 test("conversation anonymize deletes original and anonymized runtime states", async () => {
