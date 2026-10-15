@@ -1,0 +1,88 @@
+PARA DECISÃO DE JANELA — NÃO EXECUTAR NESTA TAREFA.
+Instalação, admissão, contenção, SQL e starts NÃO autorizados por esta publicação.
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-cipher-controls-v14-20261015T130000Z
+I=/dev/shm/re7-v14-decision-20261015T150100Z/owner-private
+Q=/dev/shm/re7-v14-authorized-admission-20261015T150500Z
+# Q só será criado pelo comando canônico após decisão explícita.
+# Não executar este arquivo agora; comandos abaixo são para revisão.
+# Q deve ser diretório privado NOVO; nunca reutilizar intents.
+# REVIEWED_AUTHORIZED_COMMIT deve ser o SHA40 explicitamente autorizado na decisão futura.
+# Extração já concluída. NÃO repetir A0/extração, nem usar v13 consumida.
+# Arquivo final off-host: package-current.private.tar.gz (custódia decision-20261015)
+# SHA 9ff98e9b20b472f346dc51d16250939cb918ee8fd8cc5818a504a1249072d725
+# Índice fedc0612434754a437a9528fb06c8742f20d973733c3119397ed968c3c4d3d05
+
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = c6c0eaab668c199d8ab8705ff9457776cebfea683efaa3941437ae2d624a5fe5
+(cd "$P" && sha256sum -c preparation-review.sha256)
+python3 -B "$P/verify-package.py"
+
+FRESCOR: backup real 15/10 14:27:42UTC, RPO estritamente <1h até15:27:42UTC.
+Root capturado15:00:26UTC, estritamente <600s até15:10:26UTC.
+Não renovar por rotina nesta tarefa. Após expirar, renovar provas pelo procedimento
+canônico antes de A/B e recertificar/publicar todos os hashes alterados. Não editar
+planos/cifras/população, nem replay de renewal consumido. refresh_v2.py desta revisão
+é evidência da renovação concluída; não é CLI de replay contra o review novo.
+Restore certificado retido/parado reutilizado, temporaryDatabaseRemoved=false.
+Custódia off-host conferida, owner-accessível; sem réplica física independente.
+Piso min(deploy,PostgreSQL)>=8794603520B, WAL/crescimento e orçamento do retorno;
+ambos crons before, processos/writers/SQL/proxy, source15b/helper8de/regra62b5,
+saved/fallback600 e controles exigem conferência fresca. ROOT não prova saída futura.
+
+python3 -B "$P/conductor/check_root_capture.py" "$P" "$I/root.private.json" "$I/root-baseline.private.json"
+
+A. SOMENTE após decisão explícita futura sobre interrupção, inclusive uso humano possível:
+: "${REVIEWED_AUTHORIZED_COMMIT:?Falta SHA40 da decisão expressa de autorização futura}"
+test ! -e "$Q" && test ! -L "$Q"
+python3 - "$I/backup-result.private.json" <<'RPO'
+import datetime,json,sys
+v=json.load(open(sys.argv[1]));age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(v['startedUtc'])).total_seconds()
+assert 0<=age<3600,'actual_backup_RPO_expired'
+print('ACTUAL_BACKUP_RPO_PASS')
+RPO
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = b3d242fc92ccf60275ec0f875e5c2530f565981519e0d243b4fb8035eae9376f
+bash "$P/install-api-window-policy.sh"
+# Fonte15b arquivada em pre-security-cipher-controls-v14-20261015T130000Z.json;
+# destino fa113e52. Helpers/sudoers iguais. Recusa => preservar/inspecionar, não B.
+
+# ADMISSÃO CANÔNICA EXPLÍCITA dos cinco gates, nenhum bool manual.
+# REVIEWED_AUTHORIZED_COMMIT é o SHA40 da decisão FUTURA de revisão/autorização,
+# não um valor assumido por este documento. I traz todas as provas atuais.
+# Q é saída privada NOVA, pai700/owner correto; não repetir intent consumido.
+python3 -B "$P/conductor/admit_gates.py" "$P" "$I" "$Q" "--owner-authorized-future-controls:$REVIEWED_AUTHORIZED_COMMIT"
+# Exige: root fonte15b pré-A fresco + inspect políticaNOVA pós-A; RPO real<1h;
+# custódia/dump/lab e quatro restores; cadeia REAL11gates/cronbefore/capacidade;
+# cinco gates false/execfalse/sem selagem/intents. Só PASS admite uma vez.
+
+B. SOMENTE após FIVE_GATES_ADMITTED e decisão de janela, uma execução:
+python3 -B "$P/window/locked_cli.py" "$P"
+# Saída/ownership → seal-current-under-lock → fonte/plano/hash/intent novos →
+# CAS integral mesma transação → commit → VERIFIED → sucessores compatíveis.
+# Campos Web renováveis estritamente delimitados; população/grant/TG intocados.
+# Nenhum SQL/start consumido é repetido. NEWauth+NEWDB em todos os caminhos.
+
+C. SOMENTE INSPEÇÃO em incerteza; preservar evidências e apresentar classificação:
+python3 -B "$P/window/locked_cli.py" "$P" --inspect-readonly
+# NO_FINAL_PLAN/UNCERTAIN/ambiguidade/drift bloqueiam sucessor/replay.
+
+C1. DECISÃO EXPLÍCITA ORIGINAL_VERIFIED, mutuamente exclusiva de C2:
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action record-original --operator-decision ORIGINAL_VERIFIED
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action recover-original --operator-decision ORIGINAL_VERIFIED
+# Retorno pré-commit com reader compatível; NEWauth+NEWDB; sem replay SQL/start.
+
+C2. DECISÃO EXPLÍCITA VERIFIED, inclusive commit com resposta perdida provado:
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action record-verified --operator-decision VERIFIED
+python3 -B "$P/window/locked_cli.py" "$P" --recovery-action recover-verified --operator-decision VERIFIED
+# NEWcipher exclusivamente; nunca C1/OLDcipher após VERIFIED. Lock/provas frescos.
+
+D. SOMENTE preparação fresca pós-unfence se necessária; não executada aqui:
+R=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-cipher-v14-post-return-20261015
+python3 -B "$P/window/prepare_compatible_post_return.py" "$P" "$R"
+# VERIFIED atual, identidades reais novas, política/bindings/gates próprios;
+# scheduled_controls.py incluído. Revisão/instalação/decisão próprias, sem replay.
+# Não predeclarar seus hashes/identidades futuros nem executar retorno standby.
+
+ACEITE POSTERIOR de futura janela:10 cifras/Telegramopaco/147/v2/recibos;
+Web reconectado sem mensagens; API/worker/DB; frontend/sessões/console;
+NEWauth+NEWDB, saved/fallback600, boot/supervisão e AMBOS crons before;
+barreira ausente, cinco gatesfalse/execfalse, guarda38closed/out15CLOSED.
+Nenhuma.env/credencial externa/Telegram/envio/abertura integra esse roteiro.
