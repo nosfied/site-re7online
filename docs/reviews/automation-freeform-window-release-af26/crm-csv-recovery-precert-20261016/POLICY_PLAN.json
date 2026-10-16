@@ -1,0 +1,40 @@
+{
+  "deny": "sem instala\u00e7\u00e3o/authorize/start/libera\u00e7\u00e3o; preservar intent, inspecionar e aguardar decis\u00e3o expl\u00edcita",
+  "helperSchemaRequired": [
+    "preparation",
+    "fenceB64",
+    "fenceSha256",
+    "cronBeforeB64",
+    "cronWindowB64",
+    "sourceProcesses",
+    "pm2Daemon",
+    "targetProcesses",
+    "savedPaths"
+  ],
+  "helperTargetModes": [
+    "switch",
+    "return"
+  ],
+  "helperTargets": [
+    "re7-whatsapp-agent",
+    "re7-whatsapp-web-worker"
+  ],
+  "installationAuthorized": false,
+  "installerPreparation": "reutilizar o instalador can\u00f4nico como fonte; renderizar em vers\u00e3o nova somente namespace, hashes de origem/destino, pol\u00edtica e review conferidos; nunca executar instalador hist\u00f3rico",
+  "kind": "PROPOSAL_REQUIREMENTS_NOT_HELPER_POLICY",
+  "noInstallerExecutableProduced": true,
+  "noPolicyObjectProduced": true,
+  "originalProposal": "prepared-kit/proposal/policy_proposal.py: somente targetProcesses.return pode mudar; classifica\u00e7\u00e3o STOPPED_UNSELECTED/ORIGINAL exigida",
+  "preparationNamespaceRule": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-* (novo e revisto, ainda n\u00e3o reservado)",
+  "prestop": "abort-prestop/controles pelo caminho can\u00f4nico sem partida",
+  "reason": "PIDs/ticks, hashes root e pol\u00edtica da fase n\u00e3o podem ser afirmados offline; plano e c\u00f3digo puro preparados, instala\u00e7\u00e3o bloqueada",
+  "rootOriginalActionAllowlist": [
+    "recover-partial",
+    "start:re7-whatsapp-agent",
+    "start:re7-whatsapp-web-worker",
+    "unfence",
+    "verify-unfenced",
+    "restore-controls"
+  ],
+  "sourceProcessRule": "tr\u00eas identidades PID/ticks atuais e daemon real; frontend n\u00e3o \u00e9 alvo de start/stop"
+}

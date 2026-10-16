@@ -1,0 +1,9 @@
+{
+  "executionAuthorized": false,
+  "missingOperationalInputs": "required-mode-inputs.json + public binding/checklist specification",
+  "noHistoricalObservationPromoted": true,
+  "operationallyCertified": false,
+  "policyInstalled": false,
+  "sourceIdentitiesPresent": false,
+  "state": "PREPARED_LOCALLY_UNBOUND_CODE_ONLY"
+}

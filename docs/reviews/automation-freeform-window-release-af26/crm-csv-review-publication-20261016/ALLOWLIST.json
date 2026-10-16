@@ -1,0 +1,470 @@
+{
+  "baseCommit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+  "branch": "review/campaign-recovery-20260926",
+  "excluded": [
+    "local-evidence/",
+    ".data/",
+    "__pycache__/",
+    "profiles and private bindings",
+    "tenant data",
+    "runtime archives",
+    "raw session/evidence",
+    "precert DELTA.patch duplicating all composed code",
+    "110 physical composed code copies"
+  ],
+  "files": [
+    {
+      "path": "docs/BACKLOG_TECH.md",
+      "purpose": "canonical-checkpoint"
+    },
+    {
+      "path": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "purpose": "canonical-checkpoint"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_DELTA.patch",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_PROOFS.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_REPORT.md",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_TEST_OUTPUT.txt",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/FINAL_REVIEW.md",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/FINAL_REVIEW_CHECKS.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/FULL_DELTA.patch",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/PROOFS_SANITIZED.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/PUBLIC_FILES_SHA256.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/SOURCE_PROVENANCE.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/STATE_MATRIX.md",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/consumer_delta.patch",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/future_sources.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/inputs.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/local-acceptance-20261016/CHECKS.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/local-acceptance-20261016/MANIFEST.sha256",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/local-acceptance-20261016/REVIEW.md",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/original_checks.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/policy_proposal.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/CANONICAL_DOCS_SHA256.json",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/FINAL_REVIEW.md",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/FINAL_REVIEW_CHECKS.json",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/FULL_DELTA.patch",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/PROOFS_SANITIZED.json",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/PUBLIC_FILES_SHA256.json",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/REPORT.md",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/SHA256.json",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/SOURCE_PROVENANCE.json",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/canonical-docs/docs/BACKLOG_TECH.md",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/canonical-docs/docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/canonical-docs/docs/saas/DOCUMENTATION_INDEX.md",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/consumer_delta.patch",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/future_sources.py",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/recovery_bridge.py",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/recovery_contract.py",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/reproduce.py",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/test_recovery.py",
+      "purpose": "historical-sanitized-evidence"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_contract.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_start.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/reference_sources/operations_recovery_original.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/reproduce.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_corrections.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_recovery.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/BINDING_PLAN.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/CHANGESET.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/CURRENT_OBSERVATIONS_REQUIRED.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/LIFECYCLE.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/MANIFEST.sha256",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/POLICY_PLAN.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/PROOFS_SANITIZED.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/REPORT.md",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/RUNTIME_REUSE.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/SOURCE_AUTHORITY.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/canonical-negative.sanitized.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/compose_offline.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/prepared-kit/COMPOSITION.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/prepared-kit/binding-status.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/prepared-kit/mode-code-manifest.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/prepared-kit/provenance.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/prepared-kit/required-mode-inputs.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/test_offline_composition.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/verify_offline.py",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-result-report-20261016/MANIFEST.sha256",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-result-report-20261016/RESULT_EVIDENCE_INDEX.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-result-report-20261016/RESULT_REPORT.md",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/ALLOWLIST.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/CODE_REVIEW_INDEX.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/FILES.sha256",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/PUBLICATION_CHECKS.json",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/REPORT.md",
+      "purpose": "accepted-code-evidence-or-review-document"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/admit_gates.py.2681e63919b9.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/automation-fence.nft.62342f28b9f0.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/baseline_contract.py.9af1a11a3605.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/canonical_renew_proofs.py.4427aa5e3108.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/capture_imports.py.52d6e914872e.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/check_current.py.6f840789aac8.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.7ca493142706.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.ce953df4a365.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.f867b828cf28.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/contain.py.af61f2f3a0d0.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_cli.py.3ae51bd07ca9.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_contract.py.9ca2208c5c18.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_start_gate.py.094ec4a5bbaa.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ecosystem_contract.py.7bfab72d4afd.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/event_overlay.py.7c3db254455f.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/open.cjs.d9c76eea6e83.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.33999cf29b7d.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/pre_install.py.8e45c10319f2.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/preparation-bindings.cjs.edf775c12520.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/privileged_output.py.93a114516a19.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/read-state.py.4c97c5259acb.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/recover-partial.py.7af3c2717be1.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore-controls.py.bebe88f0291c.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore_contract.py.af0d552fc5fd.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/root_readonly.py.cb63a97fffe7.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/sequencer.py.0a4d8b67f033.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/start-one.py.1959dac9717e.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/stop-pair.py.1f023b157796.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/unfence.py.d5bb4c2f5543.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/validate.cjs.5de8127d63e6.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work-frozen.cjs.f0b64320f8be.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work.cjs.1fb853b60ab9.source",
+      "purpose": "review-source-snapshot"
+    },
+    {
+      "path": "docs/saas/DOCUMENTATION_INDEX.md",
+      "purpose": "canonical-checkpoint"
+    }
+  ],
+  "publicationDoesNotAuthorizeExecution": true
+}

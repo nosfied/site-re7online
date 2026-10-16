@@ -1,0 +1,3917 @@
+# BACKLOG — RE7ONLINE WHATSAPP AGENT
+
+**CSV16/10 — PAR ORIGINAL RESTAURADO / OWNER UI ACCEPTED; ENTREGA CSV SUSPENSA.** [Recibo, provas e limites](reviews/automation-freeform-window-release-af26/crm-csv-original-recovery-20261016/RECOVERY_COMPLETE.md). Recuperação original-only executada uma vez37,509s, API936386/worker936540 nos perfis originais e frontend188897 preservado. Health200/DB/worker, ambos crons, supervisão, saved/fallback600, barreira ausente e gates falsos conferidos; sessões/telas/out.15 aceitos. NEWauth+NEWDB+NEWcipher e guarda38 preservados. Política vigentee2a5ffab em fase complete; instalação/retorno consumidos, não repetir. Sem overlay/chmod/CSV/importação. Próxima eventual revisão CSV precisa cobrir pais Event e bindings antes de conter. Segurança externa OPEN/adiamento aceito, Prisma/limpeza separados; revisão21/10 ou antes de mudança.
+
+**CSV — recuperação integrada FUTURA16/10: LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Estados/CLI/modo/política,42 ensaios e limites](reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md): PRESTOP restaura controles; STOPPED_UNSELECTED oferece ORIGINAL/return-before-commit sem overlay; após seleção somente candidato; incerteza/consumo negam replay. Prevenção/revalidação e dois crons preservados. Proposta original-only pura, sem instalação/geração. Revisão final requer correções locais: validação canônica do certificado de saída e recorte completo das referências/metadados originais;42 ensaios anteriores não cobrem essas lacunas. [Parecer](reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/FINAL_REVIEW.md). Pacote concreto, bindings/provas atuais e certificação operacional continuam pendentes antes de qualquer janela. CSV suspenso; recuperação produtiva consumida intocada. Sem VPS/commit/push neste incremento.
+
+**CSV — prevenção local16/10: LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Correção da revisão, diff completo e provas](reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/REPORT.md): semântica original de bindings restaurada, Event preservado;19 testes com28 casos diferenciais e reprodução isolada sem local-evidence. Os31 PASS anteriores não resolveram a divergência de contrato. Checker/CLI futuros antecipam a validação; consumidores revalidam no uso. Hardening adicional apenas proposto. Retorno original no CLI/política, STOPPED_UNSELECTED e recuperação integrada continuam pendentes. CSV suspenso; serviço original/NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Publicado para revisão em6bcf122ca5e5992769e67c1158208408b9c0b15b; “sem commit/push” descrevia somente a etapa anterior à publicação. Sem VPS ou nova geração.
+
+
+**Composição operacional CSV —16/10: LOCAL TESTED / NOT WINDOW BOUND / NOT DEPLOYED.** [Perfis/políticas/instaladores, recuperação e comandos para revisão](reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/REPORT.md).81 casos locais sobre controles concretos; API/worker/cron/restore, falha API sem replay, fronteira e materialização frontend/retorno candidato. Tars certificados reutilizados, zero rebuild/backup/VPS. Controles privados em custódia; mínimo planejado11.235.700.736 B sem capacidade produtiva renovada. Próximo: revisão da composição, decisão de janela e somente então provas perecíveis/bindings novos; instalação requer hashes republicados. Não usar guarda38 ou silêncio HTTP como drain CSV. Retorno frontend mantém backend ledger/GET; defeito API exige outra versão compatível. Prisma/limpeza/rotações externas separados; NEWauth+NEWDB+NEWcipher, dois crons e out.15 CLOSED preservados. Responsável Deifson; revisão16/10/próxima21/10 ou mudança.
+
+
+**ROTAÇÕES ADIADAS POR ACEITAÇÃO DO OWNER —15/10/2026:** [aceite explícito da matriz b1d41b33](reviews/automation-freeform-window-release-af26/security-containment-20261012/exposure-scope-20261015/OWNER_ACCEPTANCE_2026-10-15.md). OpenAI, Meta/state, WhatsApp/verificação e Web Push adiados para reavaliação21/10/2026, ou antes pelos gatilhos registrados. Segurança OPEN, sem declarar revogação/contenção completa; P0/A/B e resets suspensos, pacotes/evidências preservados e nenhum backup apenas para essa preparação. NEWauth+NEWDB+NEWcipher, ambos crons, produção, guarda38/out.15 CLOSED preservados. Backlog funcional retomado independentemente; Prisma42PASS/typecheck permanece LOCAL/NOT DEPLOYED, sem.env/retenção.
+
+
+**Entrega coordenada CSV —15/10: ARTEFATOS CONCRETOS / LOCAL VALIDATED / NOT DEPLOYED / NOT WINDOW READY.** [Composição sobre os bytes ativos, orçamento/comandos e limites operacionais](reviews/automation-freeform-window-release-af26/crm-csv-coordinated-20261015/REPORT.md). API447/442 preservados, frontend novo e retorno com435 assets em união; overlay literal do classificador dos tools para proteger ledger, sem executar retenção; custódia permanente e extrações integrais PASS. Corrigido total permitido independente de operationalStatus; ADMIN5/3/3 e5/2/2, demais total3/excluídos403, fonte+compilado real PASS. Retorno mantém API ledger/GET/UUID, sem rollback para backend antigo; rascunho alternativo preservado/superseded fora da entrega. Planejado mínimo11.235.700.736B, capacidade produtiva não renovada. Próximo: revisão dos artefatos e definição de janela; só então perfis/bindings/políticas novos e provas perecíveis. Não há pausa seletiva CSV canônica; roteiro usa contenção global e provas de saída, sem inferir conclusão de importação legada. P0/A/B externos suspensos; sem.env/Prisma/retenção/guarda.
+
+**Decisão de risco revisada — sem execução,15/10:** [matriz consolidada](reviews/automation-freeform-window-release-af26/security-containment-20261012/exposure-scope-20261015/CREDENTIAL_DECISIONS.md). Presença no contexto do provedor autorizado não comprova obrigação de rotação; trocas pendentes externas/state/verificação/Web Push podem ser adiadas mediante aceitação do owner. Nenhuma obrigação adicional demonstrada ou aceitação presumida. Gatilhos concretos de urgência e controles opcionais separados; não exigir ausência absoluta de acesso. P0/A/B e resets continuam suspensos; fases concluídas, pacotes, evidências e custódia local16PASS preservados. Sem novas buscas extensas, backups, mudanças de conta ou produção.
+
+
+**Estado corrente — SECURITY OPEN / P0/A/B E RESETS EXTERNOS SUSPENSOS,15/10:** [alcance sanitizado e matriz por credencial](reviews/automation-freeform-window-release-af26/security-containment-20261012/exposure-scope-20261015/REPORT.md).14 slots completos no registro local,9 no tool output truncado OpenAI; VAPID privado adicional local; Gemini recebeu antes um.env por didOpen com5 credenciais coincidentes, sem transmissão ao Google comprovada. Sem evidência de acesso não autorizado nem prova de ausência absoluta. NEWauth+NEWDB+NEWcipher já diferentes dos originais; não repetir fases concluídas. [Custódia v2 local](reviews/automation-freeform-window-release-af26/security-containment-20261012/receipt-custody-v2-20261015/REPORT.md):16 ensaios PASS com bytes originais, cadeia real sobre171 arquivos/quatro modos e relógio histórico/transferência simulados; não implantada. R0 DENY/ack/pacote originais intactos; sem backup novo, captura root ou ativação. Ambos crons/produção/guarda38/out.15 CLOSED preservados. Deifson; revisão15/10/próxima21/10, antecipar após mudanças.
+
+A suspensão acima prevalece sobre os roteiros e checkpoints anteriores abaixo.
+
+Pendências desta revisão, sem execução produtiva:
+
+- CONCLUÍDO registro de aceitação do owner para adiar OpenAI/Meta/state/WhatsApp/verificação/Web Push; reavaliar21/10 ou pelos gatilhos. Variantes legadas do.env permanecem delimitadas na matriz, sem aplicação. Não reabrir auth/banco/cifragem.
+- Custódia v2 implementada/LOCAL VALIDATED, não integrada à geração operacional. Aceite futuro: preservar bytes originais desde o produtor, publicar código/hashes de nova integração revisável, ensaiar transporte legítimo e conferir pacote concreto; não editar ack histórico ou consumir novamente R0.
+- Alcance Gemini e permissões: manter incerteza de destino remoto/leitores históricos; nenhuma exclusão de logs, alteração de configuração ou reset automático. Aceite de eventual contenção futura requer escopo e autorização próprios.
+
+
+**Checkpoint anterior — OpenAI R0 DENY,15/10:** [backup/custódia conferidos e bloqueio de transporte do recibo](reviews/automation-freeform-window-release-af26/security-containment-20261012/openai-operational-20261015/R0_RESULT_2026-10-15.md). Backup17:38:01Fortaleza/42.483.312B/614objetos/schema preservado, off-host e laboratório retido/parado conferidos. Updater negou hash do recibo reserializado;171 arquivos originais inalterados, nenhum intent de renovação e nenhum review novo. Não executar P0/A/B; sem root capturado. Correção pendente: preservar bytes de emissão e ensaiar cadeia concreta antes de nova tentativa identificada; reutilizar dump válido sem replay. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 CLOSED preservados; segurança externa/risco histórico OPEN. Deifson; revisão15/10/próxima21/10, antecipar após mudança.
+
+
+**Estado corrente — OpenAI operacional PARA REVISÃO,15/10:** [pacote completo de ativação/validação/retorno e comandos](reviews/automation-freeform-window-release-af26/security-containment-20261012/openai-operational-20261015/REPORT.md). Geração openai-v4 inativa,171 arquivos e cadeia READ ONLY real na VPS17:19:55Fortaleza PASS; mínimo18.107.121.664B/WAL160MiB, orçamento9.508.698.574B. Preservados perfis/metadados/15 testes;63 novos casos locais PASS, com OS/provider simulados explicitamente; nenhuma chamada autenticada, política instalada, gate admitido, ativação ou restart. Endpoints reais: Responses/gpt-4.1-mini e transcriptions/gpt-4o-mini-transcribe; somente API.OPENAI_API_KEY muda. Owner determinou manter modelos/permissões/limites: sem nova exigência de console; limites não observados, probes funcionais sintéticos reais só após autorização futura. Root fontefa/novoe269/instaladorb126; RPO expirado exige renovação/custódia/quatro bindings/republicação antes de A, root<600s por último; não considerar janela pronta. Retornos pós-seleção mantêm substituta+NEWauth+NEWDB+NEWcipher; fronteira incerta nega replay. Ambos crons/reader/produção/guarda38/out.15 CLOSED preservados. Segurança externa e risco histórico OPEN; sem.env/Prisma/limpeza/Meta neste escopo. Deifson; revisão15/10/próxima21/10, antecipar após mudança.
+
+
+**Checkpoint anterior — OpenAI perfis locais,15/10:** [emissão privada e perfis restritos para revisão](reviews/automation-freeform-window-release-af26/security-containment-20261012/openai-restricted-preparation-20261015/REPORT.md). Metadados completos; SAME_ID_RENAMED por comparação privada dos IDs, data sem horário inventado; fonte/retornos concretos locais validados, somente API.OPENAI_API_KEY muda.15 provas PASS; chave distinta, retorno pós-ativação com substituta; NEWauth+NEWDB+NEWcipher/worker/frontend/crons/out.15 CLOSED/guarda38 preservados. Sem autenticação no provedor/ativação/revogação/restart. Não confundir perfis com geração V4 pronta: faltam limites/modelos e composição operacional nova/quatro modos/frescor/revisão própria. Registro antigo ainda não vinculado, revogação separada. Segurança externa/risco histórico OPEN. Deifson; última revisão15/10/próxima21/10, antecipar após mudança.
+
+
+**Estado corrente — contenção externa preparada PARA REVISÃO,15/10:** [plano mínimo por provedor e ações do owner](reviews/automation-freeform-window-release-af26/security-containment-20261012/external-containment-20261015/PLAN_FOR_REVIEW.md). Cinco slots somente na API; OpenAI substituta conhecida primeiro, WhatsApp fallback e três slots Meta por emissor confirmado.341 referências históricas exigem população/CAS/escrow/retorno e fronteira irreversível de reset ensaiados antes de qualquer reset; não presumir coexistência. Owner precisa confirmar contexto organização/projeto Default privadamente, sem recibo antigo ou revogação por hipótese; emissão/troca/revogação dependem de autorização futura. Ficha privada contém ativos e identidades já inventariados. Nenhuma chamada autenticada de provider, VPS, mutação, nova janela, build/teste funcional ou credencial criada nesta preparação. Auth/banco/console/cifragem v14 concluídos/consumidos; NEWauth+NEWDB+NEWcipher/reader147/v2/ambos crons/produção/guarda38/out15CLOSED preservados. Segurança externa e risco histórico OPEN; derivados Web/Telegram não revogados por recriptografia. Sem Prisma/limpeza neste escopo. Deifson; revisão15/10/próxima21/10, antecipar após mudanças.
+
+**Resultado concluído — cifragem v14 CONSUMED/COMPLETE/VERIFIED,15/10:** [resultado,recibos,tempos e limites](reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-v14-execution-20261015/REPORT.md). Janela autorizada d03aa2a8; A/admissão/B uma vez, complete/switch12:09:29Fortaleza.10 cifras convertidas/Telegram opaco preservado;147 campos/126 eventos históricos legíveis e payloads intactos; v2 dedicado/contexto autenticado independente do grant, verificado em memória sem SQL de teste. API774414/worker774607, frontend188897 preservado;446 arquivos/2links do runtime PASS. NEWauth+NEWDB, quatro Web reconectadas/quinta já desconectada intacta, ambos crons before/boot/supervisão/savedfallback600 conferidos, barreira ausente, guard38closed/out15CLOSED/seis entregas/cinco não enviados preservados e UI owner aceita. B64,315s; contenção conservadora53,090s pelo journal, sem medir HTTP contínuo. Gatesfalse/executionfalse após encerramento com intent/recibo; nenhum retorno/replay/restart extra. Negativa do comparador adicional frontend PM2 preservada e classificada: configuração salva igual ao original, só axm_monitor mudou;240 comparações API/worker e fontes corretas PASS, nenhum reparo. Próxima ação: contenção externa para revisão e acompanhamento do risco histórico; segurança OPEN. Prisma local42PASS/typecheck permanece NOT DEPLOYED, sem.env/reativação; propostas futuras devem impedir OLDcipher ou consumidor antigo. Não repetir v14/auth/banco/console/cron/out15. Deifson; revisão15/10/próxima21/10, antecipar após mudanças.
+
+**Checkpoint anterior — 15/10, decisão v14 pendente:** [requisitos/bytes finais e blocos exatos](reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-v14-decision-20261015/REPORT.md). Owner sudo disponível agora, possível uso humano: nenhuma ausência de uso presumida, interrupção depende de decisão própria. Root vencido renovado12:00:26Fortaleza/PASS10controles/6cron/0incompletudes, válido estritamente até12:10:26; cadeia real11gates12:00/mínimo18.055.184.384B/WAL288MiB PASS. Backup real11:27:42 ainda válido até12:27:42: não repetido, custódia/schema/restore retido preservados. Reviewc6c0eaab/índicefedc/política15bfonte/fa113eproposta/instaladorb3d preservados; arquivo atual9ff98e9b somente journals/diagnósticos passivos e262 arquivos certificados. Todos gatesfalse/execfalse/sem instalação/admissão/SQL/start; nenhum replay da renovação consumida. Após expiração renovar somente o vencido e republicar hashes pertinentes antes de A. Prisma local42PASS/typecheck concluído e independente, sem deploy/env/reativação. NEWauth+NEWDB/amboscrons/console/out15CLOSED/guarda38 preservados; segurança externa/cifragem OPEN. Deifson; revisão15/10/próxima21/10, antecipar após mudanças.
+
+**Checkpoint anterior — 15/10, v14 renovada / Prisma local:** [resultado final e limites](reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-v14-final-20261015/REPORT.md). Cifragem: arquivo6fc27270/reviewc6c0eaab certificados em260 arquivos; backup real11:27:42Fortaleza/custódia/schema conferidos, restore certificado retido/parado reutilizado, temporaryDatabaseRemoved=false. Cadeia real11gates11:44:50, mínimo18.000.433.152B/WAL352MiB; root11:47:15 PASS,10 controles/6cron/incompletudes0. Frescor root até11:57:15 e RPO até12:27:42Fortaleza, estritamente; depois renovar só as provas necessárias e republicar hashes coerentes antes de janela. Política15b instalada/fa113e proposta; todos gatesfalse, sem instalação/admissão/contenção/SQL/start. Renovação inicial DENY por append passivo preservada; v2 exige prefixos exatos/ação read-only e certificação externa de todos os bytes. Prisma: proteção humano/fila, escopo conversa e tombstone sem cleanup transitivo, prévia sem escrita, CAS/Serializable local implementados;42 testes Node20/PG16.15 +typecheck PASS. [Revisão Prisma separada](reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-v14-final-20261015/PRISMA_LOCAL.md), NOT DEPLOYED; não aplicar.env/reabilitar consumidor antigo. NEWauth+NEWDB/cron recuperado/console/frontend/out.15 CLOSED/guarda38 preservados; segurança externa/cifragem OPEN e risco histórico acompanhado. Responsável Deifson; revisão15/10/próxima21/10, antecipar após mudanças. Próxima ação: decisão própria da janela v14, renovando frescor expirado; Prisma segue revisão/implantação independente.
+
+**Próximas ações históricas — antes desta entrega (15/10):** geração14 operativa inativa/checker+c cadeia real11gates certificados; namespace/política/instalador/retorno próprios concluídos para revisão, não reinstalar15b nem repetirv13. Antes de decidir janela: renovar RPO/custódia/root/writers pelo procedimento14 revisável, preservar originais e republicar pacote/index/conductor/review coerentes; fresh exit/ownership/CAS/VERIFIED só na futura decisão. Prisma independente: aprovar proteção de fila HUMAN/handoff/atribuição e escopo por conversa; não presumir contrato de closedAt obrigatório a todo BOT. Correção proposta deve negar expansão por identidade sem ação explícita de titular, preservar registros ambíguos/novos e revalidar atividade/lifecycle por CAS. Aceite: duas conversas mesma identidade (uma recente) sem dano colateral, outro tenant intocado, fila humana preservada, prévia sem upsert, concorrência/rollback/cleanup idempotente com alvos porID e preservação de auditoria/entrega. Runtime postgres/deleteMany/Assignment cascade incluídos na revisão; sem aplicar código funcional, política tenant ou.env. Segurança externa/cifragem OPEN; auth/banco/console/out.15 e cron concluídos, três remanescentes só backlog.
+
+
+**Checkpoint anterior — ações delimitadas após b0968246:** integração preventiva local concluída para revisão; não instalada. Antes de nova cifragem, gerar namespace/política/instalador com fonte15b e certificar pacote/provas atuais, sem reaproveitar A/B consumidos. Critério: admissão/recuperação/encerramento devem negar drift em qualquer cron e nunca emitir complete com cron parcial. Prisma: definir tratamento de conversa não encerrada e expansão por identidade; relatório READ ONLY por tenant/identidade deve explicar todo alcance antes de reabilitar DATABASE_URL ao cron global. Tornar auditoria/dry-run realmente sem upsert em versão futura, provar ausência de writes e isolamento. Revisar atomização/recuperação de efeitos DB+filesystem e falha entre anonimização/exclusão antes de alterar esse consumidor. Reconciliação seletiva.env bloqueada até decisão sobre esses efeitos; nunca usar senha antiga como retorno. Segurança externa/cifragem OPEN continua próxima frente; auth/banco/console/out.15 concluídos. Três remanescentes de retenção apenas backlog, sem exclusão autorizada.
+
+
+**Checkpoint anterior — cifragem14/Prisma,15/10:** [geração concreta certificada PARA REVISÃO, inativa/não instalada; alcance Prisma por identidade](reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-controls-prisma-20261015/REPORT.md). Nova política proposta fa113e52/fonte15b, arquivo66f886c2; cadeia REAL READ ONLY11gates PASS na VPS10:39Fortaleza, mínimo18.275.205.120B/WAL144MiB datados.39 provas locais sobre candidato completo, incluindo recuperação ORIGINAL_VERIFIED/VERIFIED/resposta perdida/incerto e encerramento4modos; efeitos OS/SQL substituídos. RPO/root/writers frescos/instalação/admissão/selagem/commit/starts ainda NÃO certificados; cinco gatesfalse, nenhuma janela. Renovador14 preparado/ensaiado, sem executar backup/apply ou reutilizar CLI13 de review fixo. Prisma: semente original BOT e segunda por corte temporal HUMAN/WAITING/ACTIVE, sem atribuição/closedAt; aliases/hashes canônicos sem registros extras, FKs preservadas conferidas; storage postgres remove runtime/atribuições em cleanup transitivo. Proposta mínima separa escopo de conversa/titular e protege lifecycle; sem implementar/mudar políticas.env/retention. Independência da cifragem comprovada,96 comparações NEWauth+NEWDB; pendência Prisma não bloqueia sua preparação. Cron recuperado CONSUMED/RESTORED, política15b, produção/console/frontend/out.15 CLOSED/guarda38 preservados. Segurança externa/cifragem OPEN. Deifson; revisão15/10/próxima21/10, antecipar após mudanças.
+
+**Checkpoint anterior — integração dos controles/Prisma,15/10:** [LOCAL VALIDATED / NOT DEPLOYED; relatório consolidado](reviews/automation-freeform-window-release-af26/security-containment-20261012/controls-prisma-integration-20261015/REPORT.md). Composição completa com admissão, recuperação pré-parada e encerramento nos quatro modos;34 provas locais PASS, efeitos de sistema substituídos e fatos externos reutilizados explicitamente. Crons deploy/sistema verificados separadamente; namespace/política/instalador futuros e provas frescas ainda necessários para qualquer janela, nenhuma autorização transferida da v13. Recuperação121000 permanece CONSUMED/RESTORED, seis entradas e owner UI aceitos; não repetir. Auditoria SELECT READ ONLY: dez tenants com políticas persistidas (nove90d/um365d), uma semente elegível sem closedAt. Retention:run global; dry-run chama upsert e não é leitor puro. Duas propostas.env privadas NÃO APLICADAS; NEWDB no.env reabilitaria retenção/ferramentas, bloqueada até revisão do predicado/alcance por identidade e efeitos por consumidor. NEWauth+NEWDB, política15b/gatesfalse, produção, console, out.15 CLOSED e guarda38 preservados. Cifragem suspensa/segurança externa e cifragem OPEN; nenhuma instalação/cron/retencão/restart novo. Deifson; última revisão15/10/próxima21/10, antecipar após mudanças.
+
+**Resultado consumido — recuperação dos controles,15/10:** [CONSUMED / RESTORED; recuperação restrita concluída](reviews/automation-freeform-window-release-af26/security-containment-20261012/scheduled-controls-20261015/RESULT_2026-10-15.md). Aplicação única como deploy/sem sudo às09:18:22Fortaleza: recibo RESTRICTED_DEPLOY_CRON_RESTORED/seis entradas, inspeção RESTORED09:18:24, dois crons before conferidos;23 linhas restantes idênticas. Invocação SSH/prechecks/aplicação/C10,647s, sem stop/start ou contenção de admissão. Custódia18 arquivos+índice/hashes600/700, owner confirmou sessão/console/telas/out.15. Não repetir aplicação121000 nem A/B v13. Zero vencimentos perdidos nesse intervalo; próxima execução natural16/10 00hFortaleza, sem compensação manual. Prisma/.env obsoleto permanece separado/falha preexistente; nada atualizado. Correção preventiva74 provas continua local/não instalada. Política15b/gatesfalse/NEWauth+NEWDB/API/worker/frontend/out.15 CLOSED/guarda38 preservados; cifragem suspensa e segurança externa/cifragem OPEN. Deifson; revisão15/10/próxima21/10 antecipada após mudanças.
+
+**LOCAL VALIDATED / NÃO INSTALADO — correção pré-parada/cron deploy:** [código,74 provas e comandos restritos](reviews/automation-freeform-window-release-af26/security-containment-20261012/scheduled-controls-20261015/REPORT.md). Recuperação real sequencer+helper8de, ambos crons separados, estados mistos/desconhecidos/falha parcial/resposta perdida, sem falso sucesso. Gate preparatório de crons before e consumidor final nos4 modos ensaiados; preparador de delta nega fonte divergente. **CONCLUÍDA recuperação dos controles15/10:** capsule121000 CONSUMED/RESTORED, aplicação única09:18Fortaleza, seis entradas/recibo/inspeção/dois crons/custódia/owner PASS. Não repetir. Próximo ciclo natural16/10 00hFortaleza pode ser conferido somente por leitura; nenhum job manual. **Pendente futuro de engenharia operacional:** incorporar módulo/deltas nos manifests de uma futura geração e recertificar; não usar esta publicação como janela de cifragem pronta. **Separado:** reconciliação.env do consumidor Prisma, com efeitos por tenant/cron; não reabilitar SQL por troca cega de DATABASE_URL, não executar compensação manual.
+
+**Checkpoint histórico — preparação v13,15/10:** [v13: contrato de restore único, preparação concreta validada para revisão / NOT INSTALLED / NOT WINDOW READY](reviews/automation-freeform-window-release-af26/security-containment-20261012/restore-contract-20261015/REPORT.md). Checker/Node/preflight/Operations.stop/start/quatro modos/recuperação/controles delegados compartilham a prova íntegra, schema/fronteira/tooling/estado do laboratório; restore certificado retido/parado preservado, temporaryDatabaseRemoved=false.170 provas dirigidas sobre arquivos completos PASS; cadeia real VPS15/10 06:51:42Fortaleza PASS com três referências imutáveis,147 históricos, perfis/NEWauth+NEWDB, dumps600, SQL/proxy/health. Mínimo18.376.777.728B/WAL80MiB datados. Corrigidos CLI delegado3→4, encerramento por modo e diagnósticos UUID; v11/v12 intermediárias preservadas, v9/v10 consumidas intocadas. Política nova15b91a/instalador722ae8 apenas propostos; fonte root b6 permanece instalada/consumida, inspect=phase_already_exists preservado, check-absent PASS. Gatesfalse/execfalse; nenhuma instalação/contenção/stop/start/conversão. RPO real05:43:48 já excede1h: renovar/republicar provas coerentes pelo contrato antes de eventual janela; conferir hashes root frescos/owner sudo, writers/saída/ownership/CAS só em decisão própria. Próxima ação: revisão do pacote/comandos/matriz; autorização v10 não se transfere. Auth/banco/console e out.15 CLOSED concluídos; guarda38 fechada, frontend/worker/produção preservados. Contenção anterior de admissão3,497s é limite conservador, não parada nem medição contínua HTTP. Segurança externa/cifragem OPEN/risco histórico acompanhado; propostas.env/externas separadas, três remanescentes de retenção só backlog. Deifson; última revisão15/10/próxima21/10, antecipada após mudanças; sem cron/adapters instalados.
+
+**Correção preventiva concluída para revisão — restore/consumidores reais:** implementação compartilhada e170 provas dirigidas + cadeia concreta real vinculada ao tar/manifest da v13. Não pendenciar novamente runtime/grant/SQL/auth/banco/console. Aceites da engenharia: retido/removido válidos; ausência/tipo/owner/mode/hash/schema/tooling divergentes negam antes de efeito; CLI4 modos e fronteiras original/VERIFIED/uncertain; encerramento exato por modo; histórico diagnóstico preservado. Matriz informa explicitamente efeitos kernel/PM2/SQL não exercitados em produção. Próximo gate operacional separado: revisão/decisão própria, RPO/custódia/compatibilidade e atualização coerente de TODOS os bindings/restore-contract na renovação; root b6/hash/helper/regra/cadeias/owner frescos, capacidade/WAL/identidades/writers/exit/CAS atuais. Uma renovação não pode editar plano de cifras para PASS. Retorno pós-unfence exige geração/capturas/contratos de consumidores e política próprios a partir do estado real; template não é certificado de retorno já emitido. Segurança externa/cifragem continua OPEN.
+
+
+**Checkpoint histórico — tentativa v10,15/10:** [v10 B CONSUMED / FAILED PRESTOP / RESTORED / CIPHER NOT DEPLOYED](reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-package-contract-20261015/WINDOW_RESULT_2026-10-15.md). Política b6a584 instalada; fonte9c7 arquivada; helper/sudoers iguais. B único8,721s; `ops.stop` negou `restore_not_verified` porque exige temporaryDatabaseRemovedtrue e o checker aceita restore retido certificado. Falha de auditoria nossa; v10 preservada, sem conserto de boolean/bindings, sem repetir A/B. C=NO_FINAL_PLAN, selagem/intent/recibo de commit ausentes; nenhum processo parado/start/cifra convertida. Contenção de admissão limitada a3,497s pelo journal; restaurada canonicamente antes da parada. Gatesfalse/barreira ausente, identidades/NEWauth+NEWDB/health/worker/admin/frontend/saved600/supervisão/SQL e owner UI PASS. Out.15 CLOSED/guarda38 preservados. Backup fresco05:43:48 Fortaleza off-host, fronteira/tooling iguais, provas históricas arquivadas. Próxima ação de engenharia: contrato de restore compartilhado com stop/start/retornos, prova real de precondições, nova geração/revisão com fonte root b6 instalada; corrigir diagnóstico fixo auxiliar sem sobrescrever histórico. Sem nova janela implícita. Segurança externa/cifragem OPEN, chaves de cifra ainda não substituídas e risco histórico acompanhado; propostas.env/externas separadas. Deifson; revisão15/10/próxima21/10 antecipada após mudanças.
+
+**PENDÊNCIA BLOQUEANTE — restore compartilhado entre checker e stop/start/retornos:** produtor/checker de referências corrigidos não encerraram a integração. Aceite exigido: todos os leitores reais aceitam a mesma prova retida válida e negam referência/hash/schema/tooling/owner/modo inválidos; precondições reais ensaiadas sem efeito produtivo, quatro modos e retorno preservando NEWauth+NEWDB/NEWcipher após VERIFIED. Não marcar temporaryDatabaseRemovedtrue nem remover evidência para PASS. Nova geração com política fonte b6, v10/v9 preservadas. Leitor auxiliar precisa diagnóstico único por execução; negativa original preservada. Nenhuma execução nova autorizada por esta pendência.
+
+
+**Checkpoint parcial superado pela recusa15/10 — contrato de pacote cifragem:** produtor captura modo/uid/tipo/hash reais; schema sem defaults, consumidores canônicos reais antes da publicação, receipt/candidate hashes vinculados. Aceite demonstrado: referência ausente, mode/owner/type/hash divergentes negam; nove negativas com capture concreto impedem cópia; checker completo+cadeia da v10 PASS na VPS. Permanecem requisitos de janela, não bugs ocultos: RPO/root restrito/exit/DBzero/commit/pos-deploy. Não aplicar esta integração retroativamente em gerações seladas. A cobertura CLI antiga não atesta consumidor imutável vazio; fixtures não substituem checker real.
+
+**CHECKPOINT HISTÓRICO — preparação locked-v7, 14/10:** [V4 integrado e geração NOVA completa para revisão](reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-locked-v4-20261014/REPORT.md). Geração locked-v7/011500 na VPS inativa, quatro modos+política6e0649/installer d887, cinco gatesfalse, nenhuma instalação/stop/start/SQL mutável. Saída/DBzero obrigatórios antes de fonte/plano/hash/intent novos sob lock/CAS integral; OLDcipher negado após VERIFIED também em ops.start. Grant95eda/147/opaca/v2 preservados; leitura atual/identidades/root/proxy/capacidade18.432.376.832B PASS datado, RPO/ownership/saída frescos ainda necessários antes da janela. Restore d859/provas válidas reutilizados;214100 DENY intocada. Propostas.env separadas: NEWDB pode reabilitar retention:run mutável, não aplicar agora. NEWauth+NEWDB/auth/banco/console/out15CLOSED/guarda38 preservados; segurança externa/cifragem OPEN. Próxima ação: revisão do pacote/comandos e decisão própria da janela. Deifson; revisão14/10/próxima21/10 antecipada após mudanças.
+
+Pendências específicas: (1) decisão de protocolo/fonte volátil: aceitar snapshot coerente não vence CAS divergente; manter11 bindings integrais e não fabricar janela completa. (2) reconciliar referências legadas API4/worker3 com NEWauth+NEWDB já efetivos, hashes/CAS de arquivos/owner/mode/backup privado e impacto por consumidor; revisar wrappers/crons/escopo antes de ativar credenciais. (3) isolar finalidade do.env local (APP_AUTH_SECRET/DATABASE_URL desconhecidos), negar fonte stale antes de conectar/provider e manter entrega privada do ADMIN_TOKEN vigente. Planos preparados/não aplicados; não reabrir auth/banco/console nem repetir rotação.
+
+**Recuperação do console interno após auth:** [contrato e prova atual](reviews/automation-freeform-window-release-af26/security-containment-20261012/admin-console-access-20261014/REPORT.md). ADMIN_TOKEN ativo confere com NEWauth; GET administrativo local/proxy200/DBtrue. Owner confirmou origem converta e “Sair do console”. Reconexão com token vigente confirmada pelo owner: console RECOVERED/aceite específico concluído; não confundir com login JWT do tenant já aceito. Nenhuma nova rotação/restart/RBAC necessária. Snapshot87d2f431 LOCAL VALIDATED/NOT DEPLOYED preservado; segurança externa/cifragem OPEN.
+
+**CHECKPOINT HISTÓRICO de segurança — 14/10/2026:** [snapshot inventário/dump LOCAL VALIDATED / NOT DEPLOYED](reviews/automation-freeform-window-release-af26/security-containment-20261012/snapshot-local-20261014/REPORT.md). Dez conversões/linha opaca/147/v2/CAS local PASS; transporte final5 provas dirigidas; quatro modos/configurações e propostas offline selados, gates false. Sem VPS nesta tarefa. Próxima ação: revisão do delta e autorização expressa de captura produtiva coerente + montagem/baseline/permissões/lock/RPO/capacidade atuais; sem instalação/janela implícita. Geração180000 permanece DENY. NEWauth+NEWDB concluídos, out15CLOSED/guarda38 preservados; segurança externa/cifragem OPEN, OpenAI separada. Responsável Deifson; revisão14/10/próxima21/10 antecipada após mudanças. Históricos abaixo preservados.
+
+Pendência específica para promoção operacional: transportes existentes da VPS com fonte legítima/mesma identidade, lock real e disponibilidade/permissões; snapshot atual + restore/CAS + baseline quatro modos/checkers/consumidores/root + orçamento/RPO/custódia. Aceite: geração própria íntegra, ausência de certificados consumidos, drift DENY, recibos verificáveis e cinco gates false antes de decidir janela. Não repetir auth/banco, não reabrir audiência/cancelamento nem condicionar segurança à limpeza remanescente.
+
+**CHECKPOINT HISTÓRICO — DESENHO95EDA/TG APROVADO PARA PREPARAÇÃO; GERAÇÃO OPERACIONAL NOVA DENY POR NOVO DRIFT WEB.** [Capturas, backup/restore, negativa e próximo passo](reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-operational-20261014/REPORT.md). Inventário atual11 cifras/147 históricos; duas linhas Web mudaram ciphertext/updatedAt entre captura18:03UTC e dump18:07UTC:9 originais compatíveis/11, Telegram intacto. Não adaptar input67e57724 nem repetir captura/backup para PASS. Dump40.261.687B off-host, restore70tabelas/66migrations e147/v2 PASS; dez conversões/recibo/retornos NÃO certificados, nenhum apply. Políticas/instaladores e quatro modos completos não emitidos; geração180000 registrada DENY/gatesfalse. Helper8de/regra62b5/política9c físicos conferidos; inspect consumido phase_already_exists preservado, SQL/proxy lidos separadamente. Próxima integração local: inventário+dump no mesmo snapshot READ ONLY e lock canônico, ensaio; nova geração precisa CAS atual e bloquear nova mudança. Auth/banco concluídos, NEWauth+NEWDB/out15CLOSED/guarda38/produção preservados; segurança OPEN. OpenAI substituta conhecida independente, sem criação/revogação; retenção encerrada nesta rodada/três no backlog. Segurança não bloqueia auditoria/implementação local funcional. Responsável Deifson, revisão14/10/próxima21/10 antecipada após mudanças.
+
+**CHECKPOINT HISTÓRICO — AUTH/BANCO CONCLUÍDOS; SEGURANÇA EXTERNA/CIFRAGEM OPEN; V4 LOCAL INTEGRADO PARA REVISÃO, SEM PRODUÇÃO.** [Contratos revisados, pacote e comandos](reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v3-20261014/REVIEW.md). OpenAI: GETmodels/suporte opcionais, substituta conhecida no projeto correto preparada como alternativa; emissão/revogação não executadas e antigo vínculo desconhecido. Writers/leitores v2 independem do grant v1; proposta população147 selada até disposição explícita, sem renovação periódica; não instalar prazo22/10. Telegram opaco preservado/inventariado sem recuperação. Composição446 arquivos, dois módulos revisados/444 reutilizados; SQL/verify e quatro modos/fronteiras V4 selados, nove ensaios canônicos com Bridge simulado e verificador real em PG16 sintético PASS, gatesfalse. Janela produtiva depende de revisão grant/disposição, baseline/root/capacidade/WAL/RPO/restore e política NOVA frescos; geração140000 consumida não será executada. NEWauth+NEWDB/out15CLOSED/guarda38fechada/worker/frontend preservados. Limpeza encerrada nesta rodada: terceiro loteCONSUMED/PARTIAL20/3, três apenas backlog. Segurança não bloqueia auditoria/implementação local funcional do produto. Responsável Deifson; última revisão14/10/próxima21/10, antecipar após mudanças; sem cron/adapter instalado.
+
+**CHECKPOINT HISTÓRICO — AUTH/BANCO CONCLUÍDOS; EXTERNA/CIFRAGEM OPEN; PREPARAÇÃO LOCAL PARA REVISÃO, NÃO JANELA PRONTA.** [Composição completa, disposição Telegram, expiração, orçamento e próxima ação OpenAI](reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-v2-20261014/REVIEW.md). Tar446 arquivos/439 preservados,147 campos históricos comprovados; dez cifras legíveis planejadas e uma Telegram opaca preservada com seal exato. PostgreSQL isolado CAS/rollback/replay/concorrência e recibos por tenant PASS. Sem consulta OpenAI real: configurada=custódia, registro Active do projeto ainda sem vínculo comprovado; proposta GETmodels único +correlação pelo emissor, sem revogação por hipótese. Retorno v3 compatível em cwd distinto, NEWauth+NEWDB; política/grant/hooks V4 e backup/restore da fronteira nova continuam dependências explícitas. Capacidade local datada18.471.538.688B, orçamento8.776.581.120B, não certificado de janela. Custódia permanente48 arquivos700/600. Terceiro loteCONSUMED/PARTIAL20/3, sem certificado completo/sem repetir B; out15CLOSED/guarda38fechada preservados. Responsável Deifson, última revisão14/10/próxima21/10 antecipada após mudanças; nenhum cron/adapter instalado.
+
+**CHECKPOINT HISTÓRICO — AUTH/BANCO CONCLUÍDOS; SEGURANÇA EXTERNA/CIFRAGEM OPEN; RETENÇÃO CONSUMED/PARTIAL.** [Preparação local e próxima ação do owner](reviews/automation-freeform-window-release-af26/security-containment-20261012/remaining-local-20261014/REVIEW.md): primeira credencial OpenAI, projeto Default/duas chaves/uma revogada informados pelo owner, vínculo/permissões ainda por conferir privadamente. Decoder composto por sete módulos sobre base atestada;147 campos/126 eventos imutáveis,252 negativas e contrato compilado PASS, sem instalação/rotação. Telegram futuro: disposição específica preservar linha opaca proposta, planner integral ainda DENY. Terceiro lote20 retirados/3 preservados, sem certificado completo; B consumido, nenhuma repetição/retirada manual; nova preparação exclusiva3 somente backlog. NEWauth+NEWDB/out.15CLOSED/guarda38 fechada preservados. Capacidade18.659.729.408B datada14/10 11:22UTC, não certificado de janela futura. Responsável Deifson, revisão14/10/próxima21/10 antecipada após mudanças; sem cron/adapters instalados.
+
+**CHECKPOINT HISTÓRICO — resultado anterior preservado:** ** TERCEIRO LOTE CONSUMIDO/PARTIAL DENY; SEGURANÇA EXTERNA/CIFRAGEM OPEN.** [Resultado e diagnóstico](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/THIRD_WITHDRAWAL_RESULT_2026-10-14.md). Uma chamada B retirou20/23,8.130.785.280B alocados;3 restantes685.793.280B mantidos. Recusa em stat_before/PID529658/errno2 antes de start ticks,origem específica desconhecida. C PASS owners0/incomplete0; sem WITHDRAWAL_COMPLETE/certificado23; intent/journal/parcial consumidos, não repetir. Mínimo deploy/PG11:22UTC14/10:18.659.729.408B,WAL80MiB,healthDB/HBA/processos/NEWauth+NEWDB/dumps600/cron-boot/supervisão/gatesfalse preservados;owner confirmou sessão/telas. Out15CLOSED/seis entregas/cinco não enviadas/guarda38 fechada.11 principais/109links/controles/manifests intactos,custódia privada permanente. Retenção:3 restantes exigem preparação/decisão novas; nenhuma exclusão adicional. [Segurança retomada](reviews/automation-freeform-window-release-af26/security-containment-20261012/SECURITY_REMAINING_PREPARATION_2026-10-14.md): base privada pós-banco/formulário5 slots,sem reset/rotação/rebuild. Responsável Deifson; revisão21/10 antecipada após mudanças; adapters não instalados,cron inativo.
+
+**CHECKPOINT DOCUMENTAL HISTÓRICO — integração preventiva14/10/2026:** adapters FUTUROS API/frontend e encerramento auth/banco conectados ao coordenador, [código/provas/comandos](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/PREPARER_INTEGRATION_2026-10-14.md), **38 testes locais PASS**. Conexão de código concluída localmente para revisão; NÃO instalada na VPS, sem cron ou nova janela. Responsável Deifson; revisão21/10 antecipada após mudanças conforme o runbook. Terceiro lote preparado, sem exclusão autorizada. NEWauth+NEWDB, out.15 CLOSED, guarda38 fechada; **segurança externa/cifragem OPEN**, decisão de contenção separada continua na sequência ativa.
+
+**CHECKPOINT DOCUMENTAL HISTÓRICO — revisão de retenção14/10/2026:** responsável operacional **Deifson Oliveira (owner/operador de janela)**; apoio de manutenção dos preparadores: Codex nesta revisão. Última revisão **14/10/2026** (local/documental; não nova amostra produtiva); próxima revisão semanal **21/10/2026**, antecipada após janela/recusa/substituição/encerramento. Versão futura local dos cinco gates e validação de destino privado em [scripts](../scripts/README.md#operational_preparation_reviewpy), para revisão; ligação aos preparadores produtivos NÃO concluída, nenhum cron ativo. Terceiro lote preparado, sem retirada autorizada. NEWauth+NEWDB, out.15 CLOSED, guarda38 fechada; **segurança externa/cifragem OPEN**, próxima decisão de contenção permanece separada e acompanhada no relatório de segurança.
+
+**Integração permanente de retenção14/10:** [princípios](saas/CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional), [procedimento](RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente) e [checklist](saas/RELEASE_CHECKLIST.md#retenção-de-releases-e-preparações) publicados; rotina somente local para revisão, sem cron/limpeza ativados. Auditoria de preparadores e critérios no [backlog](BACKLOG_TECH.md#retenção-operacional--integração-preventiva-dos-preparadores). Estado operacional e próxima decisão do terceiro lote abaixo preservados.
+
+**CHECKPOINT HISTÓRICO — TERCEIRO LOTE PREPARADO/PASS PARA REVISÃO; ZERO RETIRADAS NOVAS.** [23 arquivos duplicados, grafo/custódia/input/comandos](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/THIRD_WITHDRAWAL_PREPARATION_2026-10-14.md). Potencial8.816.578.560B alocados;11 nomes mantidos, hardlinksfa60 zero recuperação; diretórios/manifests/journals/recibos/logs/snapshots fora da allowlist. Driver e1380546/input77503f96 próprios, selo e dry-run09:23UTC/06:23Fortaleza14/10 PASS,owners0/incomplete0,removedCount0; sem intent. Custódia off-host10 conteúdos/34 metadados+extração verificados; diagnósticos/timeouts anteriores preservados, grafo12s fora da VPS. Capacidade09:29UTC mínimo deploy/PostgreSQL10.531.876.864B,WAL80MiB,healthDBok. NEWauth+NEWDB/API410272/worker410428/frontend188897/dumps600/boot/cron/política9c7b44 preservados,gatesfalse,guarda38closed,out15CLOSED/seis entregas/cinco não enviadas. Próxima decisão: autorização exclusiva dos23 literais pelo novo A0/A1/B/C,nenhum apply agora. Segundo lote/banco/auth consumidos,não repetir. Segurança externa/cifragem OPEN; retenção automática apenas proposta.
+
+**CHECKPOINT HISTÓRICO — AUTH/BANCO CONCLUÍDOS; SEGUNDO LOTE CONSUMIDO E VERIFICADO; SEGURANÇA EXTERNA/CIFRAGEM OPEN.** [Resultado, negativas e auditoria restante](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/SECOND_WITHDRAWAL_RESULT_2026-10-13.md). Nove raízes/140.758 membros retirados uma vez,4.456.800.256B alocados; inspeção complementar mesmos bytes confirmou owners0/incomplete0 e zero restantes, preservando DENY original por reutilização de inode. CAPACITY PASS datado: mínimo deploy/PostgreSQL10.905.092.096B às00:38UTC14/10 (21:38Fortaleza13/10), WAL112MiB. NEWauth+NEWDB/identidades/saved-fallback600/boot-cron-supervisão preservados, gatesfalse, guarda38closed/out15CLOSED, seis entregas/cinco não enviadas; owner confirmou telas. Não repetir B/auth/banco. Auditoria restante root COMPLETE,17.062 entradas,dez grupos idênticos; preparações/logs/snapshots SEM nova allowlist. Próximo passo: fechar referências/custódia e propor lote literal de duplicados, sem exclusão automática. Revisão observacional pendente: identidade de geração de inode e referência explícita ao fallback .bak; nenhum patch produtivo nesta etapa.
+
+**CHECKPOINT HISTÓRICO — AUTH3/BANCO CONCLUÍDOS; SEGUNDO LOTE PREPARADO PARA REVISÃO, SEM RETIRADA.** [Resultado concreto e limites](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/SECOND_WITHDRAWAL_PREPARATION_2026-10-13.md). Nove raízes já auditadas, driver final10f25ecc/inputc41170f6 próprios pós-banco (dry-run produtivo856cc, delta final4 testes locais),140.758 membros preservados, dry-run/read posterior PASS, owners0/incomplete0, zero remoções. Mínimo deploy/PostgreSQL6.516.224.000B datado; potencial4.456.800.256B. Custódia/hash/extração reutilizados e reconferidos. Geração211000 recusada/contexto PM2 root preservada; v2 usa captura deploy e kernel. Próxima ação: decisão exclusiva sobre [A0/A1/B/C](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/SECOND_WITHDRAWAL_COMMANDS_FOR_REVIEW.txt), novas verificações antes do intent; nenhuma exclusão autorizada. Preparações/logs/snapshot root fora do lote. NEWauth+NEWDB, API410272/worker410428/frontend188897, retornos/140000 consumida, dumps600, guarda38 fechada/out15CLOSED protegidos. Cronologia corrigida: autorização de iniciar sem esperar17h15; contenção efetiva17h47:09, interrupção37,198s. Segurança externa/cifragem OPEN; Telegram futuro/liberação da guarda separados. Não repetir banco/auth/primeiro lote nem executar retorno ou envio.
+
+**CHECKPOINT HISTÓRICO — AUTH3 E BANCO CONCLUÍDOS/VERIFIED; SECURITY OPEN EXTERNA/CIFRAGEM.** [Resultado e limites](reviews/automation-freeform-window-release-af26/security-containment-20261012/DATABASE_EXECUTION_2026-10-13.md). Geração140000 consumida uma vez, complete/switch13/10,17:47:50Fortaleza; interrupção conservadora37,198s. NEWDB TCP aceito/OLDDB rejeitado, NEWauth preservada; API410272/worker410428, frontend188897 e daemon intactos; HBA/atributos/healthDB/sessões/telas confirmados. Saved/fallback600, barreira ausente, cinco gatesfalse/execfalse; guarda38closed/out15CLOSED/seis resultados/cinco não enviados preservados. Não repetir instalação/ALTER/start/retirada consumida. Próxima preparação autorizada: driver/input novos do segundo lote com identidades/política/NEWDB efetivos; nenhuma exclusão autorizada. Segurança externa/cifragem e liberação da guarda permanecem decisões separadas.
+
+**CHECKPOINT HISTÓRICO — banco AUTORIZADO; conferências iniciais PASS; janela13/10 antecipada pelo owner para agora; A aguardando resultado na sessão sudo; NÃO INSTALADO/NÃO EXECUTADO.** [Janela e limites](reviews/automation-freeform-window-release-af26/security-containment-20261012/DATABASE_WINDOW_2026-10-13.md). Geração140000/política9c7b44/instalador17a92e preservados; quatro modos/consumidores/SQL/proxy/verificador/HBA/dumps600 conferidos, gatesfalse/zerointents. Mínimo11:34Fortaleza6.670.139.392B, WAL176MiB estável. Custódia íntegra; renovar backup/RPO e reconfirmar requisitos imediatamente antes da janela. Próxima ação: resultado efetivo de A único/inspect na sessão sudo já disponível, então reconferências e B único; incerteza permite somente C inspect antes de decisão explícita de recuperação. AuthNEW concluída, retirada consumida, out15CLOSED/guarda38closed e produção preservadas; segurança externa/cifragem OPEN. Nenhum start/ALTER/instalação agora. **Auditoria secundária:** [segundo lote](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/SECOND_LOT_2026-10-13.md): nove raízes4.456.800.256B alocados, custódia/extração/hash integral e duas amostras root posteriores owners0/incomplete0; nenhuma retirada. Preparações/logs/snapshot root e driver de retirada selado pendentes; banco17h15 prioritário, bindings140000 preservados. Reconferir estado/capacidade/RPO após qualquer futura decisão de retirada. **Decisão pós-revisão b2ac1bfd:** nenhuma exclusão autorizada; driver/input novos somente após o resultado real da fase banco, vinculados às identidades/política/NEWDB efetivos, sem seguir os sete links externos .data. Até17h15 apenas preparação sem disputa de recursos/locks; categorias secundárias separadas. Provas backup renovadas/custódia íntegra, outer44e09f3c…, política9c7b44/instalador17a92e intactos. Zero ALTER/contenção/partida nesta conferência; retirada secundária adiada até resultado real do banco.
+
+**Auditoria adicional SECULT,13/10 — somente leitura.** [Final1215: fila humana automática sexta23h12; atribuição a Mirella hoje10h10; rótulos agora corretos](reviews/secult-1215-readonly-20261013/REPORT.md). Uma conversa/runtime;8saídasbot/uma atribuição fromnull, sem registro de Assumir por Anna. Protocolo automático não comprova Assumir. Alegação histórica não confirmada; se necessário obter horário/protocolo da tentativa, sem reparo ou repetição. Mensagem somente redigida para owner, não enviada. Janela bancária17h15/guarda38 preservadas. **Decisão do owner — clarificação de contrato/UX, sem reparo:** manter a organização administrativa da fila por Transferir com janela fechada, respeitando RBAC/tenant/escopo/elegibilidade, separada de Assumir e dos gates de envio. Não bloquear Transferir automaticamente nem desfazer Mirella. Formalizar e validar a distinção: Assumir (rotas claim/assign) exige janela aberta; Transferir pode organizar responsabilidade sem abrir janela ou autorizar envio; mensagens livres continuam bloqueadas e templates seguem gates próprios. Esclarecer rótulos Atendimento humano/Em atendimento/Janela fechada. Item documental/UX pendente de revisão e validação dirigida; nenhuma implementação ou mudança produtiva autorizada. Janela bancária permanece separada.
+
+**Histórico preservado abaixo; apenas o checkpoint acima define a próxima ação.**
+
+**CHECKPOINT HISTÓRICO — RETIRADA CONCLUÍDA; CAPACITY PASS datado; banco preparado PARA REVISÃO, NÃO INSTALADO/NÃO EXECUTADO.** [Resultado/retornos/comandos](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/WITHDRAWAL_RESULT_2026-10-13.md). Lote47008ee6 consumido uma vez,4.630.863.872B alocados liberados, cache/main/controles preservados. Mínimo pós-staging14:16UTC6.657.581.056B; piso6.468.665.344B/orçamento banco2.173.698.048B atendidos. Dump fresco13:38UTC+restore PG16 isolado PASS, custódia permanente conferida. Geração bancária140000, quatro modos29arquivos/checker integral PASS, gatefalse/fivegatesfalse/zerointents; políticas apenas propostas. Próxima ação: decisão própria da fase banco, com reconferência imediata de capacidade/WAL/RPO/custódia e owner sudo antes de instalar/ALTER. Auth concluída/NEWauth, saved/fallback600, out.15 CLOSED/guarda38false/sessões preservados; segurança OPEN. Sem restart/expansão/nova rotação/envio/abertura. Retenção automática permanece proposta.
+
+**Histórico preservado abaixo; apenas o checkpoint acima define a próxima ação.**
+
+**CHECKPOINT HISTÓRICO — lote de retenção autorizado; A1 PASS durável com falha posterior do reporter; B ainda não executado; CAPACITY DENY atual.** [Diagnóstico A1 e continuidade](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/A1_REPORTING_DIAGNOSIS_2026-10-13.md). Duas observações completas/owners0; erro `len(False)` reproduzido no CLI exato, sem modificar driver/input ou repetir A1. C completo confirmou todos os candidatos presentes e mínimo deploy/PostgreSQL2.041.073.664B. Diagnósticos preservados off-host. Próxima ação: B único já autorizado na sessão sudo do owner, seguido de C fresco em diretório próprio; depois capacidade real/WAL e, com PASS, renovar backup/RPO e reconferir banco para revisão. Auth concluída/NEWauth, dumps600, out.15 CLOSED, guarda38 fechada e produção preservados; segurança OPEN. Nenhuma retirada, instalação ou rotação nesta publicação.
+
+**Checkpoint histórico — lote publicado antes da autorização e de A1:**
+
+**CHECKPOINT HISTÓRICO — retenção auditada; lote de cinco caminhos PARA REVISÃO / NÃO RETIRADO; banco CAPACITY DENY; auth concluída; out.15 CLOSED; guarda38 fechada.** [Inventário root completo, custódia e proposta4,63GB](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/REPORT.md). Expansão adiada. Cache+quatro blobs idênticos, main/manifests/journals/releases/retornos/segredos preservados.13 testes locais do driver e custódia verificada; driver produtivo não executado, nenhuma retirada. Próxima decisão: autorizar este lote com dry-run fresco e leitura posterior; depois renovar RPO/custódia e conferir capacidade bancária. Segurança OPEN, sem nova rotação/instalação.
+
+**Checkpoint histórico — expansão preparada antes da priorização da retenção:**
+
+**Continuidade 13/10 — expansão PREPARADA PARA DECISÃO, não executada:** DigitalOcean confirmado por DMI; Basic Regular80GiB/4GiB/2vCPU US$24/mês (catálogo, +US$6 se atualRegular18), exige desligamento/boot. 62GiB não é opção comprovada. [Roteiro, preservação GPT, custos/limites e dependências](reviews/automation-freeform-window-release-af26/security-containment-20261012/DATABASE_CAPACITY_FOR_REVIEW.md). Banco continua CAPACITY DENY; leitura root integral depende da sessão sudo, fatura/opção regional e snapshot recuperável dependem do console. NEWauth/out15CLOSED/guard38 e artefatos preservados; após reboot exigir geração/bindings reais novos e backup/RPO fresco, sem editar geração antiga.
+
+**Checkpoint histórico — composição bancária anterior à identificação do provedor:**
+
+**CHECKPOINT HISTÓRICO ÚNICO — auth3 CONCLUÍDA/PRESERVADA; banco composição final revisável, CAPACITY DENY; segurança OPEN; out15 CLOSED/guarda38 fechada.** [Entrega bancária e caminho concreto de capacidade](reviews/automation-freeform-window-release-af26/security-containment-20261012/DATABASE_FINAL_PREPARATION_2026-10-13.md). Quatro modos/configs/manifests/política proposta59043/installer94b7/Node20Prisma reutilizado, dez ensaios PG16 reais com efeitos PM2/nft/HTTP simulados; prova TCP original na VPS passou, final checker negou orçamento. Zero ALTER produtivo/instalações/restarts/envios/abertura; NEWauth em todas as variantes. Mínimo10:33UTC/07:33Fortaleza2.104.283.136B, orçamento2.173.698.048B, déficit69.414.912B. Próxima decisão: expansão do disco raiz60→62GiB proposta, sem limpeza/retirada; depois PASS real e renovação RPO/custódia antes de revisão de execução bancária. Backup01:14UTC/restore70/614/60 íntegro é histórico, não frescor atual. Helpers/sudoers/frontend/recibo/CRM/guard38/6resultados/5nãoenviados preservados; gatesfalse/zero intents. Externos/cifragem/Telegram futuro e liberaçãoguard separados. Auth não é trabalho pendente.
+
+**Checkpoint histórico — auth concluída e draft bancário inicial:**
+
+**Estado anteriormente vigente — out.15 CLOSED; guarda38 fechada; segurança OPEN; AUTH3 EXECUTADA/CONFIRMADA.** [Resultado consolidado e continuidade bancária](reviews/automation-freeform-window-release-af26/security-containment-20261012/AUTH_V3_EXECUTION_2026-10-13.md). Geração234100 complete/switch exit0, contenção53,154s em13/10 00:31–00:32UTC/12/10 21:31–21:32Fortaleza; três segredos novos, uma partida API e mesmo worker, frontend intacto. Owner confirmou logout da sessão antiga e novo login/telas; controle interno novo200/antigo401 em API/worker. Guard38closed/tasks{}, out15CLOSED/6entregas/5nãoenviadas/reciboCRMusage preservados, barreira ausente, cron/boot/supervisão/sessões conferidos, saved/fallback600/hash849893e2…, cinco gatesfalse. Backup fresco off-host/restauração isolada PASS; provas anteriores preservadas. Política093a instalada/helper-sudoers iguais. Banco draft novo pós-authv2-004500 com adapter/SQL/plano selados e applyAuthorizedfalse; NOT INSTALLED/NOT EXECUTED. Próxima ação: revisar retorno bancário pré/pós-commit e consumidores administrativos, reconferir privilégios/HBA e orçamento/frescor antes de decisão bancária. Não declarar contenção completa. Externos/cifragem/Telegram futuro/CSV-Syer/internacional/CRA-PR/multilote-AUTO/liberação guard separados.
+
+**Checkpoint histórico — preparação auth v3 anterior à execução:**
+
+**Estado anteriormente vigente — out.15 CLOSED; segurança OPEN; auth bloqueada para execução/zero rotações; NOVA preparação v3 concluída PARA REVISÃO.** [Pacote093a/instaladorf9/comandos A/B/provas](reviews/automation-freeform-window-release-af26/security-containment-20261012/AUTH_V3_PREPARATION_2026-10-12.md). Geração234100 captura saved/fallback atuais por duas observações; ambos485103/mode600 e mesma configuração fonte, sem repetir chmod.223100 recusada/diagnósticos preservados, não instalar nem editar seus bindings. Conferência integral SQL global/proxy/baselines/manifests/JSON-ecosystem/sessões/controles/identidades PASS, dados privados preservados; leitura não é drain/exit certificate. Policy093a proposta NÃO INSTALADA;a2ff permanece/helper-sudoers iguais; cinco gatesfalse/execution-authorized=false. Artefatos funcionais/29arquivos por modo/retornos com NEWauth preservados, sem rebuild/parada/start/save/logout. Custódia707117B/ab4d706f…validada e extraída; backup23:14UTC/restore70tabelas614objetos60migrations íntegro reutilizado, frescor/RPO precisará reconferência/renovação na janela. Último23:52UTC/20:52Fortaleza:min(deploy/PG)2.230.255.616B/authbudgetPASSdatado,WAL80MiB/slots0,healthDBOK, mesmos PIDs/ticks,guard38closed/tasks{}. Owner declara Telegram não usado/frente futura; dois cadastros, uma flag efetiva inbound/zero outbound, zero registrosTelegram30dias; não inferir uso por enabled/token. Linha inválida preservada/dependência específica da cifragem, sem omissão/BotFather/ativação/Webdisconnect/recredenciamento. Decoder integrado LOCAL a reader/writer canônicos/callers com escopo tenant; dedicated key/epoch opt-in e política histórica selada/prazo/tenant/payload-cipher hashes.147campos126eventos preservados/4testes seed e3captura/typecheckNode20 PASS, sem SQL/provider; NÃO incluído nos runtime artifacts auth. Próxima ação: revisão do pacote v3 e depois instalação restrita com owner sudo/conferências atuais; não executar223100. Banco pós-auth depende do cutover real; nenhum apply/reset/cipher rotation. .6/setembro encerrados/audiência originalNOTACCEPTED; liberação guard, CSV/Syer, internacional, CRA-PR,multilote/AUTO separados.
+
+**Checkpoint histórico — recusa e continuidade local4f5bd046:**
+
+**Estado anteriormente vigente — out.15 CLOSED; segurança OPEN; auth autorizada BLOQUEADA antes da instalação.** [Execução parcial autorizada/diagnóstico/provas](reviews/automation-freeform-window-release-af26/security-containment-20261012/AUTH_EXECUTION_2026-10-12.md). Somente dois dumps PM2 ajustados600 com duas amostras/cópia privada/conteúdo-owner intactos; backup fresco off-host/restore70tabelas614objetos60migrations/banco removido. Checker negou saved_reference_drift: geraçãoauth223100 herdou dumps50af do standby anterior, distintos dos atuais485103 e com referências API/frontend antigas. Nenhuma instalação root/contenção/parada/start/save/rotação/logout; a2ff permanece, gatesfalse, guard38closed/tasks{}, processos atuais preservados. Fix do preparador/captura de fontes reais LOCAL/3testes PASS; não aplicado na geração recusada. Decoder administrativo histórico+writerdedicado LOCAL/4cenários sintéticos e147campos126eventosoriginais PASS/hashes intactos; integração runtime/autorizações seladas continuam necessárias antes de cifragem. Mapas privados de5substitutas externas/11linhas derivadas/5estadosWeb e botTelegraminválido preparados sem valores/publicação/revogação/desconexão. Geração banco pós-auth bloqueada por inexistência de cutover/novas identidades; adapter/SQL anteriores preservados, sem apply. Próxima ação: revisar fix e gerar preparação auth nova com saved/fallback efetivos, nunca adaptar223100 para PASS; precondições globais/proxy devem completar e backup/capacidade renovados conforme validade. Último23:21UTC/20:21Fortaleza:min(deploy/PG)2.232.520.704B/authbudgetPASSdatado,WAL80MiB/slots0,healthDBOK. Out15 e.6/setembro encerrados; audiência originalNOTACCEPTED. Guard38/liberação futura, CSV/Syer, internacional, CRA-PR,multilote/AUTO separados. Contenção completa NÃO demonstrada.
+
+**Checkpoint histórico — preparação c3ef43dd anterior à execução autorizada:**
+
+**Estado anteriormente vigente — out.15 CLOSED no alcance de 2e8dc9ea; segurança OPEN, preparação concreta de contenção para revisão.** [Pacote/roteiro/hashes](reviews/automation-freeform-window-release-af26/security-containment-20261012/README.md). Inventário14slots/13valores distintos privado, consumidores/emissores/escopos locais e campos externos pendentes explícitos; nenhuma necessidade de reconstruir todo transcript. Auth3 tem geração V4 inativa223100, política723 proposta/instalador188, configs integrais/29arquivos/modo/baselines reais, helpers/sudoers iguais, gates falsos, retorno com valores novos. Fonte ativaa2ff permanece instalada; mesmos API/worker/frontend/PIDs/health/DB/saved/fallback. Dados de cifragem:10/11 canais legíveis,1Telegram enabled com estrutura inválida, MFA0/webhook0,341refs legíveis,147 campos de seed em126eventos dependem de chavecanal; troca cega bloqueada. Backup restaurado isoladamente/roundtripsNode20/SCRAMPG16 e contrato/adapter de commit incerto sem start validados no alcance local publicado. Permissões2amostras POSIX/ACL iguais: saved664 mas leitura atual deploy/root pela cadeia; proposta600+umask077, não aplicada. Propostas privadas geradas, escrow verificado, driverSCRAM/SQL/configs/recibo e adapter bancário para revisão; sem SQL ou keys prod. Próxima decisão: instalação/janela auth3/logout e ajuste mínimo de permissões; owner fornece proof/valores externos em arquivo privado; cifragem depende de recuperação específica e decoder histórico versionado revisado; derivadosWeb/Meta/Telegram exigem decisão própria. Último retrato22:58UTC/19:58Fortaleza:min(deploy/PG)2.233.253.888B/authreserva4MiB PASSdatado,WAL80MiB/slots0,guard38closed/tasks{},gatesfalse. Não declarar contenção dos14 nem capacidade universal de cifragem. Nenhuma rotação/revogação/chmodPM2/restart/deploy/envio/abertura/retomada/migration. Audiência históricaNOTACCEPTED,recibo/CRM/6resultados/5nãoenviados preservados; .6/setembro encerrados. CSV/Syer, internacional, CRA-PR,multilote/AUTO separados. Liberação da guarda será decisão independente.
+
+**Checkpoint histórico — encerramento da campanha e segurança em auditoria — out.15 encerrada por cancelamento canônico verificado, 12/10/2026; ocorrência de segurança OPEN separadamente.** [Resultado/certificado](reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/out15-closure-20261012/RESULT_2026-10-12.md) / [segurança e plano de rotação](reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/out15-closure-20261012/SECURITY_FOLLOWUP.md). Política standby a2ff instalada pelo owner, anterior112830 arquivada, helper/sudoers iguais; inspect PASS/phase null e todos os gates falsos. Uma ação ADMIN Cancelar conjunto: controlador/filho/link/conjunto/job cancelados, um evento19:57:22UTC/16:57:22Fortaleza. BlocoB único/planHashce1afa/certificado integral PASS; lista→detalhe→polling confirmado pelo owner. Seis entregas reportadas preservadas, cinco não enviadas, pending0/failed0; snapshot255/11/244 e exclusões históricas separados. Restore isolado do dump fresco comprovou CRM/usage/recibo/seis Outbounds idênticos; banco temporário removido. Guarda38 fechada/tasks{}, leases0; API/worker/frontend/sessões/controles/saved/fallback intactos, nenhuma execução de retorno, envio ou abertura. Incidente específico CLOSED; público original NOT ACCEPTED, lacunas históricas preservadas. .6/setembro/implantações encerrados; CSV/Syer, internacional, CRA-PR, multilote/AUTO separados. Próxima ação: decisão sobre plano de rotação/avaliação de acesso ao transcript; valores potencialmente expostos ainda configurados, nenhuma rotação realizada. Não presumir contenção por ausência no Git.
+
+**Checkpoint histórico — implantação/encerramento ainda pendente — implantação integrada de 12/10 concluída tecnicamente, com telas confirmadas pelo owner. Encerramento da out.15 preparado para decisão, NÃO EXECUTADO.** [Relatório único](reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/deployed-20261012/DEPLOYED_2026-10-12.md) e [procedimento histórico](reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/deployed-20261012/OUT15_CLOSURE_FOR_REVIEW.md). API dinâmica 5b3cf3af, mesmo worker mínimo afbb e frontend dinâmico estão ativos; identidade, BUILD_ID/CSS, health/DB, sessões e controles conferidos. Contenção da API: 35,414 s; intervalo observado da parada do frontend à prontidão: até 6,744 s. Uma partida por componente, sem retorno; promoção sem restart após confirmação humana, saved/fallback iguais e gates falsos. Helpers/sudoers preservados, cron/boot restaurados e barreira ausente. Guarda38 fechada, tarefa arquivada/recibo .6 preservados, job suspenso, seis entregas reportadas e cinco posições sem submissão. Retorno compatível com identidades reais preparado na geração 184200, com política a2ff, 29 arquivos por modo e gates falsos; política NÃO INSTALADA, execução bloqueada até certificado do futuro cancelamento canônico. A prova dirigida Node20/PostgreSQL passou; nenhuma ação histórica foi executada em produção. Próxima ação: decisão específica sobre o procedimento de encerramento e a política de retorno compatível. Público original da out.15 não aceito; incidente permanece aberto até encerramento verificado. Recuperação .6/setembro encerrados; CSV/Syer, internacional, CRA-PR, multilote e AUTO separados. Ocorrência de segurança independente: valores de configuração privada apareceram acidentalmente no output de uma ferramenta, sem inclusão no Git; credenciais preservadas, avaliação de acesso/rotação depende de decisão própria.
+
+**Checkpoint histórico consumido — retirada autorizada5b3 e staging integrado,12/10. WITHDRAWAL COMPLETE / CAPACITY PASS DATADO / INACTIVE STAGING VERIFIED FOR REVIEW / NOT INSTALLED / NOT DEPLOYED.** [Relatório único](reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/README.md), [comandos concretos](reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/COMMANDS_FOR_REVIEW.txt), [hashes/provas](reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/staging-result-20261012.json). Duas cópias retiradas,958.939.136B; root2amostras completas/owners0/incomplete0,main/evidências preservadas e recibo off-host. CAPACITY pós-staging14:46Fortaleza:min(deploy/PG)2.259.595.264B,piso2.131.755.008B,margem127.840.256B,WAL80MiB/5/0slots; datado, reconferir. Backup off-host concluído14:17Fortaleza/restore70tabelas/614objetos/banco temporário removido/checksumssemdivergência; idade não é horário de geração do manifesto. APIoverlay6033/frontendtar74a2 reutilizados; candidatos e retorno API compatível staged, sem starts. Identidades/baselines/inventário/proxy/guard38/sessõescontroles/savedfallback PASS14:45Fortaleza; cinco gatesfalse/frontendfalse. Políticas V4/window/permanente concretas propostas;helpers/sudoers preservados, futura instalação depende Deifsonsudo. Próxima ação: revisão do pacote/decisão consolidada API→frontend, com baseline real póscomplete/switch antes da instalação/paradafrontend. Cancelamento histórico permanece bloqueado até binding/política novos do retorno compatível à composição entãoefetiva; não inventar PIDs futuros. ProduçãoAPI2ed/workerafbb/frontend3227 viva,guard38fechada/jobsuspenso/6resultados/5semsubmissão/recibo.6 íntegros. IncidenteOPEN,audiênciaout.15NOTACCEPTED; nenhuma abertura/envio/cancelamento/reconciliação/deploy/instalação. .6/setembroCLOSED,aceitesanteriorespreservados;CSV/Syer,internacional,CRA-PR,multilote/AUTO separados. Diagnósticosrun_release/policy_already_exists/metadatatime/restorecontrato preservados e resolvidos no staging, sem relaxar gates.
+
+**Checkpoint histórico consumido — continuação cf55655b, 12/10. LOCAL VALIDATED / STORAGE ACTION READY FOR REVIEW / NOT DEPLOYED.** [Relatório único atualizado](reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/README.md) e [dois caminhos/958.939.136B/comandos restritos](reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/STORAGE_WITHDRAWAL_FOR_REVIEW.md). Aceitação conhecida sem Outbound compatível permanece uncertain também após cancelamento; lista/detalhe/lote Node20/PG PASS, sem not_submitted indevido. Retorno operacional compatível ativo+overlay6033/mesmo frontend74a2 preserva6entregas+5não enviados, resume409/claimnull/provider0 em isolamento; retorno semântico aos leitores antigos proibido após cancelamento histórico. Frontend/build/tar/provas válidas reutilizados. Capacidade usa mínimo deploy/PostgreSQL; orçamento inclui retorno adicional36.171.776B. Amostra12:56Fortaleza: déficit824.857.127B; retirada projetada supera déficit com margem134.082.009B, sem CAPACITY PASS antecipado. Custódia off-host/blob/extracao765 reconferidos; root2amostras completas/owners0/incomplete0/4174referências/zero aos dois caminhos. Main, todas as gerações/referências/retornos/manifests/journals/WAL preservados. Retirada NÃO AUTORIZADA/NÃO EXECUTADA; próximo passo decisão específica sobre blocoA/B/C, depois capacidade real/backup/WAL/staging/bindings/políticas novos com gatesfalse. Nenhuma política/window declarada pronta sem staging. Guardafechada38/hash/PIDs/ticks atuais reconfirmados na leitura root12:55; job suspenso,6resultados/5sem submissão/recibo.6 preservados. Incidente OPEN; audiência out.15 não aceita, quatro elegíveis não autorizam teste individual. Recuperação.6/setembro CLOSED, frontend3227 anterior concluído; CSV/Syer, internacional,CRA-PR,multilote/AUTO naturais separados. Nenhum envio/abertura/retomada/cancelamento produtivo/deploy/instalação nesta tarefa. Preferência de janela sem humanos não dispensa automações/serviços.
+
+**Histórico preservado abaixo — somente o checkpoint acima define a próxima ação.**
+
+**Checkpoint cf55655b — histórico de audiência dinâmica (12/10/2026). LOCAL IMPLEMENTED/VALIDATED FOR REVIEW; NOT DEPLOYED; CAPACITY DENY / NOT PREPARED FOR INSTALLATION/WINDOW.** [Entrega integrada, artefatos/hashes, provas, fronteiras e próximos gates](reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/README.md). Lifecycle compartilhado/proteção PROVISIONAL e invalidação da prévia preservados; projeção tenant-scoped distingue processamento, pausa solicitada/efetiva, suspensão e resultado incerto em lista/detalhe/polling, sem ledger global ou Campaign.status reescrito. Encerramento canônico ensaiado somente local: seis entregas reportadas preservadas, cinco não enviadas (nenhuma falha Meta fabricada), concorrência/replay idempotentes, zero provider. Quatro elegíveis não são público autorizado do teste; audiência out.15 NOT ACCEPTED. Leitura atual12:18Fortaleza: API2ed/workerafbb/frontend3227 e identidades preservados, guarda38fechada/tasks{}, job suspenso sem lease, seis resultados/cinco sem submissão e recibo.6 íntegros. Reboot local recuperado; builds finais Node20.20.0/5 provas PostgreSQL/11+6 casos Chrome tar exato/1unit PASS; provas válidas anteriores reutilizadas. Backup privado off-host/restore isolado comprovado, frescor/RPO futuro ainda obrigatório. Margem staging integrada insuficiente em807.359.015B; não instalar/montar política operacional ou declarar geração executável pronta. Próximo passo: revisão código/contrato e ação de capacidade concreta separada; depois staging/bindings/políticas novas e decisão de implantação, seguida de decisão própria de cancelamento. Não retornar ao leitor API antigo depois do cancelamento histórico. Incidente OPEN até implantação/aceite do delta e encerramento específico verificado sem envio. Recuperação.6/setembro CLOSED; frontend3227 anterior concluído; aceitação/webhook/ResultTruth aceitos no alcance publicado. CSV/Syer, internacional, CRA-PR, multilote/AUTO naturais separados. Nenhum deploy/cancelamento produtivo/ack/abertura/retomada/envio nesta tarefa. Preferência owner: feriados/fins de semana/após18hFortaleza, sem dispensar serviços/automações.
+
+**Histórico preservado abaixo — checkpoints anteriores não substituem o estado corrente.**
+
+**Audiência dinâmica out.13→out.15 — AUDIENCE NOT ACCEPTED / LOCAL CORRECTIONS VALIDATED / NOT DEPLOYED (12/10).** [Diagnóstico por posição, contratos, patch e provas](reviews/automation-freeform-window-release-af26/dynamic-audience-continuity-20261011/README.md). out.13=NURTURE, out.14=FOLLOW_UP, out.15=NEW em campanhas distintas;255IDs NEW já existiam antes da criação da out.15. Onze identidades correspondem ao filtro salvo, mas sete Contacts PROVISIONAL violam o lifecycle operacional; gate compartilhado omitia essa condição. Quatro admissíveis pelo contrato não validam a intenção de teste individual. Estimativa/tela original não registrada, owner não recorda: causa histórica da seleção desconhecida. Correção local reaproveita lifecycle/candidatos e invalida prévia pela geração existente quando usuário muda filtro/modalidade. PostgreSQL compilado Node20 PASS255→4/251, módulo original FAIL esperado11; seis casos Chrome final/CSS PASS. API/build local conferidos, worker unchanged, nenhum staging/deploy. Result Truth e telas aceitos somente pelos seis resultados conhecidos/cinco pendentes; público não aceito. Guarda38fechada/job suspenso/recibo.6/históricos e componentes preservados. Enviando é status persistido, não execução ativa; revisão de indicação de suspensão separada. Próximo: revisão local e decisão própria sobre público/job, sem retomada automática. CSV/Syer, internacional, CRA-PR, multilote/AUTO naturais separados; frontend3227/recuperação.6/setembro encerrados. Checkpoints anteriores permanecem históricos.
+
+**Result Truth API — DEPLOYED TECHNICALLY (11/10,18:33 Fortaleza), READ MODELS PRODUTIVOS PASS.** [Registro, duração, hashes e aceite discriminado](reviews/automation-freeform-window-release-af26/result-truth-api-prepared-20261011/DEPLOYMENT_2026-10-11.md). API2ed exata sobre preventiva/onlyroutes runtime; sequência V4única complete/switch exit0, contenção37,824s, uma partida API/mesmo workerafbb, frontend3227 PID/BUILD_ID preservados. Lista/detalhe/nova lista6entregas reportadas+5pendentes sem duplicação; recibo/.6/job/guarda38fechada intactos. Health/DB,auth/sessões,proxy,cron/boot/supervisão,saved/fallback/barreiraausente PASS;5gatesfalse. Backup adicional fresco off-host/restore70tabelas comparado/banco local removido.2worker_capture_churn negados e3ªamostra consistente; serializaçãofalse arquivada/restaurada aos bytes atestados, manifesto16entradas PASS. Owner confirmou especificamente lista/detalhe/polling6entregas+5pendentes sem duplicação/mistura: Result Truth PASS no escopo. StatusEnviando preservado por job suspenso/cinco posições pendentes; disposição/retomada separada. Aceites anteriores e frentes independentes preservados. Sem envio/abertura/retomada/replay/reparo. Checkpoints anteriores seguem históricos.
+
+**Result Truth API — PREPARED FOR INSTALLATION REVIEW / NOT INSTALLED / NOT DEPLOYED (11/10).** [Pacote operacional completo, comandos e limites](reviews/automation-freeform-window-release-af26/result-truth-api-prepared-20261011/README.md). Sobre API preventiva ativa, apenas routes.js runtime e fonte correspondentes; overlayaf8406ad…, compilado0118b7d3… reutilizado.1.893arquivos/2links/6.944dependências verificados, retorno completo preventivo, workerafbb sem delta e frontend3227 preservado. Geração184000 nova, guarda38/job suspenso/recibo e seis resultados/cinco não submetidos intactos;5gatesfalse/sem intents/provas consumidas. Backup fresco18:42UTC off-host/restore70tabelas removido; capacidade observada PASS pelo piso com margem datada171MB.2 provas de composição Node20/PG sintético PASS, demais reutilizadas. Somente política V4 precisa instalar por Deifson; helper/sudoers/políticas frontend iguais. Hash root600 atual exige leitura sudo antes da instalação; prechecks/backup/WAL precisam reconferência na janela. Nenhuma instalação/stop/start/deploy/envio/abertura nesta tarefa. Próximo passo decisão de instalação/janela e retornos; aceites e frentes independentes preservados.
+
+
+**Result Truth — complemento local do fallback histórico (11/10), REVIEW READY / NOT DEPLOYED.** [Relatório e provas](reviews/automation-freeform-window-release-af26/campaign-list-result-truth-20261011/README.md#complemento--fallback-histórico-por-execução-base99ad6b6b). Conjunto soma projeções canônicas por execução, sem reprojetar o resumo global:6 envios históricos sem resultados individuais +1delivered =7enviados, apenas1entrega reportada. Contador defasado de cada execução continua subordinado aos seus próprios resultados explícitos. Duas ordens dos filhos e falha/bloqueio PASS;10 provas de leitores PostgreSQL e4 cenários browser/polling PASS, Node20.20.0. Sem rebuild frontend, mudança worker ou consulta produtiva. Aceites e históricos anteriores preservados; produção aguarda revisão/decisão de implantação.
+
+
+**Result Truth LISTA — CORREÇÃO LOCAL VALIDADA / REVIEW READY / NOT DEPLOYED (11/10).** [Patch mínimo, contrato dos contadores,10 provas PostgreSQL e4 cenários Chrome](reviews/automation-freeform-window-release-af26/campaign-list-result-truth-20261011/README.md). Lista e detalhe compartilham a projeção canônica e vínculos tenant/controlador/lote, sem recibo específico/N+1. Filho/controlador6entregas reportadas+5pendentes, página só controlador, várias execuções, público previsto/materializado, FAILED131026/bloqueios, isolamento/RBAC e polling PASS em laboratório. Node20.20.0, TypeScript exit0; frontend3227 exato reutilizado/estilos PASS, sem rebuild ou alteração frontend/worker. FAIL produtivo da lista permanece até revisão e futura implantação autorizada deste delta API. Aceitação/webhook já aceitos, frontend3227 concluído, recuperação.6 e setembro CLOSED preservados; guarda38/job/recibo/históricos não acessados nem alterados. CSV/Syer, internacionais, multilote/AUTO naturais e CRA-PR separados. Checkpoints anteriores abaixo permanecem históricos.
+
+**API preventiva — ACEITAÇÃO/WEBHOOK ACEITOS NO ALCANCE REVISADO; RESULT TRUTH PARCIAL (11/10,08:22 Fortaleza).** [Matriz, hashes ativos, leitura atual e pendência P2 específica](reviews/automation-freeform-window-release-af26/preventive-api-frontend3227-prepared-20261010/API_ACCEPTANCE_2026-10-11.md). Dez provas fonte/novas fronteiras e nove provas do compilado exato reutilizadas, seis hashes runtime atuais iguais/Node20.20.0. Não há novo caso natural pós-deploy: prevenção de falha CRM/corrida webhook NOT EXERCISED em produção, sem exigir falha fabricada. Detalhe filho/controlador/conjunto6delivered+5pending PASS; lista controlador conserva0enviados/244bloqueados e resumo próprio, filho metaSummary.pending0: divergência comprovada do read model, não reparo dos dados. Pendência mínima: revisão/correção local da agregação canônica da LISTA e prova de polling, sem implementação nesta auditoria. Guarda38/job suspenso/recibo/tarefa arquivada/.6/seis únicos/cinco sem submissão preservados. Frontend3227 concluído; API tecnicamente implantada; CSV/Syer/internacionais/CRA-PR/multilote/AUTO separados, setembro CLOSED. Checkpoints anteriores permanecem históricos.
+
+**Frontend3227 — DEPLOYED TECHNICALLY / OWNER UI CONFIRMED (11/10,08:08 Fortaleza).** [Encerramento,46,122s medidos, hashes e limites](reviews/automation-freeform-window-release-af26/frontend3227-observation-diagnostic-20261011/EXECUTION_2026-10-11.md). Ida/root before e exited novos, única partida/ready/BUILD_ID/CSS PASS; owner confirmou telas. Bloqueio reader_integrity resolvido por campo único readerSha256 da política permanente autorizado em a91c538b, originais arquivados/root600/leitura real PASS. Promoção/supervisão/PM2 save/fallback PASS às08:07:23, gatefalse; frontend4121573/API4049504/worker4049657 restart0, API/worker preservados. Health/DB/sessões/inventário/cron/boot/barreira/manifests PASS; guarda fechada38/job suspenso/recuperação.6/seis resultados/cinco sem submissão intactos. Sem rebuild, envio, abertura, retomada ou reparo. Diagnósticos e manifests off-host verificados; retorno fa60/gerações referenciadas preservados. Aceite funcional API, CSV/Syer, internacionais, multilote/AUTO naturais e CRA-PR separados; setembro CLOSED. Checkpoints anteriores abaixo são históricos superados quando conflitarem com este estado atual.
+
+**Frontend3227 — SERVING / OWNER UI CONFIRMED / PERMANENT PROMOTION BLOCKED (11/10).** [Causa reader_integrity, provas e bytes mínimos propostos](reviews/automation-freeform-window-release-af26/frontend3227-observation-diagnostic-20261011/PERMANENT_READER_BLOCK_2026-10-11.md). Ida e nova saída root PASS, partida única/ready/BUILD_ID/CSS PASS; owner confirmou telas. Política permanente ed28 ainda fixa reader935, mas reader aprovado agora c885; dependência omitida na auditoria. Antes da promoção/save precisa decisão sobre campo único readerSha256 e referências arquivadas; não ampliar sudo/helpers/roles nem repetir start. Fa60 retorno também depende desse reader. API/worker/guarda38/job/.6 preservados. Não declarar DEPLOYED TECHNICALLY completo enquanto supervisão/save pendentes.
+
+**Frontend3227 — OBSERVER/POLICY VERIFIED / PREPARATORY INTEGRATED PREFLIGHT PASS / WINDOW DECISION PENDING / NOT DEPLOYED (11/10).** [Resultado integrado, hashes e7 provas dirigidas](reviews/automation-freeform-window-release-af26/frontend3227-observation-diagnostic-20261011/README.md#preflight-concluído-após-inicialização-autorizada--11102026). Preparador agora inicializa/valida receipts-private sem reparar divergências. Na VPS, lock/manifests/checker/bytes/gatefalse/ausência de intents PASS; criado só diretório deploy700 e uma invocação do preflight, uma tentativa/two-sample root PASS às07:39Fortaleza. Captura preparatória arquivada e off-host; erro anterior preservado. Instalador/helper/políticas/sudoers/bindings/controles não repetidos ou alterados nesta continuação. API preventiva/workerafbb/fa60/saved/guarda38/job/recuperação.6 preservados. Próxima ação decisão de janela com leitura fresca, sem usar captura preparatória como saída; nenhum rebuild/deploy/envio/abertura. Frentes CSV/Syer, internacional, multilote/AUTO e CRA-PR separadas.
+
+**Frontend3227 — helper/política diagnóstico INSTALLED AND CHECKED / PREFLIGHT SETUP DENY / NOT DEPLOYED (11/10).** [Resultado e reprodução da omissão](reviews/automation-freeform-window-release-af26/frontend3227-observation-diagnostic-20261011/README.md#resultado-da-instalação-autorizada--11102026): hashes/root/modos/regra/visudo e checker estrito PASS; preflight parou antes da observação por falta do pai receipts-private. 1 prova local reproduz FileNotFoundError/zero attempts; não atribuir12 provas antigas ao setup vazio. Sem repetição do instalador/preflight, mkdir produtivo ou binding alterado. API preventiva/workerafbb/fa60, supervisão/saved/fallback, guarda38/job/recuperação.6 preservados em leitura07:33Fortaleza. Próximo passo revisão mínima da criação/validação do diretório antes de decidir nova execução exclusivamente do preflight; janela segue impedida.
+
+**Frontend3227 — nova composição observacional conferida / FOR RESTRICTED INSTALLATION AND PREFLIGHT REVIEW / NOT DEPLOYED (11/10).** [Diagnóstico, patch, 15+6 novas provas e12 regressões, hashes e roteiro concreto](reviews/automation-freeform-window-release-af26/frontend3227-observation-diagnostic-20261011/README.md). Causa histórica específica permanece desconhecida: stderr original genérico sem operação/PID/FD. Helper proposto acrescenta contexto sanitizado mantendo negativas/prazos; NÃO instalado. Geração nova101500 deriva da API preventiva/workerafbb/fa60 efetivos, guarda38 e controle return ativo; tar3227/build/provas reutilizados, gatefalse. Manifests/composição/artifacts PASS; checker normal DENY esperado antes da nova instalação, futuro preflight NOT EXERCISED. Helper+política de janela exigem revisão/autorização específica; sudoers e política permanente ed28 inalterados. Leitura atual10:19UTC não substitui reconferência futura. Guardafechada38, job suspenso e recuperação.6 encerrada preservados; nenhuma janela, envio, restart ou recuperação. CSV/Syer, internacional, multilote/AUTO naturais e CRA-PR separados.
+
+**Encerramento consolidado — API preventiva DEPLOYED TECHNICALLY; frontend RETURNED TO fa60 (10/10 23:28 Fortaleza / 11/10 02:28 UTC).** [Resultado final e diagnósticos](reviews/automation-freeform-window-release-af26/preventive-api-frontend3227-prepared-20261010/EXECUTION_2026-10-11.md): V4 API/mesmo worker complete/switch, contenção28s; frontend exited inicial DENY ownership_observation_incomplete, segunda leitura nova PASS, retorno fa60 único/owner confirmou. Política permanente/promoção/supervisão/save/fallback PASS, gate frontend falso, CSS servido e configs persistidas conferidos. API4049504/worker4049657/frontend4051349 restart0; health/DB, cron/boot/barreira e inventário preservados. Guarda fechada38/job suspenso/seis resultados/cinco posições sem submissão intactos. Frontend3227 NOT DEPLOYED/sem partida, tar e provas preservados. Próximo: diagnóstico isolado da recusa observacional antes de outra proposta frontend; aceite funcional API e frentes CSV-Syer/CRA-PR/multilote/AUTO separados. Nenhum envio/reparo/abertura.
+
+**Frontend3227 — retorno fa60 confirmado pelo owner; candidato não iniciado (11/10 02:16 UTC / 10/10 23:16 Fortaleza).** [Registro](reviews/automation-freeform-window-release-af26/preventive-api-frontend3227-prepared-20261010/EXECUTION_2026-10-11.md): primeiro exited DENY ownership_observation_incomplete; segunda observação nova PASS, retorno fa60 único/HTTP/identidade/CSS PASS. Sem alteração de checker/binding ou bypass. API preventiva e worker afbb ativos, guarda fechada38/job suspenso. Política permanente/promoção/save do novo controle de retorno pendentes da sessão sudo de Deifson; confirmação das telas já registrada. Frontend3227 NOT DEPLOYED; aceite funcional API separado.
+
+**Execução consolidada em andamento — API preventiva DEPLOYED TECHNICALLY; frontend3227 NOT DEPLOYED (11/10 02:12 UTC / 10/10 23:12 Fortaleza).** [Registro factual](reviews/automation-freeform-window-release-af26/preventive-api-frontend3227-prepared-20261010/EXECUTION_2026-10-11.md): V4 complete/switch exit0, contenção28s, mesmo worker afbb retomado, frontend fa60 preservado, guarda fechada38 e job suspenso. Backup fresco off-host/restore isolado PASS. Baseline real pós-API PASS/gate frontend falso; política de janela frontend aguarda execução na sessão sudo de Deifson. Promoção frontend depende de confirmação owner. Sem envios/abertura/recuperação repetida; aceite funcional separado.
+
+
+**API preventiva sobre a26 + frontend3227 — PREPARED FOR REVIEW / NOT DEPLOYED (10/10 22:40 Fortaleza / 11/10 01:40 UTC).** [Relatório consolidado, artefatos, hashes e comandos](reviews/automation-freeform-window-release-af26/preventive-api-frontend3227-prepared-20261010/README.md): overlay restrito de seis fontes/compilados, Node20.20.0/9 testes compilados, 264 módulos runtime iguais na VPS, schema/Prisma/deps ativos preservados. Tar3227 exato reutilizado, CSS/manifestos/retorno fa60 conferidos; worker mínimo afbb sem mudança funcional. Preparações env-v2 novas, três modos JSON/ecosystem/28 arquivos íntegros, política e controles próprios, gates falsos. Geração inicial DENY environment_drift frontend preservada; produtor corrigido para ambiente OS real de PM2 cluster, ensaio Node20/PM2 real PASS sem relaxar checker. Inventário congelado exige recibo/ack/guarda38 e rejeita drift; captura frontend pós-API arquiva baseline anterior e exige sucesso real antes de avançar. Dump pós-ack off-host/restore isolado PASS/banco temporário removido; capacidade datada com margem225.595.392bytes acima do piso. Nenhuma política instalada, stop/start/save/abertura/envio/recuperação repetida. Próxima decisão: políticas restritas e sequência API→baseline frontend→janela frontend; confirmação owner precede promoção frontend. Leituras frescas, RPO/WAL e instalação sudo permanecem gates futuros. Recuperação .6 CLOSED; guarda fechada38/job suspenso/seis resultados/cinco posições sem submissão preservados. CSV/Syer, internacional, CRA-PR, multilote/AUTO e cinco restantes separados; setembro CLOSED.
+
+**Out.15 posição .6 — RECUPERAÇÃO PRODUTIVA CONCLUÍDA (10/10Fortaleza21:13 / 11/10UTC00:13).** [Relatório único, recibo e arquivo sanitizados](reviews/automation-freeform-window-release-af26/position6-operational-preparation-20261010/README.md): preflight/backup fresco off-host/dry-run exato → apply uma vez → verify completo → ack uma vez, exit0/sem timeout. Outbound .6 com DELIVERED reportado/tempos originais/bodyText:null motivado, disposição CRM histórica específica/usage/eventos/totais/recibo verificados; nenhuma identidade/janela Meta criada. Arquivo integral no audit canônico, razão accepted-delivered própria/ref/hash exatos; guarda fechada38/zero tarefas, cinco Outbounds/WebCRM preservados, seis entregas reportadas e cinco sem submissão. Jobqueued suspenso/loterunning e demais estados intactos; sem abertura/retomada/reenvio/restart/deploy. APIa26/workerafbb/frontendfa60 e controles/sessões preservados, health/DBPASS. Decisão sobre cinco posições restantes separada. Frontend3227/prevençõesAPI PENDING/NOT DEPLOYED; CSV/Syer, internacional, CRA-PR, multilote/AUTO e setembro CLOSED separados.
+
+**Out.15 posição .6 — RETIRADA ESPECÍFICA CONCLUÍDA / CAPACITY PASS delimitado (10/10,23:51–23:58UTC / 20:51–20:58Fortaleza).** [Relatório único e evidências sanitizadas](reviews/automation-freeform-window-release-af26/position6-operational-preparation-20261010/README.md): quatro cópias redundantes retiradas uma vez/exit0/stderr vazio; main, diretórios/manifests/journals e blob+índice off-host preservados. 1.917.861.888 bytes alocados liberados; duas amostras root posteriores completas, zero owners/incomplete. postgres/deploy mínimo2.399.555.584bytes disponíveis, acima do piso planejado2.131.755.008 em267.800.576bytes; WAL80MiB/sem slots/archive, crescimento medido em108s não limita rajadas. CAPACITY PASS datado não autoriza apply/ack; rever espaço, fontes e frescor/RPO antes de decisão separada. Nove arquivos administrativos/244 referências atuais/248 históricas íntegros. Guarda37/provider-persisting/job suspenso, cinco Outbounds/WebCRM/.7–.11 e identidades APIa26/workerafbb/frontendfa60 preservados; owner confirmou Inbox/CRM. Uma sessão Web QR_REQUIRED histórica permanece, sem desconexão causada pela ação. Sem apply/ack/abertura/restart/deploy. Frontend3227/prevençõesAPI pendentes; CSV/Syer, internacional, CRA-PR, multilote/AUTO separados; setembro CLOSED.
+
+**Out.15 posição .6 — REVISÃO OPERACIONAL / CAPACITY DENY (10/10,23:05–23:11UTC / 20:05–20:11Fortaleza).** [Relatório existente, fontes dos drivers, grafo/receita e ação mínima proposta](reviews/automation-freeform-window-release-af26/position6-operational-preparation-20261010/README.md): quatro templates reversíveis reproduzem hashes preparados sem valores privados; render alterado nega; grafo/bundle originais conferidos, sem rebuild. PGDATA/WAL/ledger no mesmo disco,455–461MiB livres versus piso1GiB da rotina vigente e orçamento proposto2.033MiB; logs sem erro não atestam capacidade. Preparações22,9GiB e cinco arquivos históricos idênticos; preservar conteúdo/metadados off-host e retirar apenas quatro redundantes poderá liberar1,786GiB, mas depende de leitura root/referências completas e autorização própria (143processos ilegíveis). Nenhuma limpeza, retenção, infra/config ou arquivo alterado na VPS. Guarda37/tarefa/job, identidades/protegidos e staging íntegros; backup/restore/testes reutilizados. Apply/ack permanecem NÃO AUTORIZADOS/BLOQUEADOS; comandos separados no relatório. Frontend3227/prevençõesAPI PENDING/PRESERVED; CSV/Syer, internacionais, CRA-PR, multilote/AUTO e setembro CLOSED separados.
+
+**Out.15 posição .6 — PREPARAÇÃO READ ONLY / BACKUP-RESTORE / DRY-RUN PRODUTIVO PASS (10/10,22:43–22:56UTC / 19:43–19:56Fortaleza); NOT APPLIED / NOT ACKNOWLEDGED.** [Resultado consolidado, hashes e comandos separados](reviews/automation-freeform-window-release-af26/position6-operational-preparation-20261010/README.md): guarda fechada37/provider-persisting/ref/taskHash e cinco Outbounds/WebCRM intactos; APIa26/workerafbb/frontendfa60 mesmos PID/ticks/restart0, saved/fallback/cron/boot preservados. Input original sem syntheticProofPolicy, CLI Node20.20.0/Prisma6.19.2 isolado na VPS; planHash7949aebe…1011 prevê6submitted/6DELIVERED reportados/5pending, sem provider e sem resultado aplicado. Dump fresco c25cd5ef…903c fora da VPS, restore local70tabelas/protegidos conferidos, banco removido. Disco ~478MB livres e pacote administrativo tmpfs não durável exigem avaliação de margem SQL/WAL e frescor antes de apply. Dez tenants inventariados, jobqueued suspenso/loterunning/leases expirados preservados; não é drain. Apply/verify/ack separados, timeout/commit incerto exige inspeção SQL+ledger+recibo, sem repetir automaticamente. Frontend3227 e prevenções API continuam PENDING/PRESERVED/NOT DEPLOYED; CSV/Syer, internacionais, CRA-PR, multilote/AUTO e setembro CLOSED separados.
+
+**Out.15 posição .6 — A/B/C LOCAL VERIFIED / FOR REVIEW / NOT APPLIED (10/10).** [Implementação, decisão histórica exata, CLI e provas](reviews/automation-freeform-window-release-af26/position6-recovery-implementation-20261010/README.md): owner aprovou disposição histórica/bodyTextnull somente para demo/out.15/child-run-message .6/MetaID/taskHash fixos. Resultado SENT com DELIVERED reportado, WebCRM integralmente preservado, disposition/usage/eventos/recibo completos e ack de razão própria usando archive canônico; normal CRM obrigatório e FAILED131026 preservado. 29 novas provas Node20/Postgres sintético + 1 regressão FAILED131026 + noEmit PASS. Leituras canônicas distinguem 6 entregues reportados/5 pending sem duplicar conjunto; guard/job não retomados. SQL/ledger não atômicos e produção não reatestada nesta rodada. Apply/ack produtivos exigem revisão/autorização próprias, estado/backup frescos. Frontend3227 PENDING/PRESERVED; CSV/Syer, suporte internacional, CRA-PR, multilote/AUTO e setembro CLOSED separados.
+
+**Guarda37 — auditoria produtiva READ ONLY atual / recuperação .6 FOR REVIEW (10/10, SQL21:45–21:52UTC).** [Relatório, fontes originais e proposta](reviews/automation-freeform-window-release-af26/position6-current-audit-20261010/README.md): closed37/provider-persisting/taskHash preservados, APIa26/workerafbb/frontendfa60 vivos. Conta efetiva, destinatário e componentes .6 comprovados pelo seed/log/JSON originais; body renderizado e HTTP bruto não preservados nas fontes inspecionadas. Uma aceitação + dois orphans SENT/DELIVERED, zeroOutbound/usage .6; cinco anteriores idênticos, cinco posteriores sem submissão observada. [Checklist único atualizado](reviews/automation-freeform-window-release-af26/guard37-local-proposal-20261010/POSITION6_RECOVERY_CHECKLIST.md): decisão históricaCRM explícita/bodyTextnull, usage/eventos/recibo/totais e ack accepted-delivered específico ainda pendentes; não usarFAILED131026 ou tornarCRM opcional. Jobqueued suspenso e guarda fechada, inventário dos dez tenants não é drain. Nenhum apply/ack/reenvio/abertura/restart/instalação/deploy, build/suíte ou binding alterado. Frontend3227 PENDING/NOT DEPLOYED; demais frentes e históricos preservados.
+
+**Guarda37 — fronteira webhook/CRM LOCAL FIX VERIFIED / NOT DEPLOYED (10/10).** [Revisão de162, causa, código e provas](reviews/automation-freeform-window-release-af26/guard37-local-proposal-20261010/WEBHOOK_CRM_BOUNDARY_20261010.md): status Meta agora durável/monotônico antes da materialização CRM; falha registrada separadamente, sem fabricar Conversation/runtime/janela, cleanup ou continuidade. 5 provas novas Node20/PostgreSQL PASS, 2 regressões diretamente afetadas PASS, API noEmit PASS; demais provas anteriores reutilizadas sem atribuição ao caso novo. [Checklist único .6](reviews/automation-freeform-window-release-af26/guard37-local-proposal-20261010/POSITION6_RECOVERY_CHECKLIST.md): proveniência original, CRM/disposição, usage/evento, totais e ack próprio ainda bloqueiam apply/ack. Sem SSH/leitura atual, provider real, envio, política ou deploy; frontend3227 e históricos preservados. CSV/Syer/internacionais/CRA-PR/multilote/AUTO separados.
+
+**Guarda37 — prevenção implementada LOCALMENTE / FOR REVIEW / NOT DEPLOYED (10/10).** [Relatório único, testes, hashes e limites](reviews/automation-freeform-window-release-af26/guard37-local-proposal-20261010/IMPLEMENTATION_20261010.md): resultado aceito é gravado/relido antes de CRM; falha CRM mantém Outbound, suspensão, tarefa persisting e fechamento. 10 provas Node20/PostgreSQL PASS e predicado frontend PASS; shared helper, worker, schema e identidade internacional não mudaram. Verificador/recibo específico .6 é somente offline/transport_result_only/ackEligible=false; proveniência original e CRM/usage/read models/ack de sucesso ainda precisam revisão. Cinco existentes e cinco pendentes não autorizam retomada. Frontend3227 é tecnicamente separável com baseline nova verdadeira closed37/tarefa preservada; baseline36 não foi editada, nenhuma preparação/política nova montada. Estado VPS não reatestado; sem SSH, mutação, envio, ack, abertura ou deploy. CSV/Syer, internacionais, CRA-PR, multilote/AUTO e reparo setembro CLOSED permanecem separados.
+
+**Guarda37 — reprodução local concluída / proposta preventiva e recuperação específica para revisão (10/10).** [Resultado e contratos](reviews/automation-freeform-window-release-af26/guard37-local-proposal-20261010/README.md): Node20/PostgreSQL isolado, uma aceitação simulada → erro CRM real → zero Outbound → provider persisting → guarda fechada/job queued sem lease. A preservação internacional no envio de 25/09 não revogou CRM/importação BR-only de 19/09. Proposto persistir/verificar resultado antes de CRM, mantendo suspensão; suporte internacional exige decisão separada. Plano .6 accepted/delivered sem reenvio, com timestamps/proveniência/idempotência e lacunas explícitas; não reutiliza FAILED131026. Ack de sucesso ainda exige verificador/semântica próprios. Cinco Outbounds e cinco pendentes preservados; job queued/lote running não podem ser retomados/terminalizados por esta recuperação. Sem código funcional, mutação produtiva, ack, abertura ou alteração de bindings frontend.
+
+**Guarda37 — causa identificada; auditoria READ ONLY, sem recuperação (10/10).** [Relatório, IDs, linha do tempo, SQL e inventário](reviews/automation-freeform-window-release-af26/guard37-provider-audit-20261010/README.md): demo/out.15, sexto envio internacional aceito pela Meta, com webhook delivered órfão. A materialização CRM restrita ao Brasil lançou `Invalid WhatsApp number` após aceitação. Cinco outbounds SENT/delivered persistidos, sexto sem Outbound e cinco posteriores não submetidos. Tarefa filha `provider/persisting` retida; término do runner fechou a geração37. API a26 segue viva; a guarda bloqueia campanhas globalmente, sem comprovar indisponibilidade do atendimento. Inventário dos dez tenants: um job queued e um lote running em demo; lease de tenant expirado e 17 jobs terminais com metadados de lease expirados. Não é certificado de drain. Recuperação out.13/FAILED131026 não se aplica automaticamente à posição .6 com entrega reportada e sem recibo. Próximo passo: reprodução local e plano específico revisável. Frontend3227 permanece impedido, gate falso e políticas preservadas; CSV e demais aceites separados.
+
+**Frontend3227 — POLICY INSTALLATION BLOCKED / DENY BEFORE INSTALLATION (10/10,17:36Fortaleza).** [Resultado no relatório único](reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/README.md#continuidade-autorizada-para-políticapreflight--10102026-interrompida-antes-da-instalação): branch sincronizada7c5430a9; manifests e composição conferidos até `guard_drift`. Baseline aberta36/tasks{} diverge da guarda atual **fechada37/uma tarefa provider**, audit `uncertain_close/unfinished_child_requires_review` em12:40Fortaleza. Instalação não executada; política antiga6087… e permanente24a… preservadas, leitores atuais duas amostras consistentes; gatefalse, sem intents/capturas. Frontendfa60/APIa26/workerafbb mesmas identidades/restart0. Cron/boot posteriores ao ponto de recusa não reatestados. Próximo passo é revisar por leitura a tarefa e o fechamento antes de qualquer composição nova; não adaptar bindings, abrir guarda, reenviar ou reconciliar automaticamente. Preflight proposto NOT EXERCISED / NOT DEPLOYED. CSV e aceites anteriores permanecem separados.
+
+## CRM — importação CSV com resultado desconhecido na interface e totais ambíguos — 10/10/2026
+
+**LOCAL VALIDATED / FOR REVIEW / NOT DEPLOYED —15/10.** [Entrega CSV e limites](reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/REPORT.md); [contrato canônico](saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md). 67 casos distintos PASS; recuperação durável sem migration, nenhum replay/histórico reparado. Aceites locais abaixo exercitados no alcance descrito no relatório; revisão visual local complementada; pendentes revisão do owner, orçamento e plano coordenado de implantação. Defeito relatado pelo owner em `syer-rodrigues`. Frente independente da release frontend3227 já preparada: não modificar seu tar, manifests, configurações, políticas, bindings, staging ou aceites para incluir esta correção.
+
+### Evidência e limites
+
+- Arquivo com **993 linhas**: **880 elegíveis + 82 inválidas + 31 duplicadas = 993**.
+- Primeira confirmação: **879 criações + 1 atualização = 880 processadas**, sem falhas registradas.
+- Segunda tentativa: os mesmos **880 reconhecidos, sem alterações**. Esse resultado não autoriza retry automático nem prova idempotência em qualquer corrida.
+- Interface apresentou **“Não foi possível importar o CSV.”**, embora a API tenha concluído.
+- Espera do frontend limitada a **10 segundos**; etapa de gravação levou **pelo menos 32 segundos**. Hipótese de timeout sustentada pelo código e horários informados; **sem captura Network que confirme o cancelamento específico**. Não registrar abort observado nem rollback da API por inferência.
+- Interface não oferece progresso nem recupera o resumo quando perde a resposta. Prévia mostra até **200 linhas**, sem limitar a importação.
+- Evidência recebida do owner em 10/10/2026; correlacionar com código/auditoria existente na investigação. Não inventar IDs, timestamps exatos ou nova comprovação produtiva.
+
+### Escopo solicitado: auditoria, implementação local e revisão
+
+1. Auditar e reutilizar importação, componentes, contratos de resposta, auditoria/recibos existentes e regras de identidade. Delimitar correlação da operação por tenant e identidade inequívoca; não recuperar resultado por nome, telefone ou proximidade temporal isolados.
+2. Distinguir **falha comprovada**, **operação em execução** e **resultado ainda desconhecido**. Perda da resposta/timeout do cliente não significa falha ou cancelamento da gravação. Não sugerir ou iniciar nova importação enquanto a anterior puder estar em execução; recuperar seu resultado pela auditoria existente, com RBAC e isolamento.
+3. Definir acompanhamento de progresso/conclusão conforme os contratos existentes, inclusive reconexão/recuperação do resumo. Não fabricar percentual ou declarar conclusão sem evidência. Aumentar apenas o timeout não resolve arquivos maiores. Se os contratos atuais não suportarem o acompanhamento necessário, documentar o gap e a proposta mínima antes de ampliar escopo; nenhuma migration/schema autorizada por este item.
+4. Separar na prévia **linhas do arquivo, elegíveis, novos, existentes, inválidos e duplicados**; explicar categorias, sobreposições/subtotais e reconciliação. Existente não equivale necessariamente a atualizado: preservar a distinção entre atualizado e sem alterações no resultado.
+5. Rotular claramente **amostra de até 200 linhas** e informar o total analisado; não apresentar tamanho da amostra como quantidade importada nem limitar a operação à amostra.
+6. Distinguir **total de contatos do tenant**, **total encontrado pelos filtros** e **quantidade exibida na página**. Auditar a entidade efetiva do CRM e definir explicitamente o tratamento de excluídos/anonimizados, alinhando listagem e contagens aos mesmos predicados e permissões. Preservar anonimização, retenção, RBAC e isolamento entre tenants.
+
+### Critérios de revisão e validação local
+
+- Timeout/perda da resposta com operação concluída e com processamento parcial: estado correto, sem promessa de rollback integral ou retry cego.
+- Recuperação do resumo correspondente à mesma operação, inclusive falha comprovada, resultado desconhecido, saída/reentrada na tela e sessão antiga.
+- Arquivos acima de 200 linhas: amostra rotulada, importação integral e totais reconciliados; usar fixture sintética representativa de 993/880/82/31.
+- Novos/existentes/atualizados/sem alterações, inválidos e duplicados sem contagens enganosas.
+- Filtros e paginação, páginas vazias, excluídos e anonimizados: coerência entre totais e linhas visíveis.
+- Negativas de acesso, referência de operação de outro tenant e resposta tardia/antiga sem mistura de resultado.
+- Publicar correção e provas para revisão com alcance real dos testes, arquivos alterados, SHA e limitações. Atualizar este checkpoint sem apagar a evidência inicial.
+
+**Limites:** sem deploy, reimportação produtiva, reparo histórico, alteração de dados de `syer-rodrigues` ou nova operação produtiva nesta etapa. Produção viva preservada. A próxima decisão da release3227 continua exclusivamente política de janela + preflight preparatório, mantendo `execution-authorized=false`; política permanente permanece para a fase posterior.
+
+**Frontend3227 — CONTINUITY AUDIT PASS / WINDOW-POLICY PREFLIGHT PENDING / NOT DEPLOYED (10/10).** [Relatório único de continuidade](reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/README.md#auditoria-de-continuidade--10102026-referência-6a354ceb): referência6a354ceb e worktree reconciliadas; leitura nova11:20Fortaleza/14:20UTC, manifests/tar/políticas/bindings/identidades/controles íntegros, gatefalse. Frontendfa60 corrigido é o retorno efetivo; APIa26/workerafbb intactos/restart0. Duas amostras atuais consistentes sob políticas instaladas não atestam a proposta. Próxima decisão somente instalação da política de janela + preflight preparatório; política permanente após owner/pré-promoção continua dependência explícita, sem instalação agora. Instalação parcial, timeout/intent consumido e ledger incompleto exigem diagnóstico/estado real, sem replay/start repetido/bypass. Nenhum rebuild, suíte repetida, stop/start/deploy/save/envio/mutação produtiva. Históricos/aceites e pendências multilote/AUTO/CRA-PR preservados.
+
+**Frontend3227 — STAGED / POLICY REVIEW REQUIRED / NOT DEPLOYED (09–10/10).** [Preparação única, hashes e comandos](reviews/automation-freeform-window-release-af26/frontend-3227b2d7-prepared-20261009/README.md): build Node20 reaproveitado; tar9b54548e/BUILD_ID8Oq…,23.795arquivos/31links,16cenários Chrome sobre extração exata PASS; staging remoto/cfgs/bindings/retorno fa60 ativo íntegros, gates falsos. Helpers/sudoers inalterados; duas políticas propostas: janela antes do preflight e permanente após owner confirmar/pré-promoção. Não instalar agora; futura observação sob política nova pendente. APIcorretivaa26/workerafbb/guarda36/cron/boot/saved preservados. Multilote natural/AUTO/CRA-PR e aceites anteriores permanecem separados.
+
+**UX conjunto/lote — complemento local de legibilidade e contagem prevista (09/10), REVIEW READY / NOT DEPLOYED.** Motivos reutilizam formatadores de falha; destinos/setores/fluxos e variáveis divergentes permanecem legíveis, incluindo campos exclusivos do filho. Lote não materializado preserva `recipientCount` como previsto, distinguindo zero materializado. [Relatório incremental, hashes e provas](reviews/automation-freeform-window-release-af26/campaign-batch-ux-20261009/README.md#complemento-legibilidade-e-público-previsto--sobre-170dc579): Node20 build e 16 cenários Chrome simulados PASS; sem backend/scheduler/RBAC/staging/produção. Aceites anteriores preservados; multilote natural, contingência AUTO e CRA-PR permanecem separados.
+
+**Campanhas — UX conjunto/lote IMPLEMENTED LOCAL / REVIEW READY / NOT DEPLOYED (09/10).** Autorização sobre4a910771; [implementação, provas e limites](reviews/automation-freeform-window-release-af26/campaign-batch-ux-20261009/README.md). Resumo agregado único, dados exclusivos em linhas expansíveis, divergências preservadas e “Abrir lote por ID”; filho com detalhe próprio, link explícito ao conjunto e agregado recolhível. Ações permanecem em batchId/campaignId; mesmos labels/read models Result Truth. Leitor existente compartilha dois slots, cache por sessão/versão de filho/conjunto, cancelamento/resposta antiga e erro inline; nenhum novo timer/load-all. Build final Node20.20.0,39 contratos/provas do leitor e14 cenários Chrome PASS; regressões13+7 preservadas. Typecheck amplo:22 diagnósticos preexistentes em testes não alterados, zero no delta. Sem backend/scheduler/envio/agendamento/configuração/consulta produtiva/deploy. Próximo passo: revisão independente; nenhum aceite produtivo deste delta. Multilote/AUTO aguardam caso natural, CRA-PR separado e históricos preservados. Esta entrada atualiza o estágio da proposta abaixo sem apagar seu diagnóstico.
+
+**Validações restantes — MATRIZ CONSOLIDADA / UX DIAGNÓSTICO E PROPOSTA (09/10).** [Matriz com fontes/limites](reviews/automation-freeform-window-release-af26/remaining-validations-20261009/README.md): owner encerrou cenários de ad690ee1; avulso/CRM estático/CSV individual/agendamento/dinâmica/out.14 e leitura frontend mantêm seus aceites sem repetição. Conversão12:40Fortaleza→15:40UTC e corridas/leituras limitadas sustentadas localmente, não novas submissões produtivas. Multilote e contingênciaAUTO aguardam caso natural; CRA-PR independente. **UX separada:** [causa/componentes/proposta](reviews/automation-freeform-window-release-af26/remaining-validations-20261009/UX_SET_BATCH_PROPOSAL.md): mesmo modal troca selectedCampaignId e recebe executionBatch também no filho, repetindo contexto; padrão expansível já existe no composer. Proposta: resumo agregado único + dados exclusivos em linhas expansíveis, link porID e agregado recolhível no acesso direto ao filho; preservar read models/totais/ações/RBAC/tenant/fences de leitura. Próximo passo somente revisão do arquiteto; diagnóstico/proposta publicados, sem implementação, consulta produtiva nova, teste/build/envio/deploy.
+
+**Frontend Campanhas — ACEITE DIRIGIDO DE LEITURA / OWNER PASS (09/10).** [Resultados e limites](reviews/automation-freeform-window-release-af26/frontend-read-acceptance-20261009/README.md): composer vazio/edição local preservada, reset e preservação durante polling real confirmados; out.14 representada por conjunto único, filho acessível e troca out.13 com1 enviado/entregue+1falhado+4bloqueados. Recorte Network:5GETs detalhe selecionado alternados com5lista, todos200. Dois novos scheduled explicam polling3s; ausência inicial de polling não foi declarada PASS. Máximo2 de leituras complementares, falha/detalhe lento/sessão antiga/resposta tardia não exercitados em produção; provas isoladas mantidas. Sem salvar/agendar/enviar/deploy; descarte local final confirmado pelo owner, rodada encerrada. **Pedido owner ao arquiteto:** revisar padrão conjunto/lote para reduzir telas encadeadas e informações repetidas, avaliando linhas expansíveis com dados exclusivos, preservando totais, ações, IDs, RBAC e isolamento; implementar apenas após auditoria/decisão própria. Agrupamento multilote/AUTO aguardam caso natural; CRA-PR separado, históricos preservados.
+
+**Out.14 — GUARD OPEN36 / COMPLETED / META ACCEPTED / DELIVERED / OWNER RECEIPT CONFIRMED (08/10).** [Registro e correlação](reviews/automation-freeform-window-release-af26/campaign-reconciliation-prepared/operational-composition-20261008/OUT14_CAS_EXECUTION_2026-10-08.md): pré-condições frescas nos dez tenants sem drift; única chamada autenticada CAS35→36 HTTP200 às22:04:10 Fortaleza. Tick natural materializou1 elegível final4366, data_exame/22/01/2027, Atendimento Geral/Fila Geral; uma submissão/aceitação Meta, um Outbound; lote completed22:04:21, progresso1 enviado/0 falhas/bloqueados/pendentes. Read model DELIVERED22:06:18 e owner confirmou recebimento/valor. Fila global0/leases ativos0, out.13 mantém1 SENT/1 FAILED131026/4 bloqueados e recibo intacto. APIa26/mesmo workerafbb/frontendfa60 com identidades/restart0 preservados; guardaopen36/tasks0, gates de janela false, saved/fallback intactos. Nenhum deploy, retry, reconciliação/ack/reparo ou configuração alterada. Aceite restrito ao caminho observado com um lote; agrupamento multi-lote, AUTO, CRA-PR e etapas inbound/claim deste caso não exercitados.
+
+**API de elegibilidade — DEPLOYED TECHNICALLY / OWNER FUNCTIONAL VALIDATION PENDING (08/10).** [Registro efetivo](reviews/automation-freeform-window-release-af26/campaign-reconciliation-prepared/operational-composition-20261008/DEPLOYED_2026-10-08.md): política38a20 instalada/arquivada anterior; composição JSON↔ecosystems/baselines, backup fresco/restore isolado e gates imediatos PASS. Sequência única implantou APIa26dbb0e e retomou mesmo workerafbb; frontendfa60 preservado. Contenção confirmada18:59:05–18:59:38 Fortaleza (32,683s); primeira captura negou churn, segunda passou na renovação limitada; nenhuma repetição de start/retorno. Health/DB/sessões, saved/fallback/cron/boot/barreira PASS; guarda closed35, gates false/out.14 aguardando. Recibo1 SENT/1 FAILED131026/4bloqueados intacto; sem nova reconciliação/ack/envio/abertura. Conferência de telas owner PASS; aceite funcional de execução pendente; demais frentes/históricos preservados.
+
+
+**Composição V4 corrigida — PREPARED FOR REVIEW / NOT INSTALLED / NOT EXECUTED (08/10).** [Resultado único](reviews/automation-freeform-window-release-af26/campaign-reconciliation-prepared/operational-composition-20261008/README.md): ecosystems derivados dos mesmos JSONs e conferência integral antes de qualquer ação; captura parcial usa política/path return, sem relaxar identidade/sockets. Node20/PM2 reais provaram ida/retornos e negativa de divergência antes da parada; contrato6/seq24/baseline13/captura30/template4 com efeitos reais/simulados diferenciados. Preparação211000Z nova, modos28 arquivos, policy38a20f3c não instalada/helper e sudoers inalterados, gates false. Guarda closed35/out.14 intacta; artefatos8820 arquivos/11 symlinks íntegros sem rebuild. Reaproveitado backup restaurado20:25Z, frescor exige reconfirmação antes da próxima janela. Revisão/política/inspect e gates imediatos pendentes; autorização funcional permanece. Tentativa anterior consumida preservada; nenhum deploy, contenção, start, reconciliação ou envio nesta rodada.
+
+**Janela de elegibilidade — RETURNED TO AFBB / CORRECTIVE API NOT DEPLOYED (08/10).** [Registro e causas](reviews/automation-freeform-window-release-af26/DEMO_DYNAMIC_ELIGIBILITY_RECOVERY_LOCAL_2026-10-08.md#janela-autorizada-e-retorno-comprovado--0810): manifesto íntegro não comprovou JSON/ecosystem; gerador atualizou JSON e copiou ecosystems antigos. Ida iniciou afbb, gate process_config_drift recusou; intent preservado, sem repetir start. Owner autorizou composição de recuperação afbb; retorno comprovou saída/zero DB, API e mesmo worker iniciados uma vez. Captura parcial teve KeyError; lookup/caminho normalizados ao return da política, mantendo barreiras/root revalidation. Barreira17:29:29–17:42:46 Fortaleza (13min17s), controles restaurados17:42:50. Frontend fa60 preservado, API/worker afbb online/restart0, health/DB/sessões e leitura owner PASS; guarda closed35, gates false e out.14 aguardando. Recibo/SENT1/FAILED1310261/bloqueados4 preservados, sem nova reconciliação/ack/abertura/envio. Preparação consumida; corrigir geração e validação JSON↔ecosystem em todos os modos, ensaiar composição final com captura parcial, então novos bindings/política para os PIDs atuais. Artefatos funcionais preservados/sem rebuild. Aceite da API corretiva, agrupamento/Auto/CRA-PR continuam pendentes.
+
+**Demo out.13 — RECONCILED / ACKNOWLEDGED / POLICY INSTALLED / GUARD CLOSED35 / API NOT DEPLOYED (08/10).** [Correção, 33 casos e plano ID-bound](reviews/automation-freeform-window-release-af26/DEMO_DYNAMIC_ELIGIBILITY_RECOVERY_LOCAL_2026-10-08.md): elegibilidade compartilhada CRM/estimativa/materialização/runner, marcadores recusados antes de dígitos e revalidação antes do provider. Snapshot antigo preservado; aceitação não autoriza retry. Dry-run produtivo 8/8, guarda closed34/tarefa1; fila global observada out.13/out.14 somente. Reconciliação preparada: preservar SENT válido, registrar FAILED/131026 e quatro bloqueados, recibo SQL antes de acknowledgement auditado da tarefa, guarda continua fechada. Exceção produtiva original desconhecida; causa local e injeção diferenciadas. API-only; worker mínimo/frontend preservados. Deploy, reconciliação e futura abertura exigem revisão/autorização específicas; nenhum reparo/reenvio/liberação executado. Complemento de revisão: read models reais campanha/controlador/lote/lista provam1 SENT/1 FAILED131026/4 bloqueados, replay sem dupla contagem; receipt/Meta ID/Outbound terminal exigidos antes do ack. CLI exato dry-run PASS e backup/restore fresco PASS. [Procedimento fechado e patches V4](reviews/automation-freeform-window-release-af26/campaign-reconciliation-prepared/README.md): bindings/política de janela dependem da captura pós-ack com guarda ainda fechada; V4 não pronto/não autorizado hoje, nenhuma abertura automática. Execução autorizada: SQL17:03Z e ack17:05Z concluídos, recibo431e03cc durable, SENT preservado (Meta DELIVERED), FAILED131026/quatro bloqueados; tarefa completa arquivada, guarda35 fechada/tasks0 e identidades preservadas. Out.14 queued/attempt0, lote scheduled aguardando. Preparação V4 interrompida: classificador a26 exige lote queued, contrário ao produtor scheduled; fixtures anteriores não provaram esse contrato real. Baseline/política não emitidos/instalados; todos gates false. Menor próximo passo é correção local/teste desse classificador antes de nova preparação/janela; nenhum deploy/open/reenvio. Reparo setembro CLOSED e históricos preservados. Complemento atual: classificação alinhada ao produtor real scheduled/queued/attempt0/no lease;7 testes +1 integração real compilados/PG16/SQL/consumidor PASS. Preparação pós-ack nova concluída para revisão (três modos27 arquivos, política7b8ef5c4 não instalada), guarda35 fechada/gates false/out.14 intacta. [Manifesto e roteiro concretos](reviews/automation-freeform-window-release-af26/campaign-reconciliation-prepared/POST_ACK_OWNER_STEPS.txt). Templates históricos do frontend e comparação baseline resumido/ledger tiveram recusas preservadas; frontend efetivo fa60/cluster e identidades conferidos sem alterar checker. Não houve deploy/rebuild/reconciliação/open. Instalação exclusiva posteriormente autorizada: bloco A e conferência independente18:50Z PASS; política7b8ef5c4 instalada/root0600, anterior00912bf4 arquivada, helper/sudoers preservados, phase:null, cinco gates false, out.14 intacta/zero lease. [Resultado](reviews/automation-freeform-window-release-af26/campaign-reconciliation-prepared/policy-installation-result-20261008.json). Nenhuma janela/reconciliação/ack/open/reenvio; próxima decisão é a janela, com reconferência de frescor/estados; CAS de abertura separado. Backup pós-reconciliação19:02Z/restore isolado19:08Z PASS: dumpce2154e9…6317,70 tabelas/60 migrations, recibo1/SENT1/FAILED1310261/bloqueados4/out.14 aguardando. Banco temporário removido/servidor isolado encerrado; primeira recusa Unix do sandbox preservada. Provas/manifests atualizados nos três modos27 arquivos, anteriores arquivados; leitura final19:13Z confirmou política/phase:null, identidades/restart0/proxy/baselines/controles e fila global sem drift. [Resultado consolidado](reviews/automation-freeform-window-release-af26/campaign-reconciliation-prepared/postack-preconditions-result-20261008.json). **PRECONDITIONS VERIFIED / GATES FALSE / NOT EXECUTED / NOT DEPLOYED**; guarda35 fechada/out.14 intacta, nenhuma reconciliação/ack repetidos. Backup DB/arquivos não atômico; futura janela exige reconfirmação imediata e abertura CAS separada.
+
+**CRM → conversa BOT — FRONTEND BACKLOG SEPARADO / NOT IMPLEMENTED (08/10).** [Limitação e escopo](reviews/automation-freeform-window-release-af26/DEMO_DYNAMIC_ELIGIBILITY_RECOVERY_LOCAL_2026-10-08.md#componentes-e-pendências): contato CRM não equivale a conversa listada em TODAS; conversa foi localizada no filtro Automação. Propor atalho usando resolvedores existentes, tenant/RBAC/chave, ADMIN/SUPERVISOR e privacidade, sem exceção AGENT, sem BOT em TODAS e sem mutação operacional pela leitura. Não misturar com recuperação de campanhas.
+
+**Frontend fa60 corrigido — DEPLOYED TECHNICALLY / OWNER READ AND LAYOUT CONFIRMED (07/10).** [Execução e limites](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#implantação-do-frontend-corrigido-concluída--0710-fortaleza): tar17bd exato, preflights/saída nova/start único/prontidão PASS; CSS efetivamente servido em localhost/público e owner confirmou layout/sessão/Inbox/CRM/Campanhas. Stop20:50:15Fortaleza, prontidão20:51:22,758 (limite observado68s), promoção/save depois da confirmação, conclusão20:57:37. Supervisão permanente PASS; saved/fallbackfb058238… iguais, gatefalse. API/workerafbb e daemon mesmosPIDs/restart0, guarda aberta33/scheduler habilitado/boot preservados. Geração234000 agora permanente: não remover enquanto referenciada. Sem envio/reparo/reboot produtivo; dois erros auxiliares de consolidação documentados, sem repetir partidas. Aceites e pendências funcionais independentes permanecem.
+
+**Frontend — observador permanente INSTALLED VERIFIED / LIVE READ PASS (07/10).** [Relatório único e integração concreta](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#instalação-permanente-conferida-e-integração-final--0710): instalação restrita autorizada/visudo/hashes PASS, duas amostras reais completas154/154; 9f e API/worker afbb, scripts ativos e saved/fallback preservados. Nova integração234000 gatefalse, tar corrigido17bd e retorno íntegros; política de janela6087 apenas proposta. Preflight da futura janela NÃO EXECUTADO, depende de revisão/autorização própria. Sem restart/build/envio ou alteração de histórico; provas anteriores reutilizadas com seus limites. Esta nota substitui somente o status das propostas anteriores, mantendo seus registros históricos e aceites independentes.
+
+**Frontend — recuperação automática pós-reboot, LOCAL OPERATIONAL VALIDATED / DELEGATION REVIEW REQUIRED / NOT INSTALLED (07/10).** [Relatório único](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#supervisão-permanente-após-reboot--proposta-isolada): janela e supervisão separadas; leitor permanente proposto tem escopo root estático de artefatos/PM2 e descobre boot/daemon atuais, sem rebind ou reutilização de PIDs/inodes antigos. PM2/Node/Next reais save/resurrect/daemon novo e retorno9f PASS; boot/permissão injetados, sobrevivente real nega. Uma chamada sudo literal adicional somente leitura requer aprovação; helper/sudoers de janela intocados. Substitui requisito manual da preparação43ff para futura composição, não altera staging9f ativo. Tar17bd/provas funcionais preservados, sem rebuild/install/janela. Revisão da delegação precede integração/preflight/janela; demais aceites/históricos mantidos.
+
+**Frontend fa60 corrigido — PACKAGE STAGED / PREPARED FOR POLICY REVIEW / NOT DEPLOYED (07/10).** [Relatório único](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#preparação-com-tar-corrigido-e-binding-permanente--0710): tar17bd íntegro na VPS/extração completa/CSS PASS, sem rebuild ou partida;9f/afbb e saved preservados. Composição real PM2/Node/Next ida/retorno/save/resurrect com daemon novo ensaiada; boot e permissão injetados, instalação root simulada. Inventário local completo no mesmo boot permite recuperação automática; binding root antigo nega. Após reboot, exige política explicitamente renovada e leitura root atual, sem atualização silenciosa ou sudo novo. Política nova proposta/hash10fa, gatesfalse; depende de revisão/autorização de instalação e preflight final antes de qualquer janela. Não remover staging/controle/journals enquanto referenciados; sobrevivente/incompleto continuam negados. Aceites/frentes independentes e históricos preservados.
+
+**Frontend fa60 — causa de layout demonstrada / correção local para revisão (07/10).** [Auditoria isolada no relatório único](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#causa-do-layout-demonstrada-e-supervisão-ensaiada--0710): tar rejeitado reproduzido sem rebuild inicial; CSS200/text/css contém Tailwind não expandido porque o build omitiu PostCSS/Tailwind configs. Receita corrigida, único build corretivo Node20, tar extraído limpo e detector de estilos/HTTP PASS;13smokes dirigidos PASS. Supervisão permanente confirmou falta de consumo root para processo novo ilegível; patch local ensaiado com PM2/Next reais, PermissionError local injetado e leitor root efetivo. Sobrevivente/privilégio ausente/daemon divergente negam. Root policy fixa daemon/boot: recuperar observação privilegiada após daemon novo continua limite explícito, não PASS por simulação. Nenhuma alteração do staging9f ativo, helper/política/sudoers ou produção; **NOT DEPLOYED**, sem nova janela. Preservados históricos e aceites independentes.
+
+**Frontend fa60 — FUNCTIONAL FAIL / RETURNED TO 9f / OWNER RETURN READ CONFIRMED (07/10).** [Registro único](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#retorno-9f-concluído-após-fail-de-layout--0710): candidato pronto porém layout rejeitado; nenhuma promoção. Gate de retorno negou nova identidade SSH ilegível; checker95b2d33d aprovado/aplicado com arquivos/manifestos arquivados e nova prova root/inventário PASS. Uma partida por lado, retorno9f validado14min16,866s após início; owner confirmou telas e só então supervisão/saved/fallback promovidos. Gatefalse/lock liberado, API/workerafbb/guarda33/scheduler/cron/boot/DB/auth preservados. Staging novo dependência permanente9f; preparação consumida. Causa do layout desconhecida, investigar isoladamente; auditar também observação das identidades ilegíveis em retomadas permanentes, sem restart produtivo. Fa60 NOT DEPLOYED; históricos e aceites independentes preservados.
+
+**Frontend fa60 — POLICY INSTALLED VERIFIED / INTEGRATED PREPARATORY PREFLIGHT PASS / NOT DEPLOYED (07/10).** [Resultado no relatório único](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#política-substituída-e-preflight-integrado-pass--0710): substituição autorizada somente da política d896eb99, anterior arquivada/root0600, helper/sudoers iguais; hashes/visudo PASS. Uma chamada real dos bytes finais sob exclusividade: duas amostras completas156processos, exit0/sem retry; captura arquivada. Gatefalse/nenhum start; frontend9f/API/workerafbb mesmosPIDs/restart0, controles preservados. Pré-requisitos observacionais satisfeitos nesta execução; janela exige autorização própria/reconfirmação e saídas com leituras novas. Negativa anterior/gerações preservadas, demais aceites/históricos intactos.
+
+**Frontend fa60 — nova sequência preparada / POLICY REVIEW REQUIRED / NOT READY FOR WINDOW (07/10).** [Relatório único](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#nova-sequência-fa60-com-observador-instalado--0710): controles/nonces/capturas novos, tar/build e provas reutilizados; três gates revisados intactos. Política instalada difere em cinco campos; proposta restrita de arquivamento/substituição publicada, helper/sudoers inalterados. Uma chamada integrada real negou `socket_observer_integrity_binding`, root readerPASS; registros preservados, nenhum retry/start. Staging/manifests/identidades remotos conferidos, gatefalse. Depende de revisão/instalação da política e preflight integradoPASS antes de avaliar janela. Frontend9f/API/workerafbb e controles preservados; fa60 NOT DEPLOYED, aceites independentes e históricos intactos.
+
+**Observador frontend — INSTALLED VERIFIED / LIVE VPS PREFLIGHT PASS (07/10).** [Resultado no relatório único](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#instalação-conferida-e-preflight-real-na-vps--0710): owner instalou somente helper/política/regra literal b08bdbcc, root:root0644/0600/0440 e visudo/check-installation PASS. Uma invocação/uma tentativa, duas amostras completas153processos cada; socket compartilhado somente daemonfd0+launcherfd0, root reader0,182s/driver1,072s, sem negativas. Fonte9f/API/workerafbb mesmosPIDs/restart0, controles intocados. Acesso observacional comprovado nesta execução; gatefalse/fa60 NOT DEPLOYED. Nova janela exige preparação revisada e autorização própria, sem reutilizar esta prova. Diagnósticos privados/gerações/aceites independentes preservados.
+
+**Observador frontend — pacote concreto para revisão de instalação / NOT INSTALLED (07/10).** [Relatório único](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#pacote-concreto-de-instalação-observacional--0710): staging novo somente observacional, política/bindings privados e origem9f efetiva conferidos;10arquivos/hashes/schema PASS na VPS. Helper afeb inalterado; uma regra literal proposta, comandos exatos de instalação/conferência/preflight/remoção (inclusive parcial),12testes dirigidos do driver PASS, simulações discriminadas. Leitura root produtiva e instalação NOT EXECUTED; dependem de revisão/autorização específica. Gatefalse, NOT READY FOR WINDOW; fa60 NOT DEPLOYED. Sem rebuild/envio/mutação operacional; arquivos/evidências antigas e aceites independentes preservados.
+
+**Frontend fa60 — acesso observacional auditado, revisão local / NOT READY FOR WINDOW (07/10).** [Relatório único](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#auditoria-observacional-da-árvore-ativa--0710): árvore ativa cluster PM2→launcher→bootstrap→Next e fd0 compartilhado confirmados; deploy não lê142processos, inclusive próprio UID. Contrato comum fresh-reader nos três gates, negativa de owner/executor/listener/incompleto preservada;22verificações locais (7PASS/15negações esperadas), PM2/Node/Next reais e injeções discriminadas. Proposta de uma chamada root somente leitura ainda NÃO instalada; depende de decisão/instalação restrita e preflight root antes de nova preparação/janela. Certificado consumido não reutilizado. Produção9f/afbb preservada; tarfa60 igual, sem build/envio/reparo. Aceites e frentes independentes permanecem separados.
+
+**Frontend fa60 — RETURNED TO 9f / fa60 NOT DEPLOYED (07/10).** Tentativa autorizada: parada17:36:47UTC, retorno verificado17:54:25UTC (intervalo observado17min38s), escalonamento15min. Gate original confundiu stdin Unix compartilhado do daemon com socket próprio sobrevivente; correção dirigida e leitura root restrita comprovaram saída. Um start-return, nenhum start-candidate; owner confirmou leitura, supervisão e saved/fallback do retorno promovidos. API/worker afbb/guarda33/scheduler/cron/boot/DB/auth preservados. Preparação consumida, gatefalse; nova janela não pode reutilizar seus controles/certificados. [Resultado, hashes e limites](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md#execução-autorizada-e-retorno-comprovado--0710).
+
+**Preparação histórica frontend fa60 (07/10).** [Relatório único e comandos](reviews/automation-freeform-window-release-af26/FRONTEND_FA60F0F6_PREPARED_2026-10-07.md): pacote exato Node20.20.0,13smokes horário/conjuntos +7leituras PASS; ida/retorno9f PM2 isolados PASS. Staging novo/tar/manifesto/configs conferidos, gatefalse; geração9f/journals/saved/fallback preservados. API/worker afbb/guarda33/scheduler/cron/boot intocados. Próxima etapa: revisão/autorização da troca exclusiva frontend, owner confere leitura antes da promoção. Sem envio/reparo/restore4366; demais aceites separados.
+
+**Leituras de conjuntos — COMPLEMENTO LOCAL VALIDATED / NOT DEPLOYED (07/10).** [Relatório dirigido](reviews/automation-freeform-window-release-af26/CAMPAIGN_SCHEDULE_AND_GROUPS_LOCAL_2026-10-07.md#complemento-dirigido--leituras-de-vínculos-0710): lista independente de detalhes lentos; relações explícitas reutilizadas por sessão/versão, máximo2 leituras adicionais simultâneas, falhas preservam vínculos e têm intervalo30s. Chrome:33iniciais, zero novas em3ticks, +1retry/+1snapshot; sessão nova33/máximo2. Node20.20.0 obrigatório na futura preparação; build atualNode22.13.0. Horários, backend/worker e aceites anteriores preservados.
+
+**Horário e Concluídas — LOCAL VALIDATED / NOT DEPLOYED (07/10).** [Correção e provas](reviews/automation-freeform-window-release-af26/CAMPAIGN_SCHEDULE_AND_GROUPS_LOCAL_2026-10-07.md): composer/detalhe separados, hidratação por abertura/seleção, polling preserva edição, hora civil local; conjuntos representados pelo controlador e lotes acessíveis por ID. Backend/worker/scheduler/status/históricos preservados. Aceites avulso, CRM estático, CSV individual, agendamento individual e dinâmica out.11 permanecem limitados aos seus casos; agrupamento aguarda execução natural autorizada, contingência AUTO e aceite CRA-PR pendentes. Contato4366 permanece sem restauração automática.
+
+**Dinâmica out.11 — CONTROLLED DYNAMIC CASE PASS / OWNER RECEIPT AND UI CHECK CONFIRMED (07/10).** [Resultado](reviews/automation-freeform-window-release-af26/DYNAMIC_CRM_AND_AUTO_ACCEPTANCE_PREPARATION_2026-10-07.md#execução-dinâmica-controlada--07102026): agendadoFOLLOW_UP com0destinatários/snapshot; owner moveu4366 NEW→FOLLOW_UP antes deT; snapshot único11:30:06 incluiu1contato, filho/conjuntocompleted1/1, uma submissãoMeta/accepted/SENT. Variável/destino preservados, janela expirada não renovada. Eventos delivered/read separados da confirmação do owner de recebimento/valor e atualização do detalhe. OriginalNEW preservado, sem restauração automática. Um filho não comprova agrupamento; aguardará caso natural autorizado pelo tenant. AUTO/CRA separados; sem deploy/envioCodex/reparo.
+
+**Dinâmica demo — combinação proposta por leitura (07/10,11:13Fortaleza).** [Consulta no roteiro](reviews/automation-freeform-window-release-af26/DYNAMIC_CRM_AND_AUTO_ACCEPTANCE_PREPARATION_2026-10-07.md#consulta-dirigida-demo--0710111359-fortaleza):4366 elegível, únicoLead emNEW/Novo; FOLLOW_UP/Follow-up ativo/elegível com0Leads/0elegíveis. UI admite estimativa0. Aguardar escolha explícita antes de agendar/mover; originalNEW preservado privadamente para eventual restauração autorizada. Sem mutação/envio. AUTO normal depende de interação autorizada/janela legítima; contingência aguarda indisponibilidade natural.
+
+**Decisão owner — agrupamento natural / dinâmica e AUTO em preparação (07/10).** [Roteiros separados e sequência](reviews/automation-freeform-window-release-af26/DYNAMIC_CRM_AND_AUTO_ACCEPTANCE_PREPARATION_2026-10-07.md): agrupamento aguardará execução natural autorizada pelo próprio tenant; nenhum envio em massa para aceite técnico. Dinâmica mínima positiva: filtroCRM isolado, estimativa0→1match após mudançaCRM explicitamente autorizada, uma campanha futura/uma submissão; destinatário/situação ainda não indicados. AUTO normal pode ser acompanhado em demo com uma resposta autorizada e janela legítima; contingência positiva exige indisponibilidade natural comprovada, sem desconectar sessão. Provas locais negativas reutilizadas. CRA-PR/demandaBOT, históricos/saneamento e status concorrentes permanecem separados; SECULT/DB-only e setembroCLOSED preservados, Guia pausado. Nenhuma mutação ou envio nesta preparação.
+
+**CRA-PR — campanha/agrupamento sem evidência persistida (07/10,10:57Fortaleza).** [Consulta dirigida](reviews/automation-freeform-window-release-af26/GROUPED_CAMPAIGN_ACCEPTANCE_PREPARATION_2026-10-07.md#consulta-dirigida-cra-pr--0710-105711-fortaleza): tenant cra-pr confirmado;0campanhas,0conjuntos/vínculos/jobs e0eventos campaign. Outbounds existentes769TEXT+1AUDIO WEB_SESSION/SENT não comprovam campanha nem agrupamento. Não afirmar ausência histórica em outros sistemas ou dados removidos. Somente leitura; aceite CRA/agrupamento permanece pendente.
+
+**Agrupamento — AUDIT / PREPARATION ONLY (07/10).** [Roteiro mínimo e limite](reviews/automation-freeform-window-release-af26/GROUPED_CAMPAIGN_ACCEPTANCE_PREPARATION_2026-10-07.md): CSV estático/imediato com dois filhos exige1.001 destinatários canônicos únicos elegíveis (1.000+1), até1.001 submissões para ciclo completo; repetir celular não exercita split. Público autorizado suficiente ainda não indicado; nenhuma criação/envio/configuração/teste novo. Provas locais3.001/quatro filhos reutilizadas, sem atribuir aceite produtivo. CRM agrupado, dinâmica, contingência Auto e CRA-PR separados.
+
+**Agendamento out.10 — CONTROLLED SCHEDULED CASE PASS / OWNER RECEIPT CONFIRMED (07/10).** [Resultado no relatório CRM](reviews/automation-freeform-window-release-af26/CRM_AUDIENCE_CONTROLLED_VALIDATION_2026-10-06.md#agendamento-real-individual--resultado-de-07102026): Audiência CRM estática/individual, um destinatário9614, data_exame, Atendimento Geral/Fila Geral. Horário10:40Fortaleza/13:40Z persistido e exibido; scheduler iniciou10:40:06, uma submissão Meta, completed1/1; detalhe atualizou e owner confirmou recebimento. Janela legítima anterior aberta até10:46:17 preservada, sem inbound ou novas identidades; não comprova baseline fechado. Owner mudou Meta explícita para AUTO às10:36:34, configuração preservada; campanhas permanecem Meta-only, contingência reativa Auto não exercitada. API/worker afbb, frontend9f; sem deploy/reparo/envio pelo Codex. Agrupamento, audiência dinâmica, contingência Auto e CRA-PR seguem pendentes; agendamento individual não encerra variantes e falhas não exercitadas. Preparações abaixo são históricas.
+
+**Agendamento real controlado — PREPARATION READ-ONLY COMPLETE / NOT EXERCISED (07/10).** [Roteiro e matriz no relatório CRM existente](reviews/automation-freeform-window-release-af26/CRM_AUDIENCE_CONTROLLED_VALIDATION_2026-10-06.md#preparação-separada--agendamento-real-individual-07102026): uma campanha nova, Audiência CRM estática/individual, demo final9614/data_exame, Atendimento Geral/Fila Geral. Elegível1/sem opt-out; seleçãoMeta explícita/templateMeta ready, versões afbb/worker mínimo/9f e controles preservados. Owner propôs out.10 às10:30Fortaleza, equivalente13:30Z; revalidar futuro/margem após rascunho. Janela legítima aberta até10:46:17: prova será preservação dos timestamps, não envio desde janela fechada. Nenhuma campanha criada/agendada/enviada nesta preparação; observar scheduler/submissão única/Result Truth/UI depois das ações do owner. Agrupamento, audiência dinâmica, Auto e CRA-PR continuam pendentes.
+
+**Frontend9f — DEPLOYED TECHNICALLY / OWNER READ CHECK CONFIRMED (07/10).** [Resultado no relatório único](reviews/automation-freeform-window-release-af26/FRONTEND_9F4CBE0F_PREPARED_2026-10-06.md): stop12:44:09UTC, prontidão12:44:45.979UTC, limite superior observado36,965s. Partida única do9f, ausência af26 comprovada; owner confirmou sessão/Inbox/CRM/campanhas antes da promoção permanente, sem nova partida. Saved/fallback iguais, gatefalse; API afbb/worker mínimo/daemon mesmas identidades, restart0; guarda aberta33, scheduler/cron/boot/DB/auth preservados. Sem falha/retorno/envio/reparo. Pasta operacional agora referenciada por active/saved/fallback: preservação obrigatória. Conferência de leitura não equivale a prova produtiva de processamento/agendamento; agrupamento, audiência dinâmica, agendamento real, contingência Auto e CRA-PR permanecem pendentes. Registros de preparação abaixo são históricos.
+
+**Frontend9f — REMOTE STAGING COMPLETE / NOT DEPLOYED (07/10).** [Relatório único, hashes e comandos finais](reviews/automation-freeform-window-release-af26/FRONTEND_9F4CBE0F_PREPARED_2026-10-06.md): sete scripts8da transferidos com originais arquivados, tar/candidato/retorno/configs conferidos; baseline af26/afbb/worker mínimo e daemon preservados, sem reinícios. Gatefalse e captura de leitura nova arquivada, sem intents/controls consumidos. Seletores atuais de limpeza não alcançam a geração; preservar pasta inteira enquanto active/saved/fallback referenciar launcher/control/journals. Próxima autorização é exclusivamente frontend, sem API/worker/guarda/scheduler. Sem rebuild ou suítes repetidas. Agrupamento, audiência dinâmica, agendamento real, contingência Auto e CRA-PR continuam pendentes; aceites avulso/CRM estático imediato/CSV individual imediato mantêm seus limites.
+
+**Supervisão permanente frontend — 07/10, LOCAL VALIDATED / NOT DEPLOYED.** [Relatório único e comandos](reviews/automation-freeform-window-release-af26/FRONTEND_9F4CBE0F_PREPARED_2026-10-06.md): janela tem intent único e morte do Next termina o launcher/PM2 stopped, sem retry; promoção explícita fecha o gate e permite autorestart/resurrect com evidências e nonces novos. Candidato e af26 reais ensaiados com PM2 6.0.14/Node20.20.0, mesmo dump, morte do Next após prontidão e ausência final; sobrevivente/repetição continuam negados. Diretório da geração referenciado por active/saved/fallback deve ser preservado permanentemente. Na revisão local anterior não houve rebuild ou transferência; staging remoto concluído conforme nota acima, sem troca produtiva; aceites/pendências funcionais independentes preservados.
+
+**Revisão operacional frontend 07/10 — LOCAL OPERATIONAL VALIDATED / NOT DEPLOYED.** [Relatório único atualizado](reviews/automation-freeform-window-release-af26/FRONTEND_9F4CBE0F_PREPARED_2026-10-06.md): identidade registrada antes de liberar Next, saída precoce com retorno comprovado no laboratório, descendente/socket sobrevivente nega; prontidão30s/30 tentativas e logs privados, sem repetir starts. Node20.20.0/PM2 6.0.14 reais; backend/retorno af26 em fixtures, tar Next exato também ensaiado. Tar/build preservados; na revisão histórica os scripts estavam apenas locais; staging remoto atualizado conforme nota acima, gates falsos. Nenhuma janela/alteração produtiva. Aceites e pendências funcionais independentes permanecem como registrados.
+
+**Frontend Campanhas 9f4cbe0f — PREPARED FOR REVIEW / NOT DEPLOYED (06/10).** [Relatório único, tar/hashes, comandos e limites](reviews/automation-freeform-window-release-af26/FRONTEND_9F4CBE0F_PREPARED_2026-10-06.md): pacote exato isolado, configuração atual preservada, manifesto completo e assets af26 retidos; release candidata extraída na VPS sem start, gates falsos. Troca futura somente frontend, retorno af26; API afbb/worker mínimo reativo permanecem ativos. Abas antigas precisam reload; sessões/API não são reiniciadas. Pendem janela autorizada/conferência autenticada, sem novo envio para testar apresentação. Agrupamento, audiência dinâmica, agendamento real, contingência Auto e CRA-PR continuam pendentes; aceites avulso/CRM estático imediato/CSV individual imediato preservados.
+
+**Campanhas — correção visual LOCAL VALIDATED / FOR REVIEW / NOT DEPLOYED (06/10).** [Auditoria, delta frontend e provas finais](reviews/automation-freeform-window-release-af26/CAMPAIGN_PROGRESS_VISUAL_LOCAL_2026-10-06.md): scheduled/null apresentado como fila imediata; agendamento datado preservado; um polling existente observa scheduled/sending, chega ao terminal e descarta respostas de seleção/sessão antiga. 59 testes, 10 cenários de navegador com APIs sintéticas e build frontend PASS; 22 diagnósticos de tipos iguais à base, três achados lint preexistentes. Nenhum backend/worker/scheduler/status persistido alterado, na etapa local não houve envio/deploy; correção implantada agora conforme resultado acima, cenários dirigidos de processamento ainda pendentes.
+
+**Aceites Campanhas consolidados — casos controlados, não aceite global CRA-PR.** Avulso demo completo em b9 (05/10); Audiência CRM estática/imediata em afbb (`7709b49a`, 06/10); CSV individual/imediato em afbb (`09795916`, 06/10): recebimentos e atendimento confirmados pelo owner nos relatórios vinculados acima. Agrupamento, audiência dinâmica, agendamento, contingência Auto e CRA-PR permanecem pendentes. As antigas entradas abaixo são cronologia; “CSV pendente” anterior ao seu aceite foi superado apenas no caso individual/imediato. Históricos preservados, setembro CLOSED, SECULT/DB-only encerradas; inatividade Guia pausada.
+
+**Importação CSV — individual/imediato PASS / OWNER RECEIPT CONFIRMED (06/10).** [Relatório e limites](reviews/automation-freeform-window-release-af26/CSV_CONTROLLED_VALIDATION_2026-10-06.md): Campanha teste out.9, um destinatário; template Meta manteve janela fechada, inbound Web reutilizou Conversation/runtime e Atendimento Geral/Fila Geral, Assumir/protocolo/resposta humana Meta recebidos. Conjunto canônico1/1/1/1, sem duplicação no retorno/atendimento; configuração Meta explícita preservada. Defeito visual de “Envio agendado / Sem horário definido” e detalhes sem atualização reproduzido, **registrado separadamente; correção9f agora implantada**, sem repetir a campanha aceita; prova produtiva do processamento permanece pendente. CSV agrupado/agendamento, contingência Auto, status concorrentes e CRA-PR continuam pendentes; históricos intactos, setembro CLOSED, SECULT/DB-only encerradas, Guia inatividade pausado.
+
+**Audiência CRM — ciclo controlado PASS / OWNER RECEIPT CONFIRMED (06/10).** [Relatório e limites](reviews/automation-freeform-window-release-af26/CRM_AUDIENCE_CONTROLLED_VALIDATION_2026-10-06.md): Campanha teste out.8, um destinatário, audiência estática/imediata; template Meta manteve janela fechada, inbound Web reutilizou Conversation/runtime e Atendimento Geral/Fila Geral, claim/protocolo/resposta humana Meta recebidos, sem novas duplicações. HYBRID com seleção **Meta explícita**, não Auto; afbb implantada, frontend preservado. CSV, audiência dinâmica/agendamento, contingência por desconexão, status concorrentes e CRA-PR continuam pendentes. **Defeito UI registrado no aceite, agora corrigido em9f com validação dirigida pendente:** envio imediato exibido como “Envio agendado / Sem horário definido” e detalhes sem atualização; persistência completed1/1 comprovada, sem correção incidental. Históricos intactos, setembro CLOSED, SECULT/DB-only encerradas, Guia inatividade pausado.
+
+**afbb — DEPLOYED TECHNICALLY / FUNCTIONAL ACCEPTANCE PENDING (06/10).** [Execução e evidências](reviews/automation-freeform-window-release-af26/REACTIVE_AFBB_DEPLOYED_2026-10-06.md): API afbb7455/worker mínimo reativo implantados pela sequência única corrigida; frontend af26 preservado. Backup fresco/restore isolado PASS, contenção32,984s, guarda aberta33, quatro sessões/cinco auth, health/DB/controle worker e crons/boot/saved/fallback/barreira PASS. Churn transitório resolvido pela renovação limitada; sem falha privilegiada/retorno/start repetido. Owner confirmou Inbox/CRM em leitura; contingência funcional não exercitada. CRM/CSV/CRA continuam pendentes, ciclo avulso demo aceito separado; históricos intactos, reparo de setembro CLOSED. Preparação consumida: não reutilizar provas/intents; eventual retorno pós-unfence exige preparação/política fresca.
+
+**afbb — composição corrigida, LOCAL VALIDATED / PREPARED FOR REVIEW / NOT DEPLOYED.** [Contratos auditados, patch e preparação nova](reviews/automation-freeform-window-release-af26/REACTIVE_AFBB_BASELINE_CONTRACT_REVIEW_2026-10-06.md): a omissão ocorreu no baseline operacional initial, distinto do funcional. Capturador e validação estritos antes de CAS/efeitos; 13 contratos, 24 regressões e 4 templates PASS com simulações delimitadas. Modos26 arquivos, gates falsos, helper/sudoers iguais, somente política nova futura. Tentativa abortada preservada; nenhuma janela nesta revisão. Backup íntegro reutilizado exige reconfirmação/frescor na janela; CRM/CSV/CRA pendentes.
+
+**Contingência reativa afbb — ABORTED BEFORE CONTAINMENT / NOT DEPLOYED (05/10).** [Registro da execução única](reviews/automation-freeform-window-release-af26/REACTIVE_AFBB_WINDOW_ABORTED_2026-10-05.md): política instalada/inspect PASS; CAS/drain/preflight PASS; `prepare-containment` negou por `KeyError: supervision`, campo ausente no baseline preparado. Aborto prestop comprovado, guarda aberta geração31, mesmos processos b9/af26 sem reinícios, cron/boot/saved/fallback/barreira conferidos. Não houve contenção ou parada. Preparação consumida preservada; corrigir e testar contrato real do baseline antes de nova tentativa. Provas de composição injetadas anteriores não cobriam esse acesso. CRM/CSV/CRA continuam pendentes.
+
+**Contingência reativa afbb7455 — PREPARED FOR INSTALLATION / NOT DEPLOYED (05/10).** [Preparação V4 concreta](reviews/automation-freeform-window-release-af26/REACTIVE_AFBB_V4_PREPARED_2026-10-05.md): API e tar mínimo exato em releases isoladas; retorno à API/worker b9 efetivos, frontend preservado; três modos novos com 25 arquivos/gates falsos, backup fresco/restore isolado PASS e template de contingência ensaiado 4/4 com efeitos injetados. Helper inalterado, somente política fresca futura; instalação/inspect e hash root-only da política anterior dependem de Deifson antes da janela. Sem contenção/restart/deploy/envio/reparo. Audiência CRM, CSV e aceite CRA-PR permanecem pendentes; ciclo avulso demo já aceito não cobre essas frentes.
+
+**Revisão b8365780 — auditoria/diagnóstico LOCAL VALIDATED / NOT DEPLOYED.** Intenção, transporte efetivo, modo e motivo preservados em registros existentes de protocolo/Inbox/automação; falha Meta identificada corretamente, com submissão única comprovada. Provas dirigidas e hashes finais no [adendo](reviews/automation-freeform-window-release-af26/REACTIVE_TRANSPORT_CONTINGENCY_LOCAL_2026-10-05.md#adendo--revisão-dirigida-de-b8365780). Sem novo deploy, envio ou configuração produtiva.
+
+**Contingência reativa HYBRID/AUTO — LOCAL VALIDATED / NOT DEPLOYED (05/10).** [Contrato, componentes e provas](reviews/automation-freeform-window-release-af26/REACTIVE_TRANSPORT_CONTINGENCY_LOCAL_2026-10-05.md). Protocolo, respostas da Inbox e automações DB-backed usam o resolvedor existente por intenção; somente desconexão Web comprovada, identidade híbrida compatível e janela legítima permitem seleção prévia Meta. Revalidação antes da submissão; nenhum fallback/retry após resultado incerto ou recusa. Campanhas/templates seguem Meta-only, início Web mantém autorização separada. API e backport do worker mínimo precisam ser implantados coordenadamente em decisão futura; frontend não muda. Sem alteração produtiva/configuração/saneamento. Campanhas/CRA: CRM/CSV e demais provas continuam aguardando owner; SECULT e DB-only encerradas, inatividade no Guia pausada, quatro históricos separados e reparo de setembro CLOSED. Limitação de resposta automática já submetida permanece separada da frente maior pendente.
+
+**b9 — ciclo avulso controlado completo PASS / OWNER CONFIRMED (05/10).** [Continuação final4366/Campanha teste out.7](reviews/automation-freeform-window-release-af26/HYBRID_B9_CONTROLLED_VALIDATION_2026-10-05.md#continuação-do-mesmo-ciclo--atendimento-humano-confirmado): claim atribuiu AGENT do tenant/HUMAN-IN_PROGRESS no mesmo setor/ciclo; protocolo Web SENT recebido; resposta humana Inbox **Meta** SENT recebida, sem duplicação ou renovação indevida de inbound. Aceite restrito a este ciclo, não integral da release/CRA. Próxima prioridade: owner validar Audiência CRM e Importação CSV/variantes reutilizando provas locais; nenhum novo envio autorizado por inferência. Claim com janela fechada/status concorrente continuam não exercitados. Históricos isolados e preservados; sem deploy/reparo.
+
+**b9 — retorno híbrido controlado PASS / OWNER CONFIRMED (05/10), escopo limitado.** [Caso demo-converta final4366/Campanha teste out.7](reviews/automation-freeform-window-release-af26/HYBRID_B9_CONTROLLED_VALIDATION_2026-10-05.md): envio Meta manteve janela fechada; resposta Web reutilizou mesma Conversation/runtime, abriu janela legítima e preservou Atendimento Geral/Fila Geral, sem menu/duplicação Contact/Lead. Owner confirmou leitura Inbox e Assumir disponível. Runtime histórico preservado intacto, sem saneamento; claim backend/protocolo, Meta puro, outras modalidades e corrida de status continuam NOT EXERCISED nesta prova. Não declarar aceite integral b9/af26 ou CRA. Sem novo deploy/reparo/configuração; demais pendências preservadas.
+
+**b9/V4 — DEPLOYED TECHNICALLY / OWNER VALIDATION PENDING (05/10).** [Registro efetivo](reviews/automation-freeform-window-release-af26/HYBRID_B9_CAPTURE_DEPLOYED_2026-10-05.md). API b9 e worker mínimo do tar atestado liberados ao tráfego, frontend af26 preservado. Sequência única 15:26:55–15:27:35 UTC, contenção ~34s, sem retorno/start repetido/recusa privilegiada. Capturas preservadas e renovadas antes de unfence; guarda aberta geração29, scheduler habilitado preservado, quatro sessões connected/cinco auth, health/DB/controle worker e leitura Inbox/CRM pelo owner PASS. Cron/crontab/boot/saved/fallback/barreira restaurados. Histórico preparado abaixo permanece como histórico, não estado atual. Nenhum reparo histórico/envio/migration/restore produtivo. Aceite funcional híbrido e Campanhas/CRA pendentes; SECULT encerrada, Guia inatividade pausado, setembro CLOSED. Preparação consumida não pode ser reexecutada.
+
+**b9/V4 — composição 183b integrada em preparação nova (05/10), PREPARED FOR INSTALLATION / NOT DEPLOYED.** [Relatório único, hashes, ensaios e comandos](reviews/automation-freeform-window-release-af26/HYBRID_B9_CAPTURE_COMPOSITION_PREPARED_2026-10-05.md). Logger em window e três modos, manifests de 25 arquivos, recaptura limitada antes de unfence, backup/restore fresco conferido. Helper/tar/API b9 inalterados. Ensaio encontrou gates ausentes na contingência: geração com cinco gates falsos e negação do retorno antes de ação root corrigidas/testadas. Política nova não instalada; nenhuma janela. Produção API879/workeraf26/frontendaf26, guarda aberta geração 27 e scheduler preservado. Campanhas/CRA e aceite funcional b9 pendentes; SECULT encerrada, inatividade no Guia pausada, históricos intactos e reparo de setembro CLOSED.
+
+**b9/V4 — lacunas da tentativa de 05/10 CORRIGIDAS LOCALMENTE / NOT DEPLOYED.** [Código, hashes e provas dirigidas](reviews/automation-freeform-window-release-af26/CAPTURE_RENEWAL_LOCAL_2026-10-05.md). Todas as ações privilegiadas preservam stdout/stderr completos e exit code em log privado, resumo sanitizado no journal. Ida/retornos renovam captura antes de unfence após duas observações consistentes, preservando cada arquivo anterior; PID/ticks/daemon/release/árvore/guarda/barreira reconferidos, R/S não é identidade. Recaptura e retry pré-delete limitados; churn, leitura incompleta, substituto e descendente negam. Helper/sudoers e pacote funcional b9 inalterados. Validação desta revisão: 13 novos testes por injeção, 23 regressões, quatro casos do adaptador e 25 verificações PM2/Node reais (nft/fases simulados), sem reatribuir provas históricas. Causa da primeira recusa produtiva continua desconhecida por ausência de stderr persistido. Produção API 879/worker af26/frontend af26, sem nova preparação/janela ou saneamento. Próximo passo é revisão/integrar em preparação nova; Campanhas/CRA e aceite b9 pendentes, SECULT encerrada, setembro CLOSED.
+
+**b9/V4 — tentativa de 05/10 concluída em RETURNED TO COMPATIBLE SOURCE / b9 NOT DEPLOYED.** [Registro, checkpoints, bloqueios e retorno assistido](reviews/automation-freeform-window-release-af26/HYBRID_B9_V4_RETURN_2026-10-05.md). Helper/política d7 instalados, candidatos iniciados sob contenção, mas unfence recusado; retorno também negou captura de sockets (9→18) do mesmo worker. Captura anterior preservada; recaptura com identidade/árvore/sockets estáveis passou pelo helper intacto e concluiu retorno sem repetir starts. Produção API 879/worker mínimo af26/frontend af26 preservado; quatro sessões connected/cinco auth; health/DB/worker/Inbox/CRM PASS, guarda aberta geração 27, scheduler habilitado, saved/fallback/cron/boot/barreira restaurados. Contenção ~6min24s. Sequenciador exit 1; conclusão assistida não comprova recuperação automática. Antes de nova janela, corrigir/ensaiar renovação da captura, comparação transitória R/S e captura de stderr privilegiado; causa inicial de unfence permanece sem diagnóstico específico. Não repetir esta preparação consumida. Sem reparo/reenvio; aceite funcional b9 pendente, Campanhas/CRA aguardam owner, SECULT encerrada, setembro CLOSED.
+
+**b9 híbrido/V4 — preparação operacional nova CONCLUÍDA / PREPARED FOR INSTALLATION / NOT DEPLOYED (05/10).** [Relatório final, comandos exatos e manifestos sanitizados](reviews/automation-freeform-window-release-af26/HYBRID_B9_V4_FINAL_PREPARATION_2026-10-05.md). Bytes `39682db4` e tar validado `236c1d50…c0e98` conferidos na VPS; 13 pares da API, 7.036 arquivos/11 symlinks do worker e closure de imports passaram, sem rebuild/start. Backup novo `53560123…1fa09` restaurado em PG16 isolado; 60 migrations/checksums conferidos e bancos temporários removidos. Modos/proxy/auth/configs/bindings frescos, cinco gates falsos, frontend preservado. Pendem decisão e instalação restrita pré-janela (helper/política arquivados, hash atual da política validado por sudo, inspect novo) e reconferência imediata. Política de contingência pós-retirada usa PIDs reais futuros e exige Deifson para instalação; nenhuma credencial/sudo amplo. Produção API 879/worker af26/frontend af26, guarda aberta geração 25 e scheduler habilitado. Sem janela, reparo histórico ou reenvio; campanhas/CRA e aceite b9 aguardam owner, SECULT encerrada, setembro CLOSED.
+
+**b9 híbrido/V4 — contingência de worker ausente CORRIGIDA E ENSAIADA LOCALMENTE / NOT DEPLOYED.** [Contrato, código, patch, hashes e provas](reviews/automation-freeform-window-release-af26/HYBRID_B9_V4_ABSENT_WORKER_CONTINGENCY_2026-10-05.md). A ida normal ainda exige API/worker/frontend vivos. O retorno pós-unfence vincula a ausência do worker à identidade, árvore e sockets capturados antes de retirar a contenção e à fase root-owned; rejeita substituto, sobrevivente, identidade divergente e observação incompleta. Ensaios: 33/33 helper/sequenciador, PM2 6.0.14/Node 20.20.0 reais isolados, 4/4 adaptador e 5/5 renovação. Nft/cron/systemd/DB do driver seguem simulados; nenhuma janela ou instalação ocorreu. Requer revisão independente e preparação nova com helper/política e backup/restore frescos antes de qualquer contenção. Produção permanece nas últimas versões confirmadas API 879/worker mínimo af26/frontend af26; aceite b9 pendente. Campanhas/CRA aguardam owner, quatro registros históricos intactos, reparo de setembro CLOSED.
+
+**b9 híbrido/V4 — nova preparação 05/10 STAGED / NOT DEPLOYED; janela BLOQUEADA pela contingência de worker ausente.** [Relatório único, hashes, backup/restore e sequência](reviews/automation-freeform-window-release-af26/HYBRID_B9_V4_REPREPARATION_2026-10-05.md). O tar exato SHA `236c1d50…c0e98` foi conferido antes da extração na VPS; 7.036 arquivos, 11 symlinks e imports alcançáveis verificados sem rebuild. API b9, retorno API 879/worker af26 e frontend preservado estão vinculados a modos novos, sem provas usadas. Backup fresco e restauração isolada passaram. O retorno pós-barreira com ambos candidatos vivos está preparado; se o worker cair, helper/política atuais exigem origem viva e impedem nova contenção, como na falha anterior. Fechar e ensaiar esse ramo antes de janela. Produção continua API 879/worker mínimo af26/frontend af26, guarda aberta; nenhum dos quatro registros históricos foi reparado ou reenviado. Campanhas/CRA e aceite funcional do novo 6683 seguem pendentes; reparo de setembro CLOSED.
+
+**b9 híbrido / V4 — pacote e procedimento corrigidos LOCAL VALIDATED / NOT DEPLOYED (04/10).** [Relatório, pacote/manifesto, patch e ensaios](reviews/automation-freeform-window-release-af26/B9_PACKAGE_AND_V4_PROCEDURE_FIX_2026-10-04.md). O worker mínimo final inclui o bridge compilado e Prisma Client gerado ausentes do pacote falho; o tar exato foi extraído limpo, iniciou em Node 20.20.0 com controle HTTP e passou retorno híbrido sobre DB sintético. Renovação de prova consumida, diagnóstico privado pré-start e validação dividida pelo bloqueio nft de 3001 foram corrigidos/ensaiados. Falha persistente pós-unfence exige política/preparação frescas e retorno coordenado; nenhuma janela foi aberta. Produção segue API `879cb1fa`, worker mínimo af26 e frontend af26. 6683 histórico permanece intacto, reparo de setembro CLOSED; campanhas/CRA aguardam aceite do owner.
+
+**Novo 6683 — auditoria do retorno híbrido da campanha (04/10), defeito delimitado / sem mutação.** [Relatório sanitizado, contrato, código e decisões](reviews/automation-freeform-window-release-af26/INCIDENT_6683_HYBRID_CAMPAIGN_RETURN_AUDIT_2026-10-04.md). `Campanha teste out.6` salvou Atendimento Geral/Fila Geral e criou Conversation/runtime Meta com janela corretamente fechada; o inbound do mesmo número público de atendimento entrou por WEB_SESSION como variante do destinatário sem nono dígito e criou outra Conversation/runtime e outro Contact/Lead. O handler Web seleciona `(clientId, waId)` exato e iniciou o fluxo por não encontrar o runtime humano Meta. O contrato híbrido exige Conversation canônica; dedupe inbound não vincula o outbound Meta ao remetente variante. Classificado como defeito de continuidade para o caso comprovado, não como configuração incompatível ou regressão introduzida pela API `879cb1fa`. Corrigir/validar identidade sem juntar por sufixo ou inferir alias ambíguo; nada foi reparado ou reenviado. Aceite parcial da janela fechada/UI preservado, claim backend e retorno híbrido pendentes; reparo de setembro CLOSED.
+
+**Validação dirigida do novo 6683 em 04/10 — parcial / OWNER VALIDATION PENDING.** [Evidência por cenário](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_DEPLOY_2026-10-03.md#prova-dirigida-parcial--04102026-demo-converta): campanha avulsa Meta `Campanha teste out.6`/`data_exame`, final 6787 sob controle do owner, manteve janela fechada sem inbound e a UI negou “Assumir”, sem atribuição/aviso. A resposta posterior entrou em conversa WEB_SESSION distinta, com identificador canônico de 12 dígitos versus 13 no destinatário Meta; abriu a janela Web e percorreu automação até HUMAN/WAITING. O seed da campanha continha retorno a Atendimento Geral/Fila Geral. Claim backend, retorno à conversa Meta e status tardio durante intervenção humana não foram exercitados. Investigar associação híbrida de identidade/conta e destino separadamente, sem inferir igualdade pelo sufixo ou repetir campanha/anonimização para forçar PASS. Nenhum saneamento/reenvio; caso histórico e reparo de setembro preservados.
+
+**Novo 6683 — executor V4 sequencial CORRIGIDO LOCALMENTE / NOT DEPLOYED.** [Plano, código, ensaios e delegação restrita para revisão](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_SEQUENCED_REVIEW_2026-10-03.md). A tentativa de 03/10 fechou a guarda 15→16, mas parou antes de preflight/contenção porque o estado persistido usa `tasks: {}` e o executor exigia `[]`; o retorno automático reabriu a guarda em 17, com API/worker/frontend af26, cron e boot originais. A fase root-owned `aborted`, as provas e o pacote foram preservados. O delta `ee6105af` aceita coleção vazia e isola a fase por hash da política; 17/17 testes locais e 5/5 V4 anteriores, sem rebuild funcional. Nova preparação privada `incident-6683-v4-sequenced-20261003T165710Z`, gates falsos, hashes conferidos e backup/restore isolado; helper/política originais e sudoers literal estão instalados, mas a substituição root-owned revisada ainda não foi executada. API 879cb1fa não implantada; FAIL funcional novo 6683 e saneamento dos quatro registros permanecem separados.
+
+**Novo 6683 — tentativa V4 de 03/10 abortada antes da contenção; API `879cb1fa` NOT DEPLOYED.** [Registro sanitizado](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_ABORT_2026-10-03.md). A prova inicial de preflight foi emitida antes de fechar a guarda, fora da ordem prevista; a mudança de geração impediu execução e renovação. Guarda original reaberta por CAS na geração 15, processos af26 preservados, sem regra nft aplicada. Preparação anterior desabilitada; exige pacote novo e ensaio dirigido da ordem das provas. FAIL funcional 6683 e saneamento dos quatro runtimes continuam pendentes.
+
+**Novo 6683 — revisão de `67cb9a84` fechada localmente; API `879cb1fa` FOR REVIEW / NOT DEPLOYED.** [Ordem temporal, fence corrigido, 3 testes HTTP/webhook, 1 teste direto, build, dry-run de quatro linhas e pacote API isolado](reviews/automation-freeform-window-release-af26/INCIDENT_6683_REVIEW_CLOSE_2026-10-03.md). `OutboundMessage.createdAt` era posterior ao provider e à própria atividade outbound, portanto não era o início da submissão e podia admitir retorno obsoleto após intervenção humana. O novo evento `submit_started` guarda a versão operacional e o timestamp de Conversation anteriores ao provider; status atrasado só reorienta estado ainda igual. Dry-run produtivo foi somente leitura: 0604/6787 têm forte sinal, 9614 é ambíguo e 6683 tem claim posterior. Nenhum dado foi reparado. Release da API preparada em cópia isolada; frontend e worker mínimo seguem af26 ativos. Próxima decisão exige pacote V4 fresco para API **e parada/reinício coordenado do mesmo worker**, backup/restore fresco e validação funcional autorizada. FAIL produtivo do novo 6683 permanece; reparo de setembro CLOSED; WEB_SESSION e híbrido af26 NOT EXERCISED; Campanhas/CRA aguardam validação do owner.
+
+**Novo 6683 (outubro) — defeito prioritário, correção LOCAL VALIDATED / NOT DEPLOYED.** [Causa, prova e dry-run proposto](reviews/automation-freeform-window-release-af26/INCIDENT_6683_LOCAL_2026-10-03.md): template de campanha criava runtime com janela de inbound fictícia; materialização de status podia herdar default aberto. A correção local fecha esses caminhos, protege estado humano mais novo contra status atrasado e deixa falha do aviso de protocolo como `failed`, sem retry. PostgreSQL isolado e testes focados passam; publicação para revisão não é deploy nem saneamento dos quatro runtimes observados. FAIL produtivo do novo caso 6683 permanece. Reparo homônimo de setembro segue CLOSED; WEB_SESSION e híbrido af26 NOT EXERCISED; Campanhas/CRA aguardam validação funcional do owner.
+
+**af26 pós-deploy — OWNER VALIDATION PENDING; divergência de janela no demo.** [Matriz PASS/FAIL/NOT EXERCISED e leitura dirigida](reviews/automation-freeform-window-release-af26/POST_DEPLOY_ACCEPTANCE_2026-10-03.md). API/worker/frontend estáveis, quatro WEB_SESSION conectadas; WEB_SESSION, META_CLOUD com inbound e híbrido API→WEB ainda sem prova funcional af26. Em `demo-converta`, conversa nova final 6683 originada por campanha foi assumida sem aviso porque o runtime indicava janela aberta sem inbound persistido; Meta rejeitou aviso de protocolo com 131047, outbound `FAILED`. Quatro conversas de campanha recentes no tenant têm esse sinal local; só 6683 tem rejeição comprovada. Sem reenvio/reparo/deploy. Reparo histórico 6683 continua CLOSED; classificação enganosa `protocol.notice.sent` com status FAILED é preexistente. Campanhas/CRA permanecem separados.
+
+**af26 V4 — DEPLOYED TECHNICALLY / OWNER VALIDATION PENDING (03/10 UTC).** [Registro sanitizado da janela, backup/restore, versões, horários e limites](reviews/automation-freeform-window-release-af26/V4_WINDOW_RESULT_2026-10-03.md). API/frontend af26 e worker exclusivamente mínimo af26 foram implantados; guarda voltou aberta geração 13, scheduler habilitado, três processos online sem restart, cron/boot e PM2 saved/fallback restaurados. Owner confirmou sessão, Inbox e CRM em leitura. O marco de escalonamento de 15 minutos foi atingido sem bypass. Fluxo af26, META_CLOUD puro e híbrido API→WEB permanecem sem aceite funcional nesta janela; campanhas/CRA aguardam validação do owner. Entradas de PREPARED/NOT DEPLOYED abaixo são históricas e não descrevem mais a versão ativa.
+
+**af26 V4 — PREPARED FOR WINDOW / NOT DEPLOYED (03/10 UTC).** [Preflight, hashes, backup/restore, estado e limites](reviews/automation-freeform-window-release-af26/V4_PREFLIGHT_RESULT_2026-10-03.md); [plano/receita corrigida](reviews/automation-freeform-window-release-af26/V4_INSTALL_AND_WINDOW_PLAN_2026-10-03.md). Observador root e sudo literal instalados e atestados contra docker-proxy vivo 29.2.1; quatro modos privados vinculados à configuração/auth atual e manifests íntegros, todos os gates de execução falsos. Backup novo e restore local isolado passaram; nenhuma release foi trocada e produção segue com guarda/scheduler no estado inicial. A primeira checagem de imports interrompeu a instalação por uma receita excessivamente restrita; a receita foi corrigida sem mudar helper nem privilégio. Próxima janela ainda exige autorização, reconfirmação imediata de executor único, proxy/conexões, trabalhos/sessões, backup e controles. Shutdown antigo não comprova drain retroativo de inbound/outbound/auth; risco residual permanece decisão do owner. Campanhas/CRA e provas funcionais de transporte seguem separadas.
+
+**af26 V4 — pacote operacional e testes PUBLICADOS PARA REVISÃO / NOT DEPLOYED (03/10 UTC).** [Testes 45/35/3/13 com distinção simulação/integração/injeção](reviews/automation-freeform-window-release-af26/v4-tests/README.md), [instalação e sequência executável](reviews/automation-freeform-window-release-af26/V4_INSTALL_AND_WINDOW_PLAN_2026-10-03.md), [manifesto final](reviews/automation-freeform-window-release-af26/OPERATIONAL_DB_OWNER_SET_V4_MANIFEST.json). Três candidatos remotos íntegros foram rechecados e quatro modos estáticos montados em root novo, sem provas/configurações privadas antigas. Docker Engine 29.2.1/`docker-ce` e hash em disco confirmados; vínculo com executável do proxy **vivo** depende da leitura root do helper antes da contenção. Faltam revisão independente, instalação sudo mínima, binding/preflight e autorização de janela. Campanhas/CRA e provas funcionais de transporte permanecem separadas.
+
+**af26 — V4 de propriedade coletiva LOCAL INTEGRATED / FOR REVIEW / NOT DEPLOYED (03/10 UTC).** [Pacote operacional revisável](reviews/automation-freeform-window-release-af26/OPERATIONAL_DB_OWNER_SET_V4_LOCAL_2026-10-03.md), [patch](reviews/automation-freeform-window-release-af26/operational-db-owner-set-v4-20261003.patch), [manifesto](reviews/automation-freeform-window-release-af26/OPERATIONAL_DB_OWNER_SET_V4_MANIFEST.json). O V3 e V4 são observações pontuais; a exigência de admissão DB atomicamente fechada da proposta anterior foi substituída pelo contrato real de executores/coordenador existentes. Quatro modos e renovação usam a mesma checagem; 45 testes de pacote, 35 de prova, três integrados e 13 adversos locais passaram em seus escopos. Restam revisão independente, instalação/atestado do observador root de leitura fixa e binding fresco antes de outra autorização de janela. Produção segue no conjunto compatível; nenhum processo, sessão ou configuração foi alterado. Campanhas/CRA e validações de transporte pendentes permanecem separadas.
+
+**Prova de conjunto af26 — LAB REPRESENTATIVO / NÃO PROMOVIDA (03/10 UTC).** [Contrato e resultados](reviews/automation-freeform-window-release-af26/DB_PROXY_SET_PROOF_SPEC_2026-10-02.md). Docker 29.2.1 rootless privado, bridge, porta publicada, `docker-proxy` e API compilada com DB sintético: conjunto estável 3/3/3/3 permitido; cliente extra, conexão direta/incompleta e advisory lock negados. O par individual não é necessário para a propriedade de exclusividade do processo sob proxy 1:1 e inventário exaustivo, mas falta leitura privilegiada delimitada na VPS e há janela temporal entre última amostra e start na qual um cliente DB local pode surgir. O modelo não é gate aprovado; V3/af26 seguem bloqueados e NOT DEPLOYED. Quatro modos/renovação não foram integrados ao protótipo. Leitura separada encontrou acompanhamento BOT ligado em `cra-pr` desde 30/09 18:14 UTC por ADMIN do próprio tenant, além de Syer; não foi alterado nem convertido em aceite CRA-PR. Entradas históricas de exclusividade Syer abaixo refletem somente o instante original.
+
+**Release af26 — V3 BLOQUEADO / NOT DEPLOYED (leitura 02/10).** [Auditoria do docker-proxy e reconfirmação factual](reviews/automation-freeform-window-release-af26/DOCKER_PROXY_ATTRIBUTION_AUDIT_2026-10-02.md): os três processos efetivos continuam nas releases compatíveis b66/ba66/worker mínimo b66, com hashes ativos e candidatos íntegros. O banco está atrás do `docker-proxy`; o executor não lê seus FDs, e o par individual backend→socket da API não é exposto. O ensaio local detectou cliente adicional no proxy, mas não reproduziu Docker/bridge completo. Decidir se prova exaustiva do conjunto satisfaz o contrato ou se vínculo individual continua obrigatório; ensaio representativo e privilégio delimitado seriam necessários antes de qualquer V4/janela. Guarda aberta/zero tasks não é drain. Leitura agregada mostrou Syer e mais um tenant com acompanhamento BOT ligado, contrariando a afirmação documental de ativação exclusiva; reconciliar sem mudar configuração nesta frente. Campanhas/CRA, META_CLOUD puro e híbrido API→WEB conservam suas pendências.
+
+**Protocolo operacional af26 corrigido localmente em 02/10: LOCAL VALIDATED / NOT DEPLOYED.** [Relatório, hashes, ensaio e leitura de impacto](reviews/automation-freeform-window-release-af26/OPERATIONAL_PROTOCOL_FIX_2026-10-02.md). Quatro modos compartilham identidade estável PID/tempo de início e renovação de prova por nonce/arquivo novo, sem relaxar os 300 s nem apagar histórico; 78/78 testes locais com relógio controlado. A leitura produtiva somente agregada encontrou zero inbound/outbound persistidos na contenção, 37 eventos operacionais e três falhas de notificação realtime de recibo; não elimina resultados externos incertos. Pendente revisão/empacotamento em nova janela; af26 continua NOT DEPLOYED. Campanhas/CRA e demais frentes mantêm estado anterior.
+
+**Janela posterior 02/10 - af26: RETURNED TO COMPATIBLE RELEASES / NOT DEPLOYED.** [Registro sanitizado](reviews/automation-freeform-window-release-af26/WINDOW_RETURN_2026-10-02.md). Após backup fresco/restauração isolada e saída comprovada do par antigo, a prova de start do candidato expirou. O retorno `return-partial` restaurou API b66, worker mínimo b66 e frontend ba66, com guarda/scheduler/cron/boot no estado inicial e Inbox/CRM conferidos pelo owner. Um comparador operacional de identidade confundiu `R→S` com restart; correção restrita foi aplicada somente ao verificador privado de recuperação, com originais preservados e nova prova do worker. **Não promover af26** sem corrigir e reensaiar o protocolo de prova/identidade no pacote revisado e abrir uma janela nova. META_CLOUD puro/API→WEB produtivos seguem não exercitados; Campanhas/CRA conservam pendências anteriores. A entrada seguinte registra a tentativa anterior, distinta, bloqueada antes de contenção.
+
+**Janela autorizada 02/10 - af26: BLOCKED BEFORE CONTAINMENT / NOT DEPLOYED.**
+[Registro e preservacao](reviews/automation-freeform-window-release-af26/ACTIVATION_ATTEMPT_2026-10-02.md).
+Preparacao/bindings fechados em 9947af77; tentativa imediata bloqueada por
+autenticacao sudo indisponivel no preflight nft. Releases/PIDs originais e health
+DB OK, guarda/cron/supervisao preservados. Sem backup fresco da janela, parada,
+troca ou retorno; exige contexto privilegiado autenticado e reconfirmacao fresca,
+nao nova autorizacao do owner nem relaxamento de barreiras. META_CLOUD puro e
+API->WEB pendentes; Campanhas/6683 e demais encerramentos preservados, P2 pausado.
+
+**Preparacao corrigida 02/10 - af26: ISOLATED BUILDS / RESTORE / SMOKE VALIDATED / NOT DEPLOYED; ACTIVATION BLOCKED.** [Resultado e limites](reviews/automation-freeform-window-release-af26/REMOTE_CUMULATIVE_PREPARATION_2026-10-02.md). Receita real: bf5+f06+912+patch final cumulativo, sem aplicar b66 separado; 408/408 fontes e 99/99 compilados iguais ao worker testado, protecoes b66/fence atomico preservadas. Builds API/frontend/worker PASS; backup persistente fresco com 614 objetos, restore local verificado/60 checksums e smoke isolado simulado 3/3. Artefatos ativos/PIDs/guarda/cron/supervisao preservados. Leitura final encontrou 2 jobs/1 lease e contagens de configuracao/sessoes diferentes dos validadores historicos: ativacao exige reconciliacao justificada e preflight fresco, sem relaxar gates ou limpar registros. Sem swap/restart/migration/envio real; META_CLOUD puro/API->WEB produtivos e owner permanecem pendentes. Retencao de snapshots segue pendencia separada; Campanhas, 6683 e demais encerramentos preservados; Guided Builder pausado. Entradas anteriores abaixo sao historicas.
+
+
+**Preparacao 01/10 - release af26f48a freeform window: PREPARED FOR REVIEW / NOT DEPLOYED.** Pacote versionado em `docs/reviews/automation-freeform-window-release-af26/`: patch API/frontend `sha256=833637589c65625c8cba09ee3f0802daa912b2068ebbd1648bb92ad1fe41ed61`, manifesto `af26f48a`, composicao produtiva lida (`ba66c241` frontend, `b66bb89a` API, worker minimo `bf5+f06+912+b66`) e worker minimo com patch final `worker-freeform-window-gate-20261001.patch` `sha256=ab1080df3804b35479a179425bf664db79b0f0caec50f5dd00f97cdac0c1c566`. Runbook exige backup fresco, restauracao verificada, contencao/barreira de saida, builds backend/frontend/worker minimo e retorno para releases isoladas atuais com DB/auth atuais. Sem release swap, restart, guarda/cron, ativacao, migration, provider call ou envio real. Validacoes produtivas META_CLOUD puro e hibrido API->WEB permanecem pendentes e separadas.
+
+
+**Fechamento local 01/10 - API->WEB pelo receiveWebhook: LOCAL VALIDATED / NOT DEPLOYED.** Base local `2daa2b459a0d20727cb97e2895a2059e50dd49e4` na branch `review/campaign-recovery-20260926`, preservando `b66bb89a` e o worker minimo ja validado. Delta minimo no handler integrado `receiveWebhook`: quando o chatbot prepara resposta e a janela fecha antes do envio WEB/hibrido, o backend reverte apenas campos de progresso dependentes da resposta com `updateRuntimeIfUnchanged`, mantendo inbound, respostas recebidas, template-needed e operacoes independentes legitimas; intervencao concorrente continua protegida pelo fence. A prova agora e integrada, nao de funcao extraida: `webhookApiWebWindow.test.ts` passa pelo payload Meta + `receiveWebhook`, confirma zero provider call/outbound SENT e no recuperavel no caso `window_closed`; tambem expira a janela imediatamente antes da revalidacao do sender sem escrita no runtime e comprova CAS `restored=true`; com intervencao humana concorrente, comprova CAS `restored=false` preservando o estado humano; confirma envio WEB simulado + conclusao terminal com janela aberta. Regressao dirigida: `webhookApiWebWindow.test.ts` 4/4; `automationOwnActivity.test.ts` + novo teste 21/21; backend build PASS; `git diff --check` PASS. Sem reabrir worker, producao, provider real, envio real, schema/migration ou deploy; validacoes produtivas META_CLOUD puro e hibrido API->WEB permanecem pendentes.
+
+
+**Complemento local 01/10 - janela WhatsApp, templates e WEB automatico: LOCAL VALIDATED / NOT DEPLOYED.** Base local `4f8f9869ab44cac0f46557b94ae0ef1d8699452d` na branch `review/campaign-recovery-20260926`, preservando `b66bb89a` e os registros de 339c7947/4b78bdde. UI e templates ja validados anteriormente permanecem no lote; este complemento corrige os achados de auditoria: `sendPassiveOutboundText` nega runtime ausente (`window_unavailable`), janela invalida (`window_invalid`) e expiracao apos preparo (`window_closed`) antes do provider; BOT WEB trata explicitamente `window_closed` de `sendWebSessionBotText`, registra `web_session.bot_reply.not_sent` e nao persiste avanco dependente de resposta nao enviada; caller integrado preserva estado recuperavel sem reset/retry cego; prova dirigida expira a janela apos preparar resposta com mudanca de no e confirma no banco zero envio e ausencia de avanco dependente da mensagem. Backport minimo do worker fica em `docs/reviews/automation-worker-backport/worker-freeform-window-gate-20261001.patch` (`sha256=ab1080df3804b35479a179425bf664db79b0f0caec50f5dd00f97cdac0c1c566`), sem bundles. Evidencia local nova: `automationOwnActivity.test.ts` 19/19, foco `campaignsFeatureRoutes.test.ts` 1/1, backend build PASS, worker minimo build PASS, prova dirigida dos compilados do worker PASS (`botWindowExpired`, `ownActivityB66`) e prova de corrida `updateManyFindUniqueBarrier` PASS apos reproduzir a falha; hashes registrados no manifesto. A tentativa exploratoria da suite historica compilada completa nao e gate desta correcao, pois inclui fixtures anteriores ao contrato de janela; cobertura aprovada aqui e dirigida aos modulos alcancados. Sem producao, provider real, envio real, schema/migration, commit, push ou deploy; META_CLOUD puro/API->WEB produtivos seguem pendentes.
+
+**Complemento local 30/09 - auditoria 339c7947, templates/readiness e inatividade: LOCAL VALIDATED / NOT DEPLOYED.** Base local `339c794748716c2e12c790e0530a3a71210d17b8` na branch `review/campaign-recovery-20260926`, preservando `b66bb89a`. Delta minimo: template de Inbox nao infere capacidade Meta pelo provider da conversa; UI carrega modelos/readiness do tenant e nao oferece template quando nao ha modelo utilizavel; backend permite template fora da janela sem exigir Assumir, mantendo RBAC/departamento/categoria/opt-out/readiness. Inatividade revalida janela no `sendBotText`; quando a janela expira entre claim e envio, registra skip tecnico sem declarar mensagem enviada, sem reset/retry cego e preservando transicao operacional legitima. Worker minimo: modulos alterados sao alcancaveis pelo processo `re7-whatsapp-agent`; busca de imports nao mostrou alcance direto por `apps/whatsapp-web-worker`, portanto sem backport nesta etapa. Evidencia local: `campaignsPageContract.test.ts` 30/30, `chatbotInactivityProcessor.test.ts` 12/12, rotas focadas Inbox/template 4/4 e `automationOwnActivity.test.ts` 15/15. Builds finais backend/frontend PASS. Sem producao, provider real, envio real, schema/migration, commit, push ou deploy; META_CLOUD puro e hibrido API->WEB seguem pendentes de validacao produtiva separada.
+
+
+**Atualização local 30/09 - gate único de janela livre Inbox/WEB/híbrido: LOCAL VALIDATED / NOT DEPLOYED.** Base auditada `e3f4e1f1fd4ad41312bb1ccfe2516a08c1e2bbfc` na branch `review/campaign-recovery-20260926`, contendo `b66bb89a`. Delta local bloqueia Assumir antes de mutação quando a janela WhatsApp está fechada; bloqueia texto livre, mensagem pronta e mídia na Inbox também em WEB_SESSION/HYBRID; revalida protocolo e inatividade antes do provider; preserva CRM/RBAC, responsável/lifecycle já assumido, templates aprovados e exceção estrita Contact Start WEB. UI expõe janela fechada e não sugere template em WEB_ONLY. Testes locais: `conversation.service.test.ts` 5/5, `automationOwnActivity.test.ts` 15/15, teste focado `inbox routes WhatsApp web session outbound through worker without Meta fallback` PASS, backend build PASS, frontend build PASS. Suíte completa `campaignsFeatureRoutes.test.ts` continua limitada por divergência separada do caso legado `campaign send creates inbox conversation...`; não foi tratada nesta frente. Sem schema/migration, produção, provider real, envio real, commit, push ou deploy. Suspensão Demo permanece hipótese sem causalidade atribuída. Mídias em templates Utility/Marketing continuam entrega separada.
+**Observação dirigida 30/09, até 10:15 UTC — Syer WEB recuperado; META_CLOUD puro e híbrido API→WEB NÃO EXERCITADOS.** [Incidente e alcance da leitura](saas/AUTOMATION_RUNTIME_SELF_WRITE_INCIDENT_2026-09-29.md): quatro inbounds naturais WEB_SESSION de SECULT-PE tiveram quatro outbounds `SENT` e runtime BOT com flow/nó persistidos; não equivalem a aceite funcional SECULT nem exercitam as duas vias pendentes. Nenhum novo evento de auto-invalidação nos logs atuais até 10:09 UTC. Consultas encerradas; retomar apenas com caso natural conhecido ou interação controlada indicada pelo owner. Sem novo deploy ou mudança de prioridade: campanhas/CRA aguardam validação funcional do owner; inatividade Guia pausada; 6683 CLOSED.
+
+**Atualização operacional 30/09, 02:30 UTC — correção 91230f88 DEPLOYED TECHNICALLY / INCIDENT OPEN.** [Troca, backup, validações e limites](saas/AUTOMATION_RUNTIME_FIX_ROLLOUT_2026-09-30.md). API b66bb89a e worker mínimo com backport específico efetivos; frontend ba66 preservado; guarda e scheduler no estado inicial. Prova dirigida em Syer via WEB_SESSION concluída: dois outbounds SENT, nó menu persistido e owner confirmou avanço sem repetição. META_CLOUD puro e híbrido API→WEB permanecem não exercitados; incidente aberto para esses limites.
+
+**Atualização 30/09 — incidente 91230f88: PREPARED / NOT DEPLOYED / INCIDENT OPEN.** [Plano operacional e backup fresco verificado](saas/AUTOMATION_RUNTIME_FIX_PREPARATION_2026-09-30.md): API b66bb89a + worker mínimo com backport específico preparados; frontend atual permanece. Decisão final da janela, troca com barreira de saída e prova funcional de avanço em Syer ainda pendentes. META_CLOUD e híbrido não exercitados após correção permanecem pendentes. Campanhas/CRA seguem aguardando validação funcional do owner.
+
+## Incidente prioritário 91230f88 — correção local para revisão, 29/09/2026
+
+**INCIDENT OPEN IN PRODUCTION / FIX LOCAL VALIDATED / NOT DEPLOYED.** [Matriz de todos os tenants, causa, testes e retorno compatível](saas/AUTOMATION_RUNTIME_SELF_WRITE_INCIDENT_2026-09-29.md). Syer: escrita própria de atividade outbound invalidava updatedAt e impedia persistir avanço. Tendência: conflito correlacionado com encaminhamento humano legítimo; não atribuído ao loop. Demais tenants inventariados, sem prova de ocorrência no período observado.
+
+Fix mantém CAS e reconhece apenas a escrita própria condicional; protege tenant/identidade, ciclo, inbound e transições humanas. API inclui projeção de identidade Meta condicional; worker exclusivamente mínimo bf5+f06+912 com patch específico de quatro fontes. 15 casos integrados API; caso Meta/IA revalidado após projeção; 14 aplicáveis no worker Node20.20.0, também nos compilados; 89 regressões afetadas PASS, sem somar reexecuções. Backend tipado PASS; worker --noCheck PASS e 13 diagnósticos --noEmit idênticos à base, sem aprovação integral de tipos.
+
+Publicação somente para auditoria; nenhum restart, alteração da guarda/scheduler, fluxo, transporte ou runtime produtivo. Retornos estreito/abrangente e riscos estão no incidente, sem execução autorizada nesta etapa. Recuperação exige avanço persistido após publicação controlada, não health. Chave Automação permanece ligada somente em Syer; sua validação não equivale a CRA. Resposta automática tardia e frente maior pendente continuam separadas. Campanhas/CRA aguardam owner; SECULT e DB-only encerradas; inatividade Guia pausada;6683 CLOSED.
+
+
+## Syer — acompanhamento ativado, validação parcial; regressão de consentimento separada
+
+**ACTIVATED IN SYER / FUNCTIONAL VALIDATION PARTIAL.** [Setter/auditoria, verificações e limitações](saas/SYER_AUTOMATION_ACTIVATION_2026-09-29.md). Tenant canônico `syer-rodrigues`, confirmado pelo owner; sequência ADMIN true→false→true, estado final ligado somente nele. Owner relatou leitura por papel e filtro SUPERVISOR zerado na revogação; anexos restritos, novos eventos realtime e intervenções reais não receberam PASS produtivo. Nenhum atendimento assumido/encaminhado; leitura preservou fingerprint de controle. Demais tenants não ativados. Não equivale a aceite CRA-PR.
+
+**Regressão a corrigir separadamente:** no WEB_SESSION, atividade do próprio outbound altera updatedAt e invalida o token91230f88; persistência do avanço do chatbot é rejeitada e o consentimento reinicia. Código/logs/estado do caso autorizado + reprodução sintética em DB local confirmaram o mecanismo. Não corrigir removendo proteção humana nem trocar pelo worker completo; requer ajuste dirigido e cobertura do outbound simulado/conflitos nos artefatos API/worker mínimo. Nenhuma correção ou deploy nesta etapa. Limitação de resposta automática tardia permanece distinta. Campanhas/CRA aguardam owner; SECULT encerrada; inatividade Guia pausada;6683 CLOSED.
+
+## Release Automação implantada — 29/09/2026, Fortaleza
+
+**DEPLOYED / AUTOMATION NOT ACTIVATED.** [Execução, versões, backup, retorno e limites](saas/AUTOMATION_ROLLOUT_2026-09-29.md). API/frontend ba66c241 (funcional d06a92b8); worker exclusivamente mínimo bf5+f06+backport91230f88. Correção912 separada do acompanhamento BOT. `allowAutomationConversationsInInbox` permanece false/ausente em todos; nenhum tenant ativado. Owner confirmou sessão, Inbox, CRM e configurações em leitura; não equivale a aceite funcional de Automação. Contenção de 3min20; processos antigos/sockets ausentes e barreira DB/locks zero antes do sucessor. Sessões preservaram 3 connected / 1 disconnected / 1 pending; risco residual inbound/outbound/auth não é eliminado por essa contagem. Guarda reaberta na geração 7, scheduler preservado e dois ciclos naturais observados; crons/boot/saved/fallback restaurados com referências compatíveis. Registros anteriores de NOT DEPLOYED permanecem históricos, superados apenas quanto ao deploy técnico por esta entrada.
+
+Escritores compatíveis e retorno a3/minimal-f06 preservados; rollback não restaura DB/auth antigos nem autoriza dois proprietários. Respostas automáticas em andamento seguem limitação separada, sem promessa de cancelamento. Campanhas/CRA aguardam validação funcional do owner; ativação/aceite BOT posteriores; SECULT encerrada/aceita; inatividade no Guia pausada; DB-only encerrada; 6683 CLOSED.
+
+## Automação — preparação remota concluída, janela pendente
+
+**PUBLISHED FOR REVIEW / NOT DEPLOYED.** [Evidências de releases, backup fresco e restauração isolada](saas/AUTOMATION_RELEASE_PREPARATION_2026-09-29.md). Pacote API/frontend ba66c241 mantido; worker mínimo f06+912 separado. Configs privadas resolvidas sem início; restore local PASS/60 checksums, banco temporário removido. Guarda/scheduler/processos/sessões preservados; Automação desligada. Pendem início/fim da janela, horizonte de escalonamento/retorno e aceite do risco residual inbound/outbound/auth. Entradas históricas abaixo preservam o estado de cada etapa; não representam pendência atual de preparar releases/backup. Campanhas/CRA aguardam owner; SECULT encerrada.
+
+## Automação — plano de publicação controlada, aprovação pendente
+
+PUBLISHED FOR REVIEW / NOT DEPLOYED. [Plano ba66c241 e worker mínimo91230f88](saas/AUTOMATION_RELEASE_PLAN_2026-09-29.md): pacotes locais verificados, Prisma compatível sem migration; produção só lida. Pendentes backup fresco/restauração, releases/configs remotas, janela/fim e decisão sobre risco residual do worker; não confundir zero tarefas com drain. Ownership individual lock→PID não comprovado pela projeção disponível, barreira conservadora obrigatória antes do sucessor. Deploy com chave Automação false; ativação tenant/aceite posteriores. Sem mudança de guarda/scheduler/cron/boot nesta preparação. Campanhas/CRA aguardam validação funcional do owner; inatividade Guia pausada; limitação de resposta automática separada; SECULT encerrada;6683 CLOSED.
+
+## Automação — publicação para auditoria GitHub
+
+**PUBLISHED FOR REVIEW / NOT DEPLOYED.** Código até d06a92b8, mantendo c6884100 e 91230f88 separados; [pacote versionado do worker mínimo e relatório final](reviews/automation-worker-backport/README.md). Sem deploy, ativação ou novos testes nesta publicação. Limitação de respostas automáticas separada; Campanhas/CRA aguardam owner, inatividade no Guia pausada.
+
+## Automação — auditoria dirigida de c6884100
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Confirmados e corrigidos localmente: evento BOT restrito após CLOSED escapava para caminho humano; leitura REST podia usar grant BOT após handoff fora do vínculo. Proveniência do evento preservada e checkpoints nos builders/antes de JSON e mídia. 4 novos testes dirigidos PASS e build backend PASS; sem repetir suítes anteriores. [Reprodução, correção e limites da autorização](saas/INBOX_AUTOMATION_LOCAL_2026-09-29.md#auditoria-dirigida-posterior-a-c6884100--corridas-de-leitura). Correção separada de c6884100/91230f88; sem push/deploy/ativação. Respostas automáticas em andamento são limitação técnica separada. Campanhas/CRA aguardam validação funcional do owner; inatividade no Guia continua pausada.
+
+## CRA-PR — acompanhamento BOT, escopo final local
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Decisão do owner substitui o gate departamental abaixo: SUPERVISOR/ADMIN do próprio tenant, sem vínculo departamental para leitura, somente filtro Automação, fora de TODAS; AGENT sem exceção. Default false, gestão ADMIN, helper transacional (36 escritores). [Implementação, provas e limites](saas/INBOX_AUTOMATION_LOCAL_2026-09-29.md). Código sobre 91230f88, revisão final aprovada para commit local separado, sem push/deploy. Matriz de operações e roteiro funcional registrados no relatório; código byte-idêntico ao validado.
+
+**Limitação técnica separada, sem redefinir a frente maior pendente:** coordenação entre intervenção humana e resposta automática em andamento; não resolvida pela chave de acompanhamento nem pela proteção de persistência 91230f88. Sem cancelamento prometido. Campanhas/CRA aguardam validação funcional do owner; SECULT encerrada; inatividade no Guia pausada; 6683 CLOSED.
+
+## Acompanhamento BOT — verificação departamental sobre 91230f88
+
+**BLOCKED BEFORE IMPLEMENTATION**, conforme gate do owner. O contrato humano compara departamento/vínculo, sem marcador de confirmação, mas não estabelece autorização BOT por fallback Meta ou contexto de nó/opção do chatbot compartilhado com WEB_SESSION. “Destino confirmado” era condição proposta, não regra comprovada do resolvedor. [Evidência e decisão concreta](saas/INBOX_AUTOMATION_VISIBILITY_PROPOSAL_2026-09-29.md#verificação-do-contrato-departamental--etapa-local-sobre-91230f88): definir se departamento persistido, inclusive fallback/contexto, autoriza acompanhamento; alternativa mínima é ADMIN-only até essa definição, sem criar marcador. Nenhuma implementação/ativação, nem delta no worker.
+
+Correção automação × rodízio 91230f88 preservada separadamente, somente revisão. SECULT encerrada; campanhas/CRA aguardam validação funcional do owner; inatividade no Guia pausada; 6683 CLOSED.
+
+## Automação × rodízio e acompanhamento BOT — 29/09/2026
+
+- **Defeito automação × rodízio: correção LOCAL VALIDATED / NOT DEPLOYED**, publicação somente para revisão. Distribuição exige controle humano; conclusão obsoleta não apaga transição concorrente. 115 testes afetados PASS e refinamento de 13 reexecutado; worker mínimo Node20 validado com seleção de 15 casos. Limites de tipagem, storage legado e resposta automática tardia explícitos no [relatório](saas/AUTOMATION_QUEUE_RACE_LOCAL_2026-09-29.md). O guard de envio não demonstra exclusão de toda intervenção humana: revisar contrato antes de ampliar a correção.
+- **Acompanhamento BOT: PROPOSTA, NÃO IMPLEMENTADA.** Reutilizar filtro Automação e Inbox, chave ADMIN/default false, leitura por escopo departamental e intervenção separada. [Matriz, caminhos e decisões](saas/INBOX_AUTOMATION_VISIBILITY_PROPOSAL_2026-09-29.md).
+- **Preexistente separado:** realtime SUPERVISOR tem caminho amplo por tenant. Novos eventos BOT não podem herdar esse alcance; autorização BOT indispensável não autoriza reformulação geral de eventos humanos.
+
+SECULT DEPLOYED / CLIENT ACCEPTED conforme relato do owner. Campanhas/CRA aguardam validação funcional do owner; inatividade no Guia pausada; DB-only encerrada; 6683 CLOSED. Nenhuma mudança produtiva nesta frente.
+
+## Fechamento SECULT — confirmação do owner em 29/09/2026
+
+**DEPLOYED / CLIENT ACCEPTED.** Deifson informou: “SECULT aprovou. Já está
+utilizando a nova atualização.” Ativação e uso registrados conforme esse relato;
+não foram informados horário, executor da ativação ou casos específicos exercitados.
+A confirmação do cliente é distinta das verificações técnicas e testes locais.
+A pendência de ativação registrada na janela anterior fica superada pelo relato,
+sem reescrever sua evidência histórica ou afirmar nova leitura técnica da chave.
+Permanecem os limites de shutdown, tipagem e rollback documentados; escritores
+compatíveis são necessários para preservar a garantia de concorrência.
+Campanhas/CRA aguardam validação funcional do owner; inatividade no Guia pausada;
+DB-only encerrada/aceita; 6683 CLOSED. Telegram e DELIVERED/READ separados.
+
+
+## Estado vigente — janela SECULT de 29/09/2026
+
+**Código implantado; ativação SECULT e aceite funcional pendentes.** API/frontend
+`a3d16d4b`, worker mínimo `bf5f1d76` + cinco fontes `f06d49cb` (pacote `042e386a`).
+[Fechamento técnico, backup, horários, limites e retorno](saas/SECULT_ROLLOUT_2026-09-29.md).
+Campanhas reabertas (geração 5), scheduler observado; Inbox/CRM confirmados pelo
+owner. Chave permanece desligada em todos os tenants: falta sessão legítima ou
+grant de suporte existente para o setter SECULT. Sem contorno de RBAC/SQL.
+Compatibilidade de API/worker/scripts deve ser mantida; retorno a escritores antigos
+perde a garantia concorrente. Primeira interrupção autorizada não comprova drain
+retroativo do worker. Campanhas/CRA aguardam validação funcional do owner; DB-only
+encerrada, inatividade no Guia pausada, 6683 CLOSED. Registros abaixo preservam
+o escopo e o estado histórico de cada etapa.
+
+
+## SECULT — publicação para revisão após Node20 — 29/09/2026
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Node v20.20.0 exato: 65 módulos carregados sem
+entrypoint, 104 testes PASS (29+45+30), dependências inalteradas. [Provas e limites](reviews/secult-worker-persistence/NODE20_RESULTS.md).
+Material somente para revisão: patch de cinco fontes, receita/manifesto, proposta
+de parada e plano. G1 revisão/configuração e G2 parada continuam abertos. Primeira
+interrupção não tem drain comprovado; sem implementação de shutdown. Campanhas/CRA
+aguardam owner; legados sem prova não precisam ser liberados; 6683 CLOSED.
+
+
+## SECULT — backport escolhido, pacote fonte reproduzido — 29/09/2026
+
+**REVISÃO LOCAL / NOT DEPLOYED.** Direção do owner: worker mínimo sobre bf5f1d76;
+cinco fontes f06 separadas da API/frontend. Reconstrução limpa pelos lockfiles:
+92 compilados idênticos. [Diff exato, manifesto e proposta completa](reviews/secult-worker-persistence/README.md).
+G1 revisão/runtime alvo e G2 parada continuam abertos. Nova correção de shutdown não
+implementada; primeira interrupção antiga tem risco próprio, sem prova retroativa.
+Retorno preferencial compatível+chave false não se confunde com API antiga sem SECULT,
+que perde garantia de persistência. Legados sem comprovação não precisam ser
+liberados; sem backfill/inferência/corte temporal. Campanhas/CRA aguardam owner.
+
+
+## SECULT — alternativa mínima do worker e gate de parada — 29/09/2026
+
+**AVALIAÇÃO LOCAL CONCLUÍDA / G1 E G2 ABERTOS / NOT DEPLOYED.** Base bf5f1d76
+reproduz 91 JS do bundle real e todos os 65 módulos alcançáveis; pacote/lock/tsconfig
+idênticos. Backport experimental de cinco fontes exatas de f06 altera somente quatro
+módulos + helper; recomendado para revisão em lugar dos 21 módulos do worker completo.
+45 regressões e 30 testes de concorrência PASS; tipagem mantém 13 erros, logs de
+44 linhas idênticos baseline/backport. Builds --noCheck não aprovam tipos.
+
+Quatro ensaios dirigidos reproduzem a **falha do shutdown atual**: libera ownership
+com socket/inbound/outbound/auth pendentes; store de auth pode reportar falha ignorada
+pelo adapter; timeout não é rejeição comprovada. Não existe drain seguro demonstrado.
+Proposta mínima de admissão/contagem, conclusão auth e fechamento de transporte antes
+de liberar lock apresentada, **não implementada**. Não encerrar HUMAN para deploy.
+
+Rollback feature-aware exige todos os escritores compatíveis; voltar à API antiga
+nega CLOSED, porém perde garantia de persistência e exige exclusão de snapshots
+antigos antes de qualquer retorno à funcionalidade. Reprodução confirma que escritor
+antigo restaura true revogado. Nenhuma produção alterada ou nova implementação SECULT.
+[Comparação, artefato, ensaios, proposta de parada e retorno](saas/SECULT_DEPLOY_PLAN_2026-09-29.md).
+Campanhas/CRA aguardam owner; DB-only encerrada; Guia inatividade pausado; 6683 CLOSED.
+
+
+## SECULT — preparação de implantação a3d16d4b — 29/09/2026
+
+**PREFLIGHT READ-ONLY / ARTEFATOS LOCAIS / NOT DEPLOYED.** API/frontend efetivos
+e8ebd776; 2.020 hashes conferidos. Worker: checkout 5ee2de6b, mas módulos compartilhados
+compilados mais antigos; 21 módulos alcançáveis diferentes/novos no candidato,
+incluindo fila operacional, origem CRM e normalização além da dependência SECULT.
+**Gate material:** revisar delta adicional do worker e comprovar parada/retorno
+WEB_SESSION antes de aprovar janela. Guarda de campanhas não drena todo o worker.
+Três WEB_SESSION conectadas; fila/agendamentos vazios são fotografia, não quiescência.
+Chave ausente nos dez tenants; nenhuma ativação. Builds isolados API/frontend/worker
+passaram, sem converter --noCheck em aprovação de tipos ou aceite produtivo.
+[Plano único: versões, delta, artefatos, backup, sequência, retorno e gates](saas/SECULT_DEPLOY_PLAN_2026-09-29.md).
+Backup fresco e restauração desse dump ficam para janela autorizada; não realizados
+agora. Implantação de todos os escritores compatíveis precede ativação separada
+somente secult-pe. Rollback legado perde garantia, exige revogação/exclusão de
+escritores antigos. Campanhas/CRA aguardam owner; DB-only encerrada, Guia inatividade
+pausado, 6683 CLOSED. Sem commit/push/deploy/restart/cron/admissão nesta preparação.
+
+
+## SECULT — decisão departamental aplicada localmente — 29/09/2026
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Owner definiu vínculo departamental atual
+obrigatório ao departamento do snapshot do encerramento. Perda efetiva do vínculo
+revoga consulta; departamento ausente/inativo não concede exceção. Helper único
+reutiliza resolvedor canônico com fallback legado, sem estender dispensa de assignee
+atual ao responsável histórico. Lista, contagens, detalhe, timeline, mídia e realtime
+cobertos; ativos e SUPERVISOR/ADMIN preservados. Mesma Inbox/filtro/histórico.
+
+Código final: **31/31 testes afetados PASS**, build TypeScript backend PASS e smoke
+AGENT autenticado com revogação do vínculo e remoção automática do painel/lista.
+UI usa polling existente, com atraso visual e sem promessa de revogação instantânea
+do conteúdo já exibido. Novas consultas/entregas são negadas. Duas correções anteriores
+revalidadas na suíte. As 112 provas/smoke anteriores ficam como histórico, sem
+reatribuição integral ao delta; limites de tipagem frontend/worker preservados.
+[Decisão, provas e limites](saas/SECULT_OWN_CLOSED_LOCAL_2026-09-28.md). Sem commit/push/deploy/ativação.
+API/worker/scripts compatíveis exigidos antes de ativar; rollback a escritores
+antigos perde a garantia. Campanhas/CRA aguardam owner; DB-only encerrada, inatividade
+no Guia pausada; 6683 CLOSED. A pendência departamental abaixo foi resolvida por esta
+nova decisão; registros anteriores preservados como histórico.
+
+
+## SECULT — revisão local de 48e0fc2a — 29/09/2026
+
+**CORREÇÕES LOCAIS VALIDADAS / NOT DEPLOYED; decisão departamental pendente.**
+Falha isolada da nova permissão nega CLOSED sem derrubar os caminhos ativos da
+Inbox; erros gerais continuam propagados. Realtime separa invalidação por conversa
+e por tenant: handoff de B preserva mensagem pendente de A; transferência/reentrada
+na própria conversa e revogação continuam protegidas. Reprodução: 3 falhas em seis
+casos antes; 6/6 depois. Regressões afetadas 25/25 e build TypeScript backend PASS.
+As 112 provas e smoke anteriores permanecem históricas, sem reatribuição integral
+ao delta. UI/worker não alterados nem novamente validados nesta revisão.
+
+Não foi encontrado contrato explícito estendendo a exceção departamental do assignee
+atual ao responsável histórico. A afirmação documental anterior foi corrigida;
+regra não alterada silenciosamente. Owner deve definir se perda de vínculo revoga
+consulta própria CLOSED antes de preparar deploy. [Detalhes, referências e evidências](saas/SECULT_OWN_CLOSED_LOCAL_2026-09-28.md).
+API/worker/scripts compatíveis continuam necessários; rollback para escritores
+antigos perde garantia de revogação. Campanhas/CRA aguardam owner; DB-only encerrada,
+inatividade no Guia pausada; 6683 CLOSED. Sem commit/push/deploy ou ativação.
+Os registros anteriores abaixo descrevem as respectivas etapas históricas.
+
+
+## SECULT — funcionalidade local sobre f06d49cb — 28/09/2026
+
+**LOCAL VALIDATED / NOT DEPLOYED.** Consulta AGENT de sua conversa atualmente CLOSED,
+chave `allowAgentOwnClosedConversations=false` por default, gestão SUPERVISOR/ADMIN
+na página Inbox existente. Snapshot comprova o responsável do encerramento atual;
+sem arquivo por ciclo, nova categoria ou permissão operacional. Dependência de
+persistência continua em commit separado. Entrega local de 28/09 preservada;
+publicação exclusivamente para revisão autorizada em 29/09, sem deploy/ativação.
+
+Provas: HTTP/DB/socket **10/10**, persistência com setter real **37/37**, regressões
+**65/65**; builds backend/frontend PASS. Worker build --noCheck PASS; tipagem estrita
+mantém 13 erros preexistentes. Tsc frontend amplo mantém 22 diagnósticos idênticos à
+base. Smoke autenticado confirma configuração, Encerradas, consulta, controles
+bloqueados e revogação do painel. [Implementação, matriz e limites](saas/SECULT_OWN_CLOSED_LOCAL_2026-09-28.md).
+
+API, worker e scripts precisam ser compatíveis antes da ativação; retorno a escritores
+antigos perde a garantia de revogação. Campanhas/CRA aguardam validação funcional do
+owner; DB-only encerrada/aceita, inatividade no Guia pausada, 6683 CLOSED. Sem produção.
+Revisão de publicação: 22 arquivos; comparação completa das 40 linhas dos 22
+diagnósticos frontend idêntica à base f06d49cb, mesmas dependências/compilador,
+zero diagnóstico novo. Código validado sem mudanças; 112 provas e smoke reutilizados.
+CI push restrito a main/develop; Vercel desabilitado na branch de revisão.
+Os registros anteriores abaixo preservam o estado histórico de cada etapa.
+
+
+## Persistência compartilhada — dependência local separada — 28/09/2026
+
+**LOCAL VALIDATED / NOT DEPLOYED.** [Implementação, provas e limites](saas/SECULT_CLOSED_CONFIG_CONCURRENCY_PROPOSAL_2026-09-28.md).
+34 escritores substitutivos migrados para lock transacional + leitura/transformação
+atual; criação concorrente sem sobrescrita e no-op de linha ausente protegidos.
+Rodízio decide após releitura sob lock; sem alteração de algoritmo, autorização
+WEB_SESSION ou identidade híbrida. Sem schema/migration ou configuração SECULT.
+
+Validação: **185/185** na suíte afetada e **22/22** do worker simulado; builds de
+backend/worker e typecheck dos três scripts PASS. Build worker canônico usa
+--noCheck; não representa typecheck integral. Evidências privadas preservadas.
+Implementação local encerrada; publicação somente para revisão autorizada depois,
+sem deploy/produção. Revisão adicional: worker estrito falha com 13 diagnósticos
+idênticos ao parent; tipagem integral NÃO APROVADA, sem correção alheia. Backend e
+scripts alterados checados. Rodízio conserva corpo de decisão/selector e ordem
+advisory → config → runtime. P2002 preexistente propaga HTTP 400 com código/mensagem
+Prisma após rollback, sem retry. Retorno a escritores antigos elimina a garantia;
+rollback futuro, especialmente após SECULT, exige tratamento explícito da permissão.
+
+SECULT continua **NOT IMPLEMENTED / NOT DEPLOYED**, aguardando revisão desta
+validação e implementação funcional própria. O bloqueio por persistência está
+tratado localmente, sem declarar garantia em produção. API, worker WEB_SESSION
+(escritor via fontes compartilhadas) e scripts precisam usar a correção para essa
+garantia valer; escritor antigo ainda pode restaurar JSON obsoleto. Rollout separado.
+
+Pendência preexistente separada: `/admin/tenants` com update vazio preserva config,
+mas disputa de criação pode retornar P2002; rota não alterada, sem perda de dados
+no teste. Não confundir com criação segura do novo helper. Campanhas/CRA aguardam
+retorno funcional do owner; DB-only aceita; Guia inatividade pausado; 6683 CLOSED.
+
+O registro SECULT abaixo é o histórico da parada/proposta anterior, preservado;
+“não implementado/validado” naquele registro não é o estado atual desta dependência.
+
+## SECULT — consulta AGENT de CLOSED — 28/09/2026
+
+Delimitação técnica posterior: [proposta compartilhada de persistência](saas/SECULT_CLOSED_CONFIG_CONCURRENCY_PROPOSAL_2026-09-28.md).
+Inventário: 35 pontos/9 arquivos, sendo 34 substitutivos e um create-only seguro.
+Proposta: helper transacional com lock da linha de configuração e transformação
+do JSON fresco; migrar 34 escritores, sem alterar decisões de domínio. Sem nova
+tabela/migration. Ainda não implementado/validado; SECULT mantém o bloqueio.
+Reprodução anterior íntegra; nenhuma mudança produtiva ou de prioridade CRA.
+
+**BLOCKED BEFORE IMPLEMENTATION / NOT DEPLOYED.** Frente prioritária; Guia
+inatividade pausado. Requisito: allowAgentOwnClosedConversations=false por default,
+gestão SUPERVISOR/ADMIN na configuração Inbox existente, consulta da conversa
+atualmente CLOSED pelo responsável comprovado em CompletedServiceSnapshot.
+Sem nova tela/categoria, arquivo ou segmentação de mensagens por ciclo; histórico
+e privacidade existentes preservados. Reentrada remove somente essa exceção;
+nenhuma permissão operacional, alteração de distribuição/lifecycle ou ampliação
+de inboxVisibilityPolicy ADMIN-only.
+
+Impedimento local reproduzido em PostgreSQL isolado, dados sintéticos e duas
+conexões: saveAgentSignatureSettings leu config com chave true; outra conexão
+confirmou false; o upsert do salvador real restaurou true com o JSON antigo.
+Os salvadores atuais substituem o documento inteiro; não há proteção concorrente
+reutilizável nesse caminho. Escritores de rodízio e WEB_SESSION também compartilham
+o JSON. Proteger apenas o novo setter não resolve; é necessário tratar a escrita
+concorrente das chaves compartilhadas, preservando as decisões de distribuição.
+
+Aplicada a parada exigida por ampliação material. Próximo passo depende de
+delimitar essa proteção como pré-requisito local, sem mudar armazenamento aprovado
+nem aceitar revogação insegura. Nenhum código funcional alterado; reprodução
+confirma falha existente, não PASS da funcionalidade. Evidências privadas em
+local-evidence/secult-own-closed-20260928/RESULT_REPORT.md; sem produção, providers,
+envio, build/smoke, commit/push/deploy. Realtime amplo e divergência lista/detalhe
+registrados separadamente, sem alegar resolução. DB-only permanece aceita;
+campanhas/CRA implantadas aguardam validação funcional de Deifson. 6683 CLOSED.
+
+
+## Atualização produtiva — flows DB-only — 28/09/2026
+
+**DEPLOYED / CLIENT ACCEPTED — correção de flows DB-only.** Backend/frontend
+`e8ebd776` implantados por procedimento controlado, com backup fresco restaurado
+em DB local isolado, fechamento/drain e reabertura geração 3. Campanhas abertas,
+scheduler observado em dois ciclos; worker/sessões e dados preservados. Owner
+confirmou sessão, Inbox, CRM e leitura de flows. Na validação técnica, não foram
+gravados fluxos reais nem provocados envios. Em 28/09/2026, Eduardo confirmou:
+“Funcionou, obrigado Deifson” (relato encaminhado pelo owner). Aceite funcional
+restrito à correção de gravação DB-only implantada em `e8ebd776`; não identifica
+operações ou modos exercitados e não comprova as quatro combinações Guia/Avançado.
+Não constitui aceite global CRA nem validação integral de lotes.
+[Registro único, backup, rollback e limitações](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#deploy-técnico-da-correção-de-flows-db-only--28092026).
+Os estados LOCAL VALIDATED / NOT DEPLOYED abaixo são históricos da publicação
+para revisão. Quatro PASS locais preservados: Guia criar/editar e Avançado
+criar/editar. Avisos React key e Next/workspace separados, sem correção incidental.
+6683 CLOSED; Telegram e DELIVERED/READ permanecem separados.
+
+
+## DB-only chatbot flow writes — 2026-09-28
+
+Publicação para revisão autorizada em 28/09/2026, exclusivamente na branch
+`review/campaign-recovery-20260926`, sem deploy. Os registros “sem commit/push”
+abaixo descrevem a etapa local anterior. Código testado conferido por SHA-256;
+apenas esta nota documental foi acrescentada para publicação. Quatro PASS
+preservados: Guia criar/editar e Avançado criar/editar. Status continua
+**LOCAL VALIDATED / NOT DEPLOYED**; aviso React key permanece separado.
+Auto-deploy desabilitado para esta branch em `vercel.json`; workflow CI com
+push restrito a main/develop. Evidências privadas e estado operacional excluídos.
+
+
+Status desta correção: **LOCAL VALIDATED / NOT DEPLOYED**. Sem commit/push,
+sem aceite CRA e sem alteração produtiva. Base `01989157`, branch
+`review/campaign-recovery-20260926`, worktree persistente
+`tmp/worktrees/re7-campaign-recovery-20260926`; contém `a1cc380e` e preserva
+fila/guarda de campanhas. Checkout do worker não foi usado como base.
+
+Defeito separado do encerramento de visibilidade de 15/09 (`363ce3ab`):
+POST/PUT de `/app/chatbot/flows` exigiam entrada no JSON legado, embora GET e
+configurações suportassem Client somente no banco. Não atribuir contagens
+HTTP globais ao CRA. Nenhuma nova investigação ou consulta produtiva nesta etapa.
+
+Correção mínima: após auth/ADMIN/Client ativo/feature chatbot, as duas rotas
+usam o tenant legado ou `buildDbBackedTenantFallback(client)`. O helper e
+`resolveAutomationFlagsSettings` não foram alterados: flags persistidas no DB
+continuam prioritárias, inclusive sobre JSON permissivo. Defaults existentes
+permanecem; `disableChatbot` não equivale a bloqueio de edição;
+`operationalServiceMessages` não libera nem bloqueia edição de flows.
+
+O carregador legado já ocultava erros de leitura/validação. Foi adicionada
+leitura estrita opt-in, usada apenas por essas duas rotas: lê novamente o
+arquivo, não confia em cache de fallback e propaga falha não-ENOENT. Arquivo
+inexistente mantém o default existente; entrada ausente admite fallback por
+Client; JSON corrompido, mapa inválido/vazio ou erro de leitura bloqueiam a
+gravação com erro seguro. Não grava cadastro/configuração como efeito colateral.
+O comportamento dos demais consumidores permanece inalterado.
+
+UX: mensagens PT-BR pelo tratamento central para permissão, bloqueio,
+definição/referência inválida, recurso indisponível e falha interna. O smoke
+Avançado revelou reformatação do JSON antes da resposta; removida essa
+reescrita nas duas ações para preservar literalmente o texto não salvo na
+falha. Builder/modos, transações e semântica de entryPoint não foram redesenhados.
+
+Provas locais (DB dedicado `re7_flow_db_only_20260928`, loopback:55432, schema
+copiado do banco local auditado sem dados; fixtures sintéticas):
+
+- Controle negativo restaurando somente as condições antigas: reproduziu
+  `404 tenant_not_found`; código corrigido restaurado byte a byte em finally.
+- Teste focado de rotas: 7/7 PASS (pai + seis subcasos).
+- Regressão de rotas chatbot: 14/14 PASS (oito testes principais, seis subcasos).
+- Suítes unitárias afetadas finais: 164/164 PASS; inclui leitura estrita 4/4.
+- Casos negativos com comparação de todas as linhas de ChatbotFlow antes/depois:
+  RBAC AGENT/SUPERVISOR, cliente inativo/inexistente, feature desabilitada,
+  bloqueio DB, referências estrangeiras, definição inválida, resolvedor falho,
+  arquivo ilegível/corrompido e falha de escrita dentro da transação após demissão
+  do entryPoint anterior. Nenhum fluxo/entryPoint alterado nesses casos.
+- Tenant legado, leitura SUPERVISOR, defaults sem criação de configuração,
+  edição com mensagens operacionais desligadas e isolamento preservados.
+- Build backend PASS; build frontend final PASS; `git diff --check` PASS.
+
+| Smoke autenticado com ADMIN DB-only | Rota real | Resultado |
+| --- | --- | --- |
+| Guia — criar | POST /app/chatbot/flows | PASS |
+| Guia — editar existente, inclusive texto de menu | PUT /app/chatbot/flows/:id | PASS |
+| Avançado/JSON — criar | POST /app/chatbot/flows | PASS |
+| Avançado/JSON — editar existente | PUT /app/chatbot/flows/:id | PASS |
+
+Em cada combinação: falha real por configuração local inválida (500), mensagem
+segura, conteúdo de campos preservado e DB inalterado; retirada da falha,
+mesmo payload salvo, recarga/reabertura e conferência de name/definition/
+isActive/entryPoint no DB. Guia e Avançado usam os mesmos handlers, comprovado
+por captura local das requisições. No Guia, criação manteve flags default
+false/false; edição exercitou flags e alteração de menu. Não houve reconstrução
+de fluxo existente para forçar sucesso. Avançado preservou inclusive JSON
+não formatado após falha.
+
+Evidências persistentes no worktree: `local-evidence/flow-db-only-20260928/`
+(RESULT_REPORT, logs, snapshots JSON, capturas, patch e hashes). Sem dados CRA,
+provider real ou envio; API local sem bootstrap de schedulers/integrações,
+fetch externo bloqueado e contador do smoke zero. Não há schema/migration.
+
+Limites: validação sintética local, sem aceite dos usuários CRA ou implantação;
+não cobre todos os tipos possíveis de fluxo nem altera os contratos de runtime.
+O histórico de visibilidade permanece CLOSED/DEPLOYED/CUSTOMER VALIDATED;
+esta entrega de gravação ainda exige revisão e autorização de publicação.
+6683 CLOSED; Telegram, DELIVERED/READ → HUMAN/WAITING e validação de lotes
+permanecem separados, sem nova alegação de PASS.
+
+Aviso visual separado: console React indicou key ausente em lista do
+ChatbotFlowBuilder, que não foi alterado nesta correção. Não bloqueou os quatro
+smokes; não se declara console integralmente limpo nem se corrige o builder
+incidentalmente.
+
+Pendência separada: inventariar futuramente os demais consumidores de tenants
+legados e seu fallback permissivo. Não houve auditoria geral nem correção
+incidental desses caminhos; a opção estrita não foi ativada globalmente.
+
+
+## Inicio efetivo e ensaio operacional local — 2026-09-26
+
+Status: LOCAL ROLLOUT / SUSPENDED ROLLBACK REHEARSED; NOT DEPLOYED / OWNER UI PENDING.
+Base `fedef1e1965aa6a1e53222426c6b55424e2d83fa`, branch
+`review/campaign-recovery-20260926`; historico e owner PASS anteriores preservados.
+
+- `effectiveStartedAt` passa a ser preenchido somente quando nulo, sob lock do
+  grupo; materializacao/recuperacao preservam o valor. `job.startedAt` continua
+  informando o claim do lote/tentativa, ja exposto pela API/UI. Nenhum ajuste visual.
+- Testes focados: os dois casos reproduziram a sobrescrita e passaram apos a
+  correcao (2/2); fila afetada 8/8; build backend PASS. Sem repetir suites amplas,
+  build frontend ou smokes anteriores.
+- Cluster PostgreSQL local separado, `127.0.0.1:55434/re7_rollout_local`, com
+  ambiente limpo e provider em memoria. Base `6d664d0b`: 59 migrations e tres
+  campanhas antigas; migrate deploy aplicou apenas a fila, totalizando 60.
+  Campanhas antigas preservadas; checksum da migration conferido com Prisma.
+- Falha injetada apos migration/antes da ativacao: runtime sem permissao de
+  campanhas e admissao fechada; zero jobs criados. Banco migrado foi mantido.
+- Codigo novo processou fila; pausa drenou uma chamada com aceite conhecido.
+  Morte de outro processo apos submissao, antes da resposta local, deixou uma
+  pendencia explicitamente marcada needs_review. Snapshot sem filhos sobreviveu
+  a interrupcao e alteracao do CRM.
+- Rollback ensaiado **com processamento suspenso**, ingresso HTTP em manutencao
+  e papel runtime sem privilegios nas tabelas. Runner real de `6d664d0b` recebeu
+  permission denied; zero provider. Jobs, leases, snapshots, resultados e demais
+  registros permaneceram iguais no intervalo do rollback. Health nao foi usado
+  como prova de rollback funcional; o backend antigo nao e uma alternativa de envio.
+- Retorno exclusivo ao novo codigo: dois grupos completos, quatro aceites
+  conhecidos, uma submissao incerta ainda retida e zero duplicacoes entre cinco
+  submissoes simuladas. Todos os jobs/eventos anteriores e o inicio original dos
+  grupos foram preservados. Admissao permaneceu fechada ao final do ensaio.
+- Drift: 16 objetos do inventario anterior identicos antes/depois; diff somente
+  leitura igual ao ja registrado, sem diferenca nas tabelas de fila. Nao impede
+  este rollout aditivo, desde que defaults/indices/constraints sejam preservados.
+  Nenhuma correcao incidental de drift, down migration, reset ou limpeza de filas.
+
+Procedimento, condicoes de parada e limites: RUNBOOK_WHATSAPP_AGENT.md, secao
+"Ensaio operacional local da fila — procedimento executado". Evidencias preservadas
+em `local-evidence/recovery/rollout-local/`, incluindo tres dumps e manifestos.
+Pendencias para decisao: validar cercas/permissoes e parada de todas as instancias
+no ambiente alvo, reconciliacao de pendencias incertas, owner UI e aceite CRA.
+Nao houve deploy, banco/provider de producao ou envio real. DELIVERED/READ →
+Conversation/HUMAN/WAITING continua separado; reparo 6683 CLOSED.
+
+## Correcoes da revisao Git 109c9f15 — 2026-09-26
+
+Status: LOCAL REVIEW FIXES VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+Base desta correcao: `109c9f1544003750d29930bd7b10ce6a4cf50c03`, branch
+`review/campaign-recovery-20260926`. Historico `6d664d0b` e owner PASS do lote
+anterior preservados; esta nota nao concede aceite CRA nem prontidao para deploy.
+
+- CSV: grupo, filhos, seeds e resultado idempotente na mesma transacao; falha
+  no segundo filho deixa zero registros. Retries concorrentes produzem um unico
+  conjunto. Chave vinculada ao tenant/operacao/hash do payload; conflito = 409.
+- Estados: locks de grupo preservam pausa/cancelamento/needs_review; falha
+  impeditiva bloqueia os proximos lotes, inclusive rejeicao recebida apos pausa.
+  Cancelado nao vira completed. Dinamica sem filhos pode pausar/retomar.
+- Fila: tenants ocupados excluidos antes do limite; um candidato por tenant,
+  ate 20 por consulta (teto 100), rechecado sob lock. Caso com 25 jobs antigos de
+  A nao impede B; exclusividade e continuidade contra avulsa/test-send mantidas.
+- Dinamica: recuperacao reutiliza o snapshot persistido, mesmo com CRM alterado;
+  filhos e enqueue sao atomicos. Recuperacao do intervalo legado filhos/sem jobs
+  nao duplica filhos nem snapshot. Apenas controlador sem provider recupera lease.
+- UI/API: Enviar conjunto agora exige confirmacao e RBAC, entra na mesma fila,
+  e retry nao duplica jobs. Agendamento futuro permanece sem antecipacao.
+
+Validacao final: 13/13 focados novos; suites afetadas de campanhas **198/198**
+(fila 8, runner 10, revisao 11, rotas 128, importacao 7, exclusao 5, UI 29),
+compostas por 188 casos fora do runner e sua repeticao final 10/10; Webchat 17/17.
+Builds backend/frontend PASS. Smoke visual de confirmar/recusar envio agregado,
+pausa, retomada e cancelamento PASS; zero outbound/provider. Nao houve repeticao
+da bateria visual anterior. Evidencia local: `local-evidence/recovery/review-fixes/`.
+
+A primeira suite teve interrupcao SIGKILL do runner durante diagnostico de I/O
+JSON; as demais suites passaram. A repeticao isolada revelou dois testes longos
+com relogio congelado emitindo leases vencidas. Fixture corrigida para tempo
+atual, sem reduzir audiencia, assertions ou concorrencia; runner final 10/10.
+O build expos tipagem incorreta da nova fixture CSV e filtro startsWith sobre
+UUID no Webchat, ja presente na base. Corrigidos TemplateContext e intervalo UUID
+equivalente; quatro testes de protocolo e limites SQL locais validados. O mock
+da auditoria compartilhada foi isolado (antes tentava gravar tenant_a no DB real).
+O registro historico de build PASS nao substitui esta nova evidencia compilada.
+
+Schema/SQL migration sem alteracao; DB local `re7_recovery_audit` com 60 migrations
+concluidas e zero pendentes. Nenhum migrate adicional, db push/reset ou correcao
+de drift historico. Continuam pendentes ensaio operacional de rollout/rollback,
+owner UI, aceite CRA e drift residual inventariado no runbook. CI de push apenas
+main/develop; bloqueio Vercel da branch de revisao preservado. Sem deploy/DB de
+producao/provider real. DELIVERED/READ → Conversation/HUMAN/WAITING continua
+separada e sem alteracao funcional; reparo 6683 CLOSED.
+
+## Persistencia para revisao Git — 2026-09-26
+
+Status desta frente: TECHNICAL LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+Branch dedicada `review/campaign-recovery-20260926`, com parent/base `6d664d0b9ffcf52f5315bfeca96f0622f4d25792`.
+A base de reconstrucao foi `5d925973`; os 80 acrescimos documentais de `6d664d0b`
+foram conferidos e seu historico permanece ancestral. O owner PASS do lote anterior
+(normalizacao/settings/contraste, head funcional `5ee2de6b`) continua OWNER VALIDATED / CLOSED;
+nao se estende automaticamente a esta frente de lotes/fila.
+
+Delta e fontes foram arquivados antes da troca de branch. Reaplicacao sobre `6d664d0b`
+restaurou os mesmos 23 arquivos, com hashes conferidos; nao houve conflito funcional,
+reset/clean ou alteracao da branch original. Implementacao, testes, schema/migration,
+os quatro docs e este runbook compoem o escopo; .data, evidencias, dumps, arquivos
+compactados, credenciais e fixtures de ambiente ficam fora do Git.
+
+As 18 anotacoes UUID correspondem a tipos SQL ja existentes, sem ALTER TYPE novo.
+O inventario por objeto e impacto do drift residual anterior esta no
+`docs/RUNBOOK_WHATSAPP_AGENT.md`, secao "Drift historico residual — revisao da fila".
+Nenhum desses defaults, indices ou nomes foi corrigido nesta frente.
+
+Validacao preservada: fila/runner/rotas 144/144, apoio 41/41 e rechecagem dos casos
+falhos 4/4; builds e Prisma validados anteriormente. Sem repeticao de testes/builds
+porque esta persistencia nao muda comportamento funcional. Staging e whitespace
+sao conferidos separadamente. CI versionada: push apenas main/develop; PR apenas
+com destino main/develop. `vercel.json` bloqueia auto-deploy somente desta branch
+via git.deploymentEnabled=false para seu nome exato; demais branches inalteradas.
+Push de revisao nao autoriza merge, deploy, producao DB, provider ou envio real.
+
+Pendencias: ensaio operacional de rollout/rollback, drift residual anterior,
+owner UI e aceite CRA. Divergencia DELIVERED/READ → Conversation/HUMAN/WAITING
+permanece separada e sem alteracao funcional. Reparo 6683 continua CLOSED.
+
+## Auditoria da recuperacao — 2026-09-26
+
+Status tecnico: PRONTO PARA COMMIT DE REVISAO / NOT DEPLOYED / OWNER VALIDATION PENDING.
+Esta nota atualiza o fechamento local abaixo; nao declara prontidao para deploy ou aceite CRA.
+
+- Worktree persistente: `/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926`. HEAD detached `5d9259739754816d570470a30d52eb7eb53541bc`;
+  referencia do ultimo HEAD anterior `6d664d0b9ffcf52f5315bfeca96f0622f4d25792`
+  (branch original `zero-eligible-crm-eligibility-20260923`). Nao houve novo commit.
+- Integridade: SHA-256 do patch e tar original conferidos; ambos coincidiam com
+  o codigo no inicio desta auditoria. Replay independente das edicoes historicas
+  confirmou migration, fila, runner e testes. API/UI e consultas CRM receberam
+  as correcoes posteriores discriminadas em `local-evidence/recovery/audit/`.
+  Nao existe snapshot integral do filesystem anterior: DB e capturas perdidos
+  nao sao declarados recuperados byte a byte. Comportamentos criticos foram testados.
+- Falhas fechadas: `CompletedServiceSnapshot.clientId` text versus cast SQL uuid;
+  joins Client.id/WaPhoneNumber.clientId e Conversation.id/ConversationMetrics.conversationId
+  com uuid/text na copia parcialmente criada. Banco novo `re7_recovery_audit`,
+  127.0.0.1:55432, criado exclusivamente por `prisma migrate deploy`, corrigiu o ambiente.
+  A fixture de agendamento ja teve o `idempotencyKey` obrigatorio reposto na retomada.
+  Nenhuma assertion removida ou relaxada; concorrencia preservada.
+- Schema: 18 anotacoes `@db.Uuid` alinhadas aos tipos das migrations existentes;
+  Prisma Client 6.19.2 regenerado e semanticamente correspondente. SQL da fila intacto.
+  Diff somente leitura ainda registra defaults, indices e nomes historicos;
+  nao foi aplicado e nao ha diferenca de tipos ou estrutura da fila nesse diff.
+- Migration validada: registro anterior de 60 migrations PASS recuperado; novo
+  `migrate deploy` 60/60 PASS necessario porque o DB de teste recuperado havia
+  sido substituido por schemas divergentes. Checksums de 60 SQLs iguais ao ledger.
+  "Ensaio pendente" dizia respeito a rollout/rollback operacional, nao a falha
+  da migration. Nao foi usado db push, reset ou SQL manual nesta auditoria.
+- Testes finais: casos anteriormente falhos 4/4; fila 8/8 + runner 10/10 + rotas
+  126/126 = 144/144; importacao/exclusao/contratos UI 41/41; zero skips/falhas.
+  Backend build e prisma validate/generate PASS. Build frontend anterior preservado
+  porque UI nao mudou nesta auditoria. Os quatro smokes aprovados nao foram repetidos.
+- Contratos: 3.001 → quatro lotes, snapshot unico, variaveis CRM/CSV, isolamento por
+  tenant/exclusividade, scheduler concorrente, retomada, aceite apos perda de lease
+  e bloqueios antes do provider cobertos. Provider apenas simulado nos testes.
+- Pendencias efetivas: rollout/rollback operacional, drift residual historico de
+  defaults/indices, owner validation, aceite CRA e decisao de dominio DELIVERED/READ →
+  Conversation/HUMAN/WAITING. Divergencia de dominio permanece separada e sem alteracao
+  funcional; 6683 segue encerrado. Sem commit/push/deploy, producao DB ou envio real.
+
+## Atualizacao de recuperacao e fechamento local — 2026-09-26
+
+Status: TECHNICAL LOCAL VALIDATED / OWNER VALIDATION PENDING / NOT DEPLOYED.
+Esta atualizacao substitui, para o smoke tecnico local, as lacunas visuais
+registradas anteriormente; preserva o historico e nao representa aceite CRA.
+
+- CRM estatico: selecao/filtro, previa e confirmacao clicados na UI; 3.001
+  destinatarios persistidos em quatro filhos (1.000 / 1.000 / 1.000 / 1).
+- CRM dinamico: estimativa e confirmacao de agendamento exercitadas na UI;
+  zero filhos antes da execucao. Uma etapa do processador com relogio local
+  controlado criou o snapshot de 3.001 destinatarios/quatro filhos, sem envio.
+- CSV: upload, mapeamento, previa e confirmacao pela UI; um unico conjunto,
+  3.001 destinatarios/quatro filhos. A UI trata a resposta agrupada; timeout
+  especifico e chave de idempotencia reutilizada protegem a repeticao local.
+- Acoes agregadas: agendamento atomico dos quatro lotes, reload, pausa,
+  retomada e cancelamento confirmados no DB. Nenhum outbound foi criado.
+- Test-send ocupado: clique real com input React preenchido, mensagem PT-BR,
+  zero chamadas adicionais ao provider simulado, zero outbound e zero job novo.
+- Corrigidos limites de parametros SQL em consultas de identidades CRM/CSV e
+  exclusao operacional; a previa de campanha deixa de limitar a contagem a
+  janela inicial de 800 contatos. Leitura de audiencia limitada a 5.000.
+- Evidencias locais: `local-evidence/recovery/result-summary.json`, capturas e
+  logs no worktree persistente `tmp/worktrees/re7-campaign-recovery-20260926`.
+  Capturas antigas que estavam somente em `/tmp` nao sobreviveram ao reboot;
+  seus resultados historicos foram recuperados do registro da sessao.
+- Resultado historico da primeira retomada: builds PASS, suites 41/41 e 43/43;
+  a suite ampla entao falhou nos bancos divergentes. Essas falhas foram diagnosticadas
+  e fechadas na auditoria acima. O drift residual de defaults/indices continua documentado.
+- Sem commit, push, deploy, banco de producao ou provider real. Guided Builder
+  permanece pausado. Owner validation, aceite CRA e ensaio controlado de
+  rollout/rollback da migration continuam pendentes.
+
+
+---
+
+## FASE ATUAL DO PRODUTO
+
+Produto SaaS operacional validado com:
+
+- multi-tenant real em produção
+- Postgres como source of truth
+- campanhas assíncronas operacionais
+- controle de uso por tenant
+- UI administrativa funcional
+- onboarding via Meta validado (Embedded Signup)
+- onboarding interno assistido implementado (Sprint 26)
+- observabilidade real da Meta integrada na UI de campanhas (Sprint 28)
+- área do cliente operacional com login próprio e auto-scope (Sprint 29)
+
+---
+
+## ESTADO ATUAL
+
+Produto operacional com observabilidade real da Meta e área do cliente funcional.
+
+O onboarding interno foi implementado, porém ainda não validado com novo tenant via UI.
+
+### Campaign CRM audience split into numbered drafts - 2026-09-25
+
+Status: LOCAL PARTIAL IMPLEMENTATION / FOCUSED TEST VALIDATED / NOT DEPLOYED /
+OWNER UI PENDING / NOT CRA-READY FOR COMPLETE BATCH OPERATION. New local
+campaign draft split flow keeps the existing 1,000-recipient campaign draft
+limit and adds an explicit backend-authoritative split path for CRM audiences
+that exceed that capacity. The normal paginated preview remains a preview
+surface; the split preview/confirmation resolves the selected CRM audience
+again in the backend, same tenant, deterministic order, up to the existing
+5,000 analysis ceiling. It returns the eligible total, draft count and planned
+distribution before confirmation. Confirmation creates static draft chunks named
+`Campanha X — 01/03`, `02/03`, etc., preserving template, variable mappings and
+return destination, without sending, scheduling, Outbound, Conversation,
+Runtime or provider calls.
+
+Dynamic CRM filters are not cloned as dynamic filters across multiple drafts.
+The UI offers explicit conversion to static selection at split time and informs
+the operator that future matching contacts will not be added automatically.
+If the audience signature changes between split preview and confirmation, the
+backend returns `audience_changed` and requires review. Unsupported full-split
+post-filters such as conversation/origin/city currently block with a controlled
+message instead of truncating silently. This front is separate from the previous
+normalization/settings/contrast lot, which is already DEPLOYED / OWNER
+VALIDATED / CLOSED at functional production head
+`5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`.
+Validation on the dedicated local DB covered 1,000 existing behavior, 1,001
+split into two drafts, 3,000 split into three drafts, union/no overlap, `limit:
+25` not reducing the split set, no Outbound/Conversation/Runtime/provider side
+effects and idempotent retry. `campaignsPageContract.test.ts` 28/28 PASS,
+backend/frontend builds PASS and `git diff --check` PASS. Authenticated browser
+smoke was not exercised in this step because no isolated local frontend/session
+was available; OWNER UI validation remains pending.
+
+Audit follow-up for CRA operation above 3,000 recipients: the current local
+split is a preparation convenience, not a complete batch-campaign control
+model. Current code has these effective limits/contracts:
+
+| Modality | Current behavior | Limit / batching status | Gap |
+| --- | --- | --- | --- |
+| CRM static current preview | `Criar rascunho com audiencia` uses the eligible items already loaded by `/app/campaigns/audience-preview` | UI preview is paginated (`limit=25` in the current screen); draft route rejects `selectedLeadIds.length > 1000` | Operator can confuse preview page with complete filter result. |
+| CRM static all eligible filter | Local split preview/confirm resolves Leads directly by basic CRM filters and creates numbered static drafts | Up to 5,000 analyzed; creates independent campaigns of <=1,000 | No durable parent batch identity; unsupported full filters such as conversation/origin/city currently block. |
+| CRM dynamic schedule | Existing production contract stores `selectionMode=DYNAMIC_CRM_FILTER`; scheduler snapshots once at execution | `materializeDynamicCampaignSnapshot` queries `take: 1001` and fails `dynamic_match_limit_exceeded` over 1,000 | No dynamic batch snapshot splitting; conversion to static is optional but not equivalent to true dynamic scheduling. |
+| CSV | CSV import accepts up to `CAMPAIGN_IMPORT_MAX_ROWS = 10_000`; draft/send still constrained by campaign recipient limit | No automatic CSV split into grouped campaigns | Need chunking from validated import plan without re-parsing or duplicating recipients. |
+| Manual | Manual immediate route dedupes and rejects over 1,000 recipients | No batching | Manual remains small-list operation. |
+| Reuse | Reuses stored `draftSeed`; static/dynamic/CSV restoration depends on persisted evidence | No batch-group awareness | Reusing one numbered draft does not mean reusing the whole batch set. |
+| Send/schedule | Send/schedule operate per Campaign; scheduler claims up to 10 due campaigns per tick and starts each campaign run | `runningCampaigns` dedupes only by `campaignId`; throttle is per campaign run (`CAMPAIGN_THROTTLE_MS = 1000`) | Scheduling many chunks for the same time can multiply tenant throughput. |
+| Test-send | Sends one test message from one campaign seed using simulated or real transport depending environment | Not a batch operation | Must remain single-destination and not mark participation. |
+
+Minimum architecture recommendation for CRA-ready large audiences: introduce a
+durable `CampaignBatch`/`CampaignGroup` domain (schema migration likely needed)
+instead of using numbered names as identity. It should own the operator intent,
+tenant, source mode, filter/import signature, requested execution time,
+recipient snapshot id/version, chunk membership/order, aggregate progress,
+pause/resume/cancel state and idempotency key. For dynamic campaigns, the group
+must keep the filter until due time, create one immutable recipient snapshot at
+execution, split that snapshot into disjoint chunks, then coordinate chunk
+dispatch with a tenant-level scheduler/throughput guard. Existing Campaign,
+seed, runner, opt-out, operational exclusion, identity alias, delivery truth,
+billing and provider mechanics should be reused per child chunk. Acceptance
+requires proving no duplicate sends under concurrent confirm/retry/restart,
+no provider call during split/schedule preparation, no artificial Conversation,
+batch-wide and per-chunk progress/actions, and preserved zero-eligible behavior.
+
+Owner decision added on 2026-09-25: campaign execution must be sequential per
+tenant. The platform must never run more than one campaign executor at the same
+time for the same tenant, including standalone campaigns and grouped chunks,
+immediate and scheduled. Different tenants may execute independently.
+
+Local implementation update on 2026-09-26: the batch/tenant-queue front is
+BACKEND CORE IMPLEMENTED / INTEGRATED FOCUSED VALIDATED / NOT DEPLOYED /
+OWNER UI PENDING.
+Additive schema models were introduced for `CampaignExecutionBatch`,
+`CampaignExecutionBatchCampaign`, `CampaignExecutionJob` and
+`TenantCampaignExecutionLease`. `Campaign` remains the execution chunk. Send
+now, scheduled execution and resume now enqueue a job and reuse the existing
+runner after a tenant-level claim. Test-send acquires a temporary tenant lease
+and persists a running technical job so it is blocked while the tenant has any
+running campaign/test execution. Follow-up on 2026-09-26 added deterministic
+chunk sequencing and a post-provider lease check so an executor that lost
+ownership stops before persisting/continuing after a provider return.
+`campaignExecutionQueue.test.ts` PASS 8/8 proved: only one job is claimed for
+one tenant, different tenants claim independently, test-send blocks a campaign
+claim atomically, expired running campaign jobs still block the tenant until
+explicit finish, expired test-send leases still block until explicit release,
+`needs_review` invalidates the old executor token before the next tenant job,
+and batch chunks are claimed in `chunkIndex` order. The backend orchestrator now
+executes grouped CRM dynamic and CSV jobs through the same tenant queue and
+runner. `campaignRunner.test.ts` PASS 10/10 proved: accepted provider evidence
+is preserved after lease loss without sending the next recipient; CRM dynamic
+scheduled 3,001 eligible recipients resolve one snapshot and execute four
+sequential chunks; CSV grouped 3,001 recipients execute four chunks, preserve
+per-recipient variables and exclude a recipient blocked after planning before
+provider. Focused `campaignsFeatureRoutes.test.ts` PASS 125/125 covered split
+3,000, lifecycle pause/resume/cancel/test-send and scheduled opt-out
+revalidation. Backend build PASS and `git diff --check` PASS. Frontend browser
+smoke and aggregate UX validation are explicitly pending. `prisma migrate
+deploy` was validated successfully on an isolated local database
+`127.0.0.1:55432/re7_campaign_batches_migrate_check`; Prisma Client read the
+new tables. The earlier generic local `Schema engine error` was isolated to
+the previously manipulated local test DB/workaround path and is not treated as
+proof against the migration.
+
+Implemented contract for that front:
+
+- `runningCampaigns` remains useful only as an in-process guard and is not a
+  correctness guarantee. A durable per-tenant queue is required, with jobs
+  claimed transactionally and protected by a tenant execution lease.
+- Additive model: `CampaignExecutionBatch` for operator intent and aggregate
+  state; `CampaignExecutionBatchCampaign` mapping ordered chunk index to
+  existing `Campaign` rows; `CampaignExecutionJob` for queued standalone or
+  chunk execution; and `TenantCampaignExecutionLease` keyed by `clientId`.
+- Claim: a worker selects the next due job for one tenant using deterministic
+  ordering, acquires or renews the tenant lease with a lease token and expiry,
+  marks the job running, then invokes the existing campaign runner with a guard
+  that checks the lease token before every provider attempt and again after the
+  provider returns, before persisting the result or advancing to another
+  recipient.
+- Renewal/loss: the runner heartbeats the lease periodically and before each
+  recipient. A running durable job blocks the tenant even if the lease timestamp
+  expires, so another executor does not start merely because a provider call was
+  slow. If a worker actually loses ownership, it must observe token mismatch
+  and stop before the next provider call. Terminal states, pause, cancel,
+  explicit release and controlled failure release the queue.
+- Ordering recommendation: `eligibleAt` ascending, then creation sequence/id.
+  Inside a group, chunks run by `chunkIndex` with group continuity: once a group
+  starts, its next chunk stays ahead of newly due standalone jobs until the
+  group completes, pauses, is cancelled or fails. A schedule that matures during
+  a group waits; it does not interrupt or run in parallel.
+- `Enviar agora` creates a queued job with `eligibleAt=now`. A scheduled
+  campaign/group uses `eligibleAt=scheduledAt` as the earliest execution time,
+  not a guarantee of immediate start when the tenant is busy.
+- Pause releases the tenant lease and keeps the campaign/group paused until
+  explicit resume. Resume creates/reenables a due queue job. Cancel removes
+  pending jobs and stops further chunks. Provider/system failure should default
+  to fail-stop for the group until operator action; empty chunks are skipped and
+  do not hold the queue. Paused or failed items must not pin the tenant lease.
+- CRM dynamic groups must resolve the filter only after acquiring the tenant's
+  turn, persist one immutable group snapshot, then split that snapshot. Resume
+  reuses the same snapshot. Static/CSV groups preserve the confirmed selection
+  and per-recipient variables, with opt-out/exclusion/identity revalidated
+  before provider dispatch.
+- Already accepted/submitted recipients must not be resent on resume. Result
+  uncertainty continues to use the existing campaign/result-truth mechanisms;
+  the product must not promise exactly-once delivery beyond proven provider
+  evidence.
+- Test-send remains unitary and does not dispatch a group. Proposed safety
+  policy: if the tenant has an active campaign execution lease, test-send is
+  blocked or queued as a distinct low-priority test job by explicit product
+  decision; it must not become an untracked provider-send path running in
+  parallel with campaign execution.
+- UX must show wait position/state, requested time versus effective start,
+  group/current chunk, aggregate and per-chunk progress, pause/block/failure
+  reason and available actions. Numbered names are presentation only, not group
+  identity. "Attempts completed" must remain distinct from delivery result.
+- Migration proposal: additive tables/indexes only. `CampaignBatch` indexed by
+  `(clientId, status, eligibleAt)` and unique `(clientId, idempotencyKey)`;
+  child links unique by `(batchId, chunkIndex)` and `(clientId, campaignId)`;
+  `CampaignExecutionJob` indexed by `(clientId, status, eligibleAt, sequence)`
+  plus lease expiry; `TenantCampaignExecutionLease` unique by `clientId`.
+  Existing campaigns without a group remain compatible.
+- Rollout/rollback requirement: queue-managed scheduled work must not be
+  visible to the old scheduler as normal due `Campaign.status=scheduled` rows.
+  Use an explicit queue-managed representation such as queue job `eligibleAt`
+  with legacy `scheduledAt` neutralized or guarded, and enable the queue only
+  after the old scheduler path is disabled. Rollback must restore the previous
+  code and executable build and must not let old code dispatch queued group work
+  in parallel.
+- Planned validation: two workers contending for one tenant, distinct tenants
+  independent, standalone competing with scheduled group, simultaneous
+  schedules, restart/expired lease without overlap, pause/resume/cancel/failure
+  release, one dynamic snapshot per group, zero-eligible chunks, no provider
+  call during preparation, no duplicate recipients, preserved opt-out/exclusion,
+  12/13 alias behavior, RBAC and tenant isolation.
+
+Remaining gaps before production: UI/smoke for the full group flow, aggregate
+browser experience for wait position/progress/actions, deploy runbook rehearsal
+with migration artifacts, owner UI validation and production rollout. Backend
+proof is local only; no production DB, provider real, real send, commit, push or
+deploy was performed in this step. Owner-approved policies now settled: no
+manual reprioritization, test-send is blocked rather than queued while tenant
+execution is active, and group continuity outranks newly due standalone
+campaigns until completion/pause/cancel/failure.
+
+### Privacidade / LGPD por titular - 2026-09-20
+
+Data Subject Privacy / LGPD contact-centric anonymization: OWNER PASS / LOCAL
+VALIDATED / CLEAN DELIVERY DEPLOYED / PRODUCTION HEALTH VALIDATED. A nova frente adiciona preview e execucao de
+anonimizacao por titular a partir de `Contact` canonico do mesmo tenant, com
+fallback para `Lead.id` quando `Contact.id` ainda e nulo, busca/seleção pelo CRM
+autenticado, confirmacao forte
+`ANONIMIZAR TITULAR`, bloqueio de identidade ambigua e evento auditavel
+sanitizado `privacy.subject.anonymized`. A implementacao reutiliza as primitivas
+de `privacyRetentionService.ts`; a logica comum de minimizacao de Contact,
+ContactChannelIdentity, Lead, LeadNote, OutboundMessage e Event foi extraida
+para helper compartilhado, preservando a anonimizacao/retencao de conversa
+existente. Nao houve schema, migration, hard delete, provider call, envio real,
+ou deploy. Distincoes preservadas: exclusao operacional no CRM nao e
+anonimizacao LGPD; exclusao de conversa e anonimizacao de conversa permanecem
+com seus contratos atuais; retencao continua sendo rotina separada; reentrada
+cria/usa novo ciclo operacional sem reidratar historico anonimizado.
+
+Owner UX addition/correction: Contacts agora possui atalho compacto
+`Privacidade` com icone de cadeado entre `Abrir contato` e `Retirar da
+operação`, visivel para ADMIN, que apenas abre `/app/settings/privacy` com o
+titular preselecionado. O atalho nao depende de conversa: quando a linha ainda
+nao materializa `Contact.id`, a tela de Privacidade usa `Lead.id` como alvo sem
+criar Contact artificial, sem telefone cru como chave de mutacao e sem segunda
+engine de anonimizacao. A busca de titular em Privacidade passou a usar endpoint
+governamental proprio que reutiliza o read model do CRM para contatos ativos,
+Lead-only e operacionalmente excluidos, sem alterar a lista operacional normal
+do CRM. Invariante permanente: OPERATIONAL EXCLUSION DOES NOT REMOVE SUBJECT
+FROM PRIVACY GOVERNANCE DISCOVERY.
+
+Production deploy, 2026-09-20: clean privacy head
+`2527eb6cd01261c2825e2127191c1e3edcf88692` was fast-forward deployed over
+`9bb5f88f6a10ff3280e5adcdc777e9df0b0f7657` after persistent PostgreSQL backup
+`/opt/re7online/backups/converta-persistent/postgres/privacy-clean-20260920T200352Z-predeploy.dump`.
+Backend/frontend builds passed, `re7-whatsapp-agent` and `re7-admin-front`
+were reloaded, and `re7-whatsapp-web-worker` was preserved. Health returned
+`ok`/`db=ok`. Domain counts for Contact, Lead, ContactChannelIdentity,
+Conversation and OutboundMessage stayed unchanged during validation. No
+`privacy.subject.anonymized`, provider send, `crm.contact.created` or
+materialization event was emitted. Authenticated visual smoke was not exercised
+because no valid current production app credential was available and an old
+demo-prefeitura ADMIN session was rejected as expired by runtime auth policy;
+no real anonymization was executed.
+
+Invalid phone UX mapping: OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED. Erros
+`invalid_phone` vindos da validacao canonica de CRM agora mostram
+`Informe um número de WhatsApp válido com código do país 55 e DDD.` no app. O
+backend, normalizador canonico, CSV, campanhas e regras de persistencia nao
+foram alterados; nao ha segundo validador frontend.
+
+Lead-only operational exclusion materialization: DEPLOYED / PRODUCTION HEALTH
+VALIDATED / REAL LEAD-ONLY E2E NOT EXERCISED. A acao operacional `Retirar da operação` agora suporta linhas
+Lead-only usando resolucao canonica de identidade e materializando `Contact`
+somente quando o operador executa explicitamente essa acao. Antes da
+materializacao, o guard de conversa ativa e aplicado; conflitos de identidade
+bloqueiam a mutacao com erro seguro; CCI canonico e reutilizado/criado sem
+duplicar contato; reativacao usa o mesmo `Contact`. A materializacao registra o
+evento `crm.contact.materialized_for_operational_exclusion` e exibe origem CRM
+como `Integração / sistema`. Privacidade/LGPD permanece separada e preservada:
+anonimizacao Lead-only continua usando o fluxo de titular existente, sem criar
+`Contact` para privacidade. Deploy de producao em `fa7744ac01292f78e094302e932a4d2bd73cb9c9`
+foi validado com backup, FF-only, build backend, reload apenas de
+`re7-whatsapp-agent`, health/db OK e PM2 estavel. A busca read-only encontrou
+candidatos Lead-only no tenant Demo, mas nenhum fixture com identidade WhatsApp
+valida e comprovadamente seguro para mutacao; por isso o E2E real ficou
+`NOT EXERCISED` e nenhum dado de CRM foi fabricado. Divida do teste
+`crmConversationStartRoutes.test.ts`: 2 falhas de expectativa de masking foram
+confirmadas identicas no base `fa507507` e nao sao regressao deste follow-up.
+
+P1 Privacy subject atomicity, 2026-09-21: LOCAL FIX PREPARED / NOT COMMITTED /
+NOT DEPLOYED. Incidente confirmado no tenant Demo para titular `****6787`,
+requestId `46f4aba3-23d6-422b-b018-520c540839d5`: a anonimizacao por titular
+executou a anonimização de conversa antes da transacao do titular e depois
+falhou em `ContactChannelIdentity` por colisao no indice unico
+`(clientId, channel, provider, channelAccountId, externalUserHash)` quando mais
+de uma CCI do mesmo tuple recebia o mesmo hash anonimo. A correcao local coloca
+conversa, runtime DB state, Contact, CCI, Lead, LeadNote, mensagens/eventos e
+evento final `privacy.subject.anonymized` na mesma transacao Prisma; cleanup de
+runtime JSON ocorre somente apos commit e e best-effort. CCI deixa de usar
+`updateMany` amplo com hash compartilhado e passa a receber hash deterministico
+non-PII por identidade. Ate deploy dessa correcao, NAO EXECUTAR anonimizacao
+real por titular em producao; preview/busca continuam utilizaveis e
+anonimizacao de conversa isolada preserva contrato existente. Nenhum repair de
+`****6787` foi executado neste lote local.
+
+Extensao local do mesmo P1: a anonimizacao por titular tambem desvincula o
+titular de sementes privadas de campanha dentro da mesma transacao. Campanhas,
+templates, datas, agregados, ledger/billing e evidencias anonimas permanecem;
+o seed `campaign.seed.saved` remove apenas `leadIds`, destinatario privado,
+`recipientRefs` e `componentsByWaId` do titular, preservando destinatarios nao
+relacionados. Eventos `campaign.recipient.import_blocked` deixam de carregar
+recipient bruto do titular. Re-cadastro posterior do mesmo telefone nao deve
+ressuscitar campanhas antigas no CRM.
+
+---
+
+## PRIORIDADE ATUAL
+
+Roadmap funcional/produto apos hardening de producao de 08-10/09.
+
+Itens em `WATCH` nao bloqueiam a fila de execucao e nao devem virar frente ativa
+sem novo incidente comprovado. Performance residual de Inbox deve ser medida em
+janelas representativas futuras, mas nao e a prioridade corrente de
+desenvolvimento.
+
+### Auditoria canonica de backlog — 2026-09-13
+
+Fonte de verdade auditada: branch canonico `flow-executor-quote-hardening`,
+origin/production HEAD `69bedc38396b8f837a236b0af4a5446397919403`, producao
+online, health `ok/db ok`, PM2 online, Prisma migrations up to date e CRA
+`/admin/chatbot/settings` validado em runtime DB-backed.
+
+Fechado / validado:
+
+- Guided Builder 2.4: CLOSED / DEPLOYED / OWNER APPROVED LOCAL / PRODUCTION
+  NON-DESTRUCTIVE VALIDATED. Entrega frontend-only em `ca34e123`, 54/54 testes
+  PASS, build PASS, sem schema/migration, sem reload de backend/worker, hashes
+  de `ChatbotFlow.definition` inalterados no smoke de producao e rotas
+  `/app/chatbot` e `/admin/tenants/:tenantId/chatbot` saudaveis.
+- Syer `****9614`: CLOSED. A correcao generica de handoff foi publicada em
+  `597d7030`; o atendimento pre-fix foi reparado uma unica vez apos backup,
+  preservando mensagens, protocolo, ciclo, fechamento e responsavel.
+- Human handoff / queue contract: CLOSED / REAL VALIDATED. `WAITING` humano
+  exige `departmentId` + `queueId` concreto. `queueId=null` nao representa fila
+  padrao. O Guided Builder expõe `Setor`; fila unica e resolvida internamente,
+  zero fila bloqueia e 2+ filas mostram seletor condicional.
+- Canonical mail transport: CLOSED / DEPLOYED / REAL VALIDATED em `fec3a489`.
+  Password reset, first access/invitation, Web Session disconnect alerts,
+  template review e PostgreSQL backup alerts usam a camada canonica de mail.
+  Fallback Resend API e SMTP `2465` centralizado permanecem preservados.
+- Hybrid transport / identity / recovery: CLOSED / REAL VALIDATED para routing
+  Web Session passivo, fresh-flow E2E, Meta duplicate dedupe, Lead/P2002,
+  claim-before-downstream recovery e exactly-once coexistence.
+- SECULT `presenceMode=AVAILABLE`: REAL VALIDATED por trafego organico. Nao e
+  frente ativa; fairness e cursor round-robin permanecem somente WATCH.
+- SECULT report truth/current-state, Maria 2/2 capacity diagnosis, Maria apos
+  AVAILABLE, stale-heartbeat exclusion, AGENT closed access, CLOSED claim
+  invariant, close observability, close terminal lifecycle e presence panel
+  wording: CLOSED / VALIDATED ou CLOSED / DEPLOYED conforme historico abaixo.
+- Inbox performance: IMPROVED / WATCH. `48c206fa` e `1aae26b5` estao REAL
+  VALIDATED; `94882d76` foi REVERTED por regressao real; `4bc8befd` esta
+  DEPLOYED. `last_message_lookup` permanece KNOWN RESIDUAL HOTSPOT / NO ACTIVE
+  PATCH.
+- Internal multitenant support access: IMPLEMENTED / P2 WATCH-HARDENING. O
+  produto ja possui grant temporario, sessao de suporte, auditoria e banner de
+  modo suporte; melhorias futuras devem focar evidencia operacional e least
+  privilege, nao recriar o mecanismo.
+- Users x Departments M2M: IMPLEMENTED. Existe
+  `UserDepartmentMembership`, UI de usuarios com multiplos setores e uso no
+  RBAC/assignment. Gap restante e refinamento de relatorios/filtros, nao modelo
+  relacional basico.
+- CRA admin chatbot settings: CLOSED / REAL VALIDATED em
+  `69bedc38396b8f837a236b0af4a5446397919403`. Em 2026-09-13 a
+  auditoria do toast inicial em
+  `/admin/tenants/cra-pr/chatbot?clientKey=cra-pr` mostrou que CRA existe como
+  `Client` DB-backed, mas `/admin/chatbot/settings` retornava
+  `tenant_not_found` por exigir entrada legada em `.data/tenants.json`. A rota
+  passa a montar tenant efetivo em memoria a partir do `Client` e dos resolvers
+  DB-first, preservando fallback legado e sem criar entrada artificial em
+  `tenants.json`. Smoke de producao: settings 200, resources 6 departamentos /
+  6 filas, flows 1, health ok/db ok, `.data/tenants.json` ausente.
+- Admin chatbot loading/badge: CLOSED / REAL VALIDATED em `69bedc38`. A UI
+  admin hidrata flows/recursos mesmo se settings falhar parcialmente, o estado
+  de loading nao depende mais de `settings != null`, o bug de badge permanente
+  "Carregando" foi fechado e erro verdadeiro e exibido quando settings nao
+  estiver disponivel.
+- Abandoned automation / BOT flow lifecycle: LOCAL E2E VALIDATED / P2 RESIDUAL
+  HARDENING. Em 2026-09-14, o comportamento existente foi validado em DB
+  local seguro, sem runtime change, sem producao e sem deploy. `resetAfterMinutes`
+  reinicia menu/submenu/captura no proximo inbound e nao move para HUMAN nem
+  CLOSED; `timeoutMinutes/action=HANDOFF` promove uma vez para HUMAN/WAITING
+  com department/queue concretos, protocolo e mensagem de posicao quando o
+  destino e valido; nova varredura nao duplica handoff. Caveats abertos:
+  limpeza de `flowContext` em reset stale, copy/UX de timeout e paridade
+  provider-independent do processor. Auto-close generico de atendimento HUMAN
+  continua fora do requisito.
+- Inbox visibility policy audit: CLOSED / AUDITED / NO CODE CHANGE. A politica
+  `shared`/`assignee_only_after_assignment` permanece apenas como regra de
+  projecao/visibilidade para lista/detalhe/timeline; nao altera criacao de
+  conversa, handoff, fila, capacidade, presenca, claim, transferencia, envio,
+  fechamento, atribuicao automatica ou RBAC canonico. A restricao de acesso de
+  AGENT a conversas `CLOSED` permanece mais forte e preservada.
+- P1 Auth malformed claim process crash: CLOSED / DEPLOYED / PRODUCTION HEALTH
+  VALIDATED. Em 2026-09-20, smoke pos-deploy revelou que token assinado com
+  `clientId` malformado podia chegar ao Prisma em `AppAuthSession.clientId`
+  (`@db.Uuid`), gerar `P2023`, escapar como `unhandledRejection` e reiniciar
+  `re7-whatsapp-agent` via PM2. O fix `8f15eedf4eb11dd8f0bea4f1dd79bb50cae3be9e`
+  valida claims UUID-backed antes de qualquer lookup Prisma e adiciona boundary
+  de promise/erro ao ciclo HTTP de `handleRequest`: claim malformada retorna
+  `401 invalid_token`; falha inesperada de request retorna 500 generico sem
+  stack, mensagem Prisma, token, PII ou segredo no cliente. Global
+  `unhandledRejection` permanece como last-resort fora do ciclo HTTP. Deploy
+  production FF-only feito sobre `1a28cf2a82a8bc37dec0343f0487f2faf6be2962`,
+  backend build PASS, reload somente de `re7-whatsapp-agent`, admin-front e
+  web-worker preservados. Smoke seguro usou sessao real existente e token
+  claramente invalido; NAO houve reproducao de token assinado malformado em
+  producao. Health `ok/db=ok`, PID do agent preservado apos smoke, logs sem
+  `process.unhandledRejection` e sem Prisma `P2023`.
+- Campaign flow integrity review: IMPLEMENTED LOCAL / VALIDATED / NO DEPLOY.
+  Campaign CSV uses the generic mapping model `Contato`, `Campo 1`, `Campo 2`
+  and `Campo 3`; template variables can only source those mapped generic fields,
+  and generic fields do not mutate CRM name or CRM situation. Authenticated
+  campaign CSV preview/report exposes full normalized WhatsApp identifiers and
+  renders ready, blocked and error rows in one operational table with reusable
+  copy/export evidence. Campaign names are unique per tenant after trim,
+  case-insensitive and whitespace-normalized comparison, returning
+  `campaign_name_conflict` with PT-BR UX copy. Draft reopen/send/schedule and
+  runner use persisted seed truth. Variable-template test-send uses the target
+  recipient's own values when the test number belongs to the campaign audience,
+  or an authorized deterministic sample from the campaign seed when the target
+  is external; incomplete tests stop before provider calls or campaign aggregate
+  mutation. CRM campaign history remains actual-send evidence only: draft, seed,
+  import, test-send and scheduled-not-run data stay excluded.
+- Campaign flow follow-up CSV readiness, 2026-09-22: LOCAL FIX PREPARED /
+  NOT DEPLOYED. Owner production feedback after head
+  `77e087a724fd53bcf06ed6d19267a655a06118b8` found that Campaign CSV generic
+  fields and template-variable mapping were visually mixed, unmapped generic
+  fields could appear as variable sources, CSV preview lacked copy/report
+  affordance, draft detail still masked recipients, and static CSV drafts such
+  as Demo `Campanha teste set.9` (`a1e01fb2-09f2-4be1-a180-3679a3ba008f`)
+  could have empty `templateVariableMappings` with valid per-recipient
+  `componentsByWaId`. Local fix expands Campaign CSV mapping to required
+  `Contato` plus optional `Campo 1` through `Campo 10`, exposes only mapped
+  generic fields as variable sources, separates CSV column mapping from message
+  variable mapping, adds copyable preview errors/blocks, shows authenticated
+  draft recipients with full WhatsApp identifiers, and treats static
+  components-only seeds as ready without DB repair. Dynamic CRM-filter
+  campaigns still require canonical `templateVariableMappings`. Production
+  deploy and owner validation remain pending.
+- Campaign execution truth + CRM UX follow-up, 2026-09-22: LOCAL FIX PREPARED /
+  NOT DEPLOYED. Campaign CSV preview/draft/schedule/discard no longer creates
+  Contact/Lead/CCI or writes CRM situation; it only persists the campaign-owned
+  private recipient seed and per-recipient components. Contact/Lead/CCI
+  bootstrap now happens only when an eligible recipient reaches effective
+  campaign execution after send preflight and an actual provider request. A
+  provider-returned `FAILED` attempt is effective campaign evidence and
+  materializes/reuses Contact/CCI/Lead without creating a new Conversation or
+  RuntimeState; pre-provider blocks and discarded drafts do not create contacts.
+  CRM-filter audience preview is
+  eligible-only, removes the "Envio ativo" filter concept from the operator
+  flow, hides blocked contacts from the count/table and shows full authenticated
+  identifiers. Draft/discarded/never-sent campaigns remain excluded from contact
+  campaign history. Result filters and CSV mapping selects were hardened for
+  dark-theme readability, campaign reuse restores available modality,
+  destination and variable mapping state, and Contacts CSV preview table header
+  alignment was corrected. No schema, migration, provider call, real send,
+  production DB mutation, commit, push or deploy in this local pass.
+
+ACTIVE P0:
+
+- NONE.
+
+ACTIVE P1:
+
+1. Operational Queue production rollout:
+   CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS. The
+   deployed baseline supports
+   creation/import now requires explicit `returnDestination` in the
+   `campaign.seed.saved` contract: `human_department` with concrete
+   `departmentId` + `queueId`. The local successor UI accepts Department only,
+   resolves explicit `Department.operationalQueueId`, blocks unavailable
+   mappings and never exposes a multi-queue selector. Strict production cutover
+   resolved all 54 departments on 2026-09-18, including the five owner decisions
+   recorded on 2026-09-18.
+   `automated_flow` uses any
+   active same-tenant `ChatbotFlow` persisted as `chatbot:<flowId>` at runtime.
+   `entryPoint` is not required for explicit campaign invocation; it remains the
+   default selector for unqualified/new inbound only.
+   Direct CRM contact initiation no longer falls back to generic operational
+   defaults; it uses the initiating user's valid primary department and blocks
+   before provider send when missing. Legacy campaigns without this seed remain
+   compatible through the old operational default fallback, but new campaign
+   configuration has no implicit name-based destination. Tests/builds: focused
+   `operationalQueue.test.ts` 8/8 PASS, runtime routing 30/30 PASS, identity
+   12/12 PASS, `campaignsFeatureRoutes.test.ts` 114/114 PASS,
+   `ChatbotFlowBuilder.test.ts` 53/53 PASS, backend build PASS, frontend build
+   PASS. Production advanced by FF-only to
+   `b166bcac8bf443d34ba7f3821016b6bae8069728`; backup
+   `/opt/re7online/backups/operational-queue-rollout-20260918-104054` passed
+   (`20,664,912` bytes, 578 objects, SHA256
+   `a5898b277a82e5d0317314c9decaeb75dede023f76a8d55afc2044c4da230ddf`);
+   migration `20260917213000_add_department_operational_queue` applied; first
+   reconciliation updated 44 explicit mappings and created/linked 2 internal
+   queues; second reconciliation was idempotent. Post-verify: 54 departments, 44
+   active resolved, 0 active unresolved, 8 inactive null, 2 inactive with queue,
+   0 cross-tenant/department links. Backend/frontend builds, targeted PM2 reload
+   and HTTP smoke passed. No real Meta send and no `****6787` repair occurred.
+
+2. Campaign UX / result truth canonical integration:
+   INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY. The
+   owner-approved Campaign UX delta was recovered from
+   `.codex-recovery/re7-cra-crm-integration-20260917T2015.tar.gz` and
+   reapplied on the current canonical Operational Queue baseline
+   `6eec15c4c4725079c3dd5e48e3eb10d81643c2db`, without schema/migration,
+   queue-domain changes, production deploy, Meta send or `****6787` repair.
+   Customer UX now keeps campaign destination Department-only, removes
+   customer-facing price/cost/tariff surfaces from Campaigns and the Inbox
+   template shortcut, exposes persisted lifecycle tabs `Enviando`,
+   `Agendadas` and `Concluídas`, keeps the progress/detail modal closeable
+   while backend execution continues, and renders recipient-level blocked,
+   skipped, pending and opt-out states from persisted backend data. Backend
+   execution remains authoritative; the frontend only observes persisted
+   campaign state. Final local result-detail audit for Demo campaign `Campanha
+   teste set.2` / `lembrete_vencimento_anuidade` confirmed that the repeated
+   `****6787` line was a projection/fallback duplication, not a duplicate
+   provider send. Detail now reconciles one current outcome per intended
+   recipient when identity evidence exists, shows the full phone only inside
+   the authenticated campaign detail, preserves masking in draft/review, and
+   classifies mixed delivered/blocked evidence as partial delivery. Recovery artifact:
+   `codex-recovery/campaign-ux-result-truth-delta-20260918.patch`, 36,387
+   bytes, SHA256
+   `5967b2baab3ceffa3333b6f04ec31b622652e2399e2cbcf69de60379a53db490`.
+   Root-cause closure for `****9614`: the runner blocked before provider
+   because canonical resolution found two same-tenant Contact candidates and
+   one Lead. The duplicate Contact is historical residue from the former
+   campaign bootstrap, created before Identity P1; no current creation bypass
+   was reproduced. The same recipient remains blocked until a separately
+   owner-authorized transactional data repair. Counters are separated as
+   delivered 1, blocked 1, pending 0 and technical failures 0, with campaign
+   wording `Entrega parcial`. Evidence and dry-run repair package:
+   `docs/saas/DEMO_9614_CAMPAIGN_IDENTITY_CLOSURE_2026-09-18.md`.
+   Validation: `campaignsPageContract.test.ts` 9/9 PASS,
+   `campaignsFeatureRoutes.test.ts` 115/115 PASS on safe local DB
+   `re7_campaign_result_truth_test`, backend build PASS, frontend build PASS,
+   `git diff --check` PASS. Production remains protected at
+   `b413eea04af15cef2cf7667dbc3fa84bca3f49bc`; production health/db/migrations
+   PASS read-only. Owner visual revalidation on this integrated branch is still
+   pending.
+
+   P1 canonical 12/13-digit corrective, 2026-09-18: READY FOR OWNER REVIEW /
+   NO DEPLOY. The first synthetic result-truth test did not reproduce the real
+   persisted shape. Production validation at HEAD `6f63133d7c3bb09097a11c0b49eefa7b9f8383c3`
+   exposed a 13-digit seed and 12-digit delivered outbound for the same
+   `****6787` identity, creating a false missing-history failure. The hard gate
+   stopped validation. The projection now reuses
+   `buildCrmWhatsappIdentityCandidates`; it does not add a campaign normalizer
+   or rewrite history. Exact and reverse shapes, multiple real attempts,
+   genuine fallback, cross-tenant isolation and `****9614` blocked semantics are
+   covered. Read-only replay of the real records returns exactly 2 rows: 1
+   delivered, 1 blocked, 0 pending, 0 technical failures, `Entrega parcial`.
+   Validation: campaign backend 118/118, complementary matrices 56/56 and
+   72/72 PASS. Schema unchanged, migration none, no send, no repair. Canonical
+   record:
+   `docs/saas/CAMPAIGN_RESULT_TRUTH_CANONICAL_RECONCILIATION_2026-09-18.md`.
+
+   Open controlled data action: Demo `****9614` historical identity residue.
+   DATA REPAIR PREPARED / OWNER AUTHORIZATION REQUIRED / NO RESEND. Factory is
+   fixed; do not reopen Identity P1 as an active product bug without new
+   creation evidence contradicting the focused identity-path tests.
+
+   Campaign composer cleanup: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO
+   DEPLOY. Unsaved composition is now governed by one dirty-state contract and
+   one idempotent reset. Explicit discard and Campaign-tab navigation clear
+   name, template/variables, recipients, CRM/CSV previews, mappings,
+   destination and errors; stale async preview responses are invalidated.
+   Preview creates no server record. Explicit drafts, CRM upserts committed by
+   CSV draft creation, scheduled/sending/completed campaigns, outbound, billing
+   and history remain preserved. Canonical lifecycle:
+   `docs/saas/CAMPAIGN_COMPOSER_LIFECYCLE.md`.
+   Local gate on 2026-09-18: composer/page contracts 18/18 PASS, Campaign
+   backend 115/115 PASS, import/CRM 23/23 PASS, both builds and focused lint
+   PASS. Authenticated smoke confirmed clean discard/re-entry, clean CSV cancel
+   and intentional draft preservation. Owner visual review remains pending.
+
+3. CRA Demo Utility Recipient B controlled send: COMPLETED / DEMO PRODUCT
+   CAPABILITY VALIDATED / CRA ACCEPTANCE STILL SEPARATE. On 2026-09-16 the
+   owner authorized exactly one Utility send to Recipient B `****6787` through
+   campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214`. Preflight passed:
+   `demo-converta` active, `data_exame` approved Utility `pt_BR`, B-only
+   audience, A excluded, no active opt-out, outside 24h by 143.72h, explicit
+   HUMAN return destination `Atendimento Geral`
+   (`cmsiwk1o100014sdzl5cqd2ki`) -> `Fila Geral`
+   (`cmsiyb2k200n94sdpu5khkee0`), and department OPEN. Backup:
+   `/opt/re7online/backups/demo-b-controlled-send-20260916/pre-demo-b-controlled-send-20260916T132038Z.dump`
+   (20M, 593 objects, SHA256
+   `e73be155604ae0c7e7fe42b44dc87a1213755030cfa1c0d5d585f33e0319253a`).
+   Result: exactly 1 Meta call, accepted with Meta id
+   `wamid.HBgMNTU4NDk0Nzg2Nzg3FQIAERgUQ0UzOTE0Q0UyNUY0QjQ3OUZCQ0EA`,
+   local OutboundMessage `076910ef-ce6f-43d6-bfc2-2f30c4b41930`,
+   `campaign.message.submit_started` PASS, `campaign.message.provider_accepted`
+   PASS, `campaign.message.reconciliation_required` absent, webhook `sent=1`,
+   `delivered=1`, `read=0`, `failed=0`, billing event
+   `billing.active_message.delivered` count=1, duplicate billing NO. Campaign
+   status `completed`, `sentCount=1`, `blockedCount=0`. A external sends in
+   this run: 0. Sanitized evidence:
+   `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md`
+   and `.csv`. Opt-out E2E was later completed on Demo; CRA real
+   acceptance/report package still needs owner/customer acceptance evidence.
+
+3. CRA Demo opt-out E2E: COMPLETED / DEMO PRODUCT CAPABILITY VALIDATED /
+   CRA ACCEPTANCE STILL SEPARATE. On 2026-09-16 the owner explicitly authorized
+   opt-out creation, one controlled blocked campaign and reversal for B
+   `****6787`. Canonical `recordContactOptOut` created
+   `contact.opt_out.recorded` (`88361d0f-89df-41fc-852b-ce84cbb43cc4`);
+   campaign `d260bdc6-326f-4487-8d15-21c2a98dd741` blocked before provider via
+   `campaign.recipient.opt_out_blocked`
+   (`80d6ca1d-94f2-4465-81b7-74888c1d0edc`), `blockedCount=1`,
+   `sentCount=0`, Meta calls 0, real messages 0, OutboundMessage 0 and billing
+   events 0. Canonical `revokeContactOptOut` created
+   `contact.opt_out.revoked` (`a5b58132-79fe-49dd-8aff-49fb78bf4566`); B is
+   eligible again and history is preserved. A `****9614` was untouched
+   (outbounds 125/125, billing 1/1, opt-out events 0/0). Evidence:
+   `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_D_OPT_OUT_E2E_2026-09-16.md`
+   and `.csv`.
+
+4. CRA reports / exports / billing acceptance audit: COMPLETED FOR DEMO
+   PRODUCT CAPABILITY / CRA ACCEPTANCE STILL SEPARATE. On 2026-09-16 a
+   docs/evidence-only audit reviewed the official clarification and product
+   routes without sending campaigns, changing opt-out or mutating ledger data.
+   Sources confirm export may be CSV/XLSX or equivalent open/widely used format
+   and active-message billing is Utility outside 24h effectively delivered;
+   read does not add billing. Production read-only evidence: A campaign
+   `d9874c03-10e8-4061-a92e-6caa7b3001c3` remains truthful as
+   `failed`/reconciled with one outbound and one
+   `billing.active_message.delivered`; B campaign
+   `bb1d30e2-3a98-471a-9531-1f5e5d76a214` is `completed` with one delivered
+   outbound and one billing event; opt-out campaign
+   `d260bdc6-326f-4487-8d15-21c2a98dd741` has `blockedCount=1`, zero outbound
+   and zero billing. `demo-converta` and `cra-pr` both have `campaigns` and
+   `reports` enabled. CSV/open-equivalent evidence PASS; native XLSX is not
+   claimed; formatted PDF exists in reports but campaign consumption remains
+   CSV/open-equivalent. Provider cost, estimated USD payload and CRA
+   contractual BRL price remain separate; CRA final contract unit remains NOT
+   PROVEN. Evidence:
+   `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_E_REPORTS_EXPORTS_BILLING_2026-09-16.md`
+   and `.csv`. Next front: CRM import/upsert/report with optional
+   `Situacao no CRM`.
+
+5. CRA campaign import - optional CRM situation column: IMPLEMENTED /
+   TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / DEPLOYED /
+   PRODUCTION NON-DESTRUCTIVE VALIDATED.
+   Campaign/contact audience files may optionally contain
+   `Situacao no CRM` / `Situação no CRM`. When populated, the value must resolve
+   deterministically against CRM situations/statuses already configured for the
+   same tenant, persist the canonical internal id/reference, never use
+   cross-tenant values, never create a CRM status silently and report unknown
+   values truthfully in preview/import validation. Unsafe fuzzy matching is not
+   allowed. This front is a safe tenant-scoped CRM upsert, not only a new
+   column: if imported identity matches an existing CRM contact, update the
+   canonical record and do not create another contact. Blank uploaded cells
+   preserve existing name/status values; valid imported name may update the
+   existing contact according to current CRM semantics; valid resolved
+   `Situação no CRM` may update the existing situation reference. Repeated
+   identities inside the file must not create duplicate contacts. After import,
+   a detailed operator report is mandatory with totals, created/updated/
+   unchanged/skipped/errors, duplicate/consolidation evidence and per-row safe
+   result details; downloadable evidence should reuse existing export/report
+   infrastructure. Audit completed: CRM status model,
+   canonical identity/normalization/deduplication mechanism, current import
+   schema, segmentation usage, status naming/uniqueness, update-vs-create
+   semantics, duplicate-row policy, partial-success behavior and report/export
+   infrastructure were reviewed. Implemented local result: `Lead.status` is the CRM situation
+   model; campaign CSV import now previews/applies tenant-scoped CRM upsert via
+   existing identity helpers, updates valid nonblank names, preserves blank
+   name/status cells, resolves `Situação no CRM` by same-tenant active status id
+   or label with deterministic normalization, blocks unknown/ambiguous
+   situations at row level, prevents duplicate contact creation for repeated
+   identities, records per-row import evidence and exposes downloadable CSV
+   report in the app campaign import flow. CRA customer import run is still
+   pending owner-approved sample data.
+   Audit history preserved: owner result was PARTIAL PASS; the 2026-09-17
+   principles audit blocked the front on four P1 findings (transaction
+   consistency, duplicate winner order, parallel identity matching and missing
+   CRM capability). The corrective batch now uses the canonical CRM resolver,
+   commits CRM mutation/status/campaign seed per row, validates before claiming
+   duplicate identity, requires `campaigns` plus `crm` (and `contacts` scope in
+   the public API), and neutralizes spreadsheet formulas in the result CSV.
+   Focused rollback, hash-only identity, duplicate-order, authorization and CSV
+   tests pass. Residual P2: canonical preview resolution is sequential per row
+   (100 rows about 231 ms; 1,000 rows about 1.76 s locally) and may need later
+   bulk performance hardening without a parallel identity engine. Residual P3:
+   normalize internal operation/error labels exposed to the operator. Owner
+   revalidation passed locally on 2026-09-17 for preview, import, no-duplicate
+   behavior, hash-only identity, CRM situation, blank preservation, duplicate
+   winner, report/download, CSV safety, history preservation and regressions;
+   no real send occurred. Canonical integration was then prepared from
+   `819cd9b5` with the audited corrective delta preserved. Production reached
+   `cad9489c` by FF-only on 2026-09-17 after verified persistent backup; backend
+   and frontend builds/reloads and non-destructive runtime/bundle/DB checks
+   passed. No real production import or send was executed, and CRA/customer
+   acceptance remains pending. The authorized operational untracked directory
+   `apps/whatsapp-web-worker/.data/` remained intact and its process was not
+   reloaded; this is operational state, not a product defect. Completion
+   telemetry and the broader lint baseline remain WATCH.
+
+6. Contacts - campaign relationship view: CANONICALLY INTEGRATED / TEST
+   VALIDATED / OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. Implemented
+   in the CRM/Contacts area as a read-only projection from canonical
+   `Campaign`, `OutboundMessage` and campaign event evidence. Contact list now
+   shows compact campaign count, latest campaign/date/template/status, and the
+   contact detail drawer shows recent campaign history with navigation to the
+   existing campaign detail route. No Contact-owned shadow campaign-history
+   model, schema or migration was added; no campaign/billing history was
+   rewritten. Scope is same-tenant only and the list uses one bounded aggregate
+   projection for the current page plus on-demand detail to avoid per-row N+1.
+   Customer UX exposes operational statuses only, with no price/cost fields.
+   Validation on safe local DB `re7_queue_domain_test_20260917`:
+   `crmCapabilityRoutes.test.ts` 19/19 PASS including same-phone/cross-tenant
+   isolation, delivered status, opt-out block, identity conflict, detail link
+   and no financial strings; backend build PASS; frontend build PASS; diff
+   check PASS. CRA customer acceptance and production deployment remain pending.
+
+7. Contacts + Campaigns UX refinement, 2026-09-19: IMPLEMENTED LOCAL / OWNER
+   PASS / NO DEPLOY. This is visual/interaction polish on already
+   closed domain behavior. Contacts now use clickable rows, compact
+   Inbox/Departments-like action buttons, full phone display only inside the
+   authenticated same-tenant CRM read model, no duplicate top-level CRM
+   Situation/active-send/template-eligibility summary, active-send control as an
+   ON/OFF switch backed by the canonical opt-out record/revoke path, and one
+   expandable "Campanhas relacionadas" section instead of repeated standalone
+   campaign cards. Final owner rule: contact deletion is available only from the
+   contact list row; the contact detail keeps close/edit/save/cancel semantics
+   and has no delete action. Contact exclusion remains the existing guarded
+   operational exclusion path; active/open conversations still block with
+   explicit instructions and no auto-close/transfer/delete. Campaigns removed the
+   redundant top counter panel, moved counts into tabs, made campaign rows open
+   detail directly, right-aligned compact actions, removed the technical
+   provider/persistence note and normalized detail counters so "Processadas"
+   and "Aceitas pelo provedor" are distinct. Campaign detail now has view-only
+   recipient/result filters by result status, same-tenant CRM Situation and
+   name/phone search; the filtered set can be copied as tabular text or loaded
+   into the existing composer as current canonical contacts with explicit
+   excluded-without-current-contact counts. This prefill does not send and the
+   normal composer path rechecks opt-out/identity at draft/send time. Dynamic
+   CRM-filter scheduled campaigns are now a separate OWNER PASS / LOCAL
+   VALIDATED / NOT DEPLOYED front documented in
+   `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`: schedule-time stores
+   only the CRM Situation filter, execution-time creates one immutable snapshot,
+   and static campaigns remain unchanged. No schema/migration, no real send, no
+   financial customer UX and no campaign/history rewrite.
+
+8. Contacts UX finishing + phone normalization/import validation hardening,
+   2026-09-19: OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED. Final local
+   polish keeps the active-conversation delete guard in the Contact list row but
+   makes the blocking toast closable, removes the redundant active-conversation
+   warning/action block from Contact detail, and makes `Abrir campanha` navigate
+   to the existing campaign detail route. Contact CSV preview now disables while
+   pending and ignores stale duplicate responses; preview/confirm report created,
+   updated/reused, skipped, failed rows and detailed formula-safe errors with
+   copy/download actions. Permanent invariant: NO NEW CONTACT/RECIPIENT PHONE MAY
+   BE PERSISTED WITHOUT CANONICAL NORMALIZATION + VALIDATION. Manual Contact
+   create, Contact CSV import and Campaign CSV import now share the canonical CRM
+   WhatsApp identity normalizer, reject missing DDD, unsupported/non-Brazil and
+   structurally invalid phone numbers before persistence, and preserve approved
+   12/13-digit Brazilian identity equivalence. Follow-up convergence completed
+   locally: Contacts CSV now reuses the Campaign CSV parser/status resolver where
+   domain-compatible, supports `Situação no CRM`, validates that CRM statuses
+   already exist in the same tenant, rejects invalid status rows before
+   persistence, preserves existing status when the CSV cell is blank, and uses the
+   same preview/report philosophy with row-level errors and copy/download
+   evidence. No provider call, schema, migration, production mutation, real send,
+   opt-out rewrite, result-history rewrite or tenant hardcode. Production
+   deployment `1f8304f8624e76ba3efc507b9eccd80060447adb` was applied by
+   fast-forward only from `5208de159dd11b94dd5db2382446c66b38705c52` after
+   verified PostgreSQL backup
+   `/opt/re7online/backups/converta-persistent/postgres/contacts-phone-integrity-20260919-233044/whatsapp_agent.dump`
+   (`sha256=e4c965d219c85aaeff211d12161b49cc74e8b553e47f34758c34b621e2b153cf`).
+   Production validation used Demo preview/read-only paths only: Contact CSV and
+   Campaign CSV preview produced zero Contact, Lead, Campaign or Outbound
+   mutations; no provider call, real send, billing event or schema/migration
+   occurred. Existing historical invalid phone rows remain an audit/repair topic
+   and were not mass-corrected by this gate.
+
+   Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / LOCAL
+   VALIDATED / NOT DEPLOYED. Owner production feedback required the Contacts
+   CSV modal to converge visually and behaviorally with the Campaign CSV import
+   flow. Local delta removes the initial `Confirmar importacao` action until a
+   preview exists, locks duplicate preview/import actions during pending/result
+   states, provides an explicit cancel/reset path, renders preview/report/errors
+   with Campaign-style cards, badges and tables, localizes operation/reason
+   labels, and shows full authenticated phone evidence in the Contacts CSV
+   preview/report. Preview validity is tied to the exact selected phone/name/CRM
+   Situation column mapping; mapping changes keep the stale preview visible,
+   block import and require `Atualizar previa`. Domain behavior remains
+   unchanged: preview before import, same-tenant CRM Situation resolution,
+   canonical phone normalization, formula-safe report CSV, no provider call, no
+   real send, no schema/migration.
+
+   CRM post-deploy hardening, 2026-09-21: LOCAL VALIDATED / COMMIT PENDING /
+   NOT DEPLOYED. Contact origin semantics were hardened without adding a
+   persistence field: CRM CSV confirm now persists individual per-contact
+   canonical provenance through the existing `crm.contact.created` audit event;
+   `crm_manual` maps to `Cadastro manual`, `crm_import` maps to `Importacao CSV`,
+   campaign/audience evidence maps to `Campanha / audiencia`, explicit
+   conversation/inbound/system sources map to their user-facing categories and
+   legacy records without reliable evidence show `Nao identificado` rather than
+   fabricated provenance. Origin is first reliable CRM entry provenance: a
+   manually created contact later updated by CSV remains `Cadastro manual`,
+   while a CSV-created contact shows `Importacao CSV`. Contacts CSV modal state
+   now exposes one secondary action per state: `Cancelar` before processing and
+   `Fechar` after the completed summary; no redundant close/cancel pair remains.
+   CRM conversation actions now preserve historical count/history while exposing
+   `Abrir conversa` only when the selected conversation is projectable by the
+   canonical Inbox policy `shouldProjectConversationToHumanInbox(...)`. BOT-only
+   or otherwise non-projectable historical conversations remain historical CRM
+   evidence and no longer create false Inbox-open actions. No schema/migration,
+   no provider call, no real send, no runtime mutation and no new conversation.
+
+7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
+   TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
+   2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com
+   bug operacional. Prechecks passaram, a primeira chamada Meta para `****9614`
+   foi aceita e o owner confirmou recebimento real, mas o runner falhou em seguida com
+   `default_operational_department_missing` antes de persistir OutboundMessage,
+   ledger e report; `****6787` nao foi enviado. Campanha
+   `d9874c03-10e8-4061-a92e-6caa7b3001c3` ficou `failed`, `sentCount=0`,
+   `blockedCount=0`. Meta message id foi recuperado nos eventos runtime e
+   webhooks `sent` e `delivered` foram encontrados em `webhook.status.received`,
+   mas nao correlacionaram porque o OutboundMessage local nao existia. Causa:
+   `ensureCampaignOutboundConversation` exigia default operacional depois da
+   mutacao externa Meta; no Demo havia departamento/fila, mas sem default ativo
+   `Atendimento Geral/Fila Geral`, e a dependencia nao era preflight. Fix
+   local generico aplicado sem tenant hardcode: preflight de default operacional
+   antes de Meta, eventos idempotentes `campaign.message.submit_started` e
+   `campaign.message.provider_accepted`, bloqueio de retry com
+   `campaign.message.reconciliation_required`, e registro
+   `webhook.status.orphaned` para status sem OutboundMessage sem criar billing
+   sintetico. Auditoria read-only de risco confirmou que nao e Demo-only:
+   `cra-pr`, `demo-converta`, `secult-pe` e `syer-rodrigues` nao possuem
+   `defaultDepartmentId/defaultQueueId` nem default geral ativo; `re7online`
+   possui default geral ativo. Testes locais PASS: `campaignRunner.test.ts` 5/5,
+   `campaignsFeatureRoutes.test.ts` 113/113, billing 4/4, preview 4/4,
+   backend build PASS e `git diff --check` PASS. Deploy FF-only em producao em
+   2026-09-15 no commit `b8c8f616`; backup persistente
+   `/opt/re7online/backups/campaign-post-meta-20260915/pre-campaign-post-meta-20260915-210808.dump`
+   (`20M`, 578 objetos, SHA256
+   `e4e2dc141ff23f5afef9bc4504ef7951d4038ddc39cb623754e51dded455ca27`);
+   reload somente `re7-whatsapp-agent` (`3253772` -> `3319619`), frontend e
+   web worker preservados, health/db PASS. Smoke nao destrutivo no bundle
+   implantado confirmou preflight antes de send, marker accepted,
+   reconciliation guard e orphan status path. Nao houve novo envio real; A nao
+   deve ser reenviado e B requer novo owner gate. Auditoria manual de Recipient
+   A em 2026-09-15 concluiu SAFE CONSTRAINED RECONCILIATION POSSIBLE e o owner
+   aprovou a reparacao restrita. Backup persistente criado em
+   `/opt/re7online/backups/recipient-a-reconciliation-20260915/pre-recipient-a-reconciliation-20260915T213115Z.dump`
+   (`20M`, 593 objetos, SHA256
+   `d0957043bcf2a137bbe700c7517606ac0d716ec85da24b89d2bd68d897d43122`).
+   Reparacao aplicada somente em `demo-converta`: 1 OutboundMessage criado para
+   `****9614` (`1375f639-b3df-425a-987e-545d2ffcddd1`), Meta id recuperado
+   anexado, delivered real aplicado por billing canonico idempotente
+   (`billing.active_message.delivered`), `sentCount=1`, `status=failed`
+   preservado e audit event unico registrado. A nao foi reenviado; B nao foi
+   enviado. RECIPIENT A RECONCILIATION = RECONCILED / NEVER RESENT; RECIPIENT B
+   historical 2026-09-15 attempt = NOT ATTEMPTED / BLOCKED PRE-META BY DEMO
+   OPERATIONAL DEFAULT, later superseded by 2026-09-16 explicit destination
+   draft preparation with no real send.
+   Owner autorizou B-only em 2026-09-15, mas o preflight imediato bloqueou antes
+   da Meta: `demo-converta` possui `Atendimento Geral` inativo e `Fila Geral`
+   ligada ao departamento inativo; nao existe par active default
+   `Atendimento Geral` + `Fila Geral`. Como `failed -> sending` e proibido, a
+   campanha original nao pode ser retomada; caminho correto seria nova campanha
+   controlada B-only depois de reparo config-only do default operacional Demo.
+   Meta calls para B nesta tentativa: 0. Auditoria de
+   default operacional Demo em 2026-09-15 concluiu CONFIG PENDING / OWNER GATE:
+   o mecanismo canonico existente nao usa `defaultDepartmentId/defaultQueueId`;
+   ele resolve por `Atendimento Geral` ativo + `Fila Geral` em
+   `ensureDefaultOperationalDepartmentAndQueue`. O Demo ja possui o departamento
+   `cmsiwk1o100014sdzl5cqd2ki` (`Atendimento Geral`,
+   `atendimento-geral`) com a fila `cmsiyb2k200n94sdpu5khkee0`
+   (`Fila Geral`) e membro ativo, mas o departamento esta inativo. Proposta
+   preparada e nao executada: reativar esse departamento existente; nao criar
+   setor/fila novo, nao escolher setor tematico SECULT/CRA e nao enviar Meta.
+   Owner approval obrigatorio antes da mutacao DB config-only.
+   Auditoria de
+   unidade de billing em 2026-09-15 confirmou que `R$ 0,32` veio da premissa
+   interna central `R$ 3.200,00 / 10.000 mensagens ativas`, nao de Meta, nao de
+   override de tenant e nao de proposta final CRA encontrada. O ledger de A esta
+   correto como elegibilidade/contagem delivered Utility fora de 24h. A prova
+   oficial estreita de custo Meta para B foi obtida em 2026-09-15: Brazil
+   Utility, BRL, efetivo em 2026-07-01, tier 0-250.000, R$ 0,0350/mensagem
+   entregue. A unidade BRL final CRA permanece NOT PROVEN;
+   OPT-OUT E2E e REPORTS/EXPORT/BILLING permanecem pendentes ate nova evidencia
+   valida de campanha.
+
+P2 / PRODUCT + META CAPABILITY:
+
+1. Meta Marketing template media support: OPEN. Audit and implement
+   professional support for MARKETING templates with IMAGE and VIDEO headers,
+   Meta media/example requirements, upload/handle lifecycle, preview,
+   variables, supported buttons, submission, approval/rejection status,
+   rejection reason, approved-template send path and current official Meta
+   Marketing pricing source. This must not be mixed with the current CRA Utility
+   controlled campaign. If CRA Contract/TR evidence later proves Marketing media
+   templates are required for current acceptance, flag for owner decision and
+   potentially promote it to the CRA contract front.
+
+WATCH / EXTERNAL OPERATIONS:
+
+1. Demo channel continuity: WATCH / SEPARATE META AND WEB SESSION TRACKS.
+   Auditoria somente leitura de 2026-09-15 preserva o historico do incidente
+   externo Meta de 2026-09-14 (`status=BANNED`, WABA `REJECTED`, business
+   `not_verified`, templates `SCAM`) sem tratar isso como causa de Web Session.
+   A evidencia atual em producao mudou: `npm run meta:readiness -- --tenant
+   demo-converta` retornou `WARN` sem `FAIL`/`WAITING_EXTERNAL`, com
+   `TenantMetaConfig` presente, token presente, WABA/phone mapeados e validacao
+   externa de subscription ainda requerida. A Web Session do Demo, que entrou em
+   `QR_REQUIRED` em 2026-09-13 22:40:23Z com `action=auth_clear`, foi
+   reemparelhada em 2026-09-14 16:31Z e esta `CONNECTED` em producao para
+   `****5328`; material `baileysAuthState.v1` aprovado esta configurado. Nao
+   limpar, desconectar, resetar, trocar numero/WABA ou reexecutar onboarding sem
+   diagnostico e autorizacao explicita do owner.
+2. CRA-PR contractual readiness: UTILITY READINESS AUDIT CLOSED / CONTRACT
+   ACCEPTANCE OPEN / CONTRACT GAPS TRACKED OUTSIDE RUNTIME P1 UNLESS CODE GAP
+   IS PROVEN. A matriz canonica
+   `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md` mapeia 52 requisitos
+   do Contrato/TR contra produto, configuracao CRA e evidencia de producao.
+   Nao reabrir CRA active flow visibility nem CRA business hours: ambos estao
+   fechados, respectivamente CUSTOMER VALIDATED e CONFIGURED / OPERATIONALLY
+   VALIDATED. Atualizacao de 2026-09-15: a frente ativa e aceite contratual da
+   campanha Utility controlada; a copia CRA aprovada ainda nao foi encontrada,
+   portanto nao ha autorizacao para submissao Meta nem envio real. Instagram
+   Direct, Facebook Messenger e Website/Webchat seguem contratados, mas estao
+   CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING e nao bloqueiam esta fase.
+   Snapshot somente leitura CRA: Meta/WhatsApp configurado, `campaigns=true`,
+   `templates=true`, 0 templates, 0 pedidos de template, 0 campanhas, 0 eventos
+   de billing/opt-out de campanha. Checklist canonico atualizado em
+   `docs/bids/2026/cra-pr/UTILITY_CAMPAIGN_ACCEPTANCE_CHECKLIST.md`.
+   Proibido submeter template Meta ou envio Meta real sem copia CRA aprovada e
+   aprovacao explicita do owner cobrindo template, destinatarios, janela, custo
+   esperado, nome da campanha e quantidade de mensagens. Gate local de DB em
+   `re7_cra_contract_test2`: migrations 58/58, campanha/import/runner 5/5 PASS,
+   billing/preview/lifecycle 5/5 PASS; suite ampla `campaignsFeatureRoutes`
+   111/112 PASS com timeout em runtime de chatbot inativo, fora da frente
+   Utility/campaign. Ordem atual: Utility/campaign acceptance, opt-out,
+   relatorios/exportacoes/billing, acceptance pack; canais adiados so reabrem
+   com janela do cliente.
+   Demo contract validation Phase A, 2026-09-15: `demo-converta` foi auditado
+   como mirror multitenant, nao clone CRA. Snapshot read-only: ACTIVE/business,
+   Meta Cloud configurada, 1 Utility aprovado, 0 campanhas, 0 eventos de
+   billing/opt-out de campanha, 15 departamentos, 19 filas, 4 fluxos e 50 linhas
+   de horario. Plano canonico criado em
+   `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md`: 36/52 requisitos
+   demo-validatable, 19 ja product-validated, 8 capacidades validadas nesta
+   leitura, 12 CRA-specific only, 4 customer-deferred, 1 product gap. Nenhuma
+   submissao Meta, envio real ou dado CRA usado no Demo.
+   Phase B owner gate, 2026-09-15: template Demo aprovado `data_exame`
+   (Utility/pt_BR, 1 variavel Data) e adequado apenas para homologacao Demo com
+   dados de teste; testes locais de precheck 13/13 PASS; custo de referencia
+   anterior para 2 mensagens = R$ 0,64, agora reclassificado como referencia
+   central de planejamento pendente de reconciliacao de unidade. Sem envio real.
+   Correcao de backlog: HUMAN
+   waiting-on-customer 1h e SUPERSEDED / NOT REQUIRED; atendimento humano pode
+   permanecer aberto sob controle do atendente. O front correto e BOT/FLOW
+   lifecycle, ja validado para resetAfterMinutes, stale pending question reset e
+   inactivity handoff, com residual cross-provider e Guided lifecycle UX em P2.
+   Phase C controlled gate, 2026-09-15: owner autorizou os dois numeros
+   Demo/RE7 conhecidos por finais `9614` e `6787`. Preflight read-only PASS:
+   producao health/db ok, Demo ACTIVE/business, `campaigns=true`,
+   `templates=true`, Meta config presente, Web Session conectada, template
+   `data_exame` ainda `approved`, migrations 58 up to date. Ambos os
+   destinatarios estao fora de 24h por ultimo inbound em 2026-09-10, sem
+   opt-out ativo encontrado, dedupe reduz `6787` a um alvo final apesar de
+   historico duplicado de provider. Preview: 2 mensagens META_CLOUD; custo BRL
+   pausado para reconciliacao de unidade. REAL SEND = NO; parar no owner
+   real-send hard gate ate aprovacao explicita deste envio exato apos preview
+   final e unidade de billing validada.
+   Phase C controlled send, 2026-09-15: OWNER AUTHORIZED / PARTIAL REAL META
+   ACCEPTANCE / PRODUCT ISSUE FOUND / STOP. Campanha
+   `d9874c03-10e8-4061-a92e-6caa7b3001c3` criada no Demo. Meta Cloud aceitou 1
+   template `data_exame` para `****9614`, mas o runner falhou imediatamente com
+   `default_operational_department_missing` antes de persistir OutboundMessage,
+   ledger e report; `****6787` nao foi enviado. Resultado real: accepted=1,
+   delivered webhook recuperado=1, read=0 observado, ledger local billable=0,
+   total local evidenciado R$ 0,00. Testes locais de
+   billing/idempotencia/lifecycle 10/10 PASS, mas sao evidencia de teste.
+   Proibido retry sem owner repair gate.
+
+RECENTLY CLOSED:
+
+- CRA active flow tenant visibility: CLOSED / DEPLOYED / CUSTOMER VALIDATED.
+   Real CRA ADMIN Eduardo reproduced the original absence and later confirmed
+   after the production fix that the active CRA flow is visible in tenant-side
+   `/app/chatbot` and can be opened from `Fluxos cadastrados`. Root cause
+   history preserved: the flow always existed correctly in DB/runtime/admin API,
+   `/agent-api/app/chatbot/flows` returned it, but
+   `/agent-api/app/chatbot/settings` returned 404 because app settings still
+   depended on legacy `.data/tenants.json` for a DB-backed `Client`; coupled
+   `Promise.all()` hydration then prevented the successful flows response from
+   reaching UI state. Runtime commit `363ce3ab` made `/app/chatbot/settings`
+   DB-backed and split flows/settings/resources hydration. Flow
+   `cmtkhhxtq002p4spns3fp0yux` / `CRA-PR - Atendimento Institucional` was not
+   recreated, cloned, regenerated, reactivated or rewritten; production
+   definition hash stayed
+   `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
+   Validation levels: LOCAL OWNER PASS, SERVER-SIDE PRODUCTION PASS, CUSTOMER
+   CRA ADMIN PASS. Detailed record:
+   `docs/saas/CRA_ACTIVE_FLOW_VISIBILITY_AUDIT_2026-09-15.md`.
+- User deactivation active-conversation guard: CLOSED / DEPLOYED / OWNER
+   APPROVED / PRODUCTION NON-DESTRUCTIVE VALIDATED. Entrega em producao em
+   `c40c44dc205b2324a9197322334141c5e7f079f0`, apos backup PostgreSQL
+   persistente
+   `/opt/re7online/site-re7online/apps/whatsapp-agent/backups/postgres/20260914-175614.dump`
+   (`19734685` bytes, 578 objetos, sha256
+   `07de59fb2a7d30e05170a57ac50e713627d6655ffcd351716d9c92e2c8a97592`).
+   Predicado canonico: mesmo tenant, `ConversationRuntimeState.assignedUserId`
+   do usuario, `closedAt=null`, `status IN (WAITING, IN_PROGRESS)` e `mode`
+   ausente ou diferente de `BOT`. `WAITING` sem atribuicao, `CLOSED`, outro
+   tenant e BOT nao bloqueiam. A desativacao nao fecha, transfere, remove
+   atribuicao, troca fila ou altera lifecycle de conversa silenciosamente;
+   retorna `user_has_active_conversations` com mensagem acionavel. Backend guard
+   aplicado em `/app/users/:id` e `/admin/users/:id`; UI tenant-side mostra a
+   mensagem especifica e mantem estado persistido ativo em rejeicao. Validacao
+   local: regressao backend focada 1/1 PASS, contrato frontend 7/7 PASS, builds
+   backend/frontend PASS, `git diff --check` PASS, schema unchanged, migration
+   none. Suite completa `campaignsFeatureRoutes` ficou 109/110 PASS com timeout
+   pre-existente e nao relacionado, mantido em WATCH. Deploy FF-only recarregou
+   apenas `re7-whatsapp-agent` e `re7-admin-front`; `re7-whatsapp-web-worker`
+   preservado. Smoke producao: health ok/db ok, `/app/users` 200,
+   `/app/settings/users` 200, API `/app/users` sem auth 401, guard presente no
+   codigo em producao e tenants `demo-converta`, `cra-pr`, `secult-pe` e
+   `syer-rodrigues` ACTIVE em consulta somente leitura.
+- Users Management 2.0: CLOSED / DEPLOYED / OWNER APPROVED / PRODUCTION
+   NON-DESTRUCTIVE VALIDATED. Inactive user disappearing
+   root cause: `GET /app/users` filtrava `User.isActive=true` no backend,
+   enquanto a UI ja possuia filtro de status e serializer preservava
+   `isActive=false`. Ajuste local inclui inativos no modo Todos, filtros
+   `Todos/Ativos/Inativos`, linhas expansivas em `/app/users`, contador
+   `activeUsers/maxActiveAppUsers` usando o mesmo resolver/enforcement do
+   backend e micro-ajustes finais de owner: filtro com regiao visual distinta,
+   botao explicito expandir/recolher, hierarquia tonal header/body e botao
+   Salvar preenchido. Contrato de draft: expandir inicializa do estado
+   persistido; recolher, trocar linha ou alterar filtros descarta alteracoes
+   nao salvas; filtros, contador e disponibilidade de assentos derivam somente
+   de `users` persistido, nunca de `userDrafts`. Test gate local: frontend
+   focado PASS, backend focado PASS, builds PASS, schema unchanged, migration
+   none. Entrega em producao aplicada em 2026-09-14 no commit
+   `5ad40c10eda77076bc2a069e432663ac2271f0a8`; smoke pos-deploy confirmou
+   health, rotas `/app/users` e `/app/settings/users`, backend online e dados
+   reais com usuarios inativos por tenant sem mutacao.
+- Departments Management UX 2.0: CLOSED / DEPLOYED / OWNER APPROVED /
+   PRODUCTION NON-DESTRUCTIVE VALIDATED.
+   Aplicacao local em `/app/settings/departments` reaproveita o padrao visual
+   aprovado em Users Management 2.0 e Guided Builder: linhas recolhiveis, botao
+   circular explicito expandir/recolher, um setor aberto por vez, header com
+   resumo persistido e corpo expandido em tom subordinado para edicao. Contrato
+   de draft: expandir inicializa a partir de `departments` persistido; recolher,
+   trocar linha ou alterar filtros descarta alteracoes nao salvas; resumo/filtro
+   nao deriva de draft local. Sem alteracao de rota, fila, horario, RBAC,
+   autoassign, capacidade, presenca, Inbox visibility, schema ou migracao.
+   Refinamento aprovado tambem fixa a coluna direita dos controles expansivos
+   em Users Management 2.0 e Departments Management UX 2.0 com
+   `grid-cols-[minmax(0,1fr)_auto]`, impedindo que conteudo quebrado empurre o
+   botao circular para uma segunda linha. Entrega em producao aplicada em
+   2026-09-14 no commit `5c051f83df6bc99aa998985ba93301e601e502df`; smoke
+   pos-deploy confirmou health, `/app/users`, `/app/settings/departments`,
+   estrutura right-anchor em producao e tenants demo-converta, cra-pr,
+   secult-pe e syer-rodrigues ACTIVE sem mutacao.
+
+ACTIVE P2:
+
+1. Question conditional branching: PRODUCT GAP / OPEN. Runtime atual suporta
+   captura sequencial (`capture.next`) e o Guided limita ate 3 perguntas
+   consecutivas; nao ha predicados por valor capturado, sim/nao ou fallback por
+   resposta livre. Nao e bug do Guided Builder.
+2. Reporting context enhancements: ENHANCEMENT / OPEN. Adicionar contexto AUTO
+   vs MANUAL, policy, `presenceMode`, carga/capacidade atual e filtros
+   ativo/inativo onde fizer sentido, sem reabrir bugs de verdade de relatorio ja
+   fechados.
+3. Guided Builder final review summary: UX BACKLOG / OPEN. A etapa "Revisar
+   antes de aplicar" hoje mostra resumo parcial orientado ao caminho humano mais
+   relevante quando existe handoff. O backlog e evoluir para resumo completo por
+   opcao/submenu/caminho, sem alterar runtime ou `ChatbotFlow.definition` ate
+   haver contrato de UX aprovado.
+4. Meta Cloud unlink/removal cleanup semantics: PRODUCT/OPS GAP / OPEN.
+   Consolidar semantica de disconnect/unlink, limpeza de token, associacoes
+   phone/WABA, estado de coexistencia, remocao de canal por tenant e fallback
+   seguro.
+5. Meta pricing source of truth / FinOps hardening: P2 / GENERIC PRODUCT
+   BACKLOG. Futuro escopo: rate cards Meta versionados, resolver por
+   pais/categoria, datas de vigencia, ingestao de fonte oficial, snapshots
+   historicos de custo provedor, politica FX, separacao custo Meta vs preco
+   cliente e deteccao de staleness. Nao e frente bloqueadora ampla da aderencia
+   CRA agora. Para a campanha Demo controlada, a prova estreita ja obtida e:
+   Brazil Utility, BRL, efetivo em 2026-07-01, tier 0-250.000, rate oficial
+   R$ 0,0350 por mensagem entregue via endpoint oficial WhatsApp Business
+   Platform Pricing. Recipient B Demo foi enviado e entregue em 2026-09-16;
+   FinOps generico continua P2. Doc canonico:
+   `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`.
+6. Internal support access hardening: P2 / WATCH-HARDENING. Mecanismo existe;
+   manter evolucao em auditoria, expiracao, evidencias e menor privilegio.
+7. Chatbot Flow `isActive` vs `entryPoint` semantics: WORKING AS DESIGNED /
+   P2 DOMAIN HARDENING. Auditoria de 2026-09-15 atualizada: `entryPoint` e o
+   seletor padrao de novas conversas (`clientId + isActive=true +
+   entryPoint=true`), enquanto `isActive` e o gate de execucao por id explicito
+   e continuidade de runtime. Active non-entrypoint nao e redundante: Support
+   Hub e destino automatizado de retorno de campanha executam por flow id
+   explicito, exigem `isActive=true` e nao exigem `entryPoint=true`. Modelo
+   atualizado: MULTI-ACTIVE RUNTIME COM UM ENTRYPOINT PADRAO. Gaps P2:
+   clarificar UX normal de Active vs Principal; invariantes
+   `entryPoint=>isActive`, um entrypoint por tenant e corrida de troca de
+   principal sao application-only ou ausentes no DB. Registro:
+   `docs/saas/CHATBOT_FLOW_ACTIVE_ENTRYPOINT_SEMANTICS_AUDIT_2026-09-15.md`.
+8. CAMPAIGN RETURN FLOW DEACTIVATED AFTER SEND: P2 LIFECYCLE DECISION / OPEN.
+   Auditoria local: runtime explicito tenta carregar `{ id, clientId,
+   isActive=true }`; se o flow selecionado da campanha for desativado apos o
+   envio e antes da resposta, o loader atual nao continua esse flow e cai no
+   seletor de entryPoint. Nenhum fallback novo foi implementado neste patch.
+9. Abandoned automation / BOT flow lifecycle: P2 RESIDUAL HARDENING. O
+   comportamento existente ja foi validado: `resetAfterMinutes` reinicia
+   menu/submenu/captura no proximo inbound sem HUMAN/CLOSED, e
+   `timeoutMinutes/action=HANDOFF` promove uma vez para HUMAN/WAITING com
+   department/queue concretos, protocolo e posicao na fila quando o destino e
+   valido. Residuais: limpeza/copy de `flowContext`, UX de timeout e paridade
+   cross-provider do hardening, sem auto-close HUMAN.
+10. Guided Builder - BOT inactivity policy UX: P2 / UX + PRODUCT CLARIFICATION /
+   OPEN. Futuro Guided deve explicar em linguagem de negocio duas politicas
+   independentes: por quanto tempo a pessoa pode voltar e reiniciar a
+   automacao no proximo retorno (`resetAfterMinutes`) e se abandono de
+   automacao deve gerar handoff humano automatico
+   (`inactivityPolicy.timeoutMinutes` + `action=HANDOFF`).
+   Antes de implementar, auditar valores/defaults reais em producao e exigir
+   que owner veja valores atuais, entenda consequencias, escolha duracao
+   conscientemente e veja resumo no review. Nao criar nem reabrir
+   `WAITING_FOR_CUSTOMER 60m`; HUMAN auto-close permanece NOT REQUIRED.
+
+P3:
+
+- polish de nome social/display name;
+- acao rapida de retificacao;
+- melhorias menores de UX/filtros que nao bloqueiam contrato.
+
+WATCH only:
+
+- Inbox performance residual e CPU;
+- `last_message_lookup` residual;
+- SECULT fairness e round-robin cursor;
+- SECULT Web Session non-content suppression organic validation;
+- scale/load validation em janelas representativas;
+- Syer Dashboard transient error / refresh loop: BUG NOT PROVEN / WATCH. Owner
+  observou `/app/dashboard` lento, toast vermelho breve e recuperacao posterior
+  em tenant com pouco dado; auditoria anterior nao provou endpoint falho, refresh
+  loop, relacao com `/app/conversations` ou regressao de CPU. So promover a frente
+  com reproducao ou evidencia nova.
+- billing/ledger Meta como conciliacao futura.
+
+Proximas quatro frentes:
+
+1. P2 Guided Builder - BOT inactivity policy UX. Why now: o runtime ja suporta
+   `resetAfterMinutes` e handoff automatico por `inactivityPolicy`, mas a
+   configuracao guiada precisa expor isso em linguagem operacional clara e
+   separar reset de retorno vs handoff por abandono. Dependencia: auditar
+   valores/defaults reais antes de propor UI. Code esperado: sim, futuro.
+   Risco: medio por semantica de lifecycle. Done: owner ve valores atuais,
+   escolhe duracao conscientemente e review resume o comportamento.
+2. P2 Abandoned automation / BOT flow lifecycle hardening. Why now: cidadao pode iniciar
+   menu/pergunta/captura e abandonar antes de concluir. Valor: endurece reset,
+   expiracao e UX de automacao incompleta sem afetar HUMAN. Dependencia:
+   validar comportamento atual de `resetAfterMinutes` e
+   `timeoutMinutes/action=HANDOFF` em E2E local. Demo validavel: sim. Code
+   esperado: talvez, reaproveitando executor/processador existente. Config
+   esperado: flow-level primeiro. Risco: medio por lifecycle. Done: abandono de
+   menu/captura/submenu, inbound tardio, restart e tenant isolation testados.
+3. P2 Question conditional branching. Why now: lacuna descoberta durante 2.4 e
+   valor direto para fluxos institucionais. Valor: respostas sim/nao e caminhos
+   por resposta. Dependencia: desenho de runtime/predicados. Demo validavel:
+   sim. Code esperado: sim. Config esperado: nao. Risco: medio/alto. Done:
+   predicates testados sem quebrar fluxos existentes.
+4. P2 Reporting context enhancements. Why now: transforma validacoes de fila em
+   evidencia operacional sem mexer no core de atribuicao. Valor: auditoria para
+   supervisao/contratos. Dependencia: definir campos e filtros. Demo validavel:
+   sim. Code esperado: sim. Config esperado: nao. Risco: medio. Done:
+   relatorios mostram contexto sem distorcer historico.
+
+Reconciliation note: CRA business hours remain CONFIGURED / OPERATIONALLY
+VALIDATED and are not an implementation-pending front.
+
+---
+
+## RISCOS E PENDÊNCIAS ATUAIS — 2026-05-03
+
+### Atualizacao operacional consolidada — 2026-09-01
+
+Estado fechado/validado:
+
+- hybrid exactly-once: CLOSED / REAL VALIDATED;
+- Meta template routing in configured modes: CLOSED / REAL VALIDATED;
+- HYBRID template outbound: CLOSED / REAL VALIDATED;
+- Meta-to-Web echo safety: CLOSED / REAL VALIDATED;
+- HYBRID inbound dedupe after Meta template reply: CLOSED / REAL VALIDATED;
+- HYBRID claim-before-downstream recovery: HARDENED / REAL VALIDATED;
+- HYBRID full fresh-flow E2E: CLOSED / REAL VALIDATED;
+- exactly-once coexistence path exercised: CLOSED / REAL VALIDATED;
+- post-reply freeform routing in HYBRID/AUTO: CLOSED / REAL VALIDATED;
+- multichannel Lead identity reconciliation / P2002: CLOSED / REAL VALIDATED;
+- Meta usage accounting for template vs Web Session freeform: CLOSED / REAL VALIDATED;
+- flow/runtime coherence: CLOSED / REAL VALIDATED;
+- closed HUMAN reentry: CLOSED / REAL VALIDATED;
+- SECULT CompletedServiceSnapshot: CLOSED / REAL ORGANIC VALIDATED;
+- SECULT current-state report truth: CLOSED / REAL VALIDATED;
+- Maria capacity diagnosis: CLOSED / CORRECT PRODUCT BEHAVIOR;
+- SECULT completed-service reporting: CLOSED / PRODUCTION VALIDATED;
+- Inbox Timeline Phase 1: CLOSED / PRODUCTION VALIDATED;
+- Inbox Phase 2 WebSocket-driven invalidation: CLOSED / PRODUCTION VALIDATED;
+- multichannel reconciliation migration: CLOSED / PRODUCTION VALIDATED;
+- Web Session wrapped media normalization: CLOSED / SAFE NORMALIZATION PATCH;
+- SECULT Web Session non-content control event suppression: DEPLOYED / TESTED in
+  `c308198a`; organic validation pending;
+- SECULT auto-assignment incident 2026-08-31: AUDITED / BUG NOT CONFIRMED; UX clarification deployed in `c91671e9`;
+- SECULT `presenceMode=AVAILABLE`: REAL VALIDATED on 2026-09-10; after
+  activation on 2026-09-09 11:38:31 -03, 30 organic auto-assignments selected
+  11 distinct agents, Maria Helena received one automatic assignment after
+  becoming available below capacity, `no_eligible=0`, and stale heartbeat alone
+  produced zero exclusions. Fairness and round-robin cursor remain WATCH, not
+  proven algorithm defects.
+- SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / CPU IMPROVED /
+  WATCH;
+- Backend CPU residual load watch after hybrid claim recovery deploy: IMPROVED /
+  WATCH.
+  Samples on 2026-09-10 held near 67-69% and later near 60-61% CPU with health
+  PASS, memory stable around 230-278 MB, DB pressure NORMAL, SECULT real traffic
+  active, `runtime_state_fallback=0`, `multichannel.dual_read=0`, and no
+  retry/reconnect/error loop evidence. Current residual hotspot remains
+  `/app/conversations` list reads: 21 req/min produced 246
+  `inbox.list.query_count`/min, approximately 11.7 queries/request.
+- `/app/conversations` fixed-cost lookup optimization: REAL VALIDATED. The
+  route is already mostly batched and did not show
+  current runtime-state N+1 in production (`runtime_state_fallback=0`). A small
+  backend patch now reuses the `Client.features/profile` already loaded by
+  request auth, removing one duplicate `client.findUnique(features/profile)` DB
+  read per app Inbox list request. Comparable 2026-09-10 measurement after
+  `1aae26b5` showed ~10.7 queries/request under real SECULT Inbox polling, with
+  `tenant_features` effectively zero-cost in the app list path. No global cache,
+  current-state cache or response cache was introduced.
+- `/app/conversations` channel state batch hotspot: REAL VALIDATED / IMPROVED.
+  Production audit on 2026-09-10 showed no external
+  provider call and no per-row query fan-out in `channel_state_batch`, but
+  SECULT's 251 Web Session identities caused the switch-warning lookup to
+  materialize about 10.3k historical outbound rows per refresh. The selected
+  patch keeps the same tenant-scoped provider truth and query count, but fetches
+  only the latest outbound row per identity with bounded SQL result sets.
+  Comparable post-deploy measurement showed SECULT `channel_state_batch`
+  interval avg ~189ms and cumulative p95 ~692ms, down from the previous
+  ~445-615ms avg / ~782-1411ms p95 observed baselines. No global cache, stale
+  channel-state cache, schema change or migration was added.
+- `/app/conversations` bounded outbound preview lookup experiment: REVERTED /
+  REAL PERFORMANCE REGRESSION. The `94882d76` patch was semantically correct, but production
+  evidence on 2026-09-10 showed a PostgreSQL plan regression for SECULT:
+  `JOIN LATERAL` executed a per-identity plan with sequential scans and estimated
+  cost around 150k versus around 1.6k for the previous broad outbound lookup.
+  Comparable 5-minute window showed `last_message_lookup` around 5.9s average
+  and `/app/conversations` around 5.8s average, while the pre-change comparable
+  baseline was about 275ms for `last_message_lookup`. Runtime was rolled back by
+  `4bc8befd`; keep the semantic oracle and plan evidence for a future design.
+- Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
+- true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
+- hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
+- supervisor team presence panel: DEPLOYED / VISUAL SMOKE PENDING;
+- deploy impact matrix hardening: CLOSED / SCRIPT + DEPLOY INTEGRATION + RUNBOOK;
+- closed-conversation access hardening: CLOSED / PRODUCTION VALIDATED in
+  `93cd0e06`;
+- CLOSED claim invariant: CLOSED / PRODUCTION VALIDATED;
+- Inbox close action observability: IMPLEMENTED / VALIDATED FOR ROOT-CAUSE
+  FORENSICS;
+- Inbox close terminal lifecycle: FIXED / DEPLOYED in `f62f1288`;
+- Web Session operational disconnect alert delivery: FIXED / DEPLOYED in
+  `b31fd976`; SMTP port `2465` now uses TLS, retryable transport failures have
+  bounded retry, and delivered alerts still dedupe by incident fingerprint;
+- Canonical mail transport cleanup: CLOSED / IMPLEMENTED. Password reset,
+  first-access invitations, Web Session disconnect alerts, template-review
+  alerts and PostgreSQL backup alerts now share one canonical mail provider and
+  config resolver. Business callers still own recipients, content, dedupe and
+  retry policy.
+- CRA Demo V1: READY FOR CUSTOMER VALIDATION.
+- CRA-PR real HYBRID operational validation: CLOSED / PASS;
+- CRA-PR approved flow -> consent -> menu -> handoff: CLOSED / PASS;
+- CRA-PR human Inbox + human outbound/inbound + normal close: CLOSED / PASS;
+- CRA-PR `CompletedServiceSnapshot`: CLOSED / exactly 1 snapshot in validation;
+- CRA-PR CSAT score/responded and optional comment in same response: CLOSED / PASS;
+- CRA-PR Browser Push background: CLOSED / REAL VALIDATED;
+- CRA-PR ready for training 2026-09-09: YES.
+- Guided Builder 2.1 business-first: DEPLOYED / LOCAL + PRODUCTION READ-ONLY
+  VALIDATED;
+- Guided Builder second-flow stale JSON incident: CLOSED / REAL VALIDATED;
+- Guided Builder new-flow entrypoint safety: FIXED. Creating a new chatbot
+  flow must not replace the tenant entrypoint unless the operator explicitly
+  marks it as the main entry flow.
+
+Fila ativa historica substituida pela "Auditoria canonica de backlog —
+2026-09-13" acima. Nao usar listas antigas como fila corrente quando houver
+conflito.
+
+WATCH only:
+
+- Inbox performance residual: IMPROVED / WATCH. `48c206fa` e `1aae26b5` estao
+  REAL VALIDATED; `94882d76` foi REVERTED por regressao real de plano e
+  `4bc8befd` esta DEPLOYED. Proxima acao e apenas medicao em futura janela
+  SECULT representativa, nao novo patch.
+- CPU residual: WATCH. Nao ha evidencia atual de dual-read, runtime fallback,
+  reconnect loop, retry hibrido ou pressao de DB.
+- `last_message_lookup`: KNOWN RESIDUAL HOTSPOT / NO ACTIVE PATCH. Nao retornar
+  ao desenho lateral per-identity sem indice/plano comprovado.
+- SECULT fairness/round-robin cursor: WATCH. `presenceMode=AVAILABLE` ja tem
+  comportamento funcional validado.
+- SECULT Web Session non-content suppression: DEPLOYED / TESTED / WATCH.
+  Validacao organica permanece observacao passiva; nao reabrir frente ativa sem
+  nova evidencia representativa de bolhas `Mensagem nao suportada`.
+
+Dividas tecnicas abertas:
+
+- `multichannel.shadow_write.failed` / `missing_channel_account_id`: preexistente, non-strict, sem retry loop, associado a projection/data-quality gap de Web Session, non-blocking;
+- drift historico global Prisma schema/migrations: separado da migration de reconciliacao multichannel ja validada;
+- SECULT Web Session `UNKNOWN` media historical rows: no backfill; exact original subtype is
+  not recoverable from the sanitized persisted payload;
+- SECULT closed-conversation RBAC incident 2026-09-09: fixed generically. AGENT
+  users no longer list or directly access `CLOSED` conversations; SUPERVISOR and
+  ADMIN historical access is preserved. Claim/assume against `CLOSED`
+  conversations is rejected with `conversation_closed` before assignment capacity
+  checks.
+- SECULT Inbox close terminal telemetry incident 2026-09-09: fixed generically.
+  `close.requested` is followed by an awaited terminal client event,
+  `close.succeeded` or `close.failed`, before post-close UI reconciliation can
+  clear selection or remove the row. Backend close semantics, CSAT, protocol
+  closure and snapshots remain unchanged.
+- Demo Web Session recovery: CLOSED / REAL VALIDATED after controlled reconnect.
+  Inbound, outbound, close, CSAT and post-send stability passed without
+  401/conflict recurrence.
+- CRA/SECULT business hours audit, 2026-09-14: CLOSED / DOCS-ONLY. Canonical
+  HEAD and production HEAD match `56c4a392d1eb017ad8fcafffbad5fbd442e7152f`.
+  The core runtime already resolves `DepartmentBusinessHour` /
+  `DepartmentBusinessHourException` by department with tenant timezone fallback.
+  SECULT keeps the approved contract: departments have Mon-Fri 08:00-17:00
+  `America/Recife` hours, resolve `OPEN` at 12:00 BRT and `CLOSED` at 20:00
+  BRT, and `QUEUE_FOR_NEXT_OPEN` queues closed handoff without autoassign. CRA
+  has no department hours configured, so every audited department resolves
+  `NO_SCHEDULE` both inside and outside the copied 09:00-17:00 text. This is a
+  configuration/operational validation item, not a runtime P1. Detailed record:
+  `docs/saas/CRA_SECULT_BUSINESS_HOURS_AUDIT_2026-09-14.md`.
+- CRA business hours operational configuration, 2026-09-15: CLOSED /
+  PRODUCTION CONFIG VALIDATED. Backup
+  `/opt/re7online/backups/converta-persistent/postgres/pre-cra-business-hours-20260915-001956.dump`
+  captured before mutation (`19737083` bytes, SHA-256
+  `1a0fa2daff91f5c290b7308782d10e274142be7a9a4833bea5b5a9315a6568ae`,
+  578 objects). `cra-pr` timezone set to `America/Sao_Paulo`; all 6 active
+  departments configured Mon-Fri 09:00-17:00 with weekends closed and zero
+  exceptions; each preserves one concrete `Fila Geral` queue.
+  `closedHandoffPolicy.action=QUEUE_FOR_NEXT_OPEN` preserved. Resolver
+  validation passed for all departments at Monday 10:00/16:59 `OPEN`,
+  Monday 17:00/17:01/20:00 `CLOSED`, and Saturday 10:00 `CLOSED`.
+  Flow-aware validation passed on Cobrança and Fiscalização. SECULT timezone,
+  08:00-17:00 schedules, policy and resolver status were read-only verified
+  unchanged. No code, schema, migration, PM2 reload or deploy.
+- baselines CRA versionados nesta consolidacao como evidencia de validacao, nao como dump operacional:
+  - `docs/bids/2026/cra-pr/CRA_PR_DEMO_FLOW_V1_CUSTOMER_VALIDATION_BASELINE.md`;
+  - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.
+- CRA department hours: CLOSED / PRODUCTION CONFIG VALIDATED. Under the current
+  domain rule, any future department without schedule would still resolve
+  `NO_SCHEDULE` / open, but the six active CRA departments now have
+  `America/Sao_Paulo` Mon-Fri 09:00-17:00 configured and validated;
+- billing measurement items ainda abertos: ciclo receptivo logico, template Utility fora de 24h entregue, ledger Meta apos 2026-10-01 e relatorio contratual mensal.
+- alteracoes externas de `.env`/segredos continuam como procedimento
+  operacional separado; a matriz de deploy cobre impacto derivado de diff Git.
+
+### Guided Builder — reconciliacao do patch local
+
+Em 2026-09-10 o patch local antigo/quarentenado de Guided Builder foi portado
+limpamente para worktree isolado baseado no HEAD canonico `fec3a489`, sem tocar
+o worktree principal e sem misturar com o hardening de producao:
+
+- `src/components/app/ChatbotFlowBuilder.tsx`;
+- `src/components/app/ChatbotFlowBuilder.test.ts`;
+- `src/app/app/chatbot/page.tsx`;
+- `src/app/admin/tenants/[tenantId]/chatbot/page.tsx`.
+
+Estado reconciliado:
+
+- STRATEGY: clean isolated worktree from current canonical HEAD + explicit port
+  of only Guided Builder files.
+- SOURCE OF TRUTH: same `ChatbotFlow.definition`; Guided and Advanced modes
+  mutate/read the same draft JSON through `onDefinitionTextChange`.
+- SHADOW MODEL: no wizard/planning schema persisted in the flow definition.
+- SUPPORTED OBJECTIVES: direct human handoff, menu, consent, capture, text and
+  custom/advanced.
+- NEXT TASK: detects missing start, missing menu option, missing option
+  destination, missing handoff destination, invalid queue/department pairing,
+  consent destination, capture field/next, broken references and orphan nodes.
+- TRANSFORMATIONS: deterministic node creation for menu/text/capture/consent/
+  handoff; existing orphan content is preserved for review instead of silently
+  deleted.
+- EXISTING FLOWS: Syer-style direct handoff and CRA-style complex consent/menu
+  flows load without objective reset and preserve advanced metadata.
+- VALIDATION: `ChatbotFlowBuilder.test.ts` 22/22 PASS; frontend build PASS;
+  `git diff --check` PASS.
+
+Smoke local de 2026-09-10:
+
+- temporary non-versioned harness rendered the real `ChatbotFlowBuilder`
+  component in desktop, tablet and mobile;
+- new flow entry experience, supported objective cards, next-task panel,
+  journey preview and checklist rendered coherently;
+- Syer-style direct handoff fixture loaded without reset/destructive rewrite;
+- CRA-style consent/menu/handoff fixture loaded without corruption and kept
+  Advanced mode as the escape hatch for complex structures;
+- responsive layout did not show horizontal overflow or clipped controls in the
+  captured viewports;
+- authenticated route smoke was completed in an isolated local worktree with an
+  ephemeral Postgres database, 58 migrations applied, supported `demo:seed`, a
+  real `/auth/login` app session and the local admin token;
+- `/app/chatbot` loaded inside the real App shell with tenant context, existing
+  flow list, create-flow entry and no alert/loading gate;
+- `/admin/tenants/demo-prefeitura/chatbot` loaded inside the real Admin shell
+  with tenant context, save controls and no login gate;
+- existing flow expand/edit exercised Guided and Advanced modes against the same
+  draft JSON;
+- Advanced -> Guided reflected a JSON text edit immediately in the guided
+  summary, fields and preview;
+- Guided -> Advanced reflected a guided destination change in the advanced JSON;
+- explicit save persisted to the local ephemeral database and survived route
+  reload;
+- desktop, tablet, mobile, dark/light theme and keyboard focus smoke passed
+  without horizontal overflow.
+
+Status: REAL VALIDATED in local authenticated route smoke and deployed by the
+frontend-only production rollout ending at `9b5bdb34`. No production tenant flow
+mutation was performed by this validation.
+
+### Guided Builder 2.1 — business-first flow creator
+
+Em 2026-09-11 o redesign local do Guided Builder foi reorientado para o modelo
+aprovado pelo owner: em vez de mostrar um painel tecnico com passos detectados,
+o editor novo comeca perguntando qual fluxo de negocio sera criado, faz poucas
+perguntas por vez, gera uma definicao real de `ChatbotFlow.definition`, mostra
+preview/checklist e aplica o resultado ao rascunho somente por acao explicita.
+
+Estado atual:
+
+- STATUS: GUIDED BUILDER 2.1 / LOCAL IMPLEMENTED / HUMAN VALIDATION ROUND 2.
+- WORKTREE: isolado em `/tmp/re7-guided-wizard`, baseado no HEAD canonico
+  `06256cc2`.
+- SCOPE: frontend/editor somente.
+- SOURCE OF TRUTH: preservado em `ChatbotFlow.definition`.
+- SEMANTICA: sem alteracao de runtime, parsing, transitions, handoff, save
+  payload, schema ou migration.
+- UX: novo fluxo abre em modelos de negocio: atendimento institucional com
+  menu, encaminhamento direto, coleta antes do atendimento, mensagem
+  informativa ou modo avancado.
+- WIZARD: cada modelo usa perguntas curtas sobre mensagem inicial,
+  consentimento, opcoes, destinos, validacao de entrada, horario futuro,
+  mensagem de handoff e preview.
+- SUBMENUS: o modelo institucional agora representa um subconjunto CRA-like com
+  menus aninhados gerados como nodes reais `type=menu`, sem node type novo.
+- NAVIGATION: submenus podem expor `9 - Voltar ao Menu Anterior` e
+  `0 - Voltar ao Menu Principal`, seguindo a convencao ja observada nos fluxos
+  CRA. O menu principal nao recebe retorno redundante.
+- HOURS: o wizard explica que o autoatendimento pode continuar funcionando e
+  que horario humano pertence ao cadastro de departamentos; sem horario salvo,
+  a regra de dominio atual permanece `NO_SCHEDULE`/aberto.
+- APPLY DRAFT: "Aplicar ao rascunho" atualiza apenas o JSON local e mostra
+  feedback explicito de sucesso, erro ou "nenhuma alteracao"; salvar continua
+  sendo acao separada da pagina.
+- EXISTING FLOW EDIT: fluxos existentes exibem landing separada com Revisar
+  jornada, Editar etapas simples e Abrir modo avancado. A edicao simples mostra
+  hierarquia de menus/submenus, permitindo abrir opcoes como Registro sem
+  expor a arvore inteira ou misturar com criacao.
+- MODE STATE: Assistente guiado e Modo avancado agora comunicam estado exclusivo
+  e finalidade; "Abrir modo avancado" deixou de parecer selecionado dentro da
+  landing de fluxo existente.
+- RESET: apos criacao bem-sucedida de novo fluxo em `/app` ou `/admin`, o
+  rascunho transiente volta ao estado inicial.
+- OUTPUT: os geradores criam nodes reais (`menu`, `text`, `capture`,
+  `consent`, `handoff`) sem persistir metadata de wizard ou shadow model.
+- EXISTING FLOWS: abrir fluxo existente mostra resumo seguro e acoes explicitas
+  de revisar jornada, editar informacoes simples ou abrir modo avancado; nao
+  executa reset, reclassificacao destrutiva ou mutation automatica.
+- MARKET PATTERN: alinhado ao padrao observado em builders atuais de mercado:
+  selecao de template/use case, perguntas progressivas, preview antes de
+  publicar, fallback para editor visual/avancado e protecao contra alterar
+  automacoes existentes sem confirmacao.
+- VALIDACAO TECNICA LOCAL: `ChatbotFlowBuilder.test.ts` 32/32 PASS; frontend
+  build PASS; `git diff --check` PASS.
+- STATUS: DEPLOYED / PRODUCTION READ-ONLY VALIDATED. Criacoes reais de teste
+  no tenant Syer foram usadas apenas para validar a sequencia de criacao; o
+  fluxo ativo real foi preservado.
+
+### Guided Builder 2.1 — segundo fluxo com JSON invalido
+
+Em 2026-09-11 foi auditado o incidente P1 em que a criacao de um segundo fluxo
+guiado para o tenant real Syer Rodrigues terminava com a mensagem
+`JSON invalido` antes de chegar ao backend.
+
+Conclusao:
+
+- ROOT CAUSE: estado transiente do builder de novo fluxo permanecia montado apos
+  uma criacao bem-sucedida; o parent limpava o texto do novo fluxo, mas a
+  sessao interna do wizard podia carregar dados mutaveis da criacao anterior.
+- ESCOPO: bug de estado client-side no editor guiado; nao houve evidencia de
+  problema de backend, schema, migration ou configuracao especifica da Syer.
+- SYER REAL: auditado em read-only. O fluxo real existente permaneceu
+  inalterado.
+- FIX: o wizard passou a criar defaults frescos por sessao e o builder de novo
+  fluxo em `/app` e `/admin` e remontado apos criacao bem-sucedida.
+- VALIDACAO LOCAL: fixture Syer-like comprovou primeira, segunda e terceira
+  criacoes sequenciais com JSON serializavel/parseavel e destinos validos.
+
+Validacao real: em 2026-09-11, na producao `96220ea4`, a UI admin do tenant
+`syer-rodrigues` criou dois fluxos guiados de teste inativos em sequencia, sem
+`JSON invalido` e sem estado stale. A abertura de um terceiro novo fluxo
+iniciou limpa, sem salvar. O fluxo ativo real manteve o mesmo hash de
+definition.
+
+Status: REAL VALIDATED / CLOSED.
+
+### Guided Builder 2.1 — seguranca de entrada principal em novos fluxos
+
+Em 2026-09-11 foi auditado um incidente P1 durante a validacao real da Syer:
+um fluxo novo podia herdar `entryPoint=true` no formulario de criacao e
+substituir temporariamente o fluxo principal do tenant.
+
+Conclusao:
+
+- ROOT CAUSE: default client-side inseguro nos formularios de novo fluxo de
+  `/app/chatbot` e `/admin/tenants/:tenantId/chatbot`. O backend estava
+  correto ao tratar `entryPoint=true` como acao explicita de troca.
+- ESCOPO: bug generico de UX/seguranca de criacao; sem tenant hardcode, sem
+  schema, sem migration e sem alteracao de runtime.
+- FIX: novo fluxo passa a iniciar com `entryPoint=false` por default
+  compartilhado; apos `create` bem-sucedido, o rascunho tambem reseta para
+  `false`.
+- CONTRATO: criar fluxo novo nunca troca a entrada principal silenciosamente.
+  A troca continua permitida somente por acao explicita do operador/admin.
+- VALIDACAO: teste backend cobre create sem `entryPoint`, create com
+  `entryPoint=false` e troca explicita posterior por `PUT entryPoint=true`.
+
+Status: FIXED / DEPLOY TARGET. Validacao pos-deploy deve confirmar que o fluxo
+principal ativo da Syer permanece preservado.
+
+### Guided Builder 2.2 — baseline recovery apos selecao local divergente
+
+Em 2026-09-11 o resultado local inicial do Guided Builder 2.2 foi invalidado
+para validacao de produto. O HEAD de producao estava atual; o problema foi a
+selecao local de worktree/bundle/servidor, contaminada por uma linha antiga e
+divergente do Guided Builder ja aprovado e publicado. O owner abriu o ambiente
+local e viu uma UI anterior, sem os refinamentos aprovados de producao, provando
+que aquele ambiente nao era baseline confiavel.
+
+Impacto:
+
+- PRODUCAO: nao afetada; nao houve commit, push ou deploy do resultado
+  invalido.
+- RESULTADO 2.2 ANTERIOR: INVALID FOR HUMAN PRODUCT VALIDATION.
+- CAUSA OPERACIONAL: desenvolvimento/servidor local misturou worktrees e portas;
+  `3010`/backend antigo apontavam para `/tmp/re7-guided-wizard`, enquanto uma
+  tentativa posterior servia outro bundle em porta diferente.
+- REGRA DE PROCESSO: qualquer trabalho de UX deve reproduzir localmente o
+  baseline de producao aprovado antes de aplicar novos deltas.
+
+Reconstrucao correta:
+
+- BASE: worktree limpa `/tmp/re7-guided-22-current` criada a partir do HEAD
+  canonico de producao `bf5f1d76`.
+- BASELINE LOCAL: backend local isolado e frontend em `3022`, `demo:seed` e
+  login real `admin@demo-prefeitura.local`; `/app/chatbot` respondeu no bundle
+  da base aprovada. Para evitar CORS em desenvolvimento, o frontend deve usar
+  `/agent-api` relativo via rewrite local.
+- PORT 2.2: aplicado cirurgicamente sobre a base atual, sem copiar arquivos
+  inteiros da linha divergente.
+- DELTAS PORTADOS: cancelar/excluir opcao do wizard, excluir submenu simples ja
+  criado, cancelar submenu em criacao, confirmacao destrutiva antes de remover
+  caminhos com filhos, protecao de estruturas compartilhadas/avancadas pelo
+  modo avancado, limpeza de submenu aninhado ao trocar destino, botao inferior
+  "Voltar ao nivel anterior", tons por nivel de menu, texto unificado
+  "Encaminhar para atendimento humano", fluxo Setor -> Fila condicional,
+  explicacoes para "Mostrar outra mensagem" e "Fazer uma pergunta", e suporte a
+  texto livre/emoji digitado pelo usuario no wizard, preview e JSON gerado.
+- VALIDACAO TECNICA: `ChatbotFlowBuilder.test.ts` 37/37 PASS; frontend build
+  PASS; `git diff --check` PASS.
+- STATUS: GUIDED BUILDER 2.2 / DEPLOYED / PRODUCT OWNER REAL VALIDATION. A
+  entrega frontend-only foi publicada em producao no commit `db34d83c`, sem
+  alteracao de backend, worker, schema ou migration. O proximo marco e o owner
+  concluir os testes reais em producao.
+
+### Guided Builder 2.3 — refinamento de criacao e edicao por opcoes
+
+Em 2026-09-11 o owner aprovou a base 2.2 e registrou feedback de uso real para
+reduzir atrito do criador guiado antes de nova publicacao.
+
+Escopo 2.3 aprovado:
+
+- remover as decisoes "Ativo" e "Entrada principal" do cadastro de novo fluxo;
+  novos fluxos continuam com `entryPoint=false` e ativacao como acao operacional
+  separada;
+- no modelo "Atendimento institucional com menu", iniciar pelo consentimento e
+  depois seguir para mensagem/opcoes do menu principal;
+- substituir copy especifica por texto neutro: "Quais opcoes estarao
+  disponiveis no menu?";
+- editar opcoes e destinos ja na primeira tela do menu principal, em linhas
+  expansivas, uma opcao aberta por vez, com submenu, exclusao e pendencias
+  dentro do proprio bloco;
+- aplicar o mesmo padrao recursivo para submenus e preservar tons/bordas por
+  nivel hierarquico;
+- padronizar resultados de acao em toast global visivel independentemente do
+  scroll, mantendo validacao de campo inline;
+- restaurar foco/scroll para a secao ativa apos voltar nivel, cancelar submenu,
+  remover opcao ou aplicar rascunho.
+
+Status:
+
+- GUIDED BUILDER 2.3 / DEPLOYED / OWNER APPROVED LOCAL / PRODUCTION REAL VALIDATION.
+- Sem schema, migration, backend, worker ou semantica runtime.
+- Owner aprovou a UX final local; validacao real em producao permanece aberta
+  ate exercicio humano em tenant real apos deploy.
+
+Nota de recuperacao 2026-09-12:
+
+- A worktree temporaria usada durante a validacao local foi perdida apos reboot
+  da maquina; isso confirmou que `/tmp` nao e suficiente como preservacao de
+  trabalho do owner.
+- A primeira reaplicacao pos-reboot recuperou uma versao antiga e foi descartada
+  como referencia funcional.
+- Producao nao foi mutada, nao houve commit, push ou deploy da 2.3 durante a
+  recuperacao.
+- A versao local atual foi reconstruida a partir dos patches da sessao Codex e
+  confrontada contra o HEAD canonico de producao/origin antes da continuidade.
+- A aprovacao local final do owner foi aplicada sobre worktree limpa baseada no
+  HEAD canonico atual antes de commit/push/deploy; qualquer revisao futura deve
+  manter backup de diff fora de `/tmp`.
+- Ajuste final do owner: ao excluir opcao, submenu/linha aninhada ou registro
+  editavel, a UI nao deve abrir automaticamente o proximo irmao. O item e
+  removido, irmaos permanecem colapsados, e o foco volta ao contexto pai ou a
+  secao atual.
+- Entrega final 2.3 e frontend-only: sem mudanca de `ChatbotFlow.definition`,
+  sem tenant hardcode, sem migration e sem reload de backend/worker.
+
+### Contact Timeline / Histórico do contato
+
+Status:
+
+- implementado como view derivada, sem tabela nova
+- endpoint `/app/conversation/:waId/timeline` em produção
+- acesso pelo inbox na coluna CRM
+
+Riscos conhecidos:
+
+- cursor atual usa apenas `createdAt`; em volume alto com muitos registros no mesmo milissegundo, pode haver borda rara de paginação. Evoluir para cursor composto `createdAt + id`.
+- timeline agrega `InboundMessage`, `OutboundMessage`, `Event` e `LeadNote` em memória por lote. Está limitado, mas deve ser revisado se tenants tiverem alto volume histórico.
+- eventos são exibidos sem `payloadJson` bruto por segurança; caso a operação peça detalhes ricos, criar normalizador por tipo de evento, não expor payload integral.
+- `Contact` existe, mas o CRM operacional ainda usa `Lead`. Evitar criar nova entidade ou duplicar histórico até consolidar o modelo pessoa/contato.
+- `Contact` não possui `waIdCanonical`; se ele virar entidade principal, avaliar migration específica.
+- LGPD: timeline respeita `deletedAt`/`historyVisibleAfter`; manter testes sempre que alterar anonimização, retenção ou reentrada.
+
+Pendências recomendadas:
+
+- adicionar cursor composto `createdAt + id` na timeline.
+- criar testes de endpoint para: mensagens, eventos, notas, paginação, escopo por setor e corte LGPD.
+- avaliar se histórico deve ter busca por termo em fase futura.
+- avaliar tela dedicada de contato apenas após uso real validar necessidade.
+
+### Runtime / Operação
+
+Status:
+
+- producao atual em `STORAGE_MODE=postgres`
+- leitura operacional estrita a Postgres para runtime state
+- JSON permanece apenas como compatibilidade historica/local quando configurado
+
+Riscos conhecidos:
+
+- manter rotina `state:validate` documentada após alterações em handoff, claim, transfer, release, retenção e reentrada.
+- qualquer novo write operacional precisa atualizar Postgres e manter compatibilidade com o fallback JSON enquanto a transição não for encerrada.
+
+Pendências recomendadas:
+
+- definir critério para encerrar escrita JSON ou mantê-la como fallback permanente.
+- incluir validação de runtime no checklist de deploy quando houver mudança operacional.
+
+---
+
+## SPRINT 26 — ONBOARDING INTERNO ASSISTIDO
+
+Status:
+
+- implementado (backend + UI)
+- não validado com novo tenant real
+
+Classificação:
+
+- item latente (não bloqueante)
+
+Diretriz:
+
+- NÃO priorizar validação neste momento
+- retomar apenas quando houver novo cliente real
+
+---
+
+## SPRINT 28 — OBSERVABILIDADE META (COMPLETED)
+
+- status real da Meta integrado na UI de campanhas
+- delivered / read / failed visíveis
+- billing visível por mensagem
+- correção de regressão de status (prioridade)
+- consistência UI = banco validada
+
+Impacto:
+
+- elimina ambiguidade operacional
+- aumenta confiança do operador
+- permite operação profissional com cliente real
+
+---
+
+## SPRINT 29 — ÁREA DO CLIENTE (COMPLETED)
+
+- login por usuário implementado
+- auto-scope via token (`clientId`)
+- rotas `/app/*` criadas
+- inbox operacional com claim/release, status e notas
+- campanhas completas com criação, cancelamento e replay
+- criação de usuário via UI implementada
+- reset de senha via API implementado
+- onboarding interno consolidado
+- fluxo completo sem script validado
+- login e acesso do cliente funcional
+- isolamento total por tenant
+- isolamento por tenant validado
+- uso independente sem admin validado
+
+Impacto:
+
+- sistema passou a ser utilizável pelo cliente final
+- elimina dependência do `/admin`
+- transforma a plataforma em SaaS real
+- elimina dependência técnica no onboarding
+- permite criação de clientes em minutos
+- habilita operação com múltiplos tenants
+- sistema passa a ser operacional em escala inicial
+
+---
+
+## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
+
+---
+
+### 1. Uso real com clientes
+
+- execução de campanhas
+- operação assistida
+- coleta de feedback real
+
+---
+
+### 2. Ajustes baseados em uso
+
+- melhorias de UX
+- redução de fricção operacional
+- correções pontuais
+
+---
+
+### 3. Evolução incremental do produto
+
+- filtros avançados
+- melhorias de interface
+- ajustes de fluxo
+
+---
+
+## FUTURO (NÃO PRIORITÁRIO)
+
+- onboarding self-service para cliente
+- fila persistente (Redis/Bull)
+- retry automático
+- scheduler de campanhas
+- segmentação avançada
+
+---
+
+## DIRETRIZ IMPORTANTE
+
+Priorizar:
+
+- uso real
+- operação com cliente
+- estabilidade
+
+ANTES de:
+
+- novas features
+- refatorações grandes
+- otimizações prematuras
+
+---
+
+# HISTÓRICO DE SPRINTS (MARCOS)
+
+- Sprint 14 -> shadow write completo
+- Sprint 15 -> leitura híbrida
+- Sprint 16 -> consistência validada
+- Sprint 17 -> Postgres como source of truth
+- Sprint 18 -> controle de uso
+- Sprint 19 -> campanhas base
+- Sprint 20 -> execução assíncrona
+- Sprint 21 -> API operacional
+- Sprint 22 -> operação assistida
+- Sprint 23 -> UI de campanhas
+- Sprint 24 -> refinamento de UX
+- Sprint 25 -> onboarding real validado (JUSTA)
+- Sprint 26 -> onboarding interno assistido
+- Sprint 28 -> observabilidade Meta
+- Sprint 29 -> área do cliente
+
+## Incidente P1 — handoff humano com setor sem fila concreta
+
+Em 2026-09-12 foi auditado em producao o tenant `syer-rodrigues`, contato
+`****9614`: o inbound chegou, o bot respondeu, o handoff foi ativado e o runtime
+ficou `mode=HUMAN`, `handoffStatus=ACTIVE`, `status=WAITING`,
+`departmentId=Campanha 2026`, `queueId=null`, sem responsavel e sem fechamento.
+A conversa nao projetou para a Inbox humana porque o invariant operacional da
+Inbox exige destino humano completo: setor + fila.
+
+Conclusao de dominio: `queueId=null` nao e um destino operacional humano valido
+para atendimento aguardando atribuicao. O caminho correto e resolver uma fila
+concreta antes de criar/projetar atendimento humano; nao afrouxar a visibilidade
+da Inbox para aceitar aguardando sem fila.
+
+Auditoria read-only em producao: 10 fluxos ativos; 7 handoffs ativos com
+`departmentId` e sem `queueId`, distribuidos em 2 tenants
+(`syer-rodrigues`: 6; `lab-websession`: 1). Os setores afetados tinham
+exatamente uma fila existente (`Fila Geral`), permitindo resolucao deterministica
+sem hardcode de tenant.
+
+Fix local: `departmentAwareHandoff` resolve automaticamente a unica fila
+existente do setor quando o fluxo legado/guiado traz apenas `departmentId`; se o
+setor nao tem fila ou tem multiplas filas sem escolha explicita, bloqueia o
+handoff em vez de criar `WAITING` invisivel. O Guided Builder passa a exigir fila
+concreta, auto-selecionando a unica fila do setor e exibindo erro acionavel
+quando nao ha fila cadastrada.
+
+Contrato preservado: Inbox, SLA, relatórios, posicao de fila, claim,
+transferencia, notificacoes e atribuicao automatica continuam operando sobre
+destino humano completo (`departmentId` + `queueId`).
+
+Fechamento operacional em 2026-09-12: apos backup fresco de pre-reparo, o atendimento ja existente
+`****9614` foi reparado com uma unica mutacao de campo em
+`ConversationRuntimeState.queueId`, de `null` para a fila existente
+`cmtoekafy00014s4lg41vs5i0` (`Fila Geral`). Nenhuma mensagem, historico,
+protocolo, ciclo, fechamento ou atribuicao foi alterado. A prova pos-reparo
+mostrou `mode=HUMAN`, `handoffStatus=ACTIVE`, `status=WAITING`, setor
+`Campanha 2026`, fila `Fila Geral`, sem responsavel, conversa aberta,
+projecao canonica na Inbox humana exatamente uma vez e posicao de fila `1`.
+Incidente fechado.
+
+Guided Builder 2.4 local: consolidar UX sem alterar runtime ou schema. Navegacao
+do wizard (selecionar modelo, Continuar, Voltar) preserva a posicao atual de
+scroll e usa foco com `preventScroll`; expansao de linha editavel ancora o
+cabecalho da propria linha; exclusao/cancelamento/retorno recupera o contexto
+pai sem abrir o proximo irmao. Cancelar submenu em criacao remove apenas o
+estado transiente, mantem o pai expandido e devolve foco ao cabecalho do pai.
+Destino "Fazer uma pergunta" exige pergunta, tipo de resposta e proximo
+comportamento definido; permite no maximo 3 perguntas consecutivas antes de
+outro destino. Auditoria de runtime classificou branching por resposta
+capturada como PRODUCT GAP: o runtime atual tem captura sequencial por
+`capture.next`, mas nao possui predicados por valor capturado, igualdade,
+sim/nao ou fallback branch para resposta livre.
+
+Registro historico do Guided 2.4: `WAITING` humano precisava de
+`departmentId` + `queueId` concreto. Auditoria local de cardinalidade encontrou
+24 setores ativos sem fila, 56 com uma fila e 5 com duas ou mais filas. Os 5
+casos multi-fila foram classificados como `default` = INTERNAL DEFAULT/Re7 Demo
+e `campaigns-feature-*` = AUTOMATED TEST ARTIFACT por metadados reais
+(`phoneNumbers=0`, `channelAccounts=0`, fixture em
+`campaignsFeatureRoutes.test.ts`); nenhum fluxo ativo ou runtime usa multiplas
+filas dentro do mesmo setor. A UX 2.4 resolvia fila unica internamente sem
+label/seletor/texto de fila; setor sem fila bloqueia com "Este setor ainda nao
+esta preparado para receber atendimentos."; somente setor com 2+ filas exibe
+seletor "Fila" como excecao. Esse comportamento foi SUPERSEDED localmente pelo
+dominio explicito: a UX mostra apenas Setor e bloqueia se
+`operationalQueueId` estiver ausente. Fluxos existentes com `departmentId` e
+`queueId=null` exibem aviso e nao sao reescritos automaticamente ao abrir.
+
+Backlog 2.4: GUIDED BUILDER 2.4 = APPROVED FOR FRONTEND-ONLY DELIVERY /
+PRODUCTION VALIDATION; HANDOFF QUEUE UX = SIMPLIFIED / CONDITIONAL EXCEPTION;
+QUESTION CONDITIONAL BRANCHING = PRODUCT GAP.
+
+Micro-ajuste final de UX 2.4: o owner apontou redundancia no bloco visual
+"Escolha o setor que recebera o atendimento." apos selecionar "Encaminhar para
+atendimento humano". O bloco/cartao instrucional foi removido; o editor agora
+mostra diretamente `Setor`/selector, mantendo fila unica interna, bloqueio de
+setor sem fila, seletor excepcional para 2+ filas, preview e JSON gerado sem
+alteracao. Status historico local antes da entrega: GUIDED BUILDER 2.4 =
+OWNER APPROVED LOCAL.
+
+Entrega aprovada do Guided Builder 2.4: delta validado aplicado sobre o HEAD
+canonico e publicado em `ca34e123c72de2e96f0dcff27b4e17f29e5b630b`, sem
+migracao, sem hardcode de tenant, sem reload de backend/worker e preservando
+`ChatbotFlow.definition`. Status: GUIDED BUILDER 2.4 = CLOSED / DEPLOYED /
+OWNER APPROVED LOCAL / PRODUCTION NON-DESTRUCTIVE VALIDATED; HANDOFF QUEUE
+CONTRACT = CLOSED / REAL VALIDATED; QUESTION CONDITIONAL BRANCHING = PRODUCT
+GAP / OPEN; SYER ****9614 = CLOSED.
+
+---
+
+# BACKLOG LATENTE (RETOMAR QUANDO NECESSÁRIO)
+
+- validação onboarding assistido
+- validação real do onboarding (novo cliente)
+- relatorios por atendente com historico persistido em Postgres para producao em `STORAGE_MODE=json`
+- padronização tenantId vs clientId
+- limpeza de `.data/default`
+- revisão do tenant `cliente-demo`
+
+---
+
+# BACKLOG LEGADO (BAIXA PRIORIDADE)
+
+- normalização de leadName
+- lastMessage nulo
+- limpeza de logs antigos
+- ajustes de parsing
+- melhorias menores de inbox
+
+---
+
+# DECISÕES ARQUITETURAIS
+
+- NÃO implementar recursos não oficiais de WhatsApp
+- manter foco 100% na API oficial da Meta
+- manter arquitetura simples e evolutiva
+- Sprint 42.1: separar superfícies /admin (plataforma) vs /app (cliente), migrando users, departments e reports para /app com requireClientAuth e auditoria por userId real
+
+## Canonical Identity P1 delivery - 2026-09-17
+
+- **IDENTITY P1: DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED.** Production
+  advanced by fast-forward from `cad9489c` to `ed329ec8` on 2026-09-17. Meta
+  inbound/capture and campaign CRM bootstrap reuse the existing canonical
+  resolver. The clean delivery passed 119 focused tests; the production backend
+  build, targeted agent reload, health/DB checks and read-only route/module
+  smokes passed without schema, migration, backfill or tenant hardcode. A real
+  post-deploy identity event has not yet been exercised.
+- **QUEUE DOMAIN: CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS.**
+  Nullable `Department.operationalQueueId`, composite same-tenant/same-department
+  FK, atomic Department lifecycle and explicit routing are implemented in the
+  isolated worktree. Local migration/tests/builds pass. Read-only production
+  audit of all 54 departments found 34 auto-safe exactly-one mappings, 8
+  inactive null-allowed rows, 7 resolved multi-queue mappings and 5 active
+  owner-resolved rows: `demo-converta` Setor Teste and `lab-websession`
+  Department Lunch get owner-approved internal queues; `demo-converta` FUNDARPE,
+  `re7online` Comercial and `re7online` Governo e Licitações get exact
+  owner-selected existing queues. Runtime name/order/usage inference remains
+  prohibited. Production cutover on 2026-09-18 applied the nullable schema
+  migration and reconciled 54/54 departments by explicit IDs. First production
+  reconciliation: 44 explicit updates, 2 internal queues created/linked; second
+  run: idempotent. Post-verify active unresolved = 0 and cross-tenant/department
+  links = 0. Owner decision package:
+  `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`.
+- **CAMPAIGN UX: OWNER PASS / QUEUE-DEPENDENT DELIVERY DEPLOYED.** The
+  normal UX selects only Setor and persists the exact internal queue. Production
+  delivery is now backed by `Department.operationalQueueId`; no queue selector is
+  exposed to the customer-facing admin UX.
+- Demo `****6787`: pre/post read-only snapshots of both historical Contacts and
+  Leads matched exactly; no production mutation occurred and repair remains a
+  separate gate.
+
+## CRM origin + full Contacts CSV + campaign block guards - 2026-09-23
+
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING.
+
+Production deploy 2026-09-23:
+- Previous head: `31a65a2bc6a74d7dd8fc5d5086133735155c64d4`.
+- Deployed head: `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`.
+- Backup:
+  `/opt/re7online/backups/postgres/pre-crm-origin-csv-campaign-guards-2a652e69-20260923T004417Z.dump`
+  (`21677788` bytes,
+  sha256 `99d2bbccd613dada93d27c19ee6d05a3f941cbe5a311d759036a10cb9f4688aa`,
+  `596` objects).
+- Production health after reload: `/agent-api/health` PASS (`ok=true`,
+  `db=ok`); `/app/crm`, `/app/campaigns`, `/app/inbox` and
+  `/app/settings/crm` returned HTTP 200.
+- Reloaded only `re7-whatsapp-agent` and `re7-admin-front`; worker PID/restart
+  count preserved.
+- Authenticated owner UI smoke and real CSV/campaign mutation evidence were not
+  exercised; no fabricated session, no real campaign send and no provider call
+  were used for smoke.
+
+- CRM origin preserves earliest reliable provenance and records inbound/contact
+  materialization as `Atendimento / conversa` without a new persistence field.
+- Contacts CSV import removes duplicated selected-file text and supports phone
+  plus optional name, CRM situation, company, city, email and service/interest
+  mappings.
+- Unmapped or blank optional Contacts CSV fields preserve existing CRM data;
+  preview reports the fields that will change.
+- CRM `NEW` is a mandatory system status: active and restored if tenant
+  settings omit it. It does not create campaign ineligibility by itself;
+  eligibility remains governed by campaign status configuration and explicit
+  send guards such as opt-out, operational exclusion, anonymization and valid
+  WhatsApp identity.
+- Campaign manual/CSV guards and Inbox template guards preserve pre-provider
+  opt-out/active-send blocking and show user-facing reasons.
+- Customer Campaigns/Inbox UX remains free of billing/price notices, and the
+  CRM audience panel uses neutral administrative styling.
+- Local validation: frontend contracts 46/46 PASS; backend focused
+  unit/contracts 25/25 PASS; `campaignRecipientImport` 7/7 PASS;
+  `crmCapabilityRoutes` 19/19 PASS; `campaignsFeatureRoutes` 118/118 PASS;
+  backend/frontend builds PASS; schema unchanged, migration none, provider
+  calls 0, real send NO.
+
+## P1 campaign delivery truth + alias-safe blocking - 2026-09-23
+
+Status: LOCAL FIX VALIDATED / NOT DEPLOYED.
+
+- Campaign CSV preview/import now preserves arbitrary CSV headers and requires
+  explicit phone-column mapping when no safe phone alias is detected. It no
+  longer silently selects the first CSV column as WhatsApp.
+- Active send blocking/opt-out lookup now evaluates Brazilian 12/13 digit
+  identity aliases as one canonical identity group and applies latest event wins
+  across record/revoke.
+- Provider accepted/submitted is not treated as delivered, read or Inbox-ready
+  evidence. Campaign execution persists outbound/submission and CRM attempt
+  materialization only; operational Conversation/Runtime is created or
+  reactivated only after Meta delivered/read webhook evidence.
+- Campaign result truth keeps submitted/accepted separate from delivered/read,
+  failed and blocked. Provider acceptance alone does not make a successful
+  delivery. Current `Campaign.sentCount` remains a legacy submitted/accepted
+  counter; it is not delivered count, read count or final success count.
+- Meta Cloud reaction-only webhook payloads are non-content events and do not
+  create inbox bubbles, unread/sound, bot transitions, CRM or runtime side
+  effects.
+- Real `****6683` controlled repair was executed in production on 2026-09-24
+  after backup
+  `/opt/re7online/backups/converta-persistent/postgres/20260924-105431.dump`
+  (`sha256=0b0905dbb115737fd9975438b0b750829d92b52a198eeddb5e2958fa049cb747`).
+  The repair deleted only false operational projections:
+  `ConversationRuntimeState 38012577-8dbb-43d5-8bdd-2ef8ba541038` and
+  `Conversation 9a07b043-6657-4dc3-9e7f-2b904caf939c`. Persistent repair
+  artifact:
+  `/opt/re7online/backups/converta-persistent/repairs/6683-2026-09-24-1057/`.
+  Campaign `ad354ce4-35dc-4fca-85e5-3108cc9a2332`, Outbound
+  `b5193677-2f28-41ea-879f-1dfebdfe08d9`, Event references, billing/meta usage,
+  Contact, Lead and CCI were preserved. Meta failed evidence `131026` /
+  `Message undeliverable` remains preserved as campaign failure history.
+- Local validation: focused campaign/import/webhook/runner/opt-out tests
+  23/23 PASS; `campaignsPageContract.test.ts` 21/21 PASS;
+  `campaignsFeatureRoutes.test.ts` 118/118 PASS. Schema unchanged and
+  migration none.
+
+## Final CSV inspection + Campaign Detail UX - 2026-09-23
+
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING.
+Production head: `9cfb0d439ed3acd8447659cb033519fa3507b3b3`.
+
+- Contacts CSV now separates file inspection from mapped import preview. The
+  operator can load/inspect a valid CSV, see all headers and then explicitly
+  select an arbitrary phone column when no safe `Telefone`/`Numero`/`Phone`/
+  `WhatsApp` alias exists. No contact mutation occurs during inspection.
+- Missing safe phone alias is a normal mapping state, not a generic preview
+  failure. Preview/confirmation still require a selected phone column; invalid
+  values in the chosen column remain row-level preview errors.
+- Optional Contacts CSV mappings preserve the existing tri-state semantics:
+  `undefined` permits auto-detection, `null` explicitly unmaps, and `string`
+  selects a column.
+- Campaign Detail now localizes known blocked/result reason codes in PT-BR
+  before display/copy where supported, while preserving provider details for
+  unknown diagnostics. Refresh keeps icon `↺`; `Nova campanha com filtrados`
+  uses a distinct creation icon `＋`.
+- Production deploy validated backend health (`ok=true`, `db=ok`) and app
+  shell reachability for `/app/crm`, `/app/campaigns` and `/app/inbox`.
+  Authenticated owner UI smoke was not exercised in this gate because no
+  genuine owner session was available to reuse without fabricating
+  authentication.
+
+## P1 - Campaign Reuse Contract + Owner-Facing Error Normalization - 2026-09-23
+
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN VALIDATED /
+OWNER UI PENDING.
+
+- `Reaproveitar campanha` and `Nova campanha com filtrados` now share one
+  campaign reuse contract: rebuild the original composer semantics as far as
+  persisted `draftSeed` and result evidence allow, instead of maintaining two
+  divergent reconstruction paths.
+- Full reuse preserves method semantics for manual, static CRM audience,
+  dynamic CRM filter and CSV. CSV reuse restores template/destination and asks
+  for file re-selection when the original raw file is not retained.
+- Filtered-result reuse preserves the original method where compatible.
+  Manual campaigns remain manual with filtered recipients prefilled. Dynamic
+  CRM and CSV filtered subsets are explicitly frozen into a static recipient
+  subset with an operator warning.
+- Template variables are restored as editable composer state. Missing required
+  variables are normalized as `template_variables_required` with PT-BR copy and
+  are not misclassified as `no_eligible_recipients`.
+- Campaign owner-facing errors/toasts now map campaign error codes first and
+  translate known blocked/result reasons and status labels to PT-BR. Structured
+  `no_eligible_recipients` summaries can explain known block reasons such as
+  active-send block without exposing backend English strings.
+- Local follow-up, 2026-09-24: campaign reuse preview hydration is being
+  corrected so static CRM reuse preserves the original `draftSeed.leadIds`
+  selection but refreshes each selected contact from the same-tenant CRM read
+  model before showing `Situacao no CRM` and eligibility. Persisted static
+  audience filters are not available in historical seeds, so the UI must not
+  infer filters from recipients or add new contacts. Dynamic CRM reuse can
+  restore the persisted `dynamicFilter.crmBusinessStatusId`. Status:
+  LOCAL FIX PREPARED / NOT DEPLOYED.
+- Local validation complement, 2026-09-24: post-reuse active-send blocking was
+  exercised with simulated providers. A recipient that participated in the
+  original campaign and was later opted out becomes ineligible on reuse without
+  expanding the preserved static `leadIds`; if blocking happens after preview
+  but before send, `sendScopedCampaignDraft` revalidates through
+  `resolveCampaignDraftRecipientsFromLeadIds` and stops with zero additional
+  OutboundMessage, Conversation, RuntimeState or provider call. Scheduled
+  static campaigns are revalidated by `campaignRunner` before provider calls;
+  mixed audiences send only eligible recipients and all-blocked audiences keep
+  the zero-eligible contract. CRM `Situacao` remains descriptive only and is
+  not treated as a send block by itself. Current frontend hydration uses exact
+  per-lead CRM detail reads because no batch-by-leadIds endpoint exists yet.
+- Review follow-up for commit `be4f2d51`, 2026-09-24: reuse hydration now
+  distinguishes missing contact, auth/permission and network/query failures in
+  the preview instead of labeling every failure as "Sem situação"; stale
+  hydration responses cannot change the composer after cancel/reset/another
+  reuse; the composer opens immediately with explicit loading and limited
+  concurrency while the current CRM data is refreshed. Status remains NOT
+  DEPLOYED / OWNER UI PENDING.
+- Behavioral validation: `campaignReusePreview.test.ts` 6/6 PASS covers
+  successful current CRM detail without Situation, 404 vs auth vs network
+  failure, late response after another reuse, late response after cancel/reset,
+  selected order/current block preservation and max four concurrent CRM detail
+  reads. `campaignsPageContract.test.ts` 25/25 PASS and frontend build PASS.
+- Production deploy, 2026-09-24: functional head
+  `1ea1fef7556e161a9cf938dbbf23442fdfd1e1f6` was deployed by FF-only from
+  `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294` after persistent PostgreSQL
+  backup
+  `/opt/re7online/backups/converta-persistent/postgres/campaign-reuse-preview-1ea1fef-20260924T200821Z/20260924-200822.dump`
+  (`sha256=3d87e903c379e63e7ccd60ea3c0f583fd7ac3929a4f6f0d8e8965f1148f5124c`,
+  581 objects). Frontend build PASS; only `re7-admin-front` was reloaded.
+  `re7-whatsapp-agent` and `re7-whatsapp-web-worker` were preserved. Health and
+  `/app/campaigns`, `/app/crm`, `/app/inbox` returned PASS. Authenticated owner
+  reuse smoke for `Campanha teste set.27` was NOT EXERCISED from the deploy
+  shell because no genuine session was available. Status:
+  DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
+- Local refinement, 2026-09-25: campaign detail/reuse UX was tightened without
+  schema/runtime changes. CRM audience preview now separates filter controls
+  from result counters; campaign detail removes the redundant status counter
+  card, places the state badge beside refresh, groups send/schedule/discard
+  actions separately from test-send and keeps the progress area adjacent to the
+  action group. Draft detail no longer shows the composer-only variable mapping
+  block, shows real draft recipient data in a fixed-height scroll area, removes
+  relative timestamps from this context and only renders "Situacao real por
+  mensagem" when real provider/result evidence exists. Test-send now accepts
+  only the recipient number in the UI and relies on the backend resolver for
+  explicit variables, seed recipient components or fixed template params;
+  insufficient campaign sample data still returns `campaign_test_variables_required`
+  before any provider call.
+  Reuse now loads full campaign detail with `getAppCampaign` before deciding
+  mode when the list item lacks `draftSeed`, avoiding silent fallback to manual.
+  Historical static filters remain unrecoverable when not persisted; draft
+  recipient current-vs-historical provenance is not invented when the API does
+  not expose it. Validation: campaign page/reuse contracts 32/32 PASS,
+  backend focused campaign routes 2/2 PASS, frontend build PASS, backend build
+  PASS. Authenticated local browser smoke on 2026-09-25 used backend `3047`,
+  frontend `3048`, tenant `campaign-refinement-local`, simulated providers and
+  local DB `127.0.0.1:55432/re7_contacts_campaigns_ux_test`: desktop and narrow
+  screenshots confirmed no redundant Situation counter, status badge adjacent
+  to refresh, send/discard/schedule grouped with progress below, test-send
+  separated with only a recipient-number field, no detail variable-mapping
+  block, no relative timestamps, hidden real-message status when only fallback
+  seed data exists, draft recipient scroll above five rows, detail fetch before
+  reuse mode selection and no silent manual fallback. Evidence stored in
+  `.codex/evidence/campaign-refinement-2026-09-25/`. Status: LOCAL FIX
+  PREPARED / NOT DEPLOYED / OWNER UI PENDING.
+- Review follow-up for `efbcc62`, 2026-09-25: reuse now advances the
+  generation guard before the initial `getAppCampaign` detail fetch, so a late
+  response/error from campaign A cannot update selected campaign, form, mode,
+  tab, modal or toast after campaign B or cancel/reset. Draft confidence copy is
+  neutral ("Rascunho — envio ainda não iniciado") and no longer claims send
+  readiness from `status=draft` alone. Detail-result evidence no longer depends
+  on matching the Portuguese missing-history text: the backend marks seed rows
+  without individual history as `missing_individual_history`, while real
+  `failed_or_blocked`, `status_unconfirmed` and provider result evidence
+  remains visible. `pricingBillable` counts as evidence only when it is an
+  explicit boolean. Validation: campaign page/reuse contracts 32/32 PASS;
+  backend focused campaign routes 3/3 PASS on local DB
+  `127.0.0.1:55432/re7_contacts_campaigns_ux_test`; frontend build PASS;
+  backend build PASS. Authenticated local smoke on frontend `3068` / backend
+  `3067` confirmed no draft readiness claim, no result section for
+  draft/seed-only placeholder without execution, reuse opening without silent
+  manual fallback and bounded draft table. Follow-up correction: completed
+  campaigns with `missing_individual_history` remain visible as historical
+  inconsistency, not as proven provider failure. Evidence stored in
+  `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status: LOCAL FIX
+  PREPARED / NOT DEPLOYED / OWNER UI PENDING.
+- Production deploy, 2026-09-25: functional head
+  `d172b0e65a5237d835acd6ef5ece7ee50af5d241` was deployed by FF-only from
+  `1ea1fef7556e161a9cf938dbbf23442fdfd1e1f6` after persistent backup snapshot
+  `/opt/re7online/backups/converta-persistent/snapshots/20260925T102510Z`
+  (`database.dump` sha256
+  `33003b892ae5b4f8d0228177017aa7c3c68707b910c36b7da6eb39affc070c13`,
+  22,330,663 bytes, 581 objects, `SHA256SUMS` verified). Backend and frontend
+  builds PASS; `re7-whatsapp-agent` and `re7-admin-front` were reloaded, while
+  `re7-whatsapp-web-worker` was preserved after confirming the changed backend
+  route/test files are not in the worker compile graph. Health/db and basic
+  `/app/campaigns`, `/app/crm`, `/app/inbox` route checks PASS. Authenticated
+  campaign-detail/reuse UI smoke was NOT EXERCISED from the deploy shell because
+  no legitimate owner session/case was available there. No draft, schedule,
+  test send, campaign send, opt-out mutation, provider call, schema change or
+  migration was performed by validation. Status:
+  DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
+- Owner visual validation, 2026-09-25: owner confirmed PASS for the deployed
+  campaign detail/reuse visual refinements at `d172b0e65a...`. Remaining local
+  follow-up is test-send sample resolution: the UI keeps only the destination
+  number field and the backend may use values from the same campaign's first
+  eligible complete recipient as a deterministic sample, sending exclusively to
+  the number typed by the operator. The sample is not added to campaign
+  participation/history, destination opt-out/exclusion is revalidated, and lack
+  of a complete sample blocks before provider. The same local lot removes the
+  duplicated draft-detail summary block (`Solicitados`, `Aceitos`,
+  `Bloqueados`, `Duplicados` and technical reason chips) while preserving
+  campaign main counters, draft recipient review, backend validation and
+  eligibility data. Status:
+  LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI PENDING.
+- Local correction, 2026-09-25: test-send sample resolution now re-prioritizes
+  the typed number after canonical draft readiness rebuilds CRM mapping-derived
+  components. A test destination that belongs to the audience, including 12/13
+  digit aliases, uses its own current data; if that recipient lacks required
+  variables, the request blocks instead of silently using another person's
+  sample. External test destinations may still skip incomplete candidates and
+  use the next eligible complete sample. Focused local coverage passed for
+  static CRM audience, dynamic CRM filter, alias matching, exact typed
+  destination, zero provider call on incomplete known recipient, and unchanged
+  draft campaign status. Status:
+  LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+- Production deploy, 2026-09-25: functional head
+  `aba600989eda77f6cb1258256f5aa0ba2f40ba03` was deployed by exact checkout
+  from `d172b0e65a5237d835acd6ef5ece7ee50af5d241` after persistent backup
+  `/opt/re7online/backups/converta-persistent/snapshots/20260925T130420Z`
+  (`database/database.dump`, 22,377,789 bytes, SHA256
+  `1ed097a1ded0c14c0e75dc97ba6af1ba3ccadf985080bc612ff3cd4db0df3bb5`,
+  581 objects in manifest). Backend and frontend builds PASS; only
+  `re7-whatsapp-agent` and `re7-admin-front` were reloaded, with
+  `re7-whatsapp-web-worker` preserved. Health/db and `/app/campaigns`,
+  `/app/crm`, `/app/inbox`, `/app/login` route checks PASS. Authenticated
+  draft-detail UI inspection was NOT EXERCISED from the deploy shell; owner UI
+  remains pending. Validation did not click test-send, create drafts, schedule,
+  send campaigns, change opt-out, call providers, change schema or run
+  migrations. Backup script reported a retention-cleanup permission issue for
+  an old snapshot after the new backup was created and validated; deploy used
+  the valid new snapshot. Status:
+  DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
+- Owner validation, 2026-09-25: owner confirmed PASS for the deployed
+  test-send sample + draft-detail cleanup lot at
+  `aba600989eda77f6cb1258256f5aa0ba2f40ba03`.
+- Local follow-up, 2026-09-25: campaign test-send now accepts valid Brazilian
+  national numbers with DDD and no explicit `55`, using the existing CRM
+  WhatsApp identity normalizer before provider dispatch. Complete international
+  inputs, 12/13 aliases and destination opt-out/exclusion guards are preserved;
+  incomplete or ambiguous national input returns a specific PT-BR validation
+  message before provider. `/app/settings/crm` was reorganized into
+  department-style expandable rows while preserving CRM status values,
+  permissions and the distinction between `Situação no CRM` and active-send
+  blocking. Campaign light-theme select/options and the `Envio manual` label
+  now use theme-aware tokens. Follow-up smoke diagnosed the earlier CRM load
+  error as local environment configuration: `/app/crm/settings` requires the
+  legacy `.data/tenants.json` entry, and the local smoke process had no entry
+  for the selected test tenant. A minimal ignored local `.data/tenants.json`
+  restored the supported local fixture path; the endpoint returned 200 with
+  `configSource.crmBusinessStatuses=db`. Authenticated browser smoke validated
+  mouse and keyboard expand/collapse, edit/save/reload persistence, abandoning
+  an unsaved edit by reload, desktop/narrow and light/dark screenshots. Focused
+  backend coverage includes BR national number without `55`, full `55` form,
+  international destination preservation, incomplete/ambiguous rejection and
+  alias opt-out blocking with provider mocked. Status:
+  LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+- Pre-deploy review correction, 2026-09-25: the shared CRM WhatsApp identity
+  parser now distinguishes Brazilian DDD `55` from country code `55` by input
+  length. National `55 99140-0002` and full `55 55 99140-0002` converge to the
+  same canonical destination; campaign test-send preserves the selected
+  recipient data and opt-out/alias blocking for both forms before provider.
+  Focused normalizer and campaign route tests plus backend build passed. Status:
+  LOCAL VALIDATED / NOT DEPLOYED.
+- Focused local audit, 2026-09-25: ordinary campaign execution paths now reuse
+  the canonical CRM WhatsApp normalizer before opt-out and provider dispatch.
+  CSV/import, persisted CRM static/dynamic recipients, reuse and scheduled runs
+  converge national DDD `55` input and full `55` input to the same destination,
+  preserve other Brazilian DDDs, block alias opt-out/exclusion before provider
+  and avoid duplicate recipients. CSV/import remains a typed-input surface and
+  continues to reject unsupported international input as controlled row
+  validation with zero provider calls; CRM/Inbox template sends are
+  conversation/identity-backed paths, not arbitrary typed-phone entry points.
+  Provider calls were simulated only. Status:
+  LOCAL VALIDATED / NOT DEPLOYED.
+- Review follow-up, 2026-09-25: campaign runner normalization now preserves the
+  original recipient-to-components association when a national DDD `55` entry
+  is normalized to full canonical form. Static seeds with
+  `componentsByWaId["55991400002"]` send to `5555991400002` using that exact
+  recipient's variables; national/full collisions dedupe to one send without
+  mixing data from another recipient. Focused runner and route tests plus
+  backend build passed with providers mocked. Status:
+  LOCAL VALIDATED / NOT DEPLOYED.
+- Production deploy, 2026-09-25: functional head
+  `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e` was deployed by FF-only from
+  `aba600989eda77f6cb1258256f5aa0ba2f40ba03` after persistent backup
+  `/opt/re7online/backups/converta-persistent/snapshots/20260925T161546Z`
+  (`database/database.dump`, 22,438,545 bytes, SHA256
+  `a7812cccd56a5f398ee7664aea44591b933997d74fc8199bc1a9ea6c2a5a2860`,
+  581 manifest objects). Backend and frontend production builds PASS; `git
+  diff --check` PASS. Only `re7-whatsapp-agent` and `re7-admin-front` were
+  reloaded; `re7-whatsapp-web-worker` and `.data/` were preserved. Health/db
+  and unauthenticated route reachability for `/app/campaigns`, `/app/crm`,
+  `/app/inbox`, `/app/settings/crm` and `/app/login` PASS. Authenticated
+  read-only UI smoke was NOT EXERCISED because no legitimate session was
+  available in shell; OWNER UI remains pending. Validation did not click
+  test-send, create drafts, schedule, send campaigns, save CRM settings, call
+  providers, change schema or run migrations. Backup retention cleanup still
+  has the previously documented old-snapshot permission issue, separate from
+  the validated new backup. Status:
+  DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
+- Owner validation, 2026-09-25: owner confirmed PASS for the deployed
+  normalization/settings/contrast lot. This closes the product lot as
+  DEPLOYED / OWNER VALIDATED / CLOSED at functional head
+  `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`; it is product-owner acceptance,
+  not formal CRA contractual acceptance. The old backup-retention permission
+  issue remains a separate operational follow-up, and the transient Prisma
+  reload error recovered with health/db OK and did not require rollback.
+- Audience size audit, 2026-09-25, published behavior before the local batch
+  backend: CRM static audience preview requests
+  `/app/campaigns/audience-preview` with `limit=25`; backend analyzes up to
+  5,000 CRM rows but returns paginated eligible items, and `Criar rascunho com
+  audiencia` sends only the eligible items currently present in that preview
+  response. Static draft creation rejects `selectedLeadIds.length > 1000`, and
+  the shared resolver also caps sanitized selected IDs at 1,000. There is no
+  implicit "all 3,000" selection and no automatic batching.
+- Dynamic CRM-filter audit, 2026-09-25, published behavior before the local
+  batch backend: dynamic scheduling stores only
+  `selectionMode=DYNAMIC_CRM_FILTER` plus the same-tenant CRM status filter; it
+  does not freeze recipients at schedule time. At execution, the runner queries
+  `take: 1001` and fails explicitly with `dynamic_match_limit_exceeded` when
+  more than 1,000 leads match, before provider dispatch. There is no silent
+  truncation in the runner and no automatic split into batches. UX gap remains:
+  the preview/estimate can show the current count, but the product should make
+  the 1,000-recipient campaign/execution limit and dynamic overflow failure
+  clearer before draft/schedule. Status: OPEN / P2 CAMPAIGN UX PREFLIGHT.
+- Campaign batches + tenant execution queue, local update 2026-09-26:
+  BACKEND CORE + GROUP UI INTEGRATED LOCALLY / FOCUSED VALIDATED / NOT DEPLOYED /
+  OWNER UI PENDING.
+  Additive Prisma migration was validated with `prisma migrate deploy` in an
+  isolated local DB. The local queue persists batch/chunk/job/lease records,
+  enqueues immediate/scheduled/resume paths, makes test-send acquire a durable
+  technical tenant job, and blocks new tenant execution while any running job is
+  active or uncertain even after lease expiry. New focused recovery coverage
+  proves that an expired running job does not unblock the tenant by timeout; an
+  explicit `needs_review` classification records the reason, releases the lease,
+  invalidates the old executor token and allows later queued work without
+  resending the uncertain job. Additional queue coverage proves batch chunks are
+  claimed in deterministic `chunkIndex` order, and the runner preserves accepted
+  provider evidence after lease loss while stopping before the next provider
+  call. Integrated local backend coverage proved CRM dynamic scheduled 3,001
+  recipients -> one snapshot -> four sequential chunks, and CSV grouped 3,001
+  recipients -> four sequential chunks with per-recipient variables preserved
+  and a post-plan blocked recipient excluded before provider. UI list displays
+  "Revisao operacional" and the block reason for that state. Local UI/API
+  integration now exposes the execution batch summary in Campaign detail:
+  group identity, source, total recipients, numbered chunks, per-chunk
+  status/progress, tenant queue state, requested/effective times and operational
+  block reasons. Focused validation after this UI hook: backend build PASS,
+  `campaignsPageContract.test.ts` 28/28 PASS, frontend build PASS,
+  `campaignsFeatureRoutes.test.ts` 125/125 PASS and `git diff --check` PASS.
+  Authenticated local API smoke on isolated ports `3007`/`3061` loaded
+  supervisor/admin campaign detail for fixture `batch-smoke-20260926`, confirmed
+  `executionBatch` with 3,001 recipients / four chunks and confirmed AGENT
+  403; sanitized evidence is stored in ignored local directory
+  `local-evidence/20260926-batch-ui-smoke/`. Follow-up Chrome headless/CDP
+  smoke used fixture `batch-visual-20260926` with future `eligibleAt` and
+	  captured desktop/narrow screenshots: SUPERVISOR and ADMIN saw the group
+	  detail, tenant queue copy, four chunks and progress; AGENT direct URL showed
+	  restricted campaign access and no batch detail. Follow-up CDP smoke clicked
+	  aggregate `Pausar conjunto`, `Retomar conjunto` and `Cancelar conjunto`,
+	  then confirmed persisted DB state: paused jobs=4, resumed queued jobs=4 and
+	  cancelled jobs/campaigns=4. Test-send occupied was confirmed as no outbound
+	  delta while tenant busy, but the UI toast click remains visually inconclusive
+	  because the controlled input did not update in the CDP script. Visual flows
+	  still NOT EXERCISED: CRM/CSV grouped creation confirmation and occupied
+	  test-send toast by UI click. Remaining blockers are production-safe
+  migration rollout/rollback rehearsal, complete browser flow smoke, owner UI
+  validation and deployment. Do not mark this CRA-ready until those operational
+  validations are complete.
+  Contract audit note: current production head `5ee2de6...` already calls
+  `ensureCampaignOutboundConversation(...)` from the Meta webhook path when a
+  campaign outbound receives `DELIVERED` or `READ`; tests using
+  `deliverCampaignOutbound(...)` assert `Conversation` and
+  `ConversationRuntimeState` creation with `lastInboundAt=null` and HUMAN/WAITING
+  runtime. This was not introduced by the batch lot, but it conflicts with the
+  stricter principle "campaign attempt does not equal operational conversation"
+  if that principle covers delivered outbound-only attempts. Publication of the
+  batch lot must remain blocked for owner/architecture decision on this contract;
+  do not reopen repair `6683` and do not legitimize the divergence as CRA-ready.
+
+## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
+
+Status: LOCAL FIX PREPARED / NOT DEPLOYED.
+
+- Immediate manual campaign creation now stops before campaign creation when
+  every requested recipient is blocked before provider execution. It returns a
+  controlled `no_eligible_recipients` response with PT-BR message and safe
+  summary; no campaign, outbound, runtime or provider call is created.
+- Mixed blocked + eligible requests still create the campaign and preserve the
+  blocked audit/result context, but only eligible recipients reach outbound
+  execution.
+- Contact campaign history now excludes pre-provider opt-out/active-send block
+  events. Campaign-level audit evidence remains preserved in canonical events;
+  real provider attempts such as failed/delivered/read remain campaign history.
+- CRM settings and campaign recipient preparation now use the same eligible
+  campaign-audience projection, excluding anonymized, opt-out/active-send
+  blocked, operationally excluded and invalid-identity subjects from eligible
+  counts.
+- Owner UX polish: campaign reuse success toast uses a distinct high-contrast
+  tone, and campaign name/template controls share the same height/alignment.
+- Local validation: `campaignsFeatureRoutes.test.ts` 120/120 PASS;
+  `crmCapabilityRoutes.test.ts` 20/20 PASS; campaigns frontend contracts
+  27/27 PASS. Backend build PASS; normal production frontend build
+  `npm run build` PASS with real local `node_modules`; final diff check PASS.
+- Production deployment: head `b8166b1cafea08f183646976a28b5649550729cd`
+  fast-forwarded from `332672508347836e2c4d4dbdd0aeb61272129b2c` after
+  persistent PostgreSQL backup. Backend and normal frontend production builds
+  passed; only `re7-whatsapp-agent` and `re7-admin-front` were reloaded, and
+  `re7-whatsapp-web-worker` was preserved.
+- Production read-only validation: health/db OK through `/agent-api/health`;
+  `/app/campaigns`, `/app/crm`, `/app/settings/crm` and `/app/inbox`
+  reachable. Demo CRM campaign-audience projection returned raw lead total 251
+  and eligible total 4; anonymized, opt-out/active-send blocked,
+  operationally excluded and invalid-identity exclusions remain governed by the
+  shared preparation helper. Pre-provider block sample `****6787` had no
+  outbound evidence for the same campaign/waId; real failed attempt `****9614`
+  and delivered evidence remained represented. No provider call, no real send
+  and no intended production test mutation were performed during validation.
+
+## P1 - Campaign RBAC / Active Sends Authorization - 2026-09-23
+
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER VALIDATED / CLOSED.
+
+Publication note: commit `69f71222e851ef05b23d40e5cb984b69cfef69f2` was
+published to GitHub for review first. Complement commit
+`b1a528a00d63b5dc3fea6c9ff45f9273e23f4294` was then published and deployed to
+production on 2026-09-24. Owner later declared "validação passou"; this is the
+owner acceptance record, distinct from the earlier technical smoke where
+role-specific production sessions were not available.
+
+Previous audit problem: app navigation had `feature: "campaigns"` but no
+`minRole`, so the UI omission/visibility contract was not explicit enough, and
+backend campaign routes were mainly guarded by authenticated tenant session
+plus `campaigns` feature, not by explicit SUPERVISOR/ADMIN role enforcement.
+
+Local implementation:
+- `AppShell` marks `/app/campaigns` as `minRole: "SUPERVISOR"`, so AGENT no
+  longer sees Campanhas/Comunicados in app navigation.
+- `/app/campaigns` page performs local role gating before loading protected
+  campaign data. AGENT direct URL shows a controlled no-permission state and
+  does not run campaign list/template/destination/CRM status loading while
+  authorization is checking or denied.
+- Backend now centralizes app campaign authorization through
+  `requireCampaignsAppAccess(...)`, reusing current client-session,
+  `isAdminOrSupervisorRole`, scoped client lookup and `campaigns` feature gate.
+  AGENT and unknown/non-manager app roles receive controlled 403 before body
+  parsing, payload validation, mutation or provider execution.
+- Protected app campaign routes covered locally: list, detail, export,
+  audience preview, return destinations, CSV preview, CSV draft, CRM draft,
+  manual create, discard, send, schedule, pause, resume, test-send and cancel.
+- Opt-out routes `/app/campaigns/opt-out` and `/app/campaigns/opt-out/revoke`
+  were audited and intentionally preserved because CRM consumes them for
+  contact opt-out/revoke behavior. No broad prefix block was applied there.
+
+Domain rule:
+- AGENT: no Campaign access and no active campaign operations.
+- SUPERVISOR: allowed.
+- ADMIN: allowed.
+- Backend is authoritative; UI omission is not sufficient.
+
+Local validation:
+- `campaignsFeatureRoutes.test.ts` 121/121 PASS against local dedicated DB
+  `127.0.0.1:55432/re7_contacts_campaigns_ux_test`. Added regression proves
+  AGENT gets 403, including invalid payload attempts, and negative attempts do
+  not change existing Template/Campaign records or Campaign, OutboundMessage,
+  Conversation, ConversationRuntimeState and Event counts. The provider
+  transport is mocked and asserted at zero calls. SUPERVISOR and ADMIN are
+  exercised across the same protected route set with explicit expected
+  functional responses.
+- Complement on 2026-09-24: the same backend test now also exercises
+  SUPERVISOR and ADMIN with valid fixtures for CSV preview, CSV draft, CRM
+  draft, manual immediate creation, explicit send, schedule, resume and
+  test-send. Provider calls remain simulated; the AGENT negative block still
+  proves zero provider calls and unchanged preexisting records/counts.
+- `campaignsPageContract.test.ts` 24/24 PASS. Added contract proves app
+  navigation role gate, direct page denied state and no protected list/detail
+  or polling data loading unless `campaignAccess === "allowed"`.
+- Isolated local browser validation on 2026-09-24 used backend `3039`,
+  frontend `3000`, tenant `rbac-local-smoke` and local DB
+  `127.0.0.1:55432/re7_contacts_campaigns_ux_test`: AGENT navigation omitted
+  Campaigns, direct `/app/campaigns` showed the controlled restricted state
+  without protected backend campaign API calls, and SUPERVISOR/ADMIN loaded
+  Campaigns with campaign API requests returning controlled 204/200 responses.
+  Evidence stored locally in ignored development evidence directory
+  `.codex/evidence/campaign-rbac-2026-09-24/`.
+- Builds after the final gap closure: backend `npm run build` PASS and frontend
+  `npm run build` PASS.
+- Required campaign regressions mapped and rechecked locally: delivery truth
+  via `campaignRunner.test.ts` 7/7 PASS; zero eligible/reuse via
+  `campaignsPageContract.test.ts` 24/24 PASS; CRM eligibility/import via
+  `campaignRecipientImport.test.ts` 7/7 PASS and `tenantConfig.test.ts` 3/3
+  PASS. The loading failures observed during this closure were sandbox IPC
+  `tsx` failures (`listen EPERM /tmp/tsx-1000/*.pipe`) and passed when rerun
+  with approved local execution; `campaignRunner` and `campaignRecipientImport`
+  also passed against the local test DB.
+- No schema/migration, production DB access, provider call, real send, commit,
+  push or deploy occurred in this local implementation step.
+
+Production deployment on 2026-09-24 followed
+`docs/DEPLOY_TOPOLOGY_RE7.md`, `docs/RUNBOOK_WHATSAPP_AGENT.md` and
+`docs/whatsapp-agent/ops/DEPLOY_VPS_PM2.md`: production moved by fast-forward
+from `957f19caced77693188a387bb7f7840a24092c67` to
+`b1a528a00d63b5dc3fea6c9ff45f9273e23f4294` after persistent PostgreSQL backup
+`/opt/re7online/backups/converta-persistent/postgres/campaign-rbac-b1a528a-20260924T143728Z/20260924-143729.dump`
+(22,212,175 bytes, sha256
+`215049ecb9aafdb6bd1e209b5a2f414b0ef8b0247447ec5719207de039a9ef58`, 581
+objects). Backend and frontend production builds passed; schema unchanged and
+no migration ran. PM2 reload scope was only `re7-whatsapp-agent`
+(`686274 -> 838501`) and `re7-admin-front` (`700707 -> 838522`);
+`re7-whatsapp-web-worker` stayed online and unchanged (`3747763`). Health
+returned `ok=true` / `db=ok`; `/app/campaigns`, `/app/crm`, `/app/inbox` and
+`/app/login` returned 200; unauthenticated `/app/campaigns` returned controlled
+401. No legitimate AGENT/SUPERVISOR/ADMIN production session was available to
+exercise role-specific UI/API smoke, so AGENT 403 and manager read smoke remain
+NOT EXERCISED in automated production smoke. Owner validation subsequently
+passed and closes the RBAC front. No POST campaign/opt-out mutation, provider
+call or real send was executed; rollback was prepared but not needed.
+
+Next front audit - P2 Guided Builder BOT inactivity policy UX:
+- Existing runtime/config: `ChatbotFlow.definition.inactivityPolicy` is already
+  normalized and persisted by the chatbot flow definition path. Existing keys
+  are `resetAfterMinutes`, `timeoutMinutes` and `action`; runtime accepts
+  `HANDOFF`, `CLOSE` and `RESET_TO_ROOT`, while the background processor only
+  acts on `timeoutMinutes` with `action=HANDOFF`.
+- Existing behavior: `resetAfterMinutes` is inline on the next inbound and
+  resets BOT flow to the start node without moving HUMAN/CLOSED; the inactivity
+  processor promotes eligible BOT runtimes once to HUMAN/WAITING with concrete
+  department/queue, protocol/queue messaging and skip events for invalid
+  consent/destination. HUMAN/WAITING remains under human control and must not
+  auto-close.
+- Existing UI: `ChatbotFlowBuilder` preserves `inactivityPolicy` as a simple
+  top-level field and the review currently only summarizes reset as
+  "Inatividade: N minuto(s) para reiniciar"; it does not offer clear Guided
+  controls for automatic handoff timeout/action nor explain the distinction.
+- Minimal implementation proposed: add a dedicated Guided lifecycle section
+  using current definition fields only, with two separate controls/copy blocks:
+  "Reiniciar automacao quando a pessoa voltar depois do intervalo" mapped to
+  `resetAfterMinutes`, and "Encaminhar ao atendimento humano apos abandono"
+  mapped to `timeoutMinutes` + `action=HANDOFF`, showing current
+  values/defaults in the review step. This does not resume from the previous
+  node and does not run by timer; it is applied on the next inbound after the
+  threshold. No schema, runtime, provider, production data or HUMAN auto-close
+  change.
+- Acceptance criteria: owner sees current values, can consciously set/clear
+  each policy, review explains practical effect, Advanced JSON remains
+  equivalent, existing reset/handoff tests pass, and no human service is closed
+  automatically.
+
+## Decisao de dominio pendente — materializacao por DELIVERED/READ
+
+Status: OPEN / DOMAIN DECISION REQUIRED / PUBLICATION BLOCKED.
+O webhook historico pode materializar Conversation/Runtime HUMAN/WAITING ao
+receber DELIVERED/READ de outbound de campanha, mesmo com lastInboundAt=null.
+Este comportamento e anterior ao lote e conflita com o principio de que uma
+tentativa de campanha nao equivale a conversa operacional. Nao foi resolvido
+nem legitimado por esta entrega. Webhook e campaignOutboundConversation foram
+preservados. A decisao permanece explicita para revisao final; reparo 6683 fechado.
+
+
+### Preflight do alvo — 2026-09-26 (somente leitura)
+
+Produção `5ee2de6b`; candidato `2ecfc91a`: **NOT DEPLOYED / OWNER UI PENDING**.
+[Preflight único, condições de parada e recuperação](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md) atualizado após `66b9cf2b`: portas 3000/3001 alcançáveis externamente, rewrite público do frontend e risco PM2 resurrect confirmados. Leituras privilegiadas de Nginx/firewall negadas; comandos exatos para o operador constam no preflight.
+
+Recomendação: não avançar à migration; preparar e ensaiar guarda de admissão/drain e artefato de recuperação do atendimento com campanhas fechadas, em tarefa separada. Código atual não comprova quiescência de test-send/runners, nem retorno seletivo seguro. A estimativa preliminar de 30–60 min não constitui janela proposta para aprovação. Sem promessa de inbound/retries; sem REVOKE do papel compartilhado. Migration/drift/ensaio anteriores não repetidos; nenhuma alteração de runtime. Owner PASS anterior preservado, 6683 CLOSED, CRA pendente e DELIVERED/READ → HUMAN/WAITING separados.
+
+
+### Guarda operacional e recuperação — implementação local 2026-09-26
+
+Base `2b5697b6`, sem commit/push/deploy. Guarda persistente fechada por padrão,
+controle superadmin e drain durável integram as entradas de campanha e a fila
+existente; suspensão administrativa preserva intenção, snapshot e aceites.
+Pause/cancel em execução, RBAC e exclusividade preservados; Inbox outbound não
+foi bloqueado. Worktree de recuperação separado em `5ee2de6b` com campanhas
+permanentemente fechadas e Client privado, sem dependência das tabelas novas
+para atendimento. [Resultados exatos e limites do ensaio](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#resultados-comprovados-do-ensaio-local): execução 40/40, rotas 44/44 + caso final 1/1; guarda final 8/8;
+atendimento antigo 4/4 sem fila e 5/5 com fila; retorno entre artefatos 1/1;
+ambos builds backend PASS. Subconjuntos não são soma de casos únicos.
+
+LOCAL IMPLEMENTED / TECHNICALLY VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+Primeira instalação ainda exige acesso/inventário operacional, decisão sobre
+interrupção da API antiga e reconciliação de chamadas sem observabilidade;
+a guarda nova não fornece prova retroativa. Sem promessa de inbound/retries,
+sem nova migration ou mudança de privilégios. Owner PASS anterior preservado,
+aceite CRA pendente, Guided Builder pausado, 6683 CLOSED e DELIVERED/READ →
+HUMAN/WAITING separados, sem mudança funcional desses contratos.
+
+
+### Publicação dos artefatos de guarda e recuperação — 2026-09-26
+
+NOT DEPLOYED / OWNER UI PENDING. Candidato em `review/campaign-recovery-20260926`
+(parent `2b5697b6`, histórico funcional `2ecfc91a` preservado); recuperação separada
+em `review/campaign-service-recovery-20260926`, commit `e6a12bc9f4ae77ada191f7bdc7d835ee704d5bac`,
+parent direto `5ee2de6b`, atendimento funcional com campanhas fechadas em código.
+Guarda candidata exige host único declarado e identidade local compatível; não
+coordena hosts nem substitui inventário. 11/11 testes da guarda e build candidato
+PASS; demais resultados anteriores preservados no preflight único
+`docs/saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md`; procedimento/configuração em
+`docs/RUNBOOK_WHATSAPP_AGENT.md`, seção de publicação dos dois artefatos.
+Backups e estado privado permanecem locais; branches excluídas de auto-deploy.
+Primeira transição, acessos operacionais, janela/impacto, owner UI e CRA pendentes.
+Sem quiescência retroativa. Histórico owner PASS preservado, 6683 CLOSED,
+Guided Builder pausado e DELIVERED/READ → HUMAN/WAITING separado.
+
+
+### Correções incrementais da guarda — 2026-09-26
+
+Sobre 889a1c7c/e6a12bc9: consentimento opt-out/revoke preservado com política e
+RBAC existentes nos dois artefatos; aceite conhecido alcança SQL apesar de
+contenção/EIO do ledger. Pendência compartilhada .uncertain impede abertura,
+novos envios e drain; recuperação permanece permanentemente fechada. Nenhum
+retry cego ou limpeza de lock/tarefa por timeout. Se SQL e filesystem falham,
+a resposta pode ficar só em memória: coordenação/durabilidade não são prometidas.
+Resultados afetados: guarda 15/15, runner 11/11, rotas candidatas 5/5; recuperação
+consentimento 1/1 e fechamento 2/2; CRM 4/4 em cada artefato; ambos builds PASS.
+Detalhes sem duplicar relatório: preflight `docs/saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md`
+e procedimento em `docs/RUNBOOK_WHATSAPP_AGENT.md` (seção de consentimento/aceite).
+Histórico/evidências preservados. NOT DEPLOYED / OWNER UI PENDING; primeira
+transição, owner UI/CRA e incertezas antigas pendentes. 6683 CLOSED; divergência
+DELIVERED/READ → HUMAN/WAITING separada, sem quiescência retroativa.
+
+
+### Preparação documental da primeira transição — 2026-09-26
+
+Candidato funcional a1cc380e e recovery 03f930e5 preservados; nenhum teste/build,
+implementação ou migration repetido. HEAD alvo 5ee2de6b e unit PM2 reconfirmados
+somente por leitura. Novas saídas privilegiadas não localizadas; tentativas
+sudo -n continuam exigindo senha. Configuração efetiva Nginx/IPv4/IPv6 e inventário
+completo de supervisores NÃO estão confirmados. Gate G0 pendente.
+Procedimento futuro e pedido preciso ao operador no runbook, seção “Primeira
+transição — plano condicionado às evidências do operador”; consolidação no
+preflight único `docs/saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md`.
+Recomendação: parada explícita da API antiga, recovery fechada para atendimento,
+depois candidato fechado. Owner decide interrupção/incerteza (A) e abertura (B)
+separadamente; backup fresco/restore e validação de atendimento são gates.
+NOT DEPLOYED / OWNER UI PENDING; primeira transição e CRA pendentes. Sem prova
+retroativa de drain, sem promessa inbound/retry. 6683 CLOSED, histórico owner
+PASS preservado e DELIVERED/READ → HUMAN/WAITING separado. Nenhuma operação mutável.
+
+
+### Consolidação G0 do owner — 27/09/2026
+
+Evidências de Nginx/rede/DigitalOcean/systemd/cron recebidas e atribuídas ao owner,
+sem repetir coleta nem inventar hashes/arquivos das saídas originais. A pendência
+histórica de reenvio dessas saídas está superada. Leituras dirigidas de scripts e
+metadados identificaram rotinas destrutivas de retenção e um PM2 root adicional;
+saved/fallback/user units root ainda precisam de leitura privilegiada específica.
+G0 parcialmente fechado: não presumir inventário completo ou disco=memória Nginx.
+Plano exato de contenção central API, suspensão/restauração de cron, prevenção de
+resurrect e reversão no RUNBOOK_WHATSAPP_AGENT, complemento executivo 27/09;
+matriz observado/proposto/pendente no preflight único. Backup duplicado/.bak Nginx
+são higiene separada, sem correção incidental. Backup fresco+restore isolado,
+responsáveis e decisões A (primeira parada/incerteza) e B (abrir campanhas)
+continuam gates. Recuperação fechada → migration aditiva → candidato fechado →
+validação de atendimento; sem dump sobre produção como rollback automático.
+Candidato a1cc380e/recovery 03f930e5 inalterados; nenhuma suíte/build/migration ou
+implementação repetida. NOT DEPLOYED / OWNER UI PENDING, sem aceite CRA, sem
+quiescência retroativa ou garantia inbound/retries. 6683 CLOSED; contratos prévios,
+HUMAN/WAITING, worker/sessões e DELIVERED/READ separado preservados.
+
+
+### Complemento dirigido PM2 root — 27/09/2026
+
+> Histórico: projeção recebida posteriormente; pendência de coleta encerrada abaixo.
+
+Owner encerrou leitura de dump.pm2/dump.pm2.bak (ausentes) e user units root ([]).
+Não repetir pedido nem interpretar como inexistência de daemon/apps/iniciadores.
+Leitura dirigida confirma daemon em scope de sessão active/abandoned, PPID 1;
+origem histórica desconhecida, sem mecanismo automático root PM2 comprovado.
+Manager user@0 ativo: pendência exata é projeção das units carregadas/habilitadas
+(inclusive transientes), com bloco único sanitizado no runbook, e responsável por
+intervenções/automações externas. Resurrect deploy continua mecanismo comprovado.
+Controle atual demonstrado pode encerrar gate sem recuperar origem histórica.
+Preflight é fonte da evidência; plano/impacto/reversão anteriores preservados.
+Backup/restore, responsáveis e decisão sobre chamadas incertas seguem separados.
+Somente documentação; candidato/recovery inalterados; NOT DEPLOYED / OWNER UI
+PENDING; 6683 CLOSED; divergência de materialização separada.
+
+
+### Root user manager — projeção encerrada, decisão operacional pendente
+
+Owner forneceu PYROOTLIVE sem erros em 27/09/2026. Não repetir leitura/dumps/G0.
+Preflight registra estados, origem e limites; runbook encerra a coleta dirigida.
+Sem iniciador automático root PM2 comprovado, sem inferência de inexistência de
+indiretos pelo nome e sem investigação indefinida da origem histórica. Nenhuma
+leitura de produção, teste/build ou implementação nesta consolidação.
+Pendência material passa a ser confirmação owner de responsáveis/controles sobre
+intervenções e automações externas. Backup fresco/restore isolado, operador/DBA,
+RPO/indisponibilidade e decisão A sobre chamadas incertas continuam independentes.
+Depois desses gates, decidir contenção/parada antiga/retorno recovery fechada;
+migration e abertura B separadas. NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED;
+CRA pendente, DELIVERED/READ separado e worker/sessões preservados.
+
+
+### Preparação operacional da noite 27/09 — decisão A pendente
+
+Owner nomeou Deifson Oliveira e confirmou execução única Deifson/Codex; coleta G0
+não repetida. Produção 5ee2de6b e processos preservados. Backup novo sem retenção,
+dump 21.738.573 bytes/checksum, restore PostgreSQL isolado PASS em 4,299 s;
+conteúdos/config também extraídos e conferidos. 85/85 seeds decriptados; 9/10
+segredos de canal: Telegram restante tem ciphertext malformado (IV/tag 4/9 bytes),
+sem correção incidental ou provider. Não declarar recuperação integral do canal.
+Releases exatas a1cc380e/03f930e5 independentes e verificadas, env privado/storage
+preservados, inativas; guard ainda não provisionado. Compilação de empacotamento,
+sem repetir suítes. Recovery local sem rede externa e role read-only: bootstrap/
+health 0,829 s; não comprova retorno produtivo; SIGTERM do probe não encerrou em
+10 s e somente o processo local foi finalizado. Runtime produtivo não alterado.
+104 campanhas, zero scheduled; 61 intents/61 aceites correlacionados; 16 test-sends
+com resultado. Chamadas sem registro continuam desconhecidas; não reenviar.
+Preflight centraliza caminhos/hashes/recursos/limites, runbook comandos revisados.
+Pendências para A: check nft por Deifson, disposição Telegram, fim de janela e
+contingência confirmados, acesso superadmin privado para validação. Proposta até
+23:00 + reserva operacional de 20 min, condicionada ao owner, não SLA. Nenhuma
+parada/firewall/cron/boot/migration/deploy executados. Migration/abertura separadas;
+NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED; CRA e materialização separados.
+
+
+### Etapa A executada — 27/09/2026 à noite
+
+Recovery03f930e5 ativa com campanhas permanentemente fechadas; API antiga retirada;
+frontend/worker preservados. Contenção 21:22:54–21:30:53 (7min59s), Inbox/CRM demo
+confirmados pelo owner, GET superadmin guard available/closed/build correto.
+Saved/fallback seguros, boot inactive/enabled e crons originais restaurados.
+Dois defeitos de configuração encontrados/corrigidos durante contenção: nome CJS
+não reconhecido como ecosystem e env com metadados PM2 sobrescrevendo script/cwd.
+Houve inicialização indevida do código antigo entre 21:27 e 21:28, com barreira
+mantida/scheduler campanhas inibido, seguida de parada e configuração corrigida.
+Não omitir o incidente nem alegar quiescência por contagens iguais. Configuração
+válida recovery: stage-a.ecosystem.config.cjs; versões prepared são inválidas.
+Configuração preparada do candidato também exige correção antes da ativação.
+Preflight registra horários/limites, runbook invocação corrigida. Nenhuma mudança
+funcional nos artefatos, migration, abertura, reenvio ou provider provocado na
+validação. Telegram não usado/limitação aceita pelo owner, canal não validado.
+Próxima decisão: autorizar migration aditiva separadamente, com novo backup,
+status esperado e condições de abortar; manter recovery fechada. Candidato
+NOT DEPLOYED / OWNER UI PENDING; CRA pendente, 6683 CLOSED, materialização separada.
+
+
+### Migration aditiva com recovery fechada — 27/09/2026
+
+[Registro operacional e limites](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#migration-aditiva-aplicada-com-recovery-fechada--27092026).
+Após 87335585, backup persistente fresco verificado e somente migration da fila
+aplicada via Prisma em 3,238 s: 59→60 concluídas, checksum/catálogo/status conferidos.
+Recovery 03f930e5 ATIVA, campanhas permanentemente fechadas; frontend/worker
+preservados. Owner confirmou Inbox/CRM demo pós-DDL, sem envio provocado.
+Configuração candidata limpa .config.cjs resolvida pelo PM2 isoladamente, sem start;
+artefatos inválidos preservados. Dump fresco não restaurado: reutilizado ensaio
+do dump anterior identificado no preflight. Sem alteração de drift histórico.
+STOP: candidato a1cc380e NOT DEPLOYED / OWNER UI PENDING; ativação fechada e abertura
+exigem decisões separadas, CRA pendente. Não inferir quiescência retroativa ou
+validar todos os tenants/webhooks por health/demo. Telegram separado/não validado;
+6683 CLOSED, owner PASS anterior e divergência DELIVERED/READ preservados.
+
+
+### Candidato implantado fechado — 27/09/2026
+
+[Estado e limites comprovados](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#candidato-ativado-com-campanhas-fechadas--27092026).
+Backend e frontend a1cc380e ativos; worker 5ee2de6b preservado, recovery 03f930e5
+disponível para retorno. Frontend compilado isoladamente uma vez; troca sequencial
+sob contenção 2min09s, crons/boot e saved/fallback seguros restaurados. Health,
+guarda fechada e BUILD_ID servido conferidos; owner confirmou telas/sessão/detalhe.
+Grupo de execução não comprovado (DB sem grupos); nenhum fixture/envio produtivo.
+Às 22:27:39: zero jobs/grupos/leases/agendamentos/sending. Guarda fechada e scheduler
+desabilitado permanecem; abrir guarda pode admitir envio manual mesmo sem timer.
+**DEPLOYED / CAMPAIGNS CLOSED / SCHEDULER DISABLED**, sem aceite CRA ou validação
+completa de lotes/owner UI. Abertura e habilitação do scheduler exigem decisões
+separadas e nova leitura do estado. Sem quiescência retroativa/inbound garantido.
+6683 CLOSED, Telegram/materialização separados, histórico owner PASS preservado.
+
+
+### Liberação controlada — 27/09/2026
+
+[Registro auditado e limites](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#liberação-controlada-concluída--campanhas-abertas-e-scheduler-habilitado).
+Após 84e92930 e autorização explícita, somente API a1cc380e reiniciada para habilitar
+scheduler com guarda fechada; atendimento confirmado pelo owner. Fila novamente
+vazia antes do POST superadmin: abertura 22:43:42.139, geração 0→1, motivo auditado.
+Duas varreduras reais consecutivas observadas com intervalo 60s, sem trabalho
+pendente/envio observado; nenhum fixture ou envio provocado. Frontend/worker
+preservados, saved/fallback/configuração persistente e crons/boot conferidos.
+**CAMPAIGNS OPEN / SCHEDULER ENABLED**; lotes completos/validação funcional e CRA
+continuam pendentes. Restart com guarda aberta não ensaiado, incertezas antigas
+não encerradas. Próxima validação owner exige audiência/destinatários controlados
+e revisão de template/variáveis antes de qualquer envio. 6683 CLOSED, Telegram e
+DELIVERED/READ separados; histórico owner PASS preservado.
+
+### Caso novo 6683 — janela corretiva V4 preparada (03/10/2026)
+
+O [plano API 879cb1fa](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_WINDOW_PLAN_2026-10-03.md), [manifesto](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_MANIFEST_2026-10-03.json) e [preflight](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_PREFLIGHT_2026-10-03.md) estão **PREPARED FOR WINDOW / NOT DEPLOYED**. Preparação V4 nova com backup/restore isolado, frontend af26 preservado e mesmo worker mínimo af26; todos os gates de execução falsos. Faltam decisão de janela e reconfirmação imediata dos controles, inclusive checkpoint nft privilegiado do owner. A correção previne novos registros indevidos; não saneia 0604, 6787, 9614 ou o caso novo 6683, que permanece FAIL para aceite. O reparo homônimo de setembro segue CLOSED. Campanhas/CRA continuam aguardando validação funcional do owner; outras frentes não foram iniciadas.
+
+A revisão independente de `ee6105af` confirmou outro bloqueio operacional: o helper privilegiado exigia `tasks == []` do arquivo da guarda, cujo contrato persistido é `tasks: {}`. A correção local revisável valida estritamente o schema no sequenciador, helper e quatro fontes dos três modos; também corrige bindings da preparação seguinte que ainda apontavam à tentativa anterior. [Relatório, patch e hashes](reviews/automation-freeform-window-release-af26/v4-sequencer/README.md#bloqueio-da-revisão-ee6105af-e-substituição-proposta): 21/21 testes sequenciador/helper, incluindo cadeia com leitura real da guarda, mais 2/2 por modo do módulo operacional corrigido; efeitos de sistema simulados. **FOR INDEPENDENT REVIEW / NOT INSTALLED**: helper instalado e preparação privada permanecem antigos, gates falsos, guarda produtiva aberta e sem contenção. A autorização funcional da janela não aprova automaticamente os novos bytes privilegiados. O caso novo 6683 permanece FAIL, sem reparo de dados nem reenvio. O reparo homônimo de setembro continua CLOSED; campanhas/CRA mantêm pendências próprias.
+
+**Estado posterior da janela sequenciada (03/10):** [registro sanitizado](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_SEQUENCED_RETURN_2026-10-03.md). A ida iniciou API 879cb1fa sob contenção, mas a verificação de identidade PM2 negou `unfence`; o retorno inicialmente encontrou a mesma negativa. O helper foi corrigido de `argv` para identidade exata em `/proc/PID/environ` e o retorno af26 foi concluído. A contenção durou 22:41:01–22:46:09 UTC; guarda aberta geração 19, cron/boot restaurados, owner confirmou Inbox/CRM. **RETURNED TO AF26 / API 879cb1fa NOT DEPLOYED**. Preparação consumida, não reutilizar. Novo caso 6683 ainda FAIL; sem saneamento de 0604/6787/9614/6683 nem reenvio. O reparo homônimo de setembro segue CLOSED; campanhas/CRA e os transportes não exercitados permanecem pendentes.
+
+**Atualização posterior da correção do novo 6683 (03/10, Fortaleza):** [resultado V4](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_DEPLOY_2026-10-03.md) prevalece para o estado produtivo. API `879cb1fa` implantada tecnicamente, mesmo worker mínimo retomado e frontend af26 preservado. A primeira preparação PM2 foi abortada antes da contenção por comparação de supervisão sem quebra de linha; a segunda usou política/fase/provas e backup frescos, com restauração local isolada. Houve uma falha não diagnosticada na primeira validação pós-`unfence`; a repetição somente leitura passou, sem repetir start. Guarda aberta geração 23, cron/boot restaurados, processos online sem restart; owner confirmou Inbox/CRM. **DEPLOYED TECHNICALLY / OWNER VALIDATION PENDING**: o caso novo 6683 segue FAIL funcional até prova dirigida; 0604/6787/9614/6683 não saneados, sem reenvio. Corrigir separadamente a observabilidade/continuidade do sequenciador após validação transitória. O reparo de setembro permanece CLOSED; campanhas/CRA ainda aguardam validação do owner.
+
+**Leitura pós-deploy e seguimento local:** o [relatório V4 atualizado](reviews/automation-freeform-window-release-af26/INCIDENT_6683_V4_DEPLOY_2026-10-03.md#leitura-pós-deploy-dirigida--0310-após-2207-fortaleza) registra matriz produtiva e roteiro mínimo `demo-converta`: nenhum inbound/outbound, runtime/conversa atualizados ou evento de campanha/conversa após a troca; logo os contratos do novo 6683 permanecem **NOT EXERCISED** em produção. Sessões/processos/guarda passaram tecnicamente. Um erro Instagram de destinatário incompatível foi observado separadamente, sem vínculo demonstrado com esta correção. A [captura local do validador](reviews/automation-freeform-window-release-af26/v4-sequencer/DIAGNOSTIC_FOLLOWUP_2026-10-03.md) passou 16/16 testes e guarda stdout/stderr somente em arquivo privado 0600, com etapa e exit code no journal; **FOR REVIEW / NOT INSTALLED**, causa da falha original ainda desconhecida. Nenhum start, janela, reparo, reenvio ou teste produtivo foi provocado. O novo 6683 não tem aceite funcional; o de setembro segue CLOSED. Campanhas/CRA permanecem pendentes do owner.
+
+**Retorno híbrido da campanha / variante de nono dígito (04/10):** após a [auditoria produtiva somente leitura](reviews/automation-freeform-window-release-af26/INCIDENT_6683_HYBRID_CAMPAIGN_RETURN_AUDIT_2026-10-04.md), a [correção local e seus limites](reviews/automation-freeform-window-release-af26/INCIDENT_6683_HYBRID_RETURN_LOCAL_FIX_2026-10-04.md) selecionam `winningWaId` antes do inbound Meta/Web e preparam o retorno salvo quando o aceite da campanha precede o recibo. O lock de `f6b16cce` não excluía 12/13 entre si; o delta seguinte usa a chave comum dos candidatos aprovados, com seleção/seed/CRM na própria transação e sem dependência circular do pool. PostgreSQL sintético e Node 20.20.0 comprovaram os dois sentidos entre processos API/worker mínimo, timeout sem escrita tardia e fluxo integrado com status Meta. API e patch separado do worker mínimo: **LOCAL VALIDATED nos casos descritos / NOT DEPLOYED**; frontend sem delta. Audiência CRM, CSV e avulsa compartilham o runner; a regressão dessas modalidades foi validada no commit anterior e não reatribuída ao delta de lock. Escritores antigos não participam do lock; nenhum dado existente foi fundido ou reparado. O novo caso 6683 conserva aceite parcial da janela fechada e ainda requer aceite funcional de continuidade híbrida. O reparo de setembro permanece CLOSED, e campanhas/CRA seguem aguardando validação do owner.
+
+**Tentativa b9 e retorno compatível — 04/10:** o [registro da janela](reviews/automation-freeform-window-release-af26/HYBRID_B9_V4_ATTEMPT_AND_RETURN_2026-10-04.md) prevalece sobre o estado preparado acima. O worker mínimo b9 não carregou por módulo compilado transitivo ausente do pacote; a validação pós-barreira falhou. Foi executado retorno com provas novas para API `879cb1fa` e mesmo worker mínimo af26; frontend af26 preservado. Às 22:15 UTC, guarda aberta geração 25, scheduler ativo, três PM2 online sem restart, cron/boot e saved/fallback restaurados, health/DB e worker control aprovados. **RETURNED TO 879 / b9 NOT DEPLOYED / OWNER VALIDATION PENDING**. Corrigir fechamento do pacote do worker e dois problemas procedimentais do retorno antes de outra janela; preparar política/provas/backup novos. O novo 6683 e a continuidade híbrida não tiveram aceite; nenhum dos quatro registros históricos foi reparado ou reenviado. Campanhas/CRA continuam aguardando validação do owner; reparo homônimo de setembro CLOSED.
+
+## 10/10/2026 — posição .6: captura corrigida e preservação para decisão
+
+Continuidade dcbeea48: [relatório único](reviews/automation-freeform-window-release-af26/position6-operational-preparation-20261010/README.md), com6provas dirigidas de ambiente, leitura SQL limitada, duas amostras root completas e preservação off-host do blob+índice dos cinco caminhos. Nenhuma exclusão/apply/ack/abertura/restart/deploy. Guarda37/tarefa/job e cinco Outbounds/CRM preservados; APIa26/workerafbb/frontendfa60 mesmos PID/start ticks. Capacidade continua DENY (475.422.720bytes na última leitura); revisar somente retirada das quatro cópias redundantes, com revalidação fresca individual e pós-auditoria. Mantidos originais/manifests e recusa inicial do coletor; corrigido FD de coleta sem excluir processos. Driver destrutivo só syntax-check, não execução comprovada. SQL/ack dependem de decisão separada e frescor/margem atuais. Frontend3227/prevençõesAPI permanecem pendentes; CSV/Syer, internacional, CRA-PR, multilote/AUTO separados, setembroCLOSED.
+
+## Retenção operacional — integração preventiva dos preparadores
+
+Checkpoint documental14/10/2026: [princípios](saas/CHANGE_POLICY.md#princípios-permanentes-de-retenção-operacional),
+[runbook](RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente),
+[checklist](saas/RELEASE_CHECKLIST.md#retenção-de-releases-e-preparações) e
+[capacidade](saas/OPERATIONAL_BASELINE.md#capacidade-e-retenção-operacional) integrados.
+Rotina local READ ONLY para revisão; NÃO implantada na VPS/cron. Terceiro lote
+PREPARADO sem autorização de retirada; estado corrente operacional no início permanece.
+Responsável: manutenção dos preparadores/operador de janela; decisão de ativação: owner.
+
+| Correção preventiva (integração produtiva pendente) | Evidência no código auditado | Critério de aceite |
+| --- | --- | --- |
+| Gate de reutilização e justificativa antes de cópia volumosa | `dynamic-integrated-prepared-20261012/operational-20261012/prepare-api-generation.py` verifica overlay/base/deps, mas `copytree(B,app)` e `copytree(app,COMPAT)` não registram decisão de reutilização/justificativa por cópia | Comparar hashes/runtime/contrato antes de copiar; registrar motivo quando candidato/retorno precisam de objetos separados; negativo sem capacidade; não mudar links em geração selada |
+| Medição uniforme por executores/filesystem e alocação única | O preparador API usa `statvfs(B)` e soma tamanhos; `frontend3227-observation-diagnostic-20261011/prepare-generation.py` usa apenas espaço do origin; `security-containment-20261012/prepare_database_final.py` já usa mínimo deploy/PG, porém sem registro uniforme de alocação/growth | Reutilizar medidor canônico mínimo deploy/PG; mapear FS e orçamento antes/depois; testar menor PG, hardlink, symlink externo, FS distintos, crescimento/WAL e observação incompleta; não universalizar valores de fase |
+| Sidecar e fechamento de geração | `prepare_auth_v4.py`, `prepare_database_final.py` e preparador frontend criam gates/manifests próprios, sem registro comum de finalidade/responsável/custódia/classificação ao encerrar | Estados finais disparam classificação host/arquivável/não resolvido e próxima revisão; sidecar separado, manifests históricos idênticos; launcher de geração consumida segue protegido |
+| Captura de referências e geração de objeto reutilizável entre preparadores | Auditoria second-nine recusou consulta PM2 root; terceiro lote ensaiou inode reutilizado e namespace versus vínculo explícito | Usar captura deploy+kernel validada e grafo transitivo com origem/hash; preservar negativas por owner/incompletude/geração ambígua; não ignorar executor nem arquivo removido ainda aberto; não alterar drivers consumidos |
+| Integrar relatório semanal/pós-janela sem limpeza automática | `scripts/operational-retention-report.py` entrega inventário local limitado, sem captura produtiva/certificado | Revisar input/output privado, conectar capturas canônicas mediante revisão própria, registrar responsáveis/datas e candidatos explicados; zero subprocess/entrypoint/provider no leitor; cron/apply ausentes até autorização |
+
+Escopo dos caminhos acima: `docs/reviews/automation-freeform-window-release-af26/`.
+Não alterar os preparadores históricos/selados para atender estes critérios: implementar
+em versão futura revisável e geração nova. Não reconstruir artefatos válidos, mudar
+retenção de tenants ou encerrar segurança pela publicação desta documentação.
+
+### Avanço local dos cinco gates —14/10/2026
+
+`operational_preparation_review.py` é versão futura integrada LOCALMENTE, com reutilização
+por hash dos componentes existentes. Cobertura dirigida: artefato/runtime/dependências/
+contrato e justificativa/link revisado; mínimo deploy/PG e FS distintos/WAL/frescor/
+rubricas; sidecar/fechamento com dependência consumida e custódia; grafo transitivo/
+fonte ausente/hash/contexto PM2/PID-ticks; relatório integrado e revisão até sete dias.
+Rotina de relatório agora nega diretório de outro owner, modo diferente de700,
+symlink, identidade divergente e output existente antes da captura; sem chmod corretivo.
+
+**24 testes locais PASS** (13 inventário/destino +11 versão futura). Não são provas
+produtivas nem reexecução das suites funcionais. Novo código/sidecars apenas locais;
+preparadores históricos e seus manifests permanecem byte a byte preservados.
+
+**Checkpoint histórico7bd069e7 — superado pela integração local v3 descrita abaixo:** conectar estes gates ANTES de cada copy/build/tar
+nos futuros preparadores API/frontend e ao fechamento auth/banco, consumindo as
+capturas canônicas realmente atuais e sidecar específico; ensaiar cada adapter antes
+de gerar uma nova preparação. Validar orçamento antes da mutação, reportar medições
+posteriores no encerramento e negar fonte/identidade incompleta. O wrapper local
+não executa essas cópias nem foi ligado aos sequenciadores existentes. Responsável
+operacional Deifson Oliveira; revisão21/10/2026 ou após a próxima janela. Cron e
+limpeza automática dependem de decisão própria. Segurança externa/cifragem OPEN,
+terceiro lote sem apply; não deslocar estas pendências ao declarar avanço documental.
+
+### Adapters futuros conectados — revisão14/10/2026
+
+[Entrega completa](reviews/automation-freeform-window-release-af26/security-containment-20261012/retention-audit-20261013/PREPARER_INTEGRATION_2026-10-14.md).
+Os cinco itens acima agora têm conexões executáveis nas versões futuras: reuso e
+justificativa por recipe; orçamento uniforme antes das operações; captura por
+hash/frescor/identidade e grafo; sidecar antes/pós-staging; fechamento auth/banco
+classificando dependências/custódia. **Conexão local de código concluída** —14 provas
+específicas +24 regressões PASS. Nenhum preparador antigo foi alterado.
+
+Próxima ação: revisão dos novos adapters/contratos e uso em uma geração futura
+explicitamente autorizada, com capturas canônicas atuais. Isso é uma decisão de uso/
+instalação, não implementação ainda faltante do coordenador. Não existe cron ativo,
+input produtivo novo ou autorização de retirada do terceiro lote. Responsável Deifson,
+revisão21/10 ou pós-mudança antecipada; segurança externa/cifragem OPEN segue no fluxo
+separado de contenção. Auth/banco/out.15 encerrados não serão reexecutados.
+
+## Continuidade14/10 — segurança restante e retenção parcial
+
+- **Retenção exclusiva3 (pendente, sem retirada):** nova geração/driver/input/custódia e referências frescas só para três literais preservados, sem reutilizar B/intent23. Aceite: allowlist própria, observação completa, selo/dry-run, decisão do owner e certificado específico. Não condiciona segurança a esta limpeza. Histórico parcial20/3 e ausência do certificado23 permanecem.
+- **Segurança externa (OPEN):** instruir uma credencial por vez; primeira OpenAI Default, confirmar privadamente proprietário/escopo/vínculo. Aceite da preparação: consumidores/issuer/retorno/substituta/impactos definidos; nenhuma revogação Meta antes do plano341 selado.
+- **Decoder/retorno (LOCAL REVIEW):** sete módulos compostos/147 campos ensaiados; concluir pacote final com política válida/escrow/deps/retorno capaz de ler v2 após primeiras escritas. Sem ampliar identidade/CRM nem alterar hashes históricos.
+- **Telegram futuro (decisão necessária):** preservar linha opaca exata; revisar disposição vinculada a tenant/conta/hash e eventual complemento canônico do planner, explicitando um campo não recuperado. Não exigir ativação/BotFather nem declarar canal11 PASS com omissão.
+- **Orçamento por fase:** envelopes propostos separados de reserva canônica; medir dump/retorno/crescimento e min(deploy/PostgreSQL) antes da futura janela. Auth/banco CLOSED, segurança externa/cifragem OPEN, out.15 CLOSED, guarda38 fechada. Revisão21/10 ou imediatamente após mudança.

@@ -1,0 +1,39 @@
+test_previous_generation_consistent_inventory_denied (__main__.Corrections.test_previous_generation_consistent_inventory_denied) ... ok
+test_old_generation_even_without_inventory_update_denied (__main__.Corrections.test_old_generation_even_without_inventory_update_denied) ... ok
+test_certificate_direction_and_config_denied (__main__.Corrections.test_certificate_direction_and_config_denied) ... ok
+test_certificate_identity_reappearance_denied (__main__.Corrections.test_certificate_identity_reappearance_denied) ... ok
+test_original_never_reads_candidate_runtime (__main__.Corrections.test_original_never_reads_candidate_runtime) ... ok
+test_immutable_content_drift_denied (__main__.Corrections.test_immutable_content_drift_denied) ... ok
+test_immutable_metadata_denied (__main__.Corrections.test_immutable_metadata_denied) ... ok
+test_sealed_metadata_denied (__main__.Corrections.test_sealed_metadata_denied) ... ok
+test_sealed_owner_and_hardlink_denied (__main__.Corrections.test_sealed_owner_and_hardlink_denied) ... ok
+test_missing_sealed_file_denied (__main__.Corrections.test_missing_sealed_file_denied) ... ok
+test_sealed_replaced_symlink_denied (__main__.Corrections.test_sealed_replaced_symlink_denied) ... ok
+test_sealed_integrity_denied (__main__.Corrections.test_sealed_integrity_denied) ... ok
+test_read_failure_denied (__main__.Corrections.test_read_failure_denied) ... ok
+test_immutable_reference_list_change_denied (__main__.Corrections.test_immutable_reference_list_change_denied) ... ok
+test_canonical_checker_reproduced_exactly (__main__.Corrections.test_canonical_checker_reproduced_exactly) ... ok
+test_explicitly_pinned_empty_review_denied (__main__.Corrections.test_explicitly_pinned_empty_review_denied) ... ok
+test_explicitly_pinned_incomplete_review_denied (__main__.Corrections.test_explicitly_pinned_incomplete_review_denied) ... ok
+test_original_review_missing_denied (__main__.Corrections.test_original_review_missing_denied) ... ok
+test_checker_canonical_blocks_unchanged (__main__.Corrections.test_checker_canonical_blocks_unchanged) ... ok
+test_generation_race_before_intent_denied (__main__.Corrections.test_generation_race_before_intent_denied) ... ok
+test_confirmed_selection_only_candidate (test_recovery.RecoveryTests.test_confirmed_selection_only_candidate) ... ok
+test_candidate_api_partial_known_returns_candidate (test_recovery.RecoveryTests.test_candidate_api_partial_known_returns_candidate) ... ok
+test_candidate_pair_known_returns_candidate (test_recovery.RecoveryTests.test_candidate_pair_known_returns_candidate) ... ok
+test_stopped_original_cli_full_sequence_without_overlay (test_recovery.RecoveryTests.test_stopped_original_cli_full_sequence_without_overlay) ... ok
+test_prestop_explicit_controls_closure (test_recovery.RecoveryTests.test_prestop_explicit_controls_closure) ... ok
+test_consumed_recovery_no_second_start (test_recovery.RecoveryTests.test_consumed_recovery_no_second_start) ... ok
+test_start_lost_response_no_replay_or_false_complete (test_recovery.RecoveryTests.test_start_lost_response_no_replay_or_false_complete) ... ok
+test_event775_denies_execute_but_original_recovers (test_recovery.RecoveryTests.test_event775_denies_execute_but_original_recovers) ... ok
+test_binding_missing_denies_execute_before_controls (test_recovery.RecoveryTests.test_binding_missing_denies_execute_before_controls) ... ok
+test_shared_binding_revalidation_at_original_start (test_recovery.RecoveryTests.test_shared_binding_revalidation_at_original_start) ... ok
+test_uncertain_selection_never_original (test_recovery.RecoveryTests.test_uncertain_selection_never_original) ... ok
+test_missing_candidate_binding_does_not_block_original (test_recovery.RecoveryTests.test_missing_candidate_binding_does_not_block_original) ... ok
+
+----------------------------------------------------------------------
+Ran 32 tests in 2.608s
+
+OK
+
+{"result": "FOCUSED_CORRECTIONS_PASS", "testsRun": 32, "externalEffects": "SIMULATED", "productionTouched": false}

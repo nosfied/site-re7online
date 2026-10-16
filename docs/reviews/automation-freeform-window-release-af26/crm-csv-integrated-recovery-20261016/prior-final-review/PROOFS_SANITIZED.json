@@ -1,0 +1,382 @@
+{
+  "status": "LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+  "baseCommit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+  "executedUtc": "2026-10-16T14:59:19.568778+00:00",
+  "command": "python3 -B docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/reproduce.py",
+  "exitCode": 0,
+  "suite": {
+    "passed": true,
+    "testMethods": 42,
+    "tests": [
+      "test_binding_missing_denies_execute_before_controls",
+      "test_binding_source_rejects_omissions",
+      "test_candidate_api_partial_known_returns_candidate",
+      "test_candidate_pair_known_returns_candidate",
+      "test_canonical_capture_baseline_and_close_preserve_guard38",
+      "test_canonical_node_accepts_original_with_transport_only_simulated",
+      "test_confirmed_selection_only_candidate",
+      "test_consumed_recovery_no_second_start",
+      "test_cron_failure_prevents_complete",
+      "test_db_unknown_denies_original",
+      "test_event775_denies_execute_but_original_recovers",
+      "test_exported_root_receipt_hash_drift_denies",
+      "test_frontend_identity_drift_denies",
+      "test_missing_candidate_binding_does_not_block_original",
+      "test_missing_exit_not_prestop_when_pair_stopped",
+      "test_new_admission_denies_original",
+      "test_observation_race_before_original_effect_denies",
+      "test_original_code_drift_denies_before_recovery",
+      "test_original_gate_requires_explicit_recovery_intent",
+      "test_original_protocol_action_allowlist",
+      "test_policy_proposal_canonical_root_parser",
+      "test_prestop_explicit_controls_closure",
+      "test_prestop_lost_abort_preserves_intent_no_start",
+      "test_proposal_is_return_only_delta_and_no_extra_actions",
+      "test_real_factory_cli_with_explicit_pins",
+      "test_recovery_reference_drift_denies_inspection",
+      "test_restore_authority_failure_denies",
+      "test_root_permit_expired_denies_before_intent",
+      "test_root_policy_wrong_target_denies_original",
+      "test_saved_drift_prevents_receipt",
+      "test_selection_receipt_drift_no_original_fallback",
+      "test_shared_binding_revalidation_at_original_start",
+      "test_start_failure_before_effect_keeps_intent",
+      "test_start_intent_without_ack_denies",
+      "test_start_lost_response_no_replay_or_false_complete",
+      "test_stopped_original_cli_full_sequence_without_overlay",
+      "test_supervision_drift_prevents_receipt",
+      "test_uncertain_selection_never_original",
+      "test_unfence_lost_response_never_complete_or_retry",
+      "test_unknown_cron_denies_before_recovery_intent",
+      "test_worker_capture_original_uses_root_return_path",
+      "test_wrong_decision_no_intent"
+    ],
+    "observedTransitions": [
+      {
+        "test": "test_candidate_api_partial_known_returns_candidate",
+        "classification": "SELECTED_CANDIDATE",
+        "options": [
+          "CANDIDATE"
+        ],
+        "mode": "return-partial"
+      },
+      {
+        "test": "test_candidate_api_partial_known_returns_candidate",
+        "decision": "CANDIDATE",
+        "result": "CSV_CANDIDATE_PAIR_RESTORED",
+        "mode": "return-partial"
+      },
+      {
+        "test": "test_candidate_pair_known_returns_candidate",
+        "classification": "SELECTED_CANDIDATE",
+        "options": [
+          "CANDIDATE"
+        ],
+        "mode": "return"
+      },
+      {
+        "test": "test_candidate_pair_known_returns_candidate",
+        "decision": "CANDIDATE",
+        "result": "CSV_CANDIDATE_PAIR_RESTORED",
+        "mode": "return"
+      },
+      {
+        "test": "test_confirmed_selection_only_candidate",
+        "classification": "SELECTED_CANDIDATE",
+        "options": [
+          "CANDIDATE"
+        ],
+        "mode": "return-partial"
+      },
+      {
+        "test": "test_confirmed_selection_only_candidate",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_confirmed_selection_only_candidate",
+        "decision": "CANDIDATE",
+        "result": "CSV_CANDIDATE_PAIR_RESTORED",
+        "mode": "return-partial"
+      },
+      {
+        "test": "test_consumed_recovery_no_second_start",
+        "decision": "ORIGINAL",
+        "result": "CSV_ORIGINAL_PAIR_RESTORED",
+        "mode": "return-before-commit"
+      },
+      {
+        "test": "test_consumed_recovery_no_second_start",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_cron_failure_prevents_complete",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_event775_denies_execute_but_original_recovers",
+        "decision": "ORIGINAL",
+        "result": "CSV_ORIGINAL_PAIR_RESTORED",
+        "mode": "return-before-commit"
+      },
+      {
+        "test": "test_exported_root_receipt_hash_drift_denies",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_missing_candidate_binding_does_not_block_original",
+        "decision": "ORIGINAL",
+        "result": "CSV_ORIGINAL_PAIR_RESTORED",
+        "mode": "return-before-commit"
+      },
+      {
+        "test": "test_new_admission_denies_original",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_observation_race_before_original_effect_denies",
+        "classification": "STOPPED_UNSELECTED",
+        "options": [
+          "ORIGINAL"
+        ],
+        "mode": "return-before-commit"
+      },
+      {
+        "test": "test_observation_race_before_original_effect_denies",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_original_code_drift_denies_before_recovery",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_prestop_explicit_controls_closure",
+        "classification": "PRESTOP",
+        "options": [
+          "PRESTOP"
+        ],
+        "mode": "prestop"
+      },
+      {
+        "test": "test_prestop_explicit_controls_closure",
+        "decision": "PRESTOP",
+        "result": "CSV_PRESTOP_CONTROLS_RESTORED",
+        "mode": "prestop"
+      },
+      {
+        "test": "test_prestop_lost_abort_preserves_intent_no_start",
+        "decision": "PRESTOP",
+        "denied": "TimeoutError"
+      },
+      {
+        "test": "test_prestop_lost_abort_preserves_intent_no_start",
+        "classification": "RECOVERY_CONSUMED",
+        "options": [],
+        "mode": null
+      },
+      {
+        "test": "test_proposal_is_return_only_delta_and_no_extra_actions",
+        "classification": "STOPPED_UNSELECTED",
+        "options": [
+          "ORIGINAL"
+        ],
+        "mode": "return-before-commit"
+      },
+      {
+        "test": "test_restore_authority_failure_denies",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_root_permit_expired_denies_before_intent",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_root_policy_wrong_target_denies_original",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_saved_drift_prevents_receipt",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_shared_binding_revalidation_at_original_start",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_start_failure_before_effect_keeps_intent",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_start_intent_without_ack_denies",
+        "classification": "UNCERTAIN_START",
+        "options": [],
+        "mode": null
+      },
+      {
+        "test": "test_start_intent_without_ack_denies",
+        "decision": "CANDIDATE",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_start_lost_response_no_replay_or_false_complete",
+        "decision": "ORIGINAL",
+        "denied": "TimeoutError"
+      },
+      {
+        "test": "test_start_lost_response_no_replay_or_false_complete",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_stopped_original_cli_full_sequence_without_overlay",
+        "classification": "STOPPED_UNSELECTED",
+        "options": [
+          "ORIGINAL"
+        ],
+        "mode": "return-before-commit"
+      },
+      {
+        "test": "test_stopped_original_cli_full_sequence_without_overlay",
+        "decision": "ORIGINAL",
+        "result": "CSV_ORIGINAL_PAIR_RESTORED",
+        "mode": "return-before-commit"
+      },
+      {
+        "test": "test_stopped_original_cli_full_sequence_without_overlay",
+        "classification": "RECOVERY_CONSUMED",
+        "options": [],
+        "mode": null
+      },
+      {
+        "test": "test_supervision_drift_prevents_receipt",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_uncertain_selection_never_original",
+        "classification": "UNCERTAIN_SELECTION",
+        "options": [],
+        "mode": null
+      },
+      {
+        "test": "test_uncertain_selection_never_original",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_unfence_lost_response_never_complete_or_retry",
+        "decision": "ORIGINAL",
+        "denied": "TimeoutError"
+      },
+      {
+        "test": "test_unfence_lost_response_never_complete_or_retry",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_unknown_cron_denies_before_recovery_intent",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      },
+      {
+        "test": "test_worker_capture_original_uses_root_return_path",
+        "decision": "ORIGINAL",
+        "result": "CSV_ORIGINAL_PAIR_RESTORED",
+        "mode": "return-before-commit"
+      },
+      {
+        "test": "test_wrong_decision_no_intent",
+        "decision": "ORIGINAL",
+        "denied": "RuntimeError"
+      }
+    ],
+    "productionEffects": false
+  },
+  "isolation": {
+    "onlyDeliveredFilesAndDeclaredVersionedSources": true,
+    "noGitOrPrivateEvidenceFallbackInChild": true,
+    "auditHookRejectsPrivateEvidenceAccess": true
+  },
+  "realConsumers": [
+    "future CLI main/inspect/recover/execute wiring",
+    "Recovery/Contract/Bridge",
+    "canonical Sequencer with explicit future delta",
+    "unchanged Operations and Controls.unfence excerpts",
+    "shared bindings and original start gate",
+    "canonical stage_boundary/profile_delta/ScheduledControls/root policy parser"
+  ],
+  "simulated": [
+    "PM2/process/tree/socket/DB/root command effects",
+    "HTTP and worker capture/validate.cjs",
+    "retained restore authority, no repeated restore",
+    "unaffected package/checker/admission authority",
+    "root_regular only in canonical parser; external Event ancestors755"
+  ],
+  "productionEffects": false,
+  "operationalGenerationProduced": false,
+  "consumedGenerationCopiedOrExecuted": false,
+  "consumerCodeExcerptOnly": true,
+  "priorPreventionProofReused": {
+    "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+    "testMethods": 19,
+    "equivalenceCases": 28,
+    "rerun": false
+  },
+  "remaining": [
+    "Future concrete package/bindings/manifests and certification",
+    "Fresh operational evidence and explicit window authorization",
+    "Original-only policy proposal not installed; root export/phase requires review",
+    "Post-unfence/uncertain recovery outside this consumed attempt; no replay"
+  ],
+  "consumers": {
+    "window/csv_cli.py": {
+      "inputSha256": "6b178a95c39e6aa65c1fd9d736fd6db130e07a65f2d90897ad3cd245212f176d",
+      "futureSha256": "3ae51bd07ca9b8d299f347085877de80247831bcd665f489e934b460e38753b1",
+      "syntax": "PASS"
+    },
+    "window/sequencer.py": {
+      "inputSha256": "b6abd49db636cc77d9255fbdfcde8089af3a98699240e3235dab45ee4451e86d",
+      "futureSha256": "0a4d8b67f03335403ae2addf93628519423c350eb8256bbe292373ffc36d9b7e",
+      "syntax": "PASS"
+    },
+    "EXCERPT/return-before-commit/System.validate_bindings": {
+      "inputSha256": "683b62dfe00eb52d704d521647d9dbbfa4f7440b9c27e752daab238f19453451",
+      "futureSha256": "0e6d87fe287b82e2d77b3c766372ad0a93732df5e2b166575b1d872e672ac6a6",
+      "syntax": "PASS"
+    },
+    "window/csv_start_gate.py": {
+      "inputSha256": "6f2aef85ffb605d162ae43c531e1b68cac47c55ce2778f318d991b4bcd19aaec",
+      "futureSha256": "094ec4a5bbaae7c218bd1269346a9d9d102d6cb198dd81d92cd90fe6f97798f4",
+      "syntax": "PASS"
+    }
+  },
+  "codeSha256": {
+    "future_sources.py": "f5aa957e67885d96a2e1b0d5aa0dfbf0c66e64cf43b1745141fc9d1e41b8c72e",
+    "inputs.py": "175bee603fba1048a2b5abba0f596e98c89f8feba903cf397c708c25c0c80598",
+    "policy_proposal.py": "3910f34d385970160afb00e73f64f80957f8c147c14304c2a9e6a69dd46b6450",
+    "recovery.py": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2",
+    "recovery_bridge.py": "61156b4d714d44fde65b934e13df04e4c86ea36768d05f0c805a1548ed9c2150",
+    "recovery_contract.py": "1efd4bd6982529421b65360ed667c89e84a976ad4d5ae005172b45ea1a66ba92",
+    "recovery_start.py": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9",
+    "reference_sources/operations_recovery_original.py": "0e57766066654314f51868194c22ceb58236a12869404447c66acf8a3a710d70",
+    "reproduce.py": "445b0b2fed287f7493dbd140ebb9f30804319f58fc0fb90ba7381513b701d4b8",
+    "test_recovery.py": "7da7e974cecc7325ec2713fb9adaa1a27bba02fd526fb33eddecc28efd7830ca"
+  },
+  "extraCoverage": [
+    "canonical node original mode with only transport simulated",
+    "worker capture original to root return path",
+    "canonical baseline/close guard38 with unchanged baseline/restore authorities injected"
+  ]
+}

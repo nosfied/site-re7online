@@ -1,0 +1,58 @@
+{
+  "accepted41IndexVerified": true,
+  "baseCommit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+  "branch": "review/campaign-recovery-20260926",
+  "codeChanges": false,
+  "consumerPatchReconstructedExactly": true,
+  "deduplicatedCode": {
+    "addedSourceSnapshots": 37,
+    "distinctContents": 48,
+    "originalDestinations": 110,
+    "reusedDistinctContents": 11
+  },
+  "deploymentEvidence": {
+    "configurationChanged": false,
+    "externalUnversionedIntegrationsNotInspected": true,
+    "operationalWorkflowApplicableToBranch": false,
+    "pushBranches": [
+      "main",
+      "develop"
+    ],
+    "vercelBranchDeploymentEnabled": false,
+    "workflowFiles": [
+      ".github/workflows/ci.yml"
+    ]
+  },
+  "diffCheck": {
+    "exitCode": 2,
+    "files": [
+      "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_DELTA.patch",
+      "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/FULL_DELTA.patch",
+      "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/consumer_delta.patch",
+      "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/FULL_DELTA.patch",
+      "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/prior-final-review/consumer_delta.patch",
+      "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/reference_sources/operations_recovery_original.py",
+      "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/canonical_renew_proofs.py.4427aa5e3108.source",
+      "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/preparation-bindings.cjs.edf775c12520.source"
+    ],
+    "newFunctionalCodeModified": false,
+    "scope": "Only immutable historical patches/code snapshots; bytes intentionally preserved"
+  },
+  "focused32CodeAndOutputHashesVerified": true,
+  "fullPatchIsolatedApplicability": true,
+  "historical176HashesVerified": true,
+  "historicalProofsBytePreserved": true,
+  "remainingFindings": [
+    "root source binding unresolved",
+    "16 namespace bindings unresolved",
+    "phase pin authority/materializer not certified",
+    "operational inputs/current observations absent",
+    "seven producer proofs not fully publicly reproducible: HEAD pin and private source dependency"
+  ],
+  "remoteBefore": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+  "secretShapedValuesFound": 0,
+  "stagedAllowlistExact": true,
+  "state": "CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY",
+  "testsReexecuted": 0,
+  "vpsAccesses": 0
+}

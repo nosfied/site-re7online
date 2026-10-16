@@ -1,0 +1,1009 @@
+{
+  "baseCommit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+  "branch": "review/campaign-recovery-20260926",
+  "canonicalDocumentSnapshot": {
+    "docs/BACKLOG_TECH.md": {
+      "bytes": 433603,
+      "sha256": "7cb060bc2435c94a4406a8989537573a584bedf98d88ee6409596b8f66e0eb4d"
+    },
+    "docs/RUNBOOK_WHATSAPP_AGENT.md": {
+      "bytes": 265738,
+      "sha256": "e658afa9d774da033bcde2588cd56690a58a0cf3959bd58de96e63a167c9febb"
+    },
+    "docs/saas/DOCUMENTATION_INDEX.md": {
+      "bytes": 19241,
+      "sha256": "afa6f7c82ba766b7eab8a6b8276586449b3c37d1b5c4f0ef735728900d6157fd"
+    }
+  },
+  "elapsedTimeMeaning": "Request-to-final-answer intervals, not continuous activity/CPU/SLA or outage",
+  "filesProtectedAndReverified": {
+    "crm-csv-integrated-recovery-20261016/CORRECTION_DELTA.patch": {
+      "bytes": 75200,
+      "sha256": "6d6bec70a758b44783f1379a659c7076fc3cbf08192d74d3d9916d4513d0185e"
+    },
+    "crm-csv-integrated-recovery-20261016/CORRECTION_PROOFS.json": {
+      "bytes": 7827,
+      "sha256": "fb25671f5abf6d1299808c1ca19eefef2043d58bd8234b009514aacf5655bfc0"
+    },
+    "crm-csv-integrated-recovery-20261016/CORRECTION_REPORT.md": {
+      "bytes": 9193,
+      "sha256": "b20bb590e60bff4276094798c4468b4b3affa6a82c3e66e201ff915ab2a608f3"
+    },
+    "crm-csv-integrated-recovery-20261016/CORRECTION_TEST_OUTPUT.txt": {
+      "bytes": 3991,
+      "sha256": "aea0333964c051da7fdb8d21b8f24a9d689dd23c2bdbf11f4ddf5e5b2fe75e3c"
+    },
+    "crm-csv-integrated-recovery-20261016/FINAL_REVIEW.md": {
+      "bytes": 7708,
+      "sha256": "d6c3830c3635f1a61e4c3ea2026c0d72cbeb668dd0b173f8195e633d9649eac0"
+    },
+    "crm-csv-integrated-recovery-20261016/FINAL_REVIEW_CHECKS.json": {
+      "bytes": 2372,
+      "sha256": "9630005337192bbf942cfcd16d6313d0e706cc6652d85fa9a01fcb685c509389"
+    },
+    "crm-csv-integrated-recovery-20261016/FULL_DELTA.patch": {
+      "bytes": 1140508,
+      "sha256": "76d7a404b950c7b8ad31b702dc6a8c04e069e3aca48e744aa05d62462fa8a8df"
+    },
+    "crm-csv-integrated-recovery-20261016/PROOFS_SANITIZED.json": {
+      "bytes": 13817,
+      "sha256": "683cbff40365d80ea0881ba03a54bd9ec2cb73533a85431464311f43dd956170"
+    },
+    "crm-csv-integrated-recovery-20261016/PUBLIC_FILES_SHA256.json": {
+      "bytes": 4217,
+      "sha256": "7477edd325c63ce13a8ae3d955cc626de8a8e7668df596bf5ffe97c8b73d276a"
+    },
+    "crm-csv-integrated-recovery-20261016/REPORT.md": {
+      "bytes": 9406,
+      "sha256": "7257516e0a9ddd60a1bddca6a90753c2d26636558fb4a596d50d26b91fadd07a"
+    },
+    "crm-csv-integrated-recovery-20261016/SOURCE_PROVENANCE.json": {
+      "bytes": 5494,
+      "sha256": "5c75dddbfad7558cc81a2b3afd344c8d58ed1d3b3498065a5c801d4f693dc91e"
+    },
+    "crm-csv-integrated-recovery-20261016/STATE_MATRIX.md": {
+      "bytes": 2868,
+      "sha256": "2bdeb3cef6c7364fbb3dfc55d24ed7e1efe85677ffc7622b53698017450fa102"
+    },
+    "crm-csv-integrated-recovery-20261016/consumer_delta.patch": {
+      "bytes": 18651,
+      "sha256": "3fa90e7cc8d83ebc7e13fadaab40aa6fd05608bc19a3239e9e5b0600f6e98b95"
+    },
+    "crm-csv-integrated-recovery-20261016/future_sources.py": {
+      "bytes": 8494,
+      "sha256": "85efa5d931bfebd606725f877c802dc04b6e65d40bbf3eaa5a6b6db313ad4f5d"
+    },
+    "crm-csv-integrated-recovery-20261016/inputs.py": {
+      "bytes": 838,
+      "sha256": "175bee603fba1048a2b5abba0f596e98c89f8feba903cf397c708c25c0c80598"
+    },
+    "crm-csv-integrated-recovery-20261016/local-acceptance-20261016/CHECKS.json": {
+      "bytes": 6636,
+      "sha256": "f344c8a58222404a4e1cca7b025ccd5d58eb0755edb455d0a49980e89776053b"
+    },
+    "crm-csv-integrated-recovery-20261016/local-acceptance-20261016/MANIFEST.sha256": {
+      "bytes": 154,
+      "sha256": "97c4f8bd5d04325b8e3250c3e91fe8df85cdc4c936d9a74c0222acd04f1fc048"
+    },
+    "crm-csv-integrated-recovery-20261016/local-acceptance-20261016/REVIEW.md": {
+      "bytes": 9906,
+      "sha256": "98a9fe29cb1caa05df77df0fb903f2f0fc591f739e0651d110446b4620b825ed"
+    },
+    "crm-csv-integrated-recovery-20261016/original_checks.py": {
+      "bytes": 4179,
+      "sha256": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82"
+    },
+    "crm-csv-integrated-recovery-20261016/policy_proposal.py": {
+      "bytes": 1767,
+      "sha256": "3910f34d385970160afb00e73f64f80957f8c147c14304c2a9e6a69dd46b6450"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/CANONICAL_DOCS_SHA256.json": {
+      "bytes": 307,
+      "sha256": "6631a7f59ba96035afed1b831d1ce0ba32c1229aeb1ef9fff0b46d7a337a9740"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/FINAL_REVIEW.md": {
+      "bytes": 7708,
+      "sha256": "d6c3830c3635f1a61e4c3ea2026c0d72cbeb668dd0b173f8195e633d9649eac0"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/FINAL_REVIEW_CHECKS.json": {
+      "bytes": 2372,
+      "sha256": "9630005337192bbf942cfcd16d6313d0e706cc6652d85fa9a01fcb685c509389"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/FULL_DELTA.patch": {
+      "bytes": 167627,
+      "sha256": "f3a9f1887af36916130fab891d06fa757389721fadb654996d97ca759450d6bc"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/PROOFS_SANITIZED.json": {
+      "bytes": 13817,
+      "sha256": "683cbff40365d80ea0881ba03a54bd9ec2cb73533a85431464311f43dd956170"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/PUBLIC_FILES_SHA256.json": {
+      "bytes": 1574,
+      "sha256": "114beda98863e03f8eafaf7a9c02af9f2afcbfe1d0b5b086a32135002fa6abb8"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/REPORT.md": {
+      "bytes": 9206,
+      "sha256": "48ccfee71c14d5e7f398e92efce793dae98dd8f7b80d0266cf011f69d31b52bd"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/SHA256.json": {
+      "bytes": 1199,
+      "sha256": "4dcd5956748a5694a4e7e8adab07a73b58a246a4955773e488e8b71e102efb0e"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/SOURCE_PROVENANCE.json": {
+      "bytes": 4880,
+      "sha256": "f46d9ae5c9e028f53bcb50ecf89ecbde37c3100533922c1a265abc17ef3e199d"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/canonical-docs/docs/BACKLOG_TECH.md": {
+      "bytes": 432341,
+      "sha256": "6527ae4fe9c4b7ac39a8e5892dfc47e201023c817a103feb4f15f5ad71eb900f"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/canonical-docs/docs/RUNBOOK_WHATSAPP_AGENT.md": {
+      "bytes": 264476,
+      "sha256": "a03f6929cb3f710e4cad9b57aedb0e52752c726ff088e9033e07447a8c092e10"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/canonical-docs/docs/saas/DOCUMENTATION_INDEX.md": {
+      "bytes": 18866,
+      "sha256": "ad341aad090d9a682621ef863784d3945811d3360fc26c4b7b786185cd3564e5"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/consumer_delta.patch": {
+      "bytes": 13992,
+      "sha256": "d461621d8aff8566d85994b1f9aa94a58a6097fd77492ca10045552f6b24bc2c"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/future_sources.py": {
+      "bytes": 7049,
+      "sha256": "f5aa957e67885d96a2e1b0d5aa0dfbf0c66e64cf43b1745141fc9d1e41b8c72e"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/recovery_bridge.py": {
+      "bytes": 8159,
+      "sha256": "61156b4d714d44fde65b934e13df04e4c86ea36768d05f0c805a1548ed9c2150"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/recovery_contract.py": {
+      "bytes": 7594,
+      "sha256": "1efd4bd6982529421b65360ed667c89e84a976ad4d5ae005172b45ea1a66ba92"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/reproduce.py": {
+      "bytes": 1788,
+      "sha256": "445b0b2fed287f7493dbd140ebb9f30804319f58fc0fb90ba7381513b701d4b8"
+    },
+    "crm-csv-integrated-recovery-20261016/prior-final-review/test_recovery.py": {
+      "bytes": 40706,
+      "sha256": "7da7e974cecc7325ec2713fb9adaa1a27bba02fd526fb33eddecc28efd7830ca"
+    },
+    "crm-csv-integrated-recovery-20261016/recovery.py": {
+      "bytes": 7965,
+      "sha256": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2"
+    },
+    "crm-csv-integrated-recovery-20261016/recovery_bridge.py": {
+      "bytes": 8214,
+      "sha256": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318"
+    },
+    "crm-csv-integrated-recovery-20261016/recovery_contract.py": {
+      "bytes": 9160,
+      "sha256": "9dad001588002c8566bd4ffc3e57d5985f3d05822dd773b87fa92d003382e73e"
+    },
+    "crm-csv-integrated-recovery-20261016/recovery_start.py": {
+      "bytes": 1766,
+      "sha256": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9"
+    },
+    "crm-csv-integrated-recovery-20261016/reference_sources/operations_recovery_original.py": {
+      "bytes": 12453,
+      "sha256": "0e57766066654314f51868194c22ceb58236a12869404447c66acf8a3a710d70"
+    },
+    "crm-csv-integrated-recovery-20261016/reproduce.py": {
+      "bytes": 1834,
+      "sha256": "8799628b05cd017da449aa8d3558cae53c0d149e005a3b0a1d9795dd8d3884a7"
+    },
+    "crm-csv-integrated-recovery-20261016/test_corrections.py": {
+      "bytes": 11021,
+      "sha256": "28a84e5f9b4f290d5140d0d0453b6d1e995bb4f69f24c057c7893e0622e4520e"
+    },
+    "crm-csv-integrated-recovery-20261016/test_recovery.py": {
+      "bytes": 45141,
+      "sha256": "48bcf2c703f81175285d71ec4f9cab66e9f791940a38216489d8666ce2c399ec"
+    },
+    "crm-csv-recovery-precert-20261016/BINDING_PLAN.json": {
+      "bytes": 9981,
+      "sha256": "7cf7c8dad869e3f73512094b1863a8d077ec7e9ffb9761eb41213c1e90731774"
+    },
+    "crm-csv-recovery-precert-20261016/CHANGESET.json": {
+      "bytes": 18518,
+      "sha256": "d209c66aa4d5241eac0bbb2842f37f8128e064279e1d19aa658edebf84f58b1e"
+    },
+    "crm-csv-recovery-precert-20261016/CURRENT_OBSERVATIONS_REQUIRED.json": {
+      "bytes": 6894,
+      "sha256": "9d1f87593302f5ea2d797b8faeab7f026332f515a83a839d92006eb0debfcfa2"
+    },
+    "crm-csv-recovery-precert-20261016/DELTA.patch": {
+      "bytes": 759355,
+      "sha256": "683c5a06d83c5dc75ec4b8fcf555e311cc84a508933cdf721f07ca08b026fd09"
+    },
+    "crm-csv-recovery-precert-20261016/LIFECYCLE.json": {
+      "bytes": 1088,
+      "sha256": "94cc57d7d7335832a006341640156e3b886beb7e818b77294aa4ad5a1526d5be"
+    },
+    "crm-csv-recovery-precert-20261016/MANIFEST.sha256": {
+      "bytes": 13962,
+      "sha256": "0511b63a939a1eef8d9f7d0cc86c0c402008022495d92148748f7d6a37cd56ac"
+    },
+    "crm-csv-recovery-precert-20261016/POLICY_PLAN.json": {
+      "bytes": 1775,
+      "sha256": "d41dc34dbc71938b028ca08aa12a5118736781d53301fa0c0d914e182857b7f3"
+    },
+    "crm-csv-recovery-precert-20261016/PROOFS_SANITIZED.json": {
+      "bytes": 1380,
+      "sha256": "110dea7d2ad4ba7e030350b89c8dc7b7fe392024a25a83ec1e0892fffe5e0aa2"
+    },
+    "crm-csv-recovery-precert-20261016/REPORT.md": {
+      "bytes": 14843,
+      "sha256": "5e55a0d80c4eff52779ff41443659ca03ca23d50960abe9d0f299944f4b04f7a"
+    },
+    "crm-csv-recovery-precert-20261016/RUNTIME_REUSE.json": {
+      "bytes": 1817,
+      "sha256": "24246cc5b794455f3ae0d6b9d07559814159ba68b0fc8c107cbedef278750256"
+    },
+    "crm-csv-recovery-precert-20261016/SOURCE_AUTHORITY.json": {
+      "bytes": 463,
+      "sha256": "bbae31c69fa31660ead8886a5e27e26c2546b4cf1c0427b7ede797ad8dc5dbb1"
+    },
+    "crm-csv-recovery-precert-20261016/canonical-negative.sanitized.json": {
+      "bytes": 207,
+      "sha256": "2301af5538c7caaa45e6155d34af66aa6a9acea26f00f45753d2fca52df4cf3a"
+    },
+    "crm-csv-recovery-precert-20261016/compose_offline.py": {
+      "bytes": 12366,
+      "sha256": "71440febcef941897cac2c7c02aeeb558b807ad395fd3bc6e26e66d56c728140"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/COMPOSITION.json": {
+      "bytes": 13022,
+      "sha256": "8479bed224f9294e2423d1f2585e135ea68f6def4ea943e9f8a2dc293716f55f"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/binding-status.json": {
+      "bytes": 326,
+      "sha256": "ac31765e6f93f3a6b533ad3c145d541c345db7eaa415d6056c6bf5229429c254"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/baseline_contract.py": {
+      "bytes": 7373,
+      "sha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/close.cjs": {
+      "bytes": 2167,
+      "sha256": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/contain.py": {
+      "bytes": 95,
+      "sha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/db_owner_set_gate.py": {
+      "bytes": 6790,
+      "sha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/db_owner_set_observer.py": {
+      "bytes": 4038,
+      "sha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/delegated.py": {
+      "bytes": 24576,
+      "sha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/ecosystem_contract.py": {
+      "bytes": 3532,
+      "sha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/execution-check.cjs": {
+      "bytes": 1065,
+      "sha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/open.cjs": {
+      "bytes": 2275,
+      "sha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/ops.py": {
+      "bytes": 28444,
+      "sha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/preparation-bindings.cjs": {
+      "bytes": 1535,
+      "sha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/privileged_output.py": {
+      "bytes": 3303,
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/read-state.py": {
+      "bytes": 4906,
+      "sha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/recover-partial.py": {
+      "bytes": 103,
+      "sha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/restore-controls.py": {
+      "bytes": 104,
+      "sha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/start-one.py": {
+      "bytes": 119,
+      "sha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/stop-pair.py": {
+      "bytes": 97,
+      "sha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/unfence.py": {
+      "bytes": 95,
+      "sha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/validate.cjs": {
+      "bytes": 2701,
+      "sha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/waiting-work-frozen.cjs": {
+      "bytes": 4969,
+      "sha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-before-commit/waiting-work.cjs": {
+      "bytes": 5421,
+      "sha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/baseline_contract.py": {
+      "bytes": 7373,
+      "sha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/close.cjs": {
+      "bytes": 2167,
+      "sha256": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/contain.py": {
+      "bytes": 95,
+      "sha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/db_owner_set_gate.py": {
+      "bytes": 6790,
+      "sha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/db_owner_set_observer.py": {
+      "bytes": 4038,
+      "sha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/delegated.py": {
+      "bytes": 24576,
+      "sha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/ecosystem_contract.py": {
+      "bytes": 3532,
+      "sha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/execution-check.cjs": {
+      "bytes": 1065,
+      "sha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/open.cjs": {
+      "bytes": 2275,
+      "sha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/ops.py": {
+      "bytes": 28386,
+      "sha256": "33999cf29b7dd548ba185a301331ef09fea7c6fd40cd32e8b846bd13fcdb8bb1"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/preparation-bindings.cjs": {
+      "bytes": 1535,
+      "sha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/privileged_output.py": {
+      "bytes": 3303,
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/read-state.py": {
+      "bytes": 4906,
+      "sha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/recover-partial.py": {
+      "bytes": 103,
+      "sha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/restore-controls.py": {
+      "bytes": 104,
+      "sha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/start-one.py": {
+      "bytes": 119,
+      "sha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/stop-pair.py": {
+      "bytes": 97,
+      "sha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/unfence.py": {
+      "bytes": 95,
+      "sha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/validate.cjs": {
+      "bytes": 2701,
+      "sha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/waiting-work-frozen.cjs": {
+      "bytes": 4969,
+      "sha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return-partial/waiting-work.cjs": {
+      "bytes": 5421,
+      "sha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/baseline_contract.py": {
+      "bytes": 7373,
+      "sha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/close.cjs": {
+      "bytes": 2159,
+      "sha256": "f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/contain.py": {
+      "bytes": 95,
+      "sha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/db_owner_set_gate.py": {
+      "bytes": 6790,
+      "sha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/db_owner_set_observer.py": {
+      "bytes": 4038,
+      "sha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/delegated.py": {
+      "bytes": 24576,
+      "sha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/ecosystem_contract.py": {
+      "bytes": 3532,
+      "sha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/execution-check.cjs": {
+      "bytes": 1065,
+      "sha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/open.cjs": {
+      "bytes": 2275,
+      "sha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/ops.py": {
+      "bytes": 28386,
+      "sha256": "33999cf29b7dd548ba185a301331ef09fea7c6fd40cd32e8b846bd13fcdb8bb1"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/preparation-bindings.cjs": {
+      "bytes": 1535,
+      "sha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/privileged_output.py": {
+      "bytes": 3303,
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/read-state.py": {
+      "bytes": 4906,
+      "sha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/recover-partial.py": {
+      "bytes": 103,
+      "sha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/restore-controls.py": {
+      "bytes": 104,
+      "sha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/start-one.py": {
+      "bytes": 119,
+      "sha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/stop-pair.py": {
+      "bytes": 97,
+      "sha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/unfence.py": {
+      "bytes": 95,
+      "sha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/validate.cjs": {
+      "bytes": 2701,
+      "sha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/waiting-work-frozen.cjs": {
+      "bytes": 4969,
+      "sha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/return/waiting-work.cjs": {
+      "bytes": 5421,
+      "sha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/baseline_contract.py": {
+      "bytes": 7373,
+      "sha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/close.cjs": {
+      "bytes": 2159,
+      "sha256": "7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/contain.py": {
+      "bytes": 95,
+      "sha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/db_owner_set_gate.py": {
+      "bytes": 6790,
+      "sha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/db_owner_set_observer.py": {
+      "bytes": 4038,
+      "sha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/delegated.py": {
+      "bytes": 24576,
+      "sha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/ecosystem_contract.py": {
+      "bytes": 3532,
+      "sha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/execution-check.cjs": {
+      "bytes": 1065,
+      "sha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/open.cjs": {
+      "bytes": 2275,
+      "sha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/ops.py": {
+      "bytes": 28386,
+      "sha256": "33999cf29b7dd548ba185a301331ef09fea7c6fd40cd32e8b846bd13fcdb8bb1"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/preparation-bindings.cjs": {
+      "bytes": 1535,
+      "sha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/privileged_output.py": {
+      "bytes": 3303,
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/read-state.py": {
+      "bytes": 4906,
+      "sha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/recover-partial.py": {
+      "bytes": 103,
+      "sha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/restore-controls.py": {
+      "bytes": 104,
+      "sha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/start-one.py": {
+      "bytes": 119,
+      "sha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/stop-pair.py": {
+      "bytes": 97,
+      "sha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/unfence.py": {
+      "bytes": 95,
+      "sha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/validate.cjs": {
+      "bytes": 2701,
+      "sha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/waiting-work-frozen.cjs": {
+      "bytes": 4969,
+      "sha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/switch/waiting-work.cjs": {
+      "bytes": 5421,
+      "sha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/admit_gates.py": {
+      "bytes": 4694,
+      "sha256": "2681e63919b981291d376237975e7e8dd7379ccbc0f323a55f948487730705c6"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/automation-fence.nft": {
+      "bytes": 170,
+      "sha256": "62342f28b9f011c916b8483487bb75f7211a08ffc5846c303f9a0ab0000c2797"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/baseline_contract.py": {
+      "bytes": 7325,
+      "sha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/canonical_renew_proofs.py": {
+      "bytes": 4079,
+      "sha256": "4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/capture_imports.py": {
+      "bytes": 3976,
+      "sha256": "52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/check_current.py": {
+      "bytes": 4518,
+      "sha256": "6f840789aac823e0e6f84c7fc1968d6869099d4e7aec01bad688089770fc4cb5"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/csv_boundary.py": {
+      "bytes": 4610,
+      "sha256": "73d5c6917a3476770c16412be8f9cecb4dffc0e222080169de4c64f427113a4e"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/csv_cli.py": {
+      "bytes": 4548,
+      "sha256": "3ae51bd07ca9b8d299f347085877de80247831bcd665f489e934b460e38753b1"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/csv_contract.py": {
+      "bytes": 4627,
+      "sha256": "9ca2208c5c18787aa2e3696636b17334c3362caa6991e3e4cd2bde2e363958eb"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/csv_start_gate.py": {
+      "bytes": 317,
+      "sha256": "094ec4a5bbaae7c218bd1269346a9d9d102d6cb198dd81d92cd90fe6f97798f4"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/ecosystem_contract.py": {
+      "bytes": 3532,
+      "sha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/event_overlay.py": {
+      "bytes": 2705,
+      "sha256": "7c3db254455f12a455fabb1e9936be0bced2caefcb8fcbdec2e78997c14f10f4"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/original_checks.py": {
+      "bytes": 4179,
+      "sha256": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/pre_install.py": {
+      "bytes": 1788,
+      "sha256": "8e45c10319f298f69aa812df6996e950afbc0d2cdca5b06c25499b8bcd6f8f6d"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/prestop_contract.py": {
+      "bytes": 2281,
+      "sha256": "208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/privileged.py": {
+      "bytes": 27834,
+      "sha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/privileged_output.py": {
+      "bytes": 3303,
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/recovery.py": {
+      "bytes": 7965,
+      "sha256": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/recovery_bridge.py": {
+      "bytes": 8214,
+      "sha256": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/recovery_contract.py": {
+      "bytes": 9160,
+      "sha256": "9dad001588002c8566bd4ffc3e57d5985f3d05822dd773b87fa92d003382e73e"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/recovery_start.py": {
+      "bytes": 1766,
+      "sha256": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/restore_contract.py": {
+      "bytes": 5151,
+      "sha256": "af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/root_readonly.py": {
+      "bytes": 1223,
+      "sha256": "cb63a97fffe735fd52c80eed872751873593c23a3f8b3e3663b6c0fd741aa7ab"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/scheduled_controls.py": {
+      "bytes": 2497,
+      "sha256": "9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/code/window/sequencer.py": {
+      "bytes": 35729,
+      "sha256": "0a4d8b67f03335403ae2addf93628519423c350eb8256bbe292373ffc36d9b7e"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/mode-code-manifest.json": {
+      "bytes": 7793,
+      "sha256": "6dd1cb6cc68f18fc866a51f544b5aec8887df7bc30702c09534ffdd6756341e2"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/proposal/policy_proposal.py": {
+      "bytes": 1767,
+      "sha256": "3910f34d385970160afb00e73f64f80957f8c147c14304c2a9e6a69dd46b6450"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/provenance.json": {
+      "bytes": 34502,
+      "sha256": "fb362eab7fc5dacb7b02e95eef15e4ae82d3c8026aecc635cc42fc7a44814afe"
+    },
+    "crm-csv-recovery-precert-20261016/prepared-kit/required-mode-inputs.json": {
+      "bytes": 1141,
+      "sha256": "3c2d4431c6c7bb873514700896643bc9afb587146e6a25dbd21571a6f0f451fa"
+    },
+    "crm-csv-recovery-precert-20261016/test_offline_composition.py": {
+      "bytes": 3324,
+      "sha256": "7ddb9f10e8d229ea355f61a6125f548d8b487635396d2ab12643cfb1f09b94b1"
+    },
+    "crm-csv-recovery-precert-20261016/verify_offline.py": {
+      "bytes": 4220,
+      "sha256": "7c496e3c3a473dd631f90ffdb8def3d9d39b1a2a3e93bba40b93aa0bd02facf6"
+    }
+  },
+  "finalState": {
+    "code": "ACCEPT LOCAL",
+    "composition": "PREPARED LOCALLY",
+    "csvSuspended": true,
+    "currentVpsCertificationPerformed": false,
+    "deployed": false,
+    "windowReady": false
+  },
+  "phases": [
+    {
+      "deliveryFirstLine": "Implementado e validado **somente localmente**, sobre `6bcf122ca5e5992769e67c1158208408b9c0b15b`.",
+      "deliveryFortaleza": "2026-10-16T12:00:44.298000-03:00",
+      "elapsedSeconds": 1744.358,
+      "requestFirstLine": "Codex — implementar e validar LOCALMENTE a recuperação integrada futura.",
+      "requestFortaleza": "2026-10-16T11:31:39.940000-03:00"
+    },
+    {
+      "deliveryFirstLine": "**Recomendação: correções locais necessárias antes do aceite da integração.**",
+      "deliveryFortaleza": "2026-10-16T14:02:42.280000-03:00",
+      "elapsedSeconds": 453.843,
+      "requestFirstLine": "**REVISÃO FINAL — CRM/CSV INTEGRATED RECOVERY**",
+      "requestFortaleza": "2026-10-16T13:55:08.437000-03:00"
+    },
+    {
+      "deliveryFirstLine": "Os dois achados foram corrigidos localmente.",
+      "deliveryFortaleza": "2026-10-16T14:41:12.535000-03:00",
+      "elapsedSeconds": 662.67,
+      "requestFirstLine": "**CODEX — CORREÇÃO DOS DOIS ACHADOS DA REVISÃO FINAL**",
+      "requestFortaleza": "2026-10-16T14:30:09.865000-03:00"
+    },
+    {
+      "deliveryFirstLine": "**ACCEPT LOCAL.** R1 e R2 resolvidos; contratos PRESTOP, ORIGINAL, CANDIDATE e DENY preservados. ORIGINAL mantém seus verificadores canônicos e permanece independente do runtime exclusivo do candidato.",
+      "deliveryFortaleza": "2026-10-16T14:48:36.039000-03:00",
+      "elapsedSeconds": 184.361,
+      "requestFirstLine": "**CODEX — ACEITE TÉCNICO FINAL DA RECUPERAÇÃO INTEGRADA CRM/CSV**",
+      "requestFortaleza": "2026-10-16T14:45:31.678000-03:00"
+    },
+    {
+      "deliveryFirstLine": "**PREPARED LOCALLY / NOT DEPLOYED / NOT WINDOW READY.**",
+      "deliveryFortaleza": "2026-10-16T15:22:07.535000-03:00",
+      "elapsedSeconds": 1719.527,
+      "requestFirstLine": "**CODEX — CRM/CSV: COMPOSIÇÃO E PREPARAÇÃO PARA CERTIFICAÇÃO OPERACIONAL**",
+      "requestFortaleza": "2026-10-16T14:53:28.008000-03:00"
+    }
+  ],
+  "reportScope": {
+    "endLastTechnicalDeliveryFortaleza": "2026-10-16T15:22:07.535000-03:00",
+    "reportGeneratedUtc": "2026-10-16T18:50:35.522242+00:00",
+    "reportRequestedFortaleza": "2026-10-16T15:33:05.829-03:00",
+    "startFortaleza": "2026-10-16T11:31:39.940000-03:00",
+    "timelineSource": "Local private session: bounded tail, timestamps and CSV-related prompt/final-answer headings only; raw session/config/secrets not copied",
+    "timezone": "America/Fortaleza"
+  },
+  "tests": {
+    "composition7": [
+      "test_exact_prepared_bytes_readonly",
+      "test_unbound_cannot_certify_operationally",
+      "test_missing_or_wrong_manifest_pin",
+      "test_tampered_file_denies",
+      "test_composer_refuses_existing_output_without_copy",
+      "test_template_index_drift_denies_before_copy",
+      "test_invalid_parent_denies_before_output"
+    ],
+    "correction32": [
+      {
+        "consumer": "__main__.Corrections.test_previous_generation_consistent_inventory_denied",
+        "name": "test_previous_generation_consistent_inventory_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_old_generation_even_without_inventory_update_denied",
+        "name": "test_old_generation_even_without_inventory_update_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_certificate_direction_and_config_denied",
+        "name": "test_certificate_direction_and_config_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_certificate_identity_reappearance_denied",
+        "name": "test_certificate_identity_reappearance_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_original_never_reads_candidate_runtime",
+        "name": "test_original_never_reads_candidate_runtime",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_immutable_content_drift_denied",
+        "name": "test_immutable_content_drift_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_immutable_metadata_denied",
+        "name": "test_immutable_metadata_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_sealed_metadata_denied",
+        "name": "test_sealed_metadata_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_sealed_owner_and_hardlink_denied",
+        "name": "test_sealed_owner_and_hardlink_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_missing_sealed_file_denied",
+        "name": "test_missing_sealed_file_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_sealed_replaced_symlink_denied",
+        "name": "test_sealed_replaced_symlink_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_sealed_integrity_denied",
+        "name": "test_sealed_integrity_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_read_failure_denied",
+        "name": "test_read_failure_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_immutable_reference_list_change_denied",
+        "name": "test_immutable_reference_list_change_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_canonical_checker_reproduced_exactly",
+        "name": "test_canonical_checker_reproduced_exactly",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_explicitly_pinned_empty_review_denied",
+        "name": "test_explicitly_pinned_empty_review_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_explicitly_pinned_incomplete_review_denied",
+        "name": "test_explicitly_pinned_incomplete_review_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_original_review_missing_denied",
+        "name": "test_original_review_missing_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_checker_canonical_blocks_unchanged",
+        "name": "test_checker_canonical_blocks_unchanged",
+        "result": "PASS"
+      },
+      {
+        "consumer": "__main__.Corrections.test_generation_race_before_intent_denied",
+        "name": "test_generation_race_before_intent_denied",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_confirmed_selection_only_candidate",
+        "name": "test_confirmed_selection_only_candidate",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_candidate_api_partial_known_returns_candidate",
+        "name": "test_candidate_api_partial_known_returns_candidate",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_candidate_pair_known_returns_candidate",
+        "name": "test_candidate_pair_known_returns_candidate",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_stopped_original_cli_full_sequence_without_overlay",
+        "name": "test_stopped_original_cli_full_sequence_without_overlay",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_prestop_explicit_controls_closure",
+        "name": "test_prestop_explicit_controls_closure",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_consumed_recovery_no_second_start",
+        "name": "test_consumed_recovery_no_second_start",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_start_lost_response_no_replay_or_false_complete",
+        "name": "test_start_lost_response_no_replay_or_false_complete",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_event775_denies_execute_but_original_recovers",
+        "name": "test_event775_denies_execute_but_original_recovers",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_binding_missing_denies_execute_before_controls",
+        "name": "test_binding_missing_denies_execute_before_controls",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_shared_binding_revalidation_at_original_start",
+        "name": "test_shared_binding_revalidation_at_original_start",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_uncertain_selection_never_original",
+        "name": "test_uncertain_selection_never_original",
+        "result": "PASS"
+      },
+      {
+        "consumer": "test_recovery.RecoveryTests.test_missing_candidate_binding_does_not_block_original",
+        "name": "test_missing_candidate_binding_does_not_block_original",
+        "result": "PASS"
+      }
+    ],
+    "countsNotAdditiveDistinctTests": true,
+    "functionalSuitesRunForThisReport": 0,
+    "initial42": [
+      "test_binding_missing_denies_execute_before_controls",
+      "test_binding_source_rejects_omissions",
+      "test_candidate_api_partial_known_returns_candidate",
+      "test_candidate_pair_known_returns_candidate",
+      "test_canonical_capture_baseline_and_close_preserve_guard38",
+      "test_canonical_node_accepts_original_with_transport_only_simulated",
+      "test_confirmed_selection_only_candidate",
+      "test_consumed_recovery_no_second_start",
+      "test_cron_failure_prevents_complete",
+      "test_db_unknown_denies_original",
+      "test_event775_denies_execute_but_original_recovers",
+      "test_exported_root_receipt_hash_drift_denies",
+      "test_frontend_identity_drift_denies",
+      "test_missing_candidate_binding_does_not_block_original",
+      "test_missing_exit_not_prestop_when_pair_stopped",
+      "test_new_admission_denies_original",
+      "test_observation_race_before_original_effect_denies",
+      "test_original_code_drift_denies_before_recovery",
+      "test_original_gate_requires_explicit_recovery_intent",
+      "test_original_protocol_action_allowlist",
+      "test_policy_proposal_canonical_root_parser",
+      "test_prestop_explicit_controls_closure",
+      "test_prestop_lost_abort_preserves_intent_no_start",
+      "test_proposal_is_return_only_delta_and_no_extra_actions",
+      "test_real_factory_cli_with_explicit_pins",
+      "test_recovery_reference_drift_denies_inspection",
+      "test_restore_authority_failure_denies",
+      "test_root_permit_expired_denies_before_intent",
+      "test_root_policy_wrong_target_denies_original",
+      "test_saved_drift_prevents_receipt",
+      "test_selection_receipt_drift_no_original_fallback",
+      "test_shared_binding_revalidation_at_original_start",
+      "test_start_failure_before_effect_keeps_intent",
+      "test_start_intent_without_ack_denies",
+      "test_start_lost_response_no_replay_or_false_complete",
+      "test_stopped_original_cli_full_sequence_without_overlay",
+      "test_supervision_drift_prevents_receipt",
+      "test_uncertain_selection_never_original",
+      "test_unfence_lost_response_never_complete_or_retry",
+      "test_unknown_cron_denies_before_recovery_intent",
+      "test_worker_capture_original_uses_root_return_path",
+      "test_wrong_decision_no_intent"
+    ]
+  },
+  "workForThisReport": {
+    "codeModified": false,
+    "commitPush": false,
+    "newFiles": [
+      "RESULT_REPORT.md",
+      "RESULT_EVIDENCE_INDEX.json",
+      "MANIFEST.sha256"
+    ],
+    "previousArtifactsModified": false,
+    "testsReexecuted": false,
+    "vpsAccess": false
+  }
+}

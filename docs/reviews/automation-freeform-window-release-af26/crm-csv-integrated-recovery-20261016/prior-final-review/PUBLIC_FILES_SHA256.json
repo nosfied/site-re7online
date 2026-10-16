@@ -1,0 +1,19 @@
+{
+  "FINAL_REVIEW.md": "d6c3830c3635f1a61e4c3ea2026c0d72cbeb668dd0b173f8195e633d9649eac0",
+  "FINAL_REVIEW_CHECKS.json": "9630005337192bbf942cfcd16d6313d0e706cc6652d85fa9a01fcb685c509389",
+  "PROOFS_SANITIZED.json": "683cbff40365d80ea0881ba03a54bd9ec2cb73533a85431464311f43dd956170",
+  "REPORT.md": "48ccfee71c14d5e7f398e92efce793dae98dd8f7b80d0266cf011f69d31b52bd",
+  "SOURCE_PROVENANCE.json": "f46d9ae5c9e028f53bcb50ecf89ecbde37c3100533922c1a265abc17ef3e199d",
+  "STATE_MATRIX.md": "2bdeb3cef6c7364fbb3dfc55d24ed7e1efe85677ffc7622b53698017450fa102",
+  "consumer_delta.patch": "d461621d8aff8566d85994b1f9aa94a58a6097fd77492ca10045552f6b24bc2c",
+  "future_sources.py": "f5aa957e67885d96a2e1b0d5aa0dfbf0c66e64cf43b1745141fc9d1e41b8c72e",
+  "inputs.py": "175bee603fba1048a2b5abba0f596e98c89f8feba903cf397c708c25c0c80598",
+  "policy_proposal.py": "3910f34d385970160afb00e73f64f80957f8c147c14304c2a9e6a69dd46b6450",
+  "recovery.py": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2",
+  "recovery_bridge.py": "61156b4d714d44fde65b934e13df04e4c86ea36768d05f0c805a1548ed9c2150",
+  "recovery_contract.py": "1efd4bd6982529421b65360ed667c89e84a976ad4d5ae005172b45ea1a66ba92",
+  "recovery_start.py": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9",
+  "reference_sources/operations_recovery_original.py": "0e57766066654314f51868194c22ceb58236a12869404447c66acf8a3a710d70",
+  "reproduce.py": "445b0b2fed287f7493dbd140ebb9f30804319f58fc0fb90ba7381513b701d4b8",
+  "test_recovery.py": "7da7e974cecc7325ec2713fb9adaa1a27bba02fd526fb33eddecc28efd7830ca"
+}

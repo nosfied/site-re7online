@@ -1,0 +1,27 @@
+{
+  "allocatedUniqueCodeKitBytes": 892928,
+  "apparentCodeKitBytes": 629384,
+  "archivableAfterCustody": [
+    "superseded offline code kit and review evidence"
+  ],
+  "automaticCleanupActivated": false,
+  "controlsBudgetBytes": 8388608,
+  "custody": "workspace persistent; immutable local composition index. No tar/transfer/independent physical replica or new backup claimed.",
+  "floorClassification": "specific CSV full-operation historical budget, not a global reserve or current capacity proof",
+  "lastReview": "2026-10-16",
+  "newRuntimeCopyBytes": 0,
+  "nextReview": "2026-10-21",
+  "operationalReferenceFloorBytes": 11235700736,
+  "preserveOnHostAfterFutureClosure": [
+    "active components",
+    "compatible return",
+    "reader and shared dependencies",
+    "current controls"
+  ],
+  "productionEffects": false,
+  "purpose": "offline composition of accepted CSV integrated recovery controls; not a window generation",
+  "responsible": "Deifson Oliveira",
+  "reviewEarlierOnChange": true,
+  "state": "PREPARED LOCALLY / NOT DEPLOYED / NOT WINDOW READY",
+  "uniqueFiles": 115
+}

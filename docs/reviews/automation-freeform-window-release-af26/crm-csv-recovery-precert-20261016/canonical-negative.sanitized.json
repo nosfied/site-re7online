@@ -1,0 +1,7 @@
+{
+  "result": "CANONICAL_CHECKER_DENY_UNBOUND_INPUT",
+  "canonicalCheckerExecuted": true,
+  "firstRequiredInput": "window/csv-contract.private.json",
+  "systemEffects": false,
+  "productionEffects": false
+}

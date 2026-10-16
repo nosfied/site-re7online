@@ -81,7 +81,10 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | Documento | Status | Uso |
 | --- | --- | --- |
 | `docs/RUNBOOK_WHATSAPP_AGENT.md` | atual | Deploy, migration, retencao e operacao principal |
-| `docs/reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/REPORT.md` | LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY | Semântica original de bindings, Event preservado;19 testes/28 casos diferenciais, reprodução isolada e diff completo; retorno/STOPPED_UNSELECTED/recuperação pendentes |
+| `docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/REPORT.md` | ACCEPT LOCAL / NOT DEPLOYED / NOT WINDOW READY | Reconciliação posterior a6bcf, R1/R2, publicação mínima deduplicada, allowlist e limites de reprodução; CSV suspenso |
+| `docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/REPORT.md` | PREPARED LOCALLY / NOT DEPLOYED / NOT WINDOW READY | Código integrado composto; manifests e planos de bindings/política;15 grupos de observação atual pendentes; fonte root/namespace/pins de fase não materializados; CSV suspenso |
+| `docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md` | LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY | CLI/modo/política futuros; R1/R2 corrigidos com32 regressões focadas, revisão pendente;42 provas históricas preservadas; sem pacote/janela, CSV suspenso |
+| `docs/reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/REPORT.md` | LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY | Semântica original de bindings, Event preservado;19 testes/28 casos diferenciais, reprodução isolada e diff completo; publicado6bcf; sequência local futura em relatório próprio, certificação operacional pendente |
 | `docs/DEPLOY_TOPOLOGY_RE7.md` | parcialmente atual | Topologia de deploy; validar sempre que PM2/VPS/Vercel mudarem |
 | `docs/DEPLOY_LOG.md` | atual como historico | Registro historico, nao fonte primaria de arquitetura |
 | `docs/onboarding.md` | atual | Onboarding Meta/WhatsApp, readiness, partial bind e recuperacao operacional |

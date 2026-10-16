@@ -1,0 +1,220 @@
+{
+  "classificationModes": {
+    "CANDIDATE": "return ou return-partial",
+    "DENY": "nenhum modo/efeito",
+    "ORIGINAL": "return-before-commit",
+    "PRESTOP": "prestop (sem diret\u00f3rio de start)"
+  },
+  "executionAuthorized": false,
+  "inputs": {
+    "mode/window manifests and original-preparation-review.sha256": {
+      "rule": "nenhuma refer\u00eancia vazia, hash inferido ou depend\u00eancia exclusiva do candidato no \u00edndice original; conferir m\u00f3dulos de fase sem ciclo",
+      "source": "gerar ap\u00f3s bindings reais e contrato original completo; DAG descrito em sealOrder"
+    },
+    "window/csv-baseline.private.json": {
+      "rule": "tr\u00eas PID/ticks reais; identidade frontend est\u00e1vel",
+      "source": "identidades atuais + guardGeneration38"
+    },
+    "window/csv-compiled-proof.private.json": {
+      "rule": "hash/proced\u00eancia e rela\u00e7\u00e3o com artefato24e5857f conferidos; esta prova n\u00e3o \u00e9 valida\u00e7\u00e3o funcional em produ\u00e7\u00e3o",
+      "source": "prova compilada saneada existente da entrega coordenada, sem rebuild"
+    },
+    "window/csv-contract.private.json": {
+      "rule": "n\u00e3o filtrar imut\u00e1veis para PASS; reconciliar POLICY_SOURCE coerentemente s\u00f3 ap\u00f3s captura autorizada",
+      "source": "perfis + conjunto imut\u00e1vel original/compartilhado completo + or\u00e7amento"
+    },
+    "window/csv-known-imports.private.json": {
+      "rule": "sem opera\u00e7\u00e3o UNKNOWN/PROCESSING; aus\u00eancia HTTP n\u00e3o substitui auditoria",
+      "source": "invent\u00e1rio conhecido confrontado com auditoria READ ONLY atual"
+    },
+    "window/db-owner-bindings.private.json": {
+      "rule": "ownership completo e port API correspondente; sem emiss\u00e3o de segredo",
+      "source": "SQL/proxy/portas/consumidores atuais"
+    },
+    "window/deploy.crontab.before + window": {
+      "rule": "seis entradas/hor\u00e1rios e consumidores conferidos; n\u00e3o executar jobs",
+      "source": "leitura cron deploy + receita can\u00f4nica de conten\u00e7\u00e3o"
+    },
+    "window/event-consumer-binding.private.json": {
+      "rule": "Event775 e leitura incompleta negam antes da conten\u00e7\u00e3o; CAS no uso",
+      "source": "metadados/hash literal/consumidores atuais"
+    },
+    "window/initial.private.json": {
+      "rule": "n\u00e3o gerar defaults nem copiar identidade hist\u00f3rica",
+      "source": "guard/observedGuardOpen/supervis\u00e3o + observedUtc can\u00f4nicos"
+    },
+    "window/original-bindings/path-bindings.private.json": {
+      "rule": "separado do mapa candidato; selar/hash/permiss\u00f5es sem ampliar predicado",
+      "source": "mapa observado exclusivamente do runtime original e depend\u00eancias"
+    },
+    "window/owner-evidence": {
+      "rule": "n\u00e3o copiar evid\u00eancia antiga como atual; preservar recibos originais",
+      "source": "root fresco + backup/RPO/cust\u00f3dia v2/lab"
+    },
+    "window/path-bindings.private.json": {
+      "rule": "requerido para ida; ORIGINAL n\u00e3o depende dele",
+      "source": "mapa observado dos alvos/retornos candidatos"
+    },
+    "window/privileged-policy.private.json": {
+      "rule": "nenhum UID/PID/ticks/hash assumido; preservar helper/sudoers/fence e limitar alvos",
+      "source": "fonte root observada + schema do helper + perfis/identidades reais"
+    },
+    "window/re7-converta-backup.before + window": {
+      "rule": "confer\u00eancia separada obrigat\u00f3ria em admiss\u00e3o/retorno/encerramento",
+      "source": "leitura cron sistema + receita can\u00f4nica"
+    },
+    "window/recovery-contract.private.json": {
+      "rule": "somente ap\u00f3s todos os inputs e refer\u00eancias reais; nenhum campo ausente ou default",
+      "source": "hashes de arquivos/c\u00f3digo/perfis/\u00edndices do novo pacote"
+    },
+    "window/recovery_binding.py": {
+      "rule": "pins de contrato/pol\u00edtica/export root correspondentes \u00e0 fase/decis\u00e3o; nunca derivar de sidecar n\u00e3o aprovado",
+      "source": "future_sources.binding_source(tr\u00eas hashes revistos)"
+    },
+    "window/restore proofs and mode backup/baseline/proof-bindings": {
+      "rule": "os quatro modos coerentes, fronteira/tooling/lab expl\u00edcitos; originais preservados",
+      "source": "R0 quando necess\u00e1rio, contrato de restore certificado reutiliz\u00e1vel e baselines atuais"
+    },
+    "window/saved-dump.pm2.private.json + saved-dump.pm2.bak.private.json": {
+      "rule": "preservar bytes/refer\u00eancias, n\u00e3o gerar pelo c\u00f3digo sem observa\u00e7\u00e3o",
+      "source": "capturas originais600 atuais"
+    },
+    "window/source.profile.private.json": {
+      "rule": "tr\u00eas apps e NEWauth+NEWDB+NEWcipher; metadados600 e hash pinado",
+      "source": "exporta\u00e7\u00e3o privada leg\u00edtima dos ambientes ativos, captura real"
+    },
+    "window/target.profile.private.json": {
+      "rule": "somente cwd/script API diferem; worker/frontend/env preservados pelo profile_delta",
+      "source": "derivar da fonte conferida + API CSV24e5857f"
+    },
+    "window/waiting-work.private.json": {
+      "rule": "manter guarda38 e out.15 CLOSED; n\u00e3o executar entrada hist\u00f3rica",
+      "source": "captura/baseline can\u00f4nica atual da guarda/out.15"
+    }
+  },
+  "kind": "REQUIREMENTS_NOT_RUNTIME_BINDINGS",
+  "modeTargets": {
+    "return": {
+      "source": "CANDIDATE",
+      "target": "CANDIDATE"
+    },
+    "return-before-commit": {
+      "source": "ORIGINAL",
+      "target": "ORIGINAL"
+    },
+    "return-partial": {
+      "source": "CANDIDATE",
+      "target": "CANDIDATE"
+    },
+    "switch": {
+      "source": "ORIGINAL",
+      "target": "CANDIDATE"
+    }
+  },
+  "pendingNamespaceRenderings": [
+    {
+      "file": "code/return-before-commit/ops.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/return-before-commit/execution-check.cjs",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/return-before-commit/delegated.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/return-before-commit/read-state.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/return-partial/ops.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/return-partial/execution-check.cjs",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/return-partial/delegated.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/return-partial/read-state.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/return/ops.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/return/execution-check.cjs",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/return/delegated.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/return/read-state.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/switch/ops.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/switch/execution-check.cjs",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/switch/delegated.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    },
+    {
+      "file": "code/switch/read-state.py",
+      "kind": "new_preparation_namespace_binding",
+      "outputAfterCapture": null
+    }
+  ],
+  "sealOrder": [
+    "Capturas atuais e fronteira: validar fonte/metadados/\u00e9pocas/refer\u00eancias sem copiar observa\u00e7\u00e3o hist\u00f3rica como fresca.",
+    "Materializar perfis, planos, contratos e oito ecossistemas nos quatro modos; renderizar somente bindings de namespace/root explicitamente observados.",
+    "Reconciliar os pins de fonte root em csv_contract/original_checks/pre_install e installer CAS em vers\u00e3o nova; conferir hashes e equival\u00eancia do delta de binding.",
+    "Modo files/scripts manifests -> sequencer manifest de c\u00f3digo/entradas est\u00e1ticas -> \u00edndice original completo (sem entradas exclusivas do candidato) e review do pacote.",
+    "Contrato de recupera\u00e7\u00e3o fixa os \u00edndices/c\u00f3digo/perfis; produzir o m\u00f3dulo com seus tr\u00eas pins somente com pol\u00edtica/export correspondentes \u00e0 fase e decis\u00e3o.",
+    "Revisar autoridade/hash externo do binding de fase sem ciclo (n\u00e3o incluir m\u00f3dulo que cont\u00e9m hash do contrato dentro do pr\u00f3prio contrato ou \u00edndice por ele pinado). Materializa\u00e7\u00e3o/certifica\u00e7\u00e3o dessa autoridade continua pendente.",
+    "Certificar os bytes concretos e publicar novo review hash antes de qualquer pedido futuro de instala\u00e7\u00e3o; n\u00e3o executar este plano agora."
+  ],
+  "sourceRootBindingBlocker": {
+    "affectedConsumers": [
+      "csv_contract.POLICY_SOURCE",
+      "original_checks.POLICY_SOURCE",
+      "pre_install.verify",
+      "root_readonly capture",
+      "installer CAS",
+      "policy/proof hashes"
+    ],
+    "currentObserved": false,
+    "historicalCodePin": "fa113e5259850f7b23188b81cd5279c2a95c318154a3b0737da7251b1064f251",
+    "lastHistoricalInstalledPolicy": "e2a5ffab807f457b4179a6981e15cbf52800cbf975bce921c31ee3a9a989860b",
+    "status": "BLOCKS_OPERATIONAL_CERTIFICATION_UNTIL_FRESH_BINDING_AND_REVIEW"
+  },
+  "state": "UNBOUND"
+}

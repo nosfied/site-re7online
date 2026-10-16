@@ -1,0 +1,880 @@
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py
+@@ -43,6 +43,7 @@
+         import ops
+         op = ops.Operations(self.root / mode, ops.System())
+         op.restore_proof(); op.guard()
++        op.certificate('old-exit-confirmed.json', API)
+         op.old_absent(read(self.root / mode / 'stop-start.json'))
+         require(op.d.db_zero() == {'otherClientBackends': 0, 'advisoryLocks': 0}, 'unknown_db_owner')
+         from csv_boundary import exit_and_imports
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_contract.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_contract.py
+@@ -48,9 +48,20 @@
+         self.window = self.root / 'window'
+         self.b = bridge
+         file = self.window / 'recovery-contract.private.json'
++        from original_checks import read_permission, check_original
++        read_permission(file)
+         require(sha(file) == expected_digest, 'recovery_contract_hash_drift')
+         self.seal = read(file)
+         require(self.seal['version'] == 1, 'recovery_contract_version')
++        # Pins anchor the complete canonical checker inputs; no filtered/empty
++        # immutable set and no unsealed manifest may replace the original ones.
++        for name, key in (('csv-contract.private.json', 'originalCanonicalSha256'),
++                          ('sequencer-manifest.json', 'originalSequencerManifestSha256')):
++            read_permission(self.window / name)
++            require(sha(self.window / name) == self.seal[key], 'original_canonical_input_drift')
++        require(sha(self.root / 'original-preparation-review.sha256') == self.seal['originalReviewSha256'],
++                'original_review_drift')
++        check_original(self.root, live=True)
+         required = {'window/source.profile.private.json', 'window/target.profile.private.json',
+                     'window/csv-baseline.private.json', 'window/initial.private.json',
+                     'window/mode-names.private.json', 'window/mode-manifest-v4.json',
+@@ -58,9 +69,18 @@
+                     'window/re7-converta-backup.before', 'window/re7-converta-backup.window'}
+         required |= {m + '/' + n for m in MODES for n in
+                      ('candidate.config.private.json', 'return.config.private.json', 'plan.private.json')}
++        # Canonical loop already checked every declared row; now enforce the
++        # complete ORIGINAL/shared scope instead of accepting a sparse index.
++        declared = {line.split('  ', 1)[1] for line in
++                    (self.root / 'original-preparation-review.sha256').read_text().splitlines()}
++        review_required = required | {'window/csv-contract.private.json',
++            'window/sequencer-manifest.json', 'window/original-bindings/path-bindings.private.json',
++            'window/db-owner-bindings.private.json', 'window/event-consumer-binding.private.json'}
++        require(review_required <= declared, 'original_review_coverage')
+         refs = self.seal['filesSha256']
+         require(set(refs) == required, 'recovery_reference_coverage')
+         for name, digest in refs.items():
++            read_permission(self.root / name)
+             require(sha(self.root / name) == digest, 'recovery_reference_drift:' + name)
+         names = read(self.window / 'mode-names.private.json')
+         manifest = read(self.window / 'mode-manifest-v4.json')
+@@ -76,9 +96,10 @@
+                 'original_mode_manifest_hash')
+         required_code = {'recovery.py', 'recovery_contract.py', 'recovery_bridge.py', 'recovery_start.py',
+                          'csv_cli.py', 'csv_start_gate.py', 'csv_boundary.py', 'prestop_contract.py', 'sequencer.py',
+-                         'baseline_contract.py', 'scheduled_controls.py'}
++                         'baseline_contract.py', 'scheduled_controls.py', 'original_checks.py', 'ecosystem_contract.py'}
+         require(set(self.seal['codeSha256']) == required_code, 'recovery_common_code_coverage')
+         for name, digest in self.seal['codeSha256'].items():
++            read_permission(self.window / name)
+             require(sha(self.window / name) == digest, 'recovery_common_code_hash')
+         self.source = read(self.window / 'source.profile.private.json')
+         self.target = read(self.window / 'target.profile.private.json')
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/future_sources.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/future_sources.py
+@@ -105,3 +105,26 @@
+     return ("RECOVERY_CONTRACT_SHA256 = " + repr(contract_hash) + '\n' +
+             "INSTALLED_POLICY_SHA256 = " + repr(policy_hash) + '\n' +
+             "ROOT_POLICY_PERMIT_SHA256 = " + repr(root_export_hash) + '\n')
++
++
++def original_checker(canonical_source):
++    """Reuse canonical package checks; exclude only candidate live-runtime admission.
++
++    The immutable loop still runs with live=True. No predicate is rewritten.
++    Profiles use the already shared CSV profile_delta, not the OpenAI rotation.
++    Anchor failures deny generation; no runtime source loading or entrypoint.
++    """
++    source = function(canonical_source, 'profiles', """def profiles(before,after):
++ from csv_boundary import profile_delta
++ api=next(a for a in after['apps'] if a['name']=='re7-whatsapp-agent')
++ profile_delta(before,after,api['cwd'])""")
++    source = once(source, " and c['models']=={'responses':'gpt-4.1-mini','audio':'gpt-4o-mini-transcribe'}", '')
++    source = source.replace('openai-contract', 'csv-contract')
++    source = once(source, "p/'preparation-review.sha256'", "p/'original-preparation-review.sha256'")
++    start = source.index(' if live:\n  require(str(p)')
++    end = source.index(' return {', start)
++    source = source[:start] + " require(str(p)==c['remotePreparation'],'live_path_drift')\n from baseline_contract import validate_preparation\n validate_preparation(p, modes=MODES)\n" + source[end:]
++    source = source[:source.index('def selected(')]
++    source = once(source, 'def check(p,live=False):', 'def check_original(p,live=True):')
++    source = once(source, "'OPENAI_FOUR_MODE_CONTRACT_PASS'", "'ORIGINAL_CANONICAL_PACKAGE_PASS'")
++    return source
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/original_checks.py
+@@ -0,0 +1,52 @@
++"""Restricted credential contract. Validation only; no provider, SQL or PM2 effect."""
++import copy,hashlib,json,os,re,stat
++from pathlib import Path
++MODES=('switch','return','return-partial','return-before-commit')
++API='re7-whatsapp-agent'
++POLICY_SOURCE='fa113e5259850f7b23188b81cd5279c2a95c318154a3b0737da7251b1064f251'
++def require(ok,why):
++ if not ok:raise RuntimeError(why)
++def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
++def read(p):
++ p=Path(p);s=p.lstat();require(stat.S_ISREG(s.st_mode)and not p.is_symlink()and s.st_nlink==1 and s.st_uid==os.getuid()and stat.S_IMODE(s.st_mode)==0o600,'private_object_invalid');return json.loads(p.read_text())
++def write(p,v):
++ p=Path(p);fd=os.open(p,os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_WRONLY,0o600)
++ with os.fdopen(fd,'w')as f:json.dump(v,f,sort_keys=True);f.write('\n');f.flush();os.fsync(f.fileno())
++def profiles(before,after):
++ from csv_boundary import profile_delta
++ api=next(a for a in after['apps'] if a['name']=='re7-whatsapp-agent')
++ profile_delta(before,after,api['cwd'])
++def check_original(p,live=True):
++ p=Path(p);w=p/'window';c=read(w/'csv-contract.private.json');before=read(w/'source.profile.private.json');after=read(w/'target.profile.private.json');profiles(before,after)
++ require(c['sourcePolicySha256']==POLICY_SOURCE,'source_policy_or_model_drift')
++ require(c['sourceProfileSha256']==sha(w/'source.profile.private.json')and c['targetProfileSha256']==sha(w/'target.profile.private.json'),'profile_hash_drift')
++ refs=c['immutable'];require(type(refs)is list and bool(refs),'immutable_empty')
++ for e in refs:
++  require(set(e)>={'path','uid','mode','sha256'}and type(e['uid'])is int and type(e['mode'])is int and re.fullmatch('[a-f0-9]{64}',e['sha256'])is not None,'immutable_contract')
++  if live:
++   f=Path(e['path']);s=f.lstat();require(stat.S_ISREG(s.st_mode)and not f.is_symlink()and s.st_uid==e['uid']and stat.S_IMODE(s.st_mode)==e['mode']and sha(f)==e['sha256'],'immutable_live_drift')
++ from ecosystem_contract import validate_all
++ validate_all(p)
++ names=read(w/'mode-names.private.json');mm=read(w/'mode-manifest-v4.json');require(set(names)==set(mm['modeFiles'])==set(mm['modeManifests'])==set(MODES),'four_modes_required')
++ for mode in MODES:
++  d=p/mode;plan=read(d/'plan.private.json');require(plan['mode']==mode,'explicit_mode_missing_or_drift')
++  target=before if mode=='return-before-commit'else after
++  require(read(d/'candidate.config.private.json')==target,'mode_target_drift')
++  require(read(d/'return.config.private.json')==(before if mode in ('switch','return-before-commit')else after),'mode_source_drift')
++  require(set(names[mode])==set(mm['modeFiles'][mode]),'mode_coverage')
++  for n,h in mm['modeFiles'][mode].items():require(Path(n).name==n and sha(d/n)==h,'mode_hash_drift');read_permission(d/n)
++  require(sha(d/'scripts.sha256')==mm['modeManifests'][mode],'mode_manifest_drift')
++  from restore_contract import validate
++  validate(d)
++ wm=read(w/'sequencer-manifest.json');require(wm['preparation']==c['remotePreparation'],'remote_preparation_drift')
++ for n,h in wm['filesSha256'].items():require(Path(n).name==n and sha(w/n)==h,'window_hash_drift');read_permission(w/n)
++ for line in(p/'original-preparation-review.sha256').read_text().splitlines():
++  h,n=line.split('  ',1);f=p/n;require(not Path(n).is_absolute()and '..'not in Path(n).parts and sha(f)==h,'review_hash_drift');read_permission(f)
++ policy=read(w/'privileged-policy.private.json');require(policy['preparation']==c['remotePreparation']and set(policy['sourceProcesses'])=={a['name']for a in before['apps']},'policy_shape')
++ require(sha(w/'privileged-policy.private.json')==(w/'privileged-policy.sha256').read_text().strip(),'policy_hash_drift')
++ require(str(p)==c['remotePreparation'],'live_path_drift')
++ from baseline_contract import validate_preparation
++ validate_preparation(p, modes=MODES)
++ return {'result':'ORIGINAL_CANONICAL_PACKAGE_PASS','live':live,'immutableReferences':len(refs),'modes':4}
++def read_permission(p):
++ s=Path(p).lstat();require(stat.S_ISREG(s.st_mode)and not Path(p).is_symlink()and s.st_nlink==1 and s.st_uid==os.getuid()and stat.S_IMODE(s.st_mode)==0o600,'sealed_file_type_owner_mode')
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_corrections.py
+@@ -0,0 +1,173 @@
++"""Focused R1/R2 regression. Real consumers; synthetic files and external effects."""
++import ast
++import hashlib
++import json
++import os
++import stat
++import sys
++import unittest
++from pathlib import Path
++from unittest.mock import patch
++import test_recovery as t
++from inputs import source
++import original_checks
++
++
++class Corrections(t.RecoveryTests):
++    def deny_before_effects(self, reason=None):
++        calls=list(self.fx.d.calls);root=list(self.fx.root_calls)
++        with self.assertRaises(Exception) as error:self.run_cli('ORIGINAL')
++        if reason:self.assertIn(reason,str(error.exception))
++        self.assertEqual(self.fx.d.calls,calls)
++        # read-only root inspection may run; effectful actions may not.
++        self.assertFalse(any(a in ('authorize-return','unfence','restore-controls','abort-prestop') for a in self.fx.root_calls[len(root):]))
++        self.assertFalse((self.fx.w/'csv-recovery.intent.private.json').exists())
++        self.assert_no_completion()
++    def certificate(self, **changes):
++        self.fx.stopped()
++        p=self.fx.root/'switch/old-exit-confirmed.json';v=t.c.read(p);v.update(changes);p.write_text(json.dumps(v))
++        q=self.fx.w/'csv-imports-switch-after-exit.private.json';v=t.c.read(q);v['exitCertificateSha256']=t.c.sha(p);q.write_text(json.dumps(v))
++    def test_previous_generation_consistent_inventory_denied(self):
++        self.certificate(generation=37)
++        # Same exact files rejected by the final Operations consumer and decision.
++        with self.assertRaisesRegex(RuntimeError,'guard_generation_changed'):
++            t.ops.Operations(self.fx.root/'switch',self.fx.d).certificate('old-exit-confirmed.json',t.c.API)
++        self.deny_before_effects('guard_generation_changed')
++    def test_old_generation_even_without_inventory_update_denied(self):
++        self.fx.stopped();p=self.fx.root/'switch/old-exit-confirmed.json';v=t.c.read(p);v['generation']=37;p.write_text(json.dumps(v))
++        self.deny_before_effects('guard_generation_changed')
++    def test_certificate_direction_and_config_denied(self):
++        self.certificate(direction='other',configHash='0'*64)
++        self.deny_before_effects('stale_or_wrong_certificate')
++    def test_certificate_identity_reappearance_denied(self):
++        self.fx.stopped();cert=t.c.read(self.fx.root/'switch/old-exit-confirmed.json')
++        # Reappearance of an original captured process, not a real process.
++        pid,identity=next(iter(cert['trees'][t.c.API].items()))
++        self.fx.d.proc[str(pid)]=identity
++        self.deny_before_effects()
++    def test_original_never_reads_candidate_runtime(self):
++        self.fx.stopped();candidate=Path(self.fx.target['apps'][0]['cwd'])
++        original_bytes=Path.read_bytes;original_text=Path.read_text;original_stat=Path.lstat
++        def guarded(fn):
++            def call(path,*a,**kw):
++                if path==candidate or candidate in path.parents:
++                    raise AssertionError('candidate_only_runtime_access_forbidden')
++                return fn(path,*a,**kw)
++            return call
++        with patch.object(Path,'read_bytes',guarded(original_bytes)),patch.object(Path,'read_text',guarded(original_text)),patch.object(Path,'lstat',guarded(original_stat)):
++            self.assertEqual(self.run_cli('ORIGINAL')['result'],'CSV_ORIGINAL_PAIR_RESTORED')
++    def test_immutable_content_drift_denied(self):
++        self.fx.stopped();Path(self.fx.source['apps'][0]['script']).write_bytes(b'// drift\n')
++        self.deny_before_effects('immutable_live_drift')
++    def test_immutable_metadata_denied(self):
++        self.fx.stopped();p=Path(self.fx.source['apps'][0]['script']);original=Path.lstat
++        def meta(q,*a,**kw):
++            v=original(q,*a,**kw)
++            if q==p:
++                fields=list(v);fields[0]=(v.st_mode&~0o777)|0o644;return os.stat_result(fields)
++            return v
++        with patch.object(Path,'lstat',meta):self.deny_before_effects('immutable_live_drift')
++    def test_sealed_metadata_denied(self):
++        self.fx.stopped();p=self.fx.root/t.c.ORIGINAL/'ops.py';original=Path.lstat
++        def meta(q,*a,**kw):
++            v=original(q,*a,**kw)
++            if q==p:
++                fields=list(v);fields[0]=(v.st_mode&~0o777)|0o644;return os.stat_result(fields)
++            return v
++        with patch.object(Path,'lstat',meta):self.deny_before_effects('sealed_file_type_owner_mode')
++    def test_sealed_owner_and_hardlink_denied(self):
++        self.fx.stopped();p=self.fx.root/t.c.ORIGINAL/'ops.py';original=Path.lstat
++        for field,value in ((4,os.getuid()+1),(3,2)):
++            def meta(q,*a,**kw):
++                v=original(q,*a,**kw)
++                if q==p:
++                    fields=list(v);fields[field]=value;return os.stat_result(fields)
++                return v
++            with self.subTest(field=field),patch.object(Path,'lstat',meta):self.deny_before_effects('sealed_file_type_owner_mode')
++    def test_missing_sealed_file_denied(self):
++        self.fx.stopped();p=self.fx.root/t.c.ORIGINAL/'ops.py';original=Path.read_bytes
++        def read(q):
++            if q==p:raise FileNotFoundError('synthetic_missing_sealed_file')
++            return original(q)
++        with patch.object(Path,'read_bytes',read):self.deny_before_effects('synthetic_missing')
++    def test_sealed_replaced_symlink_denied(self):
++        self.fx.stopped();p=self.fx.root/t.c.ORIGINAL/'ops.py';original=Path.is_symlink
++        with patch.object(Path,'is_symlink',lambda q:q==p or original(q)):
++            self.deny_before_effects('sealed_file_type_owner_mode')
++    def test_sealed_integrity_denied(self):
++        self.fx.stopped();(self.fx.root/t.c.ORIGINAL/'ops.py').write_text('# substituted\n')
++        self.deny_before_effects('mode_hash_drift')
++    def test_read_failure_denied(self):
++        self.fx.stopped();p=self.fx.w/'csv-contract.private.json';original=Path.read_text
++        def read(q,*a,**kw):
++            if q==p:raise PermissionError('synthetic_unreadable')
++            return original(q,*a,**kw)
++        with patch.object(Path,'read_text',read):self.deny_before_effects('synthetic_unreadable')
++    def test_immutable_reference_list_change_denied(self):
++        self.fx.stopped();p=self.fx.w/'csv-contract.private.json';v=t.c.read(p);v['immutable']=[];p.write_text(json.dumps(v))
++        self.deny_before_effects('original_canonical_input_drift')
++    def test_canonical_checker_reproduced_exactly(self):
++        expected=t.future_sources.original_checker(source('canonical_contract.py'))
++        self.assertEqual(Path(original_checks.__file__).read_text(),expected)
++        # Predicate bodies remain the exact versioned canonical AST.
++        old=ast.parse(source('canonical_contract.py'));new=ast.parse(expected)
++        for name in ('read_permission','read','require','sha'):
++            a=next(n for n in old.body if isinstance(n,ast.FunctionDef) and n.name==name)
++            b=next(n for n in new.body if isinstance(n,ast.FunctionDef) and n.name==name)
++            self.assertEqual(ast.dump(a,include_attributes=False),ast.dump(b,include_attributes=False))
++    def reseal_review(self, text):
++        p=self.fx.root/'original-preparation-review.sha256';p.write_text(text)
++        seal_path=self.fx.w/'recovery-contract.private.json';seal=t.c.read(seal_path)
++        seal['originalReviewSha256']=t.c.sha(p);seal_path.write_text(json.dumps(seal))
++        self.fx.digest=t.c.sha(seal_path);self.fx.controller.digest=self.fx.digest
++        sys.modules['recovery_binding'].RECOVERY_CONTRACT_SHA256=self.fx.digest
++    def test_explicitly_pinned_empty_review_denied(self):
++        self.fx.stopped();self.reseal_review('')
++        self.deny_before_effects('original_review_coverage')
++    def test_explicitly_pinned_incomplete_review_denied(self):
++        self.fx.stopped();p=self.fx.root/'original-preparation-review.sha256'
++        self.reseal_review(''.join(line for line in p.read_text().splitlines(True) if 'original-bindings/' not in line))
++        self.deny_before_effects('original_review_coverage')
++    def test_original_review_missing_denied(self):
++        self.fx.stopped();p=self.fx.root/'original-preparation-review.sha256';original=Path.read_bytes
++        def read(q):
++            if q==p:raise FileNotFoundError('original_review_absent')
++            return original(q)
++        with patch.object(Path,'read_bytes',read):self.deny_before_effects('original_review_absent')
++    def test_checker_canonical_blocks_unchanged(self):
++        old=ast.parse(source('canonical_contract.py'));new=ast.parse(Path(original_checks.__file__).read_text())
++        before=next(n for n in old.body if isinstance(n,ast.FunctionDef) and n.name=='check')
++        after=next(n for n in new.body if isinstance(n,ast.FunctionDef) and n.name=='check_original')
++        # Entire immutable and mode loops, not just helper names or test order.
++        for target in ('e','mode'):
++            a=next(n for n in before.body if isinstance(n,ast.For) and isinstance(n.target,ast.Name) and n.target.id==target)
++            b=next(n for n in after.body if isinstance(n,ast.For) and isinstance(n.target,ast.Name) and n.target.id==target)
++            self.assertEqual(ast.dump(a,include_attributes=False),ast.dump(b,include_attributes=False))
++    def test_generation_race_before_intent_denied(self):
++        self.fx.stopped();original=self.fx.b.verify_recovery_admission
++        def admission():
++            original();p=self.fx.root/'switch/old-exit-confirmed.json';v=t.c.read(p);v['generation']=37;p.write_text(json.dumps(v))
++        self.fx.b.verify_recovery_admission=admission
++        self.deny_before_effects('guard_generation_changed')
++
++
++# Reuse only affected interface proofs; do not discover the whole suite42.
++INTERFACES=('test_confirmed_selection_only_candidate','test_candidate_api_partial_known_returns_candidate',
++            'test_candidate_pair_known_returns_candidate','test_stopped_original_cli_full_sequence_without_overlay','test_prestop_explicit_controls_closure',
++            'test_consumed_recovery_no_second_start','test_start_lost_response_no_replay_or_false_complete',
++            'test_event775_denies_execute_but_original_recovers','test_binding_missing_denies_execute_before_controls',
++            'test_shared_binding_revalidation_at_original_start',
++            'test_uncertain_selection_never_original','test_missing_candidate_binding_does_not_block_original')
++
++def suite():
++    result=unittest.TestSuite(Corrections(n) for n in Corrections.__dict__ if n.startswith('test_'))
++    for name in INTERFACES:
++        if not hasattr(t.RecoveryTests,name):raise RuntimeError('focused_interface_test_missing:'+name)
++        result.addTest(t.RecoveryTests(name))
++    return result
++
++if __name__=='__main__':
++    result=unittest.TextTestRunner(verbosity=2).run(suite())
++    print(json.dumps({'result':'FOCUSED_CORRECTIONS_PASS' if result.wasSuccessful() else 'DENY',
++                      'testsRun':result.testsRun,'externalEffects':'SIMULATED','productionTouched':False}))
++    sys.exit(not result.wasSuccessful())
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_recovery.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_recovery.py
+@@ -41,6 +41,7 @@
+ scheduled=load('scheduled_controls',source('scheduled_controls.py'))
+ boundary=load('csv_boundary',source('csv_boundary.py'))
+ ops=load('ops',source('operations_recovery_original.py'))
++ecosystem=load('ecosystem_contract',source('ecosystem_contract.py').replace("MODES = ('switch', 'return', 'return-partial')", "MODES = ('switch', 'return', 'return-partial', 'return-before-commit')"))
+ binding_consumers={mode:load('bindings_'+mode.replace('-','_'),future_sources.operations(
+     prevent.operations(source('operations_bindings_original.py')),mode)) for mode in pre.MODES}
+ import recovery_contract as c
+@@ -138,7 +139,7 @@
+             put(self.root/mode/'return.config.private.json',self.source if mode in ('switch',c.ORIGINAL) else self.target)
+         for name,value in [('deploy.crontab.before','before-deploy'),('deploy.crontab.window','window-deploy'),
+                            ('re7-converta-backup.before','before-system'),('re7-converta-backup.window','window-system')]:put(self.w/name,value.encode())
+-        put(self.w/'initial.private.json',{'guard':{'open':False},'supervision':'ActiveState=inactive\nUnitFileState=enabled\n'})
++        put(self.w/'initial.private.json',{'guard':{'open':False,'generation':38,'tasks':0,'ledgerFault':False},'supervision':'ActiveState=inactive\nUnitFileState=enabled\n','observedGuardOpen':False,'observedUtc':'2026-10-16T00:00:00+00:00'})
+         put(self.w/'path-bindings.private.json',{});put(self.w/'original-bindings/path-bindings.private.json',{})
+         put(self.w/'db-owner-bindings.private.json',{'apiHttpPort':3001})
+         self.event=root/'events';self.event.mkdir(mode=0o700);put(self.event/'policy.ts',b'// synthetic previous Event source\n')
+@@ -155,7 +156,9 @@
+         code.update({'csv_start_gate.py':future_sources.start_gate(gate_text),'csv_cli.py':future_sources.csv_cli(prevent.csv_cli(source('csv_cli.py'))),
+                      'csv_boundary.py':source('csv_boundary.py'),'prestop_contract.py':source('prestop_contract.py'),
+                      'sequencer.py':future_sources.sequencer(source('sequencer.py')),
+-                     'baseline_contract.py':source('baseline_contract.py'),'scheduled_controls.py':source('scheduled_controls.py')})
++                     'baseline_contract.py':source('baseline_contract.py'),'scheduled_controls.py':source('scheduled_controls.py'),
++                     'original_checks.py':(Path(__file__).parent/'original_checks.py').read_text(),
++                     'ecosystem_contract.py':source('ecosystem_contract.py').replace("MODES = ('switch', 'return', 'return-partial')", "MODES = ('switch', 'return', 'return-partial', 'return-before-commit')")})
+         for name,text in code.items():put(self.w/name,text.encode())
+         original_code={'ops.py':source('operations_recovery_original.py')+'\n'+future_sources.operations(
+                        prevent.operations(source('operations_bindings_original.py')),c.ORIGINAL),
+@@ -177,8 +180,9 @@
+               'sourceScriptSha256':{a['name']:c.sha(a['script']) for a in self.source['apps']}}
+         put(self.w/'recovery-contract.private.json',seal);self.digest=c.sha(self.w/'recovery-contract.private.json')
+         self.saved=root/'saved';self.saved.mkdir()
+-        self.policy={'targetProcesses':{'switch':self.targets(self.target),'return':self.targets(self.target)}}
++        self.policy={'preparation':str(self.root),'sourceProcesses':{a['name']:{} for a in self.source['apps']},'targetProcesses':{'switch':self.targets(self.target),'return':self.targets(self.target)}}
+         self.install_policy(self.source)
++        self.canonical_package()
+         fx=self
+         class B(rb.Bridge):
+             # Only host path admission/OS effects differ; all recovery readers below are real.
+@@ -250,6 +254,49 @@
+         self.restore=types.ModuleType('restore_contract')
+         def restore_validate(path):c.require(self.d.restore_valid,'injected_restore_authority_invalid');return {'result':'PREVIOUS_RESTORE_AUTHORITY_INJECTED'}
+         self.restore.validate=restore_validate;sys.modules['restore_contract']=self.restore
++    def canonical_package(self):
++        # Complete static canonical inputs, synthetic profiles/data; real checker.
++        front=next(a for a in self.source['apps'] if a['name']==c.FRONT)
++        put(Path(front['cwd'])/'.next/BUILD_ID',b'synthetic-front\n')
++        baseline={'auth':[],'connected':[],'flags':[],'frontendBuild':'synthetic-front','observedAt':'2026-10-16T00:00:00+00:00'}
++        mm={'modeFiles':{},'modeManifests':{}};names={}
++        original=self.root/c.ORIGINAL
++        ops_text=(original/'ops.py').read_bytes();gate_raw=(original/'csv_start_gate.py').read_bytes()
++        for mode in c.MODES:
++            d=self.root/mode
++            if mode!=c.ORIGINAL:
++                put(d/'ops.py',ops_text);put(d/'csv_start_gate.py',gate_raw)
++            put(d/'baseline.private.json',baseline)
++            ecosystem.generate_mode(d)
++            files=['ops.py','csv_start_gate.py','baseline.private.json','plan.private.json',
++                   'candidate.config.private.json','return.config.private.json',
++                   'candidate.ecosystem.config.cjs','return.ecosystem.config.cjs']
++            mm['modeFiles'][mode]={n:c.sha(d/n) for n in files};names[mode]=files
++            (d/'scripts.sha256').write_text(''.join(c.sha(d/n)+'  '+n+'\n' for n in files)) if (d/'scripts.sha256').exists() else put(d/'scripts.sha256',''.join(c.sha(d/n)+'  '+n+'\n' for n in files).encode())
++            mm['modeManifests'][mode]=c.sha(d/'scripts.sha256')
++        (self.w/'mode-names.private.json').write_text(json.dumps(names))
++        (self.w/'mode-manifest-v4.json').write_text(json.dumps(mm))
++        refs=[{'path':a['script'],'uid':os.getuid(),'mode':0o600,'sha256':c.sha(a['script'])} for a in self.source['apps']]
++        refs.append({'path':str(self.event/'policy.ts'),'uid':os.getuid(),'mode':0o600,'sha256':c.sha(self.event/'policy.ts')})
++        spec={'immutable':refs,'sourcePolicySha256':'fa113e5259850f7b23188b81cd5279c2a95c318154a3b0737da7251b1064f251',
++              'remotePreparation':str(self.root),'sourceProfileSha256':c.sha(self.w/'source.profile.private.json'),
++              'targetProfileSha256':c.sha(self.w/'target.profile.private.json')}
++        put(self.w/'csv-contract.private.json',spec)
++        seal=c.read(self.w/'recovery-contract.private.json')
++        wm={'preparation':str(self.root),'filesSha256':seal['codeSha256']}
++        put(self.w/'sequencer-manifest.json',wm)
++        review=list(seal['filesSha256'])+['window/csv-contract.private.json','window/sequencer-manifest.json',
++                'window/original-bindings/path-bindings.private.json','window/db-owner-bindings.private.json',
++                'window/event-consumer-binding.private.json']
++        review += [m+'/'+n for m,files in mm['modeFiles'].items() for n in files]
++        review += [m+'/scripts.sha256' for m in c.MODES]
++        put(self.root/'original-preparation-review.sha256',''.join(c.sha(self.root/n)+'  '+n+'\n' for n in sorted(set(review))).encode())
++        seal['filesSha256']={n:c.sha(self.root/n) for n in seal['filesSha256']}
++        seal['originalCanonicalSha256']=c.sha(self.w/'csv-contract.private.json')
++        seal['originalSequencerManifestSha256']=c.sha(self.w/'sequencer-manifest.json')
++        seal['originalReviewSha256']=c.sha(self.root/'original-preparation-review.sha256')
++        (self.w/'recovery-contract.private.json').write_text(json.dumps(seal))
++        self.digest=c.sha(self.w/'recovery-contract.private.json')
+     def targets(self,profile):return {a['name']:{'cwd':a['cwd'],'script':a['script'],'sha256':c.sha(a['script'])} for a in profile['apps'] if a['name'] in (c.API,c.WORKER)}
+     def install_policy(self,profile):
+         # Synthetic fixture setup only: never invokes an installer or edits a real policy.
+@@ -258,6 +305,9 @@
+         if path.exists():path.write_text(json.dumps(self.policy)+'\n')
+         else:put(path,self.policy)
+         self.policy_hash=c.sha(path)
++        sidecar=self.w/'privileged-policy.sha256'
++        if sidecar.exists():sidecar.write_text(self.policy_hash)
++        else:put(sidecar,self.policy_hash.encode())
+         proof={'policySha256':self.policy_hash,'phase':'fenced','targetProfileSha256':c.sha(self.w/('source.profile.private.json' if profile==self.source else 'target.profile.private.json')),
+                'capturedUtc':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+         path=self.w/'recovery-policy-permit.private.json'
+@@ -411,7 +461,8 @@
+             original(root,name)
+             if name==c.API:path.write_text('{"drift":"unexpected"}')
+         self.fx.d.start=changed
+-        with self.assertRaisesRegex(RuntimeError,'original_binding_map_drift'):self.run_cli('ORIGINAL')
++        # Canonical package validation now catches the same race earlier.
++        with self.assertRaisesRegex(RuntimeError,'review_hash_drift'):self.run_cli('ORIGINAL')
+         self.assert_no_completion()
+ 
+     def test_binding_missing_denies_execute_before_controls(self):
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/reproduce.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/reproduce.py
+@@ -3,7 +3,7 @@
+ from pathlib import Path
+ HERE=Path(__file__).resolve().parent
+ FILES=('recovery.py','recovery_contract.py','recovery_bridge.py','recovery_start.py',
+-       'policy_proposal.py','future_sources.py','inputs.py','test_recovery.py','SOURCE_PROVENANCE.json')
++       'policy_proposal.py','future_sources.py','inputs.py','test_recovery.py','test_corrections.py','original_checks.py','SOURCE_PROVENANCE.json')
+ 
+ 
+ def run():
+@@ -23,7 +23,7 @@
+             (dest/'versioned-inputs'/name).write_bytes(raw)
+         (dest/'ISOLATED_DELIVERY').write_text('No Git or private evidence fallback.\n')
+         assert not (dest/'.git').exists() and not (dest/'local-evidence').exists()
+-        result=subprocess.run([sys.executable,'-B',str(dest/'test_recovery.py')],cwd=dest,
++        result=subprocess.run([sys.executable,'-B',str(dest/'test_corrections.py')],cwd=dest,
+             env={'PATH':'/usr/bin:/bin','PYTHONDONTWRITEBYTECODE':'1'},capture_output=True,text=True)
+         sys.stderr.write(result.stderr);sys.stdout.write(result.stdout)
+         return result.returncode
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/SOURCE_PROVENANCE.json
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/SOURCE_PROVENANCE.json
+@@ -65,6 +65,16 @@
+       "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+       "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/reference_sources/check_current_original.py",
+       "sha256": "7a35fd791758d8d0d049db4b15614c2797d2af7d729ec66f33b806535361c996"
++    },
++    "canonical_contract.py": {
++      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
++      "path": "docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/openai-operational-20261015/openai_contract.py",
++      "sha256": "8aa6acb96a55d0417dd7ddca99a5bb9f8c124700f7f48e24bb57a76ffccdf8d8"
++    },
++    "ecosystem_contract.py": {
++      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
++      "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/ecosystem_contract.py",
++      "sha256": "b1b5816574b351d924777959208ae159dac2ed2b95536beca0a4350cce6f232a"
+     }
+   },
+   "excerpts": {
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/consumer_delta.patch
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/consumer_delta.patch
+@@ -233,3 +233,53 @@
+ +  from recovery_start import authorize_original_start
+ +  return authorize_original_start(d)
+ + check(d.parent,live=True);stage_boundary(d.parent,d.name)
++--- a/VERSIONED/openai_contract.py
+++++ b/FUTURE/window/original_checks.py
++@@ -13,13 +13,12 @@
++  p=Path(p);fd=os.open(p,os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_WRONLY,0o600)
++  with os.fdopen(fd,'w')as f:json.dump(v,f,sort_keys=True);f.write('\n');f.flush();os.fsync(f.fileno())
++ def profiles(before,after):
++- require(set(before)==set(after)=={'apps'},'profile_shape')
++- for v in (before,after):require(len(v['apps'])==3 and {a['name']for a in v['apps']}=={API,'re7-whatsapp-web-worker','re7-admin-front'},'profile_population')
++- a=copy.deepcopy(after);x=next(x for x in a['apps']if x['name']==API);old=next(x for x in before['apps']if x['name']==API)['env']['OPENAI_API_KEY'];require(x['env']['OPENAI_API_KEY']!=old,'replacement_not_distinct');x['env']['OPENAI_API_KEY']=old;require(a==before,'unrelated_profile_drift')
++- require([x['name']for x in before['apps']if x['env'].get('OPENAI_API_KEY')]==[API],'consumer_population_drift')
++-def check(p,live=False):
++- p=Path(p);w=p/'window';c=read(w/'openai-contract.private.json');before=read(w/'source.profile.private.json');after=read(w/'target.profile.private.json');profiles(before,after)
++- require(c['sourcePolicySha256']==POLICY_SOURCE and c['models']=={'responses':'gpt-4.1-mini','audio':'gpt-4o-mini-transcribe'},'source_policy_or_model_drift')
+++ from csv_boundary import profile_delta
+++ api=next(a for a in after['apps'] if a['name']=='re7-whatsapp-agent')
+++ profile_delta(before,after,api['cwd'])
+++def check_original(p,live=True):
+++ p=Path(p);w=p/'window';c=read(w/'csv-contract.private.json');before=read(w/'source.profile.private.json');after=read(w/'target.profile.private.json');profiles(before,after)
+++ require(c['sourcePolicySha256']==POLICY_SOURCE,'source_policy_or_model_drift')
++  require(c['sourceProfileSha256']==sha(w/'source.profile.private.json')and c['targetProfileSha256']==sha(w/'target.profile.private.json'),'profile_hash_drift')
++  refs=c['immutable'];require(type(refs)is list and bool(refs),'immutable_empty')
++  for e in refs:
++@@ -41,22 +40,13 @@
++   validate(d)
++  wm=read(w/'sequencer-manifest.json');require(wm['preparation']==c['remotePreparation'],'remote_preparation_drift')
++  for n,h in wm['filesSha256'].items():require(Path(n).name==n and sha(w/n)==h,'window_hash_drift');read_permission(w/n)
++- for line in(p/'preparation-review.sha256').read_text().splitlines():
+++ for line in(p/'original-preparation-review.sha256').read_text().splitlines():
++   h,n=line.split('  ',1);f=p/n;require(not Path(n).is_absolute()and '..'not in Path(n).parts and sha(f)==h,'review_hash_drift');read_permission(f)
++  policy=read(w/'privileged-policy.private.json');require(policy['preparation']==c['remotePreparation']and set(policy['sourceProcesses'])=={a['name']for a in before['apps']},'policy_shape')
++  require(sha(w/'privileged-policy.private.json')==(w/'privileged-policy.sha256').read_text().strip(),'policy_hash_drift')
++- if live:
++-  require(str(p)==c['remotePreparation'],'live_path_drift')
++-  from baseline_contract import validate_preparation
++-  validate_preparation(p)
++-  inv=read(p/'runtime-inventory.private.json');r=Path(inv['runtimeRoot'])
++-  require(not(r/'.env').exists()and not(r/'.env').is_symlink(),'runtime_env')
++-  for e in inv['files']:require(sha(r/e['path'])==e['sha256']and not(r/e['path']).is_symlink(),'runtime_hash')
++-  for e in inv['links']:require((r/e['path']).is_symlink()and os.readlink(r/e['path'])==e['target'],'runtime_link')
++- return {'result':'OPENAI_FOUR_MODE_CONTRACT_PASS','live':live,'immutableReferences':len(refs),'modes':4}
+++ require(str(p)==c['remotePreparation'],'live_path_drift')
+++ from baseline_contract import validate_preparation
+++ validate_preparation(p, modes=MODES)
+++ return {'result':'ORIGINAL_CANONICAL_PACKAGE_PASS','live':live,'immutableReferences':len(refs),'modes':4}
++ def read_permission(p):
++  s=Path(p).lstat();require(stat.S_ISREG(s.st_mode)and not Path(p).is_symlink()and s.st_nlink==1 and s.st_uid==os.getuid()and stat.S_IMODE(s.st_mode)==0o600,'sealed_file_type_owner_mode')
++-def selected(p):
++- p=Path(p);w=p/'window';receipt=w/'openai-selection.receipt.private.json';intent=w/'openai-selection.intent.private.json'
++- if not receipt.exists():require(not intent.exists(),'selection_uncertain_inspection_only');return False
++- r=read(receipt);c=read(w/'openai-contract.private.json');require(r=={'result':'NEW_OPENAI_SELECTED','intentSha256':sha(intent),'contractSha256':sha(w/'openai-contract.private.json'),'targetProfileSha256':c['targetProfileSha256']},'selection_receipt_drift');i=read(intent);require(i['contractSha256']==sha(w/'openai-contract.private.json')and i['automaticRetry']is False,'selection_intent_drift');return True
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md
+@@ -1,7 +1,7 @@
+ # CSV — recuperação integrada futura, somente local
+ 
+ **LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.**
+-**Revisão final: CORREÇÕES LOCAIS NECESSÁRIAS.** [Achados R1/R2 e contraprova dirigida](FINAL_REVIEW.md). Os42 PASS permanecem válidos no alcance declarado, mas não autorizam aceitar a integração como concluída. Código/provas antigos preservados; nenhuma correção implementada nesta revisão.
++**Correções R1/R2 implementadas localmente; revisão pendente.** [Relatório de correção, contraprovas e limites](CORRECTION_REPORT.md). [Parecer anterior preservado](FINAL_REVIEW.md); os42 PASS anteriores não cobriam as duas lacunas. Provas/bytes anteriores preservados em prior-final-review; a reprodução atual executa somente32 regressões dirigidas, não a suíte42 completa.
+ 
+ Base/HEAD `6bcf122ca5e5992769e67c1158208408b9c0b15b`, branch `review/campaign-recovery-20260926`, reconferidos antes da edição; nenhum delta rastreado inicial. Demais worktrees/arquivos privados preservados. CSV suspenso; recuperação/instalação consumidas. Sem commit/push deste incremento.
+ 
+@@ -34,7 +34,7 @@
+ python3 -B docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/reproduce.py
+ ```
+ 
+-**42 testes PASS em diretório isolado**, somente arquivos entregues/fontes Git pinadas em6bcf e hashes conferidos. Filho sem .git/local-evidence; audit hook nega acesso a evidência privada. Inclui factory real com três pins. Suíte anterior19/28 reaproveitada, não repetida. Reexecutadas somente provas novas/afetadas durante desenvolvimento deste delta.
++**Prova histórica:42 testes PASS em diretório isolado**, somente arquivos entregues/fontes Git pinadas em6bcf e hashes conferidos. Filho sem .git/local-evidence; audit hook nega acesso a evidência privada. Inclui factory real com três pins. Suíte anterior19/28 reaproveitada, não repetida. Reexecutadas somente provas novas/afetadas durante desenvolvimento deste delta.
+ 
+ Consumidores concretos conectados: CLI futuro completo, Recovery/Contract/Bridge, Sequencer canônico com delta declarado, classe Operations intacta e Controls.unfence intacto, bindings, stage/profile_delta, ScheduledControls e parser root. Testes de ordem não certificam equivalência geral nem pacote operacional.
+ 
+@@ -44,7 +44,7 @@
+ 
+ - Operations.stop/start e Controls.unfence executam corpos reais sobre arquivos sintéticos e driver OS. ScheduledControls é real; comandos interceptados e saved/fallback sintéticos600. Nenhum PM2/nft/systemd/SQL/HTTP produtivo executado.
+ - Pre_unfence usa o predicado concreto; apenas HTTP e captura /proc/sockets são injetados. Identidades/árvores/sockets/DB/root são observações simuladas. Deleção nft do consumidor delegado é modelada como preparação de permissão; liberação root continua separada.
+-- validate.cjs/saúde API/DB e restore previamente certificado são autoridades injetadas para aceitar/negar. Restore não reconstruído. Checker completo/admissão não afetados são injetados no CLI, sem alegação de certificação do pacote.
++- validate.cjs/saúde API/DB e restore previamente certificado são autoridades injetadas para aceitar/negar. Restore não reconstruído. O checker/admissão da ida candidata continua injetado; o checker ORIGINAL corrigido é real e usa arquivos sintéticos completos no alcance estático declarado. Não há certificação de pacote operacional.
+ - Parser root real sobre política sintética completa; root_regular substituído somente para cadeia/proprietário local. Não comprova permissões root reais. Event775 interno é real; somente ancestrais externos às fixtures são modelados755. Nenhum chmod/chown.
+ - Trecho mínimo de código consumidor ausente no Git (Operations e Controls.unfence, sem System OS/CLI/configurações/recibos) entregue com origem/hash/ranges em SOURCE_PROVENANCE.json. Revisão textual: sem segredo/dado produtivo. Não foi copiada ou executada a geração consumida. Demais entradas versionadas no SHA exato.
+ - Fixtures representam os consumidores e dependências originais sob teste; não são um pacote operacional completo ou prova produtiva. Não há certificação de HTTP contínuo, SLA, tenant/provider ou autoridade root real.
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_REPORT.md
+@@ -0,0 +1,47 @@
++# Correção R1/R2 — recuperação integrada futura
++
++**LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.**
++
++Base/HEAD `6bcf122ca5e5992769e67c1158208408b9c0b15b`, branch `review/campaign-recovery-20260926`. CSV suspenso. Somente alterações locais; sem VPS, janela, commit/push ou efeitos produtivos. NEWauth+NEWDB+NEWcipher, frontend, crons, guarda38 e out.15 preservados por ausência de intervenção; não são observações produtivas novas.
++
++## Resultado da nova revisão
++
++**R1 e R2 corrigidos no alcance local; recomendação de aceite técnico das correções, sujeita à revisão do owner.** Não há achado residual impeditivo identificado nesse alcance. A certificação operacional de uma geração concreta continua pendente. [Parecer anterior](FINAL_REVIEW.md), [contraprova anterior](FINAL_REVIEW_CHECKS.json) e [42 provas anteriores](PROOFS_SANITIZED.json) permanecem byte a byte; não demonstravam os dois invariantes. Cópia anterior de fontes, documentos e índices em `prior-final-review`, com hashes próprios. Os manifests/recibos/gerações consumidos permanecem intocados.
++
++## R1 — validação do certificado
++
++`Bridge.verify_recovery_exit` chama agora `Operations.certificate('old-exit-confirmed.json', API)`, além dos controles existentes de restore, guarda, árvores/identidades, sockets, DB zero e vínculo do inventário de importações. O consumidor canônico verifica direção, configHash, geração efetiva da guarda e ausência dos processos capturados. Não se substitui isso pela coerência entre dois documentos.
++
++A inspeção ORIGINAL e sua repetição fresca sob lock usam esse mesmo caminho antes de criar intent/autorizar retorno; Operations mantém a validação no uso antes de cada partida. Geração37 contra guarda38 nega `guard_generation_changed`, inclusive quando o inventário foi atualizado para corresponder exatamente ao certificado inválido. Mudança entre inspeção e admissão também nega, sem intent ou partida. Direção/configHash e identidade reaparecida têm negativas dirigidas.
++
++## R2 — checker original canônico
++
++`original_checks.py` é produzido por `future_sources.original_checker` a partir de fonte Git fixada em SOURCE_PROVENANCE. Não reimplementa aproximadamente os predicados. Mantém os corpos de `read`, `read_permission` e os loops completos de imutáveis/quatro modos, com equivalência AST ensaiada. Mantém política/shape/hash, perfis pelo `profile_delta` compartilhado, nomes/planos, manifests/scripts, tipos/UID/modo600/nlink, integridade das referências window/review, contratos de restore e ecossistemas. Usa também o validador canônico de baseline dos quatro modos, inclusive frontend Build ID.
++
++O recorte exclui apenas a admissão live do runtime candidato (`runtime-inventory`, `.env` candidato e arquivos/links executáveis candidatos). Caminho da preparação permanece conferido. A população imutável canônica é mantida integral, não filtrada em tempo de recuperação; deve continuar contendo as dependências originais/compartilhadas aprovadas. O checker não pode inventariar nem eliminar referências para conseguir PASS.
++
++O índice dedicado `original-preparation-review.sha256` pertence exclusivamente a uma versão futura local. Deve enumerar os arquivos selados aplicáveis ao caminho original e metadados compartilhados, incluindo mapas originais, provas, scripts/manifests e dependências. Evita usar um índice cujo alcance obrigue a leitura de bindings/overlay exclusivos do candidato. Ele, o contrato canônico original e o sequencer-manifest exigem pins explícitos novos no contrato de recuperação; faltas/divergências negam. A cobertura mínima do índice é exigida a partir dos arquivos/perfis/provas compartilhados e controles originais pinados; até um índice vazio ou sem mapa original com pin explicitamente renovado nega `original_review_coverage`. Nenhum manifest histórico é editado e não existe fallback para índice vazio ou hash inferido de sidecar não aprovado. Não foi produzida uma geração operacional.
++
++`Contract` invoca esse checker com `live=True`, confere os pins e metadados do contrato/arquivos/código e mantém as verificações próprias de perfis, frontend/guarda38. O original continua exigindo seus controles canônicos, mesmo quando o candidato não está disponível. O start gate repete Contract; Operations continua revalidando certificado, ordem, DB e bindings. `path_bindings`, Event e suas referências versionadas não foram alterados.
++
++## Provas executadas e limites
++
++[32 PASS, nomes e hashes](CORRECTION_PROOFS.json); [saída sanitizada](CORRECTION_TEST_OUTPUT.txt). 20 testes dirigidos novos e12 interfaces existentes afetadas; não repetida a suíte42 completa nem a suíte de prevenção19/28. A checagem estática compartilhada atinge também estados candidatos; por isso foram incluídos os três caminhos de seleção/retorno candidato, além de PRESTOP/ORIGINAL.
++
++Contraprovas: certificado antigo com/sem atualização do inventário; direção/configHash; identidade reaparecida; conteúdo/metadados de referência imutável; alteração da lista imutável; UID/modo/nlink selados; substituição/symlink, ausência, hash e leitura proibida; índice original ausente; mudança de geração antes do intent. Positivas: STOPPED_UNSELECTED→ORIGINAL, PRESTOP sem partida, três estados candidatos. Regressões: consumo, resposta de start perdida, seleção incerta, Event775/binding candidato ausente antes da ida, independência do retorno original (inclusive proibindo qualquer leitura/lstat no runtime externo candidato) e revalidação entre API/worker.
++
++O caso de concorrência no mapa original passa agora a negar mais cedo com `review_hash_drift`, antes do segundo start, em vez de chegar a `original_binding_map_drift`; não houve relaxamento do teste nem remoção do controle no uso. Dois ajustes do ensaio foram feitos durante a implementação: nome de teste selecionado e expectativa desse erro antecipado; a saída final certificada é a dos32 PASS.
++
++Reprodução: `python3 -B docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/reproduce.py`. Copia somente os arquivos declarados e fontes Git com hash para diretório temporário; filho sem Git/local-evidence. Consumidores Recovery/Bridge/Contract/Operations/Sequencer/ScheduledControls, checker original, ecossistemas e baseline são reais. Perfis, arquivos e recibos são sintéticos. Efeitos externos e observações /proc/DB/HTTP/root são simulados; restore válido é autoridade previamente certificada injetada, não restaurada novamente. Falhas de metadados são injeções de lstat/is_symlink, sem chmod/chown. Ancestrais externos Event seguem a simulação755 do ensaio anterior, não são prova produtiva. A admissão/checker da ida candidata segue injetada e não está sendo certificada como pacote produtivo.
++
++## Diff e entrega
++
++[Diff restrito desta correção](CORRECTION_DELTA.patch), [delta integrado contra6bcf](FULL_DELTA.patch), [integrações futuras](consumer_delta.patch) e [índice de hashes](PUBLIC_FILES_SHA256.json). CORRECTION_DELTA exclui a si, índices gerados e arquivos de arquivo; FULL_DELTA exclui a si e a cópia histórica de FULL_DELTA para evitar incorporação recursiva. A cópia histórica permanece no disco, identificada pelo índice, sem reescrever seus bytes.
++
++Código alterado: recovery_bridge.py; recovery_contract.py; future_sources.py. Novo consumidor: original_checks.py. Provas/reprodução: test_recovery.py (fixture estática completa/expectativa antecipada), test_corrections.py, reproduce.py e SOURCE_PROVENANCE.json (duas fontes Git adicionais). Documentação/artefatos: REPORT.md, este relatório, CORRECTION_PROOFS.json, CORRECTION_TEST_OUTPUT.txt, patches e índice; breve atualização de BACKLOG_TECH, RUNBOOK_WHATSAPP_AGENT e DOCUMENTATION_INDEX. recovery.py, recovery_start.py, policy_proposal.py, inputs.py, STATE_MATRIX.md e o trecho real Operations permanecem inalterados.
++
++## Pendências e riscos residuais
++
++A preservação local dos predicados não certifica suas observações produtivas. Antes de qualquer composição futura: produzir e revisar os novos pins/índice original completo, escopo de imutáveis e quatro modos sobre os bytes concretos, dependências originais/reader, perfis/identidades reais, autoridade root e política coerente. Depois, somente com autorização própria, conferir frescor/RPO/capacidade, DB/writers/saída/ownership, crons/supervisão/saved/fallback e fronteiras de liberação. A validação antecipada não elimina concorrência; revalidações no uso permanecem obrigatórias. Resposta perdida/incerto/consumo não autoriza replay; após possível seleção/escrita candidata não há retorno original por hipótese. Retorno pós-unfence continua fora deste fluxo.
++
++Não executados: efeitos PM2/root/HTTP/SQL reais, nova prova de restore, instalação/política, captura VPS, backup ou janela. Nenhuma retomada CSV, Prisma, retenção, .env, credenciais ou permissões produtivas. Segurança externa/risco histórico permanecem OPEN conforme decisões existentes. Parar para revisão.
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_PROOFS.json
+@@ -0,0 +1,193 @@
++{
++  "result": "FOCUSED_CORRECTIONS_PASS",
++  "status": "LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
++  "baseCommit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
++  "testsRun": 32,
++  "newDirectedTests": 20,
++  "affectedExistingInterfaces": 12,
++  "completeSuite42Repeated": false,
++  "isolation": "Delivered files + SHA-pinned Git sources; no .git/local-evidence in child; private-evidence audit hook enabled",
++  "tests": [
++    {
++      "name": "test_previous_generation_consistent_inventory_denied",
++      "consumer": "__main__.Corrections.test_previous_generation_consistent_inventory_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_old_generation_even_without_inventory_update_denied",
++      "consumer": "__main__.Corrections.test_old_generation_even_without_inventory_update_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_certificate_direction_and_config_denied",
++      "consumer": "__main__.Corrections.test_certificate_direction_and_config_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_certificate_identity_reappearance_denied",
++      "consumer": "__main__.Corrections.test_certificate_identity_reappearance_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_original_never_reads_candidate_runtime",
++      "consumer": "__main__.Corrections.test_original_never_reads_candidate_runtime",
++      "result": "PASS"
++    },
++    {
++      "name": "test_immutable_content_drift_denied",
++      "consumer": "__main__.Corrections.test_immutable_content_drift_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_immutable_metadata_denied",
++      "consumer": "__main__.Corrections.test_immutable_metadata_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_sealed_metadata_denied",
++      "consumer": "__main__.Corrections.test_sealed_metadata_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_sealed_owner_and_hardlink_denied",
++      "consumer": "__main__.Corrections.test_sealed_owner_and_hardlink_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_missing_sealed_file_denied",
++      "consumer": "__main__.Corrections.test_missing_sealed_file_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_sealed_replaced_symlink_denied",
++      "consumer": "__main__.Corrections.test_sealed_replaced_symlink_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_sealed_integrity_denied",
++      "consumer": "__main__.Corrections.test_sealed_integrity_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_read_failure_denied",
++      "consumer": "__main__.Corrections.test_read_failure_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_immutable_reference_list_change_denied",
++      "consumer": "__main__.Corrections.test_immutable_reference_list_change_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_canonical_checker_reproduced_exactly",
++      "consumer": "__main__.Corrections.test_canonical_checker_reproduced_exactly",
++      "result": "PASS"
++    },
++    {
++      "name": "test_explicitly_pinned_empty_review_denied",
++      "consumer": "__main__.Corrections.test_explicitly_pinned_empty_review_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_explicitly_pinned_incomplete_review_denied",
++      "consumer": "__main__.Corrections.test_explicitly_pinned_incomplete_review_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_original_review_missing_denied",
++      "consumer": "__main__.Corrections.test_original_review_missing_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_checker_canonical_blocks_unchanged",
++      "consumer": "__main__.Corrections.test_checker_canonical_blocks_unchanged",
++      "result": "PASS"
++    },
++    {
++      "name": "test_generation_race_before_intent_denied",
++      "consumer": "__main__.Corrections.test_generation_race_before_intent_denied",
++      "result": "PASS"
++    },
++    {
++      "name": "test_confirmed_selection_only_candidate",
++      "consumer": "test_recovery.RecoveryTests.test_confirmed_selection_only_candidate",
++      "result": "PASS"
++    },
++    {
++      "name": "test_candidate_api_partial_known_returns_candidate",
++      "consumer": "test_recovery.RecoveryTests.test_candidate_api_partial_known_returns_candidate",
++      "result": "PASS"
++    },
++    {
++      "name": "test_candidate_pair_known_returns_candidate",
++      "consumer": "test_recovery.RecoveryTests.test_candidate_pair_known_returns_candidate",
++      "result": "PASS"
++    },
++    {
++      "name": "test_stopped_original_cli_full_sequence_without_overlay",
++      "consumer": "test_recovery.RecoveryTests.test_stopped_original_cli_full_sequence_without_overlay",
++      "result": "PASS"
++    },
++    {
++      "name": "test_prestop_explicit_controls_closure",
++      "consumer": "test_recovery.RecoveryTests.test_prestop_explicit_controls_closure",
++      "result": "PASS"
++    },
++    {
++      "name": "test_consumed_recovery_no_second_start",
++      "consumer": "test_recovery.RecoveryTests.test_consumed_recovery_no_second_start",
++      "result": "PASS"
++    },
++    {
++      "name": "test_start_lost_response_no_replay_or_false_complete",
++      "consumer": "test_recovery.RecoveryTests.test_start_lost_response_no_replay_or_false_complete",
++      "result": "PASS"
++    },
++    {
++      "name": "test_event775_denies_execute_but_original_recovers",
++      "consumer": "test_recovery.RecoveryTests.test_event775_denies_execute_but_original_recovers",
++      "result": "PASS"
++    },
++    {
++      "name": "test_binding_missing_denies_execute_before_controls",
++      "consumer": "test_recovery.RecoveryTests.test_binding_missing_denies_execute_before_controls",
++      "result": "PASS"
++    },
++    {
++      "name": "test_shared_binding_revalidation_at_original_start",
++      "consumer": "test_recovery.RecoveryTests.test_shared_binding_revalidation_at_original_start",
++      "result": "PASS"
++    },
++    {
++      "name": "test_uncertain_selection_never_original",
++      "consumer": "test_recovery.RecoveryTests.test_uncertain_selection_never_original",
++      "result": "PASS"
++    },
++    {
++      "name": "test_missing_candidate_binding_does_not_block_original",
++      "consumer": "test_recovery.RecoveryTests.test_missing_candidate_binding_does_not_block_original",
++      "result": "PASS"
++    }
++  ],
++  "canonicalCertificate": "Operations.certificate before classification and effects; called again on fresh recovery revalidation",
++  "canonicalOriginalChecker": "exact read/read_permission/immutable loop/four-mode loop; shared profile_delta and baseline/ecosystem validators",
++  "effects": "OS/process/root/SQL/HTTP effects simulated; temporary synthetic files real; metadata errors injected, no chmod/chown",
++  "restore": "Existing authority injected accept/deny; no new backup/restore",
++  "productionAccessed": false,
++  "earlierEvidenceBytePreserved": {
++    "PROOFS_SANITIZED.json": true,
++    "FINAL_REVIEW.md": true,
++    "FINAL_REVIEW_CHECKS.json": true
++  },
++  "codeSha256": {
++    "recovery_contract.py": "9dad001588002c8566bd4ffc3e57d5985f3d05822dd773b87fa92d003382e73e",
++    "recovery_bridge.py": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318",
++    "original_checks.py": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82",
++    "future_sources.py": "85efa5d931bfebd606725f877c802dc04b6e65d40bbf3eaa5a6b6db313ad4f5d",
++    "test_recovery.py": "48bcf2c703f81175285d71ec4f9cab66e9f791940a38216489d8666ce2c399ec",
++    "test_corrections.py": "28a84e5f9b4f290d5140d0d0453b6d1e995bb4f69f24c057c7893e0622e4520e",
++    "reproduce.py": "8799628b05cd017da449aa8d3558cae53c0d149e005a3b0a1d9795dd8d3884a7",
++    "SOURCE_PROVENANCE.json": "5c75dddbfad7558cc81a2b3afd344c8d58ed1d3b3498065a5c801d4f693dc91e"
++  },
++  "testOutputSha256": "aea0333964c051da7fdb8d21b8f24a9d689dd23c2bdbf11f4ddf5e5b2fe75e3c"
++}
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_TEST_OUTPUT.txt
+@@ -0,0 +1,39 @@
++test_previous_generation_consistent_inventory_denied (__main__.Corrections.test_previous_generation_consistent_inventory_denied) ... ok
++test_old_generation_even_without_inventory_update_denied (__main__.Corrections.test_old_generation_even_without_inventory_update_denied) ... ok
++test_certificate_direction_and_config_denied (__main__.Corrections.test_certificate_direction_and_config_denied) ... ok
++test_certificate_identity_reappearance_denied (__main__.Corrections.test_certificate_identity_reappearance_denied) ... ok
++test_original_never_reads_candidate_runtime (__main__.Corrections.test_original_never_reads_candidate_runtime) ... ok
++test_immutable_content_drift_denied (__main__.Corrections.test_immutable_content_drift_denied) ... ok
++test_immutable_metadata_denied (__main__.Corrections.test_immutable_metadata_denied) ... ok
++test_sealed_metadata_denied (__main__.Corrections.test_sealed_metadata_denied) ... ok
++test_sealed_owner_and_hardlink_denied (__main__.Corrections.test_sealed_owner_and_hardlink_denied) ... ok
++test_missing_sealed_file_denied (__main__.Corrections.test_missing_sealed_file_denied) ... ok
++test_sealed_replaced_symlink_denied (__main__.Corrections.test_sealed_replaced_symlink_denied) ... ok
++test_sealed_integrity_denied (__main__.Corrections.test_sealed_integrity_denied) ... ok
++test_read_failure_denied (__main__.Corrections.test_read_failure_denied) ... ok
++test_immutable_reference_list_change_denied (__main__.Corrections.test_immutable_reference_list_change_denied) ... ok
++test_canonical_checker_reproduced_exactly (__main__.Corrections.test_canonical_checker_reproduced_exactly) ... ok
++test_explicitly_pinned_empty_review_denied (__main__.Corrections.test_explicitly_pinned_empty_review_denied) ... ok
++test_explicitly_pinned_incomplete_review_denied (__main__.Corrections.test_explicitly_pinned_incomplete_review_denied) ... ok
++test_original_review_missing_denied (__main__.Corrections.test_original_review_missing_denied) ... ok
++test_checker_canonical_blocks_unchanged (__main__.Corrections.test_checker_canonical_blocks_unchanged) ... ok
++test_generation_race_before_intent_denied (__main__.Corrections.test_generation_race_before_intent_denied) ... ok
++test_confirmed_selection_only_candidate (test_recovery.RecoveryTests.test_confirmed_selection_only_candidate) ... ok
++test_candidate_api_partial_known_returns_candidate (test_recovery.RecoveryTests.test_candidate_api_partial_known_returns_candidate) ... ok
++test_candidate_pair_known_returns_candidate (test_recovery.RecoveryTests.test_candidate_pair_known_returns_candidate) ... ok
++test_stopped_original_cli_full_sequence_without_overlay (test_recovery.RecoveryTests.test_stopped_original_cli_full_sequence_without_overlay) ... ok
++test_prestop_explicit_controls_closure (test_recovery.RecoveryTests.test_prestop_explicit_controls_closure) ... ok
++test_consumed_recovery_no_second_start (test_recovery.RecoveryTests.test_consumed_recovery_no_second_start) ... ok
++test_start_lost_response_no_replay_or_false_complete (test_recovery.RecoveryTests.test_start_lost_response_no_replay_or_false_complete) ... ok
++test_event775_denies_execute_but_original_recovers (test_recovery.RecoveryTests.test_event775_denies_execute_but_original_recovers) ... ok
++test_binding_missing_denies_execute_before_controls (test_recovery.RecoveryTests.test_binding_missing_denies_execute_before_controls) ... ok
++test_shared_binding_revalidation_at_original_start (test_recovery.RecoveryTests.test_shared_binding_revalidation_at_original_start) ... ok
++test_uncertain_selection_never_original (test_recovery.RecoveryTests.test_uncertain_selection_never_original) ... ok
++test_missing_candidate_binding_does_not_block_original (test_recovery.RecoveryTests.test_missing_candidate_binding_does_not_block_original) ... ok
++
++----------------------------------------------------------------------
++Ran 32 tests in 2.608s
++
++OK
++
++{"result": "FOCUSED_CORRECTIONS_PASS", "testsRun": 32, "externalEffects": "SIMULATED", "productionTouched": false}
+--- a/docs/BACKLOG_TECH.md
++++ b/docs/BACKLOG_TECH.md
+@@ -2,7 +2,7 @@
+ 
+ **CSV16/10 — PAR ORIGINAL RESTAURADO / OWNER UI ACCEPTED; ENTREGA CSV SUSPENSA.** [Recibo, provas e limites](reviews/automation-freeform-window-release-af26/crm-csv-original-recovery-20261016/RECOVERY_COMPLETE.md). Recuperação original-only executada uma vez37,509s, API936386/worker936540 nos perfis originais e frontend188897 preservado. Health200/DB/worker, ambos crons, supervisão, saved/fallback600, barreira ausente e gates falsos conferidos; sessões/telas/out.15 aceitos. NEWauth+NEWDB+NEWcipher e guarda38 preservados. Política vigentee2a5ffab em fase complete; instalação/retorno consumidos, não repetir. Sem overlay/chmod/CSV/importação. Próxima eventual revisão CSV precisa cobrir pais Event e bindings antes de conter. Segurança externa OPEN/adiamento aceito, Prisma/limpeza separados; revisão21/10 ou antes de mudança.
+ 
+-**CSV — recuperação integrada FUTURA16/10: LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Estados/CLI/modo/política,42 ensaios e limites](reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md): PRESTOP restaura controles; STOPPED_UNSELECTED oferece ORIGINAL/return-before-commit sem overlay; após seleção somente candidato; incerteza/consumo negam replay. Prevenção/revalidação e dois crons preservados. Proposta original-only pura, sem instalação/geração. Revisão final requer correções locais: validação canônica do certificado de saída e recorte completo das referências/metadados originais;42 ensaios anteriores não cobrem essas lacunas. [Parecer](reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/FINAL_REVIEW.md). Pacote concreto, bindings/provas atuais e certificação operacional continuam pendentes antes de qualquer janela. CSV suspenso; recuperação produtiva consumida intocada. Sem VPS/commit/push neste incremento.
++**CSV — recuperação integrada FUTURA16/10: LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Estados/CLI/modo/política,42 ensaios e limites](reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md): PRESTOP restaura controles; STOPPED_UNSELECTED oferece ORIGINAL/return-before-commit sem overlay; após seleção somente candidato; incerteza/consumo negam replay. Prevenção/revalidação e dois crons preservados. Proposta original-only pura, sem instalação/geração. Achados R1/R2 corrigidos localmente: certificado canônico com geração/identidades e checker original com referências/metadados;32 regressões focadas PASS em isolamento, sem repetir a suíte42. Revisão das correções pendente; as provas anteriores permanecem preservadas. [Correção e limites](reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_REPORT.md); parecer anterior preservado. Pacote concreto, bindings/provas atuais e certificação operacional continuam pendentes antes de qualquer janela. CSV suspenso; recuperação produtiva consumida intocada. Sem VPS/commit/push neste incremento.
+ 
+ **CSV — prevenção local16/10: LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Correção da revisão, diff completo e provas](reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/REPORT.md): semântica original de bindings restaurada, Event preservado;19 testes com28 casos diferenciais e reprodução isolada sem local-evidence. Os31 PASS anteriores não resolveram a divergência de contrato. Checker/CLI futuros antecipam a validação; consumidores revalidam no uso. Hardening adicional apenas proposto. Retorno original no CLI/política, STOPPED_UNSELECTED e recuperação integrada continuam pendentes. CSV suspenso; serviço original/NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Publicado para revisão em6bcf122ca5e5992769e67c1158208408b9c0b15b; “sem commit/push” descrevia somente a etapa anterior à publicação. Sem VPS ou nova geração.
+ 
+--- a/docs/RUNBOOK_WHATSAPP_AGENT.md
++++ b/docs/RUNBOOK_WHATSAPP_AGENT.md
+@@ -2,7 +2,7 @@
+ 
+ **CSV16/10 — PAR ORIGINAL RESTAURADO / OWNER UI ACCEPTED; ENTREGA CSV SUSPENSA.** [Recibo, provas e limites](reviews/automation-freeform-window-release-af26/crm-csv-original-recovery-20261016/RECOVERY_COMPLETE.md). Recuperação original-only executada uma vez37,509s, API936386/worker936540 nos perfis originais e frontend188897 preservado. Health200/DB/worker, ambos crons, supervisão, saved/fallback600, barreira ausente e gates falsos conferidos; sessões/telas/out.15 aceitos. NEWauth+NEWDB+NEWcipher e guarda38 preservados. Política vigentee2a5ffab em fase complete; instalação/retorno consumidos, não repetir. Sem overlay/chmod/CSV/importação. Próxima eventual revisão CSV precisa cobrir pais Event e bindings antes de conter. Segurança externa OPEN/adiamento aceito, Prisma/limpeza separados; revisão21/10 ou antes de mudança.
+ 
+-**CSV — recuperação integrada FUTURA16/10: LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Estados/CLI/modo/política,42 ensaios e limites](reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md): PRESTOP restaura controles; STOPPED_UNSELECTED oferece ORIGINAL/return-before-commit sem overlay; após seleção somente candidato; incerteza/consumo negam replay. Prevenção/revalidação e dois crons preservados. Proposta original-only pura, sem instalação/geração. Revisão final requer correções locais: validação canônica do certificado de saída e recorte completo das referências/metadados originais;42 ensaios anteriores não cobrem essas lacunas. [Parecer](reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/FINAL_REVIEW.md). Pacote concreto, bindings/provas atuais e certificação operacional continuam pendentes antes de qualquer janela. CSV suspenso; recuperação produtiva consumida intocada. Sem VPS/commit/push neste incremento.
++**CSV — recuperação integrada FUTURA16/10: LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Estados/CLI/modo/política,42 ensaios e limites](reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md): PRESTOP restaura controles; STOPPED_UNSELECTED oferece ORIGINAL/return-before-commit sem overlay; após seleção somente candidato; incerteza/consumo negam replay. Prevenção/revalidação e dois crons preservados. Proposta original-only pura, sem instalação/geração. Achados R1/R2 corrigidos localmente: certificado canônico com geração/identidades e checker original com referências/metadados;32 regressões focadas PASS em isolamento, sem repetir a suíte42. Revisão das correções pendente; as provas anteriores permanecem preservadas. [Correção e limites](reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_REPORT.md); parecer anterior preservado. Pacote concreto, bindings/provas atuais e certificação operacional continuam pendentes antes de qualquer janela. CSV suspenso; recuperação produtiva consumida intocada. Sem VPS/commit/push neste incremento.
+ 
+ **CSV — prevenção local16/10: LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Correção da revisão, diff completo e provas](reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/REPORT.md): semântica original de bindings restaurada, Event preservado;19 testes com28 casos diferenciais e reprodução isolada sem local-evidence. Os31 PASS anteriores não resolveram a divergência de contrato. Checker/CLI futuros antecipam a validação; consumidores revalidam no uso. Hardening adicional apenas proposto. Retorno original no CLI/política, STOPPED_UNSELECTED e recuperação integrada continuam pendentes. CSV suspenso; serviço original/NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Publicado para revisão em6bcf122ca5e5992769e67c1158208408b9c0b15b; “sem commit/push” descrevia somente a etapa anterior à publicação. Sem VPS ou nova geração.
+ 
+--- a/docs/saas/DOCUMENTATION_INDEX.md
++++ b/docs/saas/DOCUMENTATION_INDEX.md
+@@ -81,7 +81,7 @@
+ | Documento | Status | Uso |
+ | --- | --- | --- |
+ | `docs/RUNBOOK_WHATSAPP_AGENT.md` | atual | Deploy, migration, retencao e operacao principal |
+-| `docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md` | LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY | CLI/modo/política futuros;42 ensaios e revisão final com correções R1/R2 pendentes; sem pacote/janela, CSV suspenso |
++| `docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md` | LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY | CLI/modo/política futuros; R1/R2 corrigidos com32 regressões focadas, revisão pendente;42 provas históricas preservadas; sem pacote/janela, CSV suspenso |
+ | `docs/reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/REPORT.md` | LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY | Semântica original de bindings, Event preservado;19 testes/28 casos diferenciais, reprodução isolada e diff completo; publicado6bcf; sequência local futura em relatório próprio, certificação operacional pendente |
+ | `docs/DEPLOY_TOPOLOGY_RE7.md` | parcialmente atual | Topologia de deploy; validar sempre que PM2/VPS/Vercel mudarem |
+ | `docs/DEPLOY_LOG.md` | atual como historico | Registro historico, nao fonte primaria de arquitetura |

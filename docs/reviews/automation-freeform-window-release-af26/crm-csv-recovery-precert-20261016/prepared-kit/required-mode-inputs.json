@@ -1,0 +1,42 @@
+{
+  "return": [
+    "backup-manifest.json",
+    "baseline.private.json",
+    "candidate.config.private.json",
+    "candidate.ecosystem.config.cjs",
+    "plan.private.json",
+    "proof-bindings.private.json",
+    "return.config.private.json",
+    "return.ecosystem.config.cjs"
+  ],
+  "return-before-commit": [
+    "backup-manifest.json",
+    "baseline.private.json",
+    "candidate.config.private.json",
+    "candidate.ecosystem.config.cjs",
+    "plan.private.json",
+    "proof-bindings.private.json",
+    "return.config.private.json",
+    "return.ecosystem.config.cjs"
+  ],
+  "return-partial": [
+    "backup-manifest.json",
+    "baseline.private.json",
+    "candidate.config.private.json",
+    "candidate.ecosystem.config.cjs",
+    "plan.private.json",
+    "proof-bindings.private.json",
+    "return.config.private.json",
+    "return.ecosystem.config.cjs"
+  ],
+  "switch": [
+    "backup-manifest.json",
+    "baseline.private.json",
+    "candidate.config.private.json",
+    "candidate.ecosystem.config.cjs",
+    "plan.private.json",
+    "proof-bindings.private.json",
+    "return.config.private.json",
+    "return.ecosystem.config.cjs"
+  ]
+}

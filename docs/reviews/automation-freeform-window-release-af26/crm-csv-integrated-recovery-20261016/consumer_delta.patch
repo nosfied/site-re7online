@@ -1,0 +1,285 @@
+--- a/FUTURE/window/csv_cli.py
++++ b/FUTURE/window/csv_cli.py
+@@ -23,22 +23,8 @@
+     exit_and_imports({'oldExitConfirmed':True,'ownershipComplete':True,'sqlZero':True,'sha256':sha(f)},r)
+     return sha(receipt)
+ def inspect(p):
+-    p=Path(p);check(p,live=True);b=Bridge(p);apps=b.apps();policy=read(p/'window/privileged-policy.private.json');front=policy['sourceProcesses'][FRONT]
+-    require(FRONT in apps and apps[FRONT]['pid']==front['pid'] and b.identity(front['pid'])['ticks']==front['ticks'],'frontend_identity_drift')
+-    for mode in ('switch','return','return-partial','return-before-commit'):
+-        for name in (API,WORKER):
+-            if (p/mode/('start-intent-'+name+'.json')).exists()and not(p/mode/('started-'+name+'.json')).exists():return {'classification':'UNCERTAIN_START','replayAuthorized':False}
+-    selected=(p/'window/csv-selection.receipt.private.json').exists()
+-    if not selected and(p/'window/csv-selection.intent.private.json').exists():return {'classification':'UNCERTAIN_SELECTION','replayAuthorized':False}
+-    s=Sequencer(b)
+-    if not selected:
+-        if(p/'switch/old-exit-confirmed.json').is_file():
+-            require(set(apps)=={FRONT},'unselected_pair_state_ambiguous');phase='STOPPED_UNSELECTED'
+-        else:
+-            require(s.recovery_mode()=='prestop','poststop_requires_candidate_decision');phase='PRESTOP'
+-    else:
+-        stage_boundary(p,'switch');phase=s.recovery_mode();require(phase in ('return','return-partial'),'candidate_state_ambiguous')
+-    return {'classification':phase,'replayAuthorized':False,'backendReturn':'CANDIDATE_ONLY'if selected else'PRESTOP_ONLY'}
++    from recovery import inspect as recovery_inspect
++    return recovery_inspect(p)
+ def finish(s,mode):
+     p=s.root;imports_proven(p,mode);s.finish(mode);current=check_current(p,'after');reset(p)
+     write(p/'window/csv-complete.receipt.private.json',{'result':'CSV_API_COMPLETE_CANDIDATE_PRESERVED','mode':mode,'current':current,'gatesFalse':True,'targetProfileSha256':sha(p/'window/target.profile.private.json')})
+@@ -64,33 +50,19 @@
+             s.start_pair('switch');finish(s,'switch')
+         except BaseException as e:
+             s.journal('csv_failure_inspection_only',errorClass=type(e).__name__);raise
+-def recover(p,decision):
+-    p=Path(p);w=p/'window'
+-    with(p.parent/'.incident-6683-window.lock').open('a+')as lock,(w/'sequencer.lock').open('a+')as inner:
+-        fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB);fcntl.flock(inner.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+-        v=inspect(p);require(not(w/'csv-recovery.intent.private.json').exists(),'recovery_consumed')
+-        require((w/'csv-execution.intent.private.json').exists(),'execution_baseline_required')
+-        allowed={'PRESTOP':{'PRESTOP'},'CANDIDATE':{'return','return-partial','STOPPED_UNSELECTED'}}
+-        require(decision in allowed and v['classification']in allowed[decision],'explicit_decision_or_state_denied')
+-        s=Sequencer(Bridge(p));s.baseline=read(w/'csv-baseline.private.json')
+-        write(w/'csv-recovery.intent.private.json',{'decision':decision,'inspection':v,'automaticRetry':False})
+-        if decision=='PRESTOP':
+-            s.recover();s.b.scheduled_controls().verify('before');s.b.privileged('check-absent');check_current(p);reset(p)
+-            write(w/'csv-abort.receipt.private.json',{'result':'CSV_PRESTOP_CONTROLS_RESTORED','gatesFalse':True});return
+-        mode='return-partial'if v['classification']=='STOPPED_UNSELECTED'else v['classification'];s.b.privileged('check-present');s.action(mode,'stop-pair'if mode=='return'else'recover-partial');s.verify_stopped(mode)
+-        if v['classification']=='STOPPED_UNSELECTED':
+-            imports_proven(p,mode)
+-            write(w/'csv-selection.intent.private.json',{'targetProfileSha256':sha(w/'target.profile.private.json'),'automaticRetry':False})
+-            write(w/'csv-selection.receipt.private.json',{'result':'CSV_CANDIDATE_SELECTED','targetProfileSha256':sha(w/'target.profile.private.json'),'intentSha256':sha(w/'csv-selection.intent.private.json')})
+-        imports_proven(p,mode)
+-        from event_overlay import apply
+-        apply(p)
+-        s.start_pair(mode);finish(s,mode)
++def recover(p, decision):
++    from recovery import recover as explicit_recover
++    return explicit_recover(p, decision)
++def main(argv):
++    require(len(argv) >= 2, 'exact_arguments_required')
++    if len(argv)==2 and argv[1]=='--inspect-readonly':return inspect(Path(argv[0]))
++    if len(argv)==3 and argv[1]=='--operator-recover':return recover(Path(argv[0]),argv[2])
++    if len(argv)==2 and argv[1]=='--execute':return execute(Path(argv[0]))
++    raise RuntimeError('exact_arguments_required')
+ if __name__=='__main__':
+     os.umask(0o077)
+     try:
+-        if len(sys.argv)==3 and sys.argv[2]=='--execute':execute(Path(sys.argv[1]))
+-        elif len(sys.argv)==3 and sys.argv[2]=='--inspect-readonly':print(json.dumps(inspect(Path(sys.argv[1]))))
+-        elif len(sys.argv)==4 and sys.argv[2]=='--operator-recover':recover(Path(sys.argv[1]),sys.argv[3])
+-        else:raise RuntimeError('exact_arguments_required')
+-    except BaseException as e:print(json.dumps({'result':'CSV_OPERATION_DENY','errorClass':type(e).__name__,'noAutomaticRetry':True}));sys.exit(1)
++        value=main(sys.argv[1:])
++        if value is not None:print(json.dumps(value))
++    except BaseException as error:
++        print(json.dumps({'result':'CSV_OPERATION_DENY','errorClass':type(error).__name__,'noAutomaticRetry':True}));sys.exit(1)
+--- a/FUTURE/window/sequencer.py
++++ b/FUTURE/window/sequencer.py
+@@ -14,6 +14,7 @@
+ import time
+ from urllib import request
+ from baseline_contract import validate_preparation, sequential
++from recovery_contract import root_mode
+ 
+ API = 're7-whatsapp-agent'
+ WORKER = 're7-whatsapp-web-worker'
+@@ -91,7 +92,7 @@
+         return True
+ 
+     def node(self, mode, script):
+-        require(mode in {'switch', 'return', 'return-partial'} and
++        require(mode in {'switch', 'return', 'return-partial', 'return-before-commit'} and
+                 script in {'close.cjs', 'validate.cjs', 'open.cjs'},
+                 'node_step_denied')
+         try:
+@@ -175,33 +176,18 @@
+                 os.close(fd)
+             raise RuntimeError(f'protocol_failed:{mode}/{action}/{phase}') from None
+ 
++    def scheduled_controls(self):
++        from scheduled_controls import ScheduledControls
++        return ScheduledControls(self.window, lambda args, text=None: self.run(args, input_text=text))
++
+     def restore_guard(self, config_file):
+-        config = self.expected_config(config_file[0], config_file[1])[API]
+-        token = config['env']['ADMIN_TOKEN']
+-        url = 'http://127.0.0.1:3001/admin/ops/campaign-execution'
+-        headers = {'X-Admin-Token': token, 'Content-Type': 'application/json'}
+-
+-        def call(method='GET', body=None):
+-            data = json.dumps(body).encode() if body is not None else None
+-            req = request.Request(url, data=data, headers=headers, method=method)
+-            with request.urlopen(req, timeout=5) as response:
+-                return json.load(response)
+-
+-        before = call()
+-        require(before.get('available') and not before.get('ledgerFault') and
+-                before.get('tasks') == [] and before.get('drained'), 'guard_not_restorable')
+-        if before['open']:
+-            return before
+-        call('POST', {'open': True, 'generation': before['generation'],
+-                      'reason': 'Owner-authorized 6683 V4 admission restoration after verified executor state'})
+-        after = call()
+-        require(after['open'] and after['generation'] == before['generation'] + 1 and
+-                after['tasks'] == [] and not after.get('ledgerFault'), 'guard_restore_failed')
+-        return after
++        g = self.guard()
++        require(not g['open'] and g['generation'] == 38 and not g['tasks'] and not g.get('ledgerFault'), 'closed_guard_restoration_drift')
++        return g
+ 
+     def pre_unfence(self, mode):
+         """Checks possible under nft; port 3001 HTTP is deliberately deferred."""
+-        require(mode in {'switch', 'return', 'return-partial'}, 'mode_denied')
++        require(mode in {'switch', 'return', 'return-partial', 'return-before-commit'}, 'mode_denied')
+         self.privileged('check-present')
+         guard = self.guard()
+         require(not guard['open'] and not guard['tasks'] and
+@@ -280,7 +266,7 @@
+                 {k:v['ticks'] for k,v in tree.items()} ==
+                 {k:v['ticks'] for k,v in tree_after.items()}, 'worker_capture_changed')
+         require(os.getpgid(pid) == os.getsid(pid) == pid, 'worker_capture_session_ambiguous')
+-        expected = policy['targetProcesses']['return' if mode == 'return-partial' else mode][WORKER]
++        expected = policy['targetProcesses'][root_mode(mode)][WORKER]
+         require(config['cwd'] == expected['cwd'] and config['script'] == expected['script'] and
+                 hashlib.sha256(Path(config['script']).read_bytes()).hexdigest() ==
+                 expected['sha256'], 'capture_release_drift')
+@@ -296,7 +282,7 @@
+         return record, guard['generation'], (apps[API]['pid'], api_identity['ticks'])
+ 
+     def capture_worker_before_unfence(self, mode, app, config):
+-        path = self.root / ('return' if mode == 'return-partial' else mode) / 'worker-before-unfence.private.json'
++        path = self.root / root_mode(mode) / 'worker-before-unfence.private.json'
+         previous = None
+         if path.exists():
+             info = path.lstat()
+@@ -391,7 +377,7 @@
+             require(Path(name).name == name and
+                     hashlib.sha256((self.window / name).read_bytes()).hexdigest() == expected,
+                     'sequencer_source_hash_drift')
+-        for mode in ('switch', 'return', 'return-partial'):
++        for mode in ('switch', 'return', 'return-partial', 'return-before-commit'):
+             self.b.run(['sha256sum', '-c', 'scripts.sha256'], cwd=self.root / mode)
+         gates = json.loads((self.window / 'execution-gates.private.json').read_text())
+         require(all(gates.get(k) is True for k in (
+@@ -423,13 +409,16 @@
+                 'baseline_supervision_drift')
+         require(initial['guard']['open'] == guard['open'] and
+                 initial['guard']['generation'] == guard['generation'], 'baseline_guard_drift')
+-        require(guard.get('open') and not guard.get('tasks') and
++        require(type(guard.get('open')) is bool and not guard.get('tasks') and
+                 not guard.get('ledgerFault'), 'guard_baseline_unexpected')
+         self.baseline = sequential({'guardGeneration': guard['generation'], 'apps': identities})
+         self.journal('baseline', generation=guard['generation'],
+                      processes={k: v['pid'] for k, v in identities.items()})
+ 
+     def close_then_preflight(self):
++        self.b.scheduled_controls().verify("before")
++        from restore_contract import validate
++        for mode in ("switch","return","return-partial","return-before-commit"): validate(self.root/mode)
+         # This order is intentional. No code path requests preflight earlier.
+         require(self.baseline is not None, 'baseline_missing')
+         sequential(self.baseline)
+@@ -439,7 +428,7 @@
+         self.b.node('switch', 'close.cjs')
+         guard = self.b.guard()
+         require(not guard['open'] and guard['generation'] ==
+-                self.baseline['guardGeneration'] + 1 and
++                self.baseline['guardGeneration'] + int(validate_preparation(self.root)['guard']['open']) and
+                 not guard['tasks'] and not guard.get('ledgerFault'),
+                 'guard_close_generation_drift')
+         require((self.root / 'switch' / 'drain-result.json').is_file(),
+@@ -503,10 +492,12 @@
+         self.action(mode, 'verify-unfenced')
+         self.b.node(mode, 'validate.cjs')
+         self.b.node(mode, 'open.cjs')
+-        require(self.b.guard()['open'], 'guard_not_reopened')
++        guard = self.b.guard()
++        require(not guard['open'] and guard['generation'] == 38 and not guard['tasks'] and not guard.get('ledgerFault'), 'recovery_guard38_drift')
+         self.b.privileged('restore-controls')
+         self.action(mode, 'restore-controls')
+         self.b.privileged('check-absent')
++        self.b.scheduled_controls().verify('before')
+         self.journal('complete', mode=mode, guardGeneration=self.b.guard()['generation'])
+ 
+     def recovery_mode(self):
+@@ -541,7 +532,10 @@
+             require(all(live[n]['pid'] == original[n]['pid'] and
+                         same_identity(original[n]['identity'], self.b.identity(live[n]['pid']))
+                         for n in live), 'prestop_identity_drift')
++            scheduled = self.b.scheduled_controls()
++            scheduled.known()
+             self.b.privileged('abort-prestop')
++            scheduled.restore_deploy()
+             self.b.restore_guard(('switch', 'return.config.private.json'))
+             self.journal('prestop_restored')
+             return
+--- a/FUTURE/EXCERPT/return-before-commit/System.validate_bindings
++++ b/FUTURE/EXCERPT/return-before-commit/System.validate_bindings
+@@ -10,4 +10,5 @@
+ class System:
+     def validate_bindings(self, window, config):
+         from prestop_contract import path_bindings
+-        return path_bindings(window, config)
++        from recovery_bridge import original_bindings
++        return original_bindings(window, config)
+--- a/FUTURE/window/csv_start_gate.py
++++ b/FUTURE/window/csv_start_gate.py
+@@ -2,4 +2,8 @@
+ from csv_contract import check
+ from csv_boundary import stage_boundary
+ def authorize_start(d):
+- d=Path(d);check(d.parent,live=True);stage_boundary(d.parent,d.name)
++ d=Path(d)
++ if d.name=='return-before-commit':
++  from recovery_start import authorize_original_start
++  return authorize_original_start(d)
++ check(d.parent,live=True);stage_boundary(d.parent,d.name)
+--- a/VERSIONED/openai_contract.py
++++ b/FUTURE/window/original_checks.py
+@@ -13,13 +13,12 @@
+  p=Path(p);fd=os.open(p,os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_WRONLY,0o600)
+  with os.fdopen(fd,'w')as f:json.dump(v,f,sort_keys=True);f.write('\n');f.flush();os.fsync(f.fileno())
+ def profiles(before,after):
+- require(set(before)==set(after)=={'apps'},'profile_shape')
+- for v in (before,after):require(len(v['apps'])==3 and {a['name']for a in v['apps']}=={API,'re7-whatsapp-web-worker','re7-admin-front'},'profile_population')
+- a=copy.deepcopy(after);x=next(x for x in a['apps']if x['name']==API);old=next(x for x in before['apps']if x['name']==API)['env']['OPENAI_API_KEY'];require(x['env']['OPENAI_API_KEY']!=old,'replacement_not_distinct');x['env']['OPENAI_API_KEY']=old;require(a==before,'unrelated_profile_drift')
+- require([x['name']for x in before['apps']if x['env'].get('OPENAI_API_KEY')]==[API],'consumer_population_drift')
+-def check(p,live=False):
+- p=Path(p);w=p/'window';c=read(w/'openai-contract.private.json');before=read(w/'source.profile.private.json');after=read(w/'target.profile.private.json');profiles(before,after)
+- require(c['sourcePolicySha256']==POLICY_SOURCE and c['models']=={'responses':'gpt-4.1-mini','audio':'gpt-4o-mini-transcribe'},'source_policy_or_model_drift')
++ from csv_boundary import profile_delta
++ api=next(a for a in after['apps'] if a['name']=='re7-whatsapp-agent')
++ profile_delta(before,after,api['cwd'])
++def check_original(p,live=True):
++ p=Path(p);w=p/'window';c=read(w/'csv-contract.private.json');before=read(w/'source.profile.private.json');after=read(w/'target.profile.private.json');profiles(before,after)
++ require(c['sourcePolicySha256']==POLICY_SOURCE,'source_policy_or_model_drift')
+  require(c['sourceProfileSha256']==sha(w/'source.profile.private.json')and c['targetProfileSha256']==sha(w/'target.profile.private.json'),'profile_hash_drift')
+  refs=c['immutable'];require(type(refs)is list and bool(refs),'immutable_empty')
+  for e in refs:
+@@ -41,22 +40,13 @@
+   validate(d)
+  wm=read(w/'sequencer-manifest.json');require(wm['preparation']==c['remotePreparation'],'remote_preparation_drift')
+  for n,h in wm['filesSha256'].items():require(Path(n).name==n and sha(w/n)==h,'window_hash_drift');read_permission(w/n)
+- for line in(p/'preparation-review.sha256').read_text().splitlines():
++ for line in(p/'original-preparation-review.sha256').read_text().splitlines():
+   h,n=line.split('  ',1);f=p/n;require(not Path(n).is_absolute()and '..'not in Path(n).parts and sha(f)==h,'review_hash_drift');read_permission(f)
+  policy=read(w/'privileged-policy.private.json');require(policy['preparation']==c['remotePreparation']and set(policy['sourceProcesses'])=={a['name']for a in before['apps']},'policy_shape')
+  require(sha(w/'privileged-policy.private.json')==(w/'privileged-policy.sha256').read_text().strip(),'policy_hash_drift')
+- if live:
+-  require(str(p)==c['remotePreparation'],'live_path_drift')
+-  from baseline_contract import validate_preparation
+-  validate_preparation(p)
+-  inv=read(p/'runtime-inventory.private.json');r=Path(inv['runtimeRoot'])
+-  require(not(r/'.env').exists()and not(r/'.env').is_symlink(),'runtime_env')
+-  for e in inv['files']:require(sha(r/e['path'])==e['sha256']and not(r/e['path']).is_symlink(),'runtime_hash')
+-  for e in inv['links']:require((r/e['path']).is_symlink()and os.readlink(r/e['path'])==e['target'],'runtime_link')
+- return {'result':'OPENAI_FOUR_MODE_CONTRACT_PASS','live':live,'immutableReferences':len(refs),'modes':4}
++ require(str(p)==c['remotePreparation'],'live_path_drift')
++ from baseline_contract import validate_preparation
++ validate_preparation(p, modes=MODES)
++ return {'result':'ORIGINAL_CANONICAL_PACKAGE_PASS','live':live,'immutableReferences':len(refs),'modes':4}
+ def read_permission(p):
+  s=Path(p).lstat();require(stat.S_ISREG(s.st_mode)and not Path(p).is_symlink()and s.st_nlink==1 and s.st_uid==os.getuid()and stat.S_IMODE(s.st_mode)==0o600,'sealed_file_type_owner_mode')
+-def selected(p):
+- p=Path(p);w=p/'window';receipt=w/'openai-selection.receipt.private.json';intent=w/'openai-selection.intent.private.json'
+- if not receipt.exists():require(not intent.exists(),'selection_uncertain_inspection_only');return False
+- r=read(receipt);c=read(w/'openai-contract.private.json');require(r=={'result':'NEW_OPENAI_SELECTED','intentSha256':sha(intent),'contractSha256':sha(w/'openai-contract.private.json'),'targetProfileSha256':c['targetProfileSha256']},'selection_receipt_drift');i=read(intent);require(i['contractSha256']==sha(w/'openai-contract.private.json')and i['automaticRetry']is False,'selection_intent_drift');return True

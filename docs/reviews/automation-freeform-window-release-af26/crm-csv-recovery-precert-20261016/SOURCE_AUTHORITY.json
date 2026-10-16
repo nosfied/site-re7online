@@ -1,0 +1,10 @@
+{
+  "result": "UNCONSUMED_TEMPLATE_PROVENANCE_PASS",
+  "baseCommit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+  "proofSha256": "470b792e1818f6a3a098c797431d3acd3e8918d69e853537e929a98089bb762c",
+  "indexSha256": "921a44a011c13255e7649612a28ef82021b2a44066d0e7f8ff338d80afaa4a75",
+  "reviewSha256": "caef0b3cb5feb0959dbe34708e3ac9970d571522e183a243b74546a8a9b7e5e8",
+  "codeOutputUnchanged": true,
+  "runtimeRebuilds": 0,
+  "codeRecompositionRepeated": false
+}

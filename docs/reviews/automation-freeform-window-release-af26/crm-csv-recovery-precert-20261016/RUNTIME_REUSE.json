@@ -1,0 +1,43 @@
+{
+  "apiReturnAfterSelection": "reuse candidate; no rollback to original after possible selection/write",
+  "artifacts": {
+    "api-candidate": {
+      "action": "REUSE",
+      "bytes": 8601600,
+      "compatibilityAuthority": "existing coordinated artifact/proofs; current VPS match NOT OBSERVED",
+      "manifestSha256": "4e56ec242caaf7b865949fca9baf47c81d5d4804a1ce21d8c49e41e424664860",
+      "newCopyBytes": 0,
+      "sha256": "24e5857fb30a6540c4b3930b3979b49bc9954b0ff85c4021a7f43641b7b43eb5"
+    },
+    "frontend-candidate": {
+      "action": "REUSE",
+      "bytes": 174314812,
+      "compatibilityAuthority": "existing coordinated artifact/proofs; current VPS match NOT OBSERVED",
+      "manifestSha256": "5ef8ae4c1628b843bac57825742797f1fcce9835c9226c8f959da3fa0a89b176",
+      "newCopyBytes": 0,
+      "sha256": "ea3d27881193bd872798aeb28a30630f085bad65688be913b781491b0d86c2ed"
+    },
+    "frontend-compatible-return": {
+      "action": "REUSE",
+      "bytes": 177450139,
+      "compatibilityAuthority": "existing coordinated artifact/proofs; current VPS match NOT OBSERVED",
+      "manifestSha256": "efe64f452db1a5575a7a688c5b57175fe3b25fdcaec91ed432df7a3a3ab853de",
+      "newCopyBytes": 0,
+      "sha256": "d41ddd648c12b3bed4c13a3dde1019b96e41eda64d68089043a11f5f4edc0431"
+    }
+  },
+  "auxiliaryEventOverlay": {
+    "bytes": 10240,
+    "copiedOrApplied": false,
+    "currentSourceAndCasRequired": true,
+    "hashVerifiedLocally": true,
+    "sha256": "ebdfd5bba81b86f26506b13a89afb4aafd45252c4e1b23e90d2f2896b1d523e3"
+  },
+  "builds": 0,
+  "extractions": 0,
+  "frontendStatus": "artifacts referenced only; activation/future successor bindings not composed here",
+  "newBackup": false,
+  "newRuntimeCopyBytes": 0,
+  "productionObservation": false,
+  "result": "LOCAL_RETAINED_ARTIFACT_HASH_REUSE_PASS"
+}

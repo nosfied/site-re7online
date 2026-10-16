@@ -1,0 +1,40 @@
+{
+  "acceptedFunctionalTestsReexecuted": 0,
+  "acceptedFunctionalTestsReused": 32,
+  "assemblyPerformedOnce": true,
+  "backupRenewals": 0,
+  "canonicalCheckerNegative": "canonical-negative.sanitized.json",
+  "codeFiles": 110,
+  "currentVpsGatesPassed": 0,
+  "immutableCodeCompositionManifestSha256": "8479bed224f9294e2423d1f2585e135ea68f6def4ea943e9f8a2dc293716f55f",
+  "newCompositionTests": {
+    "cases": [
+      "new output/replay denial",
+      "exact bytes verify without writes",
+      "unbound operational certification denied",
+      "missing/wrong manifest pin denied",
+      "file tamper denied",
+      "invalid private output parent denied before copy",
+      "source index drift denied against Git-pinned authority before copy"
+    ],
+    "fullFunctionalSuitesRepeated": false,
+    "initialFocusedTestsPassed": 6,
+    "subsequentSourceIndexNegativePassed": 1
+  },
+  "noProductChanges": true,
+  "noProfilesOrProductionEvidenceCopied": true,
+  "operationalInputsPresent": false,
+  "policiesInstalled": 0,
+  "productionAccesses": 0,
+  "result": "OFFLINE_COMPOSITION_PREPARED",
+  "runtimeCopyBytes": 0,
+  "runtimeExtractions": 0,
+  "runtimeRebuilds": 0,
+  "sourceAuthority": "SOURCE_AUTHORITY.json",
+  "sourceConsumerAstExact": {
+    "Controls.unfence": true,
+    "Operations": true,
+    "modes": 4
+  },
+  "status": "PREPARED LOCALLY / NOT DEPLOYED / NOT WINDOW READY"
+}

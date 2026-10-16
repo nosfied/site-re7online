@@ -1,0 +1,72 @@
+{
+  "reviewedAtUtc": "2026-10-16T17:01:51.754364+00:00",
+  "recommendation": "LOCAL_CORRECTIONS_REQUIRED",
+  "status": "LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+  "integrityBeforeReview": {
+    "baseCommit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+    "trackedFiles": [
+      "docs/BACKLOG_TECH.md",
+      "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "docs/saas/DOCUMENTATION_INDEX.md"
+    ],
+    "newIncrementFiles": [
+      "FULL_DELTA.patch",
+      "PROOFS_SANITIZED.json",
+      "PUBLIC_FILES_SHA256.json",
+      "REPORT.md",
+      "SOURCE_PROVENANCE.json",
+      "STATE_MATRIX.md",
+      "consumer_delta.patch",
+      "future_sources.py",
+      "inputs.py",
+      "policy_proposal.py",
+      "recovery.py",
+      "recovery_bridge.py",
+      "recovery_contract.py",
+      "recovery_start.py",
+      "reference_sources/operations_recovery_original.py",
+      "reproduce.py",
+      "test_recovery.py"
+    ],
+    "fullDeltaSha256": "6dc2d69f63713bb947db137d841aa5cbc6eb535fa93c758cd53b8436b7d80dc4",
+    "integrity": "PASS",
+    "consumerPatchMatchesTransformations": true,
+    "prior42TestEvidenceMatchesCurrentCode": true,
+    "suiteRepeated": false,
+    "stagedChanges": false,
+    "productionAccess": false
+  },
+  "directedCounterexample": {
+    "probe": "wrong_exit_generation_with_consistent_inventory_hash",
+    "sharedInspectionClassification": "STOPPED_UNSELECTED",
+    "sharedInspectionOptions": [
+      "ORIGINAL"
+    ],
+    "canonicalCertificateResult": "guard_generation_changed",
+    "fullSuiteRepeated": false,
+    "effects": "synthetic filesystem and simulated process state only",
+    "productionEffects": false
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "medium",
+      "acceptanceBlocked": true,
+      "file": "recovery_bridge.py",
+      "function": "Bridge.verify_recovery_exit",
+      "kind": "canonical exit-certificate validation missing; counterexample confirmed"
+    },
+    {
+      "id": "R2",
+      "severity": "medium",
+      "acceptanceBlocked": true,
+      "file": "recovery_contract.py",
+      "function": "Contract.__init__",
+      "kind": "original-scoped immutable and sealed-file metadata contract incomplete; static review"
+    }
+  ],
+  "implementationChangedByReview": false,
+  "historicalProofsRewritten": false,
+  "productionAccessOrMutation": false,
+  "fullTestSuiteRepeated": false
+}

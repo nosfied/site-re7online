@@ -1,0 +1,113 @@
+{
+  "backupRenewed": false,
+  "items": [
+    {
+      "canonicalConsumers": "Bridge.apps/identity + Operations.config/tree_absent + captura can\u00f4nica",
+      "denyCriterion": "Fonte original p\u00f3s-auth/banco/cifragem, sem dedu\u00e7\u00e3o por HEAD; popula\u00e7\u00e3o desconhecida nega",
+      "id": "PROCESS_IDENTITY",
+      "observation": "PID/ticks/PGID/SID, \u00e1rvores/FDs/sockets e PM2 daemon; API/worker/frontend nos perfis efetivos",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "root_readonly + privileged.policy_from + pre_install",
+      "denyCriterion": "e2a5ffab \u00e9 \u00faltimo recibo hist\u00f3rico; fa113e nos templates n\u00e3o \u00e9 prova vigente; fonte divergente exige revis\u00e3o",
+      "id": "ROOT_SOURCE",
+      "observation": "hash/UID/modo/cadeia de pol\u00edtica/helper/sudoers e fase root; root estritamente <600s na futura admiss\u00e3o",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "capturas can\u00f4nicas e profile_delta; sem imprimir valores",
+      "denyCriterion": "NEWauth+NEWDB+NEWcipher e reader hist\u00f3rico preservados; n\u00e3o restaurar segredo antigo",
+      "id": "CREDENTIAL_EPOCHS",
+      "observation": "correspond\u00eancia privada das tr\u00eas \u00e9pocas nos ambientes ativos, saved/fallback, perfis e recibos VERIFIED",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "prestop_contract.event_parents/path_bindings + event_consumers + baseline SQL",
+      "denyCriterion": "Event775 nega ida; n\u00e3o corrigir permiss\u00f5es automaticamente nem fazer ORIGINAL depender do overlay",
+      "id": "GUARD_EVENT",
+      "observation": "guarda38 fechada/tasks0/sem ledgerFault e out.15 CLOSED; fonte/owner/modos/cadeia dos consumidores Event",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "check_current + db_owner_set_observer + provas SQL can\u00f4nicas",
+      "denyCriterion": "READ ONLY quando autorizado; incompletude/novo writer nega; n\u00e3o usar sil\u00eancio HTTP como prova de drain",
+      "id": "SQL_PROXY_WRITERS",
+      "observation": "schema/fronteira, HBA/atributos relevantes, DB owner, conex\u00f5es, SQL/proxy e writers abrangidos",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "ScheduledControls.known/verify + initial + validate.cjs",
+      "denyCriterion": "Cron recuperado \u00e9 hist\u00f3rico, n\u00e3o captura atual; nenhum job manual ou reabilita\u00e7\u00e3o adicional",
+      "id": "CRONS_SUPERVISION",
+      "observation": "crontab deploy e cron sistema separadamente; supervis\u00e3o/boot antes, contained e after",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "prestop_contract.path_bindings + original_bindings + opera\u00e7\u00f5es no uso",
+      "denyCriterion": "preservar sem\u00e2ntica can\u00f4nica; n\u00e3o criar bindings para conseguir PASS; n\u00e3o seguir destinos para limpar",
+      "id": "BINDINGS_FILES",
+      "observation": "cwd/script/.data, links/depend\u00eancias compartilhadas e arquivo Event atual; hashes de origem CAS",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "captura saved can\u00f4nica + Bridge.verify_recovery_closure",
+      "denyCriterion": "n\u00e3o exportar segredos; comparar campos est\u00e1veis e conte\u00fado pinado, sem confundir m\u00e9tricas din\u00e2micas",
+      "id": "SAVED_FALLBACK",
+      "observation": "ambos600/owner/tipo/conte\u00fado/configura\u00e7\u00e3o; boot/helpers e perfis coerentes",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "csv_contract/original_checks + ecosystem/baseline/restore validators",
+      "denyCriterion": "n\u00e3o confundir hash local do tar com integridade do runtime implantado/staged",
+      "id": "RUNTIME_INTEGRITY",
+      "observation": "artefatos/manifests, refer\u00eancias imut\u00e1veis completas e permiss\u00f5es dos controles originais/candidatos",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "check_current/capacity_review e contrato can\u00f4nico",
+      "denyCriterion": "piso de refer\u00eancia11.235.700.736B n\u00e3o \u00e9 reserva universal nem prova atual; n\u00e3o abater limpeza/shared aparente",
+      "id": "CAPACITY_WAL",
+      "observation": "m\u00ednimo real deploy/PostgreSQL, filesystem/bytes \u00fanicos, crescimento/WAL/erros e or\u00e7amento completo",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "produtor CSV R0 + cust\u00f3dia v2 + restore_contract nos quatro modos",
+      "denyCriterion": "reutilizar restore v\u00e1lido sem mudar temporaryDatabaseRemoved=false; nenhuma renova\u00e7\u00e3o agora",
+      "id": "BACKUP_CUSTODY_RESTORE",
+      "observation": "RPO real<3600s quando necess\u00e1rio sob backup.lock; dump/invent\u00e1rio/fronteira/cust\u00f3dia v2 bytes originais; lab retido/parado",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "capture_imports + csv_boundary.imports/exit_and_imports",
+      "denyCriterion": "PROCESSING/UNKNOWN, invent\u00e1rio incompleto ou atividade n\u00e3o correlacionada negam; n\u00e3o reimportar/compensar",
+      "id": "IMPORT_FRONTIER",
+      "observation": "atividade conhecida versus auditoria completa por tenant/opera\u00e7\u00e3o e invent\u00e1rio atual",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "Operations.certificate + verify_recovery_exit + Sequencer.verify_stopped",
+      "denyCriterion": "n\u00e3o existe agora; consumo/identidade nova/commit ou start incerto bloqueiam replay",
+      "id": "EXIT_CERTIFICATE",
+      "observation": "ap\u00f3s conten\u00e7\u00e3o autorizada: gera\u00e7\u00e3o38, dire\u00e7\u00e3o/configHash, \u00e1rvores/identidades/sockets, SQL zero e invent\u00e1rio ligado",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "policy_proposal + verify_recovery_policy + tr\u00eas pins de recovery_binding",
+      "denyCriterion": "original e candidato s\u00e3o alvos mutuamente exclusivos; recibo futuro n\u00e3o pode ser fabricado offline",
+      "id": "ROOT_RETURN_PERMIT",
+      "observation": "ap\u00f3s classifica\u00e7\u00e3o e decis\u00e3o expl\u00edcita: pol\u00edtica e export root phase=fenced, target profile e hash revistos",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "canonicalConsumers": "bind_frontend/frontend_phase_contract existentes",
+      "denyCriterion": "esta composi\u00e7\u00e3o mant\u00e9m frontend; n\u00e3o iniciar fase frontend ou fallback para backend antigo ap\u00f3s sele\u00e7\u00e3o",
+      "id": "FRONTEND_AFTER_API",
+      "observation": "se fase frontend for aprovada depois: sucessores API/worker reais, phase contract/launcher/nonce/assets",
+      "status": "NOT_EXECUTED"
+    }
+  ],
+  "productionObserved": false,
+  "rootCapturePerformed": false,
+  "state": "ALL_PENDING_CURRENT_VPS_OBSERVATION"
+}

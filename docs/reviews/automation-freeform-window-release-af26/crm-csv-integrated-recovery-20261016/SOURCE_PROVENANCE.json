@@ -1,0 +1,114 @@
+{
+  "baseCommit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+  "versioned": {
+    "sequencer.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/sequencer.py",
+      "sha256": "b6abd49db636cc77d9255fbdfcde8089af3a98699240e3235dab45ee4451e86d"
+    },
+    "baseline_contract.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/baseline_contract.py",
+      "sha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf"
+    },
+    "privileged.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged.py",
+      "sha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212"
+    },
+    "scheduled_controls.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/scheduled-controls-20261015/scheduled_controls.py",
+      "sha256": "9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39"
+    },
+    "csv_cli.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/csv_cli.py",
+      "sha256": "19f69a40b912d96b05301cdf4490b7fe30019cb3b962eae92a357b2b4810f77c"
+    },
+    "csv_boundary.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/csv_boundary.py",
+      "sha256": "73d5c6917a3476770c16412be8f9cecb4dffc0e222080169de4c64f427113a4e"
+    },
+    "event_overlay.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/event_overlay.py",
+      "sha256": "034faaf2e14e10031f8eb2222ab2aabdd30e92043b3a626ef28e77935f0d8a8d"
+    },
+    "compose.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/compose.py",
+      "sha256": "64079638f1e99a673c60e4d8b622c0a355fd521c182bdae15148df558db759d0"
+    },
+    "prestop_contract.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/prestop_contract.py",
+      "sha256": "208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b"
+    },
+    "prevention_sources.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/future_sources.py",
+      "sha256": "52542c6b19b88a63eab41e936e4317d70862e3138aa60ed29048071c56e0293a"
+    },
+    "operations_bindings_original.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/reference_sources/operations_bindings_original.py",
+      "sha256": "f167a1d9e13c93663a030eaf76ebb0e3eec87e969cae537d20c4e872a570082b"
+    },
+    "recover_original.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-original-recovery-20261016/recover_original.py",
+      "sha256": "78fdca8eb4750a325a837322b7e5833f977fe255e1f3d941759bb973f9532283"
+    },
+    "check_current_original.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/reference_sources/check_current_original.py",
+      "sha256": "7a35fd791758d8d0d049db4b15614c2797d2af7d729ec66f33b806535361c996"
+    },
+    "canonical_contract.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/openai-operational-20261015/openai_contract.py",
+      "sha256": "8aa6acb96a55d0417dd7ddca99a5bb9f8c124700f7f48e24bb57a76ffccdf8d8"
+    },
+    "ecosystem_contract.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/ecosystem_contract.py",
+      "sha256": "b1b5816574b351d924777959208ae159dac2ed2b95536beca0a4350cce6f232a"
+    }
+  },
+  "excerpts": {
+    "operations_recovery_original.py": {
+      "sourceOrigin": "CSV adapter / return-before-commit / ops.py (retained code reference only)",
+      "sourceSha256": "4dc99143f2754c7ff0c9ac96e8be3f7b193f604fae03cc3da0ad0518ecbcbd3b",
+      "ranges": {
+        "require": [
+          25,
+          27
+        ],
+        "guard_state": [
+          30,
+          36
+        ],
+        "digest": [
+          39,
+          40
+        ],
+        "same_process": [
+          43,
+          45
+        ],
+        "Operations": [
+          218,
+          404
+        ],
+        "Controls.unfence": [
+          464,
+          481
+        ]
+      },
+      "deliveredSha256": "0e57766066654314f51868194c22ceb58236a12869404447c66acf8a3a710d70",
+      "sanitization": "Complete delivered text reviewed: code only; no configurations, credentials, receipts or tenant data; no consumed CLI copied."
+    }
+  }
+}
