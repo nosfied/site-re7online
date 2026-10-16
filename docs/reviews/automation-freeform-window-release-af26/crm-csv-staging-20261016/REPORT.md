@@ -1,3 +1,5 @@
+**Estado corrente após tentativa autorizada:** [DENY / STOPPED_UNSELECTED](EXECUTION_DENY_2026-10-16.md). API/worker parados sob contenção; ambos crons contidos, gates admitidos ainda true; nenhuma recuperação/replay. Preparação final abaixo é histórica e não autoriza nova execução.
+
 **Estado corrente:** [preparação final coordenada, review56965c12…](FINAL_PREPARATION_FOR_REVIEW.md). Backup/custódia v2 e quatro provas renovados; root final PASS. Sem instalação/admissão/contenção/partidas. Os números abaixo registram o staging histórico; os atuais estão no complemento e não substituem seus recibos.
 
 # CSV — staging inativo e conferência real
