@@ -1,0 +1,55 @@
+{
+  "baseCommit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+  "result": "B3_LOCAL_CONSUMPTION_BOUNDARY_VALIDATED_CONDITIONAL_ON_B4",
+  "tests": 25,
+  "directTests": 18,
+  "affectedCanonicalRegressions": 7,
+  "noVPS": true,
+  "noDaemonStarted": true,
+  "noOperationalGeneration": true,
+  "nodeVersion": "v22.13.0",
+  "pm2SourceVersion": "6.0.14",
+  "codeSha256": {
+    "pm2_input.py": "dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52",
+    "integration.py": "11a39f09d82f19d0b7bf81eceeb97213e747b3ecd3401b7e69949b86e3ead618",
+    "test_pm2.py": "3d7d3e092a8ec59113ca4fc2bf853609266cb8fdf9765d63153a640fae27df9a",
+    "pm2_boundary.cjs": "a4220370419759d1d1e81348bff264c7685c41553e4bad9866fffd7cb84605fd",
+    "reproduce.py": "f949a5f160771be1452318474a73d31afed71f9bbed35a6df671123320d9e3b2"
+  },
+  "testOutputSha256": "469d7e28b072ce3d41aefd208c5e5d2a0c0e33eeea8148626796a2fe9c0d7df4",
+  "real": [
+    "full canonical System.start/run before and after pure transforms",
+    "Context.start_mode/snapshot + Loader with actual local FD reads and dependency DAG",
+    "canonical Operations.start, selection gate, start intents, Sequencer/Recovery/Controls in accepted synthetic fixtures",
+    "actual Linux memfd seals, inherited descriptor and independent Node subprocess",
+    "verbatim PM2 source: _startJson file-consumption prefix and Common.isConfigFile/parseConfig",
+    "original CJS substitution executes synthetic canary; new JSON consumption preserves every app field despite CJS/JSON replacement"
+  ],
+  "simulated": [
+    "root authority replies and owner review (no actual installation/emission)",
+    "root UID and protected ancestors of static alias, including external /tmp ancestry",
+    "PM2 daemon-presence observation, verifyConfs normalization and every later PM2 stage",
+    "productive processes/SQL/HTTP/PM2 process state/supervision/crons as accepted fixtures"
+  ],
+  "limits": [
+    "no complete PM2 CLI/daemon/IPC/start/Node20 execution",
+    "B4 must provision and attest protected alias and pinned PM2/Node/CLI/transitive modules",
+    "future owner manifest must seal helper/parser/JSON/CJS dependency DAG for each mode",
+    "B4 concrete four-mode package/installer certification remains OPEN"
+  ],
+  "firstTestAttempt": {
+    "result": "22 PASS / 1 harness ERROR",
+    "reason": "old counterexample passed a large synthetic config through argv, exceeded OS ARG_MAX; no production effect",
+    "correction": "counterexample now uses concrete original System and real PM2 file/parser prefix; no config argv"
+  },
+  "reusedWithoutBroadRerun": [
+    "B1 canonical private diagnostic transport",
+    "B2 child continuity and snapshot bootstrap",
+    "runtime/grant/SQL/staging/functional product proofs"
+  ],
+  "claimsExcluded": [
+    "installed authority",
+    "full integration complete",
+    "production readiness"
+  ]
+}

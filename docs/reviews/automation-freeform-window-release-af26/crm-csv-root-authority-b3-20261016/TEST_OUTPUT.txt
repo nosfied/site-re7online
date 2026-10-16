@@ -1,0 +1,30 @@
+test_authority_changes_after_sealing_denies_closes_fd (test_pm2.PM2Tests.test_authority_changes_after_sealing_denies_closes_fd) ... ok
+test_candidate_recovery_modes_keep_specific_permit (test_pm2.PM2Tests.test_candidate_recovery_modes_keep_specific_permit) ... ok
+test_canonical_parser_equivalence (test_pm2.PM2Tests.test_canonical_parser_equivalence) ... ok
+test_json_cjs_mismatch_and_executable_dependency_denied (test_pm2.PM2Tests.test_json_cjs_mismatch_and_executable_dependency_denied) ... ok
+test_json_dependency_not_in_closure_denied (test_pm2.PM2Tests.test_json_dependency_not_in_closure_denied) ... ok
+test_lost_pm2_response_closes_fd_without_retry (test_pm2.PM2Tests.test_lost_pm2_response_closes_fd_without_retry) ... ok
+test_memfd_write_and_truncate_denied_and_fd_closed (test_pm2.PM2Tests.test_memfd_write_and_truncate_denied_and_fd_closed) ... ok
+test_missing_transitive_dependency_denied_before_import (test_pm2.PM2Tests.test_missing_transitive_dependency_denied_before_import) ... ok
+test_old_cjs_replacement_executes_changed_bytes_in_actual_pm2 (test_pm2.PM2Tests.test_old_cjs_replacement_executes_changed_bytes_in_actual_pm2) ... ok
+test_operations_barriers_and_order_unchanged (test_pm2.PM2Tests.test_operations_barriers_and_order_unchanged) ... ok
+test_operations_to_system_to_actual_pm2_api_worker_order (test_pm2.PM2Tests.test_operations_to_system_to_actual_pm2_api_worker_order) ... ok
+test_original_has_no_candidate_only_dependency (test_pm2.PM2Tests.test_original_has_no_candidate_only_dependency) ... ok
+test_original_without_permit_denies_before_pm2 (test_pm2.PM2Tests.test_original_without_permit_denies_before_pm2) ... ok
+test_read_permission_error_denies (test_pm2.PM2Tests.test_read_permission_error_denies) ... ok
+test_real_system_fd_and_actual_pm2_preserve_all_fields_after_replacement (test_pm2.PM2Tests.test_real_system_fd_and_actual_pm2_preserve_all_fields_after_replacement) ... ok
+test_recovery_expiry_between_api_worker_denies (test_pm2.PM2Tests.test_recovery_expiry_between_api_worker_denies) ... ok
+test_unprotected_alias_owner_denied (test_pm2.PM2Tests.test_unprotected_alias_owner_denied) ... ok
+test_wrong_alias_denied_before_pm2 (test_pm2.PM2Tests.test_wrong_alias_denied_before_pm2) ... ok
+test_original_real_checker_certificates_controls_and_replay (test_connected.Connected.test_original_real_checker_certificates_controls_and_replay) ... ok
+test_prestop_no_permit_and_no_start (test_connected.Connected.test_prestop_no_permit_and_no_start) ... ok
+test_candidate_compatible_only (test_connected.Connected.test_candidate_compatible_only) ... ok
+test_lost_start_response_no_replay_or_complete (test_connected.Connected.test_lost_start_response_no_replay_or_complete) ... ok
+test_prevention_binding_still_before_effects (test_connected.Connected.test_prevention_binding_still_before_effects) ... ok
+test_prevention_event775_still_before_effects (test_connected.Connected.test_prevention_event775_still_before_effects) ... ok
+test_forward_real_pair_without_recovery_permit (test_r3.Forward.test_forward_real_pair_without_recovery_permit) ... ok
+
+----------------------------------------------------------------------
+Ran 25 tests in 2.897s
+
+OK

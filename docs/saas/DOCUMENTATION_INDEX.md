@@ -1,5 +1,8 @@
 # Documentation Index
 
+**Revisão B3 16/10:** [consumo PM2, fontes,25 provas e condição B4](../reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md). Incremento local de autoridade; nenhum daemon/serviço iniciado. Fechamento operacional condicionado ao pacote/instalador B4, ainda aberto. INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso.
+
+
 Status: indice documental atual do Converta. Este documento nao altera runtime.
 
 ## Documentos SaaS Principais

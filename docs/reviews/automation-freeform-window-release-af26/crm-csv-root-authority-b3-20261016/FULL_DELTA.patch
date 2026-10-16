@@ -1,0 +1,2017 @@
+diff --git a/docs/BACKLOG_TECH.md b/docs/BACKLOG_TECH.md
+index dd58e13b..46df6031 100644
+--- a/docs/BACKLOG_TECH.md
++++ b/docs/BACKLOG_TECH.md
+@@ -2,0 +3,3 @@
++**B3 16/10 — consumo PM2 validado localmente, fechamento condicionado a B4.** [Delta/provas](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md): System conserva barreiras e passa JSON autenticado por FD selado;25 PASS incluindo cadeia Operations→System→parser PM2 e API→worker, sem daemon/processos reais. Alias root/PM2 toolchain e quatro manifests concretos ainda exigem B4; nenhuma instalação/emissão/geração. B1/B2/R3 preservados. INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso.
++
++
+diff --git a/docs/RUNBOOK_WHATSAPP_AGENT.md b/docs/RUNBOOK_WHATSAPP_AGENT.md
+index 7ce4304a..9dcb748a 100644
+--- a/docs/RUNBOOK_WHATSAPP_AGENT.md
++++ b/docs/RUNBOOK_WHATSAPP_AGENT.md
+@@ -2,0 +3,3 @@
++**B3 FUTURO 16/10 — sem autorização operacional.** [Contrato/inventário e limites](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md): novo transporte de System.start usa snapshot JSON/CJS/parser e memfd selado, preservando start_mode/permits, intent, gates e revalidação. PRESTOP não parte; ORIGINAL não requer candidato.25 provas locais; parser PM2 real, daemon/OS produtivos simulados. B4 deve provisionar/atestar alias root, toolchain e pacote quatro modos; não usar este delta como instalação/janela. CSV SUSPENSO / INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY.
++
++
+diff --git a/docs/saas/DOCUMENTATION_INDEX.md b/docs/saas/DOCUMENTATION_INDEX.md
+index df136e27..370680be 100644
+--- a/docs/saas/DOCUMENTATION_INDEX.md
++++ b/docs/saas/DOCUMENTATION_INDEX.md
+@@ -2,0 +3,3 @@
++**Revisão B3 16/10:** [consumo PM2, fontes,25 provas e condição B4](../reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md). Incremento local de autoridade; nenhum daemon/serviço iniciado. Fechamento operacional condicionado ao pacote/instalador B4, ainda aberto. INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso.
++
++
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/ALLOWLIST.json b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/ALLOWLIST.json
+new file mode 100644
+index 00000000..ddf63894
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/ALLOWLIST.json
+@@ -0,0 +1,27 @@
++{
++  "baseCommit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++  "files": [
++    "docs/BACKLOG_TECH.md",
++    "docs/RUNBOOK_WHATSAPP_AGENT.md",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/ALLOWLIST.json",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/CONSUMER_DELTA.patch",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/FULL_DELTA.patch",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/LAUNCH_INVENTORY.json",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/MANIFEST.sha256",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/PROOFS.json",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/SOURCE_PROVENANCE.json",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/TEST_OUTPUT.txt",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/integration.py",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_boundary.cjs",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_input.py",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/reproduce.py",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/test_pm2.py",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/API-startJson.prefix.txt",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/Common-config.excerpt.cjs",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/PM2-LICENSE",
++    "docs/saas/DOCUMENTATION_INDEX.md"
++  ],
++  "excluded": "all preexisting untracked/private work; historical generations; operational bindings; runtime packages",
++  "patchScope": "all allowlisted files except FULL_DELTA.patch and MANIFEST.sha256; CONSUMER_DELTA only shows pure future transformations"
++}
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/CONSUMER_DELTA.patch b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/CONSUMER_DELTA.patch
+new file mode 100644
+index 00000000..1ba2c7b6
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/CONSUMER_DELTA.patch
+@@ -0,0 +1,29 @@
++--- a/future-mode/ops.py
+++++ b/future-mode/ops.py
++@@ -49 +49 @@
++-    def run(self, args, text=None):
+++    def run(self, args, text=None, *, pass_fds=()):
++@@ -52 +52 @@
++-        return subprocess.check_output(args, input=text, text=True, env=CLEAN, stderr=subprocess.PIPE)
+++        return subprocess.check_output(args, input=text, text=True, env=CLEAN, stderr=subprocess.PIPE, pass_fds=pass_fds)
++@@ -168 +168,2 @@
++-        self.run([PM, 'start', str(root / 'candidate.ecosystem.config.cjs'), '--only', name])
+++        from pm2_input import start
+++        start(self, root, name, PM)
++--- a/future-mode/ecosystem_contract.py
+++++ b/future-mode/ecosystem_contract.py
++@@ -21,3 +21 @@
++-def source(path):
++-    path = Path(path)
++-    require(path.is_file() and not path.is_symlink(), 'ecosystem_source_missing_or_symlink')
+++def source_bytes(raw):
++@@ -31 +29 @@
++-        value = json.loads(path.read_text(), object_pairs_hook=unique,
+++        value = json.loads(raw.decode('utf-8') if isinstance(raw, bytes) else raw, object_pairs_hook=unique,
++@@ -44,0 +43,6 @@
+++
+++
+++def source(path):
+++    path = Path(path)
+++    require(path.is_file() and not path.is_symlink(), 'ecosystem_source_missing_or_symlink')
+++    return source_bytes(path.read_bytes())
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/LAUNCH_INVENTORY.json b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/LAUNCH_INVENTORY.json
+new file mode 100644
+index 00000000..96bcbd12
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/LAUNCH_INVENTORY.json
+@@ -0,0 +1,46 @@
++{
++  "status": "B3 LOCAL VALIDATED (conditional on B4) / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
++  "launches": [
++    {
++      "caller": "Operations.start(name)",
++      "before": "canonical gates, generation/exit/selection/restore/ownership/config, exclusive intent, fresh start_mode",
++      "delta": "none: AST of method unchanged after accepted B2 transform"
++    },
++    {
++      "caller": "System.start(root,name)",
++      "before": "daemon-presence observation via System.apps",
++      "oldTransport": "PM2 start replaceable candidate.ecosystem.config.cjs --only NAME",
++      "newTransport": "authenticated pm2_input.start -> sealed memfd -> fixed protected pm2-input.json/FD -> PM2 start --only NAME",
++      "run": "canonical System.run retains CLEAN/subprocess/child_transport; only adds pass_fds keyword"
++    },
++    {
++      "caller": "pm2_input.start",
++      "authority": "same Context.start_mode before snapshot and immediately before subprocess; same snapshot DAG and authenticated Loader parser",
++      "data": "candidate CJS must equal canonical rendered(JSON); no executable require dependencies allowed",
++      "closure": "CJS -> JSON + canonical parser; ops imports pm2_input -> canonical parser and CJS; no reverse edges/cycles",
++      "ORIGINAL": "return-before-commit own config/profile and ORIGINAL permit; no switch/overlay dependency",
++      "recovery": "return/return-partial use CANDIDATE-specific recovery permit",
++      "PRESTOP": "no start invocation; unchanged recovery path"
++    },
++    {
++      "caller": "PM2 6.0.14 _startJson",
++      "realInProof": "fs.readFileSync immutable inherited FD path + Common.parseConfig JSON branch",
++      "boundary": "capture at verifyConfs; normalization, IPC, daemon and process creation NOT exercised"
++    }
++  ],
++  "futureRootPrerequisite": {
++    "path": "/usr/local/libexec/re7/pm2-input.json",
++    "kind": "root-owned symlink to /proc/self/fd, all ancestors root-owned non-writable by group/others",
++    "purpose": "fixed .json classifier for actual PM2; no new preparation symlink or secret spool",
++    "installed": false,
++    "requiresB4": "owner-reviewed provisioning/toolchain pins and full concrete certification; no installer added here"
++  },
++  "unchangedTransports": [
++    "B1 helper private diagnostic query",
++    "B2 Bridge.protocol/delegated and Bridge.node/Node/Python baseline lineage",
++    "helper/sudoers actions and permit emission"
++  ],
++  "open": [
++    "B4 concrete root library/alias/PM2 toolchain install and real four-mode transitive package closure"
++  ]
++}
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/PROOFS.json b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/PROOFS.json
+new file mode 100644
+index 00000000..032bdb9b
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/PROOFS.json
+@@ -0,0 +1,55 @@
++{
++  "baseCommit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++  "result": "B3_LOCAL_CONSUMPTION_BOUNDARY_VALIDATED_CONDITIONAL_ON_B4",
++  "tests": 25,
++  "directTests": 18,
++  "affectedCanonicalRegressions": 7,
++  "noVPS": true,
++  "noDaemonStarted": true,
++  "noOperationalGeneration": true,
++  "nodeVersion": "v22.13.0",
++  "pm2SourceVersion": "6.0.14",
++  "codeSha256": {
++    "pm2_input.py": "dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52",
++    "integration.py": "11a39f09d82f19d0b7bf81eceeb97213e747b3ecd3401b7e69949b86e3ead618",
++    "test_pm2.py": "3d7d3e092a8ec59113ca4fc2bf853609266cb8fdf9765d63153a640fae27df9a",
++    "pm2_boundary.cjs": "a4220370419759d1d1e81348bff264c7685c41553e4bad9866fffd7cb84605fd",
++    "reproduce.py": "f949a5f160771be1452318474a73d31afed71f9bbed35a6df671123320d9e3b2"
++  },
++  "testOutputSha256": "469d7e28b072ce3d41aefd208c5e5d2a0c0e33eeea8148626796a2fe9c0d7df4",
++  "real": [
++    "full canonical System.start/run before and after pure transforms",
++    "Context.start_mode/snapshot + Loader with actual local FD reads and dependency DAG",
++    "canonical Operations.start, selection gate, start intents, Sequencer/Recovery/Controls in accepted synthetic fixtures",
++    "actual Linux memfd seals, inherited descriptor and independent Node subprocess",
++    "verbatim PM2 source: _startJson file-consumption prefix and Common.isConfigFile/parseConfig",
++    "original CJS substitution executes synthetic canary; new JSON consumption preserves every app field despite CJS/JSON replacement"
++  ],
++  "simulated": [
++    "root authority replies and owner review (no actual installation/emission)",
++    "root UID and protected ancestors of static alias, including external /tmp ancestry",
++    "PM2 daemon-presence observation, verifyConfs normalization and every later PM2 stage",
++    "productive processes/SQL/HTTP/PM2 process state/supervision/crons as accepted fixtures"
++  ],
++  "limits": [
++    "no complete PM2 CLI/daemon/IPC/start/Node20 execution",
++    "B4 must provision and attest protected alias and pinned PM2/Node/CLI/transitive modules",
++    "future owner manifest must seal helper/parser/JSON/CJS dependency DAG for each mode",
++    "B4 concrete four-mode package/installer certification remains OPEN"
++  ],
++  "firstTestAttempt": {
++    "result": "22 PASS / 1 harness ERROR",
++    "reason": "old counterexample passed a large synthetic config through argv, exceeded OS ARG_MAX; no production effect",
++    "correction": "counterexample now uses concrete original System and real PM2 file/parser prefix; no config argv"
++  },
++  "reusedWithoutBroadRerun": [
++    "B1 canonical private diagnostic transport",
++    "B2 child continuity and snapshot bootstrap",
++    "runtime/grant/SQL/staging/functional product proofs"
++  ],
++  "claimsExcluded": [
++    "installed authority",
++    "full integration complete",
++    "production readiness"
++  ]
++}
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md
+new file mode 100644
+index 00000000..c7d3931a
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md
+@@ -0,0 +1,89 @@
++# B3 — consumo imutável do ecosystem pelo PM2
++
++**LOCAL VALIDATED no limite de consumo ensaiado / FECHAMENTO CONDICIONADO A B4 / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.**
++
++Base `1ad3507bea96dc2c5aa12debdabf1c7e70ece733`, branch `review/campaign-recovery-20260926`. Consultados runbook, backlog, índice, política de mudanças, checklist e relatórios autoridade/R3/B2/B1. Nenhum AGENTS.md aplicável localizado no checkout/ancestrais. Apenas fontes futuras e checkpoints locais; nenhum arquivo histórico/selado foi modificado. Sem VPS, emissão, instalação, daemon PM2, geração operacional, rebuild ou janela.
++
++## Caminho real e contraprova
++
++A fonte completa de Operations/System está versionada em `crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source`, SHA256 `c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e`. Não foi necessário reconstruir código privado. A transformação B2 autenticava os módulos e inseria `Context.start_mode` antes das precondições e do efeito; o efeito ainda era:
++
++```python
++# Operations.start, depois de gates/certificados/ownership e intent exclusivo
++self.d.start(self.root, name)
++# System.start
++self.apps()  # não ressuscitar daemon ausente por observação implícita
++self.run([PM, 'start', str(root / 'candidate.ecosystem.config.cjs'), '--only', name])
++```
++
++O PM2 6.0.14 resolve esse caminho em `_startJson`, lê o arquivo e chama `Common.parseConfig(data, file)`. Para `.config.cjs`, o parser ignora `data` e executa `require.resolve` / `delete require.cache` / `require(confPath)`. Portanto, outro hash imediatamente antes da chamada não vincula os bytes executados. A contraprova usa a classe System original concreta, seu run/transporte e os trechos originais do PM2: a substituição no intervalo produz um canário sintético pela execução do CJS alterado. Não houve daemon ou processo da aplicação.
++
++Os trechos públicos foram extraídos do pacote npm **6.0.14**, após conferir `dist.integrity` SHA512 do tarball. URL, gitHead, intervalos, hashes do original e da entrega e licença estão em [SOURCE_PROVENANCE.json](SOURCE_PROVENANCE.json). Nenhuma dependência npm foi instalada. A evidência é sobre essa versão, sem nova observação do PM2 produtivo.
++
++## Menor delta e cadeia de confiança
++
++[Integração](integration.py) é uma transformação pura **posterior à integração B2**:
++
++1. `System.run` aceita `pass_fds`, mantendo CLEAN, subprocess.check_output e o transporte dos filhos.
++2. `System.start` mantém `self.apps()` e delega somente o transporte da configuração a [pm2_input.start](pm2_input.py).
++3. `Operations.start` não muda: comparação AST comprova identidade do método antes/depois de B3. Gates, restore, certificados, geração, ownership, seleção, intent, metadados e verificações pós-partida permanecem nos consumidores canônicos.
++4. O parser de `ecosystem_contract.source` é extraído para `source_bytes` em fonte futura. `source(path)` conserva os predicados de arquivo/symlink e o mesmo parser. Não há schema alternativo, defaults ou execução do CJS; duplicatas, JSON inválido, Unicode inválido e shape continuam negando. A transformação é ancorada e nega fonte inesperada.
++
++O bootstrap/Loader de B1/B2 continua sendo a entrada. O manifest aprovado deve declarar `ops → pm2_input → ecosystem_contract`, além do DAG de dados `pm2_input → CJS → JSON + ecosystem_contract`. Não há aresta inversa. `pm2_input` é código da preparação autenticado pelo Loader, não import de sys.path nem nova biblioteca root implicitamente confiável. `Context.snapshot(CJS)` exige entrada autorizada e valida bytes/metadados e dependências transitivas. O parser carregado pelo Loader precisa corresponder aos mesmos bytes incluídos nesse snapshot. Ausência, leitura negada ou divergência propagam DENY antes do subprocess PM2.
++
++O CJS deve ser **exatamente** `rendered(source_bytes(JSON))`. Esse contrato já proíbe lógica adicional e `require()`; não existem dependências CJS executáveis legitimamente aceitas que possam ficar fora da cobertura. A serialização literal vem do mesmo renderer canônico e preserva integralmente apps, env, cwd, script, interpreter e supervisão. Somente API ou worker podem ser selecionados, com o mesmo `--only`; frontend continua fora da partida deste consumidor.
++
++O payload JSON é escrito em `memfd_create(MFD_ALLOW_SEALING|MFD_CLOEXEC)`, com tratamento de escrita curta, rewind e os quatro seals WRITE/GROW/SHRINK/SEAL. `F_GET_SEALS` confirma o estado. O FD é passado exclusivamente ao subprocess por `pass_fds`, sem secret argv/env, arquivo temporário em disco ou protocolo stdin por chunks. O FD fecha em sucesso ou exceção; perda de resposta não repete a partida e não cria complete.
++
++`Context.start_mode` é revalidado imediatamente antes de invocar o PM2, depois de preparar o FD. Mantém a distinção R3: switch usa autoridade estática/execução/seleção canônicas, sem permit de recuperação; ORIGINAL exige permit ORIGINAL e seus próprios artefatos; return/return-partial exigem CANDIDATE. PRESTOP não invoca start. Emissão, consulta, consumo e fechamento não foram alterados.
++
++## Fronteira do descritor e condição B4
++
++O caminho proposto é `/usr/local/libexec/re7/pm2-input.json/FD`. O prefixo fixo é uma **futura** ligação root-owned para `/proc/self/fd`, com ancestrais root-owned sem escrita group/other. O consumidor confere cadeia, tipo, owner e destino literal; não cria nem corrige nada. O PM2 6.0.14 reconhece `.json` no prefixo e lê o descritor herdado, imutável. Um FD simples `/proc/self/fd/N` não é reconhecido como config pelo CLI; `pm2 start -` também foi descartado porque o CLI processa apenas o primeiro chunk de stdin. Não foram adicionados symlinks a preparações seladas nem um spool de segredo.
++
++**B4 permanece aberto e condiciona o fechamento operacional de B3**:
++
++- revisar/provisionar essa ligação estática e conferir a cadeia real; hoje ela não foi instalada;
++- atestar Linux/procfs, herança do FD pelo executable/shebang/Node reais, PM2 6.0.14 e seu parser;
++- vincular executable PM2, Node, CLI e dependências transitivas ao pacote/instalador revisados, incluindo normalização e IPC posteriores ao parser;
++- incluir helper novo, parser transformado, JSON/CJS e dependências nos quatro manifests/provas e seus índices na ordem canônica antes da instalação da âncora;
++- materializar perfis/bindings/identidades/root atuais e certificar o pacote concreto. Evidências históricas não substituem isso.
++
++Não há instalação implementada neste delta nem declaração de que o toolchain produtivo esteja certificado. O alias não é um novo privilégio sudo, assinatura, chave, serviço ou autoridade: sua proteção depende da mesma instalação root revisada, ainda pendente de B4. Root autorizado continua sendo parte da raiz de confiança. Mudança por root após conferência não é um adversário coberto pelo modelo existente.
++
++## Provas executadas e simulações
++
++[TEST_OUTPUT.txt](TEST_OUTPUT.txt), [PROOFS.json](PROOFS.json) e [inventário](LAUNCH_INVENTORY.json): **25 PASS**, 18 provas diretas + 7 regressões canônicas afetadas. Reprodução:
++
++```bash
++python3 -B docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/reproduce.py
++```
++
++O reproducer verifica hashes/procedência e monta diretório isolado apenas com fontes entregues e referências Git pinadas, sem local-evidence, segredo, binding produtivo ou acesso operacional. Não é entrypoint de preparação/instalação. Node local v22.13.0; execução Node20/PM2 completo não alegada.
++
++| Prova | Consumidor real / fronteira | Simulação/limite |
++| --- | --- | --- |
++| Substituição antiga | System.start/run completos + parser CJS PM2 original; canário é executado | Processo PM2 substituído por harness Node que executa os trechos reais; nenhum daemon |
++| Substituição depois da selagem | Context/Loader/System, memfd Linux real, FD herdado e `fs.readFileSync`/parser PM2 reais; conteúdo > chunk de pipe preservado | Root/ancestros do alias e daemon-presence simulados |
++| Ida conectada API→worker | Operations.start canônico + start gate/intents + System completo novo + parser PM2; ordem e negativa de replay | Aparição/identidade dos processos, DB e HTTP pelo Driver sintético; sem serviço real |
++| ORIGINAL independente | switch/return/partial ausentes; Loader/snapshot/System/parser usam apenas o modo original | Emissão e transporte root simulados; permit exato/Context reais |
++| Recuperações candidatas | System/parser nos modos return e partial com permit específico | Nenhum start de aplicação |
++| Integridade/dependências | CJS com require extra, JSON fora do DAG, parser ausente, leitura negada: DENY | Arquivos sintéticos locais |
++| Autoridade/FD | Mudança de política após seal, expiração antes do worker, alias/owner inadequados: DENY; FD fecha | Root, relógio e metadados externos explicitamente simulados |
++| Imutabilidade | `write` e `ftruncate` no FD selado negam pelo kernel | Não prova root/processo produtivo |
++| Resposta perdida | exceção do transporte fecha FD e não repete PM2 | Timeout simulado, sem alegar rollback ou complete |
++| Regressões | ORIGINAL/checker/certificados/controles/replay; PRESTOP sem start; CANDIDATE; resposta perdida; Event775/binding antes dos efeitos; R3 ida sem permit | Consumidores canônicos sobre fixtures aceitas; efeitos externos continuam simulados |
++
++`pm2_boundary.cjs` executa os trechos PM2 sem mudar o código de leitura/parser. Para no argumento recebido por `Common.verifyConfs`, cuja normalização é substituída por captura. `js-yaml` é stub que nega (ramo não usado). **verifyConfs, restante de `_startJson`, IPC, daemon e processos não são provas reais**. Não é um mock que reimplementa o algoritmo de leitura. Os bytes originais estão entregues e pinados; o harness apenas conecta e interrompe a execução nessa fronteira. A contraprova e a correção usam o mesmo consumidor.
++
++A primeira tentativa da suíte teve 22 PASS e um erro de harness por transportar JSON sintético grande em argv (ARG_MAX). Foi corrigido o ensaio para usar System/caminho real, sem mudar o contrato para obter PASS. Depois da ampliação da matriz e da prova conectada, 25 PASS. Provas anteriores aceitas foram reutilizadas; nenhuma suíte ampla/runtime/build foi repetida.
++
++## Entrega, preservação e próximos limites
++
++[ALLOWLIST.json](ALLOWLIST.json) delimita os arquivos. [MANIFEST.sha256](MANIFEST.sha256) indexa todos os arquivos deste incremento, inclusive o patch, exceto a si próprio. [FULL_DELTA.patch](FULL_DELTA.patch) representa os arquivos novos e os três checkpoints; **exclui o próprio patch e MANIFEST.sha256** para evitar ciclo. Os patches usam contexto zero; conferir/aplicar offline com `git apply --unidiff-zero` (nunca em geração histórica). Fontes editáveis são `pm2_input.py` e `integration.py`; vendor é evidência externa imutável, não código funcional novo.
++
++Somente os checkpoints atuais de backlog/runbook/índice foram acrescentados; relatórios B1/B2/R3/autoridade, fontes históricas, gerações, manifests e intents consumidos continuam byte a byte sem diff. Materiais privados/não rastreados existentes foram preservados, fora da allowlist. NEWauth+NEWDB+NEWcipher, crons, guarda38 e out.15 não foram observados nem alterados nesta tarefa.
++
++Antes do push: HEAD/remoto base iguais; Vercel `deploymentEnabled=false` para esta branch; único workflow CI em main/develop, sem ação aplicável a este push. Não houve mudança de configuração ou workflow manual. Commit/push autorizado publica somente revisão local, não instalação.
++
++**Próxima dependência: revisão de B3 e B4, sem execução automática. INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.**
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/SOURCE_PROVENANCE.json b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/SOURCE_PROVENANCE.json
+new file mode 100644
+index 00000000..696974cd
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/SOURCE_PROVENANCE.json
+@@ -0,0 +1,259 @@
++{
++  "baseCommit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++  "pm2": {
++    "version": "6.0.14",
++    "gitHead": "ff1ca974afada8730aa55f8ed1df40e700cedbcb",
++    "tarball": "https://registry.npmjs.org/pm2/-/pm2-6.0.14.tgz",
++    "integrity": "sha512-wX1FiFkzuT2H/UUEA8QNXDAA9MMHDsK/3UHj6Dkd5U7kxyigKDA5gyDw78ycTQZAuGCLWyUX5FiXEuVQWafukA==",
++    "tarballSha256": "a309112e6d89ed8adff54cb32831df3c79cdc6191e6085a8ea7007303fe49ce9",
++    "verification": "npm dist.integrity SHA512 verified before extraction; no npm installation",
++    "excerpts": {
++      "Common-config.excerpt.cjs": {
++        "upstream": "lib/Common.js",
++        "upstreamSha256": "4302a338ff59d8eccf52982b6623ada5e7d1edaf033e49b8679de93751628f23",
++        "deliveredSha256": "878d218c7d75878f926d8c3f69a60f18965cdc3f8b54feedccf103b43e81da06",
++        "rangeStartLine": 269,
++        "rangeLines": 65
++      },
++      "API-startJson.prefix.txt": {
++        "upstream": "lib/API.js",
++        "upstreamSha256": "5490f579b989bcc162f81ca1dfc6d4a0e35fcb7586dd22f0e4b765724639d904",
++        "deliveredSha256": "e79e599fbfd2ee5a8d33b9ac88e698e661489e616beb6a33be8b4b96044eb5d6",
++        "rangeStartLine": 900,
++        "rangeLines": 60
++      }
++    },
++    "license": "vendor/PM2-LICENSE",
++    "licenseSha256": "34d35a3baf753030cac1a1d0d50570eb6bb37be330edb7328e427072fa90b5a5",
++    "licenseSource": "package/GNU-AGPL-3.0.txt (package/LICENSE points to this filename)",
++    "copyright": "Copyright 2013-2022 the PM2 project authors. All rights reserved."
++  },
++  "privateSourcesRequired": false,
++  "repositoryInputs": [
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/ecosystem_contract.py",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "b1b5816574b351d924777959208ae159dac2ed2b95536beca0a4350cce6f232a"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/integration.py",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "f633a350ffe6ec4be24bf13c24b59efd2ec6095ee72485fa44507e69c506b254"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/authority.py",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "1a2a9ce5f928aa524b08789c5c5a4aafcbb0b6d6106c12251e677ff76b0ba92f"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/verified_loader.py",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "f1c531ee45a70a3ef23e0a38cd024f358cb7e8e2ac37a522cd0ed51b59b08793"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/bootstrap.py",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "97aa1f2e0317bc73b5127a8e19cf8c95f99a30aea35eb60fb490ac032f906c15"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/child_transport.py",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "baefd76ac4fe4b2cf3fc40a7ae43aa3b2b131ebb9c19b7ceeccab441fd9e9292"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/test_r3.py",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "acc2af27105af4f8301967368eab1bd54103c1984cb924c6874871a54588f75f"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/test_connected.py",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "d5411f4d613177d283f83bf68ac8563ea481b2e989a3ffd85b2b764e0b962404"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/admit_gates.py.2681e63919b9.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "2681e63919b981291d376237975e7e8dd7379ccbc0f323a55f948487730705c6"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/automation-fence.nft.62342f28b9f0.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "62342f28b9f011c916b8483487bb75f7211a08ffc5846c303f9a0ab0000c2797"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/baseline_contract.py.9af1a11a3605.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/canonical_renew_proofs.py.4427aa5e3108.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/capture_imports.py.52d6e914872e.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/check_current.py.6f840789aac8.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "6f840789aac823e0e6f84c7fc1968d6869099d4e7aec01bad688089770fc4cb5"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.7ca493142706.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.ce953df4a365.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.f867b828cf28.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/contain.py.af61f2f3a0d0.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_cli.py.3ae51bd07ca9.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "3ae51bd07ca9b8d299f347085877de80247831bcd665f489e934b460e38753b1"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_contract.py.9ca2208c5c18.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "9ca2208c5c18787aa2e3696636b17334c3362caa6991e3e4cd2bde2e363958eb"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_start_gate.py.094ec4a5bbaa.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "094ec4a5bbaae7c218bd1269346a9d9d102d6cb198dd81d92cd90fe6f97798f4"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ecosystem_contract.py.7bfab72d4afd.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/event_overlay.py.7c3db254455f.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "7c3db254455f12a455fabb1e9936be0bced2caefcb8fcbdec2e78997c14f10f4"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/open.cjs.d9c76eea6e83.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.33999cf29b7d.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "33999cf29b7dd548ba185a301331ef09fea7c6fd40cd32e8b846bd13fcdb8bb1"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/pre_install.py.8e45c10319f2.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "8e45c10319f298f69aa812df6996e950afbc0d2cdca5b06c25499b8bcd6f8f6d"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/preparation-bindings.cjs.edf775c12520.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/privileged_output.py.93a114516a19.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/read-state.py.4c97c5259acb.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/recover-partial.py.7af3c2717be1.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore-controls.py.bebe88f0291c.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore_contract.py.af0d552fc5fd.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/root_readonly.py.cb63a97fffe7.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "cb63a97fffe735fd52c80eed872751873593c23a3f8b3e3663b6c0fd741aa7ab"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/sequencer.py.0a4d8b67f033.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "0a4d8b67f03335403ae2addf93628519423c350eb8256bbe292373ffc36d9b7e"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/start-one.py.1959dac9717e.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/stop-pair.py.1f023b157796.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/unfence.py.d5bb4c2f5543.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/validate.cjs.5de8127d63e6.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work-frozen.cjs.f0b64320f8be.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd"
++    },
++    {
++      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work.cjs.1fb853b60ab9.source",
++      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
++      "sha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b"
++    }
++  ]
++}
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/TEST_OUTPUT.txt b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/TEST_OUTPUT.txt
+new file mode 100644
+index 00000000..0ab3328e
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/TEST_OUTPUT.txt
+@@ -0,0 +1,30 @@
++test_authority_changes_after_sealing_denies_closes_fd (test_pm2.PM2Tests.test_authority_changes_after_sealing_denies_closes_fd) ... ok
++test_candidate_recovery_modes_keep_specific_permit (test_pm2.PM2Tests.test_candidate_recovery_modes_keep_specific_permit) ... ok
++test_canonical_parser_equivalence (test_pm2.PM2Tests.test_canonical_parser_equivalence) ... ok
++test_json_cjs_mismatch_and_executable_dependency_denied (test_pm2.PM2Tests.test_json_cjs_mismatch_and_executable_dependency_denied) ... ok
++test_json_dependency_not_in_closure_denied (test_pm2.PM2Tests.test_json_dependency_not_in_closure_denied) ... ok
++test_lost_pm2_response_closes_fd_without_retry (test_pm2.PM2Tests.test_lost_pm2_response_closes_fd_without_retry) ... ok
++test_memfd_write_and_truncate_denied_and_fd_closed (test_pm2.PM2Tests.test_memfd_write_and_truncate_denied_and_fd_closed) ... ok
++test_missing_transitive_dependency_denied_before_import (test_pm2.PM2Tests.test_missing_transitive_dependency_denied_before_import) ... ok
++test_old_cjs_replacement_executes_changed_bytes_in_actual_pm2 (test_pm2.PM2Tests.test_old_cjs_replacement_executes_changed_bytes_in_actual_pm2) ... ok
++test_operations_barriers_and_order_unchanged (test_pm2.PM2Tests.test_operations_barriers_and_order_unchanged) ... ok
++test_operations_to_system_to_actual_pm2_api_worker_order (test_pm2.PM2Tests.test_operations_to_system_to_actual_pm2_api_worker_order) ... ok
++test_original_has_no_candidate_only_dependency (test_pm2.PM2Tests.test_original_has_no_candidate_only_dependency) ... ok
++test_original_without_permit_denies_before_pm2 (test_pm2.PM2Tests.test_original_without_permit_denies_before_pm2) ... ok
++test_read_permission_error_denies (test_pm2.PM2Tests.test_read_permission_error_denies) ... ok
++test_real_system_fd_and_actual_pm2_preserve_all_fields_after_replacement (test_pm2.PM2Tests.test_real_system_fd_and_actual_pm2_preserve_all_fields_after_replacement) ... ok
++test_recovery_expiry_between_api_worker_denies (test_pm2.PM2Tests.test_recovery_expiry_between_api_worker_denies) ... ok
++test_unprotected_alias_owner_denied (test_pm2.PM2Tests.test_unprotected_alias_owner_denied) ... ok
++test_wrong_alias_denied_before_pm2 (test_pm2.PM2Tests.test_wrong_alias_denied_before_pm2) ... ok
++test_original_real_checker_certificates_controls_and_replay (test_connected.Connected.test_original_real_checker_certificates_controls_and_replay) ... ok
++test_prestop_no_permit_and_no_start (test_connected.Connected.test_prestop_no_permit_and_no_start) ... ok
++test_candidate_compatible_only (test_connected.Connected.test_candidate_compatible_only) ... ok
++test_lost_start_response_no_replay_or_complete (test_connected.Connected.test_lost_start_response_no_replay_or_complete) ... ok
++test_prevention_binding_still_before_effects (test_connected.Connected.test_prevention_binding_still_before_effects) ... ok
++test_prevention_event775_still_before_effects (test_connected.Connected.test_prevention_event775_still_before_effects) ... ok
++test_forward_real_pair_without_recovery_permit (test_r3.Forward.test_forward_real_pair_without_recovery_permit) ... ok
++
++----------------------------------------------------------------------
++Ran 25 tests in 2.897s
++
++OK
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/integration.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/integration.py
+new file mode 100644
+index 00000000..a06e77e3
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/integration.py
+@@ -0,0 +1,40 @@
++"""Pure B3 transforms; apply after accepted B2 Operations transform.
++These anchors reject unexpected source changes. No historical file is edited.
++"""
++import ast
++
++
++def once(source, old, new):
++    if source.count(old) != 1:
++        raise RuntimeError('b3_transform_anchor')
++    return source.replace(old, new, 1)
++
++
++def operations(source):
++    # Preserve the daemon-presence check, all Operations.start barriers and child
++    # transport. Only System's final config transport changes.
++    source = once(source, '    def run(self, args, text=None):',
++                  '    def run(self, args, text=None, *, pass_fds=()):')
++    source = once(source, 'env=CLEAN, stderr=subprocess.PIPE)',
++                  'env=CLEAN, stderr=subprocess.PIPE, pass_fds=pass_fds)')
++    source = once(source,
++        "        self.run([PM, 'start', str(root / 'candidate.ecosystem.config.cjs'), '--only', name])",
++        "        from pm2_input import start\n        start(self, root, name, PM)")
++    ast.parse(source)
++    return source
++
++
++def ecosystem(source):
++    # Extract the original parser body exactly; no extra schema/default/predicate.
++    source = once(source, 'def source(path):\n    path = Path(path)\n    require(path.is_file() and not path.is_symlink(), \'ecosystem_source_missing_or_symlink\')\n',
++                  'def source_bytes(raw):\n')
++    source = once(source, 'json.loads(path.read_text(),', "json.loads(raw.decode('utf-8') if isinstance(raw, bytes) else raw,")
++    marker = '\n\ndef rendered(value):'
++    wrapper = '''\n\ndef source(path):
++    path = Path(path)
++    require(path.is_file() and not path.is_symlink(), 'ecosystem_source_missing_or_symlink')
++    return source_bytes(path.read_bytes())
++'''
++    source = once(source, marker, wrapper + marker)
++    ast.parse(source)
++    return source
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_boundary.cjs b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_boundary.cjs
+new file mode 100644
+index 00000000..929e7507
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_boundary.cjs
+@@ -0,0 +1,29 @@
++/* Local proof: actual PM2 6.0.14 source up to verifyConfs; no daemon/start.
++ * The canonical PM2 parser and file read are unmodified. External YAML package
++ * is a throwing stub (unused); verifyConfs captures its actual received apps.
++ * Everything after that boundary (normalization/IPC/daemon/OS) is NOT tested.
++ */
++'use strict';
++const fs = require('fs'), path = require('path'), vm = require('vm');
++const Common = {};
++const suppliedRequire = name => {
++  if (name === 'js-yaml') return {load(){throw Error('YAML not part of contract');}};
++  return require(name);
++};
++suppliedRequire.resolve = require.resolve;
++suppliedRequire.cache = require.cache;
++new Function('Common','require','path',fs.readFileSync(path.join(__dirname,'vendor/Common-config.excerpt.cjs'),'utf8'))(Common,suppliedRequire,path);
++let result;
++const stop = {};
++Common.verifyConfs = apps => {result = apps;throw stop;};
++Common.printError = () => {};
++Common.retErr = error => error;
++const prefix = fs.readFileSync(path.join(__dirname,'vendor/API-startJson.prefix.txt'),'utf8');
++const method = vm.runInThisContext('(function(Common,fs,path,debug,conf){return ({'+prefix+'\n}})._startJson})', {filename:'actual-PM2-6.0.14-consumer'})(Common,fs,path,()=>{}, {PREFIX_MSG_ERR:'',ERROR_EXIT:1});
++try {
++  method.call({cwd:process.cwd(),exitCli(){throw Error('PM2 parse denied');}},process.argv[2],{only:process.argv[3]},'restartProcessId');
++} catch(e) { if(e !== stop) throw e; }
++if (!result) throw Error('PM2 consume boundary not reached');
++// This file is used only on synthetic configurations. Production output must
++// never print apps/env. Python tests consume it in memory, no private evidence.
++process.stdout.write(JSON.stringify(result));
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_input.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_input.py
+new file mode 100644
+index 00000000..986d11ef
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_input.py
+@@ -0,0 +1,76 @@
++"""Future authenticated preparation module; immutable PM2 configuration input.
++No installation, CLI, disk spool, stdin chunks or mutable CJS execution.
++Loaded only through the phase Loader; root alias/toolchain provisioning is B4.
++"""
++import fcntl
++import os
++from pathlib import Path
++import stat
++import ecosystem_contract
++
++ALIAS = Path('/usr/local/libexec/re7/pm2-input.json')
++NAMES = {'re7-whatsapp-agent', 're7-whatsapp-web-worker'}
++SEALS = fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_SEAL
++
++
++def require(ok, reason):
++    if not ok:
++        raise RuntimeError(reason)
++
++
++def protected_alias():
++    # A directory alias, NOT a preparation symlink. PM2 6.0.14 recognizes
++    # '.json' in this fixed protected prefix; fd number alone has no suffix.
++    for parent in ALIAS.parents:
++        s = parent.lstat()
++        require(stat.S_ISDIR(s.st_mode) and s.st_uid == 0 and not s.st_mode & 0o022,
++                'pm2_input_root_chain')
++    s = ALIAS.lstat()
++    require(stat.S_ISLNK(s.st_mode) and s.st_uid == 0 and
++            os.readlink(ALIAS) == '/proc/self/fd', 'pm2_input_root_alias')
++
++
++def sealed_fd(raw):
++    fd = os.memfd_create('re7-pm2-config', os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
++    try:
++        # Handle short writes without assuming the configuration fits one pipe.
++        view = memoryview(raw)
++        while view:
++            count = os.write(fd, view)
++            require(count > 0, 'pm2_input_short_write')
++            view = view[count:]
++        os.lseek(fd, 0, os.SEEK_SET)
++        fcntl.fcntl(fd, fcntl.F_ADD_SEALS, SEALS)
++        require(fcntl.fcntl(fd, fcntl.F_GET_SEALS) & SEALS == SEALS, 'pm2_input_unsealed')
++        return fd
++    except BaseException:
++        os.close(fd)
++        raise
++
++
++def start(system, root, name, pm):
++    authority = __phase_authority__
++    root = Path(root)
++    require(name in NAMES, 'pm2_input_name')
++    authority.start_mode(root)
++    entry = str((root / 'candidate.ecosystem.config.cjs').relative_to(authority.root))
++    source = str((root / 'candidate.config.private.json').relative_to(authority.root))
++    # The owner-approved DAG must include the JSON and parser alongside the CJS.
++    # Context reads/hash-checks the full transitive snapshot through opened FDs.
++    raw = authority.snapshot(entry)
++    require(source in raw, 'pm2_input_json_dependency_missing')
++    parser = str(Path(ecosystem_contract.__file__).relative_to(authority.root))
++    require(parser in raw and raw[parser] == __phase_loader__.raw[parser],
++            'pm2_input_parser_dependency_missing_or_changed')
++    value = ecosystem_contract.source_bytes(raw[source])
++    require(raw[entry] == ecosystem_contract.rendered(value), 'ecosystem_json_drift')
++    # No require/import is executed from the CJS: canonical literal JSON only.
++    # Serialize through the SAME canonical renderer, not an independent parser.
++    payload = ecosystem_contract.rendered(value)[len(b'"use strict";\nmodule.exports = '):-2]
++    protected_alias()
++    fd = sealed_fd(payload)
++    try:
++        authority.start_mode(root)  # fresh permit/selection/execution, no renew
++        system.run([pm, 'start', str(ALIAS / str(fd)), '--only', name], pass_fds=(fd,))
++    finally:
++        os.close(fd)  # uncertain PM2 response is propagated; never retry/start again
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/reproduce.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/reproduce.py
+new file mode 100644
+index 00000000..5b707479
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/reproduce.py
+@@ -0,0 +1,96 @@
++"""Reproduce ONLY this delta in an isolated delivered tree. No private evidence.
++No installed bootstrap/helper, live transport, historical operation or product build.
++"""
++from pathlib import Path
++import hashlib
++import json
++import os
++import shutil
++import subprocess
++import sys
++import tempfile
++
++B3=Path(__file__).resolve().parent
++B1=B3.parent/'crm-csv-root-authority-b1-20261016'
++B2=B1.parent/'crm-csv-root-authority-b2-20261016'
++R3=B2.parent/'crm-csv-root-authority-r3-20261016'
++HERE=R3.parent/'crm-csv-root-authority-local-20261016'
++REVIEW=HERE.parent
++ACCEPTED=REVIEW/'crm-csv-integrated-recovery-20261016'
++BASE='bdb57f57601147632bb529895cbcd92b8b483c6c'
++NEW=('authority.py','root_store.py','root_extension.py','verified_loader.py','bootstrap.py',
++     'node_bootstrap.cjs','integration.py','child_transport.py','test_authority.py','test_connected.py')
++OLD=('recovery.py','recovery_contract.py','recovery_bridge.py','recovery_start.py','policy_proposal.py',
++     'future_sources.py','inputs.py','original_checks.py','test_recovery.py','SOURCE_PROVENANCE.json')
++EXTRA=('v4-sequencer/privileged.py','v4-sequencer/render_sudoers.py','v4-sequencer/privileged_output.py',
++       'v4-sequencer/sequencer.py','v4-sequencer/ecosystem_contract.py',
++       'crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source',
++       'crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source',
++       'crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source',
++       'crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source',
++       'crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source')
++
++def run():
++    provenance=json.loads((B3/'SOURCE_PROVENANCE.json').read_bytes())
++    repository=Path(subprocess.check_output(['git','rev-parse','--show-toplevel'],cwd=B3,text=True).strip())
++    for ref in provenance['repositoryInputs']:
++        raw=(repository/ref['path']).read_bytes()
++        pinned=subprocess.check_output(['git','show',ref['commit']+':'+ref['path']],cwd=B3)
++        assert raw==pinned and hashlib.sha256(raw).hexdigest()==ref['sha256'], 'B3_input_drift:'+ref['path']
++    for name,ref in provenance['pm2']['excerpts'].items():
++        assert hashlib.sha256((B3/'vendor'/name).read_bytes()).hexdigest()==ref['deliveredSha256'], 'B3_PM2_excerpt_drift'
++    assert hashlib.sha256((B3/'vendor/PM2-LICENSE').read_bytes()).hexdigest()==provenance['pm2']['licenseSha256']
++    spec=json.loads((ACCEPTED/'SOURCE_PROVENANCE.json').read_bytes())
++    with tempfile.TemporaryDirectory(prefix='re7-root-authority-delivery-')as tmp:
++        root=Path(tmp)/'reviews';dest=root/HERE.name;old=root/ACCEPTED.name
++        dest.mkdir(parents=True);old.mkdir()
++        for n in NEW:
++            raw=subprocess.check_output(['git','show','2cc9a35058c25bfdd01e597564a29e8d952d69aa:docs/reviews/automation-freeform-window-release-af26/'+HERE.name+'/'+n],cwd=HERE)
++            (dest/n).write_bytes(raw)
++        shutil.copyfile(dest/'integration.py',dest/'integration_before_r3.py')
++        for n in ('authority.py','integration.py','test_r3.py'):shutil.copyfile(R3/n,dest/n)
++        for n in ('authority.py','integration.py','bootstrap.py','child_transport.py','node_bootstrap.cjs'):
++            shutil.copyfile(dest/n,dest/('before_'+n))
++            shutil.copyfile(B2/n,dest/n)
++        for n in ('test_process.py','lab_shim.py','lab_effects.py'):
++            shutil.copyfile(B2/n,dest/n)
++        for n in ('authority.py','bootstrap.py','child_transport.py','node_bootstrap.cjs','privileged_output.py','lab_shim.py','lab_root_reply.py','test_diagnostics.py'):
++            shutil.copyfile(B1/n,dest/n)
++        # Fixture-only source adaptation: extra protected diagnostic library and
++        # actual local sudo endpoint, no change to Bridge/delegated/baseline bodies.
++        process=(dest/'test_process.py').read_text()
++        process=process.replace("('authority.py','bootstrap.py','child_transport.py','node_bootstrap.cjs'):",
++            "('authority.py','bootstrap.py','child_transport.py','node_bootstrap.cjs','privileged_output.py'):")
++        process=process.replace("('authority','verified_loader','child_transport')", "('authority','verified_loader','child_transport','privileged_output')")
++        process=process.replace("        shim=self.lab/'shim.py';node=self.lab/'node.cjs'", "        shutil.copyfile(HERE/'lab_root_reply.py',self.library/'lab_root_reply.py')\n        shim=self.lab/'shim.py';node=self.lab/'node.cjs'")
++        (dest/'test_process.py').write_text(process)
++
++
++        for n in OLD:shutil.copyfile(ACCEPTED/n,old/n)
++        (old/'reference_sources').mkdir();(old/'versioned-inputs').mkdir()
++        for n,r in spec['excerpts'].items():
++            raw=(ACCEPTED/'reference_sources'/n).read_bytes();assert hashlib.sha256(raw).hexdigest()==r['deliveredSha256']
++            (old/'reference_sources'/n).write_bytes(raw)
++        for n,r in spec['versioned'].items():
++            raw=subprocess.check_output(['git','show',r['commit']+':'+r['path']],cwd=HERE)
++            assert hashlib.sha256(raw).hexdigest()==r['sha256'];(old/'versioned-inputs'/n).write_bytes(raw)
++        (old/'ISOLATED_DELIVERY').write_text('Only delivered/pinned inputs; no Git or private fallback.\n')
++        prefix='docs/reviews/automation-freeform-window-release-af26'
++        for n in EXTRA:
++            raw=subprocess.check_output(['git','show',BASE+':'+prefix+'/'+n],cwd=HERE)
++            assert raw==(REVIEW/n).read_bytes(),'reference_changed:'+n
++            file=root/n;file.parent.mkdir(parents=True,exist_ok=True);file.write_bytes(raw)
++        for n in ('pm2_input.py','test_pm2.py','pm2_boundary.cjs'):
++            shutil.copyfile(B3/n,dest/n)
++        shutil.copyfile(B3/'integration.py',dest/'b3_integration.py')
++        shutil.copytree(B3/'vendor',dest/'vendor')
++        shutil.copyfile(B3/'SOURCE_PROVENANCE.json',dest/'B3_PROVENANCE.json')
++        node=shutil.which('node')
++        if node is None:raise RuntimeError('LOCAL_NODE_TEST_TOOL_REQUIRED')
++        test_path=str(Path(node).parent)+':/usr/bin:/bin'
++        result=subprocess.run([sys.executable,'-B','-m','unittest','-v','test_pm2'],
++            cwd=dest,capture_output=True,text=True,env={'PATH':test_path,'PYTHONDONTWRITEBYTECODE':'1'})
++        sys.stdout.write(result.stdout);sys.stderr.write(result.stderr)
++        return result.returncode
++
++if __name__=='__main__':sys.exit(run())
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/test_pm2.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/test_pm2.py
+new file mode 100644
+index 00000000..2045fc96
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/test_pm2.py
+@@ -0,0 +1,337 @@
++"""B3 concrete System/Context/Loader -> real inherited FD -> actual PM2 parser.
++No daemon. Root transport/metadata/authority issue and app process effects simulated.
++Run reproduce.py for a delivered-only isolated tree without local-evidence.
++"""
++import ast
++import copy
++import datetime
++import fcntl
++import hashlib
++import json
++import os
++from pathlib import Path
++import shutil
++import stat
++import subprocess
++import tempfile
++import types
++import unittest
++from unittest.mock import patch
++import authority as a
++from verified_loader import Loader
++import child_transport
++import integration as b2
++import b3_integration as b3
++import test_connected as connected
++import test_r3 as r3
++
++HERE=Path(__file__).resolve().parent
++REVIEW=HERE.parent
++SOURCE=REVIEW/'crm-csv-review-publication-20261016/code-sources'
++NODE=shutil.which('node')
++
++
++def module(name, text):
++    m=types.ModuleType(name);exec(compile(text,name,'exec'),m.__dict__);return m
++
++
++def full_operations():
++    return (SOURCE/'ops.py.c84a5e059cbc.source').read_text()
++
++
++class PM2Tests(unittest.TestCase):
++    def setUp(self):
++        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
++        self.root=Path(self.temp.name)/'prep';self.root.mkdir();self.w=self.root/'window';self.w.mkdir()
++        self.now=datetime.datetime(2026,10,16,21,tzinfo=datetime.timezone.utc)
++        self.manifest={'files':{},'dependencies':{},'entries':{},'imports':{}}
++        self.mode='switch';self.calls=[];self.before_consume=lambda:None
++        self.config={'apps':[{'name':n,'cwd':'/synthetic/'+n,'script':'/synthetic/'+n+'/main.js',
++                    'interpreter':'/synthetic/node20','watch':False,'autorestart':True,
++                    'env':{'NEWauth':'synthetic-auth','NEWDB':'synthetic-db','NEWcipher':'synthetic-cipher',
++                           'unicode':'ação','large':'x'*140000}}
++                   for n in ('re7-whatsapp-agent','re7-whatsapp-web-worker','re7-admin-front')]}
++        self.parser=b3.ecosystem((REVIEW/'v4-sequencer/ecosystem_contract.py').read_text())
++        self.ec=module('synthetic_canonical_ecosystem',self.parser)
++        self.ops_source=b3.operations(b2.operations(full_operations()))
++        for mode in ('switch','return-before-commit','return','return-partial'):
++            def name(n):return mode+'/'+n
++            self.add(name('ecosystem_contract.py'),self.parser)
++            self.add(name('candidate.config.private.json'),json.dumps(self.config),language='json')
++            self.add(name('candidate.ecosystem.config.cjs'),self.ec.rendered(self.config).decode(),language='commonjs',entry='forward' if mode=='switch'else'recovery')
++            self.add(name('pm2_input.py'),(HERE/'pm2_input.py').read_text(),imports={'ecosystem_contract':name('ecosystem_contract.py')})
++            self.add(name('db_owner_set_gate.py'),(SOURCE/'db_owner_set_gate.py.ca9b0bf8ece3.source').read_text())
++            self.add(name('db_owner_set_observer.py'),(SOURCE/'db_owner_set_observer.py.ddbe29926e27.source').read_text())
++            self.add(name('ops.py'),self.ops_source,imports={n:name(n+'.py')for n in ('db_owner_set_gate','db_owner_set_observer','pm2_input')},entry='inspect')
++            self.manifest['dependencies'][name('candidate.ecosystem.config.cjs')]=[name('candidate.config.private.json'),name('ecosystem_contract.py')]
++            self.manifest['dependencies'][name('pm2_input.py')]=[name('candidate.ecosystem.config.cjs')]
++        (self.w/'csv-execution.intent.private.json').write_bytes(b'synthetic-execution')
++        (self.w/'recovery-contract.private.json').write_bytes(b'synthetic-contract')
++        (self.w/'target.profile.private.json').write_bytes(b'synthetic-profile')
++        self.anchor={'version':1,'preparation':str(self.root),'contractSha256':a.digest(b'synthetic-contract'),
++            'policySha256':'1'*64,'codeManifestSha256':a.digest(a.canonical(self.manifest)),
++            'profileSha256':{'ORIGINAL':'2'*64,'CANDIDATE':a.digest(b'synthetic-profile')}}
++        self.reply={'result':'ROOT_RECOVERY_AUTHORITY_READ','queryOnly':True,'anchor':self.anchor,
++            'anchorSha256':a.digest(a.canonical(self.anchor)),'manifest':self.manifest,'permit':None,
++            'permitSha256':None,'livePolicySha256':'1'*64,'livePhase':'fenced'}
++        self.alias=Path(self.temp.name)/'pm2-input.json';self.alias.symlink_to('/proc/self/fd')
++        self.context=None
++
++    def add(self,name,text,imports=None,language='python',entry=None):
++        p=self.root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(text)
++        s=p.stat();self.manifest['files'][name]={'sha256':a.digest(p.read_bytes()),'uid':s.st_uid,'mode':stat.S_IMODE(s.st_mode),'language':language}
++        self.manifest['dependencies'][name]=[];self.manifest['imports'][name]=imports or{}
++        if entry:self.manifest['entries'][name]=entry
++
++    def seal_fixture(self):
++        # Synthetic owner review BEFORE creation of any Context. Not operational
++        # sealing or permission adjustment. Mutations later deliberately DENY.
++        self.anchor['codeManifestSha256']=a.digest(a.canonical(self.manifest))
++        self.reply['anchorSha256']=a.digest(a.canonical(self.anchor))
++
++    def prepare(self,mode='switch'):
++        self.mode=mode
++        if mode!='switch':
++            p={'anchorSha256':self.reply['anchorSha256'],'preparation':str(self.root),'contractSha256':self.anchor['contractSha256'],
++                'policySha256':self.anchor['policySha256'],'phase':'fenced','decision':'ORIGINAL' if mode=='return-before-commit'else'CANDIDATE',
++                'targetProfileSha256':self.anchor['profileSha256']['ORIGINAL' if mode=='return-before-commit'else'CANDIDATE'],
++                'executionIntentSha256':a.digest(b'synthetic-execution'),'capturedUtc':self.now.isoformat()}
++            self.reply.update(permit=p,permitSha256=a.digest(a.canonical(p)))
++        self.context=a.Context(lambda:a.canonical(self.reply),now=lambda:self.now)
++        self.loader=Loader(self.context,mode+'/ops.py',trusted_modules={'child_transport':child_transport})
++        self.ops=self.loader.module(mode+'/ops.py');self.system=self.ops.System()
++        self.system.apps=lambda:self.calls.append('daemon-presence-simulated')
++        self.input=self.loader.module(mode+'/pm2_input.py');self.input.ALIAS=self.alias
++
++    def alias_metadata(self):
++        # Actual symlink and Linux FD; root owner/ancestor protection simulated.
++        original=Path.lstat
++        def inspect(p,*args,**kwargs):
++            result=original(p,*args,**kwargs)
++            if p==self.alias or p in self.alias.parents:
++                row=list(result);row[4]=0
++                if p!=self.alias:row[0]=stat.S_IFDIR|0o755
++                return os.stat_result(row)
++            return result
++        return patch.object(Path,'lstat',inspect)
++
++    def consume(self):
++        original=subprocess.check_output
++        def pm2(argv,**kwargs):
++            self.assertEqual(argv[:2],[self.ops.PM,'start'])
++            self.assertEqual(argv[3:],['--only','re7-whatsapp-agent'])
++            self.assertEqual(kwargs['env'],self.ops.CLEAN)
++            self.assertEqual(kwargs['pass_fds'],(int(Path(argv[2]).name),))
++            fd=kwargs['pass_fds'][0]
++            self.assertEqual(fcntl.fcntl(fd,fcntl.F_GET_SEALS)&self.input.SEALS,self.input.SEALS)
++            self.before_consume()
++            self.calls.append('actual-PM2-read-and-parser-no-daemon')
++            out=original([NODE,str(HERE/'pm2_boundary.cjs'),argv[2],'re7-whatsapp-agent'],**kwargs)
++            self.consumed=json.loads(out)
++            return out
++        with self.alias_metadata(),patch.object(self.ops.subprocess,'check_output',pm2):
++            self.system.start(self.root/self.mode,'re7-whatsapp-agent')
++        return self.consumed
++
++    def test_old_cjs_replacement_executes_changed_bytes_in_actual_pm2(self):
++        self.prepare()
++        # Concrete original System class, not an imitation of its start method.
++        tree=ast.parse(b2.operations(full_operations()))
++        cls=next(c for c in tree.body if isinstance(c,ast.ClassDef)and c.name=='System')
++        values=dict(self.ops.__dict__)
++        exec(compile(ast.Module(body=[cls],type_ignores=[]),'original-System','exec'),values)
++        old=values['System']();old.apps=lambda:None
++        p=self.root/'switch/candidate.ecosystem.config.cjs'
++        marker=Path(self.temp.name)/'unexpected-effect'
++        original=subprocess.check_output
++        def substituted(argv,**kw):
++            self.assertEqual(argv,[self.ops.PM,'start',str(p),'--only','re7-whatsapp-agent'])
++            p.write_text('require("fs").writeFileSync('+json.dumps(str(marker))+',"executed");module.exports={apps:[{name:"replaced"}]};')
++            return original([NODE,str(HERE/'pm2_boundary.cjs'),str(p),'re7-whatsapp-agent'],**kw)
++        with patch.object(self.ops.subprocess,'check_output',substituted):
++            old.start(self.root/'switch','re7-whatsapp-agent')
++        self.assertTrue(marker.exists())
++
++    def test_real_system_fd_and_actual_pm2_preserve_all_fields_after_replacement(self):
++        self.prepare()
++        def change():
++            (self.root/'switch/candidate.ecosystem.config.cjs').write_text('throw Error("untrusted CJS ran")')
++            (self.root/'switch/candidate.config.private.json').write_text('{}')
++        self.before_consume=change
++        self.assertEqual(self.consume(),self.config['apps'])
++        self.assertEqual(self.calls,['daemon-presence-simulated','actual-PM2-read-and-parser-no-daemon'])
++        with self.assertRaisesRegex(RuntimeError,'source_hash'):
++            self.system.start(self.root/'switch','re7-whatsapp-agent')
++
++    def test_memfd_write_and_truncate_denied_and_fd_closed(self):
++        self.prepare();fd=self.input.sealed_fd(b'{"apps":[]}')
++        try:
++            with self.assertRaises(PermissionError):os.write(fd,b'changed')
++            with self.assertRaises(PermissionError):os.ftruncate(fd,0)
++        finally:os.close(fd)
++        self.consume() # exact config itself > pipe chunk; no stdin truncation
++
++    def test_original_has_no_candidate_only_dependency(self):
++        for mode in ('switch','return','return-partial'):
++            for p in (self.root/mode).iterdir():p.unlink()
++        self.prepare('return-before-commit')
++        self.assertEqual(self.consume(),self.config['apps'])
++
++    def test_candidate_recovery_modes_keep_specific_permit(self):
++        self.prepare('return')
++        self.assertEqual(self.consume(),self.config['apps'])
++        self.prepare('return-partial')
++        self.assertEqual(self.consume(),self.config['apps'])
++
++    def test_original_without_permit_denies_before_pm2(self):
++        self.prepare();self.mode='return-before-commit'
++        with self.assertRaisesRegex(RuntimeError,'permit_required'):
++            self.system.start(self.root/self.mode,'re7-whatsapp-agent')
++        self.assertNotIn('actual-PM2-read-and-parser-no-daemon',self.calls)
++
++    def test_json_cjs_mismatch_and_executable_dependency_denied(self):
++        p=self.root/'switch/candidate.ecosystem.config.cjs';p.write_bytes(p.read_bytes()+b'require("unapproved")\n')
++        self.manifest['files']['switch/candidate.ecosystem.config.cjs']['sha256']=a.digest(p.read_bytes());self.seal_fixture()
++        self.prepare()
++        with self.assertRaisesRegex(RuntimeError,'ecosystem_json_drift'):self.consume()
++        self.assertNotIn('actual-PM2-read-and-parser-no-daemon',self.calls)
++
++    def test_missing_transitive_dependency_denied_before_import(self):
++        self.prepare();(self.root/'switch/ecosystem_contract.py').unlink()
++        with self.assertRaises(FileNotFoundError):self.consume()
++        self.assertNotIn('actual-PM2-read-and-parser-no-daemon',self.calls)
++
++    def test_json_dependency_not_in_closure_denied(self):
++        self.manifest['dependencies']['switch/candidate.ecosystem.config.cjs']=[];self.seal_fixture();self.prepare()
++        with self.assertRaisesRegex(RuntimeError,'json_dependency_missing'):self.consume()
++
++    def test_read_permission_error_denies(self):
++        self.prepare();original=os.open
++        def deny(p,*args,**kw):
++            if str(p).endswith('candidate.config.private.json'):raise PermissionError('synthetic read denied')
++            return original(p,*args,**kw)
++        with patch.object(os,'open',deny),self.assertRaises(PermissionError):self.consume()
++
++    def test_authority_changes_after_sealing_denies_closes_fd(self):
++        self.prepare();original=self.input.sealed_fd;opened=[]
++        def changed(raw):
++            fd=original(raw);opened.append(fd);self.reply['livePolicySha256']='9'*64;return fd
++        with patch.object(self.input,'sealed_fd',changed),self.assertRaisesRegex(RuntimeError,'live_policy_drift'):self.consume()
++        with self.assertRaises(OSError):os.fstat(opened[0])
++        self.assertNotIn('actual-PM2-read-and-parser-no-daemon',self.calls)
++
++    def test_recovery_expiry_between_api_worker_denies(self):
++        self.prepare('return-before-commit');self.consume();self.now+=datetime.timedelta(seconds=600)
++        with self.assertRaisesRegex(RuntimeError,'permit_expired'):
++            self.system.start(self.root/self.mode,'re7-whatsapp-web-worker')
++        self.assertEqual(self.calls.count('actual-PM2-read-and-parser-no-daemon'),1)
++
++    def test_wrong_alias_denied_before_pm2(self):
++        self.prepare();self.alias.unlink();self.alias.symlink_to('/tmp')
++        with self.assertRaisesRegex(RuntimeError,'root_alias'):self.consume()
++
++    def test_unprotected_alias_owner_denied(self):
++        self.prepare()
++        # Direct metadata contract (no fixture override): synthetic non-root UID.
++        original=Path.lstat
++        def wrong(p,*args,**kw):
++            s=original(p,*args,**kw);row=list(s);row[4]=1001;return os.stat_result(row)
++        with patch.object(Path,'lstat',wrong),self.assertRaisesRegex(RuntimeError,'root_chain'):
++            self.input.protected_alias()
++
++    def test_lost_pm2_response_closes_fd_without_retry(self):
++        self.prepare();fds=[]
++        def lost(argv,**kw):
++            fds.extend(kw['pass_fds']);self.calls.append('simulated-response-lost');raise subprocess.TimeoutExpired('synthetic-pm2',1)
++        with self.alias_metadata(),patch.object(self.ops.subprocess,'check_output',lost),self.assertRaises(subprocess.TimeoutExpired):
++            self.system.start(self.root/self.mode,'re7-whatsapp-agent')
++        self.assertEqual(self.calls.count('simulated-response-lost'),1)
++        with self.assertRaises(OSError):os.fstat(fds[0])
++
++    def test_operations_barriers_and_order_unchanged(self):
++        before=ast.parse(b2.operations(full_operations()));after=ast.parse(self.ops_source)
++        def start(tree):return next(n for c in tree.body if isinstance(c,ast.ClassDef)and c.name=='Operations'for n in c.body if isinstance(n,ast.FunctionDef)and n.name=='start')
++        self.assertEqual(ast.dump(start(before)),ast.dump(start(after)))
++        self.assertLess(self.ops_source.index('self.apps()  # Never implicitly'),self.ops_source.index('from pm2_input import start'))
++
++    def test_operations_to_system_to_actual_pm2_api_worker_order(self):
++        # Concrete canonical Operations + gate + Sequencer from the accepted
++        # synthetic fixture, connected to complete real System and PM2 parser.
++        # Driver process/DB/HTTP/PM2 daemon results remain explicitly synthetic.
++        case=r3.Forward('test_forward_real_pair_without_recovery_permit')
++        case.setUp()
++        try:
++            f=case.prepare()
++            self.root=f.root;self.w=f.w
++            self.manifest={'files':{},'dependencies':{},'entries':{},'imports':{}}
++            self.anchor=copy.deepcopy(case.context.bundle['anchor'])
++            self.reply=copy.deepcopy(case.context.bundle)
++            for n in ('db_owner_set_gate','db_owner_set_observer'):
++                ref=next(SOURCE.glob(n+'.py.*.source'))
++                self.add('window/'+n+'.py',ref.read_text())
++            self.add('window/ecosystem_contract.py',self.parser)
++            self.add('window/pm2_input.py',(HERE/'pm2_input.py').read_text(),imports={'ecosystem_contract':'window/ecosystem_contract.py'})
++            self.add('window/b3_system.py',self.ops_source,imports={n:'window/'+n+'.py'for n in ('db_owner_set_gate','db_owner_set_observer','pm2_input')},entry='inspect')
++            for n,lang in [('candidate.config.private.json','json'),('candidate.ecosystem.config.cjs','commonjs')]:
++                # Register the concrete fixture's already sealed config bytes;
++                # do not rewrite them, their profiles or the canonical receipt.
++                file=f.root/'switch'/n;meta=file.stat();key='switch/'+n
++                self.manifest['files'][key]={'sha256':a.digest(file.read_bytes()),'uid':meta.st_uid,'mode':stat.S_IMODE(meta.st_mode),'language':lang}
++                self.manifest['dependencies'][key]=[];self.manifest['imports'][key]={}
++            self.manifest['entries']['switch/candidate.ecosystem.config.cjs']='forward'
++            self.manifest['dependencies']['switch/candidate.ecosystem.config.cjs']=['switch/candidate.config.private.json','window/ecosystem_contract.py']
++            self.manifest['dependencies']['window/pm2_input.py']=['switch/candidate.ecosystem.config.cjs']
++            self.reply.update(anchor=self.anchor,manifest=self.manifest)
++            self.seal_fixture()
++            ctx=a.Context(lambda:a.canonical(self.reply),now=lambda:case.now)
++            loader=Loader(ctx,'window/b3_system.py',trusted_modules={'child_transport':child_transport})
++            real=loader.module('window/b3_system.py');driver=real.System();driver.apps=lambda:None
++            inp=loader.module('window/pm2_input.py');inp.ALIAS=self.alias
++            self.input=inp
++            case.ops.__phase_authority__=ctx
++            previous=f.d.start;calls=[];output=subprocess.check_output
++            expected=json.loads((f.root/'switch/candidate.config.private.json').read_bytes())['apps']
++            def pm2(argv,**kw):
++                calls.append(argv[-1])
++                value=output([NODE,str(HERE/'pm2_boundary.cjs'),argv[2],argv[-1]],**kw)
++                self.assertEqual(json.loads(value),expected)
++                self.assertTrue((f.root/'switch'/('start-intent-'+argv[-1]+'.json')).is_file())
++                return value
++            def start(root,name):
++                driver.start(root,name)
++                previous(root,name) # explicitly simulated process appearance
++            f.d.start=start
++            with self.alias_metadata(),patch.object(real.subprocess,'check_output',pm2):
++                case.start(connected.t.c.API)
++                case.start(connected.t.c.WORKER)
++            self.assertEqual(calls,[connected.t.c.API,connected.t.c.WORKER])
++            self.assertIsNone(ctx.bundle['permit'])
++            with self.assertRaises(RuntimeError):case.start(connected.t.c.API)
++            self.assertEqual(len(calls),2) # no PM2 replay from consumed start
++        finally:
++            case.tearDown()
++
++    def test_canonical_parser_equivalence(self):
++        original=module('original_ecosystem',(REVIEW/'v4-sequencer/ecosystem_contract.py').read_text())
++        p=self.root/'matrix.json'
++        for raw in (json.dumps(self.config),'{"apps":[],"apps":[]}','{"apps":NaN}','{}','bad-json'):
++            p.write_text(raw)
++            def result(call):
++                try:return ('ok',call())
++                except Exception as e:return(type(e).__name__,str(e))
++            self.assertEqual(result(lambda:original.source(p)),result(lambda:self.ec.source(p)))
++            self.assertEqual(result(lambda:original.source(p)),result(lambda:self.ec.source_bytes(raw)))
++        for raw in (b'\xffinvalid', '{"apps":[]}'.encode('utf-16'), b'\xef\xbb\xbf{}'):
++            p.write_bytes(raw)
++            self.assertEqual(result(lambda:original.source(p)),result(lambda:self.ec.source(p)))
++            self.assertEqual(result(lambda:original.source(p)),result(lambda:self.ec.source_bytes(raw)))
++
++
++def load_tests(loader, tests, pattern):
++    suite=loader.loadTestsFromTestCase(PM2Tests)
++    for name in ('test_original_real_checker_certificates_controls_and_replay','test_prestop_no_permit_and_no_start',
++                 'test_candidate_compatible_only','test_lost_start_response_no_replay_or_complete',
++                 'test_prevention_binding_still_before_effects','test_prevention_event775_still_before_effects'):
++        suite.addTest(connected.Connected(name))
++    suite.addTest(r3.Forward('test_forward_real_pair_without_recovery_permit'))
++    return suite
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/API-startJson.prefix.txt b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/API-startJson.prefix.txt
+new file mode 100644
+index 00000000..264cc179
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/API-startJson.prefix.txt
+@@ -0,0 +1,60 @@
++  _startJson (file, opts, action, pipe, cb) {
++    var config     = {};
++    var appConf    = {};
++    var staticConf = [];
++    var deployConf = {};
++    var apps_info  = [];
++    var that = this;
++
++    /**
++     * Get File configuration
++     */
++    if (typeof(cb) === 'undefined' && typeof(pipe) === 'function') {
++      cb = pipe;
++    }
++    if (typeof(file) === 'object') {
++      config = file;
++    } else if (pipe === 'pipe') {
++      config = Common.parseConfig(file, 'pipe');
++    } else {
++      var data = null;
++
++      var isAbsolute = path.isAbsolute(file)
++      var file_path = isAbsolute ? file : path.join(that.cwd, file);
++
++      debug('Resolved filepath %s', file_path);
++
++      try {
++        data = fs.readFileSync(file_path);
++      } catch(e) {
++        Common.printError(conf.PREFIX_MSG_ERR + 'File ' + file +' not found');
++        return cb ? cb(Common.retErr(e)) : that.exitCli(conf.ERROR_EXIT);
++      }
++
++      try {
++        config = Common.parseConfig(data, file);
++      } catch(e) {
++        Common.printError(conf.PREFIX_MSG_ERR + 'File ' + file + ' malformated');
++        console.error(e);
++        return cb ? cb(Common.retErr(e)) : that.exitCli(conf.ERROR_EXIT);
++      }
++    }
++
++    /**
++     * Alias some optional fields
++     */
++    if (config.deploy)
++      deployConf = config.deploy;
++    if (config.static)
++      staticConf = config.static;
++    if (config.apps)
++      appConf = config.apps;
++    else if (config.pm2)
++      appConf = config.pm2;
++    else
++      appConf = config;
++    if (!Array.isArray(appConf))
++      appConf = [appConf];
++
++    if ((appConf = Common.verifyConfs(appConf)) instanceof Error)
++      return cb ? cb(appConf) : that.exitCli(conf.ERROR_EXIT);
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/Common-config.excerpt.cjs b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/Common-config.excerpt.cjs
+new file mode 100644
+index 00000000..4122d208
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/Common-config.excerpt.cjs
+@@ -0,0 +1,65 @@
++Common.knonwConfigFileExtensions = {
++  '.json': 'json',
++  '.yml': 'yaml',
++  '.yaml': 'yaml',
++  '.config.js': 'js',
++  '.config.cjs': 'js',
++  '.config.mjs': 'mjs'
++}
++
++/**
++ * Check if filename is a configuration file
++ * @param {string} filename
++ * @return {mixed} null if not conf file, json or yaml if conf
++ */
++Common.isConfigFile = function (filename) {
++  if (typeof (filename) !== 'string')
++    return null;
++
++  for (let extension in Common.knonwConfigFileExtensions) {
++    if (filename.indexOf(extension) !== -1) {
++      return Common.knonwConfigFileExtensions[extension];
++    }
++  }
++
++  return null;
++};
++
++Common.getConfigFileCandidates = function (name) {
++  return Object.keys(Common.knonwConfigFileExtensions).map((extension) => name + extension);
++}
++
++/**
++ * Parses a config file like ecosystem.config.js. Supported formats: JS, JSON, JSON5, YAML.
++ * @param {string} confString  contents of the config file
++ * @param {string} filename    path to the config file
++ * @return {Object} config object
++ */
++Common.parseConfig = function(confObj, filename) {
++  var yamljs = require('js-yaml');
++  var vm     = require('vm');
++
++  var isConfigFile = Common.isConfigFile(filename);
++
++  if (!filename ||
++      filename == 'pipe' ||
++      filename == 'none' ||
++      isConfigFile == 'json') {
++    var code = '(' + confObj + ')';
++    var sandbox = {};
++
++    return vm.runInThisContext(code, sandbox, {
++      filename: path.resolve(filename),
++      displayErrors: false,
++      timeout: 1000
++    });
++  }
++  else if (isConfigFile == 'yaml') {
++    return yamljs.load(confObj.toString());
++  }
++  else if (isConfigFile == 'js' || isConfigFile == 'mjs') {
++    var confPath = require.resolve(path.resolve(filename));
++    delete require.cache[confPath];
++    return require(confPath);
++  }
++};
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/PM2-LICENSE b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/PM2-LICENSE
+new file mode 100644
+index 00000000..9e9a9ca9
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/PM2-LICENSE
+@@ -0,0 +1,665 @@
++
++                    GNU AFFERO GENERAL PUBLIC LICENSE
++                       Version 3, 19 November 2007
++
++ Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>
++ Everyone is permitted to copy and distribute verbatim copies
++ of this license document, but changing it is not allowed.
++
++                            Preamble
++
++  The GNU Affero General Public License is a free, copyleft license for
++software and other kinds of works, specifically designed to ensure
++cooperation with the community in the case of network server software.
++
++  The licenses for most software and other practical works are designed
++to take away your freedom to share and change the works.  By contrast,
++our General Public Licenses are intended to guarantee your freedom to
++share and change all versions of a program--to make sure it remains free
++software for all its users.
++
++  When we speak of free software, we are referring to freedom, not
++price.  Our General Public Licenses are designed to make sure that you
++have the freedom to distribute copies of free software (and charge for
++them if you wish), that you receive source code or can get it if you
++want it, that you can change the software or use pieces of it in new
++free programs, and that you know you can do these things.
++
++  Developers that use our General Public Licenses protect your rights
++with two steps: (1) assert copyright on the software, and (2) offer
++you this License which gives you legal permission to copy, distribute
++and/or modify the software.
++
++  A secondary benefit of defending all users' freedom is that
++improvements made in alternate versions of the program, if they
++receive widespread use, become available for other developers to
++incorporate.  Many developers of free software are heartened and
++encouraged by the resulting cooperation.  However, in the case of
++software used on network servers, this result may fail to come about.
++The GNU General Public License permits making a modified version and
++letting the public access it on a server without ever releasing its
++source code to the public.
++
++  The GNU Affero General Public License is designed specifically to
++ensure that, in such cases, the modified source code becomes available
++to the community.  It requires the operator of a network server to
++provide the source code of the modified version running there to the
++users of that server.  Therefore, public use of a modified version, on
++a publicly accessible server, gives the public access to the source
++code of the modified version.
++
++  An older license, called the Affero General Public License and
++published by Affero, was designed to accomplish similar goals.  This is
++a different license, not a version of the Affero GPL, but Affero has
++released a new version of the Affero GPL which permits relicensing under
++this license.
++
++  The precise terms and conditions for copying, distribution and
++modification follow.
++
++                       TERMS AND CONDITIONS
++
++  0. Definitions.
++
++  "This License" refers to version 3 of the GNU Affero General Public License.
++
++  "Copyright" also means copyright-like laws that apply to other kinds of
++works, such as semiconductor masks.
++
++  "The Program" refers to any copyrightable work licensed under this
++License.  Each licensee is addressed as "you".  "Licensees" and
++"recipients" may be individuals or organizations.
++
++  To "modify" a work means to copy from or adapt all or part of the work
++in a fashion requiring copyright permission, other than the making of an
++exact copy.  The resulting work is called a "modified version" of the
++earlier work or a work "based on" the earlier work.
++
++  A "covered work" means either the unmodified Program or a work based
++on the Program.
++
++  To "propagate" a work means to do anything with it that, without
++permission, would make you directly or secondarily liable for
++infringement under applicable copyright law, except executing it on a
++computer or modifying a private copy.  Propagation includes copying,
++distribution (with or without modification), making available to the
++public, and in some countries other activities as well.
++
++  To "convey" a work means any kind of propagation that enables other
++parties to make or receive copies.  Mere interaction with a user through
++a computer network, with no transfer of a copy, is not conveying.
++
++  An interactive user interface displays "Appropriate Legal Notices"
++to the extent that it includes a convenient and prominently visible
++feature that (1) displays an appropriate copyright notice, and (2)
++tells the user that there is no warranty for the work (except to the
++extent that warranties are provided), that licensees may convey the
++work under this License, and how to view a copy of this License.  If
++the interface presents a list of user commands or options, such as a
++menu, a prominent item in the list meets this criterion.
++
++  1. Source Code.
++
++  The "source code" for a work means the preferred form of the work
++for making modifications to it.  "Object code" means any non-source
++form of a work.
++
++  A "Standard Interface" means an interface that either is an official
++standard defined by a recognized standards body, or, in the case of
++interfaces specified for a particular programming language, one that
++is widely used among developers working in that language.
++
++  The "System Libraries" of an executable work include anything, other
++than the work as a whole, that (a) is included in the normal form of
++packaging a Major Component, but which is not part of that Major
++Component, and (b) serves only to enable use of the work with that
++Major Component, or to implement a Standard Interface for which an
++implementation is available to the public in source code form.  A
++"Major Component", in this context, means a major essential component
++(kernel, window system, and so on) of the specific operating system
++(if any) on which the executable work runs, or a compiler used to
++produce the work, or an object code interpreter used to run it.
++
++  The "Corresponding Source" for a work in object code form means all
++the source code needed to generate, install, and (for an executable
++work) run the object code and to modify the work, including scripts to
++control those activities.  However, it does not include the work's
++System Libraries, or general-purpose tools or generally available free
++programs which are used unmodified in performing those activities but
++which are not part of the work.  For example, Corresponding Source
++includes interface definition files associated with source files for
++the work, and the source code for shared libraries and dynamically
++linked subprograms that the work is specifically designed to require,
++such as by intimate data communication or control flow between those
++subprograms and other parts of the work.
++
++  The Corresponding Source need not include anything that users
++can regenerate automatically from other parts of the Corresponding
++Source.
++
++  The Corresponding Source for a work in source code form is that
++same work.
++
++  2. Basic Permissions.
++
++  All rights granted under this License are granted for the term of
++copyright on the Program, and are irrevocable provided the stated
++conditions are met.  This License explicitly affirms your unlimited
++permission to run the unmodified Program.  The output from running a
++covered work is covered by this License only if the output, given its
++content, constitutes a covered work.  This License acknowledges your
++rights of fair use or other equivalent, as provided by copyright law.
++
++  You may make, run and propagate covered works that you do not
++convey, without conditions so long as your license otherwise remains
++in force.  You may convey covered works to others for the sole purpose
++of having them make modifications exclusively for you, or provide you
++with facilities for running those works, provided that you comply with
++the terms of this License in conveying all material for which you do
++not control copyright.  Those thus making or running the covered works
++for you must do so exclusively on your behalf, under your direction
++and control, on terms that prohibit them from making any copies of
++your copyrighted material outside their relationship with you.
++
++  Conveying under any other circumstances is permitted solely under
++the conditions stated below.  Sublicensing is not allowed; section 10
++makes it unnecessary.
++
++  3. Protecting Users' Legal Rights From Anti-Circumvention Law.
++
++  No covered work shall be deemed part of an effective technological
++measure under any applicable law fulfilling obligations under article
++11 of the WIPO copyright treaty adopted on 20 December 1996, or
++similar laws prohibiting or restricting circumvention of such
++measures.
++
++  When you convey a covered work, you waive any legal power to forbid
++circumvention of technological measures to the extent such circumvention
++is effected by exercising rights under this License with respect to
++the covered work, and you disclaim any intention to limit operation or
++modification of the work as a means of enforcing, against the work's
++users, your or third parties' legal rights to forbid circumvention of
++technological measures.
++
++  4. Conveying Verbatim Copies.
++
++  You may convey verbatim copies of the Program's source code as you
++receive it, in any medium, provided that you conspicuously and
++appropriately publish on each copy an appropriate copyright notice;
++keep intact all notices stating that this License and any
++non-permissive terms added in accord with section 7 apply to the code;
++keep intact all notices of the absence of any warranty; and give all
++recipients a copy of this License along with the Program.
++
++  You may charge any price or no price for each copy that you convey,
++and you may offer support or warranty protection for a fee.
++
++  5. Conveying Modified Source Versions.
++
++  You may convey a work based on the Program, or the modifications to
++produce it from the Program, in the form of source code under the
++terms of section 4, provided that you also meet all of these conditions:
++
++    a) The work must carry prominent notices stating that you modified
++    it, and giving a relevant date.
++
++    b) The work must carry prominent notices stating that it is
++    released under this License and any conditions added under section
++    7.  This requirement modifies the requirement in section 4 to
++    "keep intact all notices".
++
++    c) You must license the entire work, as a whole, under this
++    License to anyone who comes into possession of a copy.  This
++    License will therefore apply, along with any applicable section 7
++    additional terms, to the whole of the work, and all its parts,
++    regardless of how they are packaged.  This License gives no
++    permission to license the work in any other way, but it does not
++    invalidate such permission if you have separately received it.
++
++    d) If the work has interactive user interfaces, each must display
++    Appropriate Legal Notices; however, if the Program has interactive
++    interfaces that do not display Appropriate Legal Notices, your
++    work need not make them do so.
++
++  A compilation of a covered work with other separate and independent
++works, which are not by their nature extensions of the covered work,
++and which are not combined with it such as to form a larger program,
++in or on a volume of a storage or distribution medium, is called an
++"aggregate" if the compilation and its resulting copyright are not
++used to limit the access or legal rights of the compilation's users
++beyond what the individual works permit.  Inclusion of a covered work
++in an aggregate does not cause this License to apply to the other
++parts of the aggregate.
++
++  6. Conveying Non-Source Forms.
++
++  You may convey a covered work in object code form under the terms
++of sections 4 and 5, provided that you also convey the
++machine-readable Corresponding Source under the terms of this License,
++in one of these ways:
++
++    a) Convey the object code in, or embodied in, a physical product
++    (including a physical distribution medium), accompanied by the
++    Corresponding Source fixed on a durable physical medium
++    customarily used for software interchange.
++
++    b) Convey the object code in, or embodied in, a physical product
++    (including a physical distribution medium), accompanied by a
++    written offer, valid for at least three years and valid for as
++    long as you offer spare parts or customer support for that product
++    model, to give anyone who possesses the object code either (1) a
++    copy of the Corresponding Source for all the software in the
++    product that is covered by this License, on a durable physical
++    medium customarily used for software interchange, for a price no
++    more than your reasonable cost of physically performing this
++    conveying of source, or (2) access to copy the
++    Corresponding Source from a network server at no charge.
++
++    c) Convey individual copies of the object code with a copy of the
++    written offer to provide the Corresponding Source.  This
++    alternative is allowed only occasionally and noncommercially, and
++    only if you received the object code with such an offer, in accord
++    with subsection 6b.
++
++    d) Convey the object code by offering access from a designated
++    place (gratis or for a charge), and offer equivalent access to the
++    Corresponding Source in the same way through the same place at no
++    further charge.  You need not require recipients to copy the
++    Corresponding Source along with the object code.  If the place to
++    copy the object code is a network server, the Corresponding Source
++    may be on a different server (operated by you or a third party)
++    that supports equivalent copying facilities, provided you maintain
++    clear directions next to the object code saying where to find the
++    Corresponding Source.  Regardless of what server hosts the
++    Corresponding Source, you remain obligated to ensure that it is
++    available for as long as needed to satisfy these requirements.
++
++    e) Convey the object code using peer-to-peer transmission, provided
++    you inform other peers where the object code and Corresponding
++    Source of the work are being offered to the general public at no
++    charge under subsection 6d.
++
++  A separable portion of the object code, whose source code is excluded
++from the Corresponding Source as a System Library, need not be
++included in conveying the object code work.
++
++  A "User Product" is either (1) a "consumer product", which means any
++tangible personal property which is normally used for personal, family,
++or household purposes, or (2) anything designed or sold for incorporation
++into a dwelling.  In determining whether a product is a consumer product,
++doubtful cases shall be resolved in favor of coverage.  For a particular
++product received by a particular user, "normally used" refers to a
++typical or common use of that class of product, regardless of the status
++of the particular user or of the way in which the particular user
++actually uses, or expects or is expected to use, the product.  A product
++is a consumer product regardless of whether the product has substantial
++commercial, industrial or non-consumer uses, unless such uses represent
++the only significant mode of use of the product.
++
++  "Installation Information" for a User Product means any methods,
++procedures, authorization keys, or other information required to install
++and execute modified versions of a covered work in that User Product from
++a modified version of its Corresponding Source.  The information must
++suffice to ensure that the continued functioning of the modified object
++code is in no case prevented or interfered with solely because
++modification has been made.
++
++  If you convey an object code work under this section in, or with, or
++specifically for use in, a User Product, and the conveying occurs as
++part of a transaction in which the right of possession and use of the
++User Product is transferred to the recipient in perpetuity or for a
++fixed term (regardless of how the transaction is characterized), the
++Corresponding Source conveyed under this section must be accompanied
++by the Installation Information.  But this requirement does not apply
++if neither you nor any third party retains the ability to install
++modified object code on the User Product (for example, the work has
++been installed in ROM).
++
++  The requirement to provide Installation Information does not include a
++requirement to continue to provide support service, warranty, or updates
++for a work that has been modified or installed by the recipient, or for
++the User Product in which it has been modified or installed.  Access to a
++network may be denied when the modification itself materially and
++adversely affects the operation of the network or violates the rules and
++protocols for communication across the network.
++
++  Corresponding Source conveyed, and Installation Information provided,
++in accord with this section must be in a format that is publicly
++documented (and with an implementation available to the public in
++source code form), and must require no special password or key for
++unpacking, reading or copying.
++
++  7. Additional Terms.
++
++  "Additional permissions" are terms that supplement the terms of this
++License by making exceptions from one or more of its conditions.
++Additional permissions that are applicable to the entire Program shall
++be treated as though they were included in this License, to the extent
++that they are valid under applicable law.  If additional permissions
++apply only to part of the Program, that part may be used separately
++under those permissions, but the entire Program remains governed by
++this License without regard to the additional permissions.
++
++  When you convey a copy of a covered work, you may at your option
++remove any additional permissions from that copy, or from any part of
++it.  (Additional permissions may be written to require their own
++removal in certain cases when you modify the work.)  You may place
++additional permissions on material, added by you to a covered work,
++for which you have or can give appropriate copyright permission.
++
++  Notwithstanding any other provision of this License, for material you
++add to a covered work, you may (if authorized by the copyright holders of
++that material) supplement the terms of this License with terms:
++
++    a) Disclaiming warranty or limiting liability differently from the
++    terms of sections 15 and 16 of this License; or
++
++    b) Requiring preservation of specified reasonable legal notices or
++    author attributions in that material or in the Appropriate Legal
++    Notices displayed by works containing it; or
++
++    c) Prohibiting misrepresentation of the origin of that material, or
++    requiring that modified versions of such material be marked in
++    reasonable ways as different from the original version; or
++
++    d) Limiting the use for publicity purposes of names of licensors or
++    authors of the material; or
++
++    e) Declining to grant rights under trademark law for use of some
++    trade names, trademarks, or service marks; or
++
++    f) Requiring indemnification of licensors and authors of that
++    material by anyone who conveys the material (or modified versions of
++    it) with contractual assumptions of liability to the recipient, for
++    any liability that these contractual assumptions directly impose on
++    those licensors and authors.
++
++  All other non-permissive additional terms are considered "further
++restrictions" within the meaning of section 10.  If the Program as you
++received it, or any part of it, contains a notice stating that it is
++governed by this License along with a term that is a further
++restriction, you may remove that term.  If a license document contains
++a further restriction but permits relicensing or conveying under this
++License, you may add to a covered work material governed by the terms
++of that license document, provided that the further restriction does
++not survive such relicensing or conveying.
++
++  If you add terms to a covered work in accord with this section, you
++must place, in the relevant source files, a statement of the
++additional terms that apply to those files, or a notice indicating
++where to find the applicable terms.
++
++  Additional terms, permissive or non-permissive, may be stated in the
++form of a separately written license, or stated as exceptions;
++the above requirements apply either way.
++
++  8. Termination.
++
++  You may not propagate or modify a covered work except as expressly
++provided under this License.  Any attempt otherwise to propagate or
++modify it is void, and will automatically terminate your rights under
++this License (including any patent licenses granted under the third
++paragraph of section 11).
++
++  However, if you cease all violation of this License, then your
++license from a particular copyright holder is reinstated (a)
++provisionally, unless and until the copyright holder explicitly and
++finally terminates your license, and (b) permanently, if the copyright
++holder fails to notify you of the violation by some reasonable means
++prior to 60 days after the cessation.
++
++  Moreover, your license from a particular copyright holder is
++reinstated permanently if the copyright holder notifies you of the
++violation by some reasonable means, this is the first time you have
++received notice of violation of this License (for any work) from that
++copyright holder, and you cure the violation prior to 30 days after
++your receipt of the notice.
++
++  Termination of your rights under this section does not terminate the
++licenses of parties who have received copies or rights from you under
++this License.  If your rights have been terminated and not permanently
++reinstated, you do not qualify to receive new licenses for the same
++material under section 10.
++
++  9. Acceptance Not Required for Having Copies.
++
++  You are not required to accept this License in order to receive or
++run a copy of the Program.  Ancillary propagation of a covered work
++occurring solely as a consequence of using peer-to-peer transmission
++to receive a copy likewise does not require acceptance.  However,
++nothing other than this License grants you permission to propagate or
++modify any covered work.  These actions infringe copyright if you do
++not accept this License.  Therefore, by modifying or propagating a
++covered work, you indicate your acceptance of this License to do so.
++
++  10. Automatic Licensing of Downstream Recipients.
++
++  Each time you convey a covered work, the recipient automatically
++receives a license from the original licensors, to run, modify and
++propagate that work, subject to this License.  You are not responsible
++for enforcing compliance by third parties with this License.
++
++  An "entity transaction" is a transaction transferring control of an
++organization, or substantially all assets of one, or subdividing an
++organization, or merging organizations.  If propagation of a covered
++work results from an entity transaction, each party to that
++transaction who receives a copy of the work also receives whatever
++licenses to the work the party's predecessor in interest had or could
++give under the previous paragraph, plus a right to possession of the
++Corresponding Source of the work from the predecessor in interest, if
++the predecessor has it or can get it with reasonable efforts.
++
++  You may not impose any further restrictions on the exercise of the
++rights granted or affirmed under this License.  For example, you may
++not impose a license fee, royalty, or other charge for exercise of
++rights granted under this License, and you may not initiate litigation
++(including a cross-claim or counterclaim in a lawsuit) alleging that
++any patent claim is infringed by making, using, selling, offering for
++sale, or importing the Program or any portion of it.
++
++  11. Patents.
++
++  A "contributor" is a copyright holder who authorizes use under this
++License of the Program or a work on which the Program is based.  The
++work thus licensed is called the contributor's "contributor version".
++
++  A contributor's "essential patent claims" are all patent claims
++owned or controlled by the contributor, whether already acquired or
++hereafter acquired, that would be infringed by some manner, permitted
++by this License, of making, using, or selling its contributor version,
++but do not include claims that would be infringed only as a
++consequence of further modification of the contributor version.  For
++purposes of this definition, "control" includes the right to grant
++patent sublicenses in a manner consistent with the requirements of
++this License.
++
++  Each contributor grants you a non-exclusive, worldwide, royalty-free
++patent license under the contributor's essential patent claims, to
++make, use, sell, offer for sale, import and otherwise run, modify and
++propagate the contents of its contributor version.
++
++  In the following three paragraphs, a "patent license" is any express
++agreement or commitment, however denominated, not to enforce a patent
++(such as an express permission to practice a patent or covenant not to
++sue for patent infringement).  To "grant" such a patent license to a
++party means to make such an agreement or commitment not to enforce a
++patent against the party.
++
++  If you convey a covered work, knowingly relying on a patent license,
++and the Corresponding Source of the work is not available for anyone
++to copy, free of charge and under the terms of this License, through a
++publicly available network server or other readily accessible means,
++then you must either (1) cause the Corresponding Source to be so
++available, or (2) arrange to deprive yourself of the benefit of the
++patent license for this particular work, or (3) arrange, in a manner
++consistent with the requirements of this License, to extend the patent
++license to downstream recipients.  "Knowingly relying" means you have
++actual knowledge that, but for the patent license, your conveying the
++covered work in a country, or your recipient's use of the covered work
++in a country, would infringe one or more identifiable patents in that
++country that you have reason to believe are valid.
++
++  If, pursuant to or in connection with a single transaction or
++arrangement, you convey, or propagate by procuring conveyance of, a
++covered work, and grant a patent license to some of the parties
++receiving the covered work authorizing them to use, propagate, modify
++or convey a specific copy of the covered work, then the patent license
++you grant is automatically extended to all recipients of the covered
++work and works based on it.
++
++  A patent license is "discriminatory" if it does not include within
++the scope of its coverage, prohibits the exercise of, or is
++conditioned on the non-exercise of one or more of the rights that are
++specifically granted under this License.  You may not convey a covered
++work if you are a party to an arrangement with a third party that is
++in the business of distributing software, under which you make payment
++to the third party based on the extent of your activity of conveying
++the work, and under which the third party grants, to any of the
++parties who would receive the covered work from you, a discriminatory
++patent license (a) in connection with copies of the covered work
++conveyed by you (or copies made from those copies), or (b) primarily
++for and in connection with specific products or compilations that
++contain the covered work, unless you entered into that arrangement,
++or that patent license was granted, prior to 28 March 2007.
++
++  Nothing in this License shall be construed as excluding or limiting
++any implied license or other defenses to infringement that may
++otherwise be available to you under applicable patent law.
++
++  12. No Surrender of Others' Freedom.
++
++  If conditions are imposed on you (whether by court order, agreement or
++otherwise) that contradict the conditions of this License, they do not
++excuse you from the conditions of this License.  If you cannot convey a
++covered work so as to satisfy simultaneously your obligations under this
++License and any other pertinent obligations, then as a consequence you may
++not convey it at all.  For example, if you agree to terms that obligate you
++to collect a royalty for further conveying from those to whom you convey
++the Program, the only way you could satisfy both those terms and this
++License would be to refrain entirely from conveying the Program.
++
++  13. Remote Network Interaction; Use with the GNU General Public License.
++
++  Notwithstanding any other provision of this License, if you modify the
++Program, your modified version must prominently offer all users
++interacting with it remotely through a computer network (if your version
++supports such interaction) an opportunity to receive the Corresponding
++Source of your version by providing access to the Corresponding Source
++from a network server at no charge, through some standard or customary
++means of facilitating copying of software.  This Corresponding Source
++shall include the Corresponding Source for any work covered by version 3
++of the GNU General Public License that is incorporated pursuant to the
++following paragraph.
++
++  Notwithstanding any other provision of this License, you have
++permission to link or combine any covered work with a work licensed
++under version 3 of the GNU General Public License into a single
++combined work, and to convey the resulting work.  The terms of this
++License will continue to apply to the part which is the covered work,
++but the work with which it is combined will remain governed by version
++3 of the GNU General Public License.
++
++  14. Revised Versions of this License.
++
++  The Free Software Foundation may publish revised and/or new versions of
++the GNU Affero General Public License from time to time.  Such new versions
++will be similar in spirit to the present version, but may differ in detail to
++address new problems or concerns.
++
++  Each version is given a distinguishing version number.  If the
++Program specifies that a certain numbered version of the GNU Affero General
++Public License "or any later version" applies to it, you have the
++option of following the terms and conditions either of that numbered
++version or of any later version published by the Free Software
++Foundation.  If the Program does not specify a version number of the
++GNU Affero General Public License, you may choose any version ever published
++by the Free Software Foundation.
++
++  If the Program specifies that a proxy can decide which future
++versions of the GNU Affero General Public License can be used, that proxy's
++public statement of acceptance of a version permanently authorizes you
++to choose that version for the Program.
++
++  Later license versions may give you additional or different
++permissions.  However, no additional obligations are imposed on any
++author or copyright holder as a result of your choosing to follow a
++later version.
++
++  15. Disclaimer of Warranty.
++
++  THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
++APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
++HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY
++OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
++THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM
++IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF
++ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
++
++  16. Limitation of Liability.
++
++  IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
++WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
++THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
++GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
++USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
++DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD
++PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),
++EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
++SUCH DAMAGES.
++
++  17. Interpretation of Sections 15 and 16.
++
++  If the disclaimer of warranty and limitation of liability provided
++above cannot be given local legal effect according to their terms,
++reviewing courts shall apply local law that most closely approximates
++an absolute waiver of all civil liability in connection with the
++Program, unless a warranty or assumption of liability accompanies a
++copy of the Program in return for a fee.
++
++                     END OF TERMS AND CONDITIONS
++
++            How to Apply These Terms to Your New Programs
++
++  If you develop a new program, and you want it to be of the greatest
++possible use to the public, the best way to achieve this is to make it
++free software which everyone can redistribute and change under these terms.
++
++  To do so, attach the following notices to the program.  It is safest
++to attach them to the start of each source file to most effectively
++state the exclusion of warranty; and each file should have at least
++the "copyright" line and a pointer to where the full notice is found.
++
++    PM2 Process manager for Node.JS
++    Copyright (C) 2013-2016 Strzelewicz Alexandre
++
++    This program is free software: you can redistribute it and/or modify
++    it under the terms of the GNU Affero General Public License as published by
++    the Free Software Foundation, either version 3 of the License, or
++    (at your option) any later version.
++
++    This program is distributed in the hope that it will be useful,
++    but WITHOUT ANY WARRANTY; without even the implied warranty of
++    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++    GNU Affero General Public License for more details.
++
++    You should have received a copy of the GNU Affero General Public License
++    along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++Also add information on how to contact you by electronic and paper mail.
++
++  If your software can interact with users remotely through a computer
++network, you should also make sure that it provides a way for users to
++get its source.  For example, if your program is a web application, its
++interface could display a "Source" link that leads users to an archive
++of the code.  There are many ways you could offer source, and different
++solutions will be better for different programs; see section 13 for the
++specific requirements.
++
++  You should also get your employer (if you work as a programmer) or school,
++if any, to sign a "copyright disclaimer" for the program, if necessary.
++For more information on this, and how to apply and follow the GNU AGPL, see
++<http://www.gnu.org/licenses/>.
++
++
++--- ALEXANDRE STRZELEWICZ

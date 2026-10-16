@@ -1,0 +1,46 @@
+{
+  "status": "B3 LOCAL VALIDATED (conditional on B4) / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+  "launches": [
+    {
+      "caller": "Operations.start(name)",
+      "before": "canonical gates, generation/exit/selection/restore/ownership/config, exclusive intent, fresh start_mode",
+      "delta": "none: AST of method unchanged after accepted B2 transform"
+    },
+    {
+      "caller": "System.start(root,name)",
+      "before": "daemon-presence observation via System.apps",
+      "oldTransport": "PM2 start replaceable candidate.ecosystem.config.cjs --only NAME",
+      "newTransport": "authenticated pm2_input.start -> sealed memfd -> fixed protected pm2-input.json/FD -> PM2 start --only NAME",
+      "run": "canonical System.run retains CLEAN/subprocess/child_transport; only adds pass_fds keyword"
+    },
+    {
+      "caller": "pm2_input.start",
+      "authority": "same Context.start_mode before snapshot and immediately before subprocess; same snapshot DAG and authenticated Loader parser",
+      "data": "candidate CJS must equal canonical rendered(JSON); no executable require dependencies allowed",
+      "closure": "CJS -> JSON + canonical parser; ops imports pm2_input -> canonical parser and CJS; no reverse edges/cycles",
+      "ORIGINAL": "return-before-commit own config/profile and ORIGINAL permit; no switch/overlay dependency",
+      "recovery": "return/return-partial use CANDIDATE-specific recovery permit",
+      "PRESTOP": "no start invocation; unchanged recovery path"
+    },
+    {
+      "caller": "PM2 6.0.14 _startJson",
+      "realInProof": "fs.readFileSync immutable inherited FD path + Common.parseConfig JSON branch",
+      "boundary": "capture at verifyConfs; normalization, IPC, daemon and process creation NOT exercised"
+    }
+  ],
+  "futureRootPrerequisite": {
+    "path": "/usr/local/libexec/re7/pm2-input.json",
+    "kind": "root-owned symlink to /proc/self/fd, all ancestors root-owned non-writable by group/others",
+    "purpose": "fixed .json classifier for actual PM2; no new preparation symlink or secret spool",
+    "installed": false,
+    "requiresB4": "owner-reviewed provisioning/toolchain pins and full concrete certification; no installer added here"
+  },
+  "unchangedTransports": [
+    "B1 helper private diagnostic query",
+    "B2 Bridge.protocol/delegated and Bridge.node/Node/Python baseline lineage",
+    "helper/sudoers actions and permit emission"
+  ],
+  "open": [
+    "B4 concrete root library/alias/PM2 toolchain install and real four-mode transitive package closure"
+  ]
+}

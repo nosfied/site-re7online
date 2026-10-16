@@ -1,0 +1,259 @@
+{
+  "baseCommit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+  "pm2": {
+    "version": "6.0.14",
+    "gitHead": "ff1ca974afada8730aa55f8ed1df40e700cedbcb",
+    "tarball": "https://registry.npmjs.org/pm2/-/pm2-6.0.14.tgz",
+    "integrity": "sha512-wX1FiFkzuT2H/UUEA8QNXDAA9MMHDsK/3UHj6Dkd5U7kxyigKDA5gyDw78ycTQZAuGCLWyUX5FiXEuVQWafukA==",
+    "tarballSha256": "a309112e6d89ed8adff54cb32831df3c79cdc6191e6085a8ea7007303fe49ce9",
+    "verification": "npm dist.integrity SHA512 verified before extraction; no npm installation",
+    "excerpts": {
+      "Common-config.excerpt.cjs": {
+        "upstream": "lib/Common.js",
+        "upstreamSha256": "4302a338ff59d8eccf52982b6623ada5e7d1edaf033e49b8679de93751628f23",
+        "deliveredSha256": "878d218c7d75878f926d8c3f69a60f18965cdc3f8b54feedccf103b43e81da06",
+        "rangeStartLine": 269,
+        "rangeLines": 65
+      },
+      "API-startJson.prefix.txt": {
+        "upstream": "lib/API.js",
+        "upstreamSha256": "5490f579b989bcc162f81ca1dfc6d4a0e35fcb7586dd22f0e4b765724639d904",
+        "deliveredSha256": "e79e599fbfd2ee5a8d33b9ac88e698e661489e616beb6a33be8b4b96044eb5d6",
+        "rangeStartLine": 900,
+        "rangeLines": 60
+      }
+    },
+    "license": "vendor/PM2-LICENSE",
+    "licenseSha256": "34d35a3baf753030cac1a1d0d50570eb6bb37be330edb7328e427072fa90b5a5",
+    "licenseSource": "package/GNU-AGPL-3.0.txt (package/LICENSE points to this filename)",
+    "copyright": "Copyright 2013-2022 the PM2 project authors. All rights reserved."
+  },
+  "privateSourcesRequired": false,
+  "repositoryInputs": [
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/ecosystem_contract.py",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "b1b5816574b351d924777959208ae159dac2ed2b95536beca0a4350cce6f232a"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/integration.py",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "f633a350ffe6ec4be24bf13c24b59efd2ec6095ee72485fa44507e69c506b254"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/authority.py",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "1a2a9ce5f928aa524b08789c5c5a4aafcbb0b6d6106c12251e677ff76b0ba92f"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/verified_loader.py",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "f1c531ee45a70a3ef23e0a38cd024f358cb7e8e2ac37a522cd0ed51b59b08793"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/bootstrap.py",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "97aa1f2e0317bc73b5127a8e19cf8c95f99a30aea35eb60fb490ac032f906c15"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/child_transport.py",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "baefd76ac4fe4b2cf3fc40a7ae43aa3b2b131ebb9c19b7ceeccab441fd9e9292"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/test_r3.py",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "acc2af27105af4f8301967368eab1bd54103c1984cb924c6874871a54588f75f"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/test_connected.py",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "d5411f4d613177d283f83bf68ac8563ea481b2e989a3ffd85b2b764e0b962404"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/admit_gates.py.2681e63919b9.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "2681e63919b981291d376237975e7e8dd7379ccbc0f323a55f948487730705c6"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/automation-fence.nft.62342f28b9f0.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "62342f28b9f011c916b8483487bb75f7211a08ffc5846c303f9a0ab0000c2797"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/baseline_contract.py.9af1a11a3605.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/canonical_renew_proofs.py.4427aa5e3108.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/capture_imports.py.52d6e914872e.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/check_current.py.6f840789aac8.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "6f840789aac823e0e6f84c7fc1968d6869099d4e7aec01bad688089770fc4cb5"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.7ca493142706.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.ce953df4a365.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.f867b828cf28.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/contain.py.af61f2f3a0d0.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_cli.py.3ae51bd07ca9.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "3ae51bd07ca9b8d299f347085877de80247831bcd665f489e934b460e38753b1"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_contract.py.9ca2208c5c18.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "9ca2208c5c18787aa2e3696636b17334c3362caa6991e3e4cd2bde2e363958eb"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_start_gate.py.094ec4a5bbaa.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "094ec4a5bbaae7c218bd1269346a9d9d102d6cb198dd81d92cd90fe6f97798f4"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ecosystem_contract.py.7bfab72d4afd.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/event_overlay.py.7c3db254455f.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "7c3db254455f12a455fabb1e9936be0bced2caefcb8fcbdec2e78997c14f10f4"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/open.cjs.d9c76eea6e83.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.33999cf29b7d.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "33999cf29b7dd548ba185a301331ef09fea7c6fd40cd32e8b846bd13fcdb8bb1"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/pre_install.py.8e45c10319f2.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "8e45c10319f298f69aa812df6996e950afbc0d2cdca5b06c25499b8bcd6f8f6d"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/preparation-bindings.cjs.edf775c12520.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/privileged_output.py.93a114516a19.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/read-state.py.4c97c5259acb.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/recover-partial.py.7af3c2717be1.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore-controls.py.bebe88f0291c.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore_contract.py.af0d552fc5fd.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/root_readonly.py.cb63a97fffe7.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "cb63a97fffe735fd52c80eed872751873593c23a3f8b3e3663b6c0fd741aa7ab"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/sequencer.py.0a4d8b67f033.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "0a4d8b67f03335403ae2addf93628519423c350eb8256bbe292373ffc36d9b7e"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/start-one.py.1959dac9717e.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/stop-pair.py.1f023b157796.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/unfence.py.d5bb4c2f5543.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/validate.cjs.5de8127d63e6.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work-frozen.cjs.f0b64320f8be.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work.cjs.1fb853b60ab9.source",
+      "commit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+      "sha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b"
+    }
+  ]
+}

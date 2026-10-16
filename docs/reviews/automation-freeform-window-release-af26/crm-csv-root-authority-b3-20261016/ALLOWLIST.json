@@ -1,0 +1,27 @@
+{
+  "baseCommit": "1ad3507bea96dc2c5aa12debdabf1c7e70ece733",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/CONSUMER_DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/FULL_DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/LAUNCH_INVENTORY.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/SOURCE_PROVENANCE.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/TEST_OUTPUT.txt",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/integration.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_boundary.cjs",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_input.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/reproduce.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/test_pm2.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/API-startJson.prefix.txt",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/Common-config.excerpt.cjs",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/vendor/PM2-LICENSE",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ],
+  "excluded": "all preexisting untracked/private work; historical generations; operational bindings; runtime packages",
+  "patchScope": "all allowlisted files except FULL_DELTA.patch and MANIFEST.sha256; CONSUMER_DELTA only shows pure future transformations"
+}

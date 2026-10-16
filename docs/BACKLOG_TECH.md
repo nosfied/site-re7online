@@ -1,5 +1,8 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**B3 16/10 — consumo PM2 validado localmente, fechamento condicionado a B4.** [Delta/provas](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md): System conserva barreiras e passa JSON autenticado por FD selado;25 PASS incluindo cadeia Operations→System→parser PM2 e API→worker, sem daemon/processos reais. Alias root/PM2 toolchain e quatro manifests concretos ainda exigem B4; nenhuma instalação/emissão/geração. B1/B2/R3 preservados. INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso.
+
+
 **CSV — B1 diagnóstico inicial16/10: FECHADO LOCALMENTE / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Consulta ligada ao transporte privado canônico,19 provas e limites](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/REPORT.md). Bytes privados e resumo no journal existentes; rota é somente custódia e deve coincidir com window autenticado antes do import. Sem fallback/retry/emissão. B2 preservado; B3/B4 abertos. CSV suspenso; sem VPS, instalação, pacote operacional ou janela. Históricos preservados.
 
 **CSV — B2 continuidade/filhos16/10: FECHADO LOCALMENTE nas cadeias declaradas / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Cadeias em processos reais, vínculo E1 entre Contexts,24 provas e simulações](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/REPORT.md). Comparação de execução antes do Loader e nos bindings duráveis delegated; consulta root independente preservada. B1/B3/B4 continuam abertos. CSV suspenso; sem autoridade instalada, VPS, geração ou janela. R3/PRESTOP/retornos preservados; históricos intocados.

@@ -1,0 +1,60 @@
+  _startJson (file, opts, action, pipe, cb) {
+    var config     = {};
+    var appConf    = {};
+    var staticConf = [];
+    var deployConf = {};
+    var apps_info  = [];
+    var that = this;
+
+    /**
+     * Get File configuration
+     */
+    if (typeof(cb) === 'undefined' && typeof(pipe) === 'function') {
+      cb = pipe;
+    }
+    if (typeof(file) === 'object') {
+      config = file;
+    } else if (pipe === 'pipe') {
+      config = Common.parseConfig(file, 'pipe');
+    } else {
+      var data = null;
+
+      var isAbsolute = path.isAbsolute(file)
+      var file_path = isAbsolute ? file : path.join(that.cwd, file);
+
+      debug('Resolved filepath %s', file_path);
+
+      try {
+        data = fs.readFileSync(file_path);
+      } catch(e) {
+        Common.printError(conf.PREFIX_MSG_ERR + 'File ' + file +' not found');
+        return cb ? cb(Common.retErr(e)) : that.exitCli(conf.ERROR_EXIT);
+      }
+
+      try {
+        config = Common.parseConfig(data, file);
+      } catch(e) {
+        Common.printError(conf.PREFIX_MSG_ERR + 'File ' + file + ' malformated');
+        console.error(e);
+        return cb ? cb(Common.retErr(e)) : that.exitCli(conf.ERROR_EXIT);
+      }
+    }
+
+    /**
+     * Alias some optional fields
+     */
+    if (config.deploy)
+      deployConf = config.deploy;
+    if (config.static)
+      staticConf = config.static;
+    if (config.apps)
+      appConf = config.apps;
+    else if (config.pm2)
+      appConf = config.pm2;
+    else
+      appConf = config;
+    if (!Array.isArray(appConf))
+      appConf = [appConf];
+
+    if ((appConf = Common.verifyConfs(appConf)) instanceof Error)
+      return cb ? cb(appConf) : that.exitCli(conf.ERROR_EXIT);

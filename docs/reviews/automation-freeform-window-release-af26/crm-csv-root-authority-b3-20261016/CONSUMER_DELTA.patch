@@ -1,0 +1,29 @@
+--- a/future-mode/ops.py
++++ b/future-mode/ops.py
+@@ -49 +49 @@
+-    def run(self, args, text=None):
++    def run(self, args, text=None, *, pass_fds=()):
+@@ -52 +52 @@
+-        return subprocess.check_output(args, input=text, text=True, env=CLEAN, stderr=subprocess.PIPE)
++        return subprocess.check_output(args, input=text, text=True, env=CLEAN, stderr=subprocess.PIPE, pass_fds=pass_fds)
+@@ -168 +168,2 @@
+-        self.run([PM, 'start', str(root / 'candidate.ecosystem.config.cjs'), '--only', name])
++        from pm2_input import start
++        start(self, root, name, PM)
+--- a/future-mode/ecosystem_contract.py
++++ b/future-mode/ecosystem_contract.py
+@@ -21,3 +21 @@
+-def source(path):
+-    path = Path(path)
+-    require(path.is_file() and not path.is_symlink(), 'ecosystem_source_missing_or_symlink')
++def source_bytes(raw):
+@@ -31 +29 @@
+-        value = json.loads(path.read_text(), object_pairs_hook=unique,
++        value = json.loads(raw.decode('utf-8') if isinstance(raw, bytes) else raw, object_pairs_hook=unique,
+@@ -44,0 +43,6 @@
++
++
++def source(path):
++    path = Path(path)
++    require(path.is_file() and not path.is_symlink(), 'ecosystem_source_missing_or_symlink')
++    return source_bytes(path.read_bytes())
