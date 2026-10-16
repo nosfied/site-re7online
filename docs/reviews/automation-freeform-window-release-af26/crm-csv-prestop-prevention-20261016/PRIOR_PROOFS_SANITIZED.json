@@ -1,0 +1,77 @@
+{
+  "status": "LOCAL VALIDATED / NOT DEPLOYED / NOT WINDOW READY",
+  "baseCommit": "bd82db403e1f4db46525e24d0aef479941af0d74",
+  "testMethods": 31,
+  "tests": [
+    "test_valid_all_eight_profiles_and_real_operations",
+    "test_real_775_parent",
+    "test_missing_binding_same_denial_in_operations",
+    "test_unreadable_binding",
+    "test_unreadable_event_parent",
+    "test_symlink_event_parent_denied",
+    "test_missing_profile",
+    "test_bad_shape_and_duplicate_keys",
+    "test_data_link_without_reference",
+    "test_different_target",
+    "test_unrelated_reference",
+    "test_relative_reference",
+    "test_missing_entrypoint",
+    "test_symlinked_bindings_file",
+    "test_broken_data_link",
+    "test_script_outside_cwd",
+    "test_non_string_cwd_denies_identifiably",
+    "test_unreadable_binding_metadata",
+    "test_unreadable_release_reference",
+    "test_binding_target_alias_denied",
+    "test_data_map_is_checked_even_for_single_app_start",
+    "test_verifier_does_not_write",
+    "test_revalidate_at_operations_use_after_file_disappears",
+    "test_final_event_consumer_rechecks_parent",
+    "test_current_checker_shared_gate_precedes_old_checks",
+    "test_cli_775_denies_before_any_effect",
+    "test_cli_missing_binding_denies_before_any_effect",
+    "test_cli_binding_reference_drift_denies_before_any_effect",
+    "test_cli_valid_reaches_simulated_contain_stop_in_order",
+    "test_cli_recheck_denies_drift_before_close_contain_stop",
+    "test_unknown_consumer_source_denies"
+  ],
+  "focusedTestExit": 0,
+  "sourceConsumers": {
+    "mode/ops.py": {
+      "inputSource": "local-evidence/crm-csv-staging-20261016/incident-6683-v4-csv-staged-v2-20261016T094000Z/return-before-commit/ops.py",
+      "inputSha256": "4dc99143f2754c7ff0c9ac96e8be3f7b193f604fae03cc3da0ad0518ecbcbd3b",
+      "futureSourceSha256": "affce930cfaee750cd8bbe5374b31d04389143417906107fbc807b2cff6dd3b5"
+    },
+    "window/event_overlay.py": {
+      "inputSource": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/event_overlay.py",
+      "inputSha256": "034faaf2e14e10031f8eb2222ab2aabdd30e92043b3a626ef28e77935f0d8a8d",
+      "futureSourceSha256": "7c3db254455f12a455fabb1e9936be0bced2caefcb8fcbdec2e78997c14f10f4"
+    },
+    "window/csv_cli.py": {
+      "inputSource": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/csv_cli.py",
+      "inputSha256": "19f69a40b912d96b05301cdf4490b7fe30019cb3b962eae92a357b2b4810f77c",
+      "futureSourceSha256": "6b178a95c39e6aa65c1fd9d736fd6db130e07a65f2d90897ad3cd245212f176d"
+    },
+    "window/check_current.py": {
+      "inputSource": "local-evidence/crm-csv-staging-20261016/incident-6683-v4-csv-staged-v2-20261016T094000Z/window/check_current.py",
+      "inputSha256": "7a35fd791758d8d0d049db4b15614c2797d2af7d729ec66f33b806535361c996",
+      "futureSourceSha256": "6f840789aac823e0e6f84c7fc1968d6869099d4e7aec01bad688089770fc4cb5"
+    }
+  },
+  "instrumentation": {
+    "actual": "Shared predicates; complete Operations/overlay/CLI/check_current source bodies loaded as future versions; real fixture files, modes775, links, JSON and resolution",
+    "simulated": "Ancestors outside fixtures; unaffected Event inventory/hash authority in overlay negative test; unrelated CLI authorities; close/contain/stop OS effects",
+    "productionEffects": false
+  },
+  "historicalConsumersModified": false,
+  "operationalGenerationProduced": false,
+  "sshOrVpsUsed": false,
+  "builds": 0,
+  "commitOrPush": false,
+  "outOfScope": [
+    "Original return exposure in CLI/root policy",
+    "STOPPED_UNSELECTED classification",
+    "Integrated recovery readiness",
+    "Operational producer/sealing/window execution"
+  ]
+}

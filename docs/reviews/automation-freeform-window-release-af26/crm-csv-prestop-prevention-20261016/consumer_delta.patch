@@ -1,0 +1,58 @@
+--- a/EXCERPT/mode/ops.py
++++ b/EXCERPT/mode/ops.py
+@@ -9,9 +9,5 @@
+ 
+ class System:
+     def validate_bindings(self, window, config):
+-        bindings = json.loads((window / 'path-bindings.private.json').read_text())
+-        for app in config.values():
+-            require(Path(app['cwd']).is_dir() and Path(app['script']).is_file(), 'release_path_missing')
+-            data = bindings.get(app['cwd'] + '/.data')
+-            if data:
+-                require(Path(app['cwd'], '.data').is_symlink() and str(Path(app['cwd'], '.data').resolve()) == data, 'auth_binding_drift')
++        from prestop_contract import path_bindings
++        return path_bindings(window, config)
+--- a/FUTURE/window/event_overlay.py
++++ b/FUTURE/window/event_overlay.py
+@@ -11,7 +11,8 @@
+     event_consumers(c,live=True);event_policy(source,c['targetSha256']);s=target.lstat()
+     require(stat.S_ISREG(s.st_mode)and not target.is_symlink()and s.st_nlink==1 and s.st_uid==os.getuid()==c['uid']and stat.S_IMODE(s.st_mode)==c['mode'],'event_source_owner_mode')
+     require(not os.listxattr(target,follow_symlinks=False),'event_source_xattrs_require_separate_preservation')
+-    for parent in target.parents:require(parent.is_dir()and not parent.is_symlink()and not(parent.stat().st_mode&0o022),'event_source_parent')
++    from prestop_contract import event_parents
++    event_parents(target)
+     if sha(target)==c['targetSha256']:
+         require(not(w/'event-overlay.intent.private.json').exists()or(w/'event-overlay.receipt.private.json').exists(),'event_overlay_uncertain');return
+     require(sha(target)==c['beforeSha256'],'event_source_drift')
+--- a/FUTURE/window/csv_cli.py
++++ b/FUTURE/window/csv_cli.py
+@@ -43,7 +43,8 @@
+     p=s.root;imports_proven(p,mode);s.finish(mode);current=check_current(p,'after');reset(p)
+     write(p/'window/csv-complete.receipt.private.json',{'result':'CSV_API_COMPLETE_CANDIDATE_PRESERVED','mode':mode,'current':current,'gatesFalse':True,'targetProfileSha256':sha(p/'window/target.profile.private.json')})
+ def execute(p):
+-    p=Path(p);w=p/'window';check(p,live=True)
++    from prestop_contract import validate_pre_stop
++    p=Path(p);validate_pre_stop(p);w=p/'window';check(p,live=True)
+     with(p.parent/'.incident-6683-window.lock').open('a+')as lock,(w/'sequencer.lock').open('a+')as inner:
+         fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB);fcntl.flock(inner.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+         require(not(w/'csv-execution.intent.private.json').exists(),'execution_consumed_inspection_only')
+@@ -53,6 +54,7 @@
+         check_current(p);s=Sequencer(Bridge(p));s.eligible();s.capture_baseline();write(w/'csv-baseline.private.json',s.baseline)
+         write(w/'csv-execution.intent.private.json',{'admissionSha256':sha(w/'csv-admission.receipt.private.json'),'automaticRetry':False})
+         try:
++            validate_pre_stop(p)
+             s.close_then_preflight();s.controls_enter();s.action('switch','stop-pair');s.verify_stopped('switch')
+             imports_proven(p,'switch')
+             from event_overlay import apply
+--- a/FUTURE/window/check_current.py
++++ b/FUTURE/window/check_current.py
+@@ -4,7 +4,8 @@
+ from csv_contract import check,read,require,sha
+ 
+ def check_current(p,phase='before'):
+- p=Path(p);check(p,live=True)
++ from prestop_contract import validate_pre_stop
++ p=Path(p);validate_pre_stop(p);check(p,live=True)
+  from sequencer import Bridge
+  from scheduled_controls import ScheduledControls
+  b=Bridge(p);ScheduledControls(p/'window',lambda args:subprocess.check_output(args,text=True,stderr=subprocess.PIPE,timeout=10)).verify('before')

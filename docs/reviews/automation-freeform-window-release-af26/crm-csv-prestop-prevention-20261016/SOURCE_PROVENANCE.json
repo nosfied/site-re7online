@@ -1,0 +1,48 @@
+{
+  "baseCommit": "bd82db403e1f4db46525e24d0aef479941af0d74",
+  "versioned": {
+    "event_overlay.py": {
+      "commit": "bd82db403e1f4db46525e24d0aef479941af0d74",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/event_overlay.py",
+      "sha256": "034faaf2e14e10031f8eb2222ab2aabdd30e92043b3a626ef28e77935f0d8a8d"
+    },
+    "csv_cli.py": {
+      "commit": "bd82db403e1f4db46525e24d0aef479941af0d74",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/csv_cli.py",
+      "sha256": "19f69a40b912d96b05301cdf4490b7fe30019cb3b962eae92a357b2b4810f77c"
+    },
+    "csv_boundary.py": {
+      "commit": "bd82db403e1f4db46525e24d0aef479941af0d74",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/csv_boundary.py",
+      "sha256": "73d5c6917a3476770c16412be8f9cecb4dffc0e222080169de4c64f427113a4e"
+    }
+  },
+  "retainedExtracts": {
+    "operations_bindings_original.py": {
+      "originalPath": "local-evidence/crm-csv-staging-20261016/incident-6683-v4-csv-staged-v2-20261016T094000Z/return-before-commit/ops.py",
+      "originalSha256": "4dc99143f2754c7ff0c9ac96e8be3f7b193f604fae03cc3da0ad0518ecbcbd3b",
+      "ranges": [
+        [
+          25,
+          27
+        ],
+        [
+          182,
+          188
+        ]
+      ],
+      "deliveredSha256": "f167a1d9e13c93663a030eaf76ebb0e3eec87e969cae537d20c4e872a570082b",
+      "scope": "Exact require and System.validate_bindings bodies; import/class scaffolding only. No operational methods or entrypoint."
+    },
+    "check_current_original.py": {
+      "originalPath": "local-evidence/crm-csv-staging-20261016/incident-6683-v4-csv-staged-v2-20261016T094000Z/window/check_current.py",
+      "originalSha256": "7a35fd791758d8d0d049db4b15614c2797d2af7d729ec66f33b806535361c996",
+      "deliveredSha256": "7a35fd791758d8d0d049db4b15614c2797d2af7d729ec66f33b806535361c996",
+      "scope": "Complete real checker source; functions imported, CLI not run."
+    }
+  },
+  "sanitization": {
+    "review": "All delivered source text inspected; code only, no credential/config payload, tenant rows or production data. Original code bytes retained in declared excerpts.",
+    "originalsModified": false
+  }
+}

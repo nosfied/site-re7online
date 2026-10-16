@@ -1,0 +1,15 @@
+{
+  "HARDENING_FOR_SEPARATE_REVIEW.md": "4d2f8014cfdb11a40541dabceb31b49dfbc00ea5dd3c533ded3dbae238012305",
+  "PRIOR_PROOFS_SANITIZED.json": "ed907d380ae8bf84d9ca833c0f599de552eb1c7d7da526cc755d5534dc1ef93e",
+  "PROOFS_SANITIZED.json": "79832e3314e77ab7ac465ad8634351a911d13f58c06adf9b85d57c77b7ce8285",
+  "REPORT.md": "7c26fee84c92e918ffd928d2828b32feb24fde5ccfbf0657e9ba57c07a3d0416",
+  "SOURCE_PROVENANCE.json": "8bf1ebc41d24685e4b0b676874efe93a9dad59c1b9287a037f5939b3e8be2ecb",
+  "consumer_delta.patch": "01e319da0440346efa3d163aa5430cd033087aa52ee123664512744ca5b71402",
+  "future_sources.py": "52542c6b19b88a63eab41e936e4317d70862e3138aa60ed29048071c56e0293a",
+  "prestop_contract.py": "208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b",
+  "reference_sources/check_current_original.py": "7a35fd791758d8d0d049db4b15614c2797d2af7d729ec66f33b806535361c996",
+  "reference_sources/operations_bindings_original.py": "f167a1d9e13c93663a030eaf76ebb0e3eec87e969cae537d20c4e872a570082b",
+  "reproduce.py": "789a2be58c9c08989f94e67744dbfd93a6900dc7bd62d26144873b0b5b7eb589",
+  "source_inputs.py": "0a293cca97160411a4fce08d4ecba11e6927e7603d1b56b2a371586141c56bad",
+  "test_prevention.py": "c63d620f962e7540b57d2b8f7defa0192a60feca0ff6a49c5eb0ac4a1251cd38"
+}
