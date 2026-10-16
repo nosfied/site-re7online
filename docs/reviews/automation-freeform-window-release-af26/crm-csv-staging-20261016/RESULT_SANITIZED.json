@@ -1,0 +1,107 @@
+{
+  "result": "READONLY_PREPARATION_PASS",
+  "generation": "incident-6683-v4-csv-staged-v2-20261016T094000Z",
+  "reviewSha256": "06459884b2822c1fc1b252ced894f14b599d907133592173563aac6d7bb55819",
+  "policySha256": "4bc3454db8009dd6aef4db7c7e331c79278d37326c2438b9f668c6610a6b74b3",
+  "installerSha256": "e6523f6e0fcd27c78562b6a64ead60e642768fae6900a29b732d42d3ab21b921",
+  "controlArchiveSha256": "8d5ed9979c95ba247e3554b02e50a1ecfc7926a3c90791117b7e4f8402d1250b",
+  "checks": [
+    {
+      "consumer": "concrete_package",
+      "exitCode": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutSha256": "6d2b83c706ee657dd4e1c1b71be2d869f01f1fe578f467eb520d9b4e672d8fdd"
+    },
+    {
+      "consumer": "ecosystems",
+      "exitCode": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutSha256": "d66325f536eb0c959ec8503a8c2307f9a72c35181fcc456a4adad2a7130bf413"
+    },
+    {
+      "consumer": "baselines",
+      "exitCode": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutSha256": "5729a190914acb073152079be4af5bd5619c56df27dc562739ce30009a40d308"
+    },
+    {
+      "consumer": "current_cli",
+      "exitCode": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutSha256": "6754b6073ee6a872ce166aa282f0cdcbfa8845795336371727ca92460ad31e34"
+    },
+    {
+      "consumer": "schema_frontier",
+      "exitCode": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutSha256": "8925bddf09a9a50edefe6a85871e56cb832fd9f246620ebd7681831ff27f0a25"
+    },
+    {
+      "consumer": "restore_switch",
+      "exitCode": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutSha256": "fee1f9bd26c447cbd0efa71404dd758436fd79ae92ec5343cd322814b53f350c"
+    },
+    {
+      "consumer": "restore_return",
+      "exitCode": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutSha256": "f44c012cc74716942606e82b3ece5760ccb29fa87e628a2bfe2e6d21e012a5f8"
+    },
+    {
+      "consumer": "restore_return-partial",
+      "exitCode": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutSha256": "3d7195917725d3999c037e2b778f0f7cb343c56d610e03af31f9f4ee6be884b5"
+    },
+    {
+      "consumer": "restore_return-before-commit",
+      "exitCode": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutSha256": "753356d075ae6ed36c151b5c948fc30930d8b722e93c0ff49f28762f82dfc9a3"
+    }
+  ],
+  "minimumAvailableBytes": 16421658624,
+  "walBytes": 83886080,
+  "schemaFrontier": {
+    "result": "LIVE_SCHEMA_RESTORE_FRONTIER_MATCH",
+    "schemaDigest": "142a2b61fd5a366bb770bd4274d6cdf7f0850808d26f4e03b7cdf4ffe7acd71d",
+    "backupExecuted": false
+  },
+  "runtimeAllocatedBytes": 1308917760,
+  "actualHistoricalCsvOperations": 20,
+  "actualHistoricalCreationEvents": 1764,
+  "observedUnknownOperations": 0,
+  "liveImportExitCertified": false,
+  "backupRenewed": false,
+  "rootShortCapture": false,
+  "gatesFalse": true,
+  "processActions": 0,
+  "eventOverlayApplied": false,
+  "runtimeArtifactTransfers": 1,
+  "runtimeExtractions": 1,
+  "firstGenerationPreserved": "DENY_preparation_path_denied",
+  "readUtc": "2026-10-16T09:49:30.296905+00:00",
+  "sourceIdentities": {
+    "re7-admin-front": {
+      "pid": 188897,
+      "ticks": "2161347676"
+    },
+    "re7-whatsapp-agent": {
+      "pid": 774414,
+      "ticks": "2186133753"
+    },
+    "re7-whatsapp-web-worker": {
+      "pid": 774607,
+      "ticks": "2186134764"
+    }
+  },
+  "diagnosticsSha256": "36add233d46afe63b71222a3bb4a3939c9bfb77eb4a2a98e1f20720787f4b2bc",
+  "privateCustody": {
+    "ownerAccessible": true,
+    "directoryMode": "700",
+    "fileModes": "600",
+    "files": 7,
+    "physicalIndependentReplica": false
+  }
+}

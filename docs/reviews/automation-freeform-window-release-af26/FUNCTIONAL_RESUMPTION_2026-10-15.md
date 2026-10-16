@@ -1,5 +1,8 @@
 # Retomada funcional — prioridade e próximo trabalho local
 
+**Staging16/10:** [CSV inativo conferido na VPS](crm-csv-staging-20261016/REPORT.md), sem instalação/admissão. RPO/root apenas junto da janela, após revisão; nenhuma rotação, retenção ou limpeza retomada.
+
+
 **Atualização16/10:** [composição operacional CSV preparada localmente](crm-csv-operational-20261016/REPORT.md),81 casos, código/comandos/hashes para revisão. Perfis e templates preparados antes da janela, reutilizando pacotes certificados; ficaram pendentes as observações perecíveis e identidades futuras. Nenhum backup/VPS/deploy, build ou importação real. Retorno conserva backend candidato/ledger/GET. Segurança e Prisma continuam separados.
 
 

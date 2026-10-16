@@ -1,0 +1,16 @@
+{
+  "COMMANDS_FOR_REVIEW.txt": "407f0a3742c4534668ddbc7d4e7ebe8aeb25ded511b937337b6f722744f5a2a9",
+  "REPORT.md": "e9d24b87d297025d648bc020c43d45fc178f16024ea8a1326604928621d55172",
+  "RESULT_SANITIZED.json": "8b9c60f3053688d2ba7568b57d086debf9293deb7ae447f38498da7904b586e5",
+  "bind_window_v2.py": "12899c690b01f3b12e7bbfeb90e891ab5abb75f5fa997d7fd8f57ff2d3ca5d00",
+  "capture_backup_for_window.py": "219a356ae151de0f37df4db638187c06cf454c6c8cdcf0250ca75b1e67e35593",
+  "capture_imports_v2.py": "efb3d3d021be6e08a83db19fcf8995e0d468e9051ba5c1d201377ef17224ade0",
+  "capture_source.py": "47b10e0b3fa5c2916f942a6980543e105d62a5e7ca0620f9bc5c3728e955b53a",
+  "custody_backup_for_window.py": "4429c3b9d47e40a12b8eee217d22d8b7d5298227862f5b6c46b58261761d704d",
+  "stage_controls_v2.py": "2031f9ab62685357fbd02ddde491f28413ecf129c3a82ff9d437444b8f2affda",
+  "stage_inactive.py": "90880a6d672340900ccf58a7c9c0609b962f9468af2358d5510c54876a1352eb",
+  "test_canonical_name.py": "19a3ff3d93fe73e633084778e36d9a24aa13d113d4ac915b35ea8696298f4b21",
+  "test_legacy_correlation.py": "2822845423b24738abbb81d7bcc732e54c19fc50afc865146a4c6c5a2a8411f7",
+  "verify_readonly.py": "fa48fa7c980859b51f771dd8d4d221d1b2b3bea05836120eda494f3528dd6155",
+  "verify_readonly_v2.py": "7cbab0579becd8a9512f1425c54b7369156b550792fb11310675b06cfb88453c"
+}

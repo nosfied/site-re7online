@@ -1,5 +1,8 @@
 # CSV — composição operacional para revisão
 
+**Complemento de staging16/10:** [nove verificações READ ONLY na VPS e geração canônica vigente](../crm-csv-staging-20261016/REPORT.md). O binder anterior gerava nome negado por Bridge; versão v2 exige o prefixo canônico sem mudar o consumidor. Geração DENY preservada, runtimes reutilizados. Nenhum A/B executado.
+
+
 **LOCAL COMPOSED / LOCAL TESTED / NOT WINDOW BOUND / NOT DEPLOYED —16/10/2026, Fortaleza.** Complementa os [pacotes certificados](../crm-csv-coordinated-20261015/REPORT.md); não substitui provas anteriores nem autoriza janela. [Comandos](COMMANDS_FOR_REVIEW.txt), [matriz dos consumidores](MATRIX.md), [provas e hashes finais](PROOFS_SANITIZED.json).
 
 ## Entrega concreta

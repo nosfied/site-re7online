@@ -1,3 +1,8 @@
+HISTÓRICO DA COMPOSIÇÃO: o binder desta revisão tem prefixo incompatível com Bridge.
+Para qualquer geração futura usar ../crm-csv-staging-20261016/bind_window_v2.py
+e os comandos/hashes de ../crm-csv-staging-20261016/COMMANDS_FOR_REVIEW.txt.
+Não executar o binder antigo nem adaptar Bridge para aceitar seu prefixo.
+
 REVIEW ONLY — NÃO EXECUTAR NA VPS NESTA ETAPA.
 Não há autorização de instalação/contenção/start/retorno. Hashes abaixo são do
 TEMPLATE privado, não dos bindings ainda inexistentes da janela.

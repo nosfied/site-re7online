@@ -1,5 +1,8 @@
 # CSV — composição coordenada sobre o runtime ativo atestado
 
+**Complemento de staging16/10:** [nove verificações READ ONLY na VPS e geração canônica vigente](../crm-csv-staging-20261016/REPORT.md). O binder anterior gerava nome negado por Bridge; versão v2 exige o prefixo canônico sem mudar o consumidor. Geração DENY preservada, runtimes reutilizados. Nenhum A/B executado.
+
+
 **Complemento corrente16/10:** [composição operacional com perfis, políticas e instaladores preparados](../crm-csv-operational-20261016/REPORT.md). Os trechos abaixo que reservavam toda a composição para depois da janela descrevem a entrega material anterior; agora restam frescor e vínculos dependentes da janela.81 casos locais PASS, sem repetir build ou prova funcional válida. NOT WINDOW BOUND / NOT DEPLOYED.
 
 

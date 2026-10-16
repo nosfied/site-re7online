@@ -1,0 +1,61 @@
+REVISÃO SOMENTE. Staging concluído; NÃO repetir transferência, extração ou drivers.
+Nenhum A/admissão/B foi autorizado por esta entrega. Não usar a geração DENY.
+
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-csv-staged-v2-20261016T094000Z
+R=/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/crm-csv-staging-20261016
+
+HASHES DO STAGING ATUAL:
+review06459884b2822c1fc1b252ced894f14b599d907133592173563aac6d7bb55819
+policy4bc3454db8009dd6aef4db7c7e331c79278d37326c2438b9f668c6610a6b74b3
+installere6523f6e0fcd27c78562b6a64ead60e642768fae6900a29b732d42d3ab21b921
+
+Leituras já executadas e registradas — repetir apenas por frescor/alteração:
+python3 -B "$P/verify-package.py"
+python3 -B "$P/window/check_current.py" "$P" before
+python3 -B "$P/window/ecosystem_contract.py" validate "$P"
+python3 -B "$P/window/baseline_contract.py" "$P"
+for MODE in switch return return-partial return-before-commit; do
+  python3 -B "$P/window/restore_contract.py" "$P/$MODE"
+done
+
+PRÓXIMA SEQUÊNCIA, EXIGE DECISÃO/HORÁRIO/SUDO; NÃO EXECUTAR AGORA:
+1. Reconferir fonte/identidades/writers/SQL/proxy/Event/capacidade/WAL e ambos
+   crons, sem usar guarda38 ou silêncio HTTP como prova de drain CSV.
+2. R0: produtor CSV capture_backup_for_window.py nesta revisão, sob lock
+   canônico, somente quando autorizado. Não executar wrapper OpenAI suspenso.
+   VPS (arquivo auxiliar conferido por PUBLIC_FILES_SHA256.json):
+   python3 -B /opt/re7online/backups/converta-persistent/preparations/csv-staging-incoming-20261016T092610Z/capture_backup_for_window.py "$P"
+   Capturar stdout/stderr em arquivos600, nunca no chat.
+   IMPORTANTE: stdout NÃO é o recibo original (pode diferir na quebra de linha).
+   Ler remoteDirectory do stdout privado e validar csv-rpo-AAAAMMDDTHHMMSSZ.
+   Obter SHA do arquivo capture-receipt.private.json pela sessão SSH legítima,
+   copiar ESSE arquivo por scp para RECEIPT_PRIVATE em diretório700, arquivo600.
+   Usar esse SHA como PRODUCER_RECEIPT_SHA256. Não json.dumps, não normalizar,
+   não adicionar newline ao recibo. A custódia v2 nega bytes diferentes.
+3. LOCAL: produtor -> transferência -> custódia v2 preservando bytes originais:
+   python3 -B "$R/custody_backup_for_window.py" --receipt "$RECEIPT_PRIVATE" --receipt-sha256 "$PRODUCER_RECEIPT_SHA256" --out "$NEW_CUSTODY_PRIVATE"
+   Transferir privadamente receipt/ack/lab-current para owner-evidence na VPS.
+4. VPS, procedimento coerente de quatro modos, nunca replay de renovação:
+   python3 -B "$P/refresh_proofs.py" "$P" "$RECEIPT_PRIVATE" "$CUSTODY_ACK_PRIVATE" "$NEW_RENEWAL_PRIVATE" "$OLD_REVIEW_SHA256"
+   Preservar originais; republicar e conferir o novo review hash. Não alterar
+   temporaryDatabaseRemoved=false, fonte, política ou perfis para passar.
+5. Root curta apenas junto da janela/sudo: root_readonly.py da geração, bytes
+   conferidos, stdout privado em window/owner-evidence/root.private.json.
+6. Decisão de instalação/execução sobre hashes finais republicados:
+   python3 -B "$P/window/pre_install.py" "$P"
+   bash "$P/install-api-window-policy.sh"
+   Exigir POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE. Qualquer recusa para.
+7. Admissão exclusivamente canônica, após autorização explícita futura:
+   python3 -B "$P/window/admit_gates.py" "$P" "$P/window/owner-evidence" "$NEW_ADMISSION_PRIVATE" "$FINAL_REVIEW_SHA256" "$REVIEWED_AUTHORIZED_COMMIT"
+   Exigir FIVE_GATES_ADMITTED. Então B uma vez pelo csv_cli, não scripts soltos.
+   python3 -B "$P/window/csv_cli.py" "$P" --execute
+   Em recusa/incerteza: somente inspeção, evidências e decisão explícita:
+   python3 -B "$P/window/csv_cli.py" "$P" --inspect-readonly
+   PRESTOP/CANDIDATE não são autorizações automáticas de recuperação/replay.
+8. A fronteira API->frontend, aceite, promoção e retorno seguem os comandos
+   revisados em ../crm-csv-operational-20261016/COMMANDS_FOR_REVIEW.txt usando
+   este P canônico. Bindings frontend só após sucessores reais da API.
+
+Nenhum wrapper R0 foi executado nesta preparação. Seu schema SELECT exato já
+conferiu com a fronteira retida; transporte de backup/custódia será certificado
+pelos recibos na janela, não pelo horário do manifesto ou health200.
