@@ -1,0 +1,31 @@
+{
+  "status": "INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO",
+  "B2": "LOCAL CONNECTED PROOF CLOSED; no operational certificate",
+  "launches": [
+    {
+      "chain": "Bridge.protocol -> child_transport -> python -I -S -> bootstrap -> Loader -> delegated request/record/execute",
+      "proof": "three distinct child PID/PPID complete preflight; durable proof consumed",
+      "simulated": "root/sudo namespace and System/restore; B1 transport not installed"
+    },
+    {
+      "chain": "Bridge.node -> Node launcher -> python node-snapshot -> Python bootstrap -> Loader -> execution-check -> Python bootstrap -> actual baseline/ecosystem",
+      "proof": "real nested PID/PPID with canonical baseline consumer, not mocked return",
+      "simulated": "root channel/metadata, installed path mapping, close.cjs wrapper"
+    },
+    {
+      "chain": "A E1 -> new B E2 -> grandchild",
+      "proof": "denies before Loader/import; fresh parent record/execute also denies via durable binding",
+      "limits": "static owner installation not performed; no protection claim against malicious deploy outside canonical launcher"
+    },
+    {
+      "chain": "Recovery/PRESTOP/R3 -> Operations.start",
+      "proof": "10 directly affected prior regressions pass with updated Context/transforms",
+      "simulated": "external process/DB/HTTP/cron/PM2 and controller factory as explicitly accepted fixture"
+    }
+  ],
+  "remaining": [
+    "B1 canonical private diagnostic transport",
+    "B3 PM2 separate ecosystem reread",
+    "B4 concrete installer/real four-mode transitive closure"
+  ]
+}

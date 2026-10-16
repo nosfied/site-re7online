@@ -1,0 +1,33 @@
+{
+  "baseCommit": "6273b4d31fb0203882ad3800da6c9d4b2988a4a4",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/FULL_DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/LAUNCH_INVENTORY.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/PROCESS_EVIDENCE.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/SOURCE_DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/SOURCE_PROVENANCE.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/TEST_OUTPUT.txt",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/authority.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/bootstrap.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/child_transport.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/integration.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/lab_effects.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/lab_shim.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/node_bootstrap.cjs",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/reproduce.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/test_process.py",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ],
+  "excludedFromFullDelta": [
+    "FULL_DELTA.patch",
+    "MANIFEST.sha256",
+    "ALLOWLIST.json"
+  ],
+  "noProduction": true
+}

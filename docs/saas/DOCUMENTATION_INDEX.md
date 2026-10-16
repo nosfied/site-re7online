@@ -81,6 +81,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | Documento | Status | Uso |
 | --- | --- | --- |
 | `docs/RUNBOOK_WHATSAPP_AGENT.md` | atual | Deploy, migration, retencao e operacao principal |
+| `docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/REPORT.md` | B2 LOCAL CLOSED / INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY | Execução pai/filhos e bindings duráveis, duas cadeias reais locais,24 testes; root/sudo/OS simulados; B1/B3/B4 abertos |
 | `docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/REPORT.md` | R3 LOCAL VALIDATED / INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY | Ida switch sem permit de recuperação;28 provas focadas e contraprovas; B1–B4 abertos; CSV suspenso |
 | `docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/REPORT.md` | LOCAL VALIDATED (núcleo) / INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY | Fontes futuras root/loader Python+Node;33 provas; diagnóstico/filhos combinados/PM2/manifest concretos ainda bloqueiam integração completa; CSV suspenso |
 | `docs/reviews/automation-freeform-window-release-af26/crm-csv-phase-authority-assessment-20261016/REPORT.md` | BLOCKED / ROOT_OF_TRUST_UNBOUND / NOT DEPLOYED / NOT WINDOW READY | Bootstrap dos pins sem fornecedor/entrada autenticados; parada antes de implementar leitor; código/provas anteriores preservados |

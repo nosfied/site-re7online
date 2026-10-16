@@ -1,0 +1,24 @@
+{
+  "baseCommit": "6273b4d31fb0203882ad3800da6c9d4b2988a4a4",
+  "editableFutureSources": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016",
+  "replacedFutureSources": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/authority.py": "d6fb49a3c35503f06f2582e22e137ad53e3c8cd8c1c4ddf379cd06055c922f3b",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/integration.py": "f3628c4078007c9580651c4a1549b26d3b25375d655b6d1d58a79379a71ec7a9",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/bootstrap.py": "5c1e2cec3e2a6c54d2e1035eeceb62943e71840d94e9fdfce0e4e73be5a7f008",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/child_transport.py": "672e4a562e27c434257980a4bc1fd5ea2aba8e7529127e40662d4b1be15c87b8",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/node_bootstrap.cjs": "0743c3f4fc4c428f668de65db4669889457965e98726789d599d82ba89378ed1"
+  },
+  "untouchedReusableSources": {
+    "root_store.py": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/root_store.py",
+    "root_extension.py": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/root_extension.py",
+    "verified_loader.py": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/verified_loader.py"
+  },
+  "fixtureConsumers": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+  },
+  "reproduction": "Use reproduce.py; inherited source provenance from accepted recovery and pinned copies from 2cc9a350/bdb57f. Only the future libraries and fixture tests are overlaid. Child test tree has ISOLATED_DELIVERY and no local-evidence/Git fallback."
+}

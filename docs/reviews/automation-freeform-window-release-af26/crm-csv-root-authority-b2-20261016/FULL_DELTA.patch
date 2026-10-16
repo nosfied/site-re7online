@@ -1,0 +1,3205 @@
+--- a/docs/BACKLOG_TECH.md
++++ b/docs/BACKLOG_TECH.md
+@@ -1,4 +1,6 @@
+ # BACKLOG — RE7ONLINE WHATSAPP AGENT
++
++**CSV — B2 continuidade/filhos16/10: FECHADO LOCALMENTE nas cadeias declaradas / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Cadeias em processos reais, vínculo E1 entre Contexts,24 provas e simulações](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/REPORT.md). Comparação de execução antes do Loader e nos bindings duráveis delegated; consulta root independente preservada. B1/B3/B4 continuam abertos. CSV suspenso; sem autoridade instalada, VPS, geração ou janela. R3/PRESTOP/retornos preservados; históricos intocados.
+ 
+ **CSV — R3 autoridade da ida16/10: LOCAL VALIDATED no alcance ensaiado / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Contraprova, correção mínima,28 testes e limites](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/REPORT.md). Switch usa âncora/contexto autenticados e gates/seleção canônicos, sem permit de recuperação; ORIGINAL/CANDIDATE continuam exigindo permit específico. B1–B4 permanecem abertos. CSV suspenso; nenhuma autoridade instalada ou janela preparada. Fontes/provas históricas preservadas; publicação anterior2cc9a350 não equivale a instalação.
+ 
+--- a/docs/RUNBOOK_WHATSAPP_AGENT.md
++++ b/docs/RUNBOOK_WHATSAPP_AGENT.md
+@@ -1,4 +1,6 @@
+ # RUNBOOK OPERACIONAL — WhatsApp Agent
++
++**CSV — B2 continuidade/filhos16/10: FECHADO LOCALMENTE nas cadeias declaradas / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Cadeias em processos reais, vínculo E1 entre Contexts,24 provas e simulações](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/REPORT.md). Comparação de execução antes do Loader e nos bindings duráveis delegated; consulta root independente preservada. B1/B3/B4 continuam abertos. CSV suspenso; sem autoridade instalada, VPS, geração ou janela. R3/PRESTOP/retornos preservados; históricos intocados.
+ 
+ **CSV — R3 autoridade da ida16/10: LOCAL VALIDATED no alcance ensaiado / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Contraprova, correção mínima,28 testes e limites](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/REPORT.md). Switch usa âncora/contexto autenticados e gates/seleção canônicos, sem permit de recuperação; ORIGINAL/CANDIDATE continuam exigindo permit específico. B1–B4 permanecem abertos. CSV suspenso; nenhuma autoridade instalada ou janela preparada. Fontes/provas históricas preservadas; publicação anterior2cc9a350 não equivale a instalação.
+ 
+--- a/docs/saas/DOCUMENTATION_INDEX.md
++++ b/docs/saas/DOCUMENTATION_INDEX.md
+@@ -81,6 +81,7 @@
+ | Documento | Status | Uso |
+ | --- | --- | --- |
+ | `docs/RUNBOOK_WHATSAPP_AGENT.md` | atual | Deploy, migration, retencao e operacao principal |
++| `docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/REPORT.md` | B2 LOCAL CLOSED / INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY | Execução pai/filhos e bindings duráveis, duas cadeias reais locais,24 testes; root/sudo/OS simulados; B1/B3/B4 abertos |
+ | `docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/REPORT.md` | R3 LOCAL VALIDATED / INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY | Ida switch sem permit de recuperação;28 provas focadas e contraprovas; B1–B4 abertos; CSV suspenso |
+ | `docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/REPORT.md` | LOCAL VALIDATED (núcleo) / INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY | Fontes futuras root/loader Python+Node;33 provas; diagnóstico/filhos combinados/PM2/manifest concretos ainda bloqueiam integração completa; CSV suspenso |
+ | `docs/reviews/automation-freeform-window-release-af26/crm-csv-phase-authority-assessment-20261016/REPORT.md` | BLOCKED / ROOT_OF_TRUST_UNBOUND / NOT DEPLOYED / NOT WINDOW READY | Bootstrap dos pins sem fornecedor/entrada autenticados; parada antes de implementar leitor; código/provas anteriores preservados |
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/LAUNCH_INVENTORY.json
+@@ -0,0 +1,31 @@
++{
++  "status": "INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO",
++  "B2": "LOCAL CONNECTED PROOF CLOSED; no operational certificate",
++  "launches": [
++    {
++      "chain": "Bridge.protocol -> child_transport -> python -I -S -> bootstrap -> Loader -> delegated request/record/execute",
++      "proof": "three distinct child PID/PPID complete preflight; durable proof consumed",
++      "simulated": "root/sudo namespace and System/restore; B1 transport not installed"
++    },
++    {
++      "chain": "Bridge.node -> Node launcher -> python node-snapshot -> Python bootstrap -> Loader -> execution-check -> Python bootstrap -> actual baseline/ecosystem",
++      "proof": "real nested PID/PPID with canonical baseline consumer, not mocked return",
++      "simulated": "root channel/metadata, installed path mapping, close.cjs wrapper"
++    },
++    {
++      "chain": "A E1 -> new B E2 -> grandchild",
++      "proof": "denies before Loader/import; fresh parent record/execute also denies via durable binding",
++      "limits": "static owner installation not performed; no protection claim against malicious deploy outside canonical launcher"
++    },
++    {
++      "chain": "Recovery/PRESTOP/R3 -> Operations.start",
++      "proof": "10 directly affected prior regressions pass with updated Context/transforms",
++      "simulated": "external process/DB/HTTP/cron/PM2 and controller factory as explicitly accepted fixture"
++    }
++  ],
++  "remaining": [
++    "B1 canonical private diagnostic transport",
++    "B3 PM2 separate ecosystem reread",
++    "B4 concrete installer/real four-mode transitive closure"
++  ]
++}
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/PROCESS_EVIDENCE.json
+@@ -0,0 +1,1827 @@
++{
++  "kind": "LOCAL_SYNTHETIC_PROCESS_EVIDENCE",
++  "source": "reproduce.py final run; actual PID/PPID, no production observations",
++  "cases": [
++    {
++      "case": "test_authority_exchange_race_denied_before_import",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "bootstrap",
++          "pid": 1508527,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508527,
++          "ppid": 1508526
++        }
++      ],
++      "consumerImports": 0,
++      "requestExists": false,
++      "proofConsumed": false,
++      "falseComplete": false
++    },
++    {
++      "case": "test_before_context_gap_reaches_child_import_and_request",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "bootstrap",
++          "pid": 1508528,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508528,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508528,
++          "ppid": 1508526
++        }
++      ],
++      "consumerImports": 1,
++      "requestExists": true,
++      "proofConsumed": false,
++      "falseComplete": false
++    },
++    {
++      "case": "test_direct_bootstrap_undeclared_child_no_execution",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "bootstrap",
++          "pid": 1508546,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/not-declared.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508546,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508546,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508546,
++          "ppid": 1508526,
++          "entry": "switch/not-declared.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508546,
++          "ppid": 1508526
++        }
++      ],
++      "consumerImports": 0,
++      "requestExists": false,
++      "proofConsumed": false,
++      "falseComplete": false
++    },
++    {
++      "case": "test_execution_race_denied_before_child_import_or_request",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "bootstrap",
++          "pid": 1508547,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508547,
++          "ppid": 1508526
++        }
++      ],
++      "consumerImports": 0,
++      "requestExists": false,
++      "proofConsumed": false,
++      "falseComplete": false
++    },
++    {
++      "case": "test_expired_recovery_authority_denies_child_before_import",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "bootstrap",
++          "pid": 1508548,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508548,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508548,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508548,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508548,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508548,
++          "ppid": 1508526
++        }
++      ],
++      "consumerImports": 0,
++      "requestExists": false,
++      "proofConsumed": false,
++      "falseComplete": false
++    },
++    {
++      "case": "test_fresh_parent_execute_detects_durable_request_execution",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "bootstrap",
++          "pid": 1508549,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508549,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508549,
++          "ppid": 1508526
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508549,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508550,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508550,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508550,
++          "ppid": 1508526
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508550,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508551,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508551,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508551,
++          "ppid": 1508526
++        }
++      ],
++      "consumerImports": 3,
++      "requestExists": true,
++      "proofConsumed": false,
++      "falseComplete": false
++    },
++    {
++      "case": "test_fresh_parent_record_detects_request_execution_drift",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "bootstrap",
++          "pid": 1508552,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508552,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508552,
++          "ppid": 1508526
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508552,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508553,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508553,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508553,
++          "ppid": 1508526
++        }
++      ],
++      "consumerImports": 2,
++      "requestExists": true,
++      "proofConsumed": false,
++      "falseComplete": false
++    },
++    {
++      "case": "test_lost_execute_response_no_automatic_replay",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "bootstrap",
++          "pid": 1508554,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508554,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508554,
++          "ppid": 1508526
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508554,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508567,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508567,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508567,
++          "ppid": 1508526
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508567,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508568,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508568,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508568,
++          "ppid": 1508526
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508568,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        }
++      ],
++      "consumerImports": 3,
++      "requestExists": true,
++      "proofConsumed": true,
++      "falseComplete": false
++    },
++    {
++      "case": "test_lost_root_response_before_import",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "bootstrap",
++          "pid": 1508569,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508569,
++          "ppid": 1508526
++        }
++      ],
++      "consumerImports": 0,
++      "requestExists": false,
++      "proofConsumed": false,
++      "falseComplete": false
++    },
++    {
++      "case": "test_node_execution_race_denies_baseline_before_import",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "node_launcher",
++          "pid": 1508570,
++          "ppid": 1508526
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508577,
++          "ppid": 1508570,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508577,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508577,
++          "ppid": 1508570
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508577,
++          "ppid": 1508570,
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508577,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508577,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508577,
++          "ppid": 1508570
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508577,
++          "ppid": 1508570,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508578,
++          "ppid": 1508570,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508578,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508578,
++          "ppid": 1508570
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508578,
++          "ppid": 1508570,
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508578,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508578,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508578,
++          "ppid": 1508570
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508578,
++          "ppid": 1508570,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508579,
++          "ppid": 1508570,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508579,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508579,
++          "ppid": 1508570
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508579,
++          "ppid": 1508570,
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508579,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508579,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508579,
++          "ppid": 1508570
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508579,
++          "ppid": 1508570,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508580,
++          "ppid": 1508570,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508580,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508580,
++          "ppid": 1508570
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508580,
++          "ppid": 1508570,
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508580,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508580,
++          "ppid": 1508570
++        },
++        {
++          "event": "root_query",
++          "pid": 1508580,
++          "ppid": 1508570
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508580,
++          "ppid": 1508570,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508581,
++          "ppid": 1508570,
++          "kind": "python",
++          "entry": "switch/baseline_contract.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508581,
++          "ppid": 1508570
++        }
++      ],
++      "consumerImports": 0,
++      "requestExists": false,
++      "proofConsumed": false,
++      "falseComplete": false
++    },
++    {
++      "case": "test_real_delegated_three_processes_and_consumption",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "bootstrap",
++          "pid": 1508583,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508583,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508583,
++          "ppid": 1508526
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508583,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508584,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508584,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508584,
++          "ppid": 1508526
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508584,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508585,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508585,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508585,
++          "ppid": 1508526
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508585,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508586,
++          "ppid": 1508526,
++          "kind": "python",
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508586,
++          "ppid": 1508526,
++          "entry": "switch/delegated.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        },
++        {
++          "event": "root_query",
++          "pid": 1508586,
++          "ppid": 1508526
++        }
++      ],
++      "consumerImports": 4,
++      "requestExists": true,
++      "proofConsumed": true,
++      "falseComplete": false
++    },
++    {
++      "case": "test_real_node_python_baseline_chain",
++      "parentPid": 1508526,
++      "events": [
++        {
++          "event": "node_launcher",
++          "pid": 1508599,
++          "ppid": 1508526
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508606,
++          "ppid": 1508599,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508606,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508606,
++          "ppid": 1508599
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508606,
++          "ppid": 1508599,
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508606,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508606,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508606,
++          "ppid": 1508599
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508606,
++          "ppid": 1508599,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508607,
++          "ppid": 1508599,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508607,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508607,
++          "ppid": 1508599
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508607,
++          "ppid": 1508599,
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508607,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508607,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508607,
++          "ppid": 1508599
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508607,
++          "ppid": 1508599,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508608,
++          "ppid": 1508599,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508608,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508608,
++          "ppid": 1508599
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508608,
++          "ppid": 1508599,
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508608,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508608,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508608,
++          "ppid": 1508599
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508608,
++          "ppid": 1508599,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508609,
++          "ppid": 1508599,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508609,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508609,
++          "ppid": 1508599
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508609,
++          "ppid": 1508599,
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508609,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508609,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508609,
++          "ppid": 1508599
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508609,
++          "ppid": 1508599,
++          "kind": "node-snapshot",
++          "entry": "switch/close.cjs"
++        },
++        {
++          "event": "bootstrap",
++          "pid": 1508610,
++          "ppid": 1508599,
++          "kind": "python",
++          "entry": "switch/baseline_contract.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508610,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508610,
++          "ppid": 1508599
++        },
++        {
++          "event": "loader_constructor",
++          "pid": 1508610,
++          "ppid": 1508599,
++          "entry": "switch/baseline_contract.py"
++        },
++        {
++          "event": "root_query",
++          "pid": 1508610,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508610,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508610,
++          "ppid": 1508599
++        },
++        {
++          "event": "root_query",
++          "pid": 1508610,
++          "ppid": 1508599
++        },
++        {
++          "event": "bootstrap_complete",
++          "pid": 1508610,
++          "ppid": 1508599,
++          "kind": "python",
++          "entry": "switch/baseline_contract.py"
++        }
++      ],
++      "consumerImports": 0,
++      "requestExists": false,
++      "proofConsumed": false,
++      "falseComplete": false
++    }
++  ]
++}
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/PROOFS.json
+@@ -0,0 +1,57 @@
++{
++  "baseCommit": "6273b4d31fb0203882ad3800da6c9d4b2988a4a4",
++  "result": "B2_LOCAL_CONNECTED_CHAINS_PASS",
++  "newProcessTests": 14,
++  "affectedRecoveryAndR3Tests": 10,
++  "total": 24,
++  "B2": "CLOSED LOCALLY in the two named fixture chains and execution lineage; not operationally certified",
++  "codeSha256": {
++    "authority.py": "220de0b3b48be13b05748ae363fa81f2186ff2fd839b8569c8c2068f41674eae",
++    "integration.py": "f633a350ffe6ec4be24bf13c24b59efd2ec6095ee72485fa44507e69c506b254",
++    "bootstrap.py": "200f25cac3697baeea9560c1483d2421fa96bcba99eb04c0690b9aaa36313864",
++    "child_transport.py": "c4783ed71920a74be9cee5dc2229879852d7a4df38d582f1534a8b194cb6c866",
++    "node_bootstrap.cjs": "244777e777f3dd53222b6268219d98e22a14fad92586134ff2c40b7af5c7b9c5",
++    "lab_shim.py": "1039793698cf5b3457d2a36e6e76ebe9e1f776396b0c6c73b29859a737c9e1f0",
++    "lab_effects.py": "83617977a32a29d3233e3d0f4baefb5ff39b008d5ceba9065aeea3f38a76e7f7",
++    "test_process.py": "8f28bb868b678217cac213a9e6bdfeaa8144fd3b03e6f5cd5175cbc605c796a7",
++    "reproduce.py": "2fa7ddbc5c55e6bea615c577cda81e0b145dc8d7c5931e1427cb532565e11f19"
++  },
++  "testOutputSha256": "91df29ac0e2fc4d47cb2d76ab6fb339a1654a47738a42595c97e19cac5ddac4d",
++  "processEvidenceSha256": "4fe4a606383c4335051834af6ece338e767e400e0604a8121711191c65378de6",
++  "counterexample": "Predecessor A pins E1; mutation after parent command construction lets fresh B import delegated and write request under E2 with unchanged anchor/permit. Old bootstrap subsequently fails serializing module. That unrelated failure is NOT an execution binding.",
++  "canonicalDetectionBefore": "Same A detects drift on its next start/snapshot; delegated old root/generation/config/direction/nonce/time/consumption do not bind global execution; fresh B loses A memory. Recovery permit already binds execution and is preserved.",
++  "fix": "Parent/child comparison envelope includes authority and expected execution; child independently queries root then compares BEFORE Loader. Node snapshot refresh and Python grandchildren carry same envelope. Concrete delegated durable request/proof also includes execution hash.",
++  "simulated": [
++    "root metadata and sudo/root query, via pinned temporary library shim",
++    "clock only for expiry case",
++    "System guard/cron/OS/DB/HTTP/PM2 interfaces; no external calls permitted",
++    "restore authority injected as in accepted fixture",
++    "fixed production namespace and installed launcher paths mapped to local temp paths; /usr/bin/node mapped to available local Node"
++  ],
++  "real": [
++    "Bridge.run/protocol/node and subprocess stdin/stdout",
++    "bootstrap main/Loader, Python -I -S, Node CommonJS launcher",
++    "complete delegated request/record/execute/proof/locks/nonce/expiry/consumption bodies on preflight",
++    "execution-check.cjs and baseline_contract/ecosystem validation on synthetic complete files",
++    "PID and PPID relationships; root not installed or issued"
++  ],
++  "limits": [
++    "preflight is the connected delegated action; API/worker starts and compatible recoveries remain focused in-process OS-simulated tests",
++    "close.cjs is a declared test wrapper invoking real execution-check; real product HTTP close/validate/open are not executed",
++    "full operational package and all four-mode closure not composed or certified"
++  ],
++  "blocked": [
++    "B1 canonical private diagnostic transport",
++    "B3 PM2 separate ecosystem reread",
++    "B4 concrete installer/real four-mode transitive closure"
++  ],
++  "development": [
++    "fixture audit name initially shadowed delegated.record; fixed audit alias, no consumer change",
++    "expiry first occurred in parent; final proof expires only child clock after command construction",
++    "Node subprocess EPERM under sandbox; exact suite passed outside sandbox",
++    "bootstrap main module serialization bug reproduced; future Python branch now executes and returns None, preserving stdout"
++  ],
++  "vps": false,
++  "realIssuanceOrInstallation": false,
++  "status": "INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO"
++}
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/REPORT.md
+@@ -0,0 +1,93 @@
++# B2 — continuidade da execução e cadeias locais conectadas
++
++**B2 FECHADO LOCALMENTE no alcance abaixo. INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.**
++
++Base `6273b4d31fb0203882ad3800da6c9d4b2988a4a4`, branch `review/campaign-recovery-20260926`. As entregas anteriores são preservadas. B1, B3 e B4 permanecem abertos; esta prova não é autoridade instalada, pacote operacional ou janela pronta.
++
++## Lacuna reproduzida e controles anteriores
++
++O Context A de R3 fixa E1 em `_forward_execution`. O transporte antigo encaminha apenas `(anchorHash, permitHash)`. No teste `test_before_context_gap_reaches_child_import_and_request`:
++
++1. A consulta a autoridade sintética, valida a preparação e fixa E1.
++2. O transporte real constrói o comando de filho após conferir o snapshot.
++3. Um hook de concorrência altera o intent para E2 **depois** da construção do comando e **antes** do subprocesso.
++4. O Python filho inicia de verdade, consulta novamente root e cria Context B com a mesma âncora/permit. A correlação antiga coincide. B importa o delegated concreto e grava um request, apesar de A esperar E1.
++
++Os bindings antigos do request/proof verificam root, direção, configuração, geração, nonce, prazo e consumo. Nenhum desses campos liga o intent global E1; identidade estática consistente não detecta sua alteração. A detectaria o drift na próxima revalidação própria. Um Context novo perde essa memória. O permit de recuperação já liga execução e continua sendo exigido somente na recuperação.
++
++A execução da contraprova também expôs uma falha independente: o bootstrap antigo retornava o objeto módulo e seu entrypoint tentava serializá-lo como JSON, após o código do filho já ter rodado. O diagnóstico concreto é `TypeError ... not JSON serializable`; ele **não** constitui controle de execução. O teste exige import/request existentes antes dessa falha; não afirma protocolo antigo completo. O pipeline novo elimina essa falha de interface retornando None após a execução Python, preservando o stdout do entrypoint.
++
++## Vínculo mínimo implementado
++
++As fontes futuras editáveis estão **neste diretório**. Reutilizam-se `verified_loader.py`, `root_store.py`, `root_extension.py` e demais fontes publicadas, sem alteração de seus bytes. `SOURCE_DELTA.patch` compara somente cinco bibliotecas futuras com seus predecessores; `SOURCE_PROVENANCE.json` fixa a procedência.
++
++- **Context:** `correlation()` fornece `{authority: [anchorHash, permitHash], executionSha256: E}`. `execution_hash()` fixa o primeiro intent existente e não aceita troca/remoção posterior. Ausência durante inspeção inicial permanece explícita; `start_mode('switch')` continua negando execução ausente. Não há permit de recuperação na ida.
++- **Bootstrap Python:** cria Context por consulta root independente; `accept_correlation` compara identidade e execução correntes **antes de criar o Loader**, compilar ou importar código da preparação. O envelope do pai é uma obrigação de igualdade, não fonte de autoridade. A carga continua restrita aos mesmos bytes/hash/dependências autenticados.
++- **Transporte Python/Node:** `child_transport.command` revalida o snapshot e envia o envelope completo. Não usa env para autoridade. `bootstrap` mantém a exigência de correlação para escopo forward; inspeção/PRESTOP não emitem permit.
++- **Node:** a primeira chamada node-snapshot já recebe a correlação esperada antes da carga Python. Toda atualização de snapshot e todo filho Python levam o mesmo envelope. Uma comparação só depois de obter/carregar um snapshot novo seria tardia; não é a solução adotada.
++- **Delegated:** `bindings()` acrescenta `executionIntentSha256` usando o Context autenticado. Os consumidores originais de igualdade integral em request/record/proof passam a verificar também esse campo, inclusive quando um pai novo foi criado após E2. Não se reescrevem request/proof históricos para PASS: ausência/divergência do campo nega renovação/record/execute quando houver nova execução.
++- **Revalidação:** o Context mantém E1 em cada uso; troca de autoridade também continua negando. A decisão específica ORIGINAL/CANDIDATE, perfil, prazo e fase do permit permanecem independentes da ida e sem renovação implícita.
++
++A origem da comparação é o pai lançado/carregado pelo caminho root autenticado existente; o filho consulta root outra vez. Um argumento de digest sozinho não autoriza execução. O modelo já declarado não isola um deploy malicioso de todas as capacidades OS que ele possua: não há nova assinatura, serviço ou privilégio. B1/B4 continuam condições obrigatórias antes de alegar esse caminho instalado/confiável na VPS.
++
++## Cadeias executadas em processos reais
++
++### Bridge.protocol → delegated request/record/execute
++
++O Bridge usa seu corpo real de `protocol` e `run`. O transporte gera o comando real, stdin/stdout/pipes são preservados, e três processos `/usr/bin/python3 -I -S` executam bootstrap e o delegated completo, no mesmo ensaio, sobre a mesma fixture. A ação escolhida é **preflight**, que percorre request, nonce, prova, record, lock, execute, restore injetado, validação dos dois crons e rename de consumo.
++
++`test_real_delegated_three_processes_and_consumption` comprova três PIDs distintos com PPID do pai de teste, execução concluída, request ligado ao hash do intent e proof consumido. A repetição do protocolo nega `completed_action_cannot_renew`, sem novo execute/renovação. Isso não é execução de start/stop produtivos nem prova de todos os efeitos de cada ação delegated.
++
++### Bridge.node → Node bootstrap → Python bootstrap → baseline real
++
++`Bridge.node('switch','close.cjs')` chama seu transporte real. O `close.cjs` da fixture é um wrapper declarado que chama o **execution-check.cjs real**; não executa o fechamento HTTP real do produto. O Node roda o launcher CommonJS real, consulta snapshots através de novos processos Python, e o execution-check chama um novo Python bootstrap que executa o **baseline_contract.py real**, incluindo o ecosystem validator real sobre perfis/baselines completos sintéticos. Não se devolve uma resposta baseline simulada.
++
++`test_real_node_python_baseline_chain` exige PID do Node filho do pai e PID do baseline filho daquele Node, além de sucesso do bootstrap/baseline. `PROCESS_EVIDENCE.json` conserva eventos sanitizados e PID/PPID efetivos. Não são apenas testes dos elos separadamente.
++
++## Negativas e continuidade
++
++- **E1→E2 entre comando do pai e bootstrap filho:** nega `authority_execution_changed`, sem Loader, import do delegated ou request.
++- **E1→E2 no Node, imediatamente antes do Python baseline:** Python consulta root, compara E1/E2 e nega antes do Loader do baseline. O processo existe; o código de baseline não é carregado/executado.
++- **Context novo após E2:** record nega `owner_request_generation_or_configuration_drift`; execute nega `owner_proof_generation_or_configuration_drift`. Request/proof de E1 ficam preservados, sem consumo falso.
++- **Troca de âncora entre pai/filho:** nega `bootstrap_authority_replaced`, sem import.
++- **Permit expira somente no filho:** relógio root sintético avança após a construção do comando. A revalidação no Loader nega `authority_permit_expired`, sem import.
++- **Filho não declarado:** transporte nega; chamada direta ao bootstrap também consulta root e nega a entrada não declarada, sem executar seu canário.
++- **Resposta root perdida:** filho nega antes de importar; não consulta para renovar/emite permit.
++- **Resposta de execute perdida:** o processo real conclui execute e consome o proof; somente a resposta é perdida por hook no pai. Protocolo para, registra a fase e não repete execute ou declara complete.
++- **R3 e recuperações:** ida sem permit, negativa antes do efeito após troca, seleção obrigatória, resposta de start perdida; ORIGINAL/CANDIDATE/PRESTOP, expiração/troca API-worker e replay continuam cobertos pelas regressões diretamente afetadas.
++
++## O que foi simulado e o que não foi
++
++**Reais:** processos locais Python/Node, `/usr/bin/python3 -I -S`, Bridge.run/protocol/node, stdin/stdout, leitor/Context/Loader, transações de arquivo da fixture, delegated completo (funções request/record/proof/execute, nonce, locks e consumo), execution-check e baseline/ecosystem. Não houve monkeypatch de subprocess que devolvesse um resultado inventado; os hooks lançam o comando real, podendo injetar concorrência ou perder a resposta depois dele.
++
++**Simulações explícitas:** UID/modos/cadeias root no `trusted_library`, canal sudo/root e bundle de autoridade em arquivo sintético, relógio apenas no teste de expiração; caminhos fixos dos launchers e namespace de preparação mapeados para temporário; `/usr/bin/node` mapeado para o Node instalado localmente. A leitura FD/compilação e os hashes dos arquivos de biblioteca são reais. O shim consulta um bundle sintético, não instala/aciona helper/sudoers nem emite autoridade real.
++
++System guard/cron/PM2/SQL/HTTP são o driver declarado da fixture. Não se consulta nenhum recurso produtivo. O restore é a autoridade anterior injetada explicitamente como nas provas aceitas, sem afirmar restore novo. Para exercitar preflight, a classe System é substituída pelo driver; as funções canônicas request/record/proof/execute, os verificadores baseline e os controles ScheduledControls permanecem concretos. A instrumentação de import usa `lab_record` separado, sem substituir `delegated.record`.
++
++A fixture inclui os módulos db_owner reais para satisfazer os imports concretos de Operations, mas não executa SQL/observação DB reais. Não foram ensaiados PM2 ou todos os efeitos do delegated start em subprocessos: R3/recuperações continuam nos seus ensaios focados com OS simulado. Essa distinção não fica escondida pela contagem de testes.
++
++## Reprodução e evidências
++
++```bash
++python3 -B docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/reproduce.py
++```
++
++**24 PASS finais:**14 casos de processos/continuidade e10 regressões afetadas de R3/recuperação. As suítes28/33/32/42 inteiras não foram repetidas. O harness isola os arquivos entregues e as referências versionadas com hashes; o subprocesso da suíte não tem fallback Git/local-evidence. Nenhum build foi feito.
++
++O Node→Python encontrou EPERM no sandbox. A mesma suíte passou fora dele; o teste não foi alterado para simular esse transporte. Rodadas adicionais foram justificadas por correções do harness e novas contraprovas/evidência PID/PPID, não repetição por rotina. O primeiro harness usou um nome de auditoria que sombreava `record`; foi corrigido para alias separado antes da prova final. O primeiro ensaio de expiração negava no pai; a versão final expira somente no filho. Essas ocorrências ficam registradas em PROOFS.json, sem reescrever provas antigas.
++
++`TEST_OUTPUT.txt` fixa os24 resultados. `PROCESS_EVIDENCE.json` contém12 casos com subprocessos lançados; duas negativas param no pai sem subprocesso. Os dez testes reaproveitados continuam com suas provas de contrato e OS simulado declaradas. Não há falsos recibos de complete em nenhum caso.
++
++## Bloqueios e critério de avanço
++
++**B2 fechado somente no laboratório e nos dois caminhos especificados, com continuidade de execução.**
++
++- **B1 permanece:** canal inicial ainda não ligado à custódia/diagnóstico privado canônico byte-exato. O canal sudo foi simulado neste laboratório, como autorizado, não certificado operacionalmente.
++- **B3 permanece:** PM2 reabre ecosystem CJS em outro processo; nenhum efeito PM2 foi executado ou solução nova acrescentada.
++- **B4 permanece:** não há instalador/pacote concreto nem fechamento transitivo operacional dos quatro modos, root/pins/namespaces atuais. A fixture completa não é essa certificação.
++
++A futura certificação precisa materializar os vínculos reais e os bloqueios restantes, com autorização própria. Não ampliar a conclusão local para autoridade root instalada ou prontidão de janela. NEWauth+NEWDB+NEWcipher, produção, frontend, ambos crons, guarda38, out.15, configurações, credenciais e gerações/intents consumidos não foram acessados ou alterados.
++
++`FULL_DELTA.patch` representa o incremento e checkpoints contra o SHA-base, excluindo a si próprio, MANIFEST e ALLOWLIST; MANIFEST fixa os bytes finais. SOURCE_DELTA apresenta somente mudanças nas cinco fontes futuras. Responsável operacional Deifson; revisão21/10 ou antes após mudanças.
++
++**INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.**
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/SOURCE_DELTA.patch
+@@ -0,0 +1,143 @@
++--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/authority.py
+++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/authority.py
++@@ -153,6 +153,8 @@
++             require(b['livePhase'] in (('fenced',) if purpose != 'closure' else
++                     ('fenced', 'ready', 'unfenced', 'complete')), 'authority_live_phase_drift')
++         self.bundle = b
+++        if hasattr(self, "_execution_expected"):
+++            self._check_execution(self._execution_expected)
++         return self
++ 
++     def pin(self, name):
++@@ -181,16 +183,48 @@
++                 'authority_forward_contract')
++         require(digest((w / 'target.profile.private.json').read_bytes()) ==
++                 self.bundle['anchor']['profileSha256']['CANDIDATE'], 'authority_forward_profile')
++-        execution = digest((w / 'csv-execution.intent.private.json').read_bytes())
++-        if not hasattr(self, '_forward_execution'):
++-            self._forward_execution = execution
++-        require(execution == self._forward_execution, 'authority_forward_execution_drift')
+++        require(hexhash(self.execution_hash()), 'authority_forward_execution_required')
++         # Recovery or closure already admitted is not a second forward attempt.
++         require(not any(os.path.lexists(w / name) for name in
++                 ('csv-recovery.intent.private.json', 'csv-recovery.receipt.private.json',
++                  'csv-abort.receipt.private.json', 'csv-complete.receipt.private.json')),
++                 'authority_forward_consumed_or_recovery')
++         self.revalidate('forward')
+++        return self
+++
+++    def _current_execution(self):
+++        path = self.root / 'window/csv-execution.intent.private.json'
+++        return digest(path.read_bytes()) if os.path.lexists(path) else None
+++
+++    def _check_execution(self, expected):
+++        require(self._current_execution() == expected, 'authority_execution_changed')
+++        permit = self.bundle['permit']
+++        if permit is not None:
+++            require(expected == permit['executionIntentSha256'], 'authority_execution_permit')
+++        return expected
+++
+++    def execution_hash(self):
+++        current = self._current_execution()
+++        if not hasattr(self, '_execution_expected') and current is not None:
+++            self._execution_expected = current
+++        return self._check_execution(getattr(self, '_execution_expected', current))
+++
+++    def correlation(self):
+++        self.revalidate()
+++        return {'authority': list(self.identity), 'executionSha256': self.execution_hash()}
+++
+++    def accept_correlation(self, value):
+++        # Parent lineage is a comparison obligation, not authority: Context has
+++        # already queried/validated root independently. Check BEFORE the Loader.
+++        require(type(value) is dict and set(value) == {'authority', 'executionSha256'},
+++                'authority_correlation_shape')
+++        require(tuple(value['authority']) == self.identity, 'bootstrap_authority_replaced')
+++        expected = value['executionSha256']
+++        require(expected is None or hexhash(expected), 'authority_execution_shape')
+++        self._check_execution(expected)
+++        if expected is not None:
+++            self._execution_expected = expected
+++        self.revalidate()
++         return self
++ 
++     def operation(self, decision, purpose='recovery'):
++--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/integration.py
+++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/integration.py
++@@ -86,6 +86,7 @@
++     return source
++ 
++ def delegated(source):
+++    source=once(source, "    return result\n", "    result['executionIntentSha256'] = __phase_authority__.execution_hash()\n    return result\n")
++     return once(source,'    command, action, root = sys.argv[1:4]\n',
++         '    __phase_authority__.revalidate()\n    command, action, root = sys.argv[1:4]\n')
++ 
++--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/bootstrap.py
+++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/bootstrap.py
++@@ -37,16 +37,20 @@
++     authority.require(len(argv)>=2 and argv[0]in('python','node-snapshot'),'bootstrap_arguments')
++     context=authority.Context()
++     entry=argv[1]; rest=list(argv[2:])
++-    if rest[:1]==['--authority-correlation']:
+++    correlated = rest[:1]==['--authority-correlation']
+++    if correlated:
++         authority.require(len(rest)>=3 and rest[2]=='--', 'bootstrap_correlation_arguments')
++-        authority.require(tuple(json.loads(rest[1]))==context.identity, 'bootstrap_authority_replaced')
+++        context.accept_correlation(json.loads(rest[1]))
++         rest=rest[3:]
+++    scope=context.bundle['manifest']['entries'].get(entry)
+++    authority.require(scope != 'forward' or correlated, 'bootstrap_forward_lineage_required')
++     loader=Loader(context,entry,trusted_modules={"authority":authority,"child_transport":transport})
++     if argv[0]=='python':
++         authority.require(context.bundle['manifest']['files'][entry]['language']=='python','bootstrap_language')
++-        return loader.execute(rest)
+++        loader.execute(rest)
+++        return None
++     authority.require(context.bundle['manifest']['files'][entry]['language']=='commonjs','bootstrap_language')
++-    return {'root':str(context.root),'identity':list(context.identity),'entry':entry,
+++    return {'root':str(context.root),'identity':list(context.identity),'correlation':context.correlation(),'entry':entry,
++         'manifest':context.bundle['manifest'],
++         'files':{p:base64.b64encode(v).decode()for p,v in loader.raw.items()}}
++ 
++--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/child_transport.py
+++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/child_transport.py
++@@ -13,6 +13,6 @@
++     target=str(Path(args[1]).relative_to(context.root))
++     context.snapshot(target)  # fresh scope and transitive coverage before child
++     if name=='node':
++-        return ['/usr/bin/env','-u','NODE_OPTIONS','-u','NODE_PATH','/usr/bin/node',NODE,target,'--authority-correlation',json.dumps(context.identity),'--',*args[2:]]
+++        return ['/usr/bin/env','-u','NODE_OPTIONS','-u','NODE_PATH','/usr/bin/node',NODE,target,'--authority-correlation',json.dumps(context.correlation()),'--',*args[2:]]
++     return ['/usr/bin/python3','-I','-S',BOOTSTRAP,'python',target,
++-            '--authority-correlation',json.dumps(context.identity),'--',*args[2:]]
+++            '--authority-correlation',json.dumps(context.correlation()),'--',*args[2:]]
++--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/node_bootstrap.cjs
+++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/node_bootstrap.cjs
++@@ -6,10 +6,15 @@
++ const allowedBuiltins = new Set(['fs','path','assert','crypto','child_process','os','util','url','buffer','http','https']);
++ function deny(ok, why) { if (!ok) throw Error(why); }
++ function run(entry, args, transport = (command, options) => cp.execFileSync('/usr/bin/python3', ['-I','-S',PY,...command], options)) {
++-  const read = () => JSON.parse(transport(['node-snapshot',entry], {encoding:'utf8'}));
++-  const snap = read(), cache = new Map();
++-  if(args[0]==='--authority-correlation'){deny(JSON.stringify(JSON.parse(args[1]))===JSON.stringify(snap.identity)&&args[2]==='--','node_authority_replaced');args=args.slice(3);}
++-  function fresh() { const now=read();deny(JSON.stringify(now.identity)===JSON.stringify(snap.identity),'node_authority_replaced'); }
+++  let expected=null;
+++  if(args[0]==='--authority-correlation'){
+++    deny(args[2]==='--','node_correlation_arguments');expected=JSON.parse(args[1]);args=args.slice(3);
+++  }
+++  const read = (correlation) => JSON.parse(transport(['node-snapshot',entry,...(correlation ?
+++    ['--authority-correlation',JSON.stringify(correlation),'--'] : [])], {encoding:'utf8'}));
+++  const snap = read(expected), cache = new Map();
+++  if(expected)deny(JSON.stringify(expected)===JSON.stringify(snap.correlation),'node_authority_replaced');
+++  function fresh() { const now=read(snap.correlation);deny(JSON.stringify(now.correlation)===JSON.stringify(snap.correlation),'node_authority_replaced'); }
++   const children = Object.assign({}, cp, {
++     execFileSync(command, argv, options) {
++       fresh();
++@@ -19,7 +24,7 @@
++         deny(snap.manifest.entries[target], 'node_python_child_not_entry');
++         deny(Object.values(snap.manifest.imports[entry] || {}).includes(target) ||
++              Object.keys(snap.manifest.imports).some(k=>Object.values(snap.manifest.imports[k]).includes(target)), 'node_python_child_undeclared');
++-        return transport(['python',target,'--authority-correlation',JSON.stringify(snap.identity),'--',...argv.slice(1)],options);
+++        return transport(['python',target,'--authority-correlation',JSON.stringify(snap.correlation),'--',...argv.slice(1)],options);
++       }
++       deny(!['python','python3','node'].includes(path.basename(command)), 'node_child_bypass');
++       return cp.execFileSync(command,argv,options); // existing OS effects; rehearsals must intercept them
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/SOURCE_PROVENANCE.json
+@@ -0,0 +1,24 @@
++{
++  "baseCommit": "6273b4d31fb0203882ad3800da6c9d4b2988a4a4",
++  "editableFutureSources": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016",
++  "replacedFutureSources": {
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/authority.py": "d6fb49a3c35503f06f2582e22e137ad53e3c8cd8c1c4ddf379cd06055c922f3b",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/integration.py": "f3628c4078007c9580651c4a1549b26d3b25375d655b6d1d58a79379a71ec7a9",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/bootstrap.py": "5c1e2cec3e2a6c54d2e1035eeceb62943e71840d94e9fdfce0e4e73be5a7f008",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/child_transport.py": "672e4a562e27c434257980a4bc1fd5ea2aba8e7529127e40662d4b1be15c87b8",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/node_bootstrap.cjs": "0743c3f4fc4c428f668de65db4669889457965e98726789d599d82ba89378ed1"
++  },
++  "untouchedReusableSources": {
++    "root_store.py": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/root_store.py",
++    "root_extension.py": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/root_extension.py",
++    "verified_loader.py": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/verified_loader.py"
++  },
++  "fixtureConsumers": {
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
++  },
++  "reproduction": "Use reproduce.py; inherited source provenance from accepted recovery and pinned copies from 2cc9a350/bdb57f. Only the future libraries and fixture tests are overlaid. Child test tree has ISOLATED_DELIVERY and no local-evidence/Git fallback."
++}
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/TEST_OUTPUT.txt
+@@ -0,0 +1,29 @@
++test_authority_exchange_race_denied_before_import (test_process.ProcessChain.test_authority_exchange_race_denied_before_import) ... ok
++test_before_context_gap_reaches_child_import_and_request (test_process.ProcessChain.test_before_context_gap_reaches_child_import_and_request) ... ok
++test_direct_bootstrap_undeclared_child_no_execution (test_process.ProcessChain.test_direct_bootstrap_undeclared_child_no_execution) ... ok
++test_execution_race_denied_before_child_import_or_request (test_process.ProcessChain.test_execution_race_denied_before_child_import_or_request) ... ok
++test_expired_recovery_authority_denies_child_before_import (test_process.ProcessChain.test_expired_recovery_authority_denies_child_before_import) ... ok
++test_forward_missing_execution_still_denied (test_process.ProcessChain.test_forward_missing_execution_still_denied) ... ok
++test_fresh_parent_execute_detects_durable_request_execution (test_process.ProcessChain.test_fresh_parent_execute_detects_durable_request_execution) ... ok
++test_fresh_parent_record_detects_request_execution_drift (test_process.ProcessChain.test_fresh_parent_record_detects_request_execution_drift) ... ok
++test_lost_execute_response_no_automatic_replay (test_process.ProcessChain.test_lost_execute_response_no_automatic_replay) ... ok
++test_lost_root_response_before_import (test_process.ProcessChain.test_lost_root_response_before_import) ... ok
++test_node_execution_race_denies_baseline_before_import (test_process.ProcessChain.test_node_execution_race_denies_baseline_before_import) ... ok
++test_real_delegated_three_processes_and_consumption (test_process.ProcessChain.test_real_delegated_three_processes_and_consumption) ... ok
++test_real_node_python_baseline_chain (test_process.ProcessChain.test_real_node_python_baseline_chain) ... ok
++test_unauthorized_child_no_import (test_process.ProcessChain.test_unauthorized_child_no_import) ... ok
++test_original_real_checker_certificates_controls_and_replay (test_connected.Connected.test_original_real_checker_certificates_controls_and_replay) ... ok
++test_prestop_no_permit_and_no_start (test_connected.Connected.test_prestop_no_permit_and_no_start) ... ok
++test_candidate_compatible_only (test_connected.Connected.test_candidate_compatible_only) ... ok
++test_expiry_between_api_worker_no_complete (test_connected.Connected.test_expiry_between_api_worker_no_complete) ... ok
++test_authority_replacement_between_api_worker_no_complete (test_connected.Connected.test_authority_replacement_between_api_worker_no_complete) ... ok
++test_lost_start_response_no_replay_or_complete (test_connected.Connected.test_lost_start_response_no_replay_or_complete) ... ok
++test_forward_real_pair_without_recovery_permit (test_r3.Forward.test_forward_real_pair_without_recovery_permit) ... ok
++test_forward_revalidation_after_start_intent_before_effect (test_r3.Forward.test_forward_revalidation_after_start_intent_before_effect) ... ok
++test_forward_start_gate_selection_negative (test_r3.Forward.test_forward_start_gate_selection_negative) ... ok
++test_forward_response_lost_no_replay_or_complete (test_r3.Forward.test_forward_response_lost_no_replay_or_complete) ... ok
++
++----------------------------------------------------------------------
++Ran 24 tests in 7.600s
++
++OK
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/authority.py
+@@ -0,0 +1,269 @@
++"""Future shared authority reader. Root installation is required; no env/CLI pins.
++
++Only the fixed root helper supplies authority. This module never imports a
++binding. Test transports/metadata are injected explicitly, never via environment.
++"""
++import datetime
++import hashlib
++import json
++import os
++from pathlib import Path
++import stat
++import subprocess
++
++HELPER = '/usr/local/libexec/re7/incident-6683-window-control.py'
++BOOTSTRAP = '/usr/local/libexec/re7/recovery-launch.py'
++QUERY = ['/usr/bin/sudo', '-n', '/usr/bin/python3', '-I', '-S', HELPER,
++         'inspect-recovery-authority']
++MODES = ('switch', 'return', 'return-partial', 'return-before-commit')
++
++def require(ok, why):
++    if not ok:
++        raise RuntimeError(why)
++
++def digest(raw):
++    return hashlib.sha256(raw).hexdigest()
++
++def canonical(value):
++    return (json.dumps(value, sort_keys=True, separators=(',', ':')) + '\n').encode()
++
++def hexhash(value):
++    return type(value) is str and len(value) == 64 and all(c in '0123456789abcdef' for c in value)
++
++def protected_directory(path):
++    path=Path(path)
++    for node in (path,*path.parents):
++        meta=node.lstat()
++        require(stat.S_ISDIR(meta.st_mode) and meta.st_uid==0 and not meta.st_mode&0o022,
++                'authority_root_directory')
++
++
++def protected_bytes(path):
++    """Root chains cannot be replaced by deploy; consume bytes of the opened FD."""
++    path = Path(path)
++    for parent in path.parents:
++        s = parent.lstat()
++        require(stat.S_ISDIR(s.st_mode) and s.st_uid == 0 and not s.st_mode & 0o022,
++                'authority_root_chain')
++    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
++    try:
++        s = os.fstat(fd)
++        require(stat.S_ISREG(s.st_mode) and s.st_uid == 0 and
++                not s.st_mode & 0o022 and s.st_nlink == 1, 'authority_root_file')
++        with os.fdopen(fd, 'rb', closefd=False) as stream:
++            return stream.read()
++    finally:
++        os.close(fd)
++
++def fixed_query():
++    protected_bytes(HELPER)
++    result = subprocess.run(QUERY, check=True, capture_output=True, timeout=15,
++                            env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'})
++    return result.stdout
++
++def validate_dag(manifest):
++    require(set(manifest) == {'files', 'dependencies', 'entries', 'imports'}, 'authority_manifest_shape')
++    files = manifest['files']; deps = manifest['dependencies']
++    require(type(files) is dict and files and set(deps) == set(files), 'authority_dependency_coverage')
++    for name, row in files.items():
++        p = Path(name)
++        require(not p.is_absolute() and '..' not in p.parts and str(p) == name and
++                row['language'] in ('python', 'commonjs', 'json', 'data') and hexhash(row['sha256']) and
++                type(row['uid']) is int and type(row['mode']) is int,
++                'authority_file_row')
++        require(type(deps[name]) is list and len(set(deps[name])) == len(deps[name]) and
++                set(deps[name]) <= set(files), 'authority_dependency_unknown')
++    done = set(); active = set()
++    def visit(name):
++        require(name not in active, 'authority_dependency_cycle')
++        if name in done:
++            return
++        active.add(name)
++        for child in deps[name]:
++            visit(child)
++        active.remove(name); done.add(name)
++    for name in files:
++        visit(name)
++    require(type(manifest['entries']) is dict and manifest['entries'] and
++            set(manifest['entries']) <= set(files), 'authority_entry_coverage')
++    for name, scope in manifest['entries'].items():
++        require(scope in ('inspect', 'prestop', 'forward', 'recovery', 'closure'), 'authority_entry_scope')
++    for owner, imports in manifest['imports'].items():
++        require(owner in files and type(imports) is dict and
++                set(imports.values()) <= set(files), 'authority_import_coverage')
++    return done
++
++class Context:
++    """Explicit context; a selector/correlation digest is never its authority."""
++    def __init__(self, query=fixed_query, *, now=None):
++        self.query = query
++        self.now = now or (lambda: datetime.datetime.now(datetime.timezone.utc))
++        self.bundle = self._read()
++        self.identity = self._identity(self.bundle)
++        self.root = Path(self.bundle['anchor']['preparation'])
++
++    def _identity(self, bundle):
++        return (bundle['anchorSha256'], bundle['permitSha256'])
++
++    def _read(self):
++        raw = self.query(); b = json.loads(raw)
++        require(b['result'] == 'ROOT_RECOVERY_AUTHORITY_READ' and b['queryOnly'] is True,
++                'authority_query_result')
++        a = b['anchor']; p = b['permit']; m = b['manifest']
++        require(a['version'] == 1 and Path(a['preparation']).is_absolute() and
++                hexhash(a['contractSha256']) and hexhash(a['policySha256']) and
++                hexhash(a['codeManifestSha256']), 'authority_anchor_shape')
++        require(digest(canonical(a)) == b['anchorSha256'] and
++                digest(canonical(m)) == a['codeManifestSha256'], 'authority_anchor_integrity')
++        require(b['livePolicySha256'] == a['policySha256'], 'authority_live_policy_drift')
++        require(b['livePhase'] in (None, 'fenced', 'ready', 'unfenced', 'complete', 'aborted'),
++                'authority_phase_unknown')
++        validate_dag(m)
++        if p is None:
++            require(b['permitSha256'] is None, 'authority_permit_missing')
++        else:
++            require(digest(canonical(p)) == b['permitSha256'], 'authority_permit_integrity')
++            require(p['anchorSha256'] == b['anchorSha256'] and
++                    p['preparation'] == a['preparation'] and
++                    p['contractSha256'] == a['contractSha256'] and
++                    p['policySha256'] == a['policySha256'] and p['phase'] == 'fenced' and
++                    p['decision'] in ('ORIGINAL', 'CANDIDATE') and
++                    p['targetProfileSha256'] == a['profileSha256'][p['decision']] and
++                    hexhash(p['executionIntentSha256']), 'authority_permit_context')
++            require(datetime.datetime.fromisoformat(p['capturedUtc']).utcoffset() is not None,
++                    'authority_permit_timezone')
++        return b
++
++    def revalidate(self, purpose='inspect', decision=None, execution_hash=None):
++        b = self._read()
++        require(self._identity(b) == self.identity, 'authority_replaced')
++        require(purpose in ('inspect', 'prestop', 'forward', 'recovery', 'start', 'closure'), 'authority_purpose')
++        if purpose == 'prestop':
++            require(b['livePhase'] in (None, 'fenced') and b['permit'] is None,
++                    'authority_prestop_scope')
++        elif purpose == 'forward':
++            require(b['permit'] is None, 'authority_forward_recovery_conflict')
++            require(b['livePhase'] == 'fenced', 'authority_forward_phase')
++        elif purpose in ('recovery', 'start', 'closure'):
++            p = b['permit']; require(p is not None, 'authority_permit_required')
++            age = (self.now() - datetime.datetime.fromisoformat(p['capturedUtc'])).total_seconds()
++            require(0 <= age < 600, 'authority_permit_expired')
++            require(p['decision'] == decision and p['executionIntentSha256'] == execution_hash,
++                    'authority_decision_or_execution')
++            require(b['livePhase'] in (('fenced',) if purpose != 'closure' else
++                    ('fenced', 'ready', 'unfenced', 'complete')), 'authority_live_phase_drift')
++        self.bundle = b
++        if hasattr(self, "_execution_expected"):
++            self._check_execution(self._execution_expected)
++        return self
++
++    def pin(self, name):
++        if name == 'contract':
++            return self.bundle['anchor']['contractSha256']
++        if name == 'policy':
++            return self.bundle['anchor']['policySha256']
++        require(name == 'permit' and self.bundle['permit'] is not None, 'authority_pin_unavailable')
++        return self.bundle['permitSha256']
++
++    def start_mode(self, directory):
++        """Static reviewed authority for switch; one-shot permit only for recovery.
++
++        This does not admit gates or select a candidate. Operations and its
++        canonical start gate must still validate all dynamic preconditions.
++        """
++        directory = Path(directory)
++        require(directory.parent == self.root and directory.name in MODES,
++                'authority_start_mode_scope')
++        if directory.name != 'switch':
++            return self.operation('ORIGINAL' if directory.name == 'return-before-commit'
++                                  else 'CANDIDATE', 'start')
++        self.revalidate('forward')
++        w = self.root / 'window'
++        require(digest((w / 'recovery-contract.private.json').read_bytes()) == self.pin('contract'),
++                'authority_forward_contract')
++        require(digest((w / 'target.profile.private.json').read_bytes()) ==
++                self.bundle['anchor']['profileSha256']['CANDIDATE'], 'authority_forward_profile')
++        require(hexhash(self.execution_hash()), 'authority_forward_execution_required')
++        # Recovery or closure already admitted is not a second forward attempt.
++        require(not any(os.path.lexists(w / name) for name in
++                ('csv-recovery.intent.private.json', 'csv-recovery.receipt.private.json',
++                 'csv-abort.receipt.private.json', 'csv-complete.receipt.private.json')),
++                'authority_forward_consumed_or_recovery')
++        self.revalidate('forward')
++        return self
++
++    def _current_execution(self):
++        path = self.root / 'window/csv-execution.intent.private.json'
++        return digest(path.read_bytes()) if os.path.lexists(path) else None
++
++    def _check_execution(self, expected):
++        require(self._current_execution() == expected, 'authority_execution_changed')
++        permit = self.bundle['permit']
++        if permit is not None:
++            require(expected == permit['executionIntentSha256'], 'authority_execution_permit')
++        return expected
++
++    def execution_hash(self):
++        current = self._current_execution()
++        if not hasattr(self, '_execution_expected') and current is not None:
++            self._execution_expected = current
++        return self._check_execution(getattr(self, '_execution_expected', current))
++
++    def correlation(self):
++        self.revalidate()
++        return {'authority': list(self.identity), 'executionSha256': self.execution_hash()}
++
++    def accept_correlation(self, value):
++        # Parent lineage is a comparison obligation, not authority: Context has
++        # already queried/validated root independently. Check BEFORE the Loader.
++        require(type(value) is dict and set(value) == {'authority', 'executionSha256'},
++                'authority_correlation_shape')
++        require(tuple(value['authority']) == self.identity, 'bootstrap_authority_replaced')
++        expected = value['executionSha256']
++        require(expected is None or hexhash(expected), 'authority_execution_shape')
++        self._check_execution(expected)
++        if expected is not None:
++            self._execution_expected = expected
++        self.revalidate()
++        return self
++
++    def operation(self, decision, purpose='recovery'):
++        execution = self.root / 'window/csv-execution.intent.private.json'
++        return self.revalidate(purpose, decision, digest(execution.read_bytes()))
++
++    def snapshot(self, entry):
++        self.revalidate()
++        m = self.bundle['manifest']; require(entry in m['entries'], 'authority_entry_denied')
++        scope = m['entries'][entry]
++        if scope == 'recovery':
++            require(self.bundle['permit'] is not None, 'authority_permit_required')
++            self.operation(self.bundle['permit']['decision'], 'start')
++        elif scope == 'closure':
++            require(self.bundle['permit'] is not None, 'authority_permit_required')
++            self.operation(self.bundle['permit']['decision'], 'closure')
++        elif scope == 'forward':
++            self.start_mode(self.root / Path(entry).parts[0])
++        elif scope == 'prestop':
++            self.revalidate('prestop')
++        result = {}
++        def collect(name):
++            if name in result:
++                return
++            file = self.root / name
++            fd = os.open(file, os.O_RDONLY | os.O_NOFOLLOW)
++            try:
++                s = os.fstat(fd)
++                require(stat.S_ISREG(s.st_mode) and s.st_nlink == 1 and
++                        s.st_uid == m['files'][name]['uid'] and
++                        stat.S_IMODE(s.st_mode) == m['files'][name]['mode'], 'authority_source_type')
++                with os.fdopen(fd, 'rb', closefd=False) as stream:
++                    value = stream.read()
++            finally:
++                os.close(fd)
++            require(digest(value) == m['files'][name]['sha256'], 'authority_source_hash:' + name)
++            result[name] = value
++            for child in set(m['dependencies'][name]) | set(m['imports'].get(name, {}).values()):
++                collect(child)
++        collect(entry)
++        self.revalidate()
++        return result
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/bootstrap.py
+@@ -0,0 +1,59 @@
++"""Future root-owned bootstrap, executed AS DEPLOY. Never installed by this file.
++The launcher path and root-owned library are the OS/install trust anchor, not argv.
++"""
++import base64
++import json
++from pathlib import Path
++import sys
++import types
++
++LIBRARY=Path('/usr/local/libexec/re7')
++
++def trusted_library(name):
++    # This bootstrap itself is root-owned and launched with /usr/bin/python3 -I -S.
++    # No preparation import is performed here. Root library owner/canonical chain
++    # follows the same trust model as the installed helper.
++    import os,stat
++    path=LIBRARY/(name+'.py')
++    for parent in path.parents:
++        s=parent.lstat()
++        if not(stat.S_ISDIR(s.st_mode)and s.st_uid==0 and not s.st_mode&0o022):
++            raise RuntimeError('bootstrap_library_chain')
++    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
++    try:
++        s=os.fstat(fd)
++        if not(stat.S_ISREG(s.st_mode)and s.st_uid==0 and not s.st_mode&0o022 and s.st_nlink==1):
++            raise RuntimeError('bootstrap_library_file')
++        with os.fdopen(fd,'rb',closefd=False)as stream:raw=stream.read()
++    finally:os.close(fd)
++    module=types.ModuleType(name);module.__file__=str(path);sys.modules[name]=module
++    exec(compile(raw,str(path),'exec'),module.__dict__)
++    return module
++
++def main(argv):
++    authority=trusted_library('authority');trusted_library('verified_loader')
++    transport=trusted_library('child_transport')
++    from verified_loader import Loader
++    authority.require(len(argv)>=2 and argv[0]in('python','node-snapshot'),'bootstrap_arguments')
++    context=authority.Context()
++    entry=argv[1]; rest=list(argv[2:])
++    correlated = rest[:1]==['--authority-correlation']
++    if correlated:
++        authority.require(len(rest)>=3 and rest[2]=='--', 'bootstrap_correlation_arguments')
++        context.accept_correlation(json.loads(rest[1]))
++        rest=rest[3:]
++    scope=context.bundle['manifest']['entries'].get(entry)
++    authority.require(scope != 'forward' or correlated, 'bootstrap_forward_lineage_required')
++    loader=Loader(context,entry,trusted_modules={"authority":authority,"child_transport":transport})
++    if argv[0]=='python':
++        authority.require(context.bundle['manifest']['files'][entry]['language']=='python','bootstrap_language')
++        loader.execute(rest)
++        return None
++    authority.require(context.bundle['manifest']['files'][entry]['language']=='commonjs','bootstrap_language')
++    return {'root':str(context.root),'identity':list(context.identity),'correlation':context.correlation(),'entry':entry,
++        'manifest':context.bundle['manifest'],
++        'files':{p:base64.b64encode(v).decode()for p,v in loader.raw.items()}}
++
++if __name__=='__main__':
++    result=main(sys.argv[1:])
++    if result is not None:print(json.dumps(result,sort_keys=True))
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/child_transport.py
+@@ -0,0 +1,18 @@
++"""Future child routing. Correlation does not replace fresh root authentication."""
++from pathlib import Path
++import json
++from authority import BOOTSTRAP, require
++NODE='/usr/local/libexec/re7/recovery-node-launch.cjs'
++
++def command(context, args):
++    if not args:return args
++    name=Path(args[0]).name
++    if name not in ('python','python3','node'):
++        return args
++    require(len(args)>=2 and Path(args[1]).is_absolute(), 'authority_child_bypass')
++    target=str(Path(args[1]).relative_to(context.root))
++    context.snapshot(target)  # fresh scope and transitive coverage before child
++    if name=='node':
++        return ['/usr/bin/env','-u','NODE_OPTIONS','-u','NODE_PATH','/usr/bin/node',NODE,target,'--authority-correlation',json.dumps(context.correlation()),'--',*args[2:]]
++    return ['/usr/bin/python3','-I','-S',BOOTSTRAP,'python',target,
++            '--authority-correlation',json.dumps(context.correlation()),'--',*args[2:]]
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/integration.py
+@@ -0,0 +1,97 @@
++"""Pure future source transforms over accepted consumers. No historical edits.
++All __phase_* globals are installed by the authenticated loader, not env or argv.
++A raw execution therefore fails before operational effects.
++"""
++import ast
++import textwrap
++
++
++def once(source, old, new):
++    if source.count(old)!=1:raise RuntimeError('authority_integration_anchor:'+old[:50])
++    return source.replace(old,new,1)
++
++def method(source, cls, name, replacement):
++    tree=ast.parse(source)
++    owner=next(n for n in tree.body if isinstance(n,ast.ClassDef)and n.name==cls)
++    node=next(n for n in owner.body if isinstance(n,ast.FunctionDef)and n.name==name)
++    lines=source.splitlines(True);lines[node.lineno-1:node.end_lineno]=[textwrap.indent(textwrap.dedent(replacement).strip(),'    ')+'\n']
++    return ''.join(lines)
++
++def recovery(source):
++    source=once(source,'def __init__(self, root, bridge, sequencer_class, contract_digest):',
++        'def __init__(self, root, bridge, sequencer_class, contract_digest, authority):')
++    source=once(source,'        self.root = Path(root); self.window = self.root / \'window\'\n',
++        '        self.authority = authority\n        require(Path(root) == authority.root and contract_digest == authority.pin("contract"), "authority_recovery_root")\n        self.root = Path(root); self.window = self.root / \'window\'\n')
++    source=once(source,'    def inspect(self):\n        c = Contract(self.root, self.b, self.digest)\n',
++        '    def inspect(self):\n        self.authority.revalidate()\n        c = Contract(self.root, self.b, self.digest)\n')
++    # This second occurrence belongs to recover inside the locks.
++    source=once(source,"            require(decision in view['options'], 'explicit_decision_or_state_denied')\n",
++        "            require(decision in view['options'], 'explicit_decision_or_state_denied')\n            if decision == 'PRESTOP': self.authority.revalidate('prestop')\n            else: self.authority.operation(decision)\n")
++    source=once(source,"            self.b.reset_recovery_gates()\n",
++        "            if decision != 'PRESTOP': self.authority.operation(decision, 'closure')\n            self.b.reset_recovery_gates()\n")
++    start=source.index('def build(root):')
++    return source[:start]+'''def build(root, authority):
++    from recovery_bridge import Bridge
++    from sequencer import Sequencer
++    authority.revalidate()
++    return Recovery(root, Bridge(root, authority), Sequencer, authority.pin('contract'), authority)
++def inspect(root):
++    return build(root, __phase_authority__).inspect()
++def recover(root, decision):
++    return build(root, __phase_authority__).recover(decision)
++'''
++
++def bridge(source):
++    source=once(source,'    def __init__(self, root, policy_hash):','    def __init__(self, root, authority):')
++    source=once(source,'        self.recovery_policy_hash = policy_hash',
++        "        self.phase_authority = authority\n        self.recovery_policy_hash = authority.pin('policy')")
++    source=once(source,'original_bindings(self.window, {a[\'name\']: a for a in source[\'apps\']})',
++        'original_bindings(self.window, {a[\'name\']: a for a in source[\'apps\']}, self.phase_authority)')
++    source=once(source,'        from recovery_binding import ROOT_POLICY_PERMIT_SHA256\n',
++        "        decision = 'ORIGINAL' if mode == ORIGINAL else 'CANDIDATE'\n        self.phase_authority.operation(decision)\n        ROOT_POLICY_PERMIT_SHA256 = self.phase_authority.pin('permit')\n")
++    source=once(source,'def original_bindings(window, config):','def original_bindings(window, config, authority):')
++    source=once(source,'    from recovery_binding import RECOVERY_CONTRACT_SHA256\n',
++        "    authority.revalidate()\n    RECOVERY_CONTRACT_SHA256 = authority.pin('contract')\n")
++    return source
++
++def gate(source):
++    return once(source,'controller = build(root)', 'controller = build(root, __phase_authority__)')
++
++def operations(source):
++    if '    def run(self, args, text=None):' in source:
++        source=once(source,'    def run(self, args, text=None):\n', '    def run(self, args, text=None):\n        from child_transport import command\n        args = command(__phase_authority__, args)\n')
++    if 'return original_bindings(window, config)'in source:
++        source=once(source,'return original_bindings(window, config)',
++                    'return original_bindings(window, config, __phase_authority__)')
++    source=once(source,'    def start(self, name):\n',
++        "    def start(self, name):\n        authority = __phase_authority__\n        authority.start_mode(self.root)\n")
++    source=once(source,'        self.d.start(self.root, name)\n',
++        "        authority.start_mode(self.root)\n        self.d.start(self.root, name)\n")
++    return source
++
++def sequencer(source):
++    source=method(source,'Bridge','app_matches','''
++        def app_matches(self, name, config):
++            module = __phase_loader__.local_module(self.switch / 'ops.py')
++            app = self.apps().get(name)
++            if app is None: return False
++            try: module.Operations(self.switch, module.System()).config(app, config[name])
++            except (RuntimeError, KeyError): return False
++            return True
++    ''')
++    source=once(source, "        import importlib.util\n        spec = importlib.util.spec_from_file_location('v4_capture_ops', self.switch / 'ops.py')\n        module = importlib.util.module_from_spec(spec)\n        sys.path.insert(0, str(self.switch))\n        spec.loader.exec_module(module)\n", "        module = __phase_loader__.local_module(self.switch / 'ops.py')\n")
++    # One transport intercepts Python and Node children (including delegated.py).
++    source=once(source,'        result = subprocess.run(args, input=input_text, text=True,',
++        '        from child_transport import command\n        args = command(__phase_authority__, args)\n        result = subprocess.run(args, input=input_text, text=True,')
++    return source
++
++def delegated(source):
++    source=once(source, "    return result\n", "    result['executionIntentSha256'] = __phase_authority__.execution_hash()\n    return result\n")
++    return once(source,'    command, action, root = sys.argv[1:4]\n',
++        '    __phase_authority__.revalidate()\n    command, action, root = sys.argv[1:4]\n')
++
++def execution_check(source):
++    # The former template namespace is now checked against authenticated root data.
++    line=next(s for s in source.splitlines(True)if 'assert(__dirname.startsWith('in s)
++    return once(source,line,
++        "  assert(globalThis.__re7Authority && path.dirname(__dirname) === globalThis.__re7Authority.root, 'authority_node_scope');\n")
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/lab_effects.py
+@@ -0,0 +1,23 @@
++"""Synthetic external System/restore for subprocess fixture, not runtime code.
++No subprocess/network/SQL is allowed by this driver. Crons are READ in fixture.
++"""
++from pathlib import Path
++import json
++import os
++
++def record(root,event):
++    with (Path(root)/'window/effects.jsonl').open('a')as stream:
++        stream.write(json.dumps({'event':event,'pid':os.getpid()})+'\n')
++
++class Driver:
++    def guard(self):return {'version':1,'generation':38,'open':False,'tasks':{},'audit':[],'ledgerFault':False}
++    def run(self,args,text=None):
++        root=__phase_authority__.root
++        if args==['crontab','-l']:return (root/'window/deploy.crontab.before').read_text()
++        if args==['cat','/etc/cron.d/re7-converta-backup']:return (root/'window/re7-converta-backup.before').read_text()
++        raise RuntimeError('lab_external_effect_not_allowed:'+str(args))
++
++def validate_restore(root):
++    # Previously certified restore is explicitly injected, as in accepted tests.
++    # No new restore/capture, no substitution presented as operational evidence.
++    return {'result':'LAB_PREVIOUS_RESTORE_INJECTED'}
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/lab_shim.py
+@@ -0,0 +1,65 @@
++"""Synthetic root/sudo adapter for real local subprocess tests, never installed.
++The test renders CONFIG as a literal into a temporary copy of this script.
++"""
++import json
++import os
++from pathlib import Path
++import sys
++import types
++CONFIG = None
++
++def log(event, **more):
++    with (Path(CONFIG['lab'])/'processes.jsonl').open('a') as stream:
++        stream.write(json.dumps(dict(event=event,pid=os.getpid(),ppid=os.getppid(),**more))+'\n')
++
++def main(argv):
++    import importlib.util
++    import hashlib
++    from unittest.mock import patch
++    from contextlib import ExitStack
++    library=Path(CONFIG['library']);state=Path(CONFIG['lab'])/'root-state.json'
++    path=library/'bootstrap.py'
++    spec=importlib.util.spec_from_file_location('lab_real_bootstrap',path)
++    bootstrap=importlib.util.module_from_spec(spec);spec.loader.exec_module(bootstrap)
++    bootstrap.LIBRARY=library
++    real_trusted=bootstrap.trusted_library
++    original_lstat=Path.lstat;original_fstat=os.fstat
++    def stat_root(s):
++        values=list(s);values[0]=s.st_mode&~0o022;values[4]=0
++        return os.stat_result(values)
++    def trusted(name):
++        source=library/(name+'.py')
++        if hashlib.sha256(source.read_bytes()).hexdigest()!=CONFIG['sha256'][name]:
++            raise RuntimeError('lab_protected_library_drift')
++        # Only root library owner/chain metadata is simulated; original FD read,
++        # source hash and source compilation are real. No installation or chmod.
++        with patch.object(Path,'lstat',lambda p:stat_root(original_lstat(p))),patch.object(os,'fstat',lambda fd:stat_root(original_fstat(fd))):
++            m=real_trusted(name)
++        if name=='authority':
++            def query():
++                log('root_query')
++                value=json.loads(state.read_text())
++                if value.get('queryLost'):raise TimeoutError('lab root response lost')
++                return m.canonical(value['bundle'])
++            m.Context.__init__.__defaults__=(query,)
++            import datetime
++            def clock():
++                v=json.loads(state.read_text()).get('clock')
++                return datetime.datetime.fromisoformat(v) if v else datetime.datetime.now(datetime.timezone.utc)
++            m.Context.__init__.__kwdefaults__['now']=clock
++            m.BOOTSTRAP=CONFIG['shim']
++        if name=='verified_loader':
++            original=m.Loader.__init__
++            def loader(self,context,entry,**kw):
++                log('loader_constructor',entry=entry)
++                return original(self,context,entry,**kw)
++            m.Loader.__init__=loader
++        if name=='child_transport':m.NODE=CONFIG['node']
++        return m
++    bootstrap.trusted_library=trusted
++    log('bootstrap',kind=argv[0],entry=argv[1])
++    result=bootstrap.main(argv)
++    if result is not None:print(json.dumps(result,sort_keys=True))
++    log('bootstrap_complete',kind=argv[0],entry=argv[1])
++
++if __name__=='__main__':main(sys.argv[1:])
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/node_bootstrap.cjs
+@@ -0,0 +1,57 @@
++'use strict';
++// Future ROOT-OWNED Node launcher, executed as deploy. No preparation require().
++const cp = require('node:child_process'), vm = require('node:vm');
++const path = require('node:path'), crypto = require('node:crypto');
++const PY = '/usr/local/libexec/re7/recovery-launch.py';
++const allowedBuiltins = new Set(['fs','path','assert','crypto','child_process','os','util','url','buffer','http','https']);
++function deny(ok, why) { if (!ok) throw Error(why); }
++function run(entry, args, transport = (command, options) => cp.execFileSync('/usr/bin/python3', ['-I','-S',PY,...command], options)) {
++  let expected=null;
++  if(args[0]==='--authority-correlation'){
++    deny(args[2]==='--','node_correlation_arguments');expected=JSON.parse(args[1]);args=args.slice(3);
++  }
++  const read = (correlation) => JSON.parse(transport(['node-snapshot',entry,...(correlation ?
++    ['--authority-correlation',JSON.stringify(correlation),'--'] : [])], {encoding:'utf8'}));
++  const snap = read(expected), cache = new Map();
++  if(expected)deny(JSON.stringify(expected)===JSON.stringify(snap.correlation),'node_authority_replaced');
++  function fresh() { const now=read(snap.correlation);deny(JSON.stringify(now.correlation)===JSON.stringify(snap.correlation),'node_authority_replaced'); }
++  const children = Object.assign({}, cp, {
++    execFileSync(command, argv, options) {
++      fresh();
++      // Canonical execution-check.cjs invokes Python baseline_contract.py.
++      if (command === '/usr/bin/python3' && Array.isArray(argv) && argv[0].startsWith(snap.root + '/') && argv[0].endsWith('.py')) {
++        const target=path.relative(snap.root,argv[0]);
++        deny(snap.manifest.entries[target], 'node_python_child_not_entry');
++        deny(Object.values(snap.manifest.imports[entry] || {}).includes(target) ||
++             Object.keys(snap.manifest.imports).some(k=>Object.values(snap.manifest.imports[k]).includes(target)), 'node_python_child_undeclared');
++        return transport(['python',target,'--authority-correlation',JSON.stringify(snap.correlation),'--',...argv.slice(1)],options);
++      }
++      deny(!['python','python3','node'].includes(path.basename(command)), 'node_child_bypass');
++      return cp.execFileSync(command,argv,options); // existing OS effects; rehearsals must intercept them
++    }
++  });
++  for(const method of ['exec','execSync','execFile','spawn','spawnSync','fork'])children[method]=()=>{throw Error('node_child_transport_unsupported:'+method);};
++  function load(file) {
++    fresh();if(cache.has(file))return cache.get(file).exports;
++    const row=snap.manifest.files[file];deny(row && snap.files[file], 'node_dependency_missing');
++    const raw=Buffer.from(snap.files[file],'base64');
++    deny(crypto.createHash('sha256').update(raw).digest('hex')===row.sha256,'node_source_hash');
++    if(row.language==='json')return JSON.parse(raw.toString('utf8'));
++    deny(row.language==='commonjs','node_language');
++    const m={exports:{}};cache.set(file,m);
++    function checkedRequire(name) {
++      const core=name.startsWith('node:')?name.slice(5):name;
++      if(allowedBuiltins.has(core))return core==='child_process'?children:require('node:'+core);
++      const target=(snap.manifest.imports[file]||{})[name];
++      deny(target,'node_import_undeclared:'+name);return load(target);
++    }
++    const fn=vm.runInThisContext('(function(exports,require,module,__filename,__dirname){'+raw.toString('utf8')+'\n})',{filename:path.join(snap.root,file)});
++    globalThis.__re7Authority={root:snap.root,identity:snap.identity};
++    fn(m.exports,checkedRequire,m,path.join(snap.root,file),path.dirname(path.join(snap.root,file)));
++    return m.exports;
++  }
++  const old=process.argv;process.argv=[process.execPath,path.join(snap.root,entry),...args];
++  try{return load(entry);}finally{process.argv=old;}
++}
++module.exports={run};
++if(require.main===module)run(process.argv[2],process.argv.slice(3));
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/reproduce.py
+@@ -0,0 +1,69 @@
++"""Reproduce ONLY this delta in an isolated delivered tree. No private evidence.
++No installed bootstrap/helper, live transport, historical operation or product build.
++"""
++from pathlib import Path
++import hashlib
++import json
++import os
++import shutil
++import subprocess
++import sys
++import tempfile
++
++B2=Path(__file__).resolve().parent
++R3=B2.parent/'crm-csv-root-authority-r3-20261016'
++HERE=R3.parent/'crm-csv-root-authority-local-20261016'
++REVIEW=HERE.parent
++ACCEPTED=REVIEW/'crm-csv-integrated-recovery-20261016'
++BASE='bdb57f57601147632bb529895cbcd92b8b483c6c'
++NEW=('authority.py','root_store.py','root_extension.py','verified_loader.py','bootstrap.py',
++     'node_bootstrap.cjs','integration.py','child_transport.py','test_authority.py','test_connected.py')
++OLD=('recovery.py','recovery_contract.py','recovery_bridge.py','recovery_start.py','policy_proposal.py',
++     'future_sources.py','inputs.py','original_checks.py','test_recovery.py','SOURCE_PROVENANCE.json')
++EXTRA=('v4-sequencer/privileged.py','v4-sequencer/render_sudoers.py','v4-sequencer/privileged_output.py',
++       'v4-sequencer/sequencer.py',
++       'crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source',
++       'crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source',
++       'crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source',
++       'crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source',
++       'crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source')
++
++def run():
++    spec=json.loads((ACCEPTED/'SOURCE_PROVENANCE.json').read_bytes())
++    with tempfile.TemporaryDirectory(prefix='re7-root-authority-delivery-')as tmp:
++        root=Path(tmp)/'reviews';dest=root/HERE.name;old=root/ACCEPTED.name
++        dest.mkdir(parents=True);old.mkdir()
++        for n in NEW:
++            raw=subprocess.check_output(['git','show','2cc9a35058c25bfdd01e597564a29e8d952d69aa:docs/reviews/automation-freeform-window-release-af26/'+HERE.name+'/'+n],cwd=HERE)
++            (dest/n).write_bytes(raw)
++        shutil.copyfile(dest/'integration.py',dest/'integration_before_r3.py')
++        for n in ('authority.py','integration.py','test_r3.py'):shutil.copyfile(R3/n,dest/n)
++        for n in ('authority.py','integration.py','bootstrap.py','child_transport.py','node_bootstrap.cjs'):
++            shutil.copyfile(dest/n,dest/('before_'+n))
++            shutil.copyfile(B2/n,dest/n)
++        for n in ('test_process.py','lab_shim.py','lab_effects.py'):
++            shutil.copyfile(B2/n,dest/n)
++
++        for n in OLD:shutil.copyfile(ACCEPTED/n,old/n)
++        (old/'reference_sources').mkdir();(old/'versioned-inputs').mkdir()
++        for n,r in spec['excerpts'].items():
++            raw=(ACCEPTED/'reference_sources'/n).read_bytes();assert hashlib.sha256(raw).hexdigest()==r['deliveredSha256']
++            (old/'reference_sources'/n).write_bytes(raw)
++        for n,r in spec['versioned'].items():
++            raw=subprocess.check_output(['git','show',r['commit']+':'+r['path']],cwd=HERE)
++            assert hashlib.sha256(raw).hexdigest()==r['sha256'];(old/'versioned-inputs'/n).write_bytes(raw)
++        (old/'ISOLATED_DELIVERY').write_text('Only delivered/pinned inputs; no Git or private fallback.\n')
++        prefix='docs/reviews/automation-freeform-window-release-af26'
++        for n in EXTRA:
++            raw=subprocess.check_output(['git','show',BASE+':'+prefix+'/'+n],cwd=HERE)
++            assert raw==(REVIEW/n).read_bytes(),'reference_changed:'+n
++            file=root/n;file.parent.mkdir(parents=True,exist_ok=True);file.write_bytes(raw)
++        node=shutil.which('node')
++        if node is None:raise RuntimeError('LOCAL_NODE_TEST_TOOL_REQUIRED')
++        test_path=str(Path(node).parent)+':/usr/bin:/bin'
++        result=subprocess.run([sys.executable,'-B','-m','unittest','-v','test_process'],
++            cwd=dest,capture_output=True,text=True,env={'PATH':test_path,'PYTHONDONTWRITEBYTECODE':'1'})
++        sys.stdout.write(result.stdout);sys.stderr.write(result.stderr)
++        return result.returncode
++
++if __name__=='__main__':sys.exit(run())
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/test_process.py
+@@ -0,0 +1,268 @@
++"""Real subprocess chains; root/sudo and external host effects explicitly synthetic."""
++import copy
++import datetime
++import hashlib
++import json
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import sys
++import tempfile
++import types
++import unittest
++from unittest.mock import patch
++import authority as a
++import integration
++from test_connected import t, load
++import test_connected as connected
++
++HERE=Path(__file__).resolve().parent
++REVIEW=HERE.parent
++BASE=REVIEW/'crm-csv-review-publication-20261016/code-sources'
++
++class ProcessChain(unittest.TestCase):
++    def setUp(self):
++        self.tmp=tempfile.TemporaryDirectory();self.lab=Path(self.tmp.name)
++        self.fx=t.Fixture(self.lab);self.root=self.fx.root
++        self.library=self.lab/'library';self.library.mkdir()
++        self.now=datetime.datetime.now(datetime.timezone.utc)
++        self.state=self.lab/'root-state.json';self.trigger=None
++        self.closed=False
++    def tearDown(self):
++        if (self.lab/'processes.jsonl').exists():
++            events=self.processes()
++            print('B2_PROCESS_EVIDENCE='+json.dumps({'case':self._testMethodName,'parentPid':os.getpid(),
++                'events':events,'consumerImports':len(self.effects()),
++                'requestExists':(self.root/'switch/owner-request-preflight.json').exists(),
++                'proofConsumed':(self.root/'switch/owner-proof-preflight.consumed.json').exists(),
++                'falseComplete':(self.fx.w/'csv-complete.receipt.private.json').exists()}))
++        self.tmp.cleanup()
++    def setup(self, predecessor=False, permit=None):
++        f=self.fx
++        for name in ('authority.py','bootstrap.py','child_transport.py','node_bootstrap.cjs'):
++            source=HERE/('before_'+name if predecessor else name)
++            shutil.copyfile(source,self.library/name)
++        shutil.copyfile(HERE/'verified_loader.py',self.library/'verified_loader.py')
++        shim=self.lab/'shim.py';node=self.lab/'node.cjs'
++        config={'lab':str(self.lab),'library':str(self.library),'shim':str(shim),'node':str(node),
++            'sha256':{n:hashlib.sha256((self.library/(n+'.py')).read_bytes()).hexdigest()for n in ('authority','verified_loader','child_transport')}}
++        shim.write_text((HERE/'lab_shim.py').read_text().replace('CONFIG = None','CONFIG = '+repr(config)))
++        node.write_text("const fs=require('node:fs'),cp=require('node:child_process');fs.appendFileSync("+json.dumps(str(self.lab/'processes.jsonl'))+",JSON.stringify({event:'node_launcher',pid:process.pid,ppid:process.ppid})+'\\n');const boot=require("+json.dumps(str(self.library/'node_bootstrap.cjs'))+");boot.run(process.argv[2],process.argv.slice(3),(command,options)=>{if(command[0]==='python'&&fs.existsSync("+json.dumps(str(self.lab/'node-change-execution'))+")){fs.writeFileSync("+json.dumps(str(f.w/'csv-execution.intent.private.json'))+",'E2 changed at Node-Python boundary');}return cp.execFileSync('/usr/bin/python3',['-I','-S',"+json.dumps(str(shim))+",...command],options);});\n")
++        old=load('before_integration_process',(HERE/'before_integration.py').read_text())
++        transformer=old if predecessor else integration
++        files={}
++        files['switch/ops.py']=transformer.operations((BASE/'ops.py.c84a5e059cbc.source').read_text())
++        # Namespace and host driver injection ONLY in the authenticated fixture.
++        # Functions request/record/proof/execute/bindings remain concrete.
++        files['switch/ops.py']+='\nfrom lab_effects import Driver\nSystem=Driver\n'
++        delegated=transformer.delegated((BASE/'delegated.py.8744ced356ca.source').read_text())
++        delegated=delegated.replace("BOUND_PREPARATION = Path('/opt/re7online/backups/converta-persistent/preparations/incident-csv-operational-review-v3-20261016')",'BOUND_PREPARATION = Path('+repr(str(f.root))+')')
++        mark="if __name__ == '__main__':"
++        delegated=delegated.replace(mark,"from lab_effects import record as lab_record\nlab_record(__phase_authority__.root,'delegated_import')\n"+mark)
++        files['switch/delegated.py']=delegated
++        files['window/lab_effects.py']=(HERE/'lab_effects.py').read_text()
++        files['window/restore_contract.py']='from lab_effects import validate_restore as validate\n'
++        files['window/baseline_contract.py']=t.source('baseline_contract.py')
++        files['switch/baseline_contract.py']=t.source('baseline_contract.py')
++        files['window/ecosystem_contract.py']=t.source('ecosystem_contract.py')
++        files['window/scheduled_controls.py']=t.source('scheduled_controls.py')
++        files['switch/db_owner_set_gate.py']=(BASE/'db_owner_set_gate.py.ca9b0bf8ece3.source').read_text()
++        files['switch/db_owner_set_observer.py']=(BASE/'db_owner_set_observer.py.ddbe29926e27.source').read_text()
++        files['switch/execution-check.cjs']=transformer.execution_check((BASE/'execution-check.cjs.95aee8b54048.source').read_text())
++        files['switch/close.cjs']="require('./execution-check.cjs')();module.exports='LAB_NODE_BASELINE_COMPLETE';\n"
++        common={'ops':'switch/ops.py','baseline_contract':'window/baseline_contract.py','ecosystem_contract':'window/ecosystem_contract.py',
++                'lab_effects':'window/lab_effects.py','restore_contract':'window/restore_contract.py','scheduled_controls':'window/scheduled_controls.py',
++                'db_owner_set_gate':'switch/db_owner_set_gate.py','db_owner_set_observer':'switch/db_owner_set_observer.py'}
++        manifest={'files':{},'dependencies':{},'entries':{},'imports':{}}
++        for name,text in files.items():
++            file=f.root/name;file.parent.mkdir(parents=True,exist_ok=True);file.write_text(text);meta=file.stat()
++            manifest['files'][name]={'sha256':a.digest(file.read_bytes()),'uid':meta.st_uid,'mode':meta.st_mode&0o777,
++                'language':'commonjs'if name.endswith('.cjs')else'python'}
++            manifest['dependencies'][name]=[];manifest['imports'][name]=dict(common)
++        manifest['imports']['switch/close.cjs']={'./execution-check.cjs':'switch/execution-check.cjs'}
++        manifest['imports']['switch/execution-check.cjs']={'baseline_contract.py':'switch/baseline_contract.py'}
++        manifest['entries']={'switch/delegated.py':'inspect','switch/close.cjs':'inspect','switch/baseline_contract.py':'inspect'}
++        (f.root/'switch/scripts.sha256').write_text(''.join(row['sha256']+'  '+Path(name).name+'\n'for name,row in manifest['files'].items()if name.startswith('switch/')))
++        anchor={'version':1,'preparation':str(f.root),'contractSha256':t.c.sha(f.w/'recovery-contract.private.json'),
++                'policySha256':f.policy_hash,'codeManifestSha256':a.digest(a.canonical(manifest)),
++                'profileSha256':{'ORIGINAL':t.c.sha(f.w/'source.profile.private.json'),'CANDIDATE':t.c.sha(f.w/'target.profile.private.json')}}
++        self.bundle={'result':'ROOT_RECOVERY_AUTHORITY_READ','queryOnly':True,'anchor':anchor,'anchorSha256':a.digest(a.canonical(anchor)),
++            'permit':None,'permitSha256':None,'manifest':manifest,'livePolicySha256':f.policy_hash,'livePhase':'fenced'}
++        if permit:
++            p={'anchorSha256':self.bundle['anchorSha256'],'preparation':str(f.root),'contractSha256':anchor['contractSha256'],
++                'policySha256':f.policy_hash,'decision':'ORIGINAL','targetProfileSha256':anchor['profileSha256']['ORIGINAL'],
++                'executionIntentSha256':t.c.sha(f.w/'csv-execution.intent.private.json'),'phase':'fenced','capturedUtc':self.now.isoformat()}
++            self.bundle.update(permit=p,permitSha256=a.digest(a.canonical(p)))
++        self.save_state()
++        authority=load('lab_parent_authority',(self.library/'authority.py').read_text())
++        authority.BOOTSTRAP=str(shim)
++        query=lambda:authority.canonical(json.loads(self.state.read_text())['bundle'])
++        self.context=authority.Context(query,now=lambda:self.now)
++        transport=load('lab_parent_transport',(self.library/'child_transport.py').read_text())
++        transport.BOOTSTRAP=str(shim);transport.NODE=str(node)
++        seqsource=transformer.sequencer(t.future_sources.sequencer((REVIEW/'v4-sequencer/sequencer.py').read_text()))
++        sequence=load('lab_real_bridge',seqsource,__phase_authority__=self.context)
++        self.bridge=sequence.Bridge.__new__(sequence.Bridge)
++        self.bridge.root=f.root;self.bridge.window=f.w;self.bridge.switch=f.root/'switch'
++        self.bridge.privileged=lambda action: json.dumps({'nftables':[]})
++        self.transport=transport
++        self.old_transport=sys.modules.get('child_transport');sys.modules['child_transport']=transport
++        self.addCleanup(lambda:sys.modules.__setitem__('child_transport',self.old_transport)if self.old_transport else sys.modules.pop('child_transport',None))
++        real_run=subprocess.run
++        def run(args,**kw):
++            if self.trigger:self.trigger(args)
++            # Always launch the real command, stdin/stdout/pipes intact.
++            args=[shutil.which('node') if x=='/usr/bin/node' else x for x in args]
++            return real_run(args,**kw)
++        self.process_patch=patch.object(sequence.subprocess,'run',run);self.process_patch.start();self.addCleanup(self.process_patch.stop)
++        return self
++    def save_state(self,**kw):self.state.write_text(json.dumps(dict(bundle=self.bundle,**kw)))
++    def effects(self):
++        p=self.fx.w/'effects.jsonl'
++        return [json.loads(x)for x in p.read_text().splitlines()]if p.exists()else[]
++    def processes(self):return [json.loads(x)for x in (self.lab/'processes.jsonl').read_text().splitlines()]
++    def change_execution(self):
++        (self.fx.w/'csv-execution.intent.private.json').write_text(json.dumps({'admissionSha256':'E2-synthetic','automaticRetry':False}))
++    def diagnostic(self):return (self.fx.w/'protocol-output.private.jsonl').read_text()
++    def test_before_context_gap_reaches_child_import_and_request(self):
++        self.setup(predecessor=True);self.context.start_mode(self.root/'switch')
++        def change(args):
++            self.trigger=None;self.change_execution()
++        self.trigger=change
++        # First request actually runs in B with E2. A rejects before record.
++        with self.assertRaisesRegex(RuntimeError,'protocol_failed'):self.bridge.protocol('switch','preflight')
++        self.assertTrue((self.root/'switch/owner-request-preflight.json').exists())
++        self.assertTrue(self.effects());self.assertIn('not JSON serializable',self.diagnostic())
++    def test_execution_race_denied_before_child_import_or_request(self):
++        self.setup();self.context.start_mode(self.root/'switch')
++        def change(args):self.trigger=None;self.change_execution()
++        self.trigger=change
++        with self.assertRaisesRegex(RuntimeError,'protocol_failed'):self.bridge.protocol('switch','preflight')
++        self.assertFalse((self.root/'switch/owner-request-preflight.json').exists());self.assertEqual(self.effects(),[])
++        self.assertFalse(any(x['event']=='loader_constructor'for x in self.processes()))
++        self.assertIn('authority_execution_changed',self.diagnostic())
++    def test_real_delegated_three_processes_and_consumption(self):
++        self.setup();self.bridge.protocol('switch','preflight')
++        self.assertTrue((self.root/'switch/owner-proof-preflight.consumed.json').exists())
++        events=[p for p in self.processes()if p['event']=='bootstrap_complete']
++        self.assertEqual(len({p['pid']for p in events}),3)
++        self.assertTrue(all(p['ppid']==os.getpid()for p in events))
++        r=json.loads((self.root/'switch/owner-request-preflight.json').read_text())
++        self.assertEqual(r['executionIntentSha256'],t.c.sha(self.fx.w/'csv-execution.intent.private.json'))
++        before=len(self.effects())
++        with self.assertRaisesRegex(RuntimeError,'protocol_failed'):self.bridge.protocol('switch','preflight')
++        self.assertFalse((self.root/'switch/owner-request-preflight.renewal-0002.json').exists())
++        self.assertGreaterEqual(len(self.effects()),before) # import is read, no second execute/consume.
++        self.assertIn('completed_action_cannot_renew',self.diagnostic())
++    def test_real_node_python_baseline_chain(self):
++        self.setup()
++        try:self.bridge.node('switch','close.cjs')
++        except RuntimeError as e:raise AssertionError((self.fx.w/'step-output.private.jsonl').read_text())from e
++        p=self.processes();self.assertTrue(any(x['kind']=='node-snapshot'for x in p if x['event']=='bootstrap_complete'))
++        self.assertTrue(any(x['kind']=='python'and x['entry']=='switch/baseline_contract.py'for x in p if x['event']=='bootstrap_complete'))
++        self.assertGreaterEqual(len({x['pid']for x in p}),3)
++        node=next(x for x in p if x['event']=='node_launcher')
++        self.assertEqual(node['ppid'],os.getpid())
++        self.assertTrue(any(x['entry']=='switch/baseline_contract.py'and x['ppid']==node['pid']for x in p if x['event']=='bootstrap_complete'))
++    def test_node_execution_race_denies_baseline_before_import(self):
++        self.setup();(self.lab/'node-change-execution').write_text('synthetic concurrency hook')
++        with self.assertRaisesRegex(RuntimeError,'step_failed'):self.bridge.node('switch','close.cjs')
++        records=self.processes()
++        self.assertTrue(any(x['event']=='bootstrap'and x['entry']=='switch/baseline_contract.py'for x in records))
++        self.assertFalse(any(x['event']=='loader_constructor'and x['entry']=='switch/baseline_contract.py'for x in records))
++        self.assertIn('authority_execution_changed',(self.fx.w/'step-output.private.jsonl').read_text())
++    def test_fresh_parent_execute_detects_durable_request_execution(self):
++        self.setup();script=self.root/'switch/delegated.py'
++        payload=json.loads(self.bridge.run(['python3',str(script),'request','preflight',str(script.parent)]))
++        self.bridge.run(['python3',str(script),'record','preflight',str(script.parent),payload['nonce']],input_text=json.dumps({'nftables':[]}))
++        self.change_execution()
++        context=type(self.context)(lambda:json.dumps(json.loads(self.state.read_text())['bundle']),now=lambda:self.now)
++        sys.modules['lab_real_bridge'].__phase_authority__=context
++        with self.assertRaises(subprocess.CalledProcessError)as error:
++            self.bridge.run(['python3',str(script),'execute','preflight',str(script.parent)])
++        self.assertIn('owner_proof_generation_or_configuration_drift',error.exception.stderr)
++        self.assertTrue((script.parent/'owner-proof-preflight.json').exists())
++        self.assertFalse((script.parent/'owner-proof-preflight.consumed.json').exists())
++    def test_fresh_parent_record_detects_request_execution_drift(self):
++        self.setup()
++        script=self.root/'switch/delegated.py'
++        payload=json.loads(self.bridge.run(['python3',str(script),'request','preflight',str(script.parent)]))
++        self.change_execution()
++        self.context=type(self.context)(lambda:json.dumps(json.loads(self.state.read_text())['bundle']),now=lambda:self.now)
++        # New B has same static root identity but E2. The durable request E1
++        # binding is checked by the concrete record() body, not only correlation.
++        module=sys.modules['lab_real_bridge'];module.__phase_authority__=self.context
++        with self.assertRaises(subprocess.CalledProcessError)as error:
++            self.bridge.run(['python3',str(script),'record','preflight',str(script.parent),payload['nonce']],input_text=json.dumps({'nftables':[]}))
++        self.assertIn('owner_request_generation_or_configuration_drift',error.exception.stderr)
++        self.assertFalse((script.parent/'owner-proof-preflight.json').exists())
++    def test_unauthorized_child_no_import(self):
++        self.setup();bad=self.root/'switch/not-declared.py';bad.write_text('raise AssertionError("unverified import")')
++        with self.assertRaisesRegex(RuntimeError,'authority_entry_denied'):self.bridge.run(['python3',str(bad)])
++        self.assertEqual(self.effects(),[]);self.assertFalse((self.lab/'processes.jsonl').exists())
++    def test_direct_bootstrap_undeclared_child_no_execution(self):
++        self.setup();bad=self.root/'switch/not-declared.py';marker=self.lab/'forbidden-executed'
++        bad.write_text('from pathlib import Path\nPath('+repr(str(marker))+').write_text("BAD")\n')
++        result=subprocess.run(['/usr/bin/python3','-I','-S',str(self.lab/'shim.py'),'python','switch/not-declared.py',
++            '--authority-correlation',json.dumps(self.context.correlation()),'--'],text=True,capture_output=True)
++        self.assertNotEqual(result.returncode,0);self.assertIn('authority_entry_denied',result.stderr)
++        self.assertFalse(marker.exists());self.assertEqual(self.effects(),[])
++    def test_forward_missing_execution_still_denied(self):
++        self.setup();(self.fx.w/'csv-execution.intent.private.json').unlink()
++        with self.assertRaisesRegex(RuntimeError,'authority_forward_execution_required'):
++            self.context.start_mode(self.root/'switch')
++        self.assertEqual(self.effects(),[])
++    def test_authority_exchange_race_denied_before_import(self):
++        self.setup()
++        def change(args):
++            self.trigger=None;self.bundle['anchor']['contractSha256']='a'*64;self.bundle['anchorSha256']=a.digest(a.canonical(self.bundle['anchor']));self.save_state()
++        self.trigger=change
++        with self.assertRaisesRegex(RuntimeError,'protocol_failed'):self.bridge.protocol('switch','preflight')
++        self.assertEqual(self.effects(),[]);self.assertIn('bootstrap_authority_replaced',self.diagnostic())
++    def test_expired_recovery_authority_denies_child_before_import(self):
++        self.setup(permit=True);p=self.bundle['permit']
++        self.bundle['manifest']['entries']['switch/delegated.py']='recovery'
++        self.bundle['anchor']['codeManifestSha256']=a.digest(a.canonical(self.bundle['manifest']));self.bundle['anchorSha256']=a.digest(a.canonical(self.bundle['anchor']));p['anchorSha256']=self.bundle['anchorSha256'];self.bundle['permitSha256']=a.digest(a.canonical(p));self.save_state()
++        cls=type(self.context);self.context=cls(lambda:json.dumps(json.loads(self.state.read_text())['bundle']),now=lambda:self.now)
++        sys.modules['lab_real_bridge'].__phase_authority__=self.context
++        def expire(args):
++            self.trigger=None;self.save_state(clock=(self.now+datetime.timedelta(seconds=601)).isoformat())
++        self.trigger=expire
++        with self.assertRaisesRegex(RuntimeError,'protocol_failed'):self.bridge.protocol('switch','preflight')
++        self.assertIn('authority_permit_expired',self.diagnostic());self.assertEqual(self.effects(),[])
++    def test_lost_root_response_before_import(self):
++        self.setup()
++        def lost(args):self.trigger=None;self.save_state(queryLost=True)
++        self.trigger=lost
++        with self.assertRaisesRegex(RuntimeError,'protocol_failed'):self.bridge.protocol('switch','preflight')
++        self.assertEqual(self.effects(),[]);self.assertIn('lab root response lost',self.diagnostic())
++    def test_lost_execute_response_no_automatic_replay(self):
++        self.setup();real=subprocess.run
++        # Outer Bridge.run waits for actual execute completion; emulate only the
++        # lost response AFTER that real process returns, never a mocked execute.
++        self.process_patch.stop()
++        calls=[]
++        def lost(args,**kw):
++            result=real(args,**kw)
++            if 'execute'in args:
++                calls.append('execute');raise subprocess.TimeoutExpired(args,1,output=result.stdout,stderr='lab lost after actual execute')
++            return result
++        with patch('subprocess.run',lost),self.assertRaisesRegex(RuntimeError,'protocol_failed'):
++            self.bridge.protocol('switch','preflight')
++        self.assertEqual(calls,['execute']);self.assertTrue((self.root/'switch/owner-proof-preflight.consumed.json').exists())
++        self.assertFalse((self.fx.w/'csv-complete.receipt.private.json').exists())
++
++
++def load_tests(loader,tests,pattern):
++    suite=loader.loadTestsFromTestCase(ProcessChain)
++    for name in ('test_original_real_checker_certificates_controls_and_replay','test_prestop_no_permit_and_no_start',
++                 'test_candidate_compatible_only','test_expiry_between_api_worker_no_complete',
++                 'test_authority_replacement_between_api_worker_no_complete','test_lost_start_response_no_replay_or_complete'):
++        suite.addTest(connected.Connected(name))
++    import test_r3
++    for name in ('test_forward_real_pair_without_recovery_permit','test_forward_revalidation_after_start_intent_before_effect',
++                 'test_forward_start_gate_selection_negative','test_forward_response_lost_no_replay_or_complete'):
++        suite.addTest(test_r3.Forward(name))
++    return suite
++if __name__=='__main__':unittest.main(verbosity=2)

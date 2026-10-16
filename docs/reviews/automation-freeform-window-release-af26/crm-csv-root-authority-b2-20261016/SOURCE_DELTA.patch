@@ -1,0 +1,143 @@
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/authority.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/authority.py
+@@ -153,6 +153,8 @@
+             require(b['livePhase'] in (('fenced',) if purpose != 'closure' else
+                     ('fenced', 'ready', 'unfenced', 'complete')), 'authority_live_phase_drift')
+         self.bundle = b
++        if hasattr(self, "_execution_expected"):
++            self._check_execution(self._execution_expected)
+         return self
+ 
+     def pin(self, name):
+@@ -181,16 +183,48 @@
+                 'authority_forward_contract')
+         require(digest((w / 'target.profile.private.json').read_bytes()) ==
+                 self.bundle['anchor']['profileSha256']['CANDIDATE'], 'authority_forward_profile')
+-        execution = digest((w / 'csv-execution.intent.private.json').read_bytes())
+-        if not hasattr(self, '_forward_execution'):
+-            self._forward_execution = execution
+-        require(execution == self._forward_execution, 'authority_forward_execution_drift')
++        require(hexhash(self.execution_hash()), 'authority_forward_execution_required')
+         # Recovery or closure already admitted is not a second forward attempt.
+         require(not any(os.path.lexists(w / name) for name in
+                 ('csv-recovery.intent.private.json', 'csv-recovery.receipt.private.json',
+                  'csv-abort.receipt.private.json', 'csv-complete.receipt.private.json')),
+                 'authority_forward_consumed_or_recovery')
+         self.revalidate('forward')
++        return self
++
++    def _current_execution(self):
++        path = self.root / 'window/csv-execution.intent.private.json'
++        return digest(path.read_bytes()) if os.path.lexists(path) else None
++
++    def _check_execution(self, expected):
++        require(self._current_execution() == expected, 'authority_execution_changed')
++        permit = self.bundle['permit']
++        if permit is not None:
++            require(expected == permit['executionIntentSha256'], 'authority_execution_permit')
++        return expected
++
++    def execution_hash(self):
++        current = self._current_execution()
++        if not hasattr(self, '_execution_expected') and current is not None:
++            self._execution_expected = current
++        return self._check_execution(getattr(self, '_execution_expected', current))
++
++    def correlation(self):
++        self.revalidate()
++        return {'authority': list(self.identity), 'executionSha256': self.execution_hash()}
++
++    def accept_correlation(self, value):
++        # Parent lineage is a comparison obligation, not authority: Context has
++        # already queried/validated root independently. Check BEFORE the Loader.
++        require(type(value) is dict and set(value) == {'authority', 'executionSha256'},
++                'authority_correlation_shape')
++        require(tuple(value['authority']) == self.identity, 'bootstrap_authority_replaced')
++        expected = value['executionSha256']
++        require(expected is None or hexhash(expected), 'authority_execution_shape')
++        self._check_execution(expected)
++        if expected is not None:
++            self._execution_expected = expected
++        self.revalidate()
+         return self
+ 
+     def operation(self, decision, purpose='recovery'):
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/integration.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/integration.py
+@@ -86,6 +86,7 @@
+     return source
+ 
+ def delegated(source):
++    source=once(source, "    return result\n", "    result['executionIntentSha256'] = __phase_authority__.execution_hash()\n    return result\n")
+     return once(source,'    command, action, root = sys.argv[1:4]\n',
+         '    __phase_authority__.revalidate()\n    command, action, root = sys.argv[1:4]\n')
+ 
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/bootstrap.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/bootstrap.py
+@@ -37,16 +37,20 @@
+     authority.require(len(argv)>=2 and argv[0]in('python','node-snapshot'),'bootstrap_arguments')
+     context=authority.Context()
+     entry=argv[1]; rest=list(argv[2:])
+-    if rest[:1]==['--authority-correlation']:
++    correlated = rest[:1]==['--authority-correlation']
++    if correlated:
+         authority.require(len(rest)>=3 and rest[2]=='--', 'bootstrap_correlation_arguments')
+-        authority.require(tuple(json.loads(rest[1]))==context.identity, 'bootstrap_authority_replaced')
++        context.accept_correlation(json.loads(rest[1]))
+         rest=rest[3:]
++    scope=context.bundle['manifest']['entries'].get(entry)
++    authority.require(scope != 'forward' or correlated, 'bootstrap_forward_lineage_required')
+     loader=Loader(context,entry,trusted_modules={"authority":authority,"child_transport":transport})
+     if argv[0]=='python':
+         authority.require(context.bundle['manifest']['files'][entry]['language']=='python','bootstrap_language')
+-        return loader.execute(rest)
++        loader.execute(rest)
++        return None
+     authority.require(context.bundle['manifest']['files'][entry]['language']=='commonjs','bootstrap_language')
+-    return {'root':str(context.root),'identity':list(context.identity),'entry':entry,
++    return {'root':str(context.root),'identity':list(context.identity),'correlation':context.correlation(),'entry':entry,
+         'manifest':context.bundle['manifest'],
+         'files':{p:base64.b64encode(v).decode()for p,v in loader.raw.items()}}
+ 
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/child_transport.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/child_transport.py
+@@ -13,6 +13,6 @@
+     target=str(Path(args[1]).relative_to(context.root))
+     context.snapshot(target)  # fresh scope and transitive coverage before child
+     if name=='node':
+-        return ['/usr/bin/env','-u','NODE_OPTIONS','-u','NODE_PATH','/usr/bin/node',NODE,target,'--authority-correlation',json.dumps(context.identity),'--',*args[2:]]
++        return ['/usr/bin/env','-u','NODE_OPTIONS','-u','NODE_PATH','/usr/bin/node',NODE,target,'--authority-correlation',json.dumps(context.correlation()),'--',*args[2:]]
+     return ['/usr/bin/python3','-I','-S',BOOTSTRAP,'python',target,
+-            '--authority-correlation',json.dumps(context.identity),'--',*args[2:]]
++            '--authority-correlation',json.dumps(context.correlation()),'--',*args[2:]]
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/node_bootstrap.cjs
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/node_bootstrap.cjs
+@@ -6,10 +6,15 @@
+ const allowedBuiltins = new Set(['fs','path','assert','crypto','child_process','os','util','url','buffer','http','https']);
+ function deny(ok, why) { if (!ok) throw Error(why); }
+ function run(entry, args, transport = (command, options) => cp.execFileSync('/usr/bin/python3', ['-I','-S',PY,...command], options)) {
+-  const read = () => JSON.parse(transport(['node-snapshot',entry], {encoding:'utf8'}));
+-  const snap = read(), cache = new Map();
+-  if(args[0]==='--authority-correlation'){deny(JSON.stringify(JSON.parse(args[1]))===JSON.stringify(snap.identity)&&args[2]==='--','node_authority_replaced');args=args.slice(3);}
+-  function fresh() { const now=read();deny(JSON.stringify(now.identity)===JSON.stringify(snap.identity),'node_authority_replaced'); }
++  let expected=null;
++  if(args[0]==='--authority-correlation'){
++    deny(args[2]==='--','node_correlation_arguments');expected=JSON.parse(args[1]);args=args.slice(3);
++  }
++  const read = (correlation) => JSON.parse(transport(['node-snapshot',entry,...(correlation ?
++    ['--authority-correlation',JSON.stringify(correlation),'--'] : [])], {encoding:'utf8'}));
++  const snap = read(expected), cache = new Map();
++  if(expected)deny(JSON.stringify(expected)===JSON.stringify(snap.correlation),'node_authority_replaced');
++  function fresh() { const now=read(snap.correlation);deny(JSON.stringify(now.correlation)===JSON.stringify(snap.correlation),'node_authority_replaced'); }
+   const children = Object.assign({}, cp, {
+     execFileSync(command, argv, options) {
+       fresh();
+@@ -19,7 +24,7 @@
+         deny(snap.manifest.entries[target], 'node_python_child_not_entry');
+         deny(Object.values(snap.manifest.imports[entry] || {}).includes(target) ||
+              Object.keys(snap.manifest.imports).some(k=>Object.values(snap.manifest.imports[k]).includes(target)), 'node_python_child_undeclared');
+-        return transport(['python',target,'--authority-correlation',JSON.stringify(snap.identity),'--',...argv.slice(1)],options);
++        return transport(['python',target,'--authority-correlation',JSON.stringify(snap.correlation),'--',...argv.slice(1)],options);
+       }
+       deny(!['python','python3','node'].includes(path.basename(command)), 'node_child_bypass');
+       return cp.execFileSync(command,argv,options); // existing OS effects; rehearsals must intercept them

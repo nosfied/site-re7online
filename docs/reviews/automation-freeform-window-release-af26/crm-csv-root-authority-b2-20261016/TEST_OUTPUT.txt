@@ -1,0 +1,29 @@
+test_authority_exchange_race_denied_before_import (test_process.ProcessChain.test_authority_exchange_race_denied_before_import) ... ok
+test_before_context_gap_reaches_child_import_and_request (test_process.ProcessChain.test_before_context_gap_reaches_child_import_and_request) ... ok
+test_direct_bootstrap_undeclared_child_no_execution (test_process.ProcessChain.test_direct_bootstrap_undeclared_child_no_execution) ... ok
+test_execution_race_denied_before_child_import_or_request (test_process.ProcessChain.test_execution_race_denied_before_child_import_or_request) ... ok
+test_expired_recovery_authority_denies_child_before_import (test_process.ProcessChain.test_expired_recovery_authority_denies_child_before_import) ... ok
+test_forward_missing_execution_still_denied (test_process.ProcessChain.test_forward_missing_execution_still_denied) ... ok
+test_fresh_parent_execute_detects_durable_request_execution (test_process.ProcessChain.test_fresh_parent_execute_detects_durable_request_execution) ... ok
+test_fresh_parent_record_detects_request_execution_drift (test_process.ProcessChain.test_fresh_parent_record_detects_request_execution_drift) ... ok
+test_lost_execute_response_no_automatic_replay (test_process.ProcessChain.test_lost_execute_response_no_automatic_replay) ... ok
+test_lost_root_response_before_import (test_process.ProcessChain.test_lost_root_response_before_import) ... ok
+test_node_execution_race_denies_baseline_before_import (test_process.ProcessChain.test_node_execution_race_denies_baseline_before_import) ... ok
+test_real_delegated_three_processes_and_consumption (test_process.ProcessChain.test_real_delegated_three_processes_and_consumption) ... ok
+test_real_node_python_baseline_chain (test_process.ProcessChain.test_real_node_python_baseline_chain) ... ok
+test_unauthorized_child_no_import (test_process.ProcessChain.test_unauthorized_child_no_import) ... ok
+test_original_real_checker_certificates_controls_and_replay (test_connected.Connected.test_original_real_checker_certificates_controls_and_replay) ... ok
+test_prestop_no_permit_and_no_start (test_connected.Connected.test_prestop_no_permit_and_no_start) ... ok
+test_candidate_compatible_only (test_connected.Connected.test_candidate_compatible_only) ... ok
+test_expiry_between_api_worker_no_complete (test_connected.Connected.test_expiry_between_api_worker_no_complete) ... ok
+test_authority_replacement_between_api_worker_no_complete (test_connected.Connected.test_authority_replacement_between_api_worker_no_complete) ... ok
+test_lost_start_response_no_replay_or_complete (test_connected.Connected.test_lost_start_response_no_replay_or_complete) ... ok
+test_forward_real_pair_without_recovery_permit (test_r3.Forward.test_forward_real_pair_without_recovery_permit) ... ok
+test_forward_revalidation_after_start_intent_before_effect (test_r3.Forward.test_forward_revalidation_after_start_intent_before_effect) ... ok
+test_forward_start_gate_selection_negative (test_r3.Forward.test_forward_start_gate_selection_negative) ... ok
+test_forward_response_lost_no_replay_or_complete (test_r3.Forward.test_forward_response_lost_no_replay_or_complete) ... ok
+
+----------------------------------------------------------------------
+Ran 24 tests in 7.600s
+
+OK

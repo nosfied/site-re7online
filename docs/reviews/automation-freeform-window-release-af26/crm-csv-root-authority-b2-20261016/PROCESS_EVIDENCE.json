@@ -1,0 +1,1827 @@
+{
+  "kind": "LOCAL_SYNTHETIC_PROCESS_EVIDENCE",
+  "source": "reproduce.py final run; actual PID/PPID, no production observations",
+  "cases": [
+    {
+      "case": "test_authority_exchange_race_denied_before_import",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1508527,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508527,
+          "ppid": 1508526
+        }
+      ],
+      "consumerImports": 0,
+      "requestExists": false,
+      "proofConsumed": false,
+      "falseComplete": false
+    },
+    {
+      "case": "test_before_context_gap_reaches_child_import_and_request",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1508528,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508528,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508528,
+          "ppid": 1508526
+        }
+      ],
+      "consumerImports": 1,
+      "requestExists": true,
+      "proofConsumed": false,
+      "falseComplete": false
+    },
+    {
+      "case": "test_direct_bootstrap_undeclared_child_no_execution",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1508546,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/not-declared.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508546,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508546,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508546,
+          "ppid": 1508526,
+          "entry": "switch/not-declared.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508546,
+          "ppid": 1508526
+        }
+      ],
+      "consumerImports": 0,
+      "requestExists": false,
+      "proofConsumed": false,
+      "falseComplete": false
+    },
+    {
+      "case": "test_execution_race_denied_before_child_import_or_request",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1508547,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508547,
+          "ppid": 1508526
+        }
+      ],
+      "consumerImports": 0,
+      "requestExists": false,
+      "proofConsumed": false,
+      "falseComplete": false
+    },
+    {
+      "case": "test_expired_recovery_authority_denies_child_before_import",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1508548,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508548,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508548,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508548,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508548,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508548,
+          "ppid": 1508526
+        }
+      ],
+      "consumerImports": 0,
+      "requestExists": false,
+      "proofConsumed": false,
+      "falseComplete": false
+    },
+    {
+      "case": "test_fresh_parent_execute_detects_durable_request_execution",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1508549,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508549,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508549,
+          "ppid": 1508526
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508549,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508550,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508550,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508550,
+          "ppid": 1508526
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508550,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508551,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508551,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508551,
+          "ppid": 1508526
+        }
+      ],
+      "consumerImports": 3,
+      "requestExists": true,
+      "proofConsumed": false,
+      "falseComplete": false
+    },
+    {
+      "case": "test_fresh_parent_record_detects_request_execution_drift",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1508552,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508552,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508552,
+          "ppid": 1508526
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508552,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508553,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508553,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508553,
+          "ppid": 1508526
+        }
+      ],
+      "consumerImports": 2,
+      "requestExists": true,
+      "proofConsumed": false,
+      "falseComplete": false
+    },
+    {
+      "case": "test_lost_execute_response_no_automatic_replay",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1508554,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508554,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508554,
+          "ppid": 1508526
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508554,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508567,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508567,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508567,
+          "ppid": 1508526
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508567,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508568,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508568,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508568,
+          "ppid": 1508526
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508568,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        }
+      ],
+      "consumerImports": 3,
+      "requestExists": true,
+      "proofConsumed": true,
+      "falseComplete": false
+    },
+    {
+      "case": "test_lost_root_response_before_import",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1508569,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508569,
+          "ppid": 1508526
+        }
+      ],
+      "consumerImports": 0,
+      "requestExists": false,
+      "proofConsumed": false,
+      "falseComplete": false
+    },
+    {
+      "case": "test_node_execution_race_denies_baseline_before_import",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "node_launcher",
+          "pid": 1508570,
+          "ppid": 1508526
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508577,
+          "ppid": 1508570,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508577,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508577,
+          "ppid": 1508570
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508577,
+          "ppid": 1508570,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508577,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508577,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508577,
+          "ppid": 1508570
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508577,
+          "ppid": 1508570,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508578,
+          "ppid": 1508570,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508578,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508578,
+          "ppid": 1508570
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508578,
+          "ppid": 1508570,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508578,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508578,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508578,
+          "ppid": 1508570
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508578,
+          "ppid": 1508570,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508579,
+          "ppid": 1508570,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508579,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508579,
+          "ppid": 1508570
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508579,
+          "ppid": 1508570,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508579,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508579,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508579,
+          "ppid": 1508570
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508579,
+          "ppid": 1508570,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508580,
+          "ppid": 1508570,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508580,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508580,
+          "ppid": 1508570
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508580,
+          "ppid": 1508570,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508580,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508580,
+          "ppid": 1508570
+        },
+        {
+          "event": "root_query",
+          "pid": 1508580,
+          "ppid": 1508570
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508580,
+          "ppid": 1508570,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508581,
+          "ppid": 1508570,
+          "kind": "python",
+          "entry": "switch/baseline_contract.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508581,
+          "ppid": 1508570
+        }
+      ],
+      "consumerImports": 0,
+      "requestExists": false,
+      "proofConsumed": false,
+      "falseComplete": false
+    },
+    {
+      "case": "test_real_delegated_three_processes_and_consumption",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1508583,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508583,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508583,
+          "ppid": 1508526
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508583,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508584,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508584,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508584,
+          "ppid": 1508526
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508584,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508585,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508585,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508585,
+          "ppid": 1508526
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508585,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508586,
+          "ppid": 1508526,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508586,
+          "ppid": 1508526,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        },
+        {
+          "event": "root_query",
+          "pid": 1508586,
+          "ppid": 1508526
+        }
+      ],
+      "consumerImports": 4,
+      "requestExists": true,
+      "proofConsumed": true,
+      "falseComplete": false
+    },
+    {
+      "case": "test_real_node_python_baseline_chain",
+      "parentPid": 1508526,
+      "events": [
+        {
+          "event": "node_launcher",
+          "pid": 1508599,
+          "ppid": 1508526
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508606,
+          "ppid": 1508599,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508606,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508606,
+          "ppid": 1508599
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508606,
+          "ppid": 1508599,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508606,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508606,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508606,
+          "ppid": 1508599
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508606,
+          "ppid": 1508599,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508607,
+          "ppid": 1508599,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508607,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508607,
+          "ppid": 1508599
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508607,
+          "ppid": 1508599,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508607,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508607,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508607,
+          "ppid": 1508599
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508607,
+          "ppid": 1508599,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508608,
+          "ppid": 1508599,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508608,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508608,
+          "ppid": 1508599
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508608,
+          "ppid": 1508599,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508608,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508608,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508608,
+          "ppid": 1508599
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508608,
+          "ppid": 1508599,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508609,
+          "ppid": 1508599,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508609,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508609,
+          "ppid": 1508599
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508609,
+          "ppid": 1508599,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508609,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508609,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508609,
+          "ppid": 1508599
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508609,
+          "ppid": 1508599,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1508610,
+          "ppid": 1508599,
+          "kind": "python",
+          "entry": "switch/baseline_contract.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508610,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508610,
+          "ppid": 1508599
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1508610,
+          "ppid": 1508599,
+          "entry": "switch/baseline_contract.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1508610,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508610,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508610,
+          "ppid": 1508599
+        },
+        {
+          "event": "root_query",
+          "pid": 1508610,
+          "ppid": 1508599
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1508610,
+          "ppid": 1508599,
+          "kind": "python",
+          "entry": "switch/baseline_contract.py"
+        }
+      ],
+      "consumerImports": 0,
+      "requestExists": false,
+      "proofConsumed": false,
+      "falseComplete": false
+    }
+  ]
+}

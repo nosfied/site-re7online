@@ -1,0 +1,57 @@
+{
+  "baseCommit": "6273b4d31fb0203882ad3800da6c9d4b2988a4a4",
+  "result": "B2_LOCAL_CONNECTED_CHAINS_PASS",
+  "newProcessTests": 14,
+  "affectedRecoveryAndR3Tests": 10,
+  "total": 24,
+  "B2": "CLOSED LOCALLY in the two named fixture chains and execution lineage; not operationally certified",
+  "codeSha256": {
+    "authority.py": "220de0b3b48be13b05748ae363fa81f2186ff2fd839b8569c8c2068f41674eae",
+    "integration.py": "f633a350ffe6ec4be24bf13c24b59efd2ec6095ee72485fa44507e69c506b254",
+    "bootstrap.py": "200f25cac3697baeea9560c1483d2421fa96bcba99eb04c0690b9aaa36313864",
+    "child_transport.py": "c4783ed71920a74be9cee5dc2229879852d7a4df38d582f1534a8b194cb6c866",
+    "node_bootstrap.cjs": "244777e777f3dd53222b6268219d98e22a14fad92586134ff2c40b7af5c7b9c5",
+    "lab_shim.py": "1039793698cf5b3457d2a36e6e76ebe9e1f776396b0c6c73b29859a737c9e1f0",
+    "lab_effects.py": "83617977a32a29d3233e3d0f4baefb5ff39b008d5ceba9065aeea3f38a76e7f7",
+    "test_process.py": "8f28bb868b678217cac213a9e6bdfeaa8144fd3b03e6f5cd5175cbc605c796a7",
+    "reproduce.py": "2fa7ddbc5c55e6bea615c577cda81e0b145dc8d7c5931e1427cb532565e11f19"
+  },
+  "testOutputSha256": "91df29ac0e2fc4d47cb2d76ab6fb339a1654a47738a42595c97e19cac5ddac4d",
+  "processEvidenceSha256": "4fe4a606383c4335051834af6ece338e767e400e0604a8121711191c65378de6",
+  "counterexample": "Predecessor A pins E1; mutation after parent command construction lets fresh B import delegated and write request under E2 with unchanged anchor/permit. Old bootstrap subsequently fails serializing module. That unrelated failure is NOT an execution binding.",
+  "canonicalDetectionBefore": "Same A detects drift on its next start/snapshot; delegated old root/generation/config/direction/nonce/time/consumption do not bind global execution; fresh B loses A memory. Recovery permit already binds execution and is preserved.",
+  "fix": "Parent/child comparison envelope includes authority and expected execution; child independently queries root then compares BEFORE Loader. Node snapshot refresh and Python grandchildren carry same envelope. Concrete delegated durable request/proof also includes execution hash.",
+  "simulated": [
+    "root metadata and sudo/root query, via pinned temporary library shim",
+    "clock only for expiry case",
+    "System guard/cron/OS/DB/HTTP/PM2 interfaces; no external calls permitted",
+    "restore authority injected as in accepted fixture",
+    "fixed production namespace and installed launcher paths mapped to local temp paths; /usr/bin/node mapped to available local Node"
+  ],
+  "real": [
+    "Bridge.run/protocol/node and subprocess stdin/stdout",
+    "bootstrap main/Loader, Python -I -S, Node CommonJS launcher",
+    "complete delegated request/record/execute/proof/locks/nonce/expiry/consumption bodies on preflight",
+    "execution-check.cjs and baseline_contract/ecosystem validation on synthetic complete files",
+    "PID and PPID relationships; root not installed or issued"
+  ],
+  "limits": [
+    "preflight is the connected delegated action; API/worker starts and compatible recoveries remain focused in-process OS-simulated tests",
+    "close.cjs is a declared test wrapper invoking real execution-check; real product HTTP close/validate/open are not executed",
+    "full operational package and all four-mode closure not composed or certified"
+  ],
+  "blocked": [
+    "B1 canonical private diagnostic transport",
+    "B3 PM2 separate ecosystem reread",
+    "B4 concrete installer/real four-mode transitive closure"
+  ],
+  "development": [
+    "fixture audit name initially shadowed delegated.record; fixed audit alias, no consumer change",
+    "expiry first occurred in parent; final proof expires only child clock after command construction",
+    "Node subprocess EPERM under sandbox; exact suite passed outside sandbox",
+    "bootstrap main module serialization bug reproduced; future Python branch now executes and returns None, preserving stdout"
+  ],
+  "vps": false,
+  "realIssuanceOrInstallation": false,
+  "status": "INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO"
+}
