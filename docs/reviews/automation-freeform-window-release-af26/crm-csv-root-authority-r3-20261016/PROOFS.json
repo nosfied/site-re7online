@@ -1,0 +1,39 @@
+{
+  "baseCommit": "2cc9a35058c25bfdd01e597564a29e8d952d69aa",
+  "result": "R3_LOCAL_FOCUSED_VALIDATION_PASS",
+  "tests": 28,
+  "newTests": 18,
+  "affectedRecoveryPreventionTests": 10,
+  "counterexamples": {
+    "withoutPermit": "authority_permit_required before restore/gate/start intent in predecessor Operations.start",
+    "issueAfterContext": "actual Store.issue_owner_once writes synthetic permit; predecessor Context.start revalidation raises authority_replaced; reissue raises authority_issue_consumed"
+  },
+  "validForward": "real Sequencer.start_pair -> fixture protocol -> transformed Operations.start -> real CSV start gate/stage_boundary -> Context.start_mode -> synthetic Driver.start -> real marker/identity checks; no permit emitted",
+  "canonicalGateCounterproof": "real Sequencer.eligible rejects each of the five false gate values; checksum command implemented by read/hash in synthetic driver",
+  "limits": [
+    "fixture csv_contract.check/check_current package/environment admissions are existing stubs; no claim of real package operational certification",
+    "protocol/delegated transport and external processes/SQL/root metadata/owner lock/HTTP/PM2 are simulated",
+    "recovery fixtures retain existing synthetic permits; forward proof uses NONE and actual synthetic Store issue only in counterexamples",
+    "root protected files and installer not exercised; full chain remains B1-B4 blocked",
+    "forward pair proof ends with verified synthetic API/worker; does not certify full CLI execute/containment/unfence"
+  ],
+  "blocked": [
+    "B1 canonical diagnostic transport",
+    "B2 complete delegated/Node-Python chain",
+    "B3 PM2 ecosystem reread",
+    "B4 concrete installer/real transitive four-mode closure"
+  ],
+  "codeSha256": {
+    "authority.py": "d6fb49a3c35503f06f2582e22e137ad53e3c8cd8c1c4ddf379cd06055c922f3b",
+    "integration.py": "f3628c4078007c9580651c4a1549b26d3b25375d655b6d1d58a79379a71ec7a9",
+    "test_r3.py": "acc2af27105af4f8301967368eab1bd54103c1984cb924c6874871a54588f75f",
+    "reproduce.py": "cdb3c20c3ccdc19d952e78eff9f9b112eef168ce0a5a532847624395eb4029fe"
+  },
+  "testOutputSha256": "fb6b7f4db865782ba886f451f5fa5253b0ef5dddd1b0387496fccdfe088ff07b",
+  "previous33Repeated": false,
+  "previous32Or42Repeated": false,
+  "vps": false,
+  "realInstallationOrIssuance": false,
+  "status": "INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO",
+  "additionalScopeProof": "real Loader/Context.snapshot accepts owner-installed synthetic forward entry before import with no permit; recovery entry still denied without permit"
+}

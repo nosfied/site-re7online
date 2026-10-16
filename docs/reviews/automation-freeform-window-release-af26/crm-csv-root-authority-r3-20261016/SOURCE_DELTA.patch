@@ -1,0 +1,86 @@
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/authority.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/authority.py
+@@ -87,7 +87,7 @@
+     require(type(manifest['entries']) is dict and manifest['entries'] and
+             set(manifest['entries']) <= set(files), 'authority_entry_coverage')
+     for name, scope in manifest['entries'].items():
+-        require(scope in ('inspect', 'prestop', 'recovery', 'closure'), 'authority_entry_scope')
++        require(scope in ('inspect', 'prestop', 'forward', 'recovery', 'closure'), 'authority_entry_scope')
+     for owner, imports in manifest['imports'].items():
+         require(owner in files and type(imports) is dict and
+                 set(imports.values()) <= set(files), 'authority_import_coverage')
+@@ -137,10 +137,13 @@
+     def revalidate(self, purpose='inspect', decision=None, execution_hash=None):
+         b = self._read()
+         require(self._identity(b) == self.identity, 'authority_replaced')
+-        require(purpose in ('inspect', 'prestop', 'recovery', 'start', 'closure'), 'authority_purpose')
++        require(purpose in ('inspect', 'prestop', 'forward', 'recovery', 'start', 'closure'), 'authority_purpose')
+         if purpose == 'prestop':
+             require(b['livePhase'] in (None, 'fenced') and b['permit'] is None,
+                     'authority_prestop_scope')
++        elif purpose == 'forward':
++            require(b['permit'] is None, 'authority_forward_recovery_conflict')
++            require(b['livePhase'] == 'fenced', 'authority_forward_phase')
+         elif purpose in ('recovery', 'start', 'closure'):
+             p = b['permit']; require(p is not None, 'authority_permit_required')
+             age = (self.now() - datetime.datetime.fromisoformat(p['capturedUtc'])).total_seconds()
+@@ -160,6 +163,36 @@
+         require(name == 'permit' and self.bundle['permit'] is not None, 'authority_pin_unavailable')
+         return self.bundle['permitSha256']
+ 
++    def start_mode(self, directory):
++        """Static reviewed authority for switch; one-shot permit only for recovery.
++
++        This does not admit gates or select a candidate. Operations and its
++        canonical start gate must still validate all dynamic preconditions.
++        """
++        directory = Path(directory)
++        require(directory.parent == self.root and directory.name in MODES,
++                'authority_start_mode_scope')
++        if directory.name != 'switch':
++            return self.operation('ORIGINAL' if directory.name == 'return-before-commit'
++                                  else 'CANDIDATE', 'start')
++        self.revalidate('forward')
++        w = self.root / 'window'
++        require(digest((w / 'recovery-contract.private.json').read_bytes()) == self.pin('contract'),
++                'authority_forward_contract')
++        require(digest((w / 'target.profile.private.json').read_bytes()) ==
++                self.bundle['anchor']['profileSha256']['CANDIDATE'], 'authority_forward_profile')
++        execution = digest((w / 'csv-execution.intent.private.json').read_bytes())
++        if not hasattr(self, '_forward_execution'):
++            self._forward_execution = execution
++        require(execution == self._forward_execution, 'authority_forward_execution_drift')
++        # Recovery or closure already admitted is not a second forward attempt.
++        require(not any(os.path.lexists(w / name) for name in
++                ('csv-recovery.intent.private.json', 'csv-recovery.receipt.private.json',
++                 'csv-abort.receipt.private.json', 'csv-complete.receipt.private.json')),
++                'authority_forward_consumed_or_recovery')
++        self.revalidate('forward')
++        return self
++
+     def operation(self, decision, purpose='recovery'):
+         execution = self.root / 'window/csv-execution.intent.private.json'
+         return self.revalidate(purpose, decision, digest(execution.read_bytes()))
+@@ -174,6 +207,8 @@
+         elif scope == 'closure':
+             require(self.bundle['permit'] is not None, 'authority_permit_required')
+             self.operation(self.bundle['permit']['decision'], 'closure')
++        elif scope == 'forward':
++            self.start_mode(self.root / Path(entry).parts[0])
+         elif scope == 'prestop':
+             self.revalidate('prestop')
+         result = {}
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/integration.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016/integration.py
+@@ -64,9 +64,9 @@
+         source=once(source,'return original_bindings(window, config)',
+                     'return original_bindings(window, config, __phase_authority__)')
+     source=once(source,'    def start(self, name):\n',
+-        "    def start(self, name):\n        authority = __phase_authority__\n        decision = 'ORIGINAL' if self.root.name == 'return-before-commit' else 'CANDIDATE'\n        authority.operation(decision, 'start')\n")
++        "    def start(self, name):\n        authority = __phase_authority__\n        authority.start_mode(self.root)\n")
+     source=once(source,'        self.d.start(self.root, name)\n',
+-        "        authority.operation(decision, 'start')\n        self.d.start(self.root, name)\n")
++        "        authority.start_mode(self.root)\n        self.d.start(self.root, name)\n")
+     return source
+ 
+ def sequencer(source):

@@ -1,0 +1,33 @@
+test_forward_canonical_sequencer_rejects_each_missing_gate (test_r3.Forward.test_forward_canonical_sequencer_rejects_each_missing_gate) ... ok
+test_forward_consumed_or_recovery_blocks_no_replay (test_r3.Forward.test_forward_consumed_or_recovery_blocks_no_replay) ... ok
+test_forward_contract_profile_and_phase_negative (test_r3.Forward.test_forward_contract_profile_and_phase_negative) ... ok
+test_forward_execution_change_between_api_worker_denies (test_r3.Forward.test_forward_execution_change_between_api_worker_denies) ... ok
+test_forward_issue_between_api_worker_blocks_second_start (test_r3.Forward.test_forward_issue_between_api_worker_blocks_second_start) ... ok
+test_forward_mode_scope_and_unknown_entry_denied (test_r3.Forward.test_forward_mode_scope_and_unknown_entry_denied) ... ok
+test_forward_new_context_with_recovery_permit_cannot_start_switch (test_r3.Forward.test_forward_new_context_with_recovery_permit_cannot_start_switch) ... ok
+test_forward_old_exit_generation_denied (test_r3.Forward.test_forward_old_exit_generation_denied) ... ok
+test_forward_owner_and_restore_still_denied (test_r3.Forward.test_forward_owner_and_restore_still_denied) ... ok
+test_forward_real_pair_without_recovery_permit (test_r3.Forward.test_forward_real_pair_without_recovery_permit) ... ok
+test_forward_response_lost_no_replay_or_complete (test_r3.Forward.test_forward_response_lost_no_replay_or_complete) ... ok
+test_forward_revalidation_after_start_intent_before_effect (test_r3.Forward.test_forward_revalidation_after_start_intent_before_effect) ... ok
+test_forward_snapshot_scope_before_import_no_recovery_permit (test_r3.Forward.test_forward_snapshot_scope_before_import_no_recovery_permit) ... ok
+test_forward_start_consumed_does_not_repeat_effect (test_r3.Forward.test_forward_start_consumed_does_not_repeat_effect) ... ok
+test_forward_start_gate_selection_negative (test_r3.Forward.test_forward_start_gate_selection_negative) ... ok
+test_forward_wrong_selection_hash_negative (test_r3.Forward.test_forward_wrong_selection_hash_negative) ... ok
+test_r3_before_later_real_issue_replaces_context_no_retry (test_r3.Forward.test_r3_before_later_real_issue_replaces_context_no_retry) ... ok
+test_r3_before_no_permit_denies_before_start_intent (test_r3.Forward.test_r3_before_no_permit_denies_before_start_intent) ... ok
+test_original_real_checker_certificates_controls_and_replay (test_connected.Connected.test_original_real_checker_certificates_controls_and_replay) ... ok
+test_prestop_no_permit_and_no_start (test_connected.Connected.test_prestop_no_permit_and_no_start) ... ok
+test_candidate_compatible_only (test_connected.Connected.test_candidate_compatible_only) ... ok
+test_authority_replacement_between_api_worker_no_complete (test_connected.Connected.test_authority_replacement_between_api_worker_no_complete) ... ok
+test_expiry_between_api_worker_no_complete (test_connected.Connected.test_expiry_between_api_worker_no_complete) ... ok
+test_lost_start_response_no_replay_or_complete (test_connected.Connected.test_lost_start_response_no_replay_or_complete) ... ok
+test_uncertain_selection_no_original (test_connected.Connected.test_uncertain_selection_no_original) ... ok
+test_old_generation_still_denied (test_connected.Connected.test_old_generation_still_denied) ... ok
+test_prevention_binding_still_before_effects (test_connected.Connected.test_prevention_binding_still_before_effects) ... ok
+test_prevention_event775_still_before_effects (test_connected.Connected.test_prevention_event775_still_before_effects) ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 3.200s
+
+OK

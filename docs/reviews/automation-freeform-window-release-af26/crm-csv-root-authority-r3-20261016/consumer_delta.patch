@@ -1,0 +1,21 @@
+--- a/FUTURE_PRIOR/MODE/ops.py
++++ b/FUTURE_R3/MODE/ops.py
+@@ -360,8 +360,7 @@
+ 
+     def start(self, name):
+         authority = __phase_authority__
+-        decision = 'ORIGINAL' if self.root.name == 'return-before-commit' else 'CANDIDATE'
+-        authority.operation(decision, 'start')
++        authority.start_mode(self.root)
+         self.restore_proof()
+         import sys
+         sys.path.insert(0, str(self.window))
+@@ -391,7 +390,7 @@
+         self.d.validate_bindings(self.window, {name: self.target[name]})
+         self.db_gate_for_start(name, live)
+         self.write_once('start-intent-' + name + '.json', {'direction': self.plan['direction']})
+-        authority.operation(decision, 'start')
++        authority.start_mode(self.root)
+         self.d.start(self.root, name)
+         last_error = None
+         for _ in range(25):

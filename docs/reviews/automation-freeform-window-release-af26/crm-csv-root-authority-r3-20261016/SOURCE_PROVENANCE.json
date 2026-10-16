@@ -1,0 +1,24 @@
+{
+  "baseCommit": "2cc9a35058c25bfdd01e597564a29e8d952d69aa",
+  "editableFutureSources": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-r3-20261016",
+  "reusedFutureSources": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016",
+  "replacementFiles": [
+    "authority.py",
+    "integration.py"
+  ],
+  "baseCopies": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/authority.py": "5d2e92a0afdd3449a0064c429a5a977aca2272c90dea5abb37fb7d6b899f0de4",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/integration.py": "6778ce9e7d4f68a01c075de911a29a338d0c32df363a71ce1bd98a72d7c353de",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/reproduce.py": "8a6c62d87ebd05f87e0ebabe5cf381f5ad82efcacfec83eedd4d6160bb17ed3d",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/test_connected.py": "d5411f4d613177d283f83bf68ac8563ea481b2e989a3ffd85b2b764e0b962404",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/root_store.py": "3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a"
+  },
+  "consumer": {
+    "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source",
+    "sha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e",
+    "beforeRenderedSha256": "3ec8adacb7197f86df783950abf9a72d57fc8fd32476f70e20c49f761040c033",
+    "afterRenderedSha256": "f18fc504faadf1b0659720ed490a0d43b7cf597a66bf2474d0a54293072a84f9"
+  },
+  "dependencies": "reproduce.py reuses the published pinned input/excerpt provenance; predecessor files are fetched from baseCommit; only authority/integration/test_r3 are overlaid in isolated temporary tree. No local-evidence.",
+  "noOperationalGeneration": true
+}
