@@ -1,3 +1,9 @@
+ESTADO CORRENTE: FINAL_PREPARATION_FOR_REVIEW.md / FINAL_PREPARATION_SANITIZED.json.
+Review vigente56965c1249a5ff0dddf14df3dccefe8447c523c30a84b9b2a07b35786549faef.
+R0/custódia/renovação/root JÁ CONCLUÍDOS; NÃO repetir etapas2–5 abaixo.
+Bloco exato para decisão de A: FINAL_COMMANDS_FOR_REVIEW.txt. Sem autorização A/B.
+Os comandos seguintes preservam o roteiro de staging/histórico.
+
 REVISÃO SOMENTE. Staging concluído; NÃO repetir transferência, extração ou drivers.
 Nenhum A/admissão/B foi autorizado por esta entrega. Não usar a geração DENY.
 

@@ -1,3 +1,5 @@
+**Estado corrente:** [preparação final coordenada, review56965c12…](FINAL_PREPARATION_FOR_REVIEW.md). Backup/custódia v2 e quatro provas renovados; root final PASS. Sem instalação/admissão/contenção/partidas. Os números abaixo registram o staging histórico; os atuais estão no complemento e não substituem seus recibos.
+
 # CSV — staging inativo e conferência real
 
 **READONLY PREPARATION PASS / INACTIVE STAGED / NOT INSTALLED / NOT ADMITTED —16/10/2026.** Base autorizada2c52fa2b. [Resultado/hashes](RESULT_SANITIZED.json), [comandos e pendências](COMMANDS_FOR_REVIEW.txt). Nove consumidores/verificações reais passaram na VPS às **06h49min30s Fortaleza**; não é certificado de execução da janela.

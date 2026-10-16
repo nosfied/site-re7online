@@ -1,0 +1,58 @@
+SOMENTE REVISÃO. PREPARAÇÃO FINAL CONCLUÍDA; NÃO EXECUTAR A/ADMISSÃO/B SEM AUTORIZAÇÃO EXPRESSA.
+Não repetir staging, R0 ou renovação consumida. Possível uso humano registrado.
+Contenção futura GLOBAL TCP3000/3001 afeta atendimento/API/frontend.
+Retorno disponível mantém API candidata; backend antigo não é retorno seguro.
+
+A — BLOCO CONCRETO PARA DECISÃO FUTURA, UMA VEZ, OWNER SUDO:
+# Executar como bloco fail-fast; não colar outputs no shell nem continuar após DENY.
+(
+set -euo pipefail
+umask 077
+P=/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-csv-staged-v2-20261016T094000Z
+: "${REVIEWED_AUTHORIZED_COMMIT:?decisão explícita futura sobre os hashes finais}"
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = 56965c1249a5ff0dddf14df3dccefe8447c523c30a84b9b2a07b35786549faef
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = e6523f6e0fcd27c78562b6a64ead60e642768fae6900a29b732d42d3ab21b921
+python3 -B "$P/verify-package.py"
+python3 -B "$P/window/pre_install.py" "$P"
+python3 - <<'DEADLINES'
+import datetime
+now=datetime.datetime.now(datetime.timezone.utc)
+assert now<datetime.datetime.fromisoformat('2026-10-16T11:07:23+00:00'),'root_expired_stop_before_install'
+assert now<datetime.datetime.fromisoformat('2026-10-16T11:54:08+00:00'),'RPO_expired_stop_before_install'
+print('FINAL_PRE_A_DEADLINES_PASS')
+DEADLINES
+bash "$P/install-api-window-policy.sh"
+)
+# Exigir POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE. Recusa/timeout interrompe.
+# Root/RPO expirados: informar renovação necessária; nenhuma adaptação/replay.
+
+ADMISSÃO — APENAS APÓS A PASS E AUTORIZAÇÃO EXPRESSA:
+# Definir os mesmos P e REVIEWED_AUTHORIZED_COMMIT acima na sessão executora.
+# ADMISSION_PRIVATE e PHASE_PRIVATE devem ser diretórios novos/não existentes,
+# dentro da custódia/evidência privada700 prevista. Não reutilizar intents.
+: "${P:?geração acima}"
+: "${REVIEWED_AUTHORIZED_COMMIT:?decisão futura explícita}"
+: "${ADMISSION_PRIVATE:?caminho novo privado para admissão}"
+: "${PHASE_PRIVATE:?caminho novo privado para fronteira API/frontend}"
+python3 -B "$P/window/admit_gates.py" "$P" "$P/window/owner-evidence" "$ADMISSION_PRIVATE" 56965c1249a5ff0dddf14df3dccefe8447c523c30a84b9b2a07b35786549faef "$REVIEWED_AUTHORIZED_COMMIT"
+# Exigir FIVE_GATES_ADMITTED; negativa impede B.
+python3 -B "$P/capture_phase.py" "$P" "$PHASE_PRIVATE" before
+
+B — UMA VEZ, APÓS FIVE_GATES_ADMITTED E FRONTEIRA BEFORE PASS:
+python3 -B "$P/window/csv_cli.py" "$P" --execute
+# Capturar stdout/stderr privadamente, nunca configs/headers no chat.
+# Saída comprovada/owners completos e auditoria CSV sob fence obrigatórias.
+# HTTP ausente, inFlight0 ou guarda38 não certificam conclusão de importação.
+
+C — INCERTEZA/PARCIAL/RECUSA: INSPEÇÃO, SEM REPLAY:
+python3 -B "$P/window/csv_cli.py" "$P" --inspect-readonly
+# Recuperações PRESTOP/CANDIDATE somente com classificação fresca e decisão
+# explícita. Não executar ambas nem repetir start. Não reativar backend antigo.
+# Falha persistente API exige outra versão compatível revisada.
+
+API->FRONTEND, POLÍTICAS E ACEITE:
+# Seguir F0–F3 do roteiro ../crm-csv-operational-20261016/COMMANDS_FOR_REVIEW.txt,
+# utilizando EXCLUSIVAMENTE o P canônico acima e sucessores reais pós-API.
+# Publicar/revisar bindings/políticas derivados antes de instalação frontend.
+# Sem importação real/envios; aceite do owner em leitura. Saved/fallback600,
+# dois crons, NEWauth+NEWDB+NEWcipher, guarda38 e out.15 permanecem obrigatórios.
