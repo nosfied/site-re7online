@@ -1,0 +1,57 @@
+REVISÃO PARA DECISÃO EXPLÍCITA — NENHUM COMANDO DE RECUPERAÇÃO EXECUTADO.
+Não repetir A/B CSV. Não aplicar overlay Event/chmod. Não concluir implantação candidata.
+Recuperação original exclusivamente antes de seleção, usando return-before-commit.
+
+1. OWNER DEPLOY/SUDO — POLÍTICA RESTRITA, SEM START/UNFENCE:
+(
+set -euo pipefail
+umask 077
+Q=/opt/re7online/backups/converta-persistent/preparations/csv-original-recovery-20261016T111200Z
+test "$(sha256sum "$Q/recover_original.py" | cut -d' ' -f1)" = 78fdca8eb4750a325a837322b7e5833f977fe255e1f3d941759bb973f9532283
+test "$(sha256sum "$Q/install_original_policy.py" | cut -d' ' -f1)" = e9fdd46b18ab08b7e3e1ed9ddc5ad9d3a3617eb92887abe14851d1fae9642cdb
+test "$(sha256sum "$Q/original-return-policy.private.json" | cut -d' ' -f1)" = e2a5ffab807f457b4179a6981e15cbf52800cbf975bce921c31ee3a9a989860b
+test "$(sha256sum "$Q/dispatch_original.py" | cut -d' ' -f1)" = c59e39782dced0c743c51b89160e6e958a9a7120ceec831707b00471e80b5b42
+test ! -e "$Q/root-install.export.private.json" && test ! -L "$Q/root-install.export.private.json"
+python3 -B "$Q/recover_original.py" --inspect-readonly
+sudo -v
+sudo -n /usr/bin/python3 -B -I -S "$Q/install_original_policy.py" --operator-install-original-return > "$Q/root-install.export.private.json"
+python3 - "$Q/root-install.export.private.json" <<'VERIFY'
+import json,sys
+v=json.load(open(sys.argv[1]));assert v['result']=='ORIGINAL_RETURN_POLICY_INSTALLED_FENCED'and v['policySha256']=='e2a5ffab807f457b4179a6981e15cbf52800cbf975bce921c31ee3a9a989860b'
+print('ORIGINAL_RETURN_POLICY_INSTALLED_FENCED_NO_START_NO_UNFENCE')
+VERIFY
+)
+# Recusa/parcial/timeout: parar, preservar intent/recibo e inspecionar; NÃO repetir.
+# Root preserva política/fase antigas; cria fase nova fenced sob hash novo.
+# Helper e sudoers permanecem iguais. Não edita manifests/perfis da geração consumida.
+
+2. EXECUTOR DEPLOY — SOMENTE APÓS NOVA POLÍTICA PASS E DECISÃO EXPLÍCITA:
+(
+set -euo pipefail
+umask 077
+Q=/opt/re7online/backups/converta-persistent/preparations/csv-original-recovery-20261016T111200Z
+test "$(sha256sum "$Q/recover_original.py" | cut -d' ' -f1)" = 78fdca8eb4750a325a837322b7e5833f977fe255e1f3d941759bb973f9532283
+test ! -e "$Q/recovery.intent.private.json" && test ! -L "$Q/recovery.intent.private.json"
+test ! -e "$Q/execution.stdout.private" && test ! -e "$Q/execution.stderr.private"
+set +e
+timeout 600 python3 -B "$Q/recover_original.py" --operator-recover-original > "$Q/execution.stdout.private" 2> "$Q/execution.stderr.private"
+RECOVERY_EXIT=$?
+printf 'RECOVERY_EXIT=%s\n' "$RECOVERY_EXIT"
+python3 -B "$Q/recover_original.py" --status-readonly
+# Inspeção em sucesso/erro/timeout. Sem replay ou recuperação automática.
+if [ "$RECOVERY_EXIT" -eq 0 ]; then
+ python3 - "$Q/recovery.receipt.private.json" <<'RECEIPT'
+import json,sys
+v=json.load(open(sys.argv[1]));assert v['result']=='CSV_ORIGINAL_PAIR_RESTORED'and v['gatesFalse']and v['bothCronsRestored']
+print('CSV_ORIGINAL_PAIR_RESTORED')
+RECEIPT
+fi
+)
+# O wrapper chama recover-partial/start API/start worker/finish canônicos SOMENTE
+# no modo return-before-commit. Não executa CSV, overlay, reimportação ou código novo.
+# Unfence só após perfis/identidades, worker health autenticado, DB ownership,
+# captura completa, saved/fallback e autorização root. Health HTTP API/proxies
+# é verificado imediatamente APÓS unfence, pois a regra rejeita todos3000/3001.
+# Esse limite do contrato é explícito: não alegar HTTP200 antes da liberação.
+# Encerramento exige validação canônica pós-unfence, ambos crons, supervisão,
+# saved/fallback600, gates falsos, recibo exato e aceite de telas pelo owner.

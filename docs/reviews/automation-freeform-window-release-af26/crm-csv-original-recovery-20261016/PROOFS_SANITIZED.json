@@ -1,0 +1,25 @@
+{
+  "result": "ORIGINAL_RECOVERY_LOCAL_CONTRACT_PASS",
+  "checks": [
+    "canonical_policy_parser_concrete_bytes",
+    "restricted_return_target_only",
+    "exact_original_full_profiles",
+    "canonical_preselection_allowed",
+    "selection_intent_denied",
+    "candidate_start_intent_denied",
+    "new_scripts_compile"
+  ],
+  "productionEffectsExercised": false,
+  "rootOwnershipSubstitutionOnlyForLocalPolicyParser": true,
+  "sourceProfileSha256": "a062c7020353cb39b0578653ea51475f8e9f9f68a588d1c55eb87cbbd68b6b9e",
+  "vpsReadOnly": "ORIGINAL_RECOVERY_PRECONDITIONS_PASS",
+  "freshSqlZero": true,
+  "originalExecutorTreesSocketsAbsent": true,
+  "newCsvAdmissionEvents": 0,
+  "originalModeSourceProfileSha256": "a062c7020353cb39b0578653ea51475f8e9f9f68a588d1c55eb87cbbd68b6b9e",
+  "dataSymlinks": 2,
+  "dataAbsent": 1,
+  "rootPolicyInstalled": false,
+  "recoveryExecuted": false,
+  "exactShellBlocksSyntaxPass": 2
+}

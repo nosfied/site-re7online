@@ -1,0 +1,8 @@
+{
+  "recover_original.py": "78fdca8eb4750a325a837322b7e5833f977fe255e1f3d941759bb973f9532283",
+  "install_original_policy.py": "e9fdd46b18ab08b7e3e1ed9ddc5ad9d3a3617eb92887abe14851d1fae9642cdb",
+  "dispatch_original.py": "c59e39782dced0c743c51b89160e6e958a9a7120ceec831707b00471e80b5b42",
+  "original-return-policy.private.json": "e2a5ffab807f457b4179a6981e15cbf52800cbf975bce921c31ee3a9a989860b",
+  "data-contract.private.json": "af63ea83a4b43309da14a6764f3ab48d340231877562c3652e1327a9496975f6",
+  "path-bindings.private.json": "6f2258f4ddbfbd4c474538906323d78d279310c6e5b86b9142d46b265ff37f23"
+}
