@@ -1,0 +1,38 @@
+test_anchor_tamper_denied (test_authority.AuthorityTests.test_anchor_tamper_denied) ... ok
+test_exchange_between_api_and_worker_and_expiry (test_authority.AuthorityTests.test_exchange_between_api_and_worker_and_expiry) ... ok
+test_full_consumers_render_and_diagnostic_transport (test_authority.AuthorityTests.test_full_consumers_render_and_diagnostic_transport) ... ok
+test_future_transform_removes_binding_imports (test_authority.AuthorityTests.test_future_transform_removes_binding_imports) ... ok
+test_helper_real_dispatch_query_preserves_phase (test_authority.AuthorityTests.test_helper_real_dispatch_query_preserves_phase) ... ok
+test_lost_issue_response_no_reissue_or_renewal (test_authority.AuthorityTests.test_lost_issue_response_no_reissue_or_renewal) ... ok
+test_malicious_entry_not_executed_before_authentication (test_authority.AuthorityTests.test_malicious_entry_not_executed_before_authentication) ... ok
+test_missing_denied_before_import (test_authority.AuthorityTests.test_missing_denied_before_import) ... ok
+test_node_denies_raw_python_and_undeclared_require (test_authority.AuthorityTests.test_node_denies_raw_python_and_undeclared_require) ... ok
+test_node_launch_strips_preload_environment (test_authority.AuthorityTests.test_node_launch_strips_preload_environment) ... ok
+test_node_real_execution_check_routes_python_baseline (test_authority.AuthorityTests.test_node_real_execution_check_routes_python_baseline) ... ok
+test_owner_only_and_one_shot_issue_query_no_renewal (test_authority.AuthorityTests.test_owner_only_and_one_shot_issue_query_no_renewal) ... ok
+test_partial_issue_and_raw_child_denied (test_authority.AuthorityTests.test_partial_issue_and_raw_child_denied) ... ok
+test_permission_denied_not_pass (test_authority.AuthorityTests.test_permission_denied_not_pass) ... ok
+test_permit_profile_drift_denied_even_with_updated_ack (test_authority.AuthorityTests.test_permit_profile_drift_denied_even_with_updated_ack) ... ok
+test_phase_policy_profile_mismatch_and_expiry (test_authority.AuthorityTests.test_phase_policy_profile_mismatch_and_expiry) ... ok
+test_query_transport_literal_and_no_write_action (test_authority.AuthorityTests.test_query_transport_literal_and_no_write_action) ... ok
+test_same_checked_bytes_even_after_replacement (test_authority.AuthorityTests.test_same_checked_bytes_even_after_replacement) ... ok
+test_source_metadata_denied_before_exec (test_authority.AuthorityTests.test_source_metadata_denied_before_exec) ... ok
+test_static_inspection_and_prestop_have_no_permit (test_authority.AuthorityTests.test_static_inspection_and_prestop_have_no_permit) ... ok
+test_transitive_missing_and_seal_cycle (test_authority.AuthorityTests.test_transitive_missing_and_seal_cycle) ... ok
+test_undeclared_import_and_child_bypass (test_authority.AuthorityTests.test_undeclared_import_and_child_bypass) ... ok
+test_authority_replacement_between_api_worker_no_complete (test_connected.Connected.test_authority_replacement_between_api_worker_no_complete) ... ok
+test_candidate_compatible_only (test_connected.Connected.test_candidate_compatible_only) ... ok
+test_expiry_between_api_worker_no_complete (test_connected.Connected.test_expiry_between_api_worker_no_complete) ... ok
+test_lost_start_response_no_replay_or_complete (test_connected.Connected.test_lost_start_response_no_replay_or_complete) ... ok
+test_old_generation_still_denied (test_connected.Connected.test_old_generation_still_denied) ... ok
+test_original_real_checker_certificates_controls_and_replay (test_connected.Connected.test_original_real_checker_certificates_controls_and_replay) ... ok
+test_prestop_no_permit_and_no_start (test_connected.Connected.test_prestop_no_permit_and_no_start) ... ok
+test_prevention_binding_still_before_effects (test_connected.Connected.test_prevention_binding_still_before_effects) ... ok
+test_prevention_event775_still_before_effects (test_connected.Connected.test_prevention_event775_still_before_effects) ... ok
+test_python_baseline_real_under_snapshot_loader (test_connected.Connected.test_python_baseline_real_under_snapshot_loader) ... ok
+test_uncertain_selection_no_original (test_connected.Connected.test_uncertain_selection_no_original) ... ok
+
+----------------------------------------------------------------------
+Ran 33 tests in 1.437s
+
+OK

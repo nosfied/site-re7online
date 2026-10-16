@@ -1,0 +1,77 @@
+{
+  "entries": [
+    {
+      "futureConsumer": "root_extension.helper",
+      "limit": "root filesystem/lock/audit not executed; Store owner lock simulated",
+      "path": "Root helper/main",
+      "proof": "Real act/query; main lock unchanged in source"
+    },
+    {
+      "futureConsumer": "root_store.Store",
+      "limit": "UID/root metadata/read/lock injected; no concrete reviewed installer for future VPS",
+      "path": "Owner static install / issue",
+      "proof": "Real exclusive writes/fsync/intents/receipts on synthetic files"
+    },
+    {
+      "futureConsumer": "bootstrap + authority + verified_loader",
+      "limit": "root-owned installed bootstrap/library metadata and sudo channel not exercised",
+      "path": "Python bootstrap before imports",
+      "proof": "Real Context/Loader snapshot executes verified bytes; unauthenticated entry denies"
+    },
+    {
+      "futureConsumer": "integration.recovery/bridge/gate",
+      "limit": "start-gate factory/OS driver injected in connected rehearsal",
+      "path": "Recovery.build / original_bindings / start gate",
+      "proof": "Concrete recovery/checker/start gate connected; explicit Context; no binding imports"
+    },
+    {
+      "futureConsumer": "integration.sequencer",
+      "limit": "Both real process/capture observations remain simulated; full closure inventory pending",
+      "path": "Bridge.app_matches / worker_capture_observation",
+      "proof": "Both dynamic ops imports replaced by checked loader; pure render validated"
+    },
+    {
+      "futureConsumer": "integration.sequencer -> child_transport -> node_bootstrap",
+      "limit": "Real Bridge.node plus launcher subprocess not exercised as one chain",
+      "path": "Bridge.node",
+      "proof": "Real node consumer execution-check tested separately; Python->Node command routing implemented"
+    },
+    {
+      "futureConsumer": "integration.sequencer/delegated",
+      "limit": "No full delegated nonce/record/execute across root-owned launcher processes yet",
+      "path": "Bridge.protocol -> delegated request/record/execute",
+      "proof": "All Bridge.run Python calls routed; real recovery protocol dispatch simulated"
+    },
+    {
+      "futureConsumer": "integration.operations",
+      "limit": "Actual external observer/PM2/runtime effects not exercised",
+      "path": "Operations / System.run / original bindings",
+      "proof": "Real Operations certificates/start/order/consumption exercised with fake System; run and bindings transforms compiled"
+    },
+    {
+      "futureConsumer": "node_bootstrap.cjs",
+      "limit": "Authenticated root transport simulated; no full concrete CommonJS closure sealed",
+      "path": "Node require transitive / raw child",
+      "proof": "Real CommonJS loader and original execution-check; raw python/undeclared require denied"
+    },
+    {
+      "futureConsumer": "Node launcher + Python bootstrap/Loader",
+      "limit": "Combined Node->installed bootstrap->actual baseline end-to-end still BLOCKED",
+      "path": "execution-check.cjs -> baseline_contract.py",
+      "proof": "Original execution-check routes child through transport; actual baseline/ecosystem checked separately under Loader"
+    },
+    {
+      "futureConsumer": "existing consumer preserved",
+      "limit": "PM2 reopens raw ecosystem CJS; loader does not authenticate this separate process load: BLOCKED",
+      "path": "Operations.System.start -> pm2 -> ecosystem CJS",
+      "proof": "Canonical profile/config validators retained"
+    },
+    {
+      "futureConsumer": "root_extension.diagnostics + authority.fixed_query",
+      "limit": "fixed_query uses direct subprocess capture, not canonical private diagnostic writer: BLOCKED",
+      "path": "Root query private diagnostics",
+      "proof": "Literal registry extended; root helper audit source unchanged"
+    }
+  ],
+  "status": "INTEGRATION_BLOCKED_NOT_WINDOW_READY"
+}

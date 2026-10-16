@@ -1,0 +1,68 @@
+"""Execute authenticated snapshots; no Python path fallback or binding import.
+Imports of local modules must be declared by the authenticated manifest. Python
+stdlib remains the system trust boundary established by the root bootstrap.
+"""
+import builtins
+import importlib.util
+import sys
+import types
+from pathlib import Path
+from authority import require
+
+class Loader:
+    def __init__(self, authority, entry, *, trusted_modules=None):
+        self.authority=authority; self.entry=entry
+        self.trusted_modules=trusted_modules or {}
+        require(set(self.trusted_modules) <= {"authority", "child_transport"}, "authority_root_library_allowlist")
+        self.raw=authority.snapshot(entry)
+        self.manifest=authority.bundle['manifest']; self.modules={}
+
+    def _resolve(self, owner, name):
+        mapping=self.manifest['imports'].get(owner,{})
+        if name in mapping:
+            return mapping[name]
+        require(name.split('.')[0] in sys.stdlib_module_names and name!='__main__',
+                'authority_import_undeclared:'+name)
+        return None
+
+    def _import(self, owner):
+        def importing(name, globals=None, locals=None, fromlist=(), level=0):
+            require(level==0, 'authority_relative_python_import')
+            require(name!='recovery_binding', 'authority_legacy_binding_forbidden')
+            if name in self.trusted_modules:
+                return self.trusted_modules[name]
+            target=self._resolve(owner,name)
+            if target is None:
+                return builtins.__import__(name,globals,locals,fromlist,level)
+            return self.module(target)
+        return importing
+
+    def module(self, path, *, main=False, argv=None):
+        require(path in self.raw and self.manifest['files'][path]['language']=='python',
+                'authority_python_module_denied')
+        self.authority.revalidate()
+        if path in self.modules:
+            return self.modules[path]
+        # Snapshot bytes, NOT a second read/importlib path execution.
+        module=types.ModuleType('__main__' if main else Path(path).stem)
+        module.__file__=str(self.authority.root/path)
+        module.__phase_authority__=self.authority
+        module.__phase_loader__=self
+        module.__builtins__=dict(vars(builtins),__import__=self._import(path))
+        self.modules[path]=module
+        old_argv=sys.argv
+        try:
+            if argv is not None:sys.argv=[module.__file__,*argv]
+            exec(compile(self.raw[path],module.__file__,'exec'),module.__dict__)
+        except BaseException:
+            self.modules.pop(path,None)
+            raise
+        finally:sys.argv=old_argv
+        return module
+
+    def execute(self, argv=()):
+        return self.module(self.entry,main=True,argv=list(argv))
+
+    def local_module(self,path):
+        path=Path(path)
+        return self.module(str(path.relative_to(self.authority.root)))

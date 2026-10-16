@@ -1,0 +1,1971 @@
+--- a/docs/BACKLOG_TECH.md
++++ b/docs/BACKLOG_TECH.md
+@@ -1,4 +1,6 @@
+ # BACKLOG — RE7ONLINE WHATSAPP AGENT
++
++**CSV — autoridade root futura16/10: núcleo LOCAL VALIDATED / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Código, cadeia de confiança, inventário e33 provas isoladas](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/REPORT.md). Âncora/permit owner-only, consulta literal e loaders Python/Node locais; código aceito/históricos preservados. Integração completa NÃO concluída: diagnóstico privado da consulta, cadeia combinada delegated/Node→Python, releitura do ecossistema pelo PM2 e manifest/instalador concretos permanecem bloqueios. CSV suspenso; sem VPS, instalação/emissão reais, geração, backup ou commit/push. Provas antigas reutilizadas, não substituídas por contagem de testes.
+ 
+ **CSV — autoridade de fase16/10: BLOCKED / ROOT_OF_TRUST_UNBOUND / NOT DEPLOYED / NOT WINDOW READY.** [Avaliação local e condição de parada](reviews/automation-freeform-window-release-af26/crm-csv-phase-authority-assessment-20261016/REPORT.md). Falta fornecedor/entrada autenticados dos três pins e sua propagação ao build/bindings/start gate. Nenhum leitor implementado para apenas transferir confiança; nenhum código/prova anterior alterado, teste repetido ou operação executada. CSV suspenso; recuperação consumida e controles preservados. Este checkpoint não revoga o aceite local anterior nem constitui nova certificação.
+ 
+--- a/docs/RUNBOOK_WHATSAPP_AGENT.md
++++ b/docs/RUNBOOK_WHATSAPP_AGENT.md
+@@ -1,4 +1,6 @@
+ # RUNBOOK OPERACIONAL — WhatsApp Agent
++
++**CSV — autoridade root futura16/10: núcleo LOCAL VALIDATED / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.** [Código, cadeia de confiança, inventário e33 provas isoladas](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/REPORT.md). Âncora/permit owner-only, consulta literal e loaders Python/Node locais; código aceito/históricos preservados. Integração completa NÃO concluída: diagnóstico privado da consulta, cadeia combinada delegated/Node→Python, releitura do ecossistema pelo PM2 e manifest/instalador concretos permanecem bloqueios. CSV suspenso; sem VPS, instalação/emissão reais, geração, backup ou commit/push. Provas antigas reutilizadas, não substituídas por contagem de testes.
+ 
+ **CSV — autoridade de fase16/10: BLOCKED / ROOT_OF_TRUST_UNBOUND / NOT DEPLOYED / NOT WINDOW READY.** [Avaliação local e condição de parada](reviews/automation-freeform-window-release-af26/crm-csv-phase-authority-assessment-20261016/REPORT.md). Falta fornecedor/entrada autenticados dos três pins e sua propagação ao build/bindings/start gate. Nenhum leitor implementado para apenas transferir confiança; nenhum código/prova anterior alterado, teste repetido ou operação executada. CSV suspenso; recuperação consumida e controles preservados. Este checkpoint não revoga o aceite local anterior nem constitui nova certificação.
+ 
+--- a/docs/saas/DOCUMENTATION_INDEX.md
++++ b/docs/saas/DOCUMENTATION_INDEX.md
+@@ -81,6 +81,7 @@
+ | Documento | Status | Uso |
+ | --- | --- | --- |
+ | `docs/RUNBOOK_WHATSAPP_AGENT.md` | atual | Deploy, migration, retencao e operacao principal |
++| `docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/REPORT.md` | LOCAL VALIDATED (núcleo) / INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY | Fontes futuras root/loader Python+Node;33 provas; diagnóstico/filhos combinados/PM2/manifest concretos ainda bloqueiam integração completa; CSV suspenso |
+ | `docs/reviews/automation-freeform-window-release-af26/crm-csv-phase-authority-assessment-20261016/REPORT.md` | BLOCKED / ROOT_OF_TRUST_UNBOUND / NOT DEPLOYED / NOT WINDOW READY | Bootstrap dos pins sem fornecedor/entrada autenticados; parada antes de implementar leitor; código/provas anteriores preservados |
+ | `docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/REPORT.md` | ACCEPT LOCAL / NOT DEPLOYED / NOT WINDOW READY | Reconciliação posterior a6bcf, R1/R2, publicação mínima deduplicada, allowlist e limites de reprodução; CSV suspenso |
+ | `docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/REPORT.md` | PREPARED LOCALLY / NOT DEPLOYED / NOT WINDOW READY | Código integrado composto; manifests e planos de bindings/política;15 grupos de observação atual pendentes; fonte root/namespace/pins de fase não materializados; CSV suspenso |
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/LAUNCH_INVENTORY.json
+@@ -0,0 +1,77 @@
++{
++  "entries": [
++    {
++      "futureConsumer": "root_extension.helper",
++      "limit": "root filesystem/lock/audit not executed; Store owner lock simulated",
++      "path": "Root helper/main",
++      "proof": "Real act/query; main lock unchanged in source"
++    },
++    {
++      "futureConsumer": "root_store.Store",
++      "limit": "UID/root metadata/read/lock injected; no concrete reviewed installer for future VPS",
++      "path": "Owner static install / issue",
++      "proof": "Real exclusive writes/fsync/intents/receipts on synthetic files"
++    },
++    {
++      "futureConsumer": "bootstrap + authority + verified_loader",
++      "limit": "root-owned installed bootstrap/library metadata and sudo channel not exercised",
++      "path": "Python bootstrap before imports",
++      "proof": "Real Context/Loader snapshot executes verified bytes; unauthenticated entry denies"
++    },
++    {
++      "futureConsumer": "integration.recovery/bridge/gate",
++      "limit": "start-gate factory/OS driver injected in connected rehearsal",
++      "path": "Recovery.build / original_bindings / start gate",
++      "proof": "Concrete recovery/checker/start gate connected; explicit Context; no binding imports"
++    },
++    {
++      "futureConsumer": "integration.sequencer",
++      "limit": "Both real process/capture observations remain simulated; full closure inventory pending",
++      "path": "Bridge.app_matches / worker_capture_observation",
++      "proof": "Both dynamic ops imports replaced by checked loader; pure render validated"
++    },
++    {
++      "futureConsumer": "integration.sequencer -> child_transport -> node_bootstrap",
++      "limit": "Real Bridge.node plus launcher subprocess not exercised as one chain",
++      "path": "Bridge.node",
++      "proof": "Real node consumer execution-check tested separately; Python->Node command routing implemented"
++    },
++    {
++      "futureConsumer": "integration.sequencer/delegated",
++      "limit": "No full delegated nonce/record/execute across root-owned launcher processes yet",
++      "path": "Bridge.protocol -> delegated request/record/execute",
++      "proof": "All Bridge.run Python calls routed; real recovery protocol dispatch simulated"
++    },
++    {
++      "futureConsumer": "integration.operations",
++      "limit": "Actual external observer/PM2/runtime effects not exercised",
++      "path": "Operations / System.run / original bindings",
++      "proof": "Real Operations certificates/start/order/consumption exercised with fake System; run and bindings transforms compiled"
++    },
++    {
++      "futureConsumer": "node_bootstrap.cjs",
++      "limit": "Authenticated root transport simulated; no full concrete CommonJS closure sealed",
++      "path": "Node require transitive / raw child",
++      "proof": "Real CommonJS loader and original execution-check; raw python/undeclared require denied"
++    },
++    {
++      "futureConsumer": "Node launcher + Python bootstrap/Loader",
++      "limit": "Combined Node->installed bootstrap->actual baseline end-to-end still BLOCKED",
++      "path": "execution-check.cjs -> baseline_contract.py",
++      "proof": "Original execution-check routes child through transport; actual baseline/ecosystem checked separately under Loader"
++    },
++    {
++      "futureConsumer": "existing consumer preserved",
++      "limit": "PM2 reopens raw ecosystem CJS; loader does not authenticate this separate process load: BLOCKED",
++      "path": "Operations.System.start -> pm2 -> ecosystem CJS",
++      "proof": "Canonical profile/config validators retained"
++    },
++    {
++      "futureConsumer": "root_extension.diagnostics + authority.fixed_query",
++      "limit": "fixed_query uses direct subprocess capture, not canonical private diagnostic writer: BLOCKED",
++      "path": "Root query private diagnostics",
++      "proof": "Literal registry extended; root helper audit source unchanged"
++    }
++  ],
++  "status": "INTEGRATION_BLOCKED_NOT_WINDOW_READY"
++}
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/PROOFS.json
+@@ -0,0 +1,54 @@
++{
++  "baseCommit": "bdb57f57601147632bb529895cbcd92b8b483c6c",
++  "blocked": [
++    "B1 canonical private diagnostics not connected to initial fixed_query",
++    "B2 full delegated and combined Node->Python chain unproven",
++    "B3 PM2 rereads raw ecosystem CJS outside checked loader",
++    "B4 concrete installer and full four-mode transitive closure not sealed"
++  ],
++  "codeSha256": {
++    "authority.py": "5d2e92a0afdd3449a0064c429a5a977aca2272c90dea5abb37fb7d6b899f0de4",
++    "bootstrap.py": "5c1e2cec3e2a6c54d2e1035eeceb62943e71840d94e9fdfce0e4e73be5a7f008",
++    "child_transport.py": "672e4a562e27c434257980a4bc1fd5ea2aba8e7529127e40662d4b1be15c87b8",
++    "integration.py": "6778ce9e7d4f68a01c075de911a29a338d0c32df363a71ce1bd98a72d7c353de",
++    "node_bootstrap.cjs": "0743c3f4fc4c428f668de65db4669889457965e98726789d599d82ba89378ed1",
++    "reproduce.py": "8a6c62d87ebd05f87e0ebabe5cf381f5ad82efcacfec83eedd4d6160bb17ed3d",
++    "root_extension.py": "9c04ac1c85bdfbbd24e9b8ab108c6cc64910b80dc441c4f78d33a9ca4d2fc727",
++    "root_store.py": "3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a",
++    "test_authority.py": "34011990ca434d6f7d4158908bc29eb96222fef150abd0ed7a7dad24b5830db9",
++    "test_connected.py": "d5411f4d613177d283f83bf68ac8563ea481b2e989a3ffd85b2b764e0b962404",
++    "verified_loader.py": "f1c531ee45a70a3ef23e0a38cd024f358cb7e8e2ac37a522cd0ed51b59b08793"
++  },
++  "decision": "LOCAL_KERNEL_VALIDATED_INTEGRATION_BLOCKED",
++  "documentEntrySha256": {
++    "docs/BACKLOG_TECH.md": "f8b729c90c287944d86b3da9901ec82c99000860c6eebc2b4940ea4385287470",
++    "docs/RUNBOOK_WHATSAPP_AGENT.md": "2d3b4fc8b073241561b3721fe3db2dfaaa9e69ef8a060e7b2a12f31e3853e3c8",
++    "docs/saas/DOCUMENTATION_INDEX.md": "a2c350178b52385aba681b5f33f4a73a0f9d14e3af45cd84e2d7f0cfbc4abf7b"
++  },
++  "isolatedReproduction": true,
++  "localDevelopmentNegatives": [
++    "ambiguous source transformation anchor corrected",
++    "second dynamic ops import detected and routed",
++    "isolated Node tool PATH missing; harness corrected, no production change"
++  ],
++  "newFocusedTests": 33,
++  "oldSuite32Repeated": false,
++  "oldSuite42Repeated": false,
++  "operationalGenerationCreated": false,
++  "operationalReadiness": false,
++  "privateEvidenceUsed": false,
++  "realInstallationOrIssuance": false,
++  "recordedUtc": "2026-10-16T21:41:31.913613+00:00",
++  "simulated": [
++    "root ownership/directory validator/UID/lock and protected reads",
++    "root query/policy/phase/guard/nft and clock",
++    "process/SQL/HTTP/PM2/cron/supervision/saved",
++    "worker capture and start-gate controller factory",
++    "Node child transport in execution-check test"
++  ],
++  "status": "LOCAL VALIDATED (tested kernel) / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
++  "testAuthority": 22,
++  "testConnected": 11,
++  "testOutputSha256": "4790468e4b14ce3a8a1a1dc6e838e3cc0ea53298659105226492c63ea7f78a2a",
++  "vpsAccesses": 0
++}
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/REPORT.md
+@@ -0,0 +1,98 @@
++# Autoridade root futura — implementação local e bloqueios de integração
++
++**Núcleo e interfaces ensaiados: LOCAL VALIDATED. Integração completa: BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.**
++
++Base/HEAD `bdb57f57601147632bb529895cbcd92b8b483c6c`, branch `review/campaign-recovery-20260926`. Preservadas as alterações documentais anteriores de ROOT_OF_TRUST_UNBOUND, seus quatro arquivos, todos os materiais privados/não rastreados e demais worktrees. Não há commit/push, VPS, instalação, geração operacional ou retomada CSV. Esta implementação não é uma política/helper/launcher ativo.
++
++## Resultado e alcance
++
++Foi implementado um núcleo de autoridade baseado no modelo existente: owner aprova os bytes; instalação revisada cria arquivos root-owned; helper fixo fornece observação autenticada por chamada sudo literal. Nenhuma assinatura, nova chave ou serviço externo. Há criação exclusiva de âncora/comprovante, consulta sem emissão/renovação, contexto explícito e carga dos bytes já verificados.
++
++A integração **não é declarada concluída**: o transporte inicial de consulta ainda não usa o diagnóstico privado canônico, e faltam provas combinadas de alguns processos filhos e da releitura do ecossistema pelo PM2. A lista objetiva está na seção de bloqueios e em LAUNCH_INVENTORY.json. Os33 testes não eliminam esses limites.
++
++## Arquivos de implementação
++
++| Arquivo | Responsabilidade |
++| --- | --- |
++| authority.py | Validação root de leitura/metadata, consulta sudo fixa, validação de âncora/permit/manifest, DAG de selagem declarado, Context explícito, frescor/decisão/execução, snapshot de arquivos/imports transitivos |
++| root_store.py | APIs exclusivas do owner para instalação/emissão, lock canônico, O_EXCL/O_NOFOLLOW, fsync, intents/recibos; Store.query_locked lê e não emite/renova |
++| root_extension.py | Transformações puras da versão futura do helper, sudoers e registro de diagnósticos; adiciona somente inspect-recovery-authority |
++| bootstrap.py | Futuro launcher root-owned executado como deploy, Python -I -S; carrega bibliotecas protegidas antes de consultar/carregar preparação |
++| verified_loader.py | Imports locais declarados, sem fallback sys.path/recovery_binding; compila o snapshot conferido, não uma segunda leitura de arquivo |
++| node_bootstrap.cjs | Launcher CommonJS específico, snapshot autenticado pelo bootstrap Python, require declarado e filhos Python encaminhados pelo launcher; rejeita mecanismos de spawn não cobertos |
++| child_transport.py | Encaminhamento Python/Node e correlação com autoridade reconsultada; Node inicia com NODE_OPTIONS/NODE_PATH removidos |
++| integration.py | Transformações futuras dos consumidores aceitos: Recovery, Bridge, gate, Sequencer, Operations/System.run, delegated e execution-check |
++| reproduce.py | Reprodução isolada dos arquivos entregues, fontes Git exatas e trecho canônico já publicado; sem local-evidence |
++| test_authority.py / test_connected.py |33 testes novos/afetados do incremento, sem repetir a suíte antiga32/42 |
++
++Fontes canônicas não foram editadas. consumer_delta.patch mostra dez transformações; SOURCE_PROVENANCE.json fixa os arquivos de origem e hashes antes/depois. Os nomes FUTURE/MODE no patch são destinos de revisão, não diretórios operacionais criados.
++
++## Cadeia de confiança e papéis
++
++1. **Owner e instalação futura:** o owner deverá aprovar os hashes finais de código/manifest/âncora e instalar bootstrap, leitor, armazenamento e helper em caminhos root-owned protegidos. As APIs de root_store conferem UID root + ação explícita e os digests esperados. Argumentos/hashes não autorizam por si: a autoridade é a chamada privilegiada do owner sobre o instalador revisado. Ainda não foi produzido um instalador concreto completo dessa composição.
++2. **Registros:** diretório futuro /var/lib/re7/recovery-authority, por hash de política; âncora e manifest estáticos, intents/recibos e permit separados, root-owned. Criação única, sem sobrescrita ou replay. Store confere a cadeia do diretório; emissão só aceita fase fenced e política correspondente, guarda/nft e hashes do contrato/execução. Decisão é aprovação, não prova de elegibilidade: os verificadores canônicos continuam obrigatórios.
++3. **Consulta:** nova ação literal no helper, dentro do main/lock/audit existentes. Lê a política e a fase reais e registros protegidos. Nenhum caminho/decisão/hash vem de argv nessa ação; não há ação sudoers de instalação/emissão. A consulta nunca atualiza capturedUtc nem cria permit.
++4. **Bootstrap:** usa bibliotecas root-owned sob caminho fixo e o helper fixo via /usr/bin/sudo + /usr/bin/python3 -I -S. As respostas vêm desse subprocesso direto. Context(query=...) e transportes injetados são superfícies explícitas do laboratório; não são entrada de CLI/env de produção.
++5. **Consumo:** build recebe Context; original_bindings recebe o mesmo contexto; gate refaz build com o contexto injetado pelo loader. Cada filho deve consultar root novamente. Identificador/hash encaminhado pelo pai é apenas correlação: deve coincidir com a autoridade obtida independentemente pelo filho.
++6. **Import:** snapshot confere cada arquivo e sua metadata declarada e guarda seus bytes. Loader usa compile desses bytes; imports locais desconhecidos e recovery_binding negam. Root libraries authority/child_transport são fornecidas pelo bootstrap protegido, não buscadas na preparação. Não há import implícito de binding executável.
++
++O modelo não impede um usuário deploy malicioso de usar diretamente outras capacidades que já possua no sistema. Não foi criado sandbox OS/RBAC. O objetivo é autenticar o caminho canônico de controle e impedir atalhos/acidentes/imports não aprovados nesse caminho. Comprometimento de root permanece fora desse modelo.
++
++## Contexto, três pins e fronteiras
++
++A âncora liga preparação, contrato C, política P, manifest de código e hashes dos perfis ORIGINAL/CANDIDATE. O permit liga a âncora, C/P, decisão, perfil alvo, hash do intent de execução, fase fenced e capturedUtc com fuso. O terceiro pin é o hash dos bytes canônicos exatos desse permit. A emissão retorna os mesmos bytes para custódia, não um ack a reserializar.
++
++Inspeção/PRESTOP não fabricam permit nem hash vazio; a ausência é explícita e não permite partida. ORIGINAL/CANDIDATE exigem decisão/execução correspondentes e permit com idade0<=age<600s, antes do recovery intent e novamente antes da partida. Mudança de âncora/permit entre API e worker nega; expiração também. Resposta perdida preserva intent e não autoriza emissão/partida novamente.
++
++O permit tem origem fenced; recuperação/start exigem fase root atual fenced. Fechamento permite a progressão canônica ready/unfenced/complete sem transformar isso em autorização para nova partida. PRESTOP continua sem start. O classificador, certificado geracional, checker ORIGINAL, profile_delta, seleção e consumo são os consumidores existentes; não foi introduzida classificação ou política paralela.
++
++## Selagem e dependências
++
++Código/índices estáticos -> contrato C; política P é a efetivamente instalada e aprovada; somente depois existe permit E. A âncora protegida referencia C/P/manifest; E referencia a âncora e C/P. E não entra na âncora/manifest estáticos que ele próprio referencia. O arquivo binding legado deixa de ser autoridade executável.
++
++O manifest novo declara arquivos, entradas, dependências de selagem e resolução de imports. validate_dag rejeita dependência desconhecida/ciclo na DAG declarada; imports transitivos são coletados com conjunto de visitados. Ciclo legítimo de import Python não é confundido com ciclo de selagem/hash. Uma dependência não declarada nega no loader. **Não houve inventário/selagem completo de um pacote operacional concreto: a DAG real inteira ainda não está certificada.** Não se pode atribuir essa prova aos testes de grafos sintéticos.
++
++## Lançamentos inventariados e cobertura
++
++LAUNCH_INVENTORY.json separa12 caminhos com prova e limite. Inclui:
++
++- Bridge.app_matches e worker_capture_observation: imports dinâmicos de ops substituídos por local_module verificado; transformações renderizadas/compiladas.
++- Bridge.node: run encaminha Node para launcher próprio; não se presume cobertura pelo bootstrap Python. NODE_OPTIONS/NODE_PATH são removidos na chamada canônica.
++- Bridge.protocol: request/record/execute de delegated passam pelo transporte Python; delegated recebe revalidação antes do dispatch.
++- Operations.start: Context é revalidado na entrada e imediatamente antes de d.start; System.run encaminha filhos Python/Node; bindings originais continuam no predicado canônico.
++- Node: require local declarado, hash dos bytes recebido e reconsulta/correlação. Raw python3 e require não aprovado negam. Interfaces spawn/exec/fork não cobertas são recusadas, não liberadas por fallback.
++- execution-check.cjs: corpo real com namespace do template substituído por preparação autenticada; chamada baseline segue pelo transporte. O baseline/ecosystem reais foram também executados pelo Loader, mas em prova separada.
++
++## Provas e simulações precisas
++
++**33 PASS em reprodução isolada final:**22 em test_authority e11 em test_connected. Código+testes novos copiados para diretório temporário; fontes antigas obtidas por SHA Git/hashes e trecho sanitizado publicado. Filho sem Git/local-evidence; audit hook anterior continua negando leitura privada. Node local é ferramenta de teste explicitamente disponibilizada no PATH isolado; não é autoridade de instalação ou variável de ambiente de autenticação.
++
++Provas incluem ausência/leitura negada/adulteração/metadados, substituição entre snapshot e execução, import/filho não autorizado, fase/perfil/política divergentes, expiração/troca entre API-worker, emissão/resposta perdida sem renovação/replay, grafo desconhecido/ciclo e query sem writes em registros. A carga após troca executa bytes aprovados anteriores; uma nova carga detecta o arquivo adulterado.
++
++Consumidores conectados reais: Recovery corrigido, Bridge policy/bindings, Contract/checker ORIGINAL, Operations.certificate/start, Sequencer e controles sobre fixture canônica completa. PRESTOP/ORIGINAL/CANDIDATE, geração37/guarda38, seleção incerta e consumo sem replay/falso complete foram ensaiados. Event775 e binding ausente continuam negando antes das fábricas operacionais, instrumentadas para não haver efeito caso fossem alcançadas.
++
++**Simulado/injetado:** Store.read e verificação da cadeia root, UID do owner, lock root do Store, callback policy/phase/guard/nft, transporte root/clock, processos/DB/HTTP/PM2/systemd/cron/saved, captura worker e construção do controlador no gate. Helper.act/query é real, mas helper.main/lock/audit/root filesystem não foram executados. Ancestrais Event e775 usam metadata sintética nessa prova, não chmod. Restore é autoridade injetada válida/negativa, sem novo restore.
++
++Node roda de verdade sobre execution-check e loader CommonJS, mas seu canal para Python é simulado nesse ensaio. O baseline/ecosystem reais rodam em outro teste pelo Loader. Não existe prova combinada da cadeia inteira instalada.
++
++Ocorrências de desenvolvimento preservadas em PROOFS.json: ancoragem textual ambígua no transformador corrigida; teste encontrou um segundo importlib em worker_capture_observation, então ele também foi encaminhado; primeira reprodução isolada encontrou Node fora do PATH mínimo e o harness passou a disponibilizar explicitamente a ferramenta já existente. Nenhum desses ajustes envolveu produção. Reexecuções foram dirigidas e a reprodução final certifica os bytes finais; suítes anteriores não foram repetidas.
++
++## Bloqueios remanescentes — impedem declarar integração concluída
++
++**B1 — Diagnóstico canônico da consulta:** registro literal e fonte futura de privileged_output foram estendidos, mas authority.fixed_query ainda usa subprocess capture direto. A escrita byte-exata dos diagnósticos privados canônicos não está ligada ao bootstrap inicial sem uma preparação já autenticada. O audit root do helper foi preservado no código, mas isso não substitui essa integração. Não usar esta consulta como transporte operacional certificado.
++
++**B2 — Processos filhos completos:** falta executar as três etapas reais delegated request/record/execute através dos bootstraps e da consulta protegida no mesmo ensaio. Bridge.node -> Node bootstrap -> Python bootstrap -> baseline real também foi demonstrado somente por partes. Transformação compilada e ensaios separados não certificam a cadeia combinada.
++
++**B3 — PM2/ecossistema:** System.start continua chamando PM2 com um arquivo ecosystem.config.cjs que o PM2 relê em outro processo. As verificações canônicas de configuração permanecem, mas não há prova de carga dos mesmos bytes pelo PM2. Bootstrap Python/Node de controle não cobre automaticamente essa fronteira. Não afirmar proteção dessa releitura contra substituição concorrente.
++
++**B4 — Composição/instalador e fechamento transitivo:** APIs root de instalação/emissão existem, mas não há pacote/instalador concreto selado que instale as bibliotecas/âncora e confira todos os hashes. Não houve fechamento de todos os imports/entradas/dependências dos quatro modos em um manifest real. Root pin/16 namespaces anteriores permanecem pendentes. Nenhum campo foi preenchido para PASS.
++
++Esses bloqueios são locais de integração/certificação, além das leituras/instalação futuras dependentes de autorização. Parar aqui para revisão, sem emitir comprovante real, gerar pacote operacional ou criar outra janela.
++
++## Entrega, documentação e preservação
++
++FULL_DELTA.patch representa os arquivos novos deste incremento e os acréscimos aos três documentos **contra o estado documental de entrada**, que já continha a avaliação anterior. Não incorpora a si próprio ou MANIFEST para evitar autorreferência. Os hashes dos documentos de entrada estão em PROOFS.json; nenhuma alteração anterior foi descartada. O manifest separado fixa fontes, provas, relatórios, patch e documentos finais.
++
++SOURCE_PROVENANCE fixa fontes aceitas; seus bytes e os relatórios/patches/recibos/gerações consumidos permanecem intactos. Não houve coleta produtiva, emissão/instalação reais, sudoers ativo, backup, importação, envio, schema/dados/env/credenciais/permissões produtivas, commit/push. NEWauth+NEWDB+NEWcipher, frontend, crons, guarda38/out.15 ficam fora de alteração; não se trata de nova observação produtiva. Responsável operacional Deifson; revisão16/10 e próxima21/10 ou antes após mudanças.
++
++**LOCAL VALIDATED somente para o núcleo/ensaios descritos. INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.**
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/SOURCE_PROVENANCE.json
+@@ -0,0 +1,79 @@
++{
++  "baseCommit": "bdb57f57601147632bb529895cbcd92b8b483c6c",
++  "kind": "PURE_FUTURE_TRANSFORMS_NOT_OPERATIONAL_PACKAGE",
++  "sources": [
++    {
++      "futureSha256": "8f7fbd8c394c0c0af777692970f25ddbbdbd44046b2e9caadb8978d0517f561c",
++      "futureTarget": "window/recovery.py",
++      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery.py",
++      "sourceSha256": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2"
++    },
++    {
++      "futureSha256": "8fc1975433433bcb8c43eff829de19565ef80bbb6235b425a37e3a057b3fa747",
++      "futureTarget": "window/recovery_bridge.py",
++      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py",
++      "sourceSha256": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318"
++    },
++    {
++      "futureSha256": "3c4393f91222b63b5ab32a314700c0fbdda9b8d88082b66e5ac7058e80292da2",
++      "futureTarget": "window/recovery_start.py",
++      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_start.py",
++      "sourceSha256": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9"
++    },
++    {
++      "futureSha256": "52b1fe580d620b320d98dd7d1ca454a5c6ea7140896975830f2b7749430084bf",
++      "futureTarget": "window/sequencer.py",
++      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/sequencer.py",
++      "sourceSha256": "b6abd49db636cc77d9255fbdfcde8089af3a98699240e3235dab45ee4451e86d"
++    },
++    {
++      "futureSha256": "3ec8adacb7197f86df783950abf9a72d57fc8fd32476f70e20c49f761040c033",
++      "futureTarget": "return-before-commit/ops.py",
++      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source",
++      "sourceSha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e"
++    },
++    {
++      "futureSha256": "626fe014d1a2c22360f0458b79e54c38587c497a4c08fd16e634fcdda4d7287c",
++      "futureTarget": "MODE/delegated.py",
++      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source",
++      "sourceSha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af"
++    },
++    {
++      "futureSha256": "f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965",
++      "futureTarget": "MODE/execution-check.cjs",
++      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source",
++      "sourceSha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f"
++    },
++    {
++      "futureSha256": "19a67b9eb748b69b72ffc0e144e2a85a89e12ba9b78271b00eec5e61efc02fd5",
++      "futureTarget": "ROOT/incident-6683-window-control.py",
++      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged.py",
++      "sourceSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212"
++    },
++    {
++      "futureSha256": "bc4185b71ca07d654484c6a28fa9c9bf27ec8a2f201054fef2b9584043b963ae",
++      "futureTarget": "render_sudoers.py",
++      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/render_sudoers.py",
++      "sourceSha256": "43ac54893e854991466b11f379fdefa66662cc40822bc1b62fc8bdb110c48299"
++    },
++    {
++      "futureSha256": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021",
++      "futureTarget": "window/privileged_output.py",
++      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged_output.py",
++      "sourceSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
++    }
++  ],
++  "unchangedAcceptedSources": {
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/future_sources.py": "85efa5d931bfebd606725f877c802dc04b6e65d40bbf3eaa5a6b6db313ad4f5d",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/inputs.py": "175bee603fba1048a2b5abba0f596e98c89f8feba903cf397c708c25c0c80598",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/original_checks.py": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/policy_proposal.py": "3910f34d385970160afb00e73f64f80957f8c147c14304c2a9e6a69dd46b6450",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery.py": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_contract.py": "9dad001588002c8566bd4ffc3e57d5985f3d05822dd773b87fa92d003382e73e",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_start.py": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/reproduce.py": "8799628b05cd017da449aa8d3558cae53c0d149e005a3b0a1d9795dd8d3884a7",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_corrections.py": "28a84e5f9b4f290d5140d0d0453b6d1e995bb4f69f24c057c7893e0622e4520e",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_recovery.py": "48bcf2c703f81175285d71ec4f9cab66e9f791940a38216489d8666ce2c399ec"
++  }
++}
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/TEST_OUTPUT.txt
+@@ -0,0 +1,38 @@
++test_anchor_tamper_denied (test_authority.AuthorityTests.test_anchor_tamper_denied) ... ok
++test_exchange_between_api_and_worker_and_expiry (test_authority.AuthorityTests.test_exchange_between_api_and_worker_and_expiry) ... ok
++test_full_consumers_render_and_diagnostic_transport (test_authority.AuthorityTests.test_full_consumers_render_and_diagnostic_transport) ... ok
++test_future_transform_removes_binding_imports (test_authority.AuthorityTests.test_future_transform_removes_binding_imports) ... ok
++test_helper_real_dispatch_query_preserves_phase (test_authority.AuthorityTests.test_helper_real_dispatch_query_preserves_phase) ... ok
++test_lost_issue_response_no_reissue_or_renewal (test_authority.AuthorityTests.test_lost_issue_response_no_reissue_or_renewal) ... ok
++test_malicious_entry_not_executed_before_authentication (test_authority.AuthorityTests.test_malicious_entry_not_executed_before_authentication) ... ok
++test_missing_denied_before_import (test_authority.AuthorityTests.test_missing_denied_before_import) ... ok
++test_node_denies_raw_python_and_undeclared_require (test_authority.AuthorityTests.test_node_denies_raw_python_and_undeclared_require) ... ok
++test_node_launch_strips_preload_environment (test_authority.AuthorityTests.test_node_launch_strips_preload_environment) ... ok
++test_node_real_execution_check_routes_python_baseline (test_authority.AuthorityTests.test_node_real_execution_check_routes_python_baseline) ... ok
++test_owner_only_and_one_shot_issue_query_no_renewal (test_authority.AuthorityTests.test_owner_only_and_one_shot_issue_query_no_renewal) ... ok
++test_partial_issue_and_raw_child_denied (test_authority.AuthorityTests.test_partial_issue_and_raw_child_denied) ... ok
++test_permission_denied_not_pass (test_authority.AuthorityTests.test_permission_denied_not_pass) ... ok
++test_permit_profile_drift_denied_even_with_updated_ack (test_authority.AuthorityTests.test_permit_profile_drift_denied_even_with_updated_ack) ... ok
++test_phase_policy_profile_mismatch_and_expiry (test_authority.AuthorityTests.test_phase_policy_profile_mismatch_and_expiry) ... ok
++test_query_transport_literal_and_no_write_action (test_authority.AuthorityTests.test_query_transport_literal_and_no_write_action) ... ok
++test_same_checked_bytes_even_after_replacement (test_authority.AuthorityTests.test_same_checked_bytes_even_after_replacement) ... ok
++test_source_metadata_denied_before_exec (test_authority.AuthorityTests.test_source_metadata_denied_before_exec) ... ok
++test_static_inspection_and_prestop_have_no_permit (test_authority.AuthorityTests.test_static_inspection_and_prestop_have_no_permit) ... ok
++test_transitive_missing_and_seal_cycle (test_authority.AuthorityTests.test_transitive_missing_and_seal_cycle) ... ok
++test_undeclared_import_and_child_bypass (test_authority.AuthorityTests.test_undeclared_import_and_child_bypass) ... ok
++test_authority_replacement_between_api_worker_no_complete (test_connected.Connected.test_authority_replacement_between_api_worker_no_complete) ... ok
++test_candidate_compatible_only (test_connected.Connected.test_candidate_compatible_only) ... ok
++test_expiry_between_api_worker_no_complete (test_connected.Connected.test_expiry_between_api_worker_no_complete) ... ok
++test_lost_start_response_no_replay_or_complete (test_connected.Connected.test_lost_start_response_no_replay_or_complete) ... ok
++test_old_generation_still_denied (test_connected.Connected.test_old_generation_still_denied) ... ok
++test_original_real_checker_certificates_controls_and_replay (test_connected.Connected.test_original_real_checker_certificates_controls_and_replay) ... ok
++test_prestop_no_permit_and_no_start (test_connected.Connected.test_prestop_no_permit_and_no_start) ... ok
++test_prevention_binding_still_before_effects (test_connected.Connected.test_prevention_binding_still_before_effects) ... ok
++test_prevention_event775_still_before_effects (test_connected.Connected.test_prevention_event775_still_before_effects) ... ok
++test_python_baseline_real_under_snapshot_loader (test_connected.Connected.test_python_baseline_real_under_snapshot_loader) ... ok
++test_uncertain_selection_no_original (test_connected.Connected.test_uncertain_selection_no_original) ... ok
++
++----------------------------------------------------------------------
++Ran 33 tests in 1.437s
++
++OK
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/authority.py
+@@ -0,0 +1,200 @@
++"""Future shared authority reader. Root installation is required; no env/CLI pins.
++
++Only the fixed root helper supplies authority. This module never imports a
++binding. Test transports/metadata are injected explicitly, never via environment.
++"""
++import datetime
++import hashlib
++import json
++import os
++from pathlib import Path
++import stat
++import subprocess
++
++HELPER = '/usr/local/libexec/re7/incident-6683-window-control.py'
++BOOTSTRAP = '/usr/local/libexec/re7/recovery-launch.py'
++QUERY = ['/usr/bin/sudo', '-n', '/usr/bin/python3', '-I', '-S', HELPER,
++         'inspect-recovery-authority']
++MODES = ('switch', 'return', 'return-partial', 'return-before-commit')
++
++def require(ok, why):
++    if not ok:
++        raise RuntimeError(why)
++
++def digest(raw):
++    return hashlib.sha256(raw).hexdigest()
++
++def canonical(value):
++    return (json.dumps(value, sort_keys=True, separators=(',', ':')) + '\n').encode()
++
++def hexhash(value):
++    return type(value) is str and len(value) == 64 and all(c in '0123456789abcdef' for c in value)
++
++def protected_directory(path):
++    path=Path(path)
++    for node in (path,*path.parents):
++        meta=node.lstat()
++        require(stat.S_ISDIR(meta.st_mode) and meta.st_uid==0 and not meta.st_mode&0o022,
++                'authority_root_directory')
++
++
++def protected_bytes(path):
++    """Root chains cannot be replaced by deploy; consume bytes of the opened FD."""
++    path = Path(path)
++    for parent in path.parents:
++        s = parent.lstat()
++        require(stat.S_ISDIR(s.st_mode) and s.st_uid == 0 and not s.st_mode & 0o022,
++                'authority_root_chain')
++    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
++    try:
++        s = os.fstat(fd)
++        require(stat.S_ISREG(s.st_mode) and s.st_uid == 0 and
++                not s.st_mode & 0o022 and s.st_nlink == 1, 'authority_root_file')
++        with os.fdopen(fd, 'rb', closefd=False) as stream:
++            return stream.read()
++    finally:
++        os.close(fd)
++
++def fixed_query():
++    protected_bytes(HELPER)
++    result = subprocess.run(QUERY, check=True, capture_output=True, timeout=15,
++                            env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'})
++    return result.stdout
++
++def validate_dag(manifest):
++    require(set(manifest) == {'files', 'dependencies', 'entries', 'imports'}, 'authority_manifest_shape')
++    files = manifest['files']; deps = manifest['dependencies']
++    require(type(files) is dict and files and set(deps) == set(files), 'authority_dependency_coverage')
++    for name, row in files.items():
++        p = Path(name)
++        require(not p.is_absolute() and '..' not in p.parts and str(p) == name and
++                row['language'] in ('python', 'commonjs', 'json', 'data') and hexhash(row['sha256']) and
++                type(row['uid']) is int and type(row['mode']) is int,
++                'authority_file_row')
++        require(type(deps[name]) is list and len(set(deps[name])) == len(deps[name]) and
++                set(deps[name]) <= set(files), 'authority_dependency_unknown')
++    done = set(); active = set()
++    def visit(name):
++        require(name not in active, 'authority_dependency_cycle')
++        if name in done:
++            return
++        active.add(name)
++        for child in deps[name]:
++            visit(child)
++        active.remove(name); done.add(name)
++    for name in files:
++        visit(name)
++    require(type(manifest['entries']) is dict and manifest['entries'] and
++            set(manifest['entries']) <= set(files), 'authority_entry_coverage')
++    for name, scope in manifest['entries'].items():
++        require(scope in ('inspect', 'prestop', 'recovery', 'closure'), 'authority_entry_scope')
++    for owner, imports in manifest['imports'].items():
++        require(owner in files and type(imports) is dict and
++                set(imports.values()) <= set(files), 'authority_import_coverage')
++    return done
++
++class Context:
++    """Explicit context; a selector/correlation digest is never its authority."""
++    def __init__(self, query=fixed_query, *, now=None):
++        self.query = query
++        self.now = now or (lambda: datetime.datetime.now(datetime.timezone.utc))
++        self.bundle = self._read()
++        self.identity = self._identity(self.bundle)
++        self.root = Path(self.bundle['anchor']['preparation'])
++
++    def _identity(self, bundle):
++        return (bundle['anchorSha256'], bundle['permitSha256'])
++
++    def _read(self):
++        raw = self.query(); b = json.loads(raw)
++        require(b['result'] == 'ROOT_RECOVERY_AUTHORITY_READ' and b['queryOnly'] is True,
++                'authority_query_result')
++        a = b['anchor']; p = b['permit']; m = b['manifest']
++        require(a['version'] == 1 and Path(a['preparation']).is_absolute() and
++                hexhash(a['contractSha256']) and hexhash(a['policySha256']) and
++                hexhash(a['codeManifestSha256']), 'authority_anchor_shape')
++        require(digest(canonical(a)) == b['anchorSha256'] and
++                digest(canonical(m)) == a['codeManifestSha256'], 'authority_anchor_integrity')
++        require(b['livePolicySha256'] == a['policySha256'], 'authority_live_policy_drift')
++        require(b['livePhase'] in (None, 'fenced', 'ready', 'unfenced', 'complete', 'aborted'),
++                'authority_phase_unknown')
++        validate_dag(m)
++        if p is None:
++            require(b['permitSha256'] is None, 'authority_permit_missing')
++        else:
++            require(digest(canonical(p)) == b['permitSha256'], 'authority_permit_integrity')
++            require(p['anchorSha256'] == b['anchorSha256'] and
++                    p['preparation'] == a['preparation'] and
++                    p['contractSha256'] == a['contractSha256'] and
++                    p['policySha256'] == a['policySha256'] and p['phase'] == 'fenced' and
++                    p['decision'] in ('ORIGINAL', 'CANDIDATE') and
++                    p['targetProfileSha256'] == a['profileSha256'][p['decision']] and
++                    hexhash(p['executionIntentSha256']), 'authority_permit_context')
++            require(datetime.datetime.fromisoformat(p['capturedUtc']).utcoffset() is not None,
++                    'authority_permit_timezone')
++        return b
++
++    def revalidate(self, purpose='inspect', decision=None, execution_hash=None):
++        b = self._read()
++        require(self._identity(b) == self.identity, 'authority_replaced')
++        require(purpose in ('inspect', 'prestop', 'recovery', 'start', 'closure'), 'authority_purpose')
++        if purpose == 'prestop':
++            require(b['livePhase'] in (None, 'fenced') and b['permit'] is None,
++                    'authority_prestop_scope')
++        elif purpose in ('recovery', 'start', 'closure'):
++            p = b['permit']; require(p is not None, 'authority_permit_required')
++            age = (self.now() - datetime.datetime.fromisoformat(p['capturedUtc'])).total_seconds()
++            require(0 <= age < 600, 'authority_permit_expired')
++            require(p['decision'] == decision and p['executionIntentSha256'] == execution_hash,
++                    'authority_decision_or_execution')
++            require(b['livePhase'] in (('fenced',) if purpose != 'closure' else
++                    ('fenced', 'ready', 'unfenced', 'complete')), 'authority_live_phase_drift')
++        self.bundle = b
++        return self
++
++    def pin(self, name):
++        if name == 'contract':
++            return self.bundle['anchor']['contractSha256']
++        if name == 'policy':
++            return self.bundle['anchor']['policySha256']
++        require(name == 'permit' and self.bundle['permit'] is not None, 'authority_pin_unavailable')
++        return self.bundle['permitSha256']
++
++    def operation(self, decision, purpose='recovery'):
++        execution = self.root / 'window/csv-execution.intent.private.json'
++        return self.revalidate(purpose, decision, digest(execution.read_bytes()))
++
++    def snapshot(self, entry):
++        self.revalidate()
++        m = self.bundle['manifest']; require(entry in m['entries'], 'authority_entry_denied')
++        scope = m['entries'][entry]
++        if scope == 'recovery':
++            require(self.bundle['permit'] is not None, 'authority_permit_required')
++            self.operation(self.bundle['permit']['decision'], 'start')
++        elif scope == 'closure':
++            require(self.bundle['permit'] is not None, 'authority_permit_required')
++            self.operation(self.bundle['permit']['decision'], 'closure')
++        elif scope == 'prestop':
++            self.revalidate('prestop')
++        result = {}
++        def collect(name):
++            if name in result:
++                return
++            file = self.root / name
++            fd = os.open(file, os.O_RDONLY | os.O_NOFOLLOW)
++            try:
++                s = os.fstat(fd)
++                require(stat.S_ISREG(s.st_mode) and s.st_nlink == 1 and
++                        s.st_uid == m['files'][name]['uid'] and
++                        stat.S_IMODE(s.st_mode) == m['files'][name]['mode'], 'authority_source_type')
++                with os.fdopen(fd, 'rb', closefd=False) as stream:
++                    value = stream.read()
++            finally:
++                os.close(fd)
++            require(digest(value) == m['files'][name]['sha256'], 'authority_source_hash:' + name)
++            result[name] = value
++            for child in set(m['dependencies'][name]) | set(m['imports'].get(name, {}).values()):
++                collect(child)
++        collect(entry)
++        self.revalidate()
++        return result
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/bootstrap.py
+@@ -0,0 +1,55 @@
++"""Future root-owned bootstrap, executed AS DEPLOY. Never installed by this file.
++The launcher path and root-owned library are the OS/install trust anchor, not argv.
++"""
++import base64
++import json
++from pathlib import Path
++import sys
++import types
++
++LIBRARY=Path('/usr/local/libexec/re7')
++
++def trusted_library(name):
++    # This bootstrap itself is root-owned and launched with /usr/bin/python3 -I -S.
++    # No preparation import is performed here. Root library owner/canonical chain
++    # follows the same trust model as the installed helper.
++    import os,stat
++    path=LIBRARY/(name+'.py')
++    for parent in path.parents:
++        s=parent.lstat()
++        if not(stat.S_ISDIR(s.st_mode)and s.st_uid==0 and not s.st_mode&0o022):
++            raise RuntimeError('bootstrap_library_chain')
++    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
++    try:
++        s=os.fstat(fd)
++        if not(stat.S_ISREG(s.st_mode)and s.st_uid==0 and not s.st_mode&0o022 and s.st_nlink==1):
++            raise RuntimeError('bootstrap_library_file')
++        with os.fdopen(fd,'rb',closefd=False)as stream:raw=stream.read()
++    finally:os.close(fd)
++    module=types.ModuleType(name);module.__file__=str(path);sys.modules[name]=module
++    exec(compile(raw,str(path),'exec'),module.__dict__)
++    return module
++
++def main(argv):
++    authority=trusted_library('authority');trusted_library('verified_loader')
++    transport=trusted_library('child_transport')
++    from verified_loader import Loader
++    authority.require(len(argv)>=2 and argv[0]in('python','node-snapshot'),'bootstrap_arguments')
++    context=authority.Context()
++    entry=argv[1]; rest=list(argv[2:])
++    if rest[:1]==['--authority-correlation']:
++        authority.require(len(rest)>=3 and rest[2]=='--', 'bootstrap_correlation_arguments')
++        authority.require(tuple(json.loads(rest[1]))==context.identity, 'bootstrap_authority_replaced')
++        rest=rest[3:]
++    loader=Loader(context,entry,trusted_modules={"authority":authority,"child_transport":transport})
++    if argv[0]=='python':
++        authority.require(context.bundle['manifest']['files'][entry]['language']=='python','bootstrap_language')
++        return loader.execute(rest)
++    authority.require(context.bundle['manifest']['files'][entry]['language']=='commonjs','bootstrap_language')
++    return {'root':str(context.root),'identity':list(context.identity),'entry':entry,
++        'manifest':context.bundle['manifest'],
++        'files':{p:base64.b64encode(v).decode()for p,v in loader.raw.items()}}
++
++if __name__=='__main__':
++    result=main(sys.argv[1:])
++    if result is not None:print(json.dumps(result,sort_keys=True))
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/child_transport.py
+@@ -0,0 +1,18 @@
++"""Future child routing. Correlation does not replace fresh root authentication."""
++from pathlib import Path
++import json
++from authority import BOOTSTRAP, require
++NODE='/usr/local/libexec/re7/recovery-node-launch.cjs'
++
++def command(context, args):
++    if not args:return args
++    name=Path(args[0]).name
++    if name not in ('python','python3','node'):
++        return args
++    require(len(args)>=2 and Path(args[1]).is_absolute(), 'authority_child_bypass')
++    target=str(Path(args[1]).relative_to(context.root))
++    context.snapshot(target)  # fresh scope and transitive coverage before child
++    if name=='node':
++        return ['/usr/bin/env','-u','NODE_OPTIONS','-u','NODE_PATH','/usr/bin/node',NODE,target,'--authority-correlation',json.dumps(context.identity),'--',*args[2:]]
++    return ['/usr/bin/python3','-I','-S',BOOTSTRAP,'python',target,
++            '--authority-correlation',json.dumps(context.identity),'--',*args[2:]]
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/consumer_delta.patch
+@@ -0,0 +1,404 @@
++--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery.py
+++++ b/FUTURE/window/recovery.py
++@@ -14,11 +14,14 @@
++ 
++ 
++ class Recovery:
++-    def __init__(self, root, bridge, sequencer_class, contract_digest):
+++    def __init__(self, root, bridge, sequencer_class, contract_digest, authority):
+++        self.authority = authority
+++        require(Path(root) == authority.root and contract_digest == authority.pin("contract"), "authority_recovery_root")
++         self.root = Path(root); self.window = self.root / 'window'
++         self.b = bridge; self.Sequencer = sequencer_class; self.digest = contract_digest
++ 
++     def inspect(self):
+++        self.authority.revalidate()
++         c = Contract(self.root, self.b, self.digest)
++         s = self.Sequencer(self.b); s.baseline = c.baseline
++         def result(state, options=(), mode=None):
++@@ -77,6 +80,8 @@
++             fcntl.flock(inner, fcntl.LOCK_EX | fcntl.LOCK_NB)
++             view = self.inspect()  # Reclassification inside BOTH canonical locks.
++             require(decision in view['options'], 'explicit_decision_or_state_denied')
+++            if decision == 'PRESTOP': self.authority.revalidate('prestop')
+++            else: self.authority.operation(decision)
++             require((self.window / 'csv-execution.intent.private.json').is_file(), 'execution_intent_required')
++             c = Contract(self.root, self.b, self.digest)
++             s = self.Sequencer(self.b); s.baseline = c.baseline
++@@ -110,6 +115,7 @@
++                 s.start_pair(mode)
++                 s.finish(mode)  # Save/fallback before release, HTTP/DB after, both crons + guard.
++             c.closure(mode, prestop=decision == 'PRESTOP')
+++            if decision != 'PRESTOP': self.authority.operation(decision, 'closure')
++             self.b.reset_recovery_gates()
++             self.b.verify_recovery_gates_false()
++             put(self.window / 'csv-recovery.receipt.private.json', {
++@@ -122,17 +128,12 @@
++             return read(self.window / 'csv-recovery.receipt.private.json')
++ 
++ 
++-def build(root):
++-    # Future reviewed composer must pin this module; no unsealed hash-sidecar fallback.
++-    from recovery_binding import RECOVERY_CONTRACT_SHA256, INSTALLED_POLICY_SHA256
+++def build(root, authority):
++     from recovery_bridge import Bridge
++     from sequencer import Sequencer
++-    return Recovery(root, Bridge(root, INSTALLED_POLICY_SHA256), Sequencer, RECOVERY_CONTRACT_SHA256)
++-
++-
+++    authority.revalidate()
+++    return Recovery(root, Bridge(root, authority), Sequencer, authority.pin('contract'), authority)
++ def inspect(root):
++-    return build(root).inspect()
++-
++-
+++    return build(root, __phase_authority__).inspect()
++ def recover(root, decision):
++-    return build(root).recover(decision)
+++    return build(root, __phase_authority__).recover(decision)
++--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py
+++++ b/FUTURE/window/recovery_bridge.py
++@@ -24,9 +24,10 @@
++ class Bridge(CanonicalBridge):
++     SAVED_ROOT = Path('/home/deploy/.pm2')
++ 
++-    def __init__(self, root, policy_hash):
+++    def __init__(self, root, authority):
++         super().__init__(root)
++-        self.recovery_policy_hash = policy_hash
+++        self.phase_authority = authority
+++        self.recovery_policy_hash = authority.pin('policy')
++ 
++     def protocol(self, mode, action):
++         authorize_protocol(mode, action)
++@@ -61,7 +62,7 @@
++         require(count == '0', 'candidate_admission_not_proven_absent')
++ 
++     def verify_original_artifact_and_bindings(self, source):
++-        original_bindings(self.window, {a['name']: a for a in source['apps']})
+++        original_bindings(self.window, {a['name']: a for a in source['apps']}, self.phase_authority)
++         seal = read(self.window / 'recovery-contract.private.json')
++         require(sha(seal['eventSource']['path']) == seal['eventSource']['beforeSha256'], 'original_event_source_drift')
++         for cfg in source['apps']:
++@@ -76,7 +77,9 @@
++         meta = proof.lstat()
++         require(stat.S_ISREG(meta.st_mode) and meta.st_uid == os.getuid() and stat.S_IMODE(meta.st_mode) == 0o600
++                 and meta.st_nlink == 1 and not proof.is_symlink(), 'recovery_root_permit_metadata')
++-        from recovery_binding import ROOT_POLICY_PERMIT_SHA256
+++        decision = 'ORIGINAL' if mode == ORIGINAL else 'CANDIDATE'
+++        self.phase_authority.operation(decision)
+++        ROOT_POLICY_PERMIT_SHA256 = self.phase_authority.pin('permit')
++         require(sha(proof) == ROOT_POLICY_PERMIT_SHA256, 'recovery_root_export_hash')
++         receipt = read(proof)
++         require(receipt['policySha256'] == self.recovery_policy_hash and receipt['phase'] == 'fenced'
++@@ -125,9 +128,10 @@
++                 (self.root / 'execution-authorized').read_text().strip() == 'false', 'recovery_gates_not_false')
++ 
++ 
++-def original_bindings(window, config):
+++def original_bindings(window, config, authority):
++     """Same predicate; separate sealed original map, as in the proven dispatch adapter."""
++-    from recovery_binding import RECOVERY_CONTRACT_SHA256
+++    authority.revalidate()
+++    RECOVERY_CONTRACT_SHA256 = authority.pin('contract')
++     window = Path(window)
++     require(sha(window / 'recovery-contract.private.json') == RECOVERY_CONTRACT_SHA256, 'original_bindings_contract')
++     seal = read(window / 'recovery-contract.private.json')
++--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_start.py
+++++ b/FUTURE/window/recovery_start.py
++@@ -7,7 +7,7 @@
++ def authorize_original_start(directory):
++     directory = Path(directory); root = directory.parent
++     require(directory.name == ORIGINAL, 'original_start_mode')
++-    controller = build(root)
+++    controller = build(root, __phase_authority__)
++     c = Contract(root, controller.b, controller.digest)
++     intent = read(root / 'window/csv-recovery.intent.private.json')
++     require(intent['decision'] == 'ORIGINAL' and intent['mode'] == ORIGINAL
++--- a/docs/reviews/automation-freeform-window-release-af26/v4-sequencer/sequencer.py
+++++ b/FUTURE/window/sequencer.py
++@@ -14,6 +14,7 @@
++ import time
++ from urllib import request
++ from baseline_contract import validate_preparation, sequential
+++from recovery_contract import root_mode
++ 
++ API = 're7-whatsapp-agent'
++ WORKER = 're7-whatsapp-web-worker'
++@@ -52,6 +53,8 @@
++         self.window = self.root / 'window'
++ 
++     def run(self, args, *, input_text=None, cwd=None):
+++        from child_transport import command
+++        args = command(__phase_authority__, args)
++         result = subprocess.run(args, input=input_text, text=True,
++                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
++                                 cwd=cwd, check=True)
++@@ -76,22 +79,15 @@
++             (self.root / mode / file).read_text())['apps']}
++ 
++     def app_matches(self, name, config):
++-        import importlib.util
++-        spec = importlib.util.spec_from_file_location('v4_ops', self.switch / 'ops.py')
++-        module = importlib.util.module_from_spec(spec)
++-        sys.path.insert(0, str(self.switch))
++-        spec.loader.exec_module(module)
+++        module = __phase_loader__.local_module(self.switch / 'ops.py')
++         app = self.apps().get(name)
++-        if app is None:
++-            return False
++-        try:
++-            module.Operations(self.root / 'switch', module.System()).config(app, config[name])
++-        except Exception:
++-            return False
+++        if app is None: return False
+++        try: module.Operations(self.switch, module.System()).config(app, config[name])
+++        except (RuntimeError, KeyError): return False
++         return True
++ 
++     def node(self, mode, script):
++-        require(mode in {'switch', 'return', 'return-partial'} and
+++        require(mode in {'switch', 'return', 'return-partial', 'return-before-commit'} and
++                 script in {'close.cjs', 'validate.cjs', 'open.cjs'},
++                 'node_step_denied')
++         try:
++@@ -175,33 +171,18 @@
++                 os.close(fd)
++             raise RuntimeError(f'protocol_failed:{mode}/{action}/{phase}') from None
++ 
+++    def scheduled_controls(self):
+++        from scheduled_controls import ScheduledControls
+++        return ScheduledControls(self.window, lambda args, text=None: self.run(args, input_text=text))
+++
++     def restore_guard(self, config_file):
++-        config = self.expected_config(config_file[0], config_file[1])[API]
++-        token = config['env']['ADMIN_TOKEN']
++-        url = 'http://127.0.0.1:3001/admin/ops/campaign-execution'
++-        headers = {'X-Admin-Token': token, 'Content-Type': 'application/json'}
++-
++-        def call(method='GET', body=None):
++-            data = json.dumps(body).encode() if body is not None else None
++-            req = request.Request(url, data=data, headers=headers, method=method)
++-            with request.urlopen(req, timeout=5) as response:
++-                return json.load(response)
++-
++-        before = call()
++-        require(before.get('available') and not before.get('ledgerFault') and
++-                before.get('tasks') == [] and before.get('drained'), 'guard_not_restorable')
++-        if before['open']:
++-            return before
++-        call('POST', {'open': True, 'generation': before['generation'],
++-                      'reason': 'Owner-authorized 6683 V4 admission restoration after verified executor state'})
++-        after = call()
++-        require(after['open'] and after['generation'] == before['generation'] + 1 and
++-                after['tasks'] == [] and not after.get('ledgerFault'), 'guard_restore_failed')
++-        return after
+++        g = self.guard()
+++        require(not g['open'] and g['generation'] == 38 and not g['tasks'] and not g.get('ledgerFault'), 'closed_guard_restoration_drift')
+++        return g
++ 
++     def pre_unfence(self, mode):
++         """Checks possible under nft; port 3001 HTTP is deliberately deferred."""
++-        require(mode in {'switch', 'return', 'return-partial'}, 'mode_denied')
+++        require(mode in {'switch', 'return', 'return-partial', 'return-before-commit'}, 'mode_denied')
++         self.privileged('check-present')
++         guard = self.guard()
++         require(not guard['open'] and not guard['tasks'] and
++@@ -231,11 +212,7 @@
++         self.capture_worker_before_unfence(mode, apps[WORKER], config[WORKER])
++ 
++     def worker_capture_observation(self, mode, app, config):
++-        import importlib.util
++-        spec = importlib.util.spec_from_file_location('v4_capture_ops', self.switch / 'ops.py')
++-        module = importlib.util.module_from_spec(spec)
++-        sys.path.insert(0, str(self.switch))
++-        spec.loader.exec_module(module)
+++        module = __phase_loader__.local_module(self.switch / 'ops.py')
++         system = module.System()
++         policy = json.loads((self.window / 'privileged-policy.private.json').read_text())
++         apps = self.apps()
++@@ -280,7 +257,7 @@
++                 {k:v['ticks'] for k,v in tree.items()} ==
++                 {k:v['ticks'] for k,v in tree_after.items()}, 'worker_capture_changed')
++         require(os.getpgid(pid) == os.getsid(pid) == pid, 'worker_capture_session_ambiguous')
++-        expected = policy['targetProcesses']['return' if mode == 'return-partial' else mode][WORKER]
+++        expected = policy['targetProcesses'][root_mode(mode)][WORKER]
++         require(config['cwd'] == expected['cwd'] and config['script'] == expected['script'] and
++                 hashlib.sha256(Path(config['script']).read_bytes()).hexdigest() ==
++                 expected['sha256'], 'capture_release_drift')
++@@ -296,7 +273,7 @@
++         return record, guard['generation'], (apps[API]['pid'], api_identity['ticks'])
++ 
++     def capture_worker_before_unfence(self, mode, app, config):
++-        path = self.root / ('return' if mode == 'return-partial' else mode) / 'worker-before-unfence.private.json'
+++        path = self.root / root_mode(mode) / 'worker-before-unfence.private.json'
++         previous = None
++         if path.exists():
++             info = path.lstat()
++@@ -391,7 +368,7 @@
++             require(Path(name).name == name and
++                     hashlib.sha256((self.window / name).read_bytes()).hexdigest() == expected,
++                     'sequencer_source_hash_drift')
++-        for mode in ('switch', 'return', 'return-partial'):
+++        for mode in ('switch', 'return', 'return-partial', 'return-before-commit'):
++             self.b.run(['sha256sum', '-c', 'scripts.sha256'], cwd=self.root / mode)
++         gates = json.loads((self.window / 'execution-gates.private.json').read_text())
++         require(all(gates.get(k) is True for k in (
++@@ -423,13 +400,16 @@
++                 'baseline_supervision_drift')
++         require(initial['guard']['open'] == guard['open'] and
++                 initial['guard']['generation'] == guard['generation'], 'baseline_guard_drift')
++-        require(guard.get('open') and not guard.get('tasks') and
+++        require(type(guard.get('open')) is bool and not guard.get('tasks') and
++                 not guard.get('ledgerFault'), 'guard_baseline_unexpected')
++         self.baseline = sequential({'guardGeneration': guard['generation'], 'apps': identities})
++         self.journal('baseline', generation=guard['generation'],
++                      processes={k: v['pid'] for k, v in identities.items()})
++ 
++     def close_then_preflight(self):
+++        self.b.scheduled_controls().verify("before")
+++        from restore_contract import validate
+++        for mode in ("switch","return","return-partial","return-before-commit"): validate(self.root/mode)
++         # This order is intentional. No code path requests preflight earlier.
++         require(self.baseline is not None, 'baseline_missing')
++         sequential(self.baseline)
++@@ -439,7 +419,7 @@
++         self.b.node('switch', 'close.cjs')
++         guard = self.b.guard()
++         require(not guard['open'] and guard['generation'] ==
++-                self.baseline['guardGeneration'] + 1 and
+++                self.baseline['guardGeneration'] + int(validate_preparation(self.root)['guard']['open']) and
++                 not guard['tasks'] and not guard.get('ledgerFault'),
++                 'guard_close_generation_drift')
++         require((self.root / 'switch' / 'drain-result.json').is_file(),
++@@ -503,10 +483,12 @@
++         self.action(mode, 'verify-unfenced')
++         self.b.node(mode, 'validate.cjs')
++         self.b.node(mode, 'open.cjs')
++-        require(self.b.guard()['open'], 'guard_not_reopened')
+++        guard = self.b.guard()
+++        require(not guard['open'] and guard['generation'] == 38 and not guard['tasks'] and not guard.get('ledgerFault'), 'recovery_guard38_drift')
++         self.b.privileged('restore-controls')
++         self.action(mode, 'restore-controls')
++         self.b.privileged('check-absent')
+++        self.b.scheduled_controls().verify('before')
++         self.journal('complete', mode=mode, guardGeneration=self.b.guard()['generation'])
++ 
++     def recovery_mode(self):
++@@ -541,7 +523,10 @@
++             require(all(live[n]['pid'] == original[n]['pid'] and
++                         same_identity(original[n]['identity'], self.b.identity(live[n]['pid']))
++                         for n in live), 'prestop_identity_drift')
+++            scheduled = self.b.scheduled_controls()
+++            scheduled.known()
++             self.b.privileged('abort-prestop')
+++            scheduled.restore_deploy()
++             self.b.restore_guard(('switch', 'return.config.private.json'))
++             self.journal('prestop_restored')
++             return
++--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source
+++++ b/FUTURE/return-before-commit/ops.py
++@@ -47,6 +47,8 @@
++ 
++ class System:
++     def run(self, args, text=None):
+++        from child_transport import command
+++        args = command(__phase_authority__, args)
++         return subprocess.check_output(args, input=text, text=True, env=CLEAN, stderr=subprocess.PIPE)
++ 
++     def apps(self):
++@@ -182,7 +184,7 @@
++     def validate_bindings(self, window, config):
++         from prestop_contract import path_bindings
++         from recovery_bridge import original_bindings
++-        return original_bindings(window, config)
+++        return original_bindings(window, config, __phase_authority__)
++ 
++     def capture_auth(self, root, apps):
++         import tarfile
++@@ -357,6 +359,9 @@
++         return validate(self.root)
++ 
++     def start(self, name):
+++        authority = __phase_authority__
+++        decision = 'ORIGINAL' if self.root.name == 'return-before-commit' else 'CANDIDATE'
+++        authority.operation(decision, 'start')
++         self.restore_proof()
++         import sys
++         sys.path.insert(0, str(self.window))
++@@ -386,6 +391,7 @@
++         self.d.validate_bindings(self.window, {name: self.target[name]})
++         self.db_gate_for_start(name, live)
++         self.write_once('start-intent-' + name + '.json', {'direction': self.plan['direction']})
+++        authority.operation(decision, 'start')
++         self.d.start(self.root, name)
++         last_error = None
++         for _ in range(25):
++--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source
+++++ b/FUTURE/MODE/delegated.py
++@@ -405,6 +405,7 @@
++ 
++ 
++ def main():
+++    __phase_authority__.revalidate()
++     command, action, root = sys.argv[1:4]
++     root = Path(root).resolve()
++     ops.require(root.parent == BOUND_PREPARATION,
++--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source
+++++ b/FUTURE/MODE/execution-check.cjs
++@@ -1,6 +1,6 @@
++ module.exports = function () {
++   const fs = require('fs'), path = require('path'), assert = require('assert'), crypto = require('crypto');
++-  assert(__dirname.startsWith('/opt/re7online/backups/converta-persistent/preparations/incident-csv-operational-review-v3-20261016/'));
+++  assert(globalThis.__re7Authority && path.dirname(__dirname) === globalThis.__re7Authority.root, 'authority_node_scope');
++   require('child_process').execFileSync('/usr/bin/python3', [path.join(__dirname, 'baseline_contract.py'), path.dirname(__dirname), path.basename(__dirname)], {stdio: 'pipe'});
++   const g = JSON.parse(fs.readFileSync(path.join(__dirname, '../window/execution-gates.private.json')));
++   assert(['ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved'].every(k => g[k] === true), 'execution gates incomplete');
++--- a/docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged.py
+++++ b/FUTURE/ROOT/incident-6683-window-control.py
++@@ -26,7 +26,7 @@
++ PREPARATIONS = Path('/opt/re7online/backups/converta-persistent/preparations')
++ ACTIONS = frozenset({'inspect', 'check-absent', 'check-present', 'enter', 'unfence',
++                      'restore-controls', 'abort-prestop', 'authorize-switch',
++-                     'authorize-return'})
+++                     'authorize-return', 'inspect-recovery-authority'})
++ 
++ 
++ def require(ok, code):
++@@ -502,6 +502,14 @@
++ 
++ def act(action, value):
++     require(action in ACTIONS, 'unknown_action')
+++    if action == 'inspect-recovery-authority':
+++        # This module is installed root-owned alongside the helper; never deploy code.
+++        library = Path('/usr/local/libexec/re7')
+++        root_regular(library / 'root_store.py')
+++        root_regular(library / 'authority.py')
+++        sys.path.insert(0, str(library))
+++        from root_store import Store
+++        return Store().query_locked(sys.modules[__name__])
++     if action == 'inspect':
++         require(phase_read() is None, 'phase_already_exists')
++         source_processes_ready(value)
++--- a/docs/reviews/automation-freeform-window-release-af26/v4-sequencer/render_sudoers.py
+++++ b/FUTURE/render_sudoers.py
++@@ -7,7 +7,7 @@
++ HELPER = '/usr/local/libexec/re7/incident-6683-window-control.py'
++ ACTIONS = ('inspect', 'check-absent', 'check-present', 'enter',
++            'authorize-switch', 'authorize-return', 'unfence',
++-           'restore-controls', 'abort-prestop')
+++           'restore-controls', 'abort-prestop', 'inspect-recovery-authority')
++ 
++ 
++ def render():
++--- a/docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged_output.py
+++++ b/FUTURE/window/privileged_output.py
++@@ -14,7 +14,7 @@
++ CONTROL = '/usr/local/libexec/re7/incident-6683-window-control.py'
++ OBSERVER = '/usr/local/libexec/re7/db-owner-set-observer.py'
++ ACTIONS = {'inspect', 'check-absent', 'check-present', 'enter', 'unfence',
++-           'restore-controls', 'abort-prestop', 'authorize-switch', 'authorize-return'}
+++           'restore-controls', 'abort-prestop', 'authorize-switch', 'authorize-return', 'inspect-recovery-authority'}
++ 
++ def require(ok, code):
++     if not ok:
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/integration.py
+@@ -0,0 +1,96 @@
++"""Pure future source transforms over accepted consumers. No historical edits.
++All __phase_* globals are installed by the authenticated loader, not env or argv.
++A raw execution therefore fails before operational effects.
++"""
++import ast
++import textwrap
++
++
++def once(source, old, new):
++    if source.count(old)!=1:raise RuntimeError('authority_integration_anchor:'+old[:50])
++    return source.replace(old,new,1)
++
++def method(source, cls, name, replacement):
++    tree=ast.parse(source)
++    owner=next(n for n in tree.body if isinstance(n,ast.ClassDef)and n.name==cls)
++    node=next(n for n in owner.body if isinstance(n,ast.FunctionDef)and n.name==name)
++    lines=source.splitlines(True);lines[node.lineno-1:node.end_lineno]=[textwrap.indent(textwrap.dedent(replacement).strip(),'    ')+'\n']
++    return ''.join(lines)
++
++def recovery(source):
++    source=once(source,'def __init__(self, root, bridge, sequencer_class, contract_digest):',
++        'def __init__(self, root, bridge, sequencer_class, contract_digest, authority):')
++    source=once(source,'        self.root = Path(root); self.window = self.root / \'window\'\n',
++        '        self.authority = authority\n        require(Path(root) == authority.root and contract_digest == authority.pin("contract"), "authority_recovery_root")\n        self.root = Path(root); self.window = self.root / \'window\'\n')
++    source=once(source,'    def inspect(self):\n        c = Contract(self.root, self.b, self.digest)\n',
++        '    def inspect(self):\n        self.authority.revalidate()\n        c = Contract(self.root, self.b, self.digest)\n')
++    # This second occurrence belongs to recover inside the locks.
++    source=once(source,"            require(decision in view['options'], 'explicit_decision_or_state_denied')\n",
++        "            require(decision in view['options'], 'explicit_decision_or_state_denied')\n            if decision == 'PRESTOP': self.authority.revalidate('prestop')\n            else: self.authority.operation(decision)\n")
++    source=once(source,"            self.b.reset_recovery_gates()\n",
++        "            if decision != 'PRESTOP': self.authority.operation(decision, 'closure')\n            self.b.reset_recovery_gates()\n")
++    start=source.index('def build(root):')
++    return source[:start]+'''def build(root, authority):
++    from recovery_bridge import Bridge
++    from sequencer import Sequencer
++    authority.revalidate()
++    return Recovery(root, Bridge(root, authority), Sequencer, authority.pin('contract'), authority)
++def inspect(root):
++    return build(root, __phase_authority__).inspect()
++def recover(root, decision):
++    return build(root, __phase_authority__).recover(decision)
++'''
++
++def bridge(source):
++    source=once(source,'    def __init__(self, root, policy_hash):','    def __init__(self, root, authority):')
++    source=once(source,'        self.recovery_policy_hash = policy_hash',
++        "        self.phase_authority = authority\n        self.recovery_policy_hash = authority.pin('policy')")
++    source=once(source,'original_bindings(self.window, {a[\'name\']: a for a in source[\'apps\']})',
++        'original_bindings(self.window, {a[\'name\']: a for a in source[\'apps\']}, self.phase_authority)')
++    source=once(source,'        from recovery_binding import ROOT_POLICY_PERMIT_SHA256\n',
++        "        decision = 'ORIGINAL' if mode == ORIGINAL else 'CANDIDATE'\n        self.phase_authority.operation(decision)\n        ROOT_POLICY_PERMIT_SHA256 = self.phase_authority.pin('permit')\n")
++    source=once(source,'def original_bindings(window, config):','def original_bindings(window, config, authority):')
++    source=once(source,'    from recovery_binding import RECOVERY_CONTRACT_SHA256\n',
++        "    authority.revalidate()\n    RECOVERY_CONTRACT_SHA256 = authority.pin('contract')\n")
++    return source
++
++def gate(source):
++    return once(source,'controller = build(root)', 'controller = build(root, __phase_authority__)')
++
++def operations(source):
++    if '    def run(self, args, text=None):' in source:
++        source=once(source,'    def run(self, args, text=None):\n', '    def run(self, args, text=None):\n        from child_transport import command\n        args = command(__phase_authority__, args)\n')
++    if 'return original_bindings(window, config)'in source:
++        source=once(source,'return original_bindings(window, config)',
++                    'return original_bindings(window, config, __phase_authority__)')
++    source=once(source,'    def start(self, name):\n',
++        "    def start(self, name):\n        authority = __phase_authority__\n        decision = 'ORIGINAL' if self.root.name == 'return-before-commit' else 'CANDIDATE'\n        authority.operation(decision, 'start')\n")
++    source=once(source,'        self.d.start(self.root, name)\n',
++        "        authority.operation(decision, 'start')\n        self.d.start(self.root, name)\n")
++    return source
++
++def sequencer(source):
++    source=method(source,'Bridge','app_matches','''
++        def app_matches(self, name, config):
++            module = __phase_loader__.local_module(self.switch / 'ops.py')
++            app = self.apps().get(name)
++            if app is None: return False
++            try: module.Operations(self.switch, module.System()).config(app, config[name])
++            except (RuntimeError, KeyError): return False
++            return True
++    ''')
++    source=once(source, "        import importlib.util\n        spec = importlib.util.spec_from_file_location('v4_capture_ops', self.switch / 'ops.py')\n        module = importlib.util.module_from_spec(spec)\n        sys.path.insert(0, str(self.switch))\n        spec.loader.exec_module(module)\n", "        module = __phase_loader__.local_module(self.switch / 'ops.py')\n")
++    # One transport intercepts Python and Node children (including delegated.py).
++    source=once(source,'        result = subprocess.run(args, input=input_text, text=True,',
++        '        from child_transport import command\n        args = command(__phase_authority__, args)\n        result = subprocess.run(args, input=input_text, text=True,')
++    return source
++
++def delegated(source):
++    return once(source,'    command, action, root = sys.argv[1:4]\n',
++        '    __phase_authority__.revalidate()\n    command, action, root = sys.argv[1:4]\n')
++
++def execution_check(source):
++    # The former template namespace is now checked against authenticated root data.
++    line=next(s for s in source.splitlines(True)if 'assert(__dirname.startsWith('in s)
++    return once(source,line,
++        "  assert(globalThis.__re7Authority && path.dirname(__dirname) === globalThis.__re7Authority.root, 'authority_node_scope');\n")
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/node_bootstrap.cjs
+@@ -0,0 +1,52 @@
++'use strict';
++// Future ROOT-OWNED Node launcher, executed as deploy. No preparation require().
++const cp = require('node:child_process'), vm = require('node:vm');
++const path = require('node:path'), crypto = require('node:crypto');
++const PY = '/usr/local/libexec/re7/recovery-launch.py';
++const allowedBuiltins = new Set(['fs','path','assert','crypto','child_process','os','util','url','buffer','http','https']);
++function deny(ok, why) { if (!ok) throw Error(why); }
++function run(entry, args, transport = (command, options) => cp.execFileSync('/usr/bin/python3', ['-I','-S',PY,...command], options)) {
++  const read = () => JSON.parse(transport(['node-snapshot',entry], {encoding:'utf8'}));
++  const snap = read(), cache = new Map();
++  if(args[0]==='--authority-correlation'){deny(JSON.stringify(JSON.parse(args[1]))===JSON.stringify(snap.identity)&&args[2]==='--','node_authority_replaced');args=args.slice(3);}
++  function fresh() { const now=read();deny(JSON.stringify(now.identity)===JSON.stringify(snap.identity),'node_authority_replaced'); }
++  const children = Object.assign({}, cp, {
++    execFileSync(command, argv, options) {
++      fresh();
++      // Canonical execution-check.cjs invokes Python baseline_contract.py.
++      if (command === '/usr/bin/python3' && Array.isArray(argv) && argv[0].startsWith(snap.root + '/') && argv[0].endsWith('.py')) {
++        const target=path.relative(snap.root,argv[0]);
++        deny(snap.manifest.entries[target], 'node_python_child_not_entry');
++        deny(Object.values(snap.manifest.imports[entry] || {}).includes(target) ||
++             Object.keys(snap.manifest.imports).some(k=>Object.values(snap.manifest.imports[k]).includes(target)), 'node_python_child_undeclared');
++        return transport(['python',target,'--authority-correlation',JSON.stringify(snap.identity),'--',...argv.slice(1)],options);
++      }
++      deny(!['python','python3','node'].includes(path.basename(command)), 'node_child_bypass');
++      return cp.execFileSync(command,argv,options); // existing OS effects; rehearsals must intercept them
++    }
++  });
++  for(const method of ['exec','execSync','execFile','spawn','spawnSync','fork'])children[method]=()=>{throw Error('node_child_transport_unsupported:'+method);};
++  function load(file) {
++    fresh();if(cache.has(file))return cache.get(file).exports;
++    const row=snap.manifest.files[file];deny(row && snap.files[file], 'node_dependency_missing');
++    const raw=Buffer.from(snap.files[file],'base64');
++    deny(crypto.createHash('sha256').update(raw).digest('hex')===row.sha256,'node_source_hash');
++    if(row.language==='json')return JSON.parse(raw.toString('utf8'));
++    deny(row.language==='commonjs','node_language');
++    const m={exports:{}};cache.set(file,m);
++    function checkedRequire(name) {
++      const core=name.startsWith('node:')?name.slice(5):name;
++      if(allowedBuiltins.has(core))return core==='child_process'?children:require('node:'+core);
++      const target=(snap.manifest.imports[file]||{})[name];
++      deny(target,'node_import_undeclared:'+name);return load(target);
++    }
++    const fn=vm.runInThisContext('(function(exports,require,module,__filename,__dirname){'+raw.toString('utf8')+'\n})',{filename:path.join(snap.root,file)});
++    globalThis.__re7Authority={root:snap.root,identity:snap.identity};
++    fn(m.exports,checkedRequire,m,path.join(snap.root,file),path.dirname(path.join(snap.root,file)));
++    return m.exports;
++  }
++  const old=process.argv;process.argv=[process.execPath,path.join(snap.root,entry),...args];
++  try{return load(entry);}finally{process.argv=old;}
++}
++module.exports={run};
++if(require.main===module)run(process.argv[2],process.argv.slice(3));
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/reproduce.py
+@@ -0,0 +1,54 @@
++"""Reproduce ONLY this delta in an isolated delivered tree. No private evidence.
++No installed bootstrap/helper, live transport, historical operation or product build.
++"""
++from pathlib import Path
++import hashlib
++import json
++import os
++import shutil
++import subprocess
++import sys
++import tempfile
++
++HERE=Path(__file__).resolve().parent
++REVIEW=HERE.parent
++ACCEPTED=REVIEW/'crm-csv-integrated-recovery-20261016'
++BASE='bdb57f57601147632bb529895cbcd92b8b483c6c'
++NEW=('authority.py','root_store.py','root_extension.py','verified_loader.py','bootstrap.py',
++     'node_bootstrap.cjs','integration.py','child_transport.py','test_authority.py','test_connected.py')
++OLD=('recovery.py','recovery_contract.py','recovery_bridge.py','recovery_start.py','policy_proposal.py',
++     'future_sources.py','inputs.py','original_checks.py','test_recovery.py','SOURCE_PROVENANCE.json')
++EXTRA=('v4-sequencer/privileged.py','v4-sequencer/render_sudoers.py','v4-sequencer/privileged_output.py',
++       'v4-sequencer/sequencer.py',
++       'crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source',
++       'crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source')
++
++def run():
++    spec=json.loads((ACCEPTED/'SOURCE_PROVENANCE.json').read_bytes())
++    with tempfile.TemporaryDirectory(prefix='re7-root-authority-delivery-')as tmp:
++        root=Path(tmp)/'reviews';dest=root/HERE.name;old=root/ACCEPTED.name
++        dest.mkdir(parents=True);old.mkdir()
++        for n in NEW:shutil.copyfile(HERE/n,dest/n)
++        for n in OLD:shutil.copyfile(ACCEPTED/n,old/n)
++        (old/'reference_sources').mkdir();(old/'versioned-inputs').mkdir()
++        for n,r in spec['excerpts'].items():
++            raw=(ACCEPTED/'reference_sources'/n).read_bytes();assert hashlib.sha256(raw).hexdigest()==r['deliveredSha256']
++            (old/'reference_sources'/n).write_bytes(raw)
++        for n,r in spec['versioned'].items():
++            raw=subprocess.check_output(['git','show',r['commit']+':'+r['path']],cwd=HERE)
++            assert hashlib.sha256(raw).hexdigest()==r['sha256'];(old/'versioned-inputs'/n).write_bytes(raw)
++        (old/'ISOLATED_DELIVERY').write_text('Only delivered/pinned inputs; no Git or private fallback.\n')
++        prefix='docs/reviews/automation-freeform-window-release-af26'
++        for n in EXTRA:
++            raw=subprocess.check_output(['git','show',BASE+':'+prefix+'/'+n],cwd=HERE)
++            assert raw==(REVIEW/n).read_bytes(),'reference_changed:'+n
++            file=root/n;file.parent.mkdir(parents=True,exist_ok=True);file.write_bytes(raw)
++        node=shutil.which('node')
++        if node is None:raise RuntimeError('LOCAL_NODE_TEST_TOOL_REQUIRED')
++        test_path=str(Path(node).parent)+':/usr/bin:/bin'
++        result=subprocess.run([sys.executable,'-B','-m','unittest','-v','test_authority','test_connected'],
++            cwd=dest,capture_output=True,text=True,env={'PATH':test_path,'PYTHONDONTWRITEBYTECODE':'1'})
++        sys.stdout.write(result.stdout);sys.stderr.write(result.stderr)
++        return result.returncode
++
++if __name__=='__main__':sys.exit(run())
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/root_extension.py
+@@ -0,0 +1,31 @@
++"""Pure future helper/sudoers/diagnostic deltas; never edits or runs installed files."""
++import ast
++
++def once(source, old, new):
++    if source.count(old)!=1:raise RuntimeError('authority_source_anchor')
++    return source.replace(old,new,1)
++
++def helper(source):
++    source=once(source,"'authorize-return'})","'authorize-return', 'inspect-recovery-authority'})")
++    source=once(source,"    if action == 'inspect':\n",'''    if action == 'inspect-recovery-authority':
++        # This module is installed root-owned alongside the helper; never deploy code.
++        from root_store import Store
++        return Store().query_locked(sys.modules[__name__])
++    if action == 'inspect':
++''')
++    # -I -S removes the script directory: explicitly allow only the protected
++    # root library directory, before importing the separately installed module.
++    source=once(source,"        from root_store import Store\n",'''        library = Path('/usr/local/libexec/re7')
++        root_regular(library / 'root_store.py')
++        root_regular(library / 'authority.py')
++        sys.path.insert(0, str(library))
++        from root_store import Store
++''')
++    return source
++
++def sudoers(source):
++    return once(source,"'restore-controls', 'abort-prestop')","'restore-controls', 'abort-prestop', 'inspect-recovery-authority')")
++
++def diagnostics(source):
++    return once(source,"'restore-controls', 'abort-prestop', 'authorize-switch', 'authorize-return'}",
++                       "'restore-controls', 'abort-prestop', 'authorize-switch', 'authorize-return', 'inspect-recovery-authority'}")
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/root_store.py
+@@ -0,0 +1,131 @@
++"""Future root-owned authority storage; no import of a deploy-owned preparation.
++Owner APIs are NOT delegated by sudoers. Query has no write/renewal path.
++"""
++import datetime
++import fcntl
++from contextlib import contextmanager
++import json
++import os
++from pathlib import Path
++from authority import canonical, digest, hexhash, protected_bytes, protected_directory, require, validate_dag
++
++STORE = Path('/var/lib/re7/recovery-authority')
++LOCK = Path('/var/lib/re7/incident-6683-v4-control.lock')
++
++class Store:
++    def __init__(self, folder=STORE, *, read=protected_bytes, now=None, lock_path=LOCK, directory_check=protected_directory):
++        self.folder = Path(folder); self.read = read; self.lock_path=Path(lock_path); self.directory_check=directory_check
++        self.now = now or (lambda: datetime.datetime.now(datetime.timezone.utc))
++
++    def _path(self, policy_hash):
++        require(hexhash(policy_hash), 'authority_policy_hash')
++        return self.folder / policy_hash
++
++    @contextmanager
++    def _owner_lock(self):
++        require(os.geteuid()==0, 'authority_owner_required')
++        import stat
++        fd=os.open(self.lock_path, os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW, 0o600)
++        try:
++            s=os.fstat(fd)
++            require(stat.S_ISREG(s.st_mode) and s.st_uid==os.geteuid() and not s.st_mode&0o077, 'authority_owner_lock')
++            fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
++            yield
++        finally:os.close(fd)
++
++    def install_owner_once(self, *args, **kw):
++        with self._owner_lock():return self._install_owner_once(*args, **kw)
++
++    def issue_owner_once(self, *args, **kw):
++        with self._owner_lock():return self._issue_owner_once(*args, **kw)
++
++    def _install_owner_once(self, anchor_raw, manifest_raw, expected_anchor, expected_manifest, *, owner_action=False):
++        require(os.geteuid() == 0 and owner_action is True, 'authority_owner_install_required')
++        require(digest(anchor_raw) == expected_anchor and digest(manifest_raw) == expected_manifest,
++                'authority_reviewed_bytes')
++        a = json.loads(anchor_raw); m = json.loads(manifest_raw)
++        require(canonical(a) == anchor_raw and canonical(m) == manifest_raw,
++                'authority_canonical_bytes')
++        require(a['codeManifestSha256'] == expected_manifest, 'authority_manifest_pin')
++        validate_dag(m)
++        self.directory_check(self.folder)
++        folder = self._path(a['policySha256'])
++        # Only the privileged owner installer may create these records. The
++        # caller must hold the same canonical lock, as in owner_locked below.
++        require(not os.path.lexists(folder), 'authority_install_consumed')
++        folder.mkdir(mode=0o700)
++        self._put(folder/'install.intent.json', canonical({'expectedAnchor': expected_anchor,
++                    'expectedManifest': expected_manifest, 'automaticRetry': False}))
++        self._put(folder/'anchor.json', anchor_raw)
++        self._put(folder/'manifest.json', manifest_raw)
++        self._put(folder/'install.receipt.json', canonical({'result':'ROOT_AUTHORITY_STATIC_INSTALLED',
++                    'anchorSha256':expected_anchor,'manifestSha256':expected_manifest}))
++
++    def _put(self, path, raw):
++        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
++        with os.fdopen(fd, 'wb') as out:
++            out.write(raw); out.flush(); os.fsync(out.fileno())
++        fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
++        try: os.fsync(fd)
++        finally: os.close(fd)
++
++    def _issue_owner_once(self, helper, decision, expected_execution, *, owner_action=False):
++        require(os.geteuid() == 0 and owner_action is True, 'authority_owner_issue_required')
++        require(decision in ('ORIGINAL','CANDIDATE') and hexhash(expected_execution),
++                'authority_owner_decision')
++        value=helper.policy_from(); phase=helper.phase_read()
++        require(phase and phase['stage']=='fenced' and phase['policySha256']==value['policySha256'],
++                'authority_issue_phase')
++        helper.guard_closed(); helper.nft_present()
++        folder=self._path(value['policySha256'])
++        a=json.loads(self.read(folder/'anchor.json'))
++        self.read(folder/'install.receipt.json')
++        require(a['policySha256']==value['policySha256'] and a['preparation']==value['preparation'],
++                'authority_issue_policy')
++        # Root reads data only. No evaluation/import of the preparation.
++        p=Path(a['preparation']); raw=(p/'window/csv-execution.intent.private.json').read_bytes()
++        require(digest(raw)==expected_execution and
++                digest((p/'window/recovery-contract.private.json').read_bytes())==a['contractSha256'],
++                'authority_issue_execution')
++        require(not os.path.lexists(folder/'issue.intent.json'), 'authority_issue_consumed')
++        self._put(folder/'issue.intent.json',canonical({'decision':decision,
++                    'executionIntentSha256':expected_execution,'automaticRetry':False}))
++        permit={'anchorSha256':digest(canonical(a)), 'preparation':a['preparation'],
++            'contractSha256':a['contractSha256'],'policySha256':a['policySha256'],
++            'decision':decision,'targetProfileSha256':a['profileSha256'][decision],
++            'executionIntentSha256':expected_execution,'phase':'fenced',
++            'capturedUtc':self.now().isoformat()}
++        self._put(folder/'permit.json',canonical(permit))
++        self._put(folder/'issue.receipt.json',canonical({'result':'ROOT_RECOVERY_PERMIT_ISSUED',
++                    'permitSha256':digest(canonical(permit))}))
++        return canonical(permit)  # byte-exact custody export; never reserialize an ack
++
++    def query_locked(self, helper):
++        """Called ONLY inside canonical helper.main's existing root flock."""
++        value=helper.policy_from(); phase=helper.phase_read()
++        folder=self._path(value['policySha256'])
++        a_raw=self.read(folder/'anchor.json'); m_raw=self.read(folder/'manifest.json')
++        a=json.loads(a_raw); m=json.loads(m_raw)
++        receipt=json.loads(self.read(folder/'install.receipt.json'))
++        require(receipt['result']=='ROOT_AUTHORITY_STATIC_INSTALLED' and
++                receipt['anchorSha256']==digest(a_raw) and receipt['manifestSha256']==digest(m_raw) and
++                canonical(a)==a_raw and canonical(m)==m_raw and
++                a['policySha256']==value['policySha256'] and a['preparation']==value['preparation'] and
++                a['codeManifestSha256']==digest(m_raw), 'authority_static_record_drift')
++        require(phase is None or phase['policySha256']==value['policySha256'], 'authority_root_phase_drift')
++        permit=None; permit_hash=None
++        present={name:os.path.lexists(folder/name) for name in ('issue.intent.json','permit.json','issue.receipt.json')}
++        require(not any(present.values()) or all(present.values()), 'authority_issue_incomplete')
++        # Intent without receipt is a denial, never an invitation to issue again.
++        if os.path.lexists(folder/'issue.intent.json'):
++            raw=self.read(folder/'permit.json');permit=json.loads(raw)
++            ack=json.loads(self.read(folder/'issue.receipt.json'))
++            require(ack['result']=='ROOT_RECOVERY_PERMIT_ISSUED' and
++                    ack['permitSha256']==digest(raw) and canonical(permit)==raw,
++                    'authority_issue_incomplete')
++            permit_hash=digest(raw)
++        return canonical({'result':'ROOT_RECOVERY_AUTHORITY_READ','queryOnly':True,
++            'anchor':a,'anchorSha256':digest(a_raw),'manifest':m,'permit':permit,
++            'permitSha256':permit_hash,'livePolicySha256':value['policySha256'],
++            'livePhase':None if phase is None else phase['stage']})
++
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/test_authority.py
+@@ -0,0 +1,221 @@
++"""Local root/transport rehearsal. All files synthetic; root metadata/owner simulated."""
++import copy
++import datetime
++import importlib.util
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++import tempfile
++import types
++import unittest
++from unittest.mock import patch
++from contextlib import nullcontext
++import authority as a
++from verified_loader import Loader
++from root_store import Store
++import root_extension
++import integration
++from child_transport import command
++
++HERE=Path(__file__).resolve().parent
++REVIEW=HERE.parent
++
++def source(relative):return (REVIEW/relative).read_text()
++def module(name,text,**globals):
++    m=types.ModuleType(name);m.__dict__.update(globals);sys.modules[name]=m
++    exec(compile(text,name,'exec'),m.__dict__);return m
++
++class Case:
++    def __init__(self,root):
++        self.root=root/'prep';self.root.mkdir()
++        self.store_root=root/'root-owned';self.store_root.mkdir()
++        self.now=datetime.datetime(2026,10,16,21,tzinfo=datetime.timezone.utc)
++        self.phase='fenced';self.policy='1'*64;self.calls=0
++        self.manifest={'files':{},'dependencies':{},'entries':{},'imports':{}}
++        self.add('entry.py',"from dep import value\nresult=value\n",imports={'dep':'dep.py'},entry='inspect')
++        self.add('dep.py','value=42\n')
++        (self.root/'window').mkdir();(self.root/'window/recovery-contract.private.json').write_bytes(b'synthetic-contract')
++        (self.root/'window/csv-execution.intent.private.json').write_bytes(b'synthetic-execution')
++        self.anchor={'version':1,'preparation':str(self.root),'contractSha256':a.digest(b'synthetic-contract'),
++            'policySha256':self.policy,'codeManifestSha256':a.digest(a.canonical(self.manifest)),
++            'profileSha256':{'ORIGINAL':'2'*64,'CANDIDATE':'3'*64}}
++        self.store=Store(self.store_root,read=lambda p:Path(p).read_bytes(),now=lambda:self.now,lock_path=root/'root-lock',directory_check=lambda path:None)
++        self.helper=types.SimpleNamespace(policy_from=lambda:{'policySha256':self.policy,'preparation':str(self.root)},
++            phase_read=lambda:None if self.phase is None else{'stage':self.phase,'policySha256':self.policy},
++            guard_closed=lambda:None,nft_present=lambda:None)
++        self.install()
++    def add(self,path,text,imports=None,entry=None,language='python'):
++        f=self.root/path;f.parent.mkdir(parents=True,exist_ok=True);f.write_text(text)
++        s=f.stat();self.manifest['files'][path]={'sha256':a.digest(f.read_bytes()),'language':language,
++            'uid':s.st_uid,'mode':s.st_mode&0o777}
++        self.manifest['dependencies'][path]=[]
++        self.manifest['imports'][path]=imports or{}
++        if entry:self.manifest['entries'][path]=entry
++    def install(self):
++        self.anchor['codeManifestSha256']=a.digest(a.canonical(self.manifest))
++        with patch('os.geteuid',lambda:0),patch.object(self.store,'_owner_lock',lambda:nullcontext()):
++            self.store.install_owner_once(a.canonical(self.anchor),a.canonical(self.manifest),
++                a.digest(a.canonical(self.anchor)),a.digest(a.canonical(self.manifest)),owner_action=True)
++    def query(self):self.calls+=1;return self.store.query_locked(self.helper)
++    def ctx(self):return a.Context(self.query,now=lambda:self.now)
++    def issue(self,decision='ORIGINAL'):
++        with patch('os.geteuid',lambda:0),patch.object(self.store,'_owner_lock',lambda:nullcontext()):
++            return self.store.issue_owner_once(self.helper,decision,a.digest(b'synthetic-execution'),owner_action=True)
++
++class AuthorityTests(unittest.TestCase):
++    def setUp(self):self.tmp=tempfile.TemporaryDirectory();self.c=Case(Path(self.tmp.name))
++    def tearDown(self):self.tmp.cleanup()
++    def test_static_inspection_and_prestop_have_no_permit(self):
++        c=self.c.ctx();c.revalidate('prestop');self.assertIsNone(c.bundle['permit'])
++        with self.assertRaisesRegex(RuntimeError,'permit_required'):c.operation('ORIGINAL')
++        self.assertFalse((self.c.store._path(self.c.policy)/'issue.intent.json').exists())
++    def test_owner_only_and_one_shot_issue_query_no_renewal(self):
++        with patch('os.geteuid',lambda:1000),self.assertRaisesRegex(RuntimeError,'owner_issue'):
++            self.c.store._issue_owner_once(self.c.helper,'ORIGINAL','a'*64,owner_action=True)
++        self.c.issue();folder=self.c.store._path(self.c.policy)
++        before={p.name:(p.read_bytes(),p.stat().st_mtime_ns)for p in folder.iterdir()}
++        self.c.ctx().operation('ORIGINAL');self.c.now+=datetime.timedelta(seconds=601)
++        with self.assertRaisesRegex(RuntimeError,'expired'):self.c.ctx().operation('ORIGINAL')
++        after={p.name:(p.read_bytes(),p.stat().st_mtime_ns)for p in folder.iterdir()}
++        self.assertEqual(before,after)
++        with self.assertRaisesRegex(RuntimeError,'issue_consumed'):self.c.issue()
++    def test_missing_denied_before_import(self):
++        self.c.store.read=lambda p:(_ for _ in ()).throw(FileNotFoundError('synthetic missing'))
++        with self.assertRaises(FileNotFoundError):self.c.ctx()
++        self.assertNotIn('dep',sys.modules)
++    def test_permission_denied_not_pass(self):
++        self.c.store.read=lambda p:(_ for _ in ()).throw(PermissionError('synthetic unreadable'))
++        with self.assertRaises(PermissionError):self.c.ctx()
++    def test_anchor_tamper_denied(self):
++        f=self.c.store._path(self.c.policy)/'anchor.json';v=json.loads(f.read_bytes());v['contractSha256']='0'*64;f.write_bytes(a.canonical(v))
++        with self.assertRaisesRegex(RuntimeError,'static_record_drift'):self.c.ctx()
++    def test_same_checked_bytes_even_after_replacement(self):
++        ctx=self.c.ctx();loader=Loader(ctx,'entry.py')
++        (self.c.root/'dep.py').write_text("raise AssertionError('unverified replacement executed')\n")
++        self.assertEqual(loader.execute().result,42)
++        with self.assertRaisesRegex(RuntimeError,'source_hash'):Loader(ctx,'entry.py')
++    def test_malicious_entry_not_executed_before_authentication(self):
++        f=self.c.root/'entry.py';f.write_text("raise AssertionError('should not execute')\n")
++        with self.assertRaisesRegex(RuntimeError,'source_hash'):Loader(self.c.ctx(),'entry.py')
++    def test_undeclared_import_and_child_bypass(self):
++        # A declared file with an undeclared import must not reach sys.path fallback.
++        ctx=self.c.ctx();loader=Loader(ctx,'entry.py');loader.raw['entry.py']=b'import recovery_binding\n'
++        with self.assertRaisesRegex(RuntimeError,'legacy_binding_forbidden'):loader.execute()
++        with self.assertRaisesRegex(RuntimeError,'child_bypass'):command(ctx,['python3','relative.py'])
++        with self.assertRaises((RuntimeError,ValueError)):command(ctx,['python3','/tmp/not-approved.py'])
++    def test_phase_policy_profile_mismatch_and_expiry(self):
++        self.c.issue();ctx=self.c.ctx();ctx.operation('ORIGINAL')
++        self.c.phase='unfenced'
++        with self.assertRaisesRegex(RuntimeError,'live_phase'):ctx.operation('ORIGINAL')
++        self.c.phase='fenced';self.c.policy='9'*64
++        with self.assertRaises(FileNotFoundError):ctx.revalidate()
++    def test_permit_profile_drift_denied_even_with_updated_ack(self):
++        self.c.issue();p=self.c.store._path(self.c.policy);permit=json.loads((p/'permit.json').read_bytes());permit['targetProfileSha256']='9'*64
++        raw=a.canonical(permit);(p/'permit.json').write_bytes(raw);(p/'issue.receipt.json').write_bytes(a.canonical({'result':'ROOT_RECOVERY_PERMIT_ISSUED','permitSha256':a.digest(raw)}))
++        with self.assertRaisesRegex(RuntimeError,'permit_context'):self.c.ctx()
++    def test_exchange_between_api_and_worker_and_expiry(self):
++        self.c.issue();ctx=self.c.ctx();ctx.operation('ORIGINAL','start')
++        p=self.c.store._path(self.c.policy);v=json.loads((p/'permit.json').read_bytes());v['capturedUtc']=(self.c.now+datetime.timedelta(seconds=1)).isoformat();raw=a.canonical(v)
++        (p/'permit.json').write_bytes(raw);(p/'issue.receipt.json').write_bytes(a.canonical({'result':'ROOT_RECOVERY_PERMIT_ISSUED','permitSha256':a.digest(raw)}))
++        with self.assertRaisesRegex(RuntimeError,'authority_replaced'):ctx.operation('ORIGINAL','start')
++    def test_lost_issue_response_no_reissue_or_renewal(self):
++        original=self.c.store._put
++        def lost(path,raw):
++            original(path,raw)
++            if path.name=='issue.receipt.json':raise TimeoutError('response lost')
++        with patch.object(self.c.store,'_put',lost),self.assertRaises(TimeoutError):self.c.issue()
++        raw=self.c.query();self.assertIsNotNone(json.loads(raw)['permit'])
++        with self.assertRaisesRegex(RuntimeError,'issue_consumed'):self.c.issue()
++    def test_transitive_missing_and_seal_cycle(self):
++        m=copy.deepcopy(self.c.manifest);m['dependencies']['entry.py']=['dep.py'];m['dependencies']['dep.py']=['entry.py']
++        with self.assertRaisesRegex(RuntimeError,'cycle'):a.validate_dag(m)
++        m=copy.deepcopy(self.c.manifest);m['imports']['entry.py']['dep']='unknown.py'
++        with self.assertRaisesRegex(RuntimeError,'import_coverage'):a.validate_dag(m)
++    def test_query_transport_literal_and_no_write_action(self):
++        self.assertEqual(a.QUERY[-1],'inspect-recovery-authority')
++        text=root_extension.sudoers(source('v4-sequencer/render_sudoers.py'))
++        m=module('future_sudoers_local',text)
++        self.assertIn(' -I -S /usr/local/libexec/re7/incident-6683-window-control.py inspect-recovery-authority\n',m.render())
++        self.assertNotIn('issue',m.render());self.assertNotIn('install',m.render())
++    def test_helper_real_dispatch_query_preserves_phase(self):
++        text=root_extension.helper(source('v4-sequencer/privileged.py'))
++        h=module('future_helper_local',text)
++        # act is real; root-owned file metadata, store path and root library import
++        # are replaced with synthetic equivalents. No helper.main/root effects.
++        h.phase_read=self.c.helper.phase_read;h.policy_from=self.c.helper.policy_from
++        h.root_regular=lambda path:None
++        import root_store
++        with patch.object(root_store,'Store',lambda:self.c.store):
++            raw=h.act('inspect-recovery-authority',self.c.helper.policy_from())
++        self.assertEqual(json.loads(raw)['livePhase'],'fenced')
++        self.assertFalse((self.c.store._path(self.c.policy)/'issue.intent.json').exists())
++    def test_future_transform_removes_binding_imports(self):
++        parent=REVIEW/'crm-csv-integrated-recovery-20261016'
++        for name,fn in [('recovery.py',integration.recovery),('recovery_bridge.py',integration.bridge),('recovery_start.py',integration.gate)]:
++            value=fn((parent/name).read_text());compile(value,name,'exec')
++            self.assertNotIn('from recovery_binding import',value)
++    def test_full_consumers_render_and_diagnostic_transport(self):
++        op=source('crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source')
++        value=integration.operations(op);compile(value,'future_ops.py','exec')
++        self.assertIn('command(__phase_authority__, args)',value)
++        self.assertIn('original_bindings(window, config, __phase_authority__)',value)
++        import subprocess as sub
++        seq=source('v4-sequencer/sequencer.py')
++        parent=HERE.parent/'crm-csv-integrated-recovery-20261016'
++        pure={};exec((parent/'future_sources.py').read_text(),pure)
++        value=integration.sequencer(pure['sequencer'](seq));compile(value,'future_sequencer.py','exec')
++        self.assertNotIn('spec_from_file_location',value)
++        self.assertIn('command(__phase_authority__, args)',value)
++        out=root_extension.diagnostics(source('v4-sequencer/privileged_output.py'))
++        m=module('future_diagnostics_local',out)
++        self.assertIn('inspect-recovery-authority',m.ACTIONS)
++    def test_partial_issue_and_raw_child_denied(self):
++        p=self.c.store._path(self.c.policy)
++        (p/'issue.intent.json').write_bytes(b'{}')
++        with self.assertRaisesRegex(RuntimeError,'issue_incomplete'):self.c.ctx()
++    def test_source_metadata_denied_before_exec(self):
++        import stat
++        original=os.fstat
++        def changed(fd):
++            v=original(fd);fields=list(v);fields[4]=v.st_uid+1
++            return os.stat_result(fields)
++        with patch.object(os,'fstat',changed),self.assertRaisesRegex(RuntimeError,'source_type'):
++            Loader(self.c.ctx(),'entry.py')
++    def test_node_real_execution_check_routes_python_baseline(self):
++        # Exact execution-check consumer, only its obsolete namespace assertion
++        # is replaced by the approved root context assertion.
++        original=source('crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source')
++        check=integration.execution_check(original)
++        root=self.c.root;mode=root/'switch';mode.mkdir()
++        (mode/'scripts.sha256').write_text('')
++        # Real loop must have at least one pinned file; synthetic content only.
++        (mode/'pinned.txt').write_bytes(b'pinned')
++        (mode/'scripts.sha256').write_text(a.digest(b'pinned')+'  pinned.txt\n')
++        (root/'window/execution-gates.private.json').write_text(json.dumps({k:True for k in ('ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved')}))
++        files={'switch/entry.cjs':"require('./execution-check.cjs')();module.exports='NODE_REAL_CHECK_PASS';",'switch/execution-check.cjs':check,'switch/baseline_contract.py':"raise AssertionError('raw Python bypass')\n"}
++        m={'files':{},'dependencies':{},'entries':{'switch/entry.cjs':'inspect','switch/baseline_contract.py':'inspect'},'imports':{'switch/entry.cjs':{'./execution-check.cjs':'switch/execution-check.cjs'},'switch/execution-check.cjs':{'baseline_contract.py':'switch/baseline_contract.py'}}}
++        for n,v in files.items():m['files'][n]={'sha256':a.digest(v.encode()),'language':'python'if n.endswith('.py')else'commonjs'};m['dependencies'][n]=[]
++        import base64
++        snap={'root':str(root),'identity':['synthetic-root','synthetic-permit'],'manifest':m,'entry':'switch/entry.cjs','files':{n:base64.b64encode(v.encode()).decode()for n,v in files.items()}}
++        driver=Path(self.tmp.name)/'node-driver.cjs';driver.write_text("const boot=require("+json.dumps(str(HERE/'node_bootstrap.cjs'))+");const snap="+json.dumps(snap)+";let python=0;const out=boot.run(snap.entry,[],(cmd)=>{if(cmd[0]==='node-snapshot')return JSON.stringify(snap);if(cmd[0]==='python'&&cmd[1]==='switch/baseline_contract.py'&&cmd[2]==='--authority-correlation'){python++;return Buffer.from('BASELINE_SIMULATED');}throw Error('unexpected transport');});if(python!==1||out!=='NODE_REAL_CHECK_PASS')throw Error('bad route');console.log('NODE_CHECK_ROUTED_BASELINE_NO_RAW_EXEC');")
++        result=subprocess.run(['node',str(driver)],capture_output=True,text=True)
++        self.assertEqual(result.returncode,0,result.stderr)
++
++    def test_node_launch_strips_preload_environment(self):
++        ctx=self.c.ctx()
++        args=command(ctx,['node',str(self.c.root/'entry.py')])
++        self.assertEqual(args[:7],['/usr/bin/env','-u','NODE_OPTIONS','-u','NODE_PATH','/usr/bin/node','/usr/local/libexec/re7/recovery-node-launch.cjs'])
++    def test_node_denies_raw_python_and_undeclared_require(self):
++        import base64
++        for body,expected in [("require('child_process').execFileSync('python3',['/synthetic/unapproved.py']);",'node_child_bypass'),("require('./not-approved.cjs');",'node_import_undeclared')]:
++            raw=body.encode();snap={'root':str(self.c.root),'identity':['anchor','permit'],'entry':'entry.cjs',
++                'manifest':{'files':{'entry.cjs':{'language':'commonjs','sha256':a.digest(raw)}},'entries':{'entry.cjs':'inspect'},'imports':{}},
++                'files':{'entry.cjs':base64.b64encode(raw).decode()}}
++            driver=Path(self.tmp.name)/'node-negative.cjs'
++            driver.write_text("const boot=require("+json.dumps(str(HERE/'node_bootstrap.cjs'))+");const snap="+json.dumps(snap)+";let denied=false;try{boot.run('entry.cjs',[],()=>JSON.stringify(snap));}catch(e){if(!e.message.includes("+json.dumps(expected)+"))throw e;denied=true;}if(!denied)throw Error('unexpected PASS');")
++            result=subprocess.run(['node',str(driver)],capture_output=True,text=True)
++            self.assertEqual(result.returncode,0,result.stderr)
++
++if __name__=='__main__':unittest.main(verbosity=2)
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/test_connected.py
+@@ -0,0 +1,216 @@
++"""Affected recovery interfaces on complete synthetic canonical fixtures.
++Root transport/clock, OS effects and the factory of the start gate are simulated;
++Recovery, original checker, certificates, start barriers and controls are real.
++"""
++import datetime
++import hashlib
++import json
++from pathlib import Path
++import sys
++import tempfile
++import types
++import unittest
++from unittest.mock import patch
++import authority as a
++import integration
++
++HERE=Path(__file__).resolve().parent
++ACCEPTED=HERE.parent/'crm-csv-integrated-recovery-20261016'
++sys.path.insert(0,str(ACCEPTED))
++import test_recovery as t
++
++
++def load(name,text,**values):
++    m=types.ModuleType(name);m.__dict__.update(values);sys.modules[name]=m
++    exec(compile(text,name,'exec'),m.__dict__);return m
++
++class Connected(unittest.TestCase):
++    def setUp(self):
++        self.old_modules=dict(sys.modules);self.old_ops=t.ops;self.old_bindings=t.binding_consumers
++        self.temp=tempfile.TemporaryDirectory();self.fx=t.Fixture(Path(self.temp.name))
++        self.now=datetime.datetime.now(datetime.timezone.utc)
++        self.authority_replacement=False;self.query_lost=False
++    def tearDown(self):
++        t.ops=self.old_ops;t.binding_consumers=self.old_bindings
++        for n in ('recovery','recovery_bridge','recovery_start','ops','csv_start_gate'):
++            if n in self.old_modules:sys.modules[n]=self.old_modules[n]
++            else:sys.modules.pop(n,None)
++        self.temp.cleanup()
++    def connect(self,decision):
++        f=self.fx
++        if decision!='PRESTOP':f.stopped()
++        if decision=='CANDIDATE':f.selected()
++        texts={n:(ACCEPTED/n).read_text()for n in ('recovery.py','recovery_bridge.py','recovery_start.py')}
++        texts['recovery.py']=integration.recovery(texts['recovery.py'])
++        texts['recovery_bridge.py']=integration.bridge(texts['recovery_bridge.py'])
++        texts['recovery_start.py']=integration.gate(texts['recovery_start.py'])
++        for n,v in texts.items():(f.w/n).write_text(v)
++        baseops=t.source('operations_recovery_original.py')
++        # No final predicate is mocked; append the actual binding consumer.
++        bindings={}
++        for mode in t.c.MODES:
++            v=t.future_sources.operations(t.prevent.operations(t.source('operations_bindings_original.py')),mode)
++            if mode==t.c.ORIGINAL:v=v.replace('return original_bindings(window, config)','return original_bindings(window, config, __phase_authority__)')
++            bindings[mode]=v
++            (f.root/mode/'ops.py').write_text(integration.operations(baseops+'\n'+v))
++        # Re-seal ONLY synthetic files: real canonical R2 checker consumes them.
++        mm=t.c.read(f.w/'mode-manifest-v4.json')
++        for mode,files in mm['modeFiles'].items():
++            mm['modeFiles'][mode]={n:t.c.sha(f.root/mode/n)for n in files}
++            (f.root/mode/'scripts.sha256').write_text(''.join(t.c.sha(f.root/mode/n)+'  '+n+'\n'for n in files))
++            mm['modeManifests'][mode]=t.c.sha(f.root/mode/'scripts.sha256')
++        (f.w/'mode-manifest-v4.json').write_text(json.dumps(mm))
++        seal=t.c.read(f.w/'recovery-contract.private.json')
++        seal['codeSha256']={n:t.c.sha(f.w/n)for n in seal['codeSha256']}
++        wm=t.c.read(f.w/'sequencer-manifest.json');wm['filesSha256']=seal['codeSha256'];(f.w/'sequencer-manifest.json').write_text(json.dumps(wm))
++        seal['filesSha256']={n:t.c.sha(f.root/n)for n in seal['filesSha256']}
++        review=f.root/'original-preparation-review.sha256'
++        rows=[line.split('  ',1)[1]for line in review.read_text().splitlines()]
++        review.write_text(''.join(t.c.sha(f.root/n)+'  '+n+'\n'for n in rows))
++        seal['originalReviewSha256']=t.c.sha(review);seal['originalSequencerManifestSha256']=t.c.sha(f.w/'sequencer-manifest.json')
++        (f.w/'recovery-contract.private.json').write_text(json.dumps(seal));f.digest=t.c.sha(f.w/'recovery-contract.private.json')
++        raw=(f.w/'recovery.py').read_bytes();meta=(f.w/'recovery.py').stat()
++        manifest={'files':{'window/recovery.py':{'sha256':a.digest(raw),'language':'python','uid':meta.st_uid,'mode':meta.st_mode&0o777}},'dependencies':{'window/recovery.py':[]},'imports':{},'entries':{'window/recovery.py':'inspect'}}
++        anchor={'version':1,'preparation':str(f.root),'contractSha256':f.digest,'policySha256':f.policy_hash,
++            'codeManifestSha256':a.digest(a.canonical(manifest)),
++            'profileSha256':{'ORIGINAL':t.c.sha(f.w/'source.profile.private.json'),'CANDIDATE':t.c.sha(f.w/'target.profile.private.json')}}
++        self.permit=None if decision=='PRESTOP'else{'anchorSha256':a.digest(a.canonical(anchor)),
++            'preparation':str(f.root),'contractSha256':f.digest,'policySha256':f.policy_hash,
++            'decision':decision,'targetProfileSha256':anchor['profileSha256'][decision],
++            'executionIntentSha256':t.c.sha(f.w/'csv-execution.intent.private.json'),
++            'phase':'fenced','capturedUtc':self.now.isoformat()}
++        if self.permit:(f.w/'recovery-policy-permit.private.json').write_bytes(a.canonical(self.permit))
++        def query():
++            if self.query_lost:raise TimeoutError('synthetic query response lost')
++            permit=self.permit
++            if self.authority_replacement:
++                permit=dict(permit,capturedUtc=(self.now+datetime.timedelta(seconds=1)).isoformat())
++            return a.canonical({'result':'ROOT_RECOVERY_AUTHORITY_READ','queryOnly':True,
++                'anchor':anchor,'anchorSha256':a.digest(a.canonical(anchor)),'manifest':manifest,
++                'permit':permit,'permitSha256':None if permit is None else a.digest(a.canonical(permit)),
++                'livePolicySha256':f.policy_hash,'livePhase':'fenced'if f.fenced else'complete'})
++        self.context=a.Context(query,now=lambda:self.now)
++        rb=load('recovery_bridge',texts['recovery_bridge.py'])
++        f.b.phase_authority=self.context
++        for name in ('verify_recovery_policy','verify_original_artifact_and_bindings'):
++            setattr(f.b,name,types.MethodType(getattr(rb.Bridge,name),f.b))
++        future=load('recovery',texts['recovery.py'],__phase_authority__=self.context)
++        self.controller=future.Recovery(f.root,f.b,t.seq.Sequencer,f.digest,self.context)
++        start=load('recovery_start',texts['recovery_start.py'],__phase_authority__=self.context)
++        # Only construction/OS driver is injected; actual gate/Contract revalidate.
++        start.build=lambda root,authority:self.controller
++        t.ops=load('ops',integration.operations(baseops),__phase_authority__=self.context)
++        t.ops.System=lambda:f.d
++        t.binding_consumers={m:load('future_binding_'+m.replace('-','_'),v,__phase_authority__=self.context)for m,v in bindings.items()}
++        self.http=patch.object(t.seq.request,'urlopen',lambda *args,**kw:Response(f))
++        self.http.start();self.addCleanup(self.http.stop)
++        return self.controller
++    def test_original_real_checker_certificates_controls_and_replay(self):
++        controller=self.connect('ORIGINAL');self.assertEqual(controller.inspect()['options'],['ORIGINAL'])
++        r=controller.recover('ORIGINAL');self.assertEqual(r['result'],'CSV_ORIGINAL_PAIR_RESTORED')
++        before=list(self.fx.d.calls)
++        with self.assertRaises(RuntimeError):controller.recover('ORIGINAL')
++        self.assertEqual(before,self.fx.d.calls)
++        self.assertEqual(self.fx.crons,{'deploy':'before-deploy','system':'before-system'})
++    def test_prestop_no_permit_and_no_start(self):
++        controller=self.connect('PRESTOP');f=self.fx;f.save({x['name']:x for x in f.source['apps']})
++        self.assertEqual(controller.recover('PRESTOP')['result'],'CSV_PRESTOP_CONTROLS_RESTORED')
++        self.assertFalse(any(str(x).startswith('start:')for x in f.d.calls))
++    def test_candidate_compatible_only(self):
++        controller=self.connect('CANDIDATE')
++        self.assertEqual(controller.inspect()['options'],['CANDIDATE'])
++        with self.assertRaises(RuntimeError):controller.recover('ORIGINAL')
++        self.assertEqual(controller.recover('CANDIDATE')['result'],'CSV_CANDIDATE_PAIR_RESTORED')
++    def test_authority_replacement_between_api_worker_no_complete(self):
++        controller=self.connect('ORIGINAL');original=self.fx.d.start
++        def changed(root,name):
++            original(root,name)
++            if name==t.c.API:self.authority_replacement=True
++        self.fx.d.start=changed
++        with self.assertRaisesRegex(RuntimeError,'authority_replaced'):controller.recover('ORIGINAL')
++        self.assertNotIn('start:'+t.c.WORKER,self.fx.d.calls)
++        self.assertFalse((self.fx.w/'csv-recovery.receipt.private.json').exists())
++    def test_expiry_between_api_worker_no_complete(self):
++        controller=self.connect('ORIGINAL');original=self.fx.d.start
++        def expired(root,name):
++            original(root,name)
++            if name==t.c.API:self.now+=datetime.timedelta(seconds=601)
++        self.fx.d.start=expired
++        with self.assertRaisesRegex(RuntimeError,'expired'):controller.recover('ORIGINAL')
++        self.assertNotIn('start:'+t.c.WORKER,self.fx.d.calls)
++    def test_lost_start_response_no_replay_or_complete(self):
++        controller=self.connect('ORIGINAL');self.fx.d.fail='start-lost'
++        with self.assertRaises(TimeoutError):controller.recover('ORIGINAL')
++        before=list(self.fx.d.calls)
++        with self.assertRaises(RuntimeError):controller.recover('ORIGINAL')
++        self.assertEqual(before,self.fx.d.calls)
++        self.assertFalse((self.fx.w/'csv-recovery.receipt.private.json').exists())
++    def test_uncertain_selection_no_original(self):
++        controller=self.connect('ORIGINAL');t.put(self.fx.w/'csv-selection.intent.private.json',{})
++        self.assertEqual(controller.inspect()['options'],[])
++        with self.assertRaises(RuntimeError):controller.recover('ORIGINAL')
++        self.assertFalse((self.fx.w/'csv-recovery.intent.private.json').exists())
++    def test_old_generation_still_denied(self):
++        controller=self.connect('ORIGINAL');path=self.fx.root/'switch/old-exit-confirmed.json'
++        v=t.c.read(path);v['generation']=37;path.write_text(json.dumps(v))
++        q=self.fx.w/'csv-imports-switch-after-exit.private.json';v=t.c.read(q);v['exitCertificateSha256']=t.c.sha(path);q.write_text(json.dumps(v))
++        with self.assertRaisesRegex(RuntimeError,'guard_generation_changed'):controller.recover('ORIGINAL')
++
++    def test_prevention_binding_still_before_effects(self):
++        self.connect('PRESTOP');(self.fx.w/'path-bindings.private.json').unlink()
++        original=t.pre.FS.lstat
++        def fs(path):
++            path=Path(path)
++            if self.fx.root.parent not in path.parents and path!=self.fx.root.parent:
++                import stat
++                return types.SimpleNamespace(st_mode=stat.S_IFDIR|0o755)
++            return original(path)
++        effects=[]
++        def forbidden(*args):effects.append(args);raise AssertionError('operational factory reached')
++        with patch.object(t.pre,'EVENT_SOURCE',str(self.fx.event/'policy.ts')),patch.object(t.pre.FS,'lstat',fs),patch.object(t.cli,'Bridge',forbidden),patch.object(t.cli,'Sequencer',forbidden):
++            with self.assertRaises(FileNotFoundError):t.cli.main([str(self.fx.root),'--execute'])
++        self.assertEqual(effects,[])
++    def test_prevention_event775_still_before_effects(self):
++        self.connect('PRESTOP');original=t.pre.FS.lstat
++        def fs(path):
++            path=Path(path)
++            if path==self.fx.event:
++                import stat
++                return types.SimpleNamespace(st_mode=stat.S_IFDIR|0o775)
++            if self.fx.root.parent not in path.parents and path!=self.fx.root.parent:
++                import stat
++                return types.SimpleNamespace(st_mode=stat.S_IFDIR|0o755)
++            return original(path)
++        effects=[]
++        def forbidden(*args):effects.append(args);raise AssertionError('operational factory reached')
++        with patch.object(t.pre,'EVENT_SOURCE',str(self.fx.event/'policy.ts')),patch.object(t.pre.FS,'lstat',fs),patch.object(t.cli,'Bridge',forbidden),patch.object(t.cli,'Sequencer',forbidden):
++            with self.assertRaisesRegex(RuntimeError,'event_source_parent'):t.cli.main([str(self.fx.root),'--execute'])
++        self.assertEqual(effects,[])
++    def test_python_baseline_real_under_snapshot_loader(self):
++        self.connect('PRESTOP');f=self.fx
++        from verified_loader import Loader
++        # The exact baseline/ecosystem consumers are loaded from checked bytes.
++        files={'review/baseline_contract.py':t.source('baseline_contract.py'),
++               'review/ecosystem_contract.py':t.source('ecosystem_contract.py')}
++        m={'files':{},'dependencies':{},'entries':{'review/baseline_contract.py':'inspect'},
++            'imports':{'review/baseline_contract.py':{'ecosystem_contract':'review/ecosystem_contract.py'}}}
++        for name,text in files.items():
++            file=f.root/name;file.parent.mkdir(exist_ok=True);file.write_text(text);meta=file.stat()
++            m['files'][name]={'sha256':a.digest(text.encode()),'language':'python','uid':meta.st_uid,'mode':meta.st_mode&0o777};m['dependencies'][name]=[]
++        b=dict(self.context.bundle);anchor=dict(b['anchor'],codeManifestSha256=a.digest(a.canonical(m)))
++        b.update(anchor=anchor,anchorSha256=a.digest(a.canonical(anchor)),manifest=m)
++        context=a.Context(lambda:a.canonical(b))
++        import io
++        from contextlib import redirect_stdout
++        with redirect_stdout(io.StringIO())as output:
++            Loader(context,'review/baseline_contract.py').execute([str(f.root),'switch'])
++        self.assertIn('BASELINE_CONTRACT_PASS',output.getvalue())
++
++class Response:
++    def __init__(self,fx):self.fx=fx
++    status=200
++    def __enter__(self):return self
++    def __exit__(self,*args):pass
++    def read(self):return json.dumps({'ok':self.fx.health}).encode()
++
++if __name__=='__main__':unittest.main(verbosity=2)
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/verified_loader.py
+@@ -0,0 +1,68 @@
++"""Execute authenticated snapshots; no Python path fallback or binding import.
++Imports of local modules must be declared by the authenticated manifest. Python
++stdlib remains the system trust boundary established by the root bootstrap.
++"""
++import builtins
++import importlib.util
++import sys
++import types
++from pathlib import Path
++from authority import require
++
++class Loader:
++    def __init__(self, authority, entry, *, trusted_modules=None):
++        self.authority=authority; self.entry=entry
++        self.trusted_modules=trusted_modules or {}
++        require(set(self.trusted_modules) <= {"authority", "child_transport"}, "authority_root_library_allowlist")
++        self.raw=authority.snapshot(entry)
++        self.manifest=authority.bundle['manifest']; self.modules={}
++
++    def _resolve(self, owner, name):
++        mapping=self.manifest['imports'].get(owner,{})
++        if name in mapping:
++            return mapping[name]
++        require(name.split('.')[0] in sys.stdlib_module_names and name!='__main__',
++                'authority_import_undeclared:'+name)
++        return None
++
++    def _import(self, owner):
++        def importing(name, globals=None, locals=None, fromlist=(), level=0):
++            require(level==0, 'authority_relative_python_import')
++            require(name!='recovery_binding', 'authority_legacy_binding_forbidden')
++            if name in self.trusted_modules:
++                return self.trusted_modules[name]
++            target=self._resolve(owner,name)
++            if target is None:
++                return builtins.__import__(name,globals,locals,fromlist,level)
++            return self.module(target)
++        return importing
++
++    def module(self, path, *, main=False, argv=None):
++        require(path in self.raw and self.manifest['files'][path]['language']=='python',
++                'authority_python_module_denied')
++        self.authority.revalidate()
++        if path in self.modules:
++            return self.modules[path]
++        # Snapshot bytes, NOT a second read/importlib path execution.
++        module=types.ModuleType('__main__' if main else Path(path).stem)
++        module.__file__=str(self.authority.root/path)
++        module.__phase_authority__=self.authority
++        module.__phase_loader__=self
++        module.__builtins__=dict(vars(builtins),__import__=self._import(path))
++        self.modules[path]=module
++        old_argv=sys.argv
++        try:
++            if argv is not None:sys.argv=[module.__file__,*argv]
++            exec(compile(self.raw[path],module.__file__,'exec'),module.__dict__)
++        except BaseException:
++            self.modules.pop(path,None)
++            raise
++        finally:sys.argv=old_argv
++        return module
++
++    def execute(self, argv=()):
++        return self.module(self.entry,main=True,argv=list(argv))
++
++    def local_module(self,path):
++        path=Path(path)
++        return self.module(str(path.relative_to(self.authority.root)))

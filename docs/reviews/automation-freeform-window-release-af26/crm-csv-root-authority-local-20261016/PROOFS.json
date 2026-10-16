@@ -1,0 +1,54 @@
+{
+  "baseCommit": "bdb57f57601147632bb529895cbcd92b8b483c6c",
+  "blocked": [
+    "B1 canonical private diagnostics not connected to initial fixed_query",
+    "B2 full delegated and combined Node->Python chain unproven",
+    "B3 PM2 rereads raw ecosystem CJS outside checked loader",
+    "B4 concrete installer and full four-mode transitive closure not sealed"
+  ],
+  "codeSha256": {
+    "authority.py": "5d2e92a0afdd3449a0064c429a5a977aca2272c90dea5abb37fb7d6b899f0de4",
+    "bootstrap.py": "5c1e2cec3e2a6c54d2e1035eeceb62943e71840d94e9fdfce0e4e73be5a7f008",
+    "child_transport.py": "672e4a562e27c434257980a4bc1fd5ea2aba8e7529127e40662d4b1be15c87b8",
+    "integration.py": "6778ce9e7d4f68a01c075de911a29a338d0c32df363a71ce1bd98a72d7c353de",
+    "node_bootstrap.cjs": "0743c3f4fc4c428f668de65db4669889457965e98726789d599d82ba89378ed1",
+    "reproduce.py": "8a6c62d87ebd05f87e0ebabe5cf381f5ad82efcacfec83eedd4d6160bb17ed3d",
+    "root_extension.py": "9c04ac1c85bdfbbd24e9b8ab108c6cc64910b80dc441c4f78d33a9ca4d2fc727",
+    "root_store.py": "3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a",
+    "test_authority.py": "34011990ca434d6f7d4158908bc29eb96222fef150abd0ed7a7dad24b5830db9",
+    "test_connected.py": "d5411f4d613177d283f83bf68ac8563ea481b2e989a3ffd85b2b764e0b962404",
+    "verified_loader.py": "f1c531ee45a70a3ef23e0a38cd024f358cb7e8e2ac37a522cd0ed51b59b08793"
+  },
+  "decision": "LOCAL_KERNEL_VALIDATED_INTEGRATION_BLOCKED",
+  "documentEntrySha256": {
+    "docs/BACKLOG_TECH.md": "f8b729c90c287944d86b3da9901ec82c99000860c6eebc2b4940ea4385287470",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md": "2d3b4fc8b073241561b3721fe3db2dfaaa9e69ef8a060e7b2a12f31e3853e3c8",
+    "docs/saas/DOCUMENTATION_INDEX.md": "a2c350178b52385aba681b5f33f4a73a0f9d14e3af45cd84e2d7f0cfbc4abf7b"
+  },
+  "isolatedReproduction": true,
+  "localDevelopmentNegatives": [
+    "ambiguous source transformation anchor corrected",
+    "second dynamic ops import detected and routed",
+    "isolated Node tool PATH missing; harness corrected, no production change"
+  ],
+  "newFocusedTests": 33,
+  "oldSuite32Repeated": false,
+  "oldSuite42Repeated": false,
+  "operationalGenerationCreated": false,
+  "operationalReadiness": false,
+  "privateEvidenceUsed": false,
+  "realInstallationOrIssuance": false,
+  "recordedUtc": "2026-10-16T21:41:31.913613+00:00",
+  "simulated": [
+    "root ownership/directory validator/UID/lock and protected reads",
+    "root query/policy/phase/guard/nft and clock",
+    "process/SQL/HTTP/PM2/cron/supervision/saved",
+    "worker capture and start-gate controller factory",
+    "Node child transport in execution-check test"
+  ],
+  "status": "LOCAL VALIDATED (tested kernel) / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+  "testAuthority": 22,
+  "testConnected": 11,
+  "testOutputSha256": "4790468e4b14ce3a8a1a1dc6e838e3cc0ea53298659105226492c63ea7f78a2a",
+  "vpsAccesses": 0
+}

@@ -1,0 +1,79 @@
+{
+  "baseCommit": "bdb57f57601147632bb529895cbcd92b8b483c6c",
+  "kind": "PURE_FUTURE_TRANSFORMS_NOT_OPERATIONAL_PACKAGE",
+  "sources": [
+    {
+      "futureSha256": "8f7fbd8c394c0c0af777692970f25ddbbdbd44046b2e9caadb8978d0517f561c",
+      "futureTarget": "window/recovery.py",
+      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery.py",
+      "sourceSha256": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2"
+    },
+    {
+      "futureSha256": "8fc1975433433bcb8c43eff829de19565ef80bbb6235b425a37e3a057b3fa747",
+      "futureTarget": "window/recovery_bridge.py",
+      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py",
+      "sourceSha256": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318"
+    },
+    {
+      "futureSha256": "3c4393f91222b63b5ab32a314700c0fbdda9b8d88082b66e5ac7058e80292da2",
+      "futureTarget": "window/recovery_start.py",
+      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_start.py",
+      "sourceSha256": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9"
+    },
+    {
+      "futureSha256": "52b1fe580d620b320d98dd7d1ca454a5c6ea7140896975830f2b7749430084bf",
+      "futureTarget": "window/sequencer.py",
+      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/sequencer.py",
+      "sourceSha256": "b6abd49db636cc77d9255fbdfcde8089af3a98699240e3235dab45ee4451e86d"
+    },
+    {
+      "futureSha256": "3ec8adacb7197f86df783950abf9a72d57fc8fd32476f70e20c49f761040c033",
+      "futureTarget": "return-before-commit/ops.py",
+      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source",
+      "sourceSha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e"
+    },
+    {
+      "futureSha256": "626fe014d1a2c22360f0458b79e54c38587c497a4c08fd16e634fcdda4d7287c",
+      "futureTarget": "MODE/delegated.py",
+      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source",
+      "sourceSha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af"
+    },
+    {
+      "futureSha256": "f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965",
+      "futureTarget": "MODE/execution-check.cjs",
+      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source",
+      "sourceSha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f"
+    },
+    {
+      "futureSha256": "19a67b9eb748b69b72ffc0e144e2a85a89e12ba9b78271b00eec5e61efc02fd5",
+      "futureTarget": "ROOT/incident-6683-window-control.py",
+      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged.py",
+      "sourceSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212"
+    },
+    {
+      "futureSha256": "bc4185b71ca07d654484c6a28fa9c9bf27ec8a2f201054fef2b9584043b963ae",
+      "futureTarget": "render_sudoers.py",
+      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/render_sudoers.py",
+      "sourceSha256": "43ac54893e854991466b11f379fdefa66662cc40822bc1b62fc8bdb110c48299"
+    },
+    {
+      "futureSha256": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021",
+      "futureTarget": "window/privileged_output.py",
+      "sourcePath": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged_output.py",
+      "sourceSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+    }
+  ],
+  "unchangedAcceptedSources": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/future_sources.py": "85efa5d931bfebd606725f877c802dc04b6e65d40bbf3eaa5a6b6db313ad4f5d",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/inputs.py": "175bee603fba1048a2b5abba0f596e98c89f8feba903cf397c708c25c0c80598",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/original_checks.py": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/policy_proposal.py": "3910f34d385970160afb00e73f64f80957f8c147c14304c2a9e6a69dd46b6450",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery.py": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_contract.py": "9dad001588002c8566bd4ffc3e57d5985f3d05822dd773b87fa92d003382e73e",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_start.py": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/reproduce.py": "8799628b05cd017da449aa8d3558cae53c0d149e005a3b0a1d9795dd8d3884a7",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_corrections.py": "28a84e5f9b4f290d5140d0d0453b6d1e995bb4f69f24c057c7893e0622e4520e",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_recovery.py": "48bcf2c703f81175285d71ec4f9cab66e9f791940a38216489d8666ce2c399ec"
+  }
+}

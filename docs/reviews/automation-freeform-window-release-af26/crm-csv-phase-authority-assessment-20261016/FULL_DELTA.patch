@@ -1,0 +1,155 @@
+--- a/docs/BACKLOG_TECH.md
++++ b/docs/BACKLOG_TECH.md
+@@ -1,4 +1,6 @@
+ # BACKLOG — RE7ONLINE WHATSAPP AGENT
++
++**CSV — autoridade de fase16/10: BLOCKED / ROOT_OF_TRUST_UNBOUND / NOT DEPLOYED / NOT WINDOW READY.** [Avaliação local e condição de parada](reviews/automation-freeform-window-release-af26/crm-csv-phase-authority-assessment-20261016/REPORT.md). Falta fornecedor/entrada autenticados dos três pins e sua propagação ao build/bindings/start gate. Nenhum leitor implementado para apenas transferir confiança; nenhum código/prova anterior alterado, teste repetido ou operação executada. CSV suspenso; recuperação consumida e controles preservados. Este checkpoint não revoga o aceite local anterior nem constitui nova certificação.
+ 
+ **CSV — reconciliação para publicação de revisão16/10: ACCEPT LOCAL / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO.** [Síntese R1/R2, fontes deduplicadas, provas e lacunas](reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/REPORT.md). Código/provas aceitos preservados; esta publicação não é implantação. Root,16 vínculos e autoridade dos pins de fase permanecem pendentes; produtor de composição ainda depende de HEAD-base e template privado, sem reprodução pública integral das sete provas.32 testes reproduzíveis pelo harness entregue; nenhuma suíte repetida agora. Recuperação produtiva consumida e controles intocados. Checkpoints abaixo são históricos, inclusive menções anteriores a sem commit/push.
+ 
+--- a/docs/RUNBOOK_WHATSAPP_AGENT.md
++++ b/docs/RUNBOOK_WHATSAPP_AGENT.md
+@@ -1,4 +1,6 @@
+ # RUNBOOK OPERACIONAL — WhatsApp Agent
++
++**CSV — autoridade de fase16/10: BLOCKED / ROOT_OF_TRUST_UNBOUND / NOT DEPLOYED / NOT WINDOW READY.** [Avaliação local e condição de parada](reviews/automation-freeform-window-release-af26/crm-csv-phase-authority-assessment-20261016/REPORT.md). Falta fornecedor/entrada autenticados dos três pins e sua propagação ao build/bindings/start gate. Nenhum leitor implementado para apenas transferir confiança; nenhum código/prova anterior alterado, teste repetido ou operação executada. CSV suspenso; recuperação consumida e controles preservados. Este checkpoint não revoga o aceite local anterior nem constitui nova certificação.
+ 
+ **CSV — reconciliação para publicação de revisão16/10: ACCEPT LOCAL / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO.** [Síntese R1/R2, fontes deduplicadas, provas e lacunas](reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/REPORT.md). Código/provas aceitos preservados; esta publicação não é implantação. Root,16 vínculos e autoridade dos pins de fase permanecem pendentes; produtor de composição ainda depende de HEAD-base e template privado, sem reprodução pública integral das sete provas.32 testes reproduzíveis pelo harness entregue; nenhuma suíte repetida agora. Recuperação produtiva consumida e controles intocados. Checkpoints abaixo são históricos, inclusive menções anteriores a sem commit/push.
+ 
+--- a/docs/saas/DOCUMENTATION_INDEX.md
++++ b/docs/saas/DOCUMENTATION_INDEX.md
+@@ -81,6 +81,7 @@
+ | Documento | Status | Uso |
+ | --- | --- | --- |
+ | `docs/RUNBOOK_WHATSAPP_AGENT.md` | atual | Deploy, migration, retencao e operacao principal |
++| `docs/reviews/automation-freeform-window-release-af26/crm-csv-phase-authority-assessment-20261016/REPORT.md` | BLOCKED / ROOT_OF_TRUST_UNBOUND / NOT DEPLOYED / NOT WINDOW READY | Bootstrap dos pins sem fornecedor/entrada autenticados; parada antes de implementar leitor; código/provas anteriores preservados |
+ | `docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/REPORT.md` | ACCEPT LOCAL / NOT DEPLOYED / NOT WINDOW READY | Reconciliação posterior a6bcf, R1/R2, publicação mínima deduplicada, allowlist e limites de reprodução; CSV suspenso |
+ | `docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/REPORT.md` | PREPARED LOCALLY / NOT DEPLOYED / NOT WINDOW READY | Código integrado composto; manifests e planos de bindings/política;15 grupos de observação atual pendentes; fonte root/namespace/pins de fase não materializados; CSV suspenso |
+ | `docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/REPORT.md` | LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY | CLI/modo/política futuros; R1/R2 corrigidos com32 regressões focadas, revisão pendente;42 provas históricas preservadas; sem pacote/janela, CSV suspenso |
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-phase-authority-assessment-20261016/REPORT.md
+@@ -0,0 +1,77 @@
++# Autoridade dos pins de fase — decisão de parada antes da implementação
++
++**Resultado: BLOCKED / ROOT_OF_TRUST_UNBOUND. Nenhum leitor ou integração implementado.**
++**CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.**
++
++Base e HEAD: `bdb57f57601147632bb529895cbcd92b8b483c6c`; branch `review/campaign-recovery-20260926`. Índice e arquivos rastreados inicialmente sem alterações. Arquivos privados/não rastreados e demais worktrees preservados. Esta rodada acrescenta somente avaliação documental; não afirma LOCAL VALIDATED para um leitor inexistente.
++
++## Decisão e condição de parada
++
++A instrução determina parar se a raiz de confiança não tiver definição verificável. A inspeção local confirmou que há mecanismos para revisão estática de pacote e controles root de fase, mas não uma cadeia implementada que autentique os três pins dinâmicos antes do import de `recovery_binding` e propague essa autoridade a todos os consumidores.
++
++Criar um arquivo JSON, adicionar hash em argumento/env ou conferir um sidecar ao lado dele transferiria a confiança para um novo fornecedor ainda não autenticado. Por isso nenhum desses mecanismos foi introduzido. O risco não é demonstrado como incidente produtivo: este código continua uma proposta local não implantada.
++
++## Mecanismos existentes e alcance demonstrado
++
++| Evidência local | O que estabelece | O que não estabelece |
++| --- | --- | --- |
++| Roteiros publicados: owner decide commit/review; comandos conferem SHA literal de review e instalador | Raiz humana explícita para bytes estáticos quando o operador usa o roteiro efetivamente aprovado | Nenhum roteiro novo, aprovado e completo para os pins específicos pós-fence |
++| `admit_gates.py::admit` | Confere review recebido, pacote, root/RPO/custódia e controles; registra authorizedCommit e cinco gates | O argumento decision só tem formato de SHA conferido no código; não autentica sozinho a decisão humana. Não sela recovery_binding nem o permit específico da recuperação |
++| `compose_offline.py::compose` | Confere fontes/aceite/manifests e gera somente código/índices; conserva inputs ausentes | Não materializa política/instalador/binding dinâmico operacional nem fornecedor autenticado desses pins |
++| `privileged.py::policy_from/main/phase_require` | Na fonte canônica, política e estado root são validados sob lock; ações exigem fase compatível | Não atesta o hash do contrato/recovery_binding do código deploy; não fornece a tupla de três pins |
++| `privileged.py::act('inspect')` | Retorna política/fase nula/sourceProcessesAlive antes da fase; exige phase_read() ausente | Não é export de recuperação fenced. `check-present` confere nft, não emite permit com contrato/perfil/capturedUtc |
++| `future_sources.binding_source` | Produz três constantes hexadecimais, sem efeitos | Não verifica quem forneceu os hashes, sua origem, fase ou autorização |
++| Harness dos32 testes | Injeta binding sintético e exercita contratos/controles reais no alcance documentado | Não constitui fornecedor de autoridade para lançamento ou processos filhos reais |
++
++Nenhum desses entrypoints foi executado. Fontes root são evidência de código versionado, não observação da instalação atual. Os ZIPs externos não foram usados nem reconstruídos.
++
++## Entrada e propagação atuais — lacunas concretas
++
++1. **Quem fornece o digest esperado?** Não há fornecedor autenticado definido para o binding de fase. Há a decisão humana/review estático como padrão canônico, mas nenhum artefato de lançamento dessa recuperação que complete sua ligação com os três pins dinâmicos.
++2. **Por qual entrada chega ao primeiro consumidor?** `Recovery.build(root)` recebe somente root e importa duas constantes de `recovery_binding`; não recebe uma autoridade independente. O CLI futuro aceita root/ação/decisão e não transporta um pin autenticado de fase.
++3. **Como entrada e leitor seriam autenticados?** O leitor não existe. O conjunto estático poderia futuramente fixar seus bytes no review, mas o import atual não verifica previamente o binding contra digest de origem externa aprovada. UID600 e hash autodeterminado não suprem essa lacuna.
++4. **Como chega aos demais consumidores?** `Bridge.verify_recovery_policy` importa o terceiro pin; `original_bindings` importa o pin do contrato. `authorize_original_start` chama build novamente em outro ponto/processo. Compartilham um nome de módulo, não um objeto/entrada cuja autoridade tenha sido demonstrada e revalidada através do lançamento canônico.
++5. **Qual o fornecedor do permit?** O consumidor exige hash exato, policySha256, fase fenced, targetProfileSha256 e capturedUtc<600s. Não foi localizado no escopo canônico consultado um produtor/lançador dessa prova específica ligado à aprovação externa. Captura genérica root e inspeção pré-fase não são equivalentes.
++
++No harness, a fábrica/build é ligada ao controlador sintético em vários ensaios e os módulos são criados/injetados por `binding_source`. Isso continua válido para suas contraprovas locais; não prova o bootstrap real que falta.
++
++## Ordem de selagem: parte conhecida e fronteira não resolvida
++
++O desenho deve conservar a seguinte dependência acíclica, sem executá-la nesta rodada:
++
++1. **Código estático:** módulos atuais, futuro leitor/launcher, CLI/start gate/Operations e controles; índices de scripts por modo e manifest de código window. O leitor deve estar na autoridade estática antes de receber dados de fase.
++2. **Inputs estáticos:** perfis/planos/ecossistemas, imutáveis completos, mapas original/candidato separados, baselines/restore/cron/controles. O índice ORIGINAL deve manter o recorte obrigatório aceito, sem artefatos exclusivos candidatos. Nada disso pode ser preenchido por defaults ou recaptura oportunista.
++3. **Contrato estático:** fixa perfis, código, índices e referências estáticas; recebe hash C. O review estático e seu roteiro externo podem ancorar C e o código de verificação. Não incluir arquivo que contenha C num índice já pinado pelo próprio contrato.
++4. **Política correspondente:** bytes de política e seu hash P devem corresponder à decisão/perfil e à fonte root validada, sem novo schema paralelo.
++5. **Fase dinâmica:** somente depois do evento legítimo poderá existir o permit E. Não entra no selo estático anterior à fase como se já existisse; seu produtor e canal de autenticação ainda precisam ser definidos.
++6. **Autoridade de fase:** ligação de C, P e hash(E), leitor/launcher e decisão precisa de ancoragem externa verificável. **Esse fornecedor, sua entrada no primeiro consumidor e sua propagação aos processos filhos estão pendentes.** Acrescentar um arquivo A sem definir quem autentica hash(A) não fecha a cadeia.
++
++A ordem acima é um mapa de dependências, não manifest pronto, schema aprovado, autorização de materialização ou mecanismo certificado. Os manifests existentes ficam intactos.
++
++## O que precisa ser decidido antes de qualquer implementação
++
++Há uma escolha arquitetural ainda aberta entre usar revisão humana explícita dos bytes de fase por um lançamento autenticado, ou uma atestação emitida por mecanismo canônico com raiz previamente fixada. Não se escolheu nem implementou qualquer alternativa nesta avaliação. Em particular, não se presumiu nova delegação sudo/root, assinatura, segredo, serviço ou argumento confiável só pelo seu formato.
++
++A decisão precisa identificar concretamente:
++
++- fornecedor autorizado de C/P/E e evidência da autenticação desse fornecedor;
++- primeiro código executado confiável e autenticação do leitor e suas dependências antes de imports locais;
++- transporte imutável/revalidável da autoridade ao CLI, build, bindings e start gate/Operations dos processos filhos;
++- ligação à decisão, execução/geração, perfis e fase, sem confiar no mesmo diretório mutável como sua própria raiz;
++- emissão e revalidação do permit, tratamento de troca concorrente e ausência de ciclos.
++
++Esse é o bloqueio exato. Não basta autorizar a implementação genérica de um leitor sem fechar esse bootstrap.
++
++## Verificações feitas e provas não executadas
++
++Somente leitura estática, hashes e conferência de diff/status. Todos os112 membros do manifest publicado FILES.sha256 conferiram antes da avaliação documental. Os módulos/provas pertinentes constam com hashes em CHECKS.json; após a documentação seus bytes permanecem iguais. Código, patches e checkpoints históricos não foram alterados.
++
++**Zero testes funcionais ou builds executados.** Não existe delta de leitor para ensaiar. Não foram fabricados resultados de ausência/adulteração/leitura negada/concorrência/fase/perfil/política/expiração/ciclos. As32 provas anteriores continuam válidas para seu alcance, não para uma integração nova de autoridade. O roteiro de regressão solicitado permanece pendente e deverá exercitar o lançamento e consumidores concretos quando o bootstrap estiver definido, com efeitos externos simulados e sem repetir suítes fora da superfície afetada.
++
++## Arquivos e limites da entrega
++
++Alterações apenas em BACKLOG_TECH, RUNBOOK_WHATSAPP_AGENT e DOCUMENTATION_INDEX, acrescentando checkpoint de bloqueio. Novos: este relatório, CHECKS.json, FULL_DELTA.patch e MANIFEST.sha256. O patch inclui os três documentos e os dois novos documentos de avaliação; exclui a si próprio e o manifest para evitar autorreferência. O manifest separado inclui o patch e todos os documentos alterados.
++
++Nenhum recovery*.py, checker, transformador, protótipo externo, política, binding, índice histórico ou geração consumida foi editado. Não houve VPS/SSH, captura root, SQL, mudança de permissões/credenciais, backup, instalação, operação, commit ou push. NEWauth+NEWDB+NEWcipher, produção, ambos crons, frontend, guarda38 e out.15 estão fora de alteração; isso não é nova observação produtiva.
++
++**Parada deliberada antes da implementação por ROOT_OF_TRUST_UNBOUND. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.**
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-phase-authority-assessment-20261016/CHECKS.json
+@@ -0,0 +1,44 @@
++{
++  "assessedUtc": "2026-10-16T21:15:39.519247+00:00",
++  "baseCommit": "bdb57f57601147632bb529895cbcd92b8b483c6c",
++  "branch": "review/campaign-recovery-20260926",
++  "buildsExecuted": 0,
++  "decision": "BLOCKED_ROOT_OF_TRUST_UNBOUND_STOP_BEFORE_IMPLEMENTATION",
++  "documentationOnly": true,
++  "existingCodeSha256": {
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_PROOFS.json": "fb25671f5abf6d1299808c1ca19eefef2043d58bd8234b009514aacf5655bfc0",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/SOURCE_PROVENANCE.json": "5c75dddbfad7558cc81a2b3afd344c8d58ed1d3b3498065a5c801d4f693dc91e",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/future_sources.py": "85efa5d931bfebd606725f877c802dc04b6e65d40bbf3eaa5a6b6db313ad4f5d",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/original_checks.py": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery.py": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_contract.py": "9dad001588002c8566bd4ffc3e57d5985f3d05822dd773b87fa92d003382e73e",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_start.py": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_corrections.py": "28a84e5f9b4f290d5140d0d0453b6d1e995bb4f69f24c057c7893e0622e4520e",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_recovery.py": "48bcf2c703f81175285d71ec4f9cab66e9f791940a38216489d8666ce2c399ec",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/COMMANDS_FOR_REVIEW.txt": "9b1b5024465a6370253f2901ab58e5faee0c53f8534be6e27c315f351223a215",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/csv_cli.py": "19f69a40b912d96b05301cdf4490b7fe30019cb3b962eae92a357b2b4810f77c",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/BINDING_PLAN.json": "7cf7c8dad869e3f73512094b1863a8d077ec7e9ffb9761eb41213c1e90731774",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/POLICY_PLAN.json": "d41dc34dbc71938b028ca08aa12a5118736781d53301fa0c0d914e182857b7f3",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/REPORT.md": "5e55a0d80c4eff52779ff41443659ca03ca23d50960abe9d0f299944f4b04f7a",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/compose_offline.py": "71440febcef941897cac2c7c02aeeb558b807ad395fd3bc6e26e66d56c728140",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/admit_gates.py.2681e63919b9.source": "2681e63919b981291d376237975e7e8dd7379ccbc0f323a55f948487730705c6",
++    "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged.py": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212"
++  },
++  "externalZipContentUsed": false,
++  "functionalTestsExecuted": 0,
++  "historicalCodeAndProofsChanged": false,
++  "newRuntimeSchema": false,
++  "operationalAuthorityClaimed": false,
++  "publishedManifestMembersVerifiedBeforeAssessment": 112,
++  "sharedReaderImplemented": false,
++  "status": "CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
++  "unresolved": [
++    "authenticated provider of phase-binding digest",
++    "authenticated first-consumer input and reader bootstrap",
++    "canonical propagation to child start gate and bindings",
++    "authenticated producer/channel of specific fenced recovery permit",
++    "acyclic external authority for dynamic three-pin binding"
++  ],
++  "vpsAccesses": 0
++}
