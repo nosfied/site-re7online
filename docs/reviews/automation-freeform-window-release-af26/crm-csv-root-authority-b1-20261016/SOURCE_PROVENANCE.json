@@ -1,0 +1,23 @@
+{
+  "baseCommit": "305c1cd08c5ddc7a2b30c5a79e4a830d3a836943",
+  "editableFutureSources": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016",
+  "predecessors": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/authority.py": "220de0b3b48be13b05748ae363fa81f2186ff2fd839b8569c8c2068f41674eae",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/bootstrap.py": "200f25cac3697baeea9560c1483d2421fa96bcba99eb04c0690b9aaa36313864",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/child_transport.py": "c4783ed71920a74be9cee5dc2229879852d7a4df38d582f1534a8b194cb6c866",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/node_bootstrap.cjs": "244777e777f3dd53222b6268219d98e22a14fad92586134ff2c40b7af5c7b9c5"
+  },
+  "canonicalDiagnosticSource": {
+    "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged_output.py",
+    "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+    "rendererPath": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/root_extension.py",
+    "rendererSha256": "9c04ac1c85bdfbbd24e9b8ab108c6cc64910b80dc441c4f78d33a9ca4d2fc727",
+    "renderedSha256": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021",
+    "bodyChanged": false,
+    "onlyExistingAuthorityActionRegistration": true
+  },
+  "newDiagnosticCollector": false,
+  "newPrivateFiles": false,
+  "privateSourceRequiredButMissing": false,
+  "reproduction": "reproduce.py reuses B2/R3 and accepted pinned source/excerpt indices, overlays these future sources and fixture adapter only; isolated test child has no Git/local-evidence fallback"
+}

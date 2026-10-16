@@ -1,0 +1,1084 @@
+{
+  "kind": "SANITIZED_SYNTHETIC_DIAGNOSTIC_EVIDENCE",
+  "rawPrivateStreamsPublished": false,
+  "cases": [
+    {
+      "case": "test_absent_reply_zero_exit_denies_before_import",
+      "queryCalls": 1,
+      "private": [
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 0,
+          "stdoutBytes": 0,
+          "stderrBytes": 26,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        }
+      ],
+      "journal": [
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 0,
+          "stderrBytes": 26
+        },
+        {
+          "event": "authority_query_denied",
+          "stage": "validation",
+          "reason": "authority_query_invalid_or_unavailable",
+          "automaticRetry": false
+        }
+      ],
+      "consumerImported": false
+    },
+    {
+      "case": "test_actual_missing_transport_oserror_is_private",
+      "queryCalls": 1,
+      "private": [
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": null,
+          "stdoutBytes": 0,
+          "stderrBytes": 67,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "66eaec31b71eefce547fe79c76f03b2b6e28ca9b5371be978e021fd9a4b5e29a"
+        }
+      ],
+      "journal": [
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 0,
+          "stderrBytes": 67
+        },
+        {
+          "event": "authority_query_denied",
+          "stage": "transport",
+          "reason": "authority_query_invalid_or_unavailable",
+          "automaticRetry": false
+        }
+      ],
+      "consumerImported": false
+    },
+    {
+      "case": "test_authority_changed_between_reads_records_denial",
+      "queryCalls": 2,
+      "private": [
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 0,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26,
+          "stdoutSha256": "faf3763902922f4f1b70ed267dd89b69b5a005a4a517c53db64151e544514bf2",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        },
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 0,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26,
+          "stdoutSha256": "6421383d1744788808415cf9c105870f47047734db726713217ebac23fb10b79",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        }
+      ],
+      "journal": [
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26
+        },
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26
+        },
+        {
+          "event": "authority_query_denied",
+          "stage": "identity",
+          "reason": "authority_replaced",
+          "automaticRetry": false
+        }
+      ],
+      "consumerImported": false
+    },
+    {
+      "case": "test_diagnostic_route_is_not_authority",
+      "queryCalls": 1,
+      "private": [],
+      "journal": [],
+      "consumerImported": false
+    },
+    {
+      "case": "test_invalid_authority_private_validation_record",
+      "queryCalls": 1,
+      "private": [
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 0,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26,
+          "stdoutSha256": "3c4303e2160738e3aaa3928efb6d4e87279eb7f44cd419d657129596ac9fdf45",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        }
+      ],
+      "journal": [
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26
+        },
+        {
+          "event": "authority_query_denied",
+          "stage": "validation",
+          "reason": "authority_query_invalid_or_unavailable",
+          "automaticRetry": false
+        }
+      ],
+      "consumerImported": false
+    },
+    {
+      "case": "test_invalid_binary_reply_kept_private",
+      "queryCalls": 1,
+      "private": [
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 0,
+          "stdoutBytes": 25,
+          "stderrBytes": 26,
+          "stdoutSha256": "ac63f6db4e7dadb8046599d374ebb45e95a21de6d90633da75ccc1907c6ae539",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        }
+      ],
+      "journal": [
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 25,
+          "stderrBytes": 26
+        },
+        {
+          "event": "authority_query_denied",
+          "stage": "validation",
+          "reason": "authority_query_invalid_or_unavailable",
+          "automaticRetry": false
+        }
+      ],
+      "consumerImported": false
+    },
+    {
+      "case": "test_lost_full_response_denies_without_retry",
+      "queryCalls": 1,
+      "private": [
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": null,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26,
+          "stdoutSha256": "341a9f7999005bbd0ad151d8b8b542468129b38e0c13e24b73fe5f25f9c3b3fb",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        }
+      ],
+      "journal": [
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26
+        },
+        {
+          "event": "authority_query_denied",
+          "stage": "transport",
+          "reason": "authority_query_invalid_or_unavailable",
+          "automaticRetry": false
+        }
+      ],
+      "consumerImported": false
+    },
+    {
+      "case": "test_malformed_json_reply_kept_private",
+      "queryCalls": 1,
+      "private": [
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 0,
+          "stdoutBytes": 27,
+          "stderrBytes": 26,
+          "stdoutSha256": "89f87b9d8928d9d909e2df715839216b275bbd672d8d4ba77efb045484eb0e8d",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        }
+      ],
+      "journal": [
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 27,
+          "stderrBytes": 26
+        },
+        {
+          "event": "authority_query_denied",
+          "stage": "validation",
+          "reason": "authority_query_invalid_or_unavailable",
+          "automaticRetry": false
+        }
+      ],
+      "consumerImported": false
+    },
+    {
+      "case": "test_missing_private_directory_no_creation_or_fallback",
+      "queryCalls": 1,
+      "private": [],
+      "journal": [],
+      "consumerImported": false
+    },
+    {
+      "case": "test_missing_route_denies_before_query",
+      "queryCalls": 0,
+      "private": [],
+      "journal": [],
+      "consumerImported": false
+    },
+    {
+      "case": "test_nonzero_response_kept_private",
+      "queryCalls": 1,
+      "private": [
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 9,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26,
+          "stdoutSha256": "d7a6f9ad99f483d5703451aa8ab9bff38daeaadf41c44ea6d21f78e3a0d775ec",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        }
+      ],
+      "journal": [
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26
+        },
+        {
+          "event": "authority_query_denied",
+          "stage": "transport",
+          "reason": "authority_query_invalid_or_unavailable",
+          "automaticRetry": false
+        }
+      ],
+      "consumerImported": false
+    },
+    {
+      "case": "test_parent_authority_mismatch_before_import_is_recorded",
+      "queryCalls": 1,
+      "private": [
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 0,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26,
+          "stdoutSha256": "3cf082c9bbf4a948658e534c1fd0596d949bb00d08154de394bb55ce87c45646",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        }
+      ],
+      "journal": [
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26
+        },
+        {
+          "event": "authority_query_denied",
+          "stage": "correlation",
+          "reason": "bootstrap_authority_replaced",
+          "automaticRetry": false
+        }
+      ],
+      "consumerImported": false
+    },
+    {
+      "case": "test_private_output_symlink_cannot_be_used",
+      "queryCalls": 1,
+      "private": [],
+      "journal": [
+        {
+          "event": "authority_query_denied",
+          "stage": "transport",
+          "reason": "authority_query_invalid_or_unavailable",
+          "automaticRetry": false
+        }
+      ],
+      "consumerImported": false
+    },
+    {
+      "case": "test_real_partial_timeout_keeps_exact_bytes",
+      "queryCalls": 1,
+      "private": [
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": null,
+          "stdoutBytes": 29,
+          "stderrBytes": 26,
+          "stdoutSha256": "daecea2f36219e39884cec4056344620ff346a62305d42c49b97448846d356d5",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        }
+      ],
+      "journal": [
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 29,
+          "stderrBytes": 26
+        },
+        {
+          "event": "authority_query_denied",
+          "stage": "transport",
+          "reason": "authority_query_invalid_or_unavailable",
+          "automaticRetry": false
+        }
+      ],
+      "consumerImported": false
+    },
+    {
+      "case": "test_valid_reply_persisted_before_import",
+      "queryCalls": 4,
+      "private": [
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 0,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26,
+          "stdoutSha256": "6e8e7cb38150f2d81b45b41ac8684a7e69d67845915cd249308e330ae479d99d",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        },
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 0,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26,
+          "stdoutSha256": "6e8e7cb38150f2d81b45b41ac8684a7e69d67845915cd249308e330ae479d99d",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        },
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 0,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26,
+          "stdoutSha256": "6e8e7cb38150f2d81b45b41ac8684a7e69d67845915cd249308e330ae479d99d",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        },
+        {
+          "action": "inspect-recovery-authority",
+          "exitCode": 0,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26,
+          "stdoutSha256": "6e8e7cb38150f2d81b45b41ac8684a7e69d67845915cd249308e330ae479d99d",
+          "stderrSha256": "6f5d6aa6ffe042ee533130dc861f89d8f0c7f162ef9ed71d271be80e067df2e8"
+        }
+      ],
+      "journal": [
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26
+        },
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26
+        },
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26
+        },
+        {
+          "event": "privileged_result",
+          "reason": null,
+          "stdoutBytes": 1003,
+          "stderrBytes": 26
+        }
+      ],
+      "consumerImported": true
+    }
+  ],
+  "connectedProcesses": [
+    {
+      "case": "test_real_delegated_three_processes_and_consumption",
+      "parentPid": 1513778,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1513815,
+          "ppid": 1513778,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1513815,
+          "ppid": 1513778,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513815,
+          "ppid": 1513778
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1513815,
+          "ppid": 1513778,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1513831,
+          "ppid": 1513778,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1513831,
+          "ppid": 1513778,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513831,
+          "ppid": 1513778
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1513831,
+          "ppid": 1513778,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1513857,
+          "ppid": 1513778,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1513857,
+          "ppid": 1513778,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513857,
+          "ppid": 1513778
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1513857,
+          "ppid": 1513778,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1513875,
+          "ppid": 1513778,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1513875,
+          "ppid": 1513778,
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        },
+        {
+          "event": "root_query",
+          "pid": 1513875,
+          "ppid": 1513778
+        }
+      ],
+      "consumerImports": 4,
+      "requestExists": true,
+      "proofConsumed": true,
+      "falseComplete": false
+    },
+    {
+      "case": "test_real_node_python_baseline_chain",
+      "parentPid": 1513778,
+      "events": [
+        {
+          "event": "node_launcher",
+          "pid": 1513903,
+          "ppid": 1513778
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1513910,
+          "ppid": 1513903,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513910,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513910,
+          "ppid": 1513903
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1513910,
+          "ppid": 1513903,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513910,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513910,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513910,
+          "ppid": 1513903
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1513910,
+          "ppid": 1513903,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1513916,
+          "ppid": 1513903,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513916,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513916,
+          "ppid": 1513903
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1513916,
+          "ppid": 1513903,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513916,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513916,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513916,
+          "ppid": 1513903
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1513916,
+          "ppid": 1513903,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1513922,
+          "ppid": 1513903,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513922,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513922,
+          "ppid": 1513903
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1513922,
+          "ppid": 1513903,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513922,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513922,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513922,
+          "ppid": 1513903
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1513922,
+          "ppid": 1513903,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1513928,
+          "ppid": 1513903,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513928,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513928,
+          "ppid": 1513903
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1513928,
+          "ppid": 1513903,
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513928,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513928,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513928,
+          "ppid": 1513903
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1513928,
+          "ppid": 1513903,
+          "kind": "node-snapshot",
+          "entry": "switch/close.cjs"
+        },
+        {
+          "event": "bootstrap",
+          "pid": 1513934,
+          "ppid": 1513903,
+          "kind": "python",
+          "entry": "switch/baseline_contract.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513934,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513934,
+          "ppid": 1513903
+        },
+        {
+          "event": "loader_constructor",
+          "pid": 1513934,
+          "ppid": 1513903,
+          "entry": "switch/baseline_contract.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513934,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513934,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513934,
+          "ppid": 1513903
+        },
+        {
+          "event": "root_query",
+          "pid": 1513934,
+          "ppid": 1513903
+        },
+        {
+          "event": "bootstrap_complete",
+          "pid": 1513934,
+          "ppid": 1513903,
+          "kind": "python",
+          "entry": "switch/baseline_contract.py"
+        }
+      ],
+      "consumerImports": 0,
+      "requestExists": false,
+      "proofConsumed": false,
+      "falseComplete": false
+    },
+    {
+      "case": "test_execution_race_denied_before_child_import_or_request",
+      "parentPid": 1513778,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1513951,
+          "ppid": 1513778,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513951,
+          "ppid": 1513778
+        }
+      ],
+      "consumerImports": 0,
+      "requestExists": false,
+      "proofConsumed": false,
+      "falseComplete": false
+    },
+    {
+      "case": "test_authority_exchange_race_denied_before_import",
+      "parentPid": 1513778,
+      "events": [
+        {
+          "event": "bootstrap",
+          "pid": 1513953,
+          "ppid": 1513778,
+          "kind": "python",
+          "entry": "switch/delegated.py"
+        },
+        {
+          "event": "root_query",
+          "pid": 1513953,
+          "ppid": 1513778
+        }
+      ],
+      "consumerImports": 0,
+      "requestExists": false,
+      "proofConsumed": false,
+      "falseComplete": false
+    }
+  ]
+}

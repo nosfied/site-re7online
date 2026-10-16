@@ -1,0 +1,72 @@
+{
+  "baseCommit": "305c1cd08c5ddc7a2b30c5a79e4a830d3a836943",
+  "result": "B1_LOCAL_CANONICAL_DIAGNOSTIC_INTEGRATION_PASS",
+  "tests": 19,
+  "directDiagnosticTests": 15,
+  "affectedConnectedB2Tests": 4,
+  "codeSha256": {
+    "authority.py": "1a2a9ce5f928aa524b08789c5c5a4aafcbb0b6d6106c12251e677ff76b0ba92f",
+    "bootstrap.py": "97aa1f2e0317bc73b5127a8e19cf8c95f99a30aea35eb60fb490ac032f906c15",
+    "child_transport.py": "baefd76ac4fe4b2cf3fc40a7ae43aa3b2b131ebb9c19b7ceeccab441fd9e9292",
+    "lab_root_reply.py": "8d97d6e6f7b7d2ba3b9be90ffa6709a11a7789fa2717d994049cf21d934010b0",
+    "lab_shim.py": "c1614099050f488f005fa8b88041f7238737186608ed3c7ec99f545442c4efef",
+    "node_bootstrap.cjs": "dea5d94c665ed5faeb2898e7bc81ea675ace606ab6f7f997b9baf9064f1144bc",
+    "privileged_output.py": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021",
+    "reproduce.py": "0c4abfb5175e3eb9a0f4fc723b46b54ccbd0f9e35dd29f2b08b6df7c0c3f597b",
+    "test_diagnostics.py": "ebe025bbd7791a94dc9a7ff1d036608f0a4028a74e3fc9e5ea7cf001e826babf"
+  },
+  "testOutputSha256": "ec7ba98c0a7215872d911bb5b2e02cc7f44e76456496e39ab6df350a338419d1",
+  "sanitizedEvidenceSha256": "814b83bfa757b8048633fcaca1d03663e68a68ec0aa552cef8765d1e6b8af898",
+  "canonicalCollector": "privileged_output.run_privileged + private_record; same full private base64 streams, mode/owner/nlink/O_NOFOLLOW checks, fsync and redacted journal",
+  "initialRoute": "explicit --diagnostic-window is custody destination only, must match authenticated root/window before preparation import; no pins from route, no new collector/config authority",
+  "failures": [
+    "empty zero-exit reply",
+    "invalid UTF-8/binary reply",
+    "malformed JSON",
+    "nonzero root exit",
+    "full response lost after actual local helper result",
+    "real partial subprocess timeout",
+    "real missing executable OSError",
+    "live policy mismatch",
+    "same Context authority replacement",
+    "parent correlation mismatch",
+    "missing routing flag",
+    "wrong custody route",
+    "private output symlink",
+    "missing directory denies without creating/fallback"
+  ],
+  "byteExactProof": "synthetic stdout/stderr including NUL and invalid UTF-8 compared against canonical private base64 bytes and sha256; no raw streams published",
+  "publicError": "authority_query_denied (or specific static authority_replaced/bootstrap_authority_replaced/route code); semantic validation summary only in existing sequencer journal",
+  "noImportOnDenial": true,
+  "noFallbackOrRetry": true,
+  "noPermitIssueOrRenewal": true,
+  "real": [
+    "canonical run_privileged/private_record, fixed_query, Context, bootstrap",
+    "actual local subprocess endpoint mapped after canonical sudo allowlist",
+    "real TimeoutExpired and OSError; complete-response loss injected after actual process result",
+    "Bridge.protocol three delegated subprocesses and Node->Python baseline real with canonical diagnostic transport in each child"
+  ],
+  "simulated": [
+    "root helper metadata/UID/chain and sudo endpoint are synthetic",
+    "root bundle and clock for B2 fixtures",
+    "production OS/SQL/HTTP/PM2/cron System effects and prior restore authority as accepted fixtures"
+  ],
+  "limits": [
+    "if private destination is unavailable, no successful custody can be claimed; deny without directory creation or alternate sink",
+    "root diagnostic library/fixed arguments must be installed/sealed in future approved package; not done here",
+    "runtime destination follows existing canonical file security checks; no new directory-permission contract was invented"
+  ],
+  "development": [
+    "initial Python child route lacked new window flag; corrected in future transport",
+    "positive bootstrap makes fresh authority reads at loader boundaries; these are not failure retries",
+    "Node-Python EPERM in sandbox; same tests passed outside sandbox"
+  ],
+  "blocked": [
+    "B3 PM2 separate ecosystem reread",
+    "B4 concrete installer/real four-mode transitive closure"
+  ],
+  "oldBroadSuitesRepeated": false,
+  "vps": false,
+  "installationOrRealIssuance": false,
+  "status": "B1 CLOSED LOCALLY / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO"
+}

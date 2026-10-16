@@ -1,0 +1,24 @@
+{
+  "status": "B1 CLOSED LOCALLY / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO",
+  "launches": [
+    {
+      "chain": "bootstrap protected diagnostic library -> authority.fixed_query -> canonical run_privileged -> fixed helper query",
+      "proof": "actual local endpoint bytes captured before Loader; no direct capture bypass remains",
+      "simulated": "root metadata/sudo mapped endpoint; owner installation not exercised"
+    },
+    {
+      "chain": "Context validation/correlation denial -> canonical private_record -> existing sequencer.journal.jsonl",
+      "proof": "fixed non-sensitive denial metadata; raw stdout/stderr remain only in existing privileged-output.private.jsonl",
+      "limits": "unwritable/absent sink denies, cannot claim stored bytes"
+    },
+    {
+      "chain": "Bridge.protocol -> delegated request/record/execute and Bridge.node -> Node -> Python -> real baseline",
+      "proof": "four affected B2 connected cases PASS with real canonical diagnostics in child initial queries",
+      "simulated": "OS/root/SQL/HTTP/PM2 as prior fixture, no productive effects"
+    }
+  ],
+  "remaining": [
+    "B3 PM2 separate ecosystem reread",
+    "B4 concrete installer/real four-mode transitive closure"
+  ]
+}

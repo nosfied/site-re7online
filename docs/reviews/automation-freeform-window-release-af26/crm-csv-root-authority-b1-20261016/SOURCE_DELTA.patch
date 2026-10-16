@@ -1,0 +1,171 @@
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/authority.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/authority.py
+@@ -13,7 +13,7 @@
+ 
+ HELPER = '/usr/local/libexec/re7/incident-6683-window-control.py'
+ BOOTSTRAP = '/usr/local/libexec/re7/recovery-launch.py'
+-QUERY = ['/usr/bin/sudo', '-n', '/usr/bin/python3', '-I', '-S', HELPER,
++QUERY = ['sudo', '-n', '/usr/bin/python3', '-I', '-S', HELPER,
+          'inspect-recovery-authority']
+ MODES = ('switch', 'return', 'return-partial', 'return-before-commit')
+ 
+@@ -55,11 +55,13 @@
+     finally:
+         os.close(fd)
+ 
+-def fixed_query():
++def fixed_query(window):
++    # Imported only as deploy by the protected bootstrap. The root helper's
++    # Store imports authority primitives, never this diagnostic transport.
++    from privileged_output import run_privileged
+     protected_bytes(HELPER)
+-    result = subprocess.run(QUERY, check=True, capture_output=True, timeout=15,
+-                            env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'})
+-    return result.stdout
++    return run_privileged(QUERY, window, 'inspect-recovery-authority', timeout=15,
++                          env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'})
+ 
+ def validate_dag(manifest):
+     require(set(manifest) == {'files', 'dependencies', 'entries', 'imports'}, 'authority_manifest_shape')
+@@ -95,18 +97,50 @@
+ 
+ class Context:
+     """Explicit context; a selector/correlation digest is never its authority."""
+-    def __init__(self, query=fixed_query, *, now=None):
++    def __init__(self, query=None, *, now=None, diagnostic_window=None):
++        self.diagnostic_window = None if diagnostic_window is None else Path(diagnostic_window)
++        if query is None:
++            require(self.diagnostic_window is not None and self.diagnostic_window.is_absolute(),
++                    'authority_diagnostic_window_required')
++            query = lambda: fixed_query(self.diagnostic_window)
+         self.query = query
++        self._injected_query = diagnostic_window is None
+         self.now = now or (lambda: datetime.datetime.now(datetime.timezone.utc))
+         self.bundle = self._read()
+         self.identity = self._identity(self.bundle)
+         self.root = Path(self.bundle['anchor']['preparation'])
++        if self.diagnostic_window is not None and self.diagnostic_window != self.root / 'window':
++            self._record_denial('route', 'authority_diagnostic_window_mismatch')
++            raise RuntimeError('authority_diagnostic_window_mismatch')
+ 
+     def _identity(self, bundle):
+         return (bundle['anchorSha256'], bundle['permitSha256'])
+ 
++    def _record_denial(self, stage, reason):
++        if self.diagnostic_window is None:
++            return  # Explicit injected test query, never the default transport.
++        from privileged_output import private_record
++        try:
++            private_record(self.diagnostic_window, 'sequencer.journal.jsonl', {
++                'event': 'authority_query_denied', 'stage': stage, 'reason': reason,
++                'automaticRetry': False})
++        except Exception:
++            raise RuntimeError('authority_diagnostic_failed') from None
++
+     def _read(self):
+-        raw = self.query(); b = json.loads(raw)
++        raw = None
++        try:
++            raw = self.query()
++            return self._validate_reply(raw)
++        except Exception:
++            if self._injected_query:
++                raise
++            self._record_denial('transport' if raw is None else 'validation',
++                                'authority_query_invalid_or_unavailable')
++            raise RuntimeError('authority_query_denied') from None
++
++    def _validate_reply(self, raw):
++        b = json.loads(raw)
+         require(b['result'] == 'ROOT_RECOVERY_AUTHORITY_READ' and b['queryOnly'] is True,
+                 'authority_query_result')
+         a = b['anchor']; p = b['permit']; m = b['manifest']
+@@ -136,7 +170,9 @@
+ 
+     def revalidate(self, purpose='inspect', decision=None, execution_hash=None):
+         b = self._read()
+-        require(self._identity(b) == self.identity, 'authority_replaced')
++        if self._identity(b) != self.identity:
++            self._record_denial('identity', 'authority_replaced')
++            raise RuntimeError('authority_replaced')
+         require(purpose in ('inspect', 'prestop', 'forward', 'recovery', 'start', 'closure'), 'authority_purpose')
+         if purpose == 'prestop':
+             require(b['livePhase'] in (None, 'fenced') and b['permit'] is None,
+@@ -218,7 +254,9 @@
+         # already queried/validated root independently. Check BEFORE the Loader.
+         require(type(value) is dict and set(value) == {'authority', 'executionSha256'},
+                 'authority_correlation_shape')
+-        require(tuple(value['authority']) == self.identity, 'bootstrap_authority_replaced')
++        if tuple(value['authority']) != self.identity:
++            self._record_denial('correlation', 'bootstrap_authority_replaced')
++            raise RuntimeError('bootstrap_authority_replaced')
+         expected = value['executionSha256']
+         require(expected is None or hexhash(expected), 'authority_execution_shape')
+         self._check_execution(expected)
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/bootstrap.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/bootstrap.py
+@@ -31,12 +31,14 @@
+     return module
+ 
+ def main(argv):
++    trusted_library('privileged_output')
+     authority=trusted_library('authority');trusted_library('verified_loader')
+     transport=trusted_library('child_transport')
+     from verified_loader import Loader
+     authority.require(len(argv)>=2 and argv[0]in('python','node-snapshot'),'bootstrap_arguments')
+-    context=authority.Context()
+-    entry=argv[1]; rest=list(argv[2:])
++    authority.require(len(argv)>=4 and argv[2]=='--diagnostic-window', 'bootstrap_diagnostic_window_required')
++    context=authority.Context(diagnostic_window=argv[3])
++    entry=argv[1]; rest=list(argv[4:])
+     correlated = rest[:1]==['--authority-correlation']
+     if correlated:
+         authority.require(len(rest)>=3 and rest[2]=='--', 'bootstrap_correlation_arguments')
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/child_transport.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/child_transport.py
+@@ -13,6 +13,6 @@
+     target=str(Path(args[1]).relative_to(context.root))
+     context.snapshot(target)  # fresh scope and transitive coverage before child
+     if name=='node':
+-        return ['/usr/bin/env','-u','NODE_OPTIONS','-u','NODE_PATH','/usr/bin/node',NODE,target,'--authority-correlation',json.dumps(context.correlation()),'--',*args[2:]]
+-    return ['/usr/bin/python3','-I','-S',BOOTSTRAP,'python',target,
++        return ['/usr/bin/env','-u','NODE_OPTIONS','-u','NODE_PATH','/usr/bin/node',NODE,target,'--diagnostic-window',str(context.root/'window'),'--authority-correlation',json.dumps(context.correlation()),'--',*args[2:]]
++    return ['/usr/bin/python3','-I','-S',BOOTSTRAP,'python',target,'--diagnostic-window',str(context.root/'window'),
+             '--authority-correlation',json.dumps(context.correlation()),'--',*args[2:]]
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/node_bootstrap.cjs
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/node_bootstrap.cjs
+@@ -6,11 +6,13 @@
+ const allowedBuiltins = new Set(['fs','path','assert','crypto','child_process','os','util','url','buffer','http','https']);
+ function deny(ok, why) { if (!ok) throw Error(why); }
+ function run(entry, args, transport = (command, options) => cp.execFileSync('/usr/bin/python3', ['-I','-S',PY,...command], options)) {
++  deny(args[0]==='--diagnostic-window'&&args.length>=2,'node_diagnostic_window_required');
++  const diagnosticWindow=args[1];args=args.slice(2);
+   let expected=null;
+   if(args[0]==='--authority-correlation'){
+     deny(args[2]==='--','node_correlation_arguments');expected=JSON.parse(args[1]);args=args.slice(3);
+   }
+-  const read = (correlation) => JSON.parse(transport(['node-snapshot',entry,...(correlation ?
++  const read = (correlation) => JSON.parse(transport(['node-snapshot',entry,'--diagnostic-window',diagnosticWindow,...(correlation ?
+     ['--authority-correlation',JSON.stringify(correlation),'--'] : [])], {encoding:'utf8'}));
+   const snap = read(expected), cache = new Map();
+   if(expected)deny(JSON.stringify(expected)===JSON.stringify(snap.correlation),'node_authority_replaced');
+@@ -24,7 +26,7 @@
+         deny(snap.manifest.entries[target], 'node_python_child_not_entry');
+         deny(Object.values(snap.manifest.imports[entry] || {}).includes(target) ||
+              Object.keys(snap.manifest.imports).some(k=>Object.values(snap.manifest.imports[k]).includes(target)), 'node_python_child_undeclared');
+-        return transport(['python',target,'--authority-correlation',JSON.stringify(snap.correlation),'--',...argv.slice(1)],options);
++        return transport(['python',target,'--diagnostic-window',diagnosticWindow,'--authority-correlation',JSON.stringify(snap.correlation),'--',...argv.slice(1)],options);
+       }
+       deny(!['python','python3','node'].includes(path.basename(command)), 'node_child_bypass');
+       return cp.execFileSync(command,argv,options); // existing OS effects; rehearsals must intercept them
+--- a/docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged_output.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/privileged_output.py
+@@ -14,7 +14,7 @@
+ CONTROL = '/usr/local/libexec/re7/incident-6683-window-control.py'
+ OBSERVER = '/usr/local/libexec/re7/db-owner-set-observer.py'
+ ACTIONS = {'inspect', 'check-absent', 'check-present', 'enter', 'unfence',
+-           'restore-controls', 'abort-prestop', 'authorize-switch', 'authorize-return'}
++           'restore-controls', 'abort-prestop', 'authorize-switch', 'authorize-return', 'inspect-recovery-authority'}
+ 
+ def require(ok, code):
+     if not ok:
