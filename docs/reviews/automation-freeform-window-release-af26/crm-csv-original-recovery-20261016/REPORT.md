@@ -1,3 +1,5 @@
+**Estado corrente: [RECUPERAÇÃO ORIGINAL CONCLUÍDA / ACEITE DO OWNER](RECOVERY_COMPLETE.md). Blocos1/2 consumidos; não repetir. CSV suspenso.**
+
 # Recuperação emergencial do par original — pronta para decisão restrita
 
 CSV suspenso. **Nenhuma recuperação, instalação root, partida ou retirada de contenção executada nesta preparação.** Estado atual STOPPED_UNSELECTED; API/worker parados, frontend preservado, ambos crons contidos, gates ainda admitidos. [Comandos exatos](COMMANDS_FOR_REVIEW.txt), [hashes](HASHES.json), [provas e limites](PROOFS_SANITIZED.json).

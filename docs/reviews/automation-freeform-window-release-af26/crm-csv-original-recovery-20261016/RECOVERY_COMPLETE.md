@@ -1,0 +1,13 @@
+# Recuperação original concluída e aceita —16/10/2026
+
+**CSV_ORIGINAL_PAIR_RESTORED / OWNER UI ACCEPTED / CSV DELIVERY SUSPENDED.** Autorização0730c8c4: política original-only instalada uma vez; recuperação return-before-commit executada uma vez, exit0,37,509s, de **08h22min02s a08h22min40s Fortaleza**. [Resultado sanitizado](RECOVERY_RESULT_SANITIZED.json).
+
+API936386 e worker936540 estão nos perfis originais atestados, preservando NEWauth+NEWDB+NEWcipher; frontend188897/ticks preservados. Inspeção pós-execução exit0 e conferência independente às08h24min55s: três health200/DBok, worker saudável, barreira ausente, ambos crons no estado before, supervisão restaurada, saved/fallback600 iguais e perfis API/worker completos iguais aos originais. Gates cinco falsos e execution-authorized=false; guarda38 fechada. Validação canônica SQL/baseline e aceite do owner confirmam out.15 preservada; sessões/console/Inbox/CRM/Campanhas funcionando.
+
+A conferência adicional comparou inicialmente o saved frontend com todos os campos do perfil herdado de sessão, produzindo assert de leitura sem efeito produtivo. A comparação correta com o dump pré-janela comprovou ambiente e campos operacionais frontend intactos; apenas `axm_monitor`, métrica dinâmica do PM2, difere. Nenhum dump ou processo foi alterado para atender à verificação.
+
+Entre os registros de contained e unfence PASS há **1.236,724s (20min36,724s)**. É intervalo observado nos controles/journal, não medição contínua de HTTP;37,509s mede somente a execução da recuperação. A tentativa CSV e seus22,919s/DENY permanecem históricos.
+
+Política root vigentee2a5ffab… em fase complete; política/fase anteriores preservadas. Helper/sudoers inalterados. O retorno usou o modo original já selado e o adaptador externo da localização dos bindings. Não editou código/perfis/manifests históricos, não aplicou overlay/chmod Event, não selecionou/iniciou API CSV e não mudou credenciais ou dados. Os únicos acréscimos na geração consumida são evidências/journals do retorno canônico anteriormente não consumido. Guard38 não foi aberta.
+
+Recibos/intents/diagnósticos e provas preservados privadamente off-host, SHA `32e0cb1de5dac716027fc8face5cc60f8b996ec0ca9de6b18363cbbb84b30076`; não apagar intents nem repetir instalação/start. Blocos1/2 consumidos. Entrega CSV e frontend adiados; qualquer retomada exige revisão nova que cubra antes da contenção o contrato dos pais Event e o binding de caminhos ausente. Nenhuma autorização implícita de implantação, importação, Prisma, retenção, .env ou rotação externa. Segurança externa e risco histórico permanecem acompanhados; revisão21/10 ou gatilhos anteriores.

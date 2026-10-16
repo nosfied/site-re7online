@@ -1,3 +1,5 @@
+**Histórico preservado: [recuperação original concluída posteriormente](../crm-csv-original-recovery-20261016/RECOVERY_COMPLETE.md). O estado parado descrito abaixo foi resolvido sem implantação CSV.**
+
 # CSV — execução interrompida / recuperação depende de revisão
 
 **DENY / STOPPED_UNSELECTED —08h02min10s Fortaleza. API/worker parados, contenção global presente, frontend preservado. Não repetir A/B.** [Evidência sanitizada](EXECUTION_DENY_SANITIZED.json).
