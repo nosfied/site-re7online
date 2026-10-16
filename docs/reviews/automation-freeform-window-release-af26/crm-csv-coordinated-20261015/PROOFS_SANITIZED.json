@@ -1,0 +1,61 @@
+{
+  "result": "OPERATIONAL_STATUS_TOTAL_AND_CONCRETE_ARTIFACTS_LOCAL_PASS",
+  "sourceTest": "one directed real HTTP test; first RBAC failure preserved then PASS",
+  "compiledTest": {
+    "result": "EXACT_COMPILED_ARTIFACT_LOCAL_PASS",
+    "node": "20.20.0",
+    "adminActive": [
+      5,
+      3,
+      3
+    ],
+    "adminExcluded": [
+      5,
+      2,
+      2
+    ],
+    "otherRolesAllowedTotal": 3,
+    "excludedForbiddenForNonAdmin": true,
+    "legacyPostDeniedBeforeAdmission": true,
+    "created": 2,
+    "replayedWrites": 0,
+    "getPreservedForReturn": true,
+    "tenantIsolation": true,
+    "anonymizedHidden": true,
+    "sameApiForTargetAndReturn": true
+  },
+  "backendTypecheck": "PASS",
+  "frontendBuildTypecheck": "PASS_EXCLUDING_PREEXISTING_TESTS",
+  "previousBrowserProofsReused": true,
+  "prisma42NotRepeated": true,
+  "noProductionImportOrRepair": true,
+  "noVpsOrFreshProofRenewal": true,
+  "operationalWindowReady": false,
+  "operationalPoliciesGenerated": false,
+  "currentRuntimeReferenceOnly": "latest deployed v14 attestation; no fresh process/root certificate",
+  "pending": [
+    "new operational four-mode composition/profiles/policies and frontend launcher bindings",
+    "window-defined fresh RPO/custody/capacity/root/identity proofs",
+    "live import ownership/exit and legacy-result classification",
+    "post-API frontend phase certificate and installer hashes"
+  ],
+  "localPostgresStopped": true,
+  "evidenceDigests": {
+    "operational-total-first-deny.log": "e9f05f5a2163b63ede2c4d7ca15cf56cd255d0cc795f7549999da8663cbd2b7b",
+    "operational-total.log": "00fc37892f5533445da81273c2532cc1d417c91f4a7ef21dafde6edade23adf5",
+    "backend-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "compiled-runtime.log": "2db7712530cacd0b26518809998f90514c67077c1f70afbf3c0a9fdee8583e6a",
+    "archive-restore.log": "e6ff28f562055d450a284bff8321a4aae5cf02cd55629c64d3b5a83f71aaf9f7"
+  },
+  "reviewedArchiveHashGateSha256": "29ce116315bf4335620862fb995e3226412f5a83d9dbba292d878c31171f37a2",
+  "eventControlConsumerOverlay": {
+    "files": 1,
+    "localExactExtractionPass": true,
+    "newOperationalReferenceAuditRequired": true,
+    "notApplied": true,
+    "retentionCommandsExecuted": false,
+    "producerExactTarBytesMatch": true,
+    "custodySupplementPass": true,
+    "verificationDigest": "ffd35c26142134a88304fa2b106c8b0e85a3f7554a0cb01ef268af3ff15bd4d7"
+  }
+}

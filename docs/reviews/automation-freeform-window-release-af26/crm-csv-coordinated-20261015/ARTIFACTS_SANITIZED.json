@@ -1,0 +1,82 @@
+{
+  "state": "CONCRETE_ARTIFACTS_PREPARED_NOT_WINDOW_READY",
+  "artifacts": {
+    "api-candidate": {
+      "file": "api-candidate.tar",
+      "sha256": "24e5857fb30a6540c4b3930b3979b49bc9954b0ff85c4021a7f43641b7b43eb5",
+      "bytes": 8601600,
+      "archiveAllocatedBytes": 8601600,
+      "manifestSha256": "4e56ec242caaf7b865949fca9baf47c81d5d4804a1ce21d8c49e41e424664860",
+      "restoredUniqueAllocatedBytes": 8974336,
+      "restoredObjects": 506
+    },
+    "frontend-candidate": {
+      "file": "frontend-candidate.tar.gz",
+      "sha256": "ea3d27881193bd872798aeb28a30630f085bad65688be913b781491b0d86c2ed",
+      "bytes": 174314812,
+      "archiveAllocatedBytes": 174321664,
+      "manifestSha256": "5ef8ae4c1628b843bac57825742797f1fcce9835c9226c8f959da3fa0a89b176",
+      "restoredUniqueAllocatedBytes": 642400256,
+      "restoredObjects": 25778
+    },
+    "frontend-compatible-return": {
+      "file": "frontend-compatible-return.tar.gz",
+      "sha256": "d41ddd648c12b3bed4c13a3dde1019b96e41eda64d68089043a11f5f4edc0431",
+      "bytes": 177450139,
+      "archiveAllocatedBytes": 177455104,
+      "manifestSha256": "efe64f452db1a5575a7a688c5b57175fe3b25fdcaec91ed432df7a3a3ab853de",
+      "restoredUniqueAllocatedBytes": 657575936,
+      "restoredObjects": 26580
+    }
+  },
+  "apiReturnReuses": "api-candidate",
+  "activeApiSourceSha256": "36f51ebef7bf74f6efc90088254b1a806f427ee4f614ce9e0802b37d281a80cb",
+  "activeFrontendSourceSha256": "74a2ac2fcf93b32623fa2e0dfa857d1792cfd503e1f46cee09e6f94f3ca2216f",
+  "apiFiles": 447,
+  "activeApiFilesPreserved": 442,
+  "changedExistingApiModules": [
+    "crm/crmContactUpsert",
+    "crm/crmContactsReadModel",
+    "events/eventRetentionPolicy",
+    "http/routes"
+  ],
+  "newApiModule": "crm/crmCsvImportOperation",
+  "workerChanged": false,
+  "envChanged": false,
+  "profilesGenerated": false,
+  "policyGenerated": false,
+  "newExternalSealedLinks": false,
+  "custody": {
+    "result": "NEW_REVIEW_ARTIFACTS_PRIVATE_CUSTODY_PASS",
+    "files": 8,
+    "valuesPrinted": false,
+    "backupRenewed": false,
+    "independentPhysicalReplica": false,
+    "indexSha256": "e83ecb390d7c892c2a84e5e3d8883f28f8ab54fd12f81dc00d8fe12dc1bda031"
+  },
+  "auxiliaryArtifacts": {
+    "events-control-policy-overlay": {
+      "file": "events-control-policy-overlay.tar",
+      "sha256": "ebdfd5bba81b86f26506b13a89afb4aafd45252c4e1b23e90d2f2896b1d523e3",
+      "bytes": 10240,
+      "files": 1,
+      "runtimeRestartNeeded": false,
+      "notApplied": true
+    }
+  },
+  "auxiliaryCustody": {
+    "result": "AUXILIARY_EVENT_CONTROL_CUSTODY_PASS",
+    "files": 2,
+    "originalIndexUnchanged": true,
+    "supplementIndexSha256": "36a99fa12f5b5b33f42c436eff82c4d3d6240731a85567af474193c572b8a7db",
+    "retentionExecuted": false,
+    "productionChanged": false
+  },
+  "rootReference": {
+    "sourcePolicySha256": "fa113e5259850f7b23188b81cd5279c2a95c318154a3b0737da7251b1064f251",
+    "helperSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "sudoersSha256": "62b5a2ac1d56b013f6db4bb8180b0637b985786214f4bc3ce0e5f8d3f7c5111a",
+    "sourceProfileSha256": "aa63ea74d3a7bb315ba11124842bd02c05cf0cc60215a056eee47ab87782275d",
+    "referenceOnlyNotFreshProof": true
+  }
+}

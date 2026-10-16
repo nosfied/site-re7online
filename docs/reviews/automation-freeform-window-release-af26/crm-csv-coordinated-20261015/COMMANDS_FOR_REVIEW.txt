@@ -1,0 +1,31 @@
+REVISÃO LOCAL DOS ARTEFATOS — NÃO É A/B PRODUTIVO.
+Nenhuma instalação, admissão, contenção, start, save ou retorno autorizado.
+
+# Pacotes já preparados: não repetir prepare_local/build/compactação por rotina.
+# Fonte local para conferência; a custódia permanente tem os mesmos bytes/índices.
+P=local-evidence/crm-csv-coordinated-20261015
+R=docs/reviews/automation-freeform-window-release-af26/crm-csv-coordinated-20261015
+sha256sum "$P/api-candidate.tar" "$P/frontend-candidate.tar.gz" "$P/frontend-compatible-return.tar.gz" "$P/events-control-policy-overlay.tar"
+# API:24e5857fb30a6540c4b3930b3979b49bc9954b0ff85c4021a7f43641b7b43eb5
+# Front:ea3d27881193bd872798aeb28a30630f085bad65688be913b781491b0d86c2ed
+# Return-front:d41ddd648c12b3bed4c13a3dde1019b96e41eda64d68089043a11f5f4edc0431
+# Event-source-policy:ebdfd5bba81b86f26506b13a89afb4aafd45252c4e1b23e90d2f2896b1d523e3
+python3 "$R/verify_artifacts.py" --generation "$P"
+# Receita de extração LOCAL, apenas quando revisão exigir outra prova:
+# D=$(mktemp -d /tmp/re7-csv-review-restore.XXXXXXXX)
+# python3 "$R/verify_artifacts.py" --generation "$P" --local-restore "$D"
+
+# Reproduzir somente a prova afetada exige PostgreSQL SINTÉTICO já preparado,
+# nunca DATABASE_URL de produção. A porta55781/retention_lab é exclusiva do lab.
+# No diretório apps/whatsapp-agent:
+# DATABASE_URL=postgresql://postgres@127.0.0.1:55781/retention_lab NODE_ENV=test node --import tsx --test --test-name-pattern='permitted CRM total' src/http/crmCapabilityRoutes.test.ts
+# Executar compilado exato usa test_compiled.mjs, NODE_ENV=test/auth sintético e o mesmo lab.
+
+INSTALAÇÃO/EXECUÇÃO: BLOQUEADAS NESTA PUBLICAÇÃO.
+A/B/C novos serão vinculados à geração operacional e à captura pós-API no horário
+definido; não há atalhos para as gerações cifragem/OpenAI consumidas/suspensas.
+WINDOW_PROTOCOL_FOR_REVIEW.md descreve a contenção V4 global existente, saída
+por processos/FDs/SQL, a limitação do CSV legado sem admissão durável e a ordem.
+Não existe comando canônico --pause-csv/--drain-csv nem endpoint a ser adivinhado.
+Não usar controles de campanhas como se bloqueassem importação CRM.
+P0/A/B externos e resets seguem suspensos. Sem .env/Prisma/retention/envio/guarda.

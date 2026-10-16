@@ -11446,6 +11446,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       ) {
         return;
       }
+      if (query.operationalStatus === "excluded" && !isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can view excluded CRM contacts."));
+        return;
+      }
       const tenants = await getTenants();
       const tenant = tenants[client.clientKey] ?? null;
       const resolvedStatuses = await resolveCrmBusinessStatuses({
@@ -11470,10 +11474,14 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
         includeCampaignRelationships: getFeatures(client).campaigns,
       });
-        const scope = await buildCrmContactsPayload(tx as unknown as typeof prisma, {
-          clientId: client.id, query: { operationalStatus: isAgentRole(clientAuth.role) ? null : query.operationalStatus }, statuses: resolvedStatuses.statuses,
+        // The allowed universe is role-defined, never narrowed by a selected filter.
+        const activeScope = await buildCrmContactsPayload(tx as unknown as typeof prisma, {
+          clientId: client.id, query: { operationalStatus: "active" }, statuses: resolvedStatuses.statuses,
         });
-        return { ...filtered, totals: { tenantVisible: scope.pagination.total, filtered: filtered.pagination.total, pageCount: filtered.items.length } };
+        const excludedScope = isAdminRole(clientAuth.role) ? await buildCrmContactsPayload(tx as unknown as typeof prisma, {
+          clientId: client.id, query: { operationalStatus: "excluded" }, statuses: resolvedStatuses.statuses,
+        }) : null;
+        return { ...filtered, totals: { tenantVisible: activeScope.pagination.total + (excludedScope?.pagination.total ?? 0), filtered: filtered.pagination.total, pageCount: filtered.items.length } };
       }, { isolationLevel: "RepeatableRead", maxWait: 1000, timeout: 15000 });
       json(res, 200, isAgentRole(clientAuth.role) ? stripCrmHistoryFromContactsPayload(payload) : payload);
     } catch (error) {

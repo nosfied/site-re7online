@@ -2107,3 +2107,29 @@ test("CSV operation recovery enforces tenant, role, payload binding and no repla
   assert.equal(foreign.status,200);assert.equal(foreign.body.status,"UNKNOWN");assert.equal(foreign.body.summary,null);
   assert.equal((await request("POST","/app/crm/contacts/import/confirm",businessSupervisor,{...payload,csvText:payload.csvText+"\n5584912348888,Other"})).status,409);
 });
+
+
+test("permitted CRM total is independent of operationalStatus; excluded scope stays ADMIN-only", async () => {
+  type Page = { items: Array<{leadId:string}>; pagination: {total:number}; totals: {tenantVisible:number;filtered:number;pageCount:number} };
+  const active = await request<Page>("GET", "/app/crm/contacts?operationalStatus=active", businessAdmin);
+  const beforeExcluded = await request<Page>("GET", "/app/crm/contacts?operationalStatus=excluded", businessAdmin);
+  const waId = "5584912347771";
+  const contact = await prisma.contact.create({data:{clientId:businessClientId,waId,name:"Synthetic excluded count",operationallyExcludedAt:new Date()}});
+  const lead = await prisma.lead.create({data:{tenantId:businessClientId,waId,waIdCanonical:waId,name:"Synthetic excluded count",status:"NEW"}});
+  try {
+    const a = await request<Page>("GET", "/app/crm/contacts?operationalStatus=active", businessAdmin);
+    const e = await request<Page>("GET", "/app/crm/contacts?operationalStatus=excluded", businessAdmin);
+    assert.equal(a.status,200);assert.equal(e.status,200);
+    assert.equal(a.body.totals.tenantVisible,active.body.totals.tenantVisible+1);
+    assert.equal(a.body.totals.tenantVisible,e.body.totals.tenantVisible);
+    assert.equal(a.body.totals.filtered,active.body.totals.filtered);
+    assert.equal(e.body.totals.filtered,beforeExcluded.body.totals.filtered+1);
+    assert.ok(!a.body.items.some(x=>x.leadId===lead.id));assert.ok(e.body.items.some(x=>x.leadId===lead.id));
+    assert.equal(a.body.totals.tenantVisible,a.body.pagination.total+e.body.pagination.total);
+    for (const user of [businessAgent,businessSupervisor]) {
+      const allowed=await request<Page>("GET","/app/crm/contacts?operationalStatus=active",user);
+      assert.equal(allowed.body.totals.tenantVisible,a.body.pagination.total);
+      assert.equal((await request("GET","/app/crm/contacts?operationalStatus=excluded",user)).status,403);
+    }
+  } finally {await prisma.lead.delete({where:{id:lead.id}});await prisma.contact.delete({where:{id:contact.id}});}
+});

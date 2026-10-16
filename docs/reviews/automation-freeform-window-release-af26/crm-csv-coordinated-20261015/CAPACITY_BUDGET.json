@@ -1,0 +1,26 @@
+{
+  "requiredMinimumDeployPostgresBytes": 11235700736,
+  "rubrics": {
+    "preservedConservativeFloorBytes": 8794603520,
+    "candidateStagingAndControlsBytes": 867868672,
+    "compatibleFrontendReturnBytes": 835031040,
+    "extraApiReturnBytes": 0,
+    "walGrowthReserveBytes": 536870912,
+    "newBackupReserveBytes": 134217728,
+    "evidenceReserveBytes": 67108864
+  },
+  "currentProductionCapacityCertified": false,
+  "productionSamplesRenewed": false,
+  "nonOverlapping": true,
+  "basis": "unique allocated bytes from concrete isolated extraction plus allocated incoming archives; shared API reused for return",
+  "reserveProvenance": "last canonical v14 preserved floor, retained conservatively; no reduction or reclamation",
+  "localAvailableBeforePreparationBytes": 233824587776,
+  "localPreparationBudgetBytes": 3221225472,
+  "renewAtDefinedWindowOnly": [
+    "min(deploy,PostgreSQL)",
+    "WAL/growth/I-O errors",
+    "real backup RPO/custody",
+    "root/process/control observations"
+  ],
+  "eventControlOverlayAdditionalBytes": 16384
+}

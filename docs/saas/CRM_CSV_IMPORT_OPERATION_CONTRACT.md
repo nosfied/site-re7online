@@ -34,7 +34,7 @@ Prova sintética: 993 = 880 elegíveis + 82 inválidas + 31 duplicadas; 880 = 87
 
 A entidade de listagem é a projeção CRM de Lead, com os mesmos predicados de identidade, exclusão e anonimização dos itens. Não é a contagem bruta de Contact, de mensagens ou de conversas. Uma conversa anonimizada não implica anonimizar todo o titular.
 
-A resposta distingue totals.tenantVisible (total no escopo operacional permitido, ativo ou excluído), totals.filtered e totals.pageCount. Filtros de busca não reduzem o primeiro; RBAC e escopo operacional o restringem. Para agente o escopo é ativo, sem contagem extra de excluídos. Anonimizados permanecem ocultos pelo contrato atual. Uma página vazia preserva o total filtrado correto.
+A resposta distingue totals.tenantVisible (universo permitido pelo papel, independente de TODOS os filtros, inclusive operationalStatus), totals.filtered e totals.pageCount. ADMIN: total permitido = ativos + excluídos, partições disjuntas; AGENT/SUPERVISOR: ativos apenas, sem revelar excluídos. Listar excluídos exige ADMIN e403 para os demais. Alternar operacionalStatus muda apenas o filtrado/página, nunca reduz o permitido do mesmo papel. Anonimizados permanecem ocultos pelo contrato atual. Uma página vazia preserva o total filtrado correto. [Prova operacional específica e pacote coordenado](../reviews/automation-freeform-window-release-af26/crm-csv-coordinated-20261015/REPORT.md).
 
 A projeção percorre lotes de 500 candidatos no mesmo snapshot RepeatableRead, sem tratar o prefixo de até 4.000 como universo. Timeout de transação 15s; erros não publicam total parcial como exato. O custo de consultas exatas para bases maiores exige avaliação antes de implantação; 4.105 registros sintéticos não certificam carga produtiva.
 

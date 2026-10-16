@@ -1,0 +1,29 @@
+{
+  "artifact": "events-control-policy-overlay.tar",
+  "sha256": "ebdfd5bba81b86f26506b13a89afb4aafd45252c4e1b23e90d2f2896b1d523e3",
+  "bytes": 10240,
+  "files": [
+    {
+      "path": "apps/whatsapp-agent/src/events/eventRetentionPolicy.ts",
+      "sha256": "03791f05f68575a86bbeddd491a619adeddecf7102ed8d3000df51ceb217aad4",
+      "bytes": 2376
+    }
+  ],
+  "proposedTarget": "/opt/re7online/site-re7online/apps/whatsapp-agent/src/events/eventRetentionPolicy.ts",
+  "expectedOriginalSourceSha256": "b22246be4ede437d647c2a7cfc7492c823bea072de9d22fa09fe75fb6be2e659",
+  "sourceHashIsCurrentProductionProof": false,
+  "onDrift": "DENY without adapting origin hash",
+  "purpose": "synchronize technical CRITICAL import execution controls for existing manual events/storage tools; no tenant data policy change",
+  "consumers": [
+    "scripts/events-retention.ts",
+    "scripts/storage-report.ts"
+  ],
+  "scheduledInCapturedDeployOrSystemCron": false,
+  "capturedCronReferenceOnly": true,
+  "retentionExecuted": false,
+  "envChanged": false,
+  "rollbackOldClassifierAfterLedgerForbidden": true,
+  "newOperationalReferenceAuditRequired": true,
+  "localExactExtractionPass": true,
+  "producerExactWireBytesMatch": true
+}

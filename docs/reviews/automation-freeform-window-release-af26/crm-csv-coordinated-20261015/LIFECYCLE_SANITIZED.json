@@ -1,0 +1,81 @@
+{
+  "purpose": "coordinated CSV API/frontend review with protocol-compatible frontend return",
+  "state": "REVIEW",
+  "responsible": "Deifson",
+  "lastReview": "2026-10-15",
+  "nextReview": "2026-10-21",
+  "renewEarlierOn": "window definition or source/control changes",
+  "capacityBudget": {
+    "requiredMinimumDeployPostgresBytes": 11235700736,
+    "rubrics": {
+      "preservedConservativeFloorBytes": 8794603520,
+      "candidateStagingAndControlsBytes": 867868672,
+      "compatibleFrontendReturnBytes": 835031040,
+      "extraApiReturnBytes": 0,
+      "walGrowthReserveBytes": 536870912,
+      "newBackupReserveBytes": 134217728,
+      "evidenceReserveBytes": 67108864
+    },
+    "currentProductionCapacityCertified": false,
+    "productionSamplesRenewed": false,
+    "nonOverlapping": true,
+    "basis": "unique allocated bytes from concrete isolated extraction plus allocated incoming archives; shared API reused for return",
+    "reserveProvenance": "last canonical v14 preserved floor, retained conservatively; no reduction or reclamation",
+    "localAvailableBeforePreparationBytes": 233824587776,
+    "localPreparationBudgetBytes": 3221225472,
+    "renewAtDefinedWindowOnly": [
+      "min(deploy,PostgreSQL)",
+      "WAL/growth/I-O errors",
+      "real backup RPO/custody",
+      "root/process/control observations"
+    ],
+    "eventControlOverlayAdditionalBytes": 16384
+  },
+  "custody": {
+    "result": "NEW_REVIEW_ARTIFACTS_PRIVATE_CUSTODY_PASS",
+    "files": 8,
+    "valuesPrinted": false,
+    "backupRenewed": false,
+    "independentPhysicalReplica": false,
+    "indexSha256": "e83ecb390d7c892c2a84e5e3d8883f28f8ab54fd12f81dc00d8fe12dc1bda031"
+  },
+  "hostActiveMaterialsUntouched": true,
+  "apiReturnReused": true,
+  "supersededDraftPreserved": "private alternate API return projection; not in release",
+  "retentionClassification": [
+    {
+      "path": "api-candidate.tar",
+      "classification": "UNRESOLVED",
+      "reason": "generation_not_closed",
+      "withdrawalAuthorized": false
+    },
+    {
+      "path": "frontend-candidate.tar.gz",
+      "classification": "UNRESOLVED",
+      "reason": "generation_not_closed",
+      "withdrawalAuthorized": false
+    },
+    {
+      "path": "frontend-compatible-return.tar.gz",
+      "classification": "UNRESOLVED",
+      "reason": "generation_not_closed",
+      "withdrawalAuthorized": false
+    }
+  ],
+  "productionActions": false,
+  "auxiliaryCustody": {
+    "result": "AUXILIARY_EVENT_CONTROL_CUSTODY_PASS",
+    "files": 2,
+    "originalIndexUnchanged": true,
+    "supplementIndexSha256": "36a99fa12f5b5b33f42c436eff82c4d3d6240731a85567af474193c572b8a7db",
+    "retentionExecuted": false,
+    "productionChanged": false
+  },
+  "auxiliarySourcePolicy": {
+    "kind": "execution-control-consumer",
+    "paths": 1,
+    "notApplied": true,
+    "manualRetentionSuspended": true,
+    "keepNewPolicyAcrossReturn": true
+  }
+}

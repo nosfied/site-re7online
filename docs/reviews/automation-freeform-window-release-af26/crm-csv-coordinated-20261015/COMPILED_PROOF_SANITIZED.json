@@ -1,0 +1,23 @@
+{
+  "result": "EXACT_COMPILED_ARTIFACT_LOCAL_PASS",
+  "node": "20.20.0",
+  "adminActive": [
+    5,
+    3,
+    3
+  ],
+  "adminExcluded": [
+    5,
+    2,
+    2
+  ],
+  "otherRolesAllowedTotal": 3,
+  "excludedForbiddenForNonAdmin": true,
+  "legacyPostDeniedBeforeAdmission": true,
+  "created": 2,
+  "replayedWrites": 0,
+  "getPreservedForReturn": true,
+  "tenantIsolation": true,
+  "anonymizedHidden": true,
+  "sameApiForTargetAndReturn": true
+}

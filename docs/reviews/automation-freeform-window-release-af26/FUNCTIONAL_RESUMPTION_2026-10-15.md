@@ -1,5 +1,8 @@
 # Retomada funcional — prioridade e próximo trabalho local
 
+**Complemento de entrega coordenada:** [três artefatos concretos sobre runtime ativo atestado, total operationalStatus corrigido, custódia e roteiro](crm-csv-coordinated-20261015/REPORT.md). LOCAL VALIDATED / NOT DEPLOYED / NOT WINDOW READY; política/perfis/bindings e provas frescas somente com janela definida. Retorno conserva API ledger/GET e frontend com assets em união; nenhuma retomada de Prisma/rotações externas/limpeza.
+
+
 **Atualização15/10 — CSV LOCAL VALIDATED / FOR REVIEW / NOT DEPLOYED:** [entrega,67 provas e limites](crm-csv-operation-20261015/REPORT.md), [contrato canônico](../../saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md). A auditoria abaixo registra o diagnóstico anterior; a implementação agora reutiliza Event para admissão/progresso/terminal por operação e tenant, sem migration, recupera timeout sem replay e distingue total/filtro/página. Revisão Chrome local com API/PG reais concluída no complemento do relatório: timeout/recarga/terminal/filtros/página, correção da lista recuperada e comparação22 erros idênticos à base. Próximo trabalho concreto: revisão do owner, orçamento dos recibos/contagens e plano seletivo API/frontend coordenado. Não repetir Prisma42, suites/builds válidos, reimportação histórica ou fases operacionais concluídas.
 
 
