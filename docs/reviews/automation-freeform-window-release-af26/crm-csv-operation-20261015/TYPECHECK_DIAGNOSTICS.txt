@@ -1,0 +1,40 @@
+src/components/app/ChatbotFlowBuilder.test.ts(687,39): error TS2345: Argument of type '{ initialMessage: string; template: string; consentEnabled: boolean; consentMessage: string; consentAcceptOption: string; consentDeclineMessage: string; menuOptions: string[]; destinations: {}; ... 7 more ...; followupMessage: string; }' is not assignable to parameter of type 'StandardFlowWizardAnswers'.
+  Types of property 'template' are incompatible.
+    Type 'string' is not assignable to type 'StandardFlowTemplate | null'.
+src/components/app/ChatbotFlowBuilder.test.ts(690,39): error TS2345: Argument of type '{ initialMessage: string; template: string; consentEnabled: boolean; consentMessage: string; consentAcceptOption: string; consentDeclineMessage: string; menuOptions: string[]; destinations: {}; ... 7 more ...; followupMessage: string; }' is not assignable to parameter of type 'StandardFlowWizardAnswers'.
+  Types of property 'template' are incompatible.
+    Type 'string' is not assignable to type 'StandardFlowTemplate | null'.
+src/components/app/ChatbotFlowBuilder.test.ts(693,39): error TS2345: Argument of type '{ template: string; initialMessage: string; consentEnabled: boolean; consentMessage: string; consentAcceptOption: string; consentDeclineMessage: string; menuOptions: string[]; destinations: {}; ... 7 more ...; followupMessage: string; }' is not assignable to parameter of type 'StandardFlowWizardAnswers'.
+  Types of property 'template' are incompatible.
+    Type 'string' is not assignable to type 'StandardFlowTemplate | null'.
+src/components/app/ChatbotFlowBuilder.test.ts(698,7): error TS2345: Argument of type '{ destinations: { 0: { type: "department"; departmentId: string; queueId: string; }; }; template: string; initialMessage: string; consentEnabled: boolean; consentMessage: string; consentAcceptOption: string; ... 9 more ...; followupMessage: string; }' is not assignable to parameter of type 'StandardFlowWizardAnswers'.
+  Types of property 'template' are incompatible.
+    Type 'string' is not assignable to type 'StandardFlowTemplate | null'.
+src/lib/appChatbotDataLoader.test.ts(37,3): error TS2353: Object literal may only specify known properties, and 'disableLegacyFlows' does not exist in type 'AppAutomationSettings'.
+src/lib/appClientApi.test.ts(160,5): error TS2322: Type '{}' is not assignable to type 'TenantCapabilities'.
+  Type '{}' is missing the following properties from type 'AppFeatures': webchat, telegram, support, dashboard, and 34 more.
+src/lib/appClientApi.test.ts(204,5): error TS2322: Type '{}' is not assignable to type 'TenantCapabilities'.
+  Type '{}' is missing the following properties from type 'AppFeatures': webchat, telegram, support, dashboard, and 34 more.
+src/lib/appClientApi.test.ts(240,9): error TS2739: Type '{ token: string; expiresAt: string; baseUrl: string; user: { id: string; name: string; email: string; clientId: string; role: string; departmentId: null; departmentName: null; departmentIds: never[]; primaryDepartmentId: null; }; }' is missing the following properties from type 'AppSession': features, profile
+src/lib/appClientApi.test.ts(307,9): error TS2739: Type '{ token: string; expiresAt: string; baseUrl: string; user: { id: string; name: string; email: string; clientId: string; role: string; }; }' is missing the following properties from type 'AppSession': features, profile
+src/lib/appClientApi.test.ts(356,5): error TS2349: This expression is not callable.
+  Type 'never' has no call signatures.
+src/lib/appClientApi.test.ts(375,9): error TS2739: Type '{ token: string; expiresAt: string; baseUrl: string; user: { id: string; name: string; email: string; clientId: string; role: string; }; }' is missing the following properties from type 'AppSession': features, profile
+src/lib/appClientApi.test.ts(434,5): error TS2322: Type '{}' is not assignable to type 'TenantCapabilities'.
+  Type '{}' is missing the following properties from type 'AppFeatures': webchat, telegram, support, dashboard, and 34 more.
+src/lib/appClientApi.test.ts(499,5): error TS2322: Type '{}' is not assignable to type 'TenantCapabilities'.
+  Type '{}' is missing the following properties from type 'AppFeatures': webchat, telegram, support, dashboard, and 34 more.
+src/lib/appClientApi.test.ts(566,5): error TS2322: Type '{}' is not assignable to type 'TenantCapabilities'.
+  Type '{}' is missing the following properties from type 'AppFeatures': webchat, telegram, support, dashboard, and 34 more.
+src/lib/appClientApi.test.ts(612,5): error TS2322: Type '{}' is not assignable to type 'TenantCapabilities'.
+  Type '{}' is missing the following properties from type 'AppFeatures': webchat, telegram, support, dashboard, and 34 more.
+src/lib/appClientApi.test.ts(674,5): error TS2322: Type '{ satisfaction: true; }' is not assignable to type 'TenantCapabilities'.
+  Type '{ satisfaction: true; }' is missing the following properties from type 'AppFeatures': webchat, telegram, support, dashboard, and 33 more.
+src/lib/appClientApi.test.ts(745,5): error TS2322: Type '{ operationalServiceMessages: true; }' is not assignable to type 'TenantCapabilities'.
+  Type '{ operationalServiceMessages: true; }' is missing the following properties from type 'AppFeatures': webchat, telegram, support, dashboard, and 33 more.
+src/lib/inboxRealtimeInvalidation.test.ts(118,7): error TS2741: Property '__promisify__' is missing in type '(callback: any) => never' but required in type 'typeof setTimeout'.
+src/lib/inboxRealtimeInvalidation.test.ts(118,22): error TS7006: Parameter 'callback' implicitly has an 'any' type.
+src/lib/inboxRealtimeInvalidation.test.ts(151,7): error TS2741: Property '__promisify__' is missing in type '(callback: any) => never' but required in type 'typeof setTimeout'.
+src/lib/inboxRealtimeInvalidation.test.ts(151,22): error TS7006: Parameter 'callback' implicitly has an 'any' type.
+src/lib/inboxRealtimeInvalidation.test.ts(165,3): error TS2349: This expression is not callable.
+  Type 'never' has no call signatures.

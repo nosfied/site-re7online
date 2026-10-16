@@ -5,6 +5,7 @@ export function importOperationMessage(o: AppCrmImportOperation) {
   if (o.status === "COMPLETED") return "Importação concluída. O resumo abaixo corresponde à operação registrada.";
   if (o.status === "FAILED") return "A importação foi recusada antes de gravar contatos. Consulte o motivo antes de iniciar outra.";
   if (o.status === "PROCESSING") return `Importação em processamento. ${o.progress?.processed ?? 0} linha(s) com resultado registrado.`;
+  if (o.reason === "operation_not_observed") return "Referência preservada, mas a admissão ainda não foi comprovada pela API. Isso não comprova falha nem ausência de gravações. Não repita a importação; consulte novamente esta referência.";
   return "Resultado ainda desconhecido. Não repita a importação: consulte novamente esta operação. Gravações anteriores podem ter sido concluídas.";
 }
 export function mergeImportObservation(current: AppCrmImportOperation | null, incoming: AppCrmImportOperation) {

@@ -1,0 +1,14 @@
+{
+  "baseCommit": "7f79cee615c4bbfef342fef0084644b3d669712a",
+  "reviewedCommit": "a27e2d16265220b17b8d1fb9d0be9c1c8364d310",
+  "baseErrorCount": 22,
+  "candidateErrorCount": 22,
+  "byteIdenticalDiagnostics": true,
+  "baseDiagnosticsSha256": "ffe35672305bd3b0f406edfca28eace7c166424830306b7022b1dc1914a4f163",
+  "candidateDiagnosticsSha256": "ffe35672305bd3b0f406edfca28eace7c166424830306b7022b1dc1914a4f163",
+  "command": "tsc --noEmit --incremental false -p tsconfig.json",
+  "sameCompilerAndDependencies": true,
+  "nextEnvDeclarationReusedIdentically": true,
+  "baseMaterial": "git archive base src and tsconfig; same next-env.d.ts; node_modules reused, no install",
+  "unrelatedCodeChanged": false
+}

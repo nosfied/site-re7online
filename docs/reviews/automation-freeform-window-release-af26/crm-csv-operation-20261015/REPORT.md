@@ -1,5 +1,8 @@
 # CRM CSV — resultado local para revisão
 
+**Revisão complementar concluída:** [Chrome → API real → PostgreSQL sintético](BROWSER_REVIEW.md), [comparação com base:22 diagnósticos idênticos](TYPECHECK_BASE_COMPARISON.json) e [troca coordenada API/frontend/abas antigas](COORDINATED_PUBLICATION.md). Corrigida atualização da lista ao recuperar terminal; referência não observada explicitada;6 testes do cliente PASS. Os67 casos iniciais abaixo continuam evidência no alcance original; a revisão de navegador agora foi executada e não é mais pendência local. Sem deploy.
+
+
 **LOCAL VALIDATED / FOR REVIEW / NOT DEPLOYED — 15/10/2026.** Auditoria e implementação autorizadas pela [retomada funcional](../FUNCTIONAL_RESUMPTION_2026-10-15.md). [Contrato canônico](../../../saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md), [provas sanitizadas](PROOFS_SANITIZED.json) e [hashes dos arquivos entregues](PUBLIC_FILES_SHA256.json).
 
 ## Resultado
@@ -25,14 +28,14 @@ As contagens deixam de usar prefixo de candidatos como total. A projeção em lo
 
 Typecheck backend PASS, fontes frontend PASS e teste novo do cliente PASS. Typecheck amplo frontend ainda encontra erros em testes preexistentes fora do delta (ChatbotFlowBuilder, appChatbotDataLoader, appClientApi); não é declarado PASS global. Sem erro nos arquivos de produção alterados. Não houve build funcional, reinstalação de dependências ou geração Prisma. O laboratório sintético retention_lab/porta55781 foi encerrado; o restore certificado de cifragem não foi alterado.
 
-Os clientes HTTP foram exercitados com fetch sintético e os handlers reais com servidor HTTP/Prisma local. Isso não é ensaio visual ou navegador ponta a ponta. Não houve acesso à VPS, reimportação real, investigação histórica nova ou alteração de dados de tenants.
+Os clientes HTTP foram exercitados com fetch sintético e os handlers reais com servidor HTTP/Prisma local. Esse checkpoint inicial não era ensaio visual; foi complementado pela revisão real local vinculada acima. Não houve acesso à VPS, reimportação real, investigação histórica nova ou alteração de dados de tenants.
 
 ## Limites e próximos gates
 
-- Revisão de código e interface; planejar entrega coordenada API/frontend e compatibilidade com o runtime ativo. POST sem UUID é recusado. Nenhum pacote produtivo foi montado/substituído.
+- Revisão de código/owner e decisão operacional; revisão visual local concluída, planejar entrega coordenada API/frontend e compatibilidade com o runtime ativo. POST sem UUID é recusado. Nenhum pacote produtivo foi montado/substituído.
 - UNKNOWN não prova processo vivo nem falha; sem novo POST, retry, desbloqueio ou reparo automático. GET consulta progresso e terminal, não reinicia trabalho.
 - Contagem exata usa snapshot e limite de 15s; avaliar desempenho/índices em bases maiores antes de deploy. O volume sintético não é benchmark de capacidade produtiva.
 - Recibos por linha aumentam Event; orçar volume e revisar disposição futura, mantendo a recuperação enquanto pendente. Nenhuma política de tenant foi modificada ou CLI de retenção executada.
-- Regressões visuais e aceite operacional ficam para uma etapa própria. Nenhum resultado sintético comprova reparação do CSV histórico relatado.
+- Revisão visual local dirigida concluída no complemento; outros dispositivos e aceite operacional permanecem fora do escopo. Nenhum resultado sintético comprova reparação do CSV histórico relatado.
 
 NEWauth+NEWDB+NEWcipher/reader, ambos crons, produção, guarda38 fechada e out.15 CLOSED preservados. Rotas externas adiadas por aceite do owner para 21/10 ou gatilhos; segurança OPEN, P0/A/B e resets suspensos. Sem .env, deploy, retenção, mensagem ou abertura da guarda. Responsável operacional: Deifson; revisão 15/10, próxima 21/10 ou após mudança.

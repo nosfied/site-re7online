@@ -1,0 +1,87 @@
+{
+  "status": "LOCAL_VALIDATED_NOT_DEPLOYED",
+  "browser": "isolated Google Chrome headless",
+  "frontend": "Next16 dev webpack real sources",
+  "api": "real handleRequest with synthetic auth and PostgreSQL",
+  "injectedEffect": "18s await after actual classified event write; database effects real",
+  "clientTimeoutMs": 10000,
+  "browserStories": [
+    "timeout_then_later_completion",
+    "reload_same_operation",
+    "close_reopen_same_operation",
+    "terminal_explicit_new_import",
+    "reference_without_observed_admission",
+    "filter_and_empty_filter",
+    "second_page",
+    "legacy_post_without_uuid_denied"
+  ],
+  "functionalFixes": [
+    "refresh_contact_list_once_on_recovered_completion",
+    "distinguish_unobserved_admission_copy",
+    "separate_followup_actions"
+  ],
+  "database": {
+    "result": "REAL_DATABASE_BROWSER_SCENARIOS_PASS",
+    "scenarios": [
+      {
+        "admissions": 1,
+        "rowReceipts": 2,
+        "terminalReceipts": 1,
+        "created": 2,
+        "failed": 0,
+        "visibleLeads": 64,
+        "legacyPostWroteContacts": false
+      },
+      {
+        "admissions": 1,
+        "rowReceipts": 2,
+        "terminalReceipts": 1,
+        "created": 2,
+        "failed": 0,
+        "visibleLeads": 64,
+        "legacyPostWroteContacts": false
+      }
+    ]
+  },
+  "unitTests": {
+    "namedCases": 6,
+    "pass": 6,
+    "newCases": 1
+  },
+  "typecheck": {
+    "baseCommit": "7f79cee615c4bbfef342fef0084644b3d669712a",
+    "reviewedCommit": "a27e2d16265220b17b8d1fb9d0be9c1c8364d310",
+    "baseErrorCount": 22,
+    "candidateErrorCount": 22,
+    "byteIdenticalDiagnostics": true,
+    "baseDiagnosticsSha256": "ffe35672305bd3b0f406edfca28eace7c166424830306b7022b1dc1914a4f163",
+    "candidateDiagnosticsSha256": "ffe35672305bd3b0f406edfca28eace7c166424830306b7022b1dc1914a4f163",
+    "command": "tsc --noEmit --incremental false -p tsconfig.json",
+    "sameCompilerAndDependencies": true,
+    "nextEnvDeclarationReusedIdentically": true,
+    "baseMaterial": "git archive base src and tsconfig; same next-env.d.ts; node_modules reused, no install",
+    "unrelatedCodeChanged": false
+  },
+  "browserErrors": "",
+  "productionSourcesTypecheck": "PASS",
+  "browserStopped": true,
+  "apiStopped": true,
+  "frontendStopped": true,
+  "postgresStopped": true,
+  "noProductionAccess": true,
+  "migration": false,
+  "deploy": false,
+  "limits": [
+    "no mobile or load certification",
+    "mixed old/new API rollout forbidden; no version handshake installed",
+    "unknown admission does not permit replay",
+    "legacy HTTP call exercised with real new API; no old frontend build repeated"
+  ],
+  "frontendExactSourceSha256": {
+    "src/app/app/crm/page.tsx": "7824a9e05d77fdba14d83884151a294aef7a52b5f944a8d37e08fe08ba5b9a54",
+    "src/lib/appClientApi.ts": "d5438903ea0ccc1e4ba48f31783cfdd2c3c291dc42a55a0bfe039abf5403aa0b",
+    "src/lib/crmImportRecovery.ts": "a269fda6c6929f4500046ec70028b782927253be4310efec89780b78a89db0f1"
+  },
+  "clientTestEvidenceSha256": "d2294fdcfb8a302bc6fbaaee4a8020d261b05627fc6e10ac83ace9f00030ee7c",
+  "syntheticFixturesPersistedInStoppedLab": true
+}

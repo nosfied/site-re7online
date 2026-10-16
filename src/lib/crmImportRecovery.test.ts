@@ -47,3 +47,11 @@ test("late progress cannot erase already committed counts; unknown preserves obs
  assert.equal(mergeImportObservation(current,stale),current);
  const unknown=mergeImportObservation(current,operation('UNKNOWN'));assert.equal(unknown.status,'UNKNOWN');assert.equal(unknown.progress?.processed,12);
 });
+
+test("reference without observed admission remains unknown and explicitly forbids replay", () => {
+  const missing = { ...operation("UNKNOWN"), reason: "operation_not_observed" };
+  assert.equal(importIsTerminal(missing), false);
+  assert.match(importOperationMessage(missing), /admissão ainda não foi comprovada/);
+  assert.match(importOperationMessage(missing), /Não repita/);
+  assert.doesNotMatch(importOperationMessage(missing), /foi recusada antes/);
+});

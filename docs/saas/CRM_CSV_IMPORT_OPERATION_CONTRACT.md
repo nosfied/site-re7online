@@ -42,4 +42,10 @@ A projeção percorre lotes de 500 candidatos no mesmo snapshot RepeatableRead, 
 
 API e interface exigem revisão coordenada: clientes antigos sem operationId passam a receber 400. Não há compatibilidade implícita para replay de POST legado. Orçar armazenamento dos recibos por linha e revisar sua disposição antes de uma política futura de expurgo. Não adicionar cron automático.
 
-Ensaios locais incluem PostgreSQL real isolado, HTTP autenticado sintético e cliente HTTP com AbortController; não incluem renderização no navegador, implantação, CSV real ou reparo histórico. A revisão visual e o plano seletivo de compatibilidade com API ativa NEWauth+NEWDB+NEWcipher permanecem gates futuros. [Runbook](../RUNBOOK_WHATSAPP_AGENT.md) e [backlog](../BACKLOG_TECH.md) mantêm limites operacionais.
+Ensaios locais incluem PostgreSQL real isolado, HTTP autenticado sintético, cliente HTTP com AbortController e [revisão Chrome com API real](../reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/BROWSER_REVIEW.md). Não incluem implantação, CSV real ou reparo histórico. O plano seletivo de compatibilidade com API ativa NEWauth+NEWDB+NEWcipher permanece gate futuro. [Runbook](../RUNBOOK_WHATSAPP_AGENT.md) e [backlog](../BACKLOG_TECH.md) mantêm limites operacionais.
+
+## Complemento de revisão de navegador
+
+Ao recuperar COMPLETED por GET, aplicar o mesmo reconhecimento de conclusão do POST e atualizar a lista uma vez por operação; falha na lista não altera o terminal. Exibir a referência e distinguir operation_not_observed de falha/ausência comprovada de gravações. Fechar/reabrir e recarregar não submetem CSV. UNKNOWN não permite preparar outra importação automaticamente.
+
+A [matriz de publicação coordenada](../reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/COORDINATED_PUBLICATION.md) é obrigatória: API nova integral antes do frontend novo, sem tráfego misto para API antiga. Abas antigas sem UUID recebem400 sem gravação e requerem recarga explícita; não exige logout. Interface nova/API antiga é combinação proibida, pois a API antiga pode ignorar o UUID. Não existe handshake ou controle de rollout implantado por esta correção. Retorno deve preservar o contrato ou suspender confirmações.

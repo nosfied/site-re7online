@@ -1699,8 +1699,9 @@ function CsvImportModal({
 	            </div>
                 {operationId ? <div role="status" className="rounded-md border p-3 text-sm">
                   <p>{operation ? importOperationMessage(operation) : "Consultando a operação registrada..."}</p>
-                  <button type="button" onClick={() => void recover(operationId)}>Consultar resultado</button>
-                  {importIsTerminal(operation) ? <button type="button" onClick={() => {
+                  <p className="theme-soft break-all text-xs">Referência: {operationId}</p>
+                  <button type="button" className="theme-nav-link mt-2 mr-2 rounded-md border px-3 py-2" onClick={() => void recover(operationId)}>Consultar resultado</button>
+                  {importIsTerminal(operation) ? <button type="button" className="theme-nav-link mt-2 rounded-md border px-3 py-2" onClick={() => {
                     statusSeq.current += 1; submitIntent.current = null;
                     localStorage.removeItem(recoveryKey); setOperationId(null); setOperation(null); setSummary(null);
                     setCsvText(""); setPreview(null); setInspection(null);
@@ -2372,24 +2373,26 @@ export default function AppCrmContactsPage() {
     [session]
   );
 
-		  const confirmCsvImport = useCallback(
-		    async (payload: { operationId: string; csvText: string; mapping: AppCrmContactCsvMapping }) => {
-	      if (!session) throw new Error("Sessão indisponível.");
-	      const response = await confirmAppCrmContactCsvImport(session, payload);
-	      if (response.status === "COMPLETED" && response.summary) {
-        setNotice(`Importação concluída: ${response.summary.created} criado(s), ${response.summary.updated} atualizado(s), ${response.summary.unchanged ?? 0} sem alteração.`);
-        setPage(1);
-        try { await loadContacts(session, 1); } catch { setError("Importação concluída; não foi possível atualizar a lista agora."); }
-      }
-      return response;
-    },
-    [loadContacts, session]
-  );
-
+  const observedCsvCompletion = useRef<string | null>(null);
+  const acceptCsvCompletion = useCallback(async (response: AppCrmImportOperation) => {
+    if (!session || response.status !== "COMPLETED" || !response.summary || observedCsvCompletion.current === response.operationId) return;
+    observedCsvCompletion.current = response.operationId;
+    setNotice(`Importação concluída: ${response.summary.created} criado(s), ${response.summary.updated} atualizado(s), ${response.summary.unchanged ?? 0} sem alteração.`);
+    setPage(1);
+    try { await loadContacts(session, 1); } catch { setError("Importação concluída; não foi possível atualizar a lista agora."); }
+  }, [loadContacts, session]);
+  const confirmCsvImport = useCallback(async (payload: { operationId: string; csvText: string; mapping: AppCrmContactCsvMapping }) => {
+    if (!session) throw new Error("Sessão indisponível.");
+    const response = await confirmAppCrmContactCsvImport(session, payload);
+    await acceptCsvCompletion(response);
+    return response;
+  }, [acceptCsvCompletion, session]);
   const recoverCsvImport = useCallback(async (id: string) => {
     if (!session) throw new Error("Sessão indisponível.");
-    return fetchAppCrmImportOperation(session, id);
-  }, [session]);
+    const response = await fetchAppCrmImportOperation(session, id);
+    await acceptCsvCompletion(response);
+    return response;
+  }, [acceptCsvCompletion, session]);
   useEffect(() => {
     try { if (session && canManageCrmContacts && localStorage.getItem(importRecoveryKey(session))) setCsvModalOpen(true); } catch { /* Modal will explain storage failure; never submit without intent. */ }
   }, [session, canManageCrmContacts]);
