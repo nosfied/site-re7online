@@ -1,0 +1,61 @@
+{
+  "result": "CSV_OPERATIONAL_COMPOSITION_LOCAL_PASS_NOT_WINDOW_BOUND",
+  "cases": 81,
+  "suites": [
+    {
+      "test": "test_concrete",
+      "sourceSha256": "78dd754cd5f0833017640bedf0063f176b3d69507707f5bf8dd313e47e381bc1",
+      "stdoutSha256": "039aa6daf3b8f75776dc1b6b29e9f2b5e6b27af4ce107de2841255f2b31bf6fb",
+      "result": "CSV_CONCRETE_CONSUMERS_LOCAL_PASS",
+      "caseCount": 45
+    },
+    {
+      "test": "test_sequence",
+      "sourceSha256": "623120fceb0612be53c3812c4c0be01d066f2d40bba304378a328711a241fab0",
+      "stdoutSha256": "a6ac277ff228532864c51c152d3f0d0af5720f6ac514f661cf03546f8e80dfb8",
+      "result": "EXACT_CSV_CLI_SEQUENCE_LOCAL_PASS",
+      "caseCount": 5
+    },
+    {
+      "test": "test_boundaries",
+      "sourceSha256": "4b145189c9bb5ff25c263eaf21f146b564c90375bedd07f6de094d8678ae49e1",
+      "stdoutSha256": "99741b94476263c80893b450b6b52151d0f3460c6b1ef512022e0e53b24eed37",
+      "result": "CSV_BOUNDARIES_LOCAL_PASS",
+      "caseCount": 16
+    },
+    {
+      "test": "test_binding",
+      "sourceSha256": "58de56a23648589d5ac02ad4b6f1066259efaf8f05f370d57075f4ada51f6dae",
+      "stdoutSha256": "9417512a614b0f3df14fbe70e89e0daa4b34d75b38000170fbe380a2dee2f661",
+      "result": "CSV_EXPLICIT_BINDING_LOCAL_PASS",
+      "caseCount": 7
+    },
+    {
+      "test": "test_admission",
+      "sourceSha256": "8b6d77e0575afabcd416174fe0528ca31ab67fdefb88b61c843136b652c1fb92",
+      "stdoutSha256": "cd3bce5cb6badb26cd8fa2a6b21f0397b0e1d03c11f8a7d89059590ca903e0ab",
+      "result": "CSV_EXACT_ADMISSION_LOCAL_PASS",
+      "caseCount": 8
+    }
+  ],
+  "generation": "incident-csv-operational-review-v3-20261016",
+  "reviewSha256": "caef0b3cb5feb0959dbe34708e3ac9970d571522e183a243b74546a8a9b7e5e8",
+  "policyTemplateSha256": "02464b2d56c7c657333a6f017d4f4d1806d98a2fb0c2bec6c0bd9611f50eb3ef",
+  "installerTemplateSha256": "a1af9f29ec8bd7b394d00533175d63264a5655c0d762c9fd573e2cd840305830",
+  "uniqueControlAllocatedBytes": 1736704,
+  "controlArchiveSha256": "2c6250416fc8c7842cab5a77945fd639aaa0c20ebc108b8ca8acdd7f4110b371",
+  "controlArchiveBytes": 1587200,
+  "controlIndexSha256": "921a44a011c13255e7649612a28ef82021b2a44066d0e7f8ff338d80afaa4a75",
+  "runtimeBuilds": 0,
+  "productionEffects": false,
+  "freshProductionProofsRenewed": false,
+  "systemEffectsSimulated": true,
+  "custody": {
+    "result": "PRIVATE_CSV_CONTROLS_CUSTODY_VERIFIED",
+    "files": 2,
+    "ownerAccessible": true,
+    "directoryMode": "700",
+    "fileModes": "600",
+    "physicalIndependentReplica": false
+  }
+}

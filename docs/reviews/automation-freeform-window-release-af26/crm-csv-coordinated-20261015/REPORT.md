@@ -1,5 +1,8 @@
 # CSV — composição coordenada sobre o runtime ativo atestado
 
+**Complemento corrente16/10:** [composição operacional com perfis, políticas e instaladores preparados](../crm-csv-operational-20261016/REPORT.md). Os trechos abaixo que reservavam toda a composição para depois da janela descrevem a entrega material anterior; agora restam frescor e vínculos dependentes da janela.81 casos locais PASS, sem repetir build ou prova funcional válida. NOT WINDOW BOUND / NOT DEPLOYED.
+
+
 **CONCRETE ARTIFACTS PREPARED / LOCAL VALIDATED / NOT DEPLOYED / NOT WINDOW READY —15/10/2026 Fortaleza.** Complementa111cc543 sem substituir provas históricas. [Artefatos e hashes](ARTIFACTS_SANITIZED.json), [orçamento](CAPACITY_BUDGET.json), [roteiro](WINDOW_PROTOCOL_FOR_REVIEW.md), [comandos locais exatos](COMMANDS_FOR_REVIEW.txt), [API compilada](COMPILED_PROOF_SANITIZED.json), [extração integral](ARCHIVE_RESTORE_PROOF_SANITIZED.json).
 
 ## Correção específica do total

@@ -1,5 +1,8 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**Composição operacional CSV —16/10: LOCAL TESTED / NOT WINDOW BOUND / NOT DEPLOYED.** [Perfis/políticas/instaladores, recuperação e comandos para revisão](reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/REPORT.md).81 casos locais sobre controles concretos; API/worker/cron/restore, falha API sem replay, fronteira e materialização frontend/retorno candidato. Tars certificados reutilizados, zero rebuild/backup/VPS. Controles privados em custódia; mínimo planejado11.235.700.736 B sem capacidade produtiva renovada. Próximo: revisão da composição, decisão de janela e somente então provas perecíveis/bindings novos; instalação requer hashes republicados. Não usar guarda38 ou silêncio HTTP como drain CSV. Retorno frontend mantém backend ledger/GET; defeito API exige outra versão compatível. Prisma/limpeza/rotações externas separados; NEWauth+NEWDB+NEWcipher, dois crons e out.15 CLOSED preservados. Responsável Deifson; revisão16/10/próxima21/10 ou mudança.
+
+
 **ROTAÇÕES ADIADAS POR ACEITAÇÃO DO OWNER —15/10/2026:** [aceite explícito da matriz b1d41b33](reviews/automation-freeform-window-release-af26/security-containment-20261012/exposure-scope-20261015/OWNER_ACCEPTANCE_2026-10-15.md). OpenAI, Meta/state, WhatsApp/verificação e Web Push adiados para reavaliação21/10/2026, ou antes pelos gatilhos registrados. Segurança OPEN, sem declarar revogação/contenção completa; P0/A/B e resets suspensos, pacotes/evidências preservados e nenhum backup apenas para essa preparação. NEWauth+NEWDB+NEWcipher, ambos crons, produção, guarda38/out.15 CLOSED preservados. Backlog funcional retomado independentemente; Prisma42PASS/typecheck permanece LOCAL/NOT DEPLOYED, sem.env/retenção.
 
 

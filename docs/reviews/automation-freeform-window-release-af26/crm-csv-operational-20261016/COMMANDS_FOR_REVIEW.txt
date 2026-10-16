@@ -1,0 +1,158 @@
+REVIEW ONLY — NÃO EXECUTAR NA VPS NESTA ETAPA.
+Não há autorização de instalação/contenção/start/retorno. Hashes abaixo são do
+TEMPLATE privado, não dos bindings ainda inexistentes da janela.
+
+LOCAL — CONFERÊNCIA DOS BYTES JÁ COMPOSTOS (sem build/extract/backup):
+cd /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926
+R=docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016
+T=local-evidence/crm-csv-operational-20261016/incident-csv-operational-review-v3-20261016
+test "$(sha256sum "$T/preparation-review.sha256" | cut -d' ' -f1)" = caef0b3cb5feb0959dbe34708e3ac9970d571522e183a243b74546a8a9b7e5e8
+python3 -B "$T/verify-package.py" --offline
+# As cinco provas já passaram sobre estes bytes. Não repetir por rotina:
+# python3 -B "$R/test_concrete.py" "$T"
+# python3 -B "$R/test_sequence.py" "$T"
+# python3 -B "$R/test_boundaries.py" "$T"
+# python3 -B "$R/test_binding.py" "$T"
+# python3 -B "$R/test_admission.py" "$T"
+
+JANELA FUTURA — LEITURAS E VÍNCULOS, SOMENTE APÓS DECISÃO:
+# Usar o transporte/backup.lock canônico e custódia v2 dos bytes originais.
+# Não chamar backup/renovação consumidos; não iniciar backup aguardando revisão.
+# Reutilizar restore retido válido; renew_proofs atualiza os quatro modos em
+# conjunto, preserva originais e exige republicar review hash antes de A.
+# capture-source-readonly.py é o leitor canônico reutilizado pós-cifragem:
+# redirecionar SEMPRE stdout/stderr a diretório700/arquivos600, nunca ao chat.
+# Captura, metadados Event e inventário de atividade conhecida são arquivos
+# privados conferidos. Campos desconhecidos não recebem defaults.
+# Nome novo explícito, validado pelo binder (prefixo incident-csv-window-):
+: "${NEXT_WINDOW_GENERATION:?definir geração nova revisada}"
+: "${CAPTURE_PRIVATE:?captura canônica real e fresca}"
+: "${EVENT_BINDING_PRIVATE:?literal/hash/owner/modo conferidos}"
+: "${KNOWN_IMPORTS_PRIVATE:?inventário revisado de atividade conhecida}"
+python3 -B "$R/bind_window.py" --template "$T" --capture "$CAPTURE_PRIVATE" --event "$EVENT_BINDING_PRIVATE" --known "$KNOWN_IMPORTS_PRIVATE" --out "local-evidence/crm-csv-operational-20261016/$NEXT_WINDOW_GENERATION"
+# DENY preserva a recusa; não mudar input para passar. A geração/template
+# original não é editada. Transferência inativa/staging dos tars certificados
+# exige autorização própria; não repetir extração onde os bytes já conferem.
+# Gerar/configurar owner-evidence em window/ com root, backup-result,
+# custody-ack e lab-current. Preservar o recibo original byte a byte.
+# PUBLICAR: review/policy/installer finais após bindings/renovação, conferir
+# o pacote concreto e obter a decisão explícita antes dos comandos abaixo.
+
+A — INSTALAÇÃO API FUTURA, UMA VEZ (owner sudo):
+P=/opt/re7online/backups/converta-persistent/preparations/$NEXT_WINDOW_GENERATION
+: "${REVIEW_SHA256:?hash final publicado, não o hash do template}"
+: "${INSTALLER_SHA256:?hash final publicado}"
+: "${REVIEWED_AUTHORIZED_COMMIT:?decisão futura explícita}"
+test "$(sha256sum "$P/preparation-review.sha256" | cut -d' ' -f1)" = "$REVIEW_SHA256"
+test "$(sha256sum "$P/install-api-window-policy.sh" | cut -d' ' -f1)" = "$INSTALLER_SHA256"
+python3 -B "$P/verify-package.py"
+python3 -B "$P/window/pre_install.py" "$P"
+# Falha/expiração interrompe ANTES da instalação. Sem repetir/adaptar.
+bash "$P/install-api-window-policy.sh"
+# Esperado POLICY_ONLY_BASELINES_INSPECT_PASS_GATES_FALSE.
+
+ADMISSÃO API FUTURA — SOMENTE DEPOIS DE A PASS:
+: "${ADMISSION_PRIVATE:?diretório novo exclusivo para intent/recibo}"
+python3 -B "$P/window/admit_gates.py" "$P" "$P/window/owner-evidence" "$ADMISSION_PRIVATE" "$REVIEW_SHA256" "$REVIEWED_AUTHORIZED_COMMIT"
+# Exigir literalmente FIVE_GATES_ADMITTED. Cada gate precisa de prova.
+# Preparar um diretório700 novo para a fronteira; antes de B:
+: "${PHASE_PRIVATE:?diretório privado novo para as duas capturas de fase}"
+python3 -B "$P/capture_phase.py" "$P" "$PHASE_PRIVATE" before
+
+B — API FUTURA, UMA VEZ, SÓ APÓS FIVE_GATES_ADMITTED:
+# Guardar stdout/stderr privadamente, com umask077; timeout não autoriza replay.
+python3 -B "$P/window/csv_cli.py" "$P" --execute
+# Exigir csv-complete.receipt.private.json com
+# CSV_API_COMPLETE_CANDIDATE_PRESERVED, gatesFalse e checks efetivos.
+# Não declarar CSV funcional por health200; reutilizar provas sintéticas.
+
+C — SOMENTE INSPEÇÃO EM RECUSA/PARCIAL/TIMEOUT:
+python3 -B "$P/window/csv_cli.py" "$P" --inspect-readonly
+# Preservar intent/journal/exit/start/audit/diagnósticos em custódia privada.
+# SEM repetir B/start/CSV. Classificação incerta => decisão fora deste roteiro.
+# Alternativas EXCLUSIVAS, somente após classificação fresca e decisão explícita:
+python3 -B "$P/window/csv_cli.py" "$P" --operator-recover PRESTOP
+# OU, com saída canônica e estado conhecido sob fence, mantendo API candidata:
+python3 -B "$P/window/csv_cli.py" "$P" --operator-recover CANDIDATE
+# Não executar ambas. Nenhuma repetição de start consumido ou backend antigo.
+# Falha funcional persistente da API exige OUTRA versão compatível revisada.
+# Retorno pós-unfence exige geração/política novas; este CLI nega sem fence.
+
+F0 — FRONTEIRA API -> FRONTEND, SOMENTE APÓS API COMPLETE:
+F="$P/frontend"
+python3 -B "$P/capture_phase.py" "$P" "$PHASE_PRIVATE" after
+python3 -B "$F/bind_frontend.py" --capture "$PHASE_PRIVATE" --receipt "$PHASE_PRIVATE/phase.private.json"
+python3 -B "$F/bind_frontend.py" --capture "$PHASE_PRIVATE" --receipt "$PHASE_PRIVATE/phase.private.json" --materialize-root "$F"
+# Novos hashes de policy/bindings são DERIVADOS dos sucessores reais.
+# Publicar/conferir esses hashes antes da decisão de instalar a política frontend.
+# Não modificar os .template nem substituir identidade ausente por PID anterior.
+
+F1 — POLÍTICA JANELA FRONTEND, APÓS REVISÃO/AUTORIZAÇÃO ESPECÍFICAS:
+python3 -B "$F/install_frontend_policy.py" "$F" window --owner-authorized-policy-only
+python3 -B "$F/run-preparatory-preflight.py"
+# Gate false. Preflight/política/observações completos antes da janela frontend.
+
+F2 — JANELA FRONTEND CANÔNICA, DECISÃO SEPARADA/LOCK:
+# API candidata permanece ativa; não há parada/replay API nesta fase.
+exec 9>"$F/window.lock"
+flock -n 9
+(cd "$F" && sha256sum -c scripts.sha256 && sha256sum -c bindings.sha256)
+python3 -B "$F/check-preparation.py"
+python3 -B "$F/frontend-action.py" before
+# Única admissão frontend existente no protocolo, após as provas e autorização:
+printf 'true\n' > "$F/execution-authorized"
+python3 -B "$F/frontend-action.py" stop
+python3 -B "$F/frontend-action.py" exited
+python3 -B "$F/frontend-action.py" delete
+python3 -B "$F/frontend-action.py" start-candidate
+python3 -B "$F/frontend-action.py" ready-candidate
+python3 -B "$F/frontend-action.py" candidate
+python3 -B "$F/check-served-css.py"
+# Owner: sessões/console/Inbox/CRM/Campanhas em leitura; recarga do CRM.
+# Sem importação real, mensagem ou teste de envio. Não promover sem aceite.
+
+F3 — PERMANÊNCIA/SAVE, SÓ APÓS ACEITE:
+# Registrar candidate-accepted.private.json exclusivamente após confirmação real,
+# com ownerAcceptedReadOnlyScreens=true e phaseReceiptSha256 exato do recibo de
+# fase; manter prova privada do aceite. Nenhum aceite é gerado por health.
+: "${OWNER_READ_ONLY_ACCEPTANCE:?preencher CONFIRMED somente após aceite real}"
+test "$OWNER_READ_ONLY_ACCEPTANCE" = CONFIRMED
+python3 - "$F" <<'OWNER_ACCEPTANCE'
+import hashlib,json,os,sys
+from pathlib import Path
+p=Path(sys.argv[1]);f=p/'candidate-accepted.private.json'
+v={'ownerAcceptedReadOnlyScreens':True,'phaseReceiptSha256':hashlib.sha256((p/'phase-binding.receipt.private.json').read_bytes()).hexdigest()}
+fd=os.open(f,os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_WRONLY,0o600)
+with os.fdopen(fd,'w')as out:json.dump(v,out);out.flush();os.fsync(out.fileno())
+print('OWNER_READ_ONLY_ACCEPTANCE_RECORDED_NO_PROCESS_ACTION')
+OWNER_ACCEPTANCE
+printf 'false\n' > "$F/execution-authorized"
+python3 -B "$F/install_frontend_policy.py" "$F" permanent --owner-authorized-policy-only
+python3 -B "$F/check-permanent-policy.py"
+# O protocolo exige autorização frontend true para este efeito já aprovado:
+printf 'true\n' > "$F/execution-authorized"
+python3 -B "$F/frontend-action.py" enable-supervision-candidate
+python3 -B "$F/frontend-action.py" supervised-candidate
+umask 077
+/home/deploy/.npm-global/bin/pm2 save
+cp /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+python3 -B "$F/frontend-action.py" supervised-candidate
+printf 'false\n' > "$F/execution-authorized"
+# Conferir saved/fallback600/configs/control, API/worker exatos pós-API,
+# AMBOS crons separadamente, boot/supervisão, guard38/out.15 e barreira ausente.
+# Depois copiar recibos/diagnósticos privadamente off-host. Não alterar manifests.
+
+RETORNO FRONTEND — DECISÃO POR ESTADO, NÃO AUTOMÁTICO:
+# Antes da parada: gates false, preservar fonte; nenhum start.
+# Fonte parada sem intent candidato: exigir exited e pular stop/candidate-exited.
+# Após QUALQUER intent candidato: observar estado; quando autorizado e conhecido:
+python3 -B "$F/frontend-action.py" stop
+python3 -B "$F/frontend-action.py" candidate-exited
+python3 -B "$F/frontend-action.py" delete
+python3 -B "$F/frontend-action.py" start-return
+python3 -B "$F/frontend-action.py" ready-return
+python3 -B "$F/frontend-action.py" return
+# Mesmo aceite/permanência/save, usando enable-supervision-return/supervised-return.
+# Nunca repetir start-return nem reinstalar política já consumida. API candidata,
+# ledger/GET/UUID/Event crítico permanecem. Frontend antigo não oferece UI nova CSV.
+# Unknown/survivor/incompletude nega delete/sucessor; silêncio HTTP não prova saída.

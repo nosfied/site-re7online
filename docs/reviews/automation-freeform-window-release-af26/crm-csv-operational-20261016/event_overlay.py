@@ -1,0 +1,32 @@
+"""One approved source literal under fence; keeps new classifier on every return."""
+import os,stat
+from pathlib import Path
+from csv_boundary import require,sha,event_policy,event_consumers
+def apply(root):
+    from csv_contract import read,write
+    from sequencer import Bridge
+    root=Path(root);w=root/'window';Bridge(root).privileged('check-present')
+    c=read(w/'event-consumer-binding.private.json');target=Path(c['path']);source=w/'eventRetentionPolicy.ts'
+    require(str(target)=='/opt/re7online/site-re7online/apps/whatsapp-agent/src/events/eventRetentionPolicy.ts','event_literal')
+    event_consumers(c,live=True);event_policy(source,c['targetSha256']);s=target.lstat()
+    require(stat.S_ISREG(s.st_mode)and not target.is_symlink()and s.st_nlink==1 and s.st_uid==os.getuid()==c['uid']and stat.S_IMODE(s.st_mode)==c['mode'],'event_source_owner_mode')
+    require(not os.listxattr(target,follow_symlinks=False),'event_source_xattrs_require_separate_preservation')
+    for parent in target.parents:require(parent.is_dir()and not parent.is_symlink()and not(parent.stat().st_mode&0o022),'event_source_parent')
+    if sha(target)==c['targetSha256']:
+        require(not(w/'event-overlay.intent.private.json').exists()or(w/'event-overlay.receipt.private.json').exists(),'event_overlay_uncertain');return
+    require(sha(target)==c['beforeSha256'],'event_source_drift')
+    require(not(w/'event-overlay.intent.private.json').exists(),'event_overlay_consumed')
+    write(w/'event-overlay.intent.private.json',{'beforeSha256':sha(target),'targetSha256':c['targetSha256'],'automaticRetry':False})
+    backup=w/'event-policy-before.private.bin'
+    fd=os.open(backup,os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_WRONLY,0o600)
+    with os.fdopen(fd,'wb')as f:f.write(target.read_bytes());f.flush();os.fsync(f.fileno())
+    tmp=target.with_name(target.name+'.csv-reviewed-new');fd=os.open(tmp,os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_WRONLY,c['mode'])
+    os.fchmod(fd,c['mode']) # umask077 must not silently change the source file's mode.
+    require(os.fstat(fd).st_gid==s.st_gid,'event_source_group_preservation')
+    with os.fdopen(fd,'wb')as f:f.write(source.read_bytes());f.flush();os.fsync(f.fileno())
+    require(sha(target)==c['beforeSha256'],'event_source_changed_before_replace');os.replace(tmp,target)
+    d=os.open(target.parent,os.O_RDONLY|os.O_DIRECTORY)
+    try:os.fsync(d)
+    finally:os.close(d)
+    require(sha(target)==c['targetSha256']and target.stat().st_uid==c['uid']and stat.S_IMODE(target.stat().st_mode)==c['mode'],'event_source_postcheck')
+    write(w/'event-overlay.receipt.private.json',{'result':'ONE_EVENT_POLICY_LITERAL_INSTALLED','beforeSha256':sha(backup),'targetSha256':sha(target),'retentionExecuted':False,'restoreOldPolicyForbidden':True})

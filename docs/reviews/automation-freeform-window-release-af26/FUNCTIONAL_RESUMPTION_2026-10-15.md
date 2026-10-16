@@ -1,5 +1,8 @@
 # Retomada funcional — prioridade e próximo trabalho local
 
+**Atualização16/10:** [composição operacional CSV preparada localmente](crm-csv-operational-20261016/REPORT.md),81 casos, código/comandos/hashes para revisão. Perfis e templates preparados antes da janela, reutilizando pacotes certificados; ficaram pendentes as observações perecíveis e identidades futuras. Nenhum backup/VPS/deploy, build ou importação real. Retorno conserva backend candidato/ledger/GET. Segurança e Prisma continuam separados.
+
+
 **Complemento de entrega coordenada:** [três artefatos concretos sobre runtime ativo atestado, total operationalStatus corrigido, custódia e roteiro](crm-csv-coordinated-20261015/REPORT.md). LOCAL VALIDATED / NOT DEPLOYED / NOT WINDOW READY; política/perfis/bindings e provas frescas somente com janela definida. Retorno conserva API ledger/GET e frontend com assets em união; nenhuma retomada de Prisma/rotações externas/limpeza.
 
 
