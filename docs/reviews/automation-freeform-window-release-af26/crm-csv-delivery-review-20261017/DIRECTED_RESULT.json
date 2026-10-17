@@ -1,0 +1,374 @@
+{
+  "base": "80e62ffd43dd31a956785e67c1086d679ab4f9dd",
+  "result": "DIRECTED_READ_COMPLETE_SCOPED_RECONCILIATION_PASS_NOT_CERTIFIED_FOR_WINDOW",
+  "remoteIntervalUtc": [
+    "2026-10-17T18:37:34.897090+00:00",
+    "2026-10-17T18:37:36.148114+00:00"
+  ],
+  "transportIntervalUtc": [
+    "2026-10-17T18:37:32.029895+00:00",
+    "2026-10-17T18:37:36.675419+00:00"
+  ],
+  "manifestSha256": "1a0ac094b9276b5fdfa09e2716946210e08c73d9f0172548be73d39d8217ffa9",
+  "custodyByteExact": true,
+  "custody": {
+    "privileged-output.private.jsonl": {
+      "bytes": 1391125,
+      "sha256": "3e63d3eb9f9a9a05f34381582aca2ec9d2405a9dafb43a7a037818006ab8c62a"
+    },
+    "transfer.stdout.private": {
+      "bytes": 667110,
+      "sha256": "35dc309ae3ebbde503ed8ee0e27334182da5acf4428d7cd111471e988d3dc245"
+    },
+    "sequencer.journal.jsonl": {
+      "bytes": 359,
+      "sha256": "ff1dfa60a0e2755406b1e4ae84e72c4e7eb4b06b3c863a61d7058e205d89a25d"
+    },
+    "transfer.stderr.private": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "capture.private.jsonl": {
+      "bytes": 499893,
+      "sha256": "f6873eb97f5a70709675ad16b8b4879ff1a1953dc58464c704a80e735b5af8d5"
+    }
+  },
+  "allCommandChannelsVerified": 82,
+  "apps": [
+    {
+      "name": "re7-admin-front",
+      "pid": 188897,
+      "startTicks": "2161347676",
+      "identityAndCanonicalConfigPassed": true
+    },
+    {
+      "name": "re7-whatsapp-agent",
+      "pid": 936386,
+      "startTicks": "2193413108",
+      "identityAndCanonicalConfigPassed": true
+    },
+    {
+      "name": "re7-whatsapp-web-worker",
+      "pid": 936540,
+      "startTicks": "2193413523",
+      "identityAndCanonicalConfigPassed": true
+    }
+  ],
+  "saved": {
+    "dump.pm2": {
+      "bytes": 30425,
+      "sha256": "05fd82d48d240f82043f33c792abcb8456727e76149da5d93748c47940ac5157",
+      "owner600Regular": true,
+      "populationExact": true,
+      "members": {
+        "re7-whatsapp-agent": {
+          "allFieldsRead": true,
+          "fieldCount": 136,
+          "fieldsAdded": [],
+          "fieldsRemoved": [],
+          "changedFieldsFromPreWindow": [
+            "axm_monitor",
+            "created_at",
+            "env",
+            "pm_err_log_path",
+            "pm_out_log_path",
+            "pm_pid_path",
+            "pm_uptime",
+            "unique_id"
+          ],
+          "originalProfilePathsMatch": true,
+          "osProfileAndSavedEnvDictExactlyEqual": false,
+          "allOriginalProfileEnvironmentEntriesMatch": true,
+          "extraSavedEnvironmentKeys": [
+            "PM2_JSON_PROCESSING",
+            "re7-whatsapp-agent",
+            "unique_id"
+          ],
+          "missingOriginalEnvironmentKeys": [],
+          "savedEnvironmentEqualsObservedRpcProjection": true,
+          "fieldsOnlyInLive": [
+            "instances",
+            "pm_id"
+          ],
+          "fieldsOnlyInSaved": [],
+          "allCommonFieldDifferencesFromLive": [
+            "axm_monitor"
+          ]
+        },
+        "re7-whatsapp-web-worker": {
+          "allFieldsRead": true,
+          "fieldCount": 64,
+          "fieldsAdded": [],
+          "fieldsRemoved": [],
+          "changedFieldsFromPreWindow": [
+            "axm_monitor",
+            "created_at",
+            "env",
+            "pm_err_log_path",
+            "pm_out_log_path",
+            "pm_pid_path",
+            "pm_uptime",
+            "unique_id"
+          ],
+          "originalProfilePathsMatch": true,
+          "osProfileAndSavedEnvDictExactlyEqual": false,
+          "allOriginalProfileEnvironmentEntriesMatch": true,
+          "extraSavedEnvironmentKeys": [
+            "PM2_JSON_PROCESSING",
+            "re7-whatsapp-web-worker",
+            "unique_id"
+          ],
+          "missingOriginalEnvironmentKeys": [],
+          "savedEnvironmentEqualsObservedRpcProjection": true,
+          "fieldsOnlyInLive": [
+            "instances",
+            "pm_id"
+          ],
+          "fieldsOnlyInSaved": [],
+          "allCommonFieldDifferencesFromLive": [
+            "axm_monitor"
+          ]
+        },
+        "re7-admin-front": {
+          "allFieldsRead": true,
+          "fieldCount": 71,
+          "fieldsAdded": [],
+          "fieldsRemoved": [],
+          "changedFieldsFromPreWindow": [
+            "axm_monitor"
+          ],
+          "canonicalSavedComparison": {
+            "onlyDynamicDifference": [
+              "axm_monitor"
+            ],
+            "environmentEqual": true
+          },
+          "canonicalSavedPass": true,
+          "savedEnvironmentEqualsObservedRpcProjection": true,
+          "fieldsOnlyInLive": [
+            "instances",
+            "pm_id"
+          ],
+          "fieldsOnlyInSaved": [],
+          "allCommonFieldDifferencesFromLive": [
+            "axm_monitor"
+          ]
+        }
+      }
+    },
+    "dump.pm2.bak": {
+      "bytes": 30425,
+      "sha256": "05fd82d48d240f82043f33c792abcb8456727e76149da5d93748c47940ac5157",
+      "owner600Regular": true,
+      "populationExact": true,
+      "members": {
+        "re7-whatsapp-agent": {
+          "allFieldsRead": true,
+          "fieldCount": 136,
+          "fieldsAdded": [],
+          "fieldsRemoved": [],
+          "changedFieldsFromPreWindow": [
+            "axm_monitor",
+            "created_at",
+            "env",
+            "pm_err_log_path",
+            "pm_out_log_path",
+            "pm_pid_path",
+            "pm_uptime",
+            "unique_id"
+          ],
+          "originalProfilePathsMatch": true,
+          "osProfileAndSavedEnvDictExactlyEqual": false,
+          "allOriginalProfileEnvironmentEntriesMatch": true,
+          "extraSavedEnvironmentKeys": [
+            "PM2_JSON_PROCESSING",
+            "re7-whatsapp-agent",
+            "unique_id"
+          ],
+          "missingOriginalEnvironmentKeys": [],
+          "savedEnvironmentEqualsObservedRpcProjection": true,
+          "fieldsOnlyInLive": [
+            "instances",
+            "pm_id"
+          ],
+          "fieldsOnlyInSaved": [],
+          "allCommonFieldDifferencesFromLive": [
+            "axm_monitor"
+          ]
+        },
+        "re7-whatsapp-web-worker": {
+          "allFieldsRead": true,
+          "fieldCount": 64,
+          "fieldsAdded": [],
+          "fieldsRemoved": [],
+          "changedFieldsFromPreWindow": [
+            "axm_monitor",
+            "created_at",
+            "env",
+            "pm_err_log_path",
+            "pm_out_log_path",
+            "pm_pid_path",
+            "pm_uptime",
+            "unique_id"
+          ],
+          "originalProfilePathsMatch": true,
+          "osProfileAndSavedEnvDictExactlyEqual": false,
+          "allOriginalProfileEnvironmentEntriesMatch": true,
+          "extraSavedEnvironmentKeys": [
+            "PM2_JSON_PROCESSING",
+            "re7-whatsapp-web-worker",
+            "unique_id"
+          ],
+          "missingOriginalEnvironmentKeys": [],
+          "savedEnvironmentEqualsObservedRpcProjection": true,
+          "fieldsOnlyInLive": [
+            "instances",
+            "pm_id"
+          ],
+          "fieldsOnlyInSaved": [],
+          "allCommonFieldDifferencesFromLive": [
+            "axm_monitor"
+          ]
+        },
+        "re7-admin-front": {
+          "allFieldsRead": true,
+          "fieldCount": 71,
+          "fieldsAdded": [],
+          "fieldsRemoved": [],
+          "changedFieldsFromPreWindow": [
+            "axm_monitor"
+          ],
+          "canonicalSavedComparison": {
+            "onlyDynamicDifference": [
+              "axm_monitor"
+            ],
+            "environmentEqual": true
+          },
+          "canonicalSavedPass": true,
+          "savedEnvironmentEqualsObservedRpcProjection": true,
+          "fieldsOnlyInLive": [
+            "instances",
+            "pm_id"
+          ],
+          "fieldsOnlyInSaved": [],
+          "allCommonFieldDifferencesFromLive": [
+            "axm_monitor"
+          ]
+        }
+      }
+    }
+  },
+  "savedFallbackByteExact": true,
+  "controls": {
+    "deploy": {
+      "referenceSha256": "ff827e698a4a67b90d5818b57abfbc1d4214c6edb13ffe2b805199abdabaa742",
+      "actualSha256": "ff827e698a4a67b90d5818b57abfbc1d4214c6edb13ffe2b805199abdabaa742",
+      "bytes": 2017,
+      "byteExactBefore": true,
+      "referenceOwner600": true,
+      "referenceAuthenticatedAgainstPreservedCanonicalBefore": true
+    },
+    "system": {
+      "referenceSha256": "2e83a6778e25fe0a7edcaaea0178804ef5ce68821fe8f14da697665f7d9699fb",
+      "actualSha256": "2e83a6778e25fe0a7edcaaea0178804ef5ce68821fe8f14da697665f7d9699fb",
+      "bytes": 201,
+      "byteExactBefore": true,
+      "referenceOwner600": true,
+      "referenceAuthenticatedAgainstPreservedCanonicalBefore": true
+    }
+  },
+  "cronCanonicalResult": "PASS",
+  "supervision": {
+    "byteExactAcceptedBefore": true,
+    "bytes": 43,
+    "sha256": "ce5c1c72984173c2a33e8550e0a25aaa97b21b9c7e5be1d5ac3b062059c19a25",
+    "referenceSha256": "ce5c1c72984173c2a33e8550e0a25aaa97b21b9c7e5be1d5ac3b062059c19a25",
+    "referenceInitialSha256": "27b08dc133aaae282e0fc5cf8413fe7a3c150d7113c2bef18c6005443e46bc1d",
+    "initialReferenceByteExact": true,
+    "interpretedFromInactiveEnabled": false
+  },
+  "gates": {
+    "exactFiveFields": true,
+    "allFalse": true,
+    "owner600": true
+  },
+  "authorization": {
+    "false": true,
+    "owner600": true
+  },
+  "route": {
+    "canonicalRouteAndBothConsumerUrlsPassed": true,
+    "containerIdSha256": "64e27131957817fc8b08c5d28bef88db2e5320ea4039eaae0519ef84aca65bfd",
+    "containerImageSha256OfIdentifier": "312b6836c7cd97fcc9da3db648c7fcaceea8e4c2588bbf404cc5cab851e6e799",
+    "clientAbsolutePathObserved": true,
+    "clientMajor16": true,
+    "sqlExecuted": false,
+    "ownership": "UNKNOWN"
+  },
+  "referenceArchiveSha256": "32e0cb1de5dac716027fc8face5cc60f8b996ec0ca9de6b18363cbbb84b30076",
+  "scheduledSourceSha256": "9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39",
+  "adapterSha256": "53de3ac796228c908157930cd465993f6b2b8a14e1bc550607ff7e39f5970943",
+  "newRemoteQueriesAfterCollect": 0,
+  "atomicSnapshot": false,
+  "launcherRecords": {
+    "materialize": {
+      "bytes": 1094,
+      "sha256": "57fe61a22bfe7de707f123fc1112645cddf233548d917d5322cfc5914b77b07e",
+      "exitCode": 0,
+      "startedUtc": "2026-10-17T18:37:20.561082+00:00",
+      "finishedUtc": "2026-10-17T18:37:20.588113+00:00"
+    },
+    "collect": {
+      "bytes": 1106,
+      "sha256": "ddf1159627a5a1ac74194f1d327f56030d9fc196381dc90753903783531c79fb",
+      "exitCode": 0,
+      "startedUtc": "2026-10-17T18:37:32.006028+00:00",
+      "finishedUtc": "2026-10-17T18:37:36.901508+00:00"
+    }
+  },
+  "controlsReferenceArchiveSha256": "8d5ed9979c95ba247e3554b02e50a1ecfc7926a3c90791117b7e4f8402d1250b",
+  "cronCanonicalComparator": "ScheduledControls.verify(before), executed offline over preserved responses; no remote command",
+  "savedProfileInterpretation": "All original OS profile entries match saved API/worker; PM2 processing/unique-id entries are extra representation fields, not removed to force equality. All fields enumerated, differences retained.",
+  "ownership": "UNKNOWN",
+  "m1Repeated": false,
+  "elfPaused": true,
+  "selectExecuted": false,
+  "separateSelectReview": {
+    "authorized": false,
+    "preparedExecutionPackage": false,
+    "sourceSqls": [
+      {
+        "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/identity.sql",
+        "sha256": "ed4eb8826e4bc68e1b9a2f98c9676898b8e3f068add747881566613d172ac138",
+        "bytes": 1374
+      },
+      {
+        "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/ownership.sql",
+        "sha256": "989f3371f3e2fc2886ddba4808180869e1c646b5dca550c1c36b940a68e32efd",
+        "bytes": 494
+      },
+      {
+        "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/imports.sql",
+        "sha256": "cbb92b53c4f2c8b298016e57a6d52dcef2e0b1c4ddc003a69e07a04398cfaf12",
+        "bytes": 582
+      }
+    ],
+    "channelEvidence": {
+      "captureSha256": "f6873eb97f5a70709675ad16b8b4879ff1a1953dc58464c704a80e735b5af8d5",
+      "commands": [
+        "db-route",
+        "sql-client-path",
+        "sql-client-version",
+        "db-binding"
+      ],
+      "containerIdSha256": "64e27131957817fc8b08c5d28bef88db2e5320ea4039eaae0519ef84aca65bfd",
+      "bothConsumerUrlsMatch": true
+    },
+    "requiresFreshRouteRevalidation": true,
+    "existingConsumedSelectBlocksMustNotBeReplayed": true,
+    "noEmptyDatabasePrecondition": true,
+    "sqlDoesNotProveCompleteOwnership": true
+  },
+  "phaseAuthorityInstalledByThisRun": false,
+  "currentInstalledPhaseAuthority": "NOT_OBSERVED"
+}

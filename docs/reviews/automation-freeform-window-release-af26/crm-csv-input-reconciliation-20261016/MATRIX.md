@@ -1,3 +1,97 @@
+## Leitura dirigida concluída17/10 às15:37 Fortaleza — base80e62ffd
+
+**DOIS BLOCOS CONSUMIDOS / COLETA E CUSTÓDIA PASS / RECONCILIAÇÃO OFFLINE APROVADA NO ALCANCE OBSERVADO.** [Resultado sanitizado e procedência](../crm-csv-delivery-review-20261017/DIRECTED_RESULT.json).
+HEAD/remoto80e62ffd e todos os hashes/fontes/precondições locais conferidos; bloco1
+literal executado uma vez, materialização inativa PASS; somente depois bloco2 uma vez
+como deploy sem sudo. Nenhuma adaptação de código, referência ou constante. Manifest
+1a0ac094… e launcher5ce13ad8… inalterados. Destinos publicados agora consumidos; não
+repetir blocos, nova conexão, preflight Event, M1, M2/M3 ou frente ELF.
+
+Intervalo do runner: **18:37:34.897090–18:37:36.148114UTC** (15:37:34–15:37:36 Fortaleza),
+**1,251024s**. Transporte/custódia18:37:32.029895–18:37:36.675419UTC,4,645524s.
+Esses intervalos não são snapshot atômico, continuidade de observação ou medição de
+HTTP/indisponibilidade. Terminal GATES_1_3_AND_CONTROLS_OBSERVED e recibo
+CUSTODY_PRESERVED_GATES_PASS_NOT_CERTIFIED. Nenhuma operação de serviço/tenant foi feita.
+
+### Reconciliação pelos bytes preservados, sem nova consulta
+
+| Requisito | Fato efetivamente conferido | Limite |
+| --- | --- | --- |
+| Fontes/Node/daemon |35 fontes e26 membros RPC autenticados; Node hash/cadeia+FD; daemon18676/ticks222727, socket/peer/pm2.pid estáveis no intervalo | sem closure ELF/proteção root certificadas; fontes antigas são expectativas CAS, não substituem observações |
+| Trio | API936386/ticks2193413108, worker936540/ticks2193413523, frontend188897/ticks2161347676; população exata, identidades antes/depois e operações canônicas de configuração PASS | não é health/DB/out.15/guarda atual nem certificação permanente |
+| Frontend | source.profile atestado fornece OS; dump histórico fornece projeção PM2; compare_frontend53de e System/Operations PASS, ambientes separados | correção de representação não altera contrato nem pressupõe dump==environ |
+| Saved/fallback | dois arquivos30425B, SHA05fd82d4…, byte-idênticos, regulares owner1000 modo600; três membros completos enumerados | nenhum campo foi removido para obter PASS |
+| API/worker salvos | caminhos/interpreter e todas96/24 entradas do perfil OS original coincidem; ambientes salvos99/27 entradas coincidem integralmente com projeções RPC | dicionários OS/PM2 não são iguais: três chaves extras PM2_JSON_PROCESSING, nome do processo e unique_id, explicitamente preservadas |
+| Campos saved completos |136 campos API,64 worker,71 frontend; mesmos conjuntos que o before; entre saved e live, campos comuns diferem só em axm_monitor; live tem ainda instances/pm_id | mudança vs pre-window do par em oito campos está registrada, sem atribuição histórica por hipótese |
+| Frontend salvo | compare_saved original PASS: ambiente igual e diferença só axm_monitor vs before | exceção concretamente aceita não foi ampliada para outros campos |
+| Cron deploy |2017B, SHA ff827e69…, byte-exato ao before autenticado | confere conteúdo observado, não execução passada/futura dos jobs |
+| Cron sistema |201B, SHA2e83a677…, byte-exato ao before autenticado | conferência separada do deploy, sem alterar cron ou usar supervisão como substituto |
+| Supervisão |43B, SHAce5c1c72…, igualdade exata a initial.supervision histórico atestado | não inferida do boolean supervisionRestored ou de inactive/enabled |
+| Gates/authorization |cinco nomes exatos, todosfalse; authorization=false; arquivos owner600 | somente observação; nenhum gate admitido/resetado, nenhuma autorização de janela |
+| Rota/cliente | System.db_container e URLs ativas dos dois consumidores PASS; ID/IP/publicação do binding atestado; caminho absoluto psql e versão16 observados | nenhum SELECT/conexão PostgreSQL; identidade de servidor/database/role efetivos e ownership UNKNOWN |
+
+Os oito campos diferentes de saved API/worker vs dump pré-janela são axm_monitor,
+created_at, env, pm_err_log_path, pm_out_log_path, pm_pid_path, pm_uptime e unique_id.
+Isso não foi reduzido por whitelist para declarar igualdade integral. Paths/ambiente
+exigidos pelo perfil original coincidem, e toda projeção env coincide com o live
+observado. A igualdade de todos os campos comuns saved/live exceto axm_monitor é
+comparação explícita dos objetos preservados; não suprime os campos exclusivos live
+instances/pm_id. Os perfis preservam NEWauth+NEWDB+NEWcipher no alcance das variáveis
+conferidas privadamente; não foram publicados valores/hashes individuais de segredos.
+
+Referências legítimas: arquivo de recuperação aceita SHA32e0cb1d… fornece initial,
+source.profile e dump; archive canônico pré-janela SHA8d5ed997… fornece ambos os before
+cron. Os novos arquivos de referência foram comparados byte a byte aos membros desses
+archives, não assumidos autênticos por terem sido lidos. ScheduledControls.verify(before)
+foi executado **offline** sobre as respostas preservadas com os before autenticados;
+nenhum comando remoto/método de restauração foi executado nessa análise. Supervisão
+usa os bytes initial.supervision, conforme Controls.finish, sem invocar finish.
+
+### Custódia efetiva, encerramento e sequência mínima
+
+82 registros de canais comando/observação verificados em tamanho/SHA/Base64 e código;
+export499893B/SHAf6873eb9… conferido byte a byte contra stdout SSH667110B e recibo.
+Stderr SSH vazio, journal local1391125B; envelopes de ambos launchers exit0 e canais
+conferidos. Arquivos privados0600/diretórios0700. Todos os brutos, configurações, crons,
+ambientes, nomes/IDs privados e journals ficam fora do Git. As35 fontes e scripts
+literais consumidos permanecem iguais aos publicados, sem edição para PASS.
+Não houve teste/build novo nesta rodada: são observações reais e análise offline;
+provas locais aprovadas foram reutilizadas. DENYs anteriores não são reclassificados.
+
+A evidência permite vincular **para revisão separada** os três SQLs canônicos existentes
+(identity.sql, ownership.sql e imports.sql, hashes completos no resultado) ao canal
+observado, container identificado por hash e comandos db-route/sql-client-path/version.
+**SELECT NÃO EXECUTADO E NÃO AUTORIZADO**, sem novo launcher/pacote de execução ou
+replay dos antigos blocos consumidos. Futura proposta precisa de decisão própria,
+destinos exclusivos e revalidação da rota antes/depois; cliente16 não comprova server16,
+role/permissões/identidade do cluster. Consulta de backends não atribui por si os
+sockets de todos os processos: ownership completo exige provas canônicas próprias.
+Não exigir banco vazio com produção viva; saída/ownership é etapa da janela autorizada.
+
+**Próximo requisito concreto:** decisão separada sobre SELECTs delimitados vinculados
+a esse canal e sua revalidação, para fechar identidade SQL/visibilidade/importações.
+Depois: fechar atribuição canônica e controles protegidos/16 vínculos com observações
+atuais e fontes aceitas→materialização final quatro modos, R1/R2 e predecessor e2a5→
+revisão de autoridade/política específicas→janela coordenada/R0/root frescos→A/admissão
+explicitamente autorizadas→saída/ownership/CAS→API24e5857f→validação UUID/GET/ledger→
+fronteira frontend com identidades reais e revisão/decisão própria→frontend candidato.
+Retorno após seleção mantém backend candidato/replay protegido; defeito persistente
+exige outra versão compatível. Nada disso foi iniciado automaticamente.
+
+Faltantes exatos desta coleta: identidade SQL server/database/role e visibilidade,
+classificação atual de importações e atribuição completa; root600/política/barreira e
+guarda38 não observados aqui; proteção instalada dos consumidores,16 vínculos e
+âncora/autoridade/permit específicos não instalados por esta ação. Capacidade/WAL/RPO,
+backup/restore e frescor final só na sequência autorizada apropriada, sem renovação
+antecipada nesta rodada. ELF segue PAUSADO, não nova exigência de descoberta.
+Produção multitenant preservada: sem dados/config/RBAC/credenciais/crons/serviços,
+importação, instalação, restart, SELECT, contenção ou janela. M1 consumido intacto,
+NEWauth+NEWDB+NEWcipher, ambos crons, guarda38 fechada e out.15 CLOSED preservados;
+guarda/out.15/health atuais não foram recertificados por inferência.
+**CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.** Deifson; revisão21/10 ou mudança.
+
+---
+
 ## Próximo ato CSV preparado — base8bf0fa8e, somente revisão LOCAL
 
 **M1 COMPLETE/CONSUMIDO; não repetir M1/M2/M3, Event/preflights ou frentes ELF.**

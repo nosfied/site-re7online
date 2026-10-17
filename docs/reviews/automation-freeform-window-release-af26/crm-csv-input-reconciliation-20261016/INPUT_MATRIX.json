@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Future authorized directed read and private reconciliation of trio/config/saved/fallback/controls and route/PostgreSQL client; M1 consumed/pass, do not repeat Event. No SELECT/ownership certification or remote execution this round.",
+    "firstConcreteBlocker": "Separate authorization/review of existing bounded SELECTs linked to the newly observed route and client; effective SQL server/database/role, imports and canonical complete ownership still UNKNOWN. No empty database requirement while live. Root/16 bindings/phase authority/final freshness remain later distinct steps.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1669,6 +1669,21 @@
       "profilesFabricated": false,
       "elfPaused": true,
       "sourceProfileAndPm2ProjectionSeparate": true
+    },
+    "directedReadComplete": {
+      "base": "80e62ffd43dd31a956785e67c1086d679ab4f9dd",
+      "evidence": "../crm-csv-delivery-review-20261017/DIRECTED_RESULT.json",
+      "result": "DIRECTED_READ_COMPLETE_SCOPED_RECONCILIATION_PASS_NOT_CERTIFIED_FOR_WINDOW",
+      "consumed": true,
+      "bothCronsByteExact": true,
+      "supervisionByteExact": true,
+      "gatesFalse": true,
+      "authorizationFalse": true,
+      "savedFallbackByteExact": true,
+      "currentTrioConfigurationsPass": true,
+      "sqlExecuted": false,
+      "ownership": "UNKNOWN",
+      "newRemoteQueriesAfterCollect": 0
     }
   }
 }

@@ -14,12 +14,17 @@
   "compositionSha256": "417d0e86184da48413fc562c5b443a3a20e23721ae754215b9b6bab47843cd67",
   "csvSuspended": true,
   "currentInputsFabricated": false,
+  "directedReadConsumed": {
+    "evidence": "DIRECTED_RESULT.json",
+    "readAndScopedOfflineReconciliationPass": true,
+    "sqlExecuted": false
+  },
   "eventParentMaintenance": {
     "doNotRepeat": true,
     "evidence": "M1_RESULT.json",
     "state": "COMPLETE_CONSUMED"
   },
-  "nextOperationalAct": "Owner review of DIRECTED_COMMANDS_FOR_REVIEW.md, then separately authorized single deploy/no-sudo directed read of trio/config/saved/fallback/controls and route/PostgreSQL client; no SELECT or M1/Event repeat",
+  "nextOperationalAct": "Separate review/authorization of canonical bounded SELECTs linked to observed route/client in DIRECTED_RESULT.json, with fresh route revalidation; do not replay consumed diagnostic or require empty production DB",
   "notCertified": [
     "current processes/config/saved/fallback",
     "SQL identity/ownership/import exit",
