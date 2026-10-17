@@ -1,0 +1,106 @@
+{
+  "authorizedCommit": "2a3e9a81d6f78a14ff82ae9d3828feea16266dd9",
+  "state": "COMPLEMENT_CONSUMED_DENY",
+  "originalState": "RAW_READS_DENY",
+  "originalReference": {
+    "authorizedCommit": "ad7e866c374555bd85d3c4a2d3f1b6a45d7c7840",
+    "bytes": 87778,
+    "observations": 18,
+    "readerSha256": "d01961f5388fc49b65130ac4beace468327ac3faae22d3bb6a6599005d3a73e8",
+    "rootFinishedUtc": "2026-10-17T01:22:00.349350+00:00",
+    "rootStartedUtc": "2026-10-17T01:22:00.199522+00:00",
+    "rootStdoutSha256": "953df83c1c270595fb5f7b8c3ed80cb576979511c7f5e23a446e8ecd0ed25692",
+    "sha256": "931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529",
+    "state": "RAW_READS_DENY"
+  },
+  "collection": {
+    "startedUtc": "2026-10-17T01:40:39.463180+00:00",
+    "commandStartedUtc": "2026-10-17T01:40:39.463589+00:00",
+    "commandFinishedUtc": "2026-10-17T01:40:39.478735+00:00",
+    "endedUtc": "2026-10-17T01:40:39.479116+00:00",
+    "attemptedCommandIds": [
+      "boot-id"
+    ],
+    "exitCode": 1,
+    "errorClass": null,
+    "errno": null,
+    "accepted": false,
+    "stdoutBytes": 0,
+    "stderrBytes": 29,
+    "confirmedStaticReason": "SUDO_NONINTERACTIVE_AUTH_REQUIRED",
+    "bootIdObserved": false,
+    "rootReaderResponsePresent": false,
+    "observationCount": 0,
+    "terminal": "COMPLEMENT_READS_DENY",
+    "notRun": [
+      "deploy-cron",
+      "supervision",
+      "process-discovery",
+      "listener-discovery",
+      "tool-path-discovery"
+    ]
+  },
+  "custody": {
+    "sshTransferExit": 0,
+    "transportUtc": "2026-10-17T01:41:31.541716+00:00",
+    "byteExactCopyVerified": true,
+    "sourceBytes": 1630,
+    "sourceSha256": "2a8afe5a15cc1a90be5658828125fd219ba631e013887a3a498798f114b52e99",
+    "ingestionCompleted": false,
+    "firstLocalValidationDenial": "command_count",
+    "terminal": "R1R2_COMPLEMENT_CUSTODY_DENY",
+    "denialUtc": "2026-10-17T01:41:31.543182+00:00",
+    "sourceRecordsIngested": 0,
+    "artifacts": [
+      {
+        "privateArtifactName": "complement-capture.private.jsonl",
+        "bytes": 1630,
+        "sha256": "2a8afe5a15cc1a90be5658828125fd219ba631e013887a3a498798f114b52e99",
+        "mode": "0600"
+      },
+      {
+        "privateArtifactName": "privileged-output.private.jsonl",
+        "bytes": 492,
+        "sha256": "ce70bccab1c6057d0f3bf35832b9c80a4334e2968a4a4d0ad43019ce82cb201f",
+        "mode": "0600"
+      },
+      {
+        "privateArtifactName": "sequencer.journal.jsonl",
+        "bytes": 130,
+        "sha256": "6b001f4e8ddac27066120c02fec7e61c71d719aa2f41859df93fb5e8ec67cdb9",
+        "mode": "0600"
+      },
+      {
+        "privateArtifactName": "transfer.stderr.private",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mode": "0600"
+      },
+      {
+        "privateArtifactName": "transfer.stdout.private",
+        "bytes": 2650,
+        "sha256": "06987a05d0f2bd7cdf88027fc13e14d6d8c167fb4d5b18aca8c77ce54a35a15d",
+        "mode": "0600"
+      }
+    ]
+  },
+  "preservation": {
+    "originalPrivateArtifactsByteExactUnchanged": true,
+    "originalReclassifiedAsComplete": false,
+    "originalRemotePathsReread": 0,
+    "oldObservationCount": 18,
+    "oldObservationIntervalUtc": [
+      "2026-10-17T01:22:00.199522+00:00",
+      "2026-10-17T01:22:00.349350+00:00"
+    ],
+    "atomicSnapshot": false,
+    "retroactiveBootIdentityProven": false
+  },
+  "retries": {
+    "collect": 0,
+    "custody": 0
+  },
+  "sqlR3Executed": false,
+  "toolchainR4Executed": false,
+  "operationalCertification": false
+}
