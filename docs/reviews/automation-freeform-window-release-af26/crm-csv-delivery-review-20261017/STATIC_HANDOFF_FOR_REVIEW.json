@@ -1,0 +1,109 @@
+{
+  "base": "a953df2fed54bd8e7b358e6412c4a021d1f51027",
+  "codePaths": 127,
+  "executionAuthorized": false,
+  "kind": "STATIC_HANDOFF_FOR_REVIEW_NOT_OPERATIONAL_BINDINGS",
+  "knownActivityInput": {
+    "materialized": false,
+    "operationsReferenceOnly": true,
+    "privateSourceSlot": "draft",
+    "sourceSha256": "0dff7eaa50f1fb46dc658a8242a774de18c452ef85c305ae30c109ab8346dbae",
+    "target": "window/csv-known-imports.private.json"
+  },
+  "newCodeObjects": 0,
+  "operationalGenerationCreated": false,
+  "operationallyCertified": false,
+  "originalCompatibility": "Only unselected certified exit with full R1/R2, fresh identity/generation, explicit recovery authority; never after possible candidate admission",
+  "postSelectionReturn": "candidate backend remains; frontend may return to certified compatible package; persistent backend failure needs another compatible version",
+  "preparedModes": [
+    "PRESTOP",
+    "ORIGINAL",
+    "CANDIDATE",
+    "DENY"
+  ],
+  "privateDocumentaryLinkSha256": "94b63aa482aad74c92ef07307207e918d21cd8fd1bdd3c16f29547de3cac9130",
+  "remainingCanonicalInputs": [
+    "current processes/config/saved/fallback",
+    "ownership and executor/import exit under future authorized containment",
+    "Event parents current/CAS",
+    "root protected code/toolchain/phase authority",
+    "fresh capacity/WAL/RPO",
+    "16 future path bindings",
+    "post-API frontend successors"
+  ],
+  "requiredDecision": {
+    "consumer": "window/capture_imports.py:capture",
+    "current": false,
+    "decision": "Approve the bounded audit/known-activity comparison for the20 audited tenant+UUID operations, using the separately linked limited owner statement; not global activity, exit, ownership or phase authority",
+    "decisionRecorded": false,
+    "denial": "known_activity_scope_missing",
+    "field": "reviewedAgainstAuditAndKnownActivity",
+    "noRepeatedHumanStatementNeeded": true,
+    "required": true,
+    "unlinked993OccurrencesRemainExcludedFromIdentityClaims": true
+  },
+  "runtimeCopies": 0,
+  "runtimeReferences": {
+    "api-candidate": {
+      "bytes": 8601600,
+      "copied": false,
+      "extracted": false,
+      "file": "api-candidate.tar",
+      "manifestSha256": "4e56ec242caaf7b865949fca9baf47c81d5d4804a1ce21d8c49e41e424664860",
+      "rebuilt": false,
+      "runtimeFreshnessCertified": false,
+      "sha256": "24e5857fb30a6540c4b3930b3979b49bc9954b0ff85c4021a7f43641b7b43eb5",
+      "verifiedLocally": true
+    },
+    "events-control-policy-overlay": {
+      "bytes": 10240,
+      "copied": false,
+      "extracted": false,
+      "file": "events-control-policy-overlay.tar",
+      "rebuilt": false,
+      "runtimeFreshnessCertified": false,
+      "sha256": "ebdfd5bba81b86f26506b13a89afb4aafd45252c4e1b23e90d2f2896b1d523e3",
+      "verifiedLocally": true
+    },
+    "frontend-candidate": {
+      "bytes": 174314812,
+      "copied": false,
+      "extracted": false,
+      "file": "frontend-candidate.tar.gz",
+      "manifestSha256": "5ef8ae4c1628b843bac57825742797f1fcce9835c9226c8f959da3fa0a89b176",
+      "rebuilt": false,
+      "runtimeFreshnessCertified": false,
+      "sha256": "ea3d27881193bd872798aeb28a30630f085bad65688be913b781491b0d86c2ed",
+      "verifiedLocally": true
+    },
+    "frontend-compatible-return": {
+      "bytes": 177450139,
+      "copied": false,
+      "extracted": false,
+      "file": "frontend-compatible-return.tar.gz",
+      "manifestSha256": "efe64f452db1a5575a7a688c5b57175fe3b25fdcaec91ed432df7a3a3ab853de",
+      "rebuilt": false,
+      "runtimeFreshnessCertified": false,
+      "sha256": "d41ddd648c12b3bed4c13a3dde1019b96e41eda64d68089043a11f5f4edc0431",
+      "verifiedLocally": true
+    }
+  },
+  "runtimeVerification": "Existing certified archive/member proofs reused; runtime archives not reread or rebuilt in this delta",
+  "sourceIndices": {
+    "CODE_COMPOSITION.json": {
+      "sha256": "8d2a8e5126ef53668dfedfb0d563c75bbab85e08c17cfe4b3d9b20631dbfc0c8",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/legacy-integrated-static/CODE_COMPOSITION.json"
+    },
+    "CODE_OBJECTS.json": {
+      "sha256": "1e7c96ef24f85d940cac9dcf9f53e83ce3dabd93ebb178929424fef3e079de5e",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/legacy-integrated-static/CODE_OBJECTS.json"
+    },
+    "DELIVERY.json": {
+      "sha256": "82b6682aa516abc623bde9d78c38e0f8c1540d694d19393cfa5565eab0c74ddb",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/legacy-integrated-static/DELIVERY.json"
+    }
+  },
+  "status": "PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+  "uniqueCodeObjects": 61,
+  "windowSequence": "Reviewed scope/data bindings and protected authority separately; only an expressly authorized future window admits gates, contains, certifies executor exit/ownership, reconciles current audit under fence, selects API then reviews frontend boundary"
+}

@@ -1,3 +1,93 @@
+## Vínculo documental fechado e passagem estática preparada — basea953df2f
+
+**PREPARED LOCALLY / LOCAL VALIDATED no delta ensaiado / REVIEW PENDING /
+NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO; M1 consumido; ELF pausado.**
+[Vínculo/recibo sanitizado](../crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_LINK_RESULT.json),
+[índice concreto de passagem estática](../crm-csv-delivery-review-20261017/STATIC_HANDOFF_FOR_REVIEW.json),
+[5 provas do delta](../crm-csv-delivery-review-20261017/ACTIVITY_LINK_PROOFS.json),
+[fonte editável local](../../../../scripts/crm_csv_delivery/link_known_activity.py),
+[testes](../../../../scripts/crm_csv_delivery/test_activity_link.py).
+
+### Referência explícita e preservação
+
+Leitor estável canônico conferiu os quatro arquivos privados existentes contra o recibo
+publicado em a953df2f (Git exato, sem confiar no digest anunciado pelo próprio arquivo).
+Conferidos tamanho/hash/owner600 e relações inventário↔rascunho↔declaração, operações,
+fonte SQL/composição e exclusões da declaração. Revalidação byte-exata antes/depois da
+escrita separada: **nenhum original ou journal anterior alterado**, nenhuma regeneração.
+
+| Original privado | Bytes | SHA256 |
+| --- | ---: | --- |
+| inventário |317603|`fb346e00f5aeb219b14c43aad0669d4b392c7c1ebfa920ef4667615351c155bb`|
+| rascunho |320478|`0dff7eaa50f1fb46dc658a8242a774de18c452ef85c305ae30c109ab8346dbae`|
+| declaração limitada |769|`b5261f73ca3b5a918645616e8e0f1f1d84b6c65c3cc7b9e570755928ee793f75`|
+| journal anterior |2551|`a323c149c75308ef1460f236402e1982fee0f0ce8fa596656407a13e9097287e`|
+
+Novo diretório privado700 `csv-known-activity-linked-20261017-v1`: link.private.json
+**2529B**, SHA`94b63aa482aad74c92ef07307207e918d21cd8fd1bdd3c16f29547de3cac9130`;
+journal canônico1449B, ambos600. O link referencia caminhos privados, hashes e procedência
+dos originais, conserva os horários da observação e do recebimento da declaração e explicita
+que a pendência antiga de obter essa declaração limitada foi atendida. Não é snapshot
+atômico nem nova observação. Não copiar os privados para Git nem executar novamente o
+preparador em destino consumido. O recibo anterior e seu rascunho com humanConfirmation=null
+são históricos preservados; o link é o registro posterior, não uma edição retroativa.
+
+A declaração já recebida **“Não tenho importação própria pendente conhecida”** permanece
+somente sobre o que o owner iniciou/conhece. Não será solicitada novamente. Não certifica
+outros tenants, completude global, saída, ownership ou autoridade. Duas ocorrências993
+continuam sem vínculo de identidade; não foram associadas por horário/telefone/contagem,
+nem convertidas em atividade atual ou desconsideradas para fabricar aprovação.
+
+### Avanço estático efetivamente entregue
+
+STATIC_HANDOFF_FOR_REVIEW.json SHA
+`3f4500f1a46e4c891dbb69e5aea16528ac89b1fea822c2bbec91655b105c66df`.
+Referências byte-autenticadas aos três índices concretos existentes, **127 caminhos/61
+conteúdos** e quatro pacotes certificados (API24e5857f, frontend candidato/retorno,
+overlay Event). Índices/61 fontes conferidos; provas de archives/membros reutilizadas,
+sem releitura/cópia/rebuild/extracção de runtimes. Nenhum novo objeto de código composto.
+O índice liga o hash do link privado à referência exata do rascunho destinado futuramente
+a window/csv-known-imports.private.json, mantendo materialized=false. Esse arquivo é um
+**índice de revisão**, não binding/pin/autoridade operacional e não é consumido pelo
+entrypoint operacional para dispensar os checkers. A composição127/61 e seus manifests
+permanecem idênticos; nenhuma geração operacional foi criada.
+
+### Decisão real delimitada e sequência restante única
+
+Consumidor concreto **window/capture_imports.py:capture** (bytes já compostos
+8a2955b0…) exige em window/csv-known-imports.private.json:
+`reviewedAgainstAuditAndKnownActivity is True` e lista operations; depois verifica cada
+chave tenant+operationId contra a auditoria observada. O rascunho mantém o campo **false**.
+**Decisão não registrada:** aprovar o confronto delimitado das20 chaves auditadas com a
+atividade conhecida, usando a declaração já vinculada e preservando as duas ocorrências
+sem identidade. Isso é aprovação de uso desse escopo na preparação, **não nova pergunta
+sobre pendências**, certificação das ações dos tenants, admissão de gates ou autorização
+de janela. Nenhum campo ownerReviewed genérico foi inventado como exigência adicional.
+Não se fez a transição false→true por inferência desta instrução de vinculação documental.
+
+Após essa decisão, materializar dados/16 vínculos e manifests canônicos na preparação
+futura, com controles e autoridade próprios. Reutilizar observações datadas no seu alcance;
+fontes antigas não substituem identidades/frescor exigidos no ponto de uso. R0/root e demais
+provas perecíveis só na sequência coordenada/autorizada. Saída/ownership/CAS e auditoria
+atual sob fence permanecem **no ponto previsto da futura janela**, não antecipados. API→
+validação UUID/GET/ledger→fronteira/frontend por revisão; retorno ORIGINAL apenas antes
+da seleção e com controles R1/R2 completos; após seleção mantém API candidata compatível.
+Encerramento exige ambos crons/supervisão/saved/fallback600/gates falsos/barreira ausente/UI.
+
+### Validação e limites
+
+Cinco testes novos, sem repetir as seis provas anteriores: vínculo dos bytes reais;
+deriva de referência/operações/captura/composição; ampliação indevida da declaração ou
+flags de aprovação; tentativa de vincular993; índices/61 objetos concretos e decisão
+não preenchida. Negativas alteram somente cópias em memória. O hash zero do teste de
+índice é argumento sintético sem autoridade, não permit. Escrita real local do link e
+private_record conferida; nenhum efeito de sistema produtivo foi simulado como observado.
+Não executados capture, SQL, derive, compositor, root, PM2, VPS, instalação ou janela.
+Provas funcionais/legadas/recuperação permanecem reutilizadas; NEWauth+NEWDB+NEWcipher,
+produção multitenant, controles, guarda38 e out.15 preservados.
+
+---
+
 ## Revisão técnica do inventário e atividade conhecida — base844cff09
 
 **PREPARED LOCALLY / LOCAL VALIDATED no alcance ensaiado / REVIEW PENDING /

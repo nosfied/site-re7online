@@ -1,3 +1,20 @@
+## Vigente — vinculação fechada; decisão delimitada de uso do escopo pendente
+
+[Recibo](../crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_LINK_RESULT.json),
+[passagem estática concreta](../crm-csv-delivery-review-20261017/STATIC_HANDOFF_FOR_REVIEW.json),
+[relatório e sequência única](REPORT.md).
+
+| Grupo | Entregue / limite | Próximo ato |
+| --- | --- | --- |
+| Inventário↔rascunho↔declaração |link privado separado, hashes/procedência conferidos; originais/journals intactos |fechado; não repetir declaração/derivação/coleta |
+| Declaração owner |nenhuma própria pendente conhecida; não engloba outros tenants |reutilizar; ocorrências993 seguem sem identidade |
+| Preparação estática |índices127/61 e quatro pacotes existentes explicitamente vinculados; zero cópia/rebuild |usar na futura materialização canônica; não é geração/pin operacional |
+| Decisão exigida |capture exige reviewedAgainstAuditAndKnownActivity=true; draft false |aprovar uso do confronto delimitado20 chaves + declaração vinculada, sem completude global/saída/ownership/autoridade |
+| Depois da decisão |16 vínculos/dados/controles/autoridade e provas frescas no momento correto |decisões separadas; saída/ownership sob fence na futura janela, depois API→frontend |
+
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+M1 consumido; ELF pausado. Checkpoints abaixo são históricos e não reabrem solicitações.
+
 ## Vigente — revisão técnica concluída; escopo operacional não emitido
 
 [Relatório e sequência](REPORT.md), [resultado](../crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_RESULT.json),

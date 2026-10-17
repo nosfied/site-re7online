@@ -1,0 +1,44 @@
+{
+  "base": "a953df2fed54bd8e7b358e6412c4a021d1f51027",
+  "documentaryLinkComplete": true,
+  "executorExitCertified": false,
+  "humanScope": "OWN_IMPORTS_KNOWN_TO_OWNER_ONLY",
+  "journal": {
+    "bytes": 1449,
+    "mode600": true,
+    "sha256": "1ca425d7d39bb0faf07df487af66814d3709952974c837c4fb60554c88bc188b"
+  },
+  "linkBytes": 2529,
+  "linkSha256": "94b63aa482aad74c92ef07307207e918d21cd8fd1bdd3c16f29547de3cac9130",
+  "noNewHumanConfirmation": true,
+  "operationalScopeApproved": false,
+  "operationalScopeIssued": false,
+  "originalsUnchanged": true,
+  "ownerStatementReceived": true,
+  "ownershipComplete": false,
+  "phaseAuthorityIssued": false,
+  "privateDirectoryName": "csv-known-activity-linked-20261017-v1",
+  "result": "DOCUMENTARY_LINK_COMPLETE_STATIC_HANDOFF_PREPARED",
+  "scopeComplete": false,
+  "sourceHashes": {
+    "draft": {
+      "bytes": 320478,
+      "sha256": "0dff7eaa50f1fb46dc658a8242a774de18c452ef85c305ae30c109ab8346dbae"
+    },
+    "inventory": {
+      "bytes": 317603,
+      "sha256": "fb346e00f5aeb219b14c43aad0669d4b392c7c1ebfa920ef4667615351c155bb"
+    },
+    "priorJournal": {
+      "bytes": 2551,
+      "sha256": "a323c149c75308ef1460f236402e1982fee0f0ce8fa596656407a13e9097287e"
+    },
+    "statement": {
+      "bytes": 769,
+      "sha256": "b5261f73ca3b5a918645616e8e0f1f1d84b6c65c3cc7b9e570755928ee793f75"
+    }
+  },
+  "staticHandoffSha256": "3f4500f1a46e4c891dbb69e5aea16528ac89b1fea822c2bbec91655b105c66df",
+  "technicalReviewReused": true,
+  "unlinked993Occurrences": 2
+}

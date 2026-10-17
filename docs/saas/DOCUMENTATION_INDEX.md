@@ -1,5 +1,23 @@
 # Documentation Index
 
+## CSV — vínculo documental fechado e passagem estática para revisão
+
+[Resultado/seqüência vigente](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[índice concreto](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/STATIC_HANDOFF_FOR_REVIEW.json),
+[5 provas do delta](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_LINK_PROOFS.json).
+Inventário, rascunho e declaração limitada vinculados por hashes/procedência em sidecar
+privado separado; originais/journal intactos. Declaração já recebida, não repetir pergunta.
+Duas ocorrências993 continuam sem identidade comprovada.127 caminhos/61 conteúdos e
+quatro pacotes reutilizados, sem recomposição/cópia/build ou geração operacional.
+Próxima decisão concreta: aprovar o confronto delimitado para o campo canônico
+reviewedAgainstAuditAndKnownActivity (draft false); não é completude global, saída,
+ownership, autoridade ou autorização de janela. Depois: materialização canônica/16 vínculos/
+controles/autoridade, com provas perecíveis no momento previsto e saída sob fence só na
+futura janela expressamente autorizada. Produção intocada; M1 consumido; ELF pausado.
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+Entradas seguintes preservam a cronologia; pedidos de declaração antigos estão atendidos.
+
+
 ## CSV — inventário revisado e declaração limitada recebida
 
 [Resultado e sequência vigente](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),

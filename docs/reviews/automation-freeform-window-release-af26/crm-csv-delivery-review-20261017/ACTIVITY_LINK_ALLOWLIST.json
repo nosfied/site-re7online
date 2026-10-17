@@ -1,0 +1,22 @@
+{
+  "base": "a953df2fed54bd8e7b358e6412c4a021d1f51027",
+  "branch": "review/campaign-recovery-20260926",
+  "excluded": "All private bytes/IDs/tenants/profiles/bindings/journals; historical compositions, consumed commands and proofs; unrelated work",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
+    "scripts/crm_csv_delivery/link_known_activity.py",
+    "scripts/crm_csv_delivery/test_activity_link.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_LINK_RESULT.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/STATIC_HANDOFF_FOR_REVIEW.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_LINK_PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_LINK_ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_LINK_HASHES.sha256"
+  ],
+  "hashIndexScope": "Every allowlisted file except the hash index itself; no FULL_DELTA self-reference",
+  "scope": "Only new offline documentary link, static review handoff, focused tests and affected current checkpoints"
+}

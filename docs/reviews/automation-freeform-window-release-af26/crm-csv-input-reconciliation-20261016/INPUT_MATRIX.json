@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Operational known-activity scope has not been approved/materialized. Technical inventory review and limited owner statement are available; do not ask owner to recognize UUIDs or certify all tenants. Two historic993 reports stay identity-unlinked; not evidence of active work. Future16 links/controls/authority and under-fence exit/ownership remain distinct.",
+    "firstConcreteBlocker": "Documentary linkage is complete; static handoff prepared from unchanged127-path/61-object composition. capture_imports.capture requires reviewedAgainstAuditAndKnownActivity=True; draft remains False pending explicit decision on bounded scope use. The limited owner statement is received, linked and must not be requested again; no all-tenant/global certification inferred.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1808,6 +1808,22 @@
       "ownershipComplete": false,
       "authorityIssued": false,
       "next": "Review scope draft and explicitly bind limited statement; canonical future materialization/16 links/authority; exit and fresh reconciliation at authorized under-fence point only"
+    },
+    "knownActivityDocumentaryLink": {
+      "base": "a953df2fed54bd8e7b358e6412c4a021d1f51027",
+      "result": "../crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_LINK_RESULT.json",
+      "staticHandoff": "../crm-csv-delivery-review-20261017/STATIC_HANDOFF_FOR_REVIEW.json",
+      "proofs": "../crm-csv-delivery-review-20261017/ACTIVITY_LINK_PROOFS.json",
+      "documentaryLinkComplete": true,
+      "originalsUnchanged": true,
+      "ownerStatementAlreadyReceived": true,
+      "noRepeatedHumanConfirmation": true,
+      "unlinked993Occurrences": 2,
+      "operationalScopeIssued": false,
+      "remainingDecisionField": "reviewedAgainstAuditAndKnownActivity",
+      "currentValue": false,
+      "decisionScope": "Use the bounded20-operation audit/known-activity comparison with linked limited statement; not global activity, exit, ownership or authority",
+      "next": "Decision on bounded scope use, then canonical data/16 bindings/controls/authority; fresh exit and audit under fence only at authorized window point"
     }
   }
 }

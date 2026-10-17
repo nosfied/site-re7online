@@ -1,0 +1,18 @@
+{
+  "base": "a953df2fed54bd8e7b358e6412c4a021d1f51027",
+  "notExercised": [
+    "VPS",
+    "SQL",
+    "runtime execution",
+    "canonical capture exit/SQL/write effects",
+    "root/PM2",
+    "installation",
+    "phase authority"
+  ],
+  "real": "Existing private bytes/hash/mode read by canonical stable reader; accepted static composition and61 referenced objects; published source/receipt bytes compared against exact Git base",
+  "reused": "Six inventory-review tests,16 legacy/four composition tests and unaffected functional/recovery/SQL/PM2 proofs not rerun",
+  "scope": "New documentary reference validation and static handoff only",
+  "status": "PREPARED LOCALLY / LOCAL VALIDATED in tested scope / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+  "synthetic": "Negative mutations are in-memory copies; zero-hash link argument only in non-operational handoff test; no observed production data fabricated",
+  "tests": 5
+}
