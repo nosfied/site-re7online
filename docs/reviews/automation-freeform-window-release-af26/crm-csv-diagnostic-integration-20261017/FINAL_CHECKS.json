@@ -1,0 +1,12 @@
+{
+  "result": "SOURCE_ONLY_INTEGRATION_DELIVERY_PASS",
+  "base": "774234198bb2b6cc87d23e34e5cf37227ecb32e6",
+  "allFourProofsBoundToFinalSources": true,
+  "historicalPostRpcAndReconciliationIndicesStillValid": true,
+  "onlyTrackedChangesAreThreeCanonicalDocs": true,
+  "runnerManifestOrOperationalReferencesChanged": false,
+  "newCollectorLauncherOrOperationalPackage": false,
+  "deploymentEnabled": false,
+  "workflowApplicableToPush": false,
+  "sanitized": true
+}

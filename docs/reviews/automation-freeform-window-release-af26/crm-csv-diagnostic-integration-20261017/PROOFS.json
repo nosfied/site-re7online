@@ -1,0 +1,57 @@
+{
+  "result": "AFFECTED_SOURCE_INTEGRATION_LOCAL_VALIDATED",
+  "tests": 4,
+  "cases": [
+    {
+      "case": "profile-tampered",
+      "denial": [
+        "profile-reference-hash",
+        "HISTORICAL_HASH_DRIFT"
+      ],
+      "sourceProfileHashBeforeUse": true,
+      "separateRepresentations": true,
+      "canonicalWriterAndReaders": true,
+      "frontierSha256": "d78cd30524ba7823fcdbe3bb63bb7b4622a0177e5d4d1629d692e227c696d245",
+      "adapterSha256": "53de3ac796228c908157930cd465993f6b2b8a14e1bc550607ff7e39f5970943"
+    },
+    {
+      "case": "projection-drift",
+      "denial": [
+        "frontend-contract",
+        "FRONTEND_APPLICATION_ENVIRONMENT_DRIFT"
+      ],
+      "sourceProfileHashBeforeUse": true,
+      "separateRepresentations": true,
+      "canonicalWriterAndReaders": true,
+      "frontierSha256": "d78cd30524ba7823fcdbe3bb63bb7b4622a0177e5d4d1629d692e227c696d245",
+      "adapterSha256": "53de3ac796228c908157930cd465993f6b2b8a14e1bc550607ff7e39f5970943"
+    },
+    {
+      "case": "kernel-drift",
+      "denial": [
+        "frontend-contract",
+        "CANONICAL_ENVIRONMENT_DRIFT"
+      ],
+      "sourceProfileHashBeforeUse": true,
+      "separateRepresentations": true,
+      "canonicalWriterAndReaders": true,
+      "frontierSha256": "d78cd30524ba7823fcdbe3bb63bb7b4622a0177e5d4d1629d692e227c696d245",
+      "adapterSha256": "53de3ac796228c908157930cd465993f6b2b8a14e1bc550607ff7e39f5970943"
+    },
+    {
+      "case": "valid",
+      "denial": null,
+      "sourceProfileHashBeforeUse": true,
+      "separateRepresentations": true,
+      "canonicalWriterAndReaders": true,
+      "frontierSha256": "d78cd30524ba7823fcdbe3bb63bb7b4622a0177e5d4d1629d692e227c696d245",
+      "adapterSha256": "53de3ac796228c908157930cd465993f6b2b8a14e1bc550607ff7e39f5970943"
+    }
+  ],
+  "testSha256": "9d0384a71b1058c89d17eaa54a0e961712733c31a5f36b6d761e040fffe088ab",
+  "editableSourceSha256": "9fc6baad650fdb0ad4bc7c356276e957f454ad19ac595c33f116b6b748455f60",
+  "real": "frontend flow, consumers/load, canonical System/Operations, stable_file/hash/JSON, socket metadata, sealed memfd, Capture/private_record and saved comparisons",
+  "simulated": "SSH absent; /proc fixtures, SO_PEERCRED projection, RPC response/process execution. No real Node/PM2/SQL command. No operational profile/pin generated.",
+  "unaffectedProofsReused": "11 reconciliation tests, previous 9 literal-block and 2 stat tests; PM2 proof reused, not rerun",
+  "noOperationalOutput": true
+}

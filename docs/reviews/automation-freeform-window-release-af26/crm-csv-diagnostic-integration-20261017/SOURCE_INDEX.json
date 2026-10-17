@@ -1,0 +1,24 @@
+{
+  "base": "774234198bb2b6cc87d23e34e5cf37227ecb32e6",
+  "editableSource": "scripts/crm_csv_diagnostic/editable_sources.py",
+  "editableSourceSha256": "9fc6baad650fdb0ad4bc7c356276e957f454ad19ac595c33f116b6b748455f60",
+  "integration": "source_inputs returns bytes in memory; no CLI, filesystem materialization, runner or manifest emitted",
+  "sourceReader": {
+    "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/launch.py",
+    "sha256": "19389532ecdd9b8fc3360fb8c424dbf5bba1c17003c6f4a4f415799a6f7bd280"
+  },
+  "unchangedSnapshot": {
+    "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/frontier.source",
+    "sha256": "65f7e994770d4a69b02fb3d63b225e622b57be981ca7db2c1a5a6ad09908cb05"
+  },
+  "acceptedAdapter": {
+    "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/contracts.py",
+    "sha256": "53de3ac796228c908157930cd465993f6b2b8a14e1bc550607ff7e39f5970943"
+  },
+  "memorySources": {
+    "frontier.source": "d78cd30524ba7823fcdbe3bb63bb7b4622a0177e5d4d1629d692e227c696d245",
+    "contracts.py": "53de3ac796228c908157930cd465993f6b2b8a14e1bc550607ff7e39f5970943"
+  },
+  "sourceProfileAuthority": "unchanged historical(source.profile) -> canonical stable_file -> existing HISTORY digest -> JSON -> same profiles object passed to compare_frontend; NOT refreshed",
+  "noOperationalManifestOrReferencesChanged": true
+}

@@ -1,0 +1,7 @@
+--- consumed-snapshot/frontier.source
++++ future-editable-source/frontier.source
+@@ -13,0 +14 @@
++ 'frontend_application_environment_drift':'FRONTEND_APPLICATION_ENVIRONMENT_DRIFT',
+@@ -115 +116 @@
+-    checked(cap,'frontend-contract','CANONICAL_FRONTEND_CONFIG_DENIED',lambda:canonical_io(cap,system,'frontend-config',lambda:c['compare_frontend'](by['re7-admin-front'],before,op)),allowed)
++    checked(cap,'frontend-contract','CANONICAL_FRONTEND_CONFIG_DENIED',lambda:canonical_io(cap,system,'frontend-config',lambda:c['compare_frontend'](by['re7-admin-front'],before,op,profiles)),allowed)

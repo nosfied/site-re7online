@@ -1,0 +1,17 @@
+{
+  "scope": "Source-only integration, focused test/proof/provenance and brief canonical checkpoints; no consumed source or private file",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-diagnostic-integration-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-diagnostic-integration-20261017/DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-diagnostic-integration-20261017/FINAL_CHECKS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-diagnostic-integration-20261017/HASHES.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-diagnostic-integration-20261017/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-diagnostic-integration-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-diagnostic-integration-20261017/SOURCE_INDEX.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-diagnostic-integration-20261017/test_integration.py",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "scripts/crm_csv_diagnostic/editable_sources.py"
+  ]
+}
