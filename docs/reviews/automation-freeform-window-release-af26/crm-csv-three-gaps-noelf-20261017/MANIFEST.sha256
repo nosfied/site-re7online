@@ -1,0 +1,17 @@
+82c1afe61f1236e9b876fc4659204b760b2036aab1c8366200a2d0f8a3613aff  docs/BACKLOG_TECH.md
+6c91ba9ac9238e4bb6445e3e2a2a406a65306832c08bb37babd1bf424f2bd84e  docs/RUNBOOK_WHATSAPP_AGENT.md
+8239262ff51304d893e0c735d8e119452ef88660482b625cb43e2a0d33421d61  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/ALLOWLIST.json
+9b98b63764602f41cd0991aea67110ab80bd12c4fee9504f03e29244f6af3c8c  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/COMMANDS.md
+810face70519427bebe5d78a0a5afe1d070eb644e358377dde8147e0f8eced4c  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/DELTA_SCOPE.json
+4aa4cab022adfa70a2fa32f1b9fd4822e7ef12d1cbdeb9dc08eade6779a5b58b  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/FUNCTIONAL_DELTA.patch
+7ff4cad23368e526a376584a7fc591eb4f4a2d2e49534f9b4541fc2d75f1971d  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/MANIFEST.json
+b12a21a4fd9c6ee2cba6c949fbca3492f75271164bc8e91f7ec10b00e7657d81  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/PROOFS.json
+b2a8446979581c553d6a7d2823561cee84962ffba7d5dabe65bb85cfd1ebeffe  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/REPORT.md
+2410ac9a62d1c100a080face7da4c9d05a3c35169367e13957ff5d26b033d690  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/compose.py
+25324f0ddeebdec1825c8afb964184a6c0429383183327e37820bee9ad1f3e54  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/driver.py
+d3da0e8e534bc584daf71c7b0371872e7cee2a7a48211317bacb611cd3405abf  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/lab.py
+2eb0b322656e0872648f2cc4d296ef6608a74d52248a93e69b7b2ef1362bba8a  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/launch.py
+49ec618a703c8c0a6caf91fb1a4be3f165e2707fe7cbc244592a877e5b54200a  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/runner.py
+c00747bf1f781dcebaf20bd0fedaa2b43677566dd002254cd8e02471e9ca805b  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/seal.py
+afccb43d8acfb4f17108410e67b064643fc1456f79b995ddad3f0c83affd7d9a  docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/test_blocks.py
+4b7759fb435ec558c47188253a892c1102feb6c6901a0850b051dccc83fbb428  docs/saas/DOCUMENTATION_INDEX.md

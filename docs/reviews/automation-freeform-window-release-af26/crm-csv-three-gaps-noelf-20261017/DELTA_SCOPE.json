@@ -1,0 +1,41 @@
+{
+  "base": "99c2198d80c61d8904cae56fbb4d093258e236d2",
+  "derivedFrom": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+  "driverAndLaunchChanges": "exclusive destinations/package name only",
+  "functionalDeltaExclusive": true,
+  "newOperationalAuthorities": false,
+  "operationalConstantsUnchanged": true,
+  "runnerChange": "exactly one readelf command replaced by explicit unverified ELF event",
+  "sourceFiles": {
+    "driver.py": {
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/driver.py",
+      "sha256": "8efaccf63790ecee54022c92badbfe4629a52d7a7bbb6fdbb557a1c7d943402c"
+    },
+    "lab.py": {
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/lab.py",
+      "sha256": "8d35cc32b085aedabc0d999599756ebe8dff020d400f1fafa7b342ececebd588"
+    },
+    "launch.py": {
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/launch.py",
+      "sha256": "5922f70646b6e20969abaccad0e834742127822e812012dc75144ffb67805bc4"
+    },
+    "runner.py": {
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py",
+      "sha256": "4c54a686f6cb42ed4e9663f0d842b13dcd371ed144a2f26e5335bdb06a77fcc5"
+    },
+    "seal.py": {
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/seal.py",
+      "sha256": "6d035d4310339e3c7793acb8af4bfda828af64f649fc67b891ebb4479d8ca523"
+    },
+    "test_blocks.py": {
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/test_blocks.py",
+      "sha256": "ab8d58ffe8be30ba1be6932e1ce8c6a0f91148faaf851bd327e32367c5b522a4"
+    }
+  }
+}

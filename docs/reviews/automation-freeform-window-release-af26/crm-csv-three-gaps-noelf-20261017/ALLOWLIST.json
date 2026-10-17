@@ -1,0 +1,25 @@
+{
+  "base": "99c2198d80c61d8904cae56fbb4d093258e236d2",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/COMMANDS.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/DELTA_SCOPE.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/FUNCTIONAL_DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/MANIFEST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/compose.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/driver.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/lab.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/launch.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/runner.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/seal.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/test_blocks.py",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ],
+  "scope": "minimal ELF separation, exclusive destinations and pre-execution proofs",
+  "rawPublished": false
+}

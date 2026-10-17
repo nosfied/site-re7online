@@ -1,6 +1,9 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
 
+**CSV17/10 — separação ELF, provas prévias à VPS.** [Delta mínimo e11 ensaios literais](reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/REPORT.md): única mudança funcional troca a chamada readelf pelo registro ELF/closure operacional NÃO CONFERIDA, sem PASS de toolchain. Hash/cadeia/FD Node, closure26, peer/identidade/configuração/rota/limites e custódia preservados; destinos novos. Os blocos1/2 têm autorização condicional única após publicar/conferir essas provas; execução real ainda não realizada neste checkpoint. SELECT/readelf/alternativas/root observer/instalação não autorizados. Tentativa anterior consumida/DENY intacta; ownership UNKNOWN. LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso, NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Revisão21/10 ou mudança.
+
+
 **CSV17/10 às09:34 Fortaleza — blocos1/2 CONSUMED/DENY.** [Resultado sanitizado, gates e custódia](reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-result-20261017/REPORT.md): materialização/39 fontes e closure PASS; Node/Docker observados, tentativa de `/usr/bin/readelf` negada com FileNotFoundError/errno2 antes do RPC. Gate2/configuração e gate3/rota/psql NÃO ALCANÇADOS; SELECT não autorizado/não executado. Envelope19.788B preservado byte-exato e ingerido por private_record, recibo PRESERVED_NOT_CERTIFIED/gatePass=false; ownership UNKNOWN. Sem retry/fallback/reparo, observador root, sudo, instalação, backup ou janela. Destinos consumidos e DENYs anteriores preservados; nenhuma mudança de código/bindings/pins. CSV SUSPENSO / NOT WINDOW READY. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 intocados; sem nova certificação dos controles não observados. Deifson; revisão21/10 ou novo escopo.
 
 

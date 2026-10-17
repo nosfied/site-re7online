@@ -1,0 +1,7 @@
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/runner.py
+index a0178dd0..25287de5 100644
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/runner.py
+@@ -169 +169 @@ def run(q,action):
+-        cap.command('node-elf',['/usr/bin/readelf','--wide','--program-headers','--dynamic','/usr/bin/node'])
++        cap.event('ELF_OPERATIONAL_CLOSURE_NOT_CHECKED',elfChecked=False,operationalToolchainCertified=False)
