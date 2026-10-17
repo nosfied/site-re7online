@@ -1,0 +1,47 @@
+{
+  "result": "LOCAL_ROUTE_VALIDATED_NOT_OPERATIONALLY_CERTIFIED",
+  "tests": 4,
+  "cases": [
+    {
+      "case": "replacement",
+      "materializeExit": 0,
+      "collectExit": 1,
+      "result": "DENY_NO_RETRY",
+      "denialStage": "path-selection",
+      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
+      "literalBlocks": true
+    },
+    {
+      "case": "denied-tool",
+      "materializeExit": 0,
+      "collectExit": 1,
+      "result": "DENY_NO_RETRY",
+      "denialStage": "analysis-tool",
+      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
+      "literalBlocks": true
+    },
+    {
+      "case": "missing-tool",
+      "materializeExit": 0,
+      "collectExit": 1,
+      "result": "DENY_NO_RETRY",
+      "denialStage": "analysis-tool",
+      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
+      "literalBlocks": true
+    },
+    {
+      "case": "valid",
+      "materializeExit": 0,
+      "collectExit": 0,
+      "result": "DISCOVERY_OBSERVED_NOT_CERTIFIED",
+      "denialStage": null,
+      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
+      "literalBlocks": true
+    }
+  ],
+  "commandsSha256": "5a78a435cb8b89b9002f67a033767fd4b6ead6473abf6a618515244405f78beb",
+  "manifestSha256": "bda69876fbcd2ecf737d133c48e8c06dda7a7ffb4375186cd0b042a7820e8645",
+  "real": "Bash/Python launcher, FD/no-follow/metadata canonical reader, actual local readelf consuming actual ELF FD, export/transfer envelope/ingest/private_record; isolated user and network namespace",
+  "simulated": "SSH via local shim; host root UID65534 projected to UID0 inside user namespace; remote filesystem/proc/stat/maps/boot/pm2.pid; expected Node digest projected to local synthetic image (/usr/bin/true), not Node d016; ENOENT/EACCES injected at tool read, not observations of VPS; new fixture executable modes only",
+  "preserved": "All historical destinations, DENYs and operational generations untouched; no target Node/PM2 executed"
+}

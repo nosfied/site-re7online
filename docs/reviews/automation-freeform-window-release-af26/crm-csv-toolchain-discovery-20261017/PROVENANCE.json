@@ -1,0 +1,97 @@
+{
+  "base": "6e93e40902cde2f5cb43bf210a8dc2389c75411e",
+  "derivations": {
+    "launch.py": {
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/launch.py",
+      "sha256": "5922f70646b6e20969abaccad0e834742127822e812012dc75144ffb67805bc4",
+      "replacements": [
+        [
+          "crm-csv-three-gaps-executable-20261017",
+          "crm-csv-toolchain-discovery-20261017"
+        ],
+        [
+          "re7-csv-three-gaps-material-20261017-v1",
+          "re7-csv-toolchain-material-20261017-v1"
+        ],
+        [
+          "re7-csv-three-gaps-executable-tools-20261017-v1",
+          "re7-csv-toolchain-tools-20261017-v1"
+        ],
+        [
+          "re7-csv-three-gaps-executable-read-20261017-v1",
+          "re7-csv-toolchain-read-20261017-v1"
+        ],
+        [
+          "csv-three-gaps-executable-20261017-v1",
+          "csv-toolchain-discovery-20261017-v1"
+        ],
+        [
+          "csv-three-gaps-launcher-20261017-v1-",
+          "csv-toolchain-launcher-20261017-v1-"
+        ],
+        [
+          "THREE_GAPS_",
+          "TOOLCHAIN_DISCOVERY_"
+        ]
+      ],
+      "restriction": "collect/materialize only; no SELECT entry"
+    },
+    "driver.py": {
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/driver.py",
+      "sha256": "8efaccf63790ecee54022c92badbfe4629a52d7a7bbb6fdbb557a1c7d943402c",
+      "replacements": [
+        [
+          "crm-csv-three-gaps-executable-20261017",
+          "crm-csv-toolchain-discovery-20261017"
+        ],
+        [
+          "re7-csv-three-gaps-material-20261017-v1",
+          "re7-csv-toolchain-material-20261017-v1"
+        ],
+        [
+          "re7-csv-three-gaps-executable-tools-20261017-v1",
+          "re7-csv-toolchain-tools-20261017-v1"
+        ],
+        [
+          "re7-csv-three-gaps-executable-read-20261017-v1",
+          "re7-csv-toolchain-read-20261017-v1"
+        ],
+        [
+          "csv-three-gaps-executable-20261017-v1",
+          "csv-toolchain-discovery-20261017-v1"
+        ],
+        [
+          "csv-three-gaps-launcher-20261017-v1-",
+          "csv-toolchain-launcher-20261017-v1-"
+        ],
+        [
+          "THREE_GAPS_",
+          "TOOLCHAIN_DISCOVERY_"
+        ]
+      ],
+      "restriction": "collect/materialize only; no SELECT entry"
+    },
+    "capture.source": {
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py",
+      "sha256": "4c54a686f6cb42ed4e9663f0d842b13dcd371ed144a2f26e5335bdb06a77fcc5",
+      "extraction": [
+        "load",
+        "Capture"
+      ],
+      "method": "exact AST source segments, standard imports only"
+    }
+  },
+  "unchanged": [
+    "canonical read_package.py",
+    "privileged_output.source"
+  ],
+  "historicalEvidence": "R2 directed Node d016 and PM2 bbb586; no historical PID reused as current",
+  "selectionContract": {
+    "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source",
+    "sha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e",
+    "consumer": "System.start/System.run -> pm2_input.start -> PM2 shebang /usr/bin/env node",
+    "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "futureReviewRequired": "if consumer PATH changes, this discovery must be revised; no inference from SSH PATH"
+  },
+  "reproduction": "derive.py reproduces launch/driver/Capture; seal.py indexes reviewed sources and emits command literals; test_blocks.py runs those literals in isolated lab"
+}

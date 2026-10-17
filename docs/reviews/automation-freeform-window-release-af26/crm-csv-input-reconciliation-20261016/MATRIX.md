@@ -1,3 +1,17 @@
+# Atualização —17/10/2026, base6e93e409
+
+Integração da folha/compositor/lançamento pré-autoridade **ACCEPT LOCAL** somente no alcance descrito; simulações não são certificados. Procedimento Node/ELF/PM2 [COMMANDS](../crm-csv-toolchain-discovery-20261017/COMMANDS.md), seis fontes e quatro ensaios literais locais aprovados. Sem execução na VPS.
+
+| Grupo | Reutilizado / futuro procedimento | Ainda faltante / dependência |
+| --- | --- | --- |
+| Node selecionado/ELF | PATH canônico, entryPM2 pinado, leitor/cadeia/FD; ferramenta fixa readelf, ausente/inacessível => DENY. Futuro pm2.pid+exe/maps/boot por intervalo | Observação autorizada; PT_INTERP/NEEDED/RPATH e resolução offline; toolchain/proteção NÃO certificados |
+| PM2/path/transitivos | Fontes CLI/lock/índice e prova PM2 existentes; roteiro alias/bin/CLI/package/env e metadados das imagens mapeadas | JS dinâmico não observado UNKNOWN; decisão de proteção/instalação futura separada |
+| Saved/fallback/identidades; SQL/ownership;16vínculos/autoridade | Evidências históricas intactas nas linhas anteriores | Inputs atuais e autorizações separadas, sem fabricar dados ou renovar provas |
+
+Primeiro bloqueio factual: Node/ELF e resolução/proteção PM2. Próximo passo: revisão do procedimento, não execução implícita. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY. Seções seguintes preservadas como checkpoints históricos.
+
+---
+
 # Integração local —17/10/2026, base6adfb37e
 
 [Relatório consolidado](REPORT.md#integração-local-da-folha-e-lançamento-pré-autoridade-17102026-base6adfb37e). `currentReconciliation.compositionLaunchLocal` registra hashes, consumidores e provas. **LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO.**

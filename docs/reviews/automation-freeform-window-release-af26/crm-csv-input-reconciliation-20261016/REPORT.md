@@ -1,5 +1,46 @@
 # CRM/CSV — reconciliação dos inputs e próxima conferência
 
+## Aceite delimitado e procedimento Node/ELF/PM2 —17/10/2026, base6e93e409
+
+**INTEGRAÇÃO ANTERIOR ACCEPT LOCAL no alcance documentado / PROCEDIMENTO LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** O aceite refere-se à composição/folha e lançamento pré-autoridade descritos abaixo. Não promove projeções de UID/modos, Node local ou respostas sintéticas a observação produtiva. Os históricos REVIEW PENDING abaixo permanecem como registro de suas rodadas.
+
+### Procedimento único para o primeiro bloqueio
+
+[COMMANDS.md](../crm-csv-toolchain-discovery-20261017/COMMANDS.md) entrega dois blocos concretos **para revisão e autorização futura**: materialização local e transferência única/descoberta/custódia. Não foram executados na VPS. Novos namespaces exclusivos `re7-csv-toolchain-*20261017-v1`; nenhum destino consumido reutilizado. [MANIFEST.json](../crm-csv-toolchain-discovery-20261017/MANIFEST.json) autentica seis fontes. Não é geração operacional, manifest de fase, instalação ou permit.
+
+O adaptador dirigido [runner.py](../crm-csv-toolchain-discovery-20261017/runner.py) reutiliza `file_chain`, `stable_file`, `read_at`, `executable` e boot64 do leitor R2, Capture extraído byte-exato do runner aceito e `private_record` original. Launcher e driver derivam do transporte aceito; só materialize/collect expostos, sem SELECT. [PROVENANCE.json](../crm-csv-toolchain-discovery-20261017/PROVENANCE.json) identifica origens/hashes/transformações; derive.py reproduz os derivados e seal.py publica índice/literais. Não há writer, RPC, classificador ou autoridade paralelo.
+
+| Pergunta / consumidor | Leitura concreta e limite | Conclusão admissível / não comprovado |
+| --- | --- | --- |
+| Node que System.start selecionaria | PM2 alias/bin deve manter hashbbb586 e shebang exato; PATH vem de CLEAN da fonte Operations pinada, não da sessão SSH. Caminhos são observados em ordem. Primeira entrada existente executável deve ser Node d016; ambiguidade, falta de leitura ou drift nega | Resolução para **esse** PATH/UID e intervalo. Não executa env/Node/PM2 nem adapta referência para PASS |
+| Imagem running | pm2.pid atual, stat/ticks/exe/boot/maps pré/pós pelos leitores existentes. SHA do FD exe deve corresponder à seleção acima; nenhum PID histórico promovido | Candidato de daemon e imagem no intervalo; não identidade final do trio ou certificado de ownership/saída |
+| ELF e libs carregadas | Única ferramenta previamente escolhida `/usr/bin/readelf`; ELF executável/cadeia root-owned sem escrita grupo/outros. Ausência/EACCES nega. Tool e alvo abertos em FDs, não hash seguido de execução de caminho mutável. `--wide --program-headers --dynamic` | PT_INTERP/DT_NEEDED/RPATH/RUNPATH nos canais privados. Maps cobre o carregamento presente; resolução completa e carregamentos futuros continuam dependentes da análise offline. Não executa loader, ldconfig, ldd nem dependências |
+| Proteção PM2/transitivos | Alias/bin, CLI/package/env e imagens mapeadas com cadeias, links, owner/modos, dev/inode e hashes. JS transitivo comparável às fontes pinadas pré-existentes | Observação de proteção/ausência de proteção, sem corrigir nada. Não alega toda closureCLI, autoridade ou toolchain protegido; transitivos não observados UNKNOWN |
+
+Ferramenta readelf usa a confiança OS existente; o predicado de caminho root sem escrita de terceiros é uma precondição específica desta análise, não certificação de suas próprias dependências OS ou novo requisito retroativo de retorno. Node selecionado e imagem alvo não são executados. Quando a ferramenta faltar, não há tentativa por outro caminho, parser alternativo, instalação ou fallback. Descoberta precede qualquer escolha futura de proteção/instalação, que permanece separada e não autorizada.
+
+Limites escolhidos antes da leitura:64B boot/pm2.pid,256KiB maps,64KiB entry,8MiB scripts/config,256MiB por imagem,64 arquivos mapeados/512MiB total; readelf15s e limite HARD1MiB em **cada** canal via RLIMIT_FSIZE sobre temporários anônimos no destino privado, transporte180s. Excesso/falha para e conserva parcial. O transporte pode vencer antes do pior caso64×15s: preserva canais locais e origem remota, sem retry/reconexão automática. Sem resposta completa, custódia será DENY parcial, não conclusão da descoberta. Sem parent privado legítimo/writer íntegro ou destino já existente, parar antes dos efeitos; não criar parent nem reparar permissões.
+
+### Validação dirigida e limites das simulações
+
+[PROOFS.json](../crm-csv-toolchain-discovery-20261017/PROOFS.json): quatro casos finais aprovados em [test_blocks.py](../crm-csv-toolchain-discovery-20261017/test_blocks.py). Blocos Bash publicados executados literalmente, launcher/manifest, fontes em memória, leitor/FD/metadados, ferramenta readelf local real sobre ELF FD, export e ingestão/custódia reais. Não se substituiu verificador por callback PASS. UID0 é namespace de usuário sem privilégios no host; raiz do host representada por UID65534 é projetada explicitamente para UID0 na fixture. SSH é shim sem rede; proc/stat/maps/pm2.pid/boot e digest esperado Node são fixtures: ELF local de `/usr/bin/true` NÃO executado, **não** a imagem Node produtiva d016. ENOENT/EACCES são falhas injetadas na fronteira do tool read. Não houve PM2/Node alvo, sudo, daemon, SQL, download ou build.
+
+Casos: (1) descoberta sintética válida, sempre elfClosureCertified=false/protectionCertified=false; (2) readelf ausente, errno2, sem chamada de ferramenta; (3) leitura negada, errno13, sem chamada; (4) inode substituído entre snapshot e abertura, negativa antes de readelf. Todos preservaram canais/tamanhos/hashes e DENY no writer canônico. A suíte antiga PM2 completa, closure26, recuperação e integração de12 provas não foram repetidas.
+
+Os primeiros ensaios foram bloqueados pelo sandbox no namespace de rede. Repetidos somente no laboratório com aprovação de execução local; correções da fixture: bind gravável, projeção stat/lstat, instrumentação sem tocar metadados dos ancestrais e UID root. O ensaio identificou dependência indevida de TMPDIR no novo adaptador: temporários anônimos foram limitados ao próprio destino privado antes da validação final. Também foi explicitada a precondição root do analisador; quatro casos revalidados sobre os hashes finais. A conferência staged exigiu normalizar somente o EOF do trecho extraído; os quatro blocos/casos foram novamente aprovados com o manifest final. Não se atribuiu nenhum DENY histórico a essas causas locais.
+
+### Integridade da entrega
+
+A allowlist corrente contém somente este incremento e os seis checkpoints/documentos pertinentes. DELTA.patch representa os arquivos de código, provas, procedimento e documentos listados, **excluindo o próprio patch, ALLOWLIST.json e MANIFEST.sha256 de entrega** para não criar auto-referência. Usa contexto zero (`git apply --unidiff-zero`) para não introduzir whitespace artificial nas linhas de contexto vazias. O índice SHA da revisão cobre o patch e a allowlist, excluindo a si mesmo; MANIFEST.json do diagnóstico tem papel distinto e cobre somente suas seis fontes. Nenhuma política, perfil/binding privado, journal, mapa de processo bruto, runtime ou cache integra a publicação.
+
+Vercel permanece deploymentEnabled=false na branch review/campaign-recovery-20260926; único workflow versionado CI restringe push/PR a main/develop. Configurações não alteradas. Sem hook ativo configurado. Branch/HEAD e remoto conferidos na base6e93e409 antes das edições. Publicação Git não equivale a autorização remota ou instalação.
+
+### Dependências restantes e próximo passo
+
+Revisar/aprovar somente os dois blocos de descoberta. Nenhuma coleta autorizada por esta publicação. O resultado futuro será DISCOVERY_OBSERVED_NOT_CERTIFIED ou DENY_NO_RETRY; a análise offline dos canais ELF poderá delimitar resolução/transitivos ainda não observados. Não há certificação integral por versão, contagem4552 ou closure26. Permanecem SQL/ownership, saved/fallback/identidades finais, toolchain efetivamente protegido,16 vínculos/autoridade/inputs atuais, Event775 e futura instalação. Frontend não reaberto. NEWauth+NEWDB+NEWcipher, ambos crons, guarda38/out.15 e todos os privados/históricos consumidos intactos. Sem VPS, SQL, instalação, emissão, backup ou janela. Owner Deifson; última revisão17/10, próxima21/10 ou mudança.
+
+---
+
 ## Integração local da folha e lançamento pré-autoridade —17/10/2026, base6adfb37e
 
 **LOCAL VALIDATED no alcance abaixo / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** Esta seção sucede a integração pendente descrita nas reconciliações abaixo, sem reescrever seus resultados. Predecessor mantém ACCEPT LOCAL no alcance anterior; as condições operacionais de toolchain/SQL/identidades continuam abertas. Nenhum kit histórico, comando consumido ou manifest de fase foi alterado.

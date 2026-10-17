@@ -1,0 +1,35 @@
+import base64,json,subprocess
+def load(name):
+    scope={'__name__':'library_only','__file__':'<verified '+name+'>'}
+    exec(compile(BLOBS[name],scope['__file__'],'exec'),scope);return scope
+
+class Capture:
+    def __init__(self,q):
+        self.q=q;self.lib=load('read_package.py');self.record=load('privileged_output.source')['private_record']
+    def event(self,event,**data):self.record(self.q,self.lib['JOURNAL'],{'event':event,'utc':self.lib['utc'](),**data})
+    def bytes(self,ident,argv,start,end,code,out,err,error=None):
+        row={'id':ident,'argv':argv,'startedUtc':start,'finishedUtc':end,'exitCode':code,
+             'errorClass':None if error is None else type(error).__name__,'errno':getattr(error,'errno',None)}
+        for key,raw in [('stdout',out),('stderr',err)]:
+            self.lib['write_artifact'](self.q/(ident+'.'+key+'.private'),raw)
+            row.update({key+'Bytes':len(raw),key+'Sha256':self.lib['sha'](raw),key+'Base64':base64.b64encode(raw).decode()})
+        self.event('command',**row)
+    def command(self,ident,argv,*,input=None,pass_fds=(),timeout=25):
+        start=self.lib['utc']();code=None;out=err=b'';error=None
+        try:
+            r=subprocess.run(argv,input=input,pass_fds=pass_fds,capture_output=True,timeout=timeout,
+                             env={'PATH':'/usr/bin:/bin','HOME':'/home/deploy','LANG':'C'})
+            code,out,err=r.returncode,r.stdout,r.stderr
+        except subprocess.TimeoutExpired as e:out,err=e.stdout or b'',e.stderr or b'';error=e
+        except OSError as e:error=e;err=type(e).__name__.encode()
+        self.bytes(ident,argv,start,self.lib['utc'](),code,out,err,error)
+        self.event('command_input',id=ident,bytes=len(input or b''),sha256=self.lib['sha'](input or b''))
+        self.lib['require'](code==0 and error is None,'command_denied:'+ident)
+        return out
+    def observe(self,ident,fn):
+        start=self.lib['utc']()
+        try:value=fn()
+        except Exception as e:
+            self.bytes(ident,['library',ident],start,self.lib['utc'](),1,b'',type(e).__name__.encode(),e);raise
+        raw=json.dumps(value,sort_keys=True).encode()
+        self.bytes(ident,['library',ident],start,self.lib['utc'](),0,raw,b'');return value

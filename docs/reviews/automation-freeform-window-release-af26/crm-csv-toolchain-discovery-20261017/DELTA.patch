@@ -1,0 +1,1114 @@
+diff --git a/docs/BACKLOG_TECH.md b/docs/BACKLOG_TECH.md
+index ab4abbad..7c6256d2 100644
+--- a/docs/BACKLOG_TECH.md
++++ b/docs/BACKLOG_TECH.md
+@@ -4028,0 +4029,5 @@ separado de contenção. Auth/banco/out.15 encerrados não serão reexecutados.
++
++
++### Checkpoint17/10 — integração aceita localmente / roteiro Node-PM2 para revisão
++
++Integração6e93e409 ACCEPT LOCAL somente no alcance documentado, preservadas simulações. [Relatório/matriz](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md) atualizados; [dois blocos de descoberta](reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/COMMANDS.md), leitor/transporte/custódia existentes, quatro casos locais literais. Readelf ausente/inacessível nega sem fallback; sem ldd ou execução do alvo. Nenhuma VPS/coleta/instalação/SQL/build/backup/emissão/janela. ELF/PM2/proteção operacionais continuam NÃO certificados; saved/fallback/SQL/16vínculos/autoridade e Event775 pendentes. Próximo passo: revisar os comandos, autorização futura separada. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher, crons, guarda38/out.15 e históricos consumidos preservados. Deifson: revisão17/10, próxima21/10 ou mudança.
+diff --git a/docs/RUNBOOK_WHATSAPP_AGENT.md b/docs/RUNBOOK_WHATSAPP_AGENT.md
+index 123f8cb1..03b9c8d8 100644
+--- a/docs/RUNBOOK_WHATSAPP_AGENT.md
++++ b/docs/RUNBOOK_WHATSAPP_AGENT.md
+@@ -2733,0 +2734,5 @@ Não reexecutar auth/banco/out.15; segurança externa/cifragem continua OPEN.
++
++
++### Checkpoint17/10 — integração aceita localmente / roteiro Node-PM2 para revisão
++
++Integração6e93e409 ACCEPT LOCAL somente no alcance documentado, preservadas simulações. [Relatório/matriz](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md) atualizados; [dois blocos de descoberta](reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/COMMANDS.md), leitor/transporte/custódia existentes, quatro casos locais literais. Readelf ausente/inacessível nega sem fallback; sem ldd ou execução do alvo. Nenhuma VPS/coleta/instalação/SQL/build/backup/emissão/janela. ELF/PM2/proteção operacionais continuam NÃO certificados; saved/fallback/SQL/16vínculos/autoridade e Event775 pendentes. Próximo passo: revisar os comandos, autorização futura separada. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher, crons, guarda38/out.15 e históricos consumidos preservados. Deifson: revisão17/10, próxima21/10 ou mudança.
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json b/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json
+index 87015aae..7dc52648 100644
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json
+@@ -1317,0 +1318,20 @@
++    },
++    "compositionLaunchReview": {
++      "base": "6e93e40902cde2f5cb43bf210a8dc2389c75411e",
++      "decision": "ACCEPT_LOCAL_IN_DOCUMENTED_SCOPE",
++      "operationallyCertified": false,
++      "simulationsPreserved": true
++    },
++    "toolchainDiscoveryProcedure": {
++      "base": "6e93e40902cde2f5cb43bf210a8dc2389c75411e",
++      "commands": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/COMMANDS.md",
++      "manifestSha256": "bda69876fbcd2ecf737d133c48e8c06dda7a7ffb4375186cd0b042a7820e8645",
++      "commandsSha256": "5a78a435cb8b89b9002f67a033767fd4b6ead6473abf6a618515244405f78beb",
++      "proofsSha256": "8ef731d9721197952d38688aa0b25829dc6e7385f4e5a444ea072e0de6eb285a",
++      "localTests": 4,
++      "remoteExecuted": false,
++      "tool": "/usr/bin/readelf only; no fallback",
++      "status": "LOCAL_ROUTE_VALIDATED_REVIEW_PENDING",
++      "elfClosureCertified": false,
++      "protectionCertified": false,
++      "next": "Review literal blocks before any future remote authorization"
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md b/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md
+index c281b7f8..6f73f7dc 100644
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md
+@@ -0,0 +1,14 @@
++# Atualização —17/10/2026, base6e93e409
++
++Integração da folha/compositor/lançamento pré-autoridade **ACCEPT LOCAL** somente no alcance descrito; simulações não são certificados. Procedimento Node/ELF/PM2 [COMMANDS](../crm-csv-toolchain-discovery-20261017/COMMANDS.md), seis fontes e quatro ensaios literais locais aprovados. Sem execução na VPS.
++
++| Grupo | Reutilizado / futuro procedimento | Ainda faltante / dependência |
++| --- | --- | --- |
++| Node selecionado/ELF | PATH canônico, entryPM2 pinado, leitor/cadeia/FD; ferramenta fixa readelf, ausente/inacessível => DENY. Futuro pm2.pid+exe/maps/boot por intervalo | Observação autorizada; PT_INTERP/NEEDED/RPATH e resolução offline; toolchain/proteção NÃO certificados |
++| PM2/path/transitivos | Fontes CLI/lock/índice e prova PM2 existentes; roteiro alias/bin/CLI/package/env e metadados das imagens mapeadas | JS dinâmico não observado UNKNOWN; decisão de proteção/instalação futura separada |
++| Saved/fallback/identidades; SQL/ownership;16vínculos/autoridade | Evidências históricas intactas nas linhas anteriores | Inputs atuais e autorizações separadas, sem fabricar dados ou renovar provas |
++
++Primeiro bloqueio factual: Node/ELF e resolução/proteção PM2. Próximo passo: revisão do procedimento, não execução implícita. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY. Seções seguintes preservadas como checkpoints históricos.
++
++---
++
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md b/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md
+index 074b50f7..cd9df9f6 100644
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md
+@@ -2,0 +3,41 @@
++## Aceite delimitado e procedimento Node/ELF/PM2 —17/10/2026, base6e93e409
++
++**INTEGRAÇÃO ANTERIOR ACCEPT LOCAL no alcance documentado / PROCEDIMENTO LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** O aceite refere-se à composição/folha e lançamento pré-autoridade descritos abaixo. Não promove projeções de UID/modos, Node local ou respostas sintéticas a observação produtiva. Os históricos REVIEW PENDING abaixo permanecem como registro de suas rodadas.
++
++### Procedimento único para o primeiro bloqueio
++
++[COMMANDS.md](../crm-csv-toolchain-discovery-20261017/COMMANDS.md) entrega dois blocos concretos **para revisão e autorização futura**: materialização local e transferência única/descoberta/custódia. Não foram executados na VPS. Novos namespaces exclusivos `re7-csv-toolchain-*20261017-v1`; nenhum destino consumido reutilizado. [MANIFEST.json](../crm-csv-toolchain-discovery-20261017/MANIFEST.json) autentica seis fontes. Não é geração operacional, manifest de fase, instalação ou permit.
++
++O adaptador dirigido [runner.py](../crm-csv-toolchain-discovery-20261017/runner.py) reutiliza `file_chain`, `stable_file`, `read_at`, `executable` e boot64 do leitor R2, Capture extraído byte-exato do runner aceito e `private_record` original. Launcher e driver derivam do transporte aceito; só materialize/collect expostos, sem SELECT. [PROVENANCE.json](../crm-csv-toolchain-discovery-20261017/PROVENANCE.json) identifica origens/hashes/transformações; derive.py reproduz os derivados e seal.py publica índice/literais. Não há writer, RPC, classificador ou autoridade paralelo.
++
++| Pergunta / consumidor | Leitura concreta e limite | Conclusão admissível / não comprovado |
++| --- | --- | --- |
++| Node que System.start selecionaria | PM2 alias/bin deve manter hashbbb586 e shebang exato; PATH vem de CLEAN da fonte Operations pinada, não da sessão SSH. Caminhos são observados em ordem. Primeira entrada existente executável deve ser Node d016; ambiguidade, falta de leitura ou drift nega | Resolução para **esse** PATH/UID e intervalo. Não executa env/Node/PM2 nem adapta referência para PASS |
++| Imagem running | pm2.pid atual, stat/ticks/exe/boot/maps pré/pós pelos leitores existentes. SHA do FD exe deve corresponder à seleção acima; nenhum PID histórico promovido | Candidato de daemon e imagem no intervalo; não identidade final do trio ou certificado de ownership/saída |
++| ELF e libs carregadas | Única ferramenta previamente escolhida `/usr/bin/readelf`; ELF executável/cadeia root-owned sem escrita grupo/outros. Ausência/EACCES nega. Tool e alvo abertos em FDs, não hash seguido de execução de caminho mutável. `--wide --program-headers --dynamic` | PT_INTERP/DT_NEEDED/RPATH/RUNPATH nos canais privados. Maps cobre o carregamento presente; resolução completa e carregamentos futuros continuam dependentes da análise offline. Não executa loader, ldconfig, ldd nem dependências |
++| Proteção PM2/transitivos | Alias/bin, CLI/package/env e imagens mapeadas com cadeias, links, owner/modos, dev/inode e hashes. JS transitivo comparável às fontes pinadas pré-existentes | Observação de proteção/ausência de proteção, sem corrigir nada. Não alega toda closureCLI, autoridade ou toolchain protegido; transitivos não observados UNKNOWN |
++
++Ferramenta readelf usa a confiança OS existente; o predicado de caminho root sem escrita de terceiros é uma precondição específica desta análise, não certificação de suas próprias dependências OS ou novo requisito retroativo de retorno. Node selecionado e imagem alvo não são executados. Quando a ferramenta faltar, não há tentativa por outro caminho, parser alternativo, instalação ou fallback. Descoberta precede qualquer escolha futura de proteção/instalação, que permanece separada e não autorizada.
++
++Limites escolhidos antes da leitura:64B boot/pm2.pid,256KiB maps,64KiB entry,8MiB scripts/config,256MiB por imagem,64 arquivos mapeados/512MiB total; readelf15s e limite HARD1MiB em **cada** canal via RLIMIT_FSIZE sobre temporários anônimos no destino privado, transporte180s. Excesso/falha para e conserva parcial. O transporte pode vencer antes do pior caso64×15s: preserva canais locais e origem remota, sem retry/reconexão automática. Sem resposta completa, custódia será DENY parcial, não conclusão da descoberta. Sem parent privado legítimo/writer íntegro ou destino já existente, parar antes dos efeitos; não criar parent nem reparar permissões.
++
++### Validação dirigida e limites das simulações
++
++[PROOFS.json](../crm-csv-toolchain-discovery-20261017/PROOFS.json): quatro casos finais aprovados em [test_blocks.py](../crm-csv-toolchain-discovery-20261017/test_blocks.py). Blocos Bash publicados executados literalmente, launcher/manifest, fontes em memória, leitor/FD/metadados, ferramenta readelf local real sobre ELF FD, export e ingestão/custódia reais. Não se substituiu verificador por callback PASS. UID0 é namespace de usuário sem privilégios no host; raiz do host representada por UID65534 é projetada explicitamente para UID0 na fixture. SSH é shim sem rede; proc/stat/maps/pm2.pid/boot e digest esperado Node são fixtures: ELF local de `/usr/bin/true` NÃO executado, **não** a imagem Node produtiva d016. ENOENT/EACCES são falhas injetadas na fronteira do tool read. Não houve PM2/Node alvo, sudo, daemon, SQL, download ou build.
++
++Casos: (1) descoberta sintética válida, sempre elfClosureCertified=false/protectionCertified=false; (2) readelf ausente, errno2, sem chamada de ferramenta; (3) leitura negada, errno13, sem chamada; (4) inode substituído entre snapshot e abertura, negativa antes de readelf. Todos preservaram canais/tamanhos/hashes e DENY no writer canônico. A suíte antiga PM2 completa, closure26, recuperação e integração de12 provas não foram repetidas.
++
++Os primeiros ensaios foram bloqueados pelo sandbox no namespace de rede. Repetidos somente no laboratório com aprovação de execução local; correções da fixture: bind gravável, projeção stat/lstat, instrumentação sem tocar metadados dos ancestrais e UID root. O ensaio identificou dependência indevida de TMPDIR no novo adaptador: temporários anônimos foram limitados ao próprio destino privado antes da validação final. Também foi explicitada a precondição root do analisador; quatro casos revalidados sobre os hashes finais. A conferência staged exigiu normalizar somente o EOF do trecho extraído; os quatro blocos/casos foram novamente aprovados com o manifest final. Não se atribuiu nenhum DENY histórico a essas causas locais.
++
++### Integridade da entrega
++
++A allowlist corrente contém somente este incremento e os seis checkpoints/documentos pertinentes. DELTA.patch representa os arquivos de código, provas, procedimento e documentos listados, **excluindo o próprio patch, ALLOWLIST.json e MANIFEST.sha256 de entrega** para não criar auto-referência. Usa contexto zero (`git apply --unidiff-zero`) para não introduzir whitespace artificial nas linhas de contexto vazias. O índice SHA da revisão cobre o patch e a allowlist, excluindo a si mesmo; MANIFEST.json do diagnóstico tem papel distinto e cobre somente suas seis fontes. Nenhuma política, perfil/binding privado, journal, mapa de processo bruto, runtime ou cache integra a publicação.
++
++Vercel permanece deploymentEnabled=false na branch review/campaign-recovery-20260926; único workflow versionado CI restringe push/PR a main/develop. Configurações não alteradas. Sem hook ativo configurado. Branch/HEAD e remoto conferidos na base6e93e409 antes das edições. Publicação Git não equivale a autorização remota ou instalação.
++
++### Dependências restantes e próximo passo
++
++Revisar/aprovar somente os dois blocos de descoberta. Nenhuma coleta autorizada por esta publicação. O resultado futuro será DISCOVERY_OBSERVED_NOT_CERTIFIED ou DENY_NO_RETRY; a análise offline dos canais ELF poderá delimitar resolução/transitivos ainda não observados. Não há certificação integral por versão, contagem4552 ou closure26. Permanecem SQL/ownership, saved/fallback/identidades finais, toolchain efetivamente protegido,16 vínculos/autoridade/inputs atuais, Event775 e futura instalação. Frontend não reaberto. NEWauth+NEWDB+NEWcipher, ambos crons, guarda38/out.15 e todos os privados/históricos consumidos intactos. Sem VPS, SQL, instalação, emissão, backup ou janela. Owner Deifson; última revisão17/10, próxima21/10 ou mudança.
++
++---
++
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/COMMANDS.md b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/COMMANDS.md
+new file mode 100644
+index 00000000..6e4dc4fb
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/COMMANDS.md
+@@ -0,0 +1,114 @@
++# Node/PM2 — comandos concretos SOMENTE PARA REVISÃO
++
++Nenhuma execução na VPS autorizada nesta rodada. Futura aprovação é separada.
++Deploy SEM sudo. Não executar Node, PM2, env, CJS, ldd, SQL ou código capturado.
++Ferramenta escolhida ANTES da leitura: somente /usr/bin/readelf. Ausência,
++acesso negado, cadeia do analisador sem owner root/proteção, drift ou falha: DENY com parcial preservado; sem alternativa,
++instalação, retry, reparo ou download. Não reutilizar destinos consumidos.
++
++O owner revisa estes literais no Git; o launcher confere FD/no-follow/metadata,
++carrega os MESMOS bytes e autentica o manifest/fontes antes de executar o driver.
++Só materialize/collect são expostos. Um SSH batch único transfere fontes inativas
++e devolve também DENY. Sem resposta completa, preservar canais locais; não
++reconectar automaticamente. Não confundir custódia com certificação.
++
++## Destinos e limites prévios
++
++- LOCAL material: /dev/shm/re7-csv-toolchain-material-20261017-v1.
++- VPS inativos: /dev/shm/re7-csv-toolchain-tools-20261017-v1.
++- VPS resultados: /dev/shm/re7-csv-toolchain-read-20261017-v1.
++- LOCAL custódia: re7-private-retention-custody/csv-toolchain-discovery-20261017-v1.
++- LOCAL diagnóstico: mesmo parent, csv-toolchain-launcher-20261017-v1-{materialize,collect}.
++O parent local é o privado legítimo já documentado, owner700; scripts não o criam
++nem corrigem. Novos diretórios700/arquivos600 por criação exclusiva/no-follow.
++Destino existente impede a ação. Fontes6, sem closure26 desnecessária ao diagnóstico.
++Cada stdout/stderr contém comando, intervalo, código, errno, tamanho e SHA;
++private_record canônico, export byte-exato e ingestão do driver aceito.
++
++Leituras: scripts/package/env <=8MiB; PM2 entry <=64KiB; imagens <=256MiB;
++maps <=256KiB; pm2.pid/boot <=64B; até64 arquivos mapeados e512MiB somados.
++readelf:15s por imagem, stdout/stderr separados com limite HARD1MiB/canal;
++transporte180s. Excesso/timeout preserva parcial e nega. Nenhum backup/RPO.
++
++## 1. Materialização LOCAL inativa (somente após aprovação futura)
++
++```bash
++(
++set -euo pipefail
++umask 077
++python3 -B -I -S - <<'REVIEWED_LOCAL'
++import hashlib,os,stat,sys
++from pathlib import Path
++p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017')
++f=p/'launch.py'
++for q in (f,*f.parents):assert not q.is_symlink(),'launcher_symlink'
++def meta(s):return tuple(getattr(s,'st_'+k)for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
++s=f.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'launcher_metadata'
++fd=os.open(f,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
++try:
++ assert meta(os.fstat(fd))==meta(s),'launcher_replaced'
++ raw=os.read(fd,65536)
++ assert meta(os.fstat(fd))==meta(s) and meta(f.lstat())==meta(s),'launcher_changed'
++finally:os.close(fd)
++assert hashlib.sha256(raw).hexdigest()=='cdc1bb35eb986feb8128b64e6d27d4df63866ea3f0ff578f9c5a3691aa7c5b0c','reviewed_launcher'
++sys.argv=[str(f),str(p),'bda69876fbcd2ecf737d133c48e8c06dda7a7ffb4375186cd0b042a7820e8645','materialize']
++exec(compile(raw,str(f),'exec'),{'__name__':'__main__','__file__':str(f)})
++REVIEWED_LOCAL
++)
++```
++
++## 2. Transferência única, descoberta e custódia (aprovação futura separada)
++
++```bash
++(
++set -euo pipefail
++umask 077
++python3 -B -I -S - <<'REVIEWED_LOCAL'
++import hashlib,os,stat,sys
++from pathlib import Path
++p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017')
++f=p/'launch.py'
++for q in (f,*f.parents):assert not q.is_symlink(),'launcher_symlink'
++def meta(s):return tuple(getattr(s,'st_'+k)for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
++s=f.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'launcher_metadata'
++fd=os.open(f,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
++try:
++ assert meta(os.fstat(fd))==meta(s),'launcher_replaced'
++ raw=os.read(fd,65536)
++ assert meta(os.fstat(fd))==meta(s) and meta(f.lstat())==meta(s),'launcher_changed'
++finally:os.close(fd)
++assert hashlib.sha256(raw).hexdigest()=='cdc1bb35eb986feb8128b64e6d27d4df63866ea3f0ff578f9c5a3691aa7c5b0c','reviewed_launcher'
++sys.argv=[str(f),str(p),'bda69876fbcd2ecf737d133c48e8c06dda7a7ffb4375186cd0b042a7820e8645','collect']
++exec(compile(raw,str(f),'exec'),{'__name__':'__main__','__file__':str(f)})
++REVIEWED_LOCAL
++)
++```
++
++## Alcance da descoberta / parada
++
++1. PM2 alias/bin/CLI/package e env: cadeias, links, owner/modos/hashes. O entry
++deve manter bbb586… e shebang exato aprovado. CLEAN.PATH do System.start é
++/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin. Primeira entrada
++existente executável é lida, não executada; qualquer entrada ambígua/inacessível
++nega sem adivinhar a resolução. Node deve corresponder à referência d016…;
++drift conserva observação, não atualiza o pin. Não usa PATH da sessão SSH.
++2. readelf é observado por cadeia/hash, aberto em FD e executado por esse FD;
++imagem-alvo também por FD. A ferramenta e seu loader usam a confiança OS já
++existente, NÃO uma certificação nova. O alvo Node/PM2 nunca é executado.
++3. pm2.pid atual fornece apenas candidato para observação: stat/ticks/exe/maps,
++boot e pm2.pid são conferidos no intervalo. Imagem running deve coincidir com
++a selecionada pelo PATH acima. Não reutiliza PIDs históricos nem certifica trio.
++4. readelf dos ELF mapeados: PT_INTERP/DT_NEEDED/RPATH/RUNPATH ficam nos canais
++privados. Resolução integral exige análise offline desses resultados; maps cobre
++o carregamento desse daemon nesse intervalo, não todas as cargas futuras.
++Não se executa loader, ldconfig, ldd ou dependência para descobri-la.
++5. JS transitivo: CLI/package e caminhos observados permitem comparar a fonte
++pinada já disponível. NÃO percorre4552 arquivos nem alega closure CLI completa.
++Imports dinâmicos não observados e proteção de todos os transitivos seguem
++UNKNOWN até reconciliação dirigida; isso não é PASS de toolchain.
++
++Resultado admissível: DISCOVERY_OBSERVED_NOT_CERTIFIED ou DENY_NO_RETRY.
++elfClosureCertified=false e protectionCertified=false sempre. Metadados separados
++não são snapshot atômico; nenhum resultado modifica histórico ou autoridade.
++Instalação/proteção futura, SQL/ownership, saved/fallback/identidades finais e
++16 vínculos/autoridade permanecem separados. CSV SUSPENSO / NOT WINDOW READY.
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/MANIFEST.json b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/MANIFEST.json
+new file mode 100644
+index 00000000..0b753a5e
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/MANIFEST.json
+@@ -0,0 +1,48 @@
++{
++  "base": "6e93e40902cde2f5cb43bf210a8dc2389c75411e",
++  "files": {
++    "capture.source": {
++      "bootstrap": true,
++      "bytes": 2239,
++      "relativeSource": "capture.source",
++      "sha256": "8e40c9683b1945a730d8010fb969b781661af2c7ecc9649fbcd6b9c6e972a781",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/capture.source"
++    },
++    "driver.py": {
++      "bootstrap": true,
++      "bytes": 9962,
++      "relativeSource": "driver.py",
++      "sha256": "41330e73a1c075aad0c3713bee7f0ffa95edfbb90be986713447820d1ba13ff4",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/driver.py"
++    },
++    "launch.py": {
++      "bootstrap": true,
++      "bytes": 4545,
++      "relativeSource": "launch.py",
++      "sha256": "cdc1bb35eb986feb8128b64e6d27d4df63866ea3f0ff578f9c5a3691aa7c5b0c",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/launch.py"
++    },
++    "privileged_output.source": {
++      "bootstrap": true,
++      "bytes": 3303,
++      "relativeSource": "../crm-csv-r2-directed-20261017/privileged_output.source",
++      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/privileged_output.source"
++    },
++    "read_package.py": {
++      "bootstrap": true,
++      "bytes": 35507,
++      "relativeSource": "../crm-csv-r2-directed-20261017/read_package.py",
++      "sha256": "66f337fbe47d69ae02902f38f6b0e474241222c90967580d9c569dce21796691",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/read_package.py"
++    },
++    "runner.py": {
++      "bootstrap": true,
++      "bytes": 7942,
++      "relativeSource": "runner.py",
++      "sha256": "044e702e1adaa0ed9ce93957f60b90da24794452532fa459b6e44c38df0419d0",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/runner.py"
++    }
++  },
++  "scope": "discovery only; no operational toolchain certification"
++}
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/PROOFS.json b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/PROOFS.json
+new file mode 100644
+index 00000000..2af09d39
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/PROOFS.json
+@@ -0,0 +1,47 @@
++{
++  "result": "LOCAL_ROUTE_VALIDATED_NOT_OPERATIONALLY_CERTIFIED",
++  "tests": 4,
++  "cases": [
++    {
++      "case": "replacement",
++      "materializeExit": 0,
++      "collectExit": 1,
++      "result": "DENY_NO_RETRY",
++      "denialStage": "path-selection",
++      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
++      "literalBlocks": true
++    },
++    {
++      "case": "denied-tool",
++      "materializeExit": 0,
++      "collectExit": 1,
++      "result": "DENY_NO_RETRY",
++      "denialStage": "analysis-tool",
++      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
++      "literalBlocks": true
++    },
++    {
++      "case": "missing-tool",
++      "materializeExit": 0,
++      "collectExit": 1,
++      "result": "DENY_NO_RETRY",
++      "denialStage": "analysis-tool",
++      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
++      "literalBlocks": true
++    },
++    {
++      "case": "valid",
++      "materializeExit": 0,
++      "collectExit": 0,
++      "result": "DISCOVERY_OBSERVED_NOT_CERTIFIED",
++      "denialStage": null,
++      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
++      "literalBlocks": true
++    }
++  ],
++  "commandsSha256": "5a78a435cb8b89b9002f67a033767fd4b6ead6473abf6a618515244405f78beb",
++  "manifestSha256": "bda69876fbcd2ecf737d133c48e8c06dda7a7ffb4375186cd0b042a7820e8645",
++  "real": "Bash/Python launcher, FD/no-follow/metadata canonical reader, actual local readelf consuming actual ELF FD, export/transfer envelope/ingest/private_record; isolated user and network namespace",
++  "simulated": "SSH via local shim; host root UID65534 projected to UID0 inside user namespace; remote filesystem/proc/stat/maps/boot/pm2.pid; expected Node digest projected to local synthetic image (/usr/bin/true), not Node d016; ENOENT/EACCES injected at tool read, not observations of VPS; new fixture executable modes only",
++  "preserved": "All historical destinations, DENYs and operational generations untouched; no target Node/PM2 executed"
++}
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/PROVENANCE.json b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/PROVENANCE.json
+new file mode 100644
+index 00000000..6842e809
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/PROVENANCE.json
+@@ -0,0 +1,97 @@
++{
++  "base": "6e93e40902cde2f5cb43bf210a8dc2389c75411e",
++  "derivations": {
++    "launch.py": {
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/launch.py",
++      "sha256": "5922f70646b6e20969abaccad0e834742127822e812012dc75144ffb67805bc4",
++      "replacements": [
++        [
++          "crm-csv-three-gaps-executable-20261017",
++          "crm-csv-toolchain-discovery-20261017"
++        ],
++        [
++          "re7-csv-three-gaps-material-20261017-v1",
++          "re7-csv-toolchain-material-20261017-v1"
++        ],
++        [
++          "re7-csv-three-gaps-executable-tools-20261017-v1",
++          "re7-csv-toolchain-tools-20261017-v1"
++        ],
++        [
++          "re7-csv-three-gaps-executable-read-20261017-v1",
++          "re7-csv-toolchain-read-20261017-v1"
++        ],
++        [
++          "csv-three-gaps-executable-20261017-v1",
++          "csv-toolchain-discovery-20261017-v1"
++        ],
++        [
++          "csv-three-gaps-launcher-20261017-v1-",
++          "csv-toolchain-launcher-20261017-v1-"
++        ],
++        [
++          "THREE_GAPS_",
++          "TOOLCHAIN_DISCOVERY_"
++        ]
++      ],
++      "restriction": "collect/materialize only; no SELECT entry"
++    },
++    "driver.py": {
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/driver.py",
++      "sha256": "8efaccf63790ecee54022c92badbfe4629a52d7a7bbb6fdbb557a1c7d943402c",
++      "replacements": [
++        [
++          "crm-csv-three-gaps-executable-20261017",
++          "crm-csv-toolchain-discovery-20261017"
++        ],
++        [
++          "re7-csv-three-gaps-material-20261017-v1",
++          "re7-csv-toolchain-material-20261017-v1"
++        ],
++        [
++          "re7-csv-three-gaps-executable-tools-20261017-v1",
++          "re7-csv-toolchain-tools-20261017-v1"
++        ],
++        [
++          "re7-csv-three-gaps-executable-read-20261017-v1",
++          "re7-csv-toolchain-read-20261017-v1"
++        ],
++        [
++          "csv-three-gaps-executable-20261017-v1",
++          "csv-toolchain-discovery-20261017-v1"
++        ],
++        [
++          "csv-three-gaps-launcher-20261017-v1-",
++          "csv-toolchain-launcher-20261017-v1-"
++        ],
++        [
++          "THREE_GAPS_",
++          "TOOLCHAIN_DISCOVERY_"
++        ]
++      ],
++      "restriction": "collect/materialize only; no SELECT entry"
++    },
++    "capture.source": {
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py",
++      "sha256": "4c54a686f6cb42ed4e9663f0d842b13dcd371ed144a2f26e5335bdb06a77fcc5",
++      "extraction": [
++        "load",
++        "Capture"
++      ],
++      "method": "exact AST source segments, standard imports only"
++    }
++  },
++  "unchanged": [
++    "canonical read_package.py",
++    "privileged_output.source"
++  ],
++  "historicalEvidence": "R2 directed Node d016 and PM2 bbb586; no historical PID reused as current",
++  "selectionContract": {
++    "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source",
++    "sha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e",
++    "consumer": "System.start/System.run -> pm2_input.start -> PM2 shebang /usr/bin/env node",
++    "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
++    "futureReviewRequired": "if consumer PATH changes, this discovery must be revised; no inference from SSH PATH"
++  },
++  "reproduction": "derive.py reproduces launch/driver/Capture; seal.py indexes reviewed sources and emits command literals; test_blocks.py runs those literals in isolated lab"
++}
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/capture.source b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/capture.source
+new file mode 100644
+index 00000000..b3e8b3b7
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/capture.source
+@@ -0,0 +1,35 @@
++import base64,json,subprocess
++def load(name):
++    scope={'__name__':'library_only','__file__':'<verified '+name+'>'}
++    exec(compile(BLOBS[name],scope['__file__'],'exec'),scope);return scope
++
++class Capture:
++    def __init__(self,q):
++        self.q=q;self.lib=load('read_package.py');self.record=load('privileged_output.source')['private_record']
++    def event(self,event,**data):self.record(self.q,self.lib['JOURNAL'],{'event':event,'utc':self.lib['utc'](),**data})
++    def bytes(self,ident,argv,start,end,code,out,err,error=None):
++        row={'id':ident,'argv':argv,'startedUtc':start,'finishedUtc':end,'exitCode':code,
++             'errorClass':None if error is None else type(error).__name__,'errno':getattr(error,'errno',None)}
++        for key,raw in [('stdout',out),('stderr',err)]:
++            self.lib['write_artifact'](self.q/(ident+'.'+key+'.private'),raw)
++            row.update({key+'Bytes':len(raw),key+'Sha256':self.lib['sha'](raw),key+'Base64':base64.b64encode(raw).decode()})
++        self.event('command',**row)
++    def command(self,ident,argv,*,input=None,pass_fds=(),timeout=25):
++        start=self.lib['utc']();code=None;out=err=b'';error=None
++        try:
++            r=subprocess.run(argv,input=input,pass_fds=pass_fds,capture_output=True,timeout=timeout,
++                             env={'PATH':'/usr/bin:/bin','HOME':'/home/deploy','LANG':'C'})
++            code,out,err=r.returncode,r.stdout,r.stderr
++        except subprocess.TimeoutExpired as e:out,err=e.stdout or b'',e.stderr or b'';error=e
++        except OSError as e:error=e;err=type(e).__name__.encode()
++        self.bytes(ident,argv,start,self.lib['utc'](),code,out,err,error)
++        self.event('command_input',id=ident,bytes=len(input or b''),sha256=self.lib['sha'](input or b''))
++        self.lib['require'](code==0 and error is None,'command_denied:'+ident)
++        return out
++    def observe(self,ident,fn):
++        start=self.lib['utc']()
++        try:value=fn()
++        except Exception as e:
++            self.bytes(ident,['library',ident],start,self.lib['utc'](),1,b'',type(e).__name__.encode(),e);raise
++        raw=json.dumps(value,sort_keys=True).encode()
++        self.bytes(ident,['library',ident],start,self.lib['utc'](),0,raw,b'');return value
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/derive.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/derive.py
+new file mode 100644
+index 00000000..d2b00b95
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/derive.py
+@@ -0,0 +1,24 @@
++import ast,hashlib,json
++from pathlib import Path
++root=next(p for p in Path(__file__).resolve().parents if (p/'.git').exists());review=root/'docs/reviews/automation-freeform-window-release-af26';p=review/'crm-csv-toolchain-discovery-20261017';old=review/'crm-csv-three-gaps-executable-20261017'
++h=lambda b:hashlib.sha256(b).hexdigest()
++# Recorded inputs are versioned sources; derivations are explicit replacements only.
++transforms={}
++for name in ('launch.py','driver.py'):
++ raw=(old/name).read_bytes();text=raw.decode()
++ swaps=[('crm-csv-three-gaps-executable-20261017','crm-csv-toolchain-discovery-20261017'),('re7-csv-three-gaps-material-20261017-v1','re7-csv-toolchain-material-20261017-v1'),('re7-csv-three-gaps-executable-tools-20261017-v1','re7-csv-toolchain-tools-20261017-v1'),('re7-csv-three-gaps-executable-read-20261017-v1','re7-csv-toolchain-read-20261017-v1'),('csv-three-gaps-executable-20261017-v1','csv-toolchain-discovery-20261017-v1'),('csv-three-gaps-launcher-20261017-v1-','csv-toolchain-launcher-20261017-v1-'),('THREE_GAPS_','TOOLCHAIN_DISCOVERY_')]
++ for a,b in swaps:text=text.replace(a,b)
++ if name=='launch.py':text=text.replace("('materialize','collect','select-owner-authorized')","('materialize','collect')")
++ else:
++  text=text.replace("    if action=='select-owner-authorized':return transport('select')\n",'')
++  text=text.replace("def remote(action):\n","def remote(action):\n    if action!='collect':raise RuntimeError('discovery_collect_only')\n")
++  # Delete unused SELECT authorization branch; no reserved SQL path in new CLI.
++  a=text.index("        if action=='select':");b=text.index("        cmd=",a);text=text[:a]+text[b:]
++ (p/name).write_text(text)
++ transforms[name]={'source':str((old/name).relative_to(root)),'sha256':h(raw),'replacements':swaps,'restriction':'collect/materialize only; no SELECT entry'}
++raw=(old/'runner.py').read_bytes();tree=ast.parse(raw)
++nodes=[n for n in tree.body if isinstance(n,(ast.FunctionDef,ast.ClassDef)) and n.name in ('load','Capture')]
++snippet='import base64,json,subprocess\n'+''.join(ast.get_source_segment(raw.decode(),n)+'\n\n' for n in nodes)
++(p/'capture.source').write_text(snippet.rstrip()+'\n')
++transforms['capture.source']={'source':str((old/'runner.py').relative_to(root)),'sha256':h(raw),'extraction':['load','Capture'],'method':'exact AST source segments, standard imports only'}
++(p/'PROVENANCE.json').write_text(json.dumps({'base':'6e93e40902cde2f5cb43bf210a8dc2389c75411e','derivations':transforms,'unchanged':['canonical read_package.py','privileged_output.source'],'historicalEvidence':'R2 directed Node d016 and PM2 bbb586; no historical PID reused as current'},indent=2)+'\n')
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/driver.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/driver.py
+new file mode 100644
+index 00000000..7cae66b2
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/driver.py
+@@ -0,0 +1,142 @@
++"""Offline assembly and single-attempt transport; canonical private_record only."""
++import base64,hashlib,json,os,stat,subprocess
++from pathlib import Path
++
++BASE=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926')
++NAME='crm-csv-toolchain-discovery-20261017'
++PREFIX='docs/reviews/automation-freeform-window-release-af26/'
++MATERIAL=Path('/dev/shm/re7-csv-toolchain-material-20261017-v1')
++CUSTODY=Path('/home/deifson-oliveira/DEIFSON/re7-private-retention-custody')
++TOOLS='/dev/shm/re7-csv-toolchain-tools-20261017-v1'
++OUTPUT='/dev/shm/re7-csv-toolchain-read-20261017-v1'
++HOST='deploy@admin.re7online.com'
++JOURNAL='privileged-output.private.jsonl'
++
++def libload(name,blobs=None):
++    scope={'__name__':'reviewed_library_only','__file__':'<verified '+name+'>'}
++    exec(compile((BLOBS if blobs is None else blobs)[name],scope['__file__'],'exec'),scope);return scope
++
++def libraries(blobs=None):return libload('read_package.py',blobs),libload('privileged_output.source',blobs)['private_record']
++
++def pack(blobs):return {'manifestSha256':MANIFEST_SHA,'manifest':base64.b64encode(MANIFEST_RAW).decode(),
++                        'files':{k:base64.b64encode(v).decode()for k,v in blobs.items()}}
++
++def verify(frame):
++    raw=base64.b64decode(frame['manifest'],validate=True)
++    if hashlib.sha256(raw).hexdigest()!=MANIFEST_SHA:raise RuntimeError('remote_manifest_drift')
++    mf=json.loads(raw);blobs={k:base64.b64decode(v,validate=True)for k,v in frame['files'].items()}
++    if set(blobs)!=set(mf['files']):raise RuntimeError('remote_file_set')
++    for k,v in blobs.items():
++        if len(v)!=mf['files'][k]['bytes']or hashlib.sha256(v).hexdigest()!=mf['files'][k]['sha256']:raise RuntimeError('remote_source_drift')
++    return blobs
++
++def materialize():
++    lib,record=libraries();out=lib['new_directory'](MATERIAL)
++    record(out,JOURNAL,{'event':'materialize_begin','utc':lib['utc'](),'manifestSha256':MANIFEST_SHA})
++    try:
++        blobs=dict(BLOBS)
++        for name,entry in MANIFEST['files'].items():
++            if name in blobs:continue
++            source=Path(entry['source'])
++            if not source.is_absolute():source=BASE/source
++            start=lib['utc']()
++            try:raw=READ(source)
++            except Exception as e:
++                record(out,JOURNAL,{'event':'materialize_source','argv':['read',str(source)],'startedUtc':start,'finishedUtc':lib['utc'](),'exitCode':None,'accepted':False,'errorClass':type(e).__name__,'errno':getattr(e,'errno',None)})
++                raise
++            accepted=len(raw)==entry['bytes']and hashlib.sha256(raw).hexdigest()==entry['sha256']
++            record(out,JOURNAL,{'event':'materialize_source','argv':['read',str(source)],'startedUtc':start,'finishedUtc':lib['utc'](),'exitCode':0,'accepted':accepted,'stdoutBytes':len(raw),'stdoutSha256':lib['sha'](raw),'stdoutBase64':base64.b64encode(raw).decode(),'stderrBytes':0,'stderrSha256':lib['sha'](b''),'stderrBase64':''})
++            if not accepted:raise RuntimeError('material_source_drift')
++            blobs[name]=raw
++        frame=pack(blobs);verify(frame)
++        lib['write_artifact'](out/'bundle.private.json',json.dumps(frame,sort_keys=True).encode())
++        record(out,JOURNAL,{'event':'materialize_end','utc':lib['utc'](),'result':'MATERIALIZED_INACTIVE','files':len(blobs)})
++        print('MATERIALIZED_INACTIVE_NO_REMOTE');return 0
++    except Exception as e:
++        record(out,JOURNAL,{'event':'materialize_end','utc':lib['utc'](),'result':'DENY_NO_RETRY','errorClass':type(e).__name__,'errno':getattr(e,'errno',None)});return 1
++
++# This fixed program only decodes a reviewed byte snapshot. It does not import a transferred path.
++REMOTE_LAUNCH=r'''import base64,hashlib,json,sys
++frame=json.loads(sys.stdin.buffer.read(4*1024*1024+1))
++raw=base64.b64decode(frame['manifest'],validate=True)
++assert hashlib.sha256(raw).hexdigest()==sys.argv[1],'reviewed_manifest'
++m=json.loads(raw);blobs={k:base64.b64decode(v,validate=True)for k,v in frame['files'].items()}
++assert set(blobs)==set(m['files']),'file_set'
++for k,v in blobs.items():
++ assert len(v)==m['files'][k]['bytes'] and hashlib.sha256(v).hexdigest()==m['files'][k]['sha256'],'reviewed_source'
++s={'__name__':'reviewed_remote','__file__':'<verified driver>','BLOBS':blobs,'MANIFEST':m,'MANIFEST_RAW':raw,'MANIFEST_SHA':sys.argv[1]}
++exec(compile(blobs['driver.py'],'<verified driver>','exec'),s)
++sys.exit(s['remote'](sys.argv[2]))
++'''
++
++def remote(action):
++    if action!='collect':raise RuntimeError('discovery_collect_only')
++    os.umask(0o077)  # Newly created inactive subdirectories only; no chmod/repair.
++    # No sources are imported from the newly materialized directory.
++    lib,record=libraries();suffix=''if action=='collect'else'-sql'
++    t=lib['new_directory'](TOOLS+suffix);q=lib['new_directory'](OUTPUT+suffix)
++    record(q,JOURNAL,{'event':'transfer_inactive_begin','utc':lib['utc'](),'manifestSha256':MANIFEST_SHA,'action':action})
++    ok=False
++    try:
++        for k,v in BLOBS.items():
++            p=t/k
++            # Only new subdirectories within this exclusive tree; no repair or overwrite.
++            if not p.parent.exists():p.parent.mkdir(mode=0o700,parents=True)
++            lib['write_artifact'](p,v)
++            record(q,JOURNAL,{'event':'materialized_remote_source','argv':['write-inactive',k],'utc':lib['utc'](),'exitCode':0,'bytes':len(v),'sha256':lib['sha'](v)})
++        lib['write_artifact'](t/'MANIFEST.json',MANIFEST_RAW)
++        scope={'__name__':'reviewed_runner','__file__':'<verified runner>','BLOBS':BLOBS,'MANIFEST_SHA':MANIFEST_SHA}
++        exec(compile(BLOBS['runner.py'],'<verified runner>','exec'),scope)
++        ok,_=scope['run'](q,action)
++    except Exception as e:record(q,JOURNAL,{'event':'remote_end','result':'DENY_NO_RETRY','errorClass':type(e).__name__,'errno':getattr(e,'errno',None),'utc':lib['utc']()})
++    # Even a gate DENY exports its bytes in the same response. No second remote attempt.
++    print(json.dumps({'gateExitCode':0 if ok else 1,'manifestSha256':MANIFEST_SHA,'capture':lib['export'](q)},sort_keys=True))
++    return 0 if ok else 1
++
++def ingest(folder,stdout,stderr,code,started,finished,error=None,action='collect',argv=None,source_raw=b''):
++    lib,record=libraries();suffix=''if action=='collect'else'-sql'
++    lib['write_artifact'](folder/'transfer.stdout.private',stdout);lib['write_artifact'](folder/'transfer.stderr.private',stderr)
++    row={'event':'transport','argv':argv,
++         'startedUtc':started,'finishedUtc':finished,'stdinBytes':len(source_raw),'stdinSha256':lib['sha'](source_raw),'exitCode':code,'errorClass':None if error is None else type(error).__name__,'errno':getattr(error,'errno',None)}
++    for k,v in [('stdout',stdout),('stderr',stderr)]:row.update({k+'Bytes':len(v),k+'Sha256':lib['sha'](v),k+'Base64':base64.b64encode(v).decode()})
++    record(folder,JOURNAL,row)
++    try:
++        value=json.loads(stdout);lib['require'](value['manifestSha256']==MANIFEST_SHA,'custody_manifest')
++        f=value['capture'];raw=base64.b64decode(f['bytesBase64'],validate=True);m=f['metadata']
++        lib['require'](f['format']=='R2_DIRECTED_BYTE_EXACT_TRANSFER_V1' and f['source']==OUTPUT+suffix+'/'+JOURNAL,'custody_source')
++        lib['require'](len(raw)==f['bytes']==m['size'] and lib['sha'](raw)==f['sha256'],'custody_bytes')
++        lib['require'](stat.S_ISREG(m['mode']) and stat.S_IMODE(m['mode'])==0o600 and m['nlink']==1 and m['uid']==f['sourceUid'],'custody_metadata')
++        lib['write_artifact'](folder/'capture.private.jsonl',raw)
++        rows=[json.loads(x)for x in raw.splitlines()]
++        for r in rows:
++            if r['event']=='command':
++                for k in ('stdout','stderr'):
++                    v=base64.b64decode(r[k+'Base64'],validate=True)
++                    lib['require'](len(v)==r[k+'Bytes']and lib['sha'](v)==r[k+'Sha256'],'custody_command_bytes')
++            record(folder,JOURNAL,r)
++        valid=code==0 and error is None and value['gateExitCode']==0
++        record(folder,'sequencer.journal.jsonl',{'event':'TOOLCHAIN_DISCOVERY_CUSTODY_PRESERVED_NOT_CERTIFIED','utc':lib['utc'](),'sourceSha256':f['sha256'],'sourceBytes':len(raw),'manifestSha256':MANIFEST_SHA,'gatePass':valid,'atomicSnapshot':False,'ownership':'UNKNOWN'})
++        print('CUSTODY_PRESERVED_GATES_PASS_NOT_CERTIFIED'if valid else'CUSTODY_PRESERVED_DENY_NO_RETRY');return 0 if valid else 1
++    except Exception as e:
++        record(folder,'sequencer.journal.jsonl',{'event':'TOOLCHAIN_DISCOVERY_CUSTODY_DENY_NO_RETRY','utc':lib['utc'](),'errorClass':type(e).__name__,'errno':getattr(e,'errno',None)})
++        print('CUSTODY_DENY_PARTIAL_PRESERVED_NO_RETRY');return 1
++
++def transport(action):
++    import shlex
++    lib,record=libraries();suffix=''if action=='collect'else'-sql'
++    # Destination exists => no remote effects. Existing parent must already satisfy owner700.
++    folder=lib['new_directory'](CUSTODY/('csv-toolchain-discovery-20261017-v1'+suffix))
++    started=lib['utc']();out=err=b'';code=None;error=None;argv=['source-verify-before-ssh',action];frame_raw=b''
++    try:
++        frame_raw=READ(MATERIAL/'bundle.private.json',4*1024*1024);frame=json.loads(frame_raw);verify(frame)
++        cmd='/usr/bin/python3 -B -I -S -c '+shlex.quote(REMOTE_LAUNCH)+' '+shlex.quote(MANIFEST_SHA)+' '+shlex.quote(action)
++        argv=['ssh','-T','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes',HOST,cmd]
++        r=subprocess.run(argv,input=frame_raw,capture_output=True,timeout=180,check=False);code,out,err=r.returncode,r.stdout,r.stderr
++    except subprocess.TimeoutExpired as e:out,err=e.stdout or b'',e.stderr or b'';error=e
++    except Exception as e:error=e;err=type(e).__name__.encode()
++    return ingest(folder,out,err,code,started,lib['utc'](),error,action,argv,frame_raw)
++
++def main(action):
++    if action=='materialize':return materialize()
++    if action=='collect':return transport(action)
++    raise RuntimeError('action_not_authorized')
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/lab.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/lab.py
+new file mode 100644
+index 00000000..c39f692a
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/lab.py
+@@ -0,0 +1,77 @@
++"""Lab transport/host projection only. No production observations.
++OS file reads, readelf FD execution, launcher/export/custody are real.
++SSH, selected image reference and proc identity/maps are explicit fixtures.
++"""
++import builtins,hashlib,json,os,pathlib,shlex,subprocess,sys
++from pathlib import Path
++
++def remote(command,stdin):
++    root=Path(os.environ['RE7_DISCOVERY_LAB']);case=os.environ['RE7_DISCOVERY_CASE'];fs=root/'fs'
++    argv=shlex.split(command);sys.argv=['-c',*argv[-2:]]
++    realexec=builtins.exec;realopen=os.open;realstat=os.lstat;realstat2=os.stat;realaccess=os.access;realrun=subprocess.run
++    def mapped(path):
++        s=os.fsdecode(path)
++        if s.startswith(('/home/deploy/','/proc/999987','/usr/local/','/usr/sbin/','/usr/bin/node','/sbin/','/bin/node')):return str(fs/s.lstrip('/'))
++        return path
++    replaced=False;selected=False
++    def opened(path,*a,**kw):
++        nonlocal replaced
++        s=os.fsdecode(path)if isinstance(path,(str,bytes,os.PathLike))else ''
++        if case=='replacement' and s==str(fs/'usr/bin/node') and not replaced:
++            # Between canonical snapshot and opened(row). Earlier stable_file open
++            # uses this same path too; trigger only after analysis selection flag.
++            if selected:
++                replacement=fs/'usr/bin/other';replacement.write_bytes((fs/'usr/bin/node').read_bytes());os.replace(replacement,fs/'usr/bin/node');replaced=True
++        return realopen(mapped(path)if s else path,*a,**kw)
++    os.open=opened
++    os.lstat=lambda p,*a,**kw:realstat(mapped(p),*a,**kw)
++    os.stat=lambda p,*a,**kw:realstat2(mapped(p),*a,**kw)
++    os.access=lambda p,*a,**kw:realaccess(mapped(p),*a,**kw)
++    def run(args,*a,**kw):
++        if args[0].startswith('/proc/self/fd/'):
++            raw=os.readlink(args[0]);assert 'readelf' in raw,'target_code_must_never_execute'
++            with (root/'analysis-calls').open('a')as f:f.write('readelf\n')
++        return realrun(args,*a,**kw)
++    subprocess.run=run
++    def execute(code,scope=None,*a,**kw):
++        result=realexec(code,scope,*a,**kw)
++        if isinstance(scope,dict):
++            if scope.get('__name__')=='reviewed_runner':
++                scope['NODE_SHA']=hashlib.sha256((fs/'usr/bin/node').read_bytes()).hexdigest()
++            if scope.get('__file__')=='<verified read_package.py>':
++                chain=scope['file_chain'];observe=scope['observe'];meta=scope['meta']
++                def host_meta(s):
++                    value=meta(s)
++                    if value['uid']==65534:value['uid']=0;value['gid']=0 # host root outside user namespace
++                    return value
++                scope['meta']=host_meta
++                def file_chain(path,limit=8*1024*1024):
++                    nonlocal selected
++                    if path=='/usr/bin/readelf' and case=='missing-tool':raise FileNotFoundError(2,'synthetic tool absent')
++                    if path=='/usr/bin/readelf' and case=='denied-tool':raise PermissionError(13,'synthetic access denied')
++                    row,raw=chain(mapped(path),limit);row['path']=path
++                    if path=='/usr/bin/node':selected=True
++                    return row,raw
++                scope['file_chain']=file_chain
++                scope['observe']=lambda path:observe(path,root=fs)if path==scope['BOOT_ID']else observe(path)
++        return result
++    builtins.exec=execute
++    # Execute the unchanged authenticated remote launcher program received by SSH.
++    exec(argv[argv.index('-c')+1],{'__name__':'__main__','__file__':'<lab remote>'})
++
++def fixture(root):
++    import shutil
++    fs=root/'fs'
++    (root/'analysis-calls').write_text('')
++    def put(name,raw):
++        p=fs/name.lstrip('/');p.parent.mkdir(mode=0o700,parents=True,exist_ok=True);p.write_bytes(raw);return p
++    package=Path('/tmp/re7-b4-toolchain-20261016/node_modules/pm2')
++    for n in ('bin/pm2','lib/binaries/CLI.js','package.json'):
++        put('/home/deploy/.npm-global/lib/node_modules/pm2/'+n,(package/n).read_bytes())
++    alias=fs/'home/deploy/.npm-global/bin/pm2';alias.parent.mkdir(parents=True);alias.symlink_to('../lib/node_modules/pm2/bin/pm2')
++    node=put('/usr/bin/node',Path('/usr/bin/true').read_bytes());node.chmod(0o700) # new synthetic image only, never executed
++    put('/home/deploy/.pm2/pm2.pid',b'999987\n')
++    put('/proc/999987/stat',b'999987 (lab daemon) S '+b'0 '*18+b'12345\n')
++    put('/proc/999987/maps',b'1000-2000 r-xp 00000000 00:00 1 /usr/bin/node\n')
++    (fs/'proc/999987/exe').symlink_to(node)
++    put('/proc/sys/kernel/random/boot_id',b'00000000-0000-0000-0000-000000000001\n')
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/launch.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/launch.py
+new file mode 100644
+index 00000000..6999f276
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/launch.py
+@@ -0,0 +1,71 @@
++"""Reviewed entry: snapshot manifest and files once; execute those bytes, never import paths."""
++import hashlib,json,os,stat,sys
++from pathlib import Path
++
++def metadata(s):
++    return tuple(getattr(s,'st_'+k)for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
++
++def read(path,limit=8*1024*1024):
++    path=Path(path)
++    for p in (path,*path.parents):
++        if p.is_symlink():raise RuntimeError('source_symlink')
++    s=path.lstat()
++    if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or s.st_size>limit:raise RuntimeError('source_type_size')
++    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
++    try:
++        if metadata(os.fstat(fd))!=metadata(s):raise RuntimeError('source_replaced')
++        with os.fdopen(fd,'rb',closefd=False) as f:raw=f.read(limit+1)
++        if len(raw)>limit or metadata(os.fstat(fd))!=metadata(s) or metadata(path.lstat())!=metadata(s):raise RuntimeError('source_changed')
++        return raw
++    finally:os.close(fd)
++
++def execute():
++    root=Path(sys.argv[1]);expected=sys.argv[2];action=sys.argv[3]
++    raw=read(root/'MANIFEST.json')
++    if hashlib.sha256(raw).hexdigest()!=expected:raise RuntimeError('review_manifest_drift')
++    manifest=json.loads(raw);blobs={}
++    for name,entry in manifest['files'].items():
++        if Path(name).is_absolute() or '..' in Path(name).parts:raise RuntimeError('manifest_path')
++        if not entry.get('bootstrap',False):continue
++        source=Path(entry['source'])
++        if not source.is_absolute():source=root/entry['relativeSource']
++        value=read(source)
++        if len(value)!=entry['bytes'] or hashlib.sha256(value).hexdigest()!=entry['sha256']:raise RuntimeError('review_source_drift:'+name)
++        blobs[name]=value
++    scope={'__name__':'reviewed_driver','__file__':'<verified driver>', 'BLOBS':blobs,'MANIFEST':manifest,
++           'MANIFEST_RAW':raw,'MANIFEST_SHA':expected,'READ':read}
++    exec(compile(blobs['driver.py'],'<verified driver>','exec'),scope)
++    return scope['main'](action)
++def main():
++    import base64,contextlib,datetime,io
++    root=Path(sys.argv[1]);action=sys.argv[3]
++    if action not in ('materialize','collect'):raise RuntimeError('action_denied')
++    # Independent, already approved canonical writer before source/manifest checks.
++    writer_raw=read(root.parent/'crm-csv-r2-directed-20261017/privileged_output.source')
++    if hashlib.sha256(writer_raw).hexdigest()!='93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a':raise RuntimeError('canonical_writer_unavailable')
++    module={'__name__':'canonical_private_library','__file__':'<pinned writer>'}
++    exec(compile(writer_raw,'<pinned writer>','exec'),module)
++    parent=Path('/home/deifson-oliveira/DEIFSON/re7-private-retention-custody');m=parent.lstat()
++    if not stat.S_ISDIR(m.st_mode)or m.st_uid!=os.getuid()or stat.S_IMODE(m.st_mode)!=0o700:raise RuntimeError('custody_parent_contract')
++    for q in (parent,*parent.parents):
++        if q.is_symlink():raise RuntimeError('custody_parent_symlink')
++    folder=parent/('csv-toolchain-launcher-20261017-v1-'+action);folder.mkdir(mode=0o700)
++    started=datetime.datetime.now(datetime.timezone.utc).isoformat();out=io.StringIO();err=io.StringIO();code=1;error=None
++    try:
++        with contextlib.redirect_stdout(out),contextlib.redirect_stderr(err):code=execute()
++    except Exception as e:error=e;err.write(type(e).__name__)
++    row={'event':'reviewed_local_launcher','argv':sys.argv,'startedUtc':started,'finishedUtc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'exitCode':code,
++         'errorClass':None if error is None else type(error).__name__,'errno':getattr(error,'errno',None),'writerSha256':hashlib.sha256(writer_raw).hexdigest()}
++    for key,raw in [('stdout',out.getvalue().encode()),('stderr',err.getvalue().encode())]:
++        fd=os.open(folder/(key+'.private'),os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
++        with os.fdopen(fd,'wb')as f:f.write(raw);f.flush();os.fsync(f.fileno())
++        row.update({key+'Bytes':len(raw),key+'Sha256':hashlib.sha256(raw).hexdigest(),key+'Base64':base64.b64encode(raw).decode()})
++    module['private_record'](folder,'privileged-output.private.jsonl',row)
++    print(out.getvalue(),end='')
++    if code!=0:print('LAUNCHER_DENY_PRIVATE_DIAGNOSTIC_PRESERVED_NO_RETRY')
++    return code
++
++if __name__=='__main__':
++    try:sys.exit(main())
++    except Exception as e:
++        print(json.dumps({'result':'LOCAL_PACKAGE_DENY_NO_RETRY','errorClass':type(e).__name__,'errno':getattr(e,'errno',None)}));sys.exit(1)
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/runner.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/runner.py
+new file mode 100644
+index 00000000..9824ac00
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/runner.py
+@@ -0,0 +1,129 @@
++"""Directed discovery only. Reuses canonical Capture, reader and private_record.
++Never executes Node, PM2, captured JS, env, ldd, SQL or an installer.
++"""
++import json,os,stat,subprocess,tempfile,resource
++from pathlib import Path
++
++PATHS=('/usr/local/sbin','/usr/local/bin','/usr/sbin','/usr/bin','/sbin','/bin')
++PM='/home/deploy/.npm-global/bin/pm2'
++PM_SHA='bbb586713050b21d86aa41bde704a3a4776aa300ddcbd9710e81fa7c0089256d'
++NODE_SHA='d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e'
++JOURNAL='privileged-output.private.jsonl'
++
++def load(name):
++    scope={'__name__':'verified_library','__file__':'<verified '+name+'>','BLOBS':BLOBS}
++    exec(compile(BLOBS[name],scope['__file__'],'exec'),scope)
++    return scope
++
++def analyzer(cap,tool_fd,image_fd,label):
++    """Execute the observed OS analysis tool FD, not the target image.
++    Per-channel hard file limit and wall timeout; preserve partial channels.
++    readelf/its own OS loader are observed tools, not certified toolchain.
++    """
++    limit=1024*1024
++    argv=['/proc/self/fd/'+str(tool_fd),'--wide','--program-headers','--dynamic','/proc/self/fd/'+str(image_fd)]
++    started=cap.lib['utc']();code=None;error=None
++    def bounds():resource.setrlimit(resource.RLIMIT_FSIZE,(limit,limit))
++    with tempfile.TemporaryFile(dir=cap.q) as out,tempfile.TemporaryFile(dir=cap.q) as err:
++        try:
++            r=subprocess.run(argv,stdout=out,stderr=err,pass_fds=(tool_fd,image_fd),timeout=15,
++                             env={'PATH':'/usr/bin:/bin','LANG':'C'},preexec_fn=bounds,check=False)
++            code=r.returncode
++        except (OSError,subprocess.TimeoutExpired) as e:error=e
++        out.seek(0);err.seek(0);a=out.read(limit+1);b=err.read(limit+1)
++    cap.bytes(label,argv,started,cap.lib['utc'](),code,a,b,error)
++    cap.lib['require'](code==0 and error is None and len(a)<limit and len(b)<limit,'elf_analysis_denied')
++    return a
++
++def run(q,action):
++    Capture=load('capture.source')['Capture'];cap=Capture(q);lib=cap.lib;require=lib['require']
++    stage='begin';fds=[];ok=False
++    cap.event('begin',action=action,manifestSha256=MANIFEST_SHA,atomicSnapshot=False)
++    try:
++        require(action=='collect','discovery_action_only')
++        stage='pm2-shebang'
++        pm,raw=lib['file_chain'](PM,65536)
++        cap.observe('pm2-chain',lambda:pm)
++        require(lib['sha'](raw)==PM_SHA and raw==b"#!/usr/bin/env node\n\nrequire('../lib/binaries/CLI.js');\n",'pm2_entry_drift')
++        # Discover protection, never fix it. No captured script is executed.
++        parent=str(Path(pm['resolved']).parent.parent)
++        for ident,path in [('pm2-cli',parent+'/lib/binaries/CLI.js'),('pm2-package',parent+'/package.json'),('env-chain','/usr/bin/env')]:
++            cap.observe(ident,lambda path=path:lib['file_chain'](path,lib['LIMIT'])[0])
++        stage='path-selection';selected=None
++        for index,folder in enumerate(PATHS):
++            path=folder+'/node'
++            try:os.lstat(path)
++            except FileNotFoundError:
++                cap.observe('path-'+str(index),lambda path=path:{'path':path,'absent':True});continue
++            # Existing unreadable/broken/non-executable entries deny. Do not guess
++            # env's skip semantics across an incomplete observation.
++            row,raw=lib['file_chain'](path,lib['IMAGE_LIMIT'])
++            cap.observe('path-'+str(index),lambda:row)
++            require(os.access(path,os.X_OK),'path_entry_not_executable')
++            selected=(path,row);break
++        require(selected is not None,'node_path_absent')
++        nodepath,node=selected
++        require(node['sha256']==NODE_SHA,'selected_node_differs_from_historical_reference')
++        def opened(path,row):
++            fd=os.open(row['resolved'],os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK);fds.append(fd)
++            require(lib['meta'](os.fstat(fd))==row['metadata'],'image_replaced_before_use')
++            return fd
++        nodefd=opened(nodepath,node)
++        stage='analysis-tool'
++        # Fixed tool chosen before access. ENOENT/EACCES => DENY, no fallback.
++        tool,toolraw=lib['file_chain']('/usr/bin/readelf',lib['IMAGE_LIMIT'])
++        require(toolraw[:4]==b'\x7fELF' and os.access('/usr/bin/readelf',os.X_OK),'analysis_tool_type_access')
++        for part in tool['chains']:
++            m=part['metadata']
++            require(m['uid']==0 and (stat.S_ISLNK(m['mode']) or not(m['mode']&0o022)),'analysis_tool_path_unprotected')
++        cap.observe('readelf-tool',lambda:tool);toolfd=opened('/usr/bin/readelf',tool)
++        stage='selected-node-elf';analyzer(cap,toolfd,nodefd,'node-elf')
++        # Binding running image to newly read pm2.pid is an interval, not a
++        # promotion of old PIDs nor a certificate for the application's pair.
++        stage='daemon-image'
++        boot=lib['observe'](lib['BOOT_ID']);cap.observe('boot-before',lambda:boot)
++        pidraw,pidmeta=lib['stable_file']('/home/deploy/.pm2/pm2.pid',64)
++        require(pidraw.strip().isdigit() and int(pidraw)>1 and pidmeta['uid']==os.getuid(),'pm2_pid_format_owner')
++        pid=int(pidraw);folder=os.open('/proc/'+str(pid),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW);fds.append(folder)
++        before=lib['proc_identity'](lib['read_at'](folder,'stat',65536))
++        require(before['pid']==pid,'daemon_pid_identity')
++        image=lib['executable'](folder,{})
++        cap.observe('daemon-image',lambda:{'identity':before,'image':image})
++        require(image['sha256']==node['sha256'],'running_selected_node_mismatch')
++        stage='mapped-elf'
++        maps=lib['read_at'](folder,'maps',262144)
++        cap.bytes('daemon-maps',['read-fd','maps'],lib['utc'](),lib['utc'](),0,maps,b'')
++        paths=set()
++        for line in maps.decode('utf8').splitlines():
++            fields=line.split(None,5)
++            if len(fields)<6 or not fields[5].startswith('/'):continue
++            path=fields[5]
++            require(not path.endswith(' (deleted)') and '\\' not in path,'mapped_path_ambiguous')
++            paths.add(path)
++        require(len(paths)<=64,'mapped_file_count_bound')
++        total=0
++        for i,path in enumerate(sorted(paths)):
++            row,raw=lib['file_chain'](path,lib['IMAGE_LIMIT']);total+=len(raw)
++            require(total<=512*1024*1024,'mapped_total_bound')
++            cap.observe('mapped-'+str(i),lambda:row)
++            if raw[:4]!=b'\x7fELF':continue
++            fd=opened(path,row)
++            analyzer(cap,toolfd,fd,'mapped-elf-'+str(i))
++            require(lib['meta'](os.fstat(fd))==row['metadata'],'mapped_image_changed')
++        stage='interval-after'
++        require(lib['read_at'](folder,'maps',262144)==maps,'daemon_maps_changed')
++        require(lib['proc_identity'](lib['read_at'](folder,'stat',65536))==before,'daemon_identity_changed')
++        require(lib['executable'](folder,{})==image,'daemon_image_changed')
++        require(lib['stable_file']('/home/deploy/.pm2/pm2.pid',64)==(pidraw,pidmeta),'pm2_pid_changed')
++        require(lib['observe'](lib['BOOT_ID'])==boot,'boot_changed')
++        require(lib['meta'](os.fstat(nodefd))==node['metadata'] and lib['file_chain'](nodepath,lib['IMAGE_LIMIT'])[0]==node,'selected_node_changed')
++        require(lib['meta'](os.fstat(toolfd))==tool['metadata'] and lib['file_chain']('/usr/bin/readelf',lib['IMAGE_LIMIT'])[0]==tool,'analysis_tool_changed')
++        require(lib['file_chain'](PM,65536)[0]==pm,'pm2_entry_changed')
++        cap.event('end',result='DISCOVERY_OBSERVED_NOT_CERTIFIED',elfClosureCertified=False,protectionCertified=False,
++                  remaining='Resolve DT_NEEDED/PT_INTERP/RPATH against mapped paths offline; unobserved JS/transitive paths remain UNKNOWN')
++        ok=True
++    except Exception as e:
++        cap.event('end',result='DENY_NO_RETRY',denialStage=stage,denialReason=stage+'_not_proven',errorClass=type(e).__name__,errno=getattr(e,'errno',None))
++    finally:
++        for fd in reversed(fds):os.close(fd)
++    return ok,lib['export'](str(q))
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/seal.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/seal.py
+new file mode 100644
+index 00000000..2d3a009a
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/seal.py
+@@ -0,0 +1,88 @@
++"""Review indexes only. No materialization, remote call or operational generation."""
++import hashlib,json,os,re
++from pathlib import Path
++P=Path(__file__).resolve().parent
++ROOT=next(p for p in P.parents if (p/'.git').exists())
++sha=lambda b:hashlib.sha256(b).hexdigest()
++files={}
++for name,path in [(n,P/n)for n in ('launch.py','driver.py','runner.py','capture.source')]+[(n,P.parent/'crm-csv-r2-directed-20261017'/n)for n in ('read_package.py','privileged_output.source')]:
++    raw=path.read_bytes()
++    files[name]={'source':str(path.relative_to(ROOT)),'relativeSource':os.path.relpath(path,P),'bytes':len(raw),'sha256':sha(raw),'bootstrap':True}
++manifest={'base':'6e93e40902cde2f5cb43bf210a8dc2389c75411e','scope':'discovery only; no operational toolchain certification','files':files}
++raw=(json.dumps(manifest,sort_keys=True,indent=2)+'\n').encode()
++(P/'MANIFEST.json').write_bytes(raw)
++old=P.parent/'crm-csv-three-gaps-executable-20261017'
++blocks=re.findall(r'```bash\n(.*?)```',(old/'COMMANDS.md').read_text(),re.S)[:2]
++body='''# Node/PM2 — comandos concretos SOMENTE PARA REVISÃO
++
++Nenhuma execução na VPS autorizada nesta rodada. Futura aprovação é separada.
++Deploy SEM sudo. Não executar Node, PM2, env, CJS, ldd, SQL ou código capturado.
++Ferramenta escolhida ANTES da leitura: somente /usr/bin/readelf. Ausência,
++acesso negado, cadeia do analisador sem owner root/proteção, drift ou falha: DENY com parcial preservado; sem alternativa,
++instalação, retry, reparo ou download. Não reutilizar destinos consumidos.
++
++O owner revisa estes literais no Git; o launcher confere FD/no-follow/metadata,
++carrega os MESMOS bytes e autentica o manifest/fontes antes de executar o driver.
++Só materialize/collect são expostos. Um SSH batch único transfere fontes inativas
++e devolve também DENY. Sem resposta completa, preservar canais locais; não
++reconectar automaticamente. Não confundir custódia com certificação.
++
++## Destinos e limites prévios
++
++- LOCAL material: /dev/shm/re7-csv-toolchain-material-20261017-v1.
++- VPS inativos: /dev/shm/re7-csv-toolchain-tools-20261017-v1.
++- VPS resultados: /dev/shm/re7-csv-toolchain-read-20261017-v1.
++- LOCAL custódia: re7-private-retention-custody/csv-toolchain-discovery-20261017-v1.
++- LOCAL diagnóstico: mesmo parent, csv-toolchain-launcher-20261017-v1-{materialize,collect}.
++O parent local é o privado legítimo já documentado, owner700; scripts não o criam
++nem corrigem. Novos diretórios700/arquivos600 por criação exclusiva/no-follow.
++Destino existente impede a ação. Fontes6, sem closure26 desnecessária ao diagnóstico.
++Cada stdout/stderr contém comando, intervalo, código, errno, tamanho e SHA;
++private_record canônico, export byte-exato e ingestão do driver aceito.
++
++Leituras: scripts/package/env <=8MiB; PM2 entry <=64KiB; imagens <=256MiB;
++maps <=256KiB; pm2.pid/boot <=64B; até64 arquivos mapeados e512MiB somados.
++readelf:15s por imagem, stdout/stderr separados com limite HARD1MiB/canal;
++transporte180s. Excesso/timeout preserva parcial e nega. Nenhum backup/RPO.
++
++## 1. Materialização LOCAL inativa (somente após aprovação futura)
++
++'''
++for i,block in enumerate(blocks):
++    block=block.replace(str(old),str(P))
++    block=block.replace('5922f70646b6e20969abaccad0e834742127822e812012dc75144ffb67805bc4',sha((P/'launch.py').read_bytes()))
++    block=block.replace('3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba',sha(raw))
++    if i:body+='\n## 2. Transferência única, descoberta e custódia (aprovação futura separada)\n\n'
++    body+='```bash\n'+block+'```\n'
++body+='''
++## Alcance da descoberta / parada
++
++1. PM2 alias/bin/CLI/package e env: cadeias, links, owner/modos/hashes. O entry
++deve manter bbb586… e shebang exato aprovado. CLEAN.PATH do System.start é
++/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin. Primeira entrada
++existente executável é lida, não executada; qualquer entrada ambígua/inacessível
++nega sem adivinhar a resolução. Node deve corresponder à referência d016…;
++drift conserva observação, não atualiza o pin. Não usa PATH da sessão SSH.
++2. readelf é observado por cadeia/hash, aberto em FD e executado por esse FD;
++imagem-alvo também por FD. A ferramenta e seu loader usam a confiança OS já
++existente, NÃO uma certificação nova. O alvo Node/PM2 nunca é executado.
++3. pm2.pid atual fornece apenas candidato para observação: stat/ticks/exe/maps,
++boot e pm2.pid são conferidos no intervalo. Imagem running deve coincidir com
++a selecionada pelo PATH acima. Não reutiliza PIDs históricos nem certifica trio.
++4. readelf dos ELF mapeados: PT_INTERP/DT_NEEDED/RPATH/RUNPATH ficam nos canais
++privados. Resolução integral exige análise offline desses resultados; maps cobre
++o carregamento desse daemon nesse intervalo, não todas as cargas futuras.
++Não se executa loader, ldconfig, ldd ou dependência para descobri-la.
++5. JS transitivo: CLI/package e caminhos observados permitem comparar a fonte
++pinada já disponível. NÃO percorre4552 arquivos nem alega closure CLI completa.
++Imports dinâmicos não observados e proteção de todos os transitivos seguem
++UNKNOWN até reconciliação dirigida; isso não é PASS de toolchain.
++
++Resultado admissível: DISCOVERY_OBSERVED_NOT_CERTIFIED ou DENY_NO_RETRY.
++elfClosureCertified=false e protectionCertified=false sempre. Metadados separados
++não são snapshot atômico; nenhum resultado modifica histórico ou autoridade.
++Instalação/proteção futura, SQL/ownership, saved/fallback/identidades finais e
++16 vínculos/autoridade permanecem separados. CSV SUSPENSO / NOT WINDOW READY.
++'''
++(P/'COMMANDS.md').write_text(body)
++print(json.dumps({'manifestSha256':sha(raw),'launcherSha256':sha((P/'launch.py').read_bytes()),'files':len(files)}))
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/test_blocks.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/test_blocks.py
+new file mode 100644
+index 00000000..74997799
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/test_blocks.py
+@@ -0,0 +1,50 @@
++"""Execute the two published blocks literally in a disposable network namespace."""
++import hashlib,json,os,re,subprocess,tempfile,unittest
++from pathlib import Path
++import lab
++P=Path(__file__).resolve().parent;BASE=next(p for p in P.parents if(p/'.git').exists())
++CUSTODY=Path('/home/deifson-oliveira/DEIFSON/re7-private-retention-custody')
++RESULTS=[]
++class Blocks(unittest.TestCase):
++    def exercise(self,case):
++        with tempfile.TemporaryDirectory(prefix='re7-toolchain-blocks-')as td:
++            r=Path(td)
++            for n in ('shm','custody','bin'):(r/n).mkdir(mode=0o700)
++            lab.fixture(r)
++            shim=r/'bin/ssh';shim.write_text('#!/usr/bin/python3\nimport sys\nsys.path.insert(0,'+repr(str(P))+')\nimport lab\nlab.remote(sys.argv[-1],sys.stdin.buffer)\n');shim.chmod(0o700)
++            env=dict(os.environ,RE7_DISCOVERY_LAB=str(r),RE7_DISCOVERY_CASE=case,PATH=str(r/'bin')+':'+os.environ['PATH'],PYTHONDONTWRITEBYTECODE='1')
++            prefix=['bwrap','--die-with-parent','--unshare-user','--uid','0','--gid','0','--cap-drop','ALL','--unshare-net','--ro-bind','/','/','--bind',str(r),str(r),'--bind',str(r/'shm'),'/dev/shm','--bind',str(r/'custody'),str(CUSTODY),'--chdir',str(BASE)]
++            blocks=re.findall(r'```bash\n(.*?)```',(P/'COMMANDS.md').read_text(),re.S)
++            a=subprocess.run(prefix+['/bin/bash','-c',blocks[0]],capture_output=True,env=env,timeout=25)
++            self.assertEqual(a.returncode,0,a.stdout.decode()+a.stderr.decode())
++            b=subprocess.run(prefix+['/bin/bash','-c',blocks[1]],capture_output=True,env=env,timeout=50)
++            folder=r/'custody/csv-toolchain-discovery-20261017-v1'
++            self.assertTrue((folder/'transfer.stderr.private').exists())
++            self.assertTrue((folder/'capture.private.jsonl').exists(),(folder/'transfer.stderr.private').read_text())
++            rows=[json.loads(x)for x in(folder/'capture.private.jsonl').read_text().splitlines()]
++            end=next(x for x in reversed(rows)if x['event']=='end')
++            journal=[json.loads(x)for x in(folder/'privileged-output.private.jsonl').read_text().splitlines()]
++            transport=journal[0]
++            for key in ('stdout','stderr'):
++                raw=(folder/('transfer.'+key+'.private')).read_bytes()
++                self.assertEqual(hashlib.sha256(raw).hexdigest(),transport[key+'Sha256']);self.assertEqual(len(raw),transport[key+'Bytes'])
++            if case=='valid':
++                self.assertEqual(b.returncode,0,b.stdout.decode()+b.stderr.decode()+(folder/'transfer.stderr.private').read_text()+json.dumps(end))
++                self.assertEqual(end['result'],'DISCOVERY_OBSERVED_NOT_CERTIFIED');self.assertFalse(end['elfClosureCertified']);self.assertFalse(end['protectionCertified'])
++                self.assertTrue((r/'analysis-calls').read_text())
++            else:
++                self.assertNotEqual(b.returncode,0);self.assertEqual(end['result'],'DENY_NO_RETRY')
++                if case in ('missing-tool','denied-tool'):
++                    self.assertEqual(end['denialStage'],'analysis-tool');self.assertEqual(end['errno'],2 if case=='missing-tool'else 13)
++                    self.assertFalse((r/'analysis-calls').read_text())
++                if case=='replacement':self.assertEqual(end['denialStage'],'path-selection');self.assertFalse((r/'analysis-calls').read_text())
++            RESULTS.append({'case':case,'materializeExit':a.returncode,'collectExit':b.returncode,'result':end['result'],'denialStage':end.get('denialStage'),'custody':'canonical byte-exact journal and original stdout/stderr preserved','literalBlocks':True})
++    def test_valid(self):self.exercise('valid')
++    def test_missing_tool(self):self.exercise('missing-tool')
++    def test_denied_read(self):self.exercise('denied-tool')
++    def test_concurrent_substitution(self):self.exercise('replacement')
++if __name__=='__main__':
++    r=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(Blocks))
++    if r.wasSuccessful():
++        (P/'PROOFS.json').write_text(json.dumps({'result':'LOCAL_ROUTE_VALIDATED_NOT_OPERATIONALLY_CERTIFIED','tests':r.testsRun,'cases':RESULTS,'commandsSha256':hashlib.sha256((P/'COMMANDS.md').read_bytes()).hexdigest(),'manifestSha256':hashlib.sha256((P/'MANIFEST.json').read_bytes()).hexdigest(),'real':'Bash/Python launcher, FD/no-follow/metadata canonical reader, actual local readelf consuming actual ELF FD, export/transfer envelope/ingest/private_record; isolated user and network namespace','simulated':'SSH via local shim; host root UID65534 projected to UID0 inside user namespace; remote filesystem/proc/stat/maps/boot/pm2.pid; expected Node digest projected to local synthetic image (/usr/bin/true), not Node d016; ENOENT/EACCES injected at tool read, not observations of VPS; new fixture executable modes only','preserved':'All historical destinations, DENYs and operational generations untouched; no target Node/PM2 executed'},indent=2)+'\n')
++    raise SystemExit(0 if r.wasSuccessful()else 1)
+diff --git a/docs/saas/DOCUMENTATION_INDEX.md b/docs/saas/DOCUMENTATION_INDEX.md
+index 5982552e..58856b5d 100644
+--- a/docs/saas/DOCUMENTATION_INDEX.md
++++ b/docs/saas/DOCUMENTATION_INDEX.md
+@@ -314,0 +315,5 @@ Para licitacoes, propostas tecnicas, PoCs e diligencias, usar primeiro:
++
++
++### Checkpoint17/10 — integração aceita localmente / roteiro Node-PM2 para revisão
++
++Integração6e93e409 ACCEPT LOCAL somente no alcance documentado, preservadas simulações. [Relatório/matriz](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md) atualizados; [dois blocos de descoberta](../reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/COMMANDS.md), leitor/transporte/custódia existentes, quatro casos locais literais. Readelf ausente/inacessível nega sem fallback; sem ldd ou execução do alvo. Nenhuma VPS/coleta/instalação/SQL/build/backup/emissão/janela. ELF/PM2/proteção operacionais continuam NÃO certificados; saved/fallback/SQL/16vínculos/autoridade e Event775 pendentes. Próximo passo: revisar os comandos, autorização futura separada. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher, crons, guarda38/out.15 e históricos consumidos preservados. Deifson: revisão17/10, próxima21/10 ou mudança.
