@@ -1,5 +1,35 @@
 # Event — proposta mínima de remediação para decisão separada
 
+## M1 concluído —17/10/2026,15:09:05 Fortaleza
+
+**APPLIED_EVENT_PARENTS_PASS / CINCO EFEITOS CONFIRMADOS / M1 CONSUMIDO.** Base/remoto6feb950b e hashes conferidos. O mesmo M1 autorizado foi retomado no terminal local já aberto pelo owner, sem gnome-terminal, launcher novo ou alteração de programa/plano/gates. Deifson identificou owner/executor e declarou que não havia outros mantenedores sob sua administração atuando nesses caminhos; a confirmação e os campos reais foram fornecidos por ele no TTY. Apenas as informações já declaradas foram transcritas para facilitar essa entrada, sem inventar nomes/jobs ou assumir coordenação. Respostas/referências e compromisso de não relançar manutenção ficaram privados no intent. [Resultado sanitizado, horários, efeitos e hashes](M1_RESULT.json).
+
+Execução única como deploy/uid1000, **SEM sudo**, exit0. Oito elos/metadados e ACLs foram conferidos contra o plano pinado no uso; cinco transições registradas em ordem folha→raiz:
+
+| Diretório literal | Efeito confirmado | Preservado |
+| --- | --- | --- |
+| /opt/re7online/site-re7online/apps/whatsapp-agent/src/events |0775→0755 |uid/gid1000, dev/inode, nlink, size e mtime |
+| /opt/re7online/site-re7online/apps/whatsapp-agent/src |0775→0755 |uid/gid1000, dev/inode, nlink, size e mtime |
+| /opt/re7online/site-re7online/apps/whatsapp-agent |0775→0755 |uid/gid1000, dev/inode, nlink, size e mtime |
+| /opt/re7online/site-re7online/apps |0775→0755 |uid/gid1000, dev/inode, nlink, size e mtime |
+| /opt/re7online/site-re7online |0775→0755 |uid/gid1000, dev/inode, nlink, size e mtime |
+
+Somente g+w foi removido; todos os demais bits foram preservados. Ctime novo é efeito esperado e não foi reescrito para imitar a origem. As revalidações dos dois atributos ACL não produziram valor presente nem erro impeditivo; a interpretação POSIX já documentada permanece, sem parser/alteração de ACL. Após os cinco efeitos o executor revalidou a cadeia/FDs e chamou **o predicado Event original208f2ef5…**, resultando no terminal APPLIED_EVENT_PARENTS_PASS. É PASS **só dos pais Event**, não certificado de bindings, perfis, SQL, ownership ou prontidão CSV.
+
+### Evidência efetiva e duração, sem nova inspeção produtiva
+
+A análise posterior foi exclusivamente local, sobre os bytes já custodiados. Confirmados12 registros: plano, cinco pares apply-effect-intent/apply-effect-done e terminal. Plano/hash corresponde ao snapshot xattr original, intent referencia6feb950b/owner/operator e coordenação real; não há intent de efeito sem confirmação ou export de return.intent. Bytes de stdout11.295B, stderr0B e journal de canais90.945B conferidos contra Base64/tamanho/SHA canônicos. Exports privados: apply.intent928B/SHA2fe27a4d… e effects.private.jsonl7.214B/SHAd5c25806…, ambos íntegros off-host nos canais; sem duplicar arquivos brutos ou publicar conteúdo privado.
+
+Intervalo do journal remoto: **18:09:05.287438–18:09:05.292960UTC,0,005522s** (15:09:05 Fortaleza). Confirmações dos efeitos entre18:09:05.288774 e18:09:05.292359UTC. O span local registrado17:59:28.558833–18:09:05.348764UTC,576,789931s, **inclui a espera de preenchimento pelo owner**; não é duração de execução remota, contenção ou indisponibilidade. Tempos do journal não são medição contínua independente de HTTP/serviço. Nenhum serviço foi parado/reiniciado.
+
+**M2/M3 não foram executados**, nem nova leitura remota, replay ou reparo. A falha anterior do terminal gráfico continua preservada como M1 não iniciado naquela rodada; não foi convertida retroativamente em execução. Agora M1 e seus destinos/intents estão consumidos: não repetir nem apagar. A coordenação temporária foi liberada depois desta conferência, sem lançar jobs ou autorizar outra manutenção. Retorno, se algum dia necessário, permanece uma decisão separada sobre M3 e CAS pós-efeito; não é autorizado por este resultado.
+
+Os cinco diretórios foram tratados como infraestrutura compartilhada multitenant. Não houve overlay Event, instalação CSV, importação, mudança de dados/configurações de tenants, RBAC, credenciais, crons ou serviços. A criação dos diagnósticos privados e as cinco alterações de modo são os efeitos previstos de M1. NEWauth+NEWDB+NEWcipher, frontend, guarda38 e out.15 não foram alterados; não se afirma nova recertificação global de health/controles não observados.
+
+O impedimento de pais Event está resolvido **na verificação terminal de M1**. Os requisitos restantes do fluxo CSV continuam os já registrados (identidades/saved/fallback/bindings atuais, SQL/ownership, consumidores protegidos e autoridade), sem preparação ou execução automática nesta rodada. ELF continua PAUSADO. Nenhum teste/build/backup ou relatório preparatório adicional; somente resultado e atualização destes documentos. Deifson; revisão17/10/2026, próxima21/10 ou antes de mudança. **M1 COMPLETE / CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.**
+
+---
+
 ## M1 autorizado — não iniciado: falha local do TTY antes da coordenação
 
 **M1 NOT STARTED / ZERO EFEITOS / SEM SSH.** Base/remoto1e8ba1c0, fontes e hashes revisados conferidos; selecionado somente M1. Uma tentativa de abrir o TTY visível ao owner com gnome-terminal terminou em exit127 antes de executar o bloco. Erro fatal: `gnome-terminal.real`, biblioteca libpthread.so.0 de snap/core20, símbolo `__libc_pthread_init`/`GLIBC_PRIVATE` não resolvido. O aviso appmenu anterior não é tratado como causa independente da manutenção. [Resultado sanitizado/procedência](MAINTENANCE_RESULT.json).
@@ -340,7 +370,7 @@ Continuam faltando: estados atuais dos cinco diretórios, interpretação das ev
 
 Nenhum bloco está autorizado nesta rodada. São decisões separadas, não uma sequência automática. Não executar blocos consumidos acima.
 
-### M1 — aplicação única, somente após autorização e coordenação
+### M1 — aplicação CONSUMIDA/COMPLETE, NÃO REPETIR
 
 ```bash
 (

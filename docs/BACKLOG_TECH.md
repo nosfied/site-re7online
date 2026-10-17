@@ -1,6 +1,9 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
 
+**CSV17/10 às15:09 Fortaleza — M1 CONSUMED/COMPLETE, cinco pais0755.** [Resultado/efeitos/hashes](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/M1_RESULT.json): owner forneceu coordenação real no TTY; M1 único deploy sem sudo, cinco0775→0755 por FD, demais bits/owner/grupo/metadados preservados exceto ctime esperado; predicado Event original PASS. Plano/intent/cinco pares de confirmação e canais/exportação privados byte-exatos conferidos localmente. M2/M3, replay ou nova leitura remota não executados. Coordenação temporária encerrada; nenhum serviço/cron/tenant/RBAC/credencial/overlay/importação alterado. Somente pais Event resolvidos, CSV continua suspenso/NOT DEPLOYED/NOT WINDOW READY e demais requisitos sem continuação automática; ELF PAUSADO. Deifson; revisão21/10 ou antes de mudança.
+
+
 **CSV17/10 — M1 NÃO INICIADO, falha local do TTY.** [Resultado/procedência na proposta existente](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): base/remoto/hashes1e8ba1c0 PASS; terminal gráfico exit127 (libpthread/GLIBC_PRIVATE) antes da coordenação. Owner não respondeu, agente não preencheu; nenhum M1/SSH/efeito. Destino M1 ausente e não consumido; diagnóstico privado separado, sem recibo de aplicação. Sem retry/reparo/alternativa/M2/M3. Próximo: retomada orientada pelo owner com TTY utilizável e coordenação real; plano/CAS e provas preservados. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO. Deifson; revisão21/10 ou antes de retomada.
 
 

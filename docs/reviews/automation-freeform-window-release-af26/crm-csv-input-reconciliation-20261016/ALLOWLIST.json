@@ -1,11 +1,11 @@
 {
-  "base": "1e8ba1c0db5105083d29dfef0ace9aa77cc60cff",
-  "scope": "LOCAL_OWNER_TTY_LAUNCH_FAILURE_BEFORE_M1_SANITIZED_RESULT_AND_CHECKPOINTS_ONLY",
+  "base": "6feb950b006f8eaeec2d78e9091a383e573b641b",
+  "scope": "SANITIZED_RESULT_OF_OWNER_AUTHORIZED_SINGLE_M1_AND_NECESSARY_CHECKPOINTS_ONLY",
   "files": [
     "docs/BACKLOG_TECH.md",
     "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/M1_RESULT.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/MAINTENANCE_MANIFEST.sha256",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/MAINTENANCE_RESULT.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/PREFLIGHT_MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md",
@@ -17,7 +17,7 @@
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
     "docs/saas/DOCUMENTATION_INDEX.md"
   ],
-  "excluded": "Private diagnostic transcript/journals; M1 inputs/plan/coordination; all code/tests/previous evidence and literal blocks unchanged",
-  "m1Started": false,
-  "productiveEffects": false
+  "excluded": "Raw channels/intent/journal/coordination/plan/metadata/custodies; code/tests/previous results/consumed literal block bytes unchanged",
+  "m1Consumed": true,
+  "m2OrM3Executed": false
 }

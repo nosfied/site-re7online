@@ -1,0 +1,148 @@
+{
+  "base": "6feb950b006f8eaeec2d78e9091a383e573b641b",
+  "result": "APPLIED_EVENT_PARENTS_PASS",
+  "action": "M1_APPLY_ONLY",
+  "executionCount": 1,
+  "literalProgramChanged": false,
+  "commandExit": 0,
+  "transportErrorClass": null,
+  "operator": "deploy",
+  "uid": 1000,
+  "sudo": false,
+  "ownerCoordination": {
+    "ownerDeclared": true,
+    "ownerEnteredInExistingLocalTty": true,
+    "actorInformationOrigin": "Owner direct statement in chat, transcribed and confirmed in the already running TTY; no assumed additional maintainer or job.",
+    "authorizedCommit": "6feb950b006f8eaeec2d78e9091a383e573b641b",
+    "confirmedUtc": "2026-10-17T18:09:02.214757+00:00",
+    "relevantMaintainersAcknowledged": true,
+    "noFilesystemMaintenanceInFlightConfirmedByOwner": true,
+    "noNewMaintenanceUntilReleaseConfirmedByOwner": true,
+    "notAMachineWriterFence": true,
+    "privateTextPublished": false
+  },
+  "sourceObservationSha256": "971d5d397de694e2aec5bb09690a7500d9001b3c393f879e38186639834f54d3",
+  "planSha256": "e3b68d59b24d66aedf9de9a6753413fad8e8c5f549e4777055b5b377bdaa53ba",
+  "driverSha256": "eb2be50002d4944aa73a50fc3ff861bc2c32ee9f85cfadcef8ace2911868e38c",
+  "executorSha256": "9b7e8f1af3952a1df86775f001eb5a52791f780cf792f939d32ad4f82b4d0052",
+  "originalEventPredicateSha256": "208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b",
+  "effectsConfirmed": 5,
+  "effectOrder": "leaf-to-root",
+  "effects": [
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/src/events",
+      "beforeMode": "0775",
+      "afterMode": "0755",
+      "uidBeforeAndAfter": 1000,
+      "gidBeforeAndAfter": 1000,
+      "devInodeNlinkSizeMtimePreserved": true,
+      "ctimeChangeExpected": true,
+      "intentUtc": "2026-10-17T18:09:05.288774+00:00",
+      "confirmationUtc": "2026-10-17T18:09:05.290429+00:00"
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/src",
+      "beforeMode": "0775",
+      "afterMode": "0755",
+      "uidBeforeAndAfter": 1000,
+      "gidBeforeAndAfter": 1000,
+      "devInodeNlinkSizeMtimePreserved": true,
+      "ctimeChangeExpected": true,
+      "intentUtc": "2026-10-17T18:09:05.290834+00:00",
+      "confirmationUtc": "2026-10-17T18:09:05.291156+00:00"
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent",
+      "beforeMode": "0775",
+      "afterMode": "0755",
+      "uidBeforeAndAfter": 1000,
+      "gidBeforeAndAfter": 1000,
+      "devInodeNlinkSizeMtimePreserved": true,
+      "ctimeChangeExpected": true,
+      "intentUtc": "2026-10-17T18:09:05.291493+00:00",
+      "confirmationUtc": "2026-10-17T18:09:05.291650+00:00"
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps",
+      "beforeMode": "0775",
+      "afterMode": "0755",
+      "uidBeforeAndAfter": 1000,
+      "gidBeforeAndAfter": 1000,
+      "devInodeNlinkSizeMtimePreserved": true,
+      "ctimeChangeExpected": true,
+      "intentUtc": "2026-10-17T18:09:05.291876+00:00",
+      "confirmationUtc": "2026-10-17T18:09:05.292019+00:00"
+    },
+    {
+      "path": "/opt/re7online/site-re7online",
+      "beforeMode": "0775",
+      "afterMode": "0755",
+      "uidBeforeAndAfter": 1000,
+      "gidBeforeAndAfter": 1000,
+      "devInodeNlinkSizeMtimePreserved": true,
+      "ctimeChangeExpected": true,
+      "intentUtc": "2026-10-17T18:09:05.292243+00:00",
+      "confirmationUtc": "2026-10-17T18:09:05.292359+00:00"
+    }
+  ],
+  "journalRecords": 12,
+  "unpairedEffectIntents": 0,
+  "terminalUtc": "2026-10-17T18:09:05.292960+00:00",
+  "remoteJournalInterval": {
+    "startedUtc": "2026-10-17T18:09:05.287438+00:00",
+    "finishedUtc": "2026-10-17T18:09:05.292960+00:00",
+    "seconds": 0.005522,
+    "scope": "Remote journal interval; not an independent continuous timing or downtime measurement."
+  },
+  "localRecordedSpan": {
+    "startedUtc": "2026-10-17T17:59:28.558833+00:00",
+    "finishedUtc": "2026-10-17T18:09:05.348764+00:00",
+    "seconds": 576.789931,
+    "includesOwnerInputWaiting": true,
+    "isMaintenanceDuration": false
+  },
+  "custody": {
+    "canonicalChannelsByteExact": true,
+    "embeddedExportsByteExact": true,
+    "directoryMode": "0700",
+    "fileMode": "0600",
+    "files": {
+      "csv-event-mode-apply.stderr.private": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "csv-event-mode-apply.stdout.private": {
+        "bytes": 11295,
+        "sha256": "53b1d5339bf32f36bc9f45421d1251ca65e55fc40214063d6cd32da76ef1b059"
+      },
+      "privileged-output.private.jsonl": {
+        "bytes": 90945,
+        "sha256": "b52ca6afa3e79edc2d430e05659b92d7ae77dca857d5aa6f1d7ddf961d573155"
+      }
+    },
+    "privateExports": {
+      "apply.intent.private.json": {
+        "bytes": 928,
+        "sha256": "2fe27a4daee41b26717925d0a01c48de8a43f8fbc58f7f82343c30a969c7c0e1"
+      },
+      "effects.private.jsonl": {
+        "bytes": 7214,
+        "sha256": "d5c2580651cadc8252caa7d2b5c4ec715c930c5b45876f97bad0164da38193a0"
+      }
+    },
+    "rawBytesPublished": false,
+    "separateRawCopiesCreated": false
+  },
+  "m1Consumed": true,
+  "retryPerformed": false,
+  "m2Executed": false,
+  "m3Executed": false,
+  "automaticNextOperation": false,
+  "originalPredicatePassScope": "Event parent chain only, not full CSV/prestop/config/SQL certification",
+  "tenantDataConfigRbacCredentialsCronsServicesChanged": false,
+  "eventOverlayApplied": false,
+  "csvInstalledOrImported": false,
+  "productiveHealthRecertified": false,
+  "temporaryMaintenanceCoordinationReleasedAfterVerification": true,
+  "status": "M1_COMPLETE_CSV_SUSPENDED_NOT_DEPLOYED_NOT_WINDOW_READY_ELF_PAUSED"
+}

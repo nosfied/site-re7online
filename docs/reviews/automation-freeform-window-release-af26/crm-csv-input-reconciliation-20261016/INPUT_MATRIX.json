@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Owner TTY launch failed locally before M1/coordination; no SSH or effects. Need working owner-accessible local TTY and real named maintainer/job acknowledgements before resumed M1. No alternate launch or repair performed; preserved M1 snapshot/CAS and unused destination unchanged.",
+    "firstConcreteBlocker": "Event parents fixed by authorized M1 and original predicate PASS at2026-10-17T18:09:05UTC. No automatic CSV continuation: existing remaining current identities/saved/fallback/bindings, SQL/ownership and protected-consumer/authority certification still required under separate scope; ELF remains paused.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1647,6 +1647,19 @@
       "confirmedEffects": 0,
       "m1Consumed": false,
       "m2OrM3Executed": false
+    },
+    "eventModeMaintenanceComplete": {
+      "base": "6feb950b006f8eaeec2d78e9091a383e573b641b",
+      "result": "APPLIED_EVENT_PARENTS_PASS",
+      "evidence": "../crm-csv-delivery-review-20261017/M1_RESULT.json",
+      "confirmedEffects": 5,
+      "modeAllFive": "0755",
+      "uidGidPreserved": 1000,
+      "ownerCoordinationProvidedInTty": true,
+      "m1Consumed": true,
+      "m2OrM3Executed": false,
+      "noFurtherRemoteRead": true,
+      "scope": "Event parent predicate only, no full CSV operational readiness"
     }
   }
 }

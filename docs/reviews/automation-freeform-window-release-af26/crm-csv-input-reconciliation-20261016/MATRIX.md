@@ -1,3 +1,11 @@
+## M1 COMPLETE17/10 às15:09 Fortaleza — cinco pais0755, Event original PASS
+
+[Resultado na mesma proposta](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md), [efeitos/hashes](../crm-csv-delivery-review-20261017/M1_RESULT.json). M1 único autorizado6feb950b, owner forneceu coordenação no TTY, deploy uid1000 SEM sudo: cinco0775→0755 por FD, owner/grupo/demais bits e demais campos preservados, ctime esperado. Cinco pares intent/done, plano pinado e terminal APPLIED_EVENT_PARENTS_PASS conferidos; canais11.295B/0B e exports privados byte-exatos off-host. Journal remoto0,005522s; span local576,789931s inclui espera do owner, não duração de manutenção/HTTP.
+
+M1/destinos consumidos; M2/M3, replay, leitura remota adicional e reparo não executados. Coordenação temporária encerrada após conferência. Só o impedimento pais Event foi resolvido naquele instante; restantes CSV preservados, sem retomada automática. Sem serviço/cron/tenant/RBAC/credencial/overlay/importação; sem testes/builds/backup novos. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO. Deifson; revisão21/10 ou antes de mudança.
+
+---
+
 ## M1 não iniciado — falha local do TTY, base1e8ba1c0
 
 [Resultado na mesma proposta](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md), [hash/procedência](../crm-csv-delivery-review-20261017/MAINTENANCE_RESULT.json). HEAD/remoto/hashes PASS; tentativa única de abrir terminal do owner falhou exit127 por incompatibilidade libpthread/GLIBC_PRIVATE. Nenhuma confirmação de coordenação, bloco M1 ou SSH iniciados; zero efeitos. Destino local M1 ausente; plano/fontes/blocos não alterados, M1 não consumido. Diagnóstico privado canônico preserva o output combinado observado, sem alegar canais M1 ou horários de manutenção inexistentes.
