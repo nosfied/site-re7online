@@ -1,3 +1,18 @@
+# Correção da dependência de descoberta —17/10/2026, base002b46a6
+
+**Roteiro anterior NÃO EXECUTAR**: dependia de readelf remoto após ENOENT conhecido, cuja causa executável/loader não foi discriminada. [Procedimento corrigido](../crm-csv-toolchain-discovery-20261017/COMMANDS.md): localpreflight → remoto somente bytes/metadados → SCP/custódia/análise LOCAL.7provas afetadas, sem VPS. Nenhuma closure/proteção certificada.
+
+| Item | Reutilização / procedimento | Limite e dependência |
+| --- | --- | --- |
+| Materiais | Hash/metadados Node d016 disponíveis; Node local af8d diferente; PM2/lock/closure26/prova completa aceitos | ELF produtivo integral ausente nas fontes pinadas examinadas; não runtime inteiro |
+| Bytes remotos | Selecionado+ELF mapeados deduplicados; reader/FD/write_artifact/private_record existentes |64objetos/128MiB total; reserva operação512MiB remota/2GiB local, não reserva canônica; sem readelf/subprocesso remoto |
+| Recepção/análise | Manifest/recibo/fonte estável, SCP exclusivo, conjunto/hashes; readelf LOCAL comprovado antes do SSH e revalidado por FD |Parcial/tamper nega e conserva; sem loader/ldd/código capturado. PT_INTERP/NEEDED/RPATH ainda exigirão análise offline |
+| Closure/proteção | Descoberta é distinta de instalação/proteção |Continuam UNKNOWN; SQL/ownership, identidades finais,16vínculos/autoridade/Event775 separados |
+
+CSV SUSPENSO / LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. Checkpoints anteriores abaixo preservados como históricos; não executar seus comandosv1.
+
+---
+
 # Atualização —17/10/2026, base6e93e409
 
 Integração da folha/compositor/lançamento pré-autoridade **ACCEPT LOCAL** somente no alcance descrito; simulações não são certificados. Procedimento Node/ELF/PM2 [COMMANDS](../crm-csv-toolchain-discovery-20261017/COMMANDS.md), seis fontes e quatro ensaios literais locais aprovados. Sem execução na VPS.

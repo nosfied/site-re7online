@@ -28,10 +28,7 @@ def remote(command,stdin):
     os.stat=lambda p,*a,**kw:realstat2(mapped(p),*a,**kw)
     os.access=lambda p,*a,**kw:realaccess(mapped(p),*a,**kw)
     def run(args,*a,**kw):
-        if args[0].startswith('/proc/self/fd/'):
-            raw=os.readlink(args[0]);assert 'readelf' in raw,'target_code_must_never_execute'
-            with (root/'analysis-calls').open('a')as f:f.write('readelf\n')
-        return realrun(args,*a,**kw)
+        raise AssertionError('remote_subprocess_forbidden')
     subprocess.run=run
     def execute(code,scope=None,*a,**kw):
         result=realexec(code,scope,*a,**kw)
@@ -47,8 +44,8 @@ def remote(command,stdin):
                 scope['meta']=host_meta
                 def file_chain(path,limit=8*1024*1024):
                     nonlocal selected
-                    if path=='/usr/bin/readelf' and case=='missing-tool':raise FileNotFoundError(2,'synthetic tool absent')
-                    if path=='/usr/bin/readelf' and case=='denied-tool':raise PermissionError(13,'synthetic access denied')
+                    if path=='/usr/bin/readelf':raise FileNotFoundError(2,'synthetic tool absent')
+                    if path=='/usr/bin/node' and case=='node-read-denied':raise PermissionError(13,'synthetic node access denied')
                     row,raw=chain(mapped(path),limit);row['path']=path
                     if path=='/usr/bin/node':selected=True
                     return row,raw
@@ -75,3 +72,33 @@ def fixture(root):
     put('/proc/999987/maps',b'1000-2000 r-xp 00000000 00:00 1 /usr/bin/node\n')
     (fs/'proc/999987/exe').symlink_to(node)
     put('/proc/sys/kernel/random/boot_id',b'00000000-0000-0000-0000-000000000001\n')
+
+def local():
+    """Literal local Python bootstrap, real reader/tool; explicit namespace UID projection."""
+    case=os.environ['RE7_DISCOVERY_CASE'];realexec=builtins.exec
+    def execute(code,scope=None,*a,**kw):
+        result=realexec(code,scope,*a,**kw)
+        if isinstance(scope,dict)and scope.get('__file__')=='<verified read_package.py>':
+            meta=scope['meta'];chain=scope['file_chain']
+            def host_meta(s):
+                value=meta(s)
+                if value['uid']==65534:value['uid']=0;value['gid']=0
+                return value
+            def checked(path,limit=8*1024*1024):
+                if path=='/usr/bin/readelf' and case=='local-tool-missing':raise FileNotFoundError(2,'synthetic local tool absent')
+                if path=='/usr/bin/readelf' and case=='local-tool-denied':raise PermissionError(13,'synthetic local tool access denied')
+                return chain(path,limit)
+            scope['meta']=host_meta;scope['file_chain']=checked
+        return result
+    builtins.exec=execute
+    sys.argv=['-']
+    exec(compile(sys.stdin.buffer.read(),'<literal local block>','exec'),{'__name__':'__main__'})
+
+def scp():
+    import shutil
+    src=sys.argv[-2].split(':',1)[1];dst=sys.argv[-1]
+    shutil.copytree(src,dst,copy_function=shutil.copy2)
+    case=os.environ['RE7_DISCOVERY_CASE']
+    if case in ('partial-transfer','image-tampered'):
+        f=next(Path(dst).glob('*.elf'));f.write_bytes(b'partial')
+        if case=='partial-transfer':raise SystemExit(1)

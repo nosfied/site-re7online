@@ -1,47 +1,71 @@
 {
-  "result": "LOCAL_ROUTE_VALIDATED_NOT_OPERATIONALLY_CERTIFIED",
-  "tests": 4,
+  "result": "LOCAL_SPLIT_ROUTE_VALIDATED_NOT_CERTIFIED",
+  "tests": 7,
   "cases": [
     {
       "case": "replacement",
-      "materializeExit": 0,
       "collectExit": 1,
       "result": "DENY_NO_RETRY",
       "denialStage": "path-selection",
-      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
-      "literalBlocks": true
+      "remoteToolCalled": false
     },
     {
-      "case": "denied-tool",
+      "case": "image-tampered",
       "materializeExit": 0,
-      "collectExit": 1,
+      "collectExit": 0,
+      "localAnalysisExit": 1,
       "result": "DENY_NO_RETRY",
-      "denialStage": "analysis-tool",
-      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
-      "literalBlocks": true
+      "denialStage": "image-integrity",
+      "remoteToolCalled": false,
+      "literalBlocks": true,
+      "privateCaptureSha256": "d9a51b7fdb3ed1bdc55630a119a65d0399a6dec52b36a7903c5cc35221420fef"
     },
     {
-      "case": "missing-tool",
+      "case": "local-tool-denied",
+      "materializeExit": 1,
+      "remoteCalled": false,
+      "privateDeny": true
+    },
+    {
+      "case": "local-tool-missing",
+      "materializeExit": 1,
+      "remoteCalled": false,
+      "privateDeny": true
+    },
+    {
+      "case": "partial-transfer",
       "materializeExit": 0,
+      "collectExit": 0,
+      "localAnalysisExit": 1,
+      "result": "DENY_NO_RETRY",
+      "denialStage": "transfer-images",
+      "remoteToolCalled": false,
+      "literalBlocks": true,
+      "privateCaptureSha256": "0e4b0303797ad4198ff92cc7463f1573cd59163f441e1325b99b201044297286"
+    },
+    {
+      "case": "node-read-denied",
       "collectExit": 1,
       "result": "DENY_NO_RETRY",
-      "denialStage": "analysis-tool",
-      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
-      "literalBlocks": true
+      "denialStage": "path-selection",
+      "remoteToolCalled": false
     },
     {
       "case": "valid",
       "materializeExit": 0,
       "collectExit": 0,
-      "result": "DISCOVERY_OBSERVED_NOT_CERTIFIED",
+      "localAnalysisExit": 0,
+      "result": "LOCAL_ELF_ANALYZED_NOT_CERTIFIED",
       "denialStage": null,
-      "custody": "canonical byte-exact journal and original stdout/stderr preserved",
-      "literalBlocks": true
+      "remoteToolCalled": false,
+      "literalBlocks": true,
+      "privateCaptureSha256": "887242f25189f01af4491d1c03aad4f2a0f027ecc2988979dd339c133d1fa47b"
     }
   ],
-  "commandsSha256": "5a78a435cb8b89b9002f67a033767fd4b6ead6473abf6a618515244405f78beb",
-  "manifestSha256": "bda69876fbcd2ecf737d133c48e8c06dda7a7ffb4375186cd0b042a7820e8645",
-  "real": "Bash/Python launcher, FD/no-follow/metadata canonical reader, actual local readelf consuming actual ELF FD, export/transfer envelope/ingest/private_record; isolated user and network namespace",
-  "simulated": "SSH via local shim; host root UID65534 projected to UID0 inside user namespace; remote filesystem/proc/stat/maps/boot/pm2.pid; expected Node digest projected to local synthetic image (/usr/bin/true), not Node d016; ENOENT/EACCES injected at tool read, not observations of VPS; new fixture executable modes only",
-  "preserved": "All historical destinations, DENYs and operational generations untouched; no target Node/PM2 executed"
+  "commandsSha256": "6175de5c4368c895d898b9b71cf77b39d4755528c2d114225ec61104ff74ce15",
+  "manifestSha256": "707726e11f30ada8ef9f80f2fc7b6f84a1a737eca1b614738cf57f99c14f7dfa",
+  "real": "Three literal Bash blocks; reviewed in-memory launcher, canonical reader/write_artifact/private_record/export/ingest; real local readelf --version and ELF FD analysis; preserved image bytes and SHA integrity",
+  "simulated": "SSH/SCP transports via shims; remote proc/boot/PID/maps and expected Node hash mapped to local /usr/bin/true (never executed); root UID65534 projected to0 in isolated user namespace; denied reads/missing tool injected; no VPS",
+  "notCertified": "ELF/JS closure and operational protection; production identities not observed",
+  "reused": "Accepted Capture/reader/custody; no repetition of PM2/closure26/Operations suites"
 }

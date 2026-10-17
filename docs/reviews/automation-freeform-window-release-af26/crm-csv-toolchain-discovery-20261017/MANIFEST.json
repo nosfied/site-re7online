@@ -1,5 +1,5 @@
 {
-  "base": "6e93e40902cde2f5cb43bf210a8dc2389c75411e",
+  "base": "002b46a687b539bfaf688a8d81727aec2437abce",
   "files": {
     "capture.source": {
       "bootstrap": true,
@@ -10,17 +10,24 @@
     },
     "driver.py": {
       "bootstrap": true,
-      "bytes": 9962,
+      "bytes": 10299,
       "relativeSource": "driver.py",
-      "sha256": "41330e73a1c075aad0c3713bee7f0ffa95edfbb90be986713447820d1ba13ff4",
+      "sha256": "630f598670ae9f83f3c7ef74c055247eaa511fca2b1ebb627742008295082192",
       "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/driver.py"
     },
     "launch.py": {
       "bootstrap": true,
-      "bytes": 4545,
+      "bytes": 4563,
       "relativeSource": "launch.py",
-      "sha256": "cdc1bb35eb986feb8128b64e6d27d4df63866ea3f0ff578f9c5a3691aa7c5b0c",
+      "sha256": "1ba68f5cb5bc521b95a7035ecd048852c0072e85df08cf4ba18277be64e705e0",
       "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/launch.py"
+    },
+    "local_elf.py": {
+      "bootstrap": true,
+      "bytes": 7904,
+      "relativeSource": "local_elf.py",
+      "sha256": "f12982e3c5835c25e76521343dd382f0ae31a6af7928f39b360a323be6548a35",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/local_elf.py"
     },
     "privileged_output.source": {
       "bootstrap": true,
@@ -38,9 +45,9 @@
     },
     "runner.py": {
       "bootstrap": true,
-      "bytes": 7942,
+      "bytes": 7230,
       "relativeSource": "runner.py",
-      "sha256": "044e702e1adaa0ed9ce93957f60b90da24794452532fa459b6e44c38df0419d0",
+      "sha256": "0d36c56f1cc8b34a2dda21cff2c7ff5d52eee4c8dbda42a7746d35fa1f44d62a",
       "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/runner.py"
     }
   },

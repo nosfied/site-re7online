@@ -1,63 +1,52 @@
-# Node/PM2 — comandos concretos SOMENTE PARA REVISÃO
+# Descoberta remota / análise ELF LOCAL — somente para revisão
 
-Nenhuma execução na VPS autorizada nesta rodada. Futura aprovação é separada.
-Deploy SEM sudo. Não executar Node, PM2, env, CJS, ldd, SQL ou código capturado.
-Ferramenta escolhida ANTES da leitura: somente /usr/bin/readelf. Ausência,
-acesso negado, cadeia do analisador sem owner root/proteção, drift ou falha: DENY com parcial preservado; sem alternativa,
-instalação, retry, reparo ou download. Não reutilizar destinos consumidos.
+O roteiro de002b46a6 NÃO DEVE SER EXECUTADO: exigia readelf remoto apesar do
+ENOENT de lançamento já preservado. ENOENT não distingue executável/loader ausente.
+Esta correção não instala nem busca alternativa remota. Nenhuma execução VPS
+nesta rodada. Aprovação futura separada; deploy SEM sudo; sem retry/fallback.
 
-O owner revisa estes literais no Git; o launcher confere FD/no-follow/metadata,
-carrega os MESMOS bytes e autentica o manifest/fontes antes de executar o driver.
-Só materialize/collect são expostos. Um SSH batch único transfere fontes inativas
-e devolve também DENY. Sem resposta completa, preservar canais locais; não
-reconectar automaticamente. Não confundir custódia com certificação.
+## Materiais comparados e orçamento ANTES de transferir
 
-## Destinos e limites prévios
+- Referência Node produtiva d01614ef…,97.661.912B: somente hash/metadados nas
+  custódias R2 aceitas; imagem correspondente não existe entre as fontes pinadas
+  examinadas. Node local af8d5d1e… difere, não substitui. PM2/lock/closure26/prova
+  completa já disponíveis são reutilizados nos respectivos alcances, não recopiados.
+- Só ELF selecionado + ELF dos mapas do daemon no intervalo, deduplicados por SHA.
+  Máximo64 objetos,128MiB RAW TOTAL (não128MiB cada),128MiB por leitura de imagem.
+  Sem runtime/tree/node_modules. Justificativa, identidade, cadeia/metadados e hash
+  por objeto. Se exceder, DENY, sem elevar limite ou escolher arbitrariamente libs.
+- Reserva da operação:512MiB remotos e2GiB locais, conferidas antes das cópias.
+  São orçamento deste lote, NÃO reservas canônicas deploy/PostgreSQL nem PASS de
+  capacidade de janela. Incluem canais/journals e margem; readelf <=1MiB/canal/ELF.
+- Apenas metadados/journal (<8MiB pelo export canônico) via SSH; imagens são arquivos
+  privados600 em images700. SCP único desse diretório exato; sem glob/runtime inteiro.
+  Ingestão canônica byte-exata do journal, hashes individuais e revalidação dos FDs
+  das imagens locais antes/depois de análise. Parcial permanece privado em falha.
 
-- LOCAL material: /dev/shm/re7-csv-toolchain-material-20261017-v1.
-- VPS inativos: /dev/shm/re7-csv-toolchain-tools-20261017-v1.
-- VPS resultados: /dev/shm/re7-csv-toolchain-read-20261017-v1.
-- LOCAL custódia: re7-private-retention-custody/csv-toolchain-discovery-20261017-v1.
-- LOCAL diagnóstico: mesmo parent, csv-toolchain-launcher-20261017-v1-{materialize,collect}.
-O parent local é o privado legítimo já documentado, owner700; scripts não o criam
-nem corrigem. Novos diretórios700/arquivos600 por criação exclusiva/no-follow.
-Destino existente impede a ação. Fontes6, sem closure26 desnecessária ao diagnóstico.
-Cada stdout/stderr contém comando, intervalo, código, errno, tamanho e SHA;
-private_record canônico, export byte-exato e ingestão do driver aceito.
+## Destinos novos
 
-Leituras: scripts/package/env <=8MiB; PM2 entry <=64KiB; imagens <=256MiB;
-maps <=256KiB; pm2.pid/boot <=64B; até64 arquivos mapeados e512MiB somados.
-readelf:15s por imagem, stdout/stderr separados com limite HARD1MiB/canal;
-transporte180s. Excesso/timeout preserva parcial e nega. Nenhum backup/RPO.
+LOCAL material /dev/shm/re7-csv-toolchain-material-20261017-v2;
+VPS inativos /dev/shm/re7-csv-toolchain-tools-20261017-v2;
+VPS resultados /dev/shm/re7-csv-toolchain-read-20261017-v2 (images/).
+LOCAL custódia legítima /home/deifson-oliveira/DEIFSON/re7-private-retention-custody:
+ csv-toolchain-discovery-20261017-v2 e csv-toolchain-analysis-20261017-v2;
+ diagnósticos csv-toolchain-launcher-20261017-v2-{materialize,collect,receive-analyze}.
+Parents privados owner700 existentes; sem criar/reparar parent; novos destinos
+exclusivos700/600. Destino existente nega sem sobrescrever nem repetir.
 
-## 1. Materialização LOCAL inativa (somente após aprovação futura)
+## Ferramentas e confiança
 
-```bash
-(
-set -euo pipefail
-umask 077
-python3 -B -I -S - <<'REVIEWED_LOCAL'
-import hashlib,os,stat,sys
-from pathlib import Path
-p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017')
-f=p/'launch.py'
-for q in (f,*f.parents):assert not q.is_symlink(),'launcher_symlink'
-def meta(s):return tuple(getattr(s,'st_'+k)for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
-s=f.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'launcher_metadata'
-fd=os.open(f,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
-try:
- assert meta(os.fstat(fd))==meta(s),'launcher_replaced'
- raw=os.read(fd,65536)
- assert meta(os.fstat(fd))==meta(s) and meta(f.lstat())==meta(s),'launcher_changed'
-finally:os.close(fd)
-assert hashlib.sha256(raw).hexdigest()=='cdc1bb35eb986feb8128b64e6d27d4df63866ea3f0ff578f9c5a3691aa7c5b0c','reviewed_launcher'
-sys.argv=[str(f),str(p),'bda69876fbcd2ecf737d133c48e8c06dda7a7ffb4375186cd0b042a7820e8645','materialize']
-exec(compile(raw,str(f),'exec'),{'__name__':'__main__','__file__':str(f)})
-REVIEWED_LOCAL
-)
-```
+LOCAL /usr/bin/python3 e /usr/bin/readelf; SSH/SCP pelos acessos existentes.
+Materialização local confere readelf (cadeia root sem escrita terceiros, ELF,
+executável, FD estável), executa --version pelo FD e preserva tool/hash/saída privada.
+Ausente/negado/alterado: nega ANTES de transferir. Revalida o MESMO tool na análise.
+Manifest e launcher aprovados no Git carregam os mesmos bytes autenticados, sem
+hash seguido de import de caminho substituível. Sete fontes; sem novo framework.
+Remoto usa apenas Python/leitor/custódia existentes; não invoca readelf, Node, PM2,
+CJS, ldd, loader, SQL ou código capturado. Consulta e criação de artefatos inativos
+não são instalação/proteção. SCP recebe nomes content-addressed .elf, não scripts.
 
-## 2. Transferência única, descoberta e custódia (aprovação futura separada)
+## 1. Materialização e comprovação LOCAL do analisador — aprovação futura
 
 ```bash
 (
@@ -77,38 +66,90 @@ try:
  raw=os.read(fd,65536)
  assert meta(os.fstat(fd))==meta(s) and meta(f.lstat())==meta(s),'launcher_changed'
 finally:os.close(fd)
-assert hashlib.sha256(raw).hexdigest()=='cdc1bb35eb986feb8128b64e6d27d4df63866ea3f0ff578f9c5a3691aa7c5b0c','reviewed_launcher'
-sys.argv=[str(f),str(p),'bda69876fbcd2ecf737d133c48e8c06dda7a7ffb4375186cd0b042a7820e8645','collect']
+assert hashlib.sha256(raw).hexdigest()=='1ba68f5cb5bc521b95a7035ecd048852c0072e85df08cf4ba18277be64e705e0','reviewed_launcher'
+sys.argv=[str(f),str(p),'707726e11f30ada8ef9f80f2fc7b6f84a1a737eca1b614738cf57f99c14f7dfa','materialize']
 exec(compile(raw,str(f),'exec'),{'__name__':'__main__','__file__':str(f)})
 REVIEWED_LOCAL
 )
 ```
 
-## Alcance da descoberta / parada
+## 2. Coleta remota de bytes sem analisador + custódia — aprovação futura
 
-1. PM2 alias/bin/CLI/package e env: cadeias, links, owner/modos/hashes. O entry
-deve manter bbb586… e shebang exato aprovado. CLEAN.PATH do System.start é
-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin. Primeira entrada
-existente executável é lida, não executada; qualquer entrada ambígua/inacessível
-nega sem adivinhar a resolução. Node deve corresponder à referência d016…;
-drift conserva observação, não atualiza o pin. Não usa PATH da sessão SSH.
-2. readelf é observado por cadeia/hash, aberto em FD e executado por esse FD;
-imagem-alvo também por FD. A ferramenta e seu loader usam a confiança OS já
-existente, NÃO uma certificação nova. O alvo Node/PM2 nunca é executado.
-3. pm2.pid atual fornece apenas candidato para observação: stat/ticks/exe/maps,
-boot e pm2.pid são conferidos no intervalo. Imagem running deve coincidir com
-a selecionada pelo PATH acima. Não reutiliza PIDs históricos nem certifica trio.
-4. readelf dos ELF mapeados: PT_INTERP/DT_NEEDED/RPATH/RUNPATH ficam nos canais
-privados. Resolução integral exige análise offline desses resultados; maps cobre
-o carregamento desse daemon nesse intervalo, não todas as cargas futuras.
-Não se executa loader, ldconfig, ldd ou dependência para descobri-la.
-5. JS transitivo: CLI/package e caminhos observados permitem comparar a fonte
-pinada já disponível. NÃO percorre4552 arquivos nem alega closure CLI completa.
-Imports dinâmicos não observados e proteção de todos os transitivos seguem
-UNKNOWN até reconciliação dirigida; isso não é PASS de toolchain.
+```bash
+(
+set -euo pipefail
+umask 077
+python3 -B -I -S - <<'REVIEWED_LOCAL'
+import hashlib,os,stat,sys
+from pathlib import Path
+p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017')
+f=p/'launch.py'
+for q in (f,*f.parents):assert not q.is_symlink(),'launcher_symlink'
+def meta(s):return tuple(getattr(s,'st_'+k)for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
+s=f.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'launcher_metadata'
+fd=os.open(f,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+try:
+ assert meta(os.fstat(fd))==meta(s),'launcher_replaced'
+ raw=os.read(fd,65536)
+ assert meta(os.fstat(fd))==meta(s) and meta(f.lstat())==meta(s),'launcher_changed'
+finally:os.close(fd)
+assert hashlib.sha256(raw).hexdigest()=='1ba68f5cb5bc521b95a7035ecd048852c0072e85df08cf4ba18277be64e705e0','reviewed_launcher'
+sys.argv=[str(f),str(p),'707726e11f30ada8ef9f80f2fc7b6f84a1a737eca1b614738cf57f99c14f7dfa','collect']
+exec(compile(raw,str(f),'exec'),{'__name__':'__main__','__file__':str(f)})
+REVIEWED_LOCAL
+)
+```
 
-Resultado admissível: DISCOVERY_OBSERVED_NOT_CERTIFIED ou DENY_NO_RETRY.
-elfClosureCertified=false e protectionCertified=false sempre. Metadados separados
-não são snapshot atômico; nenhum resultado modifica histórico ou autoridade.
-Instalação/proteção futura, SQL/ownership, saved/fallback/identidades finais e
-16 vínculos/autoridade permanecem separados. CSV SUSPENSO / NOT WINDOW READY.
+## 3. Recepção única dos ELF e análise LOCAL — aprovação futura
+
+```bash
+(
+set -euo pipefail
+umask 077
+python3 -B -I -S - <<'REVIEWED_LOCAL'
+import hashlib,os,stat,sys
+from pathlib import Path
+p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017')
+f=p/'launch.py'
+for q in (f,*f.parents):assert not q.is_symlink(),'launcher_symlink'
+def meta(s):return tuple(getattr(s,'st_'+k)for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
+s=f.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'launcher_metadata'
+fd=os.open(f,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+try:
+ assert meta(os.fstat(fd))==meta(s),'launcher_replaced'
+ raw=os.read(fd,65536)
+ assert meta(os.fstat(fd))==meta(s) and meta(f.lstat())==meta(s),'launcher_changed'
+finally:os.close(fd)
+assert hashlib.sha256(raw).hexdigest()=='1ba68f5cb5bc521b95a7035ecd048852c0072e85df08cf4ba18277be64e705e0','reviewed_launcher'
+sys.argv=[str(f),str(p),'707726e11f30ada8ef9f80f2fc7b6f84a1a737eca1b614738cf57f99c14f7dfa','receive-analyze']
+exec(compile(raw,str(f),'exec'),{'__name__':'__main__','__file__':str(f)})
+REVIEWED_LOCAL
+)
+```
+
+## Alcance e parada
+
+Coleta conserva a resolução PM2/CLEAN.PATH e a referência d016; boot/pid/ticks/exe/
+maps pré/pós são intervalo, não snapshot ou identidade atual derivada de PID antigo.
+Revalida hashes, FDs, caminhos e população observada; identidade/drift/leitura negada
+nega. Só publica bytes ELF inteiros necessários ao readelf local; não extrai ELF
+com parser alternativo. Duplicatas por hash não geram cópia adicional.
+
+Bloco3 usa journal custodiado da MESMA execução/manifest; verifica conjuntos exatos,
+nomes SHA/bytes, owner600/nlink1, limites e metadados no FD. SCP parcial preserva o
+que chegou e nega sem readelf/retry. Mesmo uma origem DENY pode conservar bytes já
+publicados: análise marca sourceComplete=false, nunca reclassifica a origem.
+Ausência de objetos publicados nega sem transferência. Raw origin permanece intacto.
+
+readelf LOCAL: --wide --program-headers --dynamic, ferramenta e alvo por FD;
+15s/objeto, HARD1MiB por stdout/stderr com temporários anônimos no destino privado.
+Nunca executa o ELF capturado ou seu loader, nem ldd. Cada comando preserva argv,
+início/fim, código, errno, tamanho/hash e canais pelo private_record existente.
+SSH180s, SCP240s. Falha/timeout/destino existente: preservar e parar, sem retry,
+reparo, privilégio ou repetição de tentativa. Resposta perdida não vira COMPLETE.
+
+PT_INTERP/NEEDED/RPATH e mapas continuam requerendo reconciliação offline; cargas
+futuras e JS transitivo não observado UNKNOWN. Nenhuma certificação integral de
+closure/proteção por hash/versão/quantidade. Resultados: descoberta e análise local
+NOT_CERTIFIED ou DENY. SQL/ownership, identidades finais, autoridade/proteção futuras
+continuam separados. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.

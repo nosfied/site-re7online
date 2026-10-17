@@ -1,7 +1,7 @@
 """Directed discovery only. Reuses canonical Capture, reader and private_record.
 Never executes Node, PM2, captured JS, env, ldd, SQL or an installer.
 """
-import json,os,stat,subprocess,tempfile,resource
+import json,os,stat
 from pathlib import Path
 
 PATHS=('/usr/local/sbin','/usr/local/bin','/usr/sbin','/usr/bin','/sbin','/bin')
@@ -15,31 +15,14 @@ def load(name):
     exec(compile(BLOBS[name],scope['__file__'],'exec'),scope)
     return scope
 
-def analyzer(cap,tool_fd,image_fd,label):
-    """Execute the observed OS analysis tool FD, not the target image.
-    Per-channel hard file limit and wall timeout; preserve partial channels.
-    readelf/its own OS loader are observed tools, not certified toolchain.
-    """
-    limit=1024*1024
-    argv=['/proc/self/fd/'+str(tool_fd),'--wide','--program-headers','--dynamic','/proc/self/fd/'+str(image_fd)]
-    started=cap.lib['utc']();code=None;error=None
-    def bounds():resource.setrlimit(resource.RLIMIT_FSIZE,(limit,limit))
-    with tempfile.TemporaryFile(dir=cap.q) as out,tempfile.TemporaryFile(dir=cap.q) as err:
-        try:
-            r=subprocess.run(argv,stdout=out,stderr=err,pass_fds=(tool_fd,image_fd),timeout=15,
-                             env={'PATH':'/usr/bin:/bin','LANG':'C'},preexec_fn=bounds,check=False)
-            code=r.returncode
-        except (OSError,subprocess.TimeoutExpired) as e:error=e
-        out.seek(0);err.seek(0);a=out.read(limit+1);b=err.read(limit+1)
-    cap.bytes(label,argv,started,cap.lib['utc'](),code,a,b,error)
-    cap.lib['require'](code==0 and error is None and len(a)<limit and len(b)<limit,'elf_analysis_denied')
-    return a
-
 def run(q,action):
     Capture=load('capture.source')['Capture'];cap=Capture(q);lib=cap.lib;require=lib['require']
-    stage='begin';fds=[];ok=False
+    stage='begin';fds=[];ok=False;published={};total=0
     cap.event('begin',action=action,manifestSha256=MANIFEST_SHA,atomicSnapshot=False)
     try:
+        stage='remote-budget'
+        require(os.statvfs(q).f_bavail*os.statvfs(q).f_frsize>=512*1024*1024,'remote_budget_512MiB')
+        images=lib['new_directory'](q/'images')
         require(action=='collect','discovery_action_only')
         stage='pm2-shebang'
         pm,raw=lib['file_chain'](PM,65536)
@@ -57,7 +40,7 @@ def run(q,action):
                 cap.observe('path-'+str(index),lambda path=path:{'path':path,'absent':True});continue
             # Existing unreadable/broken/non-executable entries deny. Do not guess
             # env's skip semantics across an incomplete observation.
-            row,raw=lib['file_chain'](path,lib['IMAGE_LIMIT'])
+            row,raw=lib['file_chain'](path,128*1024*1024)
             cap.observe('path-'+str(index),lambda:row)
             require(os.access(path,os.X_OK),'path_entry_not_executable')
             selected=(path,row);break
@@ -69,15 +52,6 @@ def run(q,action):
             require(lib['meta'](os.fstat(fd))==row['metadata'],'image_replaced_before_use')
             return fd
         nodefd=opened(nodepath,node)
-        stage='analysis-tool'
-        # Fixed tool chosen before access. ENOENT/EACCES => DENY, no fallback.
-        tool,toolraw=lib['file_chain']('/usr/bin/readelf',lib['IMAGE_LIMIT'])
-        require(toolraw[:4]==b'\x7fELF' and os.access('/usr/bin/readelf',os.X_OK),'analysis_tool_type_access')
-        for part in tool['chains']:
-            m=part['metadata']
-            require(m['uid']==0 and (stat.S_ISLNK(m['mode']) or not(m['mode']&0o022)),'analysis_tool_path_unprotected')
-        cap.observe('readelf-tool',lambda:tool);toolfd=opened('/usr/bin/readelf',tool)
-        stage='selected-node-elf';analyzer(cap,toolfd,nodefd,'node-elf')
         # Binding running image to newly read pm2.pid is an interval, not a
         # promotion of old PIDs nor a certificate for the application's pair.
         stage='daemon-image'
@@ -90,7 +64,7 @@ def run(q,action):
         image=lib['executable'](folder,{})
         cap.observe('daemon-image',lambda:{'identity':before,'image':image})
         require(image['sha256']==node['sha256'],'running_selected_node_mismatch')
-        stage='mapped-elf'
+        stage='mapped-bytes'
         maps=lib['read_at'](folder,'maps',262144)
         cap.bytes('daemon-maps',['read-fd','maps'],lib['utc'](),lib['utc'](),0,maps,b'')
         paths=set()
@@ -101,14 +75,27 @@ def run(q,action):
             require(not path.endswith(' (deleted)') and '\\' not in path,'mapped_path_ambiguous')
             paths.add(path)
         require(len(paths)<=64,'mapped_file_count_bound')
-        total=0
+        # Publish only ELF objects required by local readelf, once per digest.
+        # Canonical write_artifact O_EXCL/no-follow and private_record, no new writer.
+        def preserve(row,data,fd):
+            nonlocal total
+            require(lib['meta'](os.fstat(fd))==row['metadata'],'image_changed_before_preserve')
+            if row['sha256'] in published:return
+            require(data[:4]==b'\x7fELF','image_not_elf')
+            require(len(published)<64,'object_count_bound')
+            require(total+len(data)<=128*1024*1024,'raw_image_budget_128MiB')
+            lib['write_artifact'](images/(row['sha256']+'.elf'),data)
+            require(lib['meta'](os.fstat(fd))==row['metadata'],'image_changed_after_preserve')
+            cap.event('image-published',sha256=row['sha256'],bytes=len(data),sourceMetadata=row,
+                      startedUtc=lib['utc'](),finishedUtc=lib['utc'](),justification='ELF bytes absent from accepted local byte sources; needed for local readelf; no runtime tree copied')
+            published[row['sha256']]=row;total+=len(data)
+        row,noderaw=lib['file_chain'](nodepath,128*1024*1024)
+        require(row==node,'node_changed_before_preserve');preserve(node,noderaw,nodefd)
         for i,path in enumerate(sorted(paths)):
-            row,raw=lib['file_chain'](path,lib['IMAGE_LIMIT']);total+=len(raw)
-            require(total<=512*1024*1024,'mapped_total_bound')
+            row,data=lib['file_chain'](path,128*1024*1024)
             cap.observe('mapped-'+str(i),lambda:row)
-            if raw[:4]!=b'\x7fELF':continue
-            fd=opened(path,row)
-            analyzer(cap,toolfd,fd,'mapped-elf-'+str(i))
+            if data[:4]!=b'\x7fELF':continue
+            fd=opened(path,row);preserve(row,data,fd)
             require(lib['meta'](os.fstat(fd))==row['metadata'],'mapped_image_changed')
         stage='interval-after'
         require(lib['read_at'](folder,'maps',262144)==maps,'daemon_maps_changed')
@@ -116,11 +103,10 @@ def run(q,action):
         require(lib['executable'](folder,{})==image,'daemon_image_changed')
         require(lib['stable_file']('/home/deploy/.pm2/pm2.pid',64)==(pidraw,pidmeta),'pm2_pid_changed')
         require(lib['observe'](lib['BOOT_ID'])==boot,'boot_changed')
-        require(lib['meta'](os.fstat(nodefd))==node['metadata'] and lib['file_chain'](nodepath,lib['IMAGE_LIMIT'])[0]==node,'selected_node_changed')
-        require(lib['meta'](os.fstat(toolfd))==tool['metadata'] and lib['file_chain']('/usr/bin/readelf',lib['IMAGE_LIMIT'])[0]==tool,'analysis_tool_changed')
+        require(lib['meta'](os.fstat(nodefd))==node['metadata'] and lib['file_chain'](nodepath,128*1024*1024)[0]==node,'selected_node_changed')
         require(lib['file_chain'](PM,65536)[0]==pm,'pm2_entry_changed')
         cap.event('end',result='DISCOVERY_OBSERVED_NOT_CERTIFIED',elfClosureCertified=False,protectionCertified=False,
-                  remaining='Resolve DT_NEEDED/PT_INTERP/RPATH against mapped paths offline; unobserved JS/transitive paths remain UNKNOWN')
+                  bytesPreserved=total,images=len(published),remaining='Analyze preserved bytes locally only; unobserved JS/transitive paths remain UNKNOWN')
         ok=True
     except Exception as e:
         cap.event('end',result='DENY_NO_RETRY',denialStage=stage,denialReason=stage+'_not_proven',errorClass=type(e).__name__,errno=getattr(e,'errno',None))

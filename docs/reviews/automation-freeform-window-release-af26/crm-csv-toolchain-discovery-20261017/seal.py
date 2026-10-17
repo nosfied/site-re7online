@@ -5,84 +5,22 @@ P=Path(__file__).resolve().parent
 ROOT=next(p for p in P.parents if (p/'.git').exists())
 sha=lambda b:hashlib.sha256(b).hexdigest()
 files={}
-for name,path in [(n,P/n)for n in ('launch.py','driver.py','runner.py','capture.source')]+[(n,P.parent/'crm-csv-r2-directed-20261017'/n)for n in ('read_package.py','privileged_output.source')]:
+for name,path in [(n,P/n)for n in ('launch.py','driver.py','runner.py','capture.source','local_elf.py')]+[(n,P.parent/'crm-csv-r2-directed-20261017'/n)for n in ('read_package.py','privileged_output.source')]:
     raw=path.read_bytes()
     files[name]={'source':str(path.relative_to(ROOT)),'relativeSource':os.path.relpath(path,P),'bytes':len(raw),'sha256':sha(raw),'bootstrap':True}
-manifest={'base':'6e93e40902cde2f5cb43bf210a8dc2389c75411e','scope':'discovery only; no operational toolchain certification','files':files}
+manifest={'base':'002b46a687b539bfaf688a8d81727aec2437abce','scope':'discovery only; no operational toolchain certification','files':files}
 raw=(json.dumps(manifest,sort_keys=True,indent=2)+'\n').encode()
 (P/'MANIFEST.json').write_bytes(raw)
 old=P.parent/'crm-csv-three-gaps-executable-20261017'
 blocks=re.findall(r'```bash\n(.*?)```',(old/'COMMANDS.md').read_text(),re.S)[:2]
-body='''# Node/PM2 — comandos concretos SOMENTE PARA REVISÃO
-
-Nenhuma execução na VPS autorizada nesta rodada. Futura aprovação é separada.
-Deploy SEM sudo. Não executar Node, PM2, env, CJS, ldd, SQL ou código capturado.
-Ferramenta escolhida ANTES da leitura: somente /usr/bin/readelf. Ausência,
-acesso negado, cadeia do analisador sem owner root/proteção, drift ou falha: DENY com parcial preservado; sem alternativa,
-instalação, retry, reparo ou download. Não reutilizar destinos consumidos.
-
-O owner revisa estes literais no Git; o launcher confere FD/no-follow/metadata,
-carrega os MESMOS bytes e autentica o manifest/fontes antes de executar o driver.
-Só materialize/collect são expostos. Um SSH batch único transfere fontes inativas
-e devolve também DENY. Sem resposta completa, preservar canais locais; não
-reconectar automaticamente. Não confundir custódia com certificação.
-
-## Destinos e limites prévios
-
-- LOCAL material: /dev/shm/re7-csv-toolchain-material-20261017-v1.
-- VPS inativos: /dev/shm/re7-csv-toolchain-tools-20261017-v1.
-- VPS resultados: /dev/shm/re7-csv-toolchain-read-20261017-v1.
-- LOCAL custódia: re7-private-retention-custody/csv-toolchain-discovery-20261017-v1.
-- LOCAL diagnóstico: mesmo parent, csv-toolchain-launcher-20261017-v1-{materialize,collect}.
-O parent local é o privado legítimo já documentado, owner700; scripts não o criam
-nem corrigem. Novos diretórios700/arquivos600 por criação exclusiva/no-follow.
-Destino existente impede a ação. Fontes6, sem closure26 desnecessária ao diagnóstico.
-Cada stdout/stderr contém comando, intervalo, código, errno, tamanho e SHA;
-private_record canônico, export byte-exato e ingestão do driver aceito.
-
-Leituras: scripts/package/env <=8MiB; PM2 entry <=64KiB; imagens <=256MiB;
-maps <=256KiB; pm2.pid/boot <=64B; até64 arquivos mapeados e512MiB somados.
-readelf:15s por imagem, stdout/stderr separados com limite HARD1MiB/canal;
-transporte180s. Excesso/timeout preserva parcial e nega. Nenhum backup/RPO.
-
-## 1. Materialização LOCAL inativa (somente após aprovação futura)
-
-'''
+body='# Descoberta remota / análise ELF LOCAL — somente para revisão\n\nO roteiro de002b46a6 NÃO DEVE SER EXECUTADO: exigia readelf remoto apesar do\nENOENT de lançamento já preservado. ENOENT não distingue executável/loader ausente.\nEsta correção não instala nem busca alternativa remota. Nenhuma execução VPS\nnesta rodada. Aprovação futura separada; deploy SEM sudo; sem retry/fallback.\n\n## Materiais comparados e orçamento ANTES de transferir\n\n- Referência Node produtiva d01614ef…,97.661.912B: somente hash/metadados nas\n  custódias R2 aceitas; imagem correspondente não existe entre as fontes pinadas\n  examinadas. Node local af8d5d1e… difere, não substitui. PM2/lock/closure26/prova\n  completa já disponíveis são reutilizados nos respectivos alcances, não recopiados.\n- Só ELF selecionado + ELF dos mapas do daemon no intervalo, deduplicados por SHA.\n  Máximo64 objetos,128MiB RAW TOTAL (não128MiB cada),128MiB por leitura de imagem.\n  Sem runtime/tree/node_modules. Justificativa, identidade, cadeia/metadados e hash\n  por objeto. Se exceder, DENY, sem elevar limite ou escolher arbitrariamente libs.\n- Reserva da operação:512MiB remotos e2GiB locais, conferidas antes das cópias.\n  São orçamento deste lote, NÃO reservas canônicas deploy/PostgreSQL nem PASS de\n  capacidade de janela. Incluem canais/journals e margem; readelf <=1MiB/canal/ELF.\n- Apenas metadados/journal (<8MiB pelo export canônico) via SSH; imagens são arquivos\n  privados600 em images700. SCP único desse diretório exato; sem glob/runtime inteiro.\n  Ingestão canônica byte-exata do journal, hashes individuais e revalidação dos FDs\n  das imagens locais antes/depois de análise. Parcial permanece privado em falha.\n\n## Destinos novos\n\nLOCAL material /dev/shm/re7-csv-toolchain-material-20261017-v2;\nVPS inativos /dev/shm/re7-csv-toolchain-tools-20261017-v2;\nVPS resultados /dev/shm/re7-csv-toolchain-read-20261017-v2 (images/).\nLOCAL custódia legítima /home/deifson-oliveira/DEIFSON/re7-private-retention-custody:\n csv-toolchain-discovery-20261017-v2 e csv-toolchain-analysis-20261017-v2;\n diagnósticos csv-toolchain-launcher-20261017-v2-{materialize,collect,receive-analyze}.\nParents privados owner700 existentes; sem criar/reparar parent; novos destinos\nexclusivos700/600. Destino existente nega sem sobrescrever nem repetir.\n\n## Ferramentas e confiança\n\nLOCAL /usr/bin/python3 e /usr/bin/readelf; SSH/SCP pelos acessos existentes.\nMaterialização local confere readelf (cadeia root sem escrita terceiros, ELF,\nexecutável, FD estável), executa --version pelo FD e preserva tool/hash/saída privada.\nAusente/negado/alterado: nega ANTES de transferir. Revalida o MESMO tool na análise.\nManifest e launcher aprovados no Git carregam os mesmos bytes autenticados, sem\nhash seguido de import de caminho substituível. Sete fontes; sem novo framework.\nRemoto usa apenas Python/leitor/custódia existentes; não invoca readelf, Node, PM2,\nCJS, ldd, loader, SQL ou código capturado. Consulta e criação de artefatos inativos\nnão são instalação/proteção. SCP recebe nomes content-addressed .elf, não scripts.\n\n## 1. Materialização e comprovação LOCAL do analisador — aprovação futura\n\n'
+blocks.append(blocks[1].replace("'collect'","'receive-analyze'"))
 for i,block in enumerate(blocks):
     block=block.replace(str(old),str(P))
     block=block.replace('5922f70646b6e20969abaccad0e834742127822e812012dc75144ffb67805bc4',sha((P/'launch.py').read_bytes()))
     block=block.replace('3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba',sha(raw))
-    if i:body+='\n## 2. Transferência única, descoberta e custódia (aprovação futura separada)\n\n'
+    if i:body+='\n## '+('2. Coleta remota de bytes sem analisador + custódia' if i==1 else '3. Recepção única dos ELF e análise LOCAL')+' — aprovação futura\n\n'
     body+='```bash\n'+block+'```\n'
-body+='''
-## Alcance da descoberta / parada
-
-1. PM2 alias/bin/CLI/package e env: cadeias, links, owner/modos/hashes. O entry
-deve manter bbb586… e shebang exato aprovado. CLEAN.PATH do System.start é
-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin. Primeira entrada
-existente executável é lida, não executada; qualquer entrada ambígua/inacessível
-nega sem adivinhar a resolução. Node deve corresponder à referência d016…;
-drift conserva observação, não atualiza o pin. Não usa PATH da sessão SSH.
-2. readelf é observado por cadeia/hash, aberto em FD e executado por esse FD;
-imagem-alvo também por FD. A ferramenta e seu loader usam a confiança OS já
-existente, NÃO uma certificação nova. O alvo Node/PM2 nunca é executado.
-3. pm2.pid atual fornece apenas candidato para observação: stat/ticks/exe/maps,
-boot e pm2.pid são conferidos no intervalo. Imagem running deve coincidir com
-a selecionada pelo PATH acima. Não reutiliza PIDs históricos nem certifica trio.
-4. readelf dos ELF mapeados: PT_INTERP/DT_NEEDED/RPATH/RUNPATH ficam nos canais
-privados. Resolução integral exige análise offline desses resultados; maps cobre
-o carregamento desse daemon nesse intervalo, não todas as cargas futuras.
-Não se executa loader, ldconfig, ldd ou dependência para descobri-la.
-5. JS transitivo: CLI/package e caminhos observados permitem comparar a fonte
-pinada já disponível. NÃO percorre4552 arquivos nem alega closure CLI completa.
-Imports dinâmicos não observados e proteção de todos os transitivos seguem
-UNKNOWN até reconciliação dirigida; isso não é PASS de toolchain.
-
-Resultado admissível: DISCOVERY_OBSERVED_NOT_CERTIFIED ou DENY_NO_RETRY.
-elfClosureCertified=false e protectionCertified=false sempre. Metadados separados
-não são snapshot atômico; nenhum resultado modifica histórico ou autoridade.
-Instalação/proteção futura, SQL/ownership, saved/fallback/identidades finais e
-16 vínculos/autoridade permanecem separados. CSV SUSPENSO / NOT WINDOW READY.
-'''
+body+='\n## Alcance e parada\n\nColeta conserva a resolução PM2/CLEAN.PATH e a referência d016; boot/pid/ticks/exe/\nmaps pré/pós são intervalo, não snapshot ou identidade atual derivada de PID antigo.\nRevalida hashes, FDs, caminhos e população observada; identidade/drift/leitura negada\nnega. Só publica bytes ELF inteiros necessários ao readelf local; não extrai ELF\ncom parser alternativo. Duplicatas por hash não geram cópia adicional.\n\nBloco3 usa journal custodiado da MESMA execução/manifest; verifica conjuntos exatos,\nnomes SHA/bytes, owner600/nlink1, limites e metadados no FD. SCP parcial preserva o\nque chegou e nega sem readelf/retry. Mesmo uma origem DENY pode conservar bytes já\npublicados: análise marca sourceComplete=false, nunca reclassifica a origem.\nAusência de objetos publicados nega sem transferência. Raw origin permanece intacto.\n\nreadelf LOCAL: --wide --program-headers --dynamic, ferramenta e alvo por FD;\n15s/objeto, HARD1MiB por stdout/stderr com temporários anônimos no destino privado.\nNunca executa o ELF capturado ou seu loader, nem ldd. Cada comando preserva argv,\ninício/fim, código, errno, tamanho/hash e canais pelo private_record existente.\nSSH180s, SCP240s. Falha/timeout/destino existente: preservar e parar, sem retry,\nreparo, privilégio ou repetição de tentativa. Resposta perdida não vira COMPLETE.\n\nPT_INTERP/NEEDED/RPATH e mapas continuam requerendo reconciliação offline; cargas\nfuturas e JS transitivo não observado UNKNOWN. Nenhuma certificação integral de\nclosure/proteção por hash/versão/quantidade. Resultados: descoberta e análise local\nNOT_CERTIFIED ou DENY. SQL/ownership, identidades finais, autoridade/proteção futuras\ncontinuam separados. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.\n'
 (P/'COMMANDS.md').write_text(body)
 print(json.dumps({'manifestSha256':sha(raw),'launcherSha256':sha((P/'launch.py').read_bytes()),'files':len(files)}))

@@ -5,15 +5,15 @@ from pathlib import Path
 BASE=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926')
 NAME='crm-csv-toolchain-discovery-20261017'
 PREFIX='docs/reviews/automation-freeform-window-release-af26/'
-MATERIAL=Path('/dev/shm/re7-csv-toolchain-material-20261017-v1')
+MATERIAL=Path('/dev/shm/re7-csv-toolchain-material-20261017-v2')
 CUSTODY=Path('/home/deifson-oliveira/DEIFSON/re7-private-retention-custody')
-TOOLS='/dev/shm/re7-csv-toolchain-tools-20261017-v1'
-OUTPUT='/dev/shm/re7-csv-toolchain-read-20261017-v1'
+TOOLS='/dev/shm/re7-csv-toolchain-tools-20261017-v2'
+OUTPUT='/dev/shm/re7-csv-toolchain-read-20261017-v2'
 HOST='deploy@admin.re7online.com'
 JOURNAL='privileged-output.private.jsonl'
 
 def libload(name,blobs=None):
-    scope={'__name__':'reviewed_library_only','__file__':'<verified '+name+'>'}
+    scope={'__name__':'reviewed_library_only','__file__':'<verified '+name+'>','BLOBS':BLOBS if blobs is None else blobs}
     exec(compile((BLOBS if blobs is None else blobs)[name],scope['__file__'],'exec'),scope);return scope
 
 def libraries(blobs=None):return libload('read_package.py',blobs),libload('privileged_output.source',blobs)['private_record']
@@ -48,6 +48,9 @@ def materialize():
             record(out,JOURNAL,{'event':'materialize_source','argv':['read',str(source)],'startedUtc':start,'finishedUtc':lib['utc'](),'exitCode':0,'accepted':accepted,'stdoutBytes':len(raw),'stdoutSha256':lib['sha'](raw),'stdoutBase64':base64.b64encode(raw).decode(),'stderrBytes':0,'stderrSha256':lib['sha'](b''),'stderrBase64':''})
             if not accepted:raise RuntimeError('material_source_drift')
             blobs[name]=raw
+        cap=libload('capture.source')['Capture'](out)
+        tool=libload('local_elf.py')['preflight'](cap)
+        lib['write_artifact'](out/'analyzer.private.json',json.dumps(tool,sort_keys=True).encode())
         frame=pack(blobs);verify(frame)
         lib['write_artifact'](out/'bundle.private.json',json.dumps(frame,sort_keys=True).encode())
         record(out,JOURNAL,{'event':'materialize_end','utc':lib['utc'](),'result':'MATERIALIZED_INACTIVE','files':len(blobs)})
@@ -125,7 +128,7 @@ def transport(action):
     import shlex
     lib,record=libraries();suffix=''if action=='collect'else'-sql'
     # Destination exists => no remote effects. Existing parent must already satisfy owner700.
-    folder=lib['new_directory'](CUSTODY/('csv-toolchain-discovery-20261017-v1'+suffix))
+    folder=lib['new_directory'](CUSTODY/('csv-toolchain-discovery-20261017-v2'+suffix))
     started=lib['utc']();out=err=b'';code=None;error=None;argv=['source-verify-before-ssh',action];frame_raw=b''
     try:
         frame_raw=READ(MATERIAL/'bundle.private.json',4*1024*1024);frame=json.loads(frame_raw);verify(frame)
@@ -139,4 +142,5 @@ def transport(action):
 def main(action):
     if action=='materialize':return materialize()
     if action=='collect':return transport(action)
+    if action=='receive-analyze':return libload('local_elf.py')['receive'](globals())
     raise RuntimeError('action_not_authorized')

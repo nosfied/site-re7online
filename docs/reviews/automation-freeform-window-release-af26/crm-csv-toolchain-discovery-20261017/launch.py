@@ -39,7 +39,7 @@ def execute():
 def main():
     import base64,contextlib,datetime,io
     root=Path(sys.argv[1]);action=sys.argv[3]
-    if action not in ('materialize','collect'):raise RuntimeError('action_denied')
+    if action not in ('materialize','collect','receive-analyze'):raise RuntimeError('action_denied')
     # Independent, already approved canonical writer before source/manifest checks.
     writer_raw=read(root.parent/'crm-csv-r2-directed-20261017/privileged_output.source')
     if hashlib.sha256(writer_raw).hexdigest()!='93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a':raise RuntimeError('canonical_writer_unavailable')
@@ -49,7 +49,7 @@ def main():
     if not stat.S_ISDIR(m.st_mode)or m.st_uid!=os.getuid()or stat.S_IMODE(m.st_mode)!=0o700:raise RuntimeError('custody_parent_contract')
     for q in (parent,*parent.parents):
         if q.is_symlink():raise RuntimeError('custody_parent_symlink')
-    folder=parent/('csv-toolchain-launcher-20261017-v1-'+action);folder.mkdir(mode=0o700)
+    folder=parent/('csv-toolchain-launcher-20261017-v2-'+action);folder.mkdir(mode=0o700)
     started=datetime.datetime.now(datetime.timezone.utc).isoformat();out=io.StringIO();err=io.StringIO();code=1;error=None
     try:
         with contextlib.redirect_stdout(out),contextlib.redirect_stderr(err):code=execute()

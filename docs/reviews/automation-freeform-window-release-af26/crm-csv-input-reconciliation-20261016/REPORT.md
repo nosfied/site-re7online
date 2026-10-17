@@ -1,5 +1,45 @@
 # CRM/CSV — reconciliação dos inputs e próxima conferência
 
+## Correção da dependência de descoberta —17/10/2026, base002b46a6
+
+**PROCEDIMENTO REMOTO/LOCAL SEPARADO / LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** Integração anterior permanece ACCEPT LOCAL no alcance já documentado. Esta seção substitui SOMENTE a dependência do procedimento de descoberta; não modifica a composição, contratos de execução, autoridade ou recuperação.
+
+**O COMMANDS de002b46a6 NÃO DEVE SER EXECUTADO.** Exigia `/usr/bin/readelf` na VPS, embora a tentativa custodiada anterior já tivesse falhado no lançamento desse argv com FileNotFoundError/errno2. A [evidência original](../crm-csv-three-gaps-result-20261017/REPORT.md) não distingue executável ausente de loader ausente; não se presume causa nem se procura alternativa. A dependência remota, portanto, estava mal colocada. Os bytes e quatro provas anteriores continuam disponíveis no Git em002b46a6; não são provas da nova sequência nem da disponibilidade produtiva do analisador. Nenhum DENY anterior foi reclassificado.
+
+### Comparação e volume antes de qualquer proposta de transferência
+
+Conferidos os índices/fontes aceitos e o material local indicado na matriz, sem nova varredura privada ou captura. R2 conservou hash/metadados Node d01614ef…/97.661.912B, não o ELF integral. A imagem local disponível foi lida/hashada, sem execução:120.078.896B, SHAaf8d5d1e…; difere da produtiva. PM2/package/lock/closure26 e prova completa continuam reaproveitados nos seus alcances; não há ELF produtivo pinado correspondente entre esses materiais. [PROVENANCE.json](../crm-csv-toolchain-discovery-20261017/PROVENANCE.json) registra a comparação e a limitação do conjunto examinado; não alega inexistência em todos os discos/cofres.
+
+A proposta copia somente o ELF selecionado e os ELF file-backed mapeados pelo daemon observado, **uma vez por SHA**, até64 objetos e **128MiB brutos somados**. Isso permite à ferramenta local ler os objetos completos, inclusive estruturas ELF, sem introduzir parser remoto, reconstruir arquivo esparso ou apresentar bytes fabricados como captura. Não copia runtime, árvore de release, node_modules, banco ou ambiente. O mesmo Node selecionado/mapeado não é copiado duas vezes. Uma biblioteca ainda não observada permanece UNKNOWN; o limite não pode ser aumentado para obter PASS. Exceder128MiB nega e preserva o já capturado, sem selecionar arbitrariamente um subconjunto como closure completa.
+
+Orçamento específico do lote: **512MiB livres remotos /2GiB locais** antes das cópias. Não substitui reservas canônicas deploy/PostgreSQL nem certifica capacidade de janela. Raw remoto máximo128MiB; journal/export metadata continua com limite canônico8MiB. SCP copia uma vez somente o diretório privado `images`, com nomes SHA. Localmente, raw<=128MiB, canais readelf<=128MiB no pior caso64×2MiB, journals/artefatos/diagnósticos cabem na margem2GiB. Não se embute98MB em base64 dentro do journal limitado; não se amplia o reader/export por conveniência.
+
+### Procedimento atual e consumidores reutilizados
+
+[COMMANDS.md](../crm-csv-toolchain-discovery-20261017/COMMANDS.md) contém **três blocos concretos para revisão**, todos com fontes pinadas no manifest. Novos destinosv2, sem reutilizar os propostosv1 nem destinos consumidos:
+
+1. LOCAL materialização + preflight readelf: reader/cadeia/FD, ELF executável root-owned sem escrita de terceiros, `--version` local por FD, tool/metadados/hash/canais privados. Ausente/negado nega **antes de qualquer SSH**. Literal do launcher/review ancora os mesmos bytes compilados; não import de caminho mutável.
+2. Remoto deploy sem sudo: o [runner](../crm-csv-toolchain-discovery-20261017/runner.py) só usa as leituras aceitas de PM2/CLEAN.PATH, Node, boot/pm2.pid/stat/exe/maps e limites. Abre o FD contra a mesma identidade/metadados, publica bytes estáveis com `write_artifact` O_EXCL/no-follow, registra proveniência por `private_record`. **Nenhum subprocesso remoto**, readelf/alternativa, Node, PM2, CJS, loader ou ldd. SSH único devolve o journal também em DENY; resposta perdida conserva canais e origem, sem retry.
+3. LOCAL recepção + análise: [local_elf.py](../crm-csv-toolchain-discovery-20261017/local_elf.py) exige journal/recibo canônico correspondentes ao mesmo manifest, fonte estável antes/depois, refs SHA/tamanhos e conjunto exato. Reconfere o analisador contra o preflight. SCP único para destino exclusivo; parcial preservado com tamanhos/hashes/metadados pelo leitor canônico, sem análise. Cada ELF íntegro é aberto em FD no-follow; o readelf **local** recebe esse FD, sem executar o alvo nem seu loader. stdout/stderr, comando/intervalo/código/errno e hashes pelo Capture/private_record existentes.
+
+Destinos concretos: `/dev/shm/re7-csv-toolchain-{material,tools,read}-20261017-v2` nos respectivos hosts; custódia local `csv-toolchain-discovery-20261017-v2`, análise `csv-toolchain-analysis-20261017-v2`, launcher `csv-toolchain-launcher-20261017-v2-{materialize,collect,receive-analyze}`. Parents privados legítimos700 existentes; criação exclusiva700/600; sem criar parents, chmod, chown ou reparo. Não há instalação/autoridade produtiva implícita. SSH180s/SCP240s; readelf15s por objeto e HARD1MiB/canal, temporários anônimos no destino privado. Ausência/divergência/leitura negada/timeout/consumo de destino impede prosseguimento, sem replay ou fallback.
+
+O transporte/launcher, export/ingest, leitor R2 e escritor canônico foram reaproveitados. `capture.source` permanece AST idêntico; não se criou framework/coletor genérico, writer ou parser ELF. `driver.libload` agora entrega explicitamente ao Capture o mapa BLOBS já autenticado, necessário à sua utilização local; não busca código em disco. A antiga derive.py foi desativada como gerador para não reinstalar a receita remota obsoleta; fontes editáveis atuais são os arquivos entregues, seal.py apenas publica índice/literais. Materialização continua inativa.
+
+### Provas afetadas e limites
+
+[PROOFS.json](../crm-csv-toolchain-discovery-20261017/PROOFS.json): **7 casos finais PASS**, três blocos publicados executados literalmente em namespace descartável sem rede. Caso válido conserva bytes/dedup1imagem, transferência/custódia e readelf FD local real. Negativas: ferramenta local ausente/negada antes de SSH; leitura remota negada; substituição entre conferência/uso antes de publicação; SCP parcial; imagem adulterada antes da análise. Todos preservam DENY e materiais; parciais têm hash/tamanho/metadados pelo reader real. No ramo remoto qualquer subprocess.run provoca erro no laboratório; nenhum foi chamado. Origem em DENY só poderá ser analisada mediante decisão correspondente, resultando sourceComplete=false; não altera o estado da origem nem autoriza continuar automaticamente após falha.
+
+Reais: Bash/Python, loader de revisão, FDs/no-follow/metadata/hash, Capture/private_record/export/ingest, bytes ELF locais preservados, readelf local `--version`/`--program-headers --dynamic`, revalidação. Simulados: SSH/SCP via shims, proc/boot/PID/maps, digest esperado Node projetado para ELF local `/usr/bin/true` **nunca executado**; UID root65534 projetado a0 no namespace. Ausência/negação são injeções de erro na fronteira de leitura, não observações da VPS. Provas PM2 completa, closure26, Operations/retorno e integração anterior não repetidas.
+
+O sandbox bloqueou o namespace na primeira execução; os ensaios foram feitos localmente fora dessa restrição com aprovação da ferramenta, sem VPS. O primeiro ensaio identificou ausência do mapa BLOBS no carregamento local do Capture; corrigida a interface para usar o mesmo snapshot autenticado. Revalidado somente o novo percurso e suas negativas após vincular recibo/fonte e registrar parciais. Nenhum efeito produtivo, build, instalação, download, SQL, backup, emissão ou janela.
+
+### Estado final e pendências
+
+Procedimento separado validado localmente, **não executado na VPS**. Os resultados futuros continuam descoberta/análise NOT_CERTIFIED ou DENY; full closure ELF/JS e proteção operacional NÃO certificadas. Ainda exigem reconciliação PT_INTERP/NEEDED/RPATH e mapas, transitivos dinâmicos, toolchain protegido, saved/fallback/identidades finais, SQL/ownership,16vínculos/autoridade e Event775. Não reaberto frontend nem recuperação consumida. NEWauth+NEWDB+NEWcipher, crons, guarda38/out.15 e privados/históricos preservados. Próximo passo: revisão dos comandos corrigidos, sem autorização de execução por esta publicação. Responsável Deifson; revisão17/10, próxima21/10 ou mudança.
+
+---
+
 ## Aceite delimitado e procedimento Node/ELF/PM2 —17/10/2026, base6e93e409
 
 **INTEGRAÇÃO ANTERIOR ACCEPT LOCAL no alcance documentado / PROCEDIMENTO LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** O aceite refere-se à composição/folha e lançamento pré-autoridade descritos abaixo. Não promove projeções de UID/modos, Node local ou respostas sintéticas a observação produtiva. Os históricos REVIEW PENDING abaixo permanecem como registro de suas rodadas.

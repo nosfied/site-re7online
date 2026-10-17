@@ -93,5 +93,32 @@
     "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     "futureReviewRequired": "if consumer PATH changes, this discovery must be revised; no inference from SSH PATH"
   },
-  "reproduction": "derive.py reproduces launch/driver/Capture; seal.py indexes reviewed sources and emits command literals; test_blocks.py runs those literals in isolated lab"
+  "reproduction": "derive.py reproduces launch/driver/Capture; seal.py indexes reviewed sources and emits command literals; test_blocks.py runs those literals in isolated lab",
+  "dependencyCorrection": {
+    "base": "002b46a687b539bfaf688a8d81727aec2437abce",
+    "reason": "Remote readelf argv previously failed ENOENT; prior review procedure still required remote tool and must not be executed",
+    "sourceEvidence": "crm-csv-three-gaps-result-20261017/REPORT.md, original ENOENT does not distinguish executable/loader",
+    "localComparison": {
+      "localNodeBytes": 120078896,
+      "localNodeSha256": "af8d5d1e234beb26b3095e6bebf80edc781f79c9435553a383037eccec2716f8",
+      "productiveNodeSha256": "d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e",
+      "same": false,
+      "acceptedByteMaterial": "PM2 sources/lock/closure26 and lab proof available; historical R2 captured metadata/hash, not full Node ELF; no pinned ELF libraries available in the examined source indices"
+    },
+    "limits": {
+      "rawTotalBytes": 134217728,
+      "objects": 64,
+      "remoteOperationBudgetBytes": 536870912,
+      "localOperationBudgetBytes": 2147483648
+    },
+    "reuse": "Capture/reader/private_record/export/ingest unchanged; SSH metadata then SCP exact private images dir; no new collection framework",
+    "transformation": "Remote analyzer removed; local_elf reuses bounded analyzer; driver passes authenticated BLOBS explicitly to same Capture; local preflight before transfer; derive historical recipe retired to prevent regeneration of obsolete dependency",
+    "notCertified": [
+      "ELF resolution closure",
+      "JS dynamic imports",
+      "operational protection",
+      "current production identities"
+    ],
+    "previousProofs": "002b46a687b539bfaf688a8d81727aec2437abce retains prior four-case proofs and bytes unchanged in Git"
+  }
 }

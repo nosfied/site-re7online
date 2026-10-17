@@ -1334,7 +1334,27 @@
       "status": "LOCAL_ROUTE_VALIDATED_REVIEW_PENDING",
       "elfClosureCertified": false,
       "protectionCertified": false,
-      "next": "Review literal blocks before any future remote authorization"
+      "next": "Review literal blocks before any future remote authorization",
+      "superseded": "002b46a6 procedure required remote readelf; DO_NOT_EXECUTE_V1"
+    },
+    "toolchainDiscoverySplit": {
+      "base": "002b46a687b539bfaf688a8d81727aec2437abce",
+      "status": "LOCAL_VALIDATED_REVIEW_PENDING_NOT_CERTIFIED",
+      "manifestSha256": "707726e11f30ada8ef9f80f2fc7b6f84a1a737eca1b614738cf57f99c14f7dfa",
+      "commandsSha256": "6175de5c4368c895d898b9b71cf77b39d4755528c2d114225ec61104ff74ce15",
+      "proofsSha256": "00f6f4306d9f18d00077637b3c4f0bb017109fc70b7f2ccd55cd97fdfceb9061",
+      "tests": 7,
+      "remoteExecuted": false,
+      "remoteAnalyzer": false,
+      "localAnalyzer": "readelf only, preflight before SSH, same FD/revalidated tool",
+      "rawLimitBytes": 134217728,
+      "remoteBudgetBytes": 536870912,
+      "localBudgetBytes": 2147483648,
+      "destinations": "toolchain v2 exclusive, separate analysis custody",
+      "notCertified": [
+        "operational closure/protection",
+        "current production identities"
+      ]
     }
   }
 }
