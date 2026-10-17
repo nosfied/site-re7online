@@ -1,0 +1,177 @@
+{
+  "base": "a607f26ca228b25aa9d97186835bed943c89279c",
+  "result": "SQL_V2_CONSUMED_COMPLETE_SCOPED_READ_NOT_WINDOW_CERTIFIED",
+  "manifestSha256": "7a41154b7922f8975353768ee2a77da8459b51ba6034cd30d8844ec0c7173116",
+  "materializeExecutedOnce": true,
+  "collectExecutedOnce": true,
+  "materializeExit": 0,
+  "collectExit": 0,
+  "operator": "deploy",
+  "sudo": false,
+  "remoteIntervalUtc": [
+    "2026-10-17T20:43:58.301643+00:00",
+    "2026-10-17T20:44:02.011446+00:00"
+  ],
+  "transportIntervalUtc": [
+    "2026-10-17T20:43:55.752228+00:00",
+    "2026-10-17T20:44:05.469354+00:00"
+  ],
+  "gates": {
+    "sourceMaterialization": "PASS",
+    "fourChannelBoundaries": "PASS",
+    "identitySqlAndValidation": "PASS",
+    "ownershipSqlAndShape": "PASS",
+    "importsSqlAndClassifier": "PASS",
+    "custody": "PASS_BYTE_EXACT",
+    "windowImportTerminalGate": "DENY_IMPORT_NOT_PROVEN_TERMINAL"
+  },
+  "identity": {
+    "expectedDatabaseSessionEffectiveRole": true,
+    "readOnly": true,
+    "serverMajor": 16,
+    "systemIdentifierObservedPrivate": true,
+    "serverAddressIsNull": true,
+    "allClientBackendsVisible": true,
+    "roleSuperuserObserved": true,
+    "returnedCanonicalRelations": [
+      "Client",
+      "Contact",
+      "Conversation",
+      "Event",
+      "Message"
+    ],
+    "notReturnedInLimitedRelationQuery": [
+      "ScheduledMessage"
+    ],
+    "allReturnedSelectAllowed": true,
+    "allReturnedRelationsOwnedByCurrentRole": true
+  },
+  "backends": {
+    "observed": 14,
+    "advisoryLocks": 4,
+    "ownership": "UNKNOWN",
+    "zeroRequired": false
+  },
+  "imports": {
+    "auditRows": 1784,
+    "canonicalClassifiedGroups": 1784,
+    "states": {
+      "COMPLETED": 20,
+      "UNKNOWN": 1764
+    },
+    "eventCounts": {
+      "crm.contact.created": 1764,
+      "crm.contact.import.summary": 20
+    },
+    "unknownBasis": "1764 groups contain only one legacy crm.contact.created event each, no matching terminal in that group",
+    "completedBasis": "20 groups contain one legacy crm.contact.import.summary each",
+    "unknownDoesNotProveActiveImports": true,
+    "unknownNotPromotedToTerminal": true,
+    "possibleTruncation": false,
+    "sentinel": 100001,
+    "knownActivityScopeComplete": false,
+    "executorExitCertified": false,
+    "canonicalImportsGate": "import_not_proven_terminal",
+    "classificationRecomputedSameHash": true
+  },
+  "allCommandChannelsVerified": 22,
+  "physicalSubprocesses": 15,
+  "sqlInputsMatchPinnedHashes": true,
+  "fourBoundaries": [
+    "before-identity",
+    "after-identity-before-ownership",
+    "after-ownership-before-imports",
+    "after-imports"
+  ],
+  "custodyByteExact": true,
+  "custody": {
+    "capture.private.jsonl": {
+      "bytes": 715815,
+      "sha256": "e41c5dc714d5cabdadedc5f88c12d1ea63f26ba1c9fd34df411f01fcdb3ac01e",
+      "owner600Regular": true
+    },
+    "privileged-output.private.jsonl": {
+      "bytes": 1990903,
+      "sha256": "2aa8a9ce7b6fb60fd47a770975c2be5d68b26776089a74ad29a0f7c198c5d800",
+      "owner600Regular": true
+    },
+    "sequencer.journal.jsonl": {
+      "bytes": 359,
+      "sha256": "84acfbd74a51db75348f54727f803f7e64b2091c7b3e9c11567f95261c9e7432",
+      "owner600Regular": true
+    },
+    "transfer.stderr.private": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "owner600Regular": true
+    },
+    "transfer.stdout.private": {
+      "bytes": 955001,
+      "sha256": "ab19583c681343cb05e3213e9d9bddb243f91d37b7dac09079c1319706dd1688",
+      "owner600Regular": true
+    }
+  },
+  "launchers": {
+    "csv-sql-launcher-20261017-v2-materialize": {
+      "files": {
+        "privileged-output.private.jsonl": {
+          "bytes": 1082,
+          "sha256": "f7491742498048743a3461ea80ecb1bfc752b3032e1b3ac1b42b10da07cfe4df",
+          "owner600Regular": true
+        },
+        "stderr.private": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "owner600Regular": true
+        },
+        "stdout.private": {
+          "bytes": 32,
+          "sha256": "120a7df7935e0537377e2532f4b07ef8533f297ac58d34a89994af53fdda95c6",
+          "owner600Regular": true
+        }
+      },
+      "startedUtc": "2026-10-17T20:43:46.374644+00:00",
+      "finishedUtc": "2026-10-17T20:43:46.413594+00:00",
+      "exitCode": 0
+    },
+    "csv-sql-launcher-20261017-v2-collect": {
+      "files": {
+        "privileged-output.private.jsonl": {
+          "bytes": 1094,
+          "sha256": "6c41acd2f54ff2e6f9333562ae25b40bf79420b490f96a8ded8659fede70d325",
+          "owner600Regular": true
+        },
+        "stderr.private": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "owner600Regular": true
+        },
+        "stdout.private": {
+          "bytes": 43,
+          "sha256": "551274fa39275ec4fb4341086f34f3b1b3bb3f6830bf5be28d5cbebcec9bb79a",
+          "owner600Regular": true
+        }
+      },
+      "startedUtc": "2026-10-17T20:43:55.733338+00:00",
+      "finishedUtc": "2026-10-17T20:44:05.558841+00:00",
+      "exitCode": 0
+    }
+  },
+  "sqlStderr": {
+    "bytesPerQuery": 55,
+    "sameDigestAllThree": true,
+    "sha256": "88cb46494b3249cb7cc354338357ec6718eae891e2a2bbf86715ce129869ecff",
+    "warningMarkerPresent": true,
+    "sqlErrorMarkerAbsent": true,
+    "rawPrivate": true,
+    "originNotAttributed": true
+  },
+  "noAdditionalRemoteReadOrRetry": true,
+  "snapshotAtomic": false,
+  "scopeComplete": false,
+  "ownership": "UNKNOWN",
+  "next": "Offline review of legacy UNKNOWN evidence correlation/admission contract before proposing any window; then canonical ownership attribution/16 bindings/protected controls/phase authority and separately authorized final materialization/window. No consumed SQL replay.",
+  "status": "CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY",
+  "M1": "CONSUMED",
+  "ELF": "PAUSED"
+}

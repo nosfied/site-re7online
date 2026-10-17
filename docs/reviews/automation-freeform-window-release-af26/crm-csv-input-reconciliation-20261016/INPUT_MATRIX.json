@@ -1731,6 +1731,32 @@
       "productionExecution": false,
       "ownership": "UNKNOWN",
       "next": "Review two v2 blocks for separate authorization; not deployment/window approval"
+    },
+    "sqlV2Execution": {
+      "base": "a607f26ca228b25aa9d97186835bed943c89279c",
+      "result": "SQL_V2_CONSUMED_COMPLETE_SCOPED_READ_NOT_WINDOW_CERTIFIED",
+      "resultReference": "../crm-csv-delivery-review-20261017/SQL_V2_RESULT.json",
+      "intervalUtc": [
+        "2026-10-17T20:43:58.301643+00:00",
+        "2026-10-17T20:44:02.011446+00:00"
+      ],
+      "fourBoundaries": "PASS",
+      "threeSqls": "PASS",
+      "custodyByteExact": true,
+      "ownership": "UNKNOWN",
+      "backends": 14,
+      "advisoryLocks": 4,
+      "auditRows": 1784,
+      "canonicalGroups": {
+        "COMPLETED": 20,
+        "UNKNOWN": 1764
+      },
+      "unknownEvidence": "one legacy contact-created event per group; not proof of active import executions",
+      "admission": "DENY import_not_proven_terminal",
+      "v1v2": "CONSUMED; no replay",
+      "firstLocalTask": "Review legacy correlation/scope against canonical contracts using existing private bytes, without changing classifier or promoting UNKNOWN",
+      "M1": "CONSUMED",
+      "ELF": "PAUSED"
     }
   }
 }

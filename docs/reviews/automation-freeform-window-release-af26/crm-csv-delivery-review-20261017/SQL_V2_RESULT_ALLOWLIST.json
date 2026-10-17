@@ -1,0 +1,24 @@
+{
+  "base": "a607f26ca228b25aa9d97186835bed943c89279c",
+  "branch": "review/campaign-recovery-20260926",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_RESULT.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_RESULT_ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_RESULT.sha256"
+  ],
+  "scope": "sanitized execution result, provenance hashes and affected checkpoints only; no raw IDs/tenants/environments/journals",
+  "consumedPackagesUnchanged": [
+    "sql-review",
+    "sql-review-v2",
+    "SQL_COMMANDS_FOR_REVIEW.md",
+    "SQL_V2_COMMANDS_FOR_REVIEW.md"
+  ],
+  "noCodeChange": true,
+  "deploySafety": "vercel branch=false; only ci.yml push/pr main/develop; no configuration changes"
+}

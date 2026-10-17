@@ -1,3 +1,21 @@
+## Resultado vigente — SQL v2 CONSUMED/COMPLETE17:44; admissão não satisfeita
+
+[Resultado sanitizado](../crm-csv-delivery-review-20261017/SQL_V2_RESULT.json),
+[análise/limites/encaminhamento](REPORT.md).
+
+| Requisito | Evidência observada nesta rodada | Faltante / efeito |
+| --- | --- | --- |
+| Três SQLs/canal/custódia |blocos1/2 únicos exit0; quatro fronteiras PASS; captura715815B byte-exata |v1/v2 consumidos; não repetir |
+| Identidade/visibilidade |db/roles esperados; PG16; READ ONLY; cinco relações SELECT; backends visíveis |não é fronteira/schema completo nem certificação de outros controles |
+| Ownership |14 backends/4 advisory locks |UNKNOWN sem atribuição canônica; zero não exigido |
+| Auditoria de imports |1784 eventos;20 grupos COMPLETED e1764 UNKNOWN, estes apenas criação legada isolada |imports gate nega import_not_proven_terminal; não prova1764 execuções ativas |
+| Janela/materialização CSV |não executadas; demais provas datadas reutilizáveis no alcance |correlação/alcance legado→atribuição/16 vínculos/autoridade→decisões API→frontend |
+
+Próximo passo exclusivamente local: revisão dirigida da correlação/alcance legado
+com bytes existentes e contratos, sem promover UNKNOWN nem alterar dados/classificador.
+M1 CONSUMED; ELF PAUSADO; CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
+As entradas de preparação abaixo são históricas e não autorizam replay.
+
 ## Preparação corrigida v2 — única entrada SQL vigente para revisão
 
 [Dois blocos novos](../crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md),

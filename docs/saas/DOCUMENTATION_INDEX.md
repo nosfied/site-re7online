@@ -1,5 +1,19 @@
 # Documentation Index
 
+## Resultado vigente SQL v2 — CONSUMED/COMPLETE17:44 Fortaleza
+
+[Resultado/custódia sanitizados](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_RESULT.json),
+[análise e sequência](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md).
+Blocos1/2 únicos PASS deploy sem sudo; três SQLs/quatro fronteiras/custódia byte-exata.
+14 backends/4 locks observados, ownership UNKNOWN; sem exigir banco vazio. Auditoria:
+20 grupos COMPLETED e1764 UNKNOWN (somente criações legadas isoladas), sem prova de
+1764 importações ativas. Gate canônico import_not_proven_terminal: admissão não satisfeita.
+Próximo: revisão LOCAL dirigida da correlação/alcance legado com custódias/contratos.
+**SQL v1/v2 consumidos; não repetir blocos.** Nenhuma janela/instalação/reparo/importação.
+M1 consumido; ELF pausado; CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
+Os checkpoints de preparação abaixo são históricos e não entrada executável vigente.
+
+
 ## SQL corrigido v2 — entrada vigente para revisão, basec5b6dbc4
 
 [ÚNICO roteiro SQL vigente: dois blocos v2](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md),

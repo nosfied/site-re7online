@@ -1,3 +1,93 @@
+## Resultado SQL v2 —17/10/2026,17:44 Fortaleza — CONSUMED/COMPLETE
+
+**Leitura delimitada concluída; CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.**
+[Resultado/procedência sanitizados](../crm-csv-delivery-review-20261017/SQL_V2_RESULT.json).
+Os **dois roteiros SQL v1 e v2 estão consumidos**. Não repetir blocos, materialização
+ou conexão. A autorização termina na leitura/custódia/reconciliação desta rodada;
+não é autorização de instalação, admissão, contenção, importação ou janela.
+
+### Execução e integridade efetivamente comprovadas
+
+HEAD/remoto a607f26c, manifest aprovado7a41154b e12 fontes conferidos; destinos locais
+v2 ausentes antes dos efeitos. Bloco1 literal uma vez PASS/MATERIALIZED_INACTIVE_NO_REMOTE;
+só então bloco2 literal uma vez como deploy sem sudo, exit0. Terminal remoto
+THREE_READONLY_SQLS_PRESERVED e recibo THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED,
+gatePass=true. Nenhum retry, troca de ambiente/role, grant, SQL adicional ou leitura
+remota após o roteiro. Sem alteração de tenants/RBAC/credenciais/crons/serviços.
+
+Runner20:43:58.301643–20:44:02.011446UTC = **17:43:58–17:44:02 Fortaleza**,
+3,709803s. Transporte20:43:55.752228–20:44:05.469354UTC,9,717126s. Esses tempos não
+medem indisponibilidade; serviço não foi parado. Três transações distintas, sem
+snapshot atômico. Quatro fronteiras revalidaram rota/container/cliente byte-exatos,
+antes/depois conforme o contrato.15 subprocessos reais:12 de canal + três SQLs;
+22 registros command incluem também os sete callbacks/checks internos.
+
+identity/ownership/imports retornaram exit0; stdin tamanho/hash casam com os SQLs
+pinados, READ ONLY/timeouts/ROLLBACK/ON_ERROR_STOP intactos. Nenhum limite/prefixOnly
+atingido. Cada SQL preservou55B iguais de stderr com marcador WARNING e sem marcador
+ERROR; bytes/hash privados preservados, sem atribuir origem/causa não demonstrada.
+A identidade retornada confirma transaction_read_only=on; não se descartou stderr.
+
+Custódia local off-host: capture.private.jsonl **715815B**,
+SHA`e41c5dc714d5cabdadedc5f88c12d1ea63f26ba1c9fd34df411f01fcdb3ac01e`.
+Envelope/recibo concordam; canais stdout/stderr de todos os22 commands conferidos
+por tamanho/hash/Base64; transporte/journals/launchers owner700/arquivos600 conferidos.
+Brutos, IDs/tenants, valores de canal e configurações continuam fora do Git.
+Custódia não certifica janela, frescor futuro ou ownership.
+
+### Identidade/visibilidade e limite de ownership
+
+Database/roles esperados, servidor major16, systemIdentifier observado privadamente;
+endereço do servidor NULL compatível com conexão local do container. A role existente
+foi observada superuser, com visibilidade declarada dos client backends; não houve
+GRANT ou mudança de privilégios. Cinco relações retornadas — Client, Contact,
+Conversation, Event e Message — com SELECT permitido e owner igual à role atual.
+ScheduledMessage não foi retornada pela consulta delimitada a tabelas public r/p;
+isso **não certifica** toda a fronteira/schema nem autoriza consulta adicional.
+Nenhuma exigência de tabela nova ou mudança de schema foi introduzida.
+
+ownership.sql observou **14 backends e4 advisory locks**. Não se exigiu zero, nem se
+atribuiu a cada backend processo/socket/owner operacional. **Ownership completo UNKNOWN**;
+a saída canônica dos executores continua prova exclusiva da futura janela autorizada.
+Trio/saved/fallback/crons/supervisão mantêm a observação datada15:37, não foram relidos
+ou promovidos a atuais pela consulta SQL. M1 consumido não foi repetido; ELF pausado.
+
+### Auditoria e UNKNOWN: impedimento concreto, sem inferir atividade
+
+imports.sql retornou **1784 eventos**, abaixo de100001, sem sentinela de truncamento:
+20 crm.contact.import.summary e1764 crm.contact.created com source=crm_import.
+O **mesmo classify canônico** foi recalculado offline: hash idêntico ao journal.
+Produziu20 grupos COMPLETED, cada um com resumo legado único por tenant/request, e
+1764 grupos UNKNOWN, cada um com **somente um evento legado de criação de contato**.
+Não há started/finished nessa população retornada. Não converter isso em1764 importações
+ativas, nem ligar criações a resumos por telefone/horário ou presumir rollback/conclusão.
+O número de grupos classificados não é uma contagem comprovada de execuções de import.
+
+A função canônica csv_boundary.imports, aplicada offline ao resultado, nega
+**import_not_proven_terminal**. O roteiro SQL foi completo no alcance diagnóstico;
+a admissão CSV **não** foi satisfeita. Nenhum grupo foi removido, reclassificado ou
+reparado para PASS. Faltam a correlação/alcance das evidências legadas compatíveis com
+o contrato, knownActivityScope completo/revisado e certificado de saída/ownership.
+A coleta, por desenho, não emitia essas provas: scopeComplete=false,
+knownActivityScopeComplete=false, executorExitCertified=false.
+
+### Próximo passo único e demais dependências
+
+**Primeiro impedimento:**1764 grupos UNKNOWN no predicado de admissão. Próximo trabalho
+é revisão LOCAL dirigida da correlação/alcance legado usando estes bytes e os contratos
+existentes; demonstrar se há prova terminal compatível ou lacuna de contrato, sem
+promover UNKNOWN, inferir atividade ou fabricar disposição/identidades. Nenhuma nova
+consulta/reimportação/reparo está autorizada. Não reabrir frontend/predecessor/supervisão.
+
+Depois, conforme evidência e autorização próprias: atribuição canônica de ownership,
+16 vínculos/controles protegidos/autoridade de fase; materialização final; janela/frescor/
+R0/root e decisões API→validação ledger/GET→fronteira frontend. Observação SQL de17:44
+não é prova de atividade completa ou estabilidade futura. NEWauth+NEWDB+NEWcipher,
+multitenancy/produção/crons/guarda38/out.15 preservados; sem certificação atual dessas
+outras fronteiras. Roteiros, manifests, provas e DENYs anteriores permanecem intactos.
+
+---
+
 ## Preparação SQL corrigida v2 — basec5b6dbc4
 
 **LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.**

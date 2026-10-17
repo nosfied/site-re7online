@@ -1,8 +1,22 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
-## SQL corrigido v2 — entrada vigente para revisão, basec5b6dbc4
+## Resultado vigente SQL v2 — CONSUMED/COMPLETE17:44 Fortaleza
 
-[ÚNICO roteiro SQL vigente: dois blocos v2](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md),
+[Resultado/custódia sanitizados](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_RESULT.json),
+[análise e sequência](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md).
+Blocos1/2 únicos PASS deploy sem sudo; três SQLs/quatro fronteiras/custódia byte-exata.
+14 backends/4 locks observados, ownership UNKNOWN; sem exigir banco vazio. Auditoria:
+20 grupos COMPLETED e1764 UNKNOWN (somente criações legadas isoladas), sem prova de
+1764 importações ativas. Gate canônico import_not_proven_terminal: admissão não satisfeita.
+Próximo: revisão LOCAL dirigida da correlação/alcance legado com custódias/contratos.
+**SQL v1/v2 consumidos; não repetir blocos.** Nenhuma janela/instalação/reparo/importação.
+M1 consumido; ELF pausado; CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
+Os checkpoints de preparação abaixo são históricos e não entrada executável vigente.
+
+
+## Checkpoint de preparação SQL v2 — consumido às17:44
+
+[Roteiro SQL v2 consumido — não executar](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md),
 [composição/limites/sequência](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
 [4 provas dos blocos literais](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_PROOFS.json).
 13 provas libpq reutilizadas; runner empacotado/corrigido→shell/psql/PG16→custódia
@@ -16,12 +30,12 @@ Checkpoints datados abaixo preservam a cronologia e não substituem esta entrada
 
 ## Continuidade CSV — estado vigente e metodologia
 
-**17/10/2026,17:16 Fortaleza: SQL CONSUMED/DENY; CSV SUSPENSO / NOT DEPLOYED /
+**17/10/2026,17:44 Fortaleza: SQL v2 CONSUMED/COMPLETE; CSV SUSPENSO / NOT DEPLOYED /
 NOT WINDOW READY.** Esta entrada é o ponto de continuação; checkpoints datados abaixo
 preservam a cronologia, inclusive quando dizem “próximo”, “corrente” ou “mais recente”.
 Não são instruções atuais de execução. [Relatório único e sequência](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
 [matriz vigente](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md),
-[resultado SQL](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.json).
+[resultado SQL](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_RESULT.json).
 
 | Ação / material | Estado e alcance |
 | --- | --- |
@@ -29,19 +43,17 @@ Não são instruções atuais de execução. [Relatório único e sequência](re
 | CSV API24e5857f / frontend candidato-retorno / classificador Event |pacotes e provas locais existentes; não implantados por estes commits documentais |
 | M1 cinco pais |COMPLETE/CONSUMED às15:09; não repetir manutenção/preflight Event |
 | Diagnóstico trio/saved/controles |CONSUMED/COMPLETE às15:37; dados datados, sem atualização de seu horário por esta rodada |
-| SQL blocos1/2 |CONSUMED/DENY às17:16:before-identity canal PASS, identity cliente exit2(service vazio), ownership/imports não executados; custódia íntegra |
+| SQL v1 blocos1/2 |CONSUMED/DENY17:16 preservado, sem replay |
+| SQL v2 blocos1/2 |CONSUMED/COMPLETE17:44: três SQLs/quatro fronteiras/custódia PASS; ownership UNKNOWN;20 grupos COMPLETED/1764 UNKNOWN; admissão não satisfeita |
 | ELF |PAUSADO; sem retorno à descoberta/budget como consequência desse DENY |
 
-**Preparação SQL corrigida v2 concluída LOCALMENTE para revisão (basec5b6dbc4):**
-[ÚNICA entrada SQL vigente: dois blocos novos](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md),
-[composição/alcance](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md#preparação-sql-corrigida-v2--basec5b6dbc4)
-e [4 ensaios literais](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_PROOFS.json).
-13 provas libpq reutilizadas, sem repetição. Novo manifest/launcher vincula o runner
-empacotado corrigido ao shell/psql/PG16 e custódia reais no laboratório, com SSH/Docker/
-endpoint simulados explicitamente. O roteiro anterior e v1 CONSUMED/DENY ficam intactos;
-não executar seus blocos. Próximo: revisão e autorização separada da v2, sem VPS nesta
-rodada nem prontidão de janela. Dados SQL produtivos continuam ausentes; ownership
-UNKNOWN. M1 consumido; ELF pausado.
+**Estado SQL vigente:** v2 consumido e completo no alcance diagnóstico; v1 DENY intacto.
+[Resultado e limites](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_RESULT.json).
+Nenhum roteiro SQL permanece autorizado para replay. Fonte/correção/provas13+4 preservadas.
+Primeiro impedimento da admissão:1764 grupos UNKNOWN só com criação legada isolada;
+próxima ação local é revisar correlação/alcance com contratos, sem presumir atividade,
+terminal, rollback ou reconstruir por telefone/horário. Ownership/known scope/saída,
+16 vínculos e autoridade seguem pendentes no alcance declarado. M1 consumido; ELF pausado.
 
 Consultar os princípios **completos**, não apenas este resumo: [Principios operacionais](#principios-operacionais),
 [Retenção operacional permanente](#retenção-operacional-permanente), [Change Policy](saas/CHANGE_POLICY.md),
@@ -58,8 +70,8 @@ saída/ownership, CAS, classificação, revalidação no uso, consumo e replay. 
 observada não prova atividade completa nem executor encerrado. Não inventar pins,
 perfis, permit, lock cooperado, coletor ou autoridade. Fontes antigas não são fatos atuais.
 
-O roteiro SQL v2 tem destinos novos e exige autorização própria após esta revisão.
-Não executar o v1 consumido. Só com dados válidos: atribuição/16 vínculos/controles protegidos/autoridade→
+Os roteiros SQL v1 e v2 estão consumidos: não executar novamente. Após resolver
+a correlação/alcance legado, somente com dados e autorizações válidos: atribuição/16 vínculos/controles protegidos/autoridade→
 materialização final quatro modos→janela coordenada/frescor/R0/root/review→decisão A/
 admissão/saída/CAS→API→validação UUID/GET/ledger→fronteira frontend real→decisão frontend.
 Incerteza exige inspeção e decisão correspondente, sem replay. ORIGINAL só pré-seleção
