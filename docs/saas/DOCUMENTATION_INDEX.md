@@ -1,5 +1,20 @@
 # Documentation Index
 
+## Integração estática CSV concluída — inventário privado para revisão
+
+[Índice integrado](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/legacy-integrated-static/CODE_COMPOSITION.json),
+[4 provas do Loader composto](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/INTEGRATED_AUDIT_PROOFS.json),
+[recibo do draft20](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/INTEGRATED_AUDIT_RESULT.json),
+[roteiro vigente](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md).
+127 caminhos/61 objetos reutilizados, zero novos objetos/copias de runtime. Classificador
+corrigido composto e carregado; negativos preservados. Inventário privado20/1784 evidências
+integrais derivado uma vez; ownerReviewed/completude/saída/ownership permanecem falsos.
+**Próximo ato: owner revisar o draft e atividade conhecida fora da auditoria.** Saída/
+ownership sob contenção só no ponto da futura janela autorizada; não exigir antecipação
+ou banco vazio. SQL v1/v2/M1 consumidos; ELF pausado. Sem VPS/SQL/backup/instalação.
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+
+
 ## Correlação legada CSV — corrigida OFFLINE para revisão
 
 [Conclusão vigente](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),

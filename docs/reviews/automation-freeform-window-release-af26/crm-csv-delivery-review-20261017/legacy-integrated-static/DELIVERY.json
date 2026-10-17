@@ -1,0 +1,100 @@
+{
+  "acceptedProofsReused": [
+    "R1/R2 correction32",
+    "prestop equivalence",
+    "authority R3/B2/B1/B3",
+    "ORIGINAL chain28",
+    "compiled CSV and operationalStatus",
+    "browser UUID/timeout/reentry",
+    "restore retained/stopped"
+  ],
+  "auxiliaryElfFront": "PAUSED_NO_NEW_EXECUTION_OR_GENERATION",
+  "base": "a1f934c9ec2132cbf2087f903ed40c428a6f1b5b",
+  "codeObjectsSha256": "1e7c96ef24f85d940cac9dcf9f53e83ce3dabd93ebb178929424fef3e079de5e",
+  "compositionSha256": "8d2a8e5126ef53668dfedfb0d563c75bbab85e08c17cfe4b3d9b20631dbfc0c8",
+  "csvSuspended": true,
+  "currentInputsFabricated": false,
+  "legacyClassifierSha256": "8a2955b0db3a409a5311609a281eb3936583fd2234afb483c38f6f4fbfbd7871",
+  "nextOperationalAct": "Owner review of derived private20-operation inventory and knownActivityScope; no new read, no M1 or SQL replay. Exit/ownership under containment belongs only to a separately authorized future window",
+  "notCertified": [
+    "current processes/config/saved/fallback",
+    "ownership and executor/import exit under future authorized containment",
+    "Event parents current/CAS",
+    "root protected code/toolchain/phase authority",
+    "fresh capacity/WAL/RPO",
+    "16 future path bindings",
+    "post-API frontend successors"
+  ],
+  "operationalGenerationCreated": false,
+  "originalCompatibility": "Only unselected certified exit with full R1/R2, fresh identity/generation, explicit recovery authority; never after possible candidate admission",
+  "phaseAuthorityInstalled": false,
+  "postSelectionReturn": "candidate backend remains; frontend may return to certified compatible package; persistent backend failure needs another compatible version",
+  "preparedModes": [
+    "PRESTOP",
+    "ORIGINAL",
+    "CANDIDATE",
+    "DENY"
+  ],
+  "prestopSource": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b.source",
+  "prestopSourceSha256": "208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b",
+  "result": "CSV_LOCAL_COMPOSITION_COMPLETE_OPERATIONAL_INPUTS_DENIED",
+  "runtimeReuse": {
+    "artifacts": {
+      "api-candidate": {
+        "bytes": 8601600,
+        "copied": false,
+        "extracted": false,
+        "file": "api-candidate.tar",
+        "manifestSha256": "4e56ec242caaf7b865949fca9baf47c81d5d4804a1ce21d8c49e41e424664860",
+        "rebuilt": false,
+        "runtimeFreshnessCertified": false,
+        "sha256": "24e5857fb30a6540c4b3930b3979b49bc9954b0ff85c4021a7f43641b7b43eb5",
+        "verifiedLocally": true
+      },
+      "events-control-policy-overlay": {
+        "bytes": 10240,
+        "copied": false,
+        "extracted": false,
+        "file": "events-control-policy-overlay.tar",
+        "rebuilt": false,
+        "runtimeFreshnessCertified": false,
+        "sha256": "ebdfd5bba81b86f26506b13a89afb4aafd45252c4e1b23e90d2f2896b1d523e3",
+        "verifiedLocally": true
+      },
+      "frontend-candidate": {
+        "bytes": 174314812,
+        "copied": false,
+        "extracted": false,
+        "file": "frontend-candidate.tar.gz",
+        "manifestSha256": "5ef8ae4c1628b843bac57825742797f1fcce9835c9226c8f959da3fa0a89b176",
+        "rebuilt": false,
+        "runtimeFreshnessCertified": false,
+        "sha256": "ea3d27881193bd872798aeb28a30630f085bad65688be913b781491b0d86c2ed",
+        "verifiedLocally": true
+      },
+      "frontend-compatible-return": {
+        "bytes": 177450139,
+        "copied": false,
+        "extracted": false,
+        "file": "frontend-compatible-return.tar.gz",
+        "manifestSha256": "efe64f452db1a5575a7a688c5b57175fe3b25fdcaec91ed432df7a3a3ab853de",
+        "rebuilt": false,
+        "runtimeFreshnessCertified": false,
+        "sha256": "d41ddd648c12b3bed4c13a3dde1019b96e41eda64d68089043a11f5f4edc0431",
+        "verifiedLocally": true
+      }
+    },
+    "budgetReferenceSha256": "3b6f2a578654f9b23d90517e35bdbb14d1287f0d464320bf60067280de747434",
+    "candidateApiFiles": 447,
+    "capacityFresh": false,
+    "compatibleApiReturn": "api-candidate_after_selection",
+    "compiledProofSha256": "fba46c49d030e5e99ecfb8c81586ff934da7e55e35ae8079fc9e461237d83394",
+    "minimumDeployPostgresBytesReference": 11235700736,
+    "newAuthNewDbNewCipher": "historical_runtime_members_preserved_current_profiles_pending",
+    "originalBeforeSelectionOnly": true,
+    "preservedApiFiles": 442,
+    "workerChanged": false
+  },
+  "scopeReviewOwnerConfirmed": false,
+  "sqlPreparatoryEvidence": "SQL_V2_RESULT.json:17:44 observation only, not ownership/executor exit"
+}

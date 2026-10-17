@@ -1,3 +1,103 @@
+## Integração estática e inventário privado — basea1f934c9
+
+**PREPARED LOCALLY / LOCAL VALIDATED no alcance ensaiado / REVIEW PENDING /
+NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.**
+[Índice integrado](../crm-csv-delivery-review-20261017/legacy-integrated-static/CODE_COMPOSITION.json),
+[objetos/procedência](../crm-csv-delivery-review-20261017/legacy-integrated-static/CODE_OBJECTS.json),
+[entrega](../crm-csv-delivery-review-20261017/legacy-integrated-static/DELIVERY.json),
+[4 provas incrementais](../crm-csv-delivery-review-20261017/INTEGRATED_AUDIT_PROOFS.json),
+[recibo sanitizado da derivação](../crm-csv-delivery-review-20261017/INTEGRATED_AUDIT_RESULT.json).
+Sem VPS, SQL novo, backup, instalação, importação, autoridade emitida ou janela.
+
+### Bytes efetivamente compostos, não apenas fonte editável
+
+Executado uma vez o compositor editável existente:
+`python3 -B -m scripts.crm_csv_delivery.prepare_review`, apontando a custódia R1
+preservada/pinada e os pacotes CSV certificados existentes, com destino NOVO
+`crm-csv-delivery-review-20261017/legacy-integrated-static`. Leitura canônica dos bytes
+predecessores e conferências dos arquivos/manifests existentes; nada foi reextraído,
+recompilado ou enviado. Política original-only continua predecessora, sem autorização de ida.
+
+**127 caminhos lógicos /61 conteúdos únicos;61 objetos reutilizados, zero novos objetos
+e zero bytes de código duplicado.** O empacotador foi ajustado somente para reutilizar
+também os objetos da entrega anterior pinada e a fonte corrigida já publicada.
+Os arquivos novos são três índices estáticos,180KB aproximadamente; diretório objects
+fica vazio. Quatro imagens runtime existentes foram verificadas/reutilizadas, sem cópia.
+
+CODE_COMPOSITION SHA:
+`8d2a8e5126ef53668dfedfb0d563c75bbab85e08c17cfe4b3d9b20631dbfc0c8`.
+CODE_OBJECTS SHA:
+`1e7c96ef24f85d940cac9dcf9f53e83ce3dabd93ebb178929424fef3e079de5e`.
+window/capture_imports.py agora aponta aos bytes corrigidos
+`8a2955b0db3a409a5311609a281eb3936583fd2234afb483c38f6f4fbfbd7871`,
+da fonte editável scripts/crm_csv_delivery/capture_imports.source. É o **único caminho
+executável cujo digest mudou** contra a composição anterior. Imports e dependências
+são exatamente os mesmos; DAG de selagem sem ciclos, quatro modos e closure ORIGINAL
+preservados. Metadados de transformação/procedência foram atualizados pelo compositor.
+As composições e SQLs consumidos, índices antigos e diagnósticos não foram alterados.
+Nenhum perfil, binding atual, identidade de processo, permit ou autoridade foi fabricado.
+
+### Loader concreto e contraprovas
+
+O código composto foi materializado somente numa árvore temporária de laboratório,
+sem dados operacionais; o **Review/Loader canônico efetivamente composto** autenticou
+os mesmos bytes. Usou o snapshot de inspeção permitido por window/pre_install.py,
+**sem executar pre_install ou outro entrypoint operacional**, e carregou capture_imports
++csv_boundary pelo Loader. Não se criou entrada extra, Context root ou permit de partida.
+Classificador composto aplicado aos registros custodiados e gate imports real:20 grupos
+terminais/1784 evidências. Gate exit_and_imports continua negando sem saída/ownership
+ou escopo completo; dados preparatórios não foram promovidos a essas provas.
+
+Quatro ensaios incrementais: carregamento/captura real/gates; órfão/colisão de resumo/
+tenant divergente/operação incompleta; substituição de bytes negada na revalidação;
+imports/dependências idênticos, zero ciclos/quatro modos/reuso61. Efeitos externos não
+foram exercitados: nenhum SQL, processo produtivo, PM2, root/sudo, install ou HTTP.
+Fixtures negativas e flags de fronteira são explicitamente sintéticas.16 provas legadas,
+R1/R2, recuperação ORIGINAL, PM2, libpq e provas funcionais são reutilizadas nos seus
+alcances; não foram repetidas. Não se afirma certificação operacional pelo número de testes.
+
+### Inventário privado derivado — insumo, não knownActivityScope aprovado
+
+Criado UMA VEZ, com leitor estável e private_record canônicos, no ThinkPad:
+`/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/csv-known-imports-review-20261017-v1/`.
+
+- inventory.private.json:20 operações,1784 referências Event:id/hash e procedência;
+  **317603B**, SHA`fb346e00f5aeb219b14c43aad0669d4b392c7c1ebfa920ef4667615351c155bb`.
+- imports-response.private.json:bytes integrais507872B da resposta SELECT já preservada,
+  SHA`ac29fdc49adb68294b002d81e7a48bbf9224d802039267d2135c8dbb88bf1d2a`.
+- privileged-output.private.jsonl:início/fim/recibo canônico, sem comandos de aplicação.
+
+Todas as1784 evidências originais foram mantidas, sem duplicação/perda; conjunto20 por
+tenant/UUID, sem telefone/tempo. Artefatos conferidos byte-exatamente, diretório700/
+arquivos600. Aproximadamente806KiB adicionais justificados pelo inventário + resposta
+integral para revisão; não é backup/runtime nem nova observação. Captura fonte e41c5dc7
+mantém seu intervalo17:43:58–17:44:02; a derivação posterior tem horário próprio no recibo.
+IDs/tenants/canais ficam exclusivamente privados, fora do Git.
+
+**Explicitamente falsos:**ownerReviewed, reviewedAgainstAuditAndKnownActivity,
+knownActivityScopeComplete, scopeComplete, observationComplete, underFence,
+executorExitCertified, ownershipComplete e phaseAuthorityIssued. Não foi criado
+window/csv-known-imports.private.json aprovado, certificado de saída ou pin de fase.
+Derivação e destino estão consumidos; não repetir para obter revisão/completude.
+
+### Roteiro restante único: cada prova no momento correto
+
+| Momento | Próximo ato / consumidor | Prova e limite |
+| --- | --- | --- |
+| Agora, sem operação |**Owner revisar privadamente o inventário das20 operações e declarar atividade conhecida fora da auditoria** |Insuficiência exata: o código não pode afirmar conhecimento do owner. Não precisa repetir organização/credenciais/SQL. Revisão pode identificar trabalho adicional, sem correlação por telefone/tempo nem alteração automática do draft |
+| Preparação futura revisada |knownActivityScope + bindings/manifests coerentes com este índice;16 vínculos, controles/root/predecessor e autoridade |Fonte estática pronta, dados históricos reutilizáveis no alcance; não editar escopos/pins consumidos para PASS. Leituras perecíveis e R0/root só na sequência autorizada, sem renovação antecipada |
+| **Dentro da futura janela expressamente autorizada**, após admissão/contenção e parada previstas |certificar saída/ownership dos executores relevantes pelos verificadores canônicos; capturar/reconciliar auditoria atual sob fence |É aqui, não agora, que surgem certificados de saída, identidade/CAS e prova SQL de saída no escopo correspondente. Não exigir banco vazio em produção viva nem usar os14 backends preparatórios como certificado |
+| Antes da seleção candidata |capture_imports corrigido + csv_boundary.exit_and_imports + knownActivityScope revisado |Todos terminais e escopo completo/vinculado ao certificado; órfãos/incerteza/deriva negam. Nenhuma seleção/start em estado incerto |
+| Após gates/seleção autorizados |API candidata24e5857f→validação ledger/GET/UUID→fronteira/frontend por revisão própria |Retorno preserva API candidata após seleção; ORIGINAL somente antes dela, com provas/decisão específicas. Sem replay |
+| Encerramento |conferências efetivas de ambos crons/supervisão/saved/fallback600/gates falsos/barreira ausente/owner UI |Nenhum desses controles foi alterado ou recertificado por esta composição |
+
+**Próximo ato concreto é a revisão privada do draft pelo owner**, não captura de saída,
+parada ou nova coleta. Qualquer emissão/aplicação de escopo operacional continua etapa
+separada e vinculada à atividade conhecida e à janela. M1 consumido e ELF pausado;
+NEWauth+NEWDB+NEWcipher, multitenancy, produção, guarda38 e out.15 preservados.
+
+---
+
 ## Alcance legado resolvido OFFLINE — basea76fcb60
 
 **Erro de correlação demonstrado; correção LOCAL VALIDATED / REVIEW PENDING /

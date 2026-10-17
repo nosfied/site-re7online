@@ -1,0 +1,42 @@
+{
+  "auditRows": 1784,
+  "byteExact": true,
+  "compositionSha256": "8d2a8e5126ef53668dfedfb0d563c75bbab85e08c17cfe4b3d9b20631dbfc0c8",
+  "evidencePairsPreserved": 1784,
+  "executorExitCertified": false,
+  "importsResponseBytes": 507872,
+  "importsResponseSha256": "ac29fdc49adb68294b002d81e7a48bbf9224d802039267d2135c8dbb88bf1d2a",
+  "inventoryBytes": 317603,
+  "inventorySha256": "fb346e00f5aeb219b14c43aad0669d4b392c7c1ebfa920ef4667615351c155bb",
+  "knownActivityScopeComplete": false,
+  "operationalScopeIssued": false,
+  "operations": 20,
+  "ownerReviewed": false,
+  "ownershipComplete": false,
+  "privateDirectoryName": "csv-known-imports-review-20261017-v1",
+  "result": "DERIVED_PRIVATE_20_OPERATION_REVIEW_INVENTORY_NOT_APPROVED",
+  "sourceCaptureSha256": "e41c5dc714d5cabdadedc5f88c12d1ea63f26ba1c9fd34df411f01fcdb3ac01e",
+  "privateFiles": {
+    "privileged-output.private.jsonl": {
+      "bytes": 1134,
+      "sha256": "2b86c54c5119852f9360ec5392e8bb776cc13410199d753c3bce1ec80a0e1519",
+      "owner600": true
+    },
+    "imports-response.private.json": {
+      "bytes": 507872,
+      "sha256": "ac29fdc49adb68294b002d81e7a48bbf9224d802039267d2135c8dbb88bf1d2a",
+      "owner600": true
+    },
+    "inventory.private.json": {
+      "bytes": 317603,
+      "sha256": "fb346e00f5aeb219b14c43aad0669d4b392c7c1ebfa920ef4667615351c155bb",
+      "owner600": true
+    }
+  },
+  "derivationIntervalUtc": [
+    "2026-10-17T21:02:25.716980+00:00",
+    "2026-10-17T21:02:25.723558+00:00"
+  ],
+  "derivationExecutedOnce": true,
+  "canonicalPrivateWriterSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+}

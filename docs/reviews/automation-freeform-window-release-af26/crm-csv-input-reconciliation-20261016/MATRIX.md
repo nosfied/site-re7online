@@ -1,3 +1,22 @@
+## Composição integrada + draft privado — próximo ato: revisão do owner
+
+[Índice127 caminhos/61 objetos reutilizados](../crm-csv-delivery-review-20261017/legacy-integrated-static/CODE_COMPOSITION.json),
+[provas4](../crm-csv-delivery-review-20261017/INTEGRATED_AUDIT_PROOFS.json),
+[derivação privada](../crm-csv-delivery-review-20261017/INTEGRATED_AUDIT_RESULT.json),
+[roteiro único e posição das provas](REPORT.md).
+
+| Requisito | Estado / próximo momento |
+| --- | --- |
+| capture_imports corrigido composto/carregado |PASS local; único digest executável alterado, mesmos imports/dependências/zero ciclos |
+| Draft20 operações/1784 evidências integrais |privado700/600 byte-exato; revisão do owner e completude NÃO atestadas |
+| **Próximo ato concreto** |owner revisar draft privado e atividade conhecida fora da auditoria; não repetir SQL/derivação/M1 |
+| KnownActivityScope operacional/16 vínculos/autoridade |preparação/decisão própria, sem editar binding ou scope consumido para PASS |
+| Saída/ownership sob fence |**somente no ponto previsto da futura janela autorizada**, após contenção/parada canônicas; não pré-requisito de observação antecipada |
+| API→frontend/encerramento |decisões próprias, ledger/GET/replay e controles preservados |
+
+PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV suspenso;
+M1 consumido; ELF pausado. As seções abaixo conservam os checkpoints históricos.
+
 ## Reconciliação legada OFFLINE — correlação corrigida localmente
 
 [Conclusão/produção das chaves](REPORT.md),

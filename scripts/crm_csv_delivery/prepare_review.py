@@ -16,7 +16,7 @@ from scripts.crm_csv_predecessor.test_predecessor import stored
 
 ROOT=Path(__file__).resolve().parents[2]
 REVIEW=ROOT/'docs/reviews/automation-freeform-window-release-af26'
-BASE='8b5072fb9849ebd4652597d5af14b46686e26ee2'
+BASE='a1f934c9ec2132cbf2087f903ed40c428a6f1b5b'
 COORD=REVIEW/'crm-csv-coordinated-20261015'
 HERE=Path(__file__).resolve().parent
 
@@ -117,10 +117,21 @@ def references(plan,objects):
             path=d/(h+'.source')
             if h not in known and path.is_file():
                 raw=pinned(path);need(sha(raw)==h,'existing_object_drift');known[h]=str(path.relative_to(ROOT))
+    # Reuse the prior published delivery objects rather than copying its seven
+    # derived leaves again. The index and every referenced source are Git-pinned.
+    prior=REVIEW/'crm-csv-delivery-review-20261017/CODE_OBJECTS.json'
+    index=json.loads(pinned(prior))
+    for digest,row in index['objects'].items():
+        if digest in objects and digest not in known:
+            value=pinned(ROOT/row['source'])
+            need(sha(value)==digest and len(value)==row['bytes'],'prior_object_drift')
+            known[digest]=row['source']
     # Reuse direct reviewed source leaves when byte-exact, too.
     for name in ('runtime.py','pre_authority.py'):
         path=ROOT/'scripts/crm_csv_predecessor'/name;raw=pinned(path);h=sha(raw)
         if h in objects:known.setdefault(h,str(path.relative_to(ROOT)))
+    path=ROOT/'scripts/crm_csv_delivery/capture_imports.source';raw=pinned(path);digest=sha(raw)
+    if digest in objects:known.setdefault(digest,str(path.relative_to(ROOT)))
     return known
 
 def prepare(custody,material,out):
@@ -143,12 +154,12 @@ def prepare(custody,material,out):
               'auxiliaryElfFront':'PAUSED_NO_NEW_EXECUTION_OR_GENERATION','runtimeReuse':reuse,
               'compositionSha256':sha(encode(plan)),'codeObjectsSha256':sha((out/'CODE_OBJECTS.json').read_bytes()),
               'prestopSourceSha256':sha(boundary),'prestopSource':refs[sha(boundary)],'preparedModes':['PRESTOP','ORIGINAL','CANDIDATE','DENY'],
-              'phaseAuthorityInstalled':False,'operationalGenerationCreated':False,'currentInputsFabricated':False,
+              'phaseAuthorityInstalled':False,'legacyClassifierSha256':plan['files']['window/capture_imports.py']['sha256'],'sqlPreparatoryEvidence':'SQL_V2_RESULT.json:17:44 observation only, not ownership/executor exit','scopeReviewOwnerConfirmed':False,'operationalGenerationCreated':False,'currentInputsFabricated':False,
               'originalCompatibility':'Only unselected certified exit with full R1/R2, fresh identity/generation, explicit recovery authority; never after possible candidate admission',
               'postSelectionReturn':'candidate backend remains; frontend may return to certified compatible package; persistent backend failure needs another compatible version',
-              'nextOperationalAct':'One owner-reviewed deploy/no-sudo read of the Event parent boundary, with canonical private custody; no installation, chmod, gates, stop/start or retries',
+              'nextOperationalAct':'Owner review of derived private20-operation inventory and knownActivityScope; no new read, no M1 or SQL replay. Exit/ownership under containment belongs only to a separately authorized future window',
               'acceptedProofsReused':['R1/R2 correction32','prestop equivalence','authority R3/B2/B1/B3','ORIGINAL chain28','compiled CSV and operationalStatus','browser UUID/timeout/reentry','restore retained/stopped'],
-              'notCertified':['current processes/config/saved/fallback','SQL identity/ownership/import exit','Event parents current/CAS','root protected code/toolchain/phase authority','fresh capacity/WAL/RPO','16 future path bindings','post-API frontend successors']}
+              'notCertified':['current processes/config/saved/fallback','ownership and executor/import exit under future authorized containment','Event parents current/CAS','root protected code/toolchain/phase authority','fresh capacity/WAL/RPO','16 future path bindings','post-API frontend successors']}
     write('DELIVERY.json',encode(delivery))
     return delivery
 

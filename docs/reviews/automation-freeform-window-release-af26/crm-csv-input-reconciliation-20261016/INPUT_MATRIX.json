@@ -1773,6 +1773,23 @@
       "composedOrDeployed": false,
       "consumedSqlV1V2Unchanged": true,
       "status": "LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY"
+    },
+    "integratedLegacyStatic": {
+      "base": "a1f934c9ec2132cbf2087f903ed40c428a6f1b5b",
+      "compositionReference": "../crm-csv-delivery-review-20261017/legacy-integrated-static/CODE_COMPOSITION.json",
+      "compositionSha256": "8d2a8e5126ef53668dfedfb0d563c75bbab85e08c17cfe4b3d9b20631dbfc0c8",
+      "logicalPaths": 127,
+      "reusedObjects": 61,
+      "newObjects": 0,
+      "newCodeBytes": 0,
+      "tests": 4,
+      "derivedInventoryReference": "../crm-csv-delivery-review-20261017/INTEGRATED_AUDIT_RESULT.json",
+      "ownerReviewed": false,
+      "knownActivityScopeComplete": false,
+      "executorExitCertified": false,
+      "nextAct": "Owner private review of20-operation draft and known out-of-audit activity",
+      "exitOwnershipTiming": "only after canonical containment/stop within future expressly authorized window, never preparatory database-empty demand",
+      "status": "PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY"
     }
   }
 }

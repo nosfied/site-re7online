@@ -1,5 +1,20 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## Integração estática CSV concluída — inventário privado para revisão
+
+[Índice integrado](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/legacy-integrated-static/CODE_COMPOSITION.json),
+[4 provas do Loader composto](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/INTEGRATED_AUDIT_PROOFS.json),
+[recibo do draft20](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/INTEGRATED_AUDIT_RESULT.json),
+[roteiro vigente](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md).
+127 caminhos/61 objetos reutilizados, zero novos objetos/copias de runtime. Classificador
+corrigido composto e carregado; negativos preservados. Inventário privado20/1784 evidências
+integrais derivado uma vez; ownerReviewed/completude/saída/ownership permanecem falsos.
+**Próximo ato: owner revisar o draft e atividade conhecida fora da auditoria.** Saída/
+ownership sob contenção só no ponto da futura janela autorizada; não exigir antecipação
+ou banco vazio. SQL v1/v2/M1 consumidos; ELF pausado. Sem VPS/SQL/backup/instalação.
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+
+
 ## Correlação legada CSV — corrigida OFFLINE para revisão
 
 [Conclusão vigente](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
@@ -62,14 +77,14 @@ Não são instruções atuais de execução. [Relatório único e sequência](re
 | SQL v2 blocos1/2 |CONSUMED/COMPLETE17:44: três SQLs/quatro fronteiras/custódia PASS; ownership UNKNOWN;20 grupos COMPLETED/1764 UNKNOWN; admissão não satisfeita |
 | ELF |PAUSADO; sem retorno à descoberta/budget como consequência desse DENY |
 
-**Estado SQL vigente:** v2 consumido/diagnóstico completo17:44 e v1 DENY intacto.
-[Análise corrente da correlação](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md):
-erro de agrupamento legado demonstrado e corrigido na fonte futura;1784 evidências
-preservadas agrupam20 operações por tenant/UUID exatos. Predicado terminal puro PASS
-somente offline; não é admissão integral ou observação nova. Órfãos/ambiguidade/incompletas
-continuam negando. Próximo: revisão/vínculo na futura composição; saída/ownership/
-knownActivityScope/fence,16 vínculos e autoridade continuam requisitos. Nenhum roteiro
-SQL pode ser repetido. M1 consumido; ELF pausado.
+**Estado vigente integrado:** [novo índice estático e roteiro](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md).
+127 caminhos/61 objetos reutilizados, capture_imports corrigido efetivamente composto/
+carregado, imports/dependências preservados. Draft privado20 operações/1784 evidências
+criado, sem revisão do owner/completude/saída/ownership atestadas. Próximo ato é a revisão
+privada do draft e atividade conhecida pelo owner; 16 vínculos/autoridade e preparação
+final continuam etapas próprias. Saída/ownership sob contenção devem ser provadas **na
+futura janela autorizada**, após as ações canônicas previstas, não antecipadamente.
+Nenhum roteiro SQL ou M1 pode ser repetido. ELF pausado; CSV NOT DEPLOYED/NOT WINDOW READY.
 
 Consultar os princípios **completos**, não apenas este resumo: [Principios operacionais](#principios-operacionais),
 [Retenção operacional permanente](#retenção-operacional-permanente), [Change Policy](saas/CHANGE_POLICY.md),
@@ -86,8 +101,9 @@ saída/ownership, CAS, classificação, revalidação no uso, consumo e replay. 
 observada não prova atividade completa nem executor encerrado. Não inventar pins,
 perfis, permit, lock cooperado, coletor ou autoridade. Fontes antigas não são fatos atuais.
 
-Os roteiros SQL v1 e v2 estão consumidos: não executar novamente. Após resolver
-a correlação/alcance legado, somente com dados e autorizações válidos: atribuição/16 vínculos/controles protegidos/autoridade→
+Os roteiros SQL v1 e v2 estão consumidos: não executar novamente. Correlação e
+composição resolvidas localmente; revisar o draft privado/atividade conhecida, depois
+prosseguir somente com dados e autorizações válidos: atribuição/16 vínculos/controles protegidos/autoridade→
 materialização final quatro modos→janela coordenada/frescor/R0/root/review→decisão A/
 admissão/saída/CAS→API→validação UUID/GET/ledger→fronteira frontend real→decisão frontend.
 Incerteza exige inspeção e decisão correspondente, sem replay. ORIGINAL só pré-seleção

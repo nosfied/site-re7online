@@ -1,0 +1,20 @@
+{
+  "base": "a1f934c9ec2132cbf2087f903ed40c428a6f1b5b",
+  "tests": 4,
+  "compositionSha256": "8d2a8e5126ef53668dfedfb0d563c75bbab85e08c17cfe4b3d9b20631dbfc0c8",
+  "real": "existing editable compositor; byte-pinned object sources; concrete static Review and Loader; composed full module; canonical terminal/exit gates; immutable captured rows",
+  "lab": "temporary code-only127-path tree, no operational data/pins/permit; synthetic negative events and frontier flags",
+  "coverage": [
+    "20 groups/1784 evidence",
+    "orphans",
+    "tenant mismatch",
+    "summary collision",
+    "incomplete operation",
+    "replacement denied on load",
+    "same import/dependency graph, zero cycles, four modes"
+  ],
+  "previousProofsReused": "16 legacy tests and unaffected recovery/runtime/PM2/SQL proofs not rerun",
+  "noVpsOrSqlOrInstall": true,
+  "fullAdmission": "NOT_SATISFIED ownership/exit/knownActivityScope/authority pending",
+  "status": "PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY"
+}
