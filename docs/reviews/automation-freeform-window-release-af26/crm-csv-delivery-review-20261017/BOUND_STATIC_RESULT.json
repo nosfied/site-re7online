@@ -1,0 +1,173 @@
+{
+  "authorityIssued": false,
+  "canonicalOfflineCheck": {
+    "immutableReferences": 4,
+    "live": false,
+    "modes": 4,
+    "result": "CSV_FOUR_MODE_CONTRACT_PASS"
+  },
+  "cipherHistoricalReviewSha256": "c6c0eaab668c199d8ab8705ff9457776cebfea683efaa3941437ae2d624a5fe5",
+  "codeObjectsChanged": 0,
+  "composedHashes": {
+    "preparation-review.sha256": "7132d3b58a3b33b5b49f0dbde6f729f81516fe329b98e857e437f7f63a946f0a",
+    "return-before-commit/candidate.config.private.json": "df2deb10ddc21a58917576a75171a87edaa42ac4097af9c7a3df2ca8384d32a4",
+    "return-before-commit/candidate.ecosystem.config.cjs": "6c563f508745039fc640dfcc35093db7382582c717b573a965507b59fbd88639",
+    "return-before-commit/return.config.private.json": "df2deb10ddc21a58917576a75171a87edaa42ac4097af9c7a3df2ca8384d32a4",
+    "return-before-commit/return.ecosystem.config.cjs": "6c563f508745039fc640dfcc35093db7382582c717b573a965507b59fbd88639",
+    "return-before-commit/scripts.sha256": "9f5866498986777be847a4c046a6eafaa1eca2d6976bf5c08d4bd5551d3f7323",
+    "return-partial/candidate.config.private.json": "a7f9d99a7b51d99920fa21c687020b38192e809e91e59b4dfe13b3294268e738",
+    "return-partial/candidate.ecosystem.config.cjs": "2a5cd76d4e4db3176fb22c5f16f177c0223649e1396c01a0c283574c9c267209",
+    "return-partial/return.config.private.json": "a7f9d99a7b51d99920fa21c687020b38192e809e91e59b4dfe13b3294268e738",
+    "return-partial/return.ecosystem.config.cjs": "2a5cd76d4e4db3176fb22c5f16f177c0223649e1396c01a0c283574c9c267209",
+    "return-partial/scripts.sha256": "aa1bcb43ff945ae1cd13b2ee520520a18a93a321f98c8d817aebdf9146fbf598",
+    "return/candidate.config.private.json": "a7f9d99a7b51d99920fa21c687020b38192e809e91e59b4dfe13b3294268e738",
+    "return/candidate.ecosystem.config.cjs": "2a5cd76d4e4db3176fb22c5f16f177c0223649e1396c01a0c283574c9c267209",
+    "return/return.config.private.json": "a7f9d99a7b51d99920fa21c687020b38192e809e91e59b4dfe13b3294268e738",
+    "return/return.ecosystem.config.cjs": "2a5cd76d4e4db3176fb22c5f16f177c0223649e1396c01a0c283574c9c267209",
+    "return/scripts.sha256": "cdb3cf1f2052e0bb3b7189304149c9c95ebbfa6cb5940d466f00187a4e3749c1",
+    "switch/candidate.config.private.json": "a7f9d99a7b51d99920fa21c687020b38192e809e91e59b4dfe13b3294268e738",
+    "switch/candidate.ecosystem.config.cjs": "2a5cd76d4e4db3176fb22c5f16f177c0223649e1396c01a0c283574c9c267209",
+    "switch/return.config.private.json": "df2deb10ddc21a58917576a75171a87edaa42ac4097af9c7a3df2ca8384d32a4",
+    "switch/return.ecosystem.config.cjs": "6c563f508745039fc640dfcc35093db7382582c717b573a965507b59fbd88639",
+    "switch/scripts.sha256": "91bdbf2797997d78597fcc1ec18b4c0ed49af020f67767e26bd212f20f6b7979",
+    "window/csv-contract.private.json": "5762b7a8300e86783607cb2f6a549c5b199bf77292624a682994160ca40b76df",
+    "window/mode-manifest-v4.json": "f7d64298487353611f9ced846e67b795179cd19a2d2ce2df59c62e4c61e04be7",
+    "window/path-bindings.private.json": "4f1987386cfb96b8c5f77842ef069d14a4fa5d00ae2c0296afb711716b7bf2c5",
+    "window/privileged-policy.private.json": "73d1f13c6ee99440fa0e7654a18bdb61ee6501e1344ace86c4820a3146dc1478",
+    "window/sequencer-manifest.json": "e7656720bb37f75a64e90bf12b6b44e0b3e3d49066e6591f7eaf9d09f20539f5",
+    "window/source.profile.private.json": "df2deb10ddc21a58917576a75171a87edaa42ac4097af9c7a3df2ca8384d32a4",
+    "window/target.profile.private.json": "a7f9d99a7b51d99920fa21c687020b38192e809e91e59b4dfe13b3294268e738"
+  },
+  "copyBudgetBytes": 8388608,
+  "executorExit": null,
+  "files": 183,
+  "firstOperationalBlocker": "binding-status is TEMPLATE_NOT_ADMITTED, not WINDOW_BOUND; historical source identities and immutable metadata need current canonical revalidation, protected phase installation/authority remains absent. No owner approval inferred.",
+  "freshness": null,
+  "historicalDataGroupsSupplied": [
+    "window/restore proofs and mode backup/baseline/proof-bindings"
+  ],
+  "historicalProofsRefreshed": false,
+  "historicalSourceBindings": 2,
+  "journal": {
+    "bytes": 345,
+    "sha256": "e00260381f9bee663366ee615b08fd5a426e429594aecad066c86e1596cea357"
+  },
+  "localCapacityPostComposition": {
+    "availableBytes": 231239544832,
+    "existingProducerReserveBytes": 67108864,
+    "observedUtc": "2026-10-17T21:50:29.380695+00:00",
+    "passes": true,
+    "plannedCopyBudgetBytes": 8388608,
+    "timing": "Post-composition observation; not retroactive precheck or VPS capacity. Future source now includes the same precheck before creating the tree."
+  },
+  "modeFiles": {
+    "return": 30,
+    "return-before-commit": 30,
+    "return-partial": 30,
+    "switch": 30
+  },
+  "modeManifestSha256": "f7d64298487353611f9ced846e67b795179cd19a2d2ce2df59c62e4c61e04be7",
+  "ownership": null,
+  "partialRequirementGroups": [
+    {
+      "group": "mode/window manifests and original-preparation-review.sha256",
+      "notSupplied": [
+        "original-preparation-review.sha256"
+      ],
+      "supplied": [
+        "window/mode-manifest-v4.json",
+        "window/sequencer-manifest.json",
+        "four mode scripts.sha256"
+      ]
+    }
+  ],
+  "pathBindingsSha256": "4f1987386cfb96b8c5f77842ef069d14a4fa5d00ae2c0296afb711716b7bf2c5",
+  "phaseAuthority": null,
+  "privateDirectoryName": "csv-bound-static-review-20261017-v1",
+  "producer": {
+    "functions": [
+      "sha",
+      "put",
+      "seal"
+    ],
+    "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/compose.py",
+    "profileStatements": "Original target copy/API cwd+script/profile_delta and mode expressions. Historical boundary path-import statement is excluded and supplied by authenticated composed bytes; no compose invocation",
+    "sha256": "64079638f1e99a673c60e4d8b622c0a355fd521c182bdae15148df558db759d0"
+  },
+  "profileSourceSha256": "a062c7020353cb39b0578653ea51475f8e9f9f68a588d1c55eb87cbbd68b6b9e",
+  "proposedApiTarget": "/opt/re7online/releases/crm-csv-24e5857f-20261016/apps/whatsapp-agent",
+  "proposedCandidateBinding": 1,
+  "proposedPolicyInstalled": false,
+  "proposedRemotePreparation": "/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-csv-local-review-20261017-v1",
+  "remainingRequirementGroups": [
+    "window/deploy.crontab.before + window",
+    "window/owner-evidence",
+    "window/re7-converta-backup.before + window",
+    "window/saved-dump.pm2.private.json + saved-dump.pm2.bak.private.json",
+    "current protected-file/prior-target hashes and root chains",
+    "phase code manifest with actual uid/modes",
+    "static anchor approved against policy/contract/profiles",
+    "decision-specific permit (recovery only)",
+    "current PM2/Node executable + transitive toolchain integrity"
+  ],
+  "requiredDataAbsent": [
+    "window/csv-baseline.private.json",
+    "window/csv-compiled-proof.private.json",
+    "window/db-owner-bindings.private.json",
+    "window/event-consumer-binding.private.json",
+    "window/initial.private.json",
+    "window/original-bindings/path-bindings.private.json",
+    "window/recovery-contract.private.json",
+    "window/waiting-work.private.json"
+  ],
+  "requiredDataPresent": [
+    "return/backup-manifest.json",
+    "return/baseline.private.json",
+    "return/candidate.config.private.json",
+    "return/candidate.ecosystem.config.cjs",
+    "return/plan.private.json",
+    "return/proof-bindings.private.json",
+    "return/return.config.private.json",
+    "return/return.ecosystem.config.cjs",
+    "return-before-commit/backup-manifest.json",
+    "return-before-commit/baseline.private.json",
+    "return-before-commit/candidate.config.private.json",
+    "return-before-commit/candidate.ecosystem.config.cjs",
+    "return-before-commit/plan.private.json",
+    "return-before-commit/proof-bindings.private.json",
+    "return-before-commit/return.config.private.json",
+    "return-before-commit/return.ecosystem.config.cjs",
+    "return-partial/backup-manifest.json",
+    "return-partial/baseline.private.json",
+    "return-partial/candidate.config.private.json",
+    "return-partial/candidate.ecosystem.config.cjs",
+    "return-partial/plan.private.json",
+    "return-partial/proof-bindings.private.json",
+    "return-partial/return.config.private.json",
+    "return-partial/return.ecosystem.config.cjs",
+    "switch/backup-manifest.json",
+    "switch/baseline.private.json",
+    "switch/candidate.config.private.json",
+    "switch/candidate.ecosystem.config.cjs",
+    "switch/plan.private.json",
+    "switch/proof-bindings.private.json",
+    "switch/return.config.private.json",
+    "switch/return.ecosystem.config.cjs",
+    "window/csv-contract.private.json",
+    "window/csv-known-imports.private.json",
+    "window/path-bindings.private.json",
+    "window/privileged-policy.private.json",
+    "window/source.profile.private.json",
+    "window/target.profile.private.json"
+  ],
+  "result": "FOUR_MODE_STATIC_DATA_COMPOSED_NOT_WINDOW_BOUND",
+  "reviewSha256": "7132d3b58a3b33b5b49f0dbde6f729f81516fe329b98e857e437f7f63a946f0a",
+  "runtimeCopies": 0,
+  "sourceHistoricalReviewSha256": "06459884b2822c1fc1b252ced894f14b599d907133592173563aac6d7bb55819",
+  "sourceProfileMaterializedSha256": "df2deb10ddc21a58917576a75171a87edaa42ac4097af9c7a3df2ca8384d32a4",
+  "status": "PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+  "targetProfileSha256": "a7f9d99a7b51d99920fa21c687020b38192e809e91e59b4dfe13b3294268e738",
+  "windowBound": false,
+  "windowManifestSha256": "e7656720bb37f75a64e90bf12b6b44e0b3e3d49066e6591f7eaf9d09f20539f5",
+  "writtenBytes": 1497329
+}

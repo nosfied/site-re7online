@@ -1,0 +1,22 @@
+{
+  "additionalFocusedTest": "Coverage classification: descriptive groups are not absent filenames; supplied historical restore group and partial manifests identified. One affected test passed after sidecar enumeration fix; no private tree recomposition.",
+  "base": "f8d8ea0bead5de7c71b913228cf9bd0225506ce7",
+  "distinctTestsValidated": 7,
+  "localCapacityGuard": "Original producer64MiB reserve plus8MiB bounded control-copy budget; affected fixture composed with new guard and existing false-gates test passed. No private generation replay.",
+  "notExecuted": [
+    "historical compose/bind/install entrypoints",
+    "live=True checker",
+    "VPS",
+    "SQL",
+    "CJS execution",
+    "PM2",
+    "contains/stops/starts",
+    "phase authority"
+  ],
+  "preserved": "R1/R2 and ORIGINAL code closure byte-exact; source/candidate environment equal; originals/consumed generations untouched",
+  "real": "Byte-pinned historical data; authenticated source objects; exact producer profile/variant/seal functions; ecosystem generate/validate; real Review/Loader and csv_contract.check(live=False) across four complete static modes; private filesystem and hashes",
+  "reuse": "Runtime archives/PM2/functional/SQL/recovery proofs reused; no build or broad suite",
+  "simulated": "Only tampered local review files for negative cases; no production state fabricated",
+  "status": "PREPARED LOCALLY / LOCAL VALIDATED in static scope / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+  "tests": 6
+}

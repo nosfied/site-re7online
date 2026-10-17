@@ -1,3 +1,109 @@
+## Contrato, perfis, caminhos e quatro modos compostos — basef8d8ea0b
+
+**PREPARED LOCALLY / LOCAL VALIDATED no escopo estático / REVIEW PENDING /
+NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO; M1 consumido; ELF pausado.**
+[Resultado e hashes efetivos](../crm-csv-delivery-review-20261017/BOUND_STATIC_RESULT.json),
+[7 testes distintos do delta](../crm-csv-delivery-review-20261017/BOUND_STATIC_PROOFS.json),
+[compositor editável local](../../../../scripts/crm_csv_delivery/compose_bound_review.py),
+[testes](../../../../scripts/crm_csv_delivery/test_bound_review.py).
+
+### Composição real obtida, sem janela vinculada
+
+Materializado UMA VEZ em custódia privada700 `csv-bound-static-review-20261017-v1/preparation`:
+**183 arquivos/1.497.329B**, incluindo127 caminhos de código aceito byte-exato, dados e
+manifests. Zero runtime copiado/rebuildado/extraído, zero alteração dos objetos de código.
+Cópia pequena é necessária ao layout consumido pelo checker de quatro modos; orçamento
+8MiB, não nova cópia de releases. Reserva64MiB reaproveita o produtor existente. Capacidade
+local foi observada após a composição (horário/bytes no recibo), não se alega precheck
+retroativo; a fonte futura passou a conferir8MiB+64MiB antes da criação da árvore, com
+ensaio local afetado. Não é capacidade de VPS nem prova de RAM. Journal canônico fica
+fora da árvore selada, sem alterar seus manifests.
+
+**Checker real CSV_FOUR_MODE_CONTRACT_PASS, live=false, modes=4, immutableReferences=4.**
+Review/Loader autentica os mesmos consumidores; eco JSON/CJS gerados e conferidos pelos
+produtores canônicos. Isso valida composição estática completa desse contrato, **não**
+check_current, inspeção/recuperação operacional, identidade, metadados root atuais ou
+permissão de executar. A proposta de política também foi aceita pelo parser/modelo
+canônico offline; isso não emite autoridade nem comprova seus PIDs históricos como atuais.
+
+| Vínculo composto | Procedência / alcance |
+| --- | --- |
+| source.profile → target.profile |Fonte original a062c702… da recuperação aceita; igualdade de valores mantida, nova serialização determinística df2deb10…; alvo a7f9d99a… muda somente cwd/script da API. NEWauth+NEWDB+NEWcipher, worker/frontend e todo env preservados |
+| csv-contract |sources.produce_contract com predecessor e2a5 autêntico, mantendo imutáveis não vazios/capacidade; hashes dos perfis e remotePreparation proposto vinculados |
+| path-bindings |2 vínculos de origem provados no índice selado de cifragem c6c0eaab…;1 candidato derivado do .data declarado no manifest certificado da API, com igualdade ao alvo de dados da origem. Não houve resolve() de caminhos produtivos nesta máquina |
+| Quatro modos |30 arquivos indexados por modo; JSON source/target e CJS completos. ORIGINAL/return-before-commit usa origem em ambas direções; switch usa origem→candidata; return/return-partial mantêm candidata compatível |
+| mode/window/review manifests |scripts.sha256 dos quatro modos → mode-manifest → sequencer-manifest → preparation-review; ordem da função seal existente. Grafo de código/127 fontes inalterado, R1/R2 e closure ORIGINAL preservados |
+| knownActivityScope |arquivo técnico já materializado2787d3de… reutilizado byte-exatamente; revisão técnica não é aprovação humana, completude ou autoridade |
+| Provas de restore/backup/baseline/proof-bindings |copiadas byte-exatamente do histórico autenticado para o checker, sem renovação, novo restore, frescor ou alteração de recibo |
+
+Review novo: `7132d3b58a3b33b5b49f0dbde6f729f81516fe329b98e857e437f7f63a946f0a`.
+Mode manifest: `f7d64298487353611f9ced846e67b795179cd19a2d2ce2df59c62e4c61e04be7`.
+Window manifest: `e7656720bb37f75a64e90bf12b6b44e0b3e3d49066e6591f7eaf9d09f20539f5`.
+Os28 hashes principais (contrato/perfis/caminhos/política/JSON-CJS/manifests) estão no recibo.
+
+### Produtores reutilizados e distinção de épocas/destinos
+
+Bibliotecas e expressões exatas de crm-csv-operational-20261016/compose.py pinado ao Git
+basef8d8ea0b: sha/put/seal, construção do target e variantes de cada modo. Não se executou
+seu compose ou bind_window histórico. A única atribuição de import por caminho do bloco
+original foi excluída; boundary/ecosystem são carregados dos bytes compostos autenticados,
+sem importar CJS/configuração capturada. Predecessor é tratado por sources.produce_contract
+já aceito, não por parser ou política paralelos. Nenhum instalador consumido foi chamado.
+
+Referência local de staging tem review06459884… publicado e preservado, distinto da
+renovação consumida56965c… na VPS. A cadeia review→sequencer→cada arquivo é conferida.
+O perfil a062c702… também tem hash próprio aprovado na recuperação e confronto posterior.
+Vínculos .data vêm da cadeia selada c6c0eaab… de15/10. **São dados históricos/propostos,
+não observações novas.** Os originais não são editados, reclassificados ou atualizados.
+
+remotePreparation proposto: `/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-csv-local-review-20261017-v1`.
+Alvo API **proposto/reutilizado do contrato aceito**:
+`/opt/re7online/releases/crm-csv-24e5857f-20261016/apps/whatsapp-agent`.
+Não se conferiu existência/ausência, conteúdo, links ou capacidade desses destinos na VPS.
+A proposta de política conserva identidades históricas do template, explicitamente não
+certificadas como atuais. Nenhum pin/metadata de fase foi derivado delas para autorizar start.
+
+### O que ainda impede implantação — sem transformar requisito em coleta genérica
+
+**WINDOW_BOUND não foi preenchido:** state=TEMPLATE_NOT_ADMITTED, cinco gates falsos,
+execution-authorized=false; frescor/saída/ownership/autoridade=null. Imutáveis têm contrato
+estático válido, não conferência de uid/mode/hash/cadeia root viva. A instalação/âncora
+protegida,16 vínculos e pins de fase continuam dependências concretas dos consumidores.
+O arquivo recovery-contract/metadata ORIGINAL ainda não está composto; não se presume
+que o PASS de csv_contract substitua check_original/R1/R2 ou autorize recuperar.
+
+O recibo separa **8 caminhos literais ausentes** de grupos descritivos; não são19 arquivos
+nem57 capturas novas. Em particular, os manifests de modos/janela e os restores já foram
+fornecidos; falta a referência original-preparation-review da fronteira de recuperação.
+
+| Família restante | Encaminhamento / consumidor |
+| --- | --- |
+| csv-baseline/csv-compiled-proof/db-owner/initial/waiting-work e crons/saved |Vincular material legítimo já preservado aos consumidores check_current/Sequencer, com procedência e limites; completar offline o que existir, sem exigir recolher tudo. Frescor real só no ponto canônico |
+| event-consumer-binding |Proposta do overlay/consumidores certificados precisa de metadados exatos de origem no novo vínculo; M1 consumido não é reexecutado, e sua prova não dispensa revalidação no uso |
+| recovery-contract, original-bindings, original-preparation-review |Compor pelos produtores de recuperação aceitos, mantendo ORIGINAL sem executáveis candidatos e metadados/identidades/16 vínculos legítimos; ausência continua negando |
+| Root/âncora/pins/toolchain protegido |Exigem instalação/observação/autorização próprias. Reutilizar B1–B4/PM2 no alcance; nenhuma retomada ELF está autorizada ou proposta aqui |
+| Saída/ownership/auditoria atual sob fence |Somente no ponto da futura janela autorizada, após contenção/parada previstas; não exigir antecipação ou banco vazio |
+| Backup/RPO/root/capacidade atual/API→frontend |Renovar só perecíveis no horário coordenado, conferir hashes e decisão de execução própria; depois API/UUID-GET-ledger e fronteira frontend com sucessores reais |
+
+**Próximo delta local concreto:** fechar os vínculos restantes de check_current e
+recuperação ORIGINAL com os registros privados existentes; separar o que pode ser derivado
+offline dos slots que precisam de fatos/autoridade futuros, sem nova declaração humana.
+Não executar a árvore local ou tratá-la como janela pronta. Encerramento continua exigindo
+crons, supervisão, saved/fallback600, gates falsos, barreira ausente e validação owner UI.
+
+### Provas afetadas
+
+6 testes integrados +1 teste dirigido de cobertura de grupos: checker offline completo;
+perfis/env e quatro variantes; todos os hashes/código ORIGINAL; adulteração CJS/path-binding;
+predecessor divergente/destino existente; gates falsos/campos desconhecidos/orçamento;
+grupo descritivo não confundido com filename. Repetido somente o teste afetado ao inserir
+a reserva local. Testes negativos alteram apenas fixture privada temporária e restauram
+seus bytes, sem reseal para PASS. Nenhum verificador foi substituído por aprovação.
+Não executados live=true, Context instalado, PM2, CJS, SQL, processos, VPS ou janela.
+Produção, isolamento/RBAC, NEWauth+NEWDB+NEWcipher, guarda38 e out.15 intocados.
+
+---
+
 ## Insumo estático materializado e identificação privada — base62809ecc
 
 **PREPARED LOCALLY / LOCAL VALIDATED no delta ensaiado / REVIEW PENDING /

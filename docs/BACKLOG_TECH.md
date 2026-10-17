@@ -1,5 +1,22 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## CSV — contrato/perfis/caminhos/quatro modos efetivamente compostos
+
+[Resultado/seqüência restante](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[hashes efetivos](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/BOUND_STATIC_RESULT.json),
+[7 provas focadas](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/BOUND_STATIC_PROOFS.json).
+Nova composição privada183 arquivos/1.497.329B,30 por modo, checker canônico completo
+live=false PASS com4 imutáveis. Perfis/env preservados,3 bindings .data históricos/propostos,
+JSON/CJS/manifests coerentes; zero rebuild/runtime copiado. Destinos não observados na VPS.
+WINDOW_BOUND não preenchido; gates falsos, frescor/saída/ownership/autoridade desconhecidos.
+Próximo delta: vínculos check_current/recuperação ORIGINAL com custódias existentes;
+root/metadata16/pins e fatos frescos ficam separados. R1/R2/código ORIGINAL intactos.
+reviewedAgainstAuditAndKnownActivity é revisão técnica, não pedido de aprovação humana
+ou declaração global: interpretação anterior corrigida, não repetir confirmação.
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+M1 consumido; ELF pausado; produção intocada. Checkpoints abaixo preservam a cronologia.
+
+
 ## CSV — insumo técnico materializado; sem aprovação humana presumida
 
 [Resultado/impedimento exato](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),

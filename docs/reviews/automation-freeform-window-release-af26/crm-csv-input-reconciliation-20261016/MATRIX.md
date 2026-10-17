@@ -1,3 +1,20 @@
+## Vigente — contrato/perfis/caminhos/quatro modos compostos, checker offline PASS
+
+[Resultado e hashes](../crm-csv-delivery-review-20261017/BOUND_STATIC_RESULT.json),
+[7 testes dirigidos](../crm-csv-delivery-review-20261017/BOUND_STATIC_PROOFS.json),
+[relatório único](REPORT.md).
+
+| Grupo | Composto | Ainda não certificado |
+| --- | --- | --- |
+| Contrato/perfis |predecessor e2,4 imutáveis, source/target e delta API preservando env |identidades/frescor/root vivos |
+| Caminhos |2 .data históricos +1 candidato certificado como proposta |existência/links/metadata atuais dos destinos |
+| Quatro modos/manifests |30 arquivos por modo/JSON-CJS, manifests e review7132d3b5…; checker4 modos live=false PASS |WINDOW_BOUND ausente, gates falsos, nenhum start autorizado |
+| R1/R2/ORIGINAL |código byte-exato, return-before-commit original, restores históricos íntegros |recovery-contract/original-bindings/metadata16 vínculos/âncora ainda pendentes |
+| Próximo delta local |vincular check_current/recuperação com material privado existente |não pedir aprovação de flag técnico, não recolher tudo, não retomar ELF |
+
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+M1 consumido. Seções abaixo são checkpoints históricos, inclusive impedimentos já fechados.
+
 ## Vigente — revisão técnica materializada; impedimento é vínculo operacional
 
 [Materialização](../crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION.json),

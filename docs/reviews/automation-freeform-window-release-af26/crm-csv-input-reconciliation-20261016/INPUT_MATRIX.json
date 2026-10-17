@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Technical known-activity input is materialized; no generic owner approval is required. csv_contract.check lacks the new preparation csv-contract (remotePreparation, source/target profile hashes, nonempty immutable references, target policy binding), coherent source/target profiles and four-mode path/mode bindings. WINDOW_BOUND/phase authority remain unproven; no current identity/freshness fabricated.",
+    "firstConcreteBlocker": "Four-mode static checker now passes. Binding state remains TEMPLATE_NOT_ADMITTED: remaining check_current data (baseline/compiled-proof/db-owner/event/initial/waiting-work/crons/saved), ORIGINAL recovery-contract/original-bindings/original-review and protected root/16 bindings/phase authority are not fully composed/certified. Existing historical data may be reused offline; no blanket new collection or owner technical-flag approval required.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1841,6 +1841,21 @@
       "phaseAuthorityIssued": false,
       "operationalGenerationCreated": false,
       "next": "Compose new contract/profile/path-bindings/mode manifests through existing producers; do not infer current identity, WINDOW_BOUND or authority. Fresh exit/audit under fence at authorized window point only."
+    },
+    "fourModeStaticBindings": {
+      "base": "f8d8ea0bead5de7c71b913228cf9bd0225506ce7",
+      "result": "../crm-csv-delivery-review-20261017/BOUND_STATIC_RESULT.json",
+      "proofs": "../crm-csv-delivery-review-20261017/BOUND_STATIC_PROOFS.json",
+      "contractProfilesPathsManifestsComposed": true,
+      "canonicalOfflineFourModesPass": true,
+      "immutableReferences": 4,
+      "windowBound": false,
+      "freshness": null,
+      "executorExit": null,
+      "ownership": null,
+      "authority": null,
+      "currentFactsFabricated": false,
+      "nextLocalDelta": "Bind remaining check_current and ORIGINAL recovery data from existing custody; keep root/16 bindings/phase pins and future live validation distinct. No generic owner approval, no ELF resume."
     }
   }
 }

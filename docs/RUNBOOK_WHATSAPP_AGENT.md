@@ -1,5 +1,22 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## CSV — contrato/perfis/caminhos/quatro modos efetivamente compostos
+
+[Resultado/seqüência restante](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[hashes efetivos](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/BOUND_STATIC_RESULT.json),
+[7 provas focadas](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/BOUND_STATIC_PROOFS.json).
+Nova composição privada183 arquivos/1.497.329B,30 por modo, checker canônico completo
+live=false PASS com4 imutáveis. Perfis/env preservados,3 bindings .data históricos/propostos,
+JSON/CJS/manifests coerentes; zero rebuild/runtime copiado. Destinos não observados na VPS.
+WINDOW_BOUND não preenchido; gates falsos, frescor/saída/ownership/autoridade desconhecidos.
+Próximo delta: vínculos check_current/recuperação ORIGINAL com custódias existentes;
+root/metadata16/pins e fatos frescos ficam separados. R1/R2/código ORIGINAL intactos.
+reviewedAgainstAuditAndKnownActivity é revisão técnica, não pedido de aprovação humana
+ou declaração global: interpretação anterior corrigida, não repetir confirmação.
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+M1 consumido; ELF pausado; produção intocada. Checkpoints abaixo preservam a cronologia.
+
+
 ## CSV — insumo técnico materializado; sem aprovação humana presumida
 
 [Resultado/impedimento exato](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
@@ -134,8 +151,9 @@ carregado, imports/dependências preservados. Draft privado20 operações/1784 e
 criado e tecnicamente revisado, sem completude/saída/ownership atestadas. Declaração limitada
 do owner recebida: não conhece importação própria pendente. Rascunho de escopo preparado
 separadamente, vinculado por sidecar privado íntegro à declaração. O insumo técnico
-agora foi materializado sem aprovação humana presumida;16 vínculos/autoridade e preparação
-final continuam etapas próprias. Saída/ownership sob contenção devem ser provadas **na
+agora foi materializado sem aprovação humana presumida. Contrato/perfis/caminhos/manifests
+dos quatro modos já estão compostos em árvore privada, com checker offline completo PASS;
+restam dados check_current/recuperação ORIGINAL e16 vínculos/autoridade, sem WINDOW_BOUND. Saída/ownership sob contenção devem ser provadas **na
 futura janela autorizada**, após as ações canônicas previstas, não antecipadamente.
 Nenhum roteiro SQL ou M1 pode ser repetido. ELF pausado; CSV NOT DEPLOYED/NOT WINDOW READY.
 
@@ -157,8 +175,9 @@ perfis, permit, lock cooperado, coletor ou autoridade. Fontes antigas não são 
 Os roteiros SQL v1 e v2 estão consumidos: não executar novamente. Correlação e
 composição e revisão técnica resolvidas localmente; revisar o escopo privado já preparado
 já vinculado à declaração limitada recebida (sem nova pergunta). Revisão técnica
-materializada no novo insumo; o campo interno não é pedido genérico de aprovação ao owner. Depois
-prosseguir somente com dados e autorizações válidos: atribuição/16 vínculos/controles protegidos/autoridade→
+materializada no novo insumo; o campo interno não é pedido genérico de aprovação ao owner.
+Contrato/perfis/manifests de quatro modos compostos offline não devem ser refeitos por rotina.
+Completar os vínculos restantes check_current/ORIGINAL e prosseguir somente com dados e autorizações válidos: atribuição/16 vínculos/controles protegidos/autoridade→
 materialização final quatro modos→janela coordenada/frescor/R0/root/review→decisão A/
 admissão/saída/CAS→API→validação UUID/GET/ledger→fronteira frontend real→decisão frontend.
 Incerteza exige inspeção e decisão correspondente, sem replay. ORIGINAL só pré-seleção

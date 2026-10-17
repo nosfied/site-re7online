@@ -1,0 +1,21 @@
+{
+  "base": "f8d8ea0bead5de7c71b913228cf9bd0225506ce7",
+  "branch": "review/campaign-recovery-20260926",
+  "excluded": "Private tree, JSON/CJS profiles/credentials/IDs/tenants, raw captures/crons/journals, runtime archives and unrelated work",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
+    "scripts/crm_csv_delivery/compose_bound_review.py",
+    "scripts/crm_csv_delivery/test_bound_review.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/BOUND_STATIC_RESULT.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/BOUND_STATIC_PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/BOUND_STATIC_ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/BOUND_STATIC_HASHES.sha256"
+  ],
+  "hashIndexScope": "All allowlisted files except the index itself; no self-containing delta patch",
+  "scope": "Only new private static four-mode compositor, focused proofs and sanitized result/checkpoints; no changed canonical runtime consumer or historical generation"
+}
