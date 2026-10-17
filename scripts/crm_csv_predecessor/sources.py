@@ -24,6 +24,7 @@ INPUTS = {
     'window/root_readonly.py': 'cb63a97fffe735fd52c80eed872751873593c23a3f8b3e3663b6c0fd741aa7ab',
     'window/admit_gates.py': '2681e63919b981291d376237975e7e8dd7379ccbc0f323a55f948487730705c6',
 }
+RUNTIME_SHA = '46e71c30fa44d454272f7a1e96ac5094182f4ec6f3fa7de57b153681ccd3b595'
 INSTALLER_SHA = 'b12603250d6d4acc5dc1b50fe94a1204631c7bbd4c6692b7ee8a47f4caa047ad'
 OLD_PREPARATION = '/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-security-openai-v4-20261015T203000Z'
 OLD_TARGET = 'e2695c3dbfc318d56966cd5037f6bb036070f43bc9e355d4dacca088aa8925a4'
@@ -119,7 +120,7 @@ def sources(raw):
     t = replace(t, 'from check_current import check_current', 'from check_current import check_current\nfrom policy_predecessor import require_contract, root_evidence')
     line = next(x for x in t.splitlines() if "'root_source_drift')" in x)
     code['window/admit_gates.py'] = replace(t, line, "  require_contract(read(p/'window/csv-contract.private.json'));root_evidence(root)")
-    code['window/policy_predecessor.py'] = Path(__file__).with_name('runtime.py').read_text()
+    code['window/policy_predecessor.py'] = pinned(Path(__file__).with_name('runtime.py'), RUNTIME_SHA).decode()
     return {n: t.encode() for n, t in code.items()}
 
 
@@ -157,7 +158,7 @@ def installer(raw, preparation, archive, future_raw, source_processes, targets):
     return t.encode()
 
 
-def compose_inputs(raw, prior, preparation, archive, future_raw, source_processes, targets):
+def compose_inputs(raw, prior=None, preparation=None, archive=None, future_raw=None, source_processes=None, targets=None, *, source_only=False):
     """Mandatory coherent source bundle for a future compositor BEFORE sealing.
 
     Does not fill profiles, namespace identities, phase pins or permits. Those
@@ -165,6 +166,10 @@ def compose_inputs(raw, prior, preparation, archive, future_raw, source_processe
     of this reconciliation. No generated package is written or certified here.
     """
     code = sources(raw)
+    if source_only:
+        if any(x is not None for x in (prior, preparation, archive, future_raw, source_processes, targets)):
+            raise RuntimeError('static_inputs_must_not_claim_operational_bindings')
+        return code, None
     contract = produce_contract(prior, raw)
     code['install-api-window-policy.sh'] = installer(
         raw, preparation, archive, future_raw, source_processes, targets)

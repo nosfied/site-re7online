@@ -1,3 +1,18 @@
+# Integração local —17/10/2026, base6adfb37e
+
+[Relatório consolidado](REPORT.md#integração-local-da-folha-e-lançamento-pré-autoridade-17102026-base6adfb37e). `currentReconciliation.compositionLaunchLocal` registra hashes, consumidores e provas. **LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO.**
+
+| Lacuna anterior | Implementação/prova local | Limite restante |
+| --- | --- | --- |
+| compose_inputs sem chamador | Hook real do compositor existente chama source_only antes do scan/DAG;127 caminhos/61 conteúdos em memória; seis outputs anteriores byte-iguais | Sem pacote/perfis/autoridade;57 grupos de inputs não preenchidos |
+| Folha fora do mapa | Uma window/policy_predecessor.py pinada, cinco imports/dependências; ORIGINAL carrega Operations/checker/folha por Loader real sem executáveis candidatos | Novo manifest de fase precisa metadados reais; kits históricos intactos |
+| root_readonly/pre_install com import mutável | Programa literal para revisão do owner embute review digest e bibliotecas; leitor/topo canônicos e Loader consomem snapshots e revalidam; filhos Python/Node ligados ao mesmo review | Sem Context/permit. Programa concreto para uma preparação operacional ainda exige inputs, renderização e revisão; não se autentica só por argv/env |
+| Negativas |12 provas novas+uma regressão dirigida: falta/adulteração, TOCTOU, import externo, ciclo, troca do review, recusa de start/filhos mutáveis | Root/host simulados; pre_install/SQL negam dados ausentes. Nenhum PASS operacional inferido |
+
+**Primeiro impedimento operacional inalterado:** Node/ELF e resolução/proteção PM2; saved/fallback/identidades, SQL/ownership e16 vínculos/autoridade atuais continuam pendentes. Revisar o delta antes de materializar qualquer preparação. Event775 não reparado; frontend não reaberto.
+
+---
+
 # Fechamento offline do toolchain —17/10/2026, basea8d257e6
 
 Predecessor **ACCEPT LOCAL somente nas11 provas/interfaces declaradas**; integração futura ainda pendente. [Relatório consolidado](REPORT.md#fechamento-offline-do-toolchain-17102026-basea8d257e6); resultados completos em `INPUT_MATRIX.json.currentReconciliation.toolchainOffline`. Sem testes repetidos ou novo pacote.

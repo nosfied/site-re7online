@@ -803,16 +803,16 @@
     }
   ],
   "currentReconciliation": {
-    "base": "a8d257e63845a77345d48d3e306fc82060d2fcc9",
+    "base": "6adfb37e7a4d4d7a03b6b92f878d78ff45b05487",
     "date": "2026-10-17",
-    "scope": "OFFLINE_TOOLCHAIN_SOURCE_AND_EVIDENCE_ACCOUNTING_ONLY",
+    "scope": "LOCAL_CODE_COMPOSITION_AND_OWNER_REVIEW_SNAPSHOT_LAUNCH_ONLY",
     "integrationReview": "ACCEPT_LOCAL_IN_TESTED_SCOPE_ONLY",
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
     "firstConcreteBlocker": {
       "operationalToolchain": "Missing authenticated production Node d01614ef image/ELF frontier and actual PM2 shebang/PATH/transitive closure protection; local JS inventory is available, not operationally certified",
-      "nextLocalDelta": "Integrate compose_inputs plus the policy_predecessor leaf and authenticated pre-authority launch in future editable composition before sealing, without modifying historical kits",
+      "nextLocalDelta": "Review the integrated compositor/pre-authority source delta. Concrete owner program/index/namespace require legitimate future inputs and separate authorization; no new source integration gap claimed.",
       "neededOperationalAction": "Separately authorized directed observation/protection of selected Node/PM2 toolchain; no command or collection prepared in this round",
       "notWindowReady": true
     },
@@ -901,8 +901,8 @@
         ],
         "consumers": "path_bindings/original_bindings; original_checks/csv_contract; Event parents; root Store/Context/Loader/start_mode; installer CAS",
         "reusable": "BINDING_PLAN and current static four-mode composition,57 inventory IDs,16 namespace renderings; accepted R1/R2/authority/R3/B1-B4/ORIGINAL local proofs and canonical owner/root/helper trust design.",
-        "offlineConclusion": "16 means four source renderings across four modes, not16 captures. Authorities remain proposed, not installed/emitted. Predecessor e2a5 reconciled in future producer/checker/root/pre_A/admission/CAS sources; original-only grants no forward authority. Existing consumed kit not rewritten. Predecessor review ACCEPT LOCAL only in11 tested source interfaces. policy_predecessor is one window leaf; current static/phase integration and pre-authority same-bytes launch remain pending.",
-        "exactMissing": "Future authenticated closure/index integration of reconciled source delta; actual namespace and current profile/path metadata; resolved sixteen renderings/manifests/DAG without cycles; Event writable-parent condition; protected static installation and owner-approved anchor/phase/decision/profile/policy context. Recovery-specific permit only when applicable.",
+        "offlineConclusion": "16 means four namespace renderings across four modes. Source compositor now integrates the authenticated leaf, ORIGINAL imports and owner-reviewed pre-authority snapshot launcher locally; operational kits/authority remain unmodified, not installed/emitted.",
+        "exactMissing": "Future concrete owner-reviewed package/index and literal launch program with legitimate inputs; actual namespace and current profile/path metadata; resolved sixteen renderings/manifests/DAG without cycles; Event writable-parent condition; protected static installation and owner-approved anchor/phase/decision/profile/policy context. Recovery-specific permit only when applicable.",
         "dependency": "Current operational inputs plus source/toolchain review precede materialization; root installation/anchor emission/execution are separate approvals. R1 Event five parents775 would deny before containment if unchanged. No automatic permission repair or recovery permit for forward switch/PRESTOP.",
         "requiresOperationalObservation": true
       }
@@ -925,7 +925,7 @@
       "currentObservation": false,
       "operationalPackageGenerated": false,
       "remaining": [
-        "future closure/index integration and concrete-package certification",
+        "future concrete-package certification with real inputs; source integration implemented locally and pending review",
         "current identities/saved/fallback",
         "SQL/ownership",
         "protected toolchain",
@@ -1100,8 +1100,9 @@
           "original-only review, window/sequencer-manifest and package review",
           "phase manifest files/imports/dependencies with real metadata; owner anchor last"
         ],
-        "preAuthorityGap": "root_readonly/pre_install must load the same owner-reviewed script+leaf bytes before phase authority exists; current source factory alone does not authenticate that launch",
-        "newRootLibraryOrPermitRequired": false
+        "preAuthorityGap": "Source implementation closes same-bytes owner-review launch; no real operational literal program/index has been rendered or approved. No installed Context is assumed.",
+        "newRootLibraryOrPermitRequired": false,
+        "futureSourceIntegration": "IMPLEMENTED_LOCALLY_REVIEW_PENDING; historical kit untouched"
       },
       "notAvailableInStaticKit": {
         "modeDataCount": 32,
@@ -1130,6 +1131,189 @@
       ],
       "notNewRequirements": "Python/stdlib/env/sudo/system utilities remain canonical OS trust boundaries; no new whole-OS hashing mandate; SQL tools stay separate",
       "historicalsPreserved": true,
+      "readyForWindow": false
+    },
+    "compositionLaunchLocal": {
+      "base": "6adfb37e7a4d4d7a03b6b92f878d78ff45b05487",
+      "status": "LOCAL_VALIDATED_REVIEW_PENDING_NOT_DEPLOYED_NOT_WINDOW_READY",
+      "inMemoryOnly": true,
+      "sources": {
+        "scripts/crm_csv_predecessor/sources.py": "dd0c3e09592e1235268d36c1b0715b0f8053c35da667c161dc6048541e0faf18",
+        "scripts/crm_csv_predecessor/composition.py": "f58af7fd4d3f1ecac0ca333e87f388cb00dbdea7427d6f65ef337245086b2e45",
+        "scripts/crm_csv_predecessor/pre_authority.py": "c7e638a33aac33fe990431837e8c7a56a5eeb403eb3b43c9e71c2094ded762ad",
+        "scripts/crm_csv_predecessor/test_composition_launch.py": "208aa9a5c5d48af4c037d0b2bede10cf9c936651a80fa2df3767e766d9a92efc"
+      },
+      "compositor": {
+        "accepted": "crm-csv-original-chain-20261016/compose.py",
+        "authentication": "Git bytes at base6adfb37e plus byte equality; same existing delta hook before import/DAG scan",
+        "producerCall": "compose_inputs(predecessor_raw, source_only=True)",
+        "operationalArgumentsInStaticBranch": "DENY",
+        "paths": 127,
+        "uniqueContents": 61,
+        "cycles": [],
+        "missingInputGroups": 57,
+        "previousSixSourceHashesUnchanged": true,
+        "planSha256InMemory": "417d0e86184da48413fc562c5b443a3a20e23721ae754215b9b6bab47843cd67",
+        "materializedKit": false
+      },
+      "leaf": {
+        "path": "window/policy_predecessor.py",
+        "sha256": "46e71c30fa44d454272f7a1e96ac5094182f4ec6f3fa7de57b153681ccd3b595",
+        "imports": [],
+        "directConsumers": {
+          "window/csv_contract.py": {
+            "import": "window/policy_predecessor.py",
+            "eagerDependency": true
+          },
+          "window/original_checks.py": {
+            "import": "window/policy_predecessor.py",
+            "eagerDependency": true
+          },
+          "window/pre_install.py": {
+            "import": "window/policy_predecessor.py",
+            "eagerDependency": true
+          },
+          "window/root_readonly.py": {
+            "import": "window/policy_predecessor.py",
+            "eagerDependency": true
+          },
+          "window/admit_gates.py": {
+            "import": "window/policy_predecessor.py",
+            "eagerDependency": true
+          }
+        },
+        "originalWithoutCandidateExecutables": "real Loader loaded ORIGINAL Operations/original_checks/leaf in synthetic namespace with candidate executable files absent; no recover/start/permit"
+      },
+      "canonicalLibraries": {
+        "review/reader.py": {
+          "sha256": "8b085a980e94cf4e249ff5fc0a540159c7582cae72f4b025b6c263ff10257c43",
+          "origin": {
+            "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/launch.py",
+            "inputSha256": "19389532ecdd9b8fc3360fb8c424dbf5bba1c17003c6f4a4f415799a6f7bd280",
+            "selectedFunctions": [
+              "metadata",
+              "read"
+            ],
+            "stages": [
+              "OWNER_REVIEW_ONLY_NOT_PHASE_AUTHORITY"
+            ]
+          }
+        },
+        "review/graph.py": {
+          "sha256": "6598c24450550a8640c51691c888230cbed831333462b43a71fe4e4feb3a391f",
+          "origin": {
+            "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/compose_static.py",
+            "inputSha256": "1be769c9e820938744d9ef56a90241ce26edde5fd1bbbe2aa5ff0492e03e805e",
+            "selectedFunctions": [
+              "require",
+              "topo"
+            ],
+            "stages": [
+              "OWNER_REVIEW_ONLY_NOT_PHASE_AUTHORITY"
+            ]
+          }
+        },
+        "protected/verified_loader.py": {
+          "sha256": "1c7b1068b3b9457aee12abf62f709a3ee9de593447f9e70b4ce8d100d491fcea",
+          "origin": {
+            "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/verified_loader.py",
+            "stages": [
+              "PROTECTED_ACCEPTED_LIBRARY",
+              "EXPLICIT_AUTHENTICATED_MODE"
+            ]
+          }
+        },
+        "protected/recovery-node-launch.cjs": {
+          "sha256": "92abb274adf52ce7d786021f291361d3dea8f2a2fb90ef9b9742fcb7836f2f01",
+          "origin": {
+            "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/node_bootstrap.cjs",
+            "stages": [
+              "PROTECTED_ACCEPTED_LIBRARY",
+              "STRICT_ASSERT_BUILTIN_ONLY",
+              "CANONICAL_RESTORE_CHILD_FLAGS"
+            ]
+          }
+        }
+      },
+      "ownerReview": {
+        "supplier": "owner independently reviews/pins literal launch program; preparation cannot approve itself",
+        "literalProgramContains": [
+          "review-index digest",
+          "runtime/reader exact bytes and hashes",
+          "preparation root and initial entry"
+        ],
+        "initialEntries": [
+          "window/root_readonly.py",
+          "window/pre_install.py"
+        ],
+        "noContextQueryOrInstall": true,
+        "noAnchorOrPermit": true,
+        "sameBytesCompiled": true,
+        "hashThenPathImport": false,
+        "sourceRevalidatedOnUse": true,
+        "allowedPythonChildren": "four baseline_contract.py entries only",
+        "allowedNodeSnapshot": "window/current-sql.cjs only",
+        "otherEffects": "unchanged canonical OS effects; no process sandbox claim",
+        "runtimeAndReaderAlsoCheckedAgainstIndex": true,
+        "actualOperationalProgramRenderedOrApproved": false,
+        "renderer": "composition.owner_launch_program validates the exact plan digest and runtime/reader object bytes before invoking the renderer compiled from those objects; output still requires independent owner review"
+      },
+      "proofs": {
+        "newDirectedTests": 12,
+        "passed": 12,
+        "previousRegression": [
+          "Preserved.test_coherent_producer_bundle"
+        ],
+        "baselineSuiteRepeated": false,
+        "nodeInitialSandboxResult": "spawnSync EPERM; target-only approved rerun outside sandbox PASS; no sudo",
+        "newDirectedTestNames": [
+          "real_compositor_five_edges_original_leaf_and_no_cycles",
+          "root_entry_exact_owner_program_host_boundary_simulated",
+          "preinstall_real_process_authenticates_then_canonical_missing_input_denies",
+          "leaf_missing_or_tampered_denies_before_entry",
+          "substitution_after_snapshot_before_import_denies",
+          "import_outside_review_closure_denies",
+          "cycle_denies_before_entry",
+          "literal_review_cannot_be_overridden_by_environment_or_argv",
+          "no_phase_or_mutating_child_authority",
+          "real_python_child_broker_and_node_snapshot",
+          "producer_leaf_source_tamper_denies",
+          "real_node_bootstrap_python_snapshots_then_missing_data_denies"
+        ],
+        "extraAssertions": "Canonical reader/topo function AST equality; mixed operational arguments denied in static branch; composed launcher-library tamper denied before rendering",
+        "targetedRevalidation": "11 non-Node after library import closure change; target-only Node outside sandbox; compositor AST target; four renderer-connected interfaces; one previous producer regression. No unrelated suite repeated."
+      },
+      "real": [
+        "accepted compositor transforms, import maps and DAG in memory",
+        "canonical reader/topo AST equivalence",
+        "canonical Loader and concrete root_readonly/pre_install/Operations/original_checks imports",
+        "isolated Python processes and embedded child broker",
+        "canonical Node bootstrap with Python snapshot processes and real current-sql/preparation-bindings/waiting-work source"
+      ],
+      "simulated": [
+        "root file bytes/UID/modes/ancestor metadata mapped from preserved private historical hashes; not current observations",
+        "Node executable location projected to the existing local Node; PATH excludes external tools",
+        "synthetic code-only fixture namespace/review digest, not operational profiles or authority"
+      ],
+      "canonicalDenialsNotPass": [
+        "pre_install reaches csv-contract.private.json missing",
+        "Node reaches waiting-work.private.json missing before SQL",
+        "baseline child executes without operational baseline input; nonzero"
+      ],
+      "notExercised": [
+        "complete valid operational package/RPO/SQL/ownership/health/capacity",
+        "real root or sudo",
+        "recovery/start/contain/window",
+        "current Node/PM2 protected toolchain or actual operational owner program"
+      ],
+      "remaining": [
+        "review of this local delta",
+        "legitimate current inputs and actual owner-reviewed literal launch/index",
+        "Node/ELF and PM2 interpreter/transitive closure/protection",
+        "saved/fallback/identities and SQL/ownership",
+        "16 namespace renderings and real phase metadata/anchor installation when separately authorized"
+      ],
+      "historicalArtifactsAndConsumedIntentsUnchanged": true,
       "readyForWindow": false
     }
   }
