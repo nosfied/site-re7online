@@ -1,0 +1,342 @@
+{
+  "base": "8e2a53cf00feb69325381a8bee5ee215811c9f44",
+  "reviewResult": "DOCUMENTATION_CURRENT_STATE_AND_REFERENCES_RECONCILED",
+  "scope": "Complete canonical byte bodies checked for preservation/integrity; semantic reconciliation of current state/methodology and referenced existing principles, with current references/anchors checked. Historical documents/links are preserved, not claimed to be newly certified operational facts.",
+  "canonicalDocuments": [
+    {
+      "document": "docs/BACKLOG_TECH.md",
+      "baseSha256": "8b7a663715ec88007b812f92214a995fabf4f22709cc48b16aabcdd6aca69a72",
+      "priorBodyContentPreservedByInsertionsOnly": true,
+      "newEntryScope": "current status, dated methodology/proof scope, existing complete principles and sequence; no operational rule/command added",
+      "completeBodyReadForIntegrity": true,
+      "semanticReviewScope": "current entry, dated claims relevant to CSV, normative principle sections and their current references"
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "baseSha256": "8eeea67c02754eb7070067dfe286ed3039b3487db9dcc0d3de5dd3725016b319",
+      "priorBodyContentPreservedByInsertionsOnly": true,
+      "newEntryScope": "current status, dated methodology/proof scope, existing complete principles and sequence; no operational rule/command added",
+      "completeBodyReadForIntegrity": true,
+      "semanticReviewScope": "current entry, dated claims relevant to CSV, normative principle sections and their current references"
+    },
+    {
+      "document": "docs/saas/DOCUMENTATION_INDEX.md",
+      "baseSha256": "362d07a515a1464ba85372447bf54d64980851e04410cd96886affa92fa15198",
+      "priorBodyContentPreservedByInsertionsOnly": true,
+      "newEntryScope": "current status, dated methodology/proof scope, existing complete principles and sequence; no operational rule/command added",
+      "completeBodyReadForIntegrity": true,
+      "semanticReviewScope": "current entry, dated claims relevant to CSV, normative principle sections and their current references"
+    },
+    {
+      "document": "docs/saas/CHANGE_POLICY.md",
+      "baseSha256": "a612af0a43360350b2bcab6064f458810b0a50ffaba720a87374bf206123d412",
+      "priorBodyContentPreservedByInsertionsOnly": true,
+      "newEntryScope": "current status, dated methodology/proof scope, existing complete principles and sequence; no operational rule/command added",
+      "completeBodyReadForIntegrity": true,
+      "semanticReviewScope": "current entry, dated claims relevant to CSV, normative principle sections and their current references"
+    },
+    {
+      "document": "docs/saas/RELEASE_CHECKLIST.md",
+      "baseSha256": "df5ecb4fc5eb528c47c15df1ca522b68aa001735c71a0ca822ac68cede63e5b7",
+      "priorBodyContentPreservedByInsertionsOnly": true,
+      "newEntryScope": "current status, dated methodology/proof scope, existing complete principles and sequence; no operational rule/command added",
+      "completeBodyReadForIntegrity": true,
+      "semanticReviewScope": "current entry, dated claims relevant to CSV, normative principle sections and their current references"
+    },
+    {
+      "document": "docs/saas/OPERATIONAL_BASELINE.md",
+      "baseSha256": "32a34069dddc24594d9ec8ceddc4e66e8062004fe01fc6db3ed3ac083dd46dc6",
+      "priorBodyContentPreservedByInsertionsOnly": true,
+      "newEntryScope": "current status, dated methodology/proof scope, existing complete principles and sequence; no operational rule/command added",
+      "completeBodyReadForIntegrity": true,
+      "semanticReviewScope": "current entry, dated claims relevant to CSV, normative principle sections and their current references"
+    },
+    {
+      "document": "docs/saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md",
+      "baseSha256": "299f9b8dc8218a664d47d7f9b12c4c4d6ddfa05027c18edbc4d0b46806435f58",
+      "priorBodyContentPreservedByInsertionsOnly": true,
+      "newEntryScope": "current status, dated methodology/proof scope, existing complete principles and sequence; no operational rule/command added",
+      "completeBodyReadForIntegrity": true,
+      "semanticReviewScope": "current entry, dated claims relevant to CSV, normative principle sections and their current references"
+    },
+    {
+      "document": "docs/saas/PRODUCT_MAP_CURRENT.md",
+      "baseSha256": "7afc0d6349fc7a4137340da8d1cfbed0f35b656296abc7c2d0d520577f042635",
+      "priorBodyContentPreservedByInsertionsOnly": true,
+      "newEntryScope": "current status, dated methodology/proof scope, existing complete principles and sequence; no operational rule/command added",
+      "completeBodyReadForIntegrity": true,
+      "semanticReviewScope": "current entry, dated claims relevant to CSV, normative principle sections and their current references"
+    },
+    {
+      "document": "docs/reviews/automation-freeform-window-release-af26/FUNCTIONAL_RESUMPTION_2026-10-15.md",
+      "baseSha256": "eb1e9a9052ec503169fc3913e7046667a2e64fd8af52202b4cb2f7d45b33a83a",
+      "priorBodyContentPreservedByInsertionsOnly": true,
+      "newEntryScope": "current status, dated methodology/proof scope, existing complete principles and sequence; no operational rule/command added",
+      "completeBodyReadForIntegrity": true,
+      "semanticReviewScope": "current entry, dated claims relevant to CSV, normative principle sections and their current references"
+    }
+  ],
+  "checkedCurrentReferences": [
+    {
+      "document": "docs/BACKLOG_TECH.md",
+      "reference": "reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.json",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/BACKLOG_TECH.md",
+      "reference": "RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "reference": "reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "reference": "reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "reference": "reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.json",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "reference": "#principios-operacionais",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "reference": "#retenção-operacional-permanente",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "reference": "saas/CHANGE_POLICY.md",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "reference": "saas/RELEASE_CHECKLIST.md",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "reference": "saas/OPERATIONAL_BASELINE.md#capacidade-e-retenção-operacional",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "reference": "saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "reference": "reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/COORDINATED_PUBLICATION.md",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/RUNBOOK_WHATSAPP_AGENT.md",
+      "reference": "#continuidade-csv--estado-vigente-e-metodologia",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/saas/DOCUMENTATION_INDEX.md",
+      "reference": "../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.json",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/saas/DOCUMENTATION_INDEX.md",
+      "reference": "../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/saas/CHANGE_POLICY.md",
+      "reference": "../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/saas/RELEASE_CHECKLIST.md",
+      "reference": "../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/saas/OPERATIONAL_BASELINE.md",
+      "reference": "../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md",
+      "reference": "../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/saas/PRODUCT_MAP_CURRENT.md",
+      "reference": "../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.json",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/saas/PRODUCT_MAP_CURRENT.md",
+      "reference": "../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/reviews/automation-freeform-window-release-af26/FUNCTIONAL_RESUMPTION_2026-10-15.md",
+      "reference": "../../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/reviews/automation-freeform-window-release-af26/FUNCTIONAL_RESUMPTION_2026-10-15.md",
+      "reference": "crm-csv-delivery-review-20261017/SQL_RESULT.json",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+      "reference": "../crm-csv-delivery-review-20261017/SQL_RESULT.json",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+      "reference": "../crm-csv-delivery-review-20261017/test_sql_review.py",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+      "reference": "../crm-csv-delivery-review-20261017/SQL_DOCUMENTATION_REVIEW.json",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+      "reference": "REPORT.md#estado-vigente-csv-17102026-às1716-fortaleza-base8e2a53cf",
+      "exists": true,
+      "anchorChecked": true
+    },
+    {
+      "document": "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+      "reference": "../crm-csv-delivery-review-20261017/SQL_RESULT.json",
+      "exists": true,
+      "anchorChecked": false
+    },
+    {
+      "document": "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+      "reference": "../../../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia",
+      "exists": true,
+      "anchorChecked": true
+    }
+  ],
+  "reusedConcreteEvidence": [
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/CORRECTION_PROOFS.json",
+      "sha256": "fb25671f5abf6d1299808c1ca19eefef2043d58bd8234b009514aacf5655bfc0",
+      "unchanged": true
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/PROOFS_SANITIZED.json",
+      "sha256": "79832e3314e77ab7ac465ad8634351a911d13f58c06adf9b85d57c77b7ce8285",
+      "unchanged": true
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/REPORT.md",
+      "sha256": "54562505a348405f62596b0d7d33b31ab3edf920439ad1e7f283afa8b77537b0",
+      "unchanged": true
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/COORDINATED_PUBLICATION.md",
+      "sha256": "91529704f7c4a7ff0ee7b7faeea31a61b3b8316b40494cdd274a37163d4640bb",
+      "unchanged": true
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/REPORT.md",
+      "sha256": "4b8f417eccce48de7c1e7e98cfc303154f3ad8f46ec7d2c44a86298522eca7a8",
+      "unchanged": true
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-diagnostic-integration-20261017/REPORT.md",
+      "sha256": "241996378f77590faf2e5514df207a2540473c333316c56248e80439dc7517f3",
+      "unchanged": true
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/CODE_COMPOSITION.json",
+      "sha256": "417d0e86184da48413fc562c5b443a3a20e23721ae754215b9b6bab47843cd67",
+      "unchanged": true
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/CODE_OBJECTS.json",
+      "sha256": "518fcd7d6aa6085961e4b42eac16881638b66e9398129200926e8f56047e11b7",
+      "unchanged": true
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/M1_RESULT.json",
+      "sha256": "e2beb75e78e4788a6abf885d19643bd8826b8a17b7c7e4bc7d5e65cf3c1dcaf9",
+      "unchanged": true
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/DIRECTED_RESULT.json",
+      "sha256": "9ca030be2eea71ed79e35aa2cad698f63bbd7eb07bbfce338c1878a9b969370c",
+      "unchanged": true
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_REVIEW_PROOFS.json",
+      "sha256": "5ec341b500f59bc12db637c2590b112457c8e8768c78c6e17ca5d4e4534315ef",
+      "unchanged": true
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_COMMANDS_FOR_REVIEW.md",
+      "sha256": "9aed6b028f43bb00cc009015d2f08833683d68bb532d88d2279a4e4d8f078ff6",
+      "unchanged": true
+    }
+  ],
+  "principlesCompleteReferences": [
+    "docs/RUNBOOK_WHATSAPP_AGENT.md#principios-operacionais",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente",
+    "docs/saas/CHANGE_POLICY.md",
+    "docs/saas/RELEASE_CHECKLIST.md",
+    "docs/saas/OPERATIONAL_BASELINE.md#capacidade-e-retenção-operacional",
+    "docs/saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md"
+  ],
+  "ambiguitiesClarified": [
+    "Current entry supersedes dated next/current labels without deleting chronology",
+    "Local/published/packaged/runtime/owner acceptance separated",
+    "M1, recovery, directed read and SQL attempts consumed, no replay",
+    "PG* environment transport not covered by prior local SQL tests",
+    "Service-empty client failure does not prove DB authentication/privilege failure",
+    "SQL identity/visibility/backends/imports remain unknown, not zero or completed",
+    "Proved audit subset is not full activity or canonical ownership",
+    "ELF paused, functional CSV accepted locally but not deployed",
+    "Generic build/pull/reload/dotenv examples are not the CSV execution path"
+  ],
+  "newOperationalRuleCreated": false,
+  "historical57RowsUnchanged": true,
+  "consumedExecutableAndManifestBytesUnchanged": true,
+  "nextWork": "local-only client-environment/test-equivalence correction, subject to own instruction; no new package/window authorized",
+  "additionalTestsOrProductiveReadsForDocumentationReview": false,
+  "historicalIndexInterpretation": "SQL_REVIEW_HASHES and previous delivery proof indexes remain tied to their published base commit; later canonical checkpoint changes are indexed by the new result, not edits to consumed source manifests."
+}

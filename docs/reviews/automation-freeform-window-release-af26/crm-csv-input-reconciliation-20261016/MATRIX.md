@@ -1,3 +1,32 @@
+## Vigente17/10 às17:16 Fortaleza — SQL CONSUMED/DENY
+
+[Relatório único](REPORT.md#estado-vigente-csv-17102026-às1716-fortaleza-base8e2a53cf),
+[resultado](../crm-csv-delivery-review-20261017/SQL_RESULT.json).
+A matriz histórica abaixo é procedência, não instrução de replay.
+
+| Item | Estado/evidência vigente | Próximo passo / dependência |
+| --- | --- | --- |
+| M1/pais Event |COMPLETE/CONSUMED; predicado original PASS17/10 às15:09 | não repetir M1/preflight; revalidação no uso canônico futuro não é dispensada |
+| Trio/config/saved/controles |leitura concluída15:37, fontes autênticas e compare canônico; DIRECTED_RESULT | reusar no alcance/horário; esta tentativa não os leu novamente |
+| Canal SQL |before-identity PASS17:16, mesmo container/rota/cliente da custódia | não é identidade de servidor ou certificação de toolchain |
+| SQL identity |cliente exit2, stdout0, diagnóstico service libpq vazio | corrigir LOCALMENTE ambiente efetivo/ensaio, sem alterar SQL/segredos/role |
+| SQL ownership |não executado, backends/locks não observados; ownership UNKNOWN | sem zero implícito ou atribuição por lista de backends |
+| SQL imports |não executado, classificação atual não observada; atividade completa desconhecida | sem reimportação, reparo ou conclusão retroativa por ausência de linhas |
+| Provas locais8SQL |válidas só no ambiente de fixture; Docker -e PG* não propagados ao psql | futura correção deve ensaiar opções efetivas, não só SQL contra outro ambiente |
+| Custódia |PASS byte-exato, origem DENY e destinos consumidos | sem retry/reconexão/overwrite |
+| R1/R2/retorno/autoridade |provas locais aceitas reutilizáveis e composição estática | instalação/identidades/vínculos/permit/frescor próprios ainda pendentes; ORIGINAL não depende de executáveis candidatos |
+| API→frontend |pacotes certificados reutilizados; CSV não implantado | depois de dados/provas e revisão, janela própria; backend compatível/ledger preservados no retorno pós-seleção |
+| ELF/Prisma/segurança externa |ELF pausado; demais decisões preservadas | nenhuma nova frente, coleta ou rotação |
+
+**Primeiro trabalho concreto é local:**sanitização do ambiente libpq e teste do lançamento
+que reproduza as opções Docker, sem mudar contratos SQL ou fazer nova tentativa produtiva.
+Esta entrega registra o achado, não implementa a correção. Os57 grupos originais permanecem
+históricos, sem atualizações oportunistas de pins/perfis/observações. CSV SUSPENSO /
+NOT DEPLOYED / NOT WINDOW READY. Metodologia/princípios completos e referências no
+[runbook](../../../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia).
+
+---
+
 ## Três SQLs canônicos preparados LOCALMENTE — base88126c97
 
 [Roteiro literal para revisão](../crm-csv-delivery-review-20261017/SQL_COMMANDS_FOR_REVIEW.md),

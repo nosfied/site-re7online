@@ -1,5 +1,17 @@
 # Retomada funcional — prioridade e próximo trabalho local
 
+## Continuação vigente17/10 — não reiniciar a auditoria funcional
+
+[Runbook/estado e método](../../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia),
+[resultado SQL](crm-csv-delivery-review-20261017/SQL_RESULT.json). O defeito CSV teve
+implementação/provas locais e pacotes aceitos; ainda não implantados. Recuperação
+original/owner UI aceitos, M1 e diagnóstico dirigido concluídos/consumidos. SQL agora
+CONSUMED/DENY no cliente libpq; não houve ownership/imports observados. Próximo delta
+é exclusivamente local no ambiente de lançamento/ensaio SQL, não nova importação,
+reinício de CSV funcional, ELF, Prisma ou reabertura de SECULT. Prioridade e contratos
+históricos abaixo preservados; seus “próximos passos” datados não são a instrução vigente.
+
+
 **Staging16/10:** [CSV inativo conferido na VPS](crm-csv-staging-20261016/REPORT.md), sem instalação/admissão. RPO/root apenas junto da janela, após revisão; nenhuma rotação, retenção ou limpeza retomada.
 
 

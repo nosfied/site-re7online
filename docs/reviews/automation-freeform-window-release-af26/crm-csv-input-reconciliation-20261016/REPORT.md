@@ -1,3 +1,115 @@
+## Estado vigente CSV —17/10/2026 às17:16 Fortaleza, base8e2a53cf
+
+**SQL CONSUMED/DENY, CUSTÓDIA ÍNTEGRA / CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.**
+[Resultado sanitizado](../crm-csv-delivery-review-20261017/SQL_RESULT.json).
+Esta seção substitui somente o encaminhamento vigente das entradas datadas abaixo;
+fontes, comandos, provas, recibos e DENYs históricos não foram reescritos.
+
+### Execução efetiva e fronteira da negativa
+
+HEAD/remoto/base8e2a53cf, fontes/hashes e destinos locais exclusivos PASS. Bloco1 literal
+executado uma vez, materialização inativa exit0. Só então bloco2 literal uma vez,
+como deploy sem sudo; SSH/launcher exit1. Antes de identity, os três comandos da
+rota/container/cliente e o verificador canônico passaram contra a custódia anterior.
+Em identity, psql exit2, stdout0B e stderr48B; terminal **identity /
+SQL_OR_CHANNEL_EXIT_DENIED / DENY_NO_RETRY**. Nenhuma consulta ownership/imports,
+fronteira pós-identity ou conexão adicional. Não houve grant, troca de role, SQL
+adaptado, retry, reparo, backup, restart, instalação ou janela.
+
+Runner **20:16:06.685054–20:16:07.304336UTC =17:16:06–17:16:07 Fortaleza**,
+intervalo0,619282s. São tempos do journal, não indisponibilidade/monitoramento contínuo.
+A grafia UTC é a autoridade do horário; nenhum dado é promovido a snapshot atômico.
+
+O stderr privado casa com o diagnóstico estático LIBPQ_EMPTY_SERVICE_DEFINITION_NOT_FOUND;
+o argv preservado definiu PGSERVICE com valor vazio. Não há indicação de password
+incorreta, permissão SQL negada, database/role divergente ou erro de limite neste resultado.
+O payload identity foi fornecido ao subprocesso como stdin pinado, sem recibo de
+entrega ao servidor; **não retornou identidade nem prova de SQL
+executado no servidor**. A negativa é de preparação do cliente libpq. Não se deve pedir
+nova senha/sudo, rotacionar credencial ou alterar role/pg_hba para contorná-la.
+
+### Lacuna demonstrada no ensaio anterior — sem reescrever as provas
+
+O consumidor sql_argv em scripts/crm_csv_diagnostic/sql_execution.source passou opções
+Docker -e PG*. No teste publicado, RealPostgres.exercise.local_transport em
+[test_sql_review.py](../crm-csv-delivery-review-20261017/test_sql_review.py) remapeou
+Docker para psql local com **self.env()**, sem transportar as opções -e PG*.
+Portanto os oito testes realmente provaram os SQLs/validadores, privilégios/identidade/
+100001 e export/ingest no ambiente declarado, mas **não provaram equivalência do
+ambiente efetivo Docker→libpq**. A resposta de service vazio agora comprova essa lacuna.
+Não é evidência de falha produtiva de PostgreSQL, tenant ou segredo; é falha da preparação
+publicada. A coleta cumpriu a negativa e parou. Não corrigimos runner/harness/SQL em campo
+nem executamos teste ou consulta adicional nesta autorização.
+
+### Reconciliação offline pedida
+
+| Frente | Resultado desta tentativa | Reuso e limite |
+| --- | --- | --- |
+| Material/canal |12 fontes pinadas, derivado privado da captura f6873eb9; before-identity rota/cliente PASS | observação20:16UTC; não recaptura trio/controles |
+| Identidade SQL |UNKNOWN:0 linhas, cliente exit2 | cliente/rota corretos não identificam servidor/database/role efetivos |
+| Visibilidade SQL |UNKNOWN | nenhum resultado allClientBackendsVisible/roles/owners retornou |
+| Backends/locks/ownership |NOT OBSERVED / UNKNOWN | ownership.sql não executado; não são zero nem falha de ownership comprovada |
+| Importações |NOT OBSERVED / atividade completa não certificada | imports.sql não executado; não inferir zero operações, terminal, rollback ou novo resultado de histórico |
+| Trio/saved/fallback/controles |não relidos nesta rodada | reuso da captura17/10 às15:37 e DIRECTED_RESULT; não atualizar seu frescor para17:16 |
+| Guarda/out.15/health/root |não observados aqui | preservados por ausência de mudança autorizada, não recertificados por inferência |
+
+Custódia off-host: capture11049B/SHAa845fdb8…, stdout15311B/SHAb96d5fbd…,
+stderr de transporte0B, journal33216B/SHA490e431f…; ambos launchers e cinco registros
+de canais tiveram bytes/tamanhos/hash/Base64/exit conferidos. Stderr identity48B/SHA
+b8ccb8f9124cc4cb248a78ca3518ede1cd8517f4310291996200e80433d85d85.
+IDs, tenants, rotas/ambientes e brutos permanecem exclusivamente privados; nenhum raw
+ou conteúdo arbitrário de erro foi publicado. Custódia PASS preserva origem DENY,
+não certifica três SELECTs. Todos os destinos/intents desta tentativa são consumidos.
+
+### Próximo delta, exclusivamente LOCAL e sujeito a instrução própria
+
+Corrigir a construção do ambiente do cliente e o adaptador de teste conjuntamente,
+com semântica explícita de ausência versus valor vazio para PG*, mantendo os três SQLs,
+role/database, READ ONLY/timeouts/ROLLBACK/ON_ERROR_STOP e controle de fonte/canal.
+Reproduzir a negativa com **as mesmas opções efetivas de lançamento** no PostgreSQL
+local; no teste, mapear somente a fronteira/endereço de laboratório e propagar as demais
+opções, para não esconder erros do libpq. Não presumir que remover uma opção ou corrigir
+o primeiro erro certifica autenticação/servidor. Não há alteração de código ou roteiro
+novo nesta entrega. Nenhuma nova captura genérica, janela ou autorização produtiva.
+
+Após futura revisão local favorável, eventual nova execução terá roteiro/destinos e
+autorização próprios, sem replay desta tentativa. Só com resultados SQL efetivos poderão
+ser reconciliados identidade/visibilidade e auditoria observada das importações.
+Atribuição completa continua por prova canônica própria, sem exigir banco vazio com
+produção viva. Depois seguem vínculos/consumidores protegidos/autoridade, materialização
+final dos quatro modos e frescor/R0/root na janela explicitamente coordenada; API24e5857f
+antes de frontend candidato, validando UUID/GET/ledger e fronteira real. Após seleção,
+retorno mantém backend candidato; defeito persistente exige versão compatível. Incerteza,
+consumo e PRESTOP/ORIGINAL/CANDIDATE/DENY mantêm seus contratos aceitos.
+
+### Encerramento documental, metodologia e princípios completos
+
+A [revisão de documentos/referências](../crm-csv-delivery-review-20261017/SQL_DOCUMENTATION_REVIEW.json)
+confere o estado vigente e separa snapshots históricos de orientação atual. O runbook
+agora tem entrada única de continuação CSV, fontes normativas completas e registro dos
+consumidos. Índice, backlog, mapa de produto, contrato CSV, baseline e checklist apontam
+para ela. Nenhum princípio ou regra operacional adicional foi criado; foram explicitados
+o alcance real das simulações e a aplicação dos controles já existentes. Exemplos genéricos
+pull/build/reload/PM2 não são o procedimento CSV nem autorização de uso de .env legado.
+
+Princípios completos:runbook Principios operacionais e Retenção operacional permanente;
+Change Policy (incluindo retenção e regras permanentes); Release Checklist específico;
+Operational Baseline/capacidade e contrato CRM_CSV_IMPORT_OPERATION_CONTRACT. Contratos
+canônicos prevalecem sobre adaptações aproximadas de representação. Código local,
+publicado, empacotado, ativo e aceito são estados distintos, não inferidos de HEAD.
+Fontes antigas são referência datada; comparação/hash/meta separados não são captura
+atômica. Reusar provas e pacotes válidos; testar somente delta e fronteiras realmente
+alterados, declarando efeitos simulados e opções não cobertas. Não editar históricos,
+preencher pins/bindings/permits ou remover predicados para obter PASS.
+
+A prioridade permanece campanhas/CRM e aceite Utility/CRA sob contratos próprios;
+SECULT aceita não reaberta. Prisma, .env, retenção, limpeza, rotações externas e envios
+fora deste escopo. NEWauth+NEWDB+NEWcipher, ambos crons, produção multitenant, guarda38
+fechada e out.15 CLOSED preservados por esta ação. **M1 consumido; ELF pausado.**
+Deifson; revisão17/10/2026, próxima21/10 ou mudança. Parar após publicação sanitizada.
+
+---
+
 ## Três SQLs canônicos preparados LOCALMENTE — base88126c97
 
 [Roteiro literal para revisão](../crm-csv-delivery-review-20261017/SQL_COMMANDS_FOR_REVIEW.md),

@@ -1,5 +1,23 @@
 # Documentation Index
 
+## Estado vigente CSV —17/10/2026
+
+**CONSUMED/DENY preservado / NOT DEPLOYED / NOT WINDOW READY.** [Resultado](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.json)
+e [continuidade canônica](../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia). Materialização PASS; coleta única negou em identity,
+exit2, por resolução de serviço libpq vazio; ownership/imports não executados. Custódia
+íntegra, nenhum retry/grant/role/SQL adicional. Preparação/harness não propagou o mesmo
+ambiente PG* nos ensaios; não é prova de falha de senha/privilégio do banco. Próximo
+trabalho somente local: ambiente efetivo do cliente e ensaio correspondente, preservando
+SQL/contratos. **Não executar os blocos antigos novamente.** M1 consumido; ELF pausado.
+
+Produção original recuperada/aceita; pacotes CSV e provas funcionais são locais e não
+implantações. Dados trio/saved/controles de15:37 mantêm seu horário. Identidade SQL,
+visibilidade, backends e classificação das importações não foram obtidos às17:16.
+Campanhas/CRM e Utility/CRA seguem prioritários; SECULT aceita não reaberta. Históricos
+abaixo não são roteiro vigente; princípios completos, fontes/provas reutilizáveis e
+sequência restante estão no runbook vinculado. Nenhuma regra/execução produtiva nova.
+
+
 **CSV17/10 — três SQLs pinados preparados LOCALMENTE, sem execução produtiva.** [Roteiro literal](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_COMMANDS_FOR_REVIEW.md), [provas PostgreSQL16](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_REVIEW_PROOFS.json), [sequência/limites](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md): canal derivado da custódia f6873eb9, revalidação apenas rota/container/cliente, sem repetir trio/saved/crons; READ ONLY/timeouts/ROLLBACK/ON_ERROR_STOP,100001 nega possível truncamento. Oito provas locais reais/simulações delimitadas; journal96MiB explícito após contraprova real de16,7MB, prefixos limitados sem alegar teto RAM. Próximo: decisão separada dos dois blocos SQL; ownership completo continua UNKNOWN e não se exige banco vazio com produção viva. M1 consumido; ELF pausado. Sem VPS, SELECT produtivo, backup/instalação/reparo/janela. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. Deifson; revisão21/10 ou mudança.
 
 

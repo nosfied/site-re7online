@@ -1,0 +1,28 @@
+{
+  "base": "8e2a53cf00feb69325381a8bee5ee215811c9f44",
+  "scope": "sanitized consumed SQL DENY result and necessary canonical state/methodology/reference reconciliation only",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/FUNCTIONAL_RESUMPTION_2026-10-15.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/DELIVERY.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_DOCUMENTATION_REVIEW.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT_ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+    "docs/saas/CHANGE_POLICY.md",
+    "docs/saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/saas/OPERATIONAL_BASELINE.md",
+    "docs/saas/PRODUCT_MAP_CURRENT.md",
+    "docs/saas/RELEASE_CHECKLIST.md"
+  ],
+  "excluded": "all raw/private custody, environment/config/tenant IDs, code/tests/SQLs and consumed commands/manifests/proofs, unrelated work",
+  "noAdditionalProductiveReads": true,
+  "noCodeFixInThisDelivery": true
+}

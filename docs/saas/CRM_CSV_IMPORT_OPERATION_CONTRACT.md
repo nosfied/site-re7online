@@ -1,5 +1,15 @@
 # Importação CSV CRM: operação, recuperação e contagens
 
+### Estado de implantação17/10 — contrato funcional preservado
+
+Este contrato descreve código/provas locais, **não a API produtiva atual**. [Estado vigente,
+consumidos e metodologia](../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia):
+CSV SUSPENSO / NOT DEPLOYED; diagnóstico SQL negou em identity antes de produzir dados;
+ownership/imports não foram consultados. A auditoria não é atividade completa, timeout
+não prova rollback e não autoriza reimportação. A correção local do ambiente do cliente
+não altera este contrato nem a ordem API→frontend. As cláusulas abaixo ficam intactas.
+
+
 Estado: **LOCAL VALIDATED / FOR REVIEW / NOT DEPLOYED**, 15/10/2026. [Entrega e provas](../reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/REPORT.md). Complementa os contratos existentes de identidade, upsert, auditoria, exclusão operacional e anonimização; não altera retenção por conversa ou operação explícita por titular.
 
 ## Lacuna auditada e persistência

@@ -1,0 +1,169 @@
+{
+  "base": "8e2a53cf00feb69325381a8bee5ee215811c9f44",
+  "result": "CONSUMED_DENY_PRESERVED_NO_RETRY",
+  "materializeExecutedOnce": true,
+  "materializeExit": 0,
+  "collectExecutedOnce": true,
+  "collectExit": 1,
+  "operator": "deploy",
+  "sudo": false,
+  "manifestSha256": "c35bfd260ec4745def21f71a45a6e0e5e107a41ca539e51ffa364bc3f4463343",
+  "remoteIntervalUtc": [
+    "2026-10-17T20:16:06.644434+00:00",
+    "2026-10-17T20:16:07.304336+00:00"
+  ],
+  "transportIntervalUtc": [
+    "2026-10-17T20:16:03.414430+00:00",
+    "2026-10-17T20:16:07.432939+00:00"
+  ],
+  "denialStage": "identity",
+  "denialReason": "SQL_OR_CHANNEL_EXIT_DENIED",
+  "staticDiagnostic": "LIBPQ_EMPTY_SERVICE_DEFINITION_NOT_FOUND",
+  "clientEnvironmentFinding": {
+    "PGSERVICEExplicitEmpty": true,
+    "diagnosisBasedOnPreservedStderrAndArgv": true,
+    "databasePasswordFaultProven": false,
+    "databasePrivilegeFaultProven": false,
+    "productiveRetestPerformed": false
+  },
+  "gates": {
+    "sourceMaterialization": "PASS",
+    "beforeIdentityRouteContainerClient": "PASS",
+    "identityClientInvocation": "DENY_EXIT_2",
+    "identityResult": "NOT_OBSERVED",
+    "afterIdentityRoute": "NOT_EXECUTED",
+    "ownershipSql": "NOT_EXECUTED",
+    "importsSql": "NOT_EXECUTED",
+    "custody": "PASS_PRESERVED_DENY"
+  },
+  "sql": {
+    "identityRowsReturned": 0,
+    "serverExecution": "NOT_PROVEN",
+    "identityServerDatabaseRole": "UNKNOWN",
+    "visibility": "UNKNOWN",
+    "backends": "NOT_OBSERVED",
+    "ownership": "UNKNOWN",
+    "importsClassification": "NOT_OBSERVED",
+    "auditComplete": false,
+    "knownActivityScopeComplete": false,
+    "identityPayloadSuppliedAsSubprocessInput": true
+  },
+  "custodyByteExact": true,
+  "verifiedCommandChannels": 5,
+  "custody": {
+    "privileged-output.private.jsonl": {
+      "bytes": 33216,
+      "sha256": "490e431fdcfa9924ae9d15f29eea4d3043d798bb5c94d8efc6e097b0beb34d80"
+    },
+    "transfer.stdout.private": {
+      "bytes": 15311,
+      "sha256": "b96d5fbdb239075cab0c49d5983fa85918b4ae71c541cd01c46c6522398f6085"
+    },
+    "sequencer.journal.jsonl": {
+      "bytes": 359,
+      "sha256": "a5cf2fd2b84bedba4c10c22166d83ffc9418d26c82be943f43cacc242b627946"
+    },
+    "transfer.stderr.private": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "capture.private.jsonl": {
+      "bytes": 11049,
+      "sha256": "a845fdb8d1a4238060f2976e7e54b95bc704a687f9b7f25b3c79edd0f61e8239"
+    }
+  },
+  "identityStderr": {
+    "bytes": 48,
+    "sha256": "b8ccb8f9124cc4cb248a78ca3518ede1cd8517f4310291996200e80433d85d85",
+    "rawPublished": false
+  },
+  "commands": [
+    {
+      "id": "before-identity-route",
+      "exit": 0,
+      "startedUtc": "2026-10-17T20:16:06.685764+00:00",
+      "finishedUtc": "2026-10-17T20:16:06.849384+00:00",
+      "stdoutBytes": 915,
+      "stderrBytes": 0
+    },
+    {
+      "id": "before-identity-client-path",
+      "exit": 0,
+      "startedUtc": "2026-10-17T20:16:06.875997+00:00",
+      "finishedUtc": "2026-10-17T20:16:07.009149+00:00",
+      "stdoutBytes": 20,
+      "stderrBytes": 0
+    },
+    {
+      "id": "before-identity-client-version",
+      "exit": 0,
+      "startedUtc": "2026-10-17T20:16:07.010136+00:00",
+      "finishedUtc": "2026-10-17T20:16:07.156750+00:00",
+      "stdoutBytes": 24,
+      "stderrBytes": 0
+    },
+    {
+      "id": "before-identity",
+      "exit": 0,
+      "startedUtc": "2026-10-17T20:16:06.685749+00:00",
+      "finishedUtc": "2026-10-17T20:16:07.157867+00:00",
+      "stdoutBytes": 66,
+      "stderrBytes": 0
+    },
+    {
+      "id": "identity",
+      "exit": 2,
+      "startedUtc": "2026-10-17T20:16:07.158903+00:00",
+      "finishedUtc": "2026-10-17T20:16:07.303383+00:00",
+      "stdoutBytes": 0,
+      "stderrBytes": 48
+    }
+  ],
+  "localTestGap": {
+    "file": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/test_sql_review.py",
+    "consumer": "RealPostgres.exercise.local_transport",
+    "observedContractGap": "Docker -e PG* options were not propagated; subprocess used self.env() instead. SQL payloads were real, production libpq environment semantics were not exercised.",
+    "proofsRemainValidFor": "Pinned SQLs, validators, PostgreSQL privileges/identity/sentinel, export/ingest in the declared fixture environment.",
+    "doesNotProve": "Actual Docker-to-libpq PG* launch environment equivalence"
+  },
+  "launcherRecords": {
+    "materialize": {
+      "bytes": 1076,
+      "sha256": "164495a7297b13d4cf2e1bd50c6a3a319981e90cb66020667a44e48eef205fa3",
+      "exit": 0,
+      "startedUtc": "2026-10-17T20:15:55.134438+00:00",
+      "finishedUtc": "2026-10-17T20:15:55.174026+00:00"
+    },
+    "collect": {
+      "bytes": 1072,
+      "sha256": "c7530e7ae982916c54c8b1244ff41058d7a33a0830d24a60faa7496a4b6f5df1",
+      "exit": 1,
+      "startedUtc": "2026-10-17T20:16:03.395058+00:00",
+      "finishedUtc": "2026-10-17T20:16:07.469864+00:00"
+    }
+  },
+  "rawIdsTenantsPublished": false,
+  "additionalRemoteQueries": 0,
+  "retry": false,
+  "grantOrRoleChange": false,
+  "sqlAdaptation": false,
+  "serviceConfigDataRbacCredentialChanges": false,
+  "backupRenewed": false,
+  "m1ConsumedUnchanged": true,
+  "elfPaused": true,
+  "productiveCsvInstalled": false,
+  "windowReady": false,
+  "identityInputPinned": {
+    "bytes": 1374,
+    "sha256": "ed4eb8826e4bc68e1b9a2f98c9676898b8e3f068add747881566613d172ac138",
+    "recordedInputMatchesPublishedBytes": true,
+    "serverDeliveryAcknowledged": false
+  },
+  "externalSubprocessCount": 4,
+  "afterIdentityCommandsExecuted": false,
+  "runnerIntervalUtc": [
+    "2026-10-17T20:16:06.685054+00:00",
+    "2026-10-17T20:16:07.304336+00:00"
+  ],
+  "remoteIntervalIncludesInactiveTransfer": true
+}

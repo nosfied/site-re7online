@@ -1,5 +1,15 @@
 # Operational Baseline
 
+### Leitura dos checkpoints datados —17/10/2026
+
+As medições e propostas de capacidade abaixo têm as datas/alcances declarados; não são
+observações novas desta rodada. A frente ELF/budget está **PAUSADA**, conforme o
+[estado vigente CSV](../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia).
+O DENY SQL de17:16 é do cliente libpq, não demonstra falha de capacidade/servidor.
+Nenhum novo backup, medição produtiva ou certificação de RAM/closure foi feito aqui.
+As reservas e princípios de capacidade/retencão abaixo continuam integralmente válidos.
+
+
 Status: baseline operacional permanente do Converta.
 
 Ultima atualizacao: 2026-06-27, Sprint 78O - Capacity & Swap Hardening concluida.

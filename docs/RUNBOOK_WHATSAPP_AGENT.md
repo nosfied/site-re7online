@@ -1,5 +1,64 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## Continuidade CSV — estado vigente e metodologia
+
+**17/10/2026,17:16 Fortaleza: SQL CONSUMED/DENY; CSV SUSPENSO / NOT DEPLOYED /
+NOT WINDOW READY.** Esta entrada é o ponto de continuação; checkpoints datados abaixo
+preservam a cronologia, inclusive quando dizem “próximo”, “corrente” ou “mais recente”.
+Não são instruções atuais de execução. [Relatório único e sequência](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[matriz vigente](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md),
+[resultado SQL](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.json).
+
+| Ação / material | Estado e alcance |
+| --- | --- |
+| Recuperação original16/10 |CSV_ORIGINAL_PAIR_RESTORED / OWNER UI ACCEPTED; instalação e recuperação consumidas |
+| CSV API24e5857f / frontend candidato-retorno / classificador Event |pacotes e provas locais existentes; não implantados por estes commits documentais |
+| M1 cinco pais |COMPLETE/CONSUMED às15:09; não repetir manutenção/preflight Event |
+| Diagnóstico trio/saved/controles |CONSUMED/COMPLETE às15:37; dados datados, sem atualização de seu horário por esta rodada |
+| SQL blocos1/2 |CONSUMED/DENY às17:16:before-identity canal PASS, identity cliente exit2(service vazio), ownership/imports não executados; custódia íntegra |
+| ELF |PAUSADO; sem retorno à descoberta/budget como consequência desse DENY |
+
+**Próximo delta exclusivamente local, ainda não implementado:**corrigir o ambiente do
+cliente libpq e o adaptador de ensaio que não propagou Docker -e PG*. Não mudar SQL,
+role, credenciais, pg_hba, serviço ou repetir comandos consumidos. Dados de identidade,
+visibilidade, backends e importações seguem desconhecidos nesta tentativa; ownership
+completo continua UNKNOWN, sem exigência de banco vazio com produção viva.
+
+Consultar os princípios **completos**, não apenas este resumo: [Principios operacionais](#principios-operacionais),
+[Retenção operacional permanente](#retenção-operacional-permanente), [Change Policy](saas/CHANGE_POLICY.md),
+[Release Checklist](saas/RELEASE_CHECKLIST.md), [Baseline/capacidade](saas/OPERATIONAL_BASELINE.md#capacidade-e-retenção-operacional),
+[contrato CSV](saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md) e [publicação coordenada](reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/COORDINATED_PUBLICATION.md).
+São os controles existentes; esta revisão não cria autorização, gate ou regra operacional.
+
+Aplicação à continuidade: diferenciar fonte editável/publicação/pacote/runtime/aceite;
+comparar byte-procedência e usar consumidores reais completos, sem assumir representação
+PM2==perfil OS. Efeitos de sistema e opções de lançamento substituídos no laboratório
+precisam ser declarados; oito testes SQL não comprovaram o ambiente Docker/libpq.
+Reusar provas válidas no alcance, sem rebuild/backup por rotina; preservar R1/R2,
+saída/ownership, CAS, classificação, revalidação no uso, consumo e replay. SQL/auditoria
+observada não prova atividade completa nem executor encerrado. Não inventar pins,
+perfis, permit, lock cooperado, coletor ou autoridade. Fontes antigas não são fatos atuais.
+
+Depois da correção/revisão local, eventual novo roteiro terá destinos e autorização
+próprios. Só com dados válidos: atribuição/16 vínculos/controles protegidos/autoridade→
+materialização final quatro modos→janela coordenada/frescor/R0/root/review→decisão A/
+admissão/saída/CAS→API→validação UUID/GET/ledger→fronteira frontend real→decisão frontend.
+Incerteza exige inspeção e decisão correspondente, sem replay. ORIGINAL só pré-seleção
+com provas integrais; após seleção retorno preserva backend candidato compatível.
+M1 consumido não dispensa a revalidação dos predicados no ponto de uso futuro autorizado.
+
+Índices de entregas anteriores são referências no commit da entrega: validar esses
+bytes nesse SHA. Alterações posteriores dos checkpoints não autorizam reescrever
+manifest/hash histórico, nem trocar binding para fazê-lo passar. O índice corrente
+do resultado documental é distinto do manifest executável consumido.
+
+Prioridade campanhas/CRM e aceite Utility/CRA preservada; SECULT não reaberta. NEWauth+
+NEWDB+NEWcipher, frontend, ambos crons, guarda38 fechada e out.15 CLOSED preservados;
+não recertificados como atuais sem observação. Prisma/.env/retenção/limpeza/externos/
+envios fora do escopo. Revisão21/10 ou mudança. Nunca iniciar pelo exemplo genérico
+pull/build/reload ou entrypoint consumido abaixo; o procedimento CSV específico é a referência.
+
+
 **CSV17/10 — três SQLs pinados preparados LOCALMENTE, sem execução produtiva.** [Roteiro literal](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_COMMANDS_FOR_REVIEW.md), [provas PostgreSQL16](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_REVIEW_PROOFS.json), [sequência/limites](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md): canal derivado da custódia f6873eb9, revalidação apenas rota/container/cliente, sem repetir trio/saved/crons; READ ONLY/timeouts/ROLLBACK/ON_ERROR_STOP,100001 nega possível truncamento. Oito provas locais reais/simulações delimitadas; journal96MiB explícito após contraprova real de16,7MB, prefixos limitados sem alegar teto RAM. Próximo: decisão separada dos dois blocos SQL; ownership completo continua UNKNOWN e não se exige banco vazio com produção viva. M1 consumido; ELF pausado. Sem VPS, SELECT produtivo, backup/instalação/reparo/janela. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. Deifson; revisão21/10 ou mudança.
 
 
@@ -2795,6 +2854,8 @@ Bloco único b39169e8 executado uma vez, deploy sem sudo: leitura/custódia conc
 
 [Relatório/matriz existentes](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md): fonte futura [scripts/crm_csv_elf_budget](../scripts/crm_csv_elf_budget) limita escrita/append/canais antes do efeito; recepção SCP literal não recursiva com RLIMIT por objeto, parciais e custódia canônica.12 testes focados PASS; subprocessos/FDs locais reais, transporte SCP simulado declarado. Pools143MiB remoto/546MiB local +allowances2/14 +25% +arredondamento64 → proposta192/704MiB, sem usar442,90MiB como entrada. Alocação física/RAM/reservas atuais NÃO certificadas; cliente SCP real e novo manifest/roots/destinos dependem de revisão futura. Gates consumidos512MiB/2GiB, v2/capacity-v1 e DENYs intactos, nenhuma VPS/retry/limpeza/realocação/SQL/instalação/build/janela. Não reabrir frontend/predecessor. CSV SUSPENSO / LOCAL VALIDATED no alcance / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Deifson; revisão17/10, próxima21/10 ou mudança. Próximo passo: revisão da proposta, sem execução automática.
 
+
+> Checkpoint datado anterior; sua leitura Event já foi consumida. Continuação vigente no [início deste runbook](#continuidade-csv--estado-vigente-e-metodologia); não executar o “próximo ato” histórico abaixo.
 
 ### Rumo corrente17/10 — preparação CSV, frente ELF PAUSADA
 

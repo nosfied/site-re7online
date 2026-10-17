@@ -1,5 +1,14 @@
 # Change Policy
 
+### Nota de aplicação CSV17/10 — normas abaixo preservadas
+
+O [estado e método vigente](../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia)
+registra SQL CONSUMED/DENY e lacuna de equivalência do ambiente de ensaio. A obrigação
+existente de validação local real não permite tratar SQL real com transporte/PG* substituído
+como prova do lançamento completo. Esta é a explicitação do alcance do ensaio, não regra,
+privilégio, autorização ou gate novo. Princípios permanentes completos permanecem abaixo.
+
+
 Status: politica oficial de mudancas do Converta. Este documento nao altera runtime.
 
 ## Objetivo

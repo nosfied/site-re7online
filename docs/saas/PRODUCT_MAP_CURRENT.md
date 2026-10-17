@@ -1,5 +1,23 @@
 # Product Map Current
 
+## Estado vigente CSV —17/10/2026
+
+**CONSUMED/DENY preservado / NOT DEPLOYED / NOT WINDOW READY.** [Resultado](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.json)
+e [continuidade canônica](../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia). Materialização PASS; coleta única negou em identity,
+exit2, por resolução de serviço libpq vazio; ownership/imports não executados. Custódia
+íntegra, nenhum retry/grant/role/SQL adicional. Preparação/harness não propagou o mesmo
+ambiente PG* nos ensaios; não é prova de falha de senha/privilégio do banco. Próximo
+trabalho somente local: ambiente efetivo do cliente e ensaio correspondente, preservando
+SQL/contratos. **Não executar os blocos antigos novamente.** M1 consumido; ELF pausado.
+
+Produção original recuperada/aceita; pacotes CSV e provas funcionais são locais e não
+implantações. Dados trio/saved/controles de15:37 mantêm seu horário. Identidade SQL,
+visibilidade, backends e classificação das importações não foram obtidos às17:16.
+Campanhas/CRM e Utility/CRA seguem prioritários; SECULT aceita não reaberta. Históricos
+abaixo não são roteiro vigente; princípios completos, fontes/provas reutilizáveis e
+sequência restante estão no runbook vinculado. Nenhuma regra/execução produtiva nova.
+
+
 ## Estado reconciliado — 06/10/2026
 
 API afbb/worker mínimo reativo implantados; frontend af26 preservado, conforme [registro técnico](../reviews/automation-freeform-window-release-af26/REACTIVE_AFBB_DEPLOYED_2026-10-06.md). Aceites controlados: avulso demo em b9; CRM estático/imediato e CSV individual/imediato em afbb. Agrupamento, audiência dinâmica, agendamento, contingência Auto e CRA-PR continuam pendentes. [Correção visual de fila imediata/progresso](../reviews/automation-freeform-window-release-af26/CAMPAIGN_PROGRESS_VISUAL_LOCAL_2026-10-06.md) LOCAL VALIDATED / FOR REVIEW / NOT DEPLOYED, somente frontend, sem alteração de execução/transporte/RBAC. Entradas seguintes preservam a cronologia e não substituem este estado mais recente. Históricos intactos, setembro CLOSED; SECULT/DB-only encerradas e Guia inatividade pausado.

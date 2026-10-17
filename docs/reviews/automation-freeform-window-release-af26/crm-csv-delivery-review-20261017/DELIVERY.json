@@ -24,7 +24,7 @@
     "evidence": "M1_RESULT.json",
     "state": "COMPLETE_CONSUMED"
   },
-  "nextOperationalAct": "Separate owner review/authorization of SQL_COMMANDS_FOR_REVIEW.md: pinned identity/ownership/imports SQLs with only channel revalidation; no replay of prior reads or empty production DB condition",
+  "nextOperationalAct": "NONE AUTHORIZED: first LOCAL libpq environment/test-equivalence correction and review; consumed SQL source/destinations must not be replayed; later productive attempt requires new reviewed procedure and express authorization",
   "notCertified": [
     "current processes/config/saved/fallback",
     "SQL identity/ownership/import exit",
@@ -103,5 +103,12 @@
     "originalBeforeSelectionOnly": true,
     "preservedApiFiles": 442,
     "workerChanged": false
+  },
+  "sqlReadConsumed": {
+    "evidence": "SQL_RESULT.json",
+    "ownership": "UNKNOWN",
+    "sqlResultsObserved": false,
+    "stage": "identity",
+    "state": "CONSUMED_DENY"
   }
 }

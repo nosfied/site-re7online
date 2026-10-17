@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Review/authorization of SQL_COMMANDS_FOR_REVIEW.md only; no productive SELECT performed. Pinned observed channel, real local PG16 proofs, no empty-DB requirement, identity/ownership/imports operational findings pending.",
+    "firstConcreteBlocker": "LOCAL correction/review of libpq launch environment and test adapter: consumed SQL attempt denied identity exit2 with explicit empty PGSERVICE; Docker -e PG* was not propagated in prior local test. No productive retry, SQL adaptation, role/grant change or new capture authorized. Identity/visibility/ownership/imports results remain UNKNOWN.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1692,6 +1692,20 @@
       "productiveSelectExecuted": false,
       "operationalOwnership": "UNKNOWN",
       "channelCaptureSha256": "f6873eb97f5a70709675ad16b8b4879ff1a1953dc58464c704a80e735b5af8d5"
+    },
+    "sqlExecutionConsumedDeny": {
+      "base": "8e2a53cf00feb69325381a8bee5ee215811c9f44",
+      "evidence": "../crm-csv-delivery-review-20261017/SQL_RESULT.json",
+      "denialStage": "identity",
+      "denialReason": "SQL_OR_CHANNEL_EXIT_DENIED",
+      "clientDiagnostic": "LIBPQ_EMPTY_SERVICE_DEFINITION_NOT_FOUND",
+      "identityRows": 0,
+      "ownershipSqlExecuted": false,
+      "importsSqlExecuted": false,
+      "custodyByteExact": true,
+      "retry": false,
+      "operationalOwnership": "UNKNOWN",
+      "nextStep": "local launch-environment/test equivalence only, subject to own instruction"
     }
   }
 }
