@@ -1,0 +1,110 @@
+{
+  "additionalRemoteRequestsAfterDeny": 0,
+  "authorizedBlocks": [
+    1,
+    2
+  ],
+  "authorizedCommit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+  "byteExactEnvelopeVerifiedLocally": true,
+  "canonicalIngestedRowsEqualSource": true,
+  "csv": "SUSPENDED",
+  "custody": {
+    "atomicSnapshot": false,
+    "event": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+    "gatePass": false,
+    "manifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
+    "ownership": "UNKNOWN",
+    "sourceBytes": 19788,
+    "sourceSha256": "a443d6831f82e5874bc733495d821469505b4d598b18456c5ce99b0955563039",
+    "utc": "2026-10-17T12:34:16.249456+00:00"
+  },
+  "failure": {
+    "argv": [
+      "/usr/bin/readelf",
+      "--wide",
+      "--program-headers",
+      "--dynamic",
+      "/usr/bin/node"
+    ],
+    "errno": 2,
+    "errorClass": "FileNotFoundError",
+    "exitCode": null,
+    "finishedUtc": "2026-10-17T12:34:15.985844+00:00",
+    "id": "node-elf",
+    "startedUtc": "2026-10-17T12:34:15.984838+00:00",
+    "stderrBytes": 17,
+    "stderrSha256": "27d40bea304b2546d0622f0d5c10079089f381157693c1209d8c0db9e115b63a",
+    "stdoutBytes": 0,
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "gates": {
+    "elfToolchainObservation": "DENY_BEFORE_RPC",
+    "routeContainerAndPsqlClient": "NOT_REACHED",
+    "rpcDaemonAndConfiguration": "NOT_REACHED",
+    "select": "NOT_AUTHORIZED_NOT_EXECUTED",
+    "sourcesClosure": "PASS_VERIFIED_39_FILE_SNAPSHOT"
+  },
+  "inferenceLimits": [
+    "ENOENT does not distinguish missing executable path from missing loader without additional evidence",
+    "custody is not operational certification",
+    "historical observations and DENYs are not reclassified"
+  ],
+  "materialization": {
+    "exitCode": 0,
+    "files": 39,
+    "result": "MATERIALIZED_INACTIVE_NO_REMOTE"
+  },
+  "notObserved": [
+    "daemon identity",
+    "live application configuration",
+    "boot identity",
+    "database route/container/client",
+    "SQL ownership",
+    "current crons/guard/health/UI"
+  ],
+  "observedBinaries": [
+    {
+      "bytes": 97661912,
+      "commandId": "node-chain",
+      "currentObservation": true,
+      "mode": "0o755",
+      "ownerUid": 0,
+      "resolvedMatchesRequested": true,
+      "sha256": "d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e"
+    },
+    {
+      "bytes": 44015908,
+      "commandId": "docker-chain",
+      "currentObservation": true,
+      "mode": "0o755",
+      "ownerUid": 0,
+      "resolvedMatchesRequested": true,
+      "sha256": "4fd41ecac3ec0f8a6067f8da79cbce516ed0572d1081e4767db764c84d32257b"
+    }
+  ],
+  "operationalCertification": false,
+  "ownership": "UNKNOWN",
+  "remoteInterval": {
+    "atomicSnapshot": false,
+    "firstUtc": "2026-10-17T12:34:15.090166+00:00",
+    "lastUtc": "2026-10-17T12:34:15.986413+00:00"
+  },
+  "result": "CONSUMED_DENY_NO_RETRY",
+  "rootObserverInvoked": false,
+  "selectAuthorized": false,
+  "sudoUsed": false,
+  "transport": {
+    "errno": null,
+    "errorClass": null,
+    "exitCode": 1,
+    "finishedUtc": "2026-10-17T12:34:16.199464+00:00",
+    "startedUtc": "2026-10-17T12:34:11.433783+00:00",
+    "stderrBytes": 0,
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdinBytes": 225209,
+    "stdinSha256": "9a758e511dec9a96d6e8ebaf9d56d9b8635211582b42d5fc9633e6c89064e264",
+    "stdoutBytes": 26980,
+    "stdoutSha256": "d4adfdcee54fcc83ad9e60dcf950172d9e12905cbe2602bc87c7d603a2676618"
+  },
+  "window": "NOT_WINDOW_READY"
+}

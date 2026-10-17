@@ -1,0 +1,17 @@
+{
+  "base": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+  "branch": "review/campaign-recovery-20260926",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-result-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-result-20261017/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-result-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-result-20261017/RESULT_SANITIZED.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-result-20261017/SOURCE_INDEX.json",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ],
+  "scope": "sanitized result/provenance/checkpoints only",
+  "rawPublished": false,
+  "runtimeChanged": false
+}

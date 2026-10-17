@@ -1,0 +1,169 @@
+{
+  "authorizedCommit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+  "historicalCustodiesModified": false,
+  "previousDeliveryIndexBoundToCommitNotRegenerated": true,
+  "privateArtifacts": [
+    {
+      "alias": "materialization/bundle.private.json",
+      "bytes": 225209,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "9a758e511dec9a96d6e8ebaf9d56d9b8635211582b42d5fc9633e6c89064e264",
+      "uid": 1000
+    },
+    {
+      "alias": "materialization/privileged-output.private.jsonl",
+      "bytes": 124962,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "5441e567053c32dd98309d472161ef80293682b2d03b5dba6d6eaf8ebd1c3ce9",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-materialize/stdout.private",
+      "bytes": 32,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "120a7df7935e0537377e2532f4b07ef8533f297ac58d34a89994af53fdda95c6",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-materialize/stderr.private",
+      "bytes": 0,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-materialize/privileged-output.private.jsonl",
+      "bytes": 1066,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "2d9ff913b82ae9ead53a857c6710e63f6677ddbc3fc4503b8dbe2b7c77e44de7",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-collect/stdout.private",
+      "bytes": 32,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "341902eb3a324a02be233a33a373c3ad934456a675a6f2ce4efe923ad73dca41",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-collect/stderr.private",
+      "bytes": 0,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-collect/privileged-output.private.jsonl",
+      "bytes": 1062,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "5c634a4733cad08f6d90ad516e5bad000a3984cd0a72f2113780650c57770d21",
+      "uid": 1000
+    },
+    {
+      "alias": "collection/capture.private.jsonl",
+      "bytes": 19788,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "a443d6831f82e5874bc733495d821469505b4d598b18456c5ce99b0955563039",
+      "uid": 1000
+    },
+    {
+      "alias": "collection/transfer.stdout.private",
+      "bytes": 26980,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "d4adfdcee54fcc83ad9e60dcf950172d9e12905cbe2602bc87c7d603a2676618",
+      "uid": 1000
+    },
+    {
+      "alias": "collection/transfer.stderr.private",
+      "bytes": 0,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uid": 1000
+    },
+    {
+      "alias": "collection/privileged-output.private.jsonl",
+      "bytes": 57515,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "296d7031d1e10ae45970620aa55ca101d01888565c56e550cc9c06a4c84df2d8",
+      "uid": 1000
+    },
+    {
+      "alias": "collection/sequencer.journal.jsonl",
+      "bytes": 359,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "888e8eb9720b04e9a7ae260ab5461ccf045ff503c497c26a55658072e4adee46",
+      "uid": 1000
+    }
+  ],
+  "publicInputs": [
+    {
+      "bytes": 8311,
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/COMMANDS.md",
+      "sha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da"
+    },
+    {
+      "bytes": 15372,
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/MANIFEST.json",
+      "sha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba"
+    },
+    {
+      "bytes": 2490,
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/MANIFEST.sha256",
+      "sha256": "06ae5090692dbe0fdd8b875d9fb4cd1b84364a0107b6eb53fc0cee2ba98581bb"
+    },
+    {
+      "bytes": 4572,
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/launch.py",
+      "sha256": "5922f70646b6e20969abaccad0e834742127822e812012dc75144ffb67805bc4"
+    },
+    {
+      "bytes": 10376,
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/driver.py",
+      "sha256": "8efaccf63790ecee54022c92badbfe4629a52d7a7bbb6fdbb557a1c7d943402c"
+    },
+    {
+      "bytes": 12867,
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py",
+      "sha256": "4c54a686f6cb42ed4e9663f0d842b13dcd371ed144a2f26e5335bdb06a77fcc5"
+    },
+    {
+      "bytes": 1615,
+      "commit": "63752b5f2b6e1d2e1718d6337b79b7f1e39d6f4f",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/node_snapshot.cjs",
+      "sha256": "1a53c533d104b78af4202ed3da2d98a6c00b42b9d643c43887bced6923574c87"
+    }
+  ],
+  "remoteRawBytesPublished": false
+}
