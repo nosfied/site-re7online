@@ -1,3 +1,83 @@
+## Correção libpq + harness — LOCAL VALIDATED / REVIEW PENDING
+
+Base06fc3c92,17/10/2026. **CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.**
+A tentativa SQL17:16 permanece CONSUMED/DENY; nenhum comando remoto foi repetido.
+[Reprodução anterior](../crm-csv-delivery-review-20261017/SQL_LIBPQ_REPRODUCTION.json),
+[13 provas focadas](../crm-csv-delivery-review-20261017/SQL_LIBPQ_PROOFS.json),
+[fonte/testes/procedência e hashes](../crm-csv-delivery-review-20261017/SQL_LIBPQ_SOURCES.json).
+Esta atualização não repete a revisão documental consolidada na base.
+
+### Causa reproduzida e correção restrita
+
+`Docker -e NOME=` cria variável presente e vazia: não equivale a remover NOME.
+O runner consumido pede `PGSERVICE=`; libpq procura a definição de serviço vazio,
+retorna2 em identity, sem stdout. A contraprova executou o tail original gerado por
+`sql-review/runner.py`, com as nove opções Docker aplicadas literalmente, preservando
+os vazios. O stderr estático esperado foi conferido; exportação/custódia DENY byte-exatas.
+A prova inicial foi produzida **antes** da edição da fonte e permanece separada.
+
+A única alteração funcional é `sql_argv` na fonte editável
+`scripts/crm_csv_diagnostic/sql_execution.source`: usar `/bin/sh` já observado,
+`unset` explícito de PGSERVICE e seletores/ajustes libpq herdados não desejados, depois
+`exec psql "$@"`. Lista literal revisável, sem avaliação de entrada ou ferramenta nova.
+As nove atribuições Docker, incluindo PGHOST/HOSTADDR vazios, PGPORT5432,
+PGSERVICEFILE/PGPASSFILE=/dev/null, PGPASSWORD/PGOPTIONS vazios e timeout3, continuam
+idênticas; o shell remove PGSERVICE **antes** de libpq. Configurações persistidas,
+credenciais, role/database, canal e três SQLs não mudaram. Não há env -i/fallback,
+serviço novo, senha, grant ou adaptação de SQL. Remover ajustes herdados vale apenas
+para esse processo; não modifica a configuração do container/tenant.
+
+### Consumidores e laboratório efetivamente exercitados
+
+O novo `test_sql_libpq.py` autentica o manifest consumido e cada fonte reutilizada;
+compõe a fonte editável com os mesmos quatro ASTs aceitos (load/Capture/DiagnosticDenied/
+checked). Executa `run → route_client/System.db_container → sql_argv → bounded_command
+→ /bin/sh → psql → validators/classify → export → ingest/private_record`.
+Não reconstrói argv psql nem usa admin_env para o transporte. `admin_env` é exclusivo
+da montagem/teardown e conexão auxiliar do laboratório; não é ambiente do comando testado.
+As nove opções são comparadas literalmente, distinguindo vazio/presente de ausente.
+
+PostgreSQL16.15, shell e psql locais reais; cluster descartável sem TCP, somente socket
+Unix, com fixtures sintéticas. Sem GRANT ou senhas: fixture usa roles locais criadas
+SUPERUSER para alcance positivo; contraprovas usam NOSUPERUSER/ownership da função/
+REVOKE exclusivamente nesse cluster. Isso **não** demonstra privilégios produtivos.
+Os payloads pinados preservam READ ONLY/timeouts/ROLLBACK/ON_ERROR_STOP.
+
+**Remapeamentos explícitos:** Docker inspect/exec, container/env/rota e SSH são fronteiras
+simuladas. O argv produzido é consumido integralmente; somente PGHOST vazio (socket
+local do container) é mapeado ao socket isolado e PGPORT5432 a56438. PGHOSTADDR permanece
+vazio; nenhum outro PG* é omitido/remapeado. Nos dois testes de identidade troca-se
+explicitamente -U ou -d no tail gerado, apenas para gerar o caso negativo. As consultas
+de caminho/versão têm respostas locais/sintéticas declaradas. Não é teste Docker real.
+
+Casos: comando histórico/service vazio; ambiente herdado conflitante; ambiente sem
+seletores prévios; três SQLs completos/quatro fronteiras/não-zero backends; privilégio
+pg_control_system; privilégio SELECT Event; role/database divergentes; limite real100001;
+deriva de rota antes/depois identity; timeout; resposta perdida **após SQL real**;
+excesso sintético de saída/prefixo explícito. Cada caso preserva export/custódia byte-exatos.
+Timeout e overflow são injetados no transporte, não medições de rede real.
+Falhas impedem consultas subsequentes e não há replay. A suíte histórica8 não foi
+reexecutada nem promovida a prova de Docker: reutilizados apenas seus mecanismos válidos.
+O teste negativo histórico permanece em todas as reproduções do novo harness.
+
+### Limites e sequência restante
+
+Nenhum pacote operacional, runner selado, SQL, manifest/comando consumido ou prova
+histórica foi alterado. O compositor existente consumirá a fonte editável somente em
+futura preparação explicitamente revisada; não foi executado contra destino consumido.
+A correção não certifica servidor, privilégios, imports, ownership, ambiente Docker ou
+frescor produtivos. Custódia não é certificação. Consultas separadas não são snapshot;
+limites de stdout/prefixo não constituem teto RAM de subprocess.run(capture_output).
+
+**Próximo passo:** revisão deste delta local. Só após decisão própria, preparar novos
+bytes/manifests/destinos e roteiro SQL coerente para autorização separada; nunca repetir
+os blocos consumidos. Dados atuais SQL/visibilidade/backends/imports permanecem ausentes;
+ownership completo exige atribuição canônica própria. Depois:16 vínculos/autoridade e
+materialização final→janela autorizada/frescor/R0/root→API→validação ledger/GET→frontend.
+M1 consumido, ELF pausado, NEWauth+NEWDB+NEWcipher/produção/crons/guarda38/out.15 preservados.
+
+---
+
 ## Estado vigente CSV —17/10/2026 às17:16 Fortaleza, base8e2a53cf
 
 **SQL CONSUMED/DENY, CUSTÓDIA ÍNTEGRA / CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.**

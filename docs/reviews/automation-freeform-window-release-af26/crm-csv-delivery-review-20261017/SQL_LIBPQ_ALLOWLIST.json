@@ -1,0 +1,31 @@
+{
+  "base": "06fc3c92e3349e97cd29f23ef37cb344b71a6069",
+  "branch": "review/campaign-recovery-20260926",
+  "files": [
+    "scripts/crm_csv_diagnostic/sql_execution.source",
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/test_sql_libpq.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_REPRODUCTION.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_SOURCES.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_HASHES.sha256"
+  ],
+  "patchScope": "sql_execution.source + test_sql_libpq.py only; excludes itself, proofs and documentation; complete delivery is this allowlist/Git diff",
+  "historicals": "all consumed SQL package/commands/manifests/previous proofs and attempts unchanged",
+  "publicationSafety": {
+    "vercelBranchDeploymentEnabled": false,
+    "versionedWorkflowPushBranches": [
+      "main",
+      "develop"
+    ],
+    "workflowChanged": false,
+    "noVps": true
+  }
+}

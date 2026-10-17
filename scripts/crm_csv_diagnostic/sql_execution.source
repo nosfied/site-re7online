@@ -53,7 +53,19 @@ def route_client(cap,expected,stage):
 def sql_argv(cid):
     argv=['/usr/bin/docker','exec','-i']
     for e in ('PGHOST=','PGHOSTADDR=','PGPORT=5432','PGSERVICE=','PGSERVICEFILE=/dev/null','PGPASSFILE=/dev/null','PGPASSWORD=','PGOPTIONS=','PGCONNECT_TIMEOUT=3'):argv+=['-e',e]
-    return argv+[cid,'psql','-X','-w','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1']
+    # Docker NAME= creates an empty variable; it does not unset it. libpq treats
+    # empty PGSERVICE as a requested service. The already observed /bin/sh does
+    # the removal before exec; no new tool, credential, endpoint or SQL is used.
+    # Clear inherited libpq selectors/session/TLS settings; retain the explicit
+    # PGHOST/HOSTADDR/PORT, service/pass files, password, options and timeout above.
+    unset=('PGSERVICE PGDATABASE PGUSER PGAPPNAME PGCLIENTENCODING PGDATESTYLE PGTZ '
+           'PGGEQO PGTARGETSESSIONATTRS PGLOADBALANCEHOSTS PGSSLMODE PGREQUIRESSL '
+           'PGSSLCOMPRESSION PGSSLCERT PGSSLKEY PGSSLROOTCERT PGSSLCRL PGSSLCRLDIR '
+           'PGSSLSNI PGREQUIREPEER PGSSLMINPROTOCOLVERSION PGSSLMAXPROTOCOLVERSION '
+           'PGGSSENCMODE PGKRBSRVNAME PGGSSLIB PGCHANNELBINDING PGSYSCONFDIR '
+           'PGLOCALEDIR PGREQUIREAUTH PGSSLNEGOTIATION')
+    return argv+[cid,'/bin/sh','-c','unset '+unset+'; exec psql "$@"','psql',
+                 '-X','-w','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1']
 
 def identity(cap,raw):
     rows=[json.loads(x)for x in raw.splitlines()if x.strip()]

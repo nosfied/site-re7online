@@ -18,11 +18,15 @@ Não são instruções atuais de execução. [Relatório único e sequência](re
 | SQL blocos1/2 |CONSUMED/DENY às17:16:before-identity canal PASS, identity cliente exit2(service vazio), ownership/imports não executados; custódia íntegra |
 | ELF |PAUSADO; sem retorno à descoberta/budget como consequência desse DENY |
 
-**Próximo delta exclusivamente local, ainda não implementado:**corrigir o ambiente do
-cliente libpq e o adaptador de ensaio que não propagou Docker -e PG*. Não mudar SQL,
-role, credenciais, pg_hba, serviço ou repetir comandos consumidos. Dados de identidade,
-visibilidade, backends e importações seguem desconhecidos nesta tentativa; ownership
-completo continua UNKNOWN, sem exigência de banco vazio com produção viva.
+**Correção local concluída para revisão (base06fc3c92):** fonte libpq e harness corrigidos,
+sem pacote operacional/VPS. [Relatório integrado e limites](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md#correção-libpq--harness--local-validated--review-pending)
+e [13 contraprovas](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_PROOFS.json).
+Comando histórico vazio reproduzido; comando futuro gerado executado no laboratório com
+as nove opções Docker, shell/psql/PG16 reais e remapeamento declarado do endpoint.
+DENY17:16/pacote/comandos consumidos preservados. Próximo: revisão local; eventual
+novo pacote/destinos/autorização separados, sem replay. Identidade produtiva/imports
+continuam desconhecidos; ownership UNKNOWN. LOCAL VALIDATED / REVIEW PENDING;
+sem promoção das simulações a certificação produtiva.
 
 Consultar os princípios **completos**, não apenas este resumo: [Principios operacionais](#principios-operacionais),
 [Retenção operacional permanente](#retenção-operacional-permanente), [Change Policy](saas/CHANGE_POLICY.md),

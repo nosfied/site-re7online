@@ -1706,6 +1706,18 @@
       "retry": false,
       "operationalOwnership": "UNKNOWN",
       "nextStep": "local launch-environment/test equivalence only, subject to own instruction"
+    },
+    "sqlLibpqLocalCorrection": {
+      "base": "06fc3c92e3349e97cd29f23ef37cb344b71a6069",
+      "status": "LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+      "proof": "../crm-csv-delivery-review-20261017/SQL_LIBPQ_PROOFS.json",
+      "tests": 13,
+      "productionRequery": false,
+      "consumedDenialUnchanged": true,
+      "next": "Review local delta; any future SQL package/destinations and execution require separate review/authorization",
+      "ownership": "UNKNOWN",
+      "M1": "CONSUMED",
+      "ELF": "PAUSED"
     }
   }
 }

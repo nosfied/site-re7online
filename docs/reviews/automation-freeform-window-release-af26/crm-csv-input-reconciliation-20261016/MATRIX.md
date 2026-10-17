@@ -1,3 +1,19 @@
+## Atualização local libpq/harness — base06fc3c92
+
+[Correção e limites](REPORT.md#correção-libpq--harness--local-validated--review-pending),
+[13 provas](../crm-csv-delivery-review-20261017/SQL_LIBPQ_PROOFS.json).
+
+| Requisito | Evidência / alcance | Faltante real |
+| --- | --- | --- |
+| Lançamento libpq |histórico vazio reproduzido; unset explícito na fonte futura; comando gerado consumido no laboratório |revisão; futuro pacote/manifest/destinos/autorização próprios |
+| Harness |nove Docker -e literais; shell/psql/PG16 reais; três SQLs/quatro fronteiras/custódia;13 casos |Docker/SSH/rota simulados; sem certificação produtiva |
+| SQL produtivo |DENY17:16 intacto, nada reconsultado |identity/visibilidade/backends/imports atuais; ownership UNKNOWN |
+| Implantação CSV |contratos/provas aceitos reutilizados |vínculos/autoridade/materialização e decisões API→frontend, sem replay |
+
+Primeiro ato é revisão deste delta; não executar os blocos SQL consumidos.
+M1 CONSUMED; ELF PAUSADO. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
+As entradas abaixo são checkpoints datados, não instrução de repetição.
+
 ## Vigente17/10 às17:16 Fortaleza — SQL CONSUMED/DENY
 
 [Relatório único](REPORT.md#estado-vigente-csv-17102026-às1716-fortaleza-base8e2a53cf),

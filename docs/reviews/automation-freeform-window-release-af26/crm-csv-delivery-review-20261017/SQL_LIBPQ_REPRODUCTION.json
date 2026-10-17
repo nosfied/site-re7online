@@ -1,0 +1,20 @@
+{
+  "base": "06fc3c92e3349e97cd29f23ef37cb344b71a6069",
+  "cases": [
+    {
+      "case": "historical-empty-service",
+      "postgres16Real": true,
+      "sqlPayloadsUnchanged": true,
+      "ok": false,
+      "queryCount": 1,
+      "denialStage": "identity",
+      "denialReason": "SQL_OR_CHANNEL_EXIT_DENIED",
+      "journalBytes": 6879,
+      "exportAndCanonicalCustodyByteExact": true,
+      "externalDockerRouteAndSshSimulated": true
+    }
+  ],
+  "commandSource": "sql-review/runner.py",
+  "dockerEnvironment": "explicit empty values preserved; container inheritance simulated; only endpoint remapped",
+  "noVps": true
+}

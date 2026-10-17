@@ -1,5 +1,17 @@
 # Documentation Index
 
+## Delta local vigente — libpq e harness, base06fc3c92
+
+**LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.**
+[Relatório integrado](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[reprodução e13 provas](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_PROOFS.json).
+Fonte futura corrige variável vazia versus ausente; ensaio consome comando produzido
+com Docker -e preservado, três SQLs/quatro fronteiras/custódia no PG16 local. Docker/SSH
+simulados e remapeamento de endpoint declarados. DENY17:16 permanece consumido; próximo
+é revisão deste delta, sem repetir comandos ou certificar produção. SQL atual/ownership
+ainda pendentes; M1 consumido, ELF pausado. Nenhuma nova revisão documental/execução VPS.
+
+
 ## Estado vigente CSV —17/10/2026
 
 **CONSUMED/DENY preservado / NOT DEPLOYED / NOT WINDOW READY.** [Resultado](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.json)
