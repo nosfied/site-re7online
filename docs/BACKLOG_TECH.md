@@ -1,5 +1,22 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## CSV — insumo técnico materializado; sem aprovação humana presumida
+
+[Resultado/impedimento exato](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[materialização](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION.json),
+[5 provas](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION_PROOFS.json).
+2 tenants/20 operações identificados em listagem privada disponível ao owner; nenhum ID
+publicado. Novo window/csv-known-imports.private.json estático com revisão técnica=true:
+reviewedAgainstAuditAndKnownActivity não exige aprovação genérica do owner. Esse pedido
+anterior foi interpretação documental indevida, agora superada; não repetir declaração.
+OwnerReviewed/globalidade/completude/saída/ownership/autoridade não foram inferidos.
+Duas ocorrências993 seguem sem vínculo. Próximo delta: contrato/perfis/path-bindings/JSON-CJS/
+manifests da nova preparação pelos produtores canônicos; WINDOW_BOUND e autoridade
+continuam não certificados. Nada de VPS/SQL/instalação/janela. M1 consumido; ELF pausado.
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+Históricos abaixo preservados, sem reescrever rascunhos, recibos ou ações consumidas.
+
+
 ## CSV — vínculo documental fechado e passagem estática para revisão
 
 [Resultado/seqüência vigente](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),

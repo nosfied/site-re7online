@@ -1,5 +1,22 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## CSV — insumo técnico materializado; sem aprovação humana presumida
+
+[Resultado/impedimento exato](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[materialização](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION.json),
+[5 provas](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION_PROOFS.json).
+2 tenants/20 operações identificados em listagem privada disponível ao owner; nenhum ID
+publicado. Novo window/csv-known-imports.private.json estático com revisão técnica=true:
+reviewedAgainstAuditAndKnownActivity não exige aprovação genérica do owner. Esse pedido
+anterior foi interpretação documental indevida, agora superada; não repetir declaração.
+OwnerReviewed/globalidade/completude/saída/ownership/autoridade não foram inferidos.
+Duas ocorrências993 seguem sem vínculo. Próximo delta: contrato/perfis/path-bindings/JSON-CJS/
+manifests da nova preparação pelos produtores canônicos; WINDOW_BOUND e autoridade
+continuam não certificados. Nada de VPS/SQL/instalação/janela. M1 consumido; ELF pausado.
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+Históricos abaixo preservados, sem reescrever rascunhos, recibos ou ações consumidas.
+
+
 ## CSV — vínculo documental fechado e passagem estática para revisão
 
 [Resultado/seqüência vigente](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
@@ -116,8 +133,8 @@ Não são instruções atuais de execução. [Relatório único e sequência](re
 carregado, imports/dependências preservados. Draft privado20 operações/1784 evidências
 criado e tecnicamente revisado, sem completude/saída/ownership atestadas. Declaração limitada
 do owner recebida: não conhece importação própria pendente. Rascunho de escopo preparado
-separadamente e agora vinculado por sidecar privado íntegro à declaração. Próxima decisão:
-aprovar uso do confronto delimitado (reviewedAgainstAuditAndKnownActivity);16 vínculos/autoridade e preparação
+separadamente, vinculado por sidecar privado íntegro à declaração. O insumo técnico
+agora foi materializado sem aprovação humana presumida;16 vínculos/autoridade e preparação
 final continuam etapas próprias. Saída/ownership sob contenção devem ser provadas **na
 futura janela autorizada**, após as ações canônicas previstas, não antecipadamente.
 Nenhum roteiro SQL ou M1 pode ser repetido. ELF pausado; CSV NOT DEPLOYED/NOT WINDOW READY.
@@ -139,8 +156,8 @@ perfis, permit, lock cooperado, coletor ou autoridade. Fontes antigas não são 
 
 Os roteiros SQL v1 e v2 estão consumidos: não executar novamente. Correlação e
 composição e revisão técnica resolvidas localmente; revisar o escopo privado já preparado
-já vinculado à declaração limitada recebida (sem nova pergunta), decidir seu uso no campo
-reviewedAgainstAuditAndKnownActivity e depois
+já vinculado à declaração limitada recebida (sem nova pergunta). Revisão técnica
+materializada no novo insumo; o campo interno não é pedido genérico de aprovação ao owner. Depois
 prosseguir somente com dados e autorizações válidos: atribuição/16 vínculos/controles protegidos/autoridade→
 materialização final quatro modos→janela coordenada/frescor/R0/root/review→decisão A/
 admissão/saída/CAS→API→validação UUID/GET/ledger→fronteira frontend real→decisão frontend.

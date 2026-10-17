@@ -1,0 +1,82 @@
+{
+  "base": "62809ecca47c02e93abea9949f77d05633309d79",
+  "classifierSha256": "8a2955b0db3a409a5311609a281eb3936583fd2234afb483c38f6f4fbfbd7871",
+  "codeObjectsChanged": 0,
+  "compositionSha256": "8d2a8e5126ef53668dfedfb0d563c75bbab85e08c17cfe4b3d9b20631dbfc0c8",
+  "documentaryLinkSha256": "94b63aa482aad74c92ef07307207e918d21cd8fd1bdd3c16f29547de3cac9130",
+  "executorExitCertified": false,
+  "files": {
+    "OWNER_IDENTIFICATION.private.md": {
+      "bytes": 3317,
+      "sha256": "cea0bcc0def61e84776488bc3f2eae6e7f8219651b13e53007477d2b434fcf76"
+    },
+    "window/csv-known-imports.private.json": {
+      "bytes": 321207,
+      "sha256": "2787d3deab419fde417383be430f0271eecd387335cde4a47557a07ddb8d78be"
+    }
+  },
+  "firstTechnicalBlocker": "csv_contract.check cannot bind four modes: new csv-contract/source-target profiles/path bindings and WINDOW_BOUND are absent; this is not a missing generic owner approval",
+  "humanConfirmation": null,
+  "journal": {
+    "bytes": 561,
+    "mode600": true,
+    "sha256": "dd55352fcf140c6efa32e7922952afc63b1a74acb8ddff800caab6167d8c917f"
+  },
+  "missingOperationalInputs": {
+    "executorExitOwnership": {
+      "consumer": "Sequencer.verify_stopped; csv_boundary.exit_and_imports",
+      "missing": "Fresh certified exit, ownership and current audit under fence at authorized window point only",
+      "value": null
+    },
+    "phaseAuthority": {
+      "consumer": "Context/Loader; start gate",
+      "missing": "Protected root installation and phase-specific authority; no issue/renewal here",
+      "value": null
+    },
+    "window/binding-status.private.json": {
+      "consumer": "csv_contract.check(live=True)",
+      "missing": "Canonical WINDOW_BOUND certification after real bindings, not inferred from this static file",
+      "value": null
+    },
+    "window/csv-contract.private.json": {
+      "consumer": "csv_contract.check",
+      "missing": "New preparation path, source/target profile hashes, immutable references, reviewed target policy binding",
+      "value": null
+    },
+    "window/path-bindings.private.json": {
+      "consumer": "prestop_contract.path_bindings; Operations",
+      "missing": "Actual source/target release paths and data bindings for four modes",
+      "value": null
+    },
+    "window/source.profile.private.json": {
+      "consumer": "csv_contract.check; check_current",
+      "missing": "Final source profile bound to chosen preparation and revalidated identities; historical observations are references",
+      "value": null
+    },
+    "window/target.profile.private.json": {
+      "consumer": "csv_contract.profiles/profile_delta",
+      "missing": "Candidate path and profile derived from bound source; NEWauth/NEWDB/NEWcipher unchanged",
+      "value": null
+    }
+  },
+  "observationComplete": false,
+  "operationalGenerationCreated": false,
+  "operations": 20,
+  "originalsUnchanged": true,
+  "ownerDeclarationNotExpanded": true,
+  "ownerReviewed": false,
+  "ownershipComplete": false,
+  "phaseAuthorityIssued": false,
+  "privateDirectoryName": "csv-static-activity-input-20261017-v1",
+  "result": "STATIC_ACTIVITY_INPUT_MATERIALIZED_NOT_OPERATIONAL_PREPARATION",
+  "reviewActor": "CODEX_TECHNICAL_REVIEW",
+  "reviewedAgainstAuditAndKnownActivity": true,
+  "runtimeCopies": 0,
+  "scopeComplete": false,
+  "sourceDraftSha256": "0dff7eaa50f1fb46dc658a8242a774de18c452ef85c305ae30c109ab8346dbae",
+  "sourceInventorySha256": "fb346e00f5aeb219b14c43aad0669d4b392c7c1ebfa920ef4667615351c155bb",
+  "status": "PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+  "tenants": 2,
+  "underFence": false,
+  "unlinked993Occurrences": 2
+}

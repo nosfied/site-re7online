@@ -1,3 +1,100 @@
+## Insumo estático materializado e identificação privada — base62809ecc
+
+**PREPARED LOCALLY / LOCAL VALIDATED no delta ensaiado / REVIEW PENDING /
+NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO; M1 consumido; ELF pausado.**
+[Materialização/pendências sanitizadas](../crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION.json),
+[5 provas focadas](../crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION_PROOFS.json),
+[fonte editável](../../../../scripts/crm_csv_delivery/materialize_activity.py),
+[testes](../../../../scripts/crm_csv_delivery/test_activity_materialization.py).
+
+### Abrangência identificada ao owner, exclusivamente privada
+
+Inventário existente contém **2 tenants e20 operações** (tenantId+UUID exatos). A listagem
+OWNER_IDENTIFICATION.private.md foi materializada na custódia local700
+`csv-static-activity-input-20261017-v1`, arquivo600/3317B, SHA
+`cea0bcc0def61e84776488bc3f2eae6e7f8219651b13e53007477d2b434fcf76`.
+Agrupa as20 referências pelos identificadores de tenant exatamente preservados, com estado,
+quantidade de evidências e base de correlação; não inventa nome empresarial ou pessoa a
+partir desses IDs. Disponibilizada privadamente ao owner pelo caminho local no chat;
+**não significa que ele leu/reconheceu os UUIDs ou aprovou todas as ações**. IDs/tenants não
+entram no Git. Não houve SQL, nova coleta, regeneração do inventário ou correlação nova.
+Duas tentativas993 continuam sem identidade vinculante; declaração do owner não foi
+atribuída por inferência a qualquer tenant/operação do inventário.
+
+### Semântica canônica: revisão técnica não é aprovação humana
+
+Releitura dos bytes compostos **inalterados** de capture_imports.capture:
+1. verifica parada/saída e controles antes do SELECT;
+2. classifica auditoria e lê window/csv-known-imports.private.json;
+3. exige **reviewedAgainstAuditAndKnownActivity is True** e lista operations;
+4. exige presença de cada tenant+UUID declarado na auditoria observada;
+5. só no percurso completo após a saída grava a evidência sob fence.
+
+O predicado não exige ownerReviewed, ownerApproved nem uma declaração humana global.
+Seu significado é **revisão do escopo contra a auditoria e a atividade conhecida disponível**.
+Revisão técnica já demonstrada + declaração limitada já recebida/vinculada permitem
+registrar essa revisão no novo insumo estático, com ator CODEX_TECHNICAL_REVIEW.
+**O encaminhamento anterior de pedir aprovação genérica do owner para um campo interno
+foi uma interpretação documental indevida, não um requisito do consumidor. Está superado.**
+Não se mudou o predicado para PASS, não se atribuiu aprovação ao owner e não se repetiu
+sua declaração. Os recibos/rascunhos anteriores false permanecem históricos intactos.
+
+### Materialização efetiva — dados privados no nome esperado pelo consumidor
+
+Novo arquivo `window/csv-known-imports.private.json`, **321207B/600**, SHA
+`2787d3deab419fde417383be430f0271eecd387335cde4a47557a07ddb8d78be`.
+Contém a mesma população20 e1784 evidências integrais do inventário autenticado; linhagem
+para inventário/rascunho/link/declaração e provas anteriores. Única mudança semântica
+nessa revisão: reviewedAgainstAuditAndKnownActivity=true identifica **revisão técnica**,
+registrada em technicalReview, não autorização. ownerReviewed=false e humanConfirmation=null;
+a declaração limitada tem referência própria de hash/horário/escopo, não atesta outros tenants.
+
+**Continuam false:** knownActivityScopeComplete, scopeComplete, observationComplete,
+underFence, executorExitCertified, ownershipComplete, phaseAuthorityIssued e
+consumableAsOperationalScope. Não são fatos operacionalmente certificados. O gate parcial
+de escopo passa; o fluxo completo continua negando sem suas provas. Diretório novo também
+preserva journal canônico561B. Todas as fontes privadas e journal anteriores conferidos
+antes/depois, sem alteração. A observação fonte conserva seu horário original17:43:58–
+17:44:02 Fortaleza, sem snapshot ou atualização fictícia. Nenhum perfil/permit/identidade
+operacional ou geração executável foi criado; composição127/61 e quatro pacotes reutilizados.
+
+### Impedimento técnico e próximo delta concreto
+
+**Não falta aprovação genérica para o campo interno.** O checker real csv_contract.check
+nega primeiro pela ausência de **window/csv-contract.private.json** numa preparação contendo
+somente o novo insumo. Para produzir um contrato válido faltam os vínculos concretos da
+**nova** preparação: remotePreparation, sourceProfileSha256/targetProfileSha256,
+referências imutáveis não vazias e política alvo vinculada; source/target.profile,
+path-bindings e JSON/CJS/manifests coerentes dos quatro modos. O índice do resultado aponta
+consumidor, faltante e value=null, sem criar arquivos falsamente válidos com nulls.
+`check(live=True)` ainda exige binding-status.state=WINDOW_BOUND; Context/start ainda
+exigem sua autoridade. Nenhum desses estados foi inferido do escopo ou da declaração.
+
+**Próximo delta local:** compor o contrato/perfis/bindings da nova preparação pelos
+produtores existentes, reutilizando perfis/observações legítimos no alcance datado e os
+pacotes certificados; separar proposta de destinos/política dos campos que precisam de
+identidade/frescor real. O impedimento desta rodada é essa vinculação material, não
+repetição da declaração. Não fabricar atuais a partir de fontes antigas para fazê-la passar.
+Saída/ownership/auditoria sob fence ficam no ponto da futura janela expressamente
+autorizada; não são exigidos antecipadamente. API→validação UUID/GET/ledger→fronteira
+frontend/retorno compatível permanecem. ELF continua pausado, M1 não é repetido.
+
+### Provas somente do delta e fronteiras preservadas
+
+Cinco testes: nova revisão técnica sem claims humanos/operacionais; arquivo600 lido por
+csv_contract.read real e os **três predicados exatos** extraídos do consumidor composto;
+negativa de tenant/operação não observado; gate imports real/UNKNOWN e exit_and_imports
+negando sem saída ou escopo completo; checker real negando contrato ausente; listagem
+privada/população e bytes originais intactos. Foram testadas interfaces afetadas, não o
+capture inteiro: seu SELECT/escrita/efeitos externos não foram executados. Fragmentos AST
+são os próprios predicados, não outro validador. Negativas usam cópias sintéticas; nenhuma
+observação produtiva simulada como real. Provas anteriores reutilizadas; a pequena suíte
+foi repetida apenas após explicitar observationComplete=false e sua negativa correspondente.
+Sem VPS/SQL, permissões produtivas, instalação, parada, build, reimportação ou janela.
+NEWauth+NEWDB+NEWcipher, multitenancy/RBAC, ambos crons, guarda38 e out.15 preservados.
+
+---
+
 ## Vínculo documental fechado e passagem estática preparada — basea953df2f
 
 **PREPARED LOCALLY / LOCAL VALIDATED no delta ensaiado / REVIEW PENDING /

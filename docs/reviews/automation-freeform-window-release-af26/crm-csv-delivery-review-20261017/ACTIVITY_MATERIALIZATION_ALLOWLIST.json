@@ -1,0 +1,22 @@
+{
+  "base": "62809ecca47c02e93abea9949f77d05633309d79",
+  "branch": "review/campaign-recovery-20260926",
+  "excluded": "Private tenant/UUID identities, materialized data, owner listing, raw captures/journals/profiles/bindings; historical consumed artifacts; unrelated work",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
+    "scripts/crm_csv_delivery/materialize_activity.py",
+    "scripts/crm_csv_delivery/test_activity_materialization.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION_PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION_ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION_HASHES.sha256"
+  ],
+  "hashIndexScope": "Every allowlisted file except the hash index itself",
+  "scope": "Only offline static known-activity data materialization, owner-only identity listing provenance, affected tests and checkpoints; no canonical executable change"
+}

@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Documentary linkage is complete; static handoff prepared from unchanged127-path/61-object composition. capture_imports.capture requires reviewedAgainstAuditAndKnownActivity=True; draft remains False pending explicit decision on bounded scope use. The limited owner statement is received, linked and must not be requested again; no all-tenant/global certification inferred.",
+    "firstConcreteBlocker": "Technical known-activity input is materialized; no generic owner approval is required. csv_contract.check lacks the new preparation csv-contract (remotePreparation, source/target profile hashes, nonempty immutable references, target policy binding), coherent source/target profiles and four-mode path/mode bindings. WINDOW_BOUND/phase authority remain unproven; no current identity/freshness fabricated.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1824,6 +1824,23 @@
       "currentValue": false,
       "decisionScope": "Use the bounded20-operation audit/known-activity comparison with linked limited statement; not global activity, exit, ownership or authority",
       "next": "Decision on bounded scope use, then canonical data/16 bindings/controls/authority; fresh exit and audit under fence only at authorized window point"
+    },
+    "staticActivityMaterialization": {
+      "base": "62809ecca47c02e93abea9949f77d05633309d79",
+      "result": "../crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION.json",
+      "proofs": "../crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION_PROOFS.json",
+      "tenants": 2,
+      "operations": 20,
+      "ownerIdentificationAvailablePrivately": true,
+      "technicalReviewedFlag": true,
+      "ownerApprovalInferred": false,
+      "genericOwnerApprovalRequestSuperseded": true,
+      "scopeComplete": false,
+      "executorExitCertified": false,
+      "ownershipComplete": false,
+      "phaseAuthorityIssued": false,
+      "operationalGenerationCreated": false,
+      "next": "Compose new contract/profile/path-bindings/mode manifests through existing producers; do not infer current identity, WINDOW_BOUND or authority. Fresh exit/audit under fence at authorized window point only."
     }
   }
 }

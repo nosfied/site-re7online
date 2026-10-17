@@ -1,5 +1,18 @@
 # Importação CSV CRM: operação, recuperação e contagens
 
+### Esclarecimento do insumo de preparação — revisão técnica e declaração humana
+
+No consumidor de preparação capture_imports.capture, reviewedAgainstAuditAndKnownActivity
+registra o confronto técnico do escopo com a auditoria e atividade conhecida disponível.
+Não significa aprovação do owner, conhecimento de todas as ações dos tenants, completude
+global, saída, ownership ou autoridade. A declaração humana é registrada separadamente
+com seu alcance real; não se exige confirmação genérica de um campo interno. O predicado
+existente e a exigência de cada tenant+UUID declarado estar na auditoria permanecem intactos.
+A completude sob fence/saída exige as provas canônicas no momento autorizado. Insumo
+estático tecnicamente revisado não é preparação executável nem certificação produtiva.
+[Materialização e alcance](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md).
+
+
 ### Estado de implantação17/10 — contrato funcional preservado
 
 Este contrato descreve código/provas locais, **não a API produtiva atual**. [Estado vigente,

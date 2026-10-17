@@ -1,3 +1,20 @@
+## Vigente — revisão técnica materializada; impedimento é vínculo operacional
+
+[Materialização](../crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION.json),
+[5 provas do delta](../crm-csv-delivery-review-20261017/ACTIVITY_MATERIALIZATION_PROOFS.json),
+[sequência/consumidores](REPORT.md).
+
+| Item | Resultado efetivo | Faltante / próximo passo |
+| --- | --- | --- |
+| Identificação |2 tenants/20 operações listados em arquivo600 privado, disponibilizado ao owner |não exige reconhecer UUIDs; duas ocorrências993 sem vínculo |
+| reviewedAgainstAuditAndKnownActivity |true **técnico** no novo arquivo; predicado canônico intacto |não é aprovação humana, completude ou autorização; pedido genérico anterior superado |
+| window/csv-known-imports.private.json |materializado321207B/600,20 operações/evidências/procedência |apenas insumo estático, sem geração executável |
+| Contrato/perfis/bindings quatro modos |não materializados, faltantes explícitos value=null |compor pelos produtores existentes com preparação/destinos/hashes/imutáveis/política coerentes; não fabricar atuais |
+| WINDOW_BOUND/autoridade/saída |não certificados |observações/autorizações específicas no momento previsto; saída/ownership só na futura janela |
+
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+M1 consumido; ELF pausado. Checkpoints anteriores são cronologia, inclusive o pedido genérico superado.
+
 ## Vigente — vinculação fechada; decisão delimitada de uso do escopo pendente
 
 [Recibo](../crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_LINK_RESULT.json),
