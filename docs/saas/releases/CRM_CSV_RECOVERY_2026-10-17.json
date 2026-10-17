@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "crm-csv-recovery-2026-10-17",
+  "candidateCommit": "d7d37c4f13728cd572f8253ab9ad0264b93b46a0",
+  "functionalCommits": [
+    "a27e2d16265220b17b8d1fb9d0be9c1c8364d310",
+    "111cc5433a1985de3e05cd421e9087e0d40c6a5d"
+  ],
+  "deploymentOrder": ["api", "frontend"],
+  "migrationRequired": false,
+  "workerChanged": false,
+  "automaticReplayForbidden": true,
+  "runtimeFiles": {
+    "api": [
+      {"path": "apps/whatsapp-agent/src/crm/crmContactUpsert.ts", "gitBlobSha": "22791967300b12149d01f5971d3c05278ab22934", "bytes": 51121},
+      {"path": "apps/whatsapp-agent/src/crm/crmContactsReadModel.ts", "gitBlobSha": "40d694ce67570c68a7306c46c7a3a62b443011f5", "bytes": 53919},
+      {"path": "apps/whatsapp-agent/src/crm/crmCsvImportOperation.ts", "gitBlobSha": "39b2746014f16c0f381d40f3b150c37ed3c7a9ab", "bytes": 8175},
+      {"path": "apps/whatsapp-agent/src/events/eventRetentionPolicy.ts", "gitBlobSha": "c42418af793d5ce2a48cdf803f7c449231b03d7f", "bytes": 2376},
+      {"path": "apps/whatsapp-agent/src/http/routes.ts", "gitBlobSha": "06feab4c1b355c59f2d74e2aecb6a307bd3718eb", "bytes": 1440530}
+    ],
+    "frontend": [
+      {"path": "src/app/app/crm/page.tsx", "gitBlobSha": "37c9ef2febfd6bfee79414359299026cbfbeaaac", "bytes": 125155},
+      {"path": "src/lib/appClientApi.ts", "gitBlobSha": "0bc25cc0747fd939503df794dfb8cab1a8040495", "bytes": 165314},
+      {"path": "src/lib/crmImportRecovery.ts", "gitBlobSha": "fabc3c17d66a588e1dfef6c0003d5d091dbf93c7", "bytes": 1643}
+    ]
+  },
+  "validationFiles": [
+    {"path": "apps/whatsapp-agent/src/crm/crmCsvImportOperation.postgres.test.ts", "gitBlobSha": "7d7453756bf807219c4be9bb69ba2e1a61854e15", "bytes": 9802},
+    {"path": "src/lib/crmImportRecovery.test.ts", "gitBlobSha": "3dd70700aab63799faf07f585ace087ffd6a33fc", "bytes": 5106}
+  ],
+  "excludedScopes": [
+    "apps/whatsapp-agent/prisma",
+    "apps/whatsapp-web-worker",
+    "tenant configuration",
+    "RBAC policy",
+    "credentials and secrets"
+  ],
+  "requiredChecks": [
+    "Repository contracts",
+    "Frontend build and lint",
+    "Backend build",
+    "CSV recovery and tenant isolation"
+  ]
+}

@@ -2,12 +2,43 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
+      - review/campaign-recovery-20260926
   pull_request:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
+      - review/campaign-recovery-20260926
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  repository-contracts:
+    name: Repository contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Validate canonical project state
+        run: python3 scripts/ci/verify-current-state.py
+      - name: Validate pinned CSV release surface
+        run: python3 scripts/ci/verify-release-manifest.py docs/saas/releases/CRM_CSV_RECOVERY_2026-10-17.json
+      - name: Validate deploy impact classifier
+        run: bash scripts/test-deploy-impact-matrix.sh
+      - name: Validate deploy orchestration boundaries
+        run: bash apps/whatsapp-agent/scripts/test-deploy-vps-impact.sh
+
+  frontend:
+    name: Frontend build and lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,6 +46,61 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+  backend:
+    name: Backend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/whatsapp-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/whatsapp-agent/package-lock.json
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run build
+
+  csv-critical:
+    name: CSV recovery and tenant isolation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: retention_lab
+        ports:
+          - 55781:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d retention_lab"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55781/retention_lab
+    defaults:
+      run:
+        working-directory: apps/whatsapp-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/whatsapp-agent/package-lock.json
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:deploy
+      - name: Backend durable-operation and multi-tenant tests
+        run: node --import tsx --test src/crm/crmCsvImportOperation.postgres.test.ts
+      - name: Frontend timeout and re-entry contract tests
+        run: node --import tsx --test ../../src/lib/crmImportRecovery.test.ts

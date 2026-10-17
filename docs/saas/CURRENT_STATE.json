@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "updatedAtUtc": "2026-10-17T22:21:00Z",
+  "basedOnCommit": "d7d37c4f13728cd572f8253ab9ad0264b93b46a0",
+  "canonicalBranch": "review/campaign-recovery-20260926",
+  "sourcePriority": [
+    "fresh read-only VPS evidence for live state",
+    "Git commit plus passing CI for candidate state",
+    "this file for current decision and continuation",
+    "dated reports only for the scope and time they explicitly certify"
+  ],
+  "production": {
+    "status": "LIVE_REVALIDATION_REQUIRED",
+    "lastDocumentedApiLine": "afbb",
+    "lastDocumentedFrontendLine": "af26",
+    "lastDocumentedWorkerLine": "minimal-reactive",
+    "certifiedByThisFile": false
+  },
+  "csvDelivery": {
+    "functionalBackendCommit": "a27e2d16265220b17b8d1fb9d0be9c1c8364d310",
+    "functionalFrontendCommit": "111cc5433a1985de3e05cd421e9087e0d40c6a5d",
+    "staticPreparationCommit": "d7d37c4f13728cd572f8253ab9ad0264b93b46a0",
+    "releaseManifest": "docs/saas/releases/CRM_CSV_RECOVERY_2026-10-17.json",
+    "state": "LOCAL_VALIDATED_NOT_DEPLOYED",
+    "migrationRequired": false,
+    "workerChanged": false,
+    "deploymentOrder": [
+      "api",
+      "frontend"
+    ],
+    "automaticReplayForbidden": true,
+    "consumedActionsMustNotBeRepeated": [
+      "M1",
+      "SQL-v1",
+      "SQL-v2",
+      "historical diagnostic and discovery commands"
+    ],
+    "nextAllowedAction": "READ_ONLY_LIVE_PREFLIGHT",
+    "liveExitCriteria": [
+      "active API, frontend and worker identities captured without mutation",
+      "candidate delta proven to exclude migrations, tenant policy, RBAC, credentials and worker",
+      "compatible return path pinned before API selection",
+      "isolated candidate API and frontend artifacts match reviewed manifests",
+      "explicit production window authority recorded"
+    ],
+    "postDeployCriteria": [
+      "API health succeeds before frontend promotion",
+      "same operationId is recovered by GET without another POST",
+      "tenant isolation remains enforced",
+      "993-row reference totals remain internally reconciled",
+      "CRM and Inbox authenticated smoke succeed",
+      "no CSV replay or historical repair is executed"
+    ]
+  },
+  "branchConvergence": {
+    "mainRelationshipAtAudit": {
+      "ahead": 1176,
+      "behind": 124
+    },
+    "state": "CONTROLLED_DIVERGENCE",
+    "forbidden": [
+      "force push",
+      "destructive rebase",
+      "blind merge into main",
+      "using main as production identity without VPS evidence"
+    ],
+    "nextStep": "inventory production-reachable source and create a tested integration line after CSV delivery"
+  }
+}

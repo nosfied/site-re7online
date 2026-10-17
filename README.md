@@ -107,3 +107,8 @@ npm run start
 - Arquitetura atual: `docs/whatsapp-agent/02-arquitetura-mvp-meta-cloud.md`
 - Separação `/admin` vs `/app`: `docs/ADR-004-separacao-admin-app.md`
 - Runbook operacional: `docs/RUNBOOK_WHATSAPP_AGENT.md`
+
+
+## Continuidade operacional
+
+O ponto de entrada vigente para manutenção do Converta é [`docs/saas/CURRENT_STATE.md`](docs/saas/CURRENT_STATE.md). Estado de produção exige evidência fresca da VPS; documentação histórica não equivale a deploy.

@@ -1,5 +1,15 @@
 # Change Policy
 
+## Regra de encerramento e antiespiral
+
+Cada mudança deve ter um estado canônico curto, próximo ato permitido e critérios de
+encerramento verificáveis. Um preflight negado ou incompleto preserva a produção e registra
+a evidência, mas não autoriza automaticamente novo framework, manifesto, coleta, requisito
+ou replay. Só se adiciona gate quando houver consumidor real identificado e quando o dado
+não puder ser obtido pelo mecanismo canônico existente. Provas válidas são reutilizadas.
+Branches operacionais devem executar CI de frontend, backend e contratos críticos; deploy
+não pode ser inferido de documentação nem de push. Estado vivo exige evidência atual da VPS.
+
 ### Nota de aplicação CSV17/10 — normas abaixo preservadas
 
 O [estado e método vigente](../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia)
