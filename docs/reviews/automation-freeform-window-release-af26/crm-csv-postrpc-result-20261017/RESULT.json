@@ -1,0 +1,131 @@
+{
+  "result": "CONSUMED_DENY_CUSTODY_PRESERVED",
+  "reviewedBase": "4fcad80adbdbb38e0206b40944811ff9ca83a469",
+  "manifestSha256": "85cbcb315d6081e33aefa79036c435c270e868445c1625b27ce99319af5ee617",
+  "commandsSha256": "88b5a42304ff347771beca92b481676f329e236dbb1a3955eb1790b9e9a497b2",
+  "executedBlocks": [
+    {
+      "number": 1,
+      "sha256": "0c33729b5ee051e06109a95b8f007ea680437e9d0c81d412169be30f7b81fc36"
+    },
+    {
+      "number": 2,
+      "sha256": "75d8cdb0d27b4f2c144cfbd1adcb55c497c71a142e78f3396a59ee8d446d87c5"
+    }
+  ],
+  "block3Executed": false,
+  "launchers": [
+    {
+      "action": "materialize",
+      "startedUtc": "2026-10-17T13:14:33.350463+00:00",
+      "finishedUtc": "2026-10-17T13:14:33.393738+00:00",
+      "exitCode": 0,
+      "errorClass": null,
+      "errno": null,
+      "stdoutBytes": 32,
+      "stdoutSha256": "120a7df7935e0537377e2532f4b07ef8533f297ac58d34a89994af53fdda95c6",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "action": "collect",
+      "startedUtc": "2026-10-17T13:14:42.139334+00:00",
+      "finishedUtc": "2026-10-17T13:14:46.691723+00:00",
+      "exitCode": 1,
+      "errorClass": null,
+      "errno": null,
+      "stdoutBytes": 32,
+      "stdoutSha256": "341902eb3a324a02be233a33a373c3ad934456a675a6f2ce4efe923ad73dca41",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "capture": {
+    "bytes": 358887,
+    "sha256": "67d9a84669f7941d1783a3b917d9a26d568ee3e7e531e7b4c070f805ae810f5e",
+    "startedUtc": "2026-10-17T13:14:45.048113+00:00",
+    "endedUtc": "2026-10-17T13:14:46.062476+00:00",
+    "atomicSnapshot": false
+  },
+  "denial": {
+    "denialStage": "frontend-contract",
+    "denialReason": "CANONICAL_ENVIRONMENT_DRIFT",
+    "errorClass": "DiagnosticDenied",
+    "errno": null
+  },
+  "gates": {
+    "gate1": "PASS_VERIFIED_SOURCE_SNAPSHOT",
+    "gate2": "DENY_FRONTEND_CANONICAL_ENVIRONMENT",
+    "gate3": "NOT_REACHED",
+    "elfOperationalClosure": "NOT_CHECKED",
+    "sqlIdentity": "NOT_OBSERVED",
+    "ownership": "UNKNOWN"
+  },
+  "custody": {
+    "atomicSnapshot": false,
+    "event": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+    "gatePass": false,
+    "manifestSha256": "85cbcb315d6081e33aefa79036c435c270e868445c1625b27ce99319af5ee617",
+    "ownership": "UNKNOWN",
+    "sourceBytes": 358887,
+    "sourceSha256": "67d9a84669f7941d1783a3b917d9a26d568ee3e7e531e7b4c070f805ae810f5e",
+    "utc": "2026-10-17T13:14:46.690071+00:00"
+  },
+  "observations": {
+    "socketCanonicalMetadataEqual": true,
+    "socketAtimeChangedThisAttempt": false,
+    "pidContentHashEqual": true,
+    "allThreeInitialIdentityTicksStatePassed": true,
+    "apiWorkerCanonicalConfigurationPassed": true,
+    "frontendLiveFieldsMatch": true,
+    "frontendCwdExecutablePassedBeforeEnvironment": true,
+    "frontendExpectedEnvironmentVariableCount": 31,
+    "frontendObservedEnvironmentVariableCount": 30,
+    "missingExpectedVariableNames": [
+      "LC_ALL",
+      "LC_CTYPE",
+      "NEXT_PUBLIC_CONVERTA_WEBCHAT_API_BASE_URL",
+      "NEXT_PUBLIC_CONVERTA_WEBCHAT_SITE_ID",
+      "NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID",
+      "NEXT_TELEMETRY_DISABLED",
+      "NODE_ENV",
+      "OLDPWD",
+      "PM2_JSON_PROCESSING",
+      "RE7_FRONT_CONTROL",
+      "RE7_FRONT_RUN",
+      "re7-admin-front",
+      "unique_id"
+    ],
+    "differentExpectedVariableNames": [
+      "PATH",
+      "PWD",
+      "SSH_CLIENT",
+      "SSH_CONNECTION",
+      "XDG_SESSION_ID",
+      "_"
+    ],
+    "equalExpectedVariableCount": 12,
+    "pm2EnvironmentMirrorExpectedSubsetEqual": true,
+    "historicalReferencesActuallyRead": [
+      {
+        "bytes": 26270,
+        "sha256": "c9c54c02b9694328a5aeaa4335efb88135f9bd948b4f786c8e9e4e851efd51e3"
+      },
+      {
+        "bytes": 15179,
+        "sha256": "a062c7020353cb39b0578653ea51475f8e9f9f68a588d1c55eb87cbbd68b6b9e"
+      }
+    ]
+  },
+  "notReached": [
+    "saved/fallback comparisons",
+    "final identity and boot reread",
+    "GATE2 completion",
+    "route/container observation",
+    "psql path/version",
+    "SELECT"
+  ],
+  "noRetroactiveAtimeAttribution": true,
+  "noRetryRepairOrCodeChange": true,
+  "productionWindowReady": false
+}

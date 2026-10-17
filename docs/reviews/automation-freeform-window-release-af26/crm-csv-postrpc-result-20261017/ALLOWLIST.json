@@ -1,0 +1,13 @@
+{
+  "scope": "Sanitized result, evidence hashes and canonical checkpoints only; no code change or private bytes",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-result-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-result-20261017/EVIDENCE_INDEX.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-result-20261017/HASHES.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-result-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-result-20261017/RESULT.json",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ]
+}
