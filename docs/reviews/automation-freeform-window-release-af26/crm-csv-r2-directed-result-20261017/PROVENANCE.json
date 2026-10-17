@@ -1,0 +1,53 @@
+{
+  "authorizedCommit": "de1b8c1fa9a875f43e08a5d001cddf7e78adcc98",
+  "readerSha256": "66f337fbe47d69ae02902f38f6b0e474241222c90967580d9c569dce21796691",
+  "writerSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+  "rawBytes": 34809,
+  "rawSha256": "90f004529af19c269c9ffa38df3a09b3c2565bc103967bc22705324f05b7fef8",
+  "transferByteExact": true,
+  "canonicalCustodyResult": "R2_DIRECTED_CUSTODY_DENY",
+  "firstThreeCustodiesMetadataAndBytesUnchanged": true,
+  "sourceCaptureIntervalUtc": [
+    "2026-10-17T02:23:36.612172+00:00",
+    "2026-10-17T02:23:37.965727+00:00"
+  ],
+  "sourceFormat": "R2_DIRECTED_BYTE_EXACT_TRANSFER_V1",
+  "previousStages": [
+    {
+      "resultCommit": "37ae6051f0f7bb75a31064f793da274f97f00a2c",
+      "state": "DENY_18_OBSERVATIONS"
+    },
+    {
+      "resultCommit": "96a9bef74896b0d0286b904ce208efb9eda098e5",
+      "state": "COMPLEMENT_DENY_NO_BOOT"
+    },
+    {
+      "resultCommit": "fa72aeba3a985570207afc95d8de1766d24bfb67",
+      "state": "SIX_COMMANDS_COMPLETE_NOT_CERTIFIED"
+    }
+  ],
+  "newRemoteCommandsAfterDeny": "only the one approved private exporter",
+  "runtimeMutation": false,
+  "sudo": false,
+  "originalCollectionCompleted": false,
+  "atomicSnapshot": false,
+  "rawOrConfigsPublished": false,
+  "nextCommandsExecuted": false,
+  "nextCommandsValidation": "bash -n plus compile only; no new suite or remote test",
+  "localPm2SeedsReused": {
+    "tarballSha256": "a309112e6d89ed8adff54cb32831df3c79cdc6191e6085a8ea7007303fe49ce9",
+    "source": "B3/SOURCE_PROVENANCE.json and B4/TOOLCHAIN_FILES.sha256",
+    "files": {
+      "package/bin/pm2": {
+        "bytes": 56,
+        "sha256": "bbb586713050b21d86aa41bde704a3a4776aa300ddcbd9710e81fa7c0089256d",
+        "matchesObserved": true
+      },
+      "package/package.json": {
+        "bytes": 4532,
+        "sha256": "d2d8b77291fd72dd588f0511741d706b358d5f4387e86a236c8e39b31d324cfd",
+        "matchesObserved": true
+      }
+    }
+  }
+}

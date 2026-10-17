@@ -1,5 +1,8 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**CSV R2 dirigido — CONSUMED/DENY,16/10 às23:23 Fortaleza.** [Raw preservado e reconciliação local](reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-result-20261017/REPORT.md):2 negativas de representação (frontend script/proxy argv),11 rótulos preservados;34.809B byte-exatos off-host, recibo R2_DIRECTED_CUSTODY_DENY, sem certificado completo. Daemon/API/worker e Node/PM2 observados com limites; frontend/proxy/interval-checks pendentes. Sem retry/sudo/reparo; supervisão não reaberta. Comandos mínimos adicionais somente para revisão, não executados. Dois DENYs/18 observações e complemento anterior intactos. SQL/16 vínculos/root/toolchain/autoridade continuam pendentes. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher/guarda38/out.15 intocados. Deifson; revisão21/10 ou mudança.
+
+
 **CSV R2 dirigido — análise LOCAL e pacote para revisão.** [Comparação byte-exata, candidatos e roteiro SEM sudo](reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/REPORT.md): supervisão43B igual ao before selado e ao before preservado na recuperação aceita; não inferida de boolean. PIDs/listeners/pm2.pid são candidatos históricos, não identidades atuais.10 testes locais do launcher/FDs/custódia, procfs operacional e SSH sintéticos; nenhuma VPS ou repetição dos seis comandos. SQL/canal/toolchain/16 vínculos/autoridade seguem pendentes. Dois DENYs/18 observações/recuperação consumida preservados. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 intocados. Deifson; revisão21/10 ou mudança.
 
 
