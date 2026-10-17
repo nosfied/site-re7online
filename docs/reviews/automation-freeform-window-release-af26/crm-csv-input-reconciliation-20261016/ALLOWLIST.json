@@ -1,6 +1,6 @@
 {
-  "base": "b39169e806d8b4901d368ebca0b30e2938ff2f6e",
-  "scope": "SANITIZED_SINGLE_METADATA_READ_RESULT_AND_CHECKPOINTS_ONLY",
+  "base": "5b679f62134ef87b511a7f20df92c58fd9f9e753",
+  "scope": "LOCAL_FUTURE_ELF_STORAGE_CONTROLS_AND_SIZING_PROPOSAL_ONLY",
   "files": [
     "docs/BACKLOG_TECH.md",
     "docs/RUNBOOK_WHATSAPP_AGENT.md",
@@ -9,9 +9,16 @@
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/RESULT.json",
-    "docs/saas/DOCUMENTATION_INDEX.md"
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/saas/OPERATIONAL_BASELINE.md",
+    "scripts/crm_csv_elf_budget/PLAN.json",
+    "scripts/crm_csv_elf_budget/PROOFS.json",
+    "scripts/crm_csv_elf_budget/PROVENANCE.json",
+    "scripts/crm_csv_elf_budget/SOURCE_DELTA.patch",
+    "scripts/crm_csv_elf_budget/editable_sources.py",
+    "scripts/crm_csv_elf_budget/storage_bounds.py",
+    "scripts/crm_csv_elf_budget/test_budget.py"
   ],
-  "unchanged": "Consumed code/commands/manifests/proofs/v2 and previous DENYs; all raw stdout/stderr/journals/private data excluded",
+  "excluded": "All private/raw/custody/operational profiles; consumed discovery/capacity files and unrelated work remain intact. No new operational package or commands. SOURCE_DELTA is source-only with synthetic labels, excludes itself/docs.",
   "noNewOperationalPackage": true
 }

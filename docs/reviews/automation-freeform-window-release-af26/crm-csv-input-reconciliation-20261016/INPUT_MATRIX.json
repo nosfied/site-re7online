@@ -810,13 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": {
-      "operationalToolchain": "Missing authenticated production Node d01614ef image/ELF frontier and actual PM2 shebang/PATH/transitive closure protection; local JS inventory is available, not operationally certified",
-      "nextLocalDelta": "Review this observed capacity shortfall; no automatic follow-up, repair, cleanup, budget/destination change or discovery resumption",
-      "neededOperationalAction": "None authorized after this single metadata read; any treatment requires separate reviewed decision, preserving consumed v1/v2 and original DENYs",
-      "notWindowReady": true,
-      "upstreamDiscoveryBlocker": "Current target filesystem availability464416768B is below unchanged536870912B operation budget; directory contract passed and images absent in this interval; earlier cause remains indeterminate"
-    },
+    "firstConcreteBlocker": "Review source-only ELF storage guards and derived192/704MiB proposal; physical allocation/inodes/RAM/reserves by filesystem remain uncertified. Consumed512MiB/2GiB commands unchanged;442.90MiB observation is historical, no retry/new query authorized.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1425,6 +1419,31 @@
       "remoteFilesWritten": false,
       "elfDiscoveryResumed": false,
       "actionConsumed": true
+    },
+    "elfStorageSizingLocal": {
+      "base": "5b679f62134ef87b511a7f20df92c58fd9f9e753",
+      "status": "LOCAL_CONTROLS_VALIDATED_REVIEW_PENDING_NOT_OPERATIONAL",
+      "logicalPoolMiB": {
+        "remote": 143,
+        "localAggregate": 546
+      },
+      "allocationAllowanceMiB": {
+        "remote": 2,
+        "localAggregate": 14
+      },
+      "marginFraction": 0.25,
+      "roundToMiB": 64,
+      "proposedMiB": {
+        "remote": 192,
+        "localAggregate": 704
+      },
+      "physicalAllocationCertified": false,
+      "historicalAvailableUsedToFit": false,
+      "tests": 12,
+      "noVps": true,
+      "consumedBudgetsAndDestinationsUnchanged": true,
+      "sources": "scripts/crm_csv_elf_budget",
+      "clientScpRealNotExercised": true
     }
   }
 }

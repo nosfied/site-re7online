@@ -1,0 +1,68 @@
+{
+  "base": "5b679f62134ef87b511a7f20df92c58fd9f9e753",
+  "originalManifestSha256": "707726e11f30ada8ef9f80f2fc7b6f84a1a737eca1b614738cf57f99c14f7dfa",
+  "sourceInputs": {
+    "capture.source": {
+      "bootstrap": true,
+      "bytes": 2239,
+      "relativeSource": "capture.source",
+      "sha256": "8e40c9683b1945a730d8010fb969b781661af2c7ecc9649fbcd6b9c6e972a781",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/capture.source"
+    },
+    "driver.py": {
+      "bootstrap": true,
+      "bytes": 10299,
+      "relativeSource": "driver.py",
+      "sha256": "630f598670ae9f83f3c7ef74c055247eaa511fca2b1ebb627742008295082192",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/driver.py"
+    },
+    "launch.py": {
+      "bootstrap": true,
+      "bytes": 4563,
+      "relativeSource": "launch.py",
+      "sha256": "1ba68f5cb5bc521b95a7035ecd048852c0072e85df08cf4ba18277be64e705e0",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/launch.py"
+    },
+    "local_elf.py": {
+      "bootstrap": true,
+      "bytes": 7904,
+      "relativeSource": "local_elf.py",
+      "sha256": "f12982e3c5835c25e76521343dd382f0ae31a6af7928f39b360a323be6548a35",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/local_elf.py"
+    },
+    "privileged_output.source": {
+      "bootstrap": true,
+      "bytes": 3303,
+      "relativeSource": "../crm-csv-r2-directed-20261017/privileged_output.source",
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/privileged_output.source"
+    },
+    "read_package.py": {
+      "bootstrap": true,
+      "bytes": 35507,
+      "relativeSource": "../crm-csv-r2-directed-20261017/read_package.py",
+      "sha256": "66f337fbe47d69ae02902f38f6b0e474241222c90967580d9c569dce21796691",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/read_package.py"
+    },
+    "runner.py": {
+      "bootstrap": true,
+      "bytes": 7230,
+      "relativeSource": "runner.py",
+      "sha256": "0d36c56f1cc8b34a2dda21cff2c7ff5d52eee4c8dbda42a7746d35fa1f44d62a",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/runner.py"
+    }
+  },
+  "futureSourceHashesForSyntheticDiff": {
+    "capture.source": "40bc346bdbb549870283473e3b1bbc5421d63f30a077db2ee33dd755b6b0909c",
+    "driver.py": "e523d184cd090806f0daef69594e44558906424533d316562863f031e6a05271",
+    "launch.py": "ab9d9a39d1c1a975200044651393b734c9b9a21dbd3a58545ad9d136c56b23ad",
+    "local_elf.py": "e4fb07829dffa35ceb6a35750702d96efafc811be173d77252831757dcaf8656",
+    "privileged_output.source": "485cefb8f6744e29c8059842ec4731426f44737b162714fde268926816b6c1fb",
+    "read_package.py": "1d77ba3f6a85c8ae3c73a64e132ed6db6d71c7d48781404aeadedcdd870750f8",
+    "runner.py": "bb2468020c094e956b755c578984cca566b078f4f52a9881951fe56dda2a17ef",
+    "storage_bounds.py": "668786cf7812661ffa4269ec59fc8ef38516186be68ab93ae4d065e6d9b7392a"
+  },
+  "sourcePatchScope": "Only in-memory transformed source snapshots using explicit LAB_ONLY labels, plus shared bounds leaf. Not a manifest, package, operational profile or command. Does not include itself or documentation. Editable canonical source: scripts/crm_csv_elf_budget. No private inputs.",
+  "historicalSourcesUnchanged": true,
+  "bootstrapDependency": "Future launcher retains the pre-manifest pinned canonical private writer93a11451. Future approved manifest must authenticate the8 composed source snapshots AND storageRoots; never import the guard by a mutable filesystem path."
+}

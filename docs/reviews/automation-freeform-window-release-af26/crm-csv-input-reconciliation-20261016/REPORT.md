@@ -1,5 +1,81 @@
 # CRM/CSV — reconciliação dos inputs e próxima conferência
 
+## Dimensionamento ELF revisto LOCALMENTE —17/10/2026, base5b679f62
+
+**LOCAL VALIDATED no alcance dos controles / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** Nenhuma VPS, statvfs produtiva, imagem produtiva, SQL, limpeza, realocação, instalação, build, backup ou janela nesta rodada. A consulta capacity-v1 e a tentativav2 permanecem consumidas/DENY, com bytes, hashes, horários e destinos intactos. Não se reabre frontend/predecessor.
+
+### Causa da lacuna e proposta única
+
+O teto original128MiB limita somente ELF publicados; não limita todos os arquivos/estados de falha. O export de8MiB ocorre depois da escrita do journal; private_record original não limita append. Capture.command/SSH/SCP usavam capture_output sem teto de arquivo; SCP recursivo só conferia nomes/soma depois da recepção. Logo não havia teto integral demonstrado, mesmo com timeout e128MiB no produtor. O cálculo retrospectivo512MiB permanece histórico, não fundamento para um PASS novo.
+
+**Uma proposta mínima:** fontes futuras limitadas, com envelope de planejamento **192MiB REMOTO /704MiB LOCAL quando compartilharem filesystem**, deduzido abaixo, não escolhido a partir dos442,90MiB. É proposta para revisão, NÃO redução aplicada ao lote consumido nem autorização de uso. As transformações conservam os gates conservadores512MiB/2GiB até uma revisão futura dos novos limiares, destinos e manifests. Nenhum comando executável novo ou geração operacional foi emitido. Não executar os comandos antigos com fontes novas. O valor observado em13:01 é histórico, não critério de escolha nem prova de capacidade futura.
+
+Fonte editável: [storage_bounds.py](../../../../scripts/crm_csv_elf_budget/storage_bounds.py) e [editable_sources.py](../../../../scripts/crm_csv_elf_budget/editable_sources.py). Reutiliza os sete snapshots pinados no manifest707726e1, Capture, write_artifact, private_record, export, ingest, transporte SSH/SCP e analisador readelf LOCAL. [PROVENANCE](../../../../scripts/crm_csv_elf_budget/PROVENANCE.json) registra procedência/bytes/SHA; [SOURCE_DELTA](../../../../scripts/crm_csv_elf_budget/SOURCE_DELTA.patch) representa somente as oito fontes em memória com rótulos **LAB_ONLY**, não um pacote/perfil/observação operacionais. O patch não contém a si próprio. Todo o delta editável/documental está no diff Git. Nenhuma fonte privada é necessária para reproduzir estes testes.
+
+### Limites impostos antes da escrita/lançamento
+
+- Guard envolve os escritores canônicos, sem outro journal/escritor: serializa pelo FD do diretório (flock, sem sidecar), conta bytes lógicos/entradas/arquivos parciais existentes e recusa crescimento antes de chamar a implementação original. Preserva O_EXCL/no-follow/owner600/nlink/fsync; root700 e profundidade máxima existente (images/) são conferidos. Nem chmod/chown, unlink, truncamento, sobrescrita, reparo ou fallback. Diretórios exclusivos continuam obrigatórios; acesso negado/metadata inadequada não ganha PASS.
+- Append tem teto incremental: remoto8MiB, custódia48MiB, análise192MiB; registro ordinário<=3MiB (transporte custódia<=20MiB). Reserva terminal64KiB por pool/journal para diagnóstico de falha/recibo; reserva não autoriza crescimento ilimitado. Se o armazenamento real falhar, o terminal pode também falhar: preservam-se os prefixos existentes, sem prometer recibo completo ou retry.
+- SSH: stdout<=12MiB e stderr<=1MiB, escritos pelo pai em temporários anônimos com verificação ANTES de cada escrita; stdin/frame permanece em memória. Em excesso/timeout, mata somente o grupo local daquele filho, conserva prefixos e produz ChannelLimitExceeded/TimeoutExpired, nunca COMPLETE. Não reconecta; isso não prova que o remoto parou — ele tem seus próprios limites persistentes e a incerteza permanece.
+- Capture.command:<=1MiB/canal; launcher<=16KiB/canal em memória. O launcher conserva o writer canônico independente93a11451 antes do manifest e limita seu recibo; a folha de storage é embutida nos MESMOS bytes revisados do launcher. Os demais loaders recebem explicitamente BLOBS/STORAGE_ROOTS autenticados pelo futuro manifest. Não importar guard por caminho mutável, não usar env como autoridade. Roots ausentes/sobrepostos, destinov2 consumido e hash de fonte divergente negam; o compositor só produz bytes em memória para revisão.
+- Recepção substitui SCP recursivo por sequência **não recursiva, um operando literal SHA.elf por objeto**, no mesmo transporte aceito:<=64 e soma<=128MiB antes de criar images/lançar filho. RLIMIT_FSIZE por filho é o tamanho EXATO esperado do objeto; canais<=16KiB cada, arquivos de destino novos; conferência canônica tamanho/hash antes do próximo. Prazo240s é global para a sequência, não240s×64. Parcial ou resposta perdida nega sem próximo objeto/retry. O produtor mantém deduplicação por SHA e limite128MiB, inclusive na tentativa que falhar após escrever parcial.
+- readelf LOCAL original mantém<=1MiB/canal em dois temporários anônimos,15s/objeto; canais persistidos+Base64 entram no pool. Não se executa alvo capturado, loader, ldd ou Node/PM2. Nenhum coletor/framework/autoridade paralelo.
+
+### Memória de cálculo — pico lógico limitado, não somente payload de sucesso
+
+MiB=1.048.576B. Os pools incluem estados incompletos; **não são todos somados como parcelas adicionais ao seu próprio conteúdo**. Sem cópia de runtime/tree/cache. Sem tar/gzip ou temporário de imagem remota: canonical write_artifact grava diretamente na folha exclusiva; parcial ocupa o lugar dessa folha, não é uma segunda imagem.
+
+| Local/pool | Teto MiB | Escritas e duplicações incluídas |
+| --- | ---: | --- |
+| REMOTO tools |1|Oito fontes futuras+manifest; hashes/tamanhos reais pinados, soma<1MiB; até32 entradas |
+| REMOTO resultado |142|128 imagens + journal<=8 + até6 de canais no desenho nominal; teto do pool prevalece mesmo se a distribuição diferir.64KiB terminal já dentro do pool; até384 entradas |
+| REMOTO total lógico |**143**|1+142. Export/JSON stdout não é arquivo remoto; cópia Base64/envelope fica em buffers e no lado local, não se soma duas vezes aqui |
+| LOCAL materialização |16|bundle Base64<4MiB, fontes registradas em Base64 no journal, metadados e readelf --version/canais; **2MiB reservados dentro do pool** para temporários anônimos, não acrescidos por fora; até32 entradas |
+| LOCAL custódia SSH |64|Arquivos stdout12+stderr1; journal com nova Base64 desses canais (<=17⅓MiB), capture.raw<=8MiB e cópia das linhas ingeridas<=8MiB, recibo e metadados.13MiB de temporários já reservados dentro do pool; permanentes<=51MiB menos terminal. Não confundir custody PASS com source PASS |
+| LOCAL análise/recepção |454|Imagens128; canais readelf<=64×2MiB=128; canais SCP<=64×2×16KiB=2; journal<=192 (inclui Base64 desses130MiB,~173⅓MiB, mais metadados com teto). Dois temporários anônimos<=2MiB e folga interna de2MiB. Hash/parse em memória não cria segunda imagem; até384 entradas |
+| LOCAL launchers |12|3ações×4MiB, cada uma com canais<=2×16KiB e a cópia Base64/journal dentro do pool; erro/terminais incluídos, não4MiB por objeto |
+| LOCAL pico lógico conservador |**546**|16+64+454+12; soma materiais retidos e parciais SEM supor limpeza entre etapas. Pool não é uma previsão de consumo observado |
+
+Journals/recepções falhos não podem crescer além dos pools apenas por não chegarem ao export. Caso o limite seja atingido, a operação pode negar antes dos64 objetos; NÃO descartar bytes, reduzir população, truncar evidência ou elevar limite para completar. Preservação significa manter o que foi escrito; em overflow de canal preserva-se **prefixo explicitamente incompleto**, não uma alegação de saída integral. Recursos anônimos são fechados como no analisador aceito; materiais de custódia/parciais não são removidos.
+
+### Alocação física, margem e reservas — parcelas diferentes
+
+[PLAN.json](../../../../scripts/crm_csv_elf_budget/PLAN.json), função plan(), deriva os números sem receber bytes disponíveis:
+
+| Cálculo | REMOTO | LOCAL agregado |
+| --- | ---: | ---: |
+| Pools lógicos limitados |143MiB =149.946.368B |546MiB =572.522.496B |
+| Allowance de alocação/metadados |2MiB |14MiB |
+| Base de planejamento |145MiB |560MiB |
+| Margem de segurança25% |36,25MiB |140MiB |
+| Arredondamento para próximo64MiB |10,75MiB |4MiB |
+| **Proposta total** |**192MiB =201.326.592B** |**704MiB =738.197.504B** |
+
+Os allowances são planejamento condicionado, **não teto físico universal**. Exemplificando blocos4KiB, limites de entradas32+384 dão até416 blocos remotos de arredondamento(~1,625MiB); local32+32+384+3×16=496 entradas(~1,94MiB), com allowance local maior para diretórios/metadados/temporários. A semântica de alocação real, preallocation, CoW, snapshots, quota, inodes e concorrência não é certificada por esses exemplos. O código impõe teto de bytes lógicos/quantidade/tamanho de canais; não instala quota nem controla o kernel ou escritores estranhos. Teto físico operacional exige conferir geometria/contabilização do filesystem e reservas efetivas na futura preparação; se insuficientes/desconhecidas, DENY, não declaração de bound integral. Não se usa f_frsize como prova de unidade de alocação máxima.
+
+A margem25% é decisão explícita de planejamento para pequenas oscilações/overheads não modelados e preservação de diagnóstico; NÃO corrige um produtor sem limite nem substitui reservas canônicas. Arredondamento é legibilidade do envelope, separado da margem. O relatório anterior não provava porque512MiB fora escolhido; não reescrevemos essa história. Redução futura para192/704 só pode ocorrer após revisão do procedimento novo, com destinos próprios e literais coerentes, nunca nos comandos/manifestsv2 consumidos. A observação442,90234375MiB NÃO participa de plan() e não se converte em PASS/folga atual.
+
+Conforme [OPERATIONAL_BASELINE](../../../saas/OPERATIONAL_BASELINE.md#capacidade-e-retenção-operacional): contabilizar por filesystem/executor, medir alocação/inodes e preservar reserva canônica, crescimento/WAL quando aplicáveis. Se material (/dev/shm) e custódia estiverem em FS diferentes, não somar livres: decompor os pools16 e530MiB e aplicar allowances/margens por dispositivo; o704 agregado NÃO pode ser usado para compensar falta em outro FS. Se compartilham FS, somar também outros materiais/ações retidos que já ocupam esse dispositivo antes da admissão. Os pools limitam somente esta tentativa futura; DENYs antigos não são apagados nem ficam grátis. Reservas bancária/auth e pisos datados de6.468.665.344B/4GiB não são universalizados nem reduzidos. Não houve medição de PGDATA/WAL ou liberação de reservas nesta rodada.
+
+RAM não é armazenamento: buffers ELF/proc, Base64/JSON/objetos Python e pressão compartilhada de memória/page cache não têm certificação por estes pools ou por f_bavail. O filesystem sob /dev/shm não recebe tipo inferido pelo nome. Risco de ENOSPC/OOM/quota/concorrência permanece; eventual execução exige observação/frescor/autorização própria. Não há prova física completa, proteção de toolchain/ELF ou janela pronta.
+
+### Provas afetadas, reprodução e limites
+
+[PROOFS.json](../../../../scripts/crm_csv_elf_budget/PROOFS.json): **12 testes focados PASS**, executados com `PYTHONDONTWRITEBYTECODE=1 python3 scripts/crm_csv_elf_budget/test_budget.py`. Entrypoints operacionais não são executados. Fontes pinadas existentes mais sete arquivos novos entregues bastam; não depende de private/local-evidence.
+
+Reais no laboratório: composição dos oito snapshots, Capture.command/bytes, leitor, write_artifact/private_record/export/ingest canônicos conectados; arquivos/FDs/fsync/flock/O_EXCL, subprocessos locais, pipes e RLIMIT_FSIZE, temporários anônimos. Cobertura: fonte/roots ausentes ou consumidos, hash adulterado; recusa antes de escrita/append; terminal após excesso; prefixos em ENOSPC injetado após escrita REAL de artefato e de canal temporário (filho local encerrado); canal excessivo e timeout; envelope multi-MiB com Base64 externo+interno e custódia DENY; conjunto65 ou128MiB+1 negado antes de receber; SCP literal não recursivo, arquivo excedido/EFBIG e parcial retido sem replay; launcher cap; cálculo muda quando o pool aumenta, sem entrada de capacidade observada.
+
+**Simulado:** destino/processo do transporte SCP substituído por filho Python sintético (o RLIMIT e as escritas/pipes são reais); causa ENOSPC injetada, dados/roots de laboratório, tempo de espera controlado. Nenhum SSH, cliente SCP real/servidor SFTP, leitura de imagem produtiva, metadado root, configuração de serviços ou filesystem produtivo foi certificado. O caminho de consumo PM2 e as provas frontend/predecessor não mudaram nem foram repetidos. Não se executou de novo a cadeia remota consumida nem os blocos literais antigos. A primeira tentativa do teste de reserva tinha instrumentação duplicada de flock e foi interrompida localmente; a instrumentação foi corrigida para chamar o escritor canônico sem wrapper duplicado. Isso não foi operação remota nem prova aprovada descartada.
+
+### Pendências e próximo passo
+
+Revisar esta proposta/patch. Antes de qualquer futura execução: compositor deve selar os oito snapshots/guard+roots explícitos, original writer pré-manifest e scripts de lançamento com hashes coerentes; destinos novos revisados; verificar cliente SCP real e erro de limite no seu alcance; comprovar orçamento/allocator/inodes/RAM/reservas por FS e manter os controles de identidade/intervalo originais. Nenhuma dessas lacunas é preenchida com fixture. O novo delta não prepara comando remoto ou janela. Primeiro bloqueio agora é **revisão do dimensionamento e dos controles futuros**, com512MiB ainda não satisfeito na ÚLTIMA amostra histórica; não se afirma déficit atual sem nova leitura. Não executar v2/capacity-v1 outra vez.
+
+Node/ELF/PM2/closure/proteção operacional, SQL/ownership, saved/fallback e identidades finais,16vínculos/autoridade e Event775 seguem pendentes nos respectivos contratos. NEWauth+NEWDB+NEWcipher, ambos os crons, guarda38 fechada, out.15 CLOSED e aceites anteriores preservados pelo escopo sem efeitos. Responsável operacional Deifson; revisão17/10, próxima21/10 ou mudança. Publicação só fontes/provas/documentação sanitizadas, sem brutos, configurações, bindings privados ou novos inputs operacionais.
+
+---
+
+
 ## Consulta dirigida executada uma vez —17/10/2026, baseb39169e8
 
 **LEITURA CONCLUÍDA / ORÇAMENTO NÃO SATISFEITO / CUSTÓDIA VERIFICADA / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** O bloco literal metadata-only foi executado uma vez como deploy sem sudo; sua ação/destinos locais capacity-v1 estão **consumidos**, não repetir. Não se executou nenhum bloco v2, nem se retomou a descoberta ELF. Código/COMMANDS/manifest/provas mantêm os bytes aprovados. [RESULT.json](../crm-csv-toolchain-capacity-20261017/RESULT.json) contém somente resumo tipado, valores numéricos, metadados pertinentes e hashes/procedência; não contém stdout/stderr brutos, ambientes ou journals.

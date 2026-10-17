@@ -333,3 +333,17 @@ escrita ou observação incompleta. Cache npm acima de1GiB dispara relatório/re
 não prune. Registrar limiar, horizonte, taxa/amostras e responsável por operação;
 sem série de crescimento, declarar lacuna e medir antes de atestar folga durável.
 Não há cron, alerta automático ou política de exclusão ativados por este documento.
+
+
+### Dimensionamento ELF futuro17/10/2026 — não certifica capacidade
+
+[Relatório/matriz](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md)
+derivam pools lógicos143MiB remoto/546MiB local, com guardas de escrita e parciais.
+Proposta192/704MiB inclui allowances físicos condicionais e margem25%; não usa a
+amostra histórica442,90MiB nem altera os limites/destinos consumidos512MiB/2GiB.
+Não é teto físico universal nem certificação de RAM/tmpfs/quota/allocator/inodes.
+Aplicar capacidade/reservas por filesystem/executor, sem compensar espaço entre
+material e custódia separados. Reservas canônicas e WAL não estão incluídos ou
+reduzidos pela margem do lote. Nenhuma medição ou operação produtiva nesta rodada;
+revisão e destinos próprios necessários antes de qualquer novo roteiro executável.
+CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.

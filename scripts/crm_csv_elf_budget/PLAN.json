@@ -1,0 +1,54 @@
+{
+  "remote": {
+    "payloadBytes": 149946368,
+    "allocationAllowanceBytes": 2097152,
+    "safetyMarginBytes": 38010880,
+    "roundingBytes": 11272192,
+    "proposedOperationBytes": 201326592
+  },
+  "localIfShared": {
+    "payloadBytes": 572522496,
+    "allocationAllowanceBytes": 14680064,
+    "safetyMarginBytes": 146800640,
+    "roundingBytes": 4194304,
+    "proposedOperationBytes": 738197504
+  },
+  "roleLimits": {
+    "tools": {
+      "bytes": 1048576,
+      "entries": 32
+    },
+    "remote": {
+      "bytes": 148897792,
+      "entries": 384
+    },
+    "material": {
+      "bytes": 16777216,
+      "entries": 32
+    },
+    "custody": {
+      "bytes": 67108864,
+      "entries": 32
+    },
+    "analysis": {
+      "bytes": 476053504,
+      "entries": 384
+    },
+    "launcher": {
+      "bytes": 4194304,
+      "entries": 16
+    }
+  },
+  "observedAvailableUsedAsInput": false,
+  "canonicalReserveIncluded": false,
+  "base": "5b679f62134ef87b511a7f20df92c58fd9f9e753",
+  "status": "PROPOSAL_ONLY_NOT_AUTHORIZED_FOR_EXECUTION",
+  "unit": "bytes",
+  "allocationAllowanceIsProvenUpperBound": false,
+  "futureFreshFilesystemAndReserveChecksRequired": true,
+  "consumedBudgetUnchanged": {
+    "remote": 536870912,
+    "local": 2147483648
+  },
+  "materialAndCustodyMustBeBudgetedSeparatelyIfDifferentFilesystems": true
+}

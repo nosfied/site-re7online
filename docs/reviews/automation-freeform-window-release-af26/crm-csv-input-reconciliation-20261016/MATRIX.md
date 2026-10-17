@@ -1,3 +1,25 @@
+# Dimensionamento ELF local —17/10/2026, base5b679f62
+
+Proposta única para revisão futura: pools limitados143MiB remoto/546MiB local,
+allowances físicos condicionais2/14MiB +25% +arredondamento64MiB → **192/704MiB**.
+[Memória de cálculo/limites](REPORT.md#dimensionamento-elf-revisto-localmente-17102026-base5b679f62).
+Nenhum valor de disponibilidade entra no cálculo; não autoriza redução do orçamento
+consumido512MiB/2GiB, retry, realocação ou nova consulta.
+
+| Requisito | Resultado local | Falta operacional |
+| --- | --- | --- |
+| Escrita/journal/parcial | Guard antes dos writers canônicos; pools, entradas, append, reserva terminal e parciais contabilizados | Geometria/alocação/quota/inodes/reservas/RAM atuais por filesystem |
+| Canais/recepção | Child pipes limitados; SCP exato não recursivo, RLIMIT por tamanho de referência, prazo global240s;12 testes afetados PASS | Cliente SCP real/servidor não certificados por filho sintético; revisão dos8 snapshots/roots e destinos futuros |
+| Proposta192/704MiB | Derivada de código +margem independente, PLAN.json; teto lógico, allowance físico não universal | Orçamento novo ainda não aplicado/autorizado; gates512/2GiB e snapshots consumidos intactos |
+| Deny anterior / consulta | Históricos preservados; causa anterior INDETERMINATE | Não concluir capacidade atual pelos442,90MiB históricos; não repetir |
+| Demais frentes | Frontend/predecessor/provas PM2 reutilizados, não reabertos | Toolchain protegido, SQL/ownership, saved/fallback, identidades/16vínculos/autoridade/Event775 continuam pendentes |
+
+CSV SUSPENSO / LOCAL VALIDATED no alcance / REVIEW PENDING /
+NOT DEPLOYED / NOT WINDOW READY. Próximo: revisão local da proposta; nenhuma execução.
+Checkpoints abaixo históricos.
+
+---
+
 # Consulta dirigida b39169e8 executada —17/10/2026
 
 Um bloco/um SSH/uma statvfs, deploy sem sudo, exit0. [Resultado sanitizado](../crm-csv-toolchain-capacity-20261017/RESULT.json). Custódia byte-exata verificada, readComplete=true / budgetSatisfied=false; consulta capacity-v1 **consumida**, NÃO REPETIR. Nenhuma escrita remota ou continuação ELF.

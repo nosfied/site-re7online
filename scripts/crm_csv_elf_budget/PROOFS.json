@@ -1,0 +1,26 @@
+{
+  "result": "LOCAL_STORAGE_CONTROLS_VALIDATED_NOT_OPERATIONAL",
+  "tests": 12,
+  "cases": [
+    "injected ENOSPC after actual prefix write; partial persists and counts in later accounting",
+    "canonical Capture/write_artifact/private_record/export/ingest; excess refuses before write; terminal DENY preserves prefix",
+    "real composed Capture.command reaches bounded child; overflow private prefixes and failure row preserved",
+    "eight composed pinned sources; no recursive receiver; unbound/consumed destinations deny",
+    "exact serial nonrecursive SCP arguments; transport target simulated; real RLIMIT refuses extra byte, partial image/channel retained without retry",
+    "incremental journal bound rejects before append; old bytes unchanged",
+    "multi-MiB canonical export/ingest; outer and inner Base64 copies accounted, origin DENY retained",
+    "launcher output cap before accumulation; prefix unchanged",
+    "plan derives from enforced pools + independent allocation allowance +25 percent, rounded64 MiB; no observed free bytes input",
+    "real subprocess/pipes/timeouts/overflow; capped prefixes and anonymous temporaries, no SSH",
+    "temporary channel ENOSPC after real prefix; real local child group ended, partial attached to error for canonical custody",
+    "object count65 and raw total128 MiB+1 deny before receive directory/process creation"
+  ],
+  "real": "Canonical pinned source composition, reader, Capture, writer, export, ingest; local subprocess/pipe/RLIMIT/fsync/O_EXCL, files and anonymous temporaries",
+  "simulated": "SSH not used; SCP target substituted by Python child, synthetic objects and roots. No production identities, capacity, allocation geometry or reserve certification",
+  "notRepeated": "PM2 proof, frontend/predecessor/Operations suites and consumed blocks",
+  "sourceHashes": {
+    "storage_bounds.py": "668786cf7812661ffa4269ec59fc8ef38516186be68ab93ae4d065e6d9b7392a",
+    "editable_sources.py": "7d9cacf8648630b03fddb6b1d0e817ee533ec4a1d676b771ddd9ebbae103d5a2",
+    "test_budget.py": "8be49fc3dab738de1576c53d9ea3685c17b25e087ab9e9f69b5326c7b59d8ff4"
+  }
+}

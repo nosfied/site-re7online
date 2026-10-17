@@ -1,0 +1,352 @@
+--- accepted/capture.source
++++ future-lab-source/capture.source
+@@ -3 +3 @@
+-    scope={'__name__':'library_only','__file__':'<verified '+name+'>'}
++    scope={'__name__':'library_only','STORAGE_ROOTS':STORAGE_ROOTS,'BLOBS':BLOBS,'__file__':'<verified '+name+'>'}
+@@ -8 +8 @@
+-        self.q=q;self.lib=load('read_package.py');self.record=load('privileged_output.source')['private_record']
++        self.q=q;self.lib=load('read_package.py');self.record=load('privileged_output.source')['private_record'];self.bounds=load('storage_bounds.py')
+@@ -20 +20 @@
+-            r=subprocess.run(argv,input=input,pass_fds=pass_fds,capture_output=True,timeout=timeout,
++            r=self.bounds['bounded_run'](argv,input=input,pass_fds=pass_fds,temporary_dir=self.q,channel_limit=1024**2,timeout=timeout,check=False,
+@@ -24 +24 @@
+-        except OSError as e:error=e;err=type(e).__name__.encode()
++        except OSError as e:error=e;out=getattr(e,'stdout',None) or b'';err=getattr(e,'stderr',None) or type(e).__name__.encode()
+--- accepted/driver.py
++++ future-lab-source/driver.py
+@@ -8,4 +8,4 @@
+-MATERIAL=Path('/dev/shm/re7-csv-toolchain-material-20261017-v2')
+-CUSTODY=Path('/home/deifson-oliveira/DEIFSON/re7-private-retention-custody')
+-TOOLS='/dev/shm/re7-csv-toolchain-tools-20261017-v2'
+-OUTPUT='/dev/shm/re7-csv-toolchain-read-20261017-v2'
++MATERIAL=Path('/LAB_ONLY/material')
++CUSTODY=Path('/LAB_ONLY/custody')
++TOOLS='/LAB_ONLY/tools'
++OUTPUT='/LAB_ONLY/output'
+@@ -16 +16 @@
+-    scope={'__name__':'reviewed_library_only','__file__':'<verified '+name+'>','BLOBS':BLOBS if blobs is None else blobs}
++    scope={'__name__':'reviewed_library_only','STORAGE_ROOTS':STORAGE_ROOTS,'BLOBS':BLOBS,'__file__':'<verified '+name+'>','BLOBS':BLOBS if blobs is None else blobs}
+@@ -70 +70,2 @@
+-s={'__name__':'reviewed_remote','__file__':'<verified driver>','BLOBS':blobs,'MANIFEST':m,'MANIFEST_RAW':raw,'MANIFEST_SHA':sys.argv[1]}
++STORAGE_ROOTS=m['storageRoots']
++s={'__name__':'reviewed_remote','STORAGE_ROOTS':STORAGE_ROOTS,'BLOBS':BLOBS,'__file__':'<verified driver>','BLOBS':blobs,'MANIFEST':m,'MANIFEST_RAW':raw,'MANIFEST_SHA':sys.argv[1],'STORAGE_ROOTS':m['storageRoots']}
+@@ -91 +92 @@
+-        scope={'__name__':'reviewed_runner','__file__':'<verified runner>','BLOBS':BLOBS,'MANIFEST_SHA':MANIFEST_SHA}
++        scope={'__name__':'reviewed_runner','STORAGE_ROOTS':STORAGE_ROOTS,'BLOBS':BLOBS,'__file__':'<verified runner>','BLOBS':BLOBS,'MANIFEST_SHA':MANIFEST_SHA,'STORAGE_ROOTS':STORAGE_ROOTS}
+@@ -131 +132 @@
+-    folder=lib['new_directory'](CUSTODY/('csv-toolchain-discovery-20261017-v2'+suffix))
++    folder=lib['new_directory'](CUSTODY/('LAB_ONLY_discovery'+suffix))
+@@ -137 +138 @@
+-        r=subprocess.run(argv,input=frame_raw,capture_output=True,timeout=180,check=False);code,out,err=r.returncode,r.stdout,r.stderr
++        r=libload('storage_bounds.py')['bounded_run'](argv,input=frame_raw,temporary_dir=folder,channel_limit=12*1024**2,stderr_limit=1024**2,timeout=180,check=False);code,out,err=r.returncode,r.stdout,r.stderr
+@@ -139 +140 @@
+-    except Exception as e:error=e;err=type(e).__name__.encode()
++    except Exception as e:error=e;out=getattr(e,'stdout',None) or b'';err=getattr(e,'stderr',None) or type(e).__name__.encode()
+--- accepted/launch.py
++++ future-lab-source/launch.py
+@@ -0,0 +1,3 @@
++
++_bounds={'__name__':'reviewed_storage_library'}
++exec(compile(b'"""Future ELF discovery storage guards; delegates all persistent writes to canonical writers.\nNo entrypoint, transport, destinations, authority or production operations.\n"""\nimport base64\nimport fcntl\nimport io\nimport json\nimport os\nfrom pathlib import Path\nimport resource\nimport selectors\nimport signal\nimport time\nimport stat\nimport subprocess\nimport tempfile\n\nMiB = 1024**2\nTERMINAL = 64*1024\nTEXT_LIMIT = 16*1024\nROLES = {\n    \'tools\': (MiB, 32),\n    \'remote\': (142*MiB, 384),\n    \'material\': (16*MiB, 32),\n    \'custody\': (64*MiB, 32),\n    \'analysis\': (454*MiB, 384),\n    \'launcher\': (4*MiB, 16),\n}\n\ndef need(ok, reason):\n    if not ok:\n        raise RuntimeError(reason)\n\nclass Guard:\n    def __init__(self, roots):\n        self.roots = {Path(k): v for k, v in roots.items()}\n        need(bool(self.roots), \'storage_roots_missing\')\n        for p, role in self.roots.items():\n            need(p.is_absolute() and role in ROLES, \'storage_root_contract\')\n            need(not any(other != p and other in p.parents for other in self.roots), \'storage_roots_overlap\')\n\n    def locate(self, path):\n        path = Path(path)\n        choices = [(root, role) for root, role in self.roots.items() if root in path.parents]\n        need(len(choices) == 1, \'storage_destination_undeclared\')\n        root, role = choices[0]\n        rel = path.relative_to(root)\n        need(len(rel.parts) <= 2 and \'..\' not in rel.parts, \'storage_depth\')\n        return root, role, rel\n\n    def _scan(self, fd, depth=0):\n        total = count = 0\n        for name in os.listdir(fd):\n            s = os.stat(name, dir_fd=fd, follow_symlinks=False)\n            count += 1\n            need(s.st_uid == os.getuid(), \'storage_owner\')\n            if stat.S_ISDIR(s.st_mode):\n                need(depth == 0 and stat.S_IMODE(s.st_mode) == 0o700, \'storage_directory\')\n                child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)\n                try:\n                    need(os.fstat(child).st_ino == s.st_ino, \'storage_directory_replaced\')\n                    t, n = self._scan(child, depth+1)\n                    total += t\n                    count += n\n                finally:\n                    os.close(child)\n            else:\n                need(stat.S_ISREG(s.st_mode) and s.st_nlink == 1 and stat.S_IMODE(s.st_mode) == 0o600, \'storage_file\')\n                total += s.st_size\n        return total, count\n\n    def call(self, path, growth, action, *, terminal=False, file_limit=None):\n        root, role, rel = self.locate(path)\n        need(type(growth) is int and growth >= 0, \'storage_growth\')\n        for p in (root, *root.parents):\n            need(not p.is_symlink(), \'storage_root_symlink\')\n        fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)\n        try:\n            fcntl.flock(fd, fcntl.LOCK_EX)\n            s = os.fstat(fd)\n            need(s.st_uid == os.getuid() and stat.S_IMODE(s.st_mode) == 0o700, \'storage_root_permissions\')\n            t, count = self._scan(fd)\n            cap, files = ROLES[role]\n            # Anonymous analyzer/transport files: 2 MiB analysis, 13 MiB custody.\n            # These reservations are never available to persistent writes.\n            anonymous = 2*MiB if role in (\'analysis\', \'material\') else 13*MiB if role == \'custody\' else 0\n            limit = cap - anonymous - (0 if terminal else TERMINAL)\n            try:Path(path).lstat(); added_entry=0\n            except FileNotFoundError:added_entry=1\n            need(t+growth <= limit and count+added_entry <= files, \'storage_total_exceeded\')\n            if file_limit is not None:\n                try:\n                    old = Path(path).lstat()\n                    need(stat.S_ISREG(old.st_mode), \'storage_append_type\')\n                    size = old.st_size\n                except FileNotFoundError:\n                    size = 0\n                need(size+growth <= file_limit - (0 if terminal else TERMINAL), \'storage_journal_exceeded\')\n            # Canonical writer retains O_EXCL/O_NOFOLLOW/metadata checks/fsync.\n            return action()\n        finally:\n            os.close(fd)\n\n    def artifact(self, original):\n        def write(path, raw):\n            _, role, rel = self.locate(path)\n            image = len(rel.parts) == 2 and rel.parts[0] == \'images\'\n            need(len(raw) <= (128*MiB if image else 12*MiB if role == \'custody\' else 2*MiB if role == \'analysis\' else 6*MiB), \'storage_artifact_exceeded\')\n            return self.call(path, len(raw), lambda: original(path, raw))\n        return write\n\n    def record(self, original):\n        def write(folder, name, row):\n            _, role, _ = self.locate(Path(folder)/name)\n            # Reserve is exclusively a bounded terminal failure/receipt, not arbitrary data.\n            terminal = row.get(\'event\') in (\'end\', \'remote_end\', \'materialize_end\', \'reviewed_local_launcher\') or name == \'sequencer.journal.jsonl\'\n            data = (json.dumps(row, sort_keys=True)+\'\\n\').encode()\n            need(len(data) <= (TERMINAL if terminal else 20*MiB if role == \'custody\' else 3*MiB), \'storage_record_exceeded\')\n            journal = 192*MiB if role == \'analysis\' else 48*MiB if role == \'custody\' else 8*MiB if role in (\'remote\', \'material\') else 4*MiB\n            return self.call(Path(folder)/name, len(data), lambda: original(folder, name, row), terminal=terminal, file_limit=journal)\n        return write\n\nclass LimitedText(io.StringIO):\n    """Only static launcher output; reject before an unbounded accumulation."""\n    def write(self, text):\n        need(len(self.getvalue().encode())+len(text.encode()) <= TEXT_LIMIT, \'launcher_channel_exceeded\')\n        return super().write(text)\n\nclass ChannelLimitExceeded(subprocess.TimeoutExpired):\n    """Captured prefixes are incomplete; static diagnostic, never complete."""\n\n\ndef bounded_run(argv, *, channel_limit=MiB, stderr_limit=None, temporary_dir, file_limit=None, **kw):\n    """Bounded anonymous channels written by the parent; RLIMIT for SCP leaf.\n    No communicate/capture_output accumulation or disk write before its bound.\n    """\n    limits = (channel_limit, channel_limit if stderr_limit is None else stderr_limit)\n    need(all(type(x) is int and 0 < x <= 12*MiB for x in limits), \'channel_limit\')\n    need(not set(kw).intersection((\'stdout\',\'stderr\',\'capture_output\',\'preexec_fn\',\'start_new_session\')), \'bounded_run_interface\')\n    payload=kw.pop(\'input\', None); timeout=kw.pop(\'timeout\'); check=kw.pop(\'check\', False)\n    need(not check, \'bounded_run_check\')\n    hard = channel_limit if file_limit is None else file_limit\n    need(type(hard) is int and hard > 0, \'child_file_limit\')\n    def bounds():\n        resource.setrlimit(resource.RLIMIT_FSIZE, (hard, hard))\n    with tempfile.TemporaryFile(dir=temporary_dir,buffering=0) as a, tempfile.TemporaryFile(dir=temporary_dir,buffering=0) as b:\n        proc=subprocess.Popen(argv, stdin=subprocess.PIPE if payload is not None else subprocess.DEVNULL,\n                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=bounds,\n                              start_new_session=True, **kw)\n        start=time.monotonic(); exceeded=False; timedout=False; sizes=[0,0]; offset=0\n        execution_error=None\n        try:\n            with selectors.DefaultSelector() as poll:\n                for index, stream in enumerate((proc.stdout,proc.stderr)):\n                    os.set_blocking(stream.fileno(),False);poll.register(stream,selectors.EVENT_READ,index)\n                if payload is not None:\n                    os.set_blocking(proc.stdin.fileno(),False)\n                    if payload:poll.register(proc.stdin,selectors.EVENT_WRITE,2)\n                    else:proc.stdin.close()\n                while poll.get_map():\n                    if time.monotonic()-start >= timeout:\n                        timedout=True;break\n                    for key,_ in poll.select(min(.05,max(0,timeout-(time.monotonic()-start)))):\n                        if key.data==2:\n                            try:offset+=os.write(key.fd,payload[offset:offset+65536])\n                            except BrokenPipeError:offset=len(payload)\n                            if offset==len(payload):poll.unregister(key.fileobj);key.fileobj.close()\n                            continue\n                        index=key.data;chunk=os.read(key.fd,min(65536,limits[index]-sizes[index]+1))\n                        if not chunk:poll.unregister(key.fileobj);key.fileobj.close();continue\n                        take=min(len(chunk),limits[index]-sizes[index]);written=(a,b)[index].write(chunk[:take])\n                        if written!=take:raise OSError(28,\'channel_temporary_short_write\')\n                        sizes[index]+=take\n                        if take<len(chunk):exceeded=True;break\n                    if exceeded:break\n        except OSError as e:execution_error=e\n        if timedout or exceeded or execution_error is not None:\n            try:os.killpg(proc.pid,signal.SIGKILL)\n            except ProcessLookupError:pass\n        try:code=proc.wait(timeout=max(.01,timeout-(time.monotonic()-start)))\n        except subprocess.TimeoutExpired:\n            timedout=True\n            try:os.killpg(proc.pid,signal.SIGKILL)\n            except ProcessLookupError:pass\n            code=proc.wait()\n        for stream in (proc.stdin,proc.stdout,proc.stderr):\n            if stream is not None and not stream.closed:stream.close()\n        a.seek(0);b.seek(0);out=a.read(limits[0]);err=b.read(limits[1])\n    if execution_error is not None:\n        execution_error.stdout,execution_error.stderr=out,err\n        raise execution_error\n    if timedout or exceeded:\n        # Prefixes plus size/overflow are diagnosable; never assert complete channels.\n        e=(ChannelLimitExceeded if exceeded else subprocess.TimeoutExpired)(argv,timeout,output=out,stderr=err)\n        e.storageLimitExceeded=exceeded\n        raise e\n    return subprocess.CompletedProcess(argv,code,out,err)\n\ndef receive_images(refs, incoming, driver, cap):\n    """Exact nonrecursive SCP operands, serial, unique leaf; no glob/tree/retry.\n    Parent/file guards and canonical custody remain in the existing receiver.\n    """\n    need(0 < len(refs) <= 64 and sum(x[\'bytes\'] for x in refs) <= 128*MiB, \'transfer_set_budget\')\n    lib = cap.lib\n    lib[\'new_directory\'](incoming)\n    deadline=time.monotonic()+240\n    for index, row in enumerate(refs):\n        name = row[\'sha256\']+\'.elf\'\n        need(len(row[\'sha256\']) == 64 and all(c in \'0123456789abcdef\' for c in row[\'sha256\']) and type(row[\'bytes\']) is int and row[\'bytes\'] > 0, \'transfer_reference\')\n        path = incoming/name\n        need(not path.exists() and not path.is_symlink(), \'transfer_destination_exists\')\n        argv = [\'scp\', \'-p\', \'-o\', \'BatchMode=yes\', \'-o\', \'StrictHostKeyChecking=yes\', driver[\'HOST\']+\':\'+driver[\'OUTPUT\']+\'/images/\'+name, str(path)]\n        remaining=deadline-time.monotonic();need(remaining>0,\'image_transfer_deadline\')\n        start = lib[\'utc\']();code = None;out = err = b\'\';error = None\n        try:\n            # Max image bytes written by this child = exact sealed reference size.\n            # Channels <=1 MiB. No -r; remote cannot create another received tree.\n            r = bounded_run(argv, temporary_dir=cap.q, channel_limit=16*1024, file_limit=row[\'bytes\'], timeout=remaining, check=False)\n            code, out, err = r.returncode, r.stdout, r.stderr\n        except (OSError, subprocess.TimeoutExpired) as e:\n            error=e;out=getattr(e,\'stdout\',None) or b\'\';err=getattr(e,\'stderr\',None) or b\'\'\n        cap.bytes(\'image-transfer-\'+str(index), argv, start, lib[\'utc\'](), code, out, err, error)\n        need(code == 0 and error is None, \'image_transfer_partial\')\n        raw, m = lib[\'stable_file\'](path, row[\'bytes\'])\n        need(len(raw) == row[\'bytes\'] and lib[\'sha\'](raw) == row[\'sha256\'], \'image_transfer_integrity\')\n\n\ndef plan():\n    """Independent of observed capacity. Integer byte bounds, then planning margin.\n    Pools include channels AND Base64 journal copies, never just image payload.\n    Allocation allowances are conditional planning, not an FS quota/certificate.\n    """\n    remote=sum(ROLES[x][0] for x in (\'tools\',\'remote\'))\n    local=sum(ROLES[x][0] for x in (\'material\',\'custody\',\'analysis\'))+3*ROLES[\'launcher\'][0]\n    def estimate(payload, allowance):\n        base=payload+allowance\n        margin=(base+3)//4\n        unit=64*MiB\n        proposal=((base+margin+unit-1)//unit)*unit\n        return dict(payloadBytes=payload,allocationAllowanceBytes=allowance,safetyMarginBytes=margin,\n                    roundingBytes=proposal-base-margin,proposedOperationBytes=proposal)\n    return {\'remote\':estimate(remote,2*MiB),\'localIfShared\':estimate(local,14*MiB),\n            \'roleLimits\':{k:{\'bytes\':v[0],\'entries\':v[1]} for k,v in ROLES.items()},\n            \'observedAvailableUsedAsInput\':False,\'canonicalReserveIncluded\':False}\n','<reviewed storage bounds>','exec'),_bounds)
+@@ -36 +39 @@
+-           'MANIFEST_RAW':raw,'MANIFEST_SHA':expected,'READ':read}
++           'MANIFEST_RAW':raw,'MANIFEST_SHA':expected,'READ':read,'STORAGE_ROOTS':manifest['storageRoots']}
+@@ -48 +51 @@
+-    parent=Path('/home/deifson-oliveira/DEIFSON/re7-private-retention-custody');m=parent.lstat()
++    parent=Path('/LAB_ONLY/custody');m=parent.lstat()
+@@ -52,2 +55,2 @@
+-    folder=parent/('csv-toolchain-launcher-20261017-v2-'+action);folder.mkdir(mode=0o700)
+-    started=datetime.datetime.now(datetime.timezone.utc).isoformat();out=io.StringIO();err=io.StringIO();code=1;error=None
++    folder=parent/('LAB_ONLY_launcher-'+action);folder.mkdir(mode=0o700)
++    started=datetime.datetime.now(datetime.timezone.utc).isoformat();out=_bounds['LimitedText']();err=_bounds['LimitedText']();code=1;error=None
+@@ -56 +59 @@
+-    except Exception as e:error=e;err.write(type(e).__name__)
++    except Exception as e:error=e  # static errorClass in receipt; bounded stderr prefix untouched
+@@ -63 +66 @@
+-    module['private_record'](folder,'privileged-output.private.jsonl',row)
++    _bounds['Guard']({folder:'launcher'}).record(module['private_record'])(folder,'privileged-output.private.jsonl',row)
+--- accepted/local_elf.py
++++ future-lab-source/local_elf.py
+@@ -44 +44 @@
+-    custody=driver['CUSTODY']/'csv-toolchain-discovery-20261017-v2'
++    custody=driver['CUSTODY']/'LAB_ONLY_discovery'
+@@ -47 +47 @@
+-    out=lib['new_directory'](driver['CUSTODY']/'csv-toolchain-analysis-20261017-v2');cap=Capture(out)
++    out=lib['new_directory'](driver['CUSTODY']/'LAB_ONLY_analysis');cap=Capture(out)
+@@ -65,7 +65 @@
+-        argv=['scp','-p','-r','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes',driver['HOST']+':'+driver['OUTPUT']+'/images',str(incoming)]
+-        started=lib['utc']();code=None;a=b=b'';error=None
+-        try:
+-            r=subprocess.run(argv,capture_output=True,timeout=240,check=False);code,a,b=r.returncode,r.stdout,r.stderr
+-        except (OSError,subprocess.TimeoutExpired)as e:error=e;a=getattr(e,'stdout',None)or b'';b=getattr(e,'stderr',None)or b''
+-        cap.bytes('image-transfer',argv,started,lib['utc'](),code,a,b,error)
+-        require(code==0 and error is None,'image_transfer_partial')
++        driver['libload']('storage_bounds.py')['receive_images'](refs,incoming,driver,cap)
+--- accepted/privileged_output.source
++++ future-lab-source/privileged_output.source
+@@ -72,0 +73,5 @@
++
++_guard_scope={'__name__':'reviewed_storage_library'}
++exec(compile(BLOBS['storage_bounds.py'],'<verified storage bounds>','exec'),_guard_scope)
++_guard=_guard_scope['Guard'](STORAGE_ROOTS)
++private_record=_guard.record(private_record)
+--- accepted/read_package.py
++++ future-lab-source/read_package.py
+@@ -621,0 +622,5 @@
++
++_guard_scope={'__name__':'reviewed_storage_library'}
++exec(compile(BLOBS['storage_bounds.py'],'<verified storage bounds>','exec'),_guard_scope)
++_guard=_guard_scope['Guard'](STORAGE_ROOTS)
++write_artifact=_guard.artifact(write_artifact)
+--- accepted/runner.py
++++ future-lab-source/runner.py
+@@ -14 +14 @@
+-    scope={'__name__':'verified_library','__file__':'<verified '+name+'>','BLOBS':BLOBS}
++    scope={'__name__':'verified_library','STORAGE_ROOTS':STORAGE_ROOTS,'BLOBS':BLOBS,'__file__':'<verified '+name+'>','BLOBS':BLOBS}
+--- accepted/storage_bounds.py
++++ future-lab-source/storage_bounds.py
+@@ -0,0 +1,244 @@
++"""Future ELF discovery storage guards; delegates all persistent writes to canonical writers.
++No entrypoint, transport, destinations, authority or production operations.
++"""
++import base64
++import fcntl
++import io
++import json
++import os
++from pathlib import Path
++import resource
++import selectors
++import signal
++import time
++import stat
++import subprocess
++import tempfile
++
++MiB = 1024**2
++TERMINAL = 64*1024
++TEXT_LIMIT = 16*1024
++ROLES = {
++    'tools': (MiB, 32),
++    'remote': (142*MiB, 384),
++    'material': (16*MiB, 32),
++    'custody': (64*MiB, 32),
++    'analysis': (454*MiB, 384),
++    'launcher': (4*MiB, 16),
++}
++
++def need(ok, reason):
++    if not ok:
++        raise RuntimeError(reason)
++
++class Guard:
++    def __init__(self, roots):
++        self.roots = {Path(k): v for k, v in roots.items()}
++        need(bool(self.roots), 'storage_roots_missing')
++        for p, role in self.roots.items():
++            need(p.is_absolute() and role in ROLES, 'storage_root_contract')
++            need(not any(other != p and other in p.parents for other in self.roots), 'storage_roots_overlap')
++
++    def locate(self, path):
++        path = Path(path)
++        choices = [(root, role) for root, role in self.roots.items() if root in path.parents]
++        need(len(choices) == 1, 'storage_destination_undeclared')
++        root, role = choices[0]
++        rel = path.relative_to(root)
++        need(len(rel.parts) <= 2 and '..' not in rel.parts, 'storage_depth')
++        return root, role, rel
++
++    def _scan(self, fd, depth=0):
++        total = count = 0
++        for name in os.listdir(fd):
++            s = os.stat(name, dir_fd=fd, follow_symlinks=False)
++            count += 1
++            need(s.st_uid == os.getuid(), 'storage_owner')
++            if stat.S_ISDIR(s.st_mode):
++                need(depth == 0 and stat.S_IMODE(s.st_mode) == 0o700, 'storage_directory')
++                child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
++                try:
++                    need(os.fstat(child).st_ino == s.st_ino, 'storage_directory_replaced')
++                    t, n = self._scan(child, depth+1)
++                    total += t
++                    count += n
++                finally:
++                    os.close(child)
++            else:
++                need(stat.S_ISREG(s.st_mode) and s.st_nlink == 1 and stat.S_IMODE(s.st_mode) == 0o600, 'storage_file')
++                total += s.st_size
++        return total, count
++
++    def call(self, path, growth, action, *, terminal=False, file_limit=None):
++        root, role, rel = self.locate(path)
++        need(type(growth) is int and growth >= 0, 'storage_growth')
++        for p in (root, *root.parents):
++            need(not p.is_symlink(), 'storage_root_symlink')
++        fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
++        try:
++            fcntl.flock(fd, fcntl.LOCK_EX)
++            s = os.fstat(fd)
++            need(s.st_uid == os.getuid() and stat.S_IMODE(s.st_mode) == 0o700, 'storage_root_permissions')
++            t, count = self._scan(fd)
++            cap, files = ROLES[role]
++            # Anonymous analyzer/transport files: 2 MiB analysis, 13 MiB custody.
++            # These reservations are never available to persistent writes.
++            anonymous = 2*MiB if role in ('analysis', 'material') else 13*MiB if role == 'custody' else 0
++            limit = cap - anonymous - (0 if terminal else TERMINAL)
++            try:Path(path).lstat(); added_entry=0
++            except FileNotFoundError:added_entry=1
++            need(t+growth <= limit and count+added_entry <= files, 'storage_total_exceeded')
++            if file_limit is not None:
++                try:
++                    old = Path(path).lstat()
++                    need(stat.S_ISREG(old.st_mode), 'storage_append_type')
++                    size = old.st_size
++                except FileNotFoundError:
++                    size = 0
++                need(size+growth <= file_limit - (0 if terminal else TERMINAL), 'storage_journal_exceeded')
++            # Canonical writer retains O_EXCL/O_NOFOLLOW/metadata checks/fsync.
++            return action()
++        finally:
++            os.close(fd)
++
++    def artifact(self, original):
++        def write(path, raw):
++            _, role, rel = self.locate(path)
++            image = len(rel.parts) == 2 and rel.parts[0] == 'images'
++            need(len(raw) <= (128*MiB if image else 12*MiB if role == 'custody' else 2*MiB if role == 'analysis' else 6*MiB), 'storage_artifact_exceeded')
++            return self.call(path, len(raw), lambda: original(path, raw))
++        return write
++
++    def record(self, original):
++        def write(folder, name, row):
++            _, role, _ = self.locate(Path(folder)/name)
++            # Reserve is exclusively a bounded terminal failure/receipt, not arbitrary data.
++            terminal = row.get('event') in ('end', 'remote_end', 'materialize_end', 'reviewed_local_launcher') or name == 'sequencer.journal.jsonl'
++            data = (json.dumps(row, sort_keys=True)+'\n').encode()
++            need(len(data) <= (TERMINAL if terminal else 20*MiB if role == 'custody' else 3*MiB), 'storage_record_exceeded')
++            journal = 192*MiB if role == 'analysis' else 48*MiB if role == 'custody' else 8*MiB if role in ('remote', 'material') else 4*MiB
++            return self.call(Path(folder)/name, len(data), lambda: original(folder, name, row), terminal=terminal, file_limit=journal)
++        return write
++
++class LimitedText(io.StringIO):
++    """Only static launcher output; reject before an unbounded accumulation."""
++    def write(self, text):
++        need(len(self.getvalue().encode())+len(text.encode()) <= TEXT_LIMIT, 'launcher_channel_exceeded')
++        return super().write(text)
++
++class ChannelLimitExceeded(subprocess.TimeoutExpired):
++    """Captured prefixes are incomplete; static diagnostic, never complete."""
++
++
++def bounded_run(argv, *, channel_limit=MiB, stderr_limit=None, temporary_dir, file_limit=None, **kw):
++    """Bounded anonymous channels written by the parent; RLIMIT for SCP leaf.
++    No communicate/capture_output accumulation or disk write before its bound.
++    """
++    limits = (channel_limit, channel_limit if stderr_limit is None else stderr_limit)
++    need(all(type(x) is int and 0 < x <= 12*MiB for x in limits), 'channel_limit')
++    need(not set(kw).intersection(('stdout','stderr','capture_output','preexec_fn','start_new_session')), 'bounded_run_interface')
++    payload=kw.pop('input', None); timeout=kw.pop('timeout'); check=kw.pop('check', False)
++    need(not check, 'bounded_run_check')
++    hard = channel_limit if file_limit is None else file_limit
++    need(type(hard) is int and hard > 0, 'child_file_limit')
++    def bounds():
++        resource.setrlimit(resource.RLIMIT_FSIZE, (hard, hard))
++    with tempfile.TemporaryFile(dir=temporary_dir,buffering=0) as a, tempfile.TemporaryFile(dir=temporary_dir,buffering=0) as b:
++        proc=subprocess.Popen(argv, stdin=subprocess.PIPE if payload is not None else subprocess.DEVNULL,
++                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=bounds,
++                              start_new_session=True, **kw)
++        start=time.monotonic(); exceeded=False; timedout=False; sizes=[0,0]; offset=0
++        execution_error=None
++        try:
++            with selectors.DefaultSelector() as poll:
++                for index, stream in enumerate((proc.stdout,proc.stderr)):
++                    os.set_blocking(stream.fileno(),False);poll.register(stream,selectors.EVENT_READ,index)
++                if payload is not None:
++                    os.set_blocking(proc.stdin.fileno(),False)
++                    if payload:poll.register(proc.stdin,selectors.EVENT_WRITE,2)
++                    else:proc.stdin.close()
++                while poll.get_map():
++                    if time.monotonic()-start >= timeout:
++                        timedout=True;break
++                    for key,_ in poll.select(min(.05,max(0,timeout-(time.monotonic()-start)))):
++                        if key.data==2:
++                            try:offset+=os.write(key.fd,payload[offset:offset+65536])
++                            except BrokenPipeError:offset=len(payload)
++                            if offset==len(payload):poll.unregister(key.fileobj);key.fileobj.close()
++                            continue
++                        index=key.data;chunk=os.read(key.fd,min(65536,limits[index]-sizes[index]+1))
++                        if not chunk:poll.unregister(key.fileobj);key.fileobj.close();continue
++                        take=min(len(chunk),limits[index]-sizes[index]);written=(a,b)[index].write(chunk[:take])
++                        if written!=take:raise OSError(28,'channel_temporary_short_write')
++                        sizes[index]+=take
++                        if take<len(chunk):exceeded=True;break
++                    if exceeded:break
++        except OSError as e:execution_error=e
++        if timedout or exceeded or execution_error is not None:
++            try:os.killpg(proc.pid,signal.SIGKILL)
++            except ProcessLookupError:pass
++        try:code=proc.wait(timeout=max(.01,timeout-(time.monotonic()-start)))
++        except subprocess.TimeoutExpired:
++            timedout=True
++            try:os.killpg(proc.pid,signal.SIGKILL)
++            except ProcessLookupError:pass
++            code=proc.wait()
++        for stream in (proc.stdin,proc.stdout,proc.stderr):
++            if stream is not None and not stream.closed:stream.close()
++        a.seek(0);b.seek(0);out=a.read(limits[0]);err=b.read(limits[1])
++    if execution_error is not None:
++        execution_error.stdout,execution_error.stderr=out,err
++        raise execution_error
++    if timedout or exceeded:
++        # Prefixes plus size/overflow are diagnosable; never assert complete channels.
++        e=(ChannelLimitExceeded if exceeded else subprocess.TimeoutExpired)(argv,timeout,output=out,stderr=err)
++        e.storageLimitExceeded=exceeded
++        raise e
++    return subprocess.CompletedProcess(argv,code,out,err)
++
++def receive_images(refs, incoming, driver, cap):
++    """Exact nonrecursive SCP operands, serial, unique leaf; no glob/tree/retry.
++    Parent/file guards and canonical custody remain in the existing receiver.
++    """
++    need(0 < len(refs) <= 64 and sum(x['bytes'] for x in refs) <= 128*MiB, 'transfer_set_budget')
++    lib = cap.lib
++    lib['new_directory'](incoming)
++    deadline=time.monotonic()+240
++    for index, row in enumerate(refs):
++        name = row['sha256']+'.elf'
++        need(len(row['sha256']) == 64 and all(c in '0123456789abcdef' for c in row['sha256']) and type(row['bytes']) is int and row['bytes'] > 0, 'transfer_reference')
++        path = incoming/name
++        need(not path.exists() and not path.is_symlink(), 'transfer_destination_exists')
++        argv = ['scp', '-p', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', driver['HOST']+':'+driver['OUTPUT']+'/images/'+name, str(path)]
++        remaining=deadline-time.monotonic();need(remaining>0,'image_transfer_deadline')
++        start = lib['utc']();code = None;out = err = b'';error = None
++        try:
++            # Max image bytes written by this child = exact sealed reference size.
++            # Channels <=1 MiB. No -r; remote cannot create another received tree.
++            r = bounded_run(argv, temporary_dir=cap.q, channel_limit=16*1024, file_limit=row['bytes'], timeout=remaining, check=False)
++            code, out, err = r.returncode, r.stdout, r.stderr
++        except (OSError, subprocess.TimeoutExpired) as e:
++            error=e;out=getattr(e,'stdout',None) or b'';err=getattr(e,'stderr',None) or b''
++        cap.bytes('image-transfer-'+str(index), argv, start, lib['utc'](), code, out, err, error)
++        need(code == 0 and error is None, 'image_transfer_partial')
++        raw, m = lib['stable_file'](path, row['bytes'])
++        need(len(raw) == row['bytes'] and lib['sha'](raw) == row['sha256'], 'image_transfer_integrity')
++
++
++def plan():
++    """Independent of observed capacity. Integer byte bounds, then planning margin.
++    Pools include channels AND Base64 journal copies, never just image payload.
++    Allocation allowances are conditional planning, not an FS quota/certificate.
++    """
++    remote=sum(ROLES[x][0] for x in ('tools','remote'))
++    local=sum(ROLES[x][0] for x in ('material','custody','analysis'))+3*ROLES['launcher'][0]
++    def estimate(payload, allowance):
++        base=payload+allowance
++        margin=(base+3)//4
++        unit=64*MiB
++        proposal=((base+margin+unit-1)//unit)*unit
++        return dict(payloadBytes=payload,allocationAllowanceBytes=allowance,safetyMarginBytes=margin,
++                    roundingBytes=proposal-base-margin,proposedOperationBytes=proposal)
++    return {'remote':estimate(remote,2*MiB),'localIfShared':estimate(local,14*MiB),
++            'roleLimits':{k:{'bytes':v[0],'entries':v[1]} for k,v in ROLES.items()},
++            'observedAvailableUsedAsInput':False,'canonicalReserveIncluded':False}
