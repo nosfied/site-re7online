@@ -1,0 +1,142 @@
+{
+  "base": "fa72aeba3a985570207afc95d8de1766d24bfb67",
+  "newVpsRead": false,
+  "supervision": {
+    "result": "BYTE_EXACT_EQUAL_TO_BEFORE",
+    "bytes": 43,
+    "beforeSha256": "ce5c1c72984173c2a33e8550e0a25aaa97b21b9c7e5be1d5ac3b062059c19a25",
+    "observedSha256": "ce5c1c72984173c2a33e8550e0a25aaa97b21b9c7e5be1d5ac3b062059c19a25",
+    "sealedBeforeInitialMember": "incident-6683-v4-csv-staged-v2-20261016T094000Z/window/initial.private.json",
+    "sealedBeforeInitialSha256": "27b08dc133aaae282e0fc5cf8413fe7a3c150d7113c2bef18c6005443e46bc1d",
+    "acceptedArchiveInitialMember": "window/initial.private.json",
+    "acceptedInitialSha256": "27b08dc133aaae282e0fc5cf8413fe7a3c150d7113c2bef18c6005443e46bc1d",
+    "acceptedInitialSupervisionSha256": "ce5c1c72984173c2a33e8550e0a25aaa97b21b9c7e5be1d5ac3b062059c19a25",
+    "observedIntervalUtc": [
+      "2026-10-17T01:54:56.816074+00:00",
+      "2026-10-17T01:54:56.826827+00:00"
+    ],
+    "acceptedCheckUtc": "2026-10-16T11:24:55.138543+00:00",
+    "acceptedCheckBoolean": true,
+    "acceptedPostRecoverySystemctlRawAvailable": false,
+    "equalityInferredFromBoolean": false
+  },
+  "historicalPm2Pid": {
+    "pid": 18676,
+    "startedUtc": "2026-10-17T01:22:00.311452+00:00",
+    "finishedUtc": "2026-10-17T01:22:00.312314+00:00",
+    "bytesSha256": "0a98f03f6ec1deee377bc32db3f5b01b42d6a09407253c4a236747327a5ae301",
+    "metadataOnlyCandidate": true
+  },
+  "processObservationUtc": [
+    "2026-10-17T01:54:56.827134+00:00",
+    "2026-10-17T01:54:56.861577+00:00"
+  ],
+  "candidates": {
+    "daemon": {
+      "pid": 18676,
+      "ppid": 1,
+      "uid": 1000,
+      "calendarAsReported": "Wed Feb 4 15:10:25 2026",
+      "commTruncatedAsReported": "PM2 v6.0.14: Go"
+    },
+    "api": {
+      "pid": 936386,
+      "ppid": 18676,
+      "uid": 1000,
+      "calendarAsReported": "Fri Oct 16 11:22:09 2026",
+      "commTruncatedAsReported": "node /opt/re7on"
+    },
+    "worker": {
+      "pid": 936540,
+      "ppid": 18676,
+      "uid": 1000,
+      "calendarAsReported": "Fri Oct 16 11:22:13 2026",
+      "commTruncatedAsReported": "node /opt/re7on"
+    },
+    "frontend": {
+      "pid": 188897,
+      "ppid": 18676,
+      "uid": 1000,
+      "calendarAsReported": "Mon Oct 12 18:17:54 2026",
+      "commTruncatedAsReported": "node /opt/re7on"
+    },
+    "frontend-child": {
+      "pid": 188910,
+      "ppid": 188897,
+      "uid": 1000,
+      "calendarAsReported": "Mon Oct 12 18:17:55 2026",
+      "commTruncatedAsReported": "next-server (v1"
+    },
+    "sql-proxy": {
+      "pid": 177517,
+      "ppid": 176940,
+      "uid": 0,
+      "calendarAsReported": "Sun Feb 15 18:49:58 2026",
+      "commTruncatedAsReported": "docker-proxy"
+    }
+  },
+  "listenerObservationUtc": [
+    "2026-10-17T01:54:56.861999+00:00",
+    "2026-10-17T01:54:56.876741+00:00"
+  ],
+  "listenerCandidates": [
+    {
+      "localEndpoint": "127.0.0.1:8787",
+      "pids": [
+        936540
+      ]
+    },
+    {
+      "localEndpoint": "*:3001",
+      "pids": [
+        936386
+      ]
+    },
+    {
+      "localEndpoint": "*:3000",
+      "pids": [
+        188910
+      ]
+    }
+  ],
+  "otherPm2DaemonHistorical": {
+    "pid": 3342106,
+    "uid": 0,
+    "selected": false
+  },
+  "observedCalendarTimezoneCertified": false,
+  "processTitlesComplete": false,
+  "currentIdentityCertificate": false,
+  "historicalSqlConfigurationCompatibility": [
+    {
+      "consumer": "re7-whatsapp-agent",
+      "historicalContextUtc": "2026-10-16T09:46:12.622168+00:00",
+      "loopback": true,
+      "portMatches5432": true,
+      "databaseMatchesCanonical": true,
+      "roleMatchesCanonical": true,
+      "passwordPresent": true,
+      "credentialValuePublished": false
+    },
+    {
+      "consumer": "re7-whatsapp-web-worker",
+      "historicalContextUtc": "2026-10-16T09:46:12.622168+00:00",
+      "loopback": true,
+      "portMatches5432": true,
+      "databaseMatchesCanonical": true,
+      "roleMatchesCanonical": true,
+      "passwordPresent": true,
+      "credentialValuePublished": false
+    }
+  ],
+  "requiredSqlInputs": [
+    "current API/worker DATABASE_URL channel components (password excluded) and existing NEWDB credential custody",
+    "current boot/PID/ticks/cwd/exe/socket/proxy links",
+    "canonical runtime database/role versus source capture_imports literals",
+    "verified psql/toolchain or Docker exec channel and container identity if that route is selected",
+    "future READ ONLY connection + server/database/session role identity; not executed",
+    "separately reviewed known-import scope; not recreated"
+  ],
+  "historicalsRemainConsumed": true,
+  "atomicSnapshot": false
+}

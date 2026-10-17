@@ -1,5 +1,8 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**CSV R2 dirigido — análise LOCAL e pacote para revisão.** [Comparação byte-exata, candidatos e roteiro SEM sudo](reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/REPORT.md): supervisão43B igual ao before selado e ao before preservado na recuperação aceita; não inferida de boolean. PIDs/listeners/pm2.pid são candidatos históricos, não identidades atuais.10 testes locais do launcher/FDs/custódia, procfs operacional e SSH sintéticos; nenhuma VPS ou repetição dos seis comandos. SQL/canal/toolchain/16 vínculos/autoridade seguem pendentes. Dois DENYs/18 observações/recuperação consumida preservados. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 intocados. Deifson; revisão21/10 ou mudança.
+
+
 **CSV R1/R2 — complemento deploy CONSUMED/COMPLETE_NOT_CERTIFIED,16/10 às22:54 Fortaleza.** [Resultado sanitizado e hashes](reviews/automation-freeform-window-release-af26/crm-csv-r1r2-deploy-result-20261017/REPORT.md): seis comandos exit0 SEM sudo, custódia canônica concluída;24.914B byte-exatos. Dois DENYs/18 observações permanecem históricos e intactos, sem snapshot atômico/boot retroativo. Supervisão observada inactive/enabled e PM2 não resolvido no PATH fixo exigem leitura dirigida futura; não implicam parada da API/worker nem reparo autorizado. Nenhum retry/R3/R4/SQL/instalação/backup/janela. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher/guarda38/out.15 não alterados, sem recertificação completa. Deifson; revisão21/10 ou mudança.
 
 

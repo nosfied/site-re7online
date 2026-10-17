@@ -1,0 +1,47 @@
+{
+  "base": "fa72aeba3a985570207afc95d8de1766d24bfb67",
+  "readerDerivedFromCommit": "1f51505816334b5b606afa55a60de676648b9e2a",
+  "readerParentSha256": "4b3696d6e12e53f4f4fdfa63af3b024950babecf84d38da40a4992a0b178a4a1",
+  "readerSha256": "66f337fbe47d69ae02902f38f6b0e474241222c90967580d9c569dce21796691",
+  "canonicalWriterSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+  "sourceArtifacts": [
+    {
+      "artifact": "current complement capture (private)",
+      "bytes": 24914,
+      "sha256": "a2e898cc429ec72a1f3948479c7f9772984ea78230e8921be88d236ea498f35c"
+    },
+    {
+      "artifact": "original DENY capture (private)",
+      "bytes": 87778,
+      "sha256": "931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529"
+    },
+    {
+      "artifact": "csv-canonical-v2-controls.private.tar (private)",
+      "bytes": 1597440,
+      "sha256": "8d5ed9979c95ba247e3554b02e50a1ecfc7926a3c90791117b7e4f8402d1250b"
+    },
+    {
+      "artifact": "accepted original-recovery-complete-evidence.private.tar (private)",
+      "bytes": 686080,
+      "sha256": "32e0cb1de5dac716027fc8face5cc60f8b996ec0ca9de6b18363cbbb84b30076"
+    },
+    {
+      "artifact": "capture-context-v2.private.json (private)",
+      "bytes": 1182110,
+      "sha256": "e9a5dc97acc3b984f79670b33eed75167007137db64f012abfe9e768c67277e3"
+    }
+  ],
+  "acceptedIndependentChecksSha256": "289ab20da3200d3ab018ac1a22178c3f980f65b9b01718788e37d32d339d6fbc",
+  "pm2PathSource": "v4-sequencer/sequencer.py: Bridge.apps; /home/deploy/.npm-global/bin/pm2; source consulted, never executed",
+  "sqlSource": "crm-csv-operational-20261016/capture_imports.py: SQL/classify; capture not invoked",
+  "configurationHints": "cwd/script from accepted original profile; PIDs from accepted result; ticks from independent checks; daemon from historical capture context. All are constraints/candidates, NOT current authority",
+  "newVpsRead": false,
+  "privateInputsPublished": false,
+  "canonicalSupervisionComparison": {
+    "member": "incident-6683-v4-csv-staged-v2-20261016T094000Z/return-before-commit/ops.py",
+    "sha256": "4dc99143f2754c7ff0c9ac96e8be3f7b193f604fae03cc3da0ad0518ecbcbd3b",
+    "consumer": "Controls.finish",
+    "condition": "systemctl stdout == initial.supervision",
+    "executedInThisTask": false
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "result": "LOCAL_DIRECTED_LAUNCHER_PASS",
+  "tests": 10,
+  "testNames": [
+    "test_complete_published_chain_no_sudo",
+    "test_old_pid_reused_ticks_deny_and_preserve",
+    "test_parent_divergence_denies",
+    "test_wrong_pm2_target_denies",
+    "test_proc_access_denied_errno_preserved_no_escalation",
+    "test_pidfile_changed_denies_without_new_pid_discovery",
+    "test_real_local_proc_read_and_fd_image",
+    "test_symlink_cycle_denies",
+    "test_link_substitution_between_lstat_and_read_denies",
+    "test_proc_generic_link_not_followed_and_duplicate_config_denied"
+  ],
+  "uid": 1000,
+  "real": [
+    "verbatim COMMANDS.md bash check-origin/collect/custody launchers",
+    "Python subprocesses with reviewed bytes stdin",
+    "canonical private_record/export/transfer validation/ingestion",
+    "file/Fd hashes, no-follow checks, symlink traversal and cycle limit",
+    "local real /proc stat and running Python executable FD hash",
+    "EACCES13 at actual kernel file-open boundary, without reading the denied source",
+    "all five documented bash blocks verbatim, including mkdir and shell hash checks"
+  ],
+  "synthetic": [
+    "procfs records for fixed historical candidate PIDs",
+    "boot UUID, selected environment, script/cwd markers, socket links and TCP tables",
+    "PM2 script/package filesystem (script never executed)",
+    "Node pathname is a bind of Python image for matching-hash fixture, not proof of Node",
+    "remote/custody paths mapped to temporary filesystem",
+    "SSH fixture locally exports via another real Python process, no network",
+    "SCP transport substitute copies only the two approved files with exclusive creation; no SCP/SSH network"
+  ],
+  "sudo": "unavailable in namespace; capabilities dropped; non-root UID; no helper",
+  "sourcesPrivateRequired": [
+    "two consumed DENY captures read-only for origin/provenance assertions; never published"
+  ],
+  "negativeCases": [
+    "historical PID reused with changed ticks",
+    "parent mismatch",
+    "pm2.pid changed: no new PID followed",
+    "wrong PM2 package identity",
+    "link substitution after lstat",
+    "link cycle",
+    "proc environ leaf symlink",
+    "duplicate selected configuration",
+    "permission denied errno13",
+    "existing destinations without replay"
+  ],
+  "notProven": [
+    "VPS /proc read permission or current identity",
+    "production image/path hashes",
+    "actual PM2 package/Node dependency closure",
+    "SSH network",
+    "container, SQL identity/privileges or connectivity",
+    "operational root/toolchain/phase authority",
+    "atomic process/config snapshot"
+  ],
+  "earlierProvenTestsReused": "read64/boot format/FD handling/custody prior proofs; no broad suite/build repeated"
+}

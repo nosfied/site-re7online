@@ -1,0 +1,27 @@
+{
+  "base": "fa72aeba3a985570207afc95d8de1766d24bfb67",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/read_package.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/privileged_output.source",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/test_directed.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/COMMANDS.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/LOCAL_ANALYSIS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/PROVENANCE.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/READER_DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/MANIFEST.sha256"
+  ],
+  "exclude": [
+    "private custody/raws/journals/archives",
+    "actual env/configs/credentials",
+    "runtime",
+    "caches",
+    "local-evidence",
+    "consumed sources"
+  ]
+}
