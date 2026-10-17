@@ -1,0 +1,34 @@
+{
+  "base": "37ae6051f0f7bb75a31064f793da274f97f00a2c",
+  "originalReader": {
+    "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/read_package.py",
+    "sha256": "d01961f5388fc49b65130ac4beace468327ac3faae22d3bb6a6599005d3a73e8",
+    "unchanged": true
+  },
+  "readerSha256": "cdfb33b281d69db2e3eba9ea6c7a71eb1ee575a5864f13d8729bcc24a80e5d47",
+  "canonicalWriter": {
+    "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/privileged_output.source",
+    "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+    "byteExactCopy": true
+  },
+  "originalReceipt": {
+    "authorizedCommit": "ad7e866c374555bd85d3c4a2d3f1b6a45d7c7840",
+    "sha256": "931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529",
+    "bytes": 87778,
+    "readerSha256": "d01961f5388fc49b65130ac4beace468327ac3faae22d3bb6a6599005d3a73e8",
+    "rootStdoutSha256": "953df83c1c270595fb5f7b8c3ed80cb576979511c7f5e23a446e8ecd0ed25692",
+    "rootStartedUtc": "2026-10-17T01:22:00.199522+00:00",
+    "rootFinishedUtc": "2026-10-17T01:22:00.349350+00:00",
+    "observations": 18,
+    "state": "RAW_READS_DENY"
+  },
+  "expectedSupplementRemoteReads": [
+    "/proc/sys/kernel/random/boot_id",
+    "deploy-cron",
+    "supervision",
+    "process-discovery",
+    "listener-discovery",
+    "tool-path-discovery"
+  ],
+  "additionalRemoteRereads": []
+}

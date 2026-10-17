@@ -1,0 +1,192 @@
+--- accepted/read_package.py
++++ complement/read_package.py
+@@ -1 +1 @@
+-"""R1/R2 review-only observation/custody. No operational imports or actions.
++"""R1/R2 complement-only observation/custody. Original DENY is immutable. No operational imports or actions.
+@@ -9,0 +10 @@
++import re
+@@ -16,2 +17,2 @@
+-REMOTE = '/dev/shm/re7-csv-r1r2-read-20261016-v1'
+-LOCAL = '/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/csv-r1r2-read-20261016-v1'
++REMOTE = '/dev/shm/re7-csv-r1r2-complement-read-20261017-v1'
++LOCAL = '/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/csv-r1r2-complement-read-20261017-v1'
+@@ -36,0 +38,44 @@
++BOOT_ID = '/proc/sys/kernel/random/boot_id'
++BOOT_LIMIT = 64
++ORIGINAL_PATH = Path('/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/csv-r1r2-read-20261016-v1/original-capture.private.jsonl')
++ORIGIN = {
++    'authorizedCommit':'ad7e866c374555bd85d3c4a2d3f1b6a45d7c7840',
++    'sha256':'931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529',
++    'bytes':87778,
++    'readerSha256':'d01961f5388fc49b65130ac4beace468327ac3faae22d3bb6a6599005d3a73e8',
++    'rootStdoutSha256':'953df83c1c270595fb5f7b8c3ed80cb576979511c7f5e23a446e8ecd0ed25692',
++    'rootStartedUtc':'2026-10-17T01:22:00.199522+00:00',
++    'rootFinishedUtc':'2026-10-17T01:22:00.349350+00:00',
++    'observations':18,
++    'state':'RAW_READS_DENY',
++}
++
++
++def boot_format(raw):
++    require(type(raw)is bytes and re.fullmatch(
++        rb'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\n',raw)is not None,
++        'boot_id_format')
++
++
++def verify_origin(path=ORIGINAL_PATH):
++    """Only local, read-only reuse. Never promote the original DENY to COMPLETE."""
++    path=Path(path);directory(path.parent);raw,metadata=stable_file(path)
++    require(metadata['uid']==os.getuid() and stat.S_IMODE(metadata['mode'])==0o600,'origin_permissions')
++    require(len(raw)==ORIGIN['bytes'] and sha(raw)==ORIGIN['sha256'],'origin_bytes')
++    rows=[json.loads(x)for x in raw.splitlines()]
++    require(len(rows)==3 and rows[0]['event']=='r1r2_begin' and
++            rows[0]['readerSha256']==ORIGIN['readerSha256'] and
++            rows[-1]['event']=='r1r2_end' and rows[-1]['result']==ORIGIN['state'],'origin_deny')
++    command=rows[1]
++    require(command['event']=='r1r2_command' and command['id']=='root-inventory' and
++            command['exitCode']==1 and command['accepted']is False,'origin_command')
++    payload=base64.b64decode(command['stdoutBase64'],validate=True)
++    require(sha(payload)==ORIGIN['rootStdoutSha256'] and command['stdoutSha256']==sha(payload) and
++            command['stdoutBytes']==len(payload),'origin_stdout')
++    require((command['startedUtc'],command['finishedUtc'])==
++            (ORIGIN['rootStartedUtc'],ORIGIN['rootFinishedUtc']),'origin_times')
++    value=json.loads(payload)
++    require(value['result']=='RAW_INVENTORY_DENY' and len(value['targets'])==ORIGIN['observations'] and
++            len({x['path']for x in value['targets']})==ORIGIN['observations'] and
++            len(value['errors'])==1 and value['errors'][0]['path']==BOOT_ID,'origin_observations')
++    return dict(ORIGIN)  # reference only; neither copy nor re-date the 18 observations
+@@ -106,0 +152,2 @@
++    is_boot=path==BOOT_ID
++    read_limit=BOOT_LIMIT if is_boot else LIMIT  # selected before any read; no fallback
+@@ -125,0 +173 @@
++        if is_boot:require(stat.S_ISREG(s.st_mode),'boot_id_not_regular')
+@@ -133,3 +181,8 @@
+-                require(s.st_size<=LIMIT,'target_size_bound')
+-                with os.fdopen(f,'rb',closefd=False) as stream:raw=stream.read(LIMIT+1)
+-                require(len(raw)<=LIMIT and meta(os.fstat(f))==meta(s),'leaf_changed_during_read')
++                require(s.st_size<=read_limit,'target_size_bound')
++                if is_boot:
++                    raw=os.read(f,read_limit)  # one bounded syscall, no buffered large read
++                    boot_format(raw)
++                    info['bootIdFormatVerified']=True
++                else:
++                    with os.fdopen(f,'rb',closefd=False) as stream:raw=stream.read(LIMIT+1)
++                require(len(raw)<=read_limit and meta(os.fstat(f))==meta(s),'leaf_changed_during_read')
+@@ -151 +204 @@
+-    for path in PROTECTED+EXTRA:
++    for path in (BOOT_ID,):
+@@ -154,3 +207,3 @@
+-            row=observe(path,root);row.update(startedUtc=started,finishedUtc=utc());rows.append(row)
+-        except Exception as e:errors.append({'path':path,'startedUtc':started,'finishedUtc':utc(),'errorClass':type(e).__name__})
+-    return {'result':'RAW_INVENTORY_COMPLETE'if not errors else'RAW_INVENTORY_DENY',
++            row=observe(path,root);require(row.get('bootIdFormatVerified')is True,'boot_id_not_observed');row.update(startedUtc=started,finishedUtc=utc());rows.append(row)
++        except Exception as e:errors.append({'path':path,'startedUtc':started,'finishedUtc':utc(),'errorClass':type(e).__name__,'errno':getattr(e,'errno',None)})
++    return {'result':'RAW_BOOT_ID_COMPLETE'if not errors else'RAW_BOOT_ID_DENY',
+@@ -160,0 +214,10 @@
++def validate_boot_inventory(value):
++    require(value['result']=='RAW_BOOT_ID_COMPLETE' and not value['errors'] and
++            len(value['targets'])==1 and value['targets'][0]['path']==BOOT_ID,'boot_inventory')
++    row=value['targets'][0]
++    require(row['kind']=='file' and row['bootIdFormatVerified']is True,'boot_inventory_format')
++    raw=base64.b64decode(row['bytesBase64'],validate=True)
++    require(len(raw)==row['bytes'] and sha(raw)==row['sha256'],'target_bytes')
++    boot_format(raw)
++
++
+@@ -162 +225 @@
+-    return [('root-inventory',['sudo','-n','/usr/bin/python3','-B','-I','-S','-','root'],raw),
++    return [('boot-id',['sudo','-n','/usr/bin/python3','-B','-I','-S','-','root'],raw),
+@@ -172 +235 @@
+-    record(folder,JOURNAL,{'event':'r1r2_begin','utc':utc(),'readerSha256':sha(raw),
++    record(folder,JOURNAL,{'event':'r1r2_complement_begin','utc':utc(),'readerSha256':sha(raw),'origin':dict(ORIGIN),
+@@ -176 +239 @@
+-        started=utc();code=None;stdout=b'';stderr=b'';error=None
++        started=utc();code=None;stdout=b'';stderr=b'';error=None;error_number=None
+@@ -179 +242 @@
+-                       timeout=45 if ident=='root-inventory' else 10,check=False,
++                       timeout=45 if ident=='boot-id' else 10,check=False,
+@@ -185 +248 @@
+-            stderr=str(e).encode();error=type(e).__name__
++            stderr=str(e).encode();error=type(e).__name__;error_number=e.errno
+@@ -187 +250 @@
+-        if valid and ident=='root-inventory':
++        if valid and ident=='boot-id':
+@@ -189,3 +252 @@
+-                inventory=json.loads(stdout);valid=inventory['result']=='RAW_INVENTORY_COMPLETE'
+-                require(len(inventory['targets'])==len(PROTECTED+EXTRA),'inventory_count')
+-                require([x['path']for x in inventory['targets']]==list(PROTECTED+EXTRA),'inventory_coverage')
++                validate_boot_inventory(json.loads(stdout))
+@@ -193 +254 @@
+-        record(folder,JOURNAL,{'event':'r1r2_command','id':ident,'argv':args,
++        record(folder,JOURNAL,{'event':'r1r2_complement_command','id':ident,'argv':args,
+@@ -195 +256 @@
+-          'startedUtc':started,'finishedUtc':utc(),'exitCode':code,'errorClass':error,
++          'startedUtc':started,'finishedUtc':utc(),'exitCode':code,'errorClass':error,'errno':error_number,
+@@ -200 +261 @@
+-    record(folder,JOURNAL,{'event':'r1r2_end','utc':utc(),'result':'RAW_READS_COMPLETE'if success else'RAW_READS_DENY','certification':False})
++    record(folder,JOURNAL,{'event':'r1r2_complement_end','utc':utc(),'result':'COMPLEMENT_READS_COMPLETE'if success else'COMPLEMENT_READS_DENY','certification':False})
+@@ -207 +268 @@
+-    return {'format':'R1R2_BYTE_EXACT_TRANSFER_V1','source':str(folder/JOURNAL),
++    return {'format':'R1R2_COMPLEMENT_BYTE_EXACT_TRANSFER_V1','source':str(folder/JOURNAL),
+@@ -216,2 +277,2 @@
+-    require(begin['event']=='r1r2_begin' and begin['readerSha256']==reader_hash and
+-            begin['commandIds']==expected,'capture_origin')
++    require(begin['event']=='r1r2_complement_begin' and begin['readerSha256']==reader_hash and
++            begin['commandIds']==expected and begin['origin']==ORIGIN,'capture_origin')
+@@ -221 +282 @@
+-        require(row['event']=='r1r2_command' and row['id']==ident,'command_identity')
++        require(row['event']=='r1r2_complement_command' and row['id']==ident,'command_identity')
+@@ -223 +284 @@
+-        if ident!='root-inventory':
++        if ident!='boot-id':
+@@ -229 +290 @@
+-        if ident=='root-inventory':
++        if ident=='boot-id':
+@@ -231,8 +292,2 @@
+-            v=json.loads(base64.b64decode(row['stdoutBase64']))
+-            require(v['result']=='RAW_INVENTORY_COMPLETE' and not v['errors'] and
+-                    [x['path']for x in v['targets']]==list(PROTECTED+EXTRA),'inventory_coverage')
+-            for item in v['targets']:
+-                if 'bytesBase64'in item:
+-                    b=base64.b64decode(item['bytesBase64'],validate=True)
+-                    require(sha(b)==item['sha256'] and len(b)==item['bytes'],'target_bytes')
+-    require(end['event']=='r1r2_end' and end['result']=='RAW_READS_COMPLETE' and
++            validate_boot_inventory(json.loads(base64.b64decode(row['stdoutBase64'])))
++    require(end['event']=='r1r2_complement_end' and end['result']=='COMPLEMENT_READS_COMPLETE' and
+@@ -244 +299 @@
+-    record=writer(package);folder=new_directory(target)
++    record=writer(package);origin=verify_origin();folder=new_directory(target)
+@@ -247 +302 @@
+-    code=None;stdout=b'';stderr=b'';error=None
++    code=None;stdout=b'';stderr=b'';error=None;error_number=None
+@@ -252 +307 @@
+-    except OSError as e:stderr=str(e).encode();error=type(e).__name__
++    except OSError as e:stderr=str(e).encode();error=type(e).__name__;error_number=e.errno
+@@ -255 +310 @@
+-    record(folder,JOURNAL,{'event':'r1r2_transport','argv':args,'exitCode':code,'errorClass':error,
++    record(folder,JOURNAL,{'event':'r1r2_transport','argv':args,'exitCode':code,'errorClass':error,'errno':error_number,
+@@ -259 +314 @@
+-        frame=json.loads(stdout);require(frame['format']=='R1R2_BYTE_EXACT_TRANSFER_V1' and
++        frame=json.loads(stdout);require(frame['format']=='R1R2_COMPLEMENT_BYTE_EXACT_TRANSFER_V1' and
+@@ -265 +320 @@
+-        write_artifact(folder/'original-capture.private.jsonl',original)
++        write_artifact(folder/'complement-capture.private.jsonl',original)
+@@ -268 +323 @@
+-        record(folder,'sequencer.journal.jsonl',{'event':'R1R2_CUSTODY_COMPLETE_NOT_CERTIFIED',
++        record(folder,'sequencer.journal.jsonl',{'event':'R1R2_COMPLEMENT_CUSTODY_COMPLETE_NOT_CERTIFIED','origin':origin,'originalCollectionCompleted':False,'atomicSnapshot':False,
+@@ -273 +328 @@
+-        record(folder,'sequencer.journal.jsonl',{'event':'R1R2_CUSTODY_DENY','errorClass':type(e).__name__,'utc':utc()})
++        record(folder,'sequencer.journal.jsonl',{'event':'R1R2_COMPLEMENT_CUSTODY_DENY','errorClass':type(e).__name__,'errno':getattr(e,'errno',None),'utc':utc()})
+@@ -281,0 +337,2 @@
++    if action=='check-origin':
++        verify_origin();print('ORIGINAL_DENY_REFERENCE_VERIFIED_NO_WRITE');return True
+@@ -287,2 +344,2 @@
+-    print('R1R2_RAW_COLLECTION_COMPLETE_NOT_CERTIFIED'if ok and action=='collect'else
+-          'R1R2_CUSTODY_COMPLETE_NOT_CERTIFIED'if ok else'R1R2_DENY_PRESERVE_NO_RETRY')
++    print('R1R2_COMPLEMENT_COLLECTION_COMPLETE_NOT_CERTIFIED'if ok and action=='collect'else
++          'R1R2_COMPLEMENT_CUSTODY_COMPLETE_NOT_CERTIFIED'if ok else'R1R2_COMPLEMENT_DENY_PRESERVE_NO_RETRY')
+@@ -293,2 +350,2 @@
+-    except Exception:
+-        print('R1R2_DENY_PRESERVE_NO_RETRY',file=sys.stderr);sys.exit(1)
++    except Exception as e:
++        print(json.dumps({'result':'R1R2_COMPLEMENT_DENY_PRESERVE_NO_RETRY','errorClass':type(e).__name__,'errno':getattr(e,'errno',None)}),file=sys.stderr);sys.exit(1)

@@ -1,0 +1,117 @@
+{
+  "result": "LOCAL_VALIDATED_REVIEW_PENDING_NOT_DEPLOYED_NOT_WINDOW_READY",
+  "cases": 16,
+  "tests": [
+    {
+      "name": "test_real_boot_old_failure_new_single_small_read",
+      "result": "PASS"
+    },
+    {
+      "name": "test_real_root_entrypoint_stdin_without_sudo",
+      "result": "PASS"
+    },
+    {
+      "name": "test_invalid_format_rejected_without_echo",
+      "result": "PASS"
+    },
+    {
+      "name": "test_truncated_and_overlong_rejected_no_fallback",
+      "result": "PASS"
+    },
+    {
+      "name": "test_virtual_short_read_denied",
+      "result": "PASS"
+    },
+    {
+      "name": "test_read_error_records_errno_once_without_sensitive_content",
+      "result": "PASS"
+    },
+    {
+      "name": "test_replacement_denies",
+      "result": "PASS"
+    },
+    {
+      "name": "test_leaf_and_parent_symlinks_not_followed",
+      "result": "PASS"
+    },
+    {
+      "name": "test_other_file_observation_equivalence",
+      "result": "PASS"
+    },
+    {
+      "name": "test_scope_only_boot_and_five_missing_commands",
+      "result": "PASS"
+    },
+    {
+      "name": "test_origin_unchanged_and_complement_not_original_complete",
+      "result": "PASS"
+    },
+    {
+      "name": "test_origin_tamper_denies_before_transfer",
+      "result": "PASS"
+    },
+    {
+      "name": "test_boot_failure_preserves_complement_deny_without_following_commands",
+      "result": "PASS"
+    },
+    {
+      "name": "test_transport_oserror_errno_and_no_retry",
+      "result": "PASS"
+    },
+    {
+      "name": "test_concurrent_or_consumed_destination_not_reused",
+      "result": "PASS"
+    },
+    {
+      "name": "test_custody_revalidates_format_and_origin",
+      "result": "PASS"
+    }
+  ],
+  "executionAccounting": "14 PASS in initial15; replacement denied earlier than test expected; expectation corrected without changing consumer. Only replacement+new stdin entrypoint rerun. Single real-file case rerun to retain numeric proof. No historical suite rerun.",
+  "realVirtualFileProof": {
+    "oldReadRequests": [
+      8388609
+    ],
+    "oldErrorClass": "OSError",
+    "oldErrno": 12,
+    "newReadRequests": [
+      64
+    ],
+    "newBytes": 37,
+    "newFormatVerified": true,
+    "bootValuePublished": false,
+    "productionErrnoProven": false
+  },
+  "actualOriginalReferenceVerifiedReadOnly": {
+    "authorizedCommit": "ad7e866c374555bd85d3c4a2d3f1b6a45d7c7840",
+    "sha256": "931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529",
+    "bytes": 87778,
+    "readerSha256": "d01961f5388fc49b65130ac4beace468327ac3faae22d3bb6a6599005d3a73e8",
+    "rootStdoutSha256": "953df83c1c270595fb5f7b8c3ed80cb576979511c7f5e23a446e8ecd0ed25692",
+    "rootStartedUtc": "2026-10-17T01:22:00.199522+00:00",
+    "rootFinishedUtc": "2026-10-17T01:22:00.349350+00:00",
+    "observations": 18,
+    "state": "RAW_READS_DENY"
+  },
+  "originalPrivateFilesByteAndMtimeCtimeUnchanged": true,
+  "privateFileCount": 5,
+  "real": [
+    "local boot_id old/new reader",
+    "no-follow FD/format/hash checks",
+    "local stdin Python entrypoint, no sudo",
+    "canonical private_record and export/ingestion against synthetic fixtures"
+  ],
+  "simulated": [
+    "sudo/root namespace",
+    "five pending commands",
+    "SSH and remote transport",
+    "OSError injected for EIO/EACCES cases",
+    "synthetic original reference for custody round-trip tests"
+  ],
+  "noRemoteCommandExecuted": true,
+  "publishedCommands": {
+    "bashSyntaxBlocks": 6,
+    "modifiedReaderDeniedBeforeDispatch": true,
+    "remoteExecution": false
+  }
+}

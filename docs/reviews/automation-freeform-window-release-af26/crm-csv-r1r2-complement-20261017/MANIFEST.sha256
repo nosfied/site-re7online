@@ -1,0 +1,12 @@
+1addeb92b9d5b6f406fa68c5b637c3c090593f3aed3b42f35893124ca15ba3d6  docs/BACKLOG_TECH.md
+79db420dfe709d2b45409f5fffe3d216dc4a677c70fcc622deddd196bea63732  docs/RUNBOOK_WHATSAPP_AGENT.md
+d0ed6b2839a1acb6bb2df10f7fb7455728dd5bba0d0e1db224cbe4268b9a0b79  docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/ALLOWLIST.json
+7fe67f9d0e3eb11ffcb471bc6447d497da05f08b9e0d584d8fa36a4ac4e13406  docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/COMMANDS.md
+b43f4986b599428b221afff1472f06c9e7291d0807a2bd47e35630f4646f5491  docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/PROOFS.json
+ce25388ca424e9ab29cf8d8256027a41c2eaefd72c62172eeaec64b71ce1dd9c  docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/PROVENANCE.json
+00e5cf5354cde758cf892373cda28e9db7acb318612a7385e5bf8b5690b5dd03  docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/READER_DELTA.patch
+a6d564916a30d2a5787fc6987be97073ccacc1711ba8f96771b83578318f7fd3  docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/REPORT.md
+93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a  docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/privileged_output.source
+cdfb33b281d69db2e3eba9ea6c7a71eb1ee575a5864f13d8729bcc24a80e5d47  docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/read_package.py
+3c9b891910fee880114603117c20ed7ed227feed13816f717bc5094f86f7f0d8  docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/test_complement.py
+3e2f32f7c6f9333f5b799c297ebe5d47bcce6391e7a0ac1975c4fb565d704127  docs/saas/DOCUMENTATION_INDEX.md

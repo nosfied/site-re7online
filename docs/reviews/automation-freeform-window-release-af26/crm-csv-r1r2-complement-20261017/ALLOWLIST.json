@@ -1,0 +1,19 @@
+{
+  "base": "37ae6051f0f7bb75a31064f793da274f97f00a2c",
+  "scope": "LOCAL_BOOT_FIX_AND_FUTURE_COMPLEMENT_REVIEW_ONLY",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/COMMANDS.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/PROVENANCE.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/READER_DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/privileged_output.source",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/read_package.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/test_complement.py",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ]
+}

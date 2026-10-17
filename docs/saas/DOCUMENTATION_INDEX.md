@@ -1,5 +1,8 @@
 # Documentation Index
 
+**CSV R1/R2 — correção/complementação LOCAL para revisão,17/10UTC.** [Reader, roteiro novo e16 casos dirigidos](../reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/REPORT.md): boot_id usa64B escolhidos antes da leitura, UUID/newline validado e errno numérico; reader antigo reproduziu ENOMEM somente no laboratório. Complementação futura limitada a boot_id+cinco comandos não executados, com destinos novos e private_record canônico. As18 observações anteriores conservam hash/horários e estado DENY; custódia nova nunca declara a original completa/snapshot atômico. Origem privada real conferida sem alteração. Nenhuma VPS/coleta nova autorizada ou executada; sem pins/bindings/instalação/R3/R4. LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso, produção/NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Revisão21/10 ou mudança.
+
+
 **CSV R1/R2 — CONSUMED/DENY,16/10 às22:22 Fortaleza.** [Resultado sanitizado e procedência](../reviews/automation-freeform-window-release-af26/crm-csv-r1r2-result-20261017/REPORT.md): única coleta root registrou18/19 caminhos e OSError em boot_id; os cinco comandos seguintes não rodaram. Transferência única exit0 preservou cópia privada byte-exata; ingestão canônica negou command_count e mantém R1R2_CUSTODY_DENY, sem certificado completo. Fonte root atual e2a5ffab… confirma histórico; bibliotecas/alias futuros ausentes; pais Event775 observados, sem reparo. Nenhuma repetição, pin/binding alterado, R3/R4, backup ou instalação. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher/controles/guarda38/out.15 não alterados, sem nova certificação completa. Revisão21/10 ou mudança.
 
 
