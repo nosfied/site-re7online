@@ -1,5 +1,13 @@
 # Event — proposta mínima de remediação para decisão separada
 
+## Revisão mínima xattr — LOCAL VALIDATED / REVIEW PENDING
+
+O impedimento de ferramenta remota foi tratado **somente na preparação local**: o [novo bloco literal](#revisão-xattr--novo-bloco-somente-para-revisão-não-executado) lê dois atributos POSIX pelos mesmos FDs, usando Python/stdlib. Não chama getfacl, não procura alternativa e não executa programas auxiliares na VPS. A seleção desse mecanismo é explícita nesta revisão, nunca fallback da tentativa anterior. [Provas](XATTR_PROOFS.json) e [hashes/procedência](XATTR_MANIFEST.sha256).
+
+O preflight getfacl anterior continua CONSUMED/DENY, com todos os bytes executáveis, bloco literal e recibos intactos. Nenhuma nova observação produtiva foi feita. A nova consulta ainda exige autorização separada;0755 e alterações ACL continuam bloqueadas, mesmo se houver coleta completa. ELF PAUSADO / CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
+
+---
+
 ## Resultado da execução autorizada —17/10/2026,14:17:02 Fortaleza
 
 **PREFLIGHT CONSUMED/DENY / APLICAÇÃO NÃO AUTORIZADA.** Base/remoto f0538524 conferidos, fontes/manifests/hashes publicados PASS. O bloco literal abaixo foi executado **uma vez**, deploy sem sudo. [Resultado sanitizado e procedência dos canais](PREFLIGHT_RESULT.json). Exit1, sem timeout ou falha de transporte; `denialStage=tool-preflight`, `denialReason=READ_OR_TOOL_FAILURE`, `errorClass=FileNotFoundError`, `errno=2`. A primeira operação da etapa é `os.lstat('/usr/bin/getfacl')`: esse caminho obrigatório não pôde ser resolvido (ENOENT). Isso não prova o estado de instalação de um pacote ou ausência de qualquer ferramenta em outro caminho; **nenhuma busca/alternativa foi realizada**.
@@ -140,3 +148,71 @@ Resultado completo significa **OBSERVED_NOT_AUTHORIZED**;0775 e ACL estendida/de
 [14 provas focadas](PREFLIGHT_PROOFS.json), reproduzíveis com `PYTHONDONTWRITEBYTECODE=1 python3 -m scripts.crm_csv_delivery.test_preflight`. Bash/heredoc/Python literal executados em laboratório; shim Python só injeta a instrumentação local de SSH/namespace/custódia. Código verificado, decisões, FD/getfacl local, leitor, Capture e private_record reais. O namespace remoto é fixture temporária; UID/root, access denied, substituição, ACL estendida/formato, timeout e resposta perdida são fronteiras simuladas explicitamente. Excesso de canal usa filho local real e limite real. Destino existente e adulteração de source/reader negam antes de SSH. Prova local não certifica ferramentas, ACLs, identidades ou exclusão de writers produtivos. Nenhuma suíte anterior, rebuild, captura VPS ou ação consumida foi repetida.
 
 LOCAL VALIDATED no alcance acima / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. Apenas preflight futuro para revisão; nenhuma autorização de aplicação. ELF continua PAUSADO.
+
+## Revisão xattr — novo bloco SOMENTE PARA REVISÃO, NÃO EXECUTADO
+
+```bash
+(
+set -euo pipefail
+umask 077
+python3 -B -I -S - <<'REVIEWED_EVENT_XATTR_PREFLIGHT'
+import hashlib,os,stat,sys
+from pathlib import Path
+p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/scripts/crm_csv_delivery/preflight_xattr.py')
+for q in (p,*p.parents):assert not q.is_symlink(),'reviewed_source_symlink'
+s=p.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'reviewed_source_type_size'
+def meta(m):return tuple(getattr(m,'st_'+k) for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
+fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+try:
+ assert meta(os.fstat(fd))==meta(s),'reviewed_source_replaced'
+ raw=os.read(fd,65536)
+ assert meta(os.fstat(fd))==meta(s)==meta(p.lstat()),'reviewed_source_changed'
+finally:os.close(fd)
+assert hashlib.sha256(raw).hexdigest()=='1de0e5025c8f27d0dd12f0698eccc3b839748af142e014dc4275d11fb0587a21','reviewed_event_preflight_digest'
+ns={'__name__':'reviewed_event_preflight_driver','__file__':str(p)}
+exec(compile(raw,str(p),'exec'),ns)
+sys.exit(ns['execute']())
+REVIEWED_EVENT_XATTR_PREFLIGHT
+)
+```
+
+### Fundamentação primária e interpretação restrita
+
+- [Python3.12, os.getxattr](https://docs.python.org/3.12/library/os.html#os.getxattr): leitura de valor binário e suporte a FD no Linux; os.XATTR_SIZE_MAX é64KiB. A consulta passa o FD já autenticado, não resolve novamente o caminho para obter ACL.
+- [Linux getxattr(2)](https://man7.org/linux/man-pages/man2/getxattr.2.html): fgetxattr usa o arquivo aberto; ENODATA pode significar atributo inexistente **ou** não acessível ao processo. ENOTSUP aponta falta de suporte/desabilitação. Outros erros não são ausência. A API Python pode realizar detalhes internos de dimensionamento; não se promete um único syscall nativo, não há retry/releitura/fallback implementado pelo coletor.
+- [Linux xattr(7)](https://man7.org/linux/man-pages/man7/xattr.7.html): atributos system incluem ACLs, com política de acesso própria; limite VFS de valor64KiB. Não usamos permissões de atributos user como prova de acesso aos atributos system.
+- [Linux UAPI xattr.h, v6.8](https://github.com/torvalds/linux/blob/v6.8/include/uapi/linux/xattr.h): nomes system.posix_acl_access e system.posix_acl_default. Referência de implementação, sem inferir versão do kernel produtivo.
+- [Linux acl(5)](https://man7.org/linux/man-pages/man5/acl.5.html): ACL de acesso e ACL default têm papéis diferentes; máscara e permissões de grupo são relacionadas, e ACL default governa herança. A ausência de atributo access retornável **não significa ausência de uma ACL base** associada às permissões. Não implementamos o formato binário ou cálculo de direitos.
+
+| Resultado de os.getxattr(fd, nome literal) | Registro privado | Consequência |
+| --- | --- | --- |
+| Retorna bytes, inclusive vazios |PRESENT, tamanho/SHA/Base64 byte-exatos, sem decoder |Preservar; estrutura/entradas/direitos NÃO certificados. Alteração bloqueada até análise competente |
+| ENODATA |NO_DATA_ABSENT_OR_NOT_VISIBLE, errno numérico, absenceConfirmed=false |Ausência do atributo é uma hipótese distinta de negação explícita, mas não é ausência absoluta certificada. Leitura pode terminar como observação; não autoriza mudança |
+| EACCES ou EPERM |ACCESS_DENIED, errno/classe |DENY na primeira ocorrência; não certificar restantes |
+| ENOTSUP/EOPNOTSUPP |NOT_SUPPORTED, errno/classe |DENY; não converter em atributo ausente |
+| Qualquer outro OSError, inclusive EIO/ERANGE/E2BIG/EBADF |OTHER_ERROR, errno/classe |DENY sem mensagens arbitrárias ou alternativa |
+| API ausente / erro não OSError / bytes acima do limite |Etapa e razão estática/classe; parcial preservado |DENY, nunca “sem ACL” |
+
+Somente os **dois nomes literais** são consultados, para os mesmos cinco diretórios. Não há listxattr, inventário de outros namespaces, leitura de arquivo Event, ambientes, dados ou permissões dos tenants. O perfil de captura permanece identidade→cadeia no-follow por FD→metadados canônicos→atributos→revalidação FD/resolução/metadados. Cada atributo tem intervalo próprio; a cadeia não é snapshot atômico. Mudança de ACL pode alterar ctime e será detectada pela revalidação, mas não se afirma exclusão de escritores/atomicidade de múltiplas leituras.
+
+### Consumo autenticado e custódia da revisão
+
+Fontes novas: `scripts/crm_csv_delivery/preflight_xattr.py` e `event_preflight_xattr.source`; o driver carrega os bytes pinados de preflight.py como **biblioteca de transporte**, sem executar seu contexto/destino consumido. Contexto novo é literal/revisado: fonte/SHA e destino `csv-delivery-event-xattr-preflight-20261017-v1` sob a custódia privada existente do owner. Esse destino não é criado nesta rodada; quando autorizado, será exclusivo0700 e arquivos0600, sem sobrescrita. O comando acima contém o caminho completo efetivo no driver; os canais e journals usam o mesmo Capture/private_record, sem novo escritor.
+
+O bootstrap autentica e compila o mesmo snapshot de bytes; reutiliza leitor/meta, transporte único SSH deploy SEM sudo, timeout25s, stdout/stderr antes do parse e recibo sourceComplete/noAutomaticContinuation. O corpo remoto importa somente stdlib; não depende de getfacl/setfacl ou utilitários para obter ACL. A API os.getxattr e suporte a FD precisam existir/funcionar: ausência ou erro nega sem instalação ou fallback. Chamada bem-sucedida não prova proteção global do toolchain, que continua fora desta frente.
+
+Há no máximo dez valores opacos de64KiB (655.360B brutos; Base64 até873.840B), mais metadados/envelope e duplicação canônica dos canais no journal local. Não se copia runtime ou árvore; os valores não são publicados. Não há parser ACL novo, montagem de ACL por struct, conversão em texto, aplicação dos blobs ou escrita remota. `aclInterpretationComplete=false`, `aclChangeBlocked=true`, `writersExcluded=false` e `applicationAuthorized=false` permanecem explícitos, mesmo com `readComplete=true`. Hash de blob serve à integridade, não certifica direitos nem autoriza aplicar permissões.
+
+### Provas e limites efetivos
+
+Doze testes novos focados, sem repetição das suítes anteriores: base/ENODATA real versus getfacl; access estendida/default criadas **somente em fixtures locais** com setfacl preinstalado; leitura FD real,10 comparações independentes getfacl e Base64 byte-exato; diretório local sem acesso negado por kernel; procfs local retornando EOPNOTSUPP real; EACCES/ENOTSUP/EIO na interface xattr injetados para exercitar cada classificação; symlink/substituição real em fixture; resposta perdida e custódia; pin adulterado e ausência de subprocess no corpo remoto; bloco Bash/heredoc/Python literal completo com namespace/SSH/destino simulados.
+
+O primeiro ensaio no sandbox recusou a criação da fixture estendida com EINVAL. Não foi substituído por mock/PASS: a mesma suíte foi executada no filesystem local autorizado fora dessa sobreposição, com getfacl/setfacl já disponíveis, e passou12/12. Não houve download/instalação ou contato com VPS. setfacl é usado apenas para produzir fixtures sintéticas; não é dependência do procedimento remoto. Reprodução: `PYTHONDONTWRITEBYTECODE=1 python3 -m scripts.crm_csv_delivery.test_preflight_xattr`, em filesystem local com suporte ACL e utilitários de laboratório; indisponibilidade desses componentes impede a prova, sem instalação/fallback automático.
+
+O consumidor é a mesma cadeia/leitor e os mesmos canais canônicos; somente a obtenção da evidência ACL foi revisada. As representações getfacl dos testes não se tornam parser produtivo. As novas provas não reinterpretam o DENY por getfacl ausente nem o primeiro pai0775; históricos mantêm seus horários.
+
+### Decisão atual e faltante exato
+
+Próximo ato possível é **revisão/autorização exclusiva do novo preflight xattr acima**, não sua execução nesta rodada. Dependência de getfacl remoto removida por desenho explícito, mas suporte/permissões xattr produtivos ainda desconhecidos. Se os blobs existirem, análise competente precisa determinar as entradas/máscara/default e impactos antes de alterar g+w. Se ENODATA, preservar sua ambiguidade e relacionar com modo/owner/capacidade de leitura; não concluir “sem ACL”. Nos demais erros, parar.
+
+Continuam faltando: estados atuais dos cinco diretórios, interpretação das evidências ACL, atribuição/exclusão dos writers relevantes e executor/plano/intent/CAS de aplicação com aprovação própria. As precondições de aplicação por FD, verificação integral pelo predicado original e retorno condicionado descritas anteriormente não mudam. Não há autorização de chmod/ACL, mudança de credenciais, crons, controles ou retomada CSV. Owner Deifson; revisão17/10/2026, próxima21/10 ou antes de alteração. NEWauth+NEWDB+NEWcipher/produção/guarda38/out.15 e todos os privados/DENYs preservados.

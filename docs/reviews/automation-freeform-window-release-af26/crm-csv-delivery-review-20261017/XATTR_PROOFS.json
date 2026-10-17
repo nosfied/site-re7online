@@ -1,0 +1,86 @@
+{
+  "result": "LOCAL_VALIDATED_REVIEW_PENDING_NOT_OPERATIONALLY_CERTIFIED",
+  "tests": 12,
+  "cases": [
+    {
+      "case": "base",
+      "exit": 0,
+      "realXattrCalls": 10,
+      "realGetfaclComparisons": 5,
+      "rawAclPublished": false
+    },
+    {
+      "case": "denied",
+      "exit": 1,
+      "realXattrCalls": 0,
+      "realGetfaclComparisons": 0,
+      "rawAclPublished": false
+    },
+    {
+      "case": "extended",
+      "exit": 0,
+      "realXattrCalls": 10,
+      "realGetfaclComparisons": 10,
+      "rawAclPublished": false
+    },
+    {
+      "case": "literal full shell/heredoc/authenticated Python/FD/transport/custody",
+      "result": "PASS; SSH and target namespace/destination simulated only"
+    },
+    {
+      "case": "other",
+      "exit": 1,
+      "realXattrCalls": 0,
+      "realGetfaclComparisons": 0,
+      "rawAclPublished": false
+    },
+    {
+      "case": "real directory access denial on fixture",
+      "result": "EACCES; separate injected xattr denial verifies classification"
+    },
+    {
+      "case": "local procfs real getxattr unsupported",
+      "errno": 95,
+      "result": "NOT_SUPPORTED, not absence"
+    },
+    {
+      "case": "lost",
+      "exit": 1,
+      "realXattrCalls": 0,
+      "realGetfaclComparisons": 0,
+      "rawAclPublished": false
+    },
+    {
+      "case": "pin adulteration and zero remote child tool launch",
+      "result": "DENY before SSH; source stdlib/read-only"
+    },
+    {
+      "case": "swap",
+      "exit": 1,
+      "realXattrCalls": 10,
+      "realGetfaclComparisons": 0,
+      "rawAclPublished": false
+    },
+    {
+      "case": "symlink",
+      "exit": 1,
+      "realXattrCalls": 0,
+      "realGetfaclComparisons": 0,
+      "rawAclPublished": false
+    },
+    {
+      "case": "unsupported",
+      "exit": 1,
+      "realXattrCalls": 0,
+      "realGetfaclComparisons": 0,
+      "rawAclPublished": false
+    }
+  ],
+  "labTools": {
+    "getfacl": "getfacl 2.3.2",
+    "setfacl": "preinstalled, used only to create synthetic ACL fixtures"
+  },
+  "real": "Linux FD getxattr on base/access/default ACL fixtures; independent getfacl text and byte-exact kernel values; no ACL decoder; real procfs unsupported; real directory EACCES; shell and canonical custody",
+  "simulated": "SSH, deploy namespace/destination, xattr EACCES/EOPNOTSUPP/EIO injection and response loss; no VPS or writer exclusion",
+  "applicationAuthorized": false
+}

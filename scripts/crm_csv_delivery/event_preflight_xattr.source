@@ -1,0 +1,72 @@
+"""Revision of Event preflight: opaque POSIX ACL xattrs on the same directory FDs.
+No ACL parser, writes, external commands, alternative tool search or retry.
+meta is the unchanged authenticated canonical reader function.
+"""
+import base64,datetime,errno,hashlib,json,os,stat
+TARGETS=('/opt/re7online/site-re7online','/opt/re7online/site-re7online/apps',
+ '/opt/re7online/site-re7online/apps/whatsapp-agent',
+ '/opt/re7online/site-re7online/apps/whatsapp-agent/src',
+ '/opt/re7online/site-re7online/apps/whatsapp-agent/src/events')
+ATTRIBUTES=('system.posix_acl_access','system.posix_acl_default')
+LIMIT=65536
+
+def utc():return datetime.datetime.now(datetime.timezone.utc).isoformat()
+def require(ok,reason):
+ if not ok:raise RuntimeError(reason)
+
+def attribute(fd,name):
+ row={'name':name,'startedUtc':utc(),'absenceConfirmed':False,'interpretation':'OPAQUE_NOT_ANALYZED'}
+ try:
+  raw=os.getxattr(fd,name)
+  # Linux/Python documented value bound; oversized/error never means no ACL.
+  require(len(raw)<=LIMIT,'acl_xattr_size_limit')
+  row.update(state='PRESENT',bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest(),bytesBase64=base64.b64encode(raw).decode(),errno=None)
+ except OSError as e:
+  if e.errno==errno.ENODATA:state='NO_DATA_ABSENT_OR_NOT_VISIBLE'
+  elif e.errno in (errno.EACCES,errno.EPERM):state='ACCESS_DENIED'
+  elif e.errno in (errno.ENOTSUP,errno.EOPNOTSUPP):state='NOT_SUPPORTED'
+  else:state='OTHER_ERROR'
+  row.update(state=state,errno=e.errno,errorClass=type(e).__name__)
+ row['finishedUtc']=utc()
+ return row
+
+def collect():
+ started=utc();rows=[];fds=[];links=[];stage='executor';identity=None
+ try:
+  identity={'uid':os.getuid(),'euid':os.geteuid(),'gid':os.getgid(),'egid':os.getegid(),'groups':sorted(os.getgroups())}
+  require(identity['uid']==identity['euid']!=0 and identity['gid']==identity['egid'],'unprivileged_executor_required')
+  stage='xattr-api';require(callable(getattr(os,'getxattr',None)),'xattr_api_unavailable')
+  stage='directory-chain'
+  parent=os.open('/',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW);fds.append(parent)
+  rootmeta=meta(os.fstat(parent));links.append(('/',None,'/',parent,rootmeta));current=''
+  for part in TARGETS[-1].strip('/').split('/'):
+   current+='/'+part;s=os.stat(part,dir_fd=parent,follow_symlinks=False)
+   require(stat.S_ISDIR(s.st_mode),'chain_directory_required')
+   fd=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent);fds.append(fd)
+   require(meta(os.fstat(fd))==meta(s),'chain_replaced')
+   links.append((current,parent,part,fd,meta(s)));parent=fd
+  for path,_,_,fd,m in links:
+   if path not in TARGETS:continue
+   stage='directory-acl-xattr';rows.append({'path':path,'startedUtc':utc(),'metadata':m,'complete':False,'attributes':[]})
+   for name in ATTRIBUTES:
+    observation=attribute(fd,name);rows[-1]['attributes'].append(observation)
+    require(observation['state'] in ('PRESENT','NO_DATA_ABSENT_OR_NOT_VISIBLE'),'acl_xattr_unavailable')
+   rows[-1].update(finishedUtc=utc(),complete=True)
+  stage='revalidation'
+  for path,par,name,fd,m in links:
+   require(meta(os.fstat(fd))==m,'directory_fd_changed')
+   now=os.stat(name,dir_fd=par,follow_symlinks=False) if par is not None else os.lstat('/')
+   require(meta(now)==m,'directory_path_changed')
+  require(len(rows)==5 and all(x['complete'] for x in rows),'target_population')
+  result={'result':'EVENT_PREFLIGHT_OBSERVED_NOT_AUTHORIZED','readComplete':True}
+ except Exception as e:
+  result={'result':'EVENT_PREFLIGHT_DENY_NO_RETRY','readComplete':False,'denialStage':stage,
+          'denialReason':str(e) if type(e) is RuntimeError else 'READ_OR_XATTR_FAILURE','errorClass':type(e).__name__,'errno':getattr(e,'errno',None)}
+ finally:
+  for fd in reversed(fds):os.close(fd)
+ result.update(startedUtc=started,finishedUtc=utc(),identity=identity,
+  chainObserved=[{'path':p,'metadata':m} for p,_,_,_,m in links],observations=rows,
+  aclInterpretationComplete=False,aclChangeBlocked=True,atomicSnapshot=False,
+  mutations=False,writersExcluded=False,applicationAuthorized=False,eventParentsCertified=False)
+ print(json.dumps(result,sort_keys=True))
+ return 0 if result['readComplete'] else 1

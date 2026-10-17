@@ -1,3 +1,11 @@
+## Revisão ACL xattr LOCAL — basec7aa5897, preflight consumido preservado
+
+A [proposta existente](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md) agora contém **novo** bloco literal/destino exclusivo para revisão: dois nomes POSIX ACL access/default por os.getxattr nos mesmos FDs, sem getfacl remoto ou parser. Transporte/leitor/Capture/private_record reutilizados, autenticados dos mesmos bytes. ENODATA é ausência/não visibilidade não confirmada; EACCES/EPERM, ENOTSUP e outros erros ficam distintos e negam, nunca viram “sem ACL”. Bytes presentes ficam opacos em custódia privada e alterações permanecem bloqueadas.
+
+[12 provas locais](../crm-csv-delivery-review-20261017/XATTR_PROOFS.json): ACL base/estendida/default reais contra getfacl, bytes exatos/FD, negação e falta de suporte reais locais, substituição/symlink, erros injetados, perda de resposta e bloco literal/custódia. Sem VPS/instalação/chmod/SQL/ELF, sem suíte anterior repetida. Próximo ato é somente revisão e autorização própria da consulta xattr; estados atuais, análise ACL e cobertura/exclusão dos writers continuam faltantes. DENY/getfacl consumido intacto; CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY, ELF PAUSADO. Deifson; revisão21/10 ou antes da mudança.
+
+---
+
 ## Event preflight17/10 — CONSUMED/DENY antes dos alvos
 
 [Proposta existente atualizada e decisão](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md), [resultado/hashes](../crm-csv-delivery-review-20261017/PREFLIGHT_RESULT.json). Uma execução literal f0538524 deploy sem sudo às14:17:02 Fortaleza; exit1, tool-preflight / READ_OR_TOOL_FAILURE / FileNotFoundError errno2 na consulta ao caminho fixo /usr/bin/getfacl. Identidade não privilegiada observada, zero alvos/cadeias/ACLs e zero comandos getfacl. Canais602B/0B e recibos privados conferidos; sourceComplete=false. Sem retry, alternativa, busca, leitura adicional ou mudança produtiva.

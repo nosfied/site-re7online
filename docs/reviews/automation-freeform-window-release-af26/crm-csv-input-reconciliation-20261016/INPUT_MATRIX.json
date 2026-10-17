@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Consumed Event preflight DENY before targets at2026-10-17T17:17:02UTC: fixed /usr/bin/getfacl lstat ENOENT. No current directory metadata/ACL evidence; prior observations remain dated. Owner decision on tool/evidence mechanism required; no retry/installation authorized. Writer attribution/exclusion and separate FD/CAS application approval still missing.",
+    "firstConcreteBlocker": "Current five directory mode/ACL evidence absent: prior getfacl preflight consumed DENY; explicit xattr revision prepared locally for review, not executed. Authorize only the new scoped read if accepted; no tool installation/fallback, ACL interpretation or application approval inferred.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1596,6 +1596,17 @@
       "decision": "DENY_APPLICATION_INSUFFICIENT_CURRENT_MODE_CHAIN_AND_ACL_EVIDENCE_WRITER_COVERAGE_UNKNOWN",
       "nextRequirement": "Separate owner decision on availability of the explicitly required ACL tool/evidence mechanism before any future approved preflight. No installation, alternate collector or retry authorized. Filesystem writer attribution/exclusion and separate application plan/CAS approval remain required.",
       "status": "CSV_SUSPENDED_NOT_DEPLOYED_NOT_WINDOW_READY"
+    },
+    "eventXattrPreparation": {
+      "base": "c7aa58973f54239f9cda3a113b38bb20280f74b8",
+      "result": "LOCAL_VALIDATED_REVIEW_PENDING",
+      "command": "../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md",
+      "proofs": "../crm-csv-delivery-review-20261017/XATTR_PROOFS.json",
+      "remoteExecuted": false,
+      "aclParser": false,
+      "applicationAuthorized": false,
+      "errnoPolicy": "ENODATA=NO_DATA_ABSENT_OR_NOT_VISIBLE; EACCES/EPERM=ACCESS_DENIED; ENOTSUP/EOPNOTSUPP=NOT_SUPPORTED; other=OTHER_ERROR; errors never mean no ACL",
+      "remaining": "Current five directory observations and raw ACL evidence; competent ACL analysis; writer coverage/exclusion; separate application executor/CAS approval"
     }
   }
 }

@@ -1,6 +1,9 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
 
+**CSV17/10 — revisão xattr LOCAL, getfacl consumido preservado.** [Mesma proposta e novo bloco literal](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): ACL access/default por FDs/stdlib, sem ferramenta remota/parser; bytes opacos privados, erros distintos, ENODATA sem ausência absoluta presumida.12 provas locais com ACLs/getfacl reais e fronteiras simuladas explícitas. Nenhuma VPS/instalação/chmod/SQL; aplicação continua bloqueada, inclusive por writers não excluídos. Próximo: revisão/autorização somente da nova leitura, destino próprio. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO; privados/históricos/NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Deifson; revisão21/10 ou antes da mudança.
+
+
 **CSV17/10 às14:17 Fortaleza — preflight CONSUMED/DENY antes dos alvos.** [Decisão na proposta existente](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): bloco literal f0538524 uma vez deploy sem sudo; tool-preflight / FileNotFoundError errno2 na consulta /usr/bin/getfacl. Zero cadeias/diretórios/ACLs; identidade não privilegiada e canais/recibos preservados byte-exatos. Sem retry/busca/alternativa ou mudança produtiva. Aplicação continua DENY por falta de estados/ACLs atuais e exclusão dos writers. Próxima decisão é sobre ferramenta/mecanismo de evidência, sem instalação ou nova coleta autorizada. Bloco/destino consumidos; históricos intactos; ELF PAUSADO. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY. Deifson; revisão21/10 ou antes da mudança.
 
 
