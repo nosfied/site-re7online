@@ -1,0 +1,56 @@
+--- a/return-before-commit/delegated.py
++++ b/return-before-commit/delegated.py
+@@ -266,9 +266,9 @@
+     def __init__(self, root, action, clock=time.time):
+         self.root, self.action, self.clock = Path(root), action, clock
+ 
+-    def run(self, args, text=None):
++    def run(self, args, text=None, *, pass_fds=()):
+         ops.require(args[0] != 'sudo', 'executor_must_not_use_sudo')
+-        return super().run(args, text)
++        return super().run(args, text, pass_fds=pass_fds)
+ 
+     def renewal_containment(self, window):
+         # The owner supplies a new privileged nft snapshot at record().
+--- a/return-partial/delegated.py
++++ b/return-partial/delegated.py
+@@ -266,9 +266,9 @@
+     def __init__(self, root, action, clock=time.time):
+         self.root, self.action, self.clock = Path(root), action, clock
+ 
+-    def run(self, args, text=None):
++    def run(self, args, text=None, *, pass_fds=()):
+         ops.require(args[0] != 'sudo', 'executor_must_not_use_sudo')
+-        return super().run(args, text)
++        return super().run(args, text, pass_fds=pass_fds)
+ 
+     def renewal_containment(self, window):
+         # The owner supplies a new privileged nft snapshot at record().
+--- a/return/delegated.py
++++ b/return/delegated.py
+@@ -266,9 +266,9 @@
+     def __init__(self, root, action, clock=time.time):
+         self.root, self.action, self.clock = Path(root), action, clock
+ 
+-    def run(self, args, text=None):
++    def run(self, args, text=None, *, pass_fds=()):
+         ops.require(args[0] != 'sudo', 'executor_must_not_use_sudo')
+-        return super().run(args, text)
++        return super().run(args, text, pass_fds=pass_fds)
+ 
+     def renewal_containment(self, window):
+         # The owner supplies a new privileged nft snapshot at record().
+--- a/switch/delegated.py
++++ b/switch/delegated.py
+@@ -266,9 +266,9 @@
+     def __init__(self, root, action, clock=time.time):
+         self.root, self.action, self.clock = Path(root), action, clock
+ 
+-    def run(self, args, text=None):
++    def run(self, args, text=None, *, pass_fds=()):
+         ops.require(args[0] != 'sudo', 'executor_must_not_use_sudo')
+-        return super().run(args, text)
++        return super().run(args, text, pass_fds=pass_fds)
+ 
+     def renewal_containment(self, window):
+         # The owner supplies a new privileged nft snapshot at record().

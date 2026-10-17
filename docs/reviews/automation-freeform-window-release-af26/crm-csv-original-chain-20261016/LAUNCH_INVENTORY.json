@@ -1,0 +1,423 @@
+{
+  "base": "d999ad969e66aa020a06593faba334a30d5eb292",
+  "canonicalVerifierCalls": {
+    "return-before-commit/db_owner_set_gate.py:verify": 1,
+    "return-before-commit/delegated.py:__init__": 6,
+    "return-before-commit/delegated.py:finish": 1,
+    "return-before-commit/delegated.py:proof": 13,
+    "return-before-commit/delegated.py:unfence": 1,
+    "return-before-commit/delegated.py:validate_nft": 19,
+    "return-before-commit/ops.py:__init__": 48,
+    "return-before-commit/ops.py:certificate": 10,
+    "return-before-commit/ops.py:db_gate_for_start": 2,
+    "return-before-commit/ops.py:old_absent": 19,
+    "window/original_checks.py:check_original": 7,
+    "window/prestop_contract.py:path_bindings": 6,
+    "window/recovery.py:__init__": 3,
+    "window/recovery_bridge.py:__init__": 3,
+    "window/recovery_bridge.py:verify_recovery_closure": 1,
+    "window/recovery_bridge.py:verify_recovery_gates_false": 1,
+    "window/recovery_contract.py:__init__": 7,
+    "window/recovery_start.py:authorize_original_start": 2,
+    "window/restore_contract.py:validate": 50,
+    "window/scheduled_controls.py:__init__": 7,
+    "window/scheduled_controls.py:restore_deploy": 1,
+    "window/scheduled_controls.py:verify": 6,
+    "window/sequencer.py:__init__": 5,
+    "window/sequencer.py:finish": 1
+  },
+  "changedLogicalSources": [
+    {
+      "afterSha256": "4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904",
+      "beforeSha256": "3d0749e7cc40d1d1de1a28efe06120ae03f9a76f717197af5743690060b6e38c",
+      "path": "return-before-commit/delegated.py"
+    },
+    {
+      "afterSha256": "4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904",
+      "beforeSha256": "3d0749e7cc40d1d1de1a28efe06120ae03f9a76f717197af5743690060b6e38c",
+      "path": "return-partial/delegated.py"
+    },
+    {
+      "afterSha256": "4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904",
+      "beforeSha256": "3d0749e7cc40d1d1de1a28efe06120ae03f9a76f717197af5743690060b6e38c",
+      "path": "return/delegated.py"
+    },
+    {
+      "afterSha256": "4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904",
+      "beforeSha256": "3d0749e7cc40d1d1de1a28efe06120ae03f9a76f717197af5743690060b6e38c",
+      "path": "switch/delegated.py"
+    }
+  ],
+  "compositionSha256": "f9a0a44a83073739ad3bcddfdbd697eb5723c89a88d31a0c68519a87005307df",
+  "currentInputsRemaining": [
+    {
+      "kind": "operational-data",
+      "name": "return/backup-manifest.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/baseline.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/candidate.config.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/candidate.ecosystem.config.cjs",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/plan.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/proof-bindings.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/return.config.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/return.ecosystem.config.cjs",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/backup-manifest.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/baseline.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/candidate.config.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/candidate.ecosystem.config.cjs",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/plan.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/proof-bindings.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/return.config.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/return.ecosystem.config.cjs",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/backup-manifest.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/baseline.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/candidate.config.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/candidate.ecosystem.config.cjs",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/plan.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/proof-bindings.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/return.config.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/return.ecosystem.config.cjs",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/backup-manifest.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/baseline.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/candidate.config.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/candidate.ecosystem.config.cjs",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/plan.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/proof-bindings.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/return.config.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/return.ecosystem.config.cjs",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "mode/window manifests and original-preparation-review.sha256",
+      "owner": "window",
+      "rule": "nenhuma refer\u00eancia vazia, hash inferido ou depend\u00eancia exclusiva do candidato no \u00edndice original; conferir m\u00f3dulos de fase sem ciclo",
+      "source": "gerar ap\u00f3s bindings reais e contrato original completo; DAG descrito em sealOrder"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-baseline.private.json",
+      "owner": "window",
+      "rule": "tr\u00eas PID/ticks reais; identidade frontend est\u00e1vel",
+      "source": "identidades atuais + guardGeneration38"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-compiled-proof.private.json",
+      "owner": "window",
+      "rule": "hash/proced\u00eancia e rela\u00e7\u00e3o com artefato24e5857f conferidos; esta prova n\u00e3o \u00e9 valida\u00e7\u00e3o funcional em produ\u00e7\u00e3o",
+      "source": "prova compilada saneada existente da entrega coordenada, sem rebuild"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-contract.private.json",
+      "owner": "window",
+      "rule": "n\u00e3o filtrar imut\u00e1veis para PASS; reconciliar POLICY_SOURCE coerentemente s\u00f3 ap\u00f3s captura autorizada",
+      "source": "perfis + conjunto imut\u00e1vel original/compartilhado completo + or\u00e7amento"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-known-imports.private.json",
+      "owner": "window",
+      "rule": "sem opera\u00e7\u00e3o UNKNOWN/PROCESSING; aus\u00eancia HTTP n\u00e3o substitui auditoria",
+      "source": "invent\u00e1rio conhecido confrontado com auditoria READ ONLY atual"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/db-owner-bindings.private.json",
+      "owner": "window",
+      "rule": "ownership completo e port API correspondente; sem emiss\u00e3o de segredo",
+      "source": "SQL/proxy/portas/consumidores atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/deploy.crontab.before + window",
+      "owner": "window",
+      "rule": "seis entradas/hor\u00e1rios e consumidores conferidos; n\u00e3o executar jobs",
+      "source": "leitura cron deploy + receita can\u00f4nica de conten\u00e7\u00e3o"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/event-consumer-binding.private.json",
+      "owner": "window",
+      "rule": "Event775 e leitura incompleta negam antes da conten\u00e7\u00e3o; CAS no uso",
+      "source": "metadados/hash literal/consumidores atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/initial.private.json",
+      "owner": "window",
+      "rule": "n\u00e3o gerar defaults nem copiar identidade hist\u00f3rica",
+      "source": "guard/observedGuardOpen/supervis\u00e3o + observedUtc can\u00f4nicos"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/original-bindings/path-bindings.private.json",
+      "owner": "window",
+      "rule": "separado do mapa candidato; selar/hash/permiss\u00f5es sem ampliar predicado",
+      "source": "mapa observado exclusivamente do runtime original e depend\u00eancias"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/owner-evidence",
+      "owner": "window",
+      "rule": "n\u00e3o copiar evid\u00eancia antiga como atual; preservar recibos originais",
+      "source": "root fresco + backup/RPO/cust\u00f3dia v2/lab"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/path-bindings.private.json",
+      "owner": "window",
+      "rule": "requerido para ida; ORIGINAL n\u00e3o depende dele",
+      "source": "mapa observado dos alvos/retornos candidatos"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/privileged-policy.private.json",
+      "owner": "window",
+      "rule": "nenhum UID/PID/ticks/hash assumido; preservar helper/sudoers/fence e limitar alvos",
+      "source": "fonte root observada + schema do helper + perfis/identidades reais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/re7-converta-backup.before + window",
+      "owner": "window",
+      "rule": "confer\u00eancia separada obrigat\u00f3ria em admiss\u00e3o/retorno/encerramento",
+      "source": "leitura cron sistema + receita can\u00f4nica"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/recovery-contract.private.json",
+      "owner": "window",
+      "rule": "somente ap\u00f3s todos os inputs e refer\u00eancias reais; nenhum campo ausente ou default",
+      "source": "hashes de arquivos/c\u00f3digo/perfis/\u00edndices do novo pacote"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/restore proofs and mode backup/baseline/proof-bindings",
+      "owner": "window",
+      "rule": "os quatro modos coerentes, fronteira/tooling/lab expl\u00edcitos; originais preservados",
+      "source": "R0 quando necess\u00e1rio, contrato de restore certificado reutiliz\u00e1vel e baselines atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/saved-dump.pm2.private.json + saved-dump.pm2.bak.private.json",
+      "owner": "window",
+      "rule": "preservar bytes/refer\u00eancias, n\u00e3o gerar pelo c\u00f3digo sem observa\u00e7\u00e3o",
+      "source": "capturas originais600 atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/source.profile.private.json",
+      "owner": "window",
+      "rule": "tr\u00eas apps e NEWauth+NEWDB+NEWcipher; metadados600 e hash pinado",
+      "source": "exporta\u00e7\u00e3o privada leg\u00edtima dos ambientes ativos, captura real"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/target.profile.private.json",
+      "owner": "window",
+      "rule": "somente cwd/script API diferem; worker/frontend/env preservados pelo profile_delta",
+      "source": "derivar da fonte conferida + API CSV24e5857f"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/waiting-work.private.json",
+      "owner": "window",
+      "rule": "manter guarda38 e out.15 CLOSED; n\u00e3o executar entrada hist\u00f3rica",
+      "source": "captura/baseline can\u00f4nica atual da guarda/out.15"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "current protected-file/prior-target hashes and root chains",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "phase code manifest with actual uid/modes",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "static anchor approved against policy/contract/profiles",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "decision-specific permit (recovery only)",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "current PM2/Node executable + transitive toolchain integrity",
+      "owner": "root"
+    }
+  ],
+  "dataEvidenceRule": "All four modes keep plan/config/baseline/backup+restore proofs, data-only CJS ecosystems and manifests; switch exit and import inventory retained; ORIGINAL includes code. No candidate Python modules or candidate application runtime.",
+  "editableSource": "delta.py; compose.py reuses prior authenticated-mode and B4 producers before scanning",
+  "loadedChildCode": [
+    "return-before-commit/baseline_contract.py",
+    "return-before-commit/candidate.ecosystem.config.cjs",
+    "return-before-commit/ecosystem_contract.py",
+    "return-before-commit/execution-check.cjs",
+    "return-before-commit/open.cjs",
+    "return-before-commit/preparation-bindings.cjs",
+    "return-before-commit/validate.cjs",
+    "return-before-commit/waiting-work-frozen.cjs",
+    "return-before-commit/waiting-work.cjs",
+    "window/restore_contract.py"
+  ],
+  "loadedPython": [
+    "return-before-commit/baseline_contract.py",
+    "return-before-commit/db_owner_set_gate.py",
+    "return-before-commit/db_owner_set_observer.py",
+    "return-before-commit/delegated.py",
+    "return-before-commit/ecosystem_contract.py",
+    "return-before-commit/ops.py",
+    "return-before-commit/pm2_input.py",
+    "window/baseline_contract.py",
+    "window/check_current.py",
+    "window/csv_boundary.py",
+    "window/csv_cli.py",
+    "window/csv_contract.py",
+    "window/csv_start_gate.py",
+    "window/ecosystem_contract.py",
+    "window/original_checks.py",
+    "window/prestop_contract.py",
+    "window/privileged_output.py",
+    "window/recovery.py",
+    "window/recovery_bridge.py",
+    "window/recovery_contract.py",
+    "window/recovery_start.py",
+    "window/restore_contract.py",
+    "window/scheduled_controls.py",
+    "window/sequencer.py"
+  ],
+  "result": "ORIGINAL_EXECUTABLE_CLOSURE_VALIDATED_IN_LAB",
+  "rootAndTransportSimulation": "Root queries/metadata/sudo/helper effects and lab path admission; no authority installed or emitted. Parent delegated children run in-process through Context/Loader/main+operation_lock; Node and its Python baseline/restore children are real local subprocesses.",
+  "sameAcrossFourDelegates": true,
+  "unexecuted": "Installed/protected toolchain, real root authority/helper/policy, productive processes/SQL/proxy/HTTP and current observations; other full recovery modes not recertified by this proof."
+}

@@ -1,0 +1,10 @@
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/incident-6683-window-control.py inspect
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/incident-6683-window-control.py check-absent
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/incident-6683-window-control.py check-present
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/incident-6683-window-control.py enter
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/incident-6683-window-control.py authorize-switch
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/incident-6683-window-control.py authorize-return
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/incident-6683-window-control.py unfence
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/incident-6683-window-control.py restore-controls
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/incident-6683-window-control.py abort-prestop
+deploy ALL=(root) NOPASSWD: /usr/bin/python3 -I -S /usr/local/libexec/re7/incident-6683-window-control.py inspect-recovery-authority

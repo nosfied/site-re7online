@@ -1,0 +1,103 @@
+{
+  "base": "d999ad969e66aa020a06593faba334a30d5eb292",
+  "compositionTransitiveSources": "static-kit/COMPOSITION.json: provenanceInputs, transformInputs and each object origin",
+  "fixtureOutputs": "Temporary laboratory only; generated profiles/bindings/authority/observations/intents never published.",
+  "historicalFixtureSources": "Existing SOURCE_PROVENANCE.json declares public versioned inputs and minimal sanitized excerpts originally from private consumers; inputs.py verifies their hashes. No new private source extracted.",
+  "references": [
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/test_recovery.py",
+      "sha256": "48bcf2c703f81175285d71ec4f9cab66e9f791940a38216489d8666ce2c399ec"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/inputs.py",
+      "sha256": "175bee603fba1048a2b5abba0f596e98c89f8feba903cf397c708c25c0c80598"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/future_sources.py",
+      "sha256": "85efa5d931bfebd606725f877c802dc04b6e65d40bbf3eaa5a6b6db313ad4f5d"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_contract.py",
+      "sha256": "9dad001588002c8566bd4ffc3e57d5985f3d05822dd773b87fa92d003382e73e"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery.py",
+      "sha256": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py",
+      "sha256": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_start.py",
+      "sha256": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/policy_proposal.py",
+      "sha256": "3910f34d385970160afb00e73f64f80957f8c147c14304c2a9e6a69dd46b6450"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/original_checks.py",
+      "sha256": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/SOURCE_PROVENANCE.json",
+      "sha256": "5c75dddbfad7558cc81a2b3afd344c8d58ed1d3b3498065a5c801d4f693dc91e"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/test_closure.py",
+      "sha256": "a14ffa76bcb13548fd5d088f8e2c0959ef20c5a0d44c4da64a3dfe2792dd78ad"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/compose.py",
+      "sha256": "2e9d536be74d60202e76d14847b3e24d4812af1c8c4bbca225af0da765c66c30"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/integration.py",
+      "sha256": "6b3bea31840532da438623ca46a06aba5db520da264c22e0b6fe68cd0a3045c6"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/lab_bootstrap.py",
+      "sha256": "9ed4117aefe7eb6bc510f27678fc5874deef85a0b6cbfa94567eaf6282468a8a"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/static-kit/COMPOSITION.json",
+      "sha256": "93c774b95ab99ec6cd1a2c7f0a143f566dc514eb814b09ab2421171df0995fe3"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/compose_static.py",
+      "sha256": "1be769c9e820938744d9ef56a90241ce26edde5fd1bbbe2aa5ff0492e03e805e"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/verify_static.py",
+      "sha256": "0972481ef2fe85fd2d4c43e6959b33f9110d4185724d3b25b1e0bc9b6c41ac79"
+    },
+    {
+      "commit": "d999ad969e66aa020a06593faba334a30d5eb292",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/PM2_LAB_PROOF.json",
+      "sha256": "0c57ff6ae0fcf768d0d94e419087cdb20bb49b8065cac30ff649ca2b0159ac73"
+    }
+  ],
+  "reusedPm2Proof": "B4 PM2_LAB_PROOF.json unchanged; PM2 input/parser/System.start code unchanged. New native memfd seals and FD forwarding boundary exercised; actual PM2 CLI/daemon not rerun.",
+  "toolVersions": {
+    "node": "v22.13.0",
+    "python": "3.12.3"
+  }
+}

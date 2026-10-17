@@ -1,0 +1,24 @@
+{
+  "activeLocalHooks": [],
+  "base": "d999ad969e66aa020a06593faba334a30d5eb292",
+  "branch": "review/campaign-recovery-20260926",
+  "configChanged": false,
+  "consumerPatch": "APPLIES_EXACTLY_ALL_123_LOGICAL_PATHS",
+  "deploymentEnabled": false,
+  "diffCheckExceptions": {
+    "exactAcceptedSourceHashes": [
+      "3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a",
+      "4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef",
+      "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    ],
+    "reason": "patch context blank lines and exact inherited whitespace; do not rewrite accepted source hashes",
+    "representations": [
+      "CONSUMER_DELTA.patch",
+      "FULL_DELTA.patch"
+    ]
+  },
+  "historicalFilesChanged": false,
+  "remoteAtStart": "d999ad969e66aa020a06593faba334a30d5eb292",
+  "versionedWorkflow": "CI only push/pull_request main,develop; not applicable to review push",
+  "workflowSha256": "cec3f4ab2574dc60c9ac4af6d957f032a448bc5312ffed1c37b8d6947069053d"
+}

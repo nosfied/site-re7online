@@ -1,0 +1,520 @@
+"""Private release adapter. CLI stays blocked until reviewed execution gates exist.
+
+Tests inject a simulated driver. The operational CLI has no simulation flag.
+"""
+from pathlib import Path
+import hashlib
+import json
+import os
+import stat
+import subprocess
+import sys
+import time
+import db_owner_set_gate
+import db_owner_set_observer
+
+API = 're7-whatsapp-agent'
+WORKER = 're7-whatsapp-web-worker'
+FRONT = 're7-admin-front'
+NAMES = {API, WORKER, FRONT}
+PM = '/home/deploy/.npm-global/bin/pm2'
+CLEAN = {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+         'HOME': '/home/deploy', 'USER': 'deploy', 'LANG': 'C.UTF-8'}
+
+
+def require(condition, reason):
+    if not condition:
+        raise RuntimeError(reason)
+
+
+def guard_state(value):
+    require(type(value) is dict and type(value.get('version')) is int and
+            value['version'] == 1 and type(value.get('open')) is bool and
+            type(value.get('generation')) is int and value['generation'] >= 0 and
+            type(value.get('tasks')) is dict and type(value.get('audit')) is list,
+            'guard_schema_invalid')
+    return value
+
+
+def digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def same_process(saved, current):
+    """PID is checked by callers; Linux R/S state is not process identity."""
+    return bool(saved and current and saved['ticks'] == current['ticks'] and current['state'] != 'Z')
+
+
+class System:
+    def run(self, args, text=None, *, pass_fds=()):
+        from child_transport import command
+        args = command(__phase_authority__, args)
+        return subprocess.check_output(args, input=text, text=True, env=CLEAN, stderr=subprocess.PIPE, pass_fds=pass_fds)
+
+    def apps(self):
+        daemon = Path('/home/deploy/.pm2/pm2.pid')
+        require(daemon.is_file() and self.identity(int(daemon.read_text().strip())) is not None, 'pm2_daemon_missing_no_respawn')
+        return json.loads(self.run([PM, 'jlist']))
+
+    def guard(self):
+        return guard_state(json.loads(Path('/var/lib/re7/campaign-operations/state.json').read_text()))
+
+    def identity(self, pid):
+        try:
+            a = Path('/proc', str(pid), 'stat').read_text().rsplit(')', 1)[1].split()
+            return {'state': a[0], 'ticks': a[19]}
+        except FileNotFoundError:
+            return None
+
+    def tree(self, pid):
+        result = {str(pid): self.identity(pid)}
+        while True:
+            before = len(result)
+            for line in self.run(['ps', '-eo', 'pid,ppid', '--no-headers']).splitlines():
+                child, parent = line.split()
+                if parent in result and child not in result:
+                    result[child] = self.identity(int(child))
+            if before == len(result):
+                return result
+
+    def socket_ids(self, trees):
+        found = set()
+        for tree in trees:
+            for pid in tree:
+                folder = Path('/proc', pid, 'fd')
+                if not folder.exists():
+                    continue
+                for f in folder.iterdir():
+                    try:
+                        target = os.readlink(f)
+                        if target.startswith('socket:['):
+                            found.add(target[8:-1])
+                    except FileNotFoundError:
+                        pass
+        return sorted(found)
+
+    def sockets_present(self, captured):
+        found = set()
+        for net in ['tcp', 'tcp6', 'udp', 'udp6', 'unix']:
+            for line in Path('/proc/net', net).read_text().splitlines()[1:]:
+                a = line.split()
+                found.add(a[6] if net == 'unix' else a[9])
+        return bool(set(captured) & found)
+
+    def containment(self, window):
+        require('UnitFileState=disabled' in self.run(['systemctl', 'show', 'pm2-deploy.service', '--property=UnitFileState']), 'supervision_not_disabled')
+        require(Path('/etc/cron.d/re7-converta-backup').read_bytes() == (window / 're7-converta-backup.window').read_bytes(), 'system_cron_drift')
+        require(self.run(['crontab', '-l']).encode() == (window / 'deploy.crontab.window').read_bytes(), 'deploy_cron_drift')
+        table = json.loads(self.run(['sudo', '-n', 'nft', '-j', 'list', 'table', 'inet', 're7_campaign_transition']))
+        check_fence(table)
+        # Historical network probe: both application ports must be blocked.
+        import socket
+        for port in [3000, 3001]:
+            try:
+                with socket.create_connection(('127.0.0.1', port), timeout=2):
+                    raise RuntimeError('fence_absent')
+            except (ConnectionRefusedError, TimeoutError):
+                pass
+
+    def db_zero(self):
+        sql = "BEGIN READ ONLY; SET LOCAL statement_timeout='10s'; SELECT json_build_object('otherClientBackends',(SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND backend_type='client backend' AND pid<>pg_backend_pid()),'advisoryLocks',(SELECT count(*) FROM pg_locks WHERE locktype='advisory' AND database=(SELECT oid FROM pg_database WHERE datname=current_database()))); ROLLBACK;"
+        return json.loads(self.run(['docker', 'exec', '-i', 'wa-agent-postgres', 'psql', '-X', '-U', 'wa_agent', '-d', 'whatsapp_agent', '-Atq', '-v', 'ON_ERROR_STOP=1'], sql))
+
+    def db_backends(self, container_id=None):
+        sql = "BEGIN READ ONLY; SET LOCAL statement_timeout='10s'; SELECT json_build_object('backends',COALESCE((SELECT json_agg(json_build_object('pid',pid,'address',host(client_addr),'port',client_port) ORDER BY pid) FROM pg_stat_activity WHERE datname=current_database() AND backend_type='client backend' AND pid<>pg_backend_pid()),'[]'::json),'advisoryLocks',(SELECT count(*) FROM pg_locks WHERE locktype='advisory' AND database=(SELECT oid FROM pg_database WHERE datname=current_database()))); ROLLBACK;"
+        return json.loads(self.run(['docker', 'exec', '-i', container_id or 'wa-agent-postgres', 'psql', '-X', '-U', 'wa_agent', '-d', 'whatsapp_agent', '-Atq', '-v', 'ON_ERROR_STOP=1'], sql))
+
+    def api_socket_inventory(self, pid):
+        return db_owner_set_observer._inventory(pid)
+
+    def proxy_socket_inventory(self, expected_sha):
+        path = Path('/usr/local/libexec/re7/db-owner-set-observer.py')
+        require(path.is_file() and not path.is_symlink(), 'proxy_observer_not_installed')
+        for part in (path, *path.parents):
+            st = part.lstat()
+            require(st.st_uid == 0 and not (st.st_mode & 0o022) and
+                    (stat.S_ISREG(st.st_mode) if part == path else stat.S_ISDIR(st.st_mode)),
+                    'proxy_observer_not_root_owned')
+        require(hashlib.sha256(path.read_bytes()).hexdigest() == expected_sha,
+                'proxy_observer_hash_mismatch')
+        from privileged_output import run_privileged
+        output = run_privileged(['sudo', '-n', '/usr/bin/python3', '-I', '-S', str(path)],
+                                Path(__file__).resolve().parent.parent / 'window',
+                                'db-owner-observe', env=CLEAN, timeout=10).decode()
+        return json.loads(output)
+
+    def db_container(self):
+        items = json.loads(self.run(['docker', 'inspect', 'wa-agent-postgres']))
+        require(len(items) == 1 and items[0]['State']['Running'], 'db_container_drift')
+        item = items[0]
+        nets = item['NetworkSettings']['Networks']
+        require(len(nets) == 1, 'db_network_ambiguous')
+        require(not any(n.get('GlobalIPv6Address') for n in nets.values()),
+                'db_ipv6_path_unmodeled')
+        ip = next(iter(nets.values()))['IPAddress']
+        published = item['NetworkSettings']['Ports']['5432/tcp']
+        require(len(published) == 1, 'db_publication_ambiguous')
+        return {'id': item['Id'], 'ip': ip,
+                'published': [published[0]['HostIp'], int(published[0]['HostPort'])]}
+
+    def db_only_successor_api(self, pid, identity, database_url, bindings):
+        return db_owner_set_gate.verify(self, pid, identity, database_url, bindings)
+
+    def delete(self, name):
+        self.run([PM, 'delete', name])
+
+    def start(self, root, name):
+        self.apps()  # Never implicitly resurrect a missing PM2 daemon.
+        from pm2_input import start
+        start(self, root, name, PM)
+
+    def check_config(self, app, cfg):
+        pid = str(app['pid'])
+        require(app['pm2_env']['pm_cwd'] == cfg['cwd'] and app['pm2_env']['pm_exec_path'] == cfg['script'], 'process_config_drift')
+        require(str(Path('/proc', pid, 'cwd').resolve()) == cfg['cwd'], 'cwd_drift')
+        require(str(Path('/proc', pid, 'exe').resolve()) == cfg['interpreter'], 'executable_drift')
+        actual = dict(v.split('=', 1) for v in Path('/proc', pid, 'environ').read_text().split('\0') if '=' in v)
+        require(all(actual.get(k) == str(v) for k, v in cfg['env'].items()), 'environment_drift')
+
+    def wait(self):
+        time.sleep(.2)
+
+    def path_exists(self, path):
+        return Path(path).is_file()
+
+    def validate_bindings(self, window, config):
+        from prestop_contract import path_bindings
+        from recovery_bridge import original_bindings
+        return original_bindings(window, config, __phase_authority__)
+
+    def capture_auth(self, root, apps):
+        import tarfile
+        with (root / 'auth-after-stop.private.dump').open('xb') as f:
+            subprocess.run(['docker', 'exec', 'wa-agent-postgres', 'pg_dump', '-U', 'wa_agent', '-d', 'whatsapp_agent', '-Fc', '-t', 'public."ChannelAccountSecret"'], stdout=f, stderr=subprocess.PIPE, check=True, env=CLEAN)
+        with tarfile.open(root / 'runtime-after-stop.private.tar.gz', 'x:gz') as t:
+            t.add('/var/lib/re7/campaign-operations', arcname='guard')
+            for app in apps.values():
+                d = Path(app['pm2_env']['pm_cwd']) / '.data'
+                if d.exists():
+                    t.add(d.resolve(), arcname=app['name'] + '-data')
+
+
+def check_fence(data):
+    objects = data['nftables']
+    require(all(set(x) <= {'metainfo', 'table', 'chain', 'rule'} for x in objects), 'unknown_fence_object')
+    tables = [x['table'] for x in objects if 'table' in x]
+    chains = [x['chain'] for x in objects if 'chain' in x]
+    rules = [x['rule'] for x in objects if 'rule' in x]
+    require(len(tables) == len(chains) == len(rules) == 1, 'fence_structure_drift')
+    require(tables[0]['family'] == 'inet' and tables[0]['name'] == 're7_campaign_transition', 'fence_table_drift')
+    c = chains[0]
+    require(c['family'] == 'inet' and c['table'] == 're7_campaign_transition' and c['name'] == 'api_input' and c['type'] == 'filter' and c['hook'] == 'input' and c['prio'] == -10 and c['policy'] == 'accept', 'fence_chain_drift')
+    r = rules[0]
+    require(r['family'] == 'inet' and r['table'] == 're7_campaign_transition' and r['chain'] == 'api_input', 'fence_rule_drift')
+    expr = [x for x in r['expr'] if 'counter' not in x]
+    require(expr == [{'match': {'op': '==', 'left': {'payload': {'protocol': 'tcp', 'field': 'dport'}}, 'right': {'set': [3000, 3001]}}}, {'reject': {'type': 'tcp reset'}}], 'fence_expression_drift')
+
+
+class Operations:
+    def __init__(self, root, driver):
+        self.root = Path(root)
+        self.d = driver
+        self.plan = json.loads((self.root / 'plan.private.json').read_text())
+        self.source = {a['name']: a for a in json.loads((self.root / 'return.config.private.json').read_text())['apps']}
+        self.target = {a['name']: a for a in json.loads((self.root / 'candidate.config.private.json').read_text())['apps']}
+        self.window = self.root.parent / 'window'
+
+    def write_once(self, name, data):
+        with (self.root / name).open('x') as f:
+            json.dump(data, f, indent=2)
+
+    def guard(self):
+        g = guard_state(self.d.guard())
+        require(not g['open'] and not g['tasks'] and not g.get('ledgerFault'), 'guard_not_closed_drained')
+        return g
+
+    def config(self, app, cfg, fresh=False):
+        require(app['pm2_env']['status'] == 'online' and app['pm2_env']['watch'] is False, 'process_not_stable')
+        if fresh:
+            require(app['pm2_env']['restart_time'] == 0, 'successor_restarted')
+        self.d.check_config(app, cfg)
+        require(self.d.identity(app['pid']) is not None, 'process_missing')
+
+    def old_absent(self, report):
+        for tree in report['trees'].values():
+            self.tree_absent(tree)
+        require(not self.d.sockets_present(report['sockets']), 'old_socket_alive')
+
+    def tree_absent(self, tree):
+        for pid, old in tree.items():
+            now = self.d.identity(int(pid))
+            require(not (old and now and old['ticks'] == now['ticks'] and now['state'] != 'Z'), 'old_executor_alive')
+
+    def stop(self, frontend=False, recovery=False):
+        require(not frontend, 'frontend_preserved_no_stop')
+        self.guard()
+        self.d.containment(self.window)
+        self.restore_proof()
+        apps = {a['name']: a for a in self.d.apps()}
+        require(set(apps) <= NAMES, 'unknown_pm2_process')
+        front_missing = recovery and self.plan.get('frontendAbsentAtRecovery', False)
+        require(FRONT in apps or front_missing, 'frontend_missing')
+        # Missing pair members are accepted only in explicitly bound recovery mode.
+        require(set(apps) == NAMES or (recovery and self.plan['recovery']), 'unexpected_partial_composition')
+        if frontend:
+            self.certificate('old-exit-confirmed.json', FRONT)
+        for name, app in apps.items():
+            cfg = self.source[name]
+            if frontend and name != FRONT:
+                cfg = self.target[name]
+            self.config(app, cfg)
+        if recovery:
+            require(self.plan['recovery'], 'recovery_not_bound')
+            prior = json.loads((self.root.parent / 'switch' / 'stop-start.json').read_text())
+            self.old_absent(prior)
+            if front_missing:
+                prior_front = json.loads((self.root.parent / 'switch' / 'front-stop-start.json').read_text())
+                self.old_absent(prior_front)
+        selected = {FRONT} if frontend else {API, WORKER}
+        prefix = 'front' if frontend else 'pair'
+        trees = {n: self.d.tree(a['pid']) for n, a in apps.items() if n in selected}
+        report = {'direction': self.plan['direction'], 'selected': sorted(selected), 'trees': trees,
+                  'sockets': self.d.socket_ids(trees.values()), 'generation': self.guard()['generation'],
+                  'configHash': digest(self.target), 'frontend': {'pid': apps[FRONT]['pid'], 'identity': self.d.identity(apps[FRONT]['pid'])} if FRONT in apps else None}
+        # Old one-use marker remains required and cannot be deleted on retry.
+        self.write_once(prefix + '-stop-start.json', report)
+        if not frontend:
+            self.write_once('stop-start.json', report)
+        for name in [API, WORKER, FRONT]:
+            if name in selected and name in apps:
+                self.guard()
+                self.d.delete(name)
+                # Historical ordering: prove this process/tree exited before
+                # stopping the next process; never proceed after a survivor.
+                for _ in range(25):
+                    try:
+                        self.tree_absent(trees[name])
+                        break
+                    except RuntimeError:
+                        self.d.wait()
+                self.tree_absent(trees[name])
+                require(not any(a['name'] == name for a in self.d.apps()), 'executor_respawned')
+        for _ in range(25):
+            try:
+                self.old_absent(report)
+                break
+            except RuntimeError:
+                self.d.wait()
+        self.old_absent(report)
+        live = {a['name']: a for a in self.d.apps()}
+        require(not (selected & live.keys()), 'executor_respawned')
+        require(set(live) == NAMES - selected - ({FRONT} if front_missing else set()), 'unexpected_owner_after_stop')
+        if not frontend:
+            if not front_missing:
+                require(live[FRONT]['pid'] == report['frontend']['pid'] and same_process(report['frontend']['identity'], self.d.identity(live[FRONT]['pid'])), 'frontend_identity_changed')
+            require(self.d.db_zero() == {'otherClientBackends': 0, 'advisoryLocks': 0}, 'unknown_db_owner')
+            self.d.capture_auth(self.root, apps)
+        self.guard()
+        self.d.containment(self.window)
+        self.write_once('frontend-exit-confirmed.json' if frontend else 'old-exit-confirmed.json', report)
+        if front_missing:
+            # New certificate proves the missing frontend's OLD identity is gone.
+            prior_front['direction'] = self.plan['direction']
+            prior_front['configHash'] = digest(self.target)
+            prior_front['generation'] = report['generation']
+            self.write_once('frontend-exit-confirmed.json', prior_front)
+
+    def certificate(self, name, successor):
+        r = json.loads((self.root / name).read_text())
+        require(r['direction'] == self.plan['direction'] and r['configHash'] == digest(self.target), 'stale_or_wrong_certificate')
+        require(r['generation'] == self.guard()['generation'], 'guard_generation_changed')
+        self.old_absent(r)
+        return r
+
+    def db_gate_for_start(self, name, live, *, binding_proof=None):
+        if name == API:
+            require(self.d.db_zero() == {'otherClientBackends': 0, 'advisoryLocks': 0},
+                    'unknown_db_owner')
+        elif name == WORKER:
+            api = live[API]
+            marker = json.loads((self.root / ('started-' + API + '.json')).read_text())
+            require(marker['pid'] == api['pid'] and
+                    same_process(marker['identity'], self.d.identity(api['pid'])),
+                    'successor_identity_changed')
+            binding_bytes = (self.window / 'db-owner-bindings.private.json').read_bytes()
+            if binding_proof is not None or hasattr(self.d, 'proof'):
+                proof = binding_proof if binding_proof is not None else self.d.proof()
+                require(isinstance(proof, dict) and isinstance(proof.get('request'), dict),
+                        'db_owner_binding_proof_invalid')
+                require(proof['request'].get('dbOwnerBindingsHash') ==
+                        hashlib.sha256(binding_bytes).hexdigest(), 'db_owner_binding_drift')
+            bindings = json.loads(binding_bytes)
+            require(bindings['apiHttpPort'] == int(self.target[API]['env']['PORT']),
+                    'api_http_port_binding_drift')
+            self.d.db_only_successor_api(api['pid'], marker['identity'],
+                                         self.target[API]['env']['DATABASE_URL'], bindings)
+
+    def restore_proof(self):
+        sys.path.insert(0, str(self.window))
+        from restore_contract import validate
+        return validate(self.root)
+
+    def start(self, name):
+        authority = __phase_authority__
+        authority.start_mode(self.root)
+        self.restore_proof()
+        import sys
+        sys.path.insert(0, str(self.window))
+        from csv_start_gate import authorize_start
+        authorize_start(self.root)
+        require(name in {API, WORKER}, 'frontend_preserved_no_start')
+        self.guard()
+        self.d.containment(self.window)
+        self.certificate('frontend-exit-confirmed.json' if name == FRONT else 'old-exit-confirmed.json', name)
+        expected = {API: {FRONT}, WORKER: {FRONT, API}, FRONT: {API, WORKER}}[name]
+        if self.plan.get('frontendAbsentAtRecovery') and name != FRONT:
+            expected.discard(FRONT)
+        live = {a['name']: a for a in self.d.apps()}
+        require(set(live) == expected, 'successor_order_or_owner_conflict')
+        if FRONT in expected and not (self.root / ('started-' + FRONT + '.json')).exists():
+            prior = self.certificate('old-exit-confirmed.json', name)['frontend']
+            require(prior and live[FRONT]['pid'] == prior['pid'] and
+                    same_process(prior['identity'], self.d.identity(live[FRONT]['pid'])),
+                    'frontend_identity_changed')
+        for n in expected:
+            self.config(live[n], self.source[n] if n == FRONT else self.target[n])
+            marker = self.root / ('started-' + n + '.json')
+            if marker.exists():
+                saved = json.loads(marker.read_text())
+                require(saved['pid'] == live[n]['pid'] and same_process(saved['identity'], self.d.identity(live[n]['pid'])), 'successor_identity_changed')
+        require(self.d.path_exists(self.target[name]['script']), 'successor_artifact_missing')
+        self.d.validate_bindings(self.window, {name: self.target[name]})
+        self.db_gate_for_start(name, live)
+        self.write_once('start-intent-' + name + '.json', {'direction': self.plan['direction']})
+        authority.start_mode(self.root)
+        self.d.start(self.root, name)
+        last_error = None
+        for _ in range(25):
+            try:
+                after = {a['name']: a for a in self.d.apps()}
+                require(set(after) == expected | {name}, 'unexpected_process_after_start')
+                self.config(after[name], self.target[name], fresh=True)
+                self.write_once('started-' + name + '.json', {'pid': after[name]['pid'], 'identity': self.d.identity(after[name]['pid'])})
+                return
+            except RuntimeError as e:
+                last_error = e
+                self.d.wait()
+        raise last_error
+
+
+class Controls:
+    def __init__(self, root, driver):
+        self.root = Path(root)
+        self.window = self.root.parent / 'window'
+        self.d = driver
+        from baseline_contract import operational
+        self.initial = operational(json.loads((self.window / 'initial.private.json').read_text()))
+
+    def scheduled(self):
+        sys.path.insert(0, str(self.window))
+        from scheduled_controls import ScheduledControls
+        return ScheduledControls(self.window, self.d.run)
+
+    def enter(self):
+        self.scheduled().verify('before')
+        require('ActiveState=inactive' in self.initial['supervision'], 'unexpected_initial_supervision')
+        g = guard_state(self.d.guard())
+        require(not g['open'] and not g['tasks'] and not g.get('ledgerFault'), 'guard_not_closed_drained')
+        live = self.d.run(['sudo', '-n', 'nft', '-j', 'list', 'tables'])
+        require(not any(x.get('table', {}).get('name') == 're7_campaign_transition' for x in json.loads(live)['nftables']), 'fence_already_present')
+        require(self.d.run(['crontab', '-l']) == (self.window / 'deploy.crontab.before').read_text(), 'deploy_cron_drift')
+        require(self.d.run(['cat', '/etc/cron.d/re7-converta-backup']) == (self.window / 're7-converta-backup.before').read_text(), 'system_cron_drift')
+        require(self.d.run(['systemctl', 'show', 'pm2-deploy.service', '--property=ActiveState,UnitFileState']) == self.initial['supervision'], 'supervision_drift')
+        self.d.run(['sudo', '-n', 'nft', '--check', '--file', str(self.window / 'automation-fence.nft')])
+        self.d.run(['sudo', '-n', 'install', '-o', 'root', '-g', 'root', '-m', '0644', str(self.window / 're7-converta-backup.window'), '/etc/cron.d/re7-converta-backup'])
+        self.d.run(['crontab', str(self.window / 'deploy.crontab.window')])
+        self.d.run(['sudo', '-n', 'systemctl', 'disable', 'pm2-deploy.service'])
+        self.d.run(['sudo', '-n', 'nft', '--file', str(self.window / 'automation-fence.nft')])
+        self.d.containment(self.window)
+
+    def finish(self):
+        self.scheduled().verify('contained')
+        Operations(self.root, self.d).restore_proof()
+        # The reopened guard alone does not certify release identity or health.
+        validation = json.loads((self.root / 'after-unfence.json').read_text())
+        require(validation['workerHealth'] and all(x['ok'] and x['db'] == 'ok' for x in validation['health']), 'technical_validation_failed')
+        cfg = json.loads((self.root / 'candidate.config.private.json').read_text())['apps']
+        require(validation['guard']['build'] == cfg[0]['env']['CAMPAIGN_BUILD_ID'], 'validation_build_drift')
+        current = {a['name']: a for a in self.d.apps()}
+        require(set(current) == NAMES, 'incomplete_process_set')
+        for c in cfg:
+            a = current[c['name']]
+            self.d.check_config(a, c)
+            require(a['pm2_env']['status'] == 'online' and a['pm2_env']['watch'] is False and a['pm2_env']['restart_time'] == 0, 'unstable_process_set')
+        g = guard_state(self.d.guard())
+        require(g['open'] == self.initial['guard']['open'] and not g['tasks'] and not g.get('ledgerFault'), 'guard_not_restored')
+        require(self.d.run(['crontab', '-l']) == (self.window / 'deploy.crontab.window').read_text(), 'window_cron_drift')
+        require(self.d.run(['cat', '/etc/cron.d/re7-converta-backup']) == (self.window / 're7-converta-backup.window').read_text(), 'window_system_cron_drift')
+        self.d.run(['sudo', '-n', 'install', '-o', 'root', '-g', 'root', '-m', '0644', str(self.window / 're7-converta-backup.before'), '/etc/cron.d/re7-converta-backup'])
+        self.d.run(['crontab', str(self.window / 'deploy.crontab.before')])
+        require(self.d.run(['crontab', '-l']) == (self.window / 'deploy.crontab.before').read_text(), 'cron_restore_failed')
+        require(self.d.run(['cat', '/etc/cron.d/re7-converta-backup']) == (self.window / 're7-converta-backup.before').read_text(), 'system_cron_restore_failed')
+        if 'UnitFileState=enabled' in self.initial['supervision']:
+            self.d.run(['sudo', '-n', 'systemctl', 'enable', 'pm2-deploy.service'])
+        require(self.d.run(['systemctl', 'show', 'pm2-deploy.service', '--property=ActiveState,UnitFileState']) == self.initial['supervision'], 'supervision_restore_failed')
+        self.scheduled().verify('before')
+
+    def unfence(self):
+        Operations(self.root, self.d).restore_proof()
+        self.d.containment(self.window)
+        operation = Operations(self.root, self.d)
+        operation.guard()
+        operation.certificate('old-exit-confirmed.json', API)
+        current = {a['name']: a for a in self.d.apps()}
+        require(set(current) == NAMES, 'incomplete_process_set')
+        for name, cfg in operation.target.items():
+            operation.config(current[name], cfg, fresh=True)
+        self.d.validate_bindings(self.window, operation.target)
+        if operation.source[FRONT] != operation.target[FRONT]:
+            operation.certificate('frontend-exit-confirmed.json', FRONT)
+        # Save only the complete compatible process set; no intermediate save.
+        self.d.run([PM, 'save'])
+        self.d.run(['install', '-m', '600', '/home/deploy/.pm2/dump.pm2', '/home/deploy/.pm2/dump.pm2.bak'])
+        self.d.run(['cmp', '/home/deploy/.pm2/dump.pm2', '/home/deploy/.pm2/dump.pm2.bak'])
+        self.d.run(['sudo', '-n', 'nft', 'delete', 'table', 'inet', 're7_campaign_transition'])
+
+
+def main(action, root):
+    # There is no CLI dry-run/simulation bypass. Tests import Operations directly.
+    root = Path(root).resolve()
+    require(str(root).startswith('/opt/re7online/backups/converta-persistent/preparations/incident-csv-operational-review-v3-20261016/'), 'not_bound_remote_preparation')
+    gates = json.loads((root.parent / 'window' / 'execution-gates.private.json').read_text())
+    require(gates.get('ownerAuthorized') and gates.get('preflightReviewed') and gates.get('artifactsVerified') and gates.get('restoreVerified') and gates.get('discrepanciesResolved'), 'execution_gates_incomplete')
+    for line in (root / 'scripts.sha256').read_text().splitlines():
+        expected, name = line.split('  ', 1)
+        require(Path(name).name == name and hashlib.sha256((root / name).read_bytes()).hexdigest() == expected, 'bound_script_hash_mismatch')
+    ops = Operations(root, System())
+    if action == 'stop-pair':
+        ops.stop()
+    elif action == 'recover-partial':
+        ops.stop(recovery=True)
+    elif action.startswith('start:'):
+        ops.start(action.split(':', 1)[1])
+    elif action == 'contain':
+        Controls(root, System()).enter()
+    elif action == 'restore-controls':
+        Controls(root, System()).finish()
+    elif action == 'unfence':
+        Controls(root, System()).unfence()
+    else:
+        raise RuntimeError('unknown_action')
+
+
+if __name__ == '__main__':
+    os.umask(0o077)
+    try:
+        main(sys.argv[1], sys.argv[2])
+    except Exception:
+        # Private trace can be inspected locally; do not emit env/commands/PII.
+        print('Operational gate denied; keep containment and inspect private evidence.', file=sys.stderr)
+        sys.exit(1)
