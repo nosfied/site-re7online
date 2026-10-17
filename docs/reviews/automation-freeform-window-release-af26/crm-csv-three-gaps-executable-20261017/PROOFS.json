@@ -1,0 +1,124 @@
+{
+  "result": "LOCAL_LITERAL_BLOCKS_VALIDATED",
+  "tests": 11,
+  "cases": [
+    {
+      "case": "daemon-absent",
+      "materialize": 0,
+      "collect": 1,
+      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
+      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
+      "sqlTransportSynthetic": false
+    },
+    {
+      "case": "config-changed",
+      "materialize": 0,
+      "collect": 1,
+      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
+      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
+      "sqlTransportSynthetic": false
+    },
+    {
+      "case": "valid",
+      "materialize": 0,
+      "collect": 0,
+      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
+      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
+      "sqlTransportSynthetic": true
+    },
+    {
+      "case": "partial-transfer",
+      "materialize": 0,
+      "collect": 1,
+      "custodyEvent": "THREE_GAPS_CUSTODY_DENY_NO_RETRY",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
+      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
+      "sqlTransportSynthetic": false
+    },
+    {
+      "case": "peer-wrong",
+      "materialize": 0,
+      "collect": 1,
+      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
+      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
+      "sqlTransportSynthetic": false
+    },
+    {
+      "case": "route-changed",
+      "materialize": 0,
+      "collect": 1,
+      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
+      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
+      "sqlTransportSynthetic": false
+    },
+    {
+      "case": "reply-lost",
+      "materialize": 0,
+      "collect": 1,
+      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
+      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
+      "sqlTransportSynthetic": false
+    },
+    {
+      "case": "timeout",
+      "materialize": 0,
+      "collect": 1,
+      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
+      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
+      "sqlTransportSynthetic": false
+    },
+    {
+      "case": "snapshot-substitution",
+      "materialize": 0,
+      "collect": 0,
+      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
+      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
+      "sqlTransportSynthetic": false
+    },
+    {
+      "case": "bundle-tampered",
+      "materialize": 0,
+      "collect": 1,
+      "custodyEvent": "THREE_GAPS_CUSTODY_DENY_NO_RETRY",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
+      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
+      "sqlTransportSynthetic": false
+    },
+    {
+      "case": "source-tampered",
+      "materialize": 1,
+      "literalBash": true,
+      "remoteCalled": false
+    }
+  ],
+  "effects": "Real Bash/Python/Node FD/codec/memfd/files/export/custody; simulated SSH remote OS metadata, peer projection, Docker and SQL responses. Namespace UID0 is host user, not root. No VPS or real SQL.",
+  "preservedHistoricalPackages": true
+}

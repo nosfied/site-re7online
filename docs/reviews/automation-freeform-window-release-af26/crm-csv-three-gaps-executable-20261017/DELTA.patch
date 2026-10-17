@@ -1,0 +1,1609 @@
+diff --git a/docs/BACKLOG_TECH.md b/docs/BACKLOG_TECH.md
+index 4e1c15a6..c2907970 100644
+--- a/docs/BACKLOG_TECH.md
++++ b/docs/BACKLOG_TECH.md
+@@ -2,0 +3,3 @@
++
++**CSV17/10 — pacote diagnóstico executável LOCAL.** [Roteiro final, manifest e11 provas literais](reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/REPORT.md): materialização→snapshot autenticado→RPC por FD→rota/cliente→exportação/custódia canônica, inclusive DENY/parcial. SELECT tem bloco e autorização separados; nenhum observador root, VPS, SQL real, instalação ou backup. Fontes/closure26 reutilizadas; bytes conferidos são os executados, sem import por caminho transferido. Docker/SQL/identidades/peer produtivos são fixtures explícitas; ownership permanece UNKNOWN, sem certificado atual ou janela. LOCAL VALIDATED no alcance ensaiado / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO. DENYs, gerações consumidas, NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Deifson; revisão21/10 ou mudança.
++
+diff --git a/docs/RUNBOOK_WHATSAPP_AGENT.md b/docs/RUNBOOK_WHATSAPP_AGENT.md
+index 24635070..21e0ab64 100644
+--- a/docs/RUNBOOK_WHATSAPP_AGENT.md
++++ b/docs/RUNBOOK_WHATSAPP_AGENT.md
+@@ -2,0 +3,3 @@
++
++**CSV17/10 — pacote diagnóstico executável LOCAL.** [Roteiro final, manifest e11 provas literais](reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/REPORT.md): materialização→snapshot autenticado→RPC por FD→rota/cliente→exportação/custódia canônica, inclusive DENY/parcial. SELECT tem bloco e autorização separados; nenhum observador root, VPS, SQL real, instalação ou backup. Fontes/closure26 reutilizadas; bytes conferidos são os executados, sem import por caminho transferido. Docker/SQL/identidades/peer produtivos são fixtures explícitas; ownership permanece UNKNOWN, sem certificado atual ou janela. LOCAL VALIDATED no alcance ensaiado / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO. DENYs, gerações consumidas, NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Deifson; revisão21/10 ou mudança.
++
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/ALLOWLIST.json b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/ALLOWLIST.json
+new file mode 100644
+index 00000000..ff99a4d9
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/ALLOWLIST.json
+@@ -0,0 +1,34 @@
++{
++  "base": "9101b4f245a7ceb2bc769cb8a1388d7a179472f6",
++  "branch": "review/campaign-recovery-20260926",
++  "files": [
++    "docs/BACKLOG_TECH.md",
++    "docs/RUNBOOK_WHATSAPP_AGENT.md",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/ALLOWLIST.json",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/COMMANDS.md",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/DELTA.patch",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/MANIFEST.json",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/MANIFEST.sha256",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/PROOFS.json",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/REPORT.md",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/driver.py",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/lab.py",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/launch.py",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/node_snapshot.cjs",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/seal.py",
++    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/test_blocks.py",
++    "docs/saas/DOCUMENTATION_INDEX.md"
++  ],
++  "excludes": [
++    "all private custody",
++    "local-evidence",
++    ".data",
++    "caches",
++    "old packages/consumed generations"
++  ],
++  "deltaExcludes": [
++    "DELTA.patch",
++    "MANIFEST.sha256"
++  ]
++}
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/COMMANDS.md b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/COMMANDS.md
+new file mode 100644
+index 00000000..988b911c
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/COMMANDS.md
+@@ -0,0 +1,143 @@
++# Roteiro final único — SOMENTE PARA REVISÃO
++
++Nenhuma execução remota autorizada nesta entrega. Deploy, sem sudo; sem root observer.
++Falha/timeout/destino existente/drift: preservar, parar, sem retry ou reparo.
++Os dois destinos remotos e a custódia são exclusivos; o sufixo -sql é reservado
++à decisão separada de SELECT. Não reutilizar ações antigas nem materiais consumidos.
++
++A autoridade dos hashes abaixo é a revisão destes bytes pelo owner; não são pins
++produtivos, instalação de autoridade nem autorização de SELECT. O launcher é lido
++uma vez com FD/no-follow/metadata pré/pós, comparado ao literal e compilado dos mesmos
++bytes. O manifest autenticado ancora fontes e closure26. O bootstrap remoto recebe
++uma única fotografia de bytes, verifica o mesmo manifest e compila essa fotografia.
++
++## 1. Materialização LOCAL inativa
++
++No ThinkPad, checkout canônico. Não precisa rede. Reutiliza closure26 local já pinada,
++sem npm/build. Cria somente /dev/shm/re7-csv-three-gaps-material-20261017-v1, owner700. Todas as fontes têm procedência em MANIFEST.json.
++Se faltar fonte: DENY, sem download/fallback; journal canônico preservado.
++```bash
++(
++set -euo pipefail
++umask 077
++python3 -B -I -S - <<'REVIEWED_LOCAL'
++import hashlib,os,stat,sys
++from pathlib import Path
++p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017')
++f=p/'launch.py'
++for q in (f,*f.parents):assert not q.is_symlink(),'launcher_symlink'
++def meta(s):return tuple(getattr(s,'st_'+k)for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
++s=f.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'launcher_metadata'
++fd=os.open(f,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
++try:
++ assert meta(os.fstat(fd))==meta(s),'launcher_replaced'
++ raw=os.read(fd,65536)
++ assert meta(os.fstat(fd))==meta(s) and meta(f.lstat())==meta(s),'launcher_changed'
++finally:os.close(fd)
++assert hashlib.sha256(raw).hexdigest()=='5922f70646b6e20969abaccad0e834742127822e812012dc75144ffb67805bc4','reviewed_launcher'
++sys.argv=[str(f),str(p),'3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba','materialize']
++exec(compile(raw,str(f),'exec'),{'__name__':'__main__','__file__':str(f)})
++REVIEWED_LOCAL
++)
++```
++
++## 2. Transferência única + gates1–3 + custódia
++
++Executar somente após aprovação futura deste roteiro. O único SSH envia os bytes
++inativos, coleta e devolve o envelope inclusive em DENY. Não há segunda conexão
++para tentar recuperar resposta perdida. A cópia privada local preserva stdout/stderr
++parciais e registra falha de custódia; a origem remota fica intacta.
++
++```bash
++(
++set -euo pipefail
++umask 077
++python3 -B -I -S - <<'REVIEWED_LOCAL'
++import hashlib,os,stat,sys
++from pathlib import Path
++p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017')
++f=p/'launch.py'
++for q in (f,*f.parents):assert not q.is_symlink(),'launcher_symlink'
++def meta(s):return tuple(getattr(s,'st_'+k)for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
++s=f.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'launcher_metadata'
++fd=os.open(f,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
++try:
++ assert meta(os.fstat(fd))==meta(s),'launcher_replaced'
++ raw=os.read(fd,65536)
++ assert meta(os.fstat(fd))==meta(s) and meta(f.lstat())==meta(s),'launcher_changed'
++finally:os.close(fd)
++assert hashlib.sha256(raw).hexdigest()=='5922f70646b6e20969abaccad0e834742127822e812012dc75144ffb67805bc4','reviewed_launcher'
++sys.argv=[str(f),str(p),'3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba','collect']
++exec(compile(raw,str(f),'exec'),{'__name__':'__main__','__file__':str(f)})
++REVIEWED_LOCAL
++)
++```
++
++## 3. SELECT — APENAS APÓS AUTORIZAÇÃO ESPECÍFICA
++
++Este bloco NÃO faz parte da autorização de gates1–3. Exige custódia anterior PASS
++e nova decisão explícita. Revalida gates1–3 em destinos -sql novos antes de qualquer
++conexão. Mudança nega. Não é certificado de saída/ownership, não chama observer root.
++
++```bash
++(
++set -euo pipefail
++umask 077
++python3 -B -I -S - <<'REVIEWED_LOCAL'
++import hashlib,os,stat,sys
++from pathlib import Path
++p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017')
++f=p/'launch.py'
++for q in (f,*f.parents):assert not q.is_symlink(),'launcher_symlink'
++def meta(s):return tuple(getattr(s,'st_'+k)for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
++s=f.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'launcher_metadata'
++fd=os.open(f,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
++try:
++ assert meta(os.fstat(fd))==meta(s),'launcher_replaced'
++ raw=os.read(fd,65536)
++ assert meta(os.fstat(fd))==meta(s) and meta(f.lstat())==meta(s),'launcher_changed'
++finally:os.close(fd)
++assert hashlib.sha256(raw).hexdigest()=='5922f70646b6e20969abaccad0e834742127822e812012dc75144ffb67805bc4','reviewed_launcher'
++sys.argv=[str(f),str(p),'3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba','select-owner-authorized']
++exec(compile(raw,str(f),'exec'),{'__name__':'__main__','__file__':str(f)})
++REVIEWED_LOCAL
++)
++```
++
++## Gates, dados privados e parada
++
++1. Fontes/closure: manifesto literal, arquivos estáveis/no-follow, 26 membros exatos.
++   O cliente Node resolve só esses bytes em memória de memfd selado; nenhum require
++   de arquivo transferido por caminho. Node ELF/DT_NEEDED são observados via cadeia
++   e readelf; proteção do toolchain instalado continua requisito operacional separado.
++2. RPC: um FD para daemon existente, SO_PEERCRED/ticks/PID e socket antes/depois;
++   uma chamada getMonitorData. Não usa PM2 CLI/API/connect/respawn. Configuração
++   usa Operations.config/System.check_config reais, extraídos sem executar ops.main.
++   Frontend é comparado ao dump pré-janela (env completo), não ao env da sessão SSH.
++   Saved/fallback preservam todos os campos, apenas axm_monitor pode divergir.
++3. Rota: System.db_container real, ID/IP/publicação iguais ao binding histórico;
++   URL dos dois consumidores deve corresponder a host/porta/database/role. Docker
++   inspect exclui Config.Env; cliente por ID literal, psql path/versão16 registrados.
++   Imagem observada vinculada ao mesmo ID canônico; sem alegar imagem pristine.
++4. SELECT: só bloco3 separado; três SQLs byte-exatos, READ ONLY/timeouts/ROLLBACK.
++   Rota revalidada antes/depois de cada consulta. Identidade/versão/read_only são
++   conferidos; classify canônico é extraído dos mesmos bytes, sem capture().
++   Falta de atribuição de backends/locks mantém UNKNOWN. Não elevar privilégios.
++
++Destinos remotos novos: /dev/shm/re7-csv-three-gaps-executable-tools-20261017-v1
++ e /dev/shm/re7-csv-three-gaps-executable-read-20261017-v1 (mais sufixo -sql no bloco3).
++Custódia LOCAL: /home/deifson-oliveira/DEIFSON/re7-private-retention-custody/
++ csv-three-gaps-executable-20261017-v1 (mais sufixo -sql no bloco3).
++A materialização/launcher também preserva canais e falhas diretamente na custódia
++LOCAL, em csv-three-gaps-launcher-20261017-v1-{materialize,collect,select-owner-authorized}.
++Sem writer canônico íntegro ou parent legítimo, parar antes de qualquer ação: não
++fabricar journal ou corrigir o destino. Nesse caso só haverá o erro sanitizado do
++bootstrap; nenhuma coleta será iniciada.
++Não criar/ajustar parents privados automaticamente. O journal original de cada
++comando contém argv, início/fim, código, errno, tamanhos/hashes e bytesBase64 dos
++canais; envelope exportado e stdin-fonte são ancorados ao manifest. Custódia usa
++private_record original, preserva raw antes de validar e nunca promove DENY antigo.
++
++Coletas são intervalos, não snapshot atômico. Ausência/drift de PID histórico nega;
++não descobre substitutos. Produção, NEWauth+NEWDB+NEWcipher, crons, guarda38 e out.15
++permanecem intocados. Não instala bibliotecas, políticas, helpers ou permissões.
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/MANIFEST.json b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/MANIFEST.json
+new file mode 100644
+index 00000000..b0fa44b7
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/MANIFEST.json
+@@ -0,0 +1,283 @@
++{
++  "base": "9101b4f245a7ceb2bc769cb8a1388d7a179472f6",
++  "closureProvenance": {
++    "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/CLOSURE.json",
++    "sha256": "1e35a77626fea39d8b8f02695ddc4b10594ad7af37b44fba5ddcb2d309b1cd3b"
++  },
++  "files": {
++    "capture_imports.source": {
++      "bootstrap": false,
++      "bytes": 3976,
++      "relativeSource": "../crm-csv-operational-20261016/capture_imports.py",
++      "sha256": "52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/capture_imports.py"
++    },
++    "contracts.py": {
++      "bootstrap": true,
++      "bytes": 3239,
++      "relativeSource": "../crm-csv-three-gaps-procedure-20261017/contracts.py",
++      "sha256": "8b6fd62ccaf1a9e0c866908eee57041e464156d62dbe9b9031493ef55695d198",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/contracts.py"
++    },
++    "driver.py": {
++      "bootstrap": true,
++      "bytes": 10376,
++      "relativeSource": "driver.py",
++      "sha256": "8efaccf63790ecee54022c92badbfe4629a52d7a7bbb6fdbb557a1c7d943402c",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/driver.py"
++    },
++    "identity.sql": {
++      "bootstrap": false,
++      "bytes": 1374,
++      "relativeSource": "../crm-csv-three-gaps-procedure-20261017/identity.sql",
++      "sha256": "ed4eb8826e4bc68e1b9a2f98c9676898b8e3f068add747881566613d172ac138",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/identity.sql"
++    },
++    "imports.sql": {
++      "bootstrap": false,
++      "bytes": 582,
++      "relativeSource": "../crm-csv-three-gaps-procedure-20261017/imports.sql",
++      "sha256": "cbb92b53c4f2c8b298016e57a6d52dcef2e0b1c4ddc003a69e07a04398cfaf12",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/imports.sql"
++    },
++    "launch.py": {
++      "bootstrap": true,
++      "bytes": 4572,
++      "relativeSource": "launch.py",
++      "sha256": "5922f70646b6e20969abaccad0e834742127822e812012dc75144ffb67805bc4",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/launch.py"
++    },
++    "node_snapshot.cjs": {
++      "bootstrap": true,
++      "bytes": 1615,
++      "relativeSource": "node_snapshot.cjs",
++      "sha256": "1a53c533d104b78af4202ed3da2d98a6c00b42b9d643c43887bced6923574c87",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/node_snapshot.cjs"
++    },
++    "ops.source": {
++      "bootstrap": false,
++      "bytes": 28444,
++      "relativeSource": "../crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source",
++      "sha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source"
++    },
++    "ownership.sql": {
++      "bootstrap": false,
++      "bytes": 494,
++      "relativeSource": "../crm-csv-three-gaps-procedure-20261017/ownership.sql",
++      "sha256": "989f3371f3e2fc2886ddba4808180869e1c646b5dca550c1c36b940a68e32efd",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/ownership.sql"
++    },
++    "pm2_rpc_fd.cjs": {
++      "bootstrap": false,
++      "bytes": 1481,
++      "relativeSource": "../crm-csv-three-gaps-procedure-20261017/pm2_rpc_fd.cjs",
++      "sha256": "d590608ba53ad63e883e308e9764c2125451a921372191379d5ebed9b4b75760",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/pm2_rpc_fd.cjs"
++    },
++    "privileged_output.source": {
++      "bootstrap": true,
++      "bytes": 3303,
++      "relativeSource": "../crm-csv-r2-directed-20261017/privileged_output.source",
++      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/privileged_output.source"
++    },
++    "read_package.py": {
++      "bootstrap": true,
++      "bytes": 35507,
++      "relativeSource": "../crm-csv-r2-directed-20261017/read_package.py",
++      "sha256": "66f337fbe47d69ae02902f38f6b0e474241222c90967580d9c569dce21796691",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/read_package.py"
++    },
++    "rpc/node_modules/amp-message/index.js": {
++      "bootstrap": false,
++      "bytes": 2424,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp-message/index.js",
++      "sha256": "7215025169eb555640d6de3e0b99a600d7af04d6fabf65389bec65afbc47142e",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp-message/index.js"
++    },
++    "rpc/node_modules/amp-message/package.json": {
++      "bootstrap": false,
++      "bytes": 453,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp-message/package.json",
++      "sha256": "96ff6642f0cf1f9355bc0d0314b6f304f85f570640c04f06595a4ff9d33e3b47",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp-message/package.json"
++    },
++    "rpc/node_modules/amp/index.js": {
++      "bootstrap": false,
++      "bytes": 128,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp/index.js",
++      "sha256": "e976e5f23fc1772674bd32d1a8541b3b4122675134474688366ec179fe8b3274",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp/index.js"
++    },
++    "rpc/node_modules/amp/lib/decode.js": {
++      "bootstrap": false,
++      "bytes": 458,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/decode.js",
++      "sha256": "53070d736cdc23c16e46e91ba2b78aa45d8d60131b52af2e25ee9525c30f76fa",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/decode.js"
++    },
++    "rpc/node_modules/amp/lib/encode.js": {
++      "bootstrap": false,
++      "bytes": 616,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/encode.js",
++      "sha256": "6b3be5fd8f6ed5af1fb56f8cdf0b5d91eec515e6a9cca2ef117812753fb9aaf1",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/encode.js"
++    },
++    "rpc/node_modules/amp/lib/stream.js": {
++      "bootstrap": false,
++      "bytes": 2219,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/stream.js",
++      "sha256": "151e262054bb7435af73a0049190ed9e53d5055acbc336921089c5b5817474d5",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/stream.js"
++    },
++    "rpc/node_modules/amp/package.json": {
++      "bootstrap": false,
++      "bytes": 370,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp/package.json",
++      "sha256": "e7f86738e989dab385a911729409603938cf3e087d82f0e03239d3e62c2bf302",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp/package.json"
++    },
++    "rpc/node_modules/debug/package.json": {
++      "bootstrap": false,
++      "bytes": 1479,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/debug/package.json",
++      "sha256": "ea8e33d63fe5f3a4c36609b6c3df8e2ef1f8b8ba2fc3a2e1e53cb27291f384af",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/debug/package.json"
++    },
++    "rpc/node_modules/debug/src/common.js": {
++      "bootstrap": false,
++      "bytes": 6915,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/debug/src/common.js",
++      "sha256": "dbe83d2bb5837f3c4d7fe537b8004c585987270eceed5b06b8e078deb0ae214a",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/debug/src/common.js"
++    },
++    "rpc/node_modules/debug/src/index.js": {
++      "bootstrap": false,
++      "bytes": 314,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/debug/src/index.js",
++      "sha256": "aa127ff1752b7d9c7415c5c7bb6994d9aa722b81bcbcab4bd48316b013d23bf3",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/debug/src/index.js"
++    },
++    "rpc/node_modules/debug/src/node.js": {
++      "bootstrap": false,
++      "bytes": 4728,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/debug/src/node.js",
++      "sha256": "d7b26d7c92f8ea7794b77ce11f3c11cd18c9084df7c357e3c7025344fa28aac6",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/debug/src/node.js"
++    },
++    "rpc/node_modules/has-flag/index.js": {
++      "bootstrap": false,
++      "bytes": 330,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/has-flag/index.js",
++      "sha256": "e9e921d4734fee9405bef5886c010c80a8f10fe958e5d71bd5d8eed5e616e78d",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/has-flag/index.js"
++    },
++    "rpc/node_modules/has-flag/package.json": {
++      "bootstrap": false,
++      "bytes": 696,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/has-flag/package.json",
++      "sha256": "3fef4b52efbeabeadfffd5994e90b1025eb24263286e34170675956637d368b1",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/has-flag/package.json"
++    },
++    "rpc/node_modules/ms/index.js": {
++      "bootstrap": false,
++      "bytes": 3024,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/ms/index.js",
++      "sha256": "e5f0b6a946a9b2b356a28557728410717df54ea2f599edb619f9839df6b7b0e9",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/ms/index.js"
++    },
++    "rpc/node_modules/ms/package.json": {
++      "bootstrap": false,
++      "bytes": 732,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/ms/package.json",
++      "sha256": "1a6b4d9739790c0b94ab96c8cc0507e281c164c311ff4fbf5e57fb8d26290b40",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/ms/package.json"
++    },
++    "rpc/node_modules/pm2-axon-rpc/lib/client.js": {
++      "bootstrap": false,
++      "bytes": 1113,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon-rpc/lib/client.js",
++      "sha256": "f105ec1a2916fe5d57a68ac645c00443fe35b1c47fab8718cffd4527f2ba6f91",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon-rpc/lib/client.js"
++    },
++    "rpc/node_modules/pm2-axon-rpc/package.json": {
++      "bootstrap": false,
++      "bytes": 754,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon-rpc/package.json",
++      "sha256": "9ba8348ee5e75f6c5b2c3f6ac6bb5f065aa65341e8702f2094caf7b03c60b7fe",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon-rpc/package.json"
++    },
++    "rpc/node_modules/pm2-axon/lib/configurable/index.js": {
++      "bootstrap": false,
++      "bytes": 48,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/configurable/index.js",
++      "sha256": "246fddc47d614c7985c4e924d3482a8702dccff38f17dff00af28a5406735dcd",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/configurable/index.js"
++    },
++    "rpc/node_modules/pm2-axon/lib/configurable/lib/configurable.js": {
++      "bootstrap": false,
++      "bytes": 738,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/configurable/lib/configurable.js",
++      "sha256": "91993730e20717572137853fd8ff9b065d89a510427e8fbbea925b5e43d46000",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/configurable/lib/configurable.js"
++    },
++    "rpc/node_modules/pm2-axon/lib/plugins/queue.js": {
++      "bootstrap": false,
++      "bytes": 1237,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/plugins/queue.js",
++      "sha256": "ce90875571b2966b6e58ed687dc5570f2d82e5023e0800a9648610225bb4f1be",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/plugins/queue.js"
++    },
++    "rpc/node_modules/pm2-axon/lib/sockets/req.js": {
++      "bootstrap": false,
++      "bytes": 1906,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/sockets/req.js",
++      "sha256": "d418b6124cb48fc97279ded7dd08ca17922c4550bf42a5199f7651188f36df77",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/sockets/req.js"
++    },
++    "rpc/node_modules/pm2-axon/lib/sockets/sock.js": {
++      "bootstrap": false,
++      "bytes": 9121,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/sockets/sock.js",
++      "sha256": "75c923af407dcc005f5da934fce43d0c0adf7d5275d3fd599475b91847f253c6",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/sockets/sock.js"
++    },
++    "rpc/node_modules/pm2-axon/lib/utils.js": {
++      "bootstrap": false,
++      "bytes": 255,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/utils.js",
++      "sha256": "561edbe0a58aba85e0e97dd667c4479384b1f9543935f2a6372df4ae321f302f",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/utils.js"
++    },
++    "rpc/node_modules/pm2-axon/package.json": {
++      "bootstrap": false,
++      "bytes": 845,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/package.json",
++      "sha256": "55a069a32a1cafbb1c139f2b3ac87d013fd331c36693a1a5938711f4d4fdbe58",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/package.json"
++    },
++    "rpc/node_modules/supports-color/index.js": {
++      "bootstrap": false,
++      "bytes": 2748,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/supports-color/index.js",
++      "sha256": "479fd04f71a0fed642baa7e57c7e0701ae6f4a450bde8179f96815e6a26752b0",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/supports-color/index.js"
++    },
++    "rpc/node_modules/supports-color/package.json": {
++      "bootstrap": false,
++      "bytes": 817,
++      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/supports-color/package.json",
++      "sha256": "d410a772f9f64b224482ec13815a4bbf1837c533e1be04b3687755c48b2efa1f",
++      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/supports-color/package.json"
++    },
++    "runner.py": {
++      "bootstrap": true,
++      "bytes": 12867,
++      "relativeSource": "runner.py",
++      "sha256": "4c54a686f6cb42ed4e9663f0d842b13dcd371ed144a2f26e5335bdb06a77fcc5",
++      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py"
++    }
++  },
++  "scope": "inactive diagnostic only; not installed phase authority"
++}
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/PROOFS.json b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/PROOFS.json
+new file mode 100644
+index 00000000..4c1bdf9f
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/PROOFS.json
+@@ -0,0 +1,124 @@
++{
++  "result": "LOCAL_LITERAL_BLOCKS_VALIDATED",
++  "tests": 11,
++  "cases": [
++    {
++      "case": "daemon-absent",
++      "materialize": 0,
++      "collect": 1,
++      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
++      "literalBash": true,
++      "networkNamespace": true,
++      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
++      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
++      "sqlTransportSynthetic": false
++    },
++    {
++      "case": "config-changed",
++      "materialize": 0,
++      "collect": 1,
++      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
++      "literalBash": true,
++      "networkNamespace": true,
++      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
++      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
++      "sqlTransportSynthetic": false
++    },
++    {
++      "case": "valid",
++      "materialize": 0,
++      "collect": 0,
++      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
++      "literalBash": true,
++      "networkNamespace": true,
++      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
++      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
++      "sqlTransportSynthetic": true
++    },
++    {
++      "case": "partial-transfer",
++      "materialize": 0,
++      "collect": 1,
++      "custodyEvent": "THREE_GAPS_CUSTODY_DENY_NO_RETRY",
++      "literalBash": true,
++      "networkNamespace": true,
++      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
++      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
++      "sqlTransportSynthetic": false
++    },
++    {
++      "case": "peer-wrong",
++      "materialize": 0,
++      "collect": 1,
++      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
++      "literalBash": true,
++      "networkNamespace": true,
++      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
++      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
++      "sqlTransportSynthetic": false
++    },
++    {
++      "case": "route-changed",
++      "materialize": 0,
++      "collect": 1,
++      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
++      "literalBash": true,
++      "networkNamespace": true,
++      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
++      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
++      "sqlTransportSynthetic": false
++    },
++    {
++      "case": "reply-lost",
++      "materialize": 0,
++      "collect": 1,
++      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
++      "literalBash": true,
++      "networkNamespace": true,
++      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
++      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
++      "sqlTransportSynthetic": false
++    },
++    {
++      "case": "timeout",
++      "materialize": 0,
++      "collect": 1,
++      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
++      "literalBash": true,
++      "networkNamespace": true,
++      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
++      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
++      "sqlTransportSynthetic": false
++    },
++    {
++      "case": "snapshot-substitution",
++      "materialize": 0,
++      "collect": 0,
++      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
++      "literalBash": true,
++      "networkNamespace": true,
++      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
++      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
++      "sqlTransportSynthetic": false
++    },
++    {
++      "case": "bundle-tampered",
++      "materialize": 0,
++      "collect": 1,
++      "custodyEvent": "THREE_GAPS_CUSTODY_DENY_NO_RETRY",
++      "literalBash": true,
++      "networkNamespace": true,
++      "sourceManifestSha256": "3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba",
++      "commandsSha256": "7afe23a8ed44f6ac1a9f6fa67a93c78ce2d01f489c2f5737006398de36dc73da",
++      "sqlTransportSynthetic": false
++    },
++    {
++      "case": "source-tampered",
++      "materialize": 1,
++      "literalBash": true,
++      "remoteCalled": false
++    }
++  ],
++  "effects": "Real Bash/Python/Node FD/codec/memfd/files/export/custody; simulated SSH remote OS metadata, peer projection, Docker and SQL responses. Namespace UID0 is host user, not root. No VPS or real SQL.",
++  "preservedHistoricalPackages": true
++}
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/REPORT.md b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/REPORT.md
+new file mode 100644
+index 00000000..7e89313f
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/REPORT.md
+@@ -0,0 +1,169 @@
++# Três pendências — pacote diagnóstico executável LOCAL
++
++Base/parent esperado: `9101b4f245a7ceb2bc769cb8a1388d7a179472f6`.
++**LOCAL VALIDATED no laboratório / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.**
++CSV SUSPENSO. Nenhum acesso à VPS, SELECT real, PM2 CLI, observador root, instalação,
++backup, rebuild ou emissão de autoridade nesta rodada. NEWauth+NEWDB+NEWcipher,
++crons, guarda38, out.15, custódias e DENYs anteriores não foram alterados.
++
++## Resultado e fonte editável
++
++[COMMANDS.md](COMMANDS.md) é o único roteiro final; substitui a descrição incompleta
++da preparação anterior apenas para futura revisão, sem editar aquela entrega.
++[MANIFEST.json](MANIFEST.json) ancora39 arquivos/152.298B:13 fontes/SQLs/auxiliares e
++26 membros RPC existentes. Não são39 observações nem o toolchain completo de partida.
++Nenhum runtime ou perfil privado foi publicado. As fontes editáveis novas são
++launch.py, driver.py, runner.py e node_snapshot.cjs. seal.py produz os índices e os
++blocos, não executa coleta. lab.py/test_blocks.py são exclusivamente laboratório.
++
++- Manifest runtime: `3b3990e8fdfa5087064745ce3e2ddd9d7e704d080e21096e6b30d9e44a0439ba`.
++- Launcher: `5922f70646b6e20969abaccad0e834742127822e812012dc75144ffb67805bc4`.
++- Digests literais dos39 membros, tamanhos, fontes e caminhos relativos: MANIFEST.json.
++- Hashes de toda a entrega: MANIFEST.sha256; escopo do delta: seção abaixo.
++
++O owner revisa os hashes publicados; o comando autenticado recebe esses literais.
++Não se afirma autoridade produtiva por argumento/variável/manifest autodeterminado.
++Ordem sem ciclo: fontes e closure26 → manifest → literais do launcher/roteiro →
++ensaios desses blocos → provas/relatório → delta → índice de entrega.
++O manifest não contém seu próprio hash; o delta não representa a si ou ao índice
++que contém seu digest. Atualizar índices não instala política ou autoridade.
++
++## Consumo dos mesmos bytes
++
++1. O bloco lê launch.py em FD no-follow com metadata pré/pós, confere literal e
++   compila o buffer conferido. launch lê o manifest e fontes bootstrap do mesmo modo.
++2. O writer93a11451… é conferido e carregado dos mesmos bytes antes dos demais gates.
++   O guard do launcher preserva stdout/stderr/erro, comando, horário, código e hashes
++   diretamente na custódia local nova. Sem writer íntegro ou parent legítimo não há
++   escritor substituto: nega antes de agir, com erro sanitizado no terminal.
++3. materialize verifica cada fonte e closure existente; registra também a leitura
++   rejeitada, seu conteúdo/hash privado ou errno quando a leitura não foi possível.
++   Não instala módulos nem altera fontes. bundle privado é derivado desses buffers.
++4. Um único SSH BatchMode/StrictHostKeyChecking envia o bundle; bootstrap remoto
++   verifica o mesmo manifest/file-set e compila driver/runner dos buffers recebidos.
++   Os arquivos inativos são preservados, mas não importados depois por caminho.
++5. config_consumers extrai os corpos AST exatos de System.identity/check_config/
++   db_container e Operations.config de ops.c84a5e…, fornecendo o buffer verificado
++   ao mesmo extrator aceito. Não executa ops.main/Operations.__init__/stop/start.
++6. Node recebe snapshot CJS/JSON em memfd selado contra escrita/crescimento/redução.
++   node_snapshot carrega somente closure26 e pm2_rpc_fd já aceitos, de memória,
++   com resolução restrita ao índice. Nenhum require de CJS/JSON transferido mutável.
++   O ELF Node é aberto por FD, com metadata igual à imagem conferida, e executado
++   por esse FD mantido durante o filho; a proteção do OS/dynamic loader continua
++   pressuposto explícito, não atestado de todo o toolchain instalado.
++7. SQL é stdin dos buffers conferidos; classify é o corpo AST canônico, não capture().
++   Nenhum arquivo/perfil/binding/permit operacional novo é fabricado.
++
++## Gates e contratos reaproveitados
++
++| Gate | Consumidores concretos | Prova LOCAL e limite |
++|---|---|---|
++|1 fontes/closure|launch.read, driver.materialize/verify, snapshot de39 arquivos; RPC26 do B4|Materialização literal PASS; fonte/closure e bundle adulterados DENY. Não certifica bibliotecas instaladas da VPS.|
++|2 RPC/config|contracts.verify_peer; pm2_rpc_fd Req+RPC.Client; Operations.config → System.check_config; compare_frontend/compare_saved|FD/socket/codec/client reais no lab; dados/PIDs/ticks/peer produtivos sintéticos e declarados. Ausência/peer divergente negam antes da chamada; uma chamada por ida, sem respawn.|
++|3 rota/cliente|System.db_container exato; comparação ao binding e URLs; inspect formatado sem Config.Env; psql path/version por ID|Docker e respostas simulados; predicado real nega rota alterada antes de descobrir cliente. Imagem é observação ligada ao ID canônico, não atestado pristine.|
++|4 SELECT separado|identity.sql, ownership.sql, imports.sql; identidade/read_only/major16; classify exato|Bloco literal ensaiado com respostas SQL sintéticas, nunca conexão real. collect não chama SQL. Bloco3 exige recibo anterior ligado ao mesmo manifest e autorização específica; revalida1–3 em destinos novos.|
++
++Frontend usa o env completo do dump pré-janela, inclusive comparação correta de
++saved/fallback; a fonte SSH sourceProfile.front.env não vira configuração canônica.
++Os campos LIVE_FIELDS continuam obrigatórios. Somente axm_monitor pode divergir no
++saved; nenhuma métrica substitui script/cwd/interpreter/env/status/watch/identidade.
++Hashes/ticks anteriores são referências históricas restritivas: drift nega, sem
++auto-descoberta de outro PID ou atualização de perfil.
++
++SQL usa canal canônico Docker exec/Unix socket, role/database literais, sem .env ou
++senha legada, com PG* controlado somente no processo observador. Confere container
++running/rede/IPv6/publicação pelo consumidor real; o ID protege a seleção dos execs.
++Rota é reconferida antes/depois de cada SELECT. A imagem é imutável sob a identidade
++de container no modelo Docker administrado já adotado; não há alegação de binário
++pristine nem de autenticação TCP NEWDB por esse canal trust local.
++
++Identidade SQL ou leitura de pg_stat_activity/locks não atribui executores. Sem elo
++root/socket/proxy/backend e os demais controles canônicos, **ownership UNKNOWN**.
++Não é executado o observador root, não há sudo nem alteração de sua delegação.
++UNKNOWN de imports também não autoriza futura janela; saídas são preservadas para
++reconciliação posterior, sem transformar SELECT em prova pós-saída ou liberação.
++
++## Transporte, custódia e falha
++
++Destinos exatos novos estão no roteiro; material local fica em tmpfs exclusivo;
++launcher e captura têm custódias privadas separadas, com parent owner700 existente.
++Nenhum parent é reparado. Criação é exclusiva e arquivos são600/no-follow.
++Comando filho registra argv, início/fim, código/timeout/errno, stdin len/hash,
++stdout/stderr len/hash/base64 e artefatos byte-exatos. Fontes e auxiliares ficam
++ligados ao manifest. A transferência também registra argv real e hash/tamanho do
++bundle enviado. Os buffers stdout/stderr do SSH são preservados antes da validação.
++
++Export usa o envelope R2_DIRECTED_BYTE_EXACT_TRANSFER_V1 original; ingestão verifica
++origem exata, metadata, comprimento/hash e canais de cada comando antes de registrar
++pelo private_record canônico. DENY com envelope válido é custodiado com gatePass=false.
++Transferência truncada/resposta perdida preserva parcial, dá CUSTODY_DENY, sem nova
++conexão automática. Nesse caso a captura remota pode existir e exige decisão futura
++para eventual recuperação de evidência; não se repete collect. Não há como afirmar
++custódia completa de bytes que não chegaram. Falha de disco/escritor é uma condição
++de parada, não licença para fabricar recibo ou sobrescrever diagnóstico.
++
++## Provas finais
++
++[PROOFS.json](PROOFS.json):11 ensaios dos blocos finais extraídos literalmente de
++COMMANDS.md. A suíte terminou exit0; não foi repetida a suíte PM2 completa, builds,
++backups, reader corrigido ou suítes funcionais antigas. Reexecuções durante esta
++engenharia foram restritas aos blocos afetados por correção do harness e do registro
++de falhas/entrada e de um falso DENY por atime. O bootstrap final usa exatamente
++os campos metadata do leitor canônico (sem atime); cada caso força atime antigo no
++bundle antes da leitura para cobrir a regressão. A prova publicada corresponde aos
++hashes finais.
++
++| Contraprova | Resultado exigido e observado |
++|---|---|
++|Cadeia válida, incluindo bloco SELECT separado|materialização→transferência→3gates→exportação→custódia; segundo bloco com respostas sintéticas passa seus verificadores; sem SQL real|
++|Fonte closure adulterada|DENY na materialização, bytes/hash rejeitados no journal; SSH não chamado|
++|Bundle adulterado|DENY antes do SSH; erro e canais custodiados|
++|Daemon ausente|DENY, sem CLI/respawn, envelope de falha custodiado|
++|Peer divergente|verify_peer nega antes de pm2-rpc; zero getMonitorData|
++|Resposta perdida / timeout|uma getMonitorData, erro do codec, sem replay; canais/recusa custodiados|
++|Configuração divergente|compare_frontend/Operations negam antes de db-route|
++|Rota alterada|System.db_container/comparação nega antes de sql-client-path|
++|Transferência parcial|envelope truncado preservado; CUSTODY_DENY, sem retry|
++|Substituição após conferência|CJS no diretório inativo substituído; snapshot original executado, arquivo adulterado não carregado|
++
++**Reais:** Bash publicado sem edição, Python/AST/checkers, Node e codecs PM2, socket
++Unix local, FD herdado, memfd selado, processos filhos de laboratório, arquivos,
++envelope e private_record. O server sintético usa Rep/Server do toolchain B4 local,
++apenas como peer de laboratório; não é PM2 CLI/daemon produtivo. closure26 cliente
++é a mesma referência aceita e não faz fallback para módulos globais.
++
++**Simulados:** SSH (shim sem rede em namespace), `/proc`/PIDs/ticks/boot e perfis
++históricos sintéticos, projeção explícita de SO_PEERCRED do PID real do peer local
++para a identidade da fixture, localização/hash do ELF Node do laboratório, Docker,
++rota e respostas SQL. Configuração/frontend/route são verificados pelos consumidores
++reais; nenhuma callback substitui verificador por PASS. O user namespace UID0 mapeia
++o usuário local sem capabilities, não root do host. Só namespaces de filesystem
++podem criar as custódias/destinos da fixture. Nenhum dado sintético é binding atual.
++A prova anterior de SO_PEERCRED real sem projeção e os testes canônicos de campos
++são reutilizados no alcance aceito em9101, não promovidos a observação nova.
++
++## Reprodução, diff e pendências
++
++No checkout desta entrega, com Python3.12, Node local, bwrap e toolchain B4 já
++preservado em /tmp/re7-b4-toolchain-20261016 (sem instalar/download):
++`PYTHONDONTWRITEBYTECODE=1 python3 docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/test_blocks.py`.
++Precisa permissões do laboratório para namespaces/socket Unix; sandbox que os negue
++não substitui os testes por mocks. closure pins e procedência estão no manifest e
++no CLOSURE.json da entrega anterior; o server de teste reutiliza os codecs B4.
++
++ALLOWLIST.json delimita publicação. DELTA.patch representa arquivos novos desse
++conjunto e os três checkpoints, **excluindo o próprio patch e MANIFEST.sha256** para
++não criar autorreferência. O patch usa contexto zero para evitar whitespace dos
++marcadores de contexto em um patch versionado; conferir com
++`git apply --check --reverse --unidiff-zero DELTA.patch` a partir do checkout entregue.
++MANIFEST.sha256 indexa o patch e a entrega; não se indexa.
++As gerações e fontes anteriores não foram alteradas. Worktrees, `.data`, caches,
++local-evidence e materiais privados fora do namespace de laboratório ficam fora do Git.
++Vercel mantém deploymentEnabled=false para a branch; CI versionado só atende
++main/develop. Nenhum workflow/configuração foi alterado.
++
++Próxima decisão: revisão deste roteiro e eventual autorização delimitada para
++collect1–3; SELECT4 continua separado. Identidades/configuração/rota atuais,
++atribuição ownership, fechamento/proteção de toolchain operacional, instalação e
++autoridade de fase continuam não certificados. Não há janela pronta nem retomada
++CSV. Segurança externa segue decisão de risco/revisão21/10; não foi reaberta aqui.
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/driver.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/driver.py
+new file mode 100644
+index 00000000..98827261
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/driver.py
+@@ -0,0 +1,146 @@
++"""Offline assembly and single-attempt transport; canonical private_record only."""
++import base64,hashlib,json,os,stat,subprocess
++from pathlib import Path
++
++BASE=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926')
++NAME='crm-csv-three-gaps-executable-20261017'
++PREFIX='docs/reviews/automation-freeform-window-release-af26/'
++MATERIAL=Path('/dev/shm/re7-csv-three-gaps-material-20261017-v1')
++CUSTODY=Path('/home/deifson-oliveira/DEIFSON/re7-private-retention-custody')
++TOOLS='/dev/shm/re7-csv-three-gaps-executable-tools-20261017-v1'
++OUTPUT='/dev/shm/re7-csv-three-gaps-executable-read-20261017-v1'
++HOST='deploy@admin.re7online.com'
++JOURNAL='privileged-output.private.jsonl'
++
++def libload(name,blobs=None):
++    scope={'__name__':'reviewed_library_only','__file__':'<verified '+name+'>'}
++    exec(compile((BLOBS if blobs is None else blobs)[name],scope['__file__'],'exec'),scope);return scope
++
++def libraries(blobs=None):return libload('read_package.py',blobs),libload('privileged_output.source',blobs)['private_record']
++
++def pack(blobs):return {'manifestSha256':MANIFEST_SHA,'manifest':base64.b64encode(MANIFEST_RAW).decode(),
++                        'files':{k:base64.b64encode(v).decode()for k,v in blobs.items()}}
++
++def verify(frame):
++    raw=base64.b64decode(frame['manifest'],validate=True)
++    if hashlib.sha256(raw).hexdigest()!=MANIFEST_SHA:raise RuntimeError('remote_manifest_drift')
++    mf=json.loads(raw);blobs={k:base64.b64decode(v,validate=True)for k,v in frame['files'].items()}
++    if set(blobs)!=set(mf['files']):raise RuntimeError('remote_file_set')
++    for k,v in blobs.items():
++        if len(v)!=mf['files'][k]['bytes']or hashlib.sha256(v).hexdigest()!=mf['files'][k]['sha256']:raise RuntimeError('remote_source_drift')
++    return blobs
++
++def materialize():
++    lib,record=libraries();out=lib['new_directory'](MATERIAL)
++    record(out,JOURNAL,{'event':'materialize_begin','utc':lib['utc'](),'manifestSha256':MANIFEST_SHA})
++    try:
++        blobs=dict(BLOBS)
++        for name,entry in MANIFEST['files'].items():
++            if name in blobs:continue
++            source=Path(entry['source'])
++            if not source.is_absolute():source=BASE/source
++            start=lib['utc']()
++            try:raw=READ(source)
++            except Exception as e:
++                record(out,JOURNAL,{'event':'materialize_source','argv':['read',str(source)],'startedUtc':start,'finishedUtc':lib['utc'](),'exitCode':None,'accepted':False,'errorClass':type(e).__name__,'errno':getattr(e,'errno',None)})
++                raise
++            accepted=len(raw)==entry['bytes']and hashlib.sha256(raw).hexdigest()==entry['sha256']
++            record(out,JOURNAL,{'event':'materialize_source','argv':['read',str(source)],'startedUtc':start,'finishedUtc':lib['utc'](),'exitCode':0,'accepted':accepted,'stdoutBytes':len(raw),'stdoutSha256':lib['sha'](raw),'stdoutBase64':base64.b64encode(raw).decode(),'stderrBytes':0,'stderrSha256':lib['sha'](b''),'stderrBase64':''})
++            if not accepted:raise RuntimeError('material_source_drift')
++            blobs[name]=raw
++        frame=pack(blobs);verify(frame)
++        lib['write_artifact'](out/'bundle.private.json',json.dumps(frame,sort_keys=True).encode())
++        record(out,JOURNAL,{'event':'materialize_end','utc':lib['utc'](),'result':'MATERIALIZED_INACTIVE','files':len(blobs)})
++        print('MATERIALIZED_INACTIVE_NO_REMOTE');return 0
++    except Exception as e:
++        record(out,JOURNAL,{'event':'materialize_end','utc':lib['utc'](),'result':'DENY_NO_RETRY','errorClass':type(e).__name__,'errno':getattr(e,'errno',None)});return 1
++
++# This fixed program only decodes a reviewed byte snapshot. It does not import a transferred path.
++REMOTE_LAUNCH=r'''import base64,hashlib,json,sys
++frame=json.loads(sys.stdin.buffer.read(4*1024*1024+1))
++raw=base64.b64decode(frame['manifest'],validate=True)
++assert hashlib.sha256(raw).hexdigest()==sys.argv[1],'reviewed_manifest'
++m=json.loads(raw);blobs={k:base64.b64decode(v,validate=True)for k,v in frame['files'].items()}
++assert set(blobs)==set(m['files']),'file_set'
++for k,v in blobs.items():
++ assert len(v)==m['files'][k]['bytes'] and hashlib.sha256(v).hexdigest()==m['files'][k]['sha256'],'reviewed_source'
++s={'__name__':'reviewed_remote','__file__':'<verified driver>','BLOBS':blobs,'MANIFEST':m,'MANIFEST_RAW':raw,'MANIFEST_SHA':sys.argv[1]}
++exec(compile(blobs['driver.py'],'<verified driver>','exec'),s)
++sys.exit(s['remote'](sys.argv[2]))
++'''
++
++def remote(action):
++    os.umask(0o077)  # Newly created inactive subdirectories only; no chmod/repair.
++    # No sources are imported from the newly materialized directory.
++    lib,record=libraries();suffix=''if action=='collect'else'-sql'
++    t=lib['new_directory'](TOOLS+suffix);q=lib['new_directory'](OUTPUT+suffix)
++    record(q,JOURNAL,{'event':'transfer_inactive_begin','utc':lib['utc'](),'manifestSha256':MANIFEST_SHA,'action':action})
++    ok=False
++    try:
++        for k,v in BLOBS.items():
++            p=t/k
++            # Only new subdirectories within this exclusive tree; no repair or overwrite.
++            if not p.parent.exists():p.parent.mkdir(mode=0o700,parents=True)
++            lib['write_artifact'](p,v)
++            record(q,JOURNAL,{'event':'materialized_remote_source','argv':['write-inactive',k],'utc':lib['utc'](),'exitCode':0,'bytes':len(v),'sha256':lib['sha'](v)})
++        lib['write_artifact'](t/'MANIFEST.json',MANIFEST_RAW)
++        scope={'__name__':'reviewed_runner','__file__':'<verified runner>','BLOBS':BLOBS,'MANIFEST_SHA':MANIFEST_SHA}
++        exec(compile(BLOBS['runner.py'],'<verified runner>','exec'),scope)
++        ok,_=scope['run'](q,action)
++    except Exception as e:record(q,JOURNAL,{'event':'remote_end','result':'DENY_NO_RETRY','errorClass':type(e).__name__,'errno':getattr(e,'errno',None),'utc':lib['utc']()})
++    # Even a gate DENY exports its bytes in the same response. No second remote attempt.
++    print(json.dumps({'gateExitCode':0 if ok else 1,'manifestSha256':MANIFEST_SHA,'capture':lib['export'](q)},sort_keys=True))
++    return 0 if ok else 1
++
++def ingest(folder,stdout,stderr,code,started,finished,error=None,action='collect',argv=None,source_raw=b''):
++    lib,record=libraries();suffix=''if action=='collect'else'-sql'
++    lib['write_artifact'](folder/'transfer.stdout.private',stdout);lib['write_artifact'](folder/'transfer.stderr.private',stderr)
++    row={'event':'transport','argv':argv,
++         'startedUtc':started,'finishedUtc':finished,'stdinBytes':len(source_raw),'stdinSha256':lib['sha'](source_raw),'exitCode':code,'errorClass':None if error is None else type(error).__name__,'errno':getattr(error,'errno',None)}
++    for k,v in [('stdout',stdout),('stderr',stderr)]:row.update({k+'Bytes':len(v),k+'Sha256':lib['sha'](v),k+'Base64':base64.b64encode(v).decode()})
++    record(folder,JOURNAL,row)
++    try:
++        value=json.loads(stdout);lib['require'](value['manifestSha256']==MANIFEST_SHA,'custody_manifest')
++        f=value['capture'];raw=base64.b64decode(f['bytesBase64'],validate=True);m=f['metadata']
++        lib['require'](f['format']=='R2_DIRECTED_BYTE_EXACT_TRANSFER_V1' and f['source']==OUTPUT+suffix+'/'+JOURNAL,'custody_source')
++        lib['require'](len(raw)==f['bytes']==m['size'] and lib['sha'](raw)==f['sha256'],'custody_bytes')
++        lib['require'](stat.S_ISREG(m['mode']) and stat.S_IMODE(m['mode'])==0o600 and m['nlink']==1 and m['uid']==f['sourceUid'],'custody_metadata')
++        lib['write_artifact'](folder/'capture.private.jsonl',raw)
++        rows=[json.loads(x)for x in raw.splitlines()]
++        for r in rows:
++            if r['event']=='command':
++                for k in ('stdout','stderr'):
++                    v=base64.b64decode(r[k+'Base64'],validate=True)
++                    lib['require'](len(v)==r[k+'Bytes']and lib['sha'](v)==r[k+'Sha256'],'custody_command_bytes')
++            record(folder,JOURNAL,r)
++        valid=code==0 and error is None and value['gateExitCode']==0
++        record(folder,'sequencer.journal.jsonl',{'event':'THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED','utc':lib['utc'](),'sourceSha256':f['sha256'],'sourceBytes':len(raw),'manifestSha256':MANIFEST_SHA,'gatePass':valid,'atomicSnapshot':False,'ownership':'UNKNOWN'})
++        print('CUSTODY_PRESERVED_GATES_PASS_NOT_CERTIFIED'if valid else'CUSTODY_PRESERVED_DENY_NO_RETRY');return 0 if valid else 1
++    except Exception as e:
++        record(folder,'sequencer.journal.jsonl',{'event':'THREE_GAPS_CUSTODY_DENY_NO_RETRY','utc':lib['utc'](),'errorClass':type(e).__name__,'errno':getattr(e,'errno',None)})
++        print('CUSTODY_DENY_PARTIAL_PRESERVED_NO_RETRY');return 1
++
++def transport(action):
++    import shlex
++    lib,record=libraries();suffix=''if action=='collect'else'-sql'
++    # Destination exists => no remote effects. Existing parent must already satisfy owner700.
++    folder=lib['new_directory'](CUSTODY/('csv-three-gaps-executable-20261017-v1'+suffix))
++    started=lib['utc']();out=err=b'';code=None;error=None;argv=['source-verify-before-ssh',action];frame_raw=b''
++    try:
++        frame_raw=READ(MATERIAL/'bundle.private.json',4*1024*1024);frame=json.loads(frame_raw);verify(frame)
++        if action=='select':
++            previous=CUSTODY/'csv-three-gaps-executable-20261017-v1'
++            raw,_=lib['stable_file'](previous/'sequencer.journal.jsonl');receipt=json.loads(raw.splitlines()[-1])
++            lib['require'](receipt['event']=='THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED'and receipt['gatePass']is True and receipt['manifestSha256']==MANIFEST_SHA,'previous_gates_not_passed')
++        cmd='/usr/bin/python3 -B -I -S -c '+shlex.quote(REMOTE_LAUNCH)+' '+shlex.quote(MANIFEST_SHA)+' '+shlex.quote(action)
++        argv=['ssh','-T','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes',HOST,cmd]
++        r=subprocess.run(argv,input=frame_raw,capture_output=True,timeout=180,check=False);code,out,err=r.returncode,r.stdout,r.stderr
++    except subprocess.TimeoutExpired as e:out,err=e.stdout or b'',e.stderr or b'';error=e
++    except Exception as e:error=e;err=type(e).__name__.encode()
++    return ingest(folder,out,err,code,started,lib['utc'](),error,action,argv,frame_raw)
++
++def main(action):
++    if action=='materialize':return materialize()
++    if action=='collect':return transport(action)
++    if action=='select-owner-authorized':return transport('select')
++    raise RuntimeError('action_not_authorized')
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/lab.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/lab.py
+new file mode 100644
+index 00000000..6feae7a0
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/lab.py
+@@ -0,0 +1,112 @@
++"""Lab ONLY: external OS/process/route representations, never operationally distributed.
++Runs published Bash literally. The SSH shim simulates the remote host; no network.
++Canonical checkers and the closure26 RPC client remain real. No PASS callbacks.
++"""
++import base64,builtins,copy,hashlib,json,os,pathlib,socket,struct,subprocess,sys
++from pathlib import Path
++ROOT=Path(os.environ.get('RE7_LAB','/nonexistent'))
++NODE=os.environ.get('RE7_LAB_NODE','/nonexistent')
++RealPath=Path
++CASE=os.environ.get('RE7_LAB_CASE','valid')
++
++
++def remote(command,stdin):
++    import shlex
++    argv=shlex.split(command);sys.argv=['-c',*argv[-2:]]
++    realexec=builtins.exec;realrun=subprocess.run;realsocket=socket.socket
++    fake=ROOT/'fs'
++    class LabPath(pathlib.PosixPath):
++        def __init__(self,*args):
++            p=RealPath(*args);s=str(p)
++            if s.startswith(('/proc/','/home/deploy/','/opt/re7online/')):p=fake/s.lstrip('/')
++            elif s=='/usr/bin/node':p=RealPath(NODE)
++            super().__init__(p)
++    class LabSocket(realsocket):
++        def getsockopt(self,level,opt,*args):
++            raw=super().getsockopt(level,opt,*args)
++            if (level,opt)==(socket.SOL_SOCKET,socket.SO_PEERCRED):
++                pid,uid,gid=struct.unpack('3i',raw)
++                if pid!=int(os.environ['RE7_LAB_SERVER']):raise RuntimeError('unexpected_lab_peer')
++                return struct.pack('3i',18677 if CASE=='peer-wrong'else 18676,os.getuid(),gid)
++            return raw
++    socket.socket=LabSocket
++    route=json.loads((ROOT/'route.json').read_text());docker_calls=0
++    def run(args,*a,**kw):
++        nonlocal docker_calls
++        if args[0]=='/usr/bin/docker':
++            docker_calls+=1
++            if args[1]=='inspect':
++                r=copy.deepcopy(route)
++                if CASE=='route-changed':r['NetworkSettings']['Ports']['5432/tcp'][0]['HostPort']='6543'
++                out=json.dumps(r).encode()
++            elif args[-2:]==['-c','command -v psql']:out=b'/usr/local/bin/psql\n'
++            elif args[-1]=='--version':out=b'psql (PostgreSQL) 16.6\n'
++            else:
++                # SQL transport is synthetic; statements/validators/classifier are real.
++                sql=kw['input']
++                if b'pg_control_system'in sql:out=(json.dumps({'database':'whatsapp_agent','sessionRole':'wa_agent','effectiveRole':'wa_agent','transactionReadOnly':'on','serverVersion':'160006'})+'\n'+json.dumps({'systemIdentifier':'SYNTHETIC_CLUSTER'})+'\n{}\n'+json.dumps({'allClientBackendsVisible':False})+'\n').encode()
++                elif b'LIMIT 100001'in sql:out=b'{"rows":[]}\n'
++                else:out=b'[]\n'
++            return subprocess.CompletedProcess(args,0,out,b'')
++        if args[:2]==['/usr/bin/readelf','--wide']:args=[*args[:-1],NODE]
++        return realrun(args,*a,**kw)
++    subprocess.run=run
++    def exec_hook(code,scope=None,local=None,**kw):
++        answer=realexec(code,scope,local,**kw)
++        if scope is not None and 'Path' in scope:scope['Path']=LabPath
++        if getattr(code,'co_filename',None)=='<verified contracts.py>':scope['config_consumers'].__defaults__=(LabPath,scope['OPS'])
++        if getattr(code,'co_filename',None)=='<verified runner>':
++            scope['P']=LabPath(scope['P'])
++            scope['BOOT_SHA']=hashlib.sha256((fake/'proc/sys/kernel/random/boot_id').read_bytes()).hexdigest()
++            scope['NODE_SHA']=hashlib.sha256(RealPath(NODE).read_bytes()).hexdigest()
++            scope['HISTORY']={k:hashlib.sha256((fake/'opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-csv-staged-v2-20261016T094000Z/window'/k).read_bytes()).hexdigest()for k in scope['HISTORY']}
++            if CASE=='snapshot-substitution':
++                RealPath('/dev/shm/re7-csv-three-gaps-executable-tools-20261017-v1/pm2_rpc_fd.cjs').write_text("throw Error('MUTABLE_FILE_EXECUTED');")
++        return answer
++    builtins.exec=exec_hook
++    if CASE=='partial-transfer':
++        import io
++        old=sys.stdout;sys.stdout=io.StringIO()
++        try:realexec(compile(argv[5],'<SSH fixed bootstrap>','exec'),{'__name__':'__main__'})
++        except SystemExit as e:code=e.code
++        raw=sys.stdout.getvalue();sys.stdout=old;print(raw[:len(raw)//2],end='');return code
++    realexec(compile(argv[5],'<SSH fixed bootstrap>','exec'),{'__name__':'__main__'})
++
++SERVER=r'''
++const net=require('net'),base=process.argv[1],rows=JSON.parse(process.argv[2]),endpoint=process.argv[3],kind=process.argv[4];
++const Rep=require(base+'/pm2-axon/lib/sockets/rep.js'),Server=require(base+'/pm2-axon-rpc/lib/server.js');
++let count=0;const listener=net.createServer(stream=>{
++ const rep=new Rep();rep.addSocket(stream);
++ new Server(rep).expose('getMonitorData',(opts,cb)=>{
++  count++;if(kind==='reply-lost'){stream.destroy();return;}if(kind==='timeout')return;
++  cb(null,rows);
++ });
++});
++listener.listen(endpoint,()=>process.stdout.write('READY\n'));
++process.on('SIGTERM',()=>{process.stdout.write('CALLS='+count+'\n');process.exit(0);});
++'''
++
++def fixture(root):
++    def put(p,raw):
++        p=root/'fs'/p.lstrip('/');p.parent.mkdir(parents=True,exist_ok=True,mode=0o700);p.write_bytes(raw);return p
++    before={'name':'re7-admin-front','pm_cwd':'/opt/synthetic-front','pm_exec_path':'/opt/synthetic-front/launcher.cjs','exec_interpreter':NODE,
++            'args':[],'node_args':[],'namespace':'default','exec_mode':'fork_mode','watch':False,'autorestart':True,'stop_exit_codes':0,
++            'env':{'DATABASE_URL':'postgresql://wa_agent:SYNTHETIC@127.0.0.1:5432/whatsapp_agent'},'axm_monitor':{'metric':1}}
++    apps=[];configs=[]
++    for name,pid,ticks in [('re7-whatsapp-agent',936386,'2193413108'),('re7-whatsapp-web-worker',936540,'2193413523'),('re7-admin-front',188897,'2161347676')]:
++        b=copy.deepcopy(before);b['name']=name
++        put('/proc/'+str(pid)+'/stat',(str(pid)+' (lab) S '+'0 '*18+ticks+'\n').encode())
++        env=b'\0'.join((k+'='+v).encode()for k,v in b['env'].items())+b'\0';put('/proc/'+str(pid)+'/environ',env)
++        for link,target in [('cwd',b['pm_cwd']),('exe',b['exec_interpreter'])]:(root/'fs/proc'/str(pid)/link).symlink_to(target)
++        apps.append({'name':name,'pid':pid,'pm2_env':{**b,'status':'online','restart_time':0}})
++        configs.append({'name':name,'cwd':b['pm_cwd'],'script':b['pm_exec_path'],'interpreter':b['exec_interpreter'],'env':b['env']})
++    put('/proc/18676/stat',b'18676 (lab) S '+b'0 '*18+b'222727\n')
++    put('/proc/sys/kernel/random/boot_id',b'00000000-0000-0000-0000-000000000001\n')
++    put('/home/deploy/.pm2/pm2.pid',b'18676\n')
++    dump=json.dumps([before]).encode()
++    for n in ('dump.pm2','dump.pm2.bak'):put('/home/deploy/.pm2/'+n,dump)
++    p='/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-csv-staged-v2-20261016T094000Z/window/'
++    put(p+'saved-dump.pm2.private.json',dump);put(p+'source.profile.private.json',json.dumps({'apps':configs}).encode())
++    put(p+'db-owner-bindings.private.json',b'{"containerId":"SYNTHETIC_ID","containerIp":"172.18.0.2","publishedPort":5432}')
++    row={'Id':'SYNTHETIC_ID','Image':'sha256:SYNTHETIC_IMAGE','State':{'Running':True},'NetworkSettings':{'Networks':{'one':{'IPAddress':'172.18.0.2','GlobalIPv6Address':''}},'Ports':{'5432/tcp':[{'HostIp':'127.0.0.1','HostPort':'5432'}]}}}
++    (root/'route.json').write_text(json.dumps(row));return apps
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/launch.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/launch.py
+new file mode 100644
+index 00000000..7a8eb528
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/launch.py
+@@ -0,0 +1,71 @@
++"""Reviewed entry: snapshot manifest and files once; execute those bytes, never import paths."""
++import hashlib,json,os,stat,sys
++from pathlib import Path
++
++def metadata(s):
++    return tuple(getattr(s,'st_'+k)for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
++
++def read(path,limit=8*1024*1024):
++    path=Path(path)
++    for p in (path,*path.parents):
++        if p.is_symlink():raise RuntimeError('source_symlink')
++    s=path.lstat()
++    if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or s.st_size>limit:raise RuntimeError('source_type_size')
++    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
++    try:
++        if metadata(os.fstat(fd))!=metadata(s):raise RuntimeError('source_replaced')
++        with os.fdopen(fd,'rb',closefd=False) as f:raw=f.read(limit+1)
++        if len(raw)>limit or metadata(os.fstat(fd))!=metadata(s) or metadata(path.lstat())!=metadata(s):raise RuntimeError('source_changed')
++        return raw
++    finally:os.close(fd)
++
++def execute():
++    root=Path(sys.argv[1]);expected=sys.argv[2];action=sys.argv[3]
++    raw=read(root/'MANIFEST.json')
++    if hashlib.sha256(raw).hexdigest()!=expected:raise RuntimeError('review_manifest_drift')
++    manifest=json.loads(raw);blobs={}
++    for name,entry in manifest['files'].items():
++        if Path(name).is_absolute() or '..' in Path(name).parts:raise RuntimeError('manifest_path')
++        if not entry.get('bootstrap',False):continue
++        source=Path(entry['source'])
++        if not source.is_absolute():source=root/entry['relativeSource']
++        value=read(source)
++        if len(value)!=entry['bytes'] or hashlib.sha256(value).hexdigest()!=entry['sha256']:raise RuntimeError('review_source_drift:'+name)
++        blobs[name]=value
++    scope={'__name__':'reviewed_driver','__file__':'<verified driver>', 'BLOBS':blobs,'MANIFEST':manifest,
++           'MANIFEST_RAW':raw,'MANIFEST_SHA':expected,'READ':read}
++    exec(compile(blobs['driver.py'],'<verified driver>','exec'),scope)
++    return scope['main'](action)
++def main():
++    import base64,contextlib,datetime,io
++    root=Path(sys.argv[1]);action=sys.argv[3]
++    if action not in ('materialize','collect','select-owner-authorized'):raise RuntimeError('action_denied')
++    # Independent, already approved canonical writer before source/manifest checks.
++    writer_raw=read(root.parent/'crm-csv-r2-directed-20261017/privileged_output.source')
++    if hashlib.sha256(writer_raw).hexdigest()!='93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a':raise RuntimeError('canonical_writer_unavailable')
++    module={'__name__':'canonical_private_library','__file__':'<pinned writer>'}
++    exec(compile(writer_raw,'<pinned writer>','exec'),module)
++    parent=Path('/home/deifson-oliveira/DEIFSON/re7-private-retention-custody');m=parent.lstat()
++    if not stat.S_ISDIR(m.st_mode)or m.st_uid!=os.getuid()or stat.S_IMODE(m.st_mode)!=0o700:raise RuntimeError('custody_parent_contract')
++    for q in (parent,*parent.parents):
++        if q.is_symlink():raise RuntimeError('custody_parent_symlink')
++    folder=parent/('csv-three-gaps-launcher-20261017-v1-'+action);folder.mkdir(mode=0o700)
++    started=datetime.datetime.now(datetime.timezone.utc).isoformat();out=io.StringIO();err=io.StringIO();code=1;error=None
++    try:
++        with contextlib.redirect_stdout(out),contextlib.redirect_stderr(err):code=execute()
++    except Exception as e:error=e;err.write(type(e).__name__)
++    row={'event':'reviewed_local_launcher','argv':sys.argv,'startedUtc':started,'finishedUtc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'exitCode':code,
++         'errorClass':None if error is None else type(error).__name__,'errno':getattr(error,'errno',None),'writerSha256':hashlib.sha256(writer_raw).hexdigest()}
++    for key,raw in [('stdout',out.getvalue().encode()),('stderr',err.getvalue().encode())]:
++        fd=os.open(folder/(key+'.private'),os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
++        with os.fdopen(fd,'wb')as f:f.write(raw);f.flush();os.fsync(f.fileno())
++        row.update({key+'Bytes':len(raw),key+'Sha256':hashlib.sha256(raw).hexdigest(),key+'Base64':base64.b64encode(raw).decode()})
++    module['private_record'](folder,'privileged-output.private.jsonl',row)
++    print(out.getvalue(),end='')
++    if code!=0:print('LAUNCHER_DENY_PRIVATE_DIAGNOSTIC_PRESERVED_NO_RETRY')
++    return code
++
++if __name__=='__main__':
++    try:sys.exit(main())
++    except Exception as e:
++        print(json.dumps({'result':'LOCAL_PACKAGE_DENY_NO_RETRY','errorClass':type(e).__name__,'errno':getattr(e,'errno',None)}));sys.exit(1)
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/node_snapshot.cjs b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/node_snapshot.cjs
+new file mode 100644
+index 00000000..dfc43fa0
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/node_snapshot.cjs
+@@ -0,0 +1,37 @@
++'use strict';
++// Only the already accepted closure26. All CJS/JSON are compiled from one sealed FD.
++const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path').posix;
++const frame=JSON.parse(fs.readFileSync(Number(process.argv[1]),'utf8'));
++const files=frame.files,cache=new Map(),base='/snapshot/rpc/node_modules';
++const builtins=new Set(['net','path','events','url','fs','stream','tty','util','os']);
++function resolve(request,parent){
++ let p;
++ if(request.startsWith('/'))p=request;
++ else if(request.startsWith('.'))p=path.resolve(path.dirname(parent),request);
++ else {
++  const parts=request.split('/'),pkg=parts.shift();
++  const root=base+'/'+pkg;
++  p=parts.length?root+'/'+parts.join('/'):root+'/'+(JSON.parse(files[root+'/package.json']).main||'index.js');
++ }
++ p=path.normalize(p);
++ for(const n of [p,p+'.js',p+'/index.js'])if(Object.hasOwn(files,n))return n;
++ throw Error('undeclared_module');
++}
++function load(name){
++ if(cache.has(name))return cache.get(name).exports;
++ if(!Object.hasOwn(files,name))throw Error('undeclared_source');
++ const m={exports:{}};cache.set(name,m);
++ if(name.endsWith('.json'))m.exports=JSON.parse(files[name]);
++ else {
++  const req=(r)=>{
++   const b=r.replace(/^node:/,'');
++   if(builtins.has(b))return require('node:'+b);
++   return load(resolve(r,name));
++  };
++  const fn=vm.runInThisContext('(function(exports,require,module,__filename,__dirname){'+files[name]+'\n})',{filename:name});
++  fn(m.exports,req,m,name,path.dirname(name));
++ }
++ return m.exports;
++}
++process.argv=['node','/snapshot/pm2_rpc_fd.cjs',base,String(frame.socketFd)];
++load('/snapshot/pm2_rpc_fd.cjs');
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py
+new file mode 100644
+index 00000000..a0178dd0
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py
+@@ -0,0 +1,181 @@
++"""Three gates, then separately authorized SELECTs. No root observer or PM2 CLI."""
++import ast,base64,fcntl,hashlib,json,os,socket,stat,subprocess
++from pathlib import Path
++from urllib.parse import urlsplit
++
++P=Path('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-csv-staged-v2-20261016T094000Z/window')
++HISTORY={'saved-dump.pm2.private.json':'c9c54c02b9694328a5aeaa4335efb88135f9bd948b4f786c8e9e4e851efd51e3',
++ 'source.profile.private.json':'a062c7020353cb39b0578653ea51475f8e9f9f68a588d1c55eb87cbbd68b6b9e',
++ 'db-owner-bindings.private.json':'1d67ff65fc300b7bb0fb165e31a69d415d9adb5d111d3b91e444137a3a8eaeeb'}
++NODE_SHA='d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e'
++BOOT_SHA='f9512be026ba35cb4662d4f5ac90cc0478f8d67e68ef95eb7d9793199b8d3ce7'
++EXPECTED={'re7-whatsapp-agent':(936386,'2193413108'),'re7-whatsapp-web-worker':(936540,'2193413523'),'re7-admin-front':(188897,'2161347676')}
++
++def load(name):
++    scope={'__name__':'library_only','__file__':'<verified '+name+'>'}
++    exec(compile(BLOBS[name],scope['__file__'],'exec'),scope);return scope
++
++class Capture:
++    def __init__(self,q):
++        self.q=q;self.lib=load('read_package.py');self.record=load('privileged_output.source')['private_record']
++    def event(self,event,**data):self.record(self.q,self.lib['JOURNAL'],{'event':event,'utc':self.lib['utc'](),**data})
++    def bytes(self,ident,argv,start,end,code,out,err,error=None):
++        row={'id':ident,'argv':argv,'startedUtc':start,'finishedUtc':end,'exitCode':code,
++             'errorClass':None if error is None else type(error).__name__,'errno':getattr(error,'errno',None)}
++        for key,raw in [('stdout',out),('stderr',err)]:
++            self.lib['write_artifact'](self.q/(ident+'.'+key+'.private'),raw)
++            row.update({key+'Bytes':len(raw),key+'Sha256':self.lib['sha'](raw),key+'Base64':base64.b64encode(raw).decode()})
++        self.event('command',**row)
++    def command(self,ident,argv,*,input=None,pass_fds=(),timeout=25):
++        start=self.lib['utc']();code=None;out=err=b'';error=None
++        try:
++            r=subprocess.run(argv,input=input,pass_fds=pass_fds,capture_output=True,timeout=timeout,
++                             env={'PATH':'/usr/bin:/bin','HOME':'/home/deploy','LANG':'C'})
++            code,out,err=r.returncode,r.stdout,r.stderr
++        except subprocess.TimeoutExpired as e:out,err=e.stdout or b'',e.stderr or b'';error=e
++        except OSError as e:error=e;err=type(e).__name__.encode()
++        self.bytes(ident,argv,start,self.lib['utc'](),code,out,err,error)
++        self.event('command_input',id=ident,bytes=len(input or b''),sha256=self.lib['sha'](input or b''))
++        self.lib['require'](code==0 and error is None,'command_denied:'+ident)
++        return out
++    def observe(self,ident,fn):
++        start=self.lib['utc']()
++        try:value=fn()
++        except Exception as e:
++            self.bytes(ident,['library',ident],start,self.lib['utc'](),1,b'',type(e).__name__.encode(),e);raise
++        raw=json.dumps(value,sort_keys=True).encode()
++        self.bytes(ident,['library',ident],start,self.lib['utc'](),0,raw,b'');return value
++
++def consumers():
++    # Exact method ASTs selected by the accepted extractor; read from verified memory.
++    c=load('contracts.py')
++    class BytesPath:
++        def __init__(self,*args):pass
++        def read_bytes(self):return BLOBS['ops.source']
++    c['config_consumers'].__globals__['Path']=BytesPath
++    System,Operations=c['config_consumers']()
++    return c,System,Operations
++
++def sealed(raw):
++    fd=os.memfd_create('reviewed-rpc-snapshot',os.MFD_ALLOW_SEALING)
++    try:
++        with os.fdopen(fd,'wb',closefd=False) as f:f.write(raw);f.flush()
++        os.lseek(fd,0,0)
++        fcntl.fcntl(fd,fcntl.F_ADD_SEALS,fcntl.F_SEAL_WRITE|fcntl.F_SEAL_GROW|fcntl.F_SEAL_SHRINK|fcntl.F_SEAL_SEAL)
++        return fd
++    except BaseException:os.close(fd);raise
++
++def frontend(cap,node_fd):
++    lib=cap.lib;require=lib['require'];c,System,Operations=consumers();system=System();op=Operations();op.d=system
++    boot=cap.observe('boot-before',lambda:lib['observe'](lib['BOOT_ID']));require(boot['sha256']==BOOT_SHA,'boot_drift')
++    pidraw,pm=lib['stable_file']('/home/deploy/.pm2/pm2.pid',64)
++    require(pm['uid']==os.getuid() and int(pidraw)==18676,'daemon_pid')
++    endpoint=Path('/home/deploy/.pm2/rpc.sock');meta=endpoint.lstat()
++    require(stat.S_ISSOCK(meta.st_mode) and meta.st_uid==os.getuid(),'daemon_socket')
++    cap.observe('daemon-before',lambda:{'identity':system.identity(18676),'socket':lib['meta'](meta),'pidSha256':lib['sha'](pidraw)})
++    with socket.socket(socket.AF_UNIX) as s:
++        s.settimeout(1);s.connect(str(endpoint))
++        cap.observe('peer-before',lambda:c['verify_peer'](s,system,18676,'222727',os.getuid()))
++        files={'/snapshot/pm2_rpc_fd.cjs':BLOBS['pm2_rpc_fd.cjs'].decode()}
++        files.update({'/snapshot/'+k:v.decode() for k,v in BLOBS.items()if k.startswith('rpc/')})
++        fd=sealed(json.dumps({'files':files,'socketFd':s.fileno()}).encode())
++        try:
++            raw=cap.command('pm2-rpc',['/proc/self/fd/'+str(node_fd),'-e',BLOBS['node_snapshot.cjs'].decode(),str(fd)],pass_fds=(s.fileno(),fd,node_fd),timeout=8)
++        finally:os.close(fd)
++        cap.observe('peer-after',lambda:c['verify_peer'](s,system,18676,'222727',os.getuid()))
++        require(endpoint.lstat()==meta and lib['stable_file']('/home/deploy/.pm2/pm2.pid',64)[0]==pidraw,'daemon_changed')
++    apps=json.loads(raw);by={a['name']:a for a in apps}
++    require(len(apps)==len(by)==3 and set(by)==set(EXPECTED),'application_population')
++    for name,(pid,ticks) in EXPECTED.items():
++        identity=system.identity(pid)
++        require(by[name]['pid']==pid and identity and identity['ticks']==ticks and identity['state']not in ('Z','X'),'application_identity')
++    def historical(name):
++        raw,m=lib['stable_file'](P/name);require(lib['sha'](raw)==HISTORY[name],'historical_drift')
++        cap.observe('reference-'+name,lambda:{'sha256':lib['sha'](raw),'bytes':len(raw),'metadata':m})
++        return json.loads(raw)
++    saved=historical('saved-dump.pm2.private.json');profiles=historical('source.profile.private.json')
++    before=next(a for a in saved if a['name']=='re7-admin-front')
++    for cfg in profiles['apps']:
++        if cfg['name']!='re7-admin-front':op.config(by[cfg['name']],cfg)
++    cap.observe('frontend-contract',lambda:c['compare_frontend'](by['re7-admin-front'],before,op))
++    for name in ('dump.pm2','dump.pm2.bak'):
++        raw,m=lib['stable_file'](Path('/home/deploy/.pm2')/name)
++        require(m['uid']==os.getuid() and stat.S_IMODE(m['mode'])==0o600,'saved_permissions')
++        now=next(a for a in json.loads(raw)if a['name']=='re7-admin-front')
++        cap.observe('saved-'+name,lambda:c['compare_saved'](now,before))
++    for name,(pid,ticks) in EXPECTED.items():
++        identity=system.identity(pid);require(identity and identity['ticks']==ticks and identity['state']not in ('Z','X'),'identity_after')
++    require(lib['observe'](lib['BOOT_ID'])['sha256']==boot['sha256'],'boot_after')
++    cap.event('GATE2_RPC_CONFIGURATION_PASS',atomicSnapshot=False)
++    return by
++
++INSPECT=['/usr/bin/docker','inspect','--format','{"Id":{{json .Id}},"State":{"Running":{{json .State.Running}}},"Image":{{json .Image}},"NetworkSettings":{{json .NetworkSettings}}}','wa-agent-postgres']
++
++def route(cap,apps):
++    lib=cap.lib;require=lib['require'];_,System,_=consumers();system=System()
++    raw,m=lib['stable_file'](P/'db-owner-bindings.private.json');require(lib['sha'](raw)==HISTORY['db-owner-bindings.private.json'],'db_binding_hash')
++    binding=json.loads(raw)
++    cap.observe('db-binding',lambda:{'sha256':lib['sha'](raw),'bytes':len(raw),'metadata':m})
++    row=json.loads(cap.command('db-route',INSPECT))
++    system.run=lambda argv:json.dumps([row])if argv==['docker','inspect','wa-agent-postgres']else (_ for _ in ()).throw(RuntimeError('unexpected_argv'))
++    observed=system.db_container()
++    require(observed['id']==binding['containerId'] and observed['ip']==binding['containerIp'] and observed['published']==['127.0.0.1',binding['publishedPort']],'db_route_changed')
++    # Environment source is live process/canonical PM2 config already checked, never .env.
++    for name in ('re7-whatsapp-agent','re7-whatsapp-web-worker'):
++        value=apps[name]['pm2_env']['env']['DATABASE_URL'];u=urlsplit(value)
++        require(u.scheme in ('postgres','postgresql') and u.username=='wa_agent' and u.path=='/whatsapp_agent' and
++                u.hostname in ('127.0.0.1','localhost') and u.port==binding['publishedPort'],'database_channel_mismatch')
++    require(type(row['Image'])is str and row['Image'].startswith('sha256:'),'container_image_identity')
++    cid=observed['id']
++    path=cap.command('sql-client-path',['/usr/bin/docker','exec',cid,'/bin/sh','-c','command -v psql'])
++    version=cap.command('sql-client-version',['/usr/bin/docker','exec',cid,'psql','--version'])
++    require(path.startswith(b'/') and path.endswith(b'\n') and len(path.splitlines())==1,'psql_path')
++    require(version.startswith(b'psql (PostgreSQL) 16.'),'client_restore_major')
++    cap.event('GATE3_ROUTE_CLIENT_OBSERVED',image=row['Image'],containerId=cid,ownership='UNKNOWN',imageTrust='immutable Docker container ID matched to historical binding; no pristine image attestation')
++    return row
++
++def selects(cap,row):
++    # Separate operator authorization; not called by collect. No root ownership claim.
++    require=cap.lib['require']
++    for kind in ('identity','ownership','imports'):
++        now=json.loads(cap.command(kind+'-route-before',INSPECT));require(now==row,'sql_route_before_changed')
++        argv=['/usr/bin/docker','exec','-i']
++        for e in ('PGHOST=','PGHOSTADDR=','PGPORT=5432','PGSERVICE=','PGSERVICEFILE=/dev/null','PGPASSFILE=/dev/null','PGPASSWORD=','PGOPTIONS=','PGCONNECT_TIMEOUT=3'):argv+=['-e',e]
++        argv += [row['Id'],'psql','-X','-w','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1']
++        output=cap.command(kind,argv,input=BLOBS[kind+'.sql'])
++        if kind=='identity':
++            result=[json.loads(x)for x in output.splitlines()if x.strip()]
++            require(len(result)==4 and result[0]['database']=='whatsapp_agent' and result[0]['sessionRole']=='wa_agent' and result[0]['effectiveRole']=='wa_agent' and result[0]['transactionReadOnly']=='on','sql_identity')
++            require(int(result[0]['serverVersion'])//10000==16 and result[1]['systemIdentifier'],'sql_server_frontier')
++            cap.event('SQL_IDENTITY_OBSERVED',allClientBackendsVisible=result[3]['allClientBackendsVisible'],ownership='UNKNOWN')
++        if kind=='imports':
++            tree=ast.parse(BLOBS['capture_imports.source'])
++            method=next(x for x in tree.body if isinstance(x,ast.FunctionDef)and x.name=='classify')
++            scope={'require':require,'hashlib':hashlib,'json':json}
++            exec(compile(ast.fix_missing_locations(ast.Module(body=[method],type_ignores=[])),'<canonical classify>','exec'),scope)
++            classified=scope['classify'](json.loads(output)['rows'])
++            cap.observe('imports-classification',lambda:classified)
++        require(json.loads(cap.command(kind+'-route-after',INSPECT))==row,'sql_route_after_changed')
++    cap.event('SELECT_OUTPUTS_PRESERVED_NOT_OWNERSHIP_CERTIFICATE',ownership='UNKNOWN',importsClassification='PENDING_OFFLINE')
++
++def run(q,action):
++    cap=Capture(q);ok=False
++    cap.event('begin',manifestSha256=MANIFEST_SHA,action=action,atomicSnapshot=False)
++    try:
++        cap.event('GATE1_VERIFIED_SNAPSHOT',files={k:{'bytes':len(v),'sha256':hashlib.sha256(v).hexdigest()}for k,v in BLOBS.items()})
++        node=cap.observe('node-chain',lambda:cap.lib['file_chain']('/usr/bin/node',cap.lib['IMAGE_LIMIT'])[0])
++        cap.lib['require'](node['sha256']==NODE_SHA,'node_image_drift')
++        cap.observe('docker-chain',lambda:cap.lib['file_chain']('/usr/bin/docker',cap.lib['IMAGE_LIMIT'])[0])
++        cap.command('node-elf',['/usr/bin/readelf','--wide','--program-headers','--dynamic','/usr/bin/node'])
++        node_fd=os.open(node['resolved'],os.O_RDONLY|os.O_NOFOLLOW)
++        try:
++            cap.lib['require'](cap.lib['meta'](os.fstat(node_fd))==node['metadata'],'node_replaced_before_exec')
++            apps=frontend(cap,node_fd)
++            cap.lib['require'](cap.lib['meta'](os.fstat(node_fd))==node['metadata'],'node_changed_after_exec')
++        finally:os.close(node_fd)
++        row=route(cap,apps)
++        if action=='select':selects(cap,row)
++        cap.event('end',result='GATES_1_3_PASS'if action=='collect'else'SELECTS_PRESERVED',ownership='UNKNOWN',operationalCertification=False);ok=True
++    except Exception as e:
++        cap.event('end',result='DENY_NO_RETRY',errorClass=type(e).__name__,errno=getattr(e,'errno',None),ownership='UNKNOWN')
++    return ok,cap.lib['export'](str(q))
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/seal.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/seal.py
+new file mode 100644
+index 00000000..6086be83
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/seal.py
+@@ -0,0 +1,114 @@
++"""Offline publication indices only. Never runs a collector or modifies prior packages."""
++import hashlib,json,os
++from pathlib import Path
++P=Path(__file__).resolve().parent;root=next(p for p in P.parents if (p/'.git').exists());review=P.parent
++h=lambda b:hashlib.sha256(b).hexdigest()
++files={}
++def add(name,source,bootstrap=False):
++    raw=source.read_bytes();src=str(source.relative_to(root))if source.is_relative_to(root)else str(source)
++    files[name]={'source':src,'relativeSource':os.path.relpath(source,P),'bytes':len(raw),'sha256':h(raw),'bootstrap':bootstrap}
++for n in ('launch.py','driver.py','runner.py','node_snapshot.cjs'):add(n,P/n,True)
++old=review/'crm-csv-three-gaps-procedure-20261017'
++for n in ('contracts.py','pm2_rpc_fd.cjs','identity.sql','ownership.sql','imports.sql'):add(n,old/n,n=='contracts.py')
++add('ops.source',review/'crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source')
++add('capture_imports.source',review/'crm-csv-operational-20261016/capture_imports.py')
++for n in ('read_package.py','privileged_output.source'):add(n,review/'crm-csv-r2-directed-20261017'/n,True)
++closure=json.loads((old/'CLOSURE.json').read_bytes())
++for n,digest in closure['files'].items():
++    source=Path('/tmp/re7-b4-toolchain-20261016/node_modules')/n
++    assert h(source.read_bytes())==digest
++    add('rpc/node_modules/'+n,source)
++manifest={'base':'9101b4f245a7ceb2bc769cb8a1388d7a179472f6','scope':'inactive diagnostic only; not installed phase authority','files':files,
++ 'closureProvenance':{'path':str((old/'CLOSURE.json').relative_to(root)),'sha256':h((old/'CLOSURE.json').read_bytes())}}
++raw=(json.dumps(manifest,sort_keys=True,indent=2)+'\n').encode();(P/'MANIFEST.json').write_bytes(raw)
++launch=h((P/'launch.py').read_bytes());digest=h(raw)
++header='''# Roteiro final único — SOMENTE PARA REVISÃO
++
++Nenhuma execução remota autorizada nesta entrega. Deploy, sem sudo; sem root observer.
++Falha/timeout/destino existente/drift: preservar, parar, sem retry ou reparo.
++Os dois destinos remotos e a custódia são exclusivos; o sufixo -sql é reservado
++à decisão separada de SELECT. Não reutilizar ações antigas nem materiais consumidos.
++
++A autoridade dos hashes abaixo é a revisão destes bytes pelo owner; não são pins
++produtivos, instalação de autoridade nem autorização de SELECT. O launcher é lido
++uma vez com FD/no-follow/metadata pré/pós, comparado ao literal e compilado dos mesmos
++bytes. O manifest autenticado ancora fontes e closure26. O bootstrap remoto recebe
++uma única fotografia de bytes, verifica o mesmo manifest e compila essa fotografia.
++
++## 1. Materialização LOCAL inativa
++
++No ThinkPad, checkout canônico. Não precisa rede. Reutiliza closure26 local já pinada,
++sem npm/build. Cria somente /dev/shm/re7-csv-three-gaps-material-20261017-v1, owner700. Todas as fontes têm procedência em MANIFEST.json.
++Se faltar fonte: DENY, sem download/fallback; journal canônico preservado.
++'''
++body=header
++for title,action in [(None,'materialize'),('2. Transferência única + gates1–3 + custódia','collect'),('3. SELECT — APENAS APÓS AUTORIZAÇÃO ESPECÍFICA','select-owner-authorized')]:
++    if title:body+='\n## '+title+'\n\n'
++    if action=='collect':body+='Executar somente após aprovação futura deste roteiro. O único SSH envia os bytes\ninativos, coleta e devolve o envelope inclusive em DENY. Não há segunda conexão\npara tentar recuperar resposta perdida. A cópia privada local preserva stdout/stderr\nparciais e registra falha de custódia; a origem remota fica intacta.\n\n'
++    if action.startswith('select'):body+='Este bloco NÃO faz parte da autorização de gates1–3. Exige custódia anterior PASS\ne nova decisão explícita. Revalida gates1–3 em destinos -sql novos antes de qualquer\nconexão. Mudança nega. Não é certificado de saída/ownership, não chama observer root.\n\n'
++    body+='''```bash
++(
++set -euo pipefail
++umask 077
++python3 -B -I -S - <<'REVIEWED_LOCAL'
++import hashlib,os,stat,sys
++from pathlib import Path
++p=Path('''+repr(str(P))+''')
++f=p/'launch.py'
++for q in (f,*f.parents):assert not q.is_symlink(),'launcher_symlink'
++def meta(s):return tuple(getattr(s,'st_'+k)for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
++s=f.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'launcher_metadata'
++fd=os.open(f,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
++try:
++ assert meta(os.fstat(fd))==meta(s),'launcher_replaced'
++ raw=os.read(fd,65536)
++ assert meta(os.fstat(fd))==meta(s) and meta(f.lstat())==meta(s),'launcher_changed'
++finally:os.close(fd)
++assert hashlib.sha256(raw).hexdigest()=='''+repr(launch)+''','reviewed_launcher'
++sys.argv=[str(f),str(p),'''+repr(digest)+','+repr(action)+''']
++exec(compile(raw,str(f),'exec'),{'__name__':'__main__','__file__':str(f)})
++REVIEWED_LOCAL
++)
++```
++'''
++body+='''
++## Gates, dados privados e parada
++
++1. Fontes/closure: manifesto literal, arquivos estáveis/no-follow, 26 membros exatos.
++   O cliente Node resolve só esses bytes em memória de memfd selado; nenhum require
++   de arquivo transferido por caminho. Node ELF/DT_NEEDED são observados via cadeia
++   e readelf; proteção do toolchain instalado continua requisito operacional separado.
++2. RPC: um FD para daemon existente, SO_PEERCRED/ticks/PID e socket antes/depois;
++   uma chamada getMonitorData. Não usa PM2 CLI/API/connect/respawn. Configuração
++   usa Operations.config/System.check_config reais, extraídos sem executar ops.main.
++   Frontend é comparado ao dump pré-janela (env completo), não ao env da sessão SSH.
++   Saved/fallback preservam todos os campos, apenas axm_monitor pode divergir.
++3. Rota: System.db_container real, ID/IP/publicação iguais ao binding histórico;
++   URL dos dois consumidores deve corresponder a host/porta/database/role. Docker
++   inspect exclui Config.Env; cliente por ID literal, psql path/versão16 registrados.
++   Imagem observada vinculada ao mesmo ID canônico; sem alegar imagem pristine.
++4. SELECT: só bloco3 separado; três SQLs byte-exatos, READ ONLY/timeouts/ROLLBACK.
++   Rota revalidada antes/depois de cada consulta. Identidade/versão/read_only são
++   conferidos; classify canônico é extraído dos mesmos bytes, sem capture().
++   Falta de atribuição de backends/locks mantém UNKNOWN. Não elevar privilégios.
++
++Destinos remotos novos: /dev/shm/re7-csv-three-gaps-executable-tools-20261017-v1
++ e /dev/shm/re7-csv-three-gaps-executable-read-20261017-v1 (mais sufixo -sql no bloco3).
++Custódia LOCAL: /home/deifson-oliveira/DEIFSON/re7-private-retention-custody/
++ csv-three-gaps-executable-20261017-v1 (mais sufixo -sql no bloco3).
++A materialização/launcher também preserva canais e falhas diretamente na custódia
++LOCAL, em csv-three-gaps-launcher-20261017-v1-{materialize,collect,select-owner-authorized}.
++Sem writer canônico íntegro ou parent legítimo, parar antes de qualquer ação: não
++fabricar journal ou corrigir o destino. Nesse caso só haverá o erro sanitizado do
++bootstrap; nenhuma coleta será iniciada.
++Não criar/ajustar parents privados automaticamente. O journal original de cada
++comando contém argv, início/fim, código, errno, tamanhos/hashes e bytesBase64 dos
++canais; envelope exportado e stdin-fonte são ancorados ao manifest. Custódia usa
++private_record original, preserva raw antes de validar e nunca promove DENY antigo.
++
++Coletas são intervalos, não snapshot atômico. Ausência/drift de PID histórico nega;
++não descobre substitutos. Produção, NEWauth+NEWDB+NEWcipher, crons, guarda38 e out.15
++permanecem intocados. Não instala bibliotecas, políticas, helpers ou permissões.
++'''
++(P/'COMMANDS.md').write_text(body)
++print(json.dumps({'manifestSha256':digest,'launcherSha256':launch,'files':len(files),'sourceBytes':sum(x['bytes']for x in files.values())}))
+diff --git a/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/test_blocks.py b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/test_blocks.py
+new file mode 100644
+index 00000000..921cf4a7
+--- /dev/null
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/test_blocks.py
+@@ -0,0 +1,99 @@
++"""Literal published Bash in disposable filesystem/user/network namespaces; no VPS."""
++import hashlib,json,os,re,shutil,subprocess,tempfile,time,unittest
++from pathlib import Path
++import lab
++P=Path(__file__).resolve().parent
++BASE=next(p for p in P.parents if(p/'.git').exists())
++CUSTODY=Path('/home/deifson-oliveira/DEIFSON/re7-private-retention-custody')
++NODE=shutil.which('node');PM='/tmp/re7-b4-toolchain-20261016/node_modules'
++class Blocks(unittest.TestCase):
++    def exercise(self,case='valid',sql=False):
++        old=os.umask(0o077)
++        try:
++            with tempfile.TemporaryDirectory(prefix='re7-three-gaps-blocks-')as td:
++                r=Path(td)
++                for n in ('shm','custody','bin'):(r/n).mkdir(mode=0o700)
++                apps=lab.fixture(r)
++                if case=='config-changed':apps[-1]['pm2_env']['watch']=True
++                endpoint=r/'fs/home/deploy/.pm2/rpc.sock'
++                server=None
++                if case!='daemon-absent':
++                    server=subprocess.Popen([NODE,'-e',lab.SERVER,PM,json.dumps(apps),str(endpoint),case],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
++                    self.assertEqual(server.stdout.readline(),b'READY\n')
++                shim=r/'bin/ssh'
++                shim.write_text('#!/usr/bin/python3\nimport sys\nsys.path.insert(0,'+repr(str(P))+')\nimport lab\nlab.remote(sys.argv[-1],sys.stdin.buffer)\n')
++                # New laboratory launcher only; never changes source or production permissions.
++                os.chmod(shim,0o700)
++                commands=re.findall(r'```bash\n(.*?)```',(P/'COMMANDS.md').read_text(),re.S)
++                env=dict(os.environ,RE7_LAB=str(r),RE7_LAB_NODE=NODE,RE7_LAB_CASE=case,RE7_LAB_SERVER=str(server.pid if server else 1),PATH=str(r/'bin')+':'+os.environ['PATH'],PYTHONDONTWRITEBYTECODE='1')
++                prefix=['bwrap','--die-with-parent','--unshare-user','--uid','0','--gid','0','--cap-drop','ALL','--unshare-net','--ro-bind','/','/','--bind',str(r/'shm'),'/dev/shm','--bind',str(r/'custody'),str(CUSTODY),'--chdir',str(BASE)]
++                try:
++                    if case=='source-tampered':
++                        bad=r/'bad.js';bad.write_text('adulterated')
++                        prefix+=['--ro-bind',str(bad),PM+'/amp/index.js']
++                    a=subprocess.run(prefix+['/bin/bash','-c',commands[0]],capture_output=True,env=env,timeout=30)
++                    if case=='source-tampered':
++                        self.assertNotEqual(a.returncode,0)
++                        m=r/'shm/re7-csv-three-gaps-material-20261017-v1/privileged-output.private.jsonl'
++                        self.assertEqual(json.loads(m.read_text().splitlines()[-1])['result'],'DENY_NO_RETRY')
++                        guard=r/'custody/csv-three-gaps-launcher-20261017-v1-materialize/privileged-output.private.jsonl'
++                        self.assertEqual(json.loads(guard.read_text())['exitCode'],1)
++                        return {'case':case,'materialize':a.returncode,'literalBash':True,'remoteCalled':False}
++                    self.assertEqual(a.returncode,0,a.stdout.decode()+a.stderr.decode())
++                    if case=='bundle-tampered':
++                        f=r/'shm/re7-csv-three-gaps-material-20261017-v1/bundle.private.json';v=json.loads(f.read_bytes());v['files']['pm2_rpc_fd.cjs']='YWR1bHRlcmF0ZWQ=';f.write_text(json.dumps(v))
++                    bundle=r/'shm/re7-csv-three-gaps-material-20261017-v1/bundle.private.json'
++                    st=bundle.stat();os.utime(bundle,ns=(1000000000,st.st_mtime_ns))
++                    b=subprocess.run(prefix+['/bin/bash','-c',commands[1]],capture_output=True,env=env,timeout=35)
++                    folder=r/'custody/csv-three-gaps-executable-20261017-v1'
++                    self.assertTrue((folder/'transfer.stdout.private').exists())
++                    self.assertTrue((folder/'transfer.stderr.private').exists())
++                    records=[json.loads(x)for x in(folder/'sequencer.journal.jsonl').read_text().splitlines()]
++                    transport=[json.loads(x)for x in(folder/'privileged-output.private.jsonl').read_text().splitlines()][0]
++                    self.assertIn('startedUtc',transport);self.assertIn('finishedUtc',transport)
++                    for k in ('stdout','stderr'):
++                        raw=(folder/('transfer.'+k+'.private')).read_bytes();self.assertEqual(len(raw),transport[k+'Bytes']);self.assertEqual(hashlib.sha256(raw).hexdigest(),transport[k+'Sha256'])
++                    if case in ('valid','snapshot-substitution'):
++                        self.assertEqual(b.returncode,0,b.stdout.decode()+b.stderr.decode()+(folder/'transfer.stderr.private').read_text())
++                        self.assertTrue(records[-1]['gatePass'])
++                        raw=(folder/'capture.private.jsonl').read_bytes();rows=[json.loads(x)for x in raw.splitlines()]
++                        self.assertEqual([x['event']for x in rows if x['event'].startswith('GATE')],['GATE1_VERIFIED_SNAPSHOT','GATE2_RPC_CONFIGURATION_PASS','GATE3_ROUTE_CLIENT_OBSERVED'])
++                        self.assertFalse(any(x.get('id')in('identity','ownership','imports')for x in rows))
++                        if sql:
++                            c=subprocess.run(prefix+['/bin/bash','-c',commands[2]],capture_output=True,env=env,timeout=35)
++                            self.assertEqual(c.returncode,0,c.stdout.decode()+c.stderr.decode())
++                    else:
++                        self.assertNotEqual(b.returncode,0,b.stdout.decode())
++                        if case not in ('bundle-tampered','partial-transfer'):
++                            self.assertEqual(records[-1]['event'],'THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED', (folder/'transfer.stderr.private').read_text())
++                            rows=[json.loads(x)for x in(folder/'capture.private.jsonl').read_text().splitlines()]
++                            names={x.get('id'):x for x in rows if x['event']=='command'}
++                            if case=='peer-wrong':self.assertEqual(names['peer-before']['exitCode'],1);self.assertNotIn('pm2-rpc',names)
++                            if case in ('reply-lost','timeout'):self.assertEqual(names['pm2-rpc']['exitCode'],1);self.assertNotIn('frontend-contract',names)
++                            if case=='config-changed':self.assertEqual(names['frontend-contract']['exitCode'],1);self.assertNotIn('db-route',names)
++                            if case=='route-changed':self.assertIn('db-route',names);self.assertNotIn('sql-client-path',names)
++                        self.assertFalse(records[-1].get('gatePass',False))
++                    return {'case':case,'materialize':a.returncode,'collect':b.returncode,'custodyEvent':records[-1]['event'],'literalBash':True,'networkNamespace':True,'sourceManifestSha256':hashlib.sha256((P/'MANIFEST.json').read_bytes()).hexdigest(),'commandsSha256':hashlib.sha256((P/'COMMANDS.md').read_bytes()).hexdigest(),'sqlTransportSynthetic':sql}
++                finally:
++                    if server:
++                        server.terminate();out,err=server.communicate(timeout=3)
++                        expected=0 if case in ('peer-wrong','bundle-tampered','source-tampered') else 2 if sql else 1
++                        self.assertEqual(int(out.decode().split('CALLS=')[-1].strip()or'0'),expected)
++        finally:os.umask(old)
++    def test_literal_complete(self):RESULTS.append(self.exercise(sql=True))
++    def test_absent_daemon(self):RESULTS.append(self.exercise('daemon-absent'))
++    def test_peer_divergence(self):RESULTS.append(self.exercise('peer-wrong'))
++    def test_rpc_lost_response(self):RESULTS.append(self.exercise('reply-lost'))
++    def test_rpc_timeout(self):RESULTS.append(self.exercise('timeout'))
++    def test_config_drift(self):RESULTS.append(self.exercise('config-changed'))
++    def test_route_drift(self):RESULTS.append(self.exercise('route-changed'))
++    def test_partial_transfer(self):RESULTS.append(self.exercise('partial-transfer'))
++    def test_tampered_source(self):RESULTS.append(self.exercise('source-tampered'))
++    def test_tampered_bundle(self):RESULTS.append(self.exercise('bundle-tampered'))
++    def test_substitution_after_snapshot(self):RESULTS.append(self.exercise('snapshot-substitution'))
++RESULTS=[]
++if __name__=='__main__':
++    result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(Blocks))
++    if result.wasSuccessful():
++        (P/'PROOFS.json').write_text(json.dumps({'result':'LOCAL_LITERAL_BLOCKS_VALIDATED','tests':result.testsRun,'cases':RESULTS,'effects':'Real Bash/Python/Node FD/codec/memfd/files/export/custody; simulated SSH remote OS metadata, peer projection, Docker and SQL responses. Namespace UID0 is host user, not root. No VPS or real SQL.','preservedHistoricalPackages':True},indent=2)+'\n')
++    raise SystemExit(0 if result.wasSuccessful()else 1)
+diff --git a/docs/saas/DOCUMENTATION_INDEX.md b/docs/saas/DOCUMENTATION_INDEX.md
+index c9f9b66b..0cd68dcd 100644
+--- a/docs/saas/DOCUMENTATION_INDEX.md
++++ b/docs/saas/DOCUMENTATION_INDEX.md
+@@ -2,0 +3,3 @@
++
++**CSV17/10 — pacote diagnóstico executável LOCAL.** [Roteiro final, manifest e11 provas literais](../reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/REPORT.md): materialização→snapshot autenticado→RPC por FD→rota/cliente→exportação/custódia canônica, inclusive DENY/parcial. SELECT tem bloco e autorização separados; nenhum observador root, VPS, SQL real, instalação ou backup. Fontes/closure26 reutilizadas; bytes conferidos são os executados, sem import por caminho transferido. Docker/SQL/identidades/peer produtivos são fixtures explícitas; ownership permanece UNKNOWN, sem certificado atual ou janela. LOCAL VALIDATED no alcance ensaiado / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV SUSPENSO. DENYs, gerações consumidas, NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Deifson; revisão21/10 ou mudança.
++

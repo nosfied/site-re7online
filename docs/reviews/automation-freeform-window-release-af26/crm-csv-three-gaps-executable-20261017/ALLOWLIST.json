@@ -1,0 +1,34 @@
+{
+  "base": "9101b4f245a7ceb2bc769cb8a1388d7a179472f6",
+  "branch": "review/campaign-recovery-20260926",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/COMMANDS.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/MANIFEST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/driver.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/lab.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/launch.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/node_snapshot.cjs",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/runner.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/seal.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/test_blocks.py",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ],
+  "excludes": [
+    "all private custody",
+    "local-evidence",
+    ".data",
+    "caches",
+    "old packages/consumed generations"
+  ],
+  "deltaExcludes": [
+    "DELTA.patch",
+    "MANIFEST.sha256"
+  ]
+}
