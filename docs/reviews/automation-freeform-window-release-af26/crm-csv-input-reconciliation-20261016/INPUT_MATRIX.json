@@ -812,10 +812,10 @@
     "readyForWindow": false,
     "firstConcreteBlocker": {
       "operationalToolchain": "Missing authenticated production Node d01614ef image/ELF frontier and actual PM2 shebang/PATH/transitive closure protection; local JS inventory is available, not operationally certified",
-      "nextLocalDelta": "Review prepared minimal metadata-only capacity command; no implementation/repair or v2 replay required",
-      "neededOperationalAction": "Future separate authorization for metadata of exact destination/parents/images and one statvfs on held destination FD, with numeric operands/result; no remote writes or images",
+      "nextLocalDelta": "Review this observed capacity shortfall; no automatic follow-up, repair, cleanup, budget/destination change or discovery resumption",
+      "neededOperationalAction": "None authorized after this single metadata read; any treatment requires separate reviewed decision, preserving consumed v1/v2 and original DENYs",
       "notWindowReady": true,
-      "upstreamDiscoveryBlocker": "remote-budget is ambiguous across two statvfs samples and canonical images directory validation/creation; no operands/numbers or mkdir marker recorded"
+      "upstreamDiscoveryBlocker": "Current target filesystem availability464416768B is below unchanged536870912B operation budget; directory contract passed and images absent in this interval; earlier cause remains indeterminate"
     },
     "groups": [
       {
@@ -1401,6 +1401,30 @@
       "vpsExecuted": false,
       "remoteFilesWritten": false,
       "next": "Review single metadata-only FD/statvfs command; separate authorization required"
+    },
+    "capacityMetadataExecution": {
+      "base": "b39169e806d8b4901d368ebca0b30e2938ff2f6e",
+      "resultFile": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/RESULT.json",
+      "resultSha256": "f7af832593e772205c0f09346ae625ad2f0677213fa3077f5975aba7e9e25cbf",
+      "result": "CAPACITY_OBSERVED_BUDGET_NOT_MET_NOT_CERTIFIED",
+      "exitCode": 0,
+      "statvfsCalls": 1,
+      "observedUtc": "2026-10-17T16:01:12.155254+00:00",
+      "f_bavail": 113383,
+      "f_frsize": 4096,
+      "availableBytes": 464416768,
+      "requiredBytesUnchanged": 536870912,
+      "shortfallBytes": 72454144,
+      "directoryContract": "PASS",
+      "imagesExists": false,
+      "custodyVerified": true,
+      "readComplete": true,
+      "budgetSatisfied": false,
+      "oldDenyReclassified": false,
+      "oldCause": "INDETERMINATE",
+      "remoteFilesWritten": false,
+      "elfDiscoveryResumed": false,
+      "actionConsumed": true
     }
   }
 }

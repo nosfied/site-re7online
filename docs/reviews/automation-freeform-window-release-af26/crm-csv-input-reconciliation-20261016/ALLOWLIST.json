@@ -1,6 +1,6 @@
 {
-  "base": "af2eaf0470ef8a5859d50d5101eb4df454cbd2fa",
-  "scope": "OFFLINE_REMOTE_BUDGET_RECONCILIATION_AND_METADATA_ONLY_COMMAND_FOR_REVIEW_NO_VPS",
+  "base": "b39169e806d8b4901d368ebca0b30e2938ff2f6e",
+  "scope": "SANITIZED_SINGLE_METADATA_READ_RESULT_AND_CHECKPOINTS_ONLY",
   "files": [
     "docs/BACKLOG_TECH.md",
     "docs/RUNBOOK_WHATSAPP_AGENT.md",
@@ -9,19 +9,9 @@
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/COMMANDS.md",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/MANIFEST.json",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/PROOFS.json",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/PROVENANCE.json",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/RECONCILIATION.json",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/capacity_read.py",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/driver.py",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/lab.py",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/launch.py",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/seal.py",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/test_capacity.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/RESULT.json",
     "docs/saas/DOCUMENTATION_INDEX.md"
   ],
-  "unchanged": "Consumed v2 commands/code/manifests/results/proofs/private records and all production state",
-  "excluded": "No private raw logs, profiles, bindings, environments, tenant data, images, caches or runtime files"
+  "unchanged": "Consumed code/commands/manifests/proofs/v2 and previous DENYs; all raw stdout/stderr/journals/private data excluded",
+  "noNewOperationalPackage": true
 }

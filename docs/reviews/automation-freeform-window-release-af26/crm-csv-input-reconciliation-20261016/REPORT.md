@@ -1,5 +1,51 @@
 # CRM/CSV — reconciliação dos inputs e próxima conferência
 
+## Consulta dirigida executada uma vez —17/10/2026, baseb39169e8
+
+**LEITURA CONCLUÍDA / ORÇAMENTO NÃO SATISFEITO / CUSTÓDIA VERIFICADA / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** O bloco literal metadata-only foi executado uma vez como deploy sem sudo; sua ação/destinos locais capacity-v1 estão **consumidos**, não repetir. Não se executou nenhum bloco v2, nem se retomou a descoberta ELF. Código/COMMANDS/manifest/provas mantêm os bytes aprovados. [RESULT.json](../crm-csv-toolchain-capacity-20261017/RESULT.json) contém somente resumo tipado, valores numéricos, metadados pertinentes e hashes/procedência; não contém stdout/stderr brutos, ambientes ou journals.
+
+### Execução, fontes e custódia
+
+Branch/HEAD/remoto iniciais:b39169e806d8b4901d368ebca0b30e2938ff2f6e, review/campaign-recovery-20260926. COMMANDS9d5b457c…, manifest9f248998… e seis fontes conferidos; parent privado owner700 e novos destinos exclusivos verificados. Um único SSH25s/BatchMode/StrictHostKey, sem conexão de diagnóstico adicional. A execução retornou exit0 e `CAPACITY_READ_CUSTODY_PRESERVED_NOT_CERTIFIED`.
+
+Transporte: **16:01:09.350035–16:01:12.216986 UTC**, isto é13:01:09–13:01:12 Fortaleza. Intervalo remoto **16:01:12.154664–16:01:12.155377 UTC**; statvfs16:01:12.155254–16:01:12.155289. Não houve timeout, stderr ou retry. A leitura concluiu sem tratar budget=false como falha de transporte, admissão ou PASS operacional.
+
+Custódia LOCAL pelo Capture/private_record originais: stdout2375B, SHA **340dd47cce2dfc48d17808d97fd897820ffa08449b78bc21d6833a4b6d6f2a84**; stderr0B. Envelope/manifest, canais/tamanhos/SHA/Base64 do journal e recibo conferidos offline com o leitor canônico. O input frame reconstituído das seis fontes pinadas também coincide com tamanho/hash registrados. Recibo `CAPACITY_CUSTODY_PRESERVED_NOT_CERTIFIED`, **readComplete=true / budgetSatisfied=false / oldDenyReclassified=false**. Originais privados preservados, sem sobrescrever, limpar ou reemitir. Não se repetiu suíte, build ou prova válida; somente análise offline dos novos bytes.
+
+### Uma amostra numérica e seu alcance
+
+Única chamada **os.statvfs(fd=6)** sobre o diretório aberto no-follow `/dev/shm/re7-csv-toolchain-read-20261017-v2`, identidade do objeto registrada no operando. Ambos os fatores abaixo vêm do MESMO retorno; calls=1. Leitor uid1000/gid1000.
+
+| Campo / cálculo | Valor observado |
+| --- | ---: |
+| f_bsize / f_frsize |4096 /4096B |
+| f_blocks |251872 |
+| f_bfree / f_bavail |113383 /113383 |
+| f_files |251872 |
+| f_ffree / f_favail |250798 /250798 |
+| f_flag / f_namemax |6 /255 |
+| f_bavail×f_frsize, disponível ao leitor |**464.416.768B =442,90234375MiB** |
+| Comparação aprovada |>=**536.870.912B =512MiB**, **false** |
+| Diferença para o orçamento |**72.454.144B =69,09765625MiB** |
+
+Demais campos numéricos disponíveis, inclusive f_fsid, foram preservados no registro tipado. O filesystem do FD tem dev26; a observação é desse destino, **não uma medição global de disco nem certificação de reserva deploy/PostgreSQL, RAM ou capacidade de janela**. Não se infere tipo/mount options apenas pelo nome /dev/shm ou pelo valor bruto de f_flag. A disponibilidade é do instante da chamada, não garantia para um momento futuro.512MiB permanece o orçamento aprovado, sem redução, remanejamento ou nova interpretação como128MiB só porque esse é o teto de payload.
+
+### Contrato do diretório e images, separados da capacidade
+
+O directory(q) **canônico retornou PASS**. No intervalo: destino diretório dev26/inode1067, uid1000/gid1000, modo0700, nlink2, tamanho60B; uid coincide com o leitor. Pais observados: `/` e `/dev`, root0:0/0755; `/dev/shm`, root0:0/01777. Tipos eram diretórios sem symlinks no percurso. FDs/metadados pertinentes de caminhos/pais conferidos antes/depois: pathMetadataStable=true. Isso não certifica ACL/quota ou sucesso de uma escrita/mkdir que não foi tentada.
+
+`images` **estava ausente** nos dois checks do intervalo; portanto não há metadados de inode/owner/modo de images a preencher. Não se abriu folha ou imagem, não se criou images, não houve readdir, chmod/chown, escrita remota ou instalação. A existência de pais e o PASS de directory são fatos distintos da reprovação do orçamento.
+
+### O que esclarece e o que continua indeterminado
+
+Esta observação demonstra **agora** um predicado de capacidade falso e um contrato de diretório válido, com images ausente. Logo a descoberta original com o mesmo orçamento não pode ser admitida a partir deste dado. **Não prova a causa do DENY de15:28:57 UTC**: naquela tentativa não foram registrados números, identidades/metadados do destino ou o marcador de criação/validação de images; o mesmo stage agrupava duas amostras statvfs e new_directory. Livre/ocupado, permissões e existência podem variar entre intervalos. Não se retroage capacidade, modo700, inode ou ausência atuais, nem se atribui autoria histórica. O DENY antigo permanece INDETERMINATE e inalterado; as contraprovas locais anteriores mantêm seu alcance.
+
+Não observados nesta consulta: imagens Node/ELF, dependências, PM2/shebang/PATH em execução, configurações, SQL/ownership, identidades finais, saved/fallback, toolchain protegido ou autoridade de fase. Nenhuma closure/proteção foi certificada. O código revisado não escreve arquivos remotos nem executa Node/PM2/loaders/ldd/readelf/SQL; os registros confirmam remoteFilesWritten=false, fileContentsRead=false, imagesCreationAttempted=false. Não houve instalação, reparo, limpeza, alteração de orçamento/destino, backup, emissão, contenção, stop/start, importação, envio ou janela. Não foi feita nova certificação de health/UI; NEWauth+NEWDB+NEWcipher, crons, guarda38/out.15 e fases aceitas permanecem preservados pelo escopo sem efeitos.
+
+**Primeiro bloqueio atual:** o orçamento de512MiB não é satisfeito no filesystem do destino no instante observado. A autorização desta consulta termina no resultado/custódia. Não há retry, nova captura, limpeza, troca de destino, redução de limite ou continuação automática da descoberta; qualquer tratamento posterior depende de deliberação revisada separada. Estado: CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY. Responsável Deifson; revisão17/10, próxima21/10 ou mudança. Publicação só de resultado/checkpoints/índices; todos os privados, DENYs e ações consumidas preservados.
+
+---
+
 ## Reconciliação offline de remote-budget e consulta dirigida —17/10/2026, baseaf2eaf04
 
 **DIAGNÓSTICO ANTERIOR INSUFICIENTE / PROCEDIMENTO METADATA-ONLY LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** Nenhuma consulta à VPS nesta rodada, nenhuma ação/destino v2 repetida, nenhum arquivo privado alterado. Os comandos e fontes consumidos permanecem intactos; esta seção refina a interpretação do stage, sem reclassificar seu DENY.

@@ -1,3 +1,19 @@
+# Consulta dirigida b39169e8 executada —17/10/2026
+
+Um bloco/um SSH/uma statvfs, deploy sem sudo, exit0. [Resultado sanitizado](../crm-csv-toolchain-capacity-20261017/RESULT.json). Custódia byte-exata verificada, readComplete=true / budgetSatisfied=false; consulta capacity-v1 **consumida**, NÃO REPETIR. Nenhuma escrita remota ou continuação ELF.
+
+| Requisito | Observação nova16:01:12UTC (13:01:12Fortaleza) | Limite / pendência |
+| --- | --- | --- |
+| Capacidade destino |f_bavail113383×f_frsize4096=464.416.768B (442,90234375MiB) |<536.870.912B/512MiB; faltam72.454.144B. Orçamento/destino inalterados; primeiro bloqueio atual |
+| Contrato directory(q) |Canônico PASS; uid1000/gid1000/0700, dev26/inode1067 |Não prova ACL/quota/escrita ou mkdir; não é admissão operacional |
+| images/pais |images ausente nos checks; pais/tipos/FDs/metadados estáveis no intervalo |Sem metadados de images a inventar; não se deduz sua história |
+| Causa do DENY anterior |Observação atual distingue orçamento falso de diretório válido |Causa antiga INDETERMINATE: faltam os dados daquele instante; não reclassificar |
+| Demais inputs |Não consultados |Node/ELF/PM2/closure/proteção, SQL, identidades e autoridade seguem pendentes |
+
+A leitura está concluída; capacidade de janela/closure/proteção NÃO certificadas. Sem retry, limpeza, redução, destino alternativo ou retomada automática. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY. Seções abaixo preservadas como históricas.
+
+---
+
 # Reconciliação offline de remote-budget —17/10/2026, baseaf2eaf04
 
 20arquivos privados conferidos, frame7fontes coincide com revisão. Sem números statvfs ou marcador mkdir. O stage agrupa2statvfs+new_directory(images); contraprova real do predicado canônico demonstra registros indistinguíveis. **Causa INDETERMINADA, criação de images também não demonstrada.**

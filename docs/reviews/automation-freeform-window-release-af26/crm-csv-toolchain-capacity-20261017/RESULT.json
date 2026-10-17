@@ -1,0 +1,196 @@
+{
+  "base": "b39169e806d8b4901d368ebca0b30e2938ff2f6e",
+  "result": "CAPACITY_OBSERVED_BUDGET_NOT_MET_NOT_CERTIFIED",
+  "review": {
+    "commandsSha256": "9d5b457ca8f7850f333a29ae25f5aed11e8530c3b3ac5857324f061b4497516c",
+    "manifestSha256": "9f248998b7bde612c98e8236f2900c0f492400b6668668ee4035b46d1e2b2227",
+    "authenticatedSources": 6,
+    "inputFrameHashMatched": true
+  },
+  "execution": {
+    "attempts": 1,
+    "user": "deploy",
+    "sudo": false,
+    "sshStartedUtc": "2026-10-17T16:01:09.350035+00:00",
+    "sshFinishedUtc": "2026-10-17T16:01:12.216986+00:00",
+    "exitCode": 0,
+    "remoteFilesWritten": false,
+    "fileContentsRead": false,
+    "imagesCreationAttempted": false,
+    "noAdditionalRemoteCommand": true
+  },
+  "observation": {
+    "startedUtc": "2026-10-17T16:01:12.154664+00:00",
+    "finishedUtc": "2026-10-17T16:01:12.155377+00:00",
+    "target": "/dev/shm/re7-csv-toolchain-read-20261017-v2",
+    "readerUid": 1000,
+    "readerGid": 1000,
+    "paths": [
+      {
+        "path": "/",
+        "exists": true,
+        "type": "directory",
+        "uid": 0,
+        "gid": 0,
+        "mode": "0o755",
+        "dev": 64769,
+        "ino": 2,
+        "nlink": 22,
+        "size": 4096
+      },
+      {
+        "path": "/dev",
+        "exists": true,
+        "type": "directory",
+        "uid": 0,
+        "gid": 0,
+        "mode": "0o755",
+        "dev": 5,
+        "ino": 1,
+        "nlink": 18,
+        "size": 3880
+      },
+      {
+        "path": "/dev/shm",
+        "exists": true,
+        "type": "directory",
+        "uid": 0,
+        "gid": 0,
+        "mode": "0o1777",
+        "dev": 26,
+        "ino": 1,
+        "nlink": 87,
+        "size": 2860
+      },
+      {
+        "path": "/dev/shm/re7-csv-toolchain-read-20261017-v2",
+        "exists": true,
+        "type": "directory",
+        "uid": 1000,
+        "gid": 1000,
+        "mode": "0o700",
+        "dev": 26,
+        "ino": 1067,
+        "nlink": 2,
+        "size": 60
+      },
+      {
+        "path": "/dev/shm/re7-csv-toolchain-read-20261017-v2/images",
+        "exists": false
+      }
+    ],
+    "pathMetadataStable": true,
+    "canonicalDirectory": {
+      "result": "PASS"
+    },
+    "statvfsCallCount": 1,
+    "statvfs": {
+      "api": "os.statvfs",
+      "calls": 1,
+      "comparison": {
+        "operator": ">=",
+        "requiredBytes": 536870912,
+        "satisfied": false
+      },
+      "executed": true,
+      "finishedUtc": "2026-10-17T16:01:12.155289+00:00",
+      "operand": {
+        "fd": 6,
+        "kind": "directory_fd",
+        "logicalPath": "/dev/shm/re7-csv-toolchain-read-20261017-v2",
+        "metadata": {
+          "ctime_ns": 1792250937716811866,
+          "dev": 26,
+          "gid": 1000,
+          "ino": 1067,
+          "mode": 16832,
+          "mtime_ns": 1792250937716811866,
+          "nlink": 2,
+          "size": 60,
+          "uid": 1000
+        }
+      },
+      "product": {
+        "availableBytes": 464416768,
+        "leftField": "f_bavail",
+        "leftValue": 113383,
+        "rightField": "f_frsize",
+        "rightValue": 4096
+      },
+      "result": {
+        "f_bavail": 113383,
+        "f_bfree": 113383,
+        "f_blocks": 251872,
+        "f_bsize": 4096,
+        "f_favail": 250798,
+        "f_ffree": 250798,
+        "f_files": 251872,
+        "f_flag": 6,
+        "f_frsize": 4096,
+        "f_fsid": 18015553197107938682,
+        "f_namemax": 255
+      },
+      "startedUtc": "2026-10-17T16:01:12.155254+00:00"
+    },
+    "atomicSnapshot": false
+  },
+  "comparison": {
+    "availableBytes": 464416768,
+    "availableMiB": 442.90234375,
+    "requiredBytes": 536870912,
+    "requiredMiB": 512,
+    "shortfallBytes": 72454144,
+    "shortfallMiB": 69.09765625,
+    "satisfied": false,
+    "scope": "held target filesystem; not global disk or deploy/PostgreSQL capacity certification"
+  },
+  "custody": {
+    "verifiedByteExact": true,
+    "event": "CAPACITY_CUSTODY_PRESERVED_NOT_CERTIFIED",
+    "readComplete": true,
+    "budgetSatisfied": false,
+    "oldDenyReclassified": false,
+    "stdout": {
+      "bytes": 2375,
+      "sha256": "340dd47cce2dfc48d17808d97fd897820ffa08449b78bc21d6833a4b6d6f2a84"
+    },
+    "stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "canonicalJournal": {
+      "bytes": 5240,
+      "sha256": "8be97032b2b7478a4d0fbc293912d3720b3c837e84f2cd368853899a2e473bc1"
+    },
+    "receipt": {
+      "bytes": 401,
+      "sha256": "d1ebcacab77c601c8055ae4e0dee0f680287ead104d756d9cfe5942d2f2b884f"
+    },
+    "launcherJournal": {
+      "bytes": 1076,
+      "sha256": "4792052310a895270cbe9fb9c2530a03a307fc68db8750188045c18f4d3ebc53"
+    },
+    "transportInput": {
+      "bytes": 76272,
+      "sha256": "610e41ea028cb257443fb43c72bf33299c91e43a874ebe1c78d432680f4c77aa"
+    }
+  },
+  "conclusions": {
+    "currentBudgetPredicate": "NOT_MET",
+    "currentDirectoryContract": "PASS",
+    "currentImages": "ABSENT_IN_OBSERVED_INTERVAL",
+    "previousRemoteBudgetCause": "INDETERMINATE; earlier stage covered statvfs and directory creation/validation without numeric/phase records",
+    "retrospectiveAttribution": false,
+    "mkdirSuccessProven": false,
+    "elfDiscoveryResumed": false,
+    "operationalClosureCertified": false,
+    "protectionCertified": false
+  },
+  "nextBlocker": "512MiB unchanged operation budget is not met on the exact destination filesystem in this observation; stop pending a separately reviewed decision, no automatic cleanup/relocation/reduction/retry",
+  "consumption": "metadata-only capacity-v1 action and local destinations consumed once; v2 actions untouched",
+  "status": [
+    "CSV_SUSPENDED",
+    "NOT_DEPLOYED",
+    "NOT_WINDOW_READY"
+  ]
+}
