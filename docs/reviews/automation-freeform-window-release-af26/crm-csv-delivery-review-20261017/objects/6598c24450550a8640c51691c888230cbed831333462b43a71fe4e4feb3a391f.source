@@ -1,0 +1,23 @@
+def require(ok, why):
+    if not ok:
+        raise RuntimeError(why)
+
+def topo(graph):
+    result = []
+    active = []
+    done = set()
+
+    def visit(n):
+        require(n in graph, 'dependency_missing:' + n)
+        require(n not in active, 'dependency_cycle:' + ' -> '.join(active + [n]))
+        if n in done:
+            return
+        active.append(n)
+        for child in sorted(graph[n]):
+            visit(child)
+        active.pop()
+        done.add(n)
+        result.append(n)
+    for n in sorted(graph):
+        visit(n)
+    return result

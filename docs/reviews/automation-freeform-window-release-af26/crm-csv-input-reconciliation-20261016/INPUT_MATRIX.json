@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Review source-only ELF storage guards and derived192/704MiB proposal; physical allocation/inodes/RAM/reserves by filesystem remain uncertified. Consumed512MiB/2GiB commands unchanged;442.90MiB observation is historical, no retry/new query authorized.",
+    "firstConcreteBlocker": "CSV pre-stop Event parent contract: last historical observation775, current state unknown. Exact next read published for approval; ELF auxiliary work paused. Static delivery composed; current data/root/SQL/16 bindings and later authorized R0/window still required.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1444,6 +1444,22 @@
       "consumedBudgetsAndDestinationsUnchanged": true,
       "sources": "scripts/crm_csv_elf_budget",
       "clientScpRealNotExercised": true
+    },
+    "deliveryDirection": {
+      "base": "8b5072fb9849ebd4652597d5af14b46686e26ee2",
+      "priority": "CSV_DELIVERY_LOCAL_PREPARATION",
+      "auxiliaryElfFront": "PAUSED_PRESERVE_FILES_PROOFS_NO_NEW_GENERATION_COLLECTION_TEST",
+      "concreteDelivery": "crm-csv-delivery-review-20261017/DELIVERY.json",
+      "paths": 127,
+      "uniqueContents": 61,
+      "reusedObjects": 54,
+      "newCodeObjects": 7,
+      "newCodeBytes": 17612,
+      "runtimeArchivesReused": 4,
+      "runtimeRebuildOrCopy": false,
+      "operationalInputsFabricated": false,
+      "testsFocused": 6,
+      "nextAct": "Owner review of exact Event-parent read; no execution authorized here"
     }
   }
 }

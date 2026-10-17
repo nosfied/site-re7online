@@ -49,3 +49,15 @@ Ensaios locais incluem PostgreSQL real isolado, HTTP autenticado sintético, cli
 Ao recuperar COMPLETED por GET, aplicar o mesmo reconhecimento de conclusão do POST e atualizar a lista uma vez por operação; falha na lista não altera o terminal. Exibir a referência e distinguir operation_not_observed de falha/ausência comprovada de gravações. Fechar/reabrir e recarregar não submetem CSV. UNKNOWN não permite preparar outra importação automaticamente.
 
 A [matriz de publicação coordenada](../reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/COORDINATED_PUBLICATION.md) é obrigatória: API nova integral antes do frontend novo, sem tráfego misto para API antiga. Abas antigas sem UUID recebem400 sem gravação e requerem recarga explícita; não exige logout. Interface nova/API antiga é combinação proibida, pois a API antiga pode ignorar o UUID. Não existe handshake ou controle de rollout implantado por esta correção. Retorno deve preservar o contrato ou suspender confirmações.
+
+
+## Retomada da preparação local17/10/2026
+
+[Composição e próximo ato para revisão](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/DELIVERY.json),
+[sequência coordenada restante](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/NEXT_OPERATION_FOR_REVIEW.md).
+API24e5857f/frontend/retorno/classificador certificados reutilizados; frente auxiliar
+ELF pausada, sem dispensar proteção/autoridade já adotadas. Os contratos funcionais
+e API→frontend permanecem. Retorno ORIGINAL só antes da seleção comprovada e com
+R1/R2/saída/identidades/decisão; depois mantém backend candidato/ledger/GET/replay.
+A preparação estática concreta não cria perfis, pins ou autorização de janela.
+CSV suspenso para execução / NOT DEPLOYED / NOT WINDOW READY.

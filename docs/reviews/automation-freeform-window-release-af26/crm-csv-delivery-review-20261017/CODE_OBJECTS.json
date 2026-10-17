@@ -1,0 +1,251 @@
+{
+  "newBytes": 17612,
+  "newObjects": 7,
+  "objects": {
+    "0479ef91f4b8b89357392f3eaea3036d420b45ac5d051af231a10f0df06e22cf": {
+      "bytes": 4550,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/objects/0479ef91f4b8b89357392f3eaea3036d420b45ac5d051af231a10f0df06e22cf.source"
+    },
+    "094ec4a5bbaae7c218bd1269346a9d9d102d6cb198dd81d92cd90fe6f97798f4": {
+      "bytes": 317,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/094ec4a5bbaae7c218bd1269346a9d9d102d6cb198dd81d92cd90fe6f97798f4.source"
+    },
+    "0a14af6fc2663e3bb248b55d33f65a91d608d264b4226c1e1a66ab82198dc701": {
+      "bytes": 1597,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/objects/0a14af6fc2663e3bb248b55d33f65a91d608d264b4226c1e1a66ab82198dc701.source"
+    },
+    "0d9a87b0c55b3fe3a30db0d5feea5281117fb2e16fd8ebbe8db2ea0f7f5f97ec": {
+      "bytes": 8300,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/static-kit/objects/0d9a87b0c55b3fe3a30db0d5feea5281117fb2e16fd8ebbe8db2ea0f7f5f97ec.source"
+    },
+    "10de28ec8855cbda19b45bfee422434029edd1ff8fa466ddc9cfba53ac8b68d1": {
+      "bytes": 8497,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/static-kit/objects/10de28ec8855cbda19b45bfee422434029edd1ff8fa466ddc9cfba53ac8b68d1.source"
+    },
+    "12680b4da85185ca2758a2210b3bf7b71ce49dd18954d7838e6aa6847e7056c5": {
+      "bytes": 28692,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/12680b4da85185ca2758a2210b3bf7b71ce49dd18954d7838e6aa6847e7056c5.source"
+    },
+    "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021": {
+      "bytes": 3333,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021.source"
+    },
+    "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32": {
+      "bytes": 119,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32.source"
+    },
+    "198c75956d594d33679589db6f76e3ee6775c74559091ab53e88583e6159c02b": {
+      "bytes": 4130,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/static-kit/objects/198c75956d594d33679589db6f76e3ee6775c74559091ab53e88583e6159c02b.source"
+    },
+    "19a67b9eb748b69b72ffc0e144e2a85a89e12ba9b78271b00eec5e61efc02fd5": {
+      "bytes": 28279,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/19a67b9eb748b69b72ffc0e144e2a85a89e12ba9b78271b00eec5e61efc02fd5.source"
+    },
+    "1c7b1068b3b9457aee12abf62f709a3ee9de593447f9e70b4ce8d100d491fcea": {
+      "bytes": 3737,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/static-kit/objects/1c7b1068b3b9457aee12abf62f709a3ee9de593447f9e70b4ce8d100d491fcea.source"
+    },
+    "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d": {
+      "bytes": 97,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d.source"
+    },
+    "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b": {
+      "bytes": 5421,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b.source"
+    },
+    "208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b": {
+      "bytes": 2281,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b.source"
+    },
+    "286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c": {
+      "bytes": 3638,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c.source"
+    },
+    "3ae51bd07ca9b8d299f347085877de80247831bcd665f489e934b460e38753b1": {
+      "bytes": 4548,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/3ae51bd07ca9b8d299f347085877de80247831bcd665f489e934b460e38753b1.source"
+    },
+    "3c4393f91222b63b5ab32a314700c0fbdda9b8d88082b66e5ac7058e80292da2": {
+      "bytes": 1787,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/3c4393f91222b63b5ab32a314700c0fbdda9b8d88082b66e5ac7058e80292da2.source"
+    },
+    "3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a": {
+      "bytes": 7768,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a.source"
+    },
+    "43676794e50c432193106510a6a9eb237933f08766a6fe55e170d8737e7561ed": {
+      "bytes": 4102,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/objects/43676794e50c432193106510a6a9eb237933f08766a6fe55e170d8737e7561ed.source"
+    },
+    "4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef": {
+      "bytes": 4079,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef.source"
+    },
+    "46e71c30fa44d454272f7a1e96ac5094182f4ec6f3fa7de57b153681ccd3b595": {
+      "bytes": 963,
+      "source": "scripts/crm_csv_predecessor/runtime.py"
+    },
+    "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4": {
+      "bytes": 4906,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4.source"
+    },
+    "4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904": {
+      "bytes": 24723,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-original-chain-20261016/static-kit/objects/4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904.source"
+    },
+    "529e209b841661069175ccddf9e3885c3624365efbf235d990d00a79352a16b9": {
+      "bytes": 9221,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/static-kit/objects/529e209b841661069175ccddf9e3885c3624365efbf235d990d00a79352a16b9.source"
+    },
+    "52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f": {
+      "bytes": 3976,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f.source"
+    },
+    "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24": {
+      "bytes": 2701,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24.source"
+    },
+    "62342f28b9f011c916b8483487bb75f7211a08ffc5846c303f9a0ab0000c2797": {
+      "bytes": 170,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/62342f28b9f011c916b8483487bb75f7211a08ffc5846c303f9a0ab0000c2797.source"
+    },
+    "6598c24450550a8640c51691c888230cbed831333462b43a71fe4e4feb3a391f": {
+      "bytes": 551,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/objects/6598c24450550a8640c51691c888230cbed831333462b43a71fe4e4feb3a391f.source"
+    },
+    "69039dbe69fab4a26b8396753c9496a45ec9588699bab2c54751c6255da72768": {
+      "bytes": 544,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/static-kit/objects/69039dbe69fab4a26b8396753c9496a45ec9588699bab2c54751c6255da72768.source"
+    },
+    "73d5c6917a3476770c16412be8f9cecb4dffc0e222080169de4c64f427113a4e": {
+      "bytes": 4610,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/73d5c6917a3476770c16412be8f9cecb4dffc0e222080169de4c64f427113a4e.source"
+    },
+    "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54": {
+      "bytes": 103,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54.source"
+    },
+    "7c3db254455f12a455fabb1e9936be0bced2caefcb8fcbdec2e78997c14f10f4": {
+      "bytes": 2705,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/7c3db254455f12a455fabb1e9936be0bced2caefcb8fcbdec2e78997c14f10f4.source"
+    },
+    "7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc": {
+      "bytes": 2159,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc.source"
+    },
+    "8b085a980e94cf4e249ff5fc0a540159c7582cae72f4b025b6c263ff10257c43": {
+      "bytes": 984,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/objects/8b085a980e94cf4e249ff5fc0a540159c7582cae72f4b025b6c263ff10257c43.source"
+    },
+    "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212": {
+      "bytes": 27834,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212.source"
+    },
+    "92abb274adf52ce7d786021f291361d3dea8f2a2fb90ef9b9742fcb7836f2f01": {
+      "bytes": 4367,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/static-kit/objects/92abb274adf52ce7d786021f291361d3dea8f2a2fb90ef9b9742fcb7836f2f01.source"
+    },
+    "97aa1f2e0317bc73b5127a8e19cf8c95f99a30aea35eb60fb490ac032f906c15": {
+      "bytes": 2972,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/97aa1f2e0317bc73b5127a8e19cf8c95f99a30aea35eb60fb490ac032f906c15.source"
+    },
+    "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566": {
+      "bytes": 7373,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566.source"
+    },
+    "9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39": {
+      "bytes": 2497,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39.source"
+    },
+    "a6fc80e845709dc35ff6ac2ecd8e26732ba6ef3137b8406c7618a273263ab7dd": {
+      "bytes": 1201,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/a6fc80e845709dc35ff6ac2ecd8e26732ba6ef3137b8406c7618a273263ab7dd.source"
+    },
+    "a9e9e089f825159584207a195fdf133245b921b410946611426a006819e70e9f": {
+      "bytes": 28613,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/a9e9e089f825159584207a195fdf133245b921b410946611426a006819e70e9f.source"
+    },
+    "ae8bb0973297798865229682bbc898919a14359d3c33cdf4f9e45d7a7d98454a": {
+      "bytes": 35438,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/static-kit/objects/ae8bb0973297798865229682bbc898919a14359d3c33cdf4f9e45d7a7d98454a.source"
+    },
+    "af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b": {
+      "bytes": 5151,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b.source"
+    },
+    "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015": {
+      "bytes": 95,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015.source"
+    },
+    "b31b59cfee6c7d48d7e9e88ff4b348106aaf317b530fc8791f94eb43b2b83cf6": {
+      "bytes": 15166,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/static-kit/objects/b31b59cfee6c7d48d7e9e88ff4b348106aaf317b530fc8791f94eb43b2b83cf6.source"
+    },
+    "baefd76ac4fe4b2cf3fc40a7ae43aa3b2b131ebb9c19b7ceeccab441fd9e9292": {
+      "bytes": 1038,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/baefd76ac4fe4b2cf3fc40a7ae43aa3b2b131ebb9c19b7ceeccab441fd9e9292.source"
+    },
+    "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf": {
+      "bytes": 7325,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf.source"
+    },
+    "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b": {
+      "bytes": 104,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b.source"
+    },
+    "c641aca7f060214ffd84c07b8b8567b24d3d9d0435e0efa57ec1b68640c18624": {
+      "bytes": 1215,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/objects/c641aca7f060214ffd84c07b8b8567b24d3d9d0435e0efa57ec1b68640c18624.source"
+    },
+    "c7e638a33aac33fe990431837e8c7a56a5eeb403eb3b43c9e71c2094ded762ad": {
+      "bytes": 10828,
+      "source": "scripts/crm_csv_predecessor/pre_authority.py"
+    },
+    "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6": {
+      "bytes": 6790,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6.source"
+    },
+    "cba5bf8321fe6155a720eaa0bc212b3e0e3bfc152f33ec9cca6f04dda28e5ceb": {
+      "bytes": 4613,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/objects/cba5bf8321fe6155a720eaa0bc212b3e0e3bfc152f33ec9cca6f04dda28e5ceb.source"
+    },
+    "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768": {
+      "bytes": 2167,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768.source"
+    },
+    "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38": {
+      "bytes": 95,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38.source"
+    },
+    "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f": {
+      "bytes": 2275,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f.source"
+    },
+    "dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52": {
+      "bytes": 3291,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52.source"
+    },
+    "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a": {
+      "bytes": 4038,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a.source"
+    },
+    "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7": {
+      "bytes": 1535,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7.source"
+    },
+    "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd": {
+      "bytes": 4969,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd.source"
+    },
+    "f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965": {
+      "bytes": 1052,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965.source"
+    },
+    "f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19": {
+      "bytes": 2159,
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit/objects/f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19.source"
+    }
+  },
+  "reusedObjects": 54
+}

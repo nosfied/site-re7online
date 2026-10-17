@@ -1,0 +1,3894 @@
+{
+  "acceptedCompositionIndexSha256": "c07db13522414c9f1fb3f1f4008e213e6f24d992e06481f50ec0474a3bc1e843",
+  "authenticatedChildLoads": [
+    {
+      "caller": "window/check_current.py",
+      "entry": "window/current-sql.cjs",
+      "on": "explicit four-mode diagnostic only",
+      "scope": "inspect"
+    }
+  ],
+  "baseCommit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+  "certification": "DENY_OPERATIONAL_INPUTS",
+  "compositionBase": "6adfb37e7a4d4d7a03b6b92f878d78ff45b05487",
+  "cycles": [],
+  "eagerDependencies": {
+    "protected/authority.py": [],
+    "protected/child_transport.py": [
+      "protected/authority.py"
+    ],
+    "protected/incident-6683-window-control.py": [],
+    "protected/privileged_output.py": [],
+    "protected/re7-incident-6683-window": [],
+    "protected/recovery-launch.py": [],
+    "protected/recovery-node-launch.cjs": [],
+    "protected/root_store.py": [
+      "protected/authority.py"
+    ],
+    "protected/verified_loader.py": [
+      "protected/authority.py"
+    ],
+    "return-before-commit/baseline_contract.py": [],
+    "return-before-commit/close.cjs": [
+      "return-before-commit/execution-check.cjs",
+      "return-before-commit/preparation-bindings.cjs"
+    ],
+    "return-before-commit/contain.py": [
+      "return-before-commit/ops.py"
+    ],
+    "return-before-commit/db_owner_set_gate.py": [],
+    "return-before-commit/db_owner_set_observer.py": [],
+    "return-before-commit/delegated.py": [
+      "return-before-commit/baseline_contract.py",
+      "return-before-commit/ops.py"
+    ],
+    "return-before-commit/ecosystem_contract.py": [],
+    "return-before-commit/execution-check.cjs": [],
+    "return-before-commit/open.cjs": [
+      "return-before-commit/execution-check.cjs",
+      "return-before-commit/preparation-bindings.cjs"
+    ],
+    "return-before-commit/ops.py": [
+      "return-before-commit/db_owner_set_gate.py",
+      "return-before-commit/db_owner_set_observer.py"
+    ],
+    "return-before-commit/pm2_input.py": [
+      "return-before-commit/ecosystem_contract.py"
+    ],
+    "return-before-commit/preparation-bindings.cjs": [
+      "return-before-commit/waiting-work.cjs"
+    ],
+    "return-before-commit/privileged_output.py": [],
+    "return-before-commit/read-state.py": [
+      "return-before-commit/ops.py"
+    ],
+    "return-before-commit/recover-partial.py": [
+      "return-before-commit/ops.py"
+    ],
+    "return-before-commit/restore-controls.py": [
+      "return-before-commit/ops.py"
+    ],
+    "return-before-commit/start-one.py": [
+      "return-before-commit/ops.py"
+    ],
+    "return-before-commit/stop-pair.py": [
+      "return-before-commit/ops.py"
+    ],
+    "return-before-commit/unfence.py": [
+      "return-before-commit/ops.py"
+    ],
+    "return-before-commit/validate.cjs": [
+      "return-before-commit/execution-check.cjs",
+      "return-before-commit/preparation-bindings.cjs"
+    ],
+    "return-before-commit/waiting-work-frozen.cjs": [],
+    "return-before-commit/waiting-work.cjs": [
+      "return-before-commit/waiting-work-frozen.cjs"
+    ],
+    "return-partial/baseline_contract.py": [],
+    "return-partial/close.cjs": [
+      "return-partial/execution-check.cjs",
+      "return-partial/preparation-bindings.cjs"
+    ],
+    "return-partial/contain.py": [
+      "return-partial/ops.py"
+    ],
+    "return-partial/db_owner_set_gate.py": [],
+    "return-partial/db_owner_set_observer.py": [],
+    "return-partial/delegated.py": [
+      "return-partial/baseline_contract.py",
+      "return-partial/ops.py"
+    ],
+    "return-partial/ecosystem_contract.py": [],
+    "return-partial/execution-check.cjs": [],
+    "return-partial/open.cjs": [
+      "return-partial/execution-check.cjs",
+      "return-partial/preparation-bindings.cjs"
+    ],
+    "return-partial/ops.py": [
+      "return-partial/db_owner_set_gate.py",
+      "return-partial/db_owner_set_observer.py"
+    ],
+    "return-partial/pm2_input.py": [
+      "return-partial/ecosystem_contract.py"
+    ],
+    "return-partial/preparation-bindings.cjs": [
+      "return-partial/waiting-work.cjs"
+    ],
+    "return-partial/privileged_output.py": [],
+    "return-partial/read-state.py": [
+      "return-partial/ops.py"
+    ],
+    "return-partial/recover-partial.py": [
+      "return-partial/ops.py"
+    ],
+    "return-partial/restore-controls.py": [
+      "return-partial/ops.py"
+    ],
+    "return-partial/start-one.py": [
+      "return-partial/ops.py"
+    ],
+    "return-partial/stop-pair.py": [
+      "return-partial/ops.py"
+    ],
+    "return-partial/unfence.py": [
+      "return-partial/ops.py"
+    ],
+    "return-partial/validate.cjs": [
+      "return-partial/execution-check.cjs",
+      "return-partial/preparation-bindings.cjs"
+    ],
+    "return-partial/waiting-work-frozen.cjs": [],
+    "return-partial/waiting-work.cjs": [
+      "return-partial/waiting-work-frozen.cjs"
+    ],
+    "return/baseline_contract.py": [],
+    "return/close.cjs": [
+      "return/execution-check.cjs",
+      "return/preparation-bindings.cjs"
+    ],
+    "return/contain.py": [
+      "return/ops.py"
+    ],
+    "return/db_owner_set_gate.py": [],
+    "return/db_owner_set_observer.py": [],
+    "return/delegated.py": [
+      "return/baseline_contract.py",
+      "return/ops.py"
+    ],
+    "return/ecosystem_contract.py": [],
+    "return/execution-check.cjs": [],
+    "return/open.cjs": [
+      "return/execution-check.cjs",
+      "return/preparation-bindings.cjs"
+    ],
+    "return/ops.py": [
+      "return/db_owner_set_gate.py",
+      "return/db_owner_set_observer.py"
+    ],
+    "return/pm2_input.py": [
+      "return/ecosystem_contract.py"
+    ],
+    "return/preparation-bindings.cjs": [
+      "return/waiting-work.cjs"
+    ],
+    "return/privileged_output.py": [],
+    "return/read-state.py": [
+      "return/ops.py"
+    ],
+    "return/recover-partial.py": [
+      "return/ops.py"
+    ],
+    "return/restore-controls.py": [
+      "return/ops.py"
+    ],
+    "return/start-one.py": [
+      "return/ops.py"
+    ],
+    "return/stop-pair.py": [
+      "return/ops.py"
+    ],
+    "return/unfence.py": [
+      "return/ops.py"
+    ],
+    "return/validate.cjs": [
+      "return/execution-check.cjs",
+      "return/preparation-bindings.cjs"
+    ],
+    "return/waiting-work-frozen.cjs": [],
+    "return/waiting-work.cjs": [
+      "return/waiting-work-frozen.cjs"
+    ],
+    "review/graph.py": [],
+    "review/pre_authority.py": [],
+    "review/reader.py": [],
+    "switch/baseline_contract.py": [],
+    "switch/close.cjs": [
+      "switch/execution-check.cjs",
+      "switch/preparation-bindings.cjs"
+    ],
+    "switch/contain.py": [
+      "switch/ops.py"
+    ],
+    "switch/db_owner_set_gate.py": [],
+    "switch/db_owner_set_observer.py": [],
+    "switch/delegated.py": [
+      "switch/baseline_contract.py",
+      "switch/ops.py"
+    ],
+    "switch/ecosystem_contract.py": [],
+    "switch/execution-check.cjs": [],
+    "switch/open.cjs": [
+      "switch/execution-check.cjs",
+      "switch/preparation-bindings.cjs"
+    ],
+    "switch/ops.py": [
+      "switch/db_owner_set_gate.py",
+      "switch/db_owner_set_observer.py"
+    ],
+    "switch/pm2_input.py": [
+      "switch/ecosystem_contract.py"
+    ],
+    "switch/preparation-bindings.cjs": [
+      "switch/waiting-work.cjs"
+    ],
+    "switch/privileged_output.py": [],
+    "switch/read-state.py": [
+      "switch/ops.py"
+    ],
+    "switch/recover-partial.py": [
+      "switch/ops.py"
+    ],
+    "switch/restore-controls.py": [
+      "switch/ops.py"
+    ],
+    "switch/start-one.py": [
+      "switch/ops.py"
+    ],
+    "switch/stop-pair.py": [
+      "switch/ops.py"
+    ],
+    "switch/unfence.py": [
+      "switch/ops.py"
+    ],
+    "switch/validate.cjs": [
+      "switch/execution-check.cjs",
+      "switch/preparation-bindings.cjs"
+    ],
+    "switch/waiting-work-frozen.cjs": [],
+    "switch/waiting-work.cjs": [
+      "switch/waiting-work-frozen.cjs"
+    ],
+    "window/admit_gates.py": [
+      "window/check_current.py",
+      "window/csv_contract.py",
+      "window/policy_predecessor.py"
+    ],
+    "window/automation-fence.nft": [],
+    "window/baseline_contract.py": [],
+    "window/canonical_renew_proofs.py": [],
+    "window/capture_imports.py": [
+      "window/csv_boundary.py"
+    ],
+    "window/check_current.py": [
+      "window/csv_contract.py"
+    ],
+    "window/csv_boundary.py": [],
+    "window/csv_cli.py": [
+      "window/check_current.py",
+      "window/csv_boundary.py",
+      "window/csv_contract.py",
+      "window/sequencer.py"
+    ],
+    "window/csv_contract.py": [
+      "window/policy_predecessor.py"
+    ],
+    "window/csv_start_gate.py": [
+      "window/csv_boundary.py",
+      "window/csv_contract.py"
+    ],
+    "window/current-sql.cjs": [
+      "switch/preparation-bindings.cjs"
+    ],
+    "window/ecosystem_contract.py": [],
+    "window/event_overlay.py": [
+      "window/csv_boundary.py"
+    ],
+    "window/original_checks.py": [
+      "window/policy_predecessor.py"
+    ],
+    "window/policy_predecessor.py": [],
+    "window/pre_install.py": [
+      "window/check_current.py",
+      "window/csv_contract.py",
+      "window/policy_predecessor.py"
+    ],
+    "window/prestop_contract.py": [],
+    "window/privileged.py": [],
+    "window/privileged_output.py": [],
+    "window/recovery.py": [
+      "window/recovery_contract.py"
+    ],
+    "window/recovery_bridge.py": [
+      "window/prestop_contract.py",
+      "window/recovery_contract.py",
+      "window/sequencer.py"
+    ],
+    "window/recovery_contract.py": [],
+    "window/recovery_start.py": [
+      "window/recovery.py",
+      "window/recovery_contract.py"
+    ],
+    "window/restore_contract.py": [],
+    "window/root_readonly.py": [
+      "window/policy_predecessor.py"
+    ],
+    "window/scheduled_controls.py": [],
+    "window/sequencer.py": [
+      "window/baseline_contract.py",
+      "window/recovery_contract.py"
+    ]
+  },
+  "executionAuthorized": false,
+  "explicitChildEntriesRequired": {
+    "window/restore_contract.py": "inspect"
+  },
+  "explicitModeEntriesRequired": {
+    "return-before-commit/ops.py": "inspect",
+    "return-partial/ops.py": "inspect",
+    "return/ops.py": "inspect",
+    "switch/ops.py": "inspect",
+    "window/current-sql.cjs": "inspect"
+  },
+  "files": {
+    "protected/authority.py": {
+      "bytes": 15166,
+      "object": "objects/b31b59cfee6c7d48d7e9e88ff4b348106aaf317b530fc8791f94eb43b2b83cf6.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/authority.py",
+        "stages": [
+          "PROTECTED_ACCEPTED_LIBRARY",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "sha256": "b31b59cfee6c7d48d7e9e88ff4b348106aaf317b530fc8791f94eb43b2b83cf6"
+    },
+    "protected/child_transport.py": {
+      "bytes": 1038,
+      "object": "objects/baefd76ac4fe4b2cf3fc40a7ae43aa3b2b131ebb9c19b7ceeccab441fd9e9292.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/child_transport.py",
+        "stages": [
+          "PROTECTED_ACCEPTED_LIBRARY"
+        ]
+      },
+      "sha256": "baefd76ac4fe4b2cf3fc40a7ae43aa3b2b131ebb9c19b7ceeccab441fd9e9292"
+    },
+    "protected/incident-6683-window-control.py": {
+      "bytes": 28279,
+      "object": "objects/19a67b9eb748b69b72ffc0e144e2a85a89e12ba9b78271b00eec5e61efc02fd5.source",
+      "origin": {
+        "input": "v4-sequencer/privileged.py",
+        "stages": [
+          "ACCEPTED_QUERY_EXTENSION"
+        ]
+      },
+      "sha256": "19a67b9eb748b69b72ffc0e144e2a85a89e12ba9b78271b00eec5e61efc02fd5"
+    },
+    "protected/privileged_output.py": {
+      "bytes": 3333,
+      "object": "objects/19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/privileged_output.py",
+        "stages": [
+          "PROTECTED_ACCEPTED_LIBRARY",
+          "B1_CANONICAL_DIAGNOSTIC"
+        ]
+      },
+      "sha256": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021"
+    },
+    "protected/re7-incident-6683-window": {
+      "bytes": 1201,
+      "object": "objects/a6fc80e845709dc35ff6ac2ecd8e26732ba6ef3137b8406c7618a273263ab7dd.source",
+      "origin": {
+        "input": "v4-sequencer/render_sudoers.py",
+        "stages": [
+          "ACCEPTED_QUERY_EXTENSION"
+        ]
+      },
+      "sha256": "a6fc80e845709dc35ff6ac2ecd8e26732ba6ef3137b8406c7618a273263ab7dd"
+    },
+    "protected/recovery-launch.py": {
+      "bytes": 2972,
+      "object": "objects/97aa1f2e0317bc73b5127a8e19cf8c95f99a30aea35eb60fb490ac032f906c15.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/bootstrap.py",
+        "stages": [
+          "PROTECTED_ACCEPTED_LIBRARY"
+        ]
+      },
+      "sha256": "97aa1f2e0317bc73b5127a8e19cf8c95f99a30aea35eb60fb490ac032f906c15"
+    },
+    "protected/recovery-node-launch.cjs": {
+      "bytes": 4367,
+      "object": "objects/92abb274adf52ce7d786021f291361d3dea8f2a2fb90ef9b9742fcb7836f2f01.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/node_bootstrap.cjs",
+        "stages": [
+          "PROTECTED_ACCEPTED_LIBRARY",
+          "STRICT_ASSERT_BUILTIN_ONLY",
+          "CANONICAL_RESTORE_CHILD_FLAGS"
+        ]
+      },
+      "sha256": "92abb274adf52ce7d786021f291361d3dea8f2a2fb90ef9b9742fcb7836f2f01"
+    },
+    "protected/root_store.py": {
+      "bytes": 7768,
+      "object": "objects/3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/root_store.py",
+        "stages": [
+          "PROTECTED_ACCEPTED_LIBRARY"
+        ]
+      },
+      "sha256": "3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a"
+    },
+    "protected/verified_loader.py": {
+      "bytes": 3737,
+      "object": "objects/1c7b1068b3b9457aee12abf62f709a3ee9de593447f9e70b4ce8d100d491fcea.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/verified_loader.py",
+        "stages": [
+          "PROTECTED_ACCEPTED_LIBRARY",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "sha256": "1c7b1068b3b9457aee12abf62f709a3ee9de593447f9e70b4ce8d100d491fcea"
+    },
+    "return-before-commit/baseline_contract.py": {
+      "bytes": 7373,
+      "object": "objects/9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/baseline_contract.py.9af1a11a3605.source"
+        },
+        "inputSha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    "return-before-commit/close.cjs": {
+      "bytes": 2167,
+      "object": "objects/ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.ce953df4a365.source"
+        },
+        "inputSha256": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768"
+    },
+    "return-before-commit/contain.py": {
+      "bytes": 95,
+      "object": "objects/af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/contain.py.af61f2f3a0d0.source"
+        },
+        "inputSha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015"
+    },
+    "return-before-commit/db_owner_set_gate.py": {
+      "bytes": 6790,
+      "object": "objects/ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source"
+        },
+        "inputSha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6"
+    },
+    "return-before-commit/db_owner_set_observer.py": {
+      "bytes": 4038,
+      "object": "objects/ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source"
+        },
+        "inputSha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+    },
+    "return-before-commit/delegated.py": {
+      "bytes": 24723,
+      "object": "objects/4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source"
+        },
+        "inputSha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B2_CHILD_EXECUTION",
+          "DELEGATED_SEALED_FD_FORWARDING"
+        ]
+      },
+      "sha256": "4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904"
+    },
+    "return-before-commit/ecosystem_contract.py": {
+      "bytes": 3638,
+      "object": "objects/286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ecosystem_contract.py.7bfab72d4afd.source"
+        },
+        "inputSha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B3_CANONICAL_PARSER"
+        ]
+      },
+      "sha256": "286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c"
+    },
+    "return-before-commit/execution-check.cjs": {
+      "bytes": 1052,
+      "object": "objects/f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source"
+        },
+        "inputSha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_NODE_SCOPE"
+        ]
+      },
+      "sha256": "f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965"
+    },
+    "return-before-commit/open.cjs": {
+      "bytes": 2275,
+      "object": "objects/d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/open.cjs.d9c76eea6e83.source"
+        },
+        "inputSha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
+    },
+    "return-before-commit/ops.py": {
+      "bytes": 28692,
+      "object": "objects/12680b4da85185ca2758a2210b3bf7b71ce49dd18954d7838e6aa6847e7056c5.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source"
+        },
+        "inputSha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_R3_B2",
+          "B3_IMMUTABLE_PM2"
+        ]
+      },
+      "sha256": "12680b4da85185ca2758a2210b3bf7b71ce49dd18954d7838e6aa6847e7056c5"
+    },
+    "return-before-commit/pm2_input.py": {
+      "bytes": 3291,
+      "object": "objects/dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_input.py",
+        "stages": [
+          "B3_IMMUTABLE_PM2"
+        ]
+      },
+      "sha256": "dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52"
+    },
+    "return-before-commit/preparation-bindings.cjs": {
+      "bytes": 1535,
+      "object": "objects/edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/preparation-bindings.cjs.edf775c12520.source"
+        },
+        "inputSha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    "return-before-commit/privileged_output.py": {
+      "bytes": 3333,
+      "object": "objects/19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/privileged_output.py.93a114516a19.source"
+        },
+        "inputSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B1_CANONICAL_DIAGNOSTIC"
+        ]
+      },
+      "sha256": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021"
+    },
+    "return-before-commit/read-state.py": {
+      "bytes": 4906,
+      "object": "objects/4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/read-state.py.4c97c5259acb.source"
+        },
+        "inputSha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4"
+    },
+    "return-before-commit/recover-partial.py": {
+      "bytes": 103,
+      "object": "objects/7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/recover-partial.py.7af3c2717be1.source"
+        },
+        "inputSha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54"
+    },
+    "return-before-commit/restore-controls.py": {
+      "bytes": 104,
+      "object": "objects/bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore-controls.py.bebe88f0291c.source"
+        },
+        "inputSha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b"
+    },
+    "return-before-commit/start-one.py": {
+      "bytes": 119,
+      "object": "objects/1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/start-one.py.1959dac9717e.source"
+        },
+        "inputSha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32"
+    },
+    "return-before-commit/stop-pair.py": {
+      "bytes": 97,
+      "object": "objects/1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/stop-pair.py.1f023b157796.source"
+        },
+        "inputSha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d"
+    },
+    "return-before-commit/unfence.py": {
+      "bytes": 95,
+      "object": "objects/d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/unfence.py.d5bb4c2f5543.source"
+        },
+        "inputSha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38"
+    },
+    "return-before-commit/validate.cjs": {
+      "bytes": 2701,
+      "object": "objects/5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/validate.cjs.5de8127d63e6.source"
+        },
+        "inputSha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+    },
+    "return-before-commit/waiting-work-frozen.cjs": {
+      "bytes": 4969,
+      "object": "objects/f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work-frozen.cjs.f0b64320f8be.source"
+        },
+        "inputSha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd"
+    },
+    "return-before-commit/waiting-work.cjs": {
+      "bytes": 5421,
+      "object": "objects/1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work.cjs.1fb853b60ab9.source"
+        },
+        "inputSha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b"
+    },
+    "return-partial/baseline_contract.py": {
+      "bytes": 7373,
+      "object": "objects/9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/baseline_contract.py.9af1a11a3605.source"
+        },
+        "inputSha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    "return-partial/close.cjs": {
+      "bytes": 2167,
+      "object": "objects/ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.ce953df4a365.source"
+        },
+        "inputSha256": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768"
+    },
+    "return-partial/contain.py": {
+      "bytes": 95,
+      "object": "objects/af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/contain.py.af61f2f3a0d0.source"
+        },
+        "inputSha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015"
+    },
+    "return-partial/db_owner_set_gate.py": {
+      "bytes": 6790,
+      "object": "objects/ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source"
+        },
+        "inputSha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6"
+    },
+    "return-partial/db_owner_set_observer.py": {
+      "bytes": 4038,
+      "object": "objects/ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source"
+        },
+        "inputSha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+    },
+    "return-partial/delegated.py": {
+      "bytes": 24723,
+      "object": "objects/4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source"
+        },
+        "inputSha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B2_CHILD_EXECUTION",
+          "DELEGATED_SEALED_FD_FORWARDING"
+        ]
+      },
+      "sha256": "4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904"
+    },
+    "return-partial/ecosystem_contract.py": {
+      "bytes": 3638,
+      "object": "objects/286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ecosystem_contract.py.7bfab72d4afd.source"
+        },
+        "inputSha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B3_CANONICAL_PARSER"
+        ]
+      },
+      "sha256": "286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c"
+    },
+    "return-partial/execution-check.cjs": {
+      "bytes": 1052,
+      "object": "objects/f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source"
+        },
+        "inputSha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_NODE_SCOPE"
+        ]
+      },
+      "sha256": "f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965"
+    },
+    "return-partial/open.cjs": {
+      "bytes": 2275,
+      "object": "objects/d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/open.cjs.d9c76eea6e83.source"
+        },
+        "inputSha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
+    },
+    "return-partial/ops.py": {
+      "bytes": 28613,
+      "object": "objects/a9e9e089f825159584207a195fdf133245b921b410946611426a006819e70e9f.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.33999cf29b7d.source"
+        },
+        "inputSha256": "33999cf29b7dd548ba185a301331ef09fea7c6fd40cd32e8b846bd13fcdb8bb1",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_R3_B2",
+          "B3_IMMUTABLE_PM2"
+        ]
+      },
+      "sha256": "a9e9e089f825159584207a195fdf133245b921b410946611426a006819e70e9f"
+    },
+    "return-partial/pm2_input.py": {
+      "bytes": 3291,
+      "object": "objects/dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_input.py",
+        "stages": [
+          "B3_IMMUTABLE_PM2"
+        ]
+      },
+      "sha256": "dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52"
+    },
+    "return-partial/preparation-bindings.cjs": {
+      "bytes": 1535,
+      "object": "objects/edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/preparation-bindings.cjs.edf775c12520.source"
+        },
+        "inputSha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    "return-partial/privileged_output.py": {
+      "bytes": 3333,
+      "object": "objects/19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/privileged_output.py.93a114516a19.source"
+        },
+        "inputSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B1_CANONICAL_DIAGNOSTIC"
+        ]
+      },
+      "sha256": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021"
+    },
+    "return-partial/read-state.py": {
+      "bytes": 4906,
+      "object": "objects/4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/read-state.py.4c97c5259acb.source"
+        },
+        "inputSha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4"
+    },
+    "return-partial/recover-partial.py": {
+      "bytes": 103,
+      "object": "objects/7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/recover-partial.py.7af3c2717be1.source"
+        },
+        "inputSha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54"
+    },
+    "return-partial/restore-controls.py": {
+      "bytes": 104,
+      "object": "objects/bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore-controls.py.bebe88f0291c.source"
+        },
+        "inputSha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b"
+    },
+    "return-partial/start-one.py": {
+      "bytes": 119,
+      "object": "objects/1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/start-one.py.1959dac9717e.source"
+        },
+        "inputSha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32"
+    },
+    "return-partial/stop-pair.py": {
+      "bytes": 97,
+      "object": "objects/1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/stop-pair.py.1f023b157796.source"
+        },
+        "inputSha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d"
+    },
+    "return-partial/unfence.py": {
+      "bytes": 95,
+      "object": "objects/d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/unfence.py.d5bb4c2f5543.source"
+        },
+        "inputSha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38"
+    },
+    "return-partial/validate.cjs": {
+      "bytes": 2701,
+      "object": "objects/5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/validate.cjs.5de8127d63e6.source"
+        },
+        "inputSha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+    },
+    "return-partial/waiting-work-frozen.cjs": {
+      "bytes": 4969,
+      "object": "objects/f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work-frozen.cjs.f0b64320f8be.source"
+        },
+        "inputSha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd"
+    },
+    "return-partial/waiting-work.cjs": {
+      "bytes": 5421,
+      "object": "objects/1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work.cjs.1fb853b60ab9.source"
+        },
+        "inputSha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b"
+    },
+    "return/baseline_contract.py": {
+      "bytes": 7373,
+      "object": "objects/9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/baseline_contract.py.9af1a11a3605.source"
+        },
+        "inputSha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    "return/close.cjs": {
+      "bytes": 2159,
+      "object": "objects/f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.f867b828cf28.source"
+        },
+        "inputSha256": "f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19"
+    },
+    "return/contain.py": {
+      "bytes": 95,
+      "object": "objects/af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/contain.py.af61f2f3a0d0.source"
+        },
+        "inputSha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015"
+    },
+    "return/db_owner_set_gate.py": {
+      "bytes": 6790,
+      "object": "objects/ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source"
+        },
+        "inputSha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6"
+    },
+    "return/db_owner_set_observer.py": {
+      "bytes": 4038,
+      "object": "objects/ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source"
+        },
+        "inputSha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+    },
+    "return/delegated.py": {
+      "bytes": 24723,
+      "object": "objects/4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source"
+        },
+        "inputSha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B2_CHILD_EXECUTION",
+          "DELEGATED_SEALED_FD_FORWARDING"
+        ]
+      },
+      "sha256": "4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904"
+    },
+    "return/ecosystem_contract.py": {
+      "bytes": 3638,
+      "object": "objects/286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ecosystem_contract.py.7bfab72d4afd.source"
+        },
+        "inputSha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B3_CANONICAL_PARSER"
+        ]
+      },
+      "sha256": "286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c"
+    },
+    "return/execution-check.cjs": {
+      "bytes": 1052,
+      "object": "objects/f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source"
+        },
+        "inputSha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_NODE_SCOPE"
+        ]
+      },
+      "sha256": "f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965"
+    },
+    "return/open.cjs": {
+      "bytes": 2275,
+      "object": "objects/d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/open.cjs.d9c76eea6e83.source"
+        },
+        "inputSha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
+    },
+    "return/ops.py": {
+      "bytes": 28613,
+      "object": "objects/a9e9e089f825159584207a195fdf133245b921b410946611426a006819e70e9f.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.33999cf29b7d.source"
+        },
+        "inputSha256": "33999cf29b7dd548ba185a301331ef09fea7c6fd40cd32e8b846bd13fcdb8bb1",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_R3_B2",
+          "B3_IMMUTABLE_PM2"
+        ]
+      },
+      "sha256": "a9e9e089f825159584207a195fdf133245b921b410946611426a006819e70e9f"
+    },
+    "return/pm2_input.py": {
+      "bytes": 3291,
+      "object": "objects/dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_input.py",
+        "stages": [
+          "B3_IMMUTABLE_PM2"
+        ]
+      },
+      "sha256": "dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52"
+    },
+    "return/preparation-bindings.cjs": {
+      "bytes": 1535,
+      "object": "objects/edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/preparation-bindings.cjs.edf775c12520.source"
+        },
+        "inputSha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    "return/privileged_output.py": {
+      "bytes": 3333,
+      "object": "objects/19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/privileged_output.py.93a114516a19.source"
+        },
+        "inputSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B1_CANONICAL_DIAGNOSTIC"
+        ]
+      },
+      "sha256": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021"
+    },
+    "return/read-state.py": {
+      "bytes": 4906,
+      "object": "objects/4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/read-state.py.4c97c5259acb.source"
+        },
+        "inputSha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4"
+    },
+    "return/recover-partial.py": {
+      "bytes": 103,
+      "object": "objects/7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/recover-partial.py.7af3c2717be1.source"
+        },
+        "inputSha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54"
+    },
+    "return/restore-controls.py": {
+      "bytes": 104,
+      "object": "objects/bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore-controls.py.bebe88f0291c.source"
+        },
+        "inputSha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b"
+    },
+    "return/start-one.py": {
+      "bytes": 119,
+      "object": "objects/1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/start-one.py.1959dac9717e.source"
+        },
+        "inputSha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32"
+    },
+    "return/stop-pair.py": {
+      "bytes": 97,
+      "object": "objects/1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/stop-pair.py.1f023b157796.source"
+        },
+        "inputSha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d"
+    },
+    "return/unfence.py": {
+      "bytes": 95,
+      "object": "objects/d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/unfence.py.d5bb4c2f5543.source"
+        },
+        "inputSha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38"
+    },
+    "return/validate.cjs": {
+      "bytes": 2701,
+      "object": "objects/5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/validate.cjs.5de8127d63e6.source"
+        },
+        "inputSha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+    },
+    "return/waiting-work-frozen.cjs": {
+      "bytes": 4969,
+      "object": "objects/f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work-frozen.cjs.f0b64320f8be.source"
+        },
+        "inputSha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd"
+    },
+    "return/waiting-work.cjs": {
+      "bytes": 5421,
+      "object": "objects/1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work.cjs.1fb853b60ab9.source"
+        },
+        "inputSha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b"
+    },
+    "review/graph.py": {
+      "bytes": 551,
+      "object": "objects/6598c24450550a8640c51691c888230cbed831333462b43a71fe4e4feb3a391f.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/compose_static.py",
+        "inputSha256": "1be769c9e820938744d9ef56a90241ce26edde5fd1bbbe2aa5ff0492e03e805e",
+        "selectedFunctions": [
+          "require",
+          "topo"
+        ],
+        "stages": [
+          "OWNER_REVIEW_ONLY_NOT_PHASE_AUTHORITY"
+        ]
+      },
+      "sha256": "6598c24450550a8640c51691c888230cbed831333462b43a71fe4e4feb3a391f"
+    },
+    "review/pre_authority.py": {
+      "bytes": 10828,
+      "object": "objects/c7e638a33aac33fe990431837e8c7a56a5eeb403eb3b43c9e71c2094ded762ad.source",
+      "origin": {
+        "input": "scripts/crm_csv_predecessor/pre_authority.py",
+        "inputSha256": "c7e638a33aac33fe990431837e8c7a56a5eeb403eb3b43c9e71c2094ded762ad",
+        "selectedFunctions": null,
+        "stages": [
+          "OWNER_REVIEW_ONLY_NOT_PHASE_AUTHORITY"
+        ]
+      },
+      "sha256": "c7e638a33aac33fe990431837e8c7a56a5eeb403eb3b43c9e71c2094ded762ad"
+    },
+    "review/reader.py": {
+      "bytes": 984,
+      "object": "objects/8b085a980e94cf4e249ff5fc0a540159c7582cae72f4b025b6c263ff10257c43.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/launch.py",
+        "inputSha256": "19389532ecdd9b8fc3360fb8c424dbf5bba1c17003c6f4a4f415799a6f7bd280",
+        "selectedFunctions": [
+          "metadata",
+          "read"
+        ],
+        "stages": [
+          "OWNER_REVIEW_ONLY_NOT_PHASE_AUTHORITY"
+        ]
+      },
+      "sha256": "8b085a980e94cf4e249ff5fc0a540159c7582cae72f4b025b6c263ff10257c43"
+    },
+    "switch/baseline_contract.py": {
+      "bytes": 7373,
+      "object": "objects/9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/baseline_contract.py.9af1a11a3605.source"
+        },
+        "inputSha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    "switch/close.cjs": {
+      "bytes": 2159,
+      "object": "objects/7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.7ca493142706.source"
+        },
+        "inputSha256": "7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc"
+    },
+    "switch/contain.py": {
+      "bytes": 95,
+      "object": "objects/af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/contain.py.af61f2f3a0d0.source"
+        },
+        "inputSha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015"
+    },
+    "switch/db_owner_set_gate.py": {
+      "bytes": 6790,
+      "object": "objects/ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source"
+        },
+        "inputSha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6"
+    },
+    "switch/db_owner_set_observer.py": {
+      "bytes": 4038,
+      "object": "objects/ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source"
+        },
+        "inputSha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+    },
+    "switch/delegated.py": {
+      "bytes": 24723,
+      "object": "objects/4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source"
+        },
+        "inputSha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B2_CHILD_EXECUTION",
+          "DELEGATED_SEALED_FD_FORWARDING"
+        ]
+      },
+      "sha256": "4ee905f06acf89a9e17b6d602e17205b139e57cfbd0c7a2a0ab53c1650d5d904"
+    },
+    "switch/ecosystem_contract.py": {
+      "bytes": 3638,
+      "object": "objects/286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ecosystem_contract.py.7bfab72d4afd.source"
+        },
+        "inputSha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B3_CANONICAL_PARSER"
+        ]
+      },
+      "sha256": "286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c"
+    },
+    "switch/execution-check.cjs": {
+      "bytes": 1052,
+      "object": "objects/f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source"
+        },
+        "inputSha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_NODE_SCOPE"
+        ]
+      },
+      "sha256": "f2cedb68bb8aa8358c71847c795de7f2cb1b9f4a657b0d6b5454b4f2f6a96965"
+    },
+    "switch/open.cjs": {
+      "bytes": 2275,
+      "object": "objects/d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/open.cjs.d9c76eea6e83.source"
+        },
+        "inputSha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
+    },
+    "switch/ops.py": {
+      "bytes": 28613,
+      "object": "objects/a9e9e089f825159584207a195fdf133245b921b410946611426a006819e70e9f.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.33999cf29b7d.source"
+        },
+        "inputSha256": "33999cf29b7dd548ba185a301331ef09fea7c6fd40cd32e8b846bd13fcdb8bb1",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_R3_B2",
+          "B3_IMMUTABLE_PM2"
+        ]
+      },
+      "sha256": "a9e9e089f825159584207a195fdf133245b921b410946611426a006819e70e9f"
+    },
+    "switch/pm2_input.py": {
+      "bytes": 3291,
+      "object": "objects/dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52.source",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_input.py",
+        "stages": [
+          "B3_IMMUTABLE_PM2"
+        ]
+      },
+      "sha256": "dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52"
+    },
+    "switch/preparation-bindings.cjs": {
+      "bytes": 1535,
+      "object": "objects/edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/preparation-bindings.cjs.edf775c12520.source"
+        },
+        "inputSha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    "switch/privileged_output.py": {
+      "bytes": 3333,
+      "object": "objects/19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/privileged_output.py.93a114516a19.source"
+        },
+        "inputSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B1_CANONICAL_DIAGNOSTIC"
+        ]
+      },
+      "sha256": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021"
+    },
+    "switch/read-state.py": {
+      "bytes": 4906,
+      "object": "objects/4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/read-state.py.4c97c5259acb.source"
+        },
+        "inputSha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4"
+    },
+    "switch/recover-partial.py": {
+      "bytes": 103,
+      "object": "objects/7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/recover-partial.py.7af3c2717be1.source"
+        },
+        "inputSha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54"
+    },
+    "switch/restore-controls.py": {
+      "bytes": 104,
+      "object": "objects/bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore-controls.py.bebe88f0291c.source"
+        },
+        "inputSha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b"
+    },
+    "switch/start-one.py": {
+      "bytes": 119,
+      "object": "objects/1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/start-one.py.1959dac9717e.source"
+        },
+        "inputSha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32"
+    },
+    "switch/stop-pair.py": {
+      "bytes": 97,
+      "object": "objects/1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/stop-pair.py.1f023b157796.source"
+        },
+        "inputSha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d"
+    },
+    "switch/unfence.py": {
+      "bytes": 95,
+      "object": "objects/d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/unfence.py.d5bb4c2f5543.source"
+        },
+        "inputSha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38"
+    },
+    "switch/validate.cjs": {
+      "bytes": 2701,
+      "object": "objects/5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/validate.cjs.5de8127d63e6.source"
+        },
+        "inputSha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+    },
+    "switch/waiting-work-frozen.cjs": {
+      "bytes": 4969,
+      "object": "objects/f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work-frozen.cjs.f0b64320f8be.source"
+        },
+        "inputSha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd"
+    },
+    "switch/waiting-work.cjs": {
+      "bytes": 5421,
+      "object": "objects/1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work.cjs.1fb853b60ab9.source"
+        },
+        "inputSha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b"
+    },
+    "window/admit_gates.py": {
+      "bytes": 4613,
+      "object": "objects/cba5bf8321fe6155a720eaa0bc212b3e0e3bfc152f33ec9cca6f04dda28e5ceb.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/admit_gates.py.2681e63919b9.source"
+        },
+        "inputSha256": "2681e63919b981291d376237975e7e8dd7379ccbc0f323a55f948487730705c6",
+        "priorOrigin": {
+          "input": {
+            "kind": "delivery",
+            "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/admit_gates.py.2681e63919b9.source"
+          },
+          "inputSha256": "2681e63919b981291d376237975e7e8dd7379ccbc0f323a55f948487730705c6",
+          "stages": [
+            "ACCEPT_LOCAL_COMPOSITION"
+          ]
+        },
+        "stages": [
+          "PREDECESSOR_REVIEWED_SOURCE_EXTENSION"
+        ],
+        "transformation": {
+          "path": "scripts/crm_csv_predecessor/sources.py",
+          "sha256": "dd0c3e09592e1235268d36c1b0715b0f8053c35da667c161dc6048541e0faf18"
+        }
+      },
+      "sha256": "cba5bf8321fe6155a720eaa0bc212b3e0e3bfc152f33ec9cca6f04dda28e5ceb"
+    },
+    "window/automation-fence.nft": {
+      "bytes": 170,
+      "object": "objects/62342f28b9f011c916b8483487bb75f7211a08ffc5846c303f9a0ab0000c2797.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/automation-fence.nft.62342f28b9f0.source"
+        },
+        "inputSha256": "62342f28b9f011c916b8483487bb75f7211a08ffc5846c303f9a0ab0000c2797",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "62342f28b9f011c916b8483487bb75f7211a08ffc5846c303f9a0ab0000c2797"
+    },
+    "window/baseline_contract.py": {
+      "bytes": 7325,
+      "object": "objects/baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf.source",
+      "origin": {
+        "input": {
+          "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+          "kind": "git",
+          "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/baseline_contract.py"
+        },
+        "inputSha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf"
+    },
+    "window/canonical_renew_proofs.py": {
+      "bytes": 4079,
+      "object": "objects/4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/canonical_renew_proofs.py.4427aa5e3108.source"
+        },
+        "inputSha256": "4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef"
+    },
+    "window/capture_imports.py": {
+      "bytes": 3976,
+      "object": "objects/52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/capture_imports.py.52d6e914872e.source"
+        },
+        "inputSha256": "52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f"
+    },
+    "window/check_current.py": {
+      "bytes": 4130,
+      "object": "objects/198c75956d594d33679589db6f76e3ee6775c74559091ab53e88583e6159c02b.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/check_current.py.6f840789aac8.source"
+        },
+        "inputSha256": "6f840789aac823e0e6f84c7fc1968d6869099d4e7aec01bad688089770fc4cb5",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "EXPLICIT_AUTHENTICATED_MODE_AND_NODE"
+        ]
+      },
+      "sha256": "198c75956d594d33679589db6f76e3ee6775c74559091ab53e88583e6159c02b"
+    },
+    "window/csv_boundary.py": {
+      "bytes": 4610,
+      "object": "objects/73d5c6917a3476770c16412be8f9cecb4dffc0e222080169de4c64f427113a4e.source",
+      "origin": {
+        "input": {
+          "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+          "kind": "git",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/csv_boundary.py"
+        },
+        "inputSha256": "73d5c6917a3476770c16412be8f9cecb4dffc0e222080169de4c64f427113a4e",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "73d5c6917a3476770c16412be8f9cecb4dffc0e222080169de4c64f427113a4e"
+    },
+    "window/csv_cli.py": {
+      "bytes": 4548,
+      "object": "objects/3ae51bd07ca9b8d299f347085877de80247831bcd665f489e934b460e38753b1.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_cli.py.3ae51bd07ca9.source"
+        },
+        "inputSha256": "3ae51bd07ca9b8d299f347085877de80247831bcd665f489e934b460e38753b1",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "3ae51bd07ca9b8d299f347085877de80247831bcd665f489e934b460e38753b1"
+    },
+    "window/csv_contract.py": {
+      "bytes": 4550,
+      "object": "objects/0479ef91f4b8b89357392f3eaea3036d420b45ac5d051af231a10f0df06e22cf.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_contract.py.9ca2208c5c18.source"
+        },
+        "inputSha256": "9ca2208c5c18787aa2e3696636b17334c3362caa6991e3e4cd2bde2e363958eb",
+        "priorOrigin": {
+          "input": {
+            "kind": "delivery",
+            "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_contract.py.9ca2208c5c18.source"
+          },
+          "inputSha256": "9ca2208c5c18787aa2e3696636b17334c3362caa6991e3e4cd2bde2e363958eb",
+          "stages": [
+            "ACCEPT_LOCAL_COMPOSITION"
+          ]
+        },
+        "stages": [
+          "PREDECESSOR_REVIEWED_SOURCE_EXTENSION"
+        ],
+        "transformation": {
+          "path": "scripts/crm_csv_predecessor/sources.py",
+          "sha256": "dd0c3e09592e1235268d36c1b0715b0f8053c35da667c161dc6048541e0faf18"
+        }
+      },
+      "sha256": "0479ef91f4b8b89357392f3eaea3036d420b45ac5d051af231a10f0df06e22cf"
+    },
+    "window/csv_start_gate.py": {
+      "bytes": 317,
+      "object": "objects/094ec4a5bbaae7c218bd1269346a9d9d102d6cb198dd81d92cd90fe6f97798f4.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_start_gate.py.094ec4a5bbaa.source"
+        },
+        "inputSha256": "094ec4a5bbaae7c218bd1269346a9d9d102d6cb198dd81d92cd90fe6f97798f4",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "094ec4a5bbaae7c218bd1269346a9d9d102d6cb198dd81d92cd90fe6f97798f4"
+    },
+    "window/current-sql.cjs": {
+      "bytes": 544,
+      "object": "objects/69039dbe69fab4a26b8396753c9496a45ec9588699bab2c54751c6255da72768.source",
+      "origin": {
+        "input": "window/check_current.py:existing inline SQL body",
+        "stages": [
+          "EXTRACT_EXISTING_SQL_BODY_AUTHENTICATED_NODE"
+        ]
+      },
+      "sha256": "69039dbe69fab4a26b8396753c9496a45ec9588699bab2c54751c6255da72768"
+    },
+    "window/ecosystem_contract.py": {
+      "bytes": 3638,
+      "object": "objects/286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ecosystem_contract.py.7bfab72d4afd.source"
+        },
+        "inputSha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B3_CANONICAL_PARSER"
+        ]
+      },
+      "sha256": "286f82c184039ba76576fe0a329ff36daf26038535c53e6728e2020324c2df0c"
+    },
+    "window/event_overlay.py": {
+      "bytes": 2705,
+      "object": "objects/7c3db254455f12a455fabb1e9936be0bced2caefcb8fcbdec2e78997c14f10f4.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/event_overlay.py.7c3db254455f.source"
+        },
+        "inputSha256": "7c3db254455f12a455fabb1e9936be0bced2caefcb8fcbdec2e78997c14f10f4",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "7c3db254455f12a455fabb1e9936be0bced2caefcb8fcbdec2e78997c14f10f4"
+    },
+    "window/original_checks.py": {
+      "bytes": 4102,
+      "object": "objects/43676794e50c432193106510a6a9eb237933f08766a6fe55e170d8737e7561ed.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/original_checks.py"
+        },
+        "inputSha256": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82",
+        "priorOrigin": {
+          "input": {
+            "kind": "delivery",
+            "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/original_checks.py"
+          },
+          "inputSha256": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82",
+          "stages": [
+            "ACCEPT_LOCAL_COMPOSITION"
+          ]
+        },
+        "stages": [
+          "PREDECESSOR_REVIEWED_SOURCE_EXTENSION"
+        ],
+        "transformation": {
+          "path": "scripts/crm_csv_predecessor/sources.py",
+          "sha256": "dd0c3e09592e1235268d36c1b0715b0f8053c35da667c161dc6048541e0faf18"
+        }
+      },
+      "sha256": "43676794e50c432193106510a6a9eb237933f08766a6fe55e170d8737e7561ed"
+    },
+    "window/policy_predecessor.py": {
+      "bytes": 963,
+      "object": "objects/46e71c30fa44d454272f7a1e96ac5094182f4ec6f3fa7de57b153681ccd3b595.source",
+      "origin": {
+        "input": "scripts/crm_csv_predecessor/runtime.py",
+        "inputSha256": "46e71c30fa44d454272f7a1e96ac5094182f4ec6f3fa7de57b153681ccd3b595",
+        "priorOrigin": null,
+        "stages": [
+          "PREDECESSOR_REVIEWED_SOURCE_EXTENSION"
+        ],
+        "transformation": {
+          "path": "scripts/crm_csv_predecessor/sources.py",
+          "sha256": "dd0c3e09592e1235268d36c1b0715b0f8053c35da667c161dc6048541e0faf18"
+        }
+      },
+      "sha256": "46e71c30fa44d454272f7a1e96ac5094182f4ec6f3fa7de57b153681ccd3b595"
+    },
+    "window/pre_install.py": {
+      "bytes": 1597,
+      "object": "objects/0a14af6fc2663e3bb248b55d33f65a91d608d264b4226c1e1a66ab82198dc701.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/pre_install.py.8e45c10319f2.source"
+        },
+        "inputSha256": "8e45c10319f298f69aa812df6996e950afbc0d2cdca5b06c25499b8bcd6f8f6d",
+        "priorOrigin": {
+          "input": {
+            "kind": "delivery",
+            "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/pre_install.py.8e45c10319f2.source"
+          },
+          "inputSha256": "8e45c10319f298f69aa812df6996e950afbc0d2cdca5b06c25499b8bcd6f8f6d",
+          "stages": [
+            "ACCEPT_LOCAL_COMPOSITION"
+          ]
+        },
+        "stages": [
+          "PREDECESSOR_REVIEWED_SOURCE_EXTENSION"
+        ],
+        "transformation": {
+          "path": "scripts/crm_csv_predecessor/sources.py",
+          "sha256": "dd0c3e09592e1235268d36c1b0715b0f8053c35da667c161dc6048541e0faf18"
+        }
+      },
+      "sha256": "0a14af6fc2663e3bb248b55d33f65a91d608d264b4226c1e1a66ab82198dc701"
+    },
+    "window/prestop_contract.py": {
+      "bytes": 2281,
+      "object": "objects/208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b.source",
+      "origin": {
+        "input": {
+          "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+          "kind": "git",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/prestop_contract.py"
+        },
+        "inputSha256": "208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b"
+    },
+    "window/privileged.py": {
+      "bytes": 27834,
+      "object": "objects/8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212.source",
+      "origin": {
+        "input": {
+          "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+          "kind": "git",
+          "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged.py"
+        },
+        "inputSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212"
+    },
+    "window/privileged_output.py": {
+      "bytes": 3333,
+      "object": "objects/19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/privileged_output.py.93a114516a19.source"
+        },
+        "inputSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "B1_CANONICAL_DIAGNOSTIC"
+        ]
+      },
+      "sha256": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021"
+    },
+    "window/recovery.py": {
+      "bytes": 8300,
+      "object": "objects/0d9a87b0c55b3fe3a30db0d5feea5281117fb2e16fd8ebbe8db2ea0f7f5f97ec.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery.py"
+        },
+        "inputSha256": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_R3_B2",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "sha256": "0d9a87b0c55b3fe3a30db0d5feea5281117fb2e16fd8ebbe8db2ea0f7f5f97ec"
+    },
+    "window/recovery_bridge.py": {
+      "bytes": 8497,
+      "object": "objects/10de28ec8855cbda19b45bfee422434029edd1ff8fa466ddc9cfba53ac8b68d1.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py"
+        },
+        "inputSha256": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_R3_B2",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "sha256": "10de28ec8855cbda19b45bfee422434029edd1ff8fa466ddc9cfba53ac8b68d1"
+    },
+    "window/recovery_contract.py": {
+      "bytes": 9221,
+      "object": "objects/529e209b841661069175ccddf9e3885c3624365efbf235d990d00a79352a16b9.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_contract.py"
+        },
+        "inputSha256": "9dad001588002c8566bd4ffc3e57d5985f3d05822dd773b87fa92d003382e73e",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "sha256": "529e209b841661069175ccddf9e3885c3624365efbf235d990d00a79352a16b9"
+    },
+    "window/recovery_start.py": {
+      "bytes": 1787,
+      "object": "objects/3c4393f91222b63b5ab32a314700c0fbdda9b8d88082b66e5ac7058e80292da2.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_start.py"
+        },
+        "inputSha256": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_R3_B2"
+        ]
+      },
+      "sha256": "3c4393f91222b63b5ab32a314700c0fbdda9b8d88082b66e5ac7058e80292da2"
+    },
+    "window/restore_contract.py": {
+      "bytes": 5151,
+      "object": "objects/af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore_contract.py.af0d552fc5fd.source"
+        },
+        "inputSha256": "af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b"
+    },
+    "window/root_readonly.py": {
+      "bytes": 1215,
+      "object": "objects/c641aca7f060214ffd84c07b8b8567b24d3d9d0435e0efa57ec1b68640c18624.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/root_readonly.py.cb63a97fffe7.source"
+        },
+        "inputSha256": "cb63a97fffe735fd52c80eed872751873593c23a3f8b3e3663b6c0fd741aa7ab",
+        "priorOrigin": {
+          "input": {
+            "kind": "delivery",
+            "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/root_readonly.py.cb63a97fffe7.source"
+          },
+          "inputSha256": "cb63a97fffe735fd52c80eed872751873593c23a3f8b3e3663b6c0fd741aa7ab",
+          "stages": [
+            "ACCEPT_LOCAL_COMPOSITION"
+          ]
+        },
+        "stages": [
+          "PREDECESSOR_REVIEWED_SOURCE_EXTENSION"
+        ],
+        "transformation": {
+          "path": "scripts/crm_csv_predecessor/sources.py",
+          "sha256": "dd0c3e09592e1235268d36c1b0715b0f8053c35da667c161dc6048541e0faf18"
+        }
+      },
+      "sha256": "c641aca7f060214ffd84c07b8b8567b24d3d9d0435e0efa57ec1b68640c18624"
+    },
+    "window/scheduled_controls.py": {
+      "bytes": 2497,
+      "object": "objects/9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39.source",
+      "origin": {
+        "input": {
+          "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+          "kind": "git",
+          "path": "docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/scheduled-controls-20261015/scheduled_controls.py"
+        },
+        "inputSha256": "9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION"
+        ]
+      },
+      "sha256": "9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39"
+    },
+    "window/sequencer.py": {
+      "bytes": 35438,
+      "object": "objects/ae8bb0973297798865229682bbc898919a14359d3c33cdf4f9e45d7a7d98454a.source",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/sequencer.py.0a4d8b67f033.source"
+        },
+        "inputSha256": "0a4d8b67f03335403ae2addf93628519423c350eb8256bbe292373ffc36d9b7e",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_R3_B2",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "sha256": "ae8bb0973297798865229682bbc898919a14359d3c33cdf4f9e45d7a7d98454a"
+    }
+  },
+  "imports": {
+    "protected/authority.py": {
+      "privileged_output": "protected/privileged_output.py"
+    },
+    "protected/child_transport.py": {
+      "authority": "protected/authority.py"
+    },
+    "protected/incident-6683-window-control.py": {
+      "root_store": "protected/root_store.py"
+    },
+    "protected/privileged_output.py": {},
+    "protected/re7-incident-6683-window": {},
+    "protected/recovery-launch.py": {
+      "verified_loader": "protected/verified_loader.py"
+    },
+    "protected/recovery-node-launch.cjs": {},
+    "protected/root_store.py": {
+      "authority": "protected/authority.py"
+    },
+    "protected/verified_loader.py": {
+      "authority": "protected/authority.py"
+    },
+    "return-before-commit/baseline_contract.py": {
+      "ecosystem_contract": "return-before-commit/ecosystem_contract.py"
+    },
+    "return-before-commit/close.cjs": {
+      "./execution-check.cjs": "return-before-commit/execution-check.cjs",
+      "./preparation-bindings.cjs": "return-before-commit/preparation-bindings.cjs"
+    },
+    "return-before-commit/contain.py": {
+      "ops": "return-before-commit/ops.py"
+    },
+    "return-before-commit/db_owner_set_gate.py": {},
+    "return-before-commit/db_owner_set_observer.py": {},
+    "return-before-commit/delegated.py": {
+      "baseline_contract": "return-before-commit/baseline_contract.py",
+      "ops": "return-before-commit/ops.py"
+    },
+    "return-before-commit/ecosystem_contract.py": {},
+    "return-before-commit/execution-check.cjs": {
+      "baseline_contract.py": "return-before-commit/baseline_contract.py"
+    },
+    "return-before-commit/open.cjs": {
+      "./execution-check.cjs": "return-before-commit/execution-check.cjs",
+      "./preparation-bindings.cjs": "return-before-commit/preparation-bindings.cjs"
+    },
+    "return-before-commit/ops.py": {
+      "baseline_contract": "return-before-commit/baseline_contract.py",
+      "child_transport": "protected/child_transport.py",
+      "csv_start_gate": "window/csv_start_gate.py",
+      "db_owner_set_gate": "return-before-commit/db_owner_set_gate.py",
+      "db_owner_set_observer": "return-before-commit/db_owner_set_observer.py",
+      "pm2_input": "return-before-commit/pm2_input.py",
+      "prestop_contract": "window/prestop_contract.py",
+      "privileged_output": "return-before-commit/privileged_output.py",
+      "recovery_bridge": "window/recovery_bridge.py",
+      "restore_contract": "window/restore_contract.py",
+      "scheduled_controls": "window/scheduled_controls.py"
+    },
+    "return-before-commit/pm2_input.py": {
+      "ecosystem_contract": "return-before-commit/ecosystem_contract.py"
+    },
+    "return-before-commit/preparation-bindings.cjs": {
+      "./waiting-work.cjs": "return-before-commit/waiting-work.cjs"
+    },
+    "return-before-commit/privileged_output.py": {},
+    "return-before-commit/read-state.py": {
+      "ops": "return-before-commit/ops.py"
+    },
+    "return-before-commit/recover-partial.py": {
+      "ops": "return-before-commit/ops.py"
+    },
+    "return-before-commit/restore-controls.py": {
+      "ops": "return-before-commit/ops.py"
+    },
+    "return-before-commit/start-one.py": {
+      "ops": "return-before-commit/ops.py"
+    },
+    "return-before-commit/stop-pair.py": {
+      "ops": "return-before-commit/ops.py"
+    },
+    "return-before-commit/unfence.py": {
+      "ops": "return-before-commit/ops.py"
+    },
+    "return-before-commit/validate.cjs": {
+      "./execution-check.cjs": "return-before-commit/execution-check.cjs",
+      "./preparation-bindings.cjs": "return-before-commit/preparation-bindings.cjs"
+    },
+    "return-before-commit/waiting-work-frozen.cjs": {},
+    "return-before-commit/waiting-work.cjs": {
+      "./waiting-work-frozen.cjs": "return-before-commit/waiting-work-frozen.cjs"
+    },
+    "return-partial/baseline_contract.py": {
+      "ecosystem_contract": "return-partial/ecosystem_contract.py"
+    },
+    "return-partial/close.cjs": {
+      "./execution-check.cjs": "return-partial/execution-check.cjs",
+      "./preparation-bindings.cjs": "return-partial/preparation-bindings.cjs"
+    },
+    "return-partial/contain.py": {
+      "ops": "return-partial/ops.py"
+    },
+    "return-partial/db_owner_set_gate.py": {},
+    "return-partial/db_owner_set_observer.py": {},
+    "return-partial/delegated.py": {
+      "baseline_contract": "return-partial/baseline_contract.py",
+      "ops": "return-partial/ops.py"
+    },
+    "return-partial/ecosystem_contract.py": {},
+    "return-partial/execution-check.cjs": {
+      "baseline_contract.py": "return-partial/baseline_contract.py"
+    },
+    "return-partial/open.cjs": {
+      "./execution-check.cjs": "return-partial/execution-check.cjs",
+      "./preparation-bindings.cjs": "return-partial/preparation-bindings.cjs"
+    },
+    "return-partial/ops.py": {
+      "baseline_contract": "return-partial/baseline_contract.py",
+      "child_transport": "protected/child_transport.py",
+      "csv_start_gate": "window/csv_start_gate.py",
+      "db_owner_set_gate": "return-partial/db_owner_set_gate.py",
+      "db_owner_set_observer": "return-partial/db_owner_set_observer.py",
+      "pm2_input": "return-partial/pm2_input.py",
+      "prestop_contract": "window/prestop_contract.py",
+      "privileged_output": "return-partial/privileged_output.py",
+      "restore_contract": "window/restore_contract.py",
+      "scheduled_controls": "window/scheduled_controls.py"
+    },
+    "return-partial/pm2_input.py": {
+      "ecosystem_contract": "return-partial/ecosystem_contract.py"
+    },
+    "return-partial/preparation-bindings.cjs": {
+      "./waiting-work.cjs": "return-partial/waiting-work.cjs"
+    },
+    "return-partial/privileged_output.py": {},
+    "return-partial/read-state.py": {
+      "ops": "return-partial/ops.py"
+    },
+    "return-partial/recover-partial.py": {
+      "ops": "return-partial/ops.py"
+    },
+    "return-partial/restore-controls.py": {
+      "ops": "return-partial/ops.py"
+    },
+    "return-partial/start-one.py": {
+      "ops": "return-partial/ops.py"
+    },
+    "return-partial/stop-pair.py": {
+      "ops": "return-partial/ops.py"
+    },
+    "return-partial/unfence.py": {
+      "ops": "return-partial/ops.py"
+    },
+    "return-partial/validate.cjs": {
+      "./execution-check.cjs": "return-partial/execution-check.cjs",
+      "./preparation-bindings.cjs": "return-partial/preparation-bindings.cjs"
+    },
+    "return-partial/waiting-work-frozen.cjs": {},
+    "return-partial/waiting-work.cjs": {
+      "./waiting-work-frozen.cjs": "return-partial/waiting-work-frozen.cjs"
+    },
+    "return/baseline_contract.py": {
+      "ecosystem_contract": "return/ecosystem_contract.py"
+    },
+    "return/close.cjs": {
+      "./execution-check.cjs": "return/execution-check.cjs",
+      "./preparation-bindings.cjs": "return/preparation-bindings.cjs"
+    },
+    "return/contain.py": {
+      "ops": "return/ops.py"
+    },
+    "return/db_owner_set_gate.py": {},
+    "return/db_owner_set_observer.py": {},
+    "return/delegated.py": {
+      "baseline_contract": "return/baseline_contract.py",
+      "ops": "return/ops.py"
+    },
+    "return/ecosystem_contract.py": {},
+    "return/execution-check.cjs": {
+      "baseline_contract.py": "return/baseline_contract.py"
+    },
+    "return/open.cjs": {
+      "./execution-check.cjs": "return/execution-check.cjs",
+      "./preparation-bindings.cjs": "return/preparation-bindings.cjs"
+    },
+    "return/ops.py": {
+      "baseline_contract": "return/baseline_contract.py",
+      "child_transport": "protected/child_transport.py",
+      "csv_start_gate": "window/csv_start_gate.py",
+      "db_owner_set_gate": "return/db_owner_set_gate.py",
+      "db_owner_set_observer": "return/db_owner_set_observer.py",
+      "pm2_input": "return/pm2_input.py",
+      "prestop_contract": "window/prestop_contract.py",
+      "privileged_output": "return/privileged_output.py",
+      "restore_contract": "window/restore_contract.py",
+      "scheduled_controls": "window/scheduled_controls.py"
+    },
+    "return/pm2_input.py": {
+      "ecosystem_contract": "return/ecosystem_contract.py"
+    },
+    "return/preparation-bindings.cjs": {
+      "./waiting-work.cjs": "return/waiting-work.cjs"
+    },
+    "return/privileged_output.py": {},
+    "return/read-state.py": {
+      "ops": "return/ops.py"
+    },
+    "return/recover-partial.py": {
+      "ops": "return/ops.py"
+    },
+    "return/restore-controls.py": {
+      "ops": "return/ops.py"
+    },
+    "return/start-one.py": {
+      "ops": "return/ops.py"
+    },
+    "return/stop-pair.py": {
+      "ops": "return/ops.py"
+    },
+    "return/unfence.py": {
+      "ops": "return/ops.py"
+    },
+    "return/validate.cjs": {
+      "./execution-check.cjs": "return/execution-check.cjs",
+      "./preparation-bindings.cjs": "return/preparation-bindings.cjs"
+    },
+    "return/waiting-work-frozen.cjs": {},
+    "return/waiting-work.cjs": {
+      "./waiting-work-frozen.cjs": "return/waiting-work-frozen.cjs"
+    },
+    "review/graph.py": {},
+    "review/pre_authority.py": {},
+    "review/reader.py": {},
+    "switch/baseline_contract.py": {
+      "ecosystem_contract": "switch/ecosystem_contract.py"
+    },
+    "switch/close.cjs": {
+      "./execution-check.cjs": "switch/execution-check.cjs",
+      "./preparation-bindings.cjs": "switch/preparation-bindings.cjs"
+    },
+    "switch/contain.py": {
+      "ops": "switch/ops.py"
+    },
+    "switch/db_owner_set_gate.py": {},
+    "switch/db_owner_set_observer.py": {},
+    "switch/delegated.py": {
+      "baseline_contract": "switch/baseline_contract.py",
+      "ops": "switch/ops.py"
+    },
+    "switch/ecosystem_contract.py": {},
+    "switch/execution-check.cjs": {
+      "baseline_contract.py": "switch/baseline_contract.py"
+    },
+    "switch/open.cjs": {
+      "./execution-check.cjs": "switch/execution-check.cjs",
+      "./preparation-bindings.cjs": "switch/preparation-bindings.cjs"
+    },
+    "switch/ops.py": {
+      "baseline_contract": "switch/baseline_contract.py",
+      "child_transport": "protected/child_transport.py",
+      "csv_start_gate": "window/csv_start_gate.py",
+      "db_owner_set_gate": "switch/db_owner_set_gate.py",
+      "db_owner_set_observer": "switch/db_owner_set_observer.py",
+      "pm2_input": "switch/pm2_input.py",
+      "prestop_contract": "window/prestop_contract.py",
+      "privileged_output": "switch/privileged_output.py",
+      "restore_contract": "window/restore_contract.py",
+      "scheduled_controls": "window/scheduled_controls.py"
+    },
+    "switch/pm2_input.py": {
+      "ecosystem_contract": "switch/ecosystem_contract.py"
+    },
+    "switch/preparation-bindings.cjs": {
+      "./waiting-work.cjs": "switch/waiting-work.cjs",
+      "restore_contract.py": "window/restore_contract.py"
+    },
+    "switch/privileged_output.py": {},
+    "switch/read-state.py": {
+      "ops": "switch/ops.py"
+    },
+    "switch/recover-partial.py": {
+      "ops": "switch/ops.py"
+    },
+    "switch/restore-controls.py": {
+      "ops": "switch/ops.py"
+    },
+    "switch/start-one.py": {
+      "ops": "switch/ops.py"
+    },
+    "switch/stop-pair.py": {
+      "ops": "switch/ops.py"
+    },
+    "switch/unfence.py": {
+      "ops": "switch/ops.py"
+    },
+    "switch/validate.cjs": {
+      "./execution-check.cjs": "switch/execution-check.cjs",
+      "./preparation-bindings.cjs": "switch/preparation-bindings.cjs"
+    },
+    "switch/waiting-work-frozen.cjs": {},
+    "switch/waiting-work.cjs": {
+      "./waiting-work-frozen.cjs": "switch/waiting-work-frozen.cjs"
+    },
+    "window/admit_gates.py": {
+      "check_current": "window/check_current.py",
+      "csv_contract": "window/csv_contract.py",
+      "policy_predecessor": "window/policy_predecessor.py",
+      "sequencer": "window/sequencer.py"
+    },
+    "window/automation-fence.nft": {},
+    "window/baseline_contract.py": {
+      "ecosystem_contract": "window/ecosystem_contract.py"
+    },
+    "window/canonical_renew_proofs.py": {},
+    "window/capture_imports.py": {
+      "csv_boundary": "window/csv_boundary.py",
+      "csv_contract": "window/csv_contract.py",
+      "sequencer": "window/sequencer.py"
+    },
+    "window/check_current.py": {
+      "child_transport": "protected/child_transport.py",
+      "csv_boundary": "window/csv_boundary.py",
+      "csv_contract": "window/csv_contract.py",
+      "prestop_contract": "window/prestop_contract.py",
+      "scheduled_controls": "window/scheduled_controls.py",
+      "sequencer": "window/sequencer.py"
+    },
+    "window/csv_boundary.py": {},
+    "window/csv_cli.py": {
+      "capture_imports": "window/capture_imports.py",
+      "check_current": "window/check_current.py",
+      "csv_boundary": "window/csv_boundary.py",
+      "csv_contract": "window/csv_contract.py",
+      "event_overlay": "window/event_overlay.py",
+      "prestop_contract": "window/prestop_contract.py",
+      "recovery": "window/recovery.py",
+      "sequencer": "window/sequencer.py"
+    },
+    "window/csv_contract.py": {
+      "baseline_contract": "window/baseline_contract.py",
+      "csv_boundary": "window/csv_boundary.py",
+      "ecosystem_contract": "window/ecosystem_contract.py",
+      "policy_predecessor": "window/policy_predecessor.py",
+      "restore_contract": "window/restore_contract.py"
+    },
+    "window/csv_start_gate.py": {
+      "csv_boundary": "window/csv_boundary.py",
+      "csv_contract": "window/csv_contract.py",
+      "recovery_start": "window/recovery_start.py"
+    },
+    "window/current-sql.cjs": {
+      "../switch/preparation-bindings.cjs": "switch/preparation-bindings.cjs"
+    },
+    "window/ecosystem_contract.py": {},
+    "window/event_overlay.py": {
+      "csv_boundary": "window/csv_boundary.py",
+      "csv_contract": "window/csv_contract.py",
+      "prestop_contract": "window/prestop_contract.py",
+      "sequencer": "window/sequencer.py"
+    },
+    "window/original_checks.py": {
+      "baseline_contract": "window/baseline_contract.py",
+      "csv_boundary": "window/csv_boundary.py",
+      "ecosystem_contract": "window/ecosystem_contract.py",
+      "policy_predecessor": "window/policy_predecessor.py",
+      "restore_contract": "window/restore_contract.py"
+    },
+    "window/policy_predecessor.py": {},
+    "window/pre_install.py": {
+      "check_current": "window/check_current.py",
+      "csv_contract": "window/csv_contract.py",
+      "policy_predecessor": "window/policy_predecessor.py"
+    },
+    "window/prestop_contract.py": {},
+    "window/privileged.py": {},
+    "window/privileged_output.py": {},
+    "window/recovery.py": {
+      "recovery_bridge": "window/recovery_bridge.py",
+      "recovery_contract": "window/recovery_contract.py",
+      "sequencer": "window/sequencer.py"
+    },
+    "window/recovery_bridge.py": {
+      "csv_boundary": "window/csv_boundary.py",
+      "csv_cli": "window/csv_cli.py",
+      "prestop_contract": "window/prestop_contract.py",
+      "recovery_contract": "window/recovery_contract.py",
+      "sequencer": "window/sequencer.py"
+    },
+    "window/recovery_contract.py": {
+      "csv_boundary": "window/csv_boundary.py",
+      "original_checks": "window/original_checks.py"
+    },
+    "window/recovery_start.py": {
+      "recovery": "window/recovery.py",
+      "recovery_contract": "window/recovery_contract.py"
+    },
+    "window/restore_contract.py": {},
+    "window/root_readonly.py": {
+      "policy_predecessor": "window/policy_predecessor.py"
+    },
+    "window/scheduled_controls.py": {},
+    "window/sequencer.py": {
+      "baseline_contract": "window/baseline_contract.py",
+      "child_transport": "protected/child_transport.py",
+      "privileged_output": "window/privileged_output.py",
+      "recovery_contract": "window/recovery_contract.py",
+      "restore_contract": "window/restore_contract.py",
+      "scheduled_controls": "window/scheduled_controls.py"
+    }
+  },
+  "integrationBlocks": [],
+  "kind": "STATIC_CODE_COMPOSITION_NOT_PHASE_AUTHORITY",
+  "lateModeLoads": [
+    {
+      "caller": "window/recovery_bridge.py",
+      "codeMode": "explicit code_mode",
+      "evidenceMode": "explicit mode"
+    },
+    {
+      "caller": "window/sequencer.py",
+      "codeMode": "explicit mode"
+    },
+    {
+      "caller": "window/check_current.py",
+      "codeMode": "switch; four-mode diagnostic only"
+    }
+  ],
+  "lazyCallEdges": [
+    {
+      "owner": "return-before-commit/baseline_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return-before-commit/ecosystem_contract.py"
+    },
+    {
+      "owner": "return-before-commit/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "protected/child_transport.py"
+    },
+    {
+      "owner": "return-before-commit/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return-before-commit/privileged_output.py"
+    },
+    {
+      "owner": "return-before-commit/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return-before-commit/pm2_input.py"
+    },
+    {
+      "owner": "return-before-commit/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/prestop_contract.py"
+    },
+    {
+      "owner": "return-before-commit/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/recovery_bridge.py"
+    },
+    {
+      "owner": "return-before-commit/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/restore_contract.py"
+    },
+    {
+      "owner": "return-before-commit/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_start_gate.py"
+    },
+    {
+      "owner": "return-before-commit/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return-before-commit/baseline_contract.py"
+    },
+    {
+      "owner": "return-before-commit/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/scheduled_controls.py"
+    },
+    {
+      "owner": "return-partial/baseline_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return-partial/ecosystem_contract.py"
+    },
+    {
+      "owner": "return-partial/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "protected/child_transport.py"
+    },
+    {
+      "owner": "return-partial/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return-partial/privileged_output.py"
+    },
+    {
+      "owner": "return-partial/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return-partial/pm2_input.py"
+    },
+    {
+      "owner": "return-partial/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/prestop_contract.py"
+    },
+    {
+      "owner": "return-partial/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/restore_contract.py"
+    },
+    {
+      "owner": "return-partial/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_start_gate.py"
+    },
+    {
+      "owner": "return-partial/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return-partial/baseline_contract.py"
+    },
+    {
+      "owner": "return-partial/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/scheduled_controls.py"
+    },
+    {
+      "owner": "return/baseline_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return/ecosystem_contract.py"
+    },
+    {
+      "owner": "return/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "protected/child_transport.py"
+    },
+    {
+      "owner": "return/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return/privileged_output.py"
+    },
+    {
+      "owner": "return/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return/pm2_input.py"
+    },
+    {
+      "owner": "return/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/prestop_contract.py"
+    },
+    {
+      "owner": "return/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/restore_contract.py"
+    },
+    {
+      "owner": "return/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_start_gate.py"
+    },
+    {
+      "owner": "return/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "return/baseline_contract.py"
+    },
+    {
+      "owner": "return/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/scheduled_controls.py"
+    },
+    {
+      "owner": "switch/baseline_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "switch/ecosystem_contract.py"
+    },
+    {
+      "owner": "switch/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "protected/child_transport.py"
+    },
+    {
+      "owner": "switch/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "switch/privileged_output.py"
+    },
+    {
+      "owner": "switch/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "switch/pm2_input.py"
+    },
+    {
+      "owner": "switch/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/prestop_contract.py"
+    },
+    {
+      "owner": "switch/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/restore_contract.py"
+    },
+    {
+      "owner": "switch/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_start_gate.py"
+    },
+    {
+      "owner": "switch/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "switch/baseline_contract.py"
+    },
+    {
+      "owner": "switch/ops.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/scheduled_controls.py"
+    },
+    {
+      "owner": "window/admit_gates.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/sequencer.py"
+    },
+    {
+      "owner": "window/baseline_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/ecosystem_contract.py"
+    },
+    {
+      "owner": "window/capture_imports.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_contract.py"
+    },
+    {
+      "owner": "window/capture_imports.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/sequencer.py"
+    },
+    {
+      "owner": "window/check_current.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/prestop_contract.py"
+    },
+    {
+      "owner": "window/check_current.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/sequencer.py"
+    },
+    {
+      "owner": "window/check_current.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/scheduled_controls.py"
+    },
+    {
+      "owner": "window/check_current.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_boundary.py"
+    },
+    {
+      "owner": "window/check_current.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "protected/child_transport.py"
+    },
+    {
+      "owner": "window/csv_cli.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/recovery.py"
+    },
+    {
+      "owner": "window/csv_cli.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/prestop_contract.py"
+    },
+    {
+      "owner": "window/csv_cli.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/recovery.py"
+    },
+    {
+      "owner": "window/csv_cli.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/capture_imports.py"
+    },
+    {
+      "owner": "window/csv_cli.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/event_overlay.py"
+    },
+    {
+      "owner": "window/csv_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_boundary.py"
+    },
+    {
+      "owner": "window/csv_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/ecosystem_contract.py"
+    },
+    {
+      "owner": "window/csv_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/restore_contract.py"
+    },
+    {
+      "owner": "window/csv_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/baseline_contract.py"
+    },
+    {
+      "owner": "window/csv_start_gate.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/recovery_start.py"
+    },
+    {
+      "owner": "window/event_overlay.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_contract.py"
+    },
+    {
+      "owner": "window/event_overlay.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/sequencer.py"
+    },
+    {
+      "owner": "window/event_overlay.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/prestop_contract.py"
+    },
+    {
+      "owner": "window/original_checks.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_boundary.py"
+    },
+    {
+      "owner": "window/original_checks.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/ecosystem_contract.py"
+    },
+    {
+      "owner": "window/original_checks.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/baseline_contract.py"
+    },
+    {
+      "owner": "window/original_checks.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/restore_contract.py"
+    },
+    {
+      "owner": "window/recovery.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/recovery_bridge.py"
+    },
+    {
+      "owner": "window/recovery.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/sequencer.py"
+    },
+    {
+      "owner": "window/recovery_bridge.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_boundary.py"
+    },
+    {
+      "owner": "window/recovery_bridge.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_cli.py"
+    },
+    {
+      "owner": "window/recovery_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/original_checks.py"
+    },
+    {
+      "owner": "window/recovery_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_boundary.py"
+    },
+    {
+      "owner": "window/recovery_contract.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/csv_boundary.py"
+    },
+    {
+      "owner": "window/sequencer.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "protected/child_transport.py"
+    },
+    {
+      "owner": "window/sequencer.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/privileged_output.py"
+    },
+    {
+      "owner": "window/sequencer.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/privileged_output.py"
+    },
+    {
+      "owner": "window/sequencer.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/scheduled_controls.py"
+    },
+    {
+      "owner": "window/sequencer.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "window/restore_contract.py"
+    },
+    {
+      "owner": "protected/authority.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "protected/privileged_output.py"
+    },
+    {
+      "owner": "protected/authority.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "protected/privileged_output.py"
+    },
+    {
+      "owner": "protected/recovery-launch.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "protected/verified_loader.py"
+    },
+    {
+      "owner": "protected/verified_loader.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "protected/authority.py"
+    },
+    {
+      "owner": "protected/incident-6683-window-control.py",
+      "reason": "function import; authenticate on invocation",
+      "target": "protected/root_store.py"
+    }
+  ],
+  "missingInputs": [
+    {
+      "kind": "operational-data",
+      "name": "return/backup-manifest.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/baseline.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/candidate.config.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/candidate.ecosystem.config.cjs",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/plan.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/proof-bindings.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/return.config.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/return.ecosystem.config.cjs",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/backup-manifest.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/baseline.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/candidate.config.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/candidate.ecosystem.config.cjs",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/plan.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/proof-bindings.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/return.config.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/return.ecosystem.config.cjs",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/backup-manifest.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/baseline.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/candidate.config.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/candidate.ecosystem.config.cjs",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/plan.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/proof-bindings.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/return.config.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/return.ecosystem.config.cjs",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/backup-manifest.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/baseline.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/candidate.config.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/candidate.ecosystem.config.cjs",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/plan.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/proof-bindings.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/return.config.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/return.ecosystem.config.cjs",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "mode/window manifests and original-preparation-review.sha256",
+      "owner": "window",
+      "rule": "nenhuma refer\u00eancia vazia, hash inferido ou depend\u00eancia exclusiva do candidato no \u00edndice original; conferir m\u00f3dulos de fase sem ciclo",
+      "source": "gerar ap\u00f3s bindings reais e contrato original completo; DAG descrito em sealOrder"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-baseline.private.json",
+      "owner": "window",
+      "rule": "tr\u00eas PID/ticks reais; identidade frontend est\u00e1vel",
+      "source": "identidades atuais + guardGeneration38"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-compiled-proof.private.json",
+      "owner": "window",
+      "rule": "hash/proced\u00eancia e rela\u00e7\u00e3o com artefato24e5857f conferidos; esta prova n\u00e3o \u00e9 valida\u00e7\u00e3o funcional em produ\u00e7\u00e3o",
+      "source": "prova compilada saneada existente da entrega coordenada, sem rebuild"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-contract.private.json",
+      "owner": "window",
+      "rule": "n\u00e3o filtrar imut\u00e1veis para PASS; reconciliar POLICY_SOURCE coerentemente s\u00f3 ap\u00f3s captura autorizada",
+      "source": "perfis + conjunto imut\u00e1vel original/compartilhado completo + or\u00e7amento"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-known-imports.private.json",
+      "owner": "window",
+      "rule": "sem opera\u00e7\u00e3o UNKNOWN/PROCESSING; aus\u00eancia HTTP n\u00e3o substitui auditoria",
+      "source": "invent\u00e1rio conhecido confrontado com auditoria READ ONLY atual"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/db-owner-bindings.private.json",
+      "owner": "window",
+      "rule": "ownership completo e port API correspondente; sem emiss\u00e3o de segredo",
+      "source": "SQL/proxy/portas/consumidores atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/deploy.crontab.before + window",
+      "owner": "window",
+      "rule": "seis entradas/hor\u00e1rios e consumidores conferidos; n\u00e3o executar jobs",
+      "source": "leitura cron deploy + receita can\u00f4nica de conten\u00e7\u00e3o"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/event-consumer-binding.private.json",
+      "owner": "window",
+      "rule": "Event775 e leitura incompleta negam antes da conten\u00e7\u00e3o; CAS no uso",
+      "source": "metadados/hash literal/consumidores atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/initial.private.json",
+      "owner": "window",
+      "rule": "n\u00e3o gerar defaults nem copiar identidade hist\u00f3rica",
+      "source": "guard/observedGuardOpen/supervis\u00e3o + observedUtc can\u00f4nicos"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/original-bindings/path-bindings.private.json",
+      "owner": "window",
+      "rule": "separado do mapa candidato; selar/hash/permiss\u00f5es sem ampliar predicado",
+      "source": "mapa observado exclusivamente do runtime original e depend\u00eancias"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/owner-evidence",
+      "owner": "window",
+      "rule": "n\u00e3o copiar evid\u00eancia antiga como atual; preservar recibos originais",
+      "source": "root fresco + backup/RPO/cust\u00f3dia v2/lab"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/path-bindings.private.json",
+      "owner": "window",
+      "rule": "requerido para ida; ORIGINAL n\u00e3o depende dele",
+      "source": "mapa observado dos alvos/retornos candidatos"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/privileged-policy.private.json",
+      "owner": "window",
+      "rule": "nenhum UID/PID/ticks/hash assumido; preservar helper/sudoers/fence e limitar alvos",
+      "source": "fonte root observada + schema do helper + perfis/identidades reais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/re7-converta-backup.before + window",
+      "owner": "window",
+      "rule": "confer\u00eancia separada obrigat\u00f3ria em admiss\u00e3o/retorno/encerramento",
+      "source": "leitura cron sistema + receita can\u00f4nica"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/recovery-contract.private.json",
+      "owner": "window",
+      "rule": "somente ap\u00f3s todos os inputs e refer\u00eancias reais; nenhum campo ausente ou default",
+      "source": "hashes de arquivos/c\u00f3digo/perfis/\u00edndices do novo pacote"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/restore proofs and mode backup/baseline/proof-bindings",
+      "owner": "window",
+      "rule": "os quatro modos coerentes, fronteira/tooling/lab expl\u00edcitos; originais preservados",
+      "source": "R0 quando necess\u00e1rio, contrato de restore certificado reutiliz\u00e1vel e baselines atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/saved-dump.pm2.private.json + saved-dump.pm2.bak.private.json",
+      "owner": "window",
+      "rule": "preservar bytes/refer\u00eancias, n\u00e3o gerar pelo c\u00f3digo sem observa\u00e7\u00e3o",
+      "source": "capturas originais600 atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/source.profile.private.json",
+      "owner": "window",
+      "rule": "tr\u00eas apps e NEWauth+NEWDB+NEWcipher; metadados600 e hash pinado",
+      "source": "exporta\u00e7\u00e3o privada leg\u00edtima dos ambientes ativos, captura real"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/target.profile.private.json",
+      "owner": "window",
+      "rule": "somente cwd/script API diferem; worker/frontend/env preservados pelo profile_delta",
+      "source": "derivar da fonte conferida + API CSV24e5857f"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/waiting-work.private.json",
+      "owner": "window",
+      "rule": "manter guarda38 e out.15 CLOSED; n\u00e3o executar entrada hist\u00f3rica",
+      "source": "captura/baseline can\u00f4nica atual da guarda/out.15"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "current protected-file/prior-target hashes and root chains",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "phase code manifest with actual uid/modes",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "static anchor approved against policy/contract/profiles",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "decision-specific permit (recovery only)",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "current PM2/Node executable + transitive toolchain integrity",
+      "owner": "root"
+    }
+  ],
+  "operationallyCertified": false,
+  "originalClosureCriterion": "Executable candidate code absent; sealed four-mode data and switch exit evidence retained. Synthetic complete-chain proof required, not operational certification.",
+  "ownerReviewEntries": [
+    "window/root_readonly.py",
+    "window/pre_install.py"
+  ],
+  "paths": 127,
+  "provenanceInputs": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/original_checks.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/policy_proposal.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "3910f34d385970160afb00e73f64f80957f8c147c14304c2a9e6a69dd46b6450"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_contract.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "9dad001588002c8566bd4ffc3e57d5985f3d05822dd773b87fa92d003382e73e"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_start.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "84682de56dbb2961219d79f5c7e5c3db5e6ce61400e843087dc90d58c55e89c9"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/csv_boundary.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "sha256": "73d5c6917a3476770c16412be8f9cecb4dffc0e222080169de4c64f427113a4e"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-prestop-prevention-20261016/prestop_contract.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "sha256": "208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/admit_gates.py.2681e63919b9.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "2681e63919b981291d376237975e7e8dd7379ccbc0f323a55f948487730705c6"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/automation-fence.nft.62342f28b9f0.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "62342f28b9f011c916b8483487bb75f7211a08ffc5846c303f9a0ab0000c2797"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/baseline_contract.py.9af1a11a3605.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "9af1a11a36053470ed9ba15cfa468b09987cb882d3eb9f58b29c4675005e9566"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/canonical_renew_proofs.py.4427aa5e3108.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/capture_imports.py.52d6e914872e.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/check_current.py.6f840789aac8.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "6f840789aac823e0e6f84c7fc1968d6869099d4e7aec01bad688089770fc4cb5"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.7ca493142706.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "7ca493142706047fe59ae545c0ebe683039bdae7a3a64db5a421e3d0ad943cdc"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.ce953df4a365.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "ce953df4a365a61e02154846f061eac610cc4b05fd3bbc4c7ad17dbcde29b768"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/close.cjs.f867b828cf28.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "f867b828cf288d6a01f2933bc070a541be64b20f81316ed36ff90ed25aeb4c19"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/contain.py.af61f2f3a0d0.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "af61f2f3a0d0abbe085fb1979b9ca4106a327e2de96e31c0ccfd6292b74e9015"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_cli.py.3ae51bd07ca9.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "3ae51bd07ca9b8d299f347085877de80247831bcd665f489e934b460e38753b1"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_contract.py.9ca2208c5c18.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "9ca2208c5c18787aa2e3696636b17334c3362caa6991e3e4cd2bde2e363958eb"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/csv_start_gate.py.094ec4a5bbaa.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "094ec4a5bbaae7c218bd1269346a9d9d102d6cb198dd81d92cd90fe6f97798f4"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_gate.py.ca9b0bf8ece3.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "ca9b0bf8ece3c96623037866d42bbe66b7416b56de518852517a4506a066f6b6"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/db_owner_set_observer.py.ddbe29926e27.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "ddbe29926e277b2485079b56ebfb0d07c1f077c6bb5f99a8ce911e43a5ca7e0a"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/delegated.py.8744ced356ca.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "8744ced356caefe5160018ff511c98e02eecee2fb032fb6a0bf0f8e05d44e7af"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ecosystem_contract.py.7bfab72d4afd.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "7bfab72d4afd3714453a91f5e5ef278ca29970e2bc4878a5d63bcc92b5df5cd4"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/event_overlay.py.7c3db254455f.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "7c3db254455f12a455fabb1e9936be0bced2caefcb8fcbdec2e78997c14f10f4"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/execution-check.cjs.95aee8b54048.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "95aee8b54048ab5dadea94ccf087199fd5321397ec29ac9433ed8d25ab46cd7f"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/open.cjs.d9c76eea6e83.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "d9c76eea6e83c641c37f720284e023aab5bc43866144d1ed4733a1bb56fe8c7f"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.33999cf29b7d.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "33999cf29b7dd548ba185a301331ef09fea7c6fd40cd32e8b846bd13fcdb8bb1"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/pre_install.py.8e45c10319f2.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "8e45c10319f298f69aa812df6996e950afbc0d2cdca5b06c25499b8bcd6f8f6d"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/preparation-bindings.cjs.edf775c12520.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/privileged_output.py.93a114516a19.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/read-state.py.4c97c5259acb.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "4c97c5259acb6e9c33890d5d9a7c606d56e7b045fbdb85779383ffb8f904f0c4"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/recover-partial.py.7af3c2717be1.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "7af3c2717be19976a6867d9b690fcf7b6949babaa3904879a48fdfb07f803d54"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore-controls.py.bebe88f0291c.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "bebe88f0291cd0db601658ab41b3666a824ffcf424ba102d2f9d5025dc976e0b"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/restore_contract.py.af0d552fc5fd.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/root_readonly.py.cb63a97fffe7.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "cb63a97fffe735fd52c80eed872751873593c23a3f8b3e3663b6c0fd741aa7ab"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/sequencer.py.0a4d8b67f033.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "0a4d8b67f03335403ae2addf93628519423c350eb8256bbe292373ffc36d9b7e"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/start-one.py.1959dac9717e.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "1959dac9717e0470cb0bacbfde47bef76d4577d6f8a2120ccb24f4e60e09ea32"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/stop-pair.py.1f023b157796.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "1f023b157796f0d94a96339f47a661d2ffae3e7176a07bfbb17ed8e162a7707d"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/unfence.py.d5bb4c2f5543.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "d5bb4c2f5543815ab60b80ca69423224279bda5a87cfddb1133fb67b87492d38"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/validate.cjs.5de8127d63e6.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "5de8127d63e6b4374a22b4b063f42b296df0ad17916afb986c3b6603f2e40d24"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work-frozen.cjs.f0b64320f8be.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "f0b64320f8be672a5504c200eaa8782c857c6278d29a199ab44e46a3b065d3dd"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/waiting-work.cjs.1fb853b60ab9.source": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "1fb853b60ab9eb6f78c30f06bf2d6fd22b8aef705070c7fc7214e2c0d1bfbc7b"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/security-containment-20261012/scheduled-controls-20261015/scheduled_controls.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "sha256": "9e13b29baddef346a45c8e47cb09091fd2eac8768c9070f5b018e6fbb05d9c39"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/baseline_contract.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "sha256": "baf96a5a95e59f5f1ac8bc3ec6ed4e7427de1ad0b475f93d154691fdd0241ddf"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged.py": {
+      "commit": "6bcf122ca5e5992769e67c1158208408b9c0b15b",
+      "sha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212"
+    }
+  },
+  "sealOrder": [
+    "static leaf objects + protected libraries",
+    "four mode code/data (data absent)",
+    "original-only immutable references/review",
+    "recovery contract (no self pin)",
+    "policy with current identities (absent)",
+    "phase code manifest DAG + metadata (absent)",
+    "owner-reviewed anchor (absent)",
+    "owner static install once",
+    "fresh classification + separate owner recovery permit once (when applicable)"
+  ],
+  "topologicalOrder": [
+    "protected/authority.py",
+    "protected/child_transport.py",
+    "protected/incident-6683-window-control.py",
+    "protected/privileged_output.py",
+    "protected/re7-incident-6683-window",
+    "protected/recovery-launch.py",
+    "protected/recovery-node-launch.cjs",
+    "protected/root_store.py",
+    "protected/verified_loader.py",
+    "return-before-commit/baseline_contract.py",
+    "return-before-commit/execution-check.cjs",
+    "return-before-commit/waiting-work-frozen.cjs",
+    "return-before-commit/waiting-work.cjs",
+    "return-before-commit/preparation-bindings.cjs",
+    "return-before-commit/close.cjs",
+    "return-before-commit/db_owner_set_gate.py",
+    "return-before-commit/db_owner_set_observer.py",
+    "return-before-commit/ops.py",
+    "return-before-commit/contain.py",
+    "return-before-commit/delegated.py",
+    "return-before-commit/ecosystem_contract.py",
+    "return-before-commit/open.cjs",
+    "return-before-commit/pm2_input.py",
+    "return-before-commit/privileged_output.py",
+    "return-before-commit/read-state.py",
+    "return-before-commit/recover-partial.py",
+    "return-before-commit/restore-controls.py",
+    "return-before-commit/start-one.py",
+    "return-before-commit/stop-pair.py",
+    "return-before-commit/unfence.py",
+    "return-before-commit/validate.cjs",
+    "return-partial/baseline_contract.py",
+    "return-partial/execution-check.cjs",
+    "return-partial/waiting-work-frozen.cjs",
+    "return-partial/waiting-work.cjs",
+    "return-partial/preparation-bindings.cjs",
+    "return-partial/close.cjs",
+    "return-partial/db_owner_set_gate.py",
+    "return-partial/db_owner_set_observer.py",
+    "return-partial/ops.py",
+    "return-partial/contain.py",
+    "return-partial/delegated.py",
+    "return-partial/ecosystem_contract.py",
+    "return-partial/open.cjs",
+    "return-partial/pm2_input.py",
+    "return-partial/privileged_output.py",
+    "return-partial/read-state.py",
+    "return-partial/recover-partial.py",
+    "return-partial/restore-controls.py",
+    "return-partial/start-one.py",
+    "return-partial/stop-pair.py",
+    "return-partial/unfence.py",
+    "return-partial/validate.cjs",
+    "return/baseline_contract.py",
+    "return/execution-check.cjs",
+    "return/waiting-work-frozen.cjs",
+    "return/waiting-work.cjs",
+    "return/preparation-bindings.cjs",
+    "return/close.cjs",
+    "return/db_owner_set_gate.py",
+    "return/db_owner_set_observer.py",
+    "return/ops.py",
+    "return/contain.py",
+    "return/delegated.py",
+    "return/ecosystem_contract.py",
+    "return/open.cjs",
+    "return/pm2_input.py",
+    "return/privileged_output.py",
+    "return/read-state.py",
+    "return/recover-partial.py",
+    "return/restore-controls.py",
+    "return/start-one.py",
+    "return/stop-pair.py",
+    "return/unfence.py",
+    "return/validate.cjs",
+    "review/graph.py",
+    "review/pre_authority.py",
+    "review/reader.py",
+    "switch/baseline_contract.py",
+    "switch/execution-check.cjs",
+    "switch/waiting-work-frozen.cjs",
+    "switch/waiting-work.cjs",
+    "switch/preparation-bindings.cjs",
+    "switch/close.cjs",
+    "switch/db_owner_set_gate.py",
+    "switch/db_owner_set_observer.py",
+    "switch/ops.py",
+    "switch/contain.py",
+    "switch/delegated.py",
+    "switch/ecosystem_contract.py",
+    "switch/open.cjs",
+    "switch/pm2_input.py",
+    "switch/privileged_output.py",
+    "switch/read-state.py",
+    "switch/recover-partial.py",
+    "switch/restore-controls.py",
+    "switch/start-one.py",
+    "switch/stop-pair.py",
+    "switch/unfence.py",
+    "switch/validate.cjs",
+    "window/policy_predecessor.py",
+    "window/csv_contract.py",
+    "window/check_current.py",
+    "window/admit_gates.py",
+    "window/automation-fence.nft",
+    "window/baseline_contract.py",
+    "window/canonical_renew_proofs.py",
+    "window/csv_boundary.py",
+    "window/capture_imports.py",
+    "window/recovery_contract.py",
+    "window/sequencer.py",
+    "window/csv_cli.py",
+    "window/csv_start_gate.py",
+    "window/current-sql.cjs",
+    "window/ecosystem_contract.py",
+    "window/event_overlay.py",
+    "window/original_checks.py",
+    "window/pre_install.py",
+    "window/prestop_contract.py",
+    "window/privileged.py",
+    "window/privileged_output.py",
+    "window/recovery.py",
+    "window/recovery_bridge.py",
+    "window/recovery_start.py",
+    "window/restore_contract.py",
+    "window/root_readonly.py",
+    "window/scheduled_controls.py"
+  ],
+  "transformInputs": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/integration.py": {
+      "authority": "review-only; not phase authority",
+      "commit": null,
+      "sha256": "6b3bea31840532da438623ca46a06aba5db520da264c22e0b6fe68cd0a3045c6"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-original-chain-20261016/delta.py": {
+      "authority": "review only, not phase authority",
+      "commit": null,
+      "sha256": "39124e84e7e954bf87edab882924165e33908afe2704dc7ad1b2ae9395c6315b"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/authority.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "1a2a9ce5f928aa524b08789c5c5a4aafcbb0b6d6106c12251e677ff76b0ba92f"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/bootstrap.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "97aa1f2e0317bc73b5127a8e19cf8c95f99a30aea35eb60fb490ac032f906c15"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/child_transport.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "baefd76ac4fe4b2cf3fc40a7ae43aa3b2b131ebb9c19b7ceeccab441fd9e9292"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/node_bootstrap.cjs": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "dea5d94c665ed5faeb2898e7bc81ea675ace606ab6f7f997b9baf9064f1144bc"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/privileged_output.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b2-20261016/integration.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "f633a350ffe6ec4be24bf13c24b59efd2ec6095ee72485fa44507e69c506b254"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/integration.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "11a39f09d82f19d0b7bf81eceeb97213e747b3ecd3401b7e69949b86e3ead618"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/pm2_input.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "dd731305b279b60a204f96adad9ed63ef26bb0f1d803bc0893775a8bc5e71e52"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/root_extension.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "9c04ac1c85bdfbbd24e9b8ab108c6cc64910b80dc441c4f78d33a9ca4d2fc727"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/root_store.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/verified_loader.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "f1c531ee45a70a3ef23e0a38cd024f358cb7e8e2ac37a522cd0ed51b59b08793"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/render_sudoers.py": {
+      "commit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+      "sha256": "43ac54893e854991466b11f379fdefa66662cc40822bc1b62fc8bdb110c48299"
+    },
+    "scripts/crm_csv_predecessor/composition.py": {
+      "authority": "review source only",
+      "sha256": "f58af7fd4d3f1ecac0ca333e87f388cb00dbdea7427d6f65ef337245086b2e45"
+    },
+    "scripts/crm_csv_predecessor/pre_authority.py": {
+      "authority": "review source only",
+      "sha256": "c7e638a33aac33fe990431837e8c7a56a5eeb403eb3b43c9e71c2094ded762ad"
+    },
+    "scripts/crm_csv_predecessor/sources.py": {
+      "authority": "review source only",
+      "sha256": "dd0c3e09592e1235268d36c1b0715b0f8053c35da667c161dc6048541e0faf18"
+    }
+  },
+  "transitiveImportCycles": [
+    "dependency_cycle:return-before-commit/contain.py -> return-before-commit/ops.py -> window/csv_start_gate.py -> window/recovery_start.py -> window/recovery.py -> window/recovery_bridge.py -> window/csv_cli.py -> window/recovery.py"
+  ],
+  "transitiveImportOrder": [],
+  "uniqueBytes": 367789,
+  "uniqueContents": 61
+}

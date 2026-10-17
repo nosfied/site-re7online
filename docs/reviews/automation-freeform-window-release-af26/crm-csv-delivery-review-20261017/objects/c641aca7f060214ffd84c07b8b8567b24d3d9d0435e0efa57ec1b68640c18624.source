@@ -1,0 +1,14 @@
+"""Owner sudo read-only evidence. No policy writes, environment capture or control calls."""
+import datetime,hashlib,json,os,stat
+from pathlib import Path
+from policy_predecessor import POLICY_SOURCE
+
+def capture():
+ result=[]
+ for name,mode,digest in [('/usr/local/libexec/re7/incident-6683-window-control.py',0o644,'8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212'),('/usr/local/libexec/re7/incident-6683-window-policy.json',0o600,POLICY_SOURCE),('/etc/sudoers.d/re7-incident-6683-window',0o440,'62b5a2ac1d56b013f6db4bb8180b0637b985786214f4bc3ce0e5f8d3f7c5111a')]:
+  p=Path(name);s=p.lstat();assert stat.S_ISREG(s.st_mode)and not p.is_symlink()and s.st_uid==0 and stat.S_IMODE(s.st_mode)==mode and hashlib.sha256(p.read_bytes()).hexdigest()==digest
+  for parent in p.parents:
+   s=parent.lstat();assert stat.S_ISDIR(s.st_mode)and not parent.is_symlink()and s.st_uid==0 and not(s.st_mode&0o022)
+  result.append({'path':name,'sha256':digest,'uid':0,'mode':mode,'chainsVerified':True})
+ return {'result':'CSV_ROOT_SOURCE_PASS','capturedUtc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'files':result,'mutation':False}
+if __name__=='__main__':print(json.dumps(capture(),sort_keys=True))

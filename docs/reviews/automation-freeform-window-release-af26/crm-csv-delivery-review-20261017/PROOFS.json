@@ -1,0 +1,20 @@
+{
+  "result": "CSV_LOCAL_DELIVERY_INTERFACES_VALIDATED_NOT_DEPLOYED",
+  "tests": 6,
+  "cases": [
+    "four exact certified artifact references;442/447 preservation and candidate-only post-selection return, no rebuild/copy",
+    "127 concrete paths/61 contents exact; original/prevention/predecessor kept; eager DAG acyclic, late cycles not hidden",
+    "exclusive destination and checkout scope deny before reading custody/material or writing",
+    "literal read program runs complete canonical event_parents; real local dirs775 deny, no writes/contains/starts; only namespace simulated",
+    "fixed external digest, not package-self-claimed; tamper denied before compile/exec; import never connects",
+    "real canonical private_record/Capture files; SSH timeout simulated, exact partial custody, exclusive destination stops repeat"
+  ],
+  "real": "Concrete deduplicated accepted source index; real local canonical metadata predicate/private custody files; exact source pins and hashes",
+  "simulated": "Remote namespace projected onto temporary local dirs; SSH response timeout only. No sudo/PM2/SQL/production services or phase authority executed",
+  "reusedNotRepeated": "Compiled/browser/Prisma/restore/PM2/R1R2/ORIGINAL suites. ELF budget/discovery paused and never executed",
+  "sourceHashes": {
+    "prepare_review.py": "c6040c0ebc94aa9a1b091c1b555bb42f7eda09d1e2ebab3481c2e0f63d6f8678",
+    "read_boundary.py": "f52cb151da109fcf1951882adc0273112c17fbc736576816d741c00ff884b306",
+    "test_delivery.py": "49f34d8d1ec3bdee1918e93d0c26ac6ac53d9a445402708488934684e0b84bf3"
+  }
+}

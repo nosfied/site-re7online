@@ -1,5 +1,78 @@
 # CRM/CSV — reconciliação dos inputs e próxima conferência
 
+## Correção de rumo — entrega CSV retomada LOCALMENTE, base8b5072fb
+
+**PREPARAÇÃO ESTÁTICA CSV CONCLUÍDA / REVISÃO PENDENTE / INPUTS OPERACIONAIS NEGADOS / NOT DEPLOYED / NOT WINDOW READY.** Esta seção prevalece para a prioridade: `crm_csv_elf_budget` e `toolchain-discovery` ficam **PAUSADOS**, com todos os arquivos/provas/destinos/DENYs preservados. Não foi preparada outra geração, consulta ou teste dessas frentes. Nenhuma VPS, SQL, instalação, janela, reimportação, alteração de dados/credenciais/permissões produtivas ou reparo histórico nesta rodada. CSV continua suspenso para execução; o trabalho local volta à entrega funcional já certificada.
+
+### Artefatos concretos entregues — não apenas uma lista de requisitos
+
+[Entrega local e manifest de reuso](../crm-csv-delivery-review-20261017/DELIVERY.json), [composição concreta dos consumidores](../crm-csv-delivery-review-20261017/CODE_COMPOSITION.json), [índice deduplicado](../crm-csv-delivery-review-20261017/CODE_OBJECTS.json) e [fontes editáveis](../../../../scripts/crm_csv_delivery/prepare_review.py). A composição usa o compositor aceito scripts/crm_csv_predecessor/composition.py, com os bytes da política predecessora e2a5 extraídos pelo verificador canônico do recibo R1 preservado/pinado. Não copia a política, perfis, observações ou autoridade para o Git. Política predecessora não autoriza ida.
+
+Foram compostos **127 caminhos lógicos /61 conteúdos únicos** dos quatro modos, incluindo R1/R2, prevenção Event/bindings, classificação/CLI de recuperação, R3, continuidade B2, diagnóstico B1, FD/JSON/parser B3 e fechamento aceito B4/ORIGINAL/predecessor. **54 objetos são referências a arquivos públicos já existentes; só sete objetos novos foram escritos,17.612B.** Não há hardlink/symlink ou cópia de runtime para montar este conjunto. Os sete conteúdos novos são código derivado das transformações aceitas (cinco consumidores predecessor, mais bibliotecas de revisão), não novos módulos funcionais CSV. Cada objeto é identificado por hash; o índice associa todos os127 caminhos aos mesmos bytes. CODE_COMPOSITION tem SHA **417d0e86184da48413fc562c5b443a3a20e23721ae754215b9b6bab47843cd67**.
+
+O DAG eager de selagem é acíclico. O ciclo de chamadas/imports tardios anteriormente aceito permanece explicitamente inventariado, autenticado no uso, sem ser omitido nem convertido em requisito novo. Uma primeira verificação local do novo empacotador o tratou indevidamente como ciclo de selagem e negou antes de escrever; corrigiu-se somente essa verificação nova para usar o critério canônico. Uma composição local parcial também foi preservada após erro de caminho relativo antes do índice; a versão final valida caminho absoluto/novo antes das escritas e usa destino distinto. Esses rascunhos/unreferenced copies não entram na publicação e não são gerações operacionais ou provas aceitas reescritas.
+
+### Reuso efetivamente conferido, sem rebuild/extração/cópia
+
+O novo produtor leu as quatro imagens locais existentes com o leitor limitado/no-follow/FD estável e confrontou **tamanho+SHA dos arquivos reais** com os registros publicados, além dos manifests privados pinados. Conferiu também o tar ORIGINAL36f51ebe por SHA e leu seus membros somente em memória, sem extração no filesystem, comparando-os com o manifest alvo pinado. Não confia no source-plan local sem pin. A fonte canônica Event foi comparada ao overlay. Não é inferência de runtime pelo HEAD.
+
+| Material já certificado | SHA256 | Bytes / compatibilidade |
+| --- | --- | --- |
+| API candidata |24e5857fb30a6540c4b3930b3979b49bc9954b0ff85c4021a7f43641b7b43eb5 |8.601.600;447 membros,442 originais preservados, quatro módulos CSV alterados e ledger novo |
+| Frontend candidato |ea3d27881193bd872798aeb28a30630f085bad65688be913b781491b0d86c2ed |174.314.812; contrato UUID/GET e assets compatíveis já certificados |
+| Frontend retorno compatível |d41ddd648c12b3bed4c13a3dde1019b96e41eda64d68089043a11f5f4edc0431 |177.450.139; retorno de interface mantendo backend candidato |
+| Classificador Event |ebdfd5bba81b86f26506b13a89afb4aafd45252c4e1b23e90d2f2896b1d523e3 |10.240; somente eventRetentionPolicy.ts alvo03791f05… para os dois consumidores manuais |
+
+Base histórica API36f51ebe/NEWcipher preservada nos442 membros, worker não modificado, reader histórico/v2 mantido; NEWauth/NEWDB dependem também dos perfis atuais, que **não** são certificados aqui. Os hashes/tipos originais dos pacotes, o inventário447/446 e os dois vínculos compartilhados foram conferidos; dados de .data e dependências não foram percorridos/duplicados. A versão fonte efetivamente ativa será reconfirmada no binding futuro, não presumida por essas imagens locais.
+
+Reutilizadas no seu alcance: prova compiled de operationalStatus (ADMIN5/3/3 e5/2/2, RBAC dos demais), ledger/GET/replay0/POST sem UUID negado; Chrome com timeout/reentrada/recarga; restore retido/parado/schema; extrações integrais anteriores; provas R1/R2/32, ORIGINAL/28 e PM2 completo. Não se repetiram builds, suítes ou provas funcionais. O staging e a recuperação consumidos não foram executados ou editados. Runtimes já extraídos/transferidos na VPS são referências históricas para eventual reuso, sem nova confirmação atual.
+
+### Controles e retornos preservados na composição
+
+| Estado / decisão | Consumidor concreto | Fronteira preservada |
+| --- | --- | --- |
+| PRESTOP → PRESTOP | Recovery.inspect/recover +ScheduledControls | Restaura controles, não parte API/worker nem fabrica permit |
+| STOPPED_UNSELECTED → ORIGINAL | Contract.original_allowed +check_original +recovery_start | Certificado integral com geração efetiva38/identidades, dados selados/imutáveis R2, ownership/saída/imports, autoridade específica antes do intent; independente de executáveis candidatos e de aplicar overlay |
+| SELECTED_CANDIDATE → CANDIDATE | Contract.selected +Operations.start/System.start/pm2_input | Depois de seleção/possível admissão, API antiga não é retorno compatível. Conserva API24e5857f/ledger/GET/UUID; frontend pode voltar ao pacote compatível |
+| Incerto/consumido/identidade divergente → DENY | Recovery.inspect +Context/correlation +intents/recibos | C/inspeção e decisão explícita, sem replay/start/seleção automáticos, sem falso complete |
+
+Preservados saída/ownership, certificados geração38, CAS de predecessor/overlay, controle dos cinco gates e fechamento dos dois crons/supervisão/saved/fallback600/barreira/gates falsos. A falta de código candidato não dispensa dados dos quatro modos ou switch/old-exit-confirmed.json. Nenhum checker foi removido/afrouxado e nenhum perfil/binding/permit foi fabricado.
+
+### Dependências que realmente impedem a fase operacional
+
+| Dependência concreta | Consumidor / predicado canônico | Evidência e faltante exato; sem requisito hipotético |
+| --- | --- | --- |
+| Pais Event e bindings pré-parada | prestop_contract.event_parents/path_bindings/validate_pre_stop; check_current e CLI antes do primeiro contain/stop; revalidação Operations/overlay | Última R1 viu cinco pais0775 e arquivo0664, não reparados. A ida negaria; estado atual desconhecido. Próximo ato é a leitura literal abaixo, não chmod ou exclusão do predicado. ORIGINAL não depende de overlay candidato |
+| Perfil/trio/saved/fallback/crons/supervisão | check_current/check_original, System.check_config, ScheduledControls | Perfis locais atestados são referências; geração futura exige observação correspondente e dados atuais, não cópia de capturedUtc histórico. Adaptador frontend aceito é reutilizado, investigação encerrada |
+| SQL/importações/ownership | check_current SQL_FOUR_MODES_PASS/proxy; Sequencer.verify_stopped, Operations/db_owner_set_gate, csv_boundary.exit_and_imports | Canal/rota e SELECTs precisam identidade e autorização próprias; certificado de saída/importações só sob fence na janela. Não chamar capture_imports.capture agora, nem inferir drain por HTTP0/guarda38. UNKNOWN nega, sem reimportação |
+| Bibliotecas/alias/autoridade protegidos | authority.protected_bytes/fixed_query/Context; root_store; pm2_input.protected_alias/start | Última R1 mostra helpers antigos e bibliotecas/alias novos ausentes. É instalação futura revisada, com predecessore2a5/CAS, perfis/política/manifest/âncora reais. Consulta não emite; permit só para recuperação, nunca tardio na ida. Não foi instalado nesta rodada |
+| Toolchain efetivamente consumido | System.start→PM2, pm2_input.start e premissa de proteção B3/B4 já documentada | Node/CLI/dependências escolhidos precisam corresponder ao que for aprovado/protegido. **Nenhum desses predicados exige executar readelf, copiar128MiB, orçamento192/704,4552 arquivos ou retomar o coletor ELF.** Esse método auxiliar está pausado. Não se declara a proteção operacional provada nem se dispensa seu requisito; fechar sua evidência/decisão dentro da certificação CSV é pendência, com provas existentes reutilizadas |
+|16 vínculos e selagem | Context.snapshot/manifest, path_bindings/original_bindings; modo, CJS/JSON/parser e índice original | Quatro fontes renderizadas em quatro modos com namespace/perfis reais; não16 capturas independentes. Não preencher agora. Composição em mãos fornece os consumidores exatos para materializar/selar depois dos dados |
+| RPO/capacidade/fronteira/root fresco | restore_contract, root_evidence/pre_install/admit_gates | Reusar restore retido quando válido; R0/backup.lock/custódia apenas em sequência combinada. Revalidar fronteira, orçamento CSV11235700736B como referência, WAL/crescimento; root por último.192/704MiB da frente pausada não é reserva CSV/PG nem autorização de reduzir piso |
+
+Faltam observações/autorizações, não um rebuild da aplicação ou um novo contrato CSV. As dependências acima se ligam a consumidores existentes e não concedem autorização operacional por constarem neste relatório. A pausa de uma técnica auxiliar não é dispensa silenciosa de root/proteção/manifest.
+
+### Próximo ato operacional exato e sequência única
+
+[Bloco literal](../crm-csv-delivery-review-20261017/NEXT_OPERATION_FOR_REVIEW.md): um comando no ThinkPad, futuramente autorizado, usa SSH existente como deploy **sem sudo** e executa apenas o **mesmo event_parents autenticado208f2ef5…**, lendo metadados dos pais do literal Event. Não importa entrada de geração consumida, não instala, não abre permissões, não consulta serviços/SQL/toolchain, não cria arquivo remoto. Hash fixo externo antes do compile; stdin/args/env não fabricam autoridade de fase.
+
+Custódia LOCAL exclusiva nova `csv-delivery-event-boundary-20261017-v1`, parent owner700 existente, canais/recibo byte-exatos pelo Capture/private_record aceitos. Apenas sua biblioteca genérica de diagnóstico é reutilizada dos fontes pinados; nenhum driver/runner/launcher/programa ou testes de ELF é carregado/executado. Falha/timeout/resposta perdida/destino existente: preservar e parar sem retry/reconexão/reparo. PASS certifica somente esse predicado no intervalo, não pré-parada completa. DENY para no primeiro pai inadequado e não se apresenta como observação completa de todos os pais.
+
+A sequência restante está fechada no mesmo roteiro: **(1)** revisão/autorização desta leitura e decisão restrita se persistir0775; **(2)** captura/binding privados CSV pelos consumidores existentes, incluindo SQL/ownership e saved/config, sem auditoria auxiliar genérica; **(3)**16 vínculos/política/manifests/âncora e instalação estática/fase separadas, com dados reais, código desta composição e revisão; **(4)** horário/owner, R0/root e hashes finais para autorização; **(5)** admissão/fence/saída+classificação/CAS/API→worker uma vez, inspeção/recuperação conforme estado, fronteira frontend real e revisão própria, encerramento/owner UI. Nenhum A/B é emitido agora, nenhum passo implica autorização automática do seguinte.
+
+A contenção canônica é global e pode interromper atendimento/API/frontend; guarda38 não pausa CSV e não será aberta para o deploy. API nova antecede frontend novo; abas antigas sem UUID recebem400 sem gravação e precisam recarregar, sem logout/limpeza de sessão. Frontend novo/API antiga é combinação proibida. Depois da seleção, defeito persistente do backend exige outra versão **compatível**, não a conclusão forçada de uma implantação incerta ou retorno OLDcipher. Estes limites são os contratos existentes, não foram redesenhados.
+
+### Validação efetivamente nova e limites
+
+[Seis testes novos focados](../crm-csv-delivery-review-20261017/PROOFS.json), comando `PYTHONDONTWRITEBYTECODE=1 python3 -B -m scripts.crm_csv_delivery.test_delivery`: índice127/61 e todos os hashes; reuso dos quatro materiais/compatibilidade; recusa de destino existente/fora do checkout antes da leitura privada; corpo literal do predicado em diretórios locais reais válidos/775; digest divergente nega antes do compile/exec e import não conecta; transporte com resposta perdida preserva prefixos pelo writer canônico e não repete num destino consumido. O novo comando foi conferido por digest/compilação, não executado remotamente ou apresentado como cadeia produtiva ensaiada.
+
+Reais: compositor e fontes concretos, leitura SHA dos quatro arquivos certificados/manifests, inventário API, verificadores de metadados de laboratório, arquivos/journals/FDs canônicos locais. Simulados: somente namespace remoto projetado em diretórios temporários e timeout da chamada SSH. Nenhum verificador canônico foi substituído por callback PASS; nenhuma atividade CSV real, SQL, PM2, root ou janela foi simulada para declarar readiness. Provas antigas válidas permanecem sem nova execução. Uma etapa pública ainda precisa de dados/autoridade reais; o índice estático continua DENY_OPERATIONAL_INPUTS por desenho.
+
+Princípios/Change Policy/Release Checklist e contratos específicos consultados; nenhum exemplo pull/build/reload foi usado. Publicação restrita a código público de revisão, hashes e checkpoints; materiais privados, rascunhos locais, perfis/bindings, runtimes, caches e históricos consumidos ficam fora. Responsável Deifson; revisão17/10, próxima21/10 ou mudança/janela. NEWauth+NEWDB+NEWcipher, produção original aceita, ambos crons, frontend, guarda38 e out.15 CLOSED preservados pelo escopo sem efeitos, sem nova recertificação de health/UI.
+
+---
+
+
 ## Dimensionamento ELF revisto LOCALMENTE —17/10/2026, base5b679f62
 
 **LOCAL VALIDATED no alcance dos controles / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** Nenhuma VPS, statvfs produtiva, imagem produtiva, SQL, limpeza, realocação, instalação, build, backup ou janela nesta rodada. A consulta capacity-v1 e a tentativav2 permanecem consumidas/DENY, com bytes, hashes, horários e destinos intactos. Não se reabre frontend/predecessor.

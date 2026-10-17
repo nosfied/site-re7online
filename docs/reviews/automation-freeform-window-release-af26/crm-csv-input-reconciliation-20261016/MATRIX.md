@@ -1,3 +1,24 @@
+# Rumo corrente — entrega CSV retomada LOCALMENTE17/10/2026
+
+**ELF/budget/discovery PAUSADOS.** [Composição concreta](../crm-csv-delivery-review-20261017/DELIVERY.json):
+127 caminhos/61 conteúdos,54 reutilizados,7 novos/17.612B; API24e5857f/frontendea3d/retornod41d/Eventebdf
+conferidos sem build/extração/cópia. [Próximo ato literal](../crm-csv-delivery-review-20261017/NEXT_OPERATION_FOR_REVIEW.md)
+SOMENTE PARA REVISÃO: uma leitura deploy sem sudo dos pais Event, custódia privada,
+sem execução nesta rodada, sem continuar após DENY. Código/predicado canônico no uso intacto.
+
+| Bloqueio concreto | Consumidor | Próximo passo na sequência única |
+| --- | --- | --- |
+| Última observação dos pais Event775 | event_parents→validate_pre_stop→check_current/CLI→Operations/overlay | Primeiro: revisão/autorização da leitura dirigida; remediação se necessária exige decisão separada, sem chmod implícito |
+| Dados atuais/config/SQL/ownership | System.check_config/ScheduledControls/check_current/exit_and_imports | Captura CSV dirigida e binding, sem executar capture_imports pós-saída fora de janela; preservar UNKNOWN |
+| Root/16vínculos/âncora | Context/Loader/root_store/pm2_input.alias, contratos R1/R2 | Materialização real/selagem/CAS/instalações revisadas distintas; sem fabricar permit ou identidade. Proteção do consumidor é requisito; coletor ELF não é requisito funcional obrigatório |
+| Frescor/RPO e execução | restore/pre_install/admit_gates/CLI | Só com horário: R0/root/hashes, decisão explícita; depois saída/CAS/API→frontend e recuperação conforme estado |
+
+Seis testes focados novos; provas funcionais/32/R1R2/28/PM2/restore reutilizadas,
+sem repetição. PREPARAÇÃO ESTÁTICA CONCLUÍDA / INPUTS OPERACIONAIS NEGADOS /
+CSV SUSPENSO PARA EXECUÇÃO / NOT DEPLOYED / NOT WINDOW READY. Histórico abaixo preservado.
+
+---
+
 # Dimensionamento ELF local —17/10/2026, base5b679f62
 
 Proposta única para revisão futura: pools limitados143MiB remoto/546MiB local,
