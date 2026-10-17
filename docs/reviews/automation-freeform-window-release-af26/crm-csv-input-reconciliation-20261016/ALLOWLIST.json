@@ -1,6 +1,6 @@
 {
-  "base": "ea4a80c44c1153fb9b8e36908af7daf69f32b695",
-  "scope": "SANITIZED_RESULT_OF_SINGLE_THREE_BLOCK_EXECUTION_AND_CHECKPOINTS_ONLY",
+  "base": "af2eaf0470ef8a5859d50d5101eb4df454cbd2fa",
+  "scope": "OFFLINE_REMOTE_BUDGET_RECONCILIATION_AND_METADATA_ONLY_COMMAND_FOR_REVIEW_NO_VPS",
   "files": [
     "docs/BACKLOG_TECH.md",
     "docs/RUNBOOK_WHATSAPP_AGENT.md",
@@ -9,9 +9,19 @@
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/RESULT.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/COMMANDS.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/MANIFEST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/PROVENANCE.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/RECONCILIATION.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/capacity_read.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/driver.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/lab.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/launch.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/seal.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/test_capacity.py",
     "docs/saas/DOCUMENTATION_INDEX.md"
   ],
-  "unchanged": "Reviewed commands/code/seven-source manifest/proofs and previous delta; all private bytes, journals and consumed destinations excluded",
-  "noNewOperationalPackage": true
+  "unchanged": "Consumed v2 commands/code/manifests/results/proofs/private records and all production state",
+  "excluded": "No private raw logs, profiles, bindings, environments, tenant data, images, caches or runtime files"
 }

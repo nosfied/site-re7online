@@ -1,0 +1,19 @@
+{
+  "base": "af2eaf0470ef8a5859d50d5101eb4df454cbd2fa",
+  "driverSource": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/driver.py",
+  "driverSourceSha256": "630f598670ae9f83f3c7ef74c055247eaa511fca2b1ebb627742008295082192",
+  "exactSegments": [
+    "libload",
+    "libraries",
+    "pack",
+    "REMOTE_LAUNCH"
+  ],
+  "launcherSource": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/launch.py",
+  "launcherSourceSha256": "1ba68f5cb5bc521b95a7035ecd048852c0072e85df08cf4ba18277be64e705e0",
+  "launcherDelta": "collect only; new exclusive LOCAL diagnosis namespace; reader/writer/protocol unchanged",
+  "metadata": "canonical meta/require/directory and no-follow FD checks; regular leaves never opened; new thin projection only",
+  "noRemoteWriter": true,
+  "noRunPrivilegedChange": true,
+  "captureSha256": "8e40c9683b1945a730d8010fb969b781661af2c7ecc9649fbcd6b9c6e972a781",
+  "writerSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+}

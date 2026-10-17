@@ -812,10 +812,10 @@
     "readyForWindow": false,
     "firstConcreteBlocker": {
       "operationalToolchain": "Missing authenticated production Node d01614ef image/ELF frontier and actual PM2 shebang/PATH/transitive closure protection; local JS inventory is available, not operationally certified",
-      "nextLocalDelta": "Review the sanitized DENY result. Any directed numeric capacity procedure requires a separately reviewed scope; do not repeat v2 or lower budgets.",
-      "neededOperationalAction": "None authorized now. Future separately authorized numeric evidence for the exact destination/budget must precede another discovery decision.",
+      "nextLocalDelta": "Review prepared minimal metadata-only capacity command; no implementation/repair or v2 replay required",
+      "neededOperationalAction": "Future separate authorization for metadata of exact destination/parents/images and one statvfs on held destination FD, with numeric operands/result; no remote writes or images",
       "notWindowReady": true,
-      "upstreamDiscoveryBlocker": "Execution ea4a80c4 denied at remote-budget before image observations; numeric statvfs values not recorded"
+      "upstreamDiscoveryBlocker": "remote-budget is ambiguous across two statvfs samples and canonical images directory validation/creation; no operands/numbers or mkdir marker recorded"
     },
     "groups": [
       {
@@ -1383,6 +1383,24 @@
       "remoteCapacityNumbers": "NOT_RECORDED",
       "nextBlocker": "remote-budget: directed numeric capacity evidence for exact destination requires separate reviewed/authorized scope",
       "allThreeActionsConsumed": true
+    },
+    "remoteBudgetOfflineReconciliation": {
+      "base": "af2eaf0470ef8a5859d50d5101eb4df454cbd2fa",
+      "privateFilesReviewed": 20,
+      "actualFrameSevenSourcesMatched": true,
+      "cause": "INDETERMINATE",
+      "imagesCreationReached": "NOT_RECORDED",
+      "originalStatvfsCallsInPredicate": 2,
+      "stageAlsoContainsCanonicalDirectoryValidationAndMkdir": true,
+      "budgetBytesUnchanged": 536870912,
+      "budgetModel": "retrospective planning envelope, not minimum or proven failed-state upper bound",
+      "commands": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/COMMANDS.md",
+      "manifestSha256": "9f248998b7bde612c98e8236f2900c0f492400b6668668ee4035b46d1e2b2227",
+      "proofsSha256": "719a47c62d0b7833cb302a8c17603944196194e9720e6de77e9ea343ce80bc92",
+      "newTests": 10,
+      "vpsExecuted": false,
+      "remoteFilesWritten": false,
+      "next": "Review single metadata-only FD/statvfs command; separate authorization required"
     }
   }
 }

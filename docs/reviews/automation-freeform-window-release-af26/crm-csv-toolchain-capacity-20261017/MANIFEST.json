@@ -1,0 +1,48 @@
+{
+  "base": "af2eaf0470ef8a5859d50d5101eb4df454cbd2fa",
+  "files": {
+    "capacity_read.py": {
+      "bootstrap": true,
+      "bytes": 4503,
+      "relativeSource": "capacity_read.py",
+      "sha256": "236ca80a1c86c2a161756c698824e1325be8f98f8d2914dcba0968d379336b12",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/capacity_read.py"
+    },
+    "capture.source": {
+      "bootstrap": true,
+      "bytes": 2239,
+      "relativeSource": "../crm-csv-toolchain-discovery-20261017/capture.source",
+      "sha256": "8e40c9683b1945a730d8010fb969b781661af2c7ecc9649fbcd6b9c6e972a781",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-discovery-20261017/capture.source"
+    },
+    "driver.py": {
+      "bootstrap": true,
+      "bytes": 4702,
+      "relativeSource": "driver.py",
+      "sha256": "32def09e88d22b5a55a3c65293a39c4b8d35ecb0e369cd0793d48fb747664887",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/driver.py"
+    },
+    "launch.py": {
+      "bootstrap": true,
+      "bytes": 4541,
+      "relativeSource": "launch.py",
+      "sha256": "8d9b0990920fe23a7a5ecbffa0e976c40b1b574bb773a0b1ba0d3dfa58a08ccf",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-toolchain-capacity-20261017/launch.py"
+    },
+    "privileged_output.source": {
+      "bootstrap": true,
+      "bytes": 3303,
+      "relativeSource": "../crm-csv-r2-directed-20261017/privileged_output.source",
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/privileged_output.source"
+    },
+    "read_package.py": {
+      "bootstrap": true,
+      "bytes": 35507,
+      "relativeSource": "../crm-csv-r2-directed-20261017/read_package.py",
+      "sha256": "66f337fbe47d69ae02902f38f6b0e474241222c90967580d9c569dce21796691",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/read_package.py"
+    }
+  },
+  "scope": "metadata-only read; zero remote writes, at most one statvfs call; no images"
+}

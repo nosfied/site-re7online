@@ -1,0 +1,183 @@
+{
+  "base": "af2eaf0470ef8a5859d50d5101eb4df454cbd2fa",
+  "result": "OFFLINE_DIAGNOSTIC_INSUFFICIENT_NEW_READ_PREPARED_NOT_EXECUTED",
+  "scope": "all 20 private files from materialization, three launcher areas, collection and analysis of the single v2 attempt; no remote observation",
+  "inventory": [
+    {
+      "area": "re7-csv-toolchain-material-20261017-v2",
+      "file": "analyzer.private.json",
+      "bytes": 1207,
+      "sha256": "cae22f0a65d5e39ee1be1641ac7a8287f6e4b9bc8d697aae926d68133f638df7"
+    },
+    {
+      "area": "re7-csv-toolchain-material-20261017-v2",
+      "file": "bundle.private.json",
+      "bytes": 98269,
+      "sha256": "e1d7095876c0d7a9b36c6851d73ab79a742d6adfb3b7894aae905380f84bcd7f"
+    },
+    {
+      "area": "re7-csv-toolchain-material-20261017-v2",
+      "file": "local-readelf-version.stderr.private",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "area": "re7-csv-toolchain-material-20261017-v2",
+      "file": "local-readelf-version.stdout.private",
+      "bytes": 288,
+      "sha256": "6aca4321453ac381865f3d353ea7896b150c05026483cb9db0047eee6916723d"
+    },
+    {
+      "area": "re7-csv-toolchain-material-20261017-v2",
+      "file": "privileged-output.private.jsonl",
+      "bytes": 2702,
+      "sha256": "11473cb08475343a680ba53a0a69c31fffbc5ce3ec540ea30bcf394fc3d28d7e"
+    },
+    {
+      "area": "csv-toolchain-discovery-20261017-v2",
+      "file": "capture.private.jsonl",
+      "bytes": 2244,
+      "sha256": "c6b86a6ff3d9c2168b844661059e42a622a78091dcd751381dffaf88e9892d72"
+    },
+    {
+      "area": "csv-toolchain-discovery-20261017-v2",
+      "file": "privileged-output.private.jsonl",
+      "bytes": 8761,
+      "sha256": "482eb1cacee7b6977a489a2063738cee33748d652210bb40708ce7e9ef92a9d1"
+    },
+    {
+      "area": "csv-toolchain-discovery-20261017-v2",
+      "file": "sequencer.journal.jsonl",
+      "bytes": 367,
+      "sha256": "bbd690a8fa494ceae4c38447fbba9aa10a80c0719bf815a3942993cc4a5b29f2"
+    },
+    {
+      "area": "csv-toolchain-discovery-20261017-v2",
+      "file": "transfer.stderr.private",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "area": "csv-toolchain-discovery-20261017-v2",
+      "file": "transfer.stdout.private",
+      "bytes": 3575,
+      "sha256": "581227e8093f25adb5ea69382e8ac8cdc60eb4cdc1f8376857aa23b2186cafb7"
+    },
+    {
+      "area": "csv-toolchain-analysis-20261017-v2",
+      "file": "privileged-output.private.jsonl",
+      "bytes": 210,
+      "sha256": "0fed305656ce1f14d25d42cd6cd6b28aae0ca72c0db3db61ecfc58436b272c75"
+    },
+    {
+      "area": "csv-toolchain-launcher-20261017-v2-materialize",
+      "file": "privileged-output.private.jsonl",
+      "bytes": 1062,
+      "sha256": "1d739d526da94508e7c8386e5065283a3c01bc83797109304ea6855dabc33c50"
+    },
+    {
+      "area": "csv-toolchain-launcher-20261017-v2-materialize",
+      "file": "stderr.private",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "area": "csv-toolchain-launcher-20261017-v2-materialize",
+      "file": "stdout.private",
+      "bytes": 32,
+      "sha256": "120a7df7935e0537377e2532f4b07ef8533f297ac58d34a89994af53fdda95c6"
+    },
+    {
+      "area": "csv-toolchain-launcher-20261017-v2-collect",
+      "file": "privileged-output.private.jsonl",
+      "bytes": 1058,
+      "sha256": "b08f4492da9472530a1a1a6199268cde03a1bde965694fb608a3c489742b3f7e"
+    },
+    {
+      "area": "csv-toolchain-launcher-20261017-v2-collect",
+      "file": "stderr.private",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "area": "csv-toolchain-launcher-20261017-v2-collect",
+      "file": "stdout.private",
+      "bytes": 32,
+      "sha256": "341902eb3a324a02be233a33a373c3ad934456a675a6f2ce4efe923ad73dca41"
+    },
+    {
+      "area": "csv-toolchain-launcher-20261017-v2-receive-analyze",
+      "file": "privileged-output.private.jsonl",
+      "bytes": 1021,
+      "sha256": "43217e6cdf6a54e1d31d8590d353314dc4d3a30e5c1517cc27fdac250ee7d5f5"
+    },
+    {
+      "area": "csv-toolchain-launcher-20261017-v2-receive-analyze",
+      "file": "stderr.private",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "area": "csv-toolchain-launcher-20261017-v2-receive-analyze",
+      "file": "stdout.private",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "materialFrameAndSevenSourcesMatchReviewedBytes": true,
+  "diagnosticFacts": {
+    "structuredStatvfsOperandsOrNumbers": false,
+    "imagesCreationReachedMarker": false,
+    "originalStageCovers": [
+      "two os.statvfs(path) calls mixed in one product/predicate",
+      "canonical new_directory(target/images), including directory(target) validation",
+      "action==collect validation"
+    ],
+    "recordedFailure": {
+      "stage": "remote-budget",
+      "reason": "remote-budget_not_proven",
+      "errorClass": "RuntimeError",
+      "errno": null
+    },
+    "cause": "INDETERMINATE; stage alone cannot distinguish budget predicate from canonical directory failure",
+    "contraproof": "exact original prefix/catch, actual canonical directory/new_directory/Capture; synthetic statvfs numbers and775 laboratory directory generate identical sanitized records",
+    "noRetroactiveAttribution": true
+  },
+  "budget": {
+    "requiredBytesUnchanged": 536870912,
+    "rawLimitBytes": 134217728,
+    "priorContemporaneousCalculationFound": false,
+    "retrospectivePlanningMiB": {
+      "rawELFHardLimit": 128,
+      "journalSuccessfulExportLimit": 8,
+      "rawChannelsConditionalOnJournalBound": 6,
+      "pinnedSourcesAndManifestAllowance": 1,
+      "allocationAndInodeEstimateNotCertified": 17,
+      "unassignedSafetyMargin": 352,
+      "total": 512
+    },
+    "conditions": [
+      "8MiB export bound is checked at export, not a rolling write cap",
+      "6MiB raw channel bound follows from base64 fields if journal<=8MiB",
+      "17MiB allocation/inode allowance is an estimate; allocation unit/current free capacity not observed",
+      "512MiB is a retained planning guard, not a proven tight upper bound for failed/partial metadata growth or RAM",
+      "do not reduce budget or move destination to pass"
+    ]
+  },
+  "nextRead": {
+    "manifestSha256": "9f248998b7bde612c98e8236f2900c0f492400b6668668ee4035b46d1e2b2227",
+    "remoteFilesWritten": false,
+    "imageContentsRead": false,
+    "statvfsCall": "one os.statvfs(heldTargetDirectoryFd), no call if target unsafe/unavailable",
+    "target": "/dev/shm/re7-csv-toolchain-read-20261017-v2",
+    "newLocalCustody": "csv-toolchain-capacity-20261017-v1",
+    "executedOnVps": false
+  },
+  "consumedActionsPreserved": true,
+  "status": [
+    "CSV_SUSPENDED",
+    "REVIEW_PENDING",
+    "NOT_DEPLOYED",
+    "NOT_WINDOW_READY"
+  ]
+}

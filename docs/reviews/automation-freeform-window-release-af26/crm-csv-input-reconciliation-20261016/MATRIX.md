@@ -1,3 +1,18 @@
+# Reconciliação offline de remote-budget —17/10/2026, baseaf2eaf04
+
+20arquivos privados conferidos, frame7fontes coincide com revisão. Sem números statvfs ou marcador mkdir. O stage agrupa2statvfs+new_directory(images); contraprova real do predicado canônico demonstra registros indistinguíveis. **Causa INDETERMINADA, criação de images também não demonstrada.**
+
+| Lacuna | Fechado offline | Faltante / ação proposta |
+| --- | --- | --- |
+| Causa do DENY |Custódia íntegra, insuficiência diagnóstica explicitada; action collect conhecido |Uma consulta futura de metadados/FD e1statvfs no destino original, sem escrita ou imagem |
+| Orçamento512MiB |Modelo retrospectivo128raw+8journal+6canais+1fontes+17alocação estimada+352margem |Não mínimo provado, nem bound completo para falhas; journal não tem cap incremental. Alocação/capacidade/RAM não certificadas. Limite/destino inalterados |
+| Procedimento dirigido |[Comando concreto](../crm-csv-toolchain-capacity-20261017/COMMANDS.md), leitor/transport/custódia canônicos;10provas locais novas |Não executado na VPS, exige autorização própria. calls=0 se destino inseguro/indisponível; sem fallback |
+| Demais inputs |Históricos e artefatos válidos preservados |Node/ELF/PM2/closure/proteção, SQL, identidades e autoridade continuam UNKNOWN/pendentes |
+
+Só locais: novos destinos privados capacity-v1; NENHUMA criação/modificação remota. Nenhum v2 repetido. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. Checkpoints abaixo históricos.
+
+---
+
 # Execução autorizada ea4a80c4 —17/10/2026: DENY preservado
 
 Três blocos consumidos uma vez cada, sem retry. [Resultado sanitizado](../crm-csv-toolchain-discovery-20261017/RESULT.json); relatório detalha UTC/Fortaleza e custódia. Código/manifest707726e1/COMMANDS6175de5c intactos.

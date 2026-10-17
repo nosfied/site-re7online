@@ -1,0 +1,89 @@
+{
+  "result": "LOCAL_METADATA_PROCEDURE_VALIDATED_NOT_EXECUTED_ON_VPS",
+  "tests": 10,
+  "cases": [
+    {
+      "case": "denied",
+      "scope": "actual local FD/metadata/statvfs; synthetic error/replacement only as named",
+      "statvfsCalls": 0,
+      "result": "CAPACITY_READ_DENY",
+      "imageOpened": false,
+      "remoteFileWrite": false
+    },
+    {
+      "case": "directory-contract-denied",
+      "scope": "actual local FD/metadata/statvfs; synthetic error/replacement only as named",
+      "statvfsCalls": 1,
+      "result": "CAPACITY_METADATA_OBSERVED_NOT_CERTIFIED",
+      "imageOpened": false,
+      "remoteFileWrite": false
+    },
+    {
+      "case": "budget-low",
+      "scope": "actual local FD/metadata/statvfs; synthetic error/replacement only as named",
+      "statvfsCalls": 1,
+      "result": "CAPACITY_METADATA_OBSERVED_NOT_CERTIFIED",
+      "imageOpened": false,
+      "remoteFileWrite": false
+    },
+    {
+      "case": "missing",
+      "scope": "actual local FD/metadata/statvfs; synthetic error/replacement only as named",
+      "statvfsCalls": 0,
+      "result": "CAPACITY_READ_DENY",
+      "imageOpened": false,
+      "remoteFileWrite": false
+    },
+    {
+      "case": "valid",
+      "scope": "actual local FD/metadata/statvfs; synthetic error/replacement only as named",
+      "statvfsCalls": 1,
+      "result": "CAPACITY_METADATA_OBSERVED_NOT_CERTIFIED",
+      "imageOpened": false,
+      "remoteFileWrite": false
+    },
+    {
+      "case": "original-stage-ambiguity",
+      "sameRecordedOutcomeForStatvfsPredicateAndCanonicalDirectoryDenial": true,
+      "originalStatvfsCallsEachCase": 2,
+      "validators": "exact original prefix/catch and actual canonical new_directory/directory and Capture/private_record",
+      "external": "capacity numbers synthetic; laboratory775 fixture only; no historical attribution"
+    },
+    {
+      "case": "replacement",
+      "scope": "actual local FD/metadata/statvfs; synthetic error/replacement only as named",
+      "statvfsCalls": 0,
+      "result": "CAPACITY_READ_DENY",
+      "imageOpened": false,
+      "remoteFileWrite": false
+    },
+    {
+      "case": "vfs-error",
+      "scope": "actual local FD/metadata/statvfs; synthetic error/replacement only as named",
+      "statvfsCalls": 1,
+      "result": "CAPACITY_READ_DENY",
+      "imageOpened": false,
+      "remoteFileWrite": false
+    },
+    {
+      "case": "literal-command-valid",
+      "literalBash": true,
+      "exitCode": 0,
+      "custodyEvent": "CAPACITY_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "remoteFilesWritten": false,
+      "SSH": "simulated shim, network namespace disabled; actual FD/statvfs/Capture/ingest"
+    },
+    {
+      "case": "literal-command-reply-lost",
+      "literalBash": true,
+      "exitCode": 1,
+      "custodyEvent": "CAPACITY_CUSTODY_DENY_PARTIAL_PRESERVED",
+      "remoteFilesWritten": false,
+      "SSH": "simulated shim, network namespace disabled; actual FD/statvfs/Capture/ingest"
+    }
+  ],
+  "commandsSha256": "9d5b457ca8f7850f333a29ae25f5aed11e8530c3b3ac5857324f061b4497516c",
+  "manifestSha256": "9f248998b7bde612c98e8236f2900c0f492400b6668668ee4035b46d1e2b2227",
+  "noHistoricalCauseInferred": true,
+  "limits": "local metadata/statvfs real; capacity/denial/replacement fixtures as identified; SSH/root-user namespace/production path simulated; no images, Node/PM2/ELF/SQL or VPS; no previous suite repeated"
+}

@@ -1,5 +1,64 @@
 # CRM/CSV — reconciliação dos inputs e próxima conferência
 
+## Reconciliação offline de remote-budget e consulta dirigida —17/10/2026, baseaf2eaf04
+
+**DIAGNÓSTICO ANTERIOR INSUFICIENTE / PROCEDIMENTO METADATA-ONLY LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** Nenhuma consulta à VPS nesta rodada, nenhuma ação/destino v2 repetida, nenhum arquivo privado alterado. Os comandos e fontes consumidos permanecem intactos; esta seção refina a interpretação do stage, sem reclassificar seu DENY.
+
+### Todos os registros da tentativa e a fronteira não registrada
+
+Foram lidos/conferidos os **20 arquivos privados das seis áreas** da execução: materialização (bundle/frame, analyzer, stdout/stderr versão e journal); coleta (captura, transporte stdout/stderr, journal e recibo); análise (journal); três launchers (journal/stdout/stderr). [RECONCILIATION.json](../crm-csv-toolchain-capacity-20261017/RECONCILIATION.json) publica somente inventário, tamanhos/hashes e conclusões. O frame custodiado e as sete fontes decodificadas coincidem byte-exatamente com o manifest707726e1… e os arquivos revisados. Os stderr estão vazios; os journals preservam classe/errno e motivo estático, não a mensagem específica de RuntimeError. Não há resultado numérico de statvfs, operandos observados, metadados do destino nem marcador de tentativa/criação de images. bundle contém código/fonte, não uma observação de capacidade. Referências antigas não dão capacidade atual; não se varreu o cofre inteiro ou outros ambientes para substituí-la.
+
+Código efetivamente executado, em ordem, sob **o mesmo stage remote-budget**:
+
+```python
+require(os.statvfs(q).f_bavail * os.statvfs(q).f_frsize >= 512*1024*1024,
+        'remote_budget_512MiB')
+images = lib['new_directory'](q/'images')
+require(action == 'collect', 'discovery_action_only')
+```
+
+A expressão antiga chama statvfs **duas vezes** e mistura campos de duas amostras; não é uma medição registrada. new_directory, por sua vez, valida directory(q), faz mkdir e valida directory(images). Seu predicado directory consulta tipo, owner, modo700 e ausência de symlink nos pais. Tanto o teste booleano de orçamento quanto esses predicados podem lançar RuntimeError/errno=null, o mesmo resultado salvo no DENY. O action collect está documentado no frame/begin, não explica a falha. O errno=null também não é evidência de ENOSPC/EACCES de um syscall mkdir. **Zero ELF publicados não prova que images não foi criado.** Não há marcador que discrimine se mkdir foi alcançado ou se a falha foi numa validação anterior/posterior. Não atribuir causa, autoria ou falta de capacidade ao nome do stage.
+
+Contraprova local: os **três statements e o catch reais**, extraídos AST sem chamar run/entrypoint consumido, com Capture/private_record/new_directory/directory canônicos, produzem registros sanitizados idênticos para (a) capacidade sintética abaixo do orçamento e (b) capacidade sintética suficiente seguida de reprovação canônica do diretório775 de laboratório. Cada expressão antiga chama statvfs duas vezes; nenhuma dessas provas observa ou atribui causa ao passado produtivo.
+
+### Justificativa offline dos512MiB, sem alterar o limite
+
+Não foi encontrada memória de cálculo contemporânea da escolha; o código fixa512MiB. A relação4×128MiB é aritmeticamente verdadeira, mas não prova por que o valor foi escolhido. Abaixo é **reconciliação retrospectiva de planejamento**, não uma medição nem nova autoridade de capacidade. O orçamento aprovado continua536.870.912B e o destino não muda.
+
+| Parcela | MiB | Fundamentação e limite |
+| --- | ---: | --- |
+| ELF bruto deduplicado |128|Teto de bytes efetivamente escritos, imposto no produtorv2; até64 objetos |
+| Journal exportável |8|Limite do stable_file/export canônico para execução que consegue exportar; **não** é limite incremental de escrita |
+| stdout/stderr remotos das observações |6|Se journal<=8MiB, todos esses bytes estão em Base64 no journal; logo somatório bruto<=3/4×8MiB. Não inclui imagens, já na primeira parcela |
+| Fontes inativas+manifest |1|Allowance acima dos7 arquivos pinados+manifest, conferidos abaixo de1MiB; não runtime inteiro |
+| Arredondamento, diretórios/inodes |17|Allowance estimado, **não provado**: faltam unidade/alocação do filesystem e disponibilidade numérica |
+| Margem de segurança não dedicada |352|Reserva prudencial, não bytes cuja necessidade foi observada |
+| Total de planejamento |512|128+8+6+1+17+352; não confundir com reserva canônica deploy/PostgreSQL |
+
+Consequência:512MiB é defensável como envelope prudencial para esse lote, **não como mínimo necessário demonstrado nem teto matemático de todo estado de falha**. Em DENY/parcial, o journal pode crescer antes da checagem de export; não existe cap incremental de metadados que prove o pior caso completo. RAM de buffers/processos e pressão de tmpfs também não são certificadas por f_bavail. A auditoria não encobre essas lacunas com uma conta fictícia. Não se reduz o orçamento, move destino ou instala/repara para obter PASS; eventual mudança futura do procedimento é outra revisão.
+
+### Uma consulta nova mínima, somente para aprovação futura
+
+[COMMANDS.md](../crm-csv-toolchain-capacity-20261017/COMMANDS.md) entrega **um bloco concreto**. Reutiliza launcher/leitor de revisão, protocolo REMOTE_LAUNCH e funções libload/libraries/pack exatos, Capture/reader/private_record aceitos; [PROVENANCE.json](../crm-csv-toolchain-capacity-20261017/PROVENANCE.json) explicita hashes/extrações. Não há outro framework, escritor, run_privileged, sudoers ou autorização paralela.
+
+Escopo remoto estrito: metadados e existência de `/`, `/dev`, `/dev/shm`, destino **original** `/dev/shm/re7-csv-toolchain-read-20261017-v2` e sua folha images. Pais/destino são abertos com FDs de diretório no-follow, mantidos e reconferidos; folha images só stat relativo sem seguir link nem abrir conteúdo, mesmo se for arquivo. **Nunca** chama mkdir/new_directory remoto, write, readdir, PM2/Node, readelf/ldd, SQL ou leitor de imagens. Código/fonte autenticados chegam pela única sessão SSH e são compilados dos mesmos bytes em memória, sem materializar ferramentas ou journals remotos.
+
+Uma chamada **os.statvfs(fd_destino)** no ramo em que o destino pode ser aberto com segurança: registra API, FD, caminho lógico, UID/GID do leitor, identidade/metadados, início/fim, todos os campos numéricos, f_bavail/f_frsize e produto, comparação>=512MiB calculada do **mesmo retorno**. Usar FD vincula o resultado ao objeto aberto; não transforma observação em snapshot global. Destino ausente/inacessível/substituído ou pai symlink nega antes da consulta (calls=0 explicitamente), sem escolher outro alvo. Erro de statvfs preserva operandos/errno/calls=1, sem segunda tentativa.
+
+O directory(q) canônico é consultado **separadamente** apenas por leitura. Resultado budget=false pode ser leitura concluída, nunca admissão operacional; directory=PASS também não prova mkdir criável, ACL/quota/flag de montagem ou causa histórica. Existência de images observada futuramente não provará quando foi criada. O novo intervalo não retroage sobre o DENY.
+
+Nenhum destino remoto novo. Novos destinos **exclusivamente locais**, no parent privado legítimo existente owner700: `csv-toolchain-capacity-20261017-v1` e `csv-toolchain-capacity-launcher-20261017-v1-collect`, novos diretórios700/arquivos600 sem corrigir parents. SSH único25s/BatchMode/StrictHostKey. stdout autenticado é o envelope; a custódia canônica é LOCAL, pois criar journal remoto contrariaria o escopo sem escrita. Capture preserva byte-exatamente canais/comando/intervalos/código/errno/tamanhos/hashes antes de parse, inclusive resposta perdida/parcial; recibo distingue readComplete de budgetSatisfied. Fontes6 em memória, resposta<=64KiB, sem copiar imagem/runtime. Falha/destino existente: preservar e parar, sem retry/reconexão, reparo ou expansão.
+
+### Provas e limites atuais
+
+[PROOFS.json](../crm-csv-toolchain-capacity-20261017/PROOFS.json): **10 testes novos dirigidos PASS**, sem repetir as suítes anteriores. FD/metadados e statvfs locais reais, contador de uma chamada; folha images contendo marcador sintético nunca aberta/lida; orçamento baixo e predicado directory negado distintos de leitura incompleta; ausência, negação, troca de inode, erro EIO sem retry; contraprova do stage antigo; bloco publicado executado literalmente e resposta perdida com canais/custódia preservados. Verificadores canônicos reais, sem callbacks que aprovam contratos. O ramo remoto de laboratório proíbe subprocesso e qualquer open de arquivo de conteúdo/escrita; o diretório alvo simulado permanece vazio.
+
+SSH e caminhos produtivos são simulados em namespace local sem rede; números sintéticos somente nas contraprovas indicadas. User namespace não é root produtivo. As primeiras sete provas de função passaram no sandbox; os dois casos de transporte foram bloqueados pela restrição de namespace e a validação local completa foi concluída fora dessa restrição com aprovação da ferramenta. Nenhuma consulta real à VPS, imagem, instalação, build, backup ou janela. Não há afirmação de capacidade/proteção operacional nem fechamento de Node/ELF/PM2/SQL/identidades/autoridade/Event775.
+
+**Próximo passo:** revisar e autorizar separadamente só este bloco metadata-only, se desejado. Primeira lacuna continua diagnóstico insuficiente para discriminar orçamento/validação de images; não publicar causa antes da observação. V2 e todos os DENYs/históricos/privados preservados e consumidos; NEWauth+NEWDB+NEWcipher, crons, guarda38/out.15 intocados. Responsável Deifson; revisão17/10, próxima21/10 ou mudança. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+
+---
+
 ## Execução única do roteiroea4a80c4 —17/10/2026: DENY preservado
 
 **RESULTADO: DENY / CUSTÓDIA VERIFICADA / NENHUM ELF CAPTURADO OU ANALISADO / CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.** Três blocos literais de COMMANDS.md executados uma vez cada, na ordem autorizada, sem editar código, hashes, limites ou destinos. Materialização, coleta e análisev2 estão **consumidas**; não repetir. Sete fontes revisadas e todos os privados/DENYs anteriores preservados. [RESULT.json](../crm-csv-toolchain-discovery-20261017/RESULT.json) contém somente resultados sanitizados, intervalos e hashes/procedência.
