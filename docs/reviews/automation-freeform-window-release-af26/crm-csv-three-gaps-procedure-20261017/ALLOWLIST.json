@@ -1,0 +1,32 @@
+{
+  "base": "08d4da273df1362d172c7db81ab056e19f88e3f5",
+  "files": [
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/CLOSURE.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/COMMANDS.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/LOCAL_ANALYSIS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/RPC_CLOSURE.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/SOURCE_INDEX.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/contracts.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/identity.sql",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/imports.sql",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/ownership.sql",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/pm2_rpc_fd.cjs",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/test_procedure.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/MANIFEST.sha256",
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ],
+  "excluded": [
+    "__pycache__",
+    "custody raw",
+    "profiles/bindings",
+    "environments/tenant data",
+    "runtime",
+    "local-evidence",
+    ".data"
+  ]
+}

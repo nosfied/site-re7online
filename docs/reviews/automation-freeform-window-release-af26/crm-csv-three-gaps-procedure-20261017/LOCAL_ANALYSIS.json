@@ -1,0 +1,23 @@
+{
+  "base": "08d4da273df1362d172c7db81ab056e19f88e3f5",
+  "newProductionObservation": false,
+  "acceptedRecoveryArchiveSha256": "32e0cb1de5dac716027fc8face5cc60f8b996ec0ca9de6b18363cbbb84b30076",
+  "privateMembersSha256": {
+    "window/saved-dump.pm2.private.json": "c9c54c02b9694328a5aeaa4335efb88135f9bd948b4f786c8e9e4e851efd51e3",
+    "window/source.profile.private.json": "a062c7020353cb39b0578653ea51475f8e9f9f68a588d1c55eb87cbbd68b6b9e",
+    "recovery/independent-checks.private.json": "289ab20da3200d3ab018ac1a22178c3f980f65b9b01718788e37d32d339d6fbc",
+    "window/db-owner-bindings.private.json": "1d67ff65fc300b7bb0fb165e31a69d415d9adb5d111d3b91e444137a3a8eaeeb"
+  },
+  "samePreWindowDumpInAcceptedAndDeniedArchive": true,
+  "deniedArchiveDumpSha256": "c9c54c02b9694328a5aeaa4335efb88135f9bd948b4f786c8e9e4e851efd51e3",
+  "historicalAcceptedChecks": {
+    "utc": "2026-10-16T11:24:55.138543+00:00",
+    "frontendSavedEnvironmentUnchanged": true,
+    "frontendSavedOnlyDynamicAxmMonitorChanged": true,
+    "ownerUiAccepted": true
+  },
+  "postRecoverySavedRawAvailableInThisArchive": false,
+  "notReconstructed": true,
+  "correctFrontendReference": "pre-window dump env and operational fields; not sourceProfile inherited session env",
+  "historicalIsNotCurrent": true
+}

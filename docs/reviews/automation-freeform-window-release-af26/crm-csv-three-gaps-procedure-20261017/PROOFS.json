@@ -1,0 +1,115 @@
+{
+  "result": "PROCEDURE_DEFINED_FRAGMENTS_LOCAL_VALIDATED_NOT_OPERATIONALLY_CERTIFIED",
+  "testsDistinct": 13,
+  "cases": {
+    "Config": [
+      "test_canonical_methods_and_saved_comparison",
+      "test_every_required_live_field_missing_or_drift_denies",
+      "test_environment_proc_executable_and_status_remain_mandatory",
+      "test_saved_environment_or_contract_field_change_denies",
+      "test_real_historical_dump_provenance_session_profile_not_equivalent"
+    ],
+    "RPC": [
+      "test_closed_pinned_diagnostic_snapshot",
+      "test_real_codec_valid_reply",
+      "test_lost_reply_no_replay",
+      "test_invalid_reply_denies",
+      "test_timeout_denies_without_replay"
+    ],
+    "Peer": [
+      "test_real_so_peercred_and_divergence_before_request"
+    ],
+    "Route": [
+      "test_canonical_db_container_on_recorded_transport_shape"
+    ],
+    "SQL": [
+      "test_canonical_sql_bytes_and_read_only_statements"
+    ]
+  },
+  "runs": [
+    {
+      "tests": 10,
+      "seconds": 5.338,
+      "result": "PASS",
+      "scope": "canonical config/saved, real RPC codec and SQL text checks"
+    },
+    {
+      "tests": 1,
+      "seconds": 0.012,
+      "result": "PASS",
+      "scope": "real SO_PEERCRED + mismatched PID/ticks/UID before request"
+    },
+    {
+      "tests": 1,
+      "seconds": 0.012,
+      "result": "PASS",
+      "scope": "canonical System.db_container on recorded transport fixture"
+    },
+    {
+      "tests": 1,
+      "seconds": 0.002,
+      "result": "PASS",
+      "scope": "affected SQL text after system_identifier SELECT added; no connection"
+    },
+    {
+      "tests": 1,
+      "seconds": 0.067,
+      "result": "PASS",
+      "scope": "actual codec in closed26-file diagnostic subtree, no global PM2 library fallback"
+    }
+  ],
+  "commands": {
+    "bashParseOnly": 6,
+    "pythonCompiledOnly": [
+      "FRONTEND_QUERY",
+      "ROUTE_CHECK"
+    ],
+    "blockSha256": [
+      "397df1a6fbca5921cc65802fa45f0e6300fb7af2a61500bca6ccd9793f4ce51c",
+      "c61c892e37bc74fdf334a691b3995f00af07d52a86ea3b23e546335818e7f933",
+      "6bce146f265112f53b1f0b76ec315d8d14a0aad5bc712fa12845f1d9e1bac0e1",
+      "980bfa07ecaac3e0fdbb75556daafa93d1ddb32d40ee3ffe6d13b075ed6b35ad",
+      "ab26c6e4f6d085a965742cd33c1ce8fde7cd8b417697a3d06ca85bdc76df8ac5",
+      "2b900897c774c69f7812497ccd27e5d46c25110ec8c9148e50965a6eb4fa9046"
+    ],
+    "nodeSyntaxCheck": true,
+    "remoteExecution": false,
+    "fullRemoteMaterializationTransportCustodyTested": false
+  },
+  "rpc": {
+    "localUnixSocketAndFdReal": true,
+    "realModules": "existing PM2-axon req/rpc codecs",
+    "requestsPerCase": 1,
+    "daemon": "synthetic getMonitorData RPC server; not PM2",
+    "pm2CliApiClientStartLoaded": false,
+    "realPm2DaemonStarted": false,
+    "actualJavascriptFilesLoaded": 18,
+    "resolutionPackageJson": 8,
+    "newConnectionSql": false,
+    "failedSandboxTrial": "Node rejected socket FD UNKNOWN; same test outside sandbox succeeded without sudo/remote access",
+    "closedDiagnosticSnapshotTested": true
+  },
+  "configuration": {
+    "Operations.configAndSystemCheckConfig": "exact AST bodies from source SHA c84a5e059cbc",
+    "procPathExternalBoundary": "mapped to synthetic filesystem; real reads and symlinks, no PASS verifier",
+    "privateHistoryReadOnly": true,
+    "correctBeforeSha256": "c9c54c02b9694328a5aeaa4335efb88135f9bd948b4f786c8e9e4e851efd51e3",
+    "environmentNotOmitted": true,
+    "onlySavedMetricException": "axm_monitor"
+  },
+  "sql": {
+    "imports": "byte-identical canonical SQL, capture() not called",
+    "ownership": "byte-identical System.db_backends SQL",
+    "identity": "new read-only/catalog SELECTs; not executed or server-parsed",
+    "knownActivityClassification": "existing classify retained, no new classifier",
+    "postExitOwnershipNotCertified": true
+  },
+  "toolchain": {
+    "B4RealPm2ProofReused": true,
+    "newBuildDownload": false,
+    "rpcSubsetMatchesExistingB4Pins": true,
+    "active4552FilesNotRecertified": true
+  },
+  "productionChanged": false,
+  "correctedR2ReaderExecuted": false
+}
