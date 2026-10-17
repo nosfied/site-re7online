@@ -1,24 +1,20 @@
 {
-  "base": "0b38fb0c492a7d16e04e66c39e54e8c9545060b7",
-  "scope": "LOCAL_EVENT_FIVE_DIRECTORY_PREFLIGHT_ONLY_NO_REMOTE_EXECUTION",
+  "base": "f0538524c51686cb3cc8a2561eb3023d329531f1",
+  "scope": "ONE_CONSUMED_PREFLIGHT_SANITIZED_DENY_RESULT_AND_EXISTING_PROPOSAL_UPDATE_ONLY",
   "files": [
     "docs/BACKLOG_TECH.md",
     "docs/RUNBOOK_WHATSAPP_AGENT.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/PREFLIGHT_MANIFEST.sha256",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/PREFLIGHT_PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/PREFLIGHT_RESULT.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/ALLOWLIST.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
-    "docs/saas/DOCUMENTATION_INDEX.md",
-    "scripts/crm_csv_delivery/event_preflight.source",
-    "scripts/crm_csv_delivery/preflight.py",
-    "scripts/crm_csv_delivery/test_preflight.py"
+    "docs/saas/DOCUMENTATION_INDEX.md"
   ],
-  "excluded": "Custodies/raw channels/ACLs/operational profiles/bindings/runtime/caches/ELF materials and consumed destinations",
-  "productionExecuted": false,
+  "excluded": "All raw channels/argv/ACLs/identity group membership/journals/private custodies/configs; source code, tests, runtimes, ELF front and consumed material untouched",
   "applicationAuthorized": false
 }

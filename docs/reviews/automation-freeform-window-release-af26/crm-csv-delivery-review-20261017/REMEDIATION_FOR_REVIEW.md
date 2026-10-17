@@ -1,5 +1,28 @@
 # Event — proposta mínima de remediação para decisão separada
 
+## Resultado da execução autorizada —17/10/2026,14:17:02 Fortaleza
+
+**PREFLIGHT CONSUMED/DENY / APLICAÇÃO NÃO AUTORIZADA.** Base/remoto f0538524 conferidos, fontes/manifests/hashes publicados PASS. O bloco literal abaixo foi executado **uma vez**, deploy sem sudo. [Resultado sanitizado e procedência dos canais](PREFLIGHT_RESULT.json). Exit1, sem timeout ou falha de transporte; `denialStage=tool-preflight`, `denialReason=READ_OR_TOOL_FAILURE`, `errorClass=FileNotFoundError`, `errno=2`. A primeira operação da etapa é `os.lstat('/usr/bin/getfacl')`: esse caminho obrigatório não pôde ser resolvido (ENOENT). Isso não prova o estado de instalação de um pacote ou ausência de qualquer ferramenta em outro caminho; **nenhuma busca/alternativa foi realizada**.
+
+Foi observada somente a identidade do executor: uid/euid1000, gid/egid1000, quatro grupos suplementares preservados privadamente. Isso confirma ausência de elevação nessa execução, não atribuição dos writers. **Zero diretórios/cadeias/ACLs observados e zero comandos getfacl executados.** A negativa precede a abertura de qualquer alvo. Canais stdout602B/stderr0B, registro de comando e recibo estão privados0700/0600, conferidos byte-exatos com o leitor/custódia canônicos; sourceComplete=false e applicationAuthorized=false. Não há PASS parcial dos pais.
+
+### Decisão técnica sobre0775→0755
+
+**DENY de aplicação por evidência insuficiente, sem rejeitar nem executar a proposta de desenho.** Nenhuma ACL, modo ou cadeia atual dos cinco foi obtida nesta tentativa. A identidade do executor é compatível numericamente com o owner1000 da referência anterior; isso não certifica owner atual ou cobertura de outros executores. O registro das14:02:30 continua provando0775 somente do primeiro pai **naquele horário**; a R1 das01:22UTC continua histórica para os cinco. Não atualizar timestamps, unir os intervalos como snapshot nem promover essas referências a CAS da tentativa14:17.
+
+Retirar g+w de diretórios0775 preservaria owner=rwx e leitura/travessia de grupo/outros, retirando criação/remoção/rename de entradas por quem depende de grupo. Sem ACL access/default atual não é possível concluir se haveria também redução por máscara em entradas nomeadas nem avaliar sua herança. Os efeitos condicionais descritos na tabela de consumidores abaixo continuam válidos; nenhum consumidor foi demonstrado como dependente de g+w, **mas sua ausência e exclusão continuam desconhecidas**. Coleta falhou antes de esclarecer esse ponto, não evidenciou conflito concreto de um writer nem atribuiu causa histórica.
+
+### Faltante exato e próximo ato para decisão, sem continuação automática
+
+1. Decisão separada do owner sobre disponibilização da ferramenta ACL explicitamente exigida ou revisão prévia do mecanismo de obtenção dessa evidência. O roteiro consumido não pode prosseguir na situação observada. **Esta entrega não propõe comando de instalação, alternativa automática, novo coletor, nova coleta ou aumento de privilégio.** Não executar novamente o bloco/destino abaixo.
+2. Depois dessa decisão e de eventual autorização própria, ainda obter os cinco estados completos (cadeia/metadados/ACLs) em destino novo. Nenhum deles foi certificado agora; a nova evidência não pode ser fabricada a partir das custódias anteriores.
+3. Atribuir os mantenedores Git/npm/automação/sessões relevantes e comprovar sua exclusão durante a manutenção. A consulta de identidade/ACL não substitui esse requisito. Não foi autorizado inventário genérico ou contenção para fechá-lo.
+4. Somente com esses insumos: executor/plano/hash/intent novos revisados e aprovação explícita; CAS/revalidação por FD, verificação integral e retorno condicionado já descritos. Nenhuma autorização ou prontidão de aplicação decorre desta coleta.
+
+O bloco abaixo passa a ser **registro consumido de f0538524; não é instrução reutilizável**. Seus bytes, scripts/fontes, testes, registros anteriores e destino foram preservados; não se corrigiu o gate para obter PASS. ELF segue PAUSADO; sem nova leitura remota, chmod, teste de escrita, instalação, sudo, SQL, backup ou janela. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 não foram modificados; sem recertificação global de produção. Responsável Deifson; revisão17/10, próxima21/10 ou antes de uma nova decisão. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
+
+---
+
 **SOMENTE PROPOSTA / NÃO EXECUTADA / NÃO É AUTORIZAÇÃO DE CSV.** Responsável: Deifson; revisão17/10/2026, próxima21/10 ou antes de qualquer mudança.
 
 ## Impedimento demonstrado e alcance
@@ -44,7 +67,7 @@ Mesmo que Event passe, o próximo requisito CSV é a obtenção dirigida dos dad
 
 NEWauth+NEWDB+NEWcipher, ambos os crons, frontend, guarda38 e out.15 não foram modificados. Isso descreve ausência de efeitos nesta operação, **não** uma recertificação atual global de produção. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
 
-## Preflight literal preparado LOCALMENTE — autorização futura necessária
+## Preflight literal f0538524 — registro agora CONSUMIDO, não repetir
 
 ```bash
 (
@@ -73,13 +96,13 @@ REVIEWED_EVENT_PREFLIGHT
 
 ### Ferramentas, sequência e destinos do comando acima
 
-O bloco é **preparado para revisão; não foi executado na VPS**. Precisa de autorização posterior exclusivamente de preflight, não de chmod. Há um só SSH deploy, BatchMode/StrictHostKeyChecking, prazo25s, sem reconexão. Nenhum arquivo remoto é criado. O destino local novo é `/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/csv-delivery-event-preflight-20261017-v1`, exclusivo0700, sob o pai privado existente; destino já existente nega antes de SSH. Os destinos Event-boundary, R1 e complementações anteriores continuam consumidos/intocados.
+Na preparação f0538524, o bloco estava **preparado para revisão**, com autorização de preflight separada de chmod. A execução posterior está registrada no início deste documento: **CONSUMED/DENY**, sem autorização de aplicação. Há um só SSH deploy, BatchMode/StrictHostKeyChecking, prazo25s, sem reconexão. Nenhum arquivo remoto é criado. O destino local novo é `/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/csv-delivery-event-preflight-20261017-v1`, exclusivo0700, sob o pai privado existente; destino já existente nega antes de SSH. Os destinos Event-boundary, R1 e complementações anteriores continuam consumidos/intocados.
 
 | Ferramenta / fonte | Conferência anterior ao uso | Ausência / divergência |
 | --- | --- | --- |
 | ThinkPad `/usr/bin/ssh`, Python3/stdlib |Disponíveis no laboratório; script/reader/fontes conferidos antes do único SSH |Nega localmente, sem conexão |
 | VPS `/usr/bin/python3 -B -I -S` |Canal já usado; erro de execução é preservado em stderr/exit do SSH |Sem alternativa/interpretação via app |
-| VPS `/usr/bin/getfacl` |**Disponibilidade remota desconhecida**. Primeiro gate remoto após identidade: arquivo regular/no-follow, FD, metadados estáveis, SHA e versão, antes dos alvos |Nega antes de ler os diretórios. Sem command-v/search, instalação, sudo, getfattr/xattr alternativo ou fallback |
+| VPS `/usr/bin/getfacl` |**Na preparação, disponibilidade remota desconhecida; na execução, caminho fixo ENOENT (resultado acima)**. Primeiro gate remoto após identidade: arquivo regular/no-follow, FD, metadados estáveis, SHA e versão, antes dos alvos |Nega antes de ler os diretórios. Sem command-v/search, instalação, sudo, getfattr/xattr alternativo ou fallback |
 | `/proc/self/fd`, openat/no-follow e passagem de FDs |Uso real no laboratório; ausência/acesso negado remoto nega |Não substitui por reabertura do mesmo caminho |
 
 No laboratório getfacl2.3.2 foi conferido e executado por **imagem FD**, com argv0 estável. O primeiro ensaio expôs que argv0 pelo número do FD altera o nome impresso por `--version`; corrigiu-se somente argv0 mantendo executable no FD, sem relaxar formato. A presença desse utilitário e a proteção de seu caminho na VPS não são certificadas pela prova local. Seu hash é observação, não autoridade para instalar/executar aplicações ou certificação do toolchain pausado.

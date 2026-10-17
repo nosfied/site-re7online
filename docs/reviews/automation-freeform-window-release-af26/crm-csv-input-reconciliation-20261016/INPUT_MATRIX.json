@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Event parent src/events observed0775 at2026-10-17T17:02:30UTC: canonical DENY at first parent; other parents not reached. Restricted five-literal-parent g+w removal proposal requires fresh full preflight/CAS, filesystem-writer/ACL impact review and separate approval; no remediation executed.",
+    "firstConcreteBlocker": "Consumed Event preflight DENY before targets at2026-10-17T17:17:02UTC: fixed /usr/bin/getfacl lstat ENOENT. No current directory metadata/ACL evidence; prior observations remain dated. Owner decision on tool/evidence mechanism required; no retry/installation authorized. Writer attribution/exclusion and separate FD/CAS application approval still missing.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1533,6 +1533,69 @@
       "productionExecuted": false,
       "applicationAuthorized": false,
       "remaining": "Current ACLs/tools/identities and filesystem writer attribution/exclusion; separate reviewed application executor and approval after observation. Existing Event DENY remains."
+    },
+    "eventPreflightResult": {
+      "base": "f0538524c51686cb3cc8a2561eb3023d329531f1",
+      "result": "EVENT_PREFLIGHT_DENY_NO_RETRY",
+      "executionCount": 1,
+      "literalBlockExit": 1,
+      "commandExit": 1,
+      "transportErrorClass": null,
+      "startedUtc": "2026-10-17T17:17:02.304015+00:00",
+      "finishedUtc": "2026-10-17T17:17:02.304211+00:00",
+      "transportStartedUtc": "2026-10-17T17:16:59.546017+00:00",
+      "transportFinishedUtc": "2026-10-17T17:17:02.490635+00:00",
+      "denialStage": "tool-preflight",
+      "denialReason": "READ_OR_TOOL_FAILURE",
+      "errorClass": "FileNotFoundError",
+      "errno": 2,
+      "exactOperation": "os.lstat(/usr/bin/getfacl)",
+      "conclusion": "Fixed getfacl path unavailable (ENOENT); no claim about alternate paths or package installation state. No alternate search performed.",
+      "identity": {
+        "uid": 1000,
+        "euid": 1000,
+        "gid": 1000,
+        "egid": 1000
+      },
+      "supplementaryGroupsObservedCount": 4,
+      "targetObservations": 0,
+      "chainObservations": 0,
+      "getfaclCommandsExecuted": 0,
+      "readComplete": false,
+      "writersExcluded": false,
+      "applicationAuthorized": false,
+      "eventParentsCertified": false,
+      "atomicSnapshot": false,
+      "retryOrAdditionalRemoteRead": false,
+      "remoteMutations": false,
+      "sourceSha256": "5a0591cb0b19cec29c225f7154c70ed29e1649bcd0b32b7831e5d249e2abb6ac",
+      "custody": {
+        "result": "PRESERVED_NOT_CERTIFIED",
+        "canonicalByteExactChannelsVerified": true,
+        "directoryMode": "0700",
+        "fileMode": "0600",
+        "files": {
+          "csv-event-preflight.stderr.private": {
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "csv-event-preflight.stdout.private": {
+            "bytes": 602,
+            "sha256": "a17cf9fba721aa144ce7e36cd166f853d922a40907f3dc25f649046550290b3f"
+          },
+          "privileged-output.private.jsonl": {
+            "bytes": 58274,
+            "sha256": "d89b3023f2aad0c92ded9106f29ac522e9a07eaad0396d2fd44a0a7bd511e988"
+          },
+          "sequencer.journal.jsonl": {
+            "bytes": 268,
+            "sha256": "b23a6a63d30c3064e43f5d71373ab24ca88ecbe3a36902063e44dcf27d2ce284"
+          }
+        }
+      },
+      "decision": "DENY_APPLICATION_INSUFFICIENT_CURRENT_MODE_CHAIN_AND_ACL_EVIDENCE_WRITER_COVERAGE_UNKNOWN",
+      "nextRequirement": "Separate owner decision on availability of the explicitly required ACL tool/evidence mechanism before any future approved preflight. No installation, alternate collector or retry authorized. Filesystem writer attribution/exclusion and separate application plan/CAS approval remain required.",
+      "status": "CSV_SUSPENDED_NOT_DEPLOYED_NOT_WINDOW_READY"
     }
   }
 }

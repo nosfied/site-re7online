@@ -1,3 +1,11 @@
+## Event preflight17/10 — CONSUMED/DENY antes dos alvos
+
+[Proposta existente atualizada e decisão](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md), [resultado/hashes](../crm-csv-delivery-review-20261017/PREFLIGHT_RESULT.json). Uma execução literal f0538524 deploy sem sudo às14:17:02 Fortaleza; exit1, tool-preflight / READ_OR_TOOL_FAILURE / FileNotFoundError errno2 na consulta ao caminho fixo /usr/bin/getfacl. Identidade não privilegiada observada, zero alvos/cadeias/ACLs e zero comandos getfacl. Canais602B/0B e recibos privados conferidos; sourceComplete=false. Sem retry, alternativa, busca, leitura adicional ou mudança produtiva.
+
+Aplicação0755 continua DENY: faltam evidências atuais dos cinco e atribuição/exclusão de writers. Próximo ato é decisão separada sobre a ferramenta ACL/mecanismo revisado; não há instalação ou nova coleta autorizada. Custódias anteriores mantêm seus horários/alcances; bloco/destino agora consumidos. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO; Deifson, revisão21/10 ou antes da mudança. Nenhum teste/build repetido nem código alterado.
+
+---
+
 ## Preflight dos cinco pais — preparado LOCALMENTE, base0b38fb0c
 
 [Roteiro literal e análise de impacto atualizados na mesma proposta](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): transporte/leitor/Capture/private_record reutilizados, cadeia por FD/meta canônico e ACLs por getfacl fixo; ferramentas gateadas antes dos alvos, sem fallback. Getfacl2.3.2 disponível só no laboratório; VPS desconhecida.14 provas locais afetadas, incluindo bloco shell completo e negativas; simulações explícitas, sem VPS/chmod/sudo ou novo pacote operacional.
