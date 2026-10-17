@@ -1,6 +1,6 @@
 {
-  "base": "c7aa58973f54239f9cda3a113b38bb20280f74b8",
-  "scope": "EXPLICIT_LOCAL_XATTR_REVISION_OF_SAME_FIVE_DIRECTORY_PREFLIGHT_NO_REMOTE_EXECUTION",
+  "base": "661c2ffa98002431c78c36311e0f3a68085f702b",
+  "scope": "ONE_AUTHORIZED_XATTR_PREFLIGHT_SANITIZED_RESULT_AND_EXISTING_PROPOSAL_ONLY",
   "files": [
     "docs/BACKLOG_TECH.md",
     "docs/RUNBOOK_WHATSAPP_AGENT.md",
@@ -8,17 +8,14 @@
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/PREFLIGHT_MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/XATTR_MANIFEST.sha256",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/XATTR_PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/XATTR_RESULT.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/ALLOWLIST.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
-    "docs/saas/DOCUMENTATION_INDEX.md",
-    "scripts/crm_csv_delivery/event_preflight_xattr.source",
-    "scripts/crm_csv_delivery/preflight_xattr.py",
-    "scripts/crm_csv_delivery/test_preflight_xattr.py"
+    "docs/saas/DOCUMENTATION_INDEX.md"
   ],
-  "excluded": "Consumed executable sources/commands/receipts and private/raw ACLs/custodies/profiles/runtime/cache/ELF files unchanged",
+  "excluded": "Raw channels/journals/groups/metadata snapshots/private custodies/profiles; all code/tests/executed blocks/previous result bytes and ELF files unchanged",
   "applicationAuthorized": false
 }

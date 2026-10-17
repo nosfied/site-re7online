@@ -1,3 +1,11 @@
+## Preflight xattr17/10 — coleta completa, aplicação ainda bloqueada
+
+[Resultado na proposta existente](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md) e [hashes/procedência](../crm-csv-delivery-review-20261017/XATTR_RESULT.json): novo bloco661c2ffa executado uma vez às14:28:50 Fortaleza, deploy sem sudo, exit0; histórico getfacl não executado. Oito elos revalidados, cinco diretórios0775 uid/gid1000; access/default retornaram ENODATA61 nos dez casos, zero blobs. Não é ausência comprovada. Nove campos de cada alvo iguais à R1 histórica, sem continuidade/atomicidade presumida. Canais6.978B/0B e custódia canônica byte-exatos; sourceComplete=true/applicationAuthorized=false.
+
+Faltam interpretação da visibilidade ENODATA, atribuição/exclusão de writers Git/npm/manutenção e executor/plano/intent/CAS fresco com autorização própria. Próxima decisão restrita: delimitar os mantenedores concorrentes e o tratamento dessa incerteza na mesma proposta, sem inventário genérico ou novas leituras agora. Ambos os preflights/destinos consumidos preservados; nenhuma permissão/ACL/código alterados, sem retry ou teste/build repetido. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO. Deifson; revisão21/10 ou antes de nova decisão.
+
+---
+
 ## Revisão ACL xattr LOCAL — basec7aa5897, preflight consumido preservado
 
 A [proposta existente](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md) agora contém **novo** bloco literal/destino exclusivo para revisão: dois nomes POSIX ACL access/default por os.getxattr nos mesmos FDs, sem getfacl remoto ou parser. Transporte/leitor/Capture/private_record reutilizados, autenticados dos mesmos bytes. ENODATA é ausência/não visibilidade não confirmada; EACCES/EPERM, ENOTSUP e outros erros ficam distintos e negam, nunca viram “sem ACL”. Bytes presentes ficam opacos em custódia privada e alterações permanecem bloqueadas.

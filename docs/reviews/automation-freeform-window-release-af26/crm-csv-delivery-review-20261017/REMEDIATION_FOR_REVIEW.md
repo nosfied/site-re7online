@@ -1,10 +1,44 @@
 # Event — proposta mínima de remediação para decisão separada
 
-## Revisão mínima xattr — LOCAL VALIDATED / REVIEW PENDING
+## Resultado xattr autorizado —17/10/2026,14:28:50 Fortaleza
 
-O impedimento de ferramenta remota foi tratado **somente na preparação local**: o [novo bloco literal](#revisão-xattr--novo-bloco-somente-para-revisão-não-executado) lê dois atributos POSIX pelos mesmos FDs, usando Python/stdlib. Não chama getfacl, não procura alternativa e não executa programas auxiliares na VPS. A seleção desse mecanismo é explícita nesta revisão, nunca fallback da tentativa anterior. [Provas](XATTR_PROOFS.json) e [hashes/procedência](XATTR_MANIFEST.sha256).
+**COLETA COMPLETA / PRESERVED_NOT_AUTHORIZED / APLICAÇÃO BLOQUEADA.** Base/remoto661c2ffa, fontes e hashes conferidos; somente o novo bloco xattr foi executado uma vez, deploy sem sudo, exit0. O bloco histórico/getfacl **não foi executado**. [Resultado sanitizado, horários e hashes de custódia](XATTR_RESULT.json). Fonte98c7b32f…; identidade uid/euid1000, gid/egid1000; quatro grupos permanecem no registro privado. Oito elos de cadeia, cinco diretórios e dez consultas aos dois atributos literais observados; cadeia/FDs/metadados revalidados no intervalo17:28:50.611633–17:28:50.612766UTC.
 
-O preflight getfacl anterior continua CONSUMED/DENY, com todos os bytes executáveis, bloco literal e recibos intactos. Nenhuma nova observação produtiva foi feita. A nova consulta ainda exige autorização separada;0755 e alterações ACL continuam bloqueadas, mesmo se houver coleta completa. ELF PAUSADO / CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
+| Diretório | Modo / uid / gid observados | Access | Default |
+| --- | --- | --- | --- |
+| /opt/re7online/site-re7online |0775 /1000 /1000 |ENODATA61 |ENODATA61 |
+| /opt/re7online/site-re7online/apps |0775 /1000 /1000 |ENODATA61 |ENODATA61 |
+| /opt/re7online/site-re7online/apps/whatsapp-agent |0775 /1000 /1000 |ENODATA61 |ENODATA61 |
+| /opt/re7online/site-re7online/apps/whatsapp-agent/src |0775 /1000 /1000 |ENODATA61 |ENODATA61 |
+| /opt/re7online/site-re7online/apps/whatsapp-agent/src/events |0775 /1000 /1000 |ENODATA61 |ENODATA61 |
+
+Nenhum valor ACL foi retornado: **zero blobs presentes**, sem bytes a interpretar nesta tentativa. Todos os dez estados são `NO_DATA_ABSENT_OR_NOT_VISIBLE`, `absenceConfirmed=false`; não há evidência de EACCES/EPERM/ENOTSUP nesta consulta, mas isso não elimina a ambiguidade ENODATA documentada. Não afirmar “sem ACL” nem reconstruir ACL base a partir do modo para certificar a ausência de atributos. Valores eventualmente presentes em outra coleta devem permanecer privados até análise competente.
+
+Os nove campos canônicos de cada um dos cinco alvos (dev/ino/mode/uid/gid/nlink/size/mtime_ns/ctime_ns) coincidem com a R1 pinada931c9c39… das01:22:00UTC. É comparação de duas observações datadas, **não** prova de continuidade, ausência de writers ou snapshot atômico. A referência14:02 ao primeiro pai e o DENY getfacl14:17 permanecem com seus alcances, sem PASS retroativo.
+
+Custódia local0700/0600: stdout6.978B, stderr0B e journals canônicos íntegros, canais byte-exatos conferidos pelo leitor pinado. `sourceComplete=true`, `applicationAuthorized=false`, sem timeout/perda de resposta/retry/reconexão/leitura remota adicional. Nem a cadeia nem os registros privados foram publicados em bruto. Nenhuma escrita remota, chmod, ferramenta externa, instalação ou alternativa foi executada.
+
+### Confronto com a remediação e decisão sustentada
+
+A premissa de modo da proposta foi observada: os cinco são0775, owner/grupo1000. O executor1000 coincide numericamente com o owner e reteria escrita de owner com0755 **se identidades/ACLs/estado forem os mesmos no efeito**. Retirar g+w remove criação/remoção/rename por usuários que dependam da classe de grupo nesses diretórios. A leitura e travessia previstas por0755 permanecem; não altera arquivos descendentes ou Event0664 histórico. O predicado canônico continua incompatível com0775; esta leitura não o executou para produzir um PASS fictício nem o alterou.
+
+**Ainda não é possível aprovar a aplicação.** Faltam precisamente:
+
+1. **Interpretação de visibilidade dos dois atributos no contexto observado.** ENODATA pode significar inexistência ou não visibilidade. Owner e metadados conhecidos não demonstram por si a política efetiva de leitura dos atributos system nesse filesystem. Não há blob pendente de decodificação nesta tentativa; falta resolver/aceitar explicitamente essa incerteza antes de concluir que nenhuma máscara/default afetaria terceiros. Nenhuma consulta adicional ou análise binária foi executada; a fundamentação primária permanece na seção xattr abaixo.
+2. **Atribuição e exclusão dos writers de filesystem relevantes.** A coleta não identifica sessões Git/npm/manutenção, seus UIDs/grupos/ACLs efetivos ou dependência de g+w nos cinco pais. O quadro documental abaixo continua o alcance disponível: Git/npm podem criar entradas; importadores Event só demonstram leitura do módulo; releases do par original estão historicamente fora desses pais. Não há consumidor comprovadamente dependente de g+w, mas ausência/cobertura/exclusão **não estão comprovadas**. Próxima decisão concreta é delimitar com o owner quais mantenedores/jobs/sessões de manutenção podem atuar nesses cinco caminhos e como serão excluídos durante uma eventual aplicação. Isso não exige retomar ELF nem autoriza inventário genérico ou interrupção agora.
+3. **Plano de efeito e autorização própria.** Este snapshot fornece identidade/metadados como referência privada, não CAS futuro ou intent de alteração. Depois dos itens anteriores: executor literal de aplicação por FD, plano/hash/intent exclusivos revisados, revalidação fresca de todos os alvos/cadeia/ACLs antes do primeiro efeito e no uso, registro de parcial, verificação e retorno condicionado. A corrida entre comparação e efeito não vira transação de filesystem; exclusão efetiva continua necessária. Nenhum desses atos está autorizado pela coleta.
+
+Encaminhamento restrito: revisar os três pontos acima na **mesma proposta**, sem repetir o preflight consumido nem ampliar o inventário. Decisão atual: coleta completa aceita no seu alcance; **0755 NÃO AUTORIZADO / ACL_CHANGE_BLOCKED / WRITERS_NOT_EXCLUDED**. Não há necessidade de instalar getfacl para explicar este resultado; não é licença para substituição automática de mecanismos. Preservar os bytes e não promover owner UID a cobertura universal de escritores.
+
+O novo bloco abaixo também passa a ser **CONSUMIDO — não repetir nem reutilizar seu destino**. As seções de preparação/provas seguintes são históricas do desenho executado; esta seção prevalece para seu estado. Sem alteração de código, testes anteriores repetidos, pacote, SQL, ELF, backup ou janela. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 intocados; não foi feita recertificação global de produção. Deifson; revisão17/10, próxima21/10 ou antes de qualquer nova decisão. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
+
+---
+
+## Preparação xattr661c2ffa — histórico local; execução consumida acima
+
+Na preparação661c2ffa, o impedimento de ferramenta remota foi tratado **localmente**: o [novo bloco literal](#revisão-xattr--bloco661c2ffa-agora-consumido-não-repetir) lê dois atributos POSIX pelos mesmos FDs, usando Python/stdlib. Não chama getfacl, não procura alternativa e não executa programas auxiliares na VPS. A seleção desse mecanismo é explícita nesta revisão, nunca fallback da tentativa anterior. [Provas](XATTR_PROOFS.json) e [hashes/procedência](XATTR_MANIFEST.sha256).
+
+O preflight getfacl anterior continua CONSUMED/DENY, com todos os bytes executáveis, bloco literal e recibos intactos. Nenhuma nova observação produtiva foi feita. A consulta foi posteriormente autorizada e executada conforme o resultado acima;0755 e alterações ACL continuam bloqueadas apesar da coleta completa. ELF PAUSADO / CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
 
 ---
 
@@ -149,7 +183,7 @@ Resultado completo significa **OBSERVED_NOT_AUTHORIZED**;0775 e ACL estendida/de
 
 LOCAL VALIDATED no alcance acima / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. Apenas preflight futuro para revisão; nenhuma autorização de aplicação. ELF continua PAUSADO.
 
-## Revisão xattr — novo bloco SOMENTE PARA REVISÃO, NÃO EXECUTADO
+## Revisão xattr — bloco661c2ffa agora CONSUMIDO, NÃO REPETIR
 
 ```bash
 (

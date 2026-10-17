@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Current five directory mode/ACL evidence absent: prior getfacl preflight consumed DENY; explicit xattr revision prepared locally for review, not executed. Authorize only the new scoped read if accepted; no tool installation/fallback, ACL interpretation or application approval inferred.",
+    "firstConcreteBlocker": "Current Event snapshot observed five775 owner/group1000; ten ENODATA results do not certify attribute absence. Application remains blocked on visibility interpretation, filesystem writer attribution/exclusion, and separately reviewed FD/CAS plan/intent plus owner authorization. Both preflight destinations consumed; no automatic further read or ELF resumption.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1607,6 +1607,23 @@
       "applicationAuthorized": false,
       "errnoPolicy": "ENODATA=NO_DATA_ABSENT_OR_NOT_VISIBLE; EACCES/EPERM=ACCESS_DENIED; ENOTSUP/EOPNOTSUPP=NOT_SUPPORTED; other=OTHER_ERROR; errors never mean no ACL",
       "remaining": "Current five directory observations and raw ACL evidence; competent ACL analysis; writer coverage/exclusion; separate application executor/CAS approval"
+    },
+    "eventXattrResult": {
+      "base": "661c2ffa98002431c78c36311e0f3a68085f702b",
+      "result": "EVENT_PREFLIGHT_PRESERVED_NOT_AUTHORIZED",
+      "evidence": "../crm-csv-delivery-review-20261017/XATTR_RESULT.json",
+      "startedUtc": "2026-10-17T17:28:50.611633+00:00",
+      "finishedUtc": "2026-10-17T17:28:50.612766+00:00",
+      "readComplete": true,
+      "chainNodes": 8,
+      "targets": 5,
+      "modeAllTargets": "0775",
+      "uidGidAllTargets": 1000,
+      "noDataAttributes": 10,
+      "attributeAbsenceConfirmed": false,
+      "writersExcluded": false,
+      "applicationAuthorized": false,
+      "consumed": true
     }
   }
 }

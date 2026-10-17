@@ -1,0 +1,198 @@
+{
+  "base": "661c2ffa98002431c78c36311e0f3a68085f702b",
+  "result": "EVENT_PREFLIGHT_PRESERVED_NOT_AUTHORIZED",
+  "sourceResult": "EVENT_PREFLIGHT_OBSERVED_NOT_AUTHORIZED",
+  "executionCount": 1,
+  "historicalGetfaclBlockExecuted": false,
+  "user": "deploy",
+  "sudo": false,
+  "literalBlockExit": 0,
+  "commandExit": 0,
+  "transportErrorClass": null,
+  "startedUtc": "2026-10-17T17:28:50.611633+00:00",
+  "finishedUtc": "2026-10-17T17:28:50.612766+00:00",
+  "transportStartedUtc": "2026-10-17T17:28:48.154956+00:00",
+  "transportFinishedUtc": "2026-10-17T17:28:50.643496+00:00",
+  "identity": {
+    "uid": 1000,
+    "euid": 1000,
+    "gid": 1000,
+    "egid": 1000
+  },
+  "supplementaryGroupsObservedCount": 4,
+  "readComplete": true,
+  "chainNodesObservedAndRevalidated": 8,
+  "directoriesObserved": 5,
+  "attributeCallsObserved": 10,
+  "presentAttributeValues": 0,
+  "noDataAttributes": 10,
+  "attributeAbsenceConfirmed": false,
+  "targets": [
+    {
+      "path": "/opt/re7online/site-re7online",
+      "type": "directory",
+      "mode": "0775",
+      "uid": 1000,
+      "gid": 1000,
+      "attributes": [
+        {
+          "name": "system.posix_acl_access",
+          "state": "NO_DATA_ABSENT_OR_NOT_VISIBLE",
+          "errno": 61,
+          "absenceConfirmed": false,
+          "interpretation": "OPAQUE_NOT_ANALYZED"
+        },
+        {
+          "name": "system.posix_acl_default",
+          "state": "NO_DATA_ABSENT_OR_NOT_VISIBLE",
+          "errno": 61,
+          "absenceConfirmed": false,
+          "interpretation": "OPAQUE_NOT_ANALYZED"
+        }
+      ],
+      "nineCanonicalMetadataFieldsMatchR1": true
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps",
+      "type": "directory",
+      "mode": "0775",
+      "uid": 1000,
+      "gid": 1000,
+      "attributes": [
+        {
+          "name": "system.posix_acl_access",
+          "state": "NO_DATA_ABSENT_OR_NOT_VISIBLE",
+          "errno": 61,
+          "absenceConfirmed": false,
+          "interpretation": "OPAQUE_NOT_ANALYZED"
+        },
+        {
+          "name": "system.posix_acl_default",
+          "state": "NO_DATA_ABSENT_OR_NOT_VISIBLE",
+          "errno": 61,
+          "absenceConfirmed": false,
+          "interpretation": "OPAQUE_NOT_ANALYZED"
+        }
+      ],
+      "nineCanonicalMetadataFieldsMatchR1": true
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent",
+      "type": "directory",
+      "mode": "0775",
+      "uid": 1000,
+      "gid": 1000,
+      "attributes": [
+        {
+          "name": "system.posix_acl_access",
+          "state": "NO_DATA_ABSENT_OR_NOT_VISIBLE",
+          "errno": 61,
+          "absenceConfirmed": false,
+          "interpretation": "OPAQUE_NOT_ANALYZED"
+        },
+        {
+          "name": "system.posix_acl_default",
+          "state": "NO_DATA_ABSENT_OR_NOT_VISIBLE",
+          "errno": 61,
+          "absenceConfirmed": false,
+          "interpretation": "OPAQUE_NOT_ANALYZED"
+        }
+      ],
+      "nineCanonicalMetadataFieldsMatchR1": true
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/src",
+      "type": "directory",
+      "mode": "0775",
+      "uid": 1000,
+      "gid": 1000,
+      "attributes": [
+        {
+          "name": "system.posix_acl_access",
+          "state": "NO_DATA_ABSENT_OR_NOT_VISIBLE",
+          "errno": 61,
+          "absenceConfirmed": false,
+          "interpretation": "OPAQUE_NOT_ANALYZED"
+        },
+        {
+          "name": "system.posix_acl_default",
+          "state": "NO_DATA_ABSENT_OR_NOT_VISIBLE",
+          "errno": 61,
+          "absenceConfirmed": false,
+          "interpretation": "OPAQUE_NOT_ANALYZED"
+        }
+      ],
+      "nineCanonicalMetadataFieldsMatchR1": true
+    },
+    {
+      "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/src/events",
+      "type": "directory",
+      "mode": "0775",
+      "uid": 1000,
+      "gid": 1000,
+      "attributes": [
+        {
+          "name": "system.posix_acl_access",
+          "state": "NO_DATA_ABSENT_OR_NOT_VISIBLE",
+          "errno": 61,
+          "absenceConfirmed": false,
+          "interpretation": "OPAQUE_NOT_ANALYZED"
+        },
+        {
+          "name": "system.posix_acl_default",
+          "state": "NO_DATA_ABSENT_OR_NOT_VISIBLE",
+          "errno": 61,
+          "absenceConfirmed": false,
+          "interpretation": "OPAQUE_NOT_ANALYZED"
+        }
+      ],
+      "nineCanonicalMetadataFieldsMatchR1": true
+    }
+  ],
+  "historicalReference": {
+    "sha256": "931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529",
+    "startedUtc": "2026-10-17T01:22:00.314752+00:00",
+    "finishedUtc": "2026-10-17T01:22:00.315839+00:00",
+    "comparison": "All nine canonical fields match for the five targets; distinct intervals, not a continuous or atomic certificate."
+  },
+  "custody": {
+    "result": "PRESERVED_NOT_CERTIFIED",
+    "canonicalChannelsByteExact": true,
+    "directoryMode": "0700",
+    "fileMode": "0600",
+    "files": {
+      "csv-event-preflight.stderr.private": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "csv-event-preflight.stdout.private": {
+        "bytes": 6978,
+        "sha256": "971d5d397de694e2aec5bb09690a7500d9001b3c393f879e38186639834f54d3"
+      },
+      "privileged-output.private.jsonl": {
+        "bytes": 63539,
+        "sha256": "9afeb5dff49bbc0d8019e5ee93ab8dde98eaaf4c9cff02fd80a806677717645d"
+      },
+      "sequencer.journal.jsonl": {
+        "bytes": 267,
+        "sha256": "10868c68659f54ffc79391733a14c1ca1add687ec6ba5d432714027a6f264e54"
+      }
+    }
+  },
+  "sourceSha256": "98c7b32ff33d443267999723ee8da50d99dbb243ecf19d370c369d0a5d67ecbc",
+  "remoteMutations": false,
+  "retryReconnectOrAdditionalRemoteRead": false,
+  "atomicSnapshot": false,
+  "eventParentsCertified": false,
+  "aclInterpretationComplete": false,
+  "aclChangeBlocked": true,
+  "writersExcluded": false,
+  "applicationAuthorized": false,
+  "decision": "READ_COMPLETE_APPLICATION_REMAINS_BLOCKED",
+  "remaining": [
+    "Resolve ENODATA visibility interpretation for the observed identity/filesystem without treating it as certified absence; no returned blob to decode in this attempt.",
+    "Identify filesystem maintenance writers and whether any depends on group write or named/default ACL; prove their exclusion for any approved effect.",
+    "Separate reviewed application plan/intent and fresh FD/CAS before effects; explicit application/conditional-return authorization still absent."
+  ],
+  "status": "CSV_SUSPENDED_NOT_DEPLOYED_NOT_WINDOW_READY"
+}

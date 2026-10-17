@@ -1,6 +1,9 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
 
+**CSV17/10 às14:28 Fortaleza — xattr CONSUMED/OBSERVED_NOT_AUTHORIZED.** [Resultado/decisão na mesma proposta](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): novo bloco661c2ffa uma vez deploy sem sudo, exit0; oito elos/cinco pais0775 owner/grupo1000, dez ENODATA61 sem blobs, não ausência comprovada. Custódia/canais byte-exatos, sourceComplete=true/applicationAuthorized=false. Faltam visibilidade ACL, atribuição/exclusão dos writers e plano/intent/CAS/autorização de aplicação; próximo é delimitar essa decisão restrita, sem inventário genérico. Blocos/destinos históricos e xattr consumidos; nenhuma leitura adicional ou alteração. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO. Deifson; revisão21/10 ou antes da mudança.
+
+
 **CSV17/10 — revisão xattr LOCAL, getfacl consumido preservado.** [Mesma proposta e novo bloco literal](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): ACL access/default por FDs/stdlib, sem ferramenta remota/parser; bytes opacos privados, erros distintos, ENODATA sem ausência absoluta presumida.12 provas locais com ACLs/getfacl reais e fronteiras simuladas explícitas. Nenhuma VPS/instalação/chmod/SQL; aplicação continua bloqueada, inclusive por writers não excluídos. Próximo: revisão/autorização somente da nova leitura, destino próprio. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO; privados/históricos/NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Deifson; revisão21/10 ou antes da mudança.
 
 
