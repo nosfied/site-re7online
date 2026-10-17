@@ -1,0 +1,84 @@
+{
+  "tests": 5,
+  "result": "FOCUSED_LOCAL_VALIDATED_NOT_OPERATIONAL",
+  "cases": [
+    {
+      "case": "valid",
+      "materialize": 0,
+      "collect": 0,
+      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "1a0ac094b9276b5fdfa09e2716946210e08c73d9f0172548be73d39d8217ffa9",
+      "commandsSha256": "857779f421f9039334fb34320e641b8bff9dbd5730fe97d6f8ead9a18c6838b9",
+      "sqlTransportSynthetic": false,
+      "readelfUnavailable": true,
+      "readelfCalled": false,
+      "operationalElfClosureCertified": false
+    },
+    {
+      "case": "control-denied",
+      "materialize": 0,
+      "collect": 1,
+      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "1a0ac094b9276b5fdfa09e2716946210e08c73d9f0172548be73d39d8217ffa9",
+      "commandsSha256": "857779f421f9039334fb34320e641b8bff9dbd5730fe97d6f8ead9a18c6838b9",
+      "sqlTransportSynthetic": false,
+      "readelfUnavailable": true,
+      "readelfCalled": false,
+      "operationalElfClosureCertified": false
+    },
+    {
+      "case": "partial-transfer",
+      "materialize": 0,
+      "collect": 1,
+      "custodyEvent": "THREE_GAPS_CUSTODY_DENY_NO_RETRY",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "1a0ac094b9276b5fdfa09e2716946210e08c73d9f0172548be73d39d8217ffa9",
+      "commandsSha256": "857779f421f9039334fb34320e641b8bff9dbd5730fe97d6f8ead9a18c6838b9",
+      "sqlTransportSynthetic": false,
+      "readelfUnavailable": true,
+      "readelfCalled": false,
+      "operationalElfClosureCertified": false
+    },
+    {
+      "case": "peer-wrong",
+      "materialize": 0,
+      "collect": 1,
+      "custodyEvent": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "literalBash": true,
+      "networkNamespace": true,
+      "sourceManifestSha256": "1a0ac094b9276b5fdfa09e2716946210e08c73d9f0172548be73d39d8217ffa9",
+      "commandsSha256": "857779f421f9039334fb34320e641b8bff9dbd5730fe97d6f8ead9a18c6838b9",
+      "sqlTransportSynthetic": false,
+      "readelfUnavailable": true,
+      "readelfCalled": false,
+      "operationalElfClosureCertified": false
+    },
+    {
+      "case": "source-tampered",
+      "materialize": 1,
+      "literalBash": true,
+      "remoteCalled": false
+    }
+  ],
+  "real": "published Bash, launcher/manifest authentication, source materialization, actual Node/closure26 RPC client over local socket, sealed FDs, concrete configuration consumers and corrected frontend adapter, filesystem reads and canonical private_record/export/ingest",
+  "simulated": "SSH shim, /proc identities/SO_PEERCRED projection and expected fixture hashes, Docker/psql-path/version, crontab/systemctl outputs; user/network/filesystem namespace, no VPS or SQL",
+  "unaffectedReused": "frontend reconciliation/integration negatives, R1/R2, recovery/authority, PM2 cluster proof, M1; no rerun",
+  "noOperationalCertification": true,
+  "controlsDenialStageReasonVerified": {
+    "stage": "controls-deploy-cron",
+    "reason": "DEPLOY_CRON_READ_FAILED",
+    "focusedRecheck": 1,
+    "reasonForRecheck": "Strengthened affected assertion to verify exact static denial, not only failure exit/custody."
+  },
+  "derivationReproduced": {
+    "generatedCodeByteExact": 3,
+    "manifestMembersDigestBytesBootstrapMatched": 35,
+    "onlySimulated": "output destination rewritten into TemporaryDirectory; source bytes/checkers untouched",
+    "initialDerivationMismatch": "Composer function wrapping indented an embedded source string by one column; fixed the composer string only. Delivered/exercised launcher, driver, runner and manifest unchanged."
+  }
+}

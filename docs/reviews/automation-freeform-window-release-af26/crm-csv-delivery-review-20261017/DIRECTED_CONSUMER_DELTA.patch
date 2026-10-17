@@ -1,0 +1,87 @@
+--- accepted-postrpc/launch.py
++++ future-directed/launch.py
+@@ -42 +42 @@
+-    if action not in ('materialize','collect','select-owner-authorized'):raise RuntimeError('action_denied')
++    if action not in ('materialize','collect'):raise RuntimeError('action_denied')
+@@ -44 +44 @@
+-    writer_raw=read(root.parent/'crm-csv-r2-directed-20261017/privileged_output.source')
++    writer_raw=read(root.parents[1]/'crm-csv-r2-directed-20261017/privileged_output.source')
+@@ -52 +52 @@
+-    folder=parent/('csv-postrpc-launcher-20261017-v1-'+action);folder.mkdir(mode=0o700)
++    folder=parent/('csv-directed-launcher-20261017-v1-'+action);folder.mkdir(mode=0o700)
+--- accepted-postrpc/driver.py
++++ future-directed/driver.py
+@@ -6 +6 @@
+-NAME='crm-csv-postrpc-diagnostics-20261017'
++NAME='crm-csv-delivery-review-20261017/directed-diagnostic'
+@@ -8 +8 @@
+-MATERIAL=Path('/dev/shm/re7-csv-postrpc-material-20261017-v1')
++MATERIAL=Path('/dev/shm/re7-csv-directed-material-20261017-v1')
+@@ -10,2 +10,2 @@
+-TOOLS='/dev/shm/re7-csv-postrpc-tools-20261017-v1'
+-OUTPUT='/dev/shm/re7-csv-postrpc-read-20261017-v1'
++TOOLS='/dev/shm/re7-csv-directed-tools-20261017-v1'
++OUTPUT='/dev/shm/re7-csv-directed-read-20261017-v1'
+@@ -127 +127 @@
+-    folder=lib['new_directory'](CUSTODY/('csv-postrpc-diagnostics-20261017-v1'+suffix))
++    folder=lib['new_directory'](CUSTODY/('csv-directed-diagnostic-20261017-v1'+suffix))
+@@ -131,4 +130,0 @@
+-        if action=='select':
+-            previous=CUSTODY/'csv-postrpc-diagnostics-20261017-v1'
+-            raw,_=lib['stable_file'](previous/'sequencer.journal.jsonl');receipt=json.loads(raw.splitlines()[-1])
+-            lib['require'](receipt['event']=='THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED'and receipt['gatePass']is True and receipt['manifestSha256']==MANIFEST_SHA,'previous_gates_not_passed')
+@@ -145 +140,0 @@
+-    if action=='select-owner-authorized':return transport('select')
+--- accepted-postrpc/runner.py
++++ future-directed/runner.py
+@@ -80,0 +81 @@
++ 'frontend_application_environment_drift':'FRONTEND_APPLICATION_ENVIRONMENT_DRIFT',
+@@ -182 +183 @@
+-    checked(cap,'frontend-contract','CANONICAL_FRONTEND_CONFIG_DENIED',lambda:canonical_io(cap,system,'frontend-config',lambda:c['compare_frontend'](by['re7-admin-front'],before,op)),allowed)
++    checked(cap,'frontend-contract','CANONICAL_FRONTEND_CONFIG_DENIED',lambda:canonical_io(cap,system,'frontend-config',lambda:c['compare_frontend'](by['re7-admin-front'],before,op,profiles)),allowed)
+@@ -184,0 +186 @@
++        cap.observe('saved-full-'+name,lambda:{'metadata':m,'bytes':len(value),'sha256':lib['sha'](value),'bytesBase64':base64.b64encode(value).decode()})
+@@ -219,23 +221,11 @@
+-def selects(cap,row):
+-    # Separate operator authorization; not called by collect. No root ownership claim.
+-    require=cap.lib['require']
+-    for kind in ('identity','ownership','imports'):
+-        now=json.loads(cap.command(kind+'-route-before',INSPECT));require(now==row,'sql_route_before_changed')
+-        argv=['/usr/bin/docker','exec','-i']
+-        for e in ('PGHOST=','PGHOSTADDR=','PGPORT=5432','PGSERVICE=','PGSERVICEFILE=/dev/null','PGPASSFILE=/dev/null','PGPASSWORD=','PGOPTIONS=','PGCONNECT_TIMEOUT=3'):argv+=['-e',e]
+-        argv += [row['Id'],'psql','-X','-w','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1']
+-        output=cap.command(kind,argv,input=BLOBS[kind+'.sql'])
+-        if kind=='identity':
+-            result=[json.loads(x)for x in output.splitlines()if x.strip()]
+-            require(len(result)==4 and result[0]['database']=='whatsapp_agent' and result[0]['sessionRole']=='wa_agent' and result[0]['effectiveRole']=='wa_agent' and result[0]['transactionReadOnly']=='on','sql_identity')
+-            require(int(result[0]['serverVersion'])//10000==16 and result[1]['systemIdentifier'],'sql_server_frontier')
+-            cap.event('SQL_IDENTITY_OBSERVED',allClientBackendsVisible=result[3]['allClientBackendsVisible'],ownership='UNKNOWN')
+-        if kind=='imports':
+-            tree=ast.parse(BLOBS['capture_imports.source'])
+-            method=next(x for x in tree.body if isinstance(x,ast.FunctionDef)and x.name=='classify')
+-            scope={'require':require,'hashlib':hashlib,'json':json}
+-            exec(compile(ast.fix_missing_locations(ast.Module(body=[method],type_ignores=[])),'<canonical classify>','exec'),scope)
+-            classified=scope['classify'](json.loads(output)['rows'])
+-            cap.observe('imports-classification',lambda:classified)
+-        require(json.loads(cap.command(kind+'-route-after',INSPECT))==row,'sql_route_after_changed')
+-    cap.event('SELECT_OUTPUTS_PRESERVED_NOT_OWNERSHIP_CERTIFICATE',ownership='UNKNOWN',importsClassification='PENDING_OFFLINE')
++def controls(cap):
++    # Observations only; no classification from inactive/enabled, no root helper call.
++    checked(cap,'controls-executor','CONTROL_EXECUTOR_DENIED',lambda:{'uid':os.getuid(),'gid':os.getgid()})
++    guard(cap,'controls-nonroot','CONTROL_EXECUTOR_PRIVILEGED',lambda:os.getuid()==1000)
++    checked(cap,'controls-deploy-cron','DEPLOY_CRON_READ_FAILED',lambda:cap.command('deploy-cron',['/usr/bin/crontab','-l']).decode())
++    checked(cap,'controls-system-cron','SYSTEM_CRON_READ_FAILED',lambda:private_file_observation(Path('/etc/cron.d/re7-converta-backup'),cap.lib))
++    checked(cap,'controls-supervision','SUPERVISION_READ_FAILED',lambda:cap.command('supervision',['/usr/bin/systemctl','show','pm2-deploy.service','--property=ActiveState,UnitFileState']).decode())
++    for name in ('deploy.crontab.before','re7-converta-backup.before','initial.private.json','execution-gates.private.json'):
++        checked(cap,'controls-'+name,'CONTROL_FILE_READ_FAILED',lambda name=name:private_file_observation(P/name,cap.lib))
++    checked(cap,'controls-authorization','AUTHORIZATION_READ_FAILED',lambda:private_file_observation(P.parent/'execution-authorized',cap.lib))
++    cap.event('CONTROLS_OBSERVED_NOT_CERTIFIED',bothCronsSeparatelyObserved=True,supervisionInterpretation='compare original bytes offline; inactive/enabled alone is not failure',rootPolicyCertified=False,guardCertified=False,barrierCertified=False)
+@@ -243,0 +234 @@
++    if action!='collect':raise RuntimeError('collect_only')
+@@ -258,3 +249,3 @@
+-        row=route(cap,apps)
+-        if action=='select':selects(cap,row)
+-        cap.event('end',result='GATES_1_3_PASS'if action=='collect'else'SELECTS_PRESERVED',ownership='UNKNOWN',operationalCertification=False);ok=True
++        row=checked(cap,'route-client','ROUTE_OR_POSTGRES_CLIENT_DENIED',lambda:route(cap,apps))
++        controls(cap)
++        cap.event('end',result='GATES_1_3_AND_CONTROLS_OBSERVED',ownership='UNKNOWN',operationalCertification=False);ok=True

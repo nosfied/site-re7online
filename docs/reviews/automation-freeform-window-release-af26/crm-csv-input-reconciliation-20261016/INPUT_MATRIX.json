@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Event parents fixed by authorized M1 and original predicate PASS at2026-10-17T18:09:05UTC. No automatic CSV continuation: existing remaining current identities/saved/fallback/bindings, SQL/ownership and protected-consumer/authority certification still required under separate scope; ELF remains paused.",
+    "firstConcreteBlocker": "Future authorized directed read and private reconciliation of trio/config/saved/fallback/controls and route/PostgreSQL client; M1 consumed/pass, do not repeat Event. No SELECT/ownership certification or remote execution this round.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1660,6 +1660,15 @@
       "m2OrM3Executed": false,
       "noFurtherRemoteRead": true,
       "scope": "Event parent predicate only, no full CSV operational readiness"
+    },
+    "directedReadPrepared": {
+      "base": "8bf0fa8e04cb7ed4d19c1c920c90713d4c2533ee",
+      "commands": "../crm-csv-delivery-review-20261017/DIRECTED_COMMANDS_FOR_REVIEW.md",
+      "remoteExecuted": false,
+      "selectExposed": false,
+      "profilesFabricated": false,
+      "elfPaused": true,
+      "sourceProfileAndPm2ProjectionSeparate": true
     }
   }
 }

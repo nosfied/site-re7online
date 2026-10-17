@@ -14,7 +14,12 @@
   "compositionSha256": "417d0e86184da48413fc562c5b443a3a20e23721ae754215b9b6bab47843cd67",
   "csvSuspended": true,
   "currentInputsFabricated": false,
-  "nextOperationalAct": "One owner-reviewed deploy/no-sudo read of the Event parent boundary, with canonical private custody; no installation, chmod, gates, stop/start or retries",
+  "eventParentMaintenance": {
+    "doNotRepeat": true,
+    "evidence": "M1_RESULT.json",
+    "state": "COMPLETE_CONSUMED"
+  },
+  "nextOperationalAct": "Owner review of DIRECTED_COMMANDS_FOR_REVIEW.md, then separately authorized single deploy/no-sudo directed read of trio/config/saved/fallback/controls and route/PostgreSQL client; no SELECT or M1/Event repeat",
   "notCertified": [
     "current processes/config/saved/fallback",
     "SQL identity/ownership/import exit",

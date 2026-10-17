@@ -1,3 +1,84 @@
+## Próximo ato CSV preparado — base8bf0fa8e, somente revisão LOCAL
+
+**M1 COMPLETE/CONSUMIDO; não repetir M1/M2/M3, Event/preflights ou frentes ELF.**
+[Roteiro integrado literal](../crm-csv-delivery-review-20261017/DIRECTED_COMMANDS_FOR_REVIEW.md),
+[fontes/procedência](../crm-csv-delivery-review-20261017/DIRECTED_SOURCES.json) e
+[provas focadas](../crm-csv-delivery-review-20261017/DIRECTED_PROOFS.json).
+Nenhum acesso à VPS nesta rodada. CSV SUSPENSO / LOCAL VALIDATED no alcance ensaiado /
+REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+
+O diagnóstico existente foi composto em destino de revisão próprio, sem tocar os
+runners/manifestos/intents consumidos. Fonte editável: scripts/crm_csv_diagnostic/compose_directed.py,
+que consome source_inputs() aceito e pinado. Três arquivos executáveis pequenos derivados
+(launch/driver/runner);35 fontes autenticadas, incluindo26 RPC reutilizadas por referência,
+adaptador frontend53de3ac7 e opsc84a5e05. Não é framework/coletor genérico, novo checker de
+configuração ou preparação operacional dos quatro modos. Não copia runtime, perfis ou
+bindings. A função de SELECT e seus quatro payloads foram excluídos deste roteiro; a
+exposição só permite materialize/collect, não instalação/emissão/partida.
+
+O fluxo novo conecta a fonte editável ao consumidor real: perfil OS vem exclusivamente
+do source.profile autenticado; projeção PM2 completa vem do dump aprovado; Operations.config /
+System.check_config e compare_frontend/compare_saved aceitos permanecem. Preserva ainda
+os bytes completos de saved/fallback, não só o frontend. As identidades/boot esperados são
+CAS histórico: não são fatos atuais e qualquer diferença nega sem adaptação automática.
+
+Controles são observados separadamente pelos canais canônicos: deploy crontab, cron de
+sistema, supervisão, before de ambos crons, initial.private.json, gates e authorization.
+A nova leitura não confere root600/barreira/guarda nem interpreta inactive/enabled como
+defeito. A conferência offline deve autenticar as referências contra custódias já válidas,
+comparar cada cron pelo contrato ScheduledControls(before) e supervisão por initial.supervision;
+gates/authorization false e trio completo de saved/fallback exigem reconciliação dos novos
+bytes. Não se atribui essa certificação a uma simples coleta ou ao gate frontend.
+
+### Gates e única sequência restante
+
+| Ordem | Resultado esperado / consumidor | Encaminhamento |
+| --- | --- | --- |
+| 1 Fontes/revisão | hashes literais→launch→manifest→mesmos bytes em memória; destinos exclusivos | leitura ausente/adulterada/existente nega antes do SSH quando local; não download/fallback |
+| 2 Identidade/config/saved | RPC único de daemon existente com peer/ticks/boot/FD; consumidores canônicos do trio; dumps600 | observação atual futura, não inferida das fontes datadas; perfil OS e projeção completos separados |
+| 3 Rota/cliente | System.db_container, ID/IP/publicação e URLs dos dois consumidores; psql path/versão16 | GATE3_ROUTE_CLIENT_OBSERVED, sem conectar PostgreSQL, sem exigir banco vazio |
+| 4 Controles/custódia | CONTROLS_OBSERVED_NOT_CERTIFIED, canais e export byte-exatos, antes/depois com horários | analisar privately os controles e referências; ownership/root/guarda/barreira permanecem não certificados |
+| 5 Decisão separada | SELECTs delimitados do contrato existente, depois atribuição canônica | sem SELECT nesta entrega, sem capture_imports.capture livre; produção viva não precisa de banco vazio |
+| 6 Materialização final | dados reais e16 vínculos→quatro modos/R1R2, predecessor e2a5 e autoridade apropriada | proteção dos consumidores já adotada permanece; ELF discovery pausado, não condição nova para este diagnóstico |
+| 7 Janela explícita futura | frescor/R0/root→review hashes→A/admissão→saída/ownership/CAS→API24e5857f | nenhuma dessas etapas está autorizada aqui, sem intents inventados |
+| 8 Frontend | API validada UUID/GET/ledger→identidades reais de fronteira→review/decisão→frontend candidato | retorno pós-seleção mantém backend candidato e replay protegido; defeito persistente exige versão compatível |
+
+### Provas efetivas e limites
+
+Cinco ensaios afetados: dois blocos Bash literais completos (materialização local +
+transporte/custódia), adaptador aceito com ambientes OS/PM2 distintos, controles presentes,
+fonte adulterada antes de SSH, peer divergente, leitura de controle negada e transferência
+parcial. O teste de controle negado foi reforçado e só ele repetido: etapa
+controls-deploy-cron / DEPLOY_CRON_READ_FAILED, sem falso terminal de controles observados.
+Compositor reproduz exatamente os três arquivos e35 vínculos digest/tamanho/bootstrap
+em destino descartável; só o destino foi instrumentado. A primeira checagem detectou
+um espaço extra introduzido pelo encapsulamento da string do compositor; corrigida a
+string do produtor, sem mudar os bytes entregues/testados ou afrouxar comparadores.
+
+Reais no laboratório: Node/cliente RPC closure26/protocolo e socket locais, memfd/FD,
+checkers concretos, leituras filesystem, launcher/autenticação, journal/export/ingest
+private_record. Simulados explicitamente: SSH por shim, /proc/SO_PEERCRED produtivos e
+pins sintéticos antes das contraprovas, Docker/psql-path/version e respostas dos controles.
+Network namespace sem VPS. O sandbox inicial impediu socket; mesma suíte executada com
+permissão de laboratório local. Nenhum mock substituiu o comparador por PASS. Provas
+frontend/R1R2/recuperação/autoridade/PM2/M1 não afetadas foram reaproveitadas, sem rebuild
+ou suíte ampla. Fixtures sintéticas e lab.py não são enviados pelo manifest remoto.
+
+Limites herdados explícitos no roteiro: fonte8MiB/boot64B/bundle4MiB/hash-imagem256MiB,
+RPC8s/comando25s/SSH180s; journals e capture_output não têm teto global em bytes. Não
+se declara orçamento de armazenamento/RAM certificado. Os resultados são intervalos,
+sem snapshot nem promoção de DENYs históricos. Falha preserva o parcial e encerra sem
+retry/reconexão/reparo/expansão de limites. Ação operacional seguinte é exclusivamente
+revisar/autorizar os dois blocos publicados, não executá-los nesta rodada. RPO/root
+perecíveis, SELECT e atribuição ownership continuam decisões separadas.
+
+Responsável Deifson; revisão17/10/2026, próxima21/10 ou mudança. NEWauth+NEWDB+NEWcipher,
+crons, produção, guarda38 fechada e out.15 CLOSED preservados, sem observação atual
+nova nesta entrega. Sem VPS/SQL/instalação/restart/importação/alteração de dados/RBAC,
+credenciais/crons/serviços; sem continuidade automática depois da publicação.
+
+---
+
 ## M1 COMPLETE17/10 às15:09 Fortaleza — cinco pais0755, Event original PASS
 
 [Resultado na mesma proposta](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md), [efeitos/hashes](../crm-csv-delivery-review-20261017/M1_RESULT.json). M1 único autorizado6feb950b, owner forneceu coordenação no TTY, deploy uid1000 SEM sudo: cinco0775→0755 por FD, owner/grupo/demais bits e demais campos preservados, ctime esperado. Cinco pares intent/done, plano pinado e terminal APPLIED_EVENT_PARENTS_PASS conferidos; canais11.295B/0B e exports privados byte-exatos off-host. Journal remoto0,005522s; span local576,789931s inclui espera do owner, não duração de manutenção/HTTP.

@@ -1,0 +1,82 @@
+{
+  "authority": "owner review of literal launcher/manifest digests, not installed operational authority",
+  "base": "8bf0fa8e04cb7ed4d19c1c920c90713d4c2533ee",
+  "delivered": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/DIRECTED_COMMANDS_FOR_REVIEW.md": {
+      "bytes": 8909,
+      "sha256": "857779f421f9039334fb34320e641b8bff9dbd5730fe97d6f8ead9a18c6838b9"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/DIRECTED_PROOFS.json": {
+      "bytes": 3765,
+      "sha256": "8c9d23cd16d385b862a7cd4fb675b62133642ccc778363920859ae6f881ea182"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/directed-diagnostic/MANIFEST.json": {
+      "bytes": 14115,
+      "sha256": "1a0ac094b9276b5fdfa09e2716946210e08c73d9f0172548be73d39d8217ffa9"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/directed-diagnostic/driver.py": {
+      "bytes": 9887,
+      "sha256": "6cadf8ba7153e2d5915b4489828fbe5fb0afad64f50850e91cca5d6fb87b94e4"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/directed-diagnostic/lab.py": {
+      "bytes": 2736,
+      "sha256": "e8c3484f188ff1b44a6b9403249add5eadb06ec61be9a8fbaae4cf87a250d574"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/directed-diagnostic/launch.py": {
+      "bytes": 4548,
+      "sha256": "5ce13ad8200026175d12e3b61953568c3005d29dfa8a12d6cfd89f2a5312a378"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/directed-diagnostic/runner.py": {
+      "bytes": 18052,
+      "sha256": "76f90d74008250696b9e220e5963e9c2a4b98dc25a479b1b67fe19eb37fcdc5a"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/test_directed_diagnostic.py": {
+      "bytes": 3703,
+      "sha256": "9527e6c6ed9bee4917377c7a866778f42da34a41d4a4b936398b661d2566110d"
+    },
+    "scripts/crm_csv_diagnostic/compose_directed.py": {
+      "bytes": 6768,
+      "sha256": "844df7da4d1b854cf734628a9681451d96793aa5fb0555490331e4e461fd8009"
+    }
+  },
+  "localReviewOnly": true,
+  "manifestExcludedLabFiles": [
+    "lab.py"
+  ],
+  "newRuntimeCopied": false,
+  "origins": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/contracts.py": {
+      "bytes": 4260,
+      "sha256": "53de3ac796228c908157930cd465993f6b2b8a14e1bc550607ff7e39f5970943"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/MANIFEST.json": {
+      "bytes": 15408,
+      "sha256": "85cbcb315d6081e33aefa79036c435c270e868445c1625b27ce99319af5ee617"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/driver.py": {
+      "bytes": 10339,
+      "sha256": "a739a70920c3221d3bb27851e7656be6f5d522ee22d04cd5ead7689af5fd6820"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/lab.py": {
+      "bytes": 9058,
+      "sha256": "dbedfda1b6b19f4804d9d1ad3cc09b120eb541c5ca546d560c2fa84b6f002985"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/launch.py": {
+      "bytes": 4569,
+      "sha256": "19389532ecdd9b8fc3360fb8c424dbf5bba1c17003c6f4a4f415799a6f7bd280"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/runner.py": {
+      "bytes": 18336,
+      "sha256": "aa3ae7f3c40d2fd64e8f90a0037675c30e821de50fb0be0a63ca8259084ad5b8"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/test_blocks.py": {
+      "bytes": 10531,
+      "sha256": "3f991c066e6b8ea82691d18a9f29bf36f3fec1c039e548cc26bed57efa2ea572"
+    },
+    "scripts/crm_csv_diagnostic/editable_sources.py": {
+      "bytes": 2278,
+      "sha256": "9fc6baad650fdb0ad4bc7c356276e957f454ad19ac595c33f116b6b748455f60"
+    }
+  },
+  "sourceProfileOperationalBytesPublished": false
+}
