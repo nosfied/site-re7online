@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Validate canonical project state
         run: python3 scripts/ci/verify-current-state.py
       - name: Validate pinned CSV release surface
