@@ -1,6 +1,9 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
 
+**CSV17/10 — ACL fechada OFFLINE; manutenção g+w preparada LOCALMENTE.** [Mesma proposta, M1/M2/M3 e9 provas](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): sem impedimento ACL concreto nas evidências preservadas; sem alegar ausência universal. Executor literal por FD, plano/CAS pinado, intent/done por efeito, Event original e retorno condicionado; coordenação nominal Git/npm/mantenedores depende do owner, não de lock hipotético. Nenhuma VPS/efeito produtivo/coleta/backup/SQL; apenas fixtures locais descartáveis. Próximo: revisão/autorização separada e coordenação, sem nova coleta genérica. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO; privados/históricos/NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Deifson; revisão21/10 ou antes de mudança.
+
+
 **CSV17/10 às14:28 Fortaleza — xattr CONSUMED/OBSERVED_NOT_AUTHORIZED.** [Resultado/decisão na mesma proposta](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): novo bloco661c2ffa uma vez deploy sem sudo, exit0; oito elos/cinco pais0775 owner/grupo1000, dez ENODATA61 sem blobs, não ausência comprovada. Custódia/canais byte-exatos, sourceComplete=true/applicationAuthorized=false. Faltam visibilidade ACL, atribuição/exclusão dos writers e plano/intent/CAS/autorização de aplicação; próximo é delimitar essa decisão restrita, sem inventário genérico. Blocos/destinos históricos e xattr consumidos; nenhuma leitura adicional ou alteração. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO. Deifson; revisão21/10 ou antes da mudança.
 
 

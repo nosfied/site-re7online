@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Current Event snapshot observed five775 owner/group1000; ten ENODATA results do not certify attribute absence. Application remains blocked on visibility interpretation, filesystem writer attribution/exclusion, and separately reviewed FD/CAS plan/intent plus owner authorization. Both preflight destinations consumed; no automatic further read or ELF resumption.",
+    "firstConcreteBlocker": "Restricted maintenance executor prepared and locally validated; ACL visibility no longer a demonstrated blocker. Needs owner review/authorization and real scoped maintainer coordination; fixed preserved snapshot CAS must still match all eight links/five775 targets at use, otherwise DENY. No SSH or production effects authorized.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1624,6 +1624,17 @@
       "writersExcluded": false,
       "applicationAuthorized": false,
       "consumed": true
+    },
+    "eventAclVisibilityOffline": {
+      "base": "396f2ed841e46bfc66cc859a5f381c7843b4bdf9",
+      "result": "NO_CONCRETE_ACL_VISIBILITY_BLOCKER_IN_PRESERVED_CASE",
+      "basis": "Linux POSIX ACL-specific read path; readable held FDs, same observed owner/euid1000 and ten ENODATA; no security denial or ACL blob; generic manual caveat is not demonstrated obstruction",
+      "universalAbsenceClaim": false,
+      "historicalResultsUnmodified": true,
+      "preparedExecutor": "scripts/crm_csv_delivery/event_mode_maintenance.source",
+      "proofs": "../crm-csv-delivery-review-20261017/MAINTENANCE_PROOFS.json",
+      "remaining": "review/explicit owner authorization, actual named maintainer/session/job coordination, current all-target FD/CAS and ACL revalidation before any effects",
+      "productionExecuted": false
     }
   }
 }

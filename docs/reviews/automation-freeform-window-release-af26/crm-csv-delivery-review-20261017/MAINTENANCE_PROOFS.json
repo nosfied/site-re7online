@@ -1,0 +1,193 @@
+{
+  "result": "LOCAL_VALIDATED_REVIEW_PENDING_NO_PRODUCTION_AUTHORIZATION",
+  "tests": 9,
+  "cases": [
+    {
+      "action": "apply",
+      "scenario": "normal",
+      "exit": 1,
+      "result": "EVENT_MODE_DENY_OR_PARTIAL_NO_RETRY",
+      "classification": null,
+      "confirmedEffects": null,
+      "canonicalEventLstats": 3,
+      "labOnly": true
+    },
+    {
+      "action": "apply",
+      "scenario": "normal",
+      "exit": 0,
+      "result": "APPLIED_EVENT_PARENTS_PASS",
+      "classification": null,
+      "confirmedEffects": 5,
+      "canonicalEventLstats": 11,
+      "labOnly": true
+    },
+    {
+      "action": "inspect",
+      "scenario": "normal",
+      "exit": 0,
+      "result": "EVENT_MODE_INSPECTION",
+      "classification": "APPLIED",
+      "confirmedEffects": null,
+      "canonicalEventLstats": 13,
+      "labOnly": true
+    },
+    {
+      "action": "return",
+      "scenario": "normal",
+      "exit": 0,
+      "result": "RETURNED_PROVEN_EFFECTS",
+      "classification": null,
+      "confirmedEffects": 5,
+      "canonicalEventLstats": 16,
+      "labOnly": true
+    },
+    {
+      "action": "return",
+      "scenario": "normal",
+      "exit": 1,
+      "result": "EVENT_MODE_DENY_OR_PARTIAL_NO_RETRY",
+      "classification": null,
+      "confirmedEffects": null,
+      "canonicalEventLstats": 18,
+      "labOnly": true
+    },
+    {
+      "action": "apply",
+      "scenario": "normal",
+      "exit": 0,
+      "result": "APPLIED_EVENT_PARENTS_PASS",
+      "classification": null,
+      "confirmedEffects": 5,
+      "canonicalEventLstats": 11,
+      "labOnly": true
+    },
+    {
+      "action": "apply",
+      "scenario": "normal",
+      "exit": 1,
+      "result": "EVENT_MODE_DENY_OR_PARTIAL_NO_RETRY",
+      "classification": null,
+      "confirmedEffects": null,
+      "canonicalEventLstats": 13,
+      "labOnly": true
+    },
+    {
+      "action": "return",
+      "scenario": "normal",
+      "exit": 1,
+      "result": "EVENT_MODE_DENY_OR_PARTIAL_NO_RETRY",
+      "classification": null,
+      "confirmedEffects": null,
+      "canonicalEventLstats": 15,
+      "labOnly": true
+    },
+    {
+      "action": "apply",
+      "scenario": "normal",
+      "exit": 1,
+      "result": "EVENT_MODE_DENY_OR_PARTIAL_NO_RETRY",
+      "classification": null,
+      "confirmedEffects": null,
+      "canonicalEventLstats": 3,
+      "labOnly": true
+    },
+    {
+      "action": "apply",
+      "scenario": "normal",
+      "exit": 1,
+      "result": "EVENT_MODE_DENY_OR_PARTIAL_NO_RETRY",
+      "classification": null,
+      "confirmedEffects": null,
+      "canonicalEventLstats": 3,
+      "labOnly": true
+    },
+    {
+      "action": "apply",
+      "scenario": "deadline-partial",
+      "exit": 1,
+      "result": "EVENT_MODE_DENY_OR_PARTIAL_NO_RETRY",
+      "classification": null,
+      "confirmedEffects": null,
+      "canonicalEventLstats": 3,
+      "labOnly": true
+    },
+    {
+      "action": "inspect",
+      "scenario": "normal",
+      "exit": 0,
+      "result": "EVENT_MODE_INSPECTION",
+      "classification": "PARTIAL_PROVEN",
+      "confirmedEffects": null,
+      "canonicalEventLstats": 5,
+      "labOnly": true
+    },
+    {
+      "action": "return",
+      "scenario": "normal",
+      "exit": 0,
+      "result": "RETURNED_PROVEN_EFFECTS",
+      "classification": null,
+      "confirmedEffects": 1,
+      "canonicalEventLstats": 8,
+      "labOnly": true
+    },
+    {
+      "action": "inspect",
+      "scenario": "normal",
+      "exit": 0,
+      "result": "EVENT_MODE_INSPECTION",
+      "classification": "APPLIED",
+      "confirmedEffects": null,
+      "canonicalEventLstats": 2,
+      "labOnly": true
+    },
+    {
+      "case": "driver response lost after real local five effects",
+      "result": "one transport only; no automatic return/retry; private channels preserved, subsequent separate inspect sees APPLIED"
+    },
+    {
+      "action": "apply",
+      "scenario": "unknown-ack",
+      "exit": 1,
+      "result": "EVENT_MODE_DENY_OR_PARTIAL_NO_RETRY",
+      "classification": null,
+      "confirmedEffects": null,
+      "canonicalEventLstats": 3,
+      "labOnly": true
+    },
+    {
+      "action": "inspect",
+      "scenario": "normal",
+      "exit": 0,
+      "result": "EVENT_MODE_INSPECTION",
+      "classification": "UNCERTAIN_EFFECT",
+      "confirmedEffects": null,
+      "canonicalEventLstats": 5,
+      "labOnly": true
+    },
+    {
+      "action": "return",
+      "scenario": "normal",
+      "exit": 1,
+      "result": "EVENT_MODE_DENY_OR_PARTIAL_NO_RETRY",
+      "classification": null,
+      "confirmedEffects": null,
+      "canonicalEventLstats": 7,
+      "labOnly": true
+    },
+    {
+      "action": "apply",
+      "scenario": "normal",
+      "exit": 1,
+      "result": "EVENT_MODE_DENY_OR_PARTIAL_NO_RETRY",
+      "classification": null,
+      "confirmedEffects": null,
+      "canonicalEventLstats": 3,
+      "labOnly": true
+    }
+  ],
+  "real": "Disposable-directory fchmod by held FDs; meta/ACL kernel reads; immutable original Event predicate; canonical private_record and export hashes; explicit return only confirmed effects",
+  "simulated": "Target namespace, historical expected plan, owner coordination/authorization, deadline/error delivery, SSH and lost response; no actual writer exclusion or productive effects",
+  "productionExecuted": false
+}

@@ -1,21 +1,25 @@
 {
-  "base": "661c2ffa98002431c78c36311e0f3a68085f702b",
-  "scope": "ONE_AUTHORIZED_XATTR_PREFLIGHT_SANITIZED_RESULT_AND_EXISTING_PROPOSAL_ONLY",
+  "base": "396f2ed841e46bfc66cc859a5f381c7843b4bdf9",
+  "scope": "OFFLINE_ACL_VISIBILITY_CONCLUSION_AND_LOCAL_RESTRICTED_FD_MAINTENANCE_PREPARATION_ONLY",
   "files": [
     "docs/BACKLOG_TECH.md",
     "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/MAINTENANCE_MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/MAINTENANCE_PROOFS.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/PREFLIGHT_MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/XATTR_MANIFEST.sha256",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/XATTR_RESULT.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/ALLOWLIST.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
-    "docs/saas/DOCUMENTATION_INDEX.md"
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "scripts/crm_csv_delivery/event_mode_maintenance.source",
+    "scripts/crm_csv_delivery/mode_maintenance.py",
+    "scripts/crm_csv_delivery/test_mode_maintenance.py"
   ],
-  "excluded": "Raw channels/journals/groups/metadata snapshots/private custodies/profiles; all code/tests/executed blocks/previous result bytes and ELF files unchanged",
-  "applicationAuthorized": false
+  "excluded": "All raw custody/plan metadata/coordination and operational inputs; consumed executables/blocks/receipts; runtimes/caches/ELF materials",
+  "productiveEffectsAuthorized": false
 }

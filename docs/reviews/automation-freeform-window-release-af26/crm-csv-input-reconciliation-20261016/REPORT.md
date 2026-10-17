@@ -1,3 +1,11 @@
+## ACL fechada OFFLINE e manutenção restrita LOCAL — base396f2ed8
+
+[Mesma proposta, análise primária e executores M1/M2/M3](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md). No caminho POSIX ACL Linux não há restrição VFS de owner para leitura, falhas LSM/suporte são propagadas e ENODATA corresponde à falta da ACL opcional. A custódia (FDs legíveis, uid=owner1000, cinco775 e dez ENODATA) não demonstra ocultação: a ressalva genérica não é bloqueio concreto nem exige provar ausência de mecanismo desconhecido. ACL base pelo modo continua; registros históricos/absenceConfirmed=false preservados.
+
+Executor futuro remove somente g+w em cinco FDs, preserva owner/grupo/demais bits, revalida plano original/cadeia/ACLs no uso, intent/done por efeito, Event original e retorno só de efeitos comprovados. Coordenação concreta do owner/mantenedores Git/npm/sync é precondição manual registrada, não lock inventado ou prova automatizada de ausência.9 provas locais, incluindo parcial/incerteza/replay/deriva/retorno e transporte simulado com perda de resposta. Nenhuma VPS, coleta, efeito produtivo ou janela. Próximo: revisão dos executores e decisão sobre coordenação/autorização, não nova coleta ACL/ELF por rotina. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; Deifson, revisão21/10 ou antes de mudança.
+
+---
+
 ## Preflight xattr17/10 — coleta completa, aplicação ainda bloqueada
 
 [Resultado na proposta existente](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md) e [hashes/procedência](../crm-csv-delivery-review-20261017/XATTR_RESULT.json): novo bloco661c2ffa executado uma vez às14:28:50 Fortaleza, deploy sem sudo, exit0; histórico getfacl não executado. Oito elos revalidados, cinco diretórios0775 uid/gid1000; access/default retornaram ENODATA61 nos dez casos, zero blobs. Não é ausência comprovada. Nove campos de cada alvo iguais à R1 histórica, sem continuidade/atomicidade presumida. Canais6.978B/0B e custódia canônica byte-exatos; sourceComplete=true/applicationAuthorized=false.

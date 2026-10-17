@@ -1,0 +1,175 @@
+"""Restricted future maintenance. Injected pinned meta/readers/private_record/Event predicate.
+No shell chmod, ACL parser, service action or automatic recovery. Only five fchmod FDs.
+"""
+import base64,datetime,errno,hashlib,json,os,stat,time
+TARGETS=('/opt/re7online/site-re7online','/opt/re7online/site-re7online/apps',
+ '/opt/re7online/site-re7online/apps/whatsapp-agent','/opt/re7online/site-re7online/apps/whatsapp-agent/src',
+ '/opt/re7online/site-re7online/apps/whatsapp-agent/src/events')
+ATTRS=('system.posix_acl_access','system.posix_acl_default')
+class AclPresent(RuntimeError):pass
+
+def utc():return datetime.datetime.now(datetime.timezone.utc).isoformat()
+def digest(v):return hashlib.sha256(json.dumps(v,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+def require(ok,why):
+ if not ok:raise RuntimeError(why)
+
+def exclusive(folder,name,value):
+ # Create once then write through the same canonical private writer; empty intent blocks replay too.
+ fd=os.open(folder/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600);os.close(fd)
+ private_record(folder,name,value)
+
+def coordination(c,action):
+ require(c['action']==action and c['owner']=='Deifson' and c['operatorUid']==1000,'coordination_identity')
+ require(c['authorizedCommit'] and len(c['authorizedCommit'])==40,'owner_review_reference')
+ require(c['maintainers'] and c['sessionJobReferences'] and c['confirmationMethod'],'coordination_incomplete')
+ require(c['allRelevantMaintainersAcknowledged'] is True and c['noFilesystemMaintenanceInFlight'] is True and c['noNewMaintenanceUntilRelease'] is True,'writers_not_coordinated')
+ now=datetime.datetime.now(datetime.timezone.utc);t=datetime.datetime.fromisoformat(c['confirmedUtc'])
+ require(0<=(now-t).total_seconds()<600,'coordination_expired')
+ require(os.getuid()==os.geteuid()==c['operatorUid'] and os.getgid()==os.getegid(),'executor_identity')
+ # Attestations supplied by owner are explicit operational prerequisites, not a kernel writer fence.
+
+def no_optional_acl(fd):
+ for name in ATTRS:
+  try:raw=os.getxattr(fd,name)
+  except OSError as e:
+   if e.errno!=errno.ENODATA:
+    failure=RuntimeError('acl_read_denied_or_error');failure.errno=e.errno;raise failure from None
+  else:
+   # A present value is not interpreted, applied or discarded as harmless.
+   failure=AclPresent('acl_present_analysis_required');failure.evidence={'attribute':name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'bytesBase64':base64.b64encode(raw).decode(),'fdMetadata':meta(os.fstat(fd))};raise failure
+
+def open_chain(plan):
+ require(tuple(plan['targets'])==TARGETS,'literal_population')
+ require(set(plan['expected'])==set(['/', '/opt','/opt/re7online',*TARGETS]),'chain_population')
+ links=[];fds=[]
+ try:
+  fd=os.open('/',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW);fds.append(fd);links.append(('/',None,'/',fd))
+  current=''
+  for part in TARGETS[-1].strip('/').split('/'):
+   current+='/'+part;parent=fd;s=os.stat(part,dir_fd=parent,follow_symlinks=False)
+   require(stat.S_ISDIR(s.st_mode),'chain_type')
+   fd=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent);fds.append(fd)
+   require(meta(os.fstat(fd))==meta(s),'chain_replaced');links.append((current,parent,part,fd))
+  return links
+ except BaseException:
+  for f in reversed(fds):os.close(f)
+  raise
+
+def check(links,expected):
+ for path,parent,name,fd in links:
+  require(meta(os.fstat(fd))==expected[path],'fd_metadata_drift')
+  actual=os.lstat('/') if parent is None else os.stat(name,dir_fd=parent,follow_symlinks=False)
+  require(meta(actual)==expected[path],'path_metadata_drift')
+  if path in TARGETS:
+   require(expected[path]['uid']==1000 and expected[path]['gid']==1000,'target_owner_group')
+   no_optional_acl(fd)
+
+def history(folder,plan):
+ lib_directory(folder);b,bm=lib_stable_file(folder/'effects.private.jsonl',1048576)
+ require(bm['uid']==os.getuid() and stat.S_IMODE(bm['mode'])==0o600,'journal_permissions')
+ rows=[json.loads(x) for x in b.splitlines()];require(rows and rows[0]['event']=='plan','journal_plan_absent')
+ h=digest(plan);intent_raw,im=lib_stable_file(folder/'apply.intent.private.json',1048576)
+ require(im['uid']==os.getuid() and stat.S_IMODE(im['mode'])==0o600,'intent_permissions')
+ intent=json.loads(intent_raw);require(intent['planSha256']==h,'apply_intent_drift')
+ require(rows[0]['plan']==plan and rows[0]['planSha256']==h,'journal_plan_drift')
+ expected={k:dict(v) for k,v in plan['expected'].items()};applied=[];returned=[];pending=None;terminal=None
+ for row in rows[1:]:
+  require(row['planSha256']==h,'journal_reference_drift');kind=row['event']
+  if kind in ('apply-effect-intent','return-effect-intent'):
+   require(pending is None,'journal_pending_conflict');pending=row
+   require(row['path'] in TARGETS and row['before']==expected[row['path']],'journal_before_drift')
+  elif kind in ('apply-effect-done','return-effect-done'):
+   action=kind.split('-')[0];path=row['path']
+   require(pending is not None and pending['event']==action+'-effect-intent' and pending['path']==path,'journal_effect_unpaired')
+   before=expected[path];after=row['after'];wanted=(before['mode']&~0o020) if action=='apply' else plan['expected'][path]['mode']
+   require(after['mode']==wanted and all(after[k]==before[k] for k in before if k not in ('mode','ctime_ns')),'journal_after_drift')
+   if action=='apply':require(path not in applied and path not in returned,'journal_duplicate');applied.append(path)
+   else:require(path in applied and path not in returned,'journal_return_not_proven');returned.append(path)
+   expected[path]=after;pending=None
+  elif kind in ('APPLIED_EVENT_PARENTS_PASS','RETURNED_PROVEN_EFFECTS','DENY_OR_PARTIAL'):
+   if kind=='APPLIED_EVENT_PARENTS_PASS':require(len(applied)==5 and not returned and pending is None,'terminal_apply_drift')
+   if kind=='RETURNED_PROVEN_EFFECTS':require(applied and len(returned)==len(applied) and pending is None,'terminal_return_drift')
+   terminal=kind
+  else:raise RuntimeError('journal_event_invalid')
+ return expected,applied,returned,pending,terminal
+
+def emit(folder,value,code):
+ # Export only this operation's canonical private records, into captured stdout (never public output).
+ exports={};complete=True
+ try:
+  lib_directory(folder)
+  for name in ('apply.intent.private.json','effects.private.jsonl','return.intent.private.json'):
+   f=folder/name
+   try:raw,m=lib_stable_file(f,1048576)
+   except FileNotFoundError:
+    if name=='return.intent.private.json':continue
+    raise
+   require(m['uid']==os.getuid() and stat.S_IMODE(m['mode'])==0o600,'export_permissions')
+   exports[name]={'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'bytesBase64':base64.b64encode(raw).decode()}
+ except Exception:complete=False
+ value.update(privateEvidence=exports,evidenceExportComplete=complete)
+ print(json.dumps(value));return code if complete else 1
+
+def run(action,plan,coord,folder):
+ links=[];started=utc();changed=0;h=digest(plan);end=time.monotonic()+30;can_record=False
+ def record(event,**data):private_record(folder,'effects.private.jsonl',{'event':event,'utc':utc(),'planSha256':h,**data})
+ try:
+  require(action in ('apply','inspect','return'),'literal_action')
+  require(plan['sourceSha256']==EXPECTED_CUSTODY_SHA,'source_reference')
+  if action=='apply':
+   lib_new_directory(folder);can_record=True
+   exclusive(folder,'apply.intent.private.json',{'planSha256':h,'coordination':coord})
+   record('plan',plan=plan,coordination=coord)
+   coordination(coord,'apply')
+   expected={k:dict(v) for k,v in plan['expected'].items()}
+   for path in TARGETS:require(expected[path]['mode']==0o40775,'before_mode_not_0775')
+   require(plan['sourceSha256']==EXPECTED_CUSTODY_SHA,'source_reference')
+   applied=[];returned=[];pending=None
+  else:
+   expected,applied,returned,pending,terminal=history(folder,plan)
+  links=open_chain(plan)
+  if action=='inspect' and pending is not None:
+   for path,_,_,fd in links:
+    now=meta(os.fstat(fd));require(all(now[k]==expected[path][k] for k in ('dev','ino','uid','gid')),'inspection_identity_drift')
+   return emit(folder,{'result':'EVENT_MODE_INSPECTION','classification':'UNCERTAIN_EFFECT','provenApplyEffects':len(applied),'provenReturnEffects':len(returned),'returnEligible':False,'automaticAction':False},0)
+  check(links,expected)
+  if action=='inspect':
+   state=('RETURNED' if terminal=='RETURNED_PROVEN_EFFECTS' else 'RETURN_EFFECTS_PROVEN_NOT_VERIFIED') if len(returned)==len(applied) and returned else (('APPLIED' if terminal=='APPLIED_EVENT_PARENTS_PASS' else 'ALL_EFFECTS_PROVEN_NOT_VERIFIED') if len(applied)==5 else ('PARTIAL_PROVEN' if applied else 'NO_EFFECT_PROVEN'))
+   return emit(folder,{'result':'EVENT_MODE_INSPECTION','classification':state,'provenApplyEffects':len(applied),'provenReturnEffects':len(returned),'returnEligible':bool(applied) and not returned and pending is None and not os.path.lexists(folder/'return.intent.private.json'),'automaticAction':False},0)
+  if action=='return':
+   coordination(coord,'return');require(pending is None and applied and not returned,'return_uncertain_or_consumed')
+   # One return admission; repeated/partial return never auto-replays.
+   exclusive(folder,'return.intent.private.json',{'planSha256':h,'coordination':coord});can_record=True
+   paths=list(reversed(applied))
+  else:paths=list(reversed(TARGETS))  # leaf first, all five validated before any effect
+  bypath={p:fd for p,_,_,fd in links}
+  for path in paths:
+   require(time.monotonic()<end,'maintenance_deadline')
+   check(links,expected)
+   before=dict(expected[path]);fd=bypath[path]
+   wanted=(before['mode']&~0o020) if action=='apply' else plan['expected'][path]['mode']
+   require(wanted==(0o40755 if action=='apply' else 0o40775),'literal_mode_transition')
+   record(action+'-effect-intent',path=path,before=before,wantedMode=wanted)
+   # No path reopen between authentication and fchmod; no syscall-level CAS claimed.
+   require(meta(os.fstat(fd))==before,'point_of_use_fd_drift');no_optional_acl(fd)
+   os.fchmod(fd,stat.S_IMODE(wanted))
+   after=meta(os.fstat(fd));require(after['mode']==wanted and all(after[k]==before[k] for k in before if k not in ('mode','ctime_ns')),'post_effect_drift')
+   no_optional_acl(fd);expected[path]=after
+   record(action+'-effect-done',path=path,after=after);changed+=1
+  check(links,expected)
+  if action=='apply':event_parents(EVENT_SOURCE);result='APPLIED_EVENT_PARENTS_PASS'
+  else:
+   try:event_parents(EVENT_SOURCE)
+   except RuntimeError as e:require(str(e)=='event_source_parent','return_event_verification')
+   else:raise RuntimeError('return_event_expected_deny_absent')
+   result='RETURNED_PROVEN_EFFECTS'
+  record(result,confirmedEffects=changed)
+  return emit(folder,{'result':result,'confirmedEffects':changed,'applicationIsCsvDeployment':False},0)
+ except Exception as e:
+  reason=str(e) if isinstance(e,(RuntimeError,AclPresent)) else 'OS_OR_RECORD_FAILURE'
+  if can_record:
+   try:record('DENY_OR_PARTIAL',reason=reason,errorClass=type(e).__name__,errno=getattr(e,'errno',None),aclEvidence=getattr(e,'evidence',None),confirmedEffectsThisAttempt=changed)
+   except Exception:pass  # Missing journal acknowledgement remains uncertain, never complete.
+  return emit(folder,{'result':'EVENT_MODE_DENY_OR_PARTIAL_NO_RETRY','reason':reason,'errorClass':type(e).__name__,'errno':getattr(e,'errno',None),'confirmedEffectsThisAttempt':changed,'startedUtc':started,'finishedUtc':utc(),'automaticReturn':False},1)
+ finally:
+  for _,_,_,fd in reversed(links):os.close(fd)

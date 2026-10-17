@@ -1,5 +1,74 @@
 # Event — proposta mínima de remediação para decisão separada
 
+## Fechamento ACL OFFLINE e manutenção preparada — revisão396f2ed8
+
+**ACL: SEM IMPEDIMENTO CONCRETO DEMONSTRADO / EXECUTOR LOCAL VALIDATED / REVIEW PENDING / APLICAÇÃO NÃO AUTORIZADA.** Esta análise substitui o impedimento genérico de visibilidade deixado acima; não altera o resultado histórico, seus bytes ou `absenceConfirmed=false`. [Executor fonte](../../../../scripts/crm_csv_delivery/event_mode_maintenance.source), [driver/transporte](../../../../scripts/crm_csv_delivery/mode_maintenance.py), [9 provas focadas](MAINTENANCE_PROOFS.json), [hashes/procedência](MAINTENANCE_MANIFEST.sha256). Os três blocos **M1/M2/M3** no fim deste documento são somente para revisão; os dois preflights anteriores permanecem consumidos e não devem ser repetidos.
+
+### O que foi resolvido sobre ENODATA, sem exigir prova impossível
+
+A ressalva geral de getxattr(2) não demonstra ocultação nestes dois atributos POSIX. O [caminho GET do kernel Linux, fs/xattr.c/do_getxattr/fgetxattr](https://github.com/torvalds/linux/blob/v6.8/fs/xattr.c) encaminha esses nomes ao leitor ACL usando o arquivo aberto. Em [fs/posix_acl.c/vfs_get_acl](https://github.com/torvalds/linux/blob/v6.8/fs/posix_acl.c), não há restrição VFS de owner para ler ACL POSIX; erros de segurança são propagados e falta de suporte retorna EOPNOTSUPP. Quando o getter não encontra ACL opcional, retorna ENODATA. [acl(5)](https://man7.org/linux/man-pages/man5/acl.5.html) distingue ACL base representada pelo modo, entradas adicionais e default de herança.
+
+Na custódia legítima17:28:50UTC: executor uid/euid1000, cinco owners1000, diretórios abertos para leitura por FD, modo0775, dez ENODATA, nenhuma negação/suporte faltante e nenhum blob. Isso é **coerente com inexistência das ACLs opcionais access/default no caminho POSIX comum**, não com bloqueio de leitura por ser usuário de grupo sem privilégio. A ACL base de acesso continua representada pelos bits; não declarar “sem qualquer ACL”. A referência Linux6.8 fundamenta a semântica, não afirma versão/código exato do kernel observado.
+
+Não há evidência de LSM/filesystem específico ocultando ACL com ENODATA. Sua possibilidade abstrata permanece risco residual, **não requisito de provar ausência de todo mecanismo desconhecido** nem impedimento concreto à preparação desta manutenção. Não se exige nova coleta para fechar essa análise. A autorização de aplicação permanece separada; o executor fará revalidação restrita no momento do uso: ACL presente, erro diferente ou deriva nega antes do efeito correspondente, preservando blob privado quando presente, sem parser/alteração de ACL. Evidência concreta contrária futura (valor retornado, erro de segurança/suporte, metadados/identidade divergentes) exigirá revisão; não existe agora blob pendente de análise.
+
+### Efeito literal, precondições e estados
+
+Allowlist permanece exatamente os cinco diretórios da tabela histórica. Única transformação: `st_mode & ~0020`, **0775→0755**, preservando owner/grupo, todos os demais bits e dev/inode. [fchmod(2)](https://man7.org/linux/man-pages/man2/fchmod.2.html) atua no FD e exige ownership/privilégio pertinente; o executor restringe uid/euid a1000 e owner/grupo1000, sem sudo ou troca de identidade. Não há chmod recursivo/path-based, chown, ACL set/removal, modificação do arquivo Event, descendants, perfis, releases, crons ou serviços.
+
+O plano é derivado **em memória** dos bytes originais6978B/SHA971d5d39… e canais/recibo da custódia xattr preservada; inclui os oito elos e metadados privados, sem inventar observação atual. Não é publicado nem materializado agora. Todo consumidor recebe o mesmo plano/hash; qualquer diferença futura nega, **sem renovar/adaptar esse snapshot automaticamente**. O driver carrega os bytes verificados de executor, leitor, private_record e predicado Event208f2ef5…, antes de executar. As fontes anteriores/recibos não são editados nem usados como entrypoints.
+
+| Fronteira | Exigência / resultado |
+| --- | --- |
+| Antes de efeitos |Contexto proprietário e coordenação manual explícita; população literal, fonte pinada; oito elos abertos por openat/no-follow, FD e caminho iguais aos nove campos preservados; cinco diretórios exatamente0775/uid-gid1000; access/default retornando ENODATA, sem blobs |
+| Revalidação no uso |Todos os elos/FDs e ACLs antes de cada mudança, e o FD alvo imediatamente antes de fchmod; nenhum reopen por caminho para efetuar mudança. Ordem folha→raiz |
+| Journal |Diretório exclusivo0700; intent novo O_EXCL; plano/hash/coordenação; intent **antes de cada fchmod**, confirmação posterior com metadados reais por private_record/fsync. Modo/ctime esperados mudam somente por efeito confirmado; outros campos não |
+| Aplicação íntegra |Cinco confirmações, cadeia revalidada e **mesmo event_parents(EVENT_SOURCE)** original com leitura real. APPLIED_EVENT_PARENTS_PASS; não admite gates CSV ou política |
+| Falha entre efeitos |DENY_OR_PARTIAL, preservação e nenhuma continuação/rollback automáticos. Parcial com registros pareados pode ser classificado PARTIAL_PROVEN |
+| Efeito sem confirmação |Intent sem done é UNCERTAIN_EFFECT; nunca inferir fchmod não executado ou repetir. Sem retorno pelo executor nessa classificação |
+| Resposta perdida |Canais/timeout custodiados; não prova cancelamento remoto. Próxima inspeção só por autorização separada, sem reconectar automaticamente |
+| Retorno condicionado |Decisão própria M3 e coordenação nova; só os caminhos com apply-intent/done pareados, mesmo plano/identidades e CAS do estado pós-efeito; nenhuma recuperação parcial prévia. Restaura0775 apenas nesses FDs e confirma cada retorno; reintroduz a negativa Event esperada |
+| Replay |Diretório/intent local e remoto exclusivos; instalação/gerações anteriores não são chamadas. Reaplicar ou repetir retorno nega; intents nunca apagados |
+
+Não se apresenta fstat+fchmod como transação atômica contra outro writer; há intervalo entre comparação e efeito. A proteção contra esse risco depende da coordenação específica abaixo. A operação tem orçamento próprio de30s entre início do executor e etapas de efeito; o transporte tem timeout45s. Não são prazo de backup/root, prova de cancelamento nem duração produtiva medida. Falha em registrar/exportar evidência impede exit0; efeitos eventualmente realizados continuam exigindo inspeção. APPLIED ou RETURNED só após sua verificação terminal; efeitos todos confirmados sem verificação têm classificação distinta.
+
+### Coordenação concreta: quem pausa o quê, e como confirma
+
+**Responsável: Deifson (owner). Executor previsto: sessão deploy, uid1000.** Não há autorização para interromper atividade nesta rodada. Antes de M1 ou M3:
+
+| Responsável / consumidor | Atividade que deve aguardar, nos cinco caminhos | Confirmação exigida ao coordenador |
+| --- | --- | --- |
+| Deifson e cada mantenedor com sessão SSH/editor/SFTP/automação sob seu controle |Git checkout/pull/reset/merge, npm ci/generate/build ou scripts que criem/removam/renomeiem entradas diretamente nos cinco pais; upload/sync/staging/overlay que os toque |Nome/UID/canal e referência da sessão/job; término do comando e de seus filhos ou cancelamento concluído pelo responsável; editor/sync sem tarefa pendente; aceite explícito de não relançar até liberação |
+| Responsável de CI/CD ou job de manutenção, **se existir com esse destino** |Disparo automático/manual de atualização daquele checkout; fila não pode iniciar outro writer enquanto o executor opera |Identificar controlador e referência do job/execução/fila; responsável confirma saída e bloqueio de novos lançamentos pelo mecanismo que realmente controla. Se não houver, owner registra que não existe sob a administração conhecida, sem fabricar verificação de processo |
+| Deifson, como coordenador e operador |Manter uma única sessão de aplicação, revalidar autorização e encaminhar a liberação após resultado/inspeção |Registro privado de todos os ack/referências/método e compromisso sem manutenção em voo; se não conseguir identificar/coordenar os mantenedores administrados, **não confirmar o prompt nem executar** |
+
+Esse registro é confirmação operacional do owner, não sensor que prova ausência universal de processos. Não se inventa lista nominal além do owner conhecido; nomes/sessões/jobs efetivos devem ser fornecidos por ele quando houver manutenção autorizada. O SHA informado é referência à decisão de revisão, **não concede autorização por si**. O prompt exige confirmação específica; responder sem ter realizado a coordenação não satisfaz a precondição. Não há lock apresentado como exclusão de Git/npm/editor: o intent impede apenas replay deste executor, e esses consumidores não o respeitam.
+
+API/worker/frontend e ambos os crons **não precisam ser parados por hipótese**. Os perfis de retorno atestados apontam releases fora do checkout; scripts Event demonstram import/leitura; logs e dados em diretórios descendentes não são os cinco pais cujas entradas mudam. Operação normal nesses descendentes não exige alterar os pais e mantém travessia; permissões de descendentes não mudam. Se o responsável identificar job que cria/remove entrada diretamente em um dos cinco, precisa coordenar **essa atividade específica** antes, não desabilitar todos os crons ou assumir que um daemon já está coberto. Nenhuma parada, alteração de cron ou inventário genérico é parte destes blocos.
+
+### Uso futuro dos blocos M1/M2/M3, custódia e retorno
+
+Todos são executados do ThinkPad pelo mecanismo literal de revisão, enviando o corpo autenticado uma vez à conta deploy por SSH, sem instalação de helper/política ou arquivo executável remoto. M1 e M3 pedem ao owner no TTY local: SHA autorizado, nomes/UIDs/canais dos mantenedores, referências das sessões/jobs e método real de confirmação, e frase de decisão específica. Não pedem senha/segredo. A confirmação é válida por no máximo10min como margem própria de coordenação, não substitui autorização nem prova kernel. M2 não pede nem emite autorização de escrita.
+
+Destinos futuros, **não criados nesta preparação**:
+
+- Remoto: `/dev/shm/re7-csv-event-mode-maintenance-20261017-v1`, owner700, apply.intent/return.intent/effects.private.jsonl600. Criação única em M1; M2 lê/exporta sem modificar; M3 só usa esse mesmo plano/recibo e cria intent de retorno exclusivo.
+- Custódia local: sob o pai privado canônico, `csv-event-mode-apply-20261017-v1`, `csv-event-mode-inspect-20261017-v1` e `csv-event-mode-return-20261017-v1`, cada um exclusivo700, canais/journal600. Destino existente nega; não alterar nome ou repetir para obter PASS.
+
+O driver reutiliza Capture/private_record e exporta os registros remotos privadamente no canal capturado, com tamanho/SHA/Base64 e conferência de permissões. Nenhum desses bytes/coordenação é destinado ao Git. Há no máximo cinco efeitos apply e cinco return, arquivo de journal limitado a1MiB no consumo; fonte limitada e população fixa, sem percorrer runtime. Não há nova geração operacional, backup, pacote ou staging. Materialização/transporte real/autoridade de execução produtiva **não foram certificados**; somente o código preparado e o laboratório foram ensaiados.
+
+M2 é inspeção opcional separada a ser decidida após resultado incerto, não passo automático de M1. M3 depende da classificação e nova decisão explícita, inclusive após parcial conhecido; intent pendente, retorno anterior ou drift bloqueiam. O retorno não restaura ctime antigo (evidência de efeito deve permanecer), owner/grupo/mtime/nlink/size devem corresponder ao recibo. Repor0775 restaura o impedimento pré-parada, **não** é rollback de código/credenciais/banco. Nenhum controle de guarda38/out.15 é alterado.
+
+### Ensaios efetivamente realizados e limites
+
+Nove testes focados com filesystem descartável real: aplicação775→755, preservação de identidade/outros bits, verificação pelo predicado Event original; retorno das cinco mudanças e retorno de parcial confirmado de uma; deriva antes do primeiro efeito e antes do retorno; ACL estendida real inesperada bloqueando tudo; coordenação negativa; replay; fchmod efetuado sem confirmação pareada; e bootstrap literal→transporte→executor/custódia com resposta perdida. Metadados, leitura ACL, fchmod, private_record/fsync e exportação privada são reais locais; namespace dos alvos, plano histórico de teste, owner/coordenação, falhas/deadline e SSH são simulados e não provam exclusão produtiva. Não há callbacks substituindo o predicado por aprovação.
+
+Os primeiros ensaios recusaram o complete porque os ancestrais da fixture tinham herdado775; o predicado original estava correto. A fixture foi corrigida para representar os ancestrais755 observados, sem alterar o predicado nem descartar sua cobertura. A instrumentação inclui lstat de custódia além do Event, sem promover contagem a prova. Reprodução: `PYTHONDONTWRITEBYTECODE=1 python3 -m scripts.crm_csv_delivery.test_mode_maintenance`, em ambiente local com ACL/setfacl já disponíveis para a contraprova de fixture. Não se repetiram suites/PM2/builds anteriores.
+
+Conclusão: a interpretação ACL está fechada offline no alcance sustentado e não há impedimento ACL concreto atual para **preparar** este executor. Restam decisão de revisão/autorização, coordenação real e CAS no instante do efeito; qualquer drift/ACL presente/erro então nega. Nenhum efeito produtivo está autorizado agora. Deifson; revisão17/10, próxima21/10 ou antes de nova decisão. LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO; ELF PAUSADO; NEWauth+NEWDB+NEWcipher, crons, produção, guarda38 e out.15 preservados.
+
+---
+
 ## Resultado xattr autorizado —17/10/2026,14:28:50 Fortaleza
 
 **COLETA COMPLETA / PRESERVED_NOT_AUTHORIZED / APLICAÇÃO BLOQUEADA.** Base/remoto661c2ffa, fontes e hashes conferidos; somente o novo bloco xattr foi executado uma vez, deploy sem sudo, exit0. O bloco histórico/getfacl **não foi executado**. [Resultado sanitizado, horários e hashes de custódia](XATTR_RESULT.json). Fonte98c7b32f…; identidade uid/euid1000, gid/egid1000; quatro grupos permanecem no registro privado. Oito elos de cadeia, cinco diretórios e dez consultas aos dois atributos literais observados; cadeia/FDs/metadados revalidados no intervalo17:28:50.611633–17:28:50.612766UTC.
@@ -250,3 +319,88 @@ O consumidor é a mesma cadeia/leitor e os mesmos canais canônicos; somente a o
 Próximo ato possível é **revisão/autorização exclusiva do novo preflight xattr acima**, não sua execução nesta rodada. Dependência de getfacl remoto removida por desenho explícito, mas suporte/permissões xattr produtivos ainda desconhecidos. Se os blobs existirem, análise competente precisa determinar as entradas/máscara/default e impactos antes de alterar g+w. Se ENODATA, preservar sua ambiguidade e relacionar com modo/owner/capacidade de leitura; não concluir “sem ACL”. Nos demais erros, parar.
 
 Continuam faltando: estados atuais dos cinco diretórios, interpretação das evidências ACL, atribuição/exclusão dos writers relevantes e executor/plano/intent/CAS de aplicação com aprovação própria. As precondições de aplicação por FD, verificação integral pelo predicado original e retorno condicionado descritas anteriormente não mudam. Não há autorização de chmod/ACL, mudança de credenciais, crons, controles ou retomada CSV. Owner Deifson; revisão17/10/2026, próxima21/10 ou antes de alteração. NEWauth+NEWDB+NEWcipher/produção/guarda38/out.15 e todos os privados/DENYs preservados.
+
+## Manutenção restrita — executores literais SOMENTE PARA REVISÃO
+
+Nenhum bloco está autorizado nesta rodada. São decisões separadas, não uma sequência automática. Não executar blocos consumidos acima.
+
+### M1 — aplicação única, somente após autorização e coordenação
+
+```bash
+(
+set -euo pipefail
+umask 077
+python3 -B -I -S - <<'REVIEWED_EVENT_MODE_apply'
+import hashlib,os,stat,sys
+from pathlib import Path
+p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/scripts/crm_csv_delivery/mode_maintenance.py')
+for q in (p,*p.parents):assert not q.is_symlink(),'reviewed_source_symlink'
+s=p.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'reviewed_source_type_size'
+def meta(m):return tuple(getattr(m,'st_'+k) for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
+fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+try:
+ assert meta(os.fstat(fd))==meta(s),'reviewed_source_replaced'
+ raw=os.read(fd,65536)
+ assert meta(os.fstat(fd))==meta(s)==meta(p.lstat()),'reviewed_source_changed'
+finally:os.close(fd)
+assert hashlib.sha256(raw).hexdigest()=='eb2be50002d4944aa73a50fc3ff861bc2c32ee9f85cfadcef8ace2911868e38c','reviewed_maintenance_digest'
+ns={'__name__':'reviewed_maintenance','__file__':str(p)}
+exec(compile(raw,str(p),'exec'),ns)
+sys.exit(ns['execute']('apply'))
+REVIEWED_EVENT_MODE_apply
+)
+```
+
+### M2 — inspeção/exportação separada, sem novo efeito
+
+```bash
+(
+set -euo pipefail
+umask 077
+python3 -B -I -S - <<'REVIEWED_EVENT_MODE_inspect'
+import hashlib,os,stat,sys
+from pathlib import Path
+p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/scripts/crm_csv_delivery/mode_maintenance.py')
+for q in (p,*p.parents):assert not q.is_symlink(),'reviewed_source_symlink'
+s=p.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'reviewed_source_type_size'
+def meta(m):return tuple(getattr(m,'st_'+k) for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
+fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+try:
+ assert meta(os.fstat(fd))==meta(s),'reviewed_source_replaced'
+ raw=os.read(fd,65536)
+ assert meta(os.fstat(fd))==meta(s)==meta(p.lstat()),'reviewed_source_changed'
+finally:os.close(fd)
+assert hashlib.sha256(raw).hexdigest()=='eb2be50002d4944aa73a50fc3ff861bc2c32ee9f85cfadcef8ace2911868e38c','reviewed_maintenance_digest'
+ns={'__name__':'reviewed_maintenance','__file__':str(p)}
+exec(compile(raw,str(p),'exec'),ns)
+sys.exit(ns['execute']('inspect'))
+REVIEWED_EVENT_MODE_inspect
+)
+```
+
+### M3 — retorno único, somente após decisão sobre efeitos comprovados
+
+```bash
+(
+set -euo pipefail
+umask 077
+python3 -B -I -S - <<'REVIEWED_EVENT_MODE_return'
+import hashlib,os,stat,sys
+from pathlib import Path
+p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/scripts/crm_csv_delivery/mode_maintenance.py')
+for q in (p,*p.parents):assert not q.is_symlink(),'reviewed_source_symlink'
+s=p.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'reviewed_source_type_size'
+def meta(m):return tuple(getattr(m,'st_'+k) for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
+fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+try:
+ assert meta(os.fstat(fd))==meta(s),'reviewed_source_replaced'
+ raw=os.read(fd,65536)
+ assert meta(os.fstat(fd))==meta(s)==meta(p.lstat()),'reviewed_source_changed'
+finally:os.close(fd)
+assert hashlib.sha256(raw).hexdigest()=='eb2be50002d4944aa73a50fc3ff861bc2c32ee9f85cfadcef8ace2911868e38c','reviewed_maintenance_digest'
+ns={'__name__':'reviewed_maintenance','__file__':str(p)}
+exec(compile(raw,str(p),'exec'),ns)
+sys.exit(ns['execute']('return'))
+REVIEWED_EVENT_MODE_return
+)
+```
