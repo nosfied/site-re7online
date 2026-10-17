@@ -1,3 +1,11 @@
+## Preflight dos cinco pais — preparado LOCALMENTE, base0b38fb0c
+
+[Roteiro literal e análise de impacto atualizados na mesma proposta](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): transporte/leitor/Capture/private_record reutilizados, cadeia por FD/meta canônico e ACLs por getfacl fixo; ferramentas gateadas antes dos alvos, sem fallback. Getfacl2.3.2 disponível só no laboratório; VPS desconhecida.14 provas locais afetadas, incluindo bloco shell completo e negativas; simulações explícitas, sem VPS/chmod/sudo ou novo pacote operacional.
+
+A documentação identifica Git/npm, importadores Event e cron, mas não comprova dependência efetiva de g+w ou exclusão de writers. Preflight completo não autoriza0755; faltam ACLs atuais e cobertura/exclusão dos mantenedores concorrentes, seguidas de executor/plano/intent/CAS e aprovação específica. Próximo ato concreto para revisão é autorizar somente o bloco de preflight publicado, destino novo exclusivo, sem aplicação. DENY anterior e todos os históricos permanecem intactos; CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO. Deifson; revisão21/10 ou antes da mudança.
+
+---
+
 # CRM/CSV — reconciliação dos inputs e próxima conferência
 
 ## Event17/10 — execução única CONSUMED/DENY e encaminhamento concreto

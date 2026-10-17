@@ -1,6 +1,9 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
 
+**CSV17/10 — preflight Event dos cinco pais preparado LOCALMENTE.** [Mesmo roteiro/proposta](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): identidade/cadeia/metadados/ACLs por FD, ferramenta fixa verificada antes dos alvos, transporte e custódia canônicos;14 provas locais, nenhuma VPS/chmod/sudo. Configurações documentais não provam dependência de g+w nem exclusão dos writers: permanecem pré-condições de qualquer aplicação. Próximo: revisão/autorização somente do preflight, sem remediação. DENYs/consumidos/produção preservados; CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO. Deifson; revisão21/10 ou antes da mudança.
+
+
 **CSV17/10 às14:02 Fortaleza — Event CONSUMED/DENY, custódia conferida.** Uma execução literal92df116b, deploy sem sudo: primeiro pai src/events0775; demais não alcançados, sem certificação global. [Resultado e proposta restrita](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): cinco caminhos literais, somente retirada de g+w após preflight atual integral/CAS/ACL/writers e aprovação separada; quatro pais ainda têm apenas referência histórica. Sem remediação, retry ou nova leitura. O roteiro/destino estão consumidos. Reusar composição/provas; próximos requisitos CSV permanecem dados atuais/saved/fallback, SQL/ownership, vínculos/autoridade/proteção. ELF auxiliar PAUSADO; CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 intocados, sem recertificação atual. Deifson; revisão21/10 ou antes da mudança.
 
 

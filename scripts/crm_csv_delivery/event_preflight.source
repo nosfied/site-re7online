@@ -1,0 +1,105 @@
+"""Targeted read-only Event preflight. Executed in memory, not a new collector framework.
+meta is supplied from the authenticated canonical R2 reader, without modification.
+"""
+import datetime,hashlib,json,os,re,selectors,stat,subprocess,time
+TARGETS=('/opt/re7online/site-re7online','/opt/re7online/site-re7online/apps',
+ '/opt/re7online/site-re7online/apps/whatsapp-agent',
+ '/opt/re7online/site-re7online/apps/whatsapp-agent/src',
+ '/opt/re7online/site-re7online/apps/whatsapp-agent/src/events')
+TOOL='/usr/bin/getfacl'
+class ToolFailure(RuntimeError):pass
+LIMIT=131072
+
+def utc():return datetime.datetime.now(datetime.timezone.utc).isoformat()
+def require(ok,reason):
+ if not ok:raise RuntimeError(reason)
+
+def bounded(argv,fds):
+ p=subprocess.Popen(argv,executable="/proc/self/fd/"+str(fds[0]),pass_fds=fds,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                    env={'PATH':'/usr/bin:/bin','LC_ALL':'C'})
+ sel=selectors.DefaultSelector();out=bytearray();err=bytearray();end=time.monotonic()+3
+ try:
+  for stream,dest in [(p.stdout,out),(p.stderr,err)]:sel.register(stream,selectors.EVENT_READ,dest)
+  while sel.get_map():
+   remaining=end-time.monotonic();require(remaining>0,'acl_tool_timeout')
+   for key,_ in sel.select(min(remaining,0.1)):
+    raw=os.read(key.fileobj.fileno(),min(4096,LIMIT-len(key.data)+1))
+    key.data.extend(raw);require(len(key.data)<=LIMIT,'acl_tool_output_limit')
+    if not raw:sel.unregister(key.fileobj)
+  code=p.wait(timeout=max(0.001,end-time.monotonic()))
+  return code,bytes(out),bytes(err)
+ except Exception as e:
+  failure=ToolFailure(str(e) if isinstance(e,(RuntimeError,ToolFailure)) else 'getfacl_read_failed')
+  failure.channels=(bytes(out),bytes(err));raise failure from None
+ finally:
+  sel.close()
+  if p.poll() is None:p.kill();p.wait()
+  p.stdout.close();p.stderr.close()
+
+def collect():
+ started=utc();rows=[];commands=[];fds=[];links=[];tool=None;stage='executor';reason=None;eno=None;identity=None;toolinfo=None
+ try:
+  identity={'uid':os.getuid(),'euid':os.geteuid(),'gid':os.getgid(),'egid':os.getegid(),'groups':sorted(os.getgroups())}
+  require(identity['uid']==identity['euid']!=0 and identity['gid']==identity['egid'],'unprivileged_executor_required')
+  stage='tool-preflight'
+  # Fixed tool, checked before reading targets. No PATH search, installation or alternate tool.
+  tm=os.lstat(TOOL);require(stat.S_ISREG(tm.st_mode),'getfacl_regular_required')
+  tool=os.open(TOOL,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+  require(meta(os.fstat(tool))==meta(tm),'getfacl_replaced')
+  blob=os.read(tool,1048577);require(len(blob)<=1048576,'getfacl_size_limit')
+  require(meta(os.fstat(tool))==meta(tm) and meta(os.lstat(TOOL))==meta(tm),'getfacl_changed')
+  toolinfo={'path':TOOL,'metadata':meta(tm),'sha256':hashlib.sha256(blob).hexdigest(),'bytes':len(blob)}
+  def command(args,extra=()):
+   t=utc();code=None;out=err=b''
+   try:
+    require(meta(os.fstat(tool))==meta(tm) and meta(os.lstat(TOOL))==meta(tm),'getfacl_changed')
+    code,out,err=bounded([TOOL,*args],(tool,*extra))
+   except ToolFailure as e:
+    out,err=e.channels;raise
+   finally:
+    commands.append({'args':args,'startedUtc':t,'finishedUtc':utc(),'exitCode':code,
+     'stdoutBytes':len(out),'stdoutSha256':hashlib.sha256(out).hexdigest(),'stdoutBase64':__import__('base64').b64encode(out).decode(),
+     'stderrBytes':len(err),'stderrSha256':hashlib.sha256(err).hexdigest(),'stderrBase64':__import__('base64').b64encode(err).decode()})
+   require(code==0 and not err,'getfacl_command_denied');return out.decode('ascii')
+  toolinfo['version']=command(['--version']).strip()
+  require(re.fullmatch(r'getfacl [0-9]+(?:\.[0-9]+)+',toolinfo['version']) is not None,'getfacl_version_format')
+  stage='directory-chain'
+  parent=os.open('/',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW);fds.append(parent)
+  rootmeta=meta(os.fstat(parent));links.append(('/',None,'/',parent,rootmeta))
+  current=''
+  for part in TARGETS[-1].strip('/').split('/'):
+   current+='/'+part
+   s=os.stat(part,dir_fd=parent,follow_symlinks=False)
+   require(stat.S_ISDIR(s.st_mode),'chain_directory_required')
+   fd=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent);fds.append(fd)
+   require(meta(os.fstat(fd))==meta(s),'chain_replaced')
+   links.append((current,parent,part,fd,meta(s)));parent=fd
+  for path,_,_,fd,m in links:
+   if path not in TARGETS:continue
+   stage='directory-acl';rows.append({'path':path,'startedUtc':utc(),'metadata':m,'complete':False})
+   acl=command(['--absolute-names','--numeric','--','/proc/self/fd/'+str(fd)],(fd,))
+   entries=[x for x in acl.splitlines() if x and not x.startswith('#')]
+   require(all(re.fullmatch(r'(?:default:)?(?:user|group|mask|other):[0-9]*:[rwx-]{3}(?:\s+#effective:[rwx-]{3})?',x) for x in entries),'acl_format')
+   require(all(any(x.startswith(prefix) for x in entries) for prefix in ['user::','group::','other::']),'acl_base_entries')
+   rows[-1].update(acl=acl,extendedOrDefaultAcl=any(x.startswith(('default:','mask:')) or re.match(r'(user|group):[0-9]+:',x) for x in entries),finishedUtc=utc(),complete=True)
+  stage='revalidation'
+  for path,par,name,fd,m in links:
+   require(meta(os.fstat(fd))==m,'directory_fd_changed')
+   now=os.stat(name,dir_fd=par,follow_symlinks=False) if par is not None else os.lstat('/')
+   require(meta(now)==m,'directory_path_changed')
+  require(meta(os.fstat(tool))==meta(tm) and meta(os.lstat(TOOL))==meta(tm),'getfacl_changed')
+  require(len(rows)==5 and all(x['complete'] for x in rows),'target_population')
+  chain=[{'path':p,'metadata':m} for p,_,_,_,m in links]
+  result={'result':'EVENT_PREFLIGHT_OBSERVED_NOT_AUTHORIZED','readComplete':True,'chain':chain,'tool':toolinfo}
+ except Exception as e:
+  reason=str(e) if isinstance(e,(RuntimeError,ToolFailure)) else 'READ_OR_TOOL_FAILURE'
+  # RuntimeError strings are only static literals above; OS error content stays out of diagnostics.
+  eno=getattr(e,'errno',None)
+  result={'result':'EVENT_PREFLIGHT_DENY_NO_RETRY','readComplete':False,'denialStage':stage,'denialReason':reason,'errorClass':type(e).__name__,'errno':eno}
+ finally:
+  for fd in reversed(fds):os.close(fd)
+  if tool is not None:os.close(tool)
+ result.update(startedUtc=started,finishedUtc=utc(),identity=identity,toolObserved=toolinfo,chainObserved=[{'path':p,'metadata':m} for p,_,_,_,m in links],observations=rows,commands=commands,
+  atomicSnapshot=False,mutations=False,writersExcluded=False,applicationAuthorized=False,eventParentsCertified=False)
+ print(json.dumps(result,sort_keys=True))
+ return 0 if result['readComplete'] else 1

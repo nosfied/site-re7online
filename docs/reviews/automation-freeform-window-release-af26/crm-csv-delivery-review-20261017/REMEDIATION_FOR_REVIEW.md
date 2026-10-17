@@ -43,3 +43,77 @@ Aprovar separadamente uma operação de manutenção **limitada aos cinco caminh
 Mesmo que Event passe, o próximo requisito CSV é a obtenção dirigida dos dados atuais de trio/saved/fallback/controles e canal SQL/ownership, com autorização própria para SELECT e atribuição; seguem vínculos/autoridade e proteção dos consumidores. Não há backup/RPO a renovar enquanto não houver janela coordenada. Reusar composição, pacotes e provas válidos, incluindo recuperação ORIGINAL e prevenção pré-parada. ELF/toolchain-discovery permanece pausado; não se inventa sua certificação nem se retoma esse método auxiliar.
 
 NEWauth+NEWDB+NEWcipher, ambos os crons, frontend, guarda38 e out.15 não foram modificados. Isso descreve ausência de efeitos nesta operação, **não** uma recertificação atual global de produção. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
+
+## Preflight literal preparado LOCALMENTE — autorização futura necessária
+
+```bash
+(
+set -euo pipefail
+umask 077
+python3 -B -I -S - <<'REVIEWED_EVENT_PREFLIGHT'
+import hashlib,os,stat,sys
+from pathlib import Path
+p=Path('/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926/scripts/crm_csv_delivery/preflight.py')
+for q in (p,*p.parents):assert not q.is_symlink(),'reviewed_source_symlink'
+s=p.lstat();assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<65536,'reviewed_source_type_size'
+def meta(m):return tuple(getattr(m,'st_'+k) for k in ('dev','ino','mode','uid','gid','nlink','size','mtime_ns','ctime_ns'))
+fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+try:
+ assert meta(os.fstat(fd))==meta(s),'reviewed_source_replaced'
+ raw=os.read(fd,65536)
+ assert meta(os.fstat(fd))==meta(s)==meta(p.lstat()),'reviewed_source_changed'
+finally:os.close(fd)
+assert hashlib.sha256(raw).hexdigest()=='4447ecad371247b57b6f0007b719362e6f716339e0a6a792ae27a5b8f42516f7','reviewed_event_preflight_digest'
+ns={'__name__':'reviewed_event_preflight_driver','__file__':str(p)}
+exec(compile(raw,str(p),'exec'),ns)
+sys.exit(ns['execute']())
+REVIEWED_EVENT_PREFLIGHT
+)
+```
+
+### Ferramentas, sequência e destinos do comando acima
+
+O bloco é **preparado para revisão; não foi executado na VPS**. Precisa de autorização posterior exclusivamente de preflight, não de chmod. Há um só SSH deploy, BatchMode/StrictHostKeyChecking, prazo25s, sem reconexão. Nenhum arquivo remoto é criado. O destino local novo é `/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/csv-delivery-event-preflight-20261017-v1`, exclusivo0700, sob o pai privado existente; destino já existente nega antes de SSH. Os destinos Event-boundary, R1 e complementações anteriores continuam consumidos/intocados.
+
+| Ferramenta / fonte | Conferência anterior ao uso | Ausência / divergência |
+| --- | --- | --- |
+| ThinkPad `/usr/bin/ssh`, Python3/stdlib |Disponíveis no laboratório; script/reader/fontes conferidos antes do único SSH |Nega localmente, sem conexão |
+| VPS `/usr/bin/python3 -B -I -S` |Canal já usado; erro de execução é preservado em stderr/exit do SSH |Sem alternativa/interpretação via app |
+| VPS `/usr/bin/getfacl` |**Disponibilidade remota desconhecida**. Primeiro gate remoto após identidade: arquivo regular/no-follow, FD, metadados estáveis, SHA e versão, antes dos alvos |Nega antes de ler os diretórios. Sem command-v/search, instalação, sudo, getfattr/xattr alternativo ou fallback |
+| `/proc/self/fd`, openat/no-follow e passagem de FDs |Uso real no laboratório; ausência/acesso negado remoto nega |Não substitui por reabertura do mesmo caminho |
+
+No laboratório getfacl2.3.2 foi conferido e executado por **imagem FD**, com argv0 estável. O primeiro ensaio expôs que argv0 pelo número do FD altera o nome impresso por `--version`; corrigiu-se somente argv0 mantendo executable no FD, sem relaxar formato. A presença desse utilitário e a proteção de seu caminho na VPS não são certificadas pela prova local. Seu hash é observação, não autoridade para instalar/executar aplicações ou certificação do toolchain pausado.
+
+O driver carrega os bytes pinados do transporte anterior, `stable_file/meta` do leitor R2 e `Capture/private_record` canônicos, sem entrypoints históricos. O reader e o novo corpo remoto são verificados e compilados dos mesmos bytes; não há hash seguido de import por caminho mutável. A consulta inicia registrando uid/euid/gid/egid/grupos e exige executor não privilegiado, sem mudança de identidade. A sessão SSH é a de deploy. Um uid numérico não prova cobertura dos writers.
+
+A cadeia deduplicada `/`→`/opt`→`/opt/re7online`→cinco alvos é aberta componente a componente, no-follow, com FDs mantidos até o final. Registra nove campos do `meta` canônico: dev/ino/mode/uid/gid/nlink/size/mtime_ns/ctime_ns. Cada ACL dos **cinco** alvos é lida pelo getfacl numérico sobre o FD herdado, incluindo ACL default, sem teste de escrita. Não se lê o arquivo Event ou perfis/ambientes; metadados/ACLs dos pais não alvos não autorizam sua modificação. A coleta final revalida FD, resolução por pai e metadados de todos os elos; atime não integra o contrato canônico. Intervalos separados não são snapshot atômico; a amostra não exclui writers nem garante estabilidade futura.
+
+Cada comando getfacl tem argumentos, início/fim, exit, tamanho/hash e canais Base64 privados, mesmo se houver parcial. Prazo3s por chamada, saída131.072B por canal (no excesso preserva o byte sentinela adicional), versão mais cinco ACLs; tool máximo1MiB lido só em memória para hash. Timeout/excesso encerra/recolhe o filho, sem retry. Canais externos stdout/stderr do único SSH são preservados antes do parse, com seus horários/código/tamanhos/SHA pelo Capture e journal canônicos. Não há novo escritor de custódia ou exportador remoto. Ausência, acesso negado, symlink, adulteração, erro/formato ACL ou drift nega e preserva o alcançado; os restantes não são certificados.
+
+Resultado completo significa **OBSERVED_NOT_AUTHORIZED**;0775 e ACL estendida/default são observados, nunca convertidos em autorização de0755. `writersExcluded=false`, `applicationAuthorized=false`, `eventParentsCertified=false`. O predicado Event original não é chamado para produzir PASS sobre0775, nem foi modificado. Ele continua exigido na verificação futura depois de qualquer mudança aprovada.
+
+### Consumidores: o que a documentação/configuração permite afirmar
+
+| Consumidor / referência existente | Relação com os cinco diretórios | Conclusão sobre dependência de g+w |
+| --- | --- | --- |
+| Runbook, fluxo histórico de deploy sem migration (checkout/pull no checkout e npm ci/db:generate/build em apps/whatsapp-agent) |Git pode criar/remover/renomear entradas em todos os cinco; npm gera dependências/artefatos sobretudo abaixo de apps/whatsapp-agent |Se UID efetivo for owner,0755 mantém escrita. Se depender de grupo/ACL, pode quebrar atualização. Configuração documental não demonstra UID/grupos atuais ou exclusão. Exemplos antigos não serão executados |
+| Política original-only e2a5 pinada na custódia R1; targetProcesses.return |API usa release security-epoch-v3-36f51ebe…; worker usa release worker-minimal-reactive…; ambos fora do checkout alvo |Não demonstram necessidade de criar entradas nos cinco pais. São referências históricas atestadas, não identidade/cwd atual nem prova de ausência de outros acessos |
+| `apps/whatsapp-agent/scripts/events-retention.ts` e `storage-report.ts`; package.json events:retention/storage:report |Leem/importam Event; retenção modifica DB e relatório lê filesystem. `.data`/logs são descendentes distintos; travessia permanece com0755 |Nenhum exige comprovadamente g+w dos cinco pais para importar o módulo. Não executar os scripts para testar; não certificar credenciais/políticas ou reabilitar retenção |
+| Cron de media/retention documentado no runbook |Cwd do checkout, saída em `.data/logs`, sem criação demonstrada nos cinco diretórios literais |Permissões de descendentes ficam intactas. Documento não é crontab atual, nem prova de identidade/writers; crons recuperados não serão alterados |
+| Preparadores futuros/overlay Event e `prestop_contract.event_parents` |Consumidor direto do contrato de pais sem0022, revalidado no uso |Mudança proposta resolve só esse contrato se toda cadeia estiver adequada; não autoriza overlay, CSV ou outra alteração |
+
+**Não foi identificado em evidência disponível um consumidor que comprovadamente precise de escrita de grupo nesses cinco diretórios específicos. Isso não prova sua ausência.** Faltam atribuição efetiva de mantenedores/Git/npm/automação/SSH concorrentes e respectivos direitos/locks. O preflight proposto não faz inventário genérico de processos nem pretende fornecer essa exclusão. Antes de aplicar: owner deve identificar e impedir sessões/jobs de manutenção relevantes durante a operação, com mecanismo/identidade e saída comprovados sob decisão específica; lock advisory desconhecido não é exclusão. Se essa cobertura não puder ser demonstrada, aplicação continua bloqueada, mesmo com coleta completa.
+
+### Decisão possível depois do preflight e controles de aplicação/retorno
+
+- Se getfacl faltar: diagnóstico exato TOOL/PATH/errno custodiado; nenhum alvo certificado. Parar e decidir separadamente, sem ferramenta alternativa automática.
+- Se o preflight negar ou qualquer alvo divergir da proposta literal0775/identidade/cadeia: preservar; não adaptar input. Não há PASS parcial autorizando chmod.
+- Se completo: analisar owner/grupos e ACL access/default de cada alvo. ACL estendida exige avaliar efeito da máscara;0775→0755 não é autorização para alterar uma máscara sem essa análise. O preflight não fabrica esse aceite.
+- Somente após owner aceitar impactos e cobertura/exclusão: futuro plano/intent/hash novo ligado ao snapshot privado, aplicação por FD com revalidação imediata, sem CAS simulado como atomicidade de filesystem. O executor de aplicação **ainda não está entregue/autorizado**; resultado da coleta é o insumo necessário. Os cinco efeitos/partial/recibo e retorno condicionado já delimitados acima permanecem exigidos.
+- Verificação futura: mesmas identidades/owners/grupos/ACLs esperadas e modo0755, cadeia/predicado Event completo; conteúdo Event, releases e controles preservados. Retorno só sobre FDs/efeitos comprovados, CAS pós-mudança e decisão explícita, sem rollback automático, restaurando0775 e sua negativa conhecida.
+
+### Validação local desta extensão
+
+[14 provas focadas](PREFLIGHT_PROOFS.json), reproduzíveis com `PYTHONDONTWRITEBYTECODE=1 python3 -m scripts.crm_csv_delivery.test_preflight`. Bash/heredoc/Python literal executados em laboratório; shim Python só injeta a instrumentação local de SSH/namespace/custódia. Código verificado, decisões, FD/getfacl local, leitor, Capture e private_record reais. O namespace remoto é fixture temporária; UID/root, access denied, substituição, ACL estendida/formato, timeout e resposta perdida são fronteiras simuladas explicitamente. Excesso de canal usa filho local real e limite real. Destino existente e adulteração de source/reader negam antes de SSH. Prova local não certifica ferramentas, ACLs, identidades ou exclusão de writers produtivos. Nenhuma suíte anterior, rebuild, captura VPS ou ação consumida foi repetida.
+
+LOCAL VALIDATED no alcance acima / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. Apenas preflight futuro para revisão; nenhuma autorização de aplicação. ELF continua PAUSADO.

@@ -1,19 +1,24 @@
 {
-  "base": "92df116b8523fcefad293c2847455781550631cf",
-  "scope": "ONE_CONSUMED_EVENT_READ_SANITIZED_RESULT_AND_REMEDIATION_PROPOSAL_ONLY",
+  "base": "0b38fb0c492a7d16e04e66c39e54e8c9545060b7",
+  "scope": "LOCAL_EVENT_FIVE_DIRECTORY_PREFLIGHT_ONLY_NO_REMOTE_EXECUTION",
   "files": [
     "docs/BACKLOG_TECH.md",
     "docs/RUNBOOK_WHATSAPP_AGENT.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/PREFLIGHT_MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/PREFLIGHT_PROOFS.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/RESULT.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/ALLOWLIST.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
-    "docs/saas/DOCUMENTATION_INDEX.md"
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "scripts/crm_csv_delivery/event_preflight.source",
+    "scripts/crm_csv_delivery/preflight.py",
+    "scripts/crm_csv_delivery/test_preflight.py"
   ],
-  "excluded": "Raw custody/channels/journals/metadata bindings, private paths, runtimes, unrelated drafts; no code or operational permission changes",
-  "remediationExecuted": false
+  "excluded": "Custodies/raw channels/ACLs/operational profiles/bindings/runtime/caches/ELF materials and consumed destinations",
+  "productionExecuted": false,
+  "applicationAuthorized": false
 }

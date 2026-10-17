@@ -1,0 +1,86 @@
+{
+  "result": "LOCAL_VALIDATED_NOT_OPERATIONALLY_CERTIFIED",
+  "tests": 14,
+  "cases": [
+    {
+      "case": "real child output over131072B",
+      "result": "DENY with retained bounded partial, child reaped"
+    },
+    {
+      "case": "read-denied",
+      "exit": 1,
+      "transport": "SSH simulated once; literal Python launcher and verified driver; custody local real",
+      "remoteResult": "EVENT_PREFLIGHT_DENY_NO_RETRY"
+    },
+    {
+      "case": "existing custody destination",
+      "result": "DENY before SSH; no overwrite"
+    },
+    {
+      "case": "extended-acl",
+      "exit": 0,
+      "transport": "SSH simulated once; literal Python launcher and verified driver; custody local real",
+      "remoteResult": "EVENT_PREFLIGHT_OBSERVED_NOT_AUTHORIZED"
+    },
+    {
+      "case": "literal full bash/heredoc/Python/custody",
+      "result": "PASS",
+      "simulated": "only SSH, target namespace and local custody destination; shim injects these at Python entry, no validator replaced"
+    },
+    {
+      "case": "invalid-acl",
+      "exit": 1,
+      "transport": "SSH simulated once; literal Python launcher and verified driver; custody local real",
+      "remoteResult": "EVENT_PREFLIGHT_DENY_NO_RETRY"
+    },
+    {
+      "case": "missing-tool",
+      "exit": 1,
+      "transport": "SSH simulated once; literal Python launcher and verified driver; custody local real",
+      "remoteResult": "EVENT_PREFLIGHT_DENY_NO_RETRY"
+    },
+    {
+      "case": "source and reader adulteration",
+      "result": "DENY before SSH"
+    },
+    {
+      "case": "root",
+      "exit": 1,
+      "transport": "SSH simulated once; literal Python launcher and verified driver; custody local real",
+      "remoteResult": "EVENT_PREFLIGHT_DENY_NO_RETRY"
+    },
+    {
+      "case": "swap",
+      "exit": 1,
+      "transport": "SSH simulated once; literal Python launcher and verified driver; custody local real",
+      "remoteResult": "EVENT_PREFLIGHT_DENY_NO_RETRY"
+    },
+    {
+      "case": "symlink",
+      "exit": 1,
+      "transport": "SSH simulated once; literal Python launcher and verified driver; custody local real",
+      "remoteResult": "EVENT_PREFLIGHT_DENY_NO_RETRY"
+    },
+    {
+      "case": "tool-timeout",
+      "exit": 1,
+      "transport": "SSH simulated once; literal Python launcher and verified driver; custody local real",
+      "remoteResult": "EVENT_PREFLIGHT_DENY_NO_RETRY"
+    },
+    {
+      "case": "lost",
+      "exit": 1,
+      "transport": "SSH simulated once; literal Python launcher and verified driver; custody local real",
+      "remoteResult": null
+    },
+    {
+      "case": "valid",
+      "exit": 0,
+      "transport": "SSH simulated once; literal Python launcher and verified driver; custody local real",
+      "remoteResult": "EVENT_PREFLIGHT_OBSERVED_NOT_AUTHORIZED"
+    }
+  ],
+  "real": "local getfacl2.3.2 via inherited FDs, kernel stat/open/read, canonical source loading/Capture/private_record",
+  "simulated": "SSH/deploy namespace, access denial, races, ACL variants and timeout; no VPS or writer exclusion; destination redirected only for local custody",
+  "productionExecuted": false
+}

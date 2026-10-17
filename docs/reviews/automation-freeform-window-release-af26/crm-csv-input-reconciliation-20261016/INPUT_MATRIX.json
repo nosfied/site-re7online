@@ -1524,6 +1524,15 @@
       "status": "CSV_SUSPENDED_NOT_DEPLOYED_NOT_WINDOW_READY",
       "nextReview": "2026-10-21 or before any authorized change"
     },
-    "eventRemediationProposal": "../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md"
+    "eventRemediationProposal": "../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md",
+    "eventPreflightPreparation": {
+      "base": "0b38fb0c492a7d16e04e66c39e54e8c9545060b7",
+      "result": "LOCAL_VALIDATED_REVIEW_PENDING",
+      "command": "../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md",
+      "proofs": "../crm-csv-delivery-review-20261017/PREFLIGHT_PROOFS.json",
+      "productionExecuted": false,
+      "applicationAuthorized": false,
+      "remaining": "Current ACLs/tools/identities and filesystem writer attribution/exclusion; separate reviewed application executor and approval after observation. Existing Event DENY remains."
+    }
   }
 }
