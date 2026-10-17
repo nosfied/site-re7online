@@ -72,7 +72,7 @@ for n in('launch.py','driver.py','runner.py'):add(n,out/n,True)
 for n in('read_package.py','privileged_output.source','ops.source','contracts.py'):
  e=manifest['files'][n];p=Path(e['source']);add(n,p if p.is_absolute()else r/p,e['bootstrap'])
 for n in('identity.sql','ownership.sql','imports.sql'):add(n,rv/'crm-csv-three-gaps-procedure-20261017'/n)
-add('capture_imports.source',rv/'crm-csv-operational-20261016/capture_imports.py')
+add('capture_imports.source',r/'scripts/crm_csv_delivery/capture_imports.source')
 files['channel.private.json']={'source':'derived-from-pinned-private-capture','relativeSource':'not-a-path-derived-in-memory','bytes':len(channel),'sha256':h(channel),'bootstrap':False,
  'derivedFrom':{'captureSha256':'f6873eb97f5a70709675ad16b8b4879ff1a1953dc58464c704a80e735b5af8d5','commandIds':['db-route','sql-client-path','sql-client-version']}}
 (out/'MANIFEST.json').write_text(json.dumps({'base':'c5b6dbc4acbd09d609a0bc71beb1f925b6bcb91e','editableRunnerSourceSha256':h(body),'scope':'review-only three pinned SQLs; no trio/control refresh, no operational authority','files':files,'journalReadLimit':96*1024*1024},indent=2,sort_keys=True)+'\n')

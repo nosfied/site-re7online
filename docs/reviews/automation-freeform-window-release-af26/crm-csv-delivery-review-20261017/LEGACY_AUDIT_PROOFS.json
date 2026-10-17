@@ -1,0 +1,31 @@
+{
+  "actual": {
+    "sourceSha256": "e41c5dc714d5cabdadedc5f88c12d1ea63f26ba1c9fd34df411f01fcdb3ac01e",
+    "originalGroups": {
+      "COMPLETED": 20,
+      "UNKNOWN": 1764
+    },
+    "correctedGroups": {
+      "COMPLETED": 20
+    },
+    "eventEvidencePreserved": 1784,
+    "orphanCreationGroups": 0,
+    "exactTenantEmbeddedRequestJoin": true,
+    "terminalPredicateOnly": "PASS",
+    "fullAdmission": "NOT_SATISFIED canonical_exit_required/knownActivityScope/current authority pending"
+  },
+  "base": "a76fcb60c1fe17ccc0cc552e5f7238373851b40a",
+  "tests": 16,
+  "sourceSha256": "8a2955b0db3a409a5311609a281eb3936583fd2234afb483c38f6f4fbfbd7871",
+  "producerSourceCommit": "7f79cee615c4bbfef342fef0084644b3d669712a",
+  "producerArchiveSha256": "36f51ebef7bf74f6efc90088254b1a806f427ee4f614ce9e0802b37d281a80cb",
+  "producerCompiledHashes": {
+    "crmContactUpsert": "30234430b9ce501dfb5523c654d877cd0c54118a3d4ee62d3eaa9b31246f9949",
+    "routes": "27b689d964b389c56dd46c3027c38c36931eaa1afaf450a11a0fdef990a0eaa0"
+  },
+  "producerTsHash": "6bda96e66f81a194fede5ed19d8c79a3d3f0437a1f00f4783d5f73f338835342",
+  "real": "attested producer pure JS templates/hash via local Node; original/corrected classifiers, canonical gate, future diagnostic consumer, immutable private captured rows",
+  "simulated": "synthetic tenants/contacts/operation UUIDs only; no producer application/DB/process effects",
+  "noVpsSqlRuntimeOrImportExecution": true,
+  "status": "LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY"
+}

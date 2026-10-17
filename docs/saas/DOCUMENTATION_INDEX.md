@@ -1,5 +1,20 @@
 # Documentation Index
 
+## Correlação legada CSV — corrigida OFFLINE para revisão
+
+[Conclusão vigente](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[16 provas/bytes/procedência](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/LEGACY_AUDIT_PROOFS.json).
+Erro demonstrado no agrupamento: created usa leadId+UUID+hash de linha e summary prefixo+UUID.
+Mesmos1784 eventos →20 operações por tenant/UUID exatos, sem excluir evidência ou usar
+telefone/tempo. Gate terminal puro passa offline; admissão integral NÃO está satisfeita:
+saída/ownership/fence/knownActivityScope/autoridade permanecem. Órfãos, colisões e
+operações reais incompletas continuam negando. Fonte futura e hooks editáveis corrigidos;
+nenhum pacote selado/resultado17:44 foi reescrito. Próximo: revisão e vínculo na futura
+composição, sem promover análise a certificado operacional. SQL v1/v2 e M1 consumidos;
+ELF pausado. CSV SUSPENSO / LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+Checkpoints abaixo preservam a cronologia, inclusive contagens do leitor antigo.
+
+
 ## Resultado vigente SQL v2 — CONSUMED/COMPLETE17:44 Fortaleza
 
 [Resultado/custódia sanitizados](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_RESULT.json),

@@ -1,3 +1,23 @@
+## Reconciliação legada OFFLINE — correlação corrigida localmente
+
+[Conclusão/produção das chaves](REPORT.md),
+[16 provas](../crm-csv-delivery-review-20261017/LEGACY_AUDIT_PROOFS.json).
+1764 criações e20 resumos da captura17:44 se correlacionam por UUID de chamada embutido
+**e tenant**, não por telefone/hash/tempo. Mesmo conjunto1784 evidências →20 grupos
+COMPLETED; nenhuma evidência removida. Erro no agrupamento52d6, não no gate terminal.
+Fonte futura editável e hooks de composição corrigidos; snapshots/SQL v1/v2 consumidos
+intactos. Órfãos/ambiguidade/operações realmente incompletas continuam negando.
+
+| Controle | Estado vigente |
+| --- | --- |
+| Predicado terminal puro sobre a captura corrigida |PASS para20 resumos correlacionados, somente offline |
+| Admissão integral |NÃO satisfeita: saída/ownership/escopo completo conhecido/fence não foram provados por esta análise |
+| Próximo delta |revisar correção e vincular fonte/hashes à futura composição; não ajustar escopo/binding histórico para PASS |
+| Demais dependências |atribuição/knownActivityScope/16 vínculos/autoridade/decisões API→frontend permanecem |
+
+LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV suspenso;
+M1 consumido; ELF pausado. Seções abaixo são checkpoints históricos.
+
 ## Resultado vigente — SQL v2 CONSUMED/COMPLETE17:44; admissão não satisfeita
 
 [Resultado sanitizado](../crm-csv-delivery-review-20261017/SQL_V2_RESULT.json),

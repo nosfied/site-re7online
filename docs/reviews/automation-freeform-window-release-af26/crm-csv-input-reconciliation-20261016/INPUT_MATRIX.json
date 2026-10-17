@@ -1757,6 +1757,22 @@
       "firstLocalTask": "Review legacy correlation/scope against canonical contracts using existing private bytes, without changing classifier or promoting UNKNOWN",
       "M1": "CONSUMED",
       "ELF": "PAUSED"
+    },
+    "legacyCorrelationCorrection": {
+      "base": "a76fcb60c1fe17ccc0cc552e5f7238373851b40a",
+      "proof": "../crm-csv-delivery-review-20261017/LEGACY_AUDIT_PROOFS.json",
+      "originalClassifiedGroups": 1784,
+      "correctedOperationGroups": 20,
+      "allEvidencePairsPreserved": 1784,
+      "joins": "exact tenant plus request UUID embedded by attested producer; never phone/time",
+      "orphanCreationGroupsObserved": 0,
+      "terminalPredicateOnly": "PASS offline",
+      "fullAdmission": "NOT_SATISFIED exit/ownership/knownActivityScope/fence/authority pending",
+      "source": "scripts/crm_csv_delivery/capture_imports.source",
+      "tests": 16,
+      "composedOrDeployed": false,
+      "consumedSqlV1V2Unchanged": true,
+      "status": "LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY"
     }
   }
 }

@@ -4,10 +4,16 @@
 
 Este contrato descreve código/provas locais, **não a API produtiva atual**. [Estado vigente,
 consumidos e metodologia](../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia):
-CSV SUSPENSO / NOT DEPLOYED; diagnóstico SQL negou em identity antes de produzir dados;
-ownership/imports não foram consultados. A auditoria não é atividade completa, timeout
-não prova rollback e não autoriza reimportação. A correção local do ambiente do cliente
-não altera este contrato nem a ordem API→frontend. As cláusulas abaixo ficam intactas.
+CSV SUSPENSO / NOT DEPLOYED. SQL v1 negou no cliente; v2 consumido17:44 obteve
+os três resultados. Correlação legada corrigida **somente localmente**: criação contém
+leadId + UUID da chamada + hash de linha, resumo contém prefixo + o mesmo UUID. O join
+permitido é tenant + UUID explícito, sem telefone/hash como identidade ou proximidade
+temporal. Os1784 eventos custodiados preservados agrupam20 resumos/operações; o resultado
+histórico do leitor antigo não é reescrito. Órfãos/ambiguidade/controles não terminais
+continuam negativos. Um resumo legado não é ledger durável nem prova de atividade
+completa. Saída/ownership/knownActivityScope/fence e autoridade continuam obrigatórios;
+nenhum banco vazio é exigido com produção viva. A auditoria não autoriza reimportação.
+As cláusulas funcionais abaixo e a ordem API→frontend permanecem.
 
 
 Estado: **LOCAL VALIDATED / FOR REVIEW / NOT DEPLOYED**, 15/10/2026. [Entrega e provas](../reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/REPORT.md). Complementa os contratos existentes de identidade, upsert, auditoria, exclusão operacional e anonimização; não altera retenção por conversa ou operação explícita por titular.

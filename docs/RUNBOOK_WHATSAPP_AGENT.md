@@ -1,5 +1,20 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## Correlação legada CSV — corrigida OFFLINE para revisão
+
+[Conclusão vigente](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[16 provas/bytes/procedência](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/LEGACY_AUDIT_PROOFS.json).
+Erro demonstrado no agrupamento: created usa leadId+UUID+hash de linha e summary prefixo+UUID.
+Mesmos1784 eventos →20 operações por tenant/UUID exatos, sem excluir evidência ou usar
+telefone/tempo. Gate terminal puro passa offline; admissão integral NÃO está satisfeita:
+saída/ownership/fence/knownActivityScope/autoridade permanecem. Órfãos, colisões e
+operações reais incompletas continuam negando. Fonte futura e hooks editáveis corrigidos;
+nenhum pacote selado/resultado17:44 foi reescrito. Próximo: revisão e vínculo na futura
+composição, sem promover análise a certificado operacional. SQL v1/v2 e M1 consumidos;
+ELF pausado. CSV SUSPENSO / LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+Checkpoints abaixo preservam a cronologia, inclusive contagens do leitor antigo.
+
+
 ## Resultado vigente SQL v2 — CONSUMED/COMPLETE17:44 Fortaleza
 
 [Resultado/custódia sanitizados](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_RESULT.json),
@@ -47,13 +62,14 @@ Não são instruções atuais de execução. [Relatório único e sequência](re
 | SQL v2 blocos1/2 |CONSUMED/COMPLETE17:44: três SQLs/quatro fronteiras/custódia PASS; ownership UNKNOWN;20 grupos COMPLETED/1764 UNKNOWN; admissão não satisfeita |
 | ELF |PAUSADO; sem retorno à descoberta/budget como consequência desse DENY |
 
-**Estado SQL vigente:** v2 consumido e completo no alcance diagnóstico; v1 DENY intacto.
-[Resultado e limites](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_RESULT.json).
-Nenhum roteiro SQL permanece autorizado para replay. Fonte/correção/provas13+4 preservadas.
-Primeiro impedimento da admissão:1764 grupos UNKNOWN só com criação legada isolada;
-próxima ação local é revisar correlação/alcance com contratos, sem presumir atividade,
-terminal, rollback ou reconstruir por telefone/horário. Ownership/known scope/saída,
-16 vínculos e autoridade seguem pendentes no alcance declarado. M1 consumido; ELF pausado.
+**Estado SQL vigente:** v2 consumido/diagnóstico completo17:44 e v1 DENY intacto.
+[Análise corrente da correlação](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md):
+erro de agrupamento legado demonstrado e corrigido na fonte futura;1784 evidências
+preservadas agrupam20 operações por tenant/UUID exatos. Predicado terminal puro PASS
+somente offline; não é admissão integral ou observação nova. Órfãos/ambiguidade/incompletas
+continuam negando. Próximo: revisão/vínculo na futura composição; saída/ownership/
+knownActivityScope/fence,16 vínculos e autoridade continuam requisitos. Nenhum roteiro
+SQL pode ser repetido. M1 consumido; ELF pausado.
 
 Consultar os princípios **completos**, não apenas este resumo: [Principios operacionais](#principios-operacionais),
 [Retenção operacional permanente](#retenção-operacional-permanente), [Change Policy](saas/CHANGE_POLICY.md),

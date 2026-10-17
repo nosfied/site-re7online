@@ -1,0 +1,27 @@
+{
+  "base": "a76fcb60c1fe17ccc0cc552e5f7238373851b40a",
+  "branch": "review/campaign-recovery-20260926",
+  "files": [
+    "scripts/crm_csv_delivery/capture_imports.source",
+    "scripts/crm_csv_delivery/test_import_audit.py",
+    "scripts/crm_csv_predecessor/composition.py",
+    "scripts/crm_csv_diagnostic/compose_sql_review.py",
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/LEGACY_AUDIT_PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/LEGACY_AUDIT_DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/LEGACY_AUDIT_ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/LEGACY_AUDIT_HASHES.sha256"
+  ],
+  "patchScope": "four editable executable sources/hooks/tests only; excludes patch itself and documents/proofs",
+  "scope": "offline exact producer-key correlation correction; no consumed generation or productive data changed",
+  "originalSource": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/capture_imports.py",
+  "originalSourceSha256": "52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f",
+  "newSourceSha256": "8a2955b0db3a409a5311609a281eb3936583fd2234afb483c38f6f4fbfbd7871",
+  "ciSafety": "vercel branch disabled; ci.yml push/pr main/develop only; no workflows changed"
+}

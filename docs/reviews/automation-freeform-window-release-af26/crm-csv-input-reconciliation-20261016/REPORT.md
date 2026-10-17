@@ -1,3 +1,104 @@
+## Alcance legado resolvido OFFLINE — basea76fcb60
+
+**Erro de correlação demonstrado; correção LOCAL VALIDATED / REVIEW PENDING /
+NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.**
+[16 provas focadas e procedência](../crm-csv-delivery-review-20261017/LEGACY_AUDIT_PROOFS.json),
+[delta executável](../crm-csv-delivery-review-20261017/LEGACY_AUDIT_DELTA.patch).
+Nenhuma VPS/consulta SQL/reimportação/reparo ou nova coleta. SQL v1/v2 e M1 consumidos;
+ELF pausado. Resultado17:44/contagens antigas são preservados como observação do leitor
+então executado; não foram regravados como se o classificador novo estivesse implantado.
+
+### Produtores efetivos e significado das chaves
+
+A procedência não é o HEAD. A recuperação original aceita
+[CSV_ORIGINAL_PAIR_RESTORED](../crm-csv-original-recovery-20261016/RECOVERY_COMPLETE.md)
+restaurou o par original, sem seleção CSV. A composição coordenada já atestou fonte
+7f79cee615c4bbfef342fef0084644b3d669712a contra os módulos compilados do arquivo API
+36f51ebef7bf74f6efc90088254b1a806f427ee4f614ce9e0802b37d281a80cb.
+Nesta rodada, esse arquivo foi lido/hasheado localmente, sem extração nem execução;
+os templates exatos também foram encontrados nos bytes compilados:
+crmContactUpsert30234430… e routes27b689d9… (hashes completos nas provas).
+As referências de runtime/configuração15:37 e a captura SQL17:44 mantêm seus horários;
+isso não certifica runtime atual ou execução passada de cada instrução isoladamente.
+
+| Produtor/consumidor | Formação real | Significado |
+| --- | --- | --- |
+| routes.handleRequestWithCampaignAdmission |crypto.randomUUID(), enviado como requestId à confirmação |UUID por chamada HTTP, não contato/linha; legado não tem admissão durável |
+| confirmCrmContactCsvImport |requestId da chamada + ':' + resultlessHash(row.phone) |contexto do upsert da linha; hash SHA256 truncado a16hex do telefone, não índice/UUID da operação |
+| upsertCrmContact/persistEvent |crm.contact.created:<leadId>:<UUID da chamada>:<hash16> |leadId identifica entidade CRM; sufixo distingue a linha/contexto; UUID embutido identifica chamada |
+| confirmação/resumo legado |crm.contact.import.summary:<mesmo UUID da chamada>, sem payload.operationId |resumo da chamada emitido após o loop; não atomicidade nem prova de outros executores |
+| produtor candidato crmCsvImportOperation (local, não implantado) |requestId=operationId para controles/resumo; row=<operationId>:<rowNumber>, payload.operationId explícito |operação UUIDv4 durável e linhas por ordinal; criação continua evidência auxiliar |
+
+A correlação usa **somente tenant + UUID embutido de chamada**, ambos provenientes das
+chaves do próprio produtor. Não usa telefone, seu hash como chave de operação, leadId,
+proximidade temporal ou correspondência entre tenants. O parser apenas reconhece o
+formato do sufixo16hex; não calcula telefone produtivo nem deriva identidade dele.
+UUIDv4 vem do crypto.randomUUID legado e do contrato candidato, não de regra inventada.
+
+### Contraprova, correção e resultado nos mesmos bytes
+
+O classificador52d6e914 preservado extraía de created `UUID:hash16` pelo split em duas
+partes; para summary usava `crm.contact.import.summary:UUID` inteiro. São chaves em
+níveis distintos; por isso1764 linhas/criações viravam1764 grupos UNKNOWN e os20 resumos
+ficavam isolados. O gate original **corretamente** negava UNKNOWN; o erro estava na
+formação dos grupos pelo consumidor, não no predicado terminal nem nos eventos.
+
+Em scripts/crm_csv_delivery/capture_imports.source está a cópia futura editável do
+consumidor, com alteração **somente de classify**. SQL e corpo capture são AST-idênticos
+ao original; gate csv_boundary.imports/exit_and_imports não mudou. A normalização remove
+os prefixos respectivos e o contexto da linha, preserva tenant e o UUID exato e vincula
+todas as evidências. Formato inválido/declaração divergente nega; colisão de resumo
+legado com controles novos ou resumos duplicados não gera terminal. Orfão de criação
+continua UNKNOWN com base explícita de histórico sem prova de atividade, e gate nega.
+Não se ignora histórico não correlacionável nem se interpreta silêncio como conclusão.
+
+A captura legítima **e41c5dc7…715815B**, sem releitura da VPS, mostra que **todas1764
+criações** têm um dos20 UUIDs de resumo no **mesmo tenant**; nenhum órfão nessa amostra.
+O novo resultado é20 grupos COMPLETED por resumo legado correlacionado. Os1784 pares
+source/hash de evidência são **exatamente os mesmos**, sem remoção, duplicação, edição ou
+reparo. Isso não transforma um resumo legado em ledger durável nem afirma que outro
+trabalho conhecido pelo owner esteja encerrado. Registros brutos/IDs permanecem privados.
+
+### Integração futura e provas efetivamente executadas
+
+A fonte editável foi ligada ao compositor diagnóstico já existente. O hook
+apply_import_audit do compositor editável scripts/crm_csv_predecessor/composition.py
+substitui window/capture_imports.py em memória antes da selagem, exigindo o digest do
+consumidor anterior52d6e914 e registrando procedência da fonte nova. Não há novo schema,
+classificador paralelo de admissão ou autoridade. Imports/dependências de módulo continuam
+iguais; nenhum toolchain adicional. O compositor não foi executado, nenhum kit/manifest/
+perfil/binding/permit foi produzido, e pacotes/grações consumidos não mudaram.
+
+16 testes reais do código puro: templates/hash **exatos compilados** avaliados em Node
+local com entradas sintéticas e chaves distintas; classificadores anterior/novo sobre
+custódia real; consumidor imports do diagnóstico; hook real de composição; gate canônico.
+Cobertura: múltiplos contatos/chamadas; mesmo UUID entre tenants com e sem terminais
+próprios; colisão de lead/hash sem join de operação; resumo duplicado; colisão legado/novo;
+órfãos; started sem terminal; finished sem started; uncertain; finished duplicado;
+row operationId/requestId divergente e formato/adulteração. Nenhum SQL/HTTP/produtor
+com efeitos foi executado. Não foi ensaiada a composição completa, Loader/instalação
+ou janela nesta rodada; essas provas anteriores só valem no alcance não alterado.
+
+### Efeito exato sobre a admissão e próximo passo
+
+**Resolvido:**falsa negativa dos1764 grupos neste conjunto. O predicado terminal puro
+csv_boundary.imports passa para os20 grupos corrigidos, como já passava para um resumo
+legado válido. **Não resolvido/dispensado:** exit_and_imports ainda nega sem certificado
+canônico de saída/ownership e inventário completo sob fence; scopeComplete/knownActivityScope
+não são concedidos pelo novo parser. Teste com fronteira sintética também nega escopo
+incompleto. O corpo capture mantém a revisão de knownActivityScope e subset por tenant/op.
+
+Próximo trabalho concreto: revisão deste delta local e incorporação dos bytes/hashes da
+fonte na **futura composição revisada**, sem reusar SQL v1/v2 consumidos. Depois, completar
+as dependências já existentes — atribuição/saída, knownActivityScope confrontado com estas
+chaves normalizadas e atividade conhecida,16 vínculos/autoridade e decisões API→frontend.
+Não preencher/editar scopes ou bindings antigos para PASS: a identidade normalizada
+muda o hash derivado e exigirá um novo artefato revisado quando autorizado. Nenhuma nova
+observação/instalação/janela autorizada aqui. NEWauth+NEWDB+NEWcipher, produção multitenant,
+crons, guarda38 e out.15 preservados.
+
+---
+
 ## Resultado SQL v2 —17/10/2026,17:44 Fortaleza — CONSUMED/COMPLETE
 
 **Leitura delimitada concluída; CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.**

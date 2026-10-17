@@ -35,6 +35,19 @@ def selected_functions(path, names, imports=''):
     return (imports + ast.unparse(ast.Module(body=body, type_ignores=[])) + '\n').encode()
 
 
+def apply_import_audit(code, origins):
+    # Future in-memory source substitution only, before the existing seal graph.
+    # Consumed compositions, manifests and their52d6 source stay immutable.
+    name='window/capture_imports.py'
+    if sources.digest(code[name])!='52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f':
+        raise RuntimeError('legacy_import_audit_source_drift')
+    path=ROOT/'scripts/crm_csv_delivery/capture_imports.source'
+    raw=path.read_bytes();compile(raw,str(path),'exec')
+    prior=origins[name];code[name]=raw
+    origins[name]={'input':str(path.relative_to(ROOT)),'inputSha256':sources.digest(raw),
+                  'priorOrigin':prior,'stages':['LEGACY_IMPORT_EXACT_PRODUCER_CORRELATION']}
+
+
 def apply(code, origins, bundle):
     for name, expected in sources.INPUTS.items():
         if sources.digest(code[name]) != expected:
@@ -47,6 +60,8 @@ def apply(code, origins, bundle):
                          'priorOrigin': prior, 'stages': ['PREDECESSOR_REVIEWED_SOURCE_EXTENSION'],
                          'transformation': {'path': 'scripts/crm_csv_predecessor/sources.py',
                              'sha256': sources.digest(Path(sources.__file__).read_bytes())}}
+
+    apply_import_audit(code, origins)
 
     # Extra launch libraries are review-only static sources, not installed authority.
     paths = {

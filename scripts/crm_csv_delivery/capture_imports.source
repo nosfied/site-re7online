@@ -1,0 +1,86 @@
+"""Bounded SELECT after canonical executor exit. Historical orphan controls DENY.
+
+No CSV import, HTTP counter, SQL mutation or implicit disposition of unknown work.
+"""
+import hashlib,json,subprocess
+from pathlib import Path
+from csv_boundary import require,sha
+SQL='''BEGIN READ ONLY; SET LOCAL statement_timeout=15000;
+WITH e AS (SELECT "id","clientId","requestId","eventName","payloadJson" FROM "Event"
+ WHERE "eventName" LIKE 'crm.contact.import.%' OR
+ ("eventName"='crm.contact.created' AND "payloadJson"->>'source'='crm_import')),
+limited AS (SELECT * FROM e ORDER BY "id" LIMIT 100001)
+SELECT json_build_object('rows',coalesce(json_agg(json_build_object(
+ 'id',"id",'tenant',"clientId",'request',"requestId",'event',"eventName",
+ 'status',"payloadJson"->>'status','operation',"payloadJson"->>'operationId')),'[]'::json)) FROM limited;
+ROLLBACK;'''
+def classify(rows):
+    """Correlate producer keys, never phone/time; unresolved evidence still denies."""
+    def is_uuid(value):
+        return (isinstance(value,str)and len(value)==36 and
+                [i for i,c in enumerate(value)if c=='-']==[8,13,18,23]and
+                all(c in '0123456789abcdef'for c in value.replace('-',''))and
+                value[14]=='4'and value[19]in '89ab')
+    require(len(rows)<=100000,'audit_limit_exceeded_no_truncation_allowed')
+    groups={};kinds={}
+    for r in rows:
+        tenant=r['tenant'];request=r['request'];declared=r['operation'];event=r['event']
+        require(isinstance(tenant,str)and bool(tenant)and isinstance(request,str)and bool(request),'audit_identity_missing')
+        kind='control';op=request
+        if event=='crm.contact.created':
+            # upsert: created:<leadId>:<requestId>:<row hash>. Lead/row token are
+            # NOT operation identity; the embedded request UUID is the only join.
+            parts=request.split(':')
+            require(len(parts)==4 and parts[0]=='crm.contact.created'and bool(parts[1])
+                    and is_uuid(parts[2])and len(parts[3])==16 and all(c in '0123456789abcdef'for c in parts[3]),'legacy_creation_correlation_unknown')
+            op=parts[2];kind='creation'
+            require(declared in (None,op),'creation_operation_mismatch')
+        elif event=='crm.contact.import.summary'and request.startswith('crm.contact.import.summary:'):
+            op=request.removeprefix('crm.contact.import.summary:');kind='legacy-summary'
+            require(is_uuid(op)and declared in (None,op),'legacy_summary_correlation_unknown')
+        elif event=='crm.contact.import.row':
+            require(is_uuid(declared)and request.startswith(declared+':')
+                    and bool(request[len(declared)+1:])and request[len(declared)+1]in '123456789'
+                    and all(c in '0123456789'for c in request[len(declared)+1:]),'row_correlation_missing')
+            op=declared
+        else:
+            require(is_uuid(request)and declared in (None,request),'operation_request_mismatch')
+            if event=='crm.contact.import.summary':
+                require(declared==request,'summary_operation_missing');kind='modern-summary'
+        key=(tenant,op);groups.setdefault(key,[]).append(r);kinds.setdefault(key,set()).add(kind)
+    result=[]
+    for (tenant,op),events in groups.items():
+        finished=[r for r in events if r['event']=='crm.contact.import.finished']
+        summary=[r for r in events if r['event']=='crm.contact.import.summary']
+        starts=[r for r in events if r['event']=='crm.contact.import.started']
+        tags=kinds[(tenant,op)];state='UNKNOWN';basis='UNRESOLVED_OPERATION_OR_HISTORY'
+        # A reused UUID spanning legacy summary and new controls is ambiguous.
+        if 'legacy-summary'in tags:
+            if tags<={'legacy-summary','creation'}and len(summary)==1:
+                state='COMPLETED';basis='LEGACY_SUMMARY_EXACT_REQUEST_AND_TENANT'
+        elif len(finished)==1 and len(starts)==1 and finished[0]['status']in ('COMPLETED','FAILED'):
+            state='COMPLETED'if finished[0]['status']=='COMPLETED'else'PROVEN_FAILED'
+            basis='START_FINISH_EXACT_REQUEST_AND_TENANT'
+        elif tags=={'creation'}:
+            basis='CREATION_HISTORY_WITHOUT_TERMINAL_NOT_EXECUTOR_ACTIVITY'
+        result.append({'tenantId':tenant,'operationId':op,'state':state,
+            'terminalProofMatchesOperation':state!='UNKNOWN','correlationBasis':basis,
+            'evidence':[{'source':'Event:'+str(r['id']),'sha256':hashlib.sha256(json.dumps(r,sort_keys=True).encode()).hexdigest()}for r in events]})
+    return result
+def capture(p,mode,run=subprocess.check_output):
+    from csv_contract import write,read
+    from sequencer import Bridge,Sequencer
+    p=Path(p);s=Sequencer(Bridge(p));s.baseline=read(p/'window/csv-baseline.private.json');s.verify_stopped(mode)
+    # Exact old-exit certificate exists only after real tree/FD/socket/DB checks.
+    exitfile=p/mode/'old-exit-confirmed.json';require(exitfile.is_file(),'exit_absent');s.b.privileged('check-present')
+    raw=run(['docker','exec','-i','wa-agent-postgres','psql','-X','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1'],input=SQL,text=True,stderr=subprocess.PIPE,timeout=25)
+    rows=json.loads(raw)['rows'];operations=classify(rows)
+    # Explicitly bounded to persisted audit: unknown legacy activity known to
+    # the operator must remain listed in the separately sealed admission scope.
+    scope=read(p/'window/csv-known-imports.private.json')
+    require(scope['reviewedAgainstAuditAndKnownActivity']is True and type(scope['operations'])is list,'known_activity_scope_missing')
+    keys={(r['tenantId'],r['operationId'])for r in operations}
+    require(all((r['tenantId'],r['operationId'])in keys for r in scope['operations']),'known_activity_not_observed')
+    path=p/'window'/('csv-imports-'+mode+'-after-exit.private.json')
+    write(path,{'basis':'AUDIT_AND_EXECUTOR_EXIT','scopeComplete':True,'observationComplete':True,'underFence':True,'exitCertificateSha256':sha(exitfile),'operations':operations,'auditRows':len(rows),'knownScopeSha256':sha(p/'window/csv-known-imports.private.json'),'unobservedHistoryCertified':False})
+    return path
