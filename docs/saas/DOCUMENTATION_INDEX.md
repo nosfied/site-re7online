@@ -1,5 +1,21 @@
 # Documentation Index
 
+## CSV — inventário revisado e declaração limitada recebida
+
+[Resultado e sequência vigente](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[6 provas focadas](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_PROOFS.json).
+20 tenant+UUID únicos/1784 evidências/20 resumos legados conferidos sem regeneração ou
+SQL. As duas tentativas originais993 continuam sem identidade vinculante; ensaios sintéticos
+não as comprovam. Owner: **“Não tenho importação própria pendente conhecida”**, registrada
+separadamente; não pedir UUIDs nem certificação das ações de outros tenants. Rascunho
+knownActivityScope privado preparado, sem aprovação formal/completude/saída/ownership/
+autoridade inferidas. Próximo: revisão do rascunho e ligação à declaração para materialização
+canônica; não repetir pergunta, derivação ou SQL. Provas sob fence só na futura janela
+autorizada. M1 consumido; ELF pausado; produção intocada.
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+Checkpoints abaixo preservam pedidos e estados históricos; esta entrada os atualiza.
+
+
 ## Integração estática CSV concluída — inventário privado para revisão
 
 [Índice integrado](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/legacy-integrated-static/CODE_COMPOSITION.json),

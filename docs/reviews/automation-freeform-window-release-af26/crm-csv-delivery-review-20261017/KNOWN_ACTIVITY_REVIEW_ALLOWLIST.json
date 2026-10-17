@@ -1,0 +1,21 @@
+{
+  "base": "844cff09eddafcf0e508108f293f5add1c8ea5fb",
+  "branch": "review/campaign-recovery-20260926",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
+    "scripts/crm_csv_delivery/review_known_activity.py",
+    "scripts/crm_csv_delivery/test_known_activity_review.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_RESULT.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_HASHES.sha256"
+  ],
+  "scope": "Only offline inventory review, separate scope draft provenance, limited owner statement and current checkpoints",
+  "excluded": "Private scope/inventory/IDs/tenants/responses/journals; runtime; historical composed or consumed materials; unrelated untracked work",
+  "hashIndexScope": "Every allowlisted file except this hash index itself"
+}

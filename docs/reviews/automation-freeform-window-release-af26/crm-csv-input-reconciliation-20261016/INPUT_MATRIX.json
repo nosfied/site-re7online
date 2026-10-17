@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "LOCAL correction/review of libpq launch environment and test adapter: consumed SQL attempt denied identity exit2 with explicit empty PGSERVICE; Docker -e PG* was not propagated in prior local test. No productive retry, SQL adaptation, role/grant change or new capture authorized. Identity/visibility/ownership/imports results remain UNKNOWN.",
+    "firstConcreteBlocker": "Operational known-activity scope has not been approved/materialized. Technical inventory review and limited owner statement are available; do not ask owner to recognize UUIDs or certify all tenants. Two historic993 reports stay identity-unlinked; not evidence of active work. Future16 links/controls/authority and under-fence exit/ownership remain distinct.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1790,6 +1790,24 @@
       "nextAct": "Owner private review of20-operation draft and known out-of-audit activity",
       "exitOwnershipTiming": "only after canonical containment/stop within future expressly authorized window, never preparatory database-empty demand",
       "status": "PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY"
+    },
+    "knownActivityTechnicalReview": {
+      "base": "844cff09eddafcf0e508108f293f5add1c8ea5fb",
+      "evidence": "../crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_RESULT.json",
+      "tests": "../crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_PROOFS.json",
+      "inventoryUnchanged": true,
+      "operations": 20,
+      "evidencePairs": 1784,
+      "legacyTerminals": 20,
+      "reported993AttemptsUnlinked": 2,
+      "ownerStatement": "No own known pending imports; not all tenants",
+      "draftPrepared": true,
+      "operationalScopeIssued": false,
+      "scopeComplete": false,
+      "executorExitCertified": false,
+      "ownershipComplete": false,
+      "authorityIssued": false,
+      "next": "Review scope draft and explicitly bind limited statement; canonical future materialization/16 links/authority; exit and fresh reconciliation at authorized under-fence point only"
     }
   }
 }

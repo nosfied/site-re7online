@@ -1,3 +1,19 @@
+## Vigente — revisão técnica concluída; escopo operacional não emitido
+
+[Relatório e sequência](REPORT.md), [resultado](../crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_RESULT.json),
+[6 provas incrementais](../crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_PROOFS.json).
+
+| Item | Evidência / limite | Próximo passo |
+| --- | --- | --- |
+| Inventário existente |20 tenant+UUID únicos/1784 pares íntegros/20 resumos legados; bytes originais intactos |reutilizar; não regenerar/SQL |
+| Ocorrências993 |duas tentativas reportadas sem identidade vinculante; sintéticos separados |manter UNLINKED; não inferir atividade atual nem exigir reconhecimento de UUID |
+| Atividade pessoal do owner |“Não tenho importação própria pendente conhecida”; declaração separada |não repetir pergunta; não certificar outros tenants |
+| knownActivityScope |rascunho privado/procedência preparado, revisão formal/completude false |revisão e ligação explícita à declaração antes da materialização operacional;16 vínculos/controles/autoridade próprios |
+| Saída/ownership/fence |não demonstrados por esta revisão |somente no ponto previsto da futura janela autorizada |
+
+CSV SUSPENSO / PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+M1 consumido; ELF pausado. Seções abaixo são checkpoints históricos, não pedidos atuais.
+
 ## Composição integrada + draft privado — próximo ato: revisão do owner
 
 [Índice127 caminhos/61 objetos reutilizados](../crm-csv-delivery-review-20261017/legacy-integrated-static/CODE_COMPOSITION.json),

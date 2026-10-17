@@ -1,0 +1,28 @@
+{
+  "base": "844cff09eddafcf0e508108f293f5add1c8ea5fb",
+  "tests": 6,
+  "status": "LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+  "real": "Stable existing private inventory/source response; composed Review/Loader/classifier/imports gate; exact pure scope predicate extracted from composed capture",
+  "contraproofs": [
+    "operation drift",
+    "duplicate tenant+UUID",
+    "evidence hash",
+    "tenant divergence",
+    "unproven terminal",
+    "nine inferred approval/completeness flags",
+    "unapproved scope denied"
+  ],
+  "synthetic": "Only mutated in-memory copies for negative tests; temporary code-only tree. No production observation simulated.",
+  "notExecuted": [
+    "derive",
+    "capture",
+    "SQL",
+    "VPS",
+    "exit/ownership",
+    "root/PM2/system effects",
+    "composition rebuild"
+  ],
+  "reused": "16 legacy tests and four composed integration tests, plus unaffected runtime/PM2/SQL/recovery proofs; not rerun",
+  "inventorySha256": "fb346e00f5aeb219b14c43aad0669d4b392c7c1ebfa920ef4667615351c155bb",
+  "compositionSha256": "8d2a8e5126ef53668dfedfb0d563c75bbab85e08c17cfe4b3d9b20631dbfc0c8"
+}

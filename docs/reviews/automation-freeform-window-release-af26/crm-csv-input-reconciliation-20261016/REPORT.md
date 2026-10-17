@@ -1,3 +1,81 @@
+## Revisão técnica do inventário e atividade conhecida — base844cff09
+
+**PREPARED LOCALLY / LOCAL VALIDATED no alcance ensaiado / REVIEW PENDING /
+NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO; M1 consumido; ELF pausado.**
+[Resultado/custódia sanitizados](../crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_RESULT.json),
+[6 provas focadas](../crm-csv-delivery-review-20261017/KNOWN_ACTIVITY_REVIEW_PROOFS.json),
+[revisor offline](../../../../scripts/crm_csv_delivery/review_known_activity.py),
+[testes](../../../../scripts/crm_csv_delivery/test_known_activity_review.py).
+
+### Integridade, população e terminais — inventário existente, não regenerado
+
+Conferidos bytes/hash/permissão600 do inventário já derivado, resposta integral e sua
+igualdade com a resposta da captura SQL v2 custodiada. SHA do inventário permanece
+`fb346e00f5aeb219b14c43aad0669d4b392c7c1ebfa920ef4667615351c155bb`.
+Classificador **já composto** carregado pelo Review/Loader real: comparação em memória,
+sem chamar derive, capture, SQL ou reexecutar compositor. **20 chaves tenant+UUID únicas,
+1784 pares Event:id/hash exatos, sem perda/duplicação,20 resumos terminais** de identidade
+exata no mesmo tenant. Gate imports real aceitou os terminais; nenhuma aprovação de saída.
+
+A evidência terminal é o resumo legado correlacionado, não ledger durável, prova de
+sucesso de cada linha, atividade completa, reconciliação de contagens do CSV ou ausência
+absoluta de trabalho em andamento. O SELECT fonte conserva17:43:58–17:44:02 Fortaleza;
+a revisão posterior não atualiza observações nem cria snapshot. Originais e DENYs intactos.
+
+### Ocorrências conhecidas: vínculo exige identidade
+
+Revisados os documentos exatos no commit844cff09; hashes/procedência no resultado.
+O [registro original de10/10](../../../BACKLOG_TECH.md#crm--importação-csv-com-resultado-desconhecido-na-interface-e-totais-ambíguos--10102026)
+relata duas tentativas do arquivo993:880 elegíveis,82 inválidas,31 duplicadas; primeira
+com879 criações+1 atualização; segunda com880 sem alterações. A mensagem de erro na
+interface não é uma terceira operação nem comprova execução atual. **Não há requestId,
+operationId, Event vinculante ou captura Network dessas tentativas nos registros
+revisados. Ambas permanecem UNLINKED**; nem telefone, contagem ou horário autorizam
+associá-las a qualquer uma das20 operações. Os ensaios sintéticos993 de15/10 são laboratório,
+não evidência dessas ocorrências produtivas. Ausência de vínculo não cria operação ativa
+nem autoriza reimportação/reparo; não foi solicitado ao owner reconhecer UUIDs internos.
+
+### Declaração limitada recebida e rascunho privado revisável
+
+Perguntado somente sobre importações que ele próprio iniciou e conhece, o owner respondeu
+neste chat: **“Não tenho importação própria pendente conhecida”.** Registro privado separado,
+sem promover a declaração a certificação de todos os tenants ou a atividade completa.
+Não é necessário repetir a pergunta nem pedir revisão humana de cada UUID.
+
+Criado uma única vez, fora do Git, diretório700 `csv-known-activity-scope-review-20261017-v1`,
+com private_record e escrita exclusiva canônicos; três arquivos600: rascunho320478B,
+declaração769B e journal2551B. Rascunho SHA
+`0dff7eaa50f1fb46dc658a8242a774de18c452ef85c305ae30c109ab8346dbae`.
+Contém operações/evidências já existentes, procedência da captura/composição, duas
+ocorrências sem identidade e pendências explícitas. Declaração foi preservada depois,
+com hash próprio no recibo; **não reescreve o rascunho nem o inventário**. HumanConfirmation
+no rascunho continua null, e reviewedAgainstAuditAndKnownActivity/ownerReviewed/
+scopeComplete/knownActivityScopeComplete/saída/ownership/autoridade permanecem falsos.
+O campo false de revisão formal não apaga a declaração limitada recebida separadamente.
+Não foi emitido window/csv-known-imports.private.json operacional nem permit.
+
+### Provas e avanço independente da declaração
+
+Seis testes novos: integridade/população sem reescrita; deriva/duplicação tenant+UUID;
+hash/tenant/terminal; nove flags de aprovação/completude indevidas; duas ocorrências sem
+vínculo/documentos pinados; negativa do **predicado puro exato extraído do capture composto**
+para escopo não aprovado. Este último não executa capture inteiro: saída/SQL/escrita e
+sistema não foram exercitados. Negativas usam cópias em memória; árvore temporária contém
+somente código já autenticado. Não há mock de observação produtiva.16 provas legadas e4
+de composição anteriores reutilizadas, sem repetição, build, download ou recomposição.
+
+Avanço local: revisão técnica concluída e insumo de escopo preparado, com hashes e declaração
+limitada separados. Pacotes/API24e5857f/frontend/classificador, índice127/61 e recuperação
+aceita não mudaram. **Próximo ato: revisão do rascunho e sua ligação explícita à declaração
+para a futura materialização canônica** (16 vínculos/controles/autoridade, com provas válidas
+e decisão própria). A declaração não admite gates; a falta de identidade das ocorrências
+históricas não pode ser preenchida por inferência nem tratada, sozinha, como execução ativa.
+Saída/ownership e reconciliação atual sob fence continuam no ponto da futura janela
+expressamente autorizada, não antecipados. Nenhuma VPS/coleta/SQL/backup/manutenção foi
+executada; NEWauth+NEWDB+NEWcipher, produção multitenant, guarda38 e out.15 preservados.
+
+---
+
 ## Integração estática e inventário privado — basea1f934c9
 
 **PREPARED LOCALLY / LOCAL VALIDATED no alcance ensaiado / REVIEW PENDING /

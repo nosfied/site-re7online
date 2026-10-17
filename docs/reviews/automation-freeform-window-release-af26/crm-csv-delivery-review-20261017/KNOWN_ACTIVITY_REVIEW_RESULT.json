@@ -1,0 +1,77 @@
+{
+  "base": "844cff09eddafcf0e508108f293f5add1c8ea5fb",
+  "custody": {
+    "knownActivityScope.review.private.json": {
+      "bytes": 320478,
+      "ownerMode600": true,
+      "sha256": "0dff7eaa50f1fb46dc658a8242a774de18c452ef85c305ae30c109ab8346dbae"
+    },
+    "owner-statement.private.json": {
+      "bytes": 769,
+      "ownerMode600": true,
+      "sha256": "b5261f73ca3b5a918645616e8e0f1f1d84b6c65c3cc7b9e570755928ee793f75"
+    },
+    "privileged-output.private.jsonl": {
+      "bytes": 2551,
+      "ownerMode600": true,
+      "sha256": "a323c149c75308ef1460f236402e1982fee0f0ce8fa596656407a13e9097287e"
+    }
+  },
+  "evidencePairs": 1784,
+  "exactLegacyTerminals": 20,
+  "executorExitCertified": false,
+  "humanConfirmation": null,
+  "inventoryRewritten": false,
+  "inventorySha256": "fb346e00f5aeb219b14c43aad0669d4b392c7c1ebfa920ef4667615351c155bb",
+  "knownActivityScopeComplete": false,
+  "noVpsOrSqlOrInventoryRegeneration": true,
+  "operationalScopeIssued": false,
+  "operations": 20,
+  "originalInventoryUnchanged": true,
+  "orphanEvidenceReferences": 0,
+  "ownerReviewed": false,
+  "ownerStatement": {
+    "operationalScopeApproved": false,
+    "received": true,
+    "scope": "OWN_IMPORTS_KNOWN_TO_OWNER_ONLY",
+    "sha256": "b5261f73ca3b5a918645616e8e0f1f1d84b6c65c3cc7b9e570755928ee793f75",
+    "statement": "N\u00e3o tenho importa\u00e7\u00e3o pr\u00f3pria pendente conhecida"
+  },
+  "ownershipComplete": false,
+  "phaseAuthorityIssued": false,
+  "privateDirectoryName": "csv-known-activity-scope-review-20261017-v1",
+  "result": "TECHNICAL_INVENTORY_REVIEW_PASS_SCOPE_DRAFT_PENDING",
+  "scopeDraftBytes": 320478,
+  "scopeDraftSha256": "0dff7eaa50f1fb46dc658a8242a774de18c452ef85c305ae30c109ab8346dbae",
+  "sourceDocuments": {
+    "docs/BACKLOG_TECH.md": {
+      "bytes": 490476,
+      "commit": "844cff09eddafcf0e508108f293f5add1c8ea5fb",
+      "sha256": "00fc9bb6ee0270709f0456e183944ece2e7be3db66e89b305c0f2338132e142c"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/FUNCTIONAL_RESUMPTION_2026-10-15.md": {
+      "bytes": 7916,
+      "commit": "844cff09eddafcf0e508108f293f5add1c8ea5fb",
+      "sha256": "c6b8b8206dee5c2b4ddc72e291328dc42e4da9ddfa5ad72ce828ed818e2b844a"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/BROWSER_REVIEW.md": {
+      "bytes": 6375,
+      "commit": "844cff09eddafcf0e508108f293f5add1c8ea5fb",
+      "sha256": "1f441468c93e2da1640433529e20b75b0bfce38a563489c0265bb6452670eb0a"
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/REPORT.md": {
+      "bytes": 5960,
+      "commit": "844cff09eddafcf0e508108f293f5add1c8ea5fb",
+      "sha256": "54562505a348405f62596b0d7d33b31ab3edf920439ad1e7f283afa8b77537b0"
+    },
+    "docs/saas/CRM_CSV_IMPORT_OPERATION_CONTRACT.md": {
+      "bytes": 10110,
+      "commit": "844cff09eddafcf0e508108f293f5add1c8ea5fb",
+      "sha256": "321409f99f86da781f8ee12551195e8fd780f04dd4ef213ab8f42c8abe3fe215"
+    }
+  },
+  "syntheticCasesAreNotProductionEvidence": true,
+  "terminalBasis": "LEGACY_SUMMARY_NOT_DURABLE_LEDGER_OR_ACTIVITY_COMPLETENESS",
+  "uniqueTenantUuidKeys": 20,
+  "unlinkedDocumentedProductionOccurrences": 2
+}
