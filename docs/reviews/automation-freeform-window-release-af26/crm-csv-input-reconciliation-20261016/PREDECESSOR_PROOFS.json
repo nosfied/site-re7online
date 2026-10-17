@@ -1,0 +1,97 @@
+{
+  "base": "5243771041210fed3f53fb621cb10abb90277a0e",
+  "status": "LOCAL_VALIDATED_SOURCE_INTERFACES_ONLY_REVIEW_PENDING_NOT_DEPLOYED_NOT_WINDOW_READY",
+  "testCommand": "python3 -B -m scripts.crm_csv_predecessor.test_predecessor --custody <pinned-private-JSONL>",
+  "tests": {
+    "run": 11,
+    "passed": 11,
+    "public": 5,
+    "privatePinnedBytesRequired": 6
+  },
+  "custody": {
+    "envelopeBytes": 87778,
+    "envelopeSha256": "931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529",
+    "policyBytes": 2751,
+    "policySha256": "e2a5ffab807f457b4179a6981e15cbf52800cbf975bce921c31ee3a9a989860b",
+    "newObservation": false,
+    "originalDenyPreserved": true,
+    "rawPublished": false
+  },
+  "inputs": {
+    "window/csv_contract.py": "9ca2208c5c18787aa2e3696636b17334c3362caa6991e3e4cd2bde2e363958eb",
+    "window/original_checks.py": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82",
+    "window/pre_install.py": "8e45c10319f298f69aa812df6996e950afbc0d2cdca5b06c25499b8bcd6f8f6d",
+    "window/root_readonly.py": "cb63a97fffe735fd52c80eed872751873593c23a3f8b3e3663b6c0fd741aa7ab",
+    "window/admit_gates.py": "2681e63919b981291d376237975e7e8dd7379ccbc0f323a55f948487730705c6"
+  },
+  "canonicalModel": {
+    "helperSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+    "function": "policy_from",
+    "transformation": "same AST body except two IO statements replaced by authenticated raw parameter",
+    "parallelSchema": false
+  },
+  "installerSource": {
+    "bytes": 2300,
+    "sha256": "b12603250d6d4acc5dc1b50fe94a1204631c7bbd4c6692b7ee8a47f4caa047ad",
+    "provenance": "preserved private OpenAI v4 source installer; source copy only; no policy, cron or environment bytes",
+    "reusedOrExecutedConsumedInstaller": false
+  },
+  "outputSourceSha256": {
+    "window/csv_contract.py": "0479ef91f4b8b89357392f3eaea3036d420b45ac5d051af231a10f0df06e22cf",
+    "window/original_checks.py": "43676794e50c432193106510a6a9eb237933f08766a6fe55e170d8737e7561ed",
+    "window/pre_install.py": "0a14af6fc2663e3bb248b55d33f65a91d608d264b4226c1e1a66ab82198dc701",
+    "window/root_readonly.py": "c641aca7f060214ffd84c07b8b8567b24d3d9d0435e0efa57ec1b68640c18624",
+    "window/admit_gates.py": "cba5bf8321fe6155a720eaa0bc212b3e0e3bfc152f33ec9cca6f04dda28e5ceb",
+    "window/policy_predecessor.py": "46e71c30fa44d454272f7a1e96ac5094182f4ec6f3fa7de57b153681ccd3b595"
+  },
+  "real": [
+    "bounded custody FD read and all envelope/target byte hashes",
+    "canonical helper AST model body",
+    "both concrete checkers through profile_delta and source/immutable negative gates",
+    "Bash test/sha256sum in CAS fragment",
+    "compilation and byte-exact checker suffix comparison"
+  ],
+  "simulated": [
+    "future policy identities and namespace; not operational inputs",
+    "sudo/visudo/install commands in CAS fragment; native cp only inside disposable lab"
+  ],
+  "notExercised": [
+    "complete current package certification/pre_A/admission",
+    "root filesystem metadata observation or privileged installation",
+    "phase issuance, contain, stop, start, SQL, HTTP, PM2",
+    "uncooperative root writer or multi-file atomic policy installation"
+  ],
+  "preservation": {
+    "immutableRowsNotRemoved": true,
+    "canonicalSuffixesByteExact": true,
+    "historicalPathsEdited": false,
+    "frontendSQLToolchainEventUnchanged": true
+  },
+  "remaining": [
+    "future authenticated closure/index integration and concrete package review",
+    "current saved/fallback and identities",
+    "SQL ownership",
+    "protected toolchain",
+    "16 bindings and installed phase authority"
+  ],
+  "deliverySourceSha256": {
+    "scripts/crm_csv_predecessor/runtime.py": "46e71c30fa44d454272f7a1e96ac5094182f4ec6f3fa7de57b153681ccd3b595",
+    "scripts/crm_csv_predecessor/installer.source": "b12603250d6d4acc5dc1b50fe94a1204631c7bbd4c6692b7ee8a47f4caa047ad",
+    "scripts/crm_csv_predecessor/sources.py": "ddd12201535596fc279ca019944330092b65fdabfa35c7eafb6e99fb83533d8f",
+    "scripts/crm_csv_predecessor/test_predecessor.py": "699e585b3edf36a606b684c4754ec48bf1f4e14b43ef14e41389309d48ff3fe8"
+  },
+  "publicationPrerequisites": {
+    "branch": "review/campaign-recovery-20260926",
+    "headBeforeCommit": "5243771041210fed3f53fb621cb10abb90277a0e",
+    "remoteBeforeCommit": "5243771041210fed3f53fb621cb10abb90277a0e",
+    "deploymentEnabled": false,
+    "onlyWorkflow": ".github/workflows/ci.yml",
+    "pushAndPRBranches": [
+      "main",
+      "develop"
+    ],
+    "manualWorkflowInvoked": false,
+    "sanitizedAllowlistFiles": 13,
+    "sensitivePatternCheck": "added lines and new files; unchanged historical paths preserved"
+  }
+}

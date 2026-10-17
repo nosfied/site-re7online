@@ -1,6 +1,10 @@
+# Atualização local do predecessor —17/10/2026
+
+Fonte e2a5 reconciliada no produtor/transformações futuros, sem fallback, instalação ou emissão. Ver [relatório](REPORT.md#reconciliação-local-do-predecessor-17102026-base52437710) e [provas](PREDECESSOR_PROOFS.json). Contrato, root/pre-A/admissão e CAS têm papéis distintos; política original-only não autoriza ida. Imutáveis atuais preservados. Kit histórico permanece fa113 até futura materialização revisada; nenhum input operacional promovido. Restam saved/fallback/identidades, SQL/ownership, toolchain protegido e vínculos/autoridade/closure atual.11 testes focados; não certificação operacional.
+
 # Matriz dos 57 grupos — requisitos, não capturas
 
-## Atualização de17/10 — pendências restantes, base a60a00cb
+## Reconciliação anterior de17/10 — pendências restantes, base a60a00cb
 
 Revisão da integração frontend: **ACCEPT LOCAL no alcance dos quatro ensaios**, em conjunto com as onze provas de reconciliação. São provas locais/fixtures, não observações ou certificação produtiva. [Integração](../crm-csv-diagnostic-integration-20261017/REPORT.md) e [reconciliação](../crm-csv-frontend-reconciliation-20261017/REPORT.md) não são reabertas. A seção histórica dos57 IDs abaixo permanece intacta; `INPUT_MATRIX.json.currentReconciliation` registra somente esta atualização, sem preencher inputs.
 

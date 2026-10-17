@@ -1,6 +1,53 @@
 # CRM/CSV — reconciliação dos inputs e próxima conferência
 
-## Reconciliação atual —17/10/2026, base a60a00cb
+## Reconciliação local do predecessor —17/10/2026, base52437710
+
+**LOCAL VALIDATED no delta de fontes / REVIEW PENDING / CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.** Esta seção sucede a pendência descrita abaixo; preserva a reconciliação anterior e os57 registros históricos. Nenhuma observação foi renovada.
+
+### Procedência e distinção de autoridade
+
+O envelope R1 preservado de87.778B/SHA `931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529` foi lido localmente pelo leitor limitado/no-follow já aceito. Conferidos tamanho/hash do stdout e do alvo privado de2.751B/SHA `e2a5ffab807f457b4179a6981e15cbf52800cbf975bce921c31ee3a9a989860b`. A tentativa continua DENY; os horários16/10 não se tornam atuais. Os bytes da política não entram no Git. As18 observações não foram repetidas.
+
+A fonte explica uma distinção importante: a política não possui campos `model`/`actions`. Seu modelo é o `policy_from` do helper8de358fd; as ações literais são do helper/sudoers, e a autorização depende também da fase e dos gates. A instalação original-only alterou exclusivamente os destinos de retorno para o par original, conforme `crm-csv-original-recovery-20261016/install_original_policy.py`; não apagou os dados `targetProcesses.switch`. A presença desses dados **não autoriza ida**. A recuperação consumida/aceita e a política preservada são fatos históricos, não uma nova autorização.
+
+- **Predecessor:** e2a5 é somente a identidade esperada para pré-A/CAS futuro, ancorada na revisão dos bytes preservados. Sem fallback para fa113, sem inferir vigência atual.
+- **Política futura:** bytes diferentes, nova preparação revisada, identidades e destinos delimitados, hash próprio. A admissão mantém a exigência de `inspect` da política futura instalada, `phase=None`, fontes vivas, cinco provas e demais controles. A evidência root do predecessor não substitui esse inspect.
+- **Autoridade de fase:** Context/âncora/permit e distinção forward/recovery continuam intactos. A reconciliação não instala Store, emite permit ou fabrica pins. ORIGINAL/CANDIDATE continuam exigindo decisão específica; PRESTOP não parte.
+
+### Rastreio produtor→consumidor e delta mínimo
+
+Fonte editável nova: [sources.py](../../../../scripts/crm_csv_predecessor/sources.py), com [runtime compartilhado](../../../../scripts/crm_csv_predecessor/runtime.py). `compose_inputs` é a entrada conjunta e sem escrita para um **futuro compositor**, antes da selagem. Recebe explicitamente o contrato anterior, os bytes preservados, a política futura e seus vínculos já revisados; devolve fontes e contrato coerentes em memória. Não executa o compositor histórico nem gera uma preparação. O chamador futuro deverá incorporar estas fontes e suas dependências à closure/índices autenticados antes de selar; os kits históricos continuam como estavam.
+
+| Elo existente | Origem/consumo de POLICY_SOURCE | Transformação futura |
+| --- | --- | --- |
+| compose.py operacional | herdava o pin fa113 do contrato OpenAI e do template do instalador | `produce_contract` valida os bytes e2a5 antes de produzir `sourcePolicySha256`; copia os imutáveis sem remover linhas; `compose_inputs` vincula o mesmo predecessor às demais saídas |
+| csv_contract.check / original_checks.check_original | constantes próprias fa113 | importam `POLICY_SOURCE/require_contract` da mesma fonte; todo o sufixo canônico (imutáveis, arquivos, metadados, quatro modos, restore, referências, baseline) permanece byte-exato |
+| root_readonly.capture | pin literal fa113 entre helper/sudoers root | usa o pin compartilhado; tipo, UID/modos, cadeias e hashes restantes permanecem |
+| pre_install.verify | valida contrato e captura pré-A | mantém os verificadores, frescor600/3600s, RPO/custódia/laboratório; valida o conjunto exato dos três hashes root pelo mesmo módulo |
+| admit_gates.admit | conferia root com valor do contrato, depois inspect da política instalada | exige contrato e root coerentes; mantém inspect do **hash futuro**, locks, gates, backup, seleção/consumo e exclusividade |
+| instalador futuro | template herdava fa113 no predecessor e outro hash no destino | renderiza separadamente predecessor e hash futuro; mantém lock canônico, archive ausente, verificadores, helper/sudoers, backup e pós-conferências; reconfere predecessor após visudo, imediatamente antes da primeira escrita |
+
+O instalador de entrada foi recuperado apenas como fonte:2.300B/SHA `b12603250d6d4acc5dc1b50fe94a1204631c7bbd4c6692b7ee8a47f4caa047ad`, cópia byte-exata sanitizada de `install-api-window-policy.sh` do material privado OpenAI anterior, agora [installer.source](../../../../scripts/crm_csv_predecessor/installer.source). Contém somente lógica, caminhos operacionais já públicos e pins, sem política/cron/ambiente. Nunca foi executado nesta rodada. O shell continua usando a sequência canônica de instalação: não é uma transação atômica de múltiplos arquivos nem protege contra um escritor root que ignore o lock; não se afirma fechamento dessa hipótese por um teste de hash.
+
+O modelo reutiliza **o corpo canônico** de `policy_from` pinado em8de358fd: apenas as duas instruções de IO são substituídas pelo argumento de bytes já autenticados no produtor. Não há parser/schema paralelo. A validação preserva preparação, cron/fence, população/identidades, dois conjuntos de destinos e saved paths. Um campo novo `actions` ou `model` é recusado pelo modelo existente. O predecessor exato não tem absentWorker; uma política que precisasse dessa fronteira exigiria as provas canônicas externas, não seria completada artificialmente por este módulo.
+
+### Provas executadas e limites
+
+[PREDECESSOR_PROOFS.json](PREDECESSOR_PROOFS.json) registra os hashes de entrada/saída e os11 testes de [test_predecessor.py](../../../../scripts/crm_csv_predecessor/test_predecessor.py). Executado localmente `python3 -B -m scripts.crm_csv_predecessor.test_predecessor --custody <JSONL privado preservado>`;11/11 PASS. Sem a custódia, cinco testes públicos rodam e os seis dependentes dos bytes exatos são explicitamente SKIP, não substituídos por política fictícia.
+
+Cobertura: fonte ausente/adulterada; modelo/população/fence/saved/actions incompatíveis; identidades/destinos futuros divergentes; desacordo de qualquer um dos três consumidores root; produtor sem mutação do input/imutáveis; predecessor recusado como política de ida; coerência do conjunto produzido; checkers concretos com leitura de arquivos privados sintéticos e profile_delta real; sufixos canônicos integralmente preservados; compilação das seis fontes transformadas; shell/CAS e troca durante visudo.
+
+**Fronteira precisa:** os checkers completos são carregados, mas nestas fixtures sua execução termina deliberadamente em `source_policy_or_model_drift` ou no controle canônico `immutable_empty`. Isso demonstra a interface afetada e que R2 não foi removido; não é PASS de pacote completo. Pre_install/admissão têm suas chamadas e invariantes conferidas nas fontes, com o predicado compartilhado exercitado; seus requisitos completos não foram simulados como aprovados. O teste Bash executa literalmente o segmento CAS com `test`/`sha256sum` reais; sudo/visudo/install são funções de laboratório e o hash sudoers está fora desse segmento. Não há prova de instalação root ou de admissão real. As provas anteriores de recuperação/ORIGINAL/R3/B1–B4/PM2/controles e frontend são reutilizadas no alcance já aceito, sem rerun.
+
+### Pendências e primeiro próximo passo
+
+O desacordo de predecessor está reconciliado **nas fontes futuras**, não instalado nem materializado no kit consumido. Ainda faltam inputs atuais (saved/fallback/identidades finais, rota SQL/ownership, toolchain protegido),16 renderizações, namespace, inclusão deste módulo na closure autenticada e futura certificação do pacote concreto. A instalação da política futura continua separada da instalação estática/autoridade e da execução. Root fresco e CAS no uso exigirão autorização e coordenação próprias; esta leitura privada não os supre.
+
+Próximo trabalho offline mínimo: conferir a closure do toolchain contra as fontes pinadas disponíveis e registrar exatamente o que falta, seguindo a sequência existente; nenhuma nova coleta genérica ou reparo Event775 foi preparado. Event775 continua negativa pré-parada, não flexibilizada. Frontend encerrado localmente; SQL e quaisquer operações permanecem fora desta rodada. NEWauth+NEWDB+NEWcipher, crons, guarda38/out.15 e todos os históricos consumidos intocados. Responsável Deifson; revisão17/10, próxima21/10 ou mudança.
+
+---
+
+## Reconciliação anterior —17/10/2026, base a60a00cb
 
 **Integração a60a00cb ACCEPT LOCAL no alcance ensaiado / requisitos reconciliados offline / CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.** Aceite dos quatro testes conectados, reutilizando as onze contraprovas anteriores; RPC/peer/procfs simulados não viram prova produtiva. Nenhuma investigação frontend é reaberta. Esta atualização usa o relatório e a [matriz existentes](MATRIX.md), sem criar relatório, coletor ou pacote paralelos.
 

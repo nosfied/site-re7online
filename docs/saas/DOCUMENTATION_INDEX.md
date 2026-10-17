@@ -300,3 +300,7 @@ Para licitacoes, propostas tecnicas, PoCs e diligencias, usar primeiro:
 - `OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`: concise package for
   the five previously active blockers, with final owner decisions, operational
   consequences and local reconciliation evidence.
+
+## Checkpoint17/10 — predecessor CSV reconciliado localmente (base52437710)
+
+[Relatório/matriz existentes](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md) atualizados: bytes privados e2a5 autenticados; produtor/transformações futuros compartilham a fonte entre contrato, root, pre-A, admissão e CAS. Predecessor original-only não autoriza ida nem fase; imutáveis/verificadores preservados.11 testes focados, com limites explícitos, sem repetir provas aceitas. Fonte editável scripts/crm_csv_predecessor; kits consumidos não modificados. Futura closure/selagem e certificação concreta ainda necessárias; não instalar/usar o template histórico. Próximo passo offline: closure/toolchain pinado e faltantes exatos; saved/fallback/identidades, SQL/ownership, vínculos/autoridade atuais pendentes. Event775 não reparado; frontend não reaberto. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. Sem VPS ou nova geração.

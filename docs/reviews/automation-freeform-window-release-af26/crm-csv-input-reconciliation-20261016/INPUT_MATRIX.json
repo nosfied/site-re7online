@@ -803,19 +803,17 @@
     }
   ],
   "currentReconciliation": {
-    "base": "a60a00cbd23e64c21ad71bd8d915333582b5f8ec",
+    "base": "5243771041210fed3f53fb621cb10abb90277a0e",
     "date": "2026-10-17",
-    "scope": "DOCUMENTATION_ONLY_RECONCILIATION_NO_OPERATIONAL_EFFECTS",
+    "scope": "LOCAL_PREDECESSOR_SOURCE_RECONCILIATION_NO_OPERATIONAL_EFFECTS",
     "integrationReview": "ACCEPT_LOCAL_IN_TESTED_SCOPE_ONLY",
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
     "firstConcreteBlocker": {
-      "scope": "LOCAL_COMPOSITION_PREDECESSOR_POLICY_BINDING",
-      "fact": "Current static csv_contract/original_checks/root_readonly/pre_install consumers still bind predecessor fa113e; R1 preserved policy bytes hash e2a5ffab match original-only recovery. No source reconciliation applied.",
-      "reusableEvidence": "../crm-csv-r1r2-result-20261017/PROVENANCE.json; private capture 87778B SHA931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529, policy2751B SHAe2a5ffab807f457b4179a6981e15cbf52800cbf975bce921c31ee3a9a989860b",
-      "nextLocalAction": "Apply the already documented BINDING_PLAN predecessor reconciliation coherently to future producer/checkers/root capture/pre_install/admission/installer CAS and immutable references, with explicit model/actions review and negative proofs; no isolated pin replacement, installation or package in this round.",
-      "operationalDependency": "Fresh predecessor CAS and separate owner installation decision later; R1 is dated evidence, not current root certificate."
+      "localPredecessorSourceReconciled": true,
+      "nextOfflineAction": "Conferir closure/toolchain contra fontes pinadas disponíveis; separar faltantes observacionais; sem coleta genérica ou reparo Event775",
+      "notWindowReady": true
     },
     "groups": [
       {
@@ -902,8 +900,8 @@
         ],
         "consumers": "path_bindings/original_bindings; original_checks/csv_contract; Event parents; root Store/Context/Loader/start_mode; installer CAS",
         "reusable": "BINDING_PLAN and current static four-mode composition,57 inventory IDs,16 namespace renderings; accepted R1/R2/authority/R3/B1-B4/ORIGINAL local proofs and canonical owner/root/helper trust design.",
-        "offlineConclusion": "16 means four source renderings across four modes, not16 captures. Authorities remain proposed, not installed/emitted.",
-        "exactMissing": "Predecessor policy reconciliation; actual namespace and current profile/path metadata; resolved sixteen renderings/manifests/DAG without cycles; Event writable-parent condition; protected static installation and owner-approved anchor/phase/decision/profile/policy context. Recovery-specific permit only when applicable.",
+        "offlineConclusion": "16 means four source renderings across four modes, not16 captures. Authorities remain proposed, not installed/emitted. Predecessor e2a5 reconciled in future producer/checker/root/pre_A/admission/CAS sources; original-only grants no forward authority. Existing consumed kit not rewritten.",
+        "exactMissing": "Future authenticated closure/index integration of reconciled source delta; actual namespace and current profile/path metadata; resolved sixteen renderings/manifests/DAG without cycles; Event writable-parent condition; protected static installation and owner-approved anchor/phase/decision/profile/policy context. Recovery-specific permit only when applicable.",
         "dependency": "Current operational inputs plus source/toolchain review precede materialization; root installation/anchor emission/execution are separate approvals. R1 Event five parents775 would deny before containment if unchanged. No automatic permission repair or recovery permit for forward switch/PRESTOP.",
         "requiresOperationalObservation": true
       }
@@ -915,6 +913,23 @@
       "operational observations"
     ],
     "status": "CSV_SUSPENDED_NOT_DEPLOYED_NOT_WINDOW_READY",
-    "nextReview": "2026-10-21 or earlier on change"
+    "nextReview": "2026-10-21 or earlier on change",
+    "predecessorLocalDelta": {
+      "base": "5243771041210fed3f53fb621cb10abb90277a0e",
+      "status": "LOCAL_VALIDATED_SOURCE_DELTA_ONLY_REVIEW_PENDING",
+      "policySha256": "e2a5ffab807f457b4179a6981e15cbf52800cbf975bce921c31ee3a9a989860b",
+      "role": "EXPECTED_PREDECESSOR_NOT_FORWARD_OR_PHASE_AUTHORITY",
+      "source": "scripts/crm_csv_predecessor/sources.py",
+      "proofs": "PREDECESSOR_PROOFS.json",
+      "currentObservation": false,
+      "operationalPackageGenerated": false,
+      "remaining": [
+        "future closure/index integration and concrete-package certification",
+        "current identities/saved/fallback",
+        "SQL/ownership",
+        "protected toolchain",
+        "16 namespace bindings and installed phase authority"
+      ]
+    }
   }
 }
