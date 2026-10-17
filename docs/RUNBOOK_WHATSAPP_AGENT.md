@@ -1,6 +1,9 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
 
+**CSV17/10 — M1 NÃO INICIADO, falha local do TTY.** [Resultado/procedência na proposta existente](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): base/remoto/hashes1e8ba1c0 PASS; terminal gráfico exit127 (libpthread/GLIBC_PRIVATE) antes da coordenação. Owner não respondeu, agente não preencheu; nenhum M1/SSH/efeito. Destino M1 ausente e não consumido; diagnóstico privado separado, sem recibo de aplicação. Sem retry/reparo/alternativa/M2/M3. Próximo: retomada orientada pelo owner com TTY utilizável e coordenação real; plano/CAS e provas preservados. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO. Deifson; revisão21/10 ou antes de retomada.
+
+
 **CSV17/10 — ACL fechada OFFLINE; manutenção g+w preparada LOCALMENTE.** [Mesma proposta, M1/M2/M3 e9 provas](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): sem impedimento ACL concreto nas evidências preservadas; sem alegar ausência universal. Executor literal por FD, plano/CAS pinado, intent/done por efeito, Event original e retorno condicionado; coordenação nominal Git/npm/mantenedores depende do owner, não de lock hipotético. Nenhuma VPS/efeito produtivo/coleta/backup/SQL; apenas fixtures locais descartáveis. Próximo: revisão/autorização separada e coordenação, sem nova coleta genérica. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO; privados/históricos/NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Deifson; revisão21/10 ou antes de mudança.
 
 

@@ -1,3 +1,11 @@
+## M1 não iniciado — falha local do TTY, base1e8ba1c0
+
+[Resultado na mesma proposta](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md), [hash/procedência](../crm-csv-delivery-review-20261017/MAINTENANCE_RESULT.json). HEAD/remoto/hashes PASS; tentativa única de abrir terminal do owner falhou exit127 por incompatibilidade libpthread/GLIBC_PRIVATE. Nenhuma confirmação de coordenação, bloco M1 ou SSH iniciados; zero efeitos. Destino local M1 ausente; plano/fontes/blocos não alterados, M1 não consumido. Diagnóstico privado canônico preserva o output combinado observado, sem alegar canais M1 ou horários de manutenção inexistentes.
+
+Parado sem retry/reparo/alternativa/M2/M3. Próximo: owner orientar retomada por TTY local utilizável e confirmar os mantenedores/jobs reais antes de qualquer SSH. Não houve observação produtiva nem recertificação de permissões; análise ACL/provas locais continuam válidas. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO; Deifson, revisão21/10 ou antes de retomada.
+
+---
+
 ## ACL fechada OFFLINE e manutenção restrita LOCAL — base396f2ed8
 
 [Mesma proposta, análise primária e executores M1/M2/M3](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md). No caminho POSIX ACL Linux não há restrição VFS de owner para leitura, falhas LSM/suporte são propagadas e ENODATA corresponde à falta da ACL opcional. A custódia (FDs legíveis, uid=owner1000, cinco775 e dez ENODATA) não demonstra ocultação: a ressalva genérica não é bloqueio concreto nem exige provar ausência de mecanismo desconhecido. ACL base pelo modo continua; registros históricos/absenceConfirmed=false preservados.

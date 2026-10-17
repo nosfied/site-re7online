@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "Restricted maintenance executor prepared and locally validated; ACL visibility no longer a demonstrated blocker. Needs owner review/authorization and real scoped maintainer coordination; fixed preserved snapshot CAS must still match all eight links/five775 targets at use, otherwise DENY. No SSH or production effects authorized.",
+    "firstConcreteBlocker": "Owner TTY launch failed locally before M1/coordination; no SSH or effects. Need working owner-accessible local TTY and real named maintainer/job acknowledgements before resumed M1. No alternate launch or repair performed; preserved M1 snapshot/CAS and unused destination unchanged.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1635,6 +1635,18 @@
       "proofs": "../crm-csv-delivery-review-20261017/MAINTENANCE_PROOFS.json",
       "remaining": "review/explicit owner authorization, actual named maintainer/session/job coordination, current all-target FD/CAS and ACL revalidation before any effects",
       "productionExecuted": false
+    },
+    "eventModeMaintenanceAttempt": {
+      "base": "1e8ba1c0db5105083d29dfef0ace9aa77cc60cff",
+      "result": "M1_NOT_STARTED_LOCAL_OWNER_TTY_LAUNCH_FAILED",
+      "evidence": "../crm-csv-delivery-review-20261017/MAINTENANCE_RESULT.json",
+      "terminalProcessExit": 127,
+      "m1Started": false,
+      "ownerCoordinationObtained": false,
+      "sshStarted": false,
+      "confirmedEffects": 0,
+      "m1Consumed": false,
+      "m2OrM3Executed": false
     }
   }
 }

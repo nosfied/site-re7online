@@ -1,5 +1,21 @@
 # Event — proposta mínima de remediação para decisão separada
 
+## M1 autorizado — não iniciado: falha local do TTY antes da coordenação
+
+**M1 NOT STARTED / ZERO EFEITOS / SEM SSH.** Base/remoto1e8ba1c0, fontes e hashes revisados conferidos; selecionado somente M1. Uma tentativa de abrir o TTY visível ao owner com gnome-terminal terminou em exit127 antes de executar o bloco. Erro fatal: `gnome-terminal.real`, biblioteca libpthread.so.0 de snap/core20, símbolo `__libc_pthread_init`/`GLIBC_PRIVATE` não resolvido. O aviso appmenu anterior não é tratado como causa independente da manutenção. [Resultado sanitizado/procedência](MAINTENANCE_RESULT.json).
+
+O owner **não recebeu/preencheu a confirmação no TTY**; nenhuma resposta foi preenchida pelo agente e nenhuma coordenação foi presumida. O processo do terminal falhou antes do programa M1 e do seu único SSH. Conferência **somente local**: destino `csv-event-mode-apply-20261017-v1` continua ausente; não há intent, canais ou confirmações de efeito M1 criados por esta rodada. Não há observação do estado remoto atual nem afirmação de ausência remota de materiais produzidos por terceiros. Nenhum chmod, M2, M3, overlay, instalação CSV, SQL, restart ou janela foi executado.
+
+A tentativa de abertura foi encerrada, sem retry, lançamento alternativo, reconexão ou reparo do ambiente. O **M1 não foi consumido**: permanecem os mesmos blocos/fontes/plano pinado e destino não utilizado. Os preflights anteriores continuam consumidos. A autorização recebida não equivale à confirmação operacional ausente; a rodada foi interrompida conforme o limite de falha.
+
+O diagnóstico foi preservado pelo private_record canônico em diretório privado próprio, distinto do destino M1: `csv-event-mode-owner-tty-launch-20261017-v1`,0700/registro0600,871B/SHAaf2ca826…. Trata-se de registro explícito do output combinado observado da ferramenta, **não** captura retrospectiva inventada de stdout/stderr separados nem recibo M1. Horários de início/fim/duração de manutenção não existem; recordedUtc é a hora de preservação do diagnóstico. Não foi produzido selo ou recibo de aplicação.
+
+**Próximo requisito concreto:** disponibilizar ao owner um TTY local efetivamente utilizável para o bloco M1 já revisado, e obter nele as respostas reais sobre mantenedores/sessões/jobs e compromisso de não relançar manutenção. Não preencher campos automaticamente nem adaptar plano, fontes, referências ou gates. Este resultado não autoriza novo lançamento ou reparo; retomada deve ser orientada pelo owner após esta interrupção. Não é necessário executar M2/M3 para uma manutenção que não começou.
+
+A análise ACL offline e o executor localmente validado continuam aproveitáveis; não se repetiram testes/builds, captura ou backup. Nenhuma evidência permite recertificar os modos atuais de produção por esta rodada. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 não foram modificados. Owner Deifson; revisão17/10/2026, próxima21/10 ou antes da retomada. **CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; ELF PAUSADO.**
+
+---
+
 ## Fechamento ACL OFFLINE e manutenção preparada — revisão396f2ed8
 
 **ACL: SEM IMPEDIMENTO CONCRETO DEMONSTRADO / EXECUTOR LOCAL VALIDATED / REVIEW PENDING / APLICAÇÃO NÃO AUTORIZADA.** Esta análise substitui o impedimento genérico de visibilidade deixado acima; não altera o resultado histórico, seus bytes ou `absenceConfirmed=false`. [Executor fonte](../../../../scripts/crm_csv_delivery/event_mode_maintenance.source), [driver/transporte](../../../../scripts/crm_csv_delivery/mode_maintenance.py), [9 provas focadas](MAINTENANCE_PROOFS.json), [hashes/procedência](MAINTENANCE_MANIFEST.sha256). Os três blocos **M1/M2/M3** no fim deste documento são somente para revisão; os dois preflights anteriores permanecem consumidos e não devem ser repetidos.
