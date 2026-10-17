@@ -1,0 +1,168 @@
+{
+  "oldCaptureSha256Unchanged": "a443d6831f82e5874bc733495d821469505b4d598b18456c5ce99b0955563039",
+  "privateArtifacts": [
+    {
+      "alias": "materialization/bundle.private.json",
+      "bytes": 225285,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "23f2bd3f0b4b8cef218e2dfdfcfb0a1d7266c938d925fc4311063a1b00bf0f5a",
+      "uid": 1000
+    },
+    {
+      "alias": "materialization/privileged-output.private.jsonl",
+      "bytes": 124962,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "da0852d1e066fa715888cd645051956f58cbccd114e291df69a8f72f752204dc",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-materialize/stdout.private",
+      "bytes": 32,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "120a7df7935e0537377e2532f4b07ef8533f297ac58d34a89994af53fdda95c6",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-materialize/stderr.private",
+      "bytes": 0,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-materialize/privileged-output.private.jsonl",
+      "bytes": 1056,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "d1bb711fa27cf3054d6fec8f7ffdf89f473467c87a54889d302205f2697e1940",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-collect/stdout.private",
+      "bytes": 32,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "341902eb3a324a02be233a33a373c3ad934456a675a6f2ce4efe923ad73dca41",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-collect/stderr.private",
+      "bytes": 0,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uid": 1000
+    },
+    {
+      "alias": "launcher-collect/privileged-output.private.jsonl",
+      "bytes": 1052,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "793a06ef54ba449833af1b13eb3c300ea579c495841377c79733393e2e37575c",
+      "uid": 1000
+    },
+    {
+      "alias": "collection/capture.private.jsonl",
+      "bytes": 60158,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "18add4ba10e9509cf1527241ff4a6e48e35205519d7bce70713bd07923b58b7d",
+      "uid": 1000
+    },
+    {
+      "alias": "collection/transfer.stdout.private",
+      "bytes": 80814,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "eaae53cffb2a44e5bcc22351c4079e3e29d62f4056b04d1251e8ceacea3bafcf",
+      "uid": 1000
+    },
+    {
+      "alias": "collection/transfer.stderr.private",
+      "bytes": 0,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uid": 1000
+    },
+    {
+      "alias": "collection/privileged-output.private.jsonl",
+      "bytes": 169661,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "ba1ac421cf0f184db0a043d59aba11c3cb2275bb80ab37f5df032dd191ac7d00",
+      "uid": 1000
+    },
+    {
+      "alias": "collection/sequencer.journal.jsonl",
+      "bytes": 359,
+      "mode": "0600",
+      "nlink": 1,
+      "rawPublished": false,
+      "sha256": "023e45bb12d88fcdf2caf6f897f099508f1e6209406f2770d2065ea5417d2790",
+      "uid": 1000
+    }
+  ],
+  "proofCommit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+  "publicInputs": [
+    {
+      "bytes": 8532,
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/COMMANDS.md",
+      "sha256": "9b98b63764602f41cd0991aea67110ab80bd12c4fee9504f03e29244f6af3c8c"
+    },
+    {
+      "bytes": 15399,
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/MANIFEST.json",
+      "sha256": "7ff4cad23368e526a376584a7fc591eb4f4a2d2e49534f9b4541fc2d75f1971d"
+    },
+    {
+      "bytes": 2147,
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/DELTA_SCOPE.json",
+      "sha256": "810face70519427bebe5d78a0a5afe1d070eb644e358377dde8147e0f8eced4c"
+    },
+    {
+      "bytes": 5960,
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/PROOFS.json",
+      "sha256": "b12a21a4fd9c6ee2cba6c949fbca3492f75271164bc8e91f7ec10b00e7657d81"
+    },
+    {
+      "bytes": 12867,
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/runner.py",
+      "sha256": "49ec618a703c8c0a6caf91fb1a4be3f165e2707fe7cbc244592a877e5b54200a"
+    },
+    {
+      "bytes": 10401,
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/driver.py",
+      "sha256": "25324f0ddeebdec1825c8afb964184a6c0429383183327e37820bee9ad1f3e54"
+    },
+    {
+      "bytes": 4578,
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/launch.py",
+      "sha256": "2eb0b322656e0872648f2cc4d296ef6608a74d52248a93e69b7b2ef1362bba8a"
+    }
+  ],
+  "rawPublished": false
+}

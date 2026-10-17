@@ -1,0 +1,77 @@
+{
+  "byteExactCustodyVerified": true,
+  "canonicalIngestMatchesSource": true,
+  "collectExitCode": 1,
+  "csv": "SUSPENDED",
+  "custody": {
+    "atomicSnapshot": false,
+    "event": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+    "gatePass": false,
+    "manifestSha256": "7ff4cad23368e526a376584a7fc591eb4f4a2d2e49534f9b4541fc2d75f1971d",
+    "ownership": "UNKNOWN",
+    "sourceBytes": 60158,
+    "sourceSha256": "18add4ba10e9509cf1527241ff4a6e48e35205519d7bce70713bd07923b58b7d",
+    "utc": "2026-10-17T12:46:40.547863+00:00"
+  },
+  "failure": {
+    "additionalRemoteObservationPerformed": false,
+    "errno": null,
+    "errorClass": "RuntimeError",
+    "firstFailedPredicate": "UNKNOWN_IN_CAPTURE",
+    "lastSuccessfulStep": "peer-after",
+    "possibleRemainingBoundary": [
+      "socket/pm2.pid stability after response",
+      "per-application kernel PID/state/start ticks",
+      "first historical reference stable-file/hash check before its observation is recorded"
+    ]
+  },
+  "gates": {
+    "canonicalConfiguration": "NOT_REACHED_GATE2_INCOMPLETE",
+    "daemonRpc": "TRANSPORT_AND_PEER_BEFORE_AFTER_PASS",
+    "operationalElfClosure": "NOT_CHECKED",
+    "operationalToolchainCertified": false,
+    "routeContainerAndPsql": "NOT_REACHED",
+    "select": "NOT_AUTHORIZED_NOT_EXECUTED",
+    "sourcesClosure": "PASS_VERIFIED_SNAPSHOT"
+  },
+  "materializationExitCode": 0,
+  "oldDenyPreserved": true,
+  "ownership": "UNKNOWN",
+  "proofCommit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+  "proofParent": "99c2198d80c61d8904cae56fbb4d093258e236d2",
+  "readelfInvoked": false,
+  "remoteInterval": {
+    "atomicSnapshot": false,
+    "firstUtc": "2026-10-17T12:46:39.254868+00:00",
+    "lastUtc": "2026-10-17T12:46:40.255830+00:00"
+  },
+  "result": "CONSUMED_DENY_NO_RETRY",
+  "rootObserverInvoked": false,
+  "rpc": {
+    "allReturnedPidsMatchExpected": true,
+    "configurationCertified": false,
+    "exitCode": 0,
+    "kernelProcessIdentitiesCertified": false,
+    "populationNamesMatch": true,
+    "rowCount": 3,
+    "stderrBytes": 0,
+    "stdoutBytes": 25655,
+    "stdoutSha256": "ec71e5a5364035d06ac72e1cef728ce20836cb2e223e5d0dbaa7ad0d4559687a"
+  },
+  "selectInvoked": false,
+  "sudoUsed": false,
+  "transport": {
+    "errno": null,
+    "errorClass": null,
+    "exitCode": 1,
+    "finishedUtc": "2026-10-17T12:46:40.466380+00:00",
+    "startedUtc": "2026-10-17T12:46:36.304007+00:00",
+    "stderrBytes": 0,
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdinBytes": 225285,
+    "stdinSha256": "23f2bd3f0b4b8cef218e2dfdfcfb0a1d7266c938d925fc4311063a1b00bf0f5a",
+    "stdoutBytes": 80814,
+    "stdoutSha256": "eaae53cffb2a44e5bcc22351c4079e3e29d62f4056b04d1251e8ceacea3bafcf"
+  },
+  "window": "NOT_WINDOW_READY"
+}

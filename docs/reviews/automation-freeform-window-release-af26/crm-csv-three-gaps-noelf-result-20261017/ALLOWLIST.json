@@ -1,0 +1,16 @@
+{
+  "base": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-result-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-result-20261017/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-result-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-result-20261017/RESULT_SANITIZED.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-result-20261017/SOURCE_INDEX.json",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ],
+  "rawPublished": false,
+  "runtimeChangedAfterProofPublication": false,
+  "scope": "sanitized execution result/provenance/checkpoints only"
+}

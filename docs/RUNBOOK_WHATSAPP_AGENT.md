@@ -1,6 +1,9 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
 
+**CSV17/10 às09:46 Fortaleza — diagnóstico sem ELF CONSUMED/DENY.** [Resultado/custódia e limites](reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-result-20261017/REPORT.md): provas9afc2197 publicadas antes da execução única. Fontes/closure26 PASS; readelf não chamado, ELF/closure operacional NÃO CONFERIDA, sem PASS de toolchain. RPC real exit0 e peer antes/depois PASS; DENY posterior sem reason específico no journal, antes de concluir configuração; rota/psql não alcançados. População/PIDs retornados conferem, sem certificar identidades kernel.60.158B custodiados byte-exatos, gatePass=false; ownership UNKNOWN. Sem retry/fallback/outra mudança, SELECT/root/sudo/reparo/instalação/backup/janela. Provas e DENY anterior intactos; NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 não alterados. CSV SUSPENSO / NOT WINDOW READY; nova análise/correção exige revisão. Revisão21/10 ou novo escopo.
+
+
 **CSV17/10 — separação ELF, provas prévias à VPS.** [Delta mínimo e11 ensaios literais](reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/REPORT.md): única mudança funcional troca a chamada readelf pelo registro ELF/closure operacional NÃO CONFERIDA, sem PASS de toolchain. Hash/cadeia/FD Node, closure26, peer/identidade/configuração/rota/limites e custódia preservados; destinos novos. Os blocos1/2 têm autorização condicional única após publicar/conferir essas provas; execução real ainda não realizada neste checkpoint. SELECT/readelf/alternativas/root observer/instalação não autorizados. Tentativa anterior consumida/DENY intacta; ownership UNKNOWN. LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso, NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Revisão21/10 ou mudança.
 
 
