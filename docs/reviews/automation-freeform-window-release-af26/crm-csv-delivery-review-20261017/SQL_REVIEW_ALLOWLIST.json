@@ -1,0 +1,29 @@
+{
+  "base": "88126c975abcb4cc70e2f55f6ac4ff256b942e0b",
+  "scope": "local review of three existing SQLs and their minimal authenticated channel/transport integration; no VPS",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/DELIVERY.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_COMMANDS_FOR_REVIEW.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_CONSUMER_DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_REVIEW_ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_REVIEW_HASHES.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_REVIEW_PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_REVIEW_SOURCES.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review/MANIFEST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review/driver.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review/launch.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review/runner.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/test_sql_review.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "scripts/crm_csv_diagnostic/compose_sql_review.py",
+    "scripts/crm_csv_diagnostic/sql_execution.source"
+  ],
+  "excluded": "private raw capture/derived channel/profiles/bindings/tenants, runtimes, caches, all consumed code/commands/results and unrelated work"
+}

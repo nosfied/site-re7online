@@ -1,3 +1,82 @@
+## Três SQLs canônicos preparados LOCALMENTE — base88126c97
+
+[Roteiro literal para revisão](../crm-csv-delivery-review-20261017/SQL_COMMANDS_FOR_REVIEW.md),
+[fontes/hashes](../crm-csv-delivery-review-20261017/SQL_REVIEW_SOURCES.json),
+[provas PostgreSQL16 real](../crm-csv-delivery-review-20261017/SQL_REVIEW_PROOFS.json).
+**Nenhuma VPS/SELECT produtivo nesta rodada. M1 consumido; ELF pausado.**
+
+Reutiliza transporte/leitor/Capture/private_record e os três arquivos SQL existentes
+sem mudar seus bytes:identity.sql(ed4eb882…), ownership.sql(989f3371…), imports.sql(cbb92b53…).
+O canal é derivado em memória da captura autenticada499893B/f6873eb9… já concluída,
+selecionando somente db-route/sql-client-path/version. Derivado privado tem tamanho/hash
+no novo manifest, sem corpo publicado; não inclui env/trio/saved/crons. Falta/adulteração
+ou leitura negada nega antes da materialização/SSH. Launcher e manifest têm hashes literais
+no roteiro; carregam os mesmos bytes conferidos, sem import posterior por caminho mutável.
+Não é nova autoridade operacional, framework, coletor genérico ou schema de política.
+
+### Percurso mínimo, condições e alcance
+
+Quatro fronteiras de rota/container/cliente:before-identity→after-identity/before-ownership→
+after-ownership/before-imports→after-imports. Cada uma usa inspect limitado existente,
+System.db_container canônico e os dois comandos de cliente já aceitos, com igualdade
+à custódia. Sem refresh do trio, saved/fallback ou controles; nenhuma fonte datada
+substitui a revalidação do canal. No máximo15 subprocessos no caminho válido.
+
+Cada SQL executa uma vez, na ordem, READ ONLY/timeouts/ROLLBACK e psql -X -w -Atq
+ON_ERROR_STOP=1, role/database fixos, PG* limitadas. Identity exige database/role/read-only/
+major16 e system ID observado; não inventa pin de cluster anterior. Falha de privilégio
+ou identidade/limite nega sem sudo, role alternativo, alteração de SQL ou retry. Falha
+encerra a conexão (rollback automático se ON_ERROR_STOP impedir o ROLLBACK textual),
+preserva diagnóstico e não faz a próxima fronteira/consulta. ownership lista backends/
+locks, não requer zero com produção viva e nunca certifica atribuição completa.
+Imports100001 dispara IMPORTS_POSSIBLY_TRUNCATED_100001, com raw privado preservado;
+é possível truncamento, não contagem completa presumida. Até100000, classificador
+canônico tenant/op/UNKNOWN é reutilizado, sem emitir scopeComplete/old-exit/fence.
+Dados IDs/tenants e erros SQL ficam privados; Git recebe só conclusões/hashes.
+
+A lacuna8MiB do journal foi demonstrada por PostgreSQL real:100001 linhas produziram
+16675395B. Só o export desta derivação escolhe96MiB antes da leitura, via o mesmo
+stable_file e o mesmo formato canônico. SQL stdout64KiB/4MiB/32MiB e demais comandos1MiB,
+stderr64KiB; excesso preserva prefixo explicitamente parcial e hashes/tamanhos observados,
+nega sem afirmar custódia dos bytes descartados. Captura do subprocesso em memória vem
+antes dessa checagem: não é limite de RAM/processo ou orçamento de disco total. Não se
+reduziu o limite SQL nem alterou o leitor/manifest histórico. O roteiro discrimina o
+cálculo Base64/journal e as cópias adicionais de transporte; capacidade/reservas canônicas
+continuam requisito de execução, não certificado nesta preparação. Sem backup/build.
+
+### Provas novas afetadas e reuso
+
+Oito provas em PostgreSQL16 isolado novo sob /tmp, socket Unix sem TCP/VPS, ciclo de
+laboratório iniciado/encerrado explicitamente:caso válido com segundo backend real ativo;
+negação real de EXECUTE pg_control_system; negação real de SELECT Event; database e role
+divergentes reais;100001 linhas Event sintéticas reais; rota divergente (fronteira Docker
+simulada, zero SQL); limite de saída (resposta sintética, prefixo/negação explícitos).
+Nos casos SQL reais os payloads são exatamente os pinados, não mocks de resultado.
+Classificador, System.db_container e byte-exact export/ingest/private_record são concretos.
+Docker inspect/exec e seus IDs são fixtures; SSH não foi executado, não é prova de canal
+produtivo. O caso válido comprova três consultas e quatro revalidações; negativas impedem
+próxima consulta, sem replay ou falso complete. Somente essas interfaces foram testadas.
+
+Compositor reproduz3 arquivos de código byte a byte e12 vínculos de entrada em destino
+descartável (só destino instrumentado); derivação do canal lê a custódia local legítima,
+com negativas ausência/negação/adulteração e metadados de origem(uid/600). Nada é publicado como observação/perfil/permit
+operacional novo. Provas funcionais CSV, frontend, retorno, autoridade/PM2, M1 e coleta
+anterior foram reutilizadas sem repetir suítes/builds. Fontes editáveis em
+scripts/crm_csv_diagnostic/sql_execution.source e compose_sql_review.py; arquivos sob
+sql-review são derivados inativos para a revisão, não geração de implantação.
+
+**Primeiro ato restante:** revisão e autorização separada dos dois blocos SQL publicados,
+com destinos exclusivos. Sem execução automática após publicação. Depois dos resultados,
+reconciliar identidade SQL/visibilidade e importações; atribuição canônica completa continua
+própria, sem presumir que pg_stat_activity ou zero backends resolvem ownership. Root/
+proteção dos consumidores/16 vínculos/autoridade/frescor final continuam fases distintas
+na sequência já registrada API24e5857f→validação ledger/GET→fronteira/revisão frontend.
+NEWauth+NEWDB+NEWcipher, multitenancy, crons, guarda38 e out.15 CLOSED preservados.
+**CSV SUSPENSO / LOCAL VALIDATED NO ALCANCE / REVIEW PENDING / NOT DEPLOYED /
+NOT WINDOW READY.** Deifson; revisão21/10 ou mudança. Histórico abaixo preservado.
+
+---
+
 ## Leitura dirigida concluída17/10 às15:37 Fortaleza — base80e62ffd
 
 **DOIS BLOCOS CONSUMIDOS / COLETA E CUSTÓDIA PASS / RECONCILIAÇÃO OFFLINE APROVADA NO ALCANCE OBSERVADO.** [Resultado sanitizado e procedência](../crm-csv-delivery-review-20261017/DIRECTED_RESULT.json).

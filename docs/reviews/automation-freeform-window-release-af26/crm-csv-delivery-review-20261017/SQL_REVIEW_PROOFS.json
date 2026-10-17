@@ -1,0 +1,120 @@
+{
+  "result": "LOCAL_POSTGRES16_FOCUSED_VALIDATED_NOT_PRODUCTION",
+  "tests": 8,
+  "cases": [
+    {
+      "case": "database",
+      "postgres16Real": true,
+      "sqlPayloadsUnchanged": true,
+      "ok": false,
+      "queryCount": 1,
+      "denialStage": "identity-validation",
+      "denialReason": "SQL_RESULT_IDENTITY_PRIVILEGE_OR_SCHEMA_DENIED",
+      "journalBytes": 8511,
+      "exportAndCanonicalCustodyByteExact": true,
+      "externalDockerRouteAndSshSimulated": true
+    },
+    {
+      "case": "imports-privilege",
+      "postgres16Real": true,
+      "sqlPayloadsUnchanged": true,
+      "ok": false,
+      "queryCount": 3,
+      "denialStage": "imports",
+      "denialReason": "SQL_OR_CHANNEL_EXIT_DENIED",
+      "journalBytes": 22345,
+      "exportAndCanonicalCustodyByteExact": true,
+      "externalDockerRouteAndSshSimulated": true
+    },
+    {
+      "case": "output-limit",
+      "postgres16Real": true,
+      "sqlPayloadsUnchanged": true,
+      "ok": false,
+      "queryCount": 1,
+      "denialStage": "identity",
+      "denialReason": "OUTPUT_LIMIT_PARTIAL_PRESERVED",
+      "journalBytes": 94208,
+      "exportAndCanonicalCustodyByteExact": true,
+      "externalDockerRouteAndSshSimulated": true
+    },
+    {
+      "case": "privilege",
+      "postgres16Real": true,
+      "sqlPayloadsUnchanged": true,
+      "ok": false,
+      "queryCount": 1,
+      "denialStage": "identity",
+      "denialReason": "SQL_OR_CHANNEL_EXIT_DENIED",
+      "journalBytes": 7263,
+      "exportAndCanonicalCustodyByteExact": true,
+      "externalDockerRouteAndSshSimulated": true
+    },
+    {
+      "case": "limit",
+      "postgres16Real": true,
+      "sqlPayloadsUnchanged": true,
+      "ok": false,
+      "queryCount": 3,
+      "denialStage": "imports",
+      "denialReason": "IMPORTS_POSSIBLY_TRUNCATED_100001",
+      "journalBytes": 16675395,
+      "exportAndCanonicalCustodyByteExact": true,
+      "externalDockerRouteAndSshSimulated": true
+    },
+    {
+      "case": "role",
+      "postgres16Real": true,
+      "sqlPayloadsUnchanged": true,
+      "ok": false,
+      "queryCount": 1,
+      "denialStage": "identity-validation",
+      "denialReason": "SQL_RESULT_IDENTITY_PRIVILEGE_OR_SCHEMA_DENIED",
+      "journalBytes": 8515,
+      "exportAndCanonicalCustodyByteExact": true,
+      "externalDockerRouteAndSshSimulated": true
+    },
+    {
+      "case": "route",
+      "postgres16Real": true,
+      "sqlPayloadsUnchanged": true,
+      "ok": false,
+      "queryCount": 0,
+      "denialStage": "before-identity",
+      "denialReason": "SQL_ROUTE_OR_CLIENT_CHANGED",
+      "journalBytes": 3058,
+      "exportAndCanonicalCustodyByteExact": true,
+      "externalDockerRouteAndSshSimulated": true
+    },
+    {
+      "case": "valid",
+      "postgres16Real": true,
+      "sqlPayloadsUnchanged": true,
+      "ok": true,
+      "queryCount": 3,
+      "denialStage": null,
+      "denialReason": null,
+      "journalBytes": 28731,
+      "exportAndCanonicalCustodyByteExact": true,
+      "externalDockerRouteAndSshSimulated": true
+    }
+  ],
+  "real": "isolated PostgreSQL16/psql with exact pinned SQLs, actual roles/privilege failures, 100001 synthetic Event rows and nonzero backends; route verifier System.db_container, classifier, private_record/export/ingest",
+  "simulated": "Docker inspect/exec mapping and container/channel fixtures; SSH not executed; output-size overflow response synthetic",
+  "limitations": "statements are separate READ ONLY transactions, no cross-query snapshot/complete ownership; no VPS",
+  "noProductionAccess": true,
+  "derivation": {
+    "generatedCodeByteExact": 3,
+    "manifestMemberBindingsMatched": 12,
+    "privateChannelDerivedOnlyInMemory": true,
+    "sourceAuthenticationNegatives": [
+      "absent",
+      "tampered",
+      "metadata",
+      "denied-simulated"
+    ],
+    "localPrivateCustodyRead": true,
+    "newRemoteRead": false,
+    "metadataCanonicalSourceUid600Verified": true
+  }
+}

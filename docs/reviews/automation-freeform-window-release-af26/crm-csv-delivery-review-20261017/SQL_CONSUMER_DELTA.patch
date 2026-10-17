@@ -1,0 +1,475 @@
+--- accepted-directed/launch.py
++++ future-sql/launch.py
+@@ -52 +52 @@
+-    folder=parent/('csv-directed-launcher-20261017-v1-'+action);folder.mkdir(mode=0o700)
++    folder=parent/('csv-sql-launcher-20261017-v1-'+action);folder.mkdir(mode=0o700)
+--- accepted-directed/driver.py
++++ future-sql/driver.py
+@@ -6 +6 @@
+-NAME='crm-csv-delivery-review-20261017/directed-diagnostic'
++NAME='crm-csv-delivery-review-20261017/sql-review'
+@@ -8 +8 @@
+-MATERIAL=Path('/dev/shm/re7-csv-directed-material-20261017-v1')
++MATERIAL=Path('/dev/shm/re7-csv-sql-material-20261017-v1')
+@@ -10,2 +10,2 @@
+-TOOLS='/dev/shm/re7-csv-directed-tools-20261017-v1'
+-OUTPUT='/dev/shm/re7-csv-directed-read-20261017-v1'
++TOOLS='/dev/shm/re7-csv-sql-tools-20261017-v1'
++OUTPUT='/dev/shm/re7-csv-sql-read-20261017-v1'
+@@ -19 +19,6 @@
+-def libraries(blobs=None):return libload('read_package.py',blobs),libload('privileged_output.source',blobs)['private_record']
++def libraries(blobs=None):
++    lib=libload('read_package.py',blobs);original=lib['stable_file']
++    def sql_journal_read(path,limit=8*1024*1024):
++        return original(path,96*1024*1024 if Path(path).name==JOURNAL else limit)
++    lib['stable_file']=sql_journal_read
++    return lib,libload('privileged_output.source',blobs)['private_record']
+@@ -32,0 +38,19 @@
++def channel_snapshot():
++    folder=CUSTODY/'csv-directed-diagnostic-20261017-v1'
++    lib,_=libraries();lib['directory'](folder)
++    raw,metadata=lib['stable_file'](folder/'capture.private.jsonl')
++    if metadata['uid']!=os.getuid()or stat.S_IMODE(metadata['mode'])!=0o600:raise RuntimeError('pinned_channel_permissions')
++    if len(raw)!=499893 or hashlib.sha256(raw).hexdigest()!='f6873eb97f5a70709675ad16b8b4879ff1a1953dc58464c704a80e735b5af8d5':raise RuntimeError('pinned_channel_capture_drift')
++    rows=[json.loads(x)for x in raw.splitlines()]
++    if rows[-1]['result']!='GATES_1_3_AND_CONTROLS_OBSERVED':raise RuntimeError('pinned_channel_not_complete')
++    def command(ident):
++        selected=[x for x in rows if x.get('event')=='command'and x.get('id')==ident]
++        if len(selected)!=1 or selected[0]['exitCode']!=0:raise RuntimeError('pinned_channel_command')
++        row=selected[0];b=base64.b64decode(row['stdoutBase64'],validate=True)
++        if len(b)!=row['stdoutBytes']or hashlib.sha256(b).hexdigest()!=row['stdoutSha256']:raise RuntimeError('pinned_channel_bytes')
++        return b
++    value={'captureSha256':hashlib.sha256(raw).hexdigest(),'intervalUtc':[next(x['utc']for x in rows if x['event']=='begin'),rows[-1]['utc']],
++        'route':json.loads(command('db-route')),'clientPathBase64':base64.b64encode(command('sql-client-path')).decode(),
++        'clientVersionBase64':base64.b64encode(command('sql-client-version')).decode()}
++    return json.dumps(value,sort_keys=True).encode()
++
+@@ -43 +67 @@
+-            try:raw=READ(source)
++            try:raw=channel_snapshot()if name=='channel.private.json'else READ(source)
+@@ -127 +151 @@
+-    folder=lib['new_directory'](CUSTODY/('csv-directed-diagnostic-20261017-v1'+suffix))
++    folder=lib['new_directory'](CUSTODY/('csv-sql-read-20261017-v1'+suffix))
+--- accepted-directed/runner.py
++++ future-sql/runner.py
+@@ -1,2 +1,4 @@
+-"""Three gates, then separately authorized SELECTs. No root observer or PM2 CLI."""
+-import ast,base64,fcntl,hashlib,json,os,socket,stat,subprocess
++"""Bounded SQL review step; existing route contract, Capture and canonical classifier.
++No production entrypoint at import. Transport supplies authenticated BLOBS.
++"""
++import ast,base64,hashlib,json,os,stat,subprocess
+@@ -4 +5,0 @@
+-from urllib.parse import urlsplit
+@@ -6,7 +7,101 @@
+-P=Path('/opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-csv-staged-v2-20261016T094000Z/window')
+-HISTORY={'saved-dump.pm2.private.json':'c9c54c02b9694328a5aeaa4335efb88135f9bd948b4f786c8e9e4e851efd51e3',
+- 'source.profile.private.json':'a062c7020353cb39b0578653ea51475f8e9f9f68a588d1c55eb87cbbd68b6b9e',
+- 'db-owner-bindings.private.json':'1d67ff65fc300b7bb0fb165e31a69d415d9adb5d111d3b91e444137a3a8eaeeb'}
+-NODE_SHA='d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e'
+-BOOT_SHA='f9512be026ba35cb4662d4f5ac90cc0478f8d67e68ef95eb7d9793199b8d3ce7'
+-EXPECTED={'re7-whatsapp-agent':(936386,'2193413108'),'re7-whatsapp-web-worker':(936540,'2193413523'),'re7-admin-front':(188897,'2161347676')}
++JOURNAL_LIMIT=96*1024*1024
++OUTPUT_LIMITS={'identity':65536,'ownership':4*1024*1024,'imports':32*1024*1024}
++INSPECT=['/usr/bin/docker','inspect','--format','{"Id":{{json .Id}},"State":{"Running":{{json .State.Running}}},"Image":{{json .Image}},"NetworkSettings":{{json .NetworkSettings}}}','wa-agent-postgres']
++
++# load, Capture and diagnostic primitives are composed from exact accepted ASTs.
++def bounded_command(cap,ident,argv,*,input=None,timeout=25):
++    limit=OUTPUT_LIMITS.get(ident,1024*1024)
++    start=cap.lib['utc']();code=None;out=err=b'';error=None
++    try:
++        r=subprocess.run(argv,input=input,capture_output=True,timeout=timeout,
++                         env={'PATH':'/usr/bin:/bin','HOME':'/home/deploy','LANG':'C'})
++        code,out,err=r.returncode,r.stdout,r.stderr
++    except subprocess.TimeoutExpired as e:out,err=e.stdout or b'',e.stderr or b'';error=e
++    except OSError as e:error=e;err=type(e).__name__.encode()
++    exceeded=len(out)>limit or len(err)>65536
++    # An exceeded channel is explicitly partial; never claim full custody of discarded bytes.
++    cap.bytes(ident,argv,start,cap.lib['utc'](),code,out[:limit],err[:65536],error)
++    cap.event('sql_command_limits',id=ident,stdoutLimit=limit,stderrLimit=65536,
++              observedStdoutBytes=len(out),observedStderrBytes=len(err),
++              observedStdoutSha256=hashlib.sha256(out).hexdigest(),observedStderrSha256=hashlib.sha256(err).hexdigest(),
++              prefixOnly=exceeded,stdinBytes=len(input or b''),stdinSha256=hashlib.sha256(input or b'').hexdigest())
++    if exceeded:raise DiagnosticDenied(ident,'OUTPUT_LIMIT_PARTIAL_PRESERVED')
++    if error is not None:raise DiagnosticDenied(ident,'SQL_OR_CHANNEL_TIMEOUT_OR_OS_FAILURE')
++    if code!=0:raise DiagnosticDenied(ident,'SQL_OR_CHANNEL_EXIT_DENIED')
++    return out
++
++def route_client(cap,expected,stage):
++    row=json.loads(bounded_command(cap,stage+'-route',INSPECT))
++    cap.lib['require'](row==expected['route'],'sql_route_changed')
++    # Reuse the exact System.db_container method over the preserved docker response.
++    c=load('contracts.py')
++    class BytesPath:
++        def __init__(self,*a):pass
++        def read_bytes(self):return BLOBS['ops.source']
++    c['config_consumers'].__globals__['Path']=BytesPath
++    System,_=c['config_consumers']();system=System()
++    system.run=lambda args:json.dumps([row])if args==['docker','inspect','wa-agent-postgres']else (_ for _ in ()).throw(RuntimeError('unexpected_argv'))
++    system.db_container()
++    cid=row['Id']
++    path=bounded_command(cap,stage+'-client-path',['/usr/bin/docker','exec',cid,'/bin/sh','-c','command -v psql'])
++    version=bounded_command(cap,stage+'-client-version',['/usr/bin/docker','exec',cid,'psql','--version'])
++    cap.lib['require'](path==base64.b64decode(expected['clientPathBase64'],validate=True)and
++                       version==base64.b64decode(expected['clientVersionBase64'],validate=True),'sql_client_changed')
++    cap.event('SQL_CHANNEL_REVALIDATED',stage=stage,containerIdSha256=hashlib.sha256(cid.encode()).hexdigest())
++    return cid
++
++def sql_argv(cid):
++    argv=['/usr/bin/docker','exec','-i']
++    for e in ('PGHOST=','PGHOSTADDR=','PGPORT=5432','PGSERVICE=','PGSERVICEFILE=/dev/null','PGPASSFILE=/dev/null','PGPASSWORD=','PGOPTIONS=','PGCONNECT_TIMEOUT=3'):argv+=['-e',e]
++    return argv+[cid,'psql','-X','-w','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1']
++
++def identity(cap,raw):
++    rows=[json.loads(x)for x in raw.splitlines()if x.strip()]
++    cap.lib['require'](len(rows)==4,'sql_identity_shape')
++    first=rows[0]
++    cap.lib['require'](first['database']=='whatsapp_agent'and first['sessionRole']=='wa_agent'and first['effectiveRole']=='wa_agent'and first['transactionReadOnly']=='on','sql_identity_mismatch')
++    cap.lib['require'](int(first['serverVersion'])//10000==16 and rows[1]['systemIdentifier'],'sql_server_frontier')
++    cap.event('SQL_IDENTITY_OBSERVED',allClientBackendsVisible=rows[3]['allClientBackendsVisible'],ownership='UNKNOWN')
++
++def ownership(cap,raw):
++    value=json.loads(raw)
++    cap.lib['require'](type(value['backends'])is list and type(value['advisoryLocks'])is int and value['advisoryLocks']>=0,'sql_ownership_shape')
++    cap.event('SQL_BACKENDS_OBSERVED',backends=len(value['backends']),advisoryLocks=value['advisoryLocks'],ownership='UNKNOWN',zeroRequired=False)
++
++def imports(cap,raw):
++    rows=json.loads(raw)['rows'];cap.lib['require'](type(rows)is list,'sql_imports_shape')
++    if len(rows)>=100001:
++        cap.event('IMPORTS_POSSIBLY_TRUNCATED_DENY',rows=len(rows),sentinel=100001)
++        raise DiagnosticDenied('imports','IMPORTS_POSSIBLY_TRUNCATED_100001')
++    tree=ast.parse(BLOBS['capture_imports.source'])
++    f=next(n for n in tree.body if isinstance(n,ast.FunctionDef)and n.name=='classify')
++    scope={'require':cap.lib['require'],'json':json,'hashlib':hashlib}
++    exec(compile(ast.fix_missing_locations(ast.Module(body=[f],type_ignores=[])),'<canonical classify only>','exec'),scope)
++    ops=scope['classify'](rows);counts={}
++    for op in ops:counts[op['state']]=counts.get(op['state'],0)+1
++    # Raw tenant/id rows stay private; no duplicate per-operation payload in the journal.
++    cap.event('IMPORTS_CLASSIFIED_PRIVATE_AUDIT_ONLY',auditRows=len(rows),operations=len(ops),states=counts,
++              classificationSha256=hashlib.sha256(json.dumps(ops,sort_keys=True).encode()).hexdigest(),
++              knownActivityScopeComplete=False,executorExitCertified=False,ownership='UNKNOWN')
++
++def run(q,action):
++    if action!='collect':raise RuntimeError('select_review_action_denied')
++    cap=Capture(q);ok=False
++    cap.event('begin',manifestSha256=MANIFEST_SHA,action='three_sql_selects_only',atomicSnapshot=False)
++    try:
++        expected=json.loads(BLOBS['channel.private.json'])
++        cap.event('PINNED_CHANNEL_SOURCE',captureSha256=expected['captureSha256'],sourceIntervalUtc=expected['intervalUtc'])
++        cid=checked(cap,'before-identity','SQL_ROUTE_OR_CLIENT_CHANGED',lambda:route_client(cap,expected,'before-identity'))
++        for kind,next_stage,validator in (
++            ('identity','after-identity-before-ownership',identity),
++            ('ownership','after-ownership-before-imports',ownership),
++            ('imports','after-imports',imports)):
++            raw=bounded_command(cap,kind,sql_argv(cid),input=BLOBS[kind+'.sql'])
++            checked(cap,kind+'-validation','SQL_RESULT_IDENTITY_PRIVILEGE_OR_SCHEMA_DENIED',lambda validator=validator,raw=raw:validator(cap,raw))
++            cid=checked(cap,next_stage,'SQL_ROUTE_OR_CLIENT_CHANGED',lambda next_stage=next_stage:route_client(cap,expected,next_stage))
++        cap.event('end',result='THREE_READONLY_SQLS_PRESERVED',ownership='UNKNOWN',scopeComplete=False);ok=True
++    except Exception as e:
++        cap.event('end',result='DENY_NO_RETRY',errorClass=type(e).__name__,errno=getattr(e,'errno',None),
++                  denialStage=e.stage if isinstance(e,DiagnosticDenied)else None,
++                  denialReason=e.reason if isinstance(e,DiagnosticDenied)else 'SQL_REVIEW_UNCLASSIFIED_DENY',ownership='UNKNOWN')
++    return ok,None
+@@ -15,2 +110,3 @@
+-    scope={'__name__':'library_only','__file__':'<verified '+name+'>'}
+-    exec(compile(BLOBS[name],scope['__file__'],'exec'),scope);return scope
++    scope = {'__name__': 'library_only', '__file__': '<verified ' + name + '>'}
++    exec(compile(BLOBS[name], scope['__file__'], 'exec'), scope)
++    return scope
+@@ -19,12 +115,21 @@
+-    def __init__(self,q):
+-        self.q=q;self.lib=load('read_package.py');self.record=load('privileged_output.source')['private_record']
+-    def event(self,event,**data):self.record(self.q,self.lib['JOURNAL'],{'event':event,'utc':self.lib['utc'](),**data})
+-    def bytes(self,ident,argv,start,end,code,out,err,error=None):
+-        row={'id':ident,'argv':argv,'startedUtc':start,'finishedUtc':end,'exitCode':code,
+-             'errorClass':None if error is None else type(error).__name__,'errno':getattr(error,'errno',None)}
+-        for key,raw in [('stdout',out),('stderr',err)]:
+-            self.lib['write_artifact'](self.q/(ident+'.'+key+'.private'),raw)
+-            row.update({key+'Bytes':len(raw),key+'Sha256':self.lib['sha'](raw),key+'Base64':base64.b64encode(raw).decode()})
+-        self.event('command',**row)
+-    def command(self,ident,argv,*,input=None,pass_fds=(),timeout=25):
+-        start=self.lib['utc']();code=None;out=err=b'';error=None
++
++    def __init__(self, q):
++        self.q = q
++        self.lib = load('read_package.py')
++        self.record = load('privileged_output.source')['private_record']
++
++    def event(self, event, **data):
++        self.record(self.q, self.lib['JOURNAL'], {'event': event, 'utc': self.lib['utc'](), **data})
++
++    def bytes(self, ident, argv, start, end, code, out, err, error=None):
++        row = {'id': ident, 'argv': argv, 'startedUtc': start, 'finishedUtc': end, 'exitCode': code, 'errorClass': None if error is None else type(error).__name__, 'errno': getattr(error, 'errno', None)}
++        for key, raw in [('stdout', out), ('stderr', err)]:
++            self.lib['write_artifact'](self.q / (ident + '.' + key + '.private'), raw)
++            row.update({key + 'Bytes': len(raw), key + 'Sha256': self.lib['sha'](raw), key + 'Base64': base64.b64encode(raw).decode()})
++        self.event('command', **row)
++
++    def command(self, ident, argv, *, input=None, pass_fds=(), timeout=25):
++        start = self.lib['utc']()
++        code = None
++        out = err = b''
++        error = None
+@@ -32,8 +137,11 @@
+-            r=subprocess.run(argv,input=input,pass_fds=pass_fds,capture_output=True,timeout=timeout,
+-                             env={'PATH':'/usr/bin:/bin','HOME':'/home/deploy','LANG':'C'})
+-            code,out,err=r.returncode,r.stdout,r.stderr
+-        except subprocess.TimeoutExpired as e:out,err=e.stdout or b'',e.stderr or b'';error=e
+-        except OSError as e:error=e;err=type(e).__name__.encode()
+-        self.bytes(ident,argv,start,self.lib['utc'](),code,out,err,error)
+-        self.event('command_input',id=ident,bytes=len(input or b''),sha256=self.lib['sha'](input or b''))
+-        self.lib['require'](code==0 and error is None,'command_denied:'+ident)
++            r = subprocess.run(argv, input=input, pass_fds=pass_fds, capture_output=True, timeout=timeout, env={'PATH': '/usr/bin:/bin', 'HOME': '/home/deploy', 'LANG': 'C'})
++            code, out, err = (r.returncode, r.stdout, r.stderr)
++        except subprocess.TimeoutExpired as e:
++            out, err = (e.stdout or b'', e.stderr or b'')
++            error = e
++        except OSError as e:
++            error = e
++            err = type(e).__name__.encode()
++        self.bytes(ident, argv, start, self.lib['utc'](), code, out, err, error)
++        self.event('command_input', id=ident, bytes=len(input or b''), sha256=self.lib['sha'](input or b''))
++        self.lib['require'](code == 0 and error is None, 'command_denied:' + ident)
+@@ -41,3 +149,5 @@
+-    def observe(self,ident,fn):
+-        start=self.lib['utc']()
+-        try:value=fn()
++
++    def observe(self, ident, fn):
++        start = self.lib['utc']()
++        try:
++            value = fn()
+@@ -45,3 +155,5 @@
+-            self.bytes(ident,['library',ident],start,self.lib['utc'](),1,b'',type(e).__name__.encode(),e);raise
+-        raw=json.dumps(value,sort_keys=True).encode()
+-        self.bytes(ident,['library',ident],start,self.lib['utc'](),0,raw,b'');return value
++            self.bytes(ident, ['library', ident], start, self.lib['utc'](), 1, b'', type(e).__name__.encode(), e)
++            raise
++        raw = json.dumps(value, sort_keys=True).encode()
++        self.bytes(ident, ['library', ident], start, self.lib['utc'](), 0, raw, b'')
++        return value
+@@ -49,9 +161 @@
+-def consumers():
+-    # Exact method ASTs selected by the accepted extractor; read from verified memory.
+-    c=load('contracts.py')
+-    class BytesPath:
+-        def __init__(self,*args):pass
+-        def read_bytes(self):return BLOBS['ops.source']
+-    c['config_consumers'].__globals__['Path']=BytesPath
+-    System,Operations=c['config_consumers']()
+-    return c,System,Operations
++class DiagnosticDenied(RuntimeError):
+@@ -59,2 +163,7 @@
+-def sealed(raw):
+-    fd=os.memfd_create('reviewed-rpc-snapshot',os.MFD_ALLOW_SEALING)
++    def __init__(self, stage, reason):
++        super().__init__(reason)
++        self.stage = stage
++        self.reason = reason
++
++def checked(cap, stage, reason, fn, allowed=None, preserve_exception=False):
++    cap.event('verification_begin', stage=stage, denyReason=reason)
+@@ -62,25 +171 @@
+-        with os.fdopen(fd,'wb',closefd=False) as f:f.write(raw);f.flush()
+-        os.lseek(fd,0,0)
+-        fcntl.fcntl(fd,fcntl.F_ADD_SEALS,fcntl.F_SEAL_WRITE|fcntl.F_SEAL_GROW|fcntl.F_SEAL_SHRINK|fcntl.F_SEAL_SEAL)
+-        return fd
+-    except BaseException:os.close(fd);raise
+-
+-# Inline diagnostic integration; no independent checker or operational authority.
+-class DiagnosticDenied(RuntimeError):
+-    def __init__(self,stage,reason):
+-        super().__init__(reason);self.stage=stage;self.reason=reason
+-
+-CANONICAL_REASONS={
+- 'process_not_stable':'CANONICAL_PROCESS_NOT_STABLE',
+- 'successor_restarted':'CANONICAL_SUCCESSOR_RESTARTED',
+- 'process_config_drift':'CANONICAL_PROCESS_CONFIG_DRIFT',
+- 'cwd_drift':'CANONICAL_CWD_DRIFT','executable_drift':'CANONICAL_EXECUTABLE_DRIFT',
+- 'environment_drift':'CANONICAL_ENVIRONMENT_DRIFT','process_missing':'CANONICAL_PROCESS_MISSING',
+- 'frontend_before_schema':'HISTORICAL_FRONTEND_SCHEMA_INVALID',
+- 'frontend_environment_not_scalar':'HISTORICAL_FRONTEND_ENV_SCHEMA_INVALID',
+- 'frontend_application_environment_drift':'FRONTEND_APPLICATION_ENVIRONMENT_DRIFT',
+-}
+-
+-def checked(cap,stage,reason,fn,allowed=None,preserve_exception=False):
+-    cap.event('verification_begin',stage=stage,denyReason=reason)
+-    try:value=cap.observe(stage,fn)
++        value = cap.observe(stage, fn)
+@@ -88 +173,2 @@
+-        cap.event('verification_denied',stage=stage,reason=e.reason,originStage=e.stage);raise
++        cap.event('verification_denied', stage=stage, reason=e.reason, originStage=e.stage)
++        raise
+@@ -90,7 +176,7 @@
+-        # Only exact fixed canonical literals are translated, never arbitrary error text.
+-        if allowed and type(e)is RuntimeError and len(e.args)==1 and type(e.args[0])is str:
+-            reason=allowed.get(e.args[0],reason)
+-        cap.event('verification_denied',stage=stage,reason=reason,errorClass=type(e).__name__,errno=getattr(e,'errno',None))
+-        if preserve_exception:raise
+-        raise DiagnosticDenied(stage,reason)from None
+-    cap.event('verification_pass',stage=stage)
++        if allowed and type(e) is RuntimeError and (len(e.args) == 1) and (type(e.args[0]) is str):
++            reason = allowed.get(e.args[0], reason)
++        cap.event('verification_denied', stage=stage, reason=reason, errorClass=type(e).__name__, errno=getattr(e, 'errno', None))
++        if preserve_exception:
++            raise
++        raise DiagnosticDenied(stage, reason) from None
++    cap.event('verification_pass', stage=stage)
+@@ -98,157 +183,0 @@
+-
+-def guard(cap,stage,reason,predicate):
+-    def evaluate():
+-        cap.lib['require'](predicate(),reason)
+-        return {'predicateSatisfied':True}
+-    return checked(cap,stage,reason,evaluate)
+-
+-def stat_observation(path,lib):
+-    s=path.lstat()
+-    return {'metadata':lib['meta'](s),'atimeNs':s.st_atime_ns}
+-
+-def private_file_observation(path,lib,limit=None):
+-    raw,m=lib['stable_file'](path)if limit is None else lib['stable_file'](path,limit)
+-    return {'metadata':m,'bytes':len(raw),'sha256':lib['sha'](raw),'bytesBase64':base64.b64encode(raw).decode()}
+-
+-def canonical_io(cap,system,stage,fn):
+-    # Tap exactly the Path operations of the pinned methods, returning their real result.
+-    # read_text evidence is the consumed (newline-normalized) text, not raw fd bytes.
+-    scope=system.identity.__func__.__globals__;original=scope['Path'];count=0
+-    class Tap:
+-        def __init__(self,*args):self.path=original(*args)
+-        def ident(self):
+-            nonlocal count
+-            count+=1;return stage+'-io-'+str(count)
+-        def read_text(self,*a,**kw):
+-            return checked(cap,self.ident(),'CANONICAL_TEXT_READ_FAILED',lambda:self.path.read_text(*a,**kw),preserve_exception=True)
+-        def resolve(self,*a,**kw):
+-            held={}
+-            def read():held['path']=self.path.resolve(*a,**kw);return str(held['path'])
+-            checked(cap,self.ident(),'CANONICAL_PATH_RESOLVE_FAILED',read,preserve_exception=True)
+-            return held['path']
+-    scope['Path']=Tap
+-    try:return fn()
+-    finally:scope['Path']=original
+-
+-def frontend(cap,node_fd):
+-    lib=cap.lib;require=lib['require'];c,System,Operations=consumers();system=System();op=Operations();op.d=system
+-    boot=cap.observe('boot-before',lambda:lib['observe'](lib['BOOT_ID']));require(boot['sha256']==BOOT_SHA,'boot_drift')
+-    pidraw,pm=lib['stable_file']('/home/deploy/.pm2/pm2.pid',64)
+-    require(pm['uid']==os.getuid() and int(pidraw)==18676,'daemon_pid')
+-    endpoint=Path('/home/deploy/.pm2/rpc.sock');meta=endpoint.lstat()
+-    require(stat.S_ISSOCK(meta.st_mode) and meta.st_uid==os.getuid(),'daemon_socket')
+-    cap.observe('daemon-before',lambda:{'identity':system.identity(18676),'socket':lib['meta'](meta),
+-        'socketAtimeNs':meta.st_atime_ns,'pidSha256':lib['sha'](pidraw),'pidBytesBase64':base64.b64encode(pidraw).decode(),'pidMetadata':pm})
+-    with socket.socket(socket.AF_UNIX) as s:
+-        s.settimeout(1);s.connect(str(endpoint))
+-        cap.observe('peer-before',lambda:c['verify_peer'](s,system,18676,'222727',os.getuid()))
+-        files={'/snapshot/pm2_rpc_fd.cjs':BLOBS['pm2_rpc_fd.cjs'].decode()}
+-        files.update({'/snapshot/'+k:v.decode() for k,v in BLOBS.items()if k.startswith('rpc/')})
+-        fd=sealed(json.dumps({'files':files,'socketFd':s.fileno()}).encode())
+-        try:
+-            raw=cap.command('pm2-rpc',['/proc/self/fd/'+str(node_fd),'-e',BLOBS['node_snapshot.cjs'].decode(),str(fd)],pass_fds=(s.fileno(),fd,node_fd),timeout=8)
+-        finally:os.close(fd)
+-        cap.observe('peer-after',lambda:c['verify_peer'](s,system,18676,'222727',os.getuid()))
+-        after=checked(cap,'postrpc-socket-stat','POSTRPC_SOCKET_STAT_UNAVAILABLE',lambda:stat_observation(endpoint,lib))
+-        guard(cap,'postrpc-socket-type-owner','POSTRPC_SOCKET_TYPE_OWNER',lambda:stat.S_ISSOCK(after['metadata']['mode'])and after['metadata']['uid']==os.getuid())
+-        guard(cap,'postrpc-socket-metadata','POSTRPC_SOCKET_METADATA_DRIFT',lambda:after['metadata']==lib['meta'](meta))
+-        pid_after=checked(cap,'postrpc-pid-read','POSTRPC_PID_READ_UNSTABLE',lambda:private_file_observation(Path('/home/deploy/.pm2/pm2.pid'),lib,64))
+-        guard(cap,'postrpc-pid-content','POSTRPC_PID_CONTENT_DRIFT',lambda:base64.b64decode(pid_after['bytesBase64'],validate=True)==pidraw)
+-    apps=checked(cap,'rpc-json','RPC_JSON_INVALID',lambda:json.loads(raw))
+-    by=checked(cap,'rpc-index','RPC_STRUCTURE_INVALID',lambda:{a['name']:a for a in apps})
+-    guard(cap,'rpc-population','RPC_POPULATION_MISMATCH',lambda:len(apps)==len(by)==3 and set(by)==set(EXPECTED))
+-    for index,(name,(pid,ticks))in enumerate(EXPECTED.items()):
+-        stage='application-'+str(index)
+-        identity=checked(cap,stage+'-identity','APPLICATION_IDENTITY_READ_FAILED',lambda:canonical_io(cap,system,stage,lambda:system.identity(pid)))
+-        guard(cap,stage+'-returned-pid','APPLICATION_RETURNED_PID_DRIFT',lambda:by[name]['pid']==pid)
+-        guard(cap,stage+'-present','APPLICATION_IDENTITY_ABSENT',lambda:identity is not None)
+-        guard(cap,stage+'-ticks','APPLICATION_START_TICKS_DRIFT',lambda:identity['ticks']==ticks)
+-        guard(cap,stage+'-state','APPLICATION_STATE_UNSAFE',lambda:identity['state']not in('Z','X'))
+-    def historical(name,stage):
+-        value=checked(cap,stage+'-read','HISTORICAL_READ_UNSTABLE',lambda:private_file_observation(P/name,lib))
+-        guard(cap,stage+'-hash','HISTORICAL_HASH_DRIFT',lambda:value['sha256']==HISTORY[name])
+-        data=checked(cap,stage+'-json','HISTORICAL_JSON_INVALID',lambda:json.loads(base64.b64decode(value['bytesBase64'],validate=True)))
+-        cap.observe('reference-'+name,lambda:{'sha256':value['sha256'],'bytes':value['bytes'],'metadata':value['metadata']})
+-        return data
+-    saved=historical('saved-dump.pm2.private.json','saved-reference')
+-    profiles=historical('source.profile.private.json','profile-reference')
+-    before=checked(cap,'frontend-reference','HISTORICAL_FRONTEND_MISSING',lambda:next(a for a in saved if a['name']=='re7-admin-front'))
+-    cfgs=checked(cap,'profile-apps','HISTORICAL_PROFILE_SCHEMA_INVALID',lambda:profiles['apps'])
+-    for index,cfg in enumerate(cfgs):
+-        stage='pair-config-'+str(index)
+-        name=checked(cap,stage+'-name','HISTORICAL_PROFILE_SCHEMA_INVALID',lambda:cfg['name'])
+-        if name!='re7-admin-front':
+-            checked(cap,stage,'CANONICAL_PAIR_CONFIG_DENIED',lambda:canonical_io(cap,system,stage,lambda:op.config(by[name],cfg)),CANONICAL_REASONS)
+-    allowed={**CANONICAL_REASONS,**{'frontend_live_field:'+field:'FRONTEND_FIELD_'+field.upper()+'_DRIFT'for field in c['LIVE_FIELDS']}}
+-    checked(cap,'frontend-contract','CANONICAL_FRONTEND_CONFIG_DENIED',lambda:canonical_io(cap,system,'frontend-config',lambda:c['compare_frontend'](by['re7-admin-front'],before,op,profiles)),allowed)
+-    for name in ('dump.pm2','dump.pm2.bak'):
+-        value,m=lib['stable_file'](Path('/home/deploy/.pm2')/name)
+-        cap.observe('saved-full-'+name,lambda:{'metadata':m,'bytes':len(value),'sha256':lib['sha'](value),'bytesBase64':base64.b64encode(value).decode()})
+-        require(m['uid']==os.getuid() and stat.S_IMODE(m['mode'])==0o600,'saved_permissions')
+-        now=next(a for a in json.loads(value)if a['name']=='re7-admin-front')
+-        cap.observe('saved-'+name,lambda:c['compare_saved'](now,before))
+-    for name,(pid,ticks)in EXPECTED.items():
+-        identity=system.identity(pid);require(identity and identity['ticks']==ticks and identity['state']not in('Z','X'),'identity_after')
+-    require(lib['observe'](lib['BOOT_ID'])['sha256']==boot['sha256'],'boot_after')
+-    cap.event('GATE2_RPC_CONFIGURATION_PASS',atomicSnapshot=False)
+-    return by
+-
+-INSPECT=['/usr/bin/docker','inspect','--format','{"Id":{{json .Id}},"State":{"Running":{{json .State.Running}}},"Image":{{json .Image}},"NetworkSettings":{{json .NetworkSettings}}}','wa-agent-postgres']
+-
+-def route(cap,apps):
+-    lib=cap.lib;require=lib['require'];_,System,_=consumers();system=System()
+-    raw,m=lib['stable_file'](P/'db-owner-bindings.private.json');require(lib['sha'](raw)==HISTORY['db-owner-bindings.private.json'],'db_binding_hash')
+-    binding=json.loads(raw)
+-    cap.observe('db-binding',lambda:{'sha256':lib['sha'](raw),'bytes':len(raw),'metadata':m})
+-    row=json.loads(cap.command('db-route',INSPECT))
+-    system.run=lambda argv:json.dumps([row])if argv==['docker','inspect','wa-agent-postgres']else (_ for _ in ()).throw(RuntimeError('unexpected_argv'))
+-    observed=system.db_container()
+-    require(observed['id']==binding['containerId'] and observed['ip']==binding['containerIp'] and observed['published']==['127.0.0.1',binding['publishedPort']],'db_route_changed')
+-    # Environment source is live process/canonical PM2 config already checked, never .env.
+-    for name in ('re7-whatsapp-agent','re7-whatsapp-web-worker'):
+-        value=apps[name]['pm2_env']['env']['DATABASE_URL'];u=urlsplit(value)
+-        require(u.scheme in ('postgres','postgresql') and u.username=='wa_agent' and u.path=='/whatsapp_agent' and
+-                u.hostname in ('127.0.0.1','localhost') and u.port==binding['publishedPort'],'database_channel_mismatch')
+-    require(type(row['Image'])is str and row['Image'].startswith('sha256:'),'container_image_identity')
+-    cid=observed['id']
+-    path=cap.command('sql-client-path',['/usr/bin/docker','exec',cid,'/bin/sh','-c','command -v psql'])
+-    version=cap.command('sql-client-version',['/usr/bin/docker','exec',cid,'psql','--version'])
+-    require(path.startswith(b'/') and path.endswith(b'\n') and len(path.splitlines())==1,'psql_path')
+-    require(version.startswith(b'psql (PostgreSQL) 16.'),'client_restore_major')
+-    cap.event('GATE3_ROUTE_CLIENT_OBSERVED',image=row['Image'],containerId=cid,ownership='UNKNOWN',imageTrust='immutable Docker container ID matched to historical binding; no pristine image attestation')
+-    return row
+-
+-def controls(cap):
+-    # Observations only; no classification from inactive/enabled, no root helper call.
+-    checked(cap,'controls-executor','CONTROL_EXECUTOR_DENIED',lambda:{'uid':os.getuid(),'gid':os.getgid()})
+-    guard(cap,'controls-nonroot','CONTROL_EXECUTOR_PRIVILEGED',lambda:os.getuid()==1000)
+-    checked(cap,'controls-deploy-cron','DEPLOY_CRON_READ_FAILED',lambda:cap.command('deploy-cron',['/usr/bin/crontab','-l']).decode())
+-    checked(cap,'controls-system-cron','SYSTEM_CRON_READ_FAILED',lambda:private_file_observation(Path('/etc/cron.d/re7-converta-backup'),cap.lib))
+-    checked(cap,'controls-supervision','SUPERVISION_READ_FAILED',lambda:cap.command('supervision',['/usr/bin/systemctl','show','pm2-deploy.service','--property=ActiveState,UnitFileState']).decode())
+-    for name in ('deploy.crontab.before','re7-converta-backup.before','initial.private.json','execution-gates.private.json'):
+-        checked(cap,'controls-'+name,'CONTROL_FILE_READ_FAILED',lambda name=name:private_file_observation(P/name,cap.lib))
+-    checked(cap,'controls-authorization','AUTHORIZATION_READ_FAILED',lambda:private_file_observation(P.parent/'execution-authorized',cap.lib))
+-    cap.event('CONTROLS_OBSERVED_NOT_CERTIFIED',bothCronsSeparatelyObserved=True,supervisionInterpretation='compare original bytes offline; inactive/enabled alone is not failure',rootPolicyCertified=False,guardCertified=False,barrierCertified=False)
+-
+-def run(q,action):
+-    if action!='collect':raise RuntimeError('collect_only')
+-    cap=Capture(q);ok=False
+-    cap.event('begin',manifestSha256=MANIFEST_SHA,action=action,atomicSnapshot=False)
+-    try:
+-        cap.event('GATE1_VERIFIED_SNAPSHOT',files={k:{'bytes':len(v),'sha256':hashlib.sha256(v).hexdigest()}for k,v in BLOBS.items()})
+-        node=cap.observe('node-chain',lambda:cap.lib['file_chain']('/usr/bin/node',cap.lib['IMAGE_LIMIT'])[0])
+-        cap.lib['require'](node['sha256']==NODE_SHA,'node_image_drift')
+-        cap.observe('docker-chain',lambda:cap.lib['file_chain']('/usr/bin/docker',cap.lib['IMAGE_LIMIT'])[0])
+-        cap.event('ELF_OPERATIONAL_CLOSURE_NOT_CHECKED',elfChecked=False,operationalToolchainCertified=False)
+-        node_fd=os.open(node['resolved'],os.O_RDONLY|os.O_NOFOLLOW)
+-        try:
+-            cap.lib['require'](cap.lib['meta'](os.fstat(node_fd))==node['metadata'],'node_replaced_before_exec')
+-            apps=frontend(cap,node_fd)
+-            cap.lib['require'](cap.lib['meta'](os.fstat(node_fd))==node['metadata'],'node_changed_after_exec')
+-        finally:os.close(node_fd)
+-        row=checked(cap,'route-client','ROUTE_OR_POSTGRES_CLIENT_DENIED',lambda:route(cap,apps))
+-        controls(cap)
+-        cap.event('end',result='GATES_1_3_AND_CONTROLS_OBSERVED',ownership='UNKNOWN',operationalCertification=False);ok=True
+-    except Exception as e:
+-        cap.event('end',result='DENY_NO_RETRY',errorClass=type(e).__name__,errno=getattr(e,'errno',None),ownership='UNKNOWN',denialStage=e.stage if isinstance(e,DiagnosticDenied)else None,denialReason=e.reason if isinstance(e,DiagnosticDenied)else None)
+-    return ok,cap.lib['export'](str(q))

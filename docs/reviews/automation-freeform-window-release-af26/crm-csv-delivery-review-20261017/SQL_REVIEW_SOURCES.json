@@ -1,0 +1,49 @@
+{
+  "base": "88126c975abcb4cc70e2f55f6ac4ff256b942e0b",
+  "launcherSha256": "c5cf760be017f83e56c459da72760e8a108f92b57fc7d42a999a3c6f51c78fa9",
+  "manifestSha256": "c35bfd260ec4745def21f71a45a6e0e5e107a41ca539e51ffa364bc3f4463343",
+  "privateBytesPublished": false,
+  "privateChannel": {
+    "bootstrap": false,
+    "bytes": 1262,
+    "derivedFrom": {
+      "captureSha256": "f6873eb97f5a70709675ad16b8b4879ff1a1953dc58464c704a80e735b5af8d5",
+      "commandIds": [
+        "db-route",
+        "sql-client-path",
+        "sql-client-version"
+      ]
+    },
+    "relativeSource": "not-a-path-derived-in-memory",
+    "sha256": "02c319171efed5bdead83746bf90185c5cf440cd44afa4e36abb346fb619345b",
+    "source": "derived-from-pinned-private-capture"
+  },
+  "queries": {
+    "identity.sql": {
+      "bootstrap": false,
+      "bytes": 1374,
+      "relativeSource": "../../crm-csv-three-gaps-procedure-20261017/identity.sql",
+      "sha256": "ed4eb8826e4bc68e1b9a2f98c9676898b8e3f068add747881566613d172ac138",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/identity.sql"
+    },
+    "imports.sql": {
+      "bootstrap": false,
+      "bytes": 582,
+      "relativeSource": "../../crm-csv-three-gaps-procedure-20261017/imports.sql",
+      "sha256": "cbb92b53c4f2c8b298016e57a6d52dcef2e0b1c4ddc003a69e07a04398cfaf12",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/imports.sql"
+    },
+    "ownership.sql": {
+      "bootstrap": false,
+      "bytes": 494,
+      "relativeSource": "../../crm-csv-three-gaps-procedure-20261017/ownership.sql",
+      "sha256": "989f3371f3e2fc2886ddba4808180869e1c646b5dca550c1c36b940a68e32efd",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/ownership.sql"
+    }
+  },
+  "reuse": {
+    "journalReadBoundExplicit": 100663296,
+    "runnerDefinitions": "accepted ASTs load/Capture/DiagnosticDenied/checked; unchanged canonical System.db_container/config extractor and classify only",
+    "transportOrigin": "directed-diagnostic/launch.py + driver.py"
+  }
+}

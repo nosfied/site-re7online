@@ -24,7 +24,7 @@
     "evidence": "M1_RESULT.json",
     "state": "COMPLETE_CONSUMED"
   },
-  "nextOperationalAct": "Separate review/authorization of canonical bounded SELECTs linked to observed route/client in DIRECTED_RESULT.json, with fresh route revalidation; do not replay consumed diagnostic or require empty production DB",
+  "nextOperationalAct": "Separate owner review/authorization of SQL_COMMANDS_FOR_REVIEW.md: pinned identity/ownership/imports SQLs with only channel revalidation; no replay of prior reads or empty production DB condition",
   "notCertified": [
     "current processes/config/saved/fallback",
     "SQL identity/ownership/import exit",
