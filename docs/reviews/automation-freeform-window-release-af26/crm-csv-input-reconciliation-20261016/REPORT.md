@@ -1,5 +1,15 @@
 # CRM/CSV — reconciliação dos inputs e próxima conferência
 
+## Event17/10 — execução única CONSUMED/DENY e encaminhamento concreto
+
+**CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.** Base92df116b/remoto conferidos; manifest publicado integral PASS e bloco literal executado uma vez como deploy, sem sudo. Às14:02:30 Fortaleza, exit1: `event-parent-contract` / `EVENT_PARENT_CONTRACT_NOT_SATISFIED`. Primeiro pai `src/events`0775, uid/gid1000. Só um pai alcançado; demais não certificados. Sem timeout/retry/reconexão ou leitura remota adicional. Canais, hashes, modos privados e ingestão canônica conferidos; [resultado sanitizado](../crm-csv-delivery-review-20261017/RESULT.json). O roteiro anterior está **consumido**; não executar novamente nem reaproveitar seu destino.
+
+[Proposta mínima para decisão separada](../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md): remover apenas g+w dos cinco pais literais historicamente0775, condicionado a preflight atual integral, atribuição dos consumidores/writers e ACLs, plano/intent/CAS novos, verificação pelo mesmo predicado e retorno explícito dos efeitos comprovados. Somente o primeiro tem observação nova; quatro são históricos, não CAS atual. Não há aplicação autorizada nem executor de remediação certificado nesta rodada. Faltantes e efeitos sobre escrita de grupo estão explicitados; nenhum chmod/reparo foi executado.
+
+Próximo ato para revisão: autorizar e concretizar essa manutenção restrita, sem A/B/CSV; não simplesmente repetir a coleta consumida. Event PASS futuro não resolverá sozinho saved/fallback/identidades, SQL/ownership, vínculos/autoridade e proteção de consumidores. ELF/budget/discovery continua PAUSADO. Artefatos, fontes, testes válidos, DENYs, históricos e57 grupos originais preservados. Nenhum teste/build repetido: delta é resultado documental e proposta, sem alteração de implementação. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 intocados, sem recertificação global. Responsável Deifson; revisão17/10, próxima21/10 ou antes da mudança.
+
+---
+
 ## Correção de rumo — entrega CSV retomada LOCALMENTE, base8b5072fb
 
 **PREPARAÇÃO ESTÁTICA CSV CONCLUÍDA / REVISÃO PENDENTE / INPUTS OPERACIONAIS NEGADOS / NOT DEPLOYED / NOT WINDOW READY.** Esta seção prevalece para a prioridade: `crm_csv_elf_budget` e `toolchain-discovery` ficam **PAUSADOS**, com todos os arquivos/provas/destinos/DENYs preservados. Não foi preparada outra geração, consulta ou teste dessas frentes. Nenhuma VPS, SQL, instalação, janela, reimportação, alteração de dados/credenciais/permissões produtivas ou reparo histórico nesta rodada. CSV continua suspenso para execução; o trabalho local volta à entrega funcional já certificada.

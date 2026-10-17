@@ -810,7 +810,7 @@
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
-    "firstConcreteBlocker": "CSV pre-stop Event parent contract: last historical observation775, current state unknown. Exact next read published for approval; ELF auxiliary work paused. Static delivery composed; current data/root/SQL/16 bindings and later authorized R0/window still required.",
+    "firstConcreteBlocker": "Event parent src/events observed0775 at2026-10-17T17:02:30UTC: canonical DENY at first parent; other parents not reached. Restricted five-literal-parent g+w removal proposal requires fresh full preflight/CAS, filesystem-writer/ACL impact review and separate approval; no remediation executed.",
     "groups": [
       {
         "group": "LIVE_SAVED_FINAL",
@@ -1460,6 +1460,70 @@
       "operationalInputsFabricated": false,
       "testsFocused": 6,
       "nextAct": "Owner review of exact Event-parent read; no execution authorized here"
-    }
+    },
+    "eventBoundaryResult": {
+      "base": "92df116b8523fcefad293c2847455781550631cf",
+      "result": "CSV_EVENT_BOUNDARY_DENY_NO_RETRY",
+      "executionCount": 1,
+      "user": "deploy",
+      "sudo": false,
+      "commandExit": 1,
+      "literalBlockExit": 1,
+      "localCommandStartedUtc": "2026-10-17T17:02:27.799434+00:00",
+      "localCommandFinishedUtc": "2026-10-17T17:02:30.322451+00:00",
+      "remoteStartedUtc": "2026-10-17T17:02:30.262110+00:00",
+      "remoteFinishedUtc": "2026-10-17T17:02:30.262310+00:00",
+      "denialStage": "event-parent-contract",
+      "denialReason": "EVENT_PARENT_CONTRACT_NOT_SATISFIED",
+      "observedParentCount": 1,
+      "observedParent": {
+        "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/src/events",
+        "type": "directory",
+        "mode": "0775",
+        "uid": 1000,
+        "gid": 1000
+      },
+      "predicateSha256": "208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b",
+      "custody": {
+        "result": "PRESERVED_NOT_CERTIFIED",
+        "channelsByteExact": true,
+        "directoryMode": "0700",
+        "fileMode": "0600",
+        "files": {
+          "csv-event-boundary.stderr.private": {
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "csv-event-boundary.stdout.private": {
+            "bytes": 716,
+            "sha256": "e3edd34c250d7d61073186dbe918ebfbad542a8d30b0622c68b871f5495f0dad"
+          },
+          "privileged-output.private.jsonl": {
+            "bytes": 6429,
+            "sha256": "12364e2dda71c22b1fe94c586eeba83935ae835bd66bf10aaf894de5bbe75ffc"
+          },
+          "sequencer.journal.jsonl": {
+            "bytes": 209,
+            "sha256": "8f1e1b144d0c6fe90fd97e5c10c7d2d5bc513b62c18faf702582e30014d6b5c5"
+          }
+        }
+      },
+      "atomicSnapshot": false,
+      "fullPrestopCertified": false,
+      "otherParentsCertified": false,
+      "retryOrAdditionalRemoteRead": false,
+      "remediationExecuted": false,
+      "historicalSource": {
+        "sha256": "931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529",
+        "bytes": 87778,
+        "targetStartedUtc": "2026-10-17T01:22:00.314752+00:00",
+        "targetFinishedUtc": "2026-10-17T01:22:00.315839+00:00",
+        "freshFirstParentMetadataMatchesHistorical": true,
+        "otherFourModesHistoricalOnly": true
+      },
+      "status": "CSV_SUSPENDED_NOT_DEPLOYED_NOT_WINDOW_READY",
+      "nextReview": "2026-10-21 or before any authorized change"
+    },
+    "eventRemediationProposal": "../crm-csv-delivery-review-20261017/REMEDIATION_FOR_REVIEW.md"
   }
 }
