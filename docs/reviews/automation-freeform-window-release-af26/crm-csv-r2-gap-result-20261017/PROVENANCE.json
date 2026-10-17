@@ -1,0 +1,56 @@
+{
+  "sourceCommands": {
+    "commit": "68575192cf3283c49b2a404b87c2bd9e5d2efa42",
+    "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-result-20261017/NEXT_COMMANDS.md",
+    "sha256": "6daa22ad7248b46f2cbabc57c5e231bfcfec8ad912218f7f87d254688519891d"
+  },
+  "blockSha256": [
+    "8105c9e742000682496c765c38676d7741fb7b80391af20228a376cf16fbeb5c",
+    "5b3ae3f8e9671990d8b1bec07956f3f1ac71e980bd2810f5b1d1c856bad1d178"
+  ],
+  "historicalContext": {
+    "privateReference": "crm-csv-staging-20261016/capture-context-v2.private.json",
+    "sha256": "e9a5dc97acc3b984f79670b33eed75167007137db64f012abfe9e768c67277e3",
+    "purpose": "comparison only; no new observation"
+  },
+  "newPrivateArtifacts": [
+    {
+      "name": "gap-capture.private.jsonl",
+      "bytes": 3059,
+      "sha256": "d19f335f38531d2cc14a40fffe9946eb1d0630a2aa1161ae9a0c94b512f3ecaf"
+    },
+    {
+      "name": "privileged-output.private.jsonl",
+      "bytes": 3593,
+      "sha256": "26511c79299437e0838fcb32e359e79960f6e7f3dca13195e36e915c7fe7ed90"
+    },
+    {
+      "name": "sequencer.journal.jsonl",
+      "bytes": 294,
+      "sha256": "82b5c23cb05afd1305b6438314140f6ad22f0abce795b3afe38743cd4e66ab71"
+    },
+    {
+      "name": "transfer.stderr.private",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transfer.stdout.private",
+      "bytes": 4547,
+      "sha256": "00e058d53c19959775228373d7dec282b5c949006bf268c8cf716648dbf0662f"
+    }
+  ],
+  "rawPublished": false,
+  "oldCustodies": {
+    "count": 4,
+    "artifactsUnchanged": 20,
+    "comparison": [
+      "sha256",
+      "size",
+      "mode",
+      "inode",
+      "mtime_ns",
+      "ctime_ns"
+    ]
+  }
+}

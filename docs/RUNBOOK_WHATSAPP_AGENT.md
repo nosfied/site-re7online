@@ -1,5 +1,8 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**CSV R2 frontend/proxy — diagnósticos consumidos,17/10 às08:16 Fortaleza.** [Resultado, procedência e proposta mínima do leitor](reviews/automation-freeform-window-release-af26/crm-csv-r2-gap-result-20261017/REPORT.md): dois blocos intactos ensaiados/publicados antes da VPS; leitura única deploy SEM sudo e custódia exit0,3.059B byte-exatos/R2_GAP_RAW_PRESERVED_NOT_CERTIFIED. Frontend sem marcador literal tem hash de título igual ao contexto histórico; proxy12 argumentos/-use-listen-fd igual ao histórico. Não é prova isolada de configuração nem fechamento global. Quatro custódias/20 arquivos intactos; DENYs anteriores permanecem. Ajuste do reader apenas proposto, não implementado. SQL/16 vínculos/toolchain/root/autoridade pendentes. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 não alterados. Deifson; revisão21/10 ou mudança.
+
+
 **CSV R2 diagnóstico delimitado — ensaio LOCAL, oito provas.** [Blocos intactos, limites e procedência](reviews/automation-freeform-window-release-af26/crm-csv-r2-gap-rehearsal-20261017/REPORT.md): launcher/leitura/exportação/custódia reais no laboratório; SSH/procfs/UID externos simulados, sem validação por PASS. Negativas preservam parcial e DENYs. Execução remota única condicionada à publicação destas provas, ainda não realizada. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; produção e históricos intocados. Revisão21/10 ou mudança.
 
 

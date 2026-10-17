@@ -1,0 +1,65 @@
+{
+  "result": "TWO_DIAGNOSTIC_BLOCKS_CONSUMED_RAW_PRESERVED_NOT_CERTIFIED",
+  "sourceBase": "68575192cf3283c49b2a404b87c2bd9e5d2efa42",
+  "proofCommitBeforeRemote": "5f5dd88aec19a67c09a1f1fdea4d0d625bc9df9a",
+  "readExit": 0,
+  "custodyExit": 0,
+  "remoteReadCount": 1,
+  "remoteExportCount": 1,
+  "remoteSudo": false,
+  "sourceUtc": {
+    "begin": "2026-10-17T11:16:07.055634+00:00",
+    "frontend": "2026-10-17T11:16:07.058204+00:00",
+    "proxy": "2026-10-17T11:16:08.207980+00:00",
+    "end": "2026-10-17T11:16:08.208736+00:00"
+  },
+  "receiptUtc": "2026-10-17T11:16:22.420128+00:00",
+  "sourceBytes": 3059,
+  "sourceSha256": "d19f335f38531d2cc14a40fffe9946eb1d0630a2aa1161ae9a0c94b512f3ecaf",
+  "byteExactTransferVerified": true,
+  "transportStderrBytes": 0,
+  "receipt": "R2_GAP_RAW_PRESERVED_NOT_CERTIFIED",
+  "originalCollectionCompleted": false,
+  "atomicSnapshot": false,
+  "operationalCertification": false,
+  "privateDirectoryMode": "0700",
+  "privateFileMode": "0600",
+  "previousPrivateArtifactsUnchanged": 20,
+  "frontend": {
+    "identity": {
+      "pid": 188897,
+      "ppid": 18676,
+      "state": "S",
+      "ticks": "2161347676"
+    },
+    "cmdlineBytes": 84,
+    "cmdlineSha256": "b440af4ab3b9d9dad8f59079dd6704494c4f2c2397ab77bc2fca61561a7b9d47",
+    "argumentCount": 1,
+    "expectedLiteralScriptAbsent": true,
+    "pmExecPathAbsent": true,
+    "cwdMatchesHistoricalProfile": true,
+    "cmdlineHashMatchesHistoricalAcceptedContext": true,
+    "executableSha256": "d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e",
+    "selectedEnvironmentKeys": [
+      "PM2_HOME"
+    ]
+  },
+  "proxy": {
+    "identity": {
+      "pid": 177517,
+      "ppid": 176940,
+      "state": "S",
+      "ticks": "96580070"
+    },
+    "cmdlineBytes": 129,
+    "cmdlineSha256": "49156c4850f730f0d3a852e6516188e9e267c5083e9f54fa9cbcb8e599aa6da9",
+    "argumentCount": 12,
+    "matchesHistoricalArgv": true,
+    "containsUnitaryUseListenFd": true
+  },
+  "unchangedReaderSha256": "66f337fbe47d69ae02902f38f6b0e474241222c90967580d9c569dce21796691",
+  "newReaderImplemented": false,
+  "newSQLExecuted": false,
+  "pm2Executed": false,
+  "daemonApiWorkerNodeSeedsReread": false
+}
