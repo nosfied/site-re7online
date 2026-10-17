@@ -1,0 +1,28 @@
+{
+  "activeLocalHooks": [],
+  "base": "7ab912bf885b0b7e78fc723bcc1c1555170f259e",
+  "branch": "review/campaign-recovery-20260926",
+  "claim": "versioned branch configuration and local hooks inspected; no production operation authorized or invoked",
+  "configChanged": false,
+  "deploymentEnabled": false,
+  "diffCheck": {
+    "editableCodeAndDocs": "PASS",
+    "exactAcceptedSourceCopies": [
+      "3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a",
+      "4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef",
+      "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7"
+    ],
+    "excludedRepresentations": [
+      "CONSUMER_DELTA.patch",
+      "FULL_DELTA.patch"
+    ],
+    "overall": "representation/historical-copy warnings retained"
+  },
+  "remoteAtStart": "7ab912bf885b0b7e78fc723bcc1c1555170f259e",
+  "workflows": {
+    "ci.yml": {
+      "events": "push and pull_request main/develop only; review push not matched",
+      "sha256": "cec3f4ab2574dc60c9ac4af6d957f032a448bc5312ffed1c37b8d6947069053d"
+    }
+  }
+}

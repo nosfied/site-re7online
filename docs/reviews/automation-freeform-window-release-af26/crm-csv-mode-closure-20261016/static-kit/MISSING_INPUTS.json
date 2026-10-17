@@ -1,0 +1,343 @@
+{
+  "entryRequirements": {
+    "return-before-commit/ops.py": "inspect",
+    "return-partial/ops.py": "inspect",
+    "return/ops.py": "inspect",
+    "switch/ops.py": "inspect",
+    "window/current-sql.cjs": "inspect"
+  },
+  "inputs": [
+    {
+      "kind": "operational-data",
+      "name": "return/backup-manifest.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/baseline.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/candidate.config.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/candidate.ecosystem.config.cjs",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/plan.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/proof-bindings.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/return.config.private.json",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return/return.ecosystem.config.cjs",
+      "owner": "return"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/backup-manifest.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/baseline.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/candidate.config.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/candidate.ecosystem.config.cjs",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/plan.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/proof-bindings.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/return.config.private.json",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-before-commit/return.ecosystem.config.cjs",
+      "owner": "return-before-commit"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/backup-manifest.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/baseline.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/candidate.config.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/candidate.ecosystem.config.cjs",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/plan.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/proof-bindings.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/return.config.private.json",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "return-partial/return.ecosystem.config.cjs",
+      "owner": "return-partial"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/backup-manifest.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/baseline.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/candidate.config.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/candidate.ecosystem.config.cjs",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/plan.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/proof-bindings.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/return.config.private.json",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-data",
+      "name": "switch/return.ecosystem.config.cjs",
+      "owner": "switch"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "mode/window manifests and original-preparation-review.sha256",
+      "owner": "window",
+      "rule": "nenhuma refer\u00eancia vazia, hash inferido ou depend\u00eancia exclusiva do candidato no \u00edndice original; conferir m\u00f3dulos de fase sem ciclo",
+      "source": "gerar ap\u00f3s bindings reais e contrato original completo; DAG descrito em sealOrder"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-baseline.private.json",
+      "owner": "window",
+      "rule": "tr\u00eas PID/ticks reais; identidade frontend est\u00e1vel",
+      "source": "identidades atuais + guardGeneration38"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-compiled-proof.private.json",
+      "owner": "window",
+      "rule": "hash/proced\u00eancia e rela\u00e7\u00e3o com artefato24e5857f conferidos; esta prova n\u00e3o \u00e9 valida\u00e7\u00e3o funcional em produ\u00e7\u00e3o",
+      "source": "prova compilada saneada existente da entrega coordenada, sem rebuild"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-contract.private.json",
+      "owner": "window",
+      "rule": "n\u00e3o filtrar imut\u00e1veis para PASS; reconciliar POLICY_SOURCE coerentemente s\u00f3 ap\u00f3s captura autorizada",
+      "source": "perfis + conjunto imut\u00e1vel original/compartilhado completo + or\u00e7amento"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/csv-known-imports.private.json",
+      "owner": "window",
+      "rule": "sem opera\u00e7\u00e3o UNKNOWN/PROCESSING; aus\u00eancia HTTP n\u00e3o substitui auditoria",
+      "source": "invent\u00e1rio conhecido confrontado com auditoria READ ONLY atual"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/db-owner-bindings.private.json",
+      "owner": "window",
+      "rule": "ownership completo e port API correspondente; sem emiss\u00e3o de segredo",
+      "source": "SQL/proxy/portas/consumidores atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/deploy.crontab.before + window",
+      "owner": "window",
+      "rule": "seis entradas/hor\u00e1rios e consumidores conferidos; n\u00e3o executar jobs",
+      "source": "leitura cron deploy + receita can\u00f4nica de conten\u00e7\u00e3o"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/event-consumer-binding.private.json",
+      "owner": "window",
+      "rule": "Event775 e leitura incompleta negam antes da conten\u00e7\u00e3o; CAS no uso",
+      "source": "metadados/hash literal/consumidores atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/initial.private.json",
+      "owner": "window",
+      "rule": "n\u00e3o gerar defaults nem copiar identidade hist\u00f3rica",
+      "source": "guard/observedGuardOpen/supervis\u00e3o + observedUtc can\u00f4nicos"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/original-bindings/path-bindings.private.json",
+      "owner": "window",
+      "rule": "separado do mapa candidato; selar/hash/permiss\u00f5es sem ampliar predicado",
+      "source": "mapa observado exclusivamente do runtime original e depend\u00eancias"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/owner-evidence",
+      "owner": "window",
+      "rule": "n\u00e3o copiar evid\u00eancia antiga como atual; preservar recibos originais",
+      "source": "root fresco + backup/RPO/cust\u00f3dia v2/lab"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/path-bindings.private.json",
+      "owner": "window",
+      "rule": "requerido para ida; ORIGINAL n\u00e3o depende dele",
+      "source": "mapa observado dos alvos/retornos candidatos"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/privileged-policy.private.json",
+      "owner": "window",
+      "rule": "nenhum UID/PID/ticks/hash assumido; preservar helper/sudoers/fence e limitar alvos",
+      "source": "fonte root observada + schema do helper + perfis/identidades reais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/re7-converta-backup.before + window",
+      "owner": "window",
+      "rule": "confer\u00eancia separada obrigat\u00f3ria em admiss\u00e3o/retorno/encerramento",
+      "source": "leitura cron sistema + receita can\u00f4nica"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/recovery-contract.private.json",
+      "owner": "window",
+      "rule": "somente ap\u00f3s todos os inputs e refer\u00eancias reais; nenhum campo ausente ou default",
+      "source": "hashes de arquivos/c\u00f3digo/perfis/\u00edndices do novo pacote"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/restore proofs and mode backup/baseline/proof-bindings",
+      "owner": "window",
+      "rule": "os quatro modos coerentes, fronteira/tooling/lab expl\u00edcitos; originais preservados",
+      "source": "R0 quando necess\u00e1rio, contrato de restore certificado reutiliz\u00e1vel e baselines atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/saved-dump.pm2.private.json + saved-dump.pm2.bak.private.json",
+      "owner": "window",
+      "rule": "preservar bytes/refer\u00eancias, n\u00e3o gerar pelo c\u00f3digo sem observa\u00e7\u00e3o",
+      "source": "capturas originais600 atuais"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/source.profile.private.json",
+      "owner": "window",
+      "rule": "tr\u00eas apps e NEWauth+NEWDB+NEWcipher; metadados600 e hash pinado",
+      "source": "exporta\u00e7\u00e3o privada leg\u00edtima dos ambientes ativos, captura real"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/target.profile.private.json",
+      "owner": "window",
+      "rule": "somente cwd/script API diferem; worker/frontend/env preservados pelo profile_delta",
+      "source": "derivar da fonte conferida + API CSV24e5857f"
+    },
+    {
+      "kind": "operational-observation-or-contract",
+      "name": "window/waiting-work.private.json",
+      "owner": "window",
+      "rule": "manter guarda38 e out.15 CLOSED; n\u00e3o executar entrada hist\u00f3rica",
+      "source": "captura/baseline can\u00f4nica atual da guarda/out.15"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "current protected-file/prior-target hashes and root chains",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "phase code manifest with actual uid/modes",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "static anchor approved against policy/contract/profiles",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "decision-specific permit (recovery only)",
+      "owner": "root"
+    },
+    {
+      "kind": "owner-approved-data",
+      "name": "current PM2/Node executable + transitive toolchain integrity",
+      "owner": "root"
+    }
+  ],
+  "integrationBlocks": [
+    {
+      "consumer": "ORIGINAL full directory absence",
+      "reason": "Canonical R2 Contract still requires sealed four-mode DATA and switch exit proof; code independence alone is not full-directory independence."
+    }
+  ],
+  "result": "DENY_INTEGRATION_AND_OPERATIONAL_INPUTS"
+}

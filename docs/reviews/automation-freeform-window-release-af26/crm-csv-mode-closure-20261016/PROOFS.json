@@ -1,0 +1,50 @@
+{
+  "actual": "Python Context/snapshot/Loader/bootstrap, Node VM/checkedRequire, canonical Operations.config + System.check_config over local /proc, preparation-bindings/waiting-work/restore_contract over synthetic data; real local subprocesses",
+  "base": "7ab912bf885b0b7e78fc723bcc1c1555170f259e",
+  "compositionSha256": "93c774b95ab99ec6cd1a2c7f0a143f566dc514eb814b09ab2421171df0995fe3",
+  "errors": 0,
+  "failures": 0,
+  "notProved": "full recovery with missing candidate DATA directories; productive admission/stop/start/recovery; current inputs; installed toolchain/authority",
+  "passed": [
+    "test_authority_exchange_and_expiry_before_use",
+    "test_call_sites_and_unchanged_sql_predicates",
+    "test_check_current_real_loader_missing_inputs_denies_before_host_effect",
+    "test_composition_missing_inputs_remain_denied_and_original_data_rule_explicit",
+    "test_current_sql_real_node_python_restore_four_modes",
+    "test_current_sql_tamper_before_use_no_docker",
+    "test_exit_code_mode_explicit_canonical_methods_called",
+    "test_forward_r3_default_and_consumption_unchanged",
+    "test_frozen_consumer_real_negative_and_undeclared_import",
+    "test_missing_mode_entry_denied",
+    "test_mode_tamper_between_snapshot_and_use_denies",
+    "test_original_config_library_after_unfence_no_start_authorization",
+    "test_original_contract_complete_entry_missing_inputs_not_bypassed",
+    "test_original_entrypoint_load_and_config_real_predicate",
+    "test_original_loader_real_ops_without_candidate_directories",
+    "test_prestop_inspection_no_start_permit",
+    "test_read_failure_propagates_no_pass",
+    "test_same_snapshot_bytes_not_mutable_path",
+    "test_undeclared_import_denied_real_loader",
+    "test_waiting_work_real_imports_strict_builtin",
+    "test_wrong_mode_denied_before_ops_import"
+  ],
+  "pm2Proof": "reused B4 PM2_LAB_PROOF.json unchanged; no B3 System.start/pm2_input/ecosystem changes",
+  "recomposition": "EXACT_ALL_BYTES",
+  "result": "LOCAL_VALIDATED_IN_DECLARED_SCOPE",
+  "simulated": "root metadata/installation/query/sudo, productive SQL/docker/guard/PM2 population, exit/restore/DB observers in verify_recovery_exit method test only",
+  "staticVerification": {
+    "executionAuthorized": false,
+    "integrationBlocks": [
+      {
+        "consumer": "ORIGINAL full directory absence",
+        "reason": "Canonical R2 Contract still requires sealed four-mode DATA and switch exit proof; code independence alone is not full-directory independence."
+      }
+    ],
+    "missingInputs": 57,
+    "paths": 123,
+    "result": "STATIC_BYTES_VERIFIED_OPERATIONAL_CERTIFICATION_DENIED",
+    "uniqueContents": 57
+  },
+  "testSourceSha256": "a14ffa76bcb13548fd5d088f8e2c0959ef20c5a0d44c4da64a3dfe2792dd78ad",
+  "testsRun": 21
+}

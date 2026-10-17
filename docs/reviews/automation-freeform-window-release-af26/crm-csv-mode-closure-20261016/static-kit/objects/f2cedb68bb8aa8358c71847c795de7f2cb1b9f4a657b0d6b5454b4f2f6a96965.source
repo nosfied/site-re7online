@@ -1,0 +1,11 @@
+module.exports = function () {
+  const fs = require('fs'), path = require('path'), assert = require('assert'), crypto = require('crypto');
+  assert(globalThis.__re7Authority && path.dirname(__dirname) === globalThis.__re7Authority.root, 'authority_node_scope');
+  require('child_process').execFileSync('/usr/bin/python3', [path.join(__dirname, 'baseline_contract.py'), path.dirname(__dirname), path.basename(__dirname)], {stdio: 'pipe'});
+  const g = JSON.parse(fs.readFileSync(path.join(__dirname, '../window/execution-gates.private.json')));
+  assert(['ownerAuthorized','preflightReviewed','artifactsVerified','restoreVerified','discrepanciesResolved'].every(k => g[k] === true), 'execution gates incomplete');
+  for (const row of fs.readFileSync(path.join(__dirname, 'scripts.sha256'), 'utf8').trim().split('\n')) {
+    const [hash, name] = row.split('  '); assert(path.basename(name) === name);
+    assert(crypto.createHash('sha256').update(fs.readFileSync(path.join(__dirname, name))).digest('hex') === hash, 'bound script hash mismatch');
+  }
+};

@@ -1,5 +1,8 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**B4 delta16/10 — modos explícitos; fechamento parcial.** [Código, composição e21 provas dirigidas](reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/REPORT.md): imports ops por modo/Context, configuração original sem código switch e SQL/proofs pelo bootstrap; strict Node delimitado. LOCAL VALIDATED no alcance ensaiado / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. O contrato R2 ainda exige dados selados dos quatro modos e saída switch: recuperação completa com diretórios candidatos inteiramente ausentes permanece aberta, sem remover controles.57 grupos de inputs operacionais e toolchain/instalação/autoridade de fase pendentes. PM2 completo B4 reutilizado; sem VPS/instalação/emissão/geração. CSV suspenso; históricos/recuperação consumida preservados. Deifson; revisão16/10/próxima21/10 ou mudança.
+
+
 **B4 16/10 — composição estática / INTEGRATION BLOCKED.** [Entrega, instalador e lacunas](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/REPORT.md):122 caminhos/56 conteúdos deduplicados,18 testes e PM2 completo real em namespace sintético encerrado. Quatro lacunas concretas de imports/ORIGINAL/Node e67 pendências inventariadas; não fabricar perfis,16 bindings, root ou permits. Instalador futuro só estático, ensaiado em destino lab; sem VPS/emissão/geração. REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso. Próximo delta local: resolução autenticada de ops por modo sem dependência candidata em ORIGINAL. Revisão21/10 ou gatilho preservada.
 
 

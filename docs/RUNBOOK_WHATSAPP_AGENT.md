@@ -1,5 +1,8 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**CSV — revisão local dos quatro pontos B4.** [Código, composição e21 provas dirigidas](reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/REPORT.md): imports ops por modo/Context, configuração original sem código switch e SQL/proofs pelo bootstrap; strict Node delimitado. LOCAL VALIDATED no alcance ensaiado / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. O contrato R2 ainda exige dados selados dos quatro modos e saída switch: recuperação completa com diretórios candidatos inteiramente ausentes permanece aberta, sem remover controles.57 grupos de inputs operacionais e toolchain/instalação/autoridade de fase pendentes. PM2 completo B4 reutilizado; sem VPS/instalação/emissão/geração. CSV suspenso; históricos/recuperação consumida preservados. Deifson; revisão16/10/próxima21/10 ou mudança.
+
+
 **B4 FUTURO 16/10 — não executar na VPS.** [Composição/ordem de selagem, instalador e negativos](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/REPORT.md). Kit estático não é manifest de fase nem âncora; verificação de bytes PASS e certificação operacional DENY. Instalador usa owner/root, hash aprovado, estado prévio fresco e lock canônico; não instala política de fase nem emite permit.18 testes lab/visudo e PM2 CLI→daemon→filhos reais sintéticos; proteção root e pacote operacional não certificados. Quatro lacunas do fechamento transitivo permanecem explícitas. INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso. Crons/guarda38/out.15 e épocas não acessados.
 
 

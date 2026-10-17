@@ -1,0 +1,185 @@
+{
+  "base": "7ab912bf885b0b7e78fc723bcc1c1555170f259e",
+  "changedLogicalFiles": [
+    {
+      "afterSha256": "b31b59cfee6c7d48d7e9e88ff4b348106aaf317b530fc8791f94eb43b2b83cf6",
+      "beforeSha256": "1a2a9ce5f928aa524b08789c5c5a4aafcbb0b6d6106c12251e677ff76b0ba92f",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/authority.py",
+        "stages": [
+          "PROTECTED_ACCEPTED_LIBRARY",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "path": "protected/authority.py"
+    },
+    {
+      "afterSha256": "92abb274adf52ce7d786021f291361d3dea8f2a2fb90ef9b9742fcb7836f2f01",
+      "beforeSha256": "dea5d94c665ed5faeb2898e7bc81ea675ace606ab6f7f997b9baf9064f1144bc",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b1-20261016/node_bootstrap.cjs",
+        "stages": [
+          "PROTECTED_ACCEPTED_LIBRARY",
+          "STRICT_ASSERT_BUILTIN_ONLY",
+          "CANONICAL_RESTORE_CHILD_FLAGS"
+        ]
+      },
+      "path": "protected/recovery-node-launch.cjs"
+    },
+    {
+      "afterSha256": "1c7b1068b3b9457aee12abf62f709a3ee9de593447f9e70b4ce8d100d491fcea",
+      "beforeSha256": "f1c531ee45a70a3ef23e0a38cd024f358cb7e8e2ac37a522cd0ed51b59b08793",
+      "origin": {
+        "input": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-local-20261016/verified_loader.py",
+        "stages": [
+          "PROTECTED_ACCEPTED_LIBRARY",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "path": "protected/verified_loader.py"
+    },
+    {
+      "afterSha256": "198c75956d594d33679589db6f76e3ee6775c74559091ab53e88583e6159c02b",
+      "beforeSha256": "6f840789aac823e0e6f84c7fc1968d6869099d4e7aec01bad688089770fc4cb5",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/check_current.py.6f840789aac8.source"
+        },
+        "inputSha256": "6f840789aac823e0e6f84c7fc1968d6869099d4e7aec01bad688089770fc4cb5",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "EXPLICIT_AUTHENTICATED_MODE_AND_NODE"
+        ]
+      },
+      "path": "window/check_current.py"
+    },
+    {
+      "afterSha256": "69039dbe69fab4a26b8396753c9496a45ec9588699bab2c54751c6255da72768",
+      "beforeSha256": null,
+      "origin": {
+        "input": "window/check_current.py:existing inline SQL body",
+        "stages": [
+          "EXTRACT_EXISTING_SQL_BODY_AUTHENTICATED_NODE"
+        ]
+      },
+      "path": "window/current-sql.cjs"
+    },
+    {
+      "afterSha256": "0d9a87b0c55b3fe3a30db0d5feea5281117fb2e16fd8ebbe8db2ea0f7f5f97ec",
+      "beforeSha256": "8f7fbd8c394c0c0af777692970f25ddbbdbd44046b2e9caadb8978d0517f561c",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery.py"
+        },
+        "inputSha256": "336c2793813f61d10c8afba8b4bdc0957b144e93aebe85c58e7b03c16def02f2",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_R3_B2",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "path": "window/recovery.py"
+    },
+    {
+      "afterSha256": "10de28ec8855cbda19b45bfee422434029edd1ff8fa466ddc9cfba53ac8b68d1",
+      "beforeSha256": "8fc1975433433bcb8c43eff829de19565ef80bbb6235b425a37e3a057b3fa747",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_bridge.py"
+        },
+        "inputSha256": "27e750305e6d77f61c132e1747ba32a7c8d06261187cf8fb1def8bedce341318",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_R3_B2",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "path": "window/recovery_bridge.py"
+    },
+    {
+      "afterSha256": "529e209b841661069175ccddf9e3885c3624365efbf235d990d00a79352a16b9",
+      "beforeSha256": "9dad001588002c8566bd4ffc3e57d5985f3d05822dd773b87fa92d003382e73e",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-integrated-recovery-20261016/recovery_contract.py"
+        },
+        "inputSha256": "9dad001588002c8566bd4ffc3e57d5985f3d05822dd773b87fa92d003382e73e",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "path": "window/recovery_contract.py"
+    },
+    {
+      "afterSha256": "ae8bb0973297798865229682bbc898919a14359d3c33cdf4f9e45d7a7d98454a",
+      "beforeSha256": "52b1fe580d620b320d98dd7d1ca454a5c6ea7140896975830f2b7749430084bf",
+      "origin": {
+        "input": {
+          "kind": "delivery",
+          "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/sequencer.py.0a4d8b67f033.source"
+        },
+        "inputSha256": "0a4d8b67f03335403ae2addf93628519423c350eb8256bbe292373ffc36d9b7e",
+        "stages": [
+          "ACCEPT_LOCAL_COMPOSITION",
+          "AUTHORITY_R3_B2",
+          "EXPLICIT_AUTHENTICATED_MODE"
+        ]
+      },
+      "path": "window/sequencer.py"
+    }
+  ],
+  "childLoads": [
+    {
+      "caller": "window/check_current.py",
+      "entry": "window/current-sql.cjs",
+      "on": "explicit four-mode diagnostic only",
+      "scope": "inspect"
+    }
+  ],
+  "compositionSha256": "93c774b95ab99ec6cd1a2c7f0a143f566dc514eb814b09ab2421171df0995fe3",
+  "entryRequirements": {
+    "return-before-commit/ops.py": "inspect",
+    "return-partial/ops.py": "inspect",
+    "return/ops.py": "inspect",
+    "switch/ops.py": "inspect",
+    "window/current-sql.cjs": "inspect",
+    "window/restore_contract.py": "inspect"
+  },
+  "explicitCodeMode": [
+    {
+      "caller": "window/recovery_bridge.py",
+      "codeMode": "explicit code_mode",
+      "evidenceMode": "explicit mode"
+    },
+    {
+      "caller": "window/sequencer.py",
+      "codeMode": "explicit mode"
+    },
+    {
+      "caller": "window/check_current.py",
+      "codeMode": "switch; four-mode diagnostic only"
+    }
+  ],
+  "historicalPreservation": "git diff against base restricted to three canonical checkpoints and new directory; no historical source, manifest, receipt or consumed command changed.",
+  "missingInputCount": 57,
+  "remaining": [
+    {
+      "consumer": "ORIGINAL full directory absence",
+      "reason": "Canonical R2 Contract still requires sealed four-mode DATA and switch exit proof; code independence alone is not full-directory independence."
+    }
+  ],
+  "reusedPm2": {
+    "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/PM2_LAB_PROOF.json",
+    "reason": "All four ops.py, pm2_input.py and ecosystem_contract.py bytes unchanged; new mode dispatch only chooses Operations/config, not B3 consumption.",
+    "rerun": false,
+    "sha256": "0c57ff6ae0fcf768d0d94e419087cdb20bb49b8065cac30ff649ca2b0159ac73"
+  },
+  "sealDependencies": "eager DAG retained; imports include authenticated transitive snapshots; late calls are not independent hash pins or seal cycles",
+  "sources": "integration.py is the editable delta; compose.py reuses the Git-pinned B4 compositor before scanning; objects are derived exact snapshots, not alternate sources.",
+  "unchangedLogicalFiles": 114
+}

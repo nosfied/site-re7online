@@ -1,5 +1,8 @@
 # Documentation Index
 
+**CSV/B4 — resolução autenticada por modo e Node.** [Código, composição e21 provas dirigidas](../reviews/automation-freeform-window-release-af26/crm-csv-mode-closure-20261016/REPORT.md): imports ops por modo/Context, configuração original sem código switch e SQL/proofs pelo bootstrap; strict Node delimitado. LOCAL VALIDATED no alcance ensaiado / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. O contrato R2 ainda exige dados selados dos quatro modos e saída switch: recuperação completa com diretórios candidatos inteiramente ausentes permanece aberta, sem remover controles.57 grupos de inputs operacionais e toolchain/instalação/autoridade de fase pendentes. PM2 completo B4 reutilizado; sem VPS/instalação/emissão/geração. CSV suspenso; históricos/recuperação consumida preservados. Deifson; revisão16/10/próxima21/10 ou mudança.
+
+
 **B4 16/10 — revisão estática:** [fontes deduplicadas, manifests, instalador futuro, provas e bloqueios](../reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/REPORT.md).122 caminhos/56 conteúdos;18 testes e PM2 completo local. Inputs operacionais não fabricados; autoridade/política não instaladas. PREPARED LOCALLY / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso.
 
 

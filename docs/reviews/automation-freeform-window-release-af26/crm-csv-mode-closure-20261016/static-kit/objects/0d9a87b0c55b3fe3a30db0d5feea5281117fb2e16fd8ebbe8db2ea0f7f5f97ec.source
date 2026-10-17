@@ -1,0 +1,139 @@
+"""Explicit future recovery; locks, fresh classification, intent once, no replay."""
+import fcntl
+import json
+import os
+from pathlib import Path
+from recovery_contract import API, WORKER, FRONT, MODES, ORIGINAL, Contract, present, read, require, sha, same
+
+
+def put(path, value):
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'w') as stream:
+        json.dump(value, stream, sort_keys=True)
+        stream.write('\n'); stream.flush(); os.fsync(stream.fileno())
+
+
+class Recovery:
+    def __init__(self, root, bridge, sequencer_class, contract_digest, authority):
+        self.authority = authority
+        require(Path(root) == authority.root and contract_digest == authority.pin("contract"), "authority_recovery_root")
+        self.root = Path(root); self.window = self.root / 'window'
+        self.b = bridge; self.Sequencer = sequencer_class; self.digest = contract_digest
+
+    def inspect(self):
+        self.authority.revalidate()
+        c = Contract(self.root, self.b, self.digest)
+        s = self.Sequencer(self.b); s.baseline = c.baseline
+        def result(state, options=(), mode=None):
+            return {'classification': state, 'options': list(options), 'mode': mode,
+                    'automaticReplay': False, 'contractSha256': self.digest}
+        if present(self.window / 'csv-recovery.intent.private.json'):
+            view = result('RECOVERY_CONSUMED')
+            view['receiptPresent'] = present(self.window / 'csv-recovery.receipt.private.json')
+            view['unacknowledgedStarts'] = [mode + '/' + name for mode in MODES for name in (API, WORKER)
+                if present(self.root / mode / ('start-intent-' + name + '.json'))
+                and not present(self.root / mode / ('started-' + name + '.json'))]
+            return view
+        if present(self.window / 'csv-recovery.receipt.private.json'):
+            return result('RECOVERY_RECEIPT_WITHOUT_INTENT')
+        if present(self.window / 'csv-complete.receipt.private.json'):
+            return result('COMPLETE_NEW_PREPARATION_REQUIRED')
+        # All modes, not just switch. A lost response or unrecorded start never permits original.
+        for mode in MODES:
+            for name in (API, WORKER):
+                intent = self.root / mode / ('start-intent-' + name + '.json')
+                marker = self.root / mode / ('started-' + name + '.json')
+                if present(intent) and not present(marker):
+                    return result('UNCERTAIN_START')
+                if present(marker) and not present(intent):
+                    return result('UNPROVEN_START')
+        intent = self.window / 'csv-selection.intent.private.json'
+        receipt = self.window / 'csv-selection.receipt.private.json'
+        starts = any(list((self.root / mode).glob('start-intent-*.json')) or
+                     list((self.root / mode).glob('started-*.json')) for mode in MODES)
+        if present(receipt):
+            c.selected()  # Invalid/mismatched receipts deny; never fall back to original.
+            require((self.root / 'switch/old-exit-confirmed.json').is_file(), 'selected_without_exit')
+            for name in (API, WORKER):
+                if name in self.b.apps():
+                    marker = read(self.root / 'switch' / ('started-' + name + '.json'))
+                    live = self.b.apps()[name]
+                    require(marker['pid'] == live['pid'] and same(marker['identity'], self.b.identity(live['pid'])), 'candidate_identity_unproven')
+            s.mode = s.recovery_mode()
+            require(s.mode in ('return', 'return-partial'), 'candidate_recovery_mode')
+            self.b.privileged('check-present')
+            return result('SELECTED_CANDIDATE', ('CANDIDATE',), s.mode)
+        if present(intent) or starts or any(present(self.window / n) for n in
+                ('event-overlay.intent.private.json', 'event-overlay.receipt.private.json')):
+            return result('UNCERTAIN_SELECTION')
+        if (self.root / 'switch/old-exit-confirmed.json').is_file():
+            c.original_allowed(s)
+            return result('STOPPED_UNSELECTED', ('ORIGINAL',), ORIGINAL)
+        # Missing exit does not imply original is still running.
+        c.source_live(); self.b.scheduled_controls().known()
+        return result('PRESTOP', ('PRESTOP',), 'prestop')
+
+    def recover(self, decision):
+        with (self.root.parent / '.incident-6683-window.lock').open('a+') as outer, \
+                (self.window / 'sequencer.lock').open('a+') as inner:
+            fcntl.flock(outer, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(inner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            view = self.inspect()  # Reclassification inside BOTH canonical locks.
+            require(decision in view['options'], 'explicit_decision_or_state_denied')
+            if decision == 'PRESTOP': self.authority.revalidate('prestop')
+            else: self.authority.operation(decision)
+            require((self.window / 'csv-execution.intent.private.json').is_file(), 'execution_intent_required')
+            c = Contract(self.root, self.b, self.digest)
+            s = self.Sequencer(self.b); s.baseline = c.baseline
+            mode = view['mode']
+            self.b.verify_recovery_admission()
+            if decision != 'PRESTOP':
+                c.policy(mode)
+                if decision == 'ORIGINAL': c.original_allowed(s)
+            put(self.window / 'csv-recovery.intent.private.json', {
+                'decision': decision, 'classification': view, 'mode': mode,
+                'executionIntentSha256': sha(self.window / 'csv-execution.intent.private.json'),
+                'contractSha256': self.digest, 'automaticRetry': False})
+            # Any exception, including lost response after an effect, leaves the intent.
+            # There is NO catch-and-recover or attempt to continue automatically.
+            if decision == 'PRESTOP':
+                s.recover()  # Canonical identity/abort-prestop path + both scheduled controls.
+            else:
+                self.b.privileged('check-present'); s.mode = mode
+                s.action(mode, 'recover-partial' if mode in (ORIGINAL, 'return-partial') else 'stop-pair')
+                s.verify_stopped(mode)
+                self.b.verify_recovery_exit(mode, code_mode=mode)
+                if decision == 'ORIGINAL':
+                    # The same exclusion of selection/candidate starts must still hold after exit.
+                    require(not any(present(self.window / n) for n in
+                            ('csv-selection.intent.private.json', 'csv-selection.receipt.private.json',
+                             'event-overlay.intent.private.json', 'event-overlay.receipt.private.json')),
+                            'selection_raced_original_recovery')
+                    self.b.verify_no_candidate_admission()
+                else:
+                    c.selected()
+                s.start_pair(mode)
+                s.finish(mode)  # Save/fallback before release, HTTP/DB after, both crons + guard.
+            c.closure(mode, prestop=decision == 'PRESTOP')
+            if decision != 'PRESTOP': self.authority.operation(decision, 'closure')
+            self.b.reset_recovery_gates()
+            self.b.verify_recovery_gates_false()
+            put(self.window / 'csv-recovery.receipt.private.json', {
+                'result': 'CSV_ORIGINAL_PAIR_RESTORED' if decision == 'ORIGINAL' else
+                          ('CSV_PRESTOP_CONTROLS_RESTORED' if decision == 'PRESTOP' else
+                           'CSV_CANDIDATE_PAIR_RESTORED'),
+                'mode': mode, 'decision': decision,
+                'intentSha256': sha(self.window / 'csv-recovery.intent.private.json'),
+                'contractSha256': self.digest, 'bothCronsRestored': True, 'gatesFalse': True})
+            return read(self.window / 'csv-recovery.receipt.private.json')
+
+
+def build(root, authority):
+    from recovery_bridge import Bridge
+    from sequencer import Sequencer
+    authority.revalidate()
+    return Recovery(root, Bridge(root, authority), Sequencer, authority.pin('contract'), authority)
+def inspect(root):
+    return build(root, __phase_authority__).inspect()
+def recover(root, decision):
+    return build(root, __phase_authority__).recover(decision)

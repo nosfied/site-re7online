@@ -1,0 +1,7 @@
+{
+  "consumerPatch": "APPLIES_EXACTLY_B4_TO_NEW_ALL_123_PATHS",
+  "historicalFilesChanged": false,
+  "pm2ConsumingFilesChanged": false,
+  "scope": "logical composition only, no operational application",
+  "sha256": "0f1492d9dc1f6f248ac8b2e012be72631cffe51d0b887332399ceb9a2e8db8b1"
+}

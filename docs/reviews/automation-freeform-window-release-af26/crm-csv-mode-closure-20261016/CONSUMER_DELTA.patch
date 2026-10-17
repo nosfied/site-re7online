@@ -1,0 +1,241 @@
+--- a/protected/authority.py
++++ b/protected/authority.py
+@@ -201,18 +201,19 @@
+         require(name == 'permit' and self.bundle['permit'] is not None, 'authority_pin_unavailable')
+         return self.bundle['permitSha256']
+ 
+-    def start_mode(self, directory):
++    def start_mode(self, directory, *, purpose='start'):
+         """Static reviewed authority for switch; one-shot permit only for recovery.
+ 
+         This does not admit gates or select a candidate. Operations and its
+         canonical start gate must still validate all dynamic preconditions.
+         """
++        require(purpose in ('start','closure'), 'authority_mode_purpose')
+         directory = Path(directory)
+         require(directory.parent == self.root and directory.name in MODES,
+                 'authority_start_mode_scope')
+         if directory.name != 'switch':
+             return self.operation('ORIGINAL' if directory.name == 'return-before-commit'
+-                                  else 'CANDIDATE', 'start')
++                                  else 'CANDIDATE', purpose)
+         self.revalidate('forward')
+         w = self.root / 'window'
+         require(digest((w / 'recovery-contract.private.json').read_bytes()) == self.pin('contract'),
+--- a/protected/recovery-node-launch.cjs
++++ b/protected/recovery-node-launch.cjs
+@@ -3,7 +3,7 @@
+ const cp = require('node:child_process'), vm = require('node:vm');
+ const path = require('node:path'), crypto = require('node:crypto');
+ const PY = '/usr/local/libexec/re7/recovery-launch.py';
+-const allowedBuiltins = new Set(['fs','path','assert','crypto','child_process','os','util','url','buffer','http','https']);
++const allowedBuiltins = new Set(['fs','path','assert','assert/strict','crypto','child_process','os','util','url','buffer','http','https']);
+ function deny(ok, why) { if (!ok) throw Error(why); }
+ function run(entry, args, transport = (command, options) => cp.execFileSync('/usr/bin/python3', ['-I','-S',PY,...command], options)) {
+   deny(args[0]==='--diagnostic-window'&&args.length>=2,'node_diagnostic_window_required');
+@@ -21,12 +21,13 @@
+     execFileSync(command, argv, options) {
+       fresh();
+       // Canonical execution-check.cjs invokes Python baseline_contract.py.
+-      if (command === '/usr/bin/python3' && Array.isArray(argv) && argv[0].startsWith(snap.root + '/') && argv[0].endsWith('.py')) {
+-        const target=path.relative(snap.root,argv[0]);
++      const pyargs=Array.isArray(argv)&&argv.slice(0,3).join(' ')==='-B -I -S'?argv.slice(3):argv;
++      if (command === '/usr/bin/python3' && Array.isArray(pyargs) && typeof pyargs[0]==='string' && pyargs[0].startsWith(snap.root + '/') && pyargs[0].endsWith('.py')) {
++        const target=path.relative(snap.root,pyargs[0]);
+         deny(snap.manifest.entries[target], 'node_python_child_not_entry');
+         deny(Object.values(snap.manifest.imports[entry] || {}).includes(target) ||
+              Object.keys(snap.manifest.imports).some(k=>Object.values(snap.manifest.imports[k]).includes(target)), 'node_python_child_undeclared');
+-        return transport(['python',target,'--diagnostic-window',diagnosticWindow,'--authority-correlation',JSON.stringify(snap.correlation),'--',...argv.slice(1)],options);
++        return transport(['python',target,'--diagnostic-window',diagnosticWindow,'--authority-correlation',JSON.stringify(snap.correlation),'--',...pyargs.slice(1)],options);
+       }
+       deny(!['python','python3','node'].includes(path.basename(command)), 'node_child_bypass');
+       return cp.execFileSync(command,argv,options); // existing OS effects; rehearsals must intercept them
+@@ -43,6 +44,7 @@
+     const m={exports:{}};cache.set(file,m);
+     function checkedRequire(name) {
+       const core=name.startsWith('node:')?name.slice(5):name;
++      deny(core!=='assert/strict'||name==='node:assert/strict','node_import_undeclared:'+name);
+       if(allowedBuiltins.has(core))return core==='child_process'?children:require('node:'+core);
+       const target=(snap.manifest.imports[file]||{})[name];
+       deny(target,'node_import_undeclared:'+name);return load(target);
+--- a/protected/verified_loader.py
++++ b/protected/verified_loader.py
+@@ -66,3 +66,18 @@
+     def local_module(self,path):
+         path=Path(path)
+         return self.module(str(path.relative_to(self.authority.root)))
++
++    def mode_module(self, mode):
++        # Read-only library load; this does not authorize start/intent/effects.
++        # The same Context retains root identity AND B2 execution correlation.
++        from authority import MODES
++        require(mode in MODES, 'authority_mode_scope')
++        self.authority.revalidate()
++        entry=mode+'/ops.py'
++        require(self.authority.bundle['manifest']['entries'].get(entry)=='inspect',
++                'authority_mode_inspect_entry_required')
++        if self.authority.bundle['permit'] is not None:
++            # An ORIGINAL permit cannot load CANDIDATE/switch code, or vice versa.
++            self.authority.start_mode(self.authority.root/mode, purpose='closure')
++        scoped=type(self)(self.authority,entry,trusted_modules=self.trusted_modules)
++        return scoped.module(entry)
+--- a/window/check_current.py
++++ b/window/check_current.py
+@@ -11,7 +11,7 @@
+  b=Bridge(p);ScheduledControls(p/'window',lambda args:subprocess.check_output(args,text=True,stderr=subprocess.PIPE,timeout=10)).verify('before')
+  cfg=b.expected_config('switch','return.config.private.json'if phase=='before'else'candidate.config.private.json');apps=b.apps();policy=read(p/'window/privileged-policy.private.json');require(set(apps)==set(cfg),'process_population')
+  for n,a in apps.items():
+-  require(b.app_matches(n,cfg),'active_config_drift')
++  require(b.app_matches('switch',n,cfg),'active_config_drift')
+   if phase=='before':require(a['pid']==policy['sourceProcesses'][n]['pid']and b.identity(a['pid'])['ticks']==policy['sourceProcesses'][n]['ticks'],'source_identity_drift')
+  front=policy['sourceProcesses']['re7-admin-front'];require(apps['re7-admin-front']['pid']==front['pid']and b.identity(front['pid'])['ticks']==front['ticks'],'frontend_identity_drift')
+  for n in ('dump.pm2','dump.pm2.bak'):
+@@ -26,9 +26,10 @@
+  if phase=='after':event_policy(event['path'],event['targetSha256'])
+  g=b.guard();require(not g['open']and g['generation']==38 and not g['tasks']and not g.get('ledgerFault'),'guard38_drift')
+  require(subprocess.check_output(['systemctl','show','pm2-deploy.service','--property=ActiveState,UnitFileState'],text=True)==read(p/'window/initial.private.json')['supervision'],'supervision_drift')
+- code="const p=process.argv[1],b=require(p+'/switch/preparation-bindings.cjs'),cp=require('child_process');const q=JSON.parse(cp.execFileSync('docker',['exec','-i','wa-agent-postgres','psql','-X','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1'],{input:'BEGIN READ ONLY;SET LOCAL statement_timeout=8000;'+b.sql+';ROLLBACK;',encoding:'utf8'}));b.noWork(q);for(const m of ['switch','return','return-partial','return-before-commit']){b.baseline(p+'/'+m,q);b.proofs(p+'/'+m);}process.stdout.write('SQL_FOUR_MODES_PASS');"
+- require(subprocess.check_output(['node','-e',code,str(p)],text=True,stderr=subprocess.PIPE,timeout=25)=='SQL_FOUR_MODES_PASS','sql_baselines')
+- import ops
++ from child_transport import command
++ command_line=command(__phase_authority__,['node',str(p/'window/current-sql.cjs')])
++ require(subprocess.check_output(command_line,text=True,stderr=subprocess.PIPE,timeout=25)=='SQL_FOUR_MODES_PASS','sql_baselines')
++ ops=__phase_loader__.mode_module('switch')
+  ops.System().proxy_socket_inventory(sha(p/'switch/db_owner_set_observer.py'))
+  health=json.load(urllib.request.urlopen('http://127.0.0.1:3001/health',timeout=5));require(health['ok']and health['db']=='ok','health_db')
+  v=os.statvfs(p);pg=int(subprocess.check_output(['docker','exec','--user','70','wa-agent-postgres','df','-B1','/var/lib/postgresql/data'],text=True).splitlines()[-1].split()[3]);minimum=min(pg,v.f_bavail*v.f_frsize);require(minimum>=read(p/'window/csv-contract.private.json')['minimumCapacityBytes'],'capacity_denied')
+--- /dev/null
++++ b/window/current-sql.cjs
+@@ -0,0 +1 @@
++const p=globalThis.__re7Authority.root,b=require('../switch/preparation-bindings.cjs'),cp=require('child_process');const q=JSON.parse(cp.execFileSync('docker',['exec','-i','wa-agent-postgres','psql','-X','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1'],{input:'BEGIN READ ONLY;SET LOCAL statement_timeout=8000;'+b.sql+';ROLLBACK;',encoding:'utf8'}));b.noWork(q);for(const m of ['switch','return','return-partial','return-before-commit']){b.baseline(p+'/'+m,q);b.proofs(p+'/'+m);}process.stdout.write('SQL_FOUR_MODES_PASS');
+--- a/window/recovery.py
++++ b/window/recovery.py
+@@ -102,7 +102,7 @@
+                 self.b.privileged('check-present'); s.mode = mode
+                 s.action(mode, 'recover-partial' if mode in (ORIGINAL, 'return-partial') else 'stop-pair')
+                 s.verify_stopped(mode)
+-                self.b.verify_recovery_exit(mode)
++                self.b.verify_recovery_exit(mode, code_mode=mode)
+                 if decision == 'ORIGINAL':
+                     # The same exclusion of selection/candidate starts must still hold after exit.
+                     require(not any(present(self.window / n) for n in
+--- a/window/recovery_bridge.py
++++ b/window/recovery_bridge.py
+@@ -40,8 +40,8 @@
+                 all(v is True for v in gates.values()), 'recovery_admission_gates')
+         require((self.root / 'execution-authorized').read_text().strip() == 'true', 'recovery_not_authorized')
+ 
+-    def verify_recovery_exit(self, mode):
+-        import ops
++    def verify_recovery_exit(self, mode, *, code_mode):
++        ops = __phase_loader__.mode_module(code_mode)
+         op = ops.Operations(self.root / mode, ops.System())
+         op.restore_proof(); op.guard()
+         op.certificate('old-exit-confirmed.json', API)
+--- a/window/recovery_contract.py
++++ b/window/recovery_contract.py
+@@ -135,13 +135,13 @@
+         for name in apps:
+             old = self.baseline['apps'][name]
+             require(apps[name]['pid'] == old['pid'] and same(old['identity'], self.b.identity(old['pid']))
+-                    and self.b.app_matches(name, config), 'prestop_original_identity')
++                    and self.b.app_matches(ORIGINAL, name, config), 'prestop_original_identity')
+ 
+     def original_allowed(self, sequencer):
+         # Recover only the exact original configuration, independent of candidate Event parents.
+         self.b.privileged('check-present')
+         sequencer.verify_stopped('switch')
+-        self.b.verify_recovery_exit('switch')  # Existing Operations absence/DB/restore predicates.
++        self.b.verify_recovery_exit('switch', code_mode=ORIGINAL)  # Existing Operations absence/DB/restore predicates.
+         self.b.verify_no_candidate_admission()  # Fresh scoped SELECT, never HTTP silence.
+         self.b.verify_original_artifact_and_bindings(self.source)
+         self.b.scheduled_controls().verify('contained')
+@@ -155,7 +155,7 @@
+ 
+     def closure(self, mode, *, prestop=False):
+         cfg = {a['name']: a for a in (self.source if mode == ORIGINAL or prestop else self.target)['apps']}
+-        require(set(self.b.apps()) == set(cfg) and all(self.b.app_matches(n, cfg) for n in cfg),
++        require(set(self.b.apps()) == set(cfg) and all(self.b.app_matches(ORIGINAL if prestop else mode, n, cfg) for n in cfg),
+                 'recovery_closure_config')
+         self.b.verify_recovery_closure(mode, cfg, prestop=prestop)
+         self.b.scheduled_controls().verify('before')
+--- a/window/sequencer.py
++++ b/window/sequencer.py
+@@ -78,11 +78,11 @@
+         return {a['name']: a for a in json.loads(
+             (self.root / mode / file).read_text())['apps']}
+ 
+-    def app_matches(self, name, config):
+-        module = __phase_loader__.local_module(self.switch / 'ops.py')
++    def app_matches(self, mode, name, config):
++        module = __phase_loader__.mode_module(mode)
+         app = self.apps().get(name)
+         if app is None: return False
+-        try: module.Operations(self.switch, module.System()).config(app, config[name])
++        try: module.Operations(self.root / mode, module.System()).config(app, config[name])
+         except (RuntimeError, KeyError): return False
+         return True
+ 
+@@ -194,7 +194,7 @@
+             marker = json.loads((self.root / mode / ('started-' + name + '.json')).read_text())
+             require(apps[name]['pid'] == marker['pid'] and
+                     same_identity(marker['identity'], self.identity(marker['pid'])) and
+-                    self.app_matches(name, config), 'successor_identity_or_config_drift')
++                    self.app_matches(mode, name, config), 'successor_identity_or_config_drift')
+         worker_env = config[WORKER]['env']
+         host = worker_env['WHATSAPP_WEB_WORKER_CONTROL_HOST']
+         port = int(worker_env['WHATSAPP_WEB_WORKER_CONTROL_PORT'])
+@@ -212,13 +212,13 @@
+         self.capture_worker_before_unfence(mode, apps[WORKER], config[WORKER])
+ 
+     def worker_capture_observation(self, mode, app, config):
+-        module = __phase_loader__.local_module(self.switch / 'ops.py')
++        module = __phase_loader__.mode_module(mode)
+         system = module.System()
+         policy = json.loads((self.window / 'privileged-policy.private.json').read_text())
+         apps = self.apps()
+         require(set(apps) == {API, WORKER, FRONT}, 'incomplete_process_set')
+         targets = self.expected_config(mode, 'candidate.config.private.json')
+-        require(all(self.app_matches(n, targets) for n in apps), 'capture_release_drift')
++        require(all(self.app_matches(mode, n, targets) for n in apps), 'capture_release_drift')
+         require(apps[WORKER]['pid'] == app['pid'], 'worker_capture_identity_drift')
+         front = policy['sourceProcesses'][FRONT]
+         require(apps[FRONT]['pid'] == front['pid'] and
+@@ -388,7 +388,7 @@
+         apps = self.b.apps()
+         require(set(apps) == {API, WORKER, FRONT}, 'unexpected_process_set')
+         source = self.b.expected_config('switch', 'return.config.private.json')
+-        require(all(self.b.app_matches(n, source) for n in apps), 'source_config_drift')
++        require(all(self.b.app_matches('switch', n, source) for n in apps), 'source_config_drift')
+         identities = {n: {'pid': a['pid'], 'identity': self.b.identity(a['pid'])}
+                       for n, a in apps.items()}
+         require(all(v['identity'] and v['identity']['state'] != 'Z'
+@@ -456,7 +456,7 @@
+         require((self.root / mode / ('started-' + name + '.json')).is_file(),
+                 'started_marker_missing')
+         config = self.b.expected_config(mode, 'candidate.config.private.json')
+-        require(self.b.app_matches(name, config), 'successor_identity_or_config_drift')
++        require(self.b.app_matches(mode, name, config), 'successor_identity_or_config_drift')
+         apps = self.b.apps()
+         require(name in apps and self.b.identity(apps[name]['pid']) is not None,
+                 'successor_process_missing')
+@@ -502,8 +502,8 @@
+         apps = self.b.apps()
+         require(FRONT in apps, 'frontend_missing_cannot_select_return')
+         new = self.b.expected_config('switch', 'candidate.config.private.json')
+-        candidate_api = API in apps and self.b.app_matches(API, new)
+-        candidate_worker = WORKER in apps and self.b.app_matches(WORKER, new)
++        candidate_api = API in apps and self.b.app_matches('switch', API, new)
++        candidate_worker = WORKER in apps and self.b.app_matches('switch', WORKER, new)
+         if candidate_worker:
+             require(candidate_api and (switch / ('started-' + API + '.json')).exists() and
+                     (switch / ('started-' + WORKER + '.json')).exists(),
+@@ -586,7 +586,7 @@
+                 require(all_apps[WORKER]['pid'] in (0, None),
+                         'return_worker_substitute_or_live')
+             source = self.b.expected_config(mode, 'return.config.private.json')
+-            require(all(self.b.app_matches(n, source) for n in apps),
++            require(all(self.b.app_matches(mode, n, source) for n in apps),
+                     'return_source_config_drift')
+             target = self.b.expected_config(mode, 'candidate.config.private.json')
+             require(source[FRONT] == target[FRONT], 'frontend_not_preserved_in_return')
