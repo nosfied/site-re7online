@@ -1,0 +1,196 @@
+{
+  "authorizedCommit": "ad7e866c374555bd85d3c4a2d3f1b6a45d7c7840",
+  "state": "R1_R2_DENY_NO_RETRY",
+  "collection": {
+    "startedUtc": "2026-10-17T01:22:00.199014+00:00",
+    "commandStartedUtc": "2026-10-17T01:22:00.199522+00:00",
+    "commandFinishedUtc": "2026-10-17T01:22:00.349350+00:00",
+    "rootResult": "RAW_INVENTORY_DENY",
+    "exitCode": 1,
+    "observedPaths": 18,
+    "missingPaths": 9,
+    "observedFiles": 9,
+    "errors": [
+      {
+        "errorClass": "OSError",
+        "finishedUtc": "2026-10-17T01:22:00.314732+00:00",
+        "path": "/proc/sys/kernel/random/boot_id",
+        "startedUtc": "2026-10-17T01:22:00.314376+00:00"
+      }
+    ],
+    "commandIdsExecuted": [
+      "root-inventory"
+    ],
+    "commandsNotExecuted": [
+      "deploy-cron",
+      "supervision",
+      "process-discovery",
+      "listener-discovery",
+      "tool-path-discovery"
+    ],
+    "terminal": "RAW_READS_DENY",
+    "rawStdoutBytes": 65041,
+    "rawStdoutSha256": "953df83c1c270595fb5f7b8c3ed80cb576979511c7f5e23a446e8ecd0ed25692",
+    "rawStderrBytes": 0
+  },
+  "custody": {
+    "sshTransferExit": 0,
+    "originalBytes": 87778,
+    "originalSha256": "931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529",
+    "byteExactCopyVerified": true,
+    "canonicalTransportRecordPresent": true,
+    "canonicalIngestionCompleted": false,
+    "firstLocalValidationDenial": "command_count",
+    "terminal": "R1R2_CUSTODY_DENY",
+    "sourceRecordsIngested": 0,
+    "transportUtc": "2026-10-17T01:22:40.789807+00:00",
+    "denialUtc": "2026-10-17T01:22:40.792502+00:00",
+    "reference": "csv-r1r2-read-20261016-v1",
+    "artifacts": [
+      {
+        "privateArtifactName": "original-capture.private.jsonl",
+        "bytes": 87778,
+        "sha256": "931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529",
+        "mode": "0600"
+      },
+      {
+        "privateArtifactName": "privileged-output.private.jsonl",
+        "bytes": 479,
+        "sha256": "bca8358aadb722c884a3e43ecb1669dce767033ee23ca3cfb3a754219db86435",
+        "mode": "0600"
+      },
+      {
+        "privateArtifactName": "sequencer.journal.jsonl",
+        "bytes": 104,
+        "sha256": "c8e6968a92a2fde497fa3cddad7f9f22d5afa9c245d24b82aaa5649d4039ccb3",
+        "mode": "0600"
+      },
+      {
+        "privateArtifactName": "transfer.stderr.private",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mode": "0600"
+      },
+      {
+        "privateArtifactName": "transfer.stdout.private",
+        "bytes": 117494,
+        "sha256": "a184da304fc9649fda2c21efdeb895db3583c0aa1ef733411b8ebbbd3a7edd7f",
+        "mode": "0600"
+      }
+    ]
+  },
+  "protectedTargets": [
+    {
+      "path": "/usr/local/libexec/re7/authority.py",
+      "observedKind": "absent",
+      "proposedKind": "file",
+      "comparison": "ABSENT_NOT_INSTALLED_OBSERVATION"
+    },
+    {
+      "path": "/usr/local/libexec/re7/root_store.py",
+      "observedKind": "absent",
+      "proposedKind": "file",
+      "comparison": "ABSENT_NOT_INSTALLED_OBSERVATION"
+    },
+    {
+      "path": "/usr/local/libexec/re7/verified_loader.py",
+      "observedKind": "absent",
+      "proposedKind": "file",
+      "comparison": "ABSENT_NOT_INSTALLED_OBSERVATION"
+    },
+    {
+      "path": "/usr/local/libexec/re7/child_transport.py",
+      "observedKind": "absent",
+      "proposedKind": "file",
+      "comparison": "ABSENT_NOT_INSTALLED_OBSERVATION"
+    },
+    {
+      "path": "/usr/local/libexec/re7/privileged_output.py",
+      "observedKind": "absent",
+      "proposedKind": "file",
+      "comparison": "ABSENT_NOT_INSTALLED_OBSERVATION"
+    },
+    {
+      "path": "/usr/local/libexec/re7/recovery-launch.py",
+      "observedKind": "absent",
+      "proposedKind": "file",
+      "comparison": "ABSENT_NOT_INSTALLED_OBSERVATION"
+    },
+    {
+      "path": "/usr/local/libexec/re7/recovery-node-launch.cjs",
+      "observedKind": "absent",
+      "proposedKind": "file",
+      "comparison": "ABSENT_NOT_INSTALLED_OBSERVATION"
+    },
+    {
+      "path": "/usr/local/libexec/re7/incident-6683-window-control.py",
+      "observedKind": "file",
+      "proposedKind": "file",
+      "uid": 0,
+      "mode": "0644",
+      "nlink": 1,
+      "observedSha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+      "proposedSha256": "19a67b9eb748b69b72ffc0e144e2a85a89e12ba9b78271b00eec5e61efc02fd5",
+      "comparison": "CURRENT_DIFFERS_FROM_FUTURE_PROPOSAL"
+    },
+    {
+      "path": "/etc/sudoers.d/re7-incident-6683-window",
+      "observedKind": "file",
+      "proposedKind": "file",
+      "uid": 0,
+      "mode": "0440",
+      "nlink": 1,
+      "observedSha256": "62b5a2ac1d56b013f6db4bb8180b0637b985786214f4bc3ce0e5f8d3f7c5111a",
+      "proposedSha256": "a6fc80e845709dc35ff6ac2ecd8e26732ba6ef3137b8406c7618a273263ab7dd",
+      "comparison": "CURRENT_DIFFERS_FROM_FUTURE_PROPOSAL"
+    },
+    {
+      "path": "/usr/local/libexec/re7/pm2-input.json",
+      "observedKind": "absent",
+      "proposedKind": "symlink",
+      "comparison": "ABSENT_NOT_INSTALLED_OBSERVATION"
+    }
+  ],
+  "historicalComparisons": {
+    "policyObservedSha256": "e2a5ffab807f457b4179a6981e15cbf52800cbf975bce921c31ee3a9a989860b",
+    "matchesHistoricalOriginalRecoveryPolicy": true,
+    "matchesHistoricalCodePinFa113e": false,
+    "helperMatchesHistorical8de358": true,
+    "sudoersMatchesHistorical62b5a2": true
+  },
+  "eventObservation": {
+    "fileMode": "0664",
+    "writableParents": [
+      {
+        "path": "/opt/re7online/site-re7online",
+        "mode": "0775"
+      },
+      {
+        "path": "/opt/re7online/site-re7online/apps",
+        "mode": "0775"
+      },
+      {
+        "path": "/opt/re7online/site-re7online/apps/whatsapp-agent",
+        "mode": "0775"
+      },
+      {
+        "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/src",
+        "mode": "0775"
+      },
+      {
+        "path": "/opt/re7online/site-re7online/apps/whatsapp-agent/src/events",
+        "mode": "0775"
+      }
+    ],
+    "futureCanonicalIdaPredicate": "DENY_EVENT_PARENTS_WRITABLE",
+    "originalRecoveryAffectedByCandidateEvent": false
+  },
+  "localOnlyAnalysis": {
+    "sameObserveOnLocalBootId": "OSError",
+    "errno": 12,
+    "productionErrnoKnown": false,
+    "causeInProductionProven": false,
+    "codeChanged": false
+  },
+  "operationalCertification": false
+}

@@ -1,0 +1,14 @@
+{
+  "base": "ad7e866c374555bd85d3c4a2d3f1b6a45d7c7840",
+  "scope": "SANITIZED_REPORT_PROVENANCE_CHECKPOINTS_ONLY",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-result-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-result-20261017/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-result-20261017/PROVENANCE.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-result-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-result-20261017/SANITIZED_RESULT.json",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ]
+}

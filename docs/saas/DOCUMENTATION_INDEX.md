@@ -1,5 +1,8 @@
 # Documentation Index
 
+**CSV R1/R2 — CONSUMED/DENY,16/10 às22:22 Fortaleza.** [Resultado sanitizado e procedência](../reviews/automation-freeform-window-release-af26/crm-csv-r1r2-result-20261017/REPORT.md): única coleta root registrou18/19 caminhos e OSError em boot_id; os cinco comandos seguintes não rodaram. Transferência única exit0 preservou cópia privada byte-exata; ingestão canônica negou command_count e mantém R1R2_CUSTODY_DENY, sem certificado completo. Fonte root atual e2a5ffab… confirma histórico; bibliotecas/alias futuros ausentes; pais Event775 observados, sem reparo. Nenhuma repetição, pin/binding alterado, R3/R4, backup ou instalação. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher/controles/guarda38/out.15 não alterados, sem nova certificação completa. Revisão21/10 ou mudança.
+
+
 **CSV16/10 — primeira conferência R1/R2 preparada somente para revisão.** [Roteiro único, inventário e17 provas locais](../reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/REPORT.md): dez alvos estáticos (nove arquivos+alias), nove auxiliares; ausências registradas sem reparo. Destinos privados fixos, transferência byte-exata e ingestão pelo private_record canônico; seis comandos com canais/hashes/resultados e DENY sem retry. Coleta não atômica nem certificação; SSH/sudo e observações produtivas não executados. SQL/ownership/toolchain transitivo ficam dirigidos pelos resultados, sem impedir a proposta inicial. Nenhum pin/binding/implementação operacional alterado. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 e históricos consumidos preservados; revisão21/10 ou mudança.
 
 

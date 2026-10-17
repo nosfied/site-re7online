@@ -1,0 +1,12 @@
+{
+  "authorizedCommit": "ad7e866c374555bd85d3c4a2d3f1b6a45d7c7840",
+  "commandSource": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/COMMANDS.md",
+  "readerSha256": "d01961f5388fc49b65130ac4beace468327ac3faae22d3bb6a6599005d3a73e8",
+  "canonicalWriterSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+  "sourceCapturePrivateSha256": "931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529",
+  "sourceCapturePrivateBytes": 87778,
+  "publicOutputScope": "explicit sanitized projection only; no raw receipts/policies/crons/environments/journals",
+  "newRemoteReadsAfterDenial": 0,
+  "captureReplay": false,
+  "custodyReplay": false
+}
