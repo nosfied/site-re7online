@@ -803,16 +803,17 @@
     }
   ],
   "currentReconciliation": {
-    "base": "5243771041210fed3f53fb621cb10abb90277a0e",
+    "base": "a8d257e63845a77345d48d3e306fc82060d2fcc9",
     "date": "2026-10-17",
-    "scope": "LOCAL_PREDECESSOR_SOURCE_RECONCILIATION_NO_OPERATIONAL_EFFECTS",
+    "scope": "OFFLINE_TOOLCHAIN_SOURCE_AND_EVIDENCE_ACCOUNTING_ONLY",
     "integrationReview": "ACCEPT_LOCAL_IN_TESTED_SCOPE_ONLY",
     "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
     "historicalRowsUnchanged": 57,
     "readyForWindow": false,
     "firstConcreteBlocker": {
-      "localPredecessorSourceReconciled": true,
-      "nextOfflineAction": "Conferir closure/toolchain contra fontes pinadas disponíveis; separar faltantes observacionais; sem coleta genérica ou reparo Event775",
+      "operationalToolchain": "Missing authenticated production Node d01614ef image/ELF frontier and actual PM2 shebang/PATH/transitive closure protection; local JS inventory is available, not operationally certified",
+      "nextLocalDelta": "Integrate compose_inputs plus the policy_predecessor leaf and authenticated pre-authority launch in future editable composition before sealing, without modifying historical kits",
+      "neededOperationalAction": "Separately authorized directed observation/protection of selected Node/PM2 toolchain; no command or collection prepared in this round",
       "notWindowReady": true
     },
     "groups": [
@@ -857,8 +858,8 @@
         ],
         "consumers": "Context.snapshot/protected_bytes; pm2_input.start; ecosystem parser; install_static/verify_static",
         "reusable": "Observed Node image hashd01614ef and PM2 CLI/package seeds against pinned local tar; closure26 diagnostic sources; B3/B4 FD/parser/PM2 local proof and code manifest/DAG.",
-        "offlineConclusion": "Code/FD consumption and local sources are reusable; diagnostic closure26 and real local PM2 proof do not establish installed ELF/transitive closure or protected ancestors.",
-        "exactMissing": "Exact consumed Node/PM2/shebang/CLI/parser/JS+ELF dependent files and their approved bytes/metadata; protected libraries/launchers/alias/root chains actually installed and verified. R1 observed future targets absent.",
+        "offlineConclusion": "Declared code/RPC/PM2 local bytes all match existing pins; full PM222 lab proof reused. No local file is missing within the conservative JS index. Production Node/ELF and actual protected PM2 consumption are not certified.",
+        "exactMissing": "Authenticated production Node d01614ef image/ELF resolution; actual PM2 shebang/PATH and action-dependent consumed module binding; current root-protected toolchain/libraries/alias metadata. Full installed closure is UNKNOWN, not replaced by closure26 or a4552 target.",
         "dependency": "Offline compare declared closure against pinned available sources; authorize only unresolved observations later. Installation separate after static bytes review. No readelf retry/alternative installation,4552-file quota or download/build.",
         "requiresOperationalObservation": true
       },
@@ -900,7 +901,7 @@
         ],
         "consumers": "path_bindings/original_bindings; original_checks/csv_contract; Event parents; root Store/Context/Loader/start_mode; installer CAS",
         "reusable": "BINDING_PLAN and current static four-mode composition,57 inventory IDs,16 namespace renderings; accepted R1/R2/authority/R3/B1-B4/ORIGINAL local proofs and canonical owner/root/helper trust design.",
-        "offlineConclusion": "16 means four source renderings across four modes, not16 captures. Authorities remain proposed, not installed/emitted. Predecessor e2a5 reconciled in future producer/checker/root/pre_A/admission/CAS sources; original-only grants no forward authority. Existing consumed kit not rewritten.",
+        "offlineConclusion": "16 means four source renderings across four modes, not16 captures. Authorities remain proposed, not installed/emitted. Predecessor e2a5 reconciled in future producer/checker/root/pre_A/admission/CAS sources; original-only grants no forward authority. Existing consumed kit not rewritten. Predecessor review ACCEPT LOCAL only in11 tested source interfaces. policy_predecessor is one window leaf; current static/phase integration and pre-authority same-bytes launch remain pending.",
         "exactMissing": "Future authenticated closure/index integration of reconciled source delta; actual namespace and current profile/path metadata; resolved sixteen renderings/manifests/DAG without cycles; Event writable-parent condition; protected static installation and owner-approved anchor/phase/decision/profile/policy context. Recovery-specific permit only when applicable.",
         "dependency": "Current operational inputs plus source/toolchain review precede materialization; root installation/anchor emission/execution are separate approvals. R1 Event five parents775 would deny before containment if unchanged. No automatic permission repair or recovery permit for forward switch/PRESTOP.",
         "requiresOperationalObservation": true
@@ -916,7 +917,7 @@
     "nextReview": "2026-10-21 or earlier on change",
     "predecessorLocalDelta": {
       "base": "5243771041210fed3f53fb621cb10abb90277a0e",
-      "status": "LOCAL_VALIDATED_SOURCE_DELTA_ONLY_REVIEW_PENDING",
+      "status": "ACCEPT_LOCAL_IN_ELEVEN_SOURCE_INTERFACE_PROOFS_ONLY_FUTURE_INTEGRATION_PENDING",
       "policySha256": "e2a5ffab807f457b4179a6981e15cbf52800cbf975bce921c31ee3a9a989860b",
       "role": "EXPECTED_PREDECESSOR_NOT_FORWARD_OR_PHASE_AUTHORITY",
       "source": "scripts/crm_csv_predecessor/sources.py",
@@ -930,6 +931,206 @@
         "protected toolchain",
         "16 namespace bindings and installed phase authority"
       ]
+    },
+    "toolchainOffline": {
+      "base": "a8d257e63845a77345d48d3e306fc82060d2fcc9",
+      "result": "DECLARED_LOCAL_BYTES_ACCOUNTED_OPERATIONAL_TOOLCHAIN_NOT_CERTIFIED",
+      "analysisOnly": true,
+      "newTestSuiteOrPM2Run": false,
+      "staticComposition": {
+        "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-original-chain-20261016/static-kit/COMPOSITION.json",
+        "sha256": "f9a0a44a83073739ad3bcddfdbd697eb5723c89a88d31a0c68519a87005307df",
+        "logicalPathsChecked": 123,
+        "uniqueContents": 57,
+        "missingOrHashDrift": [],
+        "declaredImportTargetsPresent": true,
+        "protectedEntries": 9,
+        "operationalManifest": false
+      },
+      "diagnosticClosure": {
+        "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/CLOSURE.json",
+        "sha256": "1e35a77626fea39d8b8f02695ddc4b10594ad7af37b44fba5ddcb2d309b1cd3b",
+        "javascript": 18,
+        "resolutionJSON": 8,
+        "allDeclaredBytesMatchedLocally": true,
+        "samePinsInB4Index": true,
+        "modules": [
+          "amp",
+          "amp-message",
+          "debug",
+          "has-flag",
+          "ms",
+          "pm2-axon",
+          "pm2-axon-rpc",
+          "supports-color"
+        ],
+        "scope": "RPC codec only; Node builtins from runtime; no PM2 CLI/daemon/ELF certification"
+      },
+      "conservativeLabInventory": {
+        "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/TOOLCHAIN_FILES.sha256",
+        "sha256": "46180a0c52cbf9768ba750903fad5fa807c2c8b33dd2e20ef97d50ecb6c4fee7",
+        "listed": 4552,
+        "localByteMatches": 4552,
+        "missing": [],
+        "different": [],
+        "meaning": "Conservative reference inventory, not runtime trace or target capture count",
+        "localLockSha256": "8a96586f6981e972f0c619416b016459c1381c7d248c16d3a8bc53baabd90c71"
+      },
+      "pm2EntryFiles": {
+        "bin/pm2": {
+          "sha256": "bbb586713050b21d86aa41bde704a3a4776aa300ddcbd9710e81fa7c0089256d",
+          "localBytes": "MATCH",
+          "installedBytesCurrent": "UNKNOWN"
+        },
+        "package.json": {
+          "sha256": "d2d8b77291fd72dd588f0511741d706b358d5f4387e86a236c8e39b31d324cfd",
+          "localBytes": "MATCH",
+          "installedBytesCurrent": "UNKNOWN"
+        },
+        "index.js": {
+          "sha256": "4774d3dfdf283f67a049ab24e08c2362b236b5b50299a77eed1b5e3e29f6daf1",
+          "localBytes": "MATCH",
+          "installedBytesCurrent": "UNKNOWN"
+        },
+        "lib/binaries/CLI.js": {
+          "sha256": "8eebbc16af9f88c9f92452ba2fe9cb843ec8bc010cb80b2756f1ddd7103cf529",
+          "localBytes": "MATCH",
+          "installedBytesCurrent": "UNKNOWN"
+        },
+        "lib/API.js": {
+          "sha256": "5490f579b989bcc162f81ca1dfc6d4a0e35fcb7586dd22f0e4b765724639d904",
+          "localBytes": "MATCH",
+          "installedBytesCurrent": "UNKNOWN"
+        },
+        "lib/Common.js": {
+          "sha256": "4302a338ff59d8eccf52982b6623ada5e7d1edaf033e49b8679de93751628f23",
+          "localBytes": "MATCH",
+          "installedBytesCurrent": "UNKNOWN"
+        },
+        "lib/Client.js": {
+          "sha256": "2c05d0f5e51e3101de8f1e0b4c24d9b50d0a85e0e13b92c41fb68f280e4be093",
+          "localBytes": "MATCH",
+          "installedBytesCurrent": "UNKNOWN"
+        },
+        "lib/Daemon.js": {
+          "sha256": "820725216d7237c1c90b193e3b19c7338893b5672afb4a0ba81b244aac8f231a",
+          "localBytes": "MATCH",
+          "installedBytesCurrent": "UNKNOWN"
+        },
+        "lib/ProcessContainerFork.js": {
+          "sha256": "1fdda3aa24eec19dc74e280d4c1a0d657945fea1de2fc47427a55f1b3f18ef8d",
+          "localBytes": "MATCH",
+          "installedBytesCurrent": "UNKNOWN"
+        },
+        "lib/ProcessContainer.js": {
+          "sha256": "beaf002a3743489c3df5b884f45d11abceb2491402efc560a4b7c0a15d7e45b8",
+          "localBytes": "MATCH",
+          "installedBytesCurrent": "UNKNOWN"
+        }
+      },
+      "pm2Tar": {
+        "sha256": "a309112e6d89ed8adff54cb32831df3c79cdc6191e6085a8ea7007303fe49ce9",
+        "localPresentAndHashMatched": true,
+        "regularMembersComparedToIndex": 133,
+        "allComparedMembersMatched": true,
+        "extractedOrExecuted": false,
+        "historicalObservedSeeds": [
+          "bin/pm2",
+          "package.json"
+        ]
+      },
+      "fullPM2Proof": {
+        "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/PM2_LAB_PROOF.json",
+        "sha256": "0c57ff6ae0fcf768d0d94e419087cdb20bb49b8065cac30ff649ca2b0159ac73",
+        "reusedWithoutRerun": true,
+        "real": [
+          "sealed FD inheritance",
+          "PM2 CLI6.0.14/parser/normalization",
+          "daemon/IPC/synthetic children",
+          "API-before-worker and namespace exit"
+        ],
+        "notProven": [
+          "root authority query",
+          "real protected alias",
+          "production toolchain",
+          "one integrated full production recovery"
+        ]
+      },
+      "node": {
+        "lab": {
+          "bytes": 120078896,
+          "sha256": "af8d5d1e234beb26b3095e6bebf80edc781f79c9435553a383037eccec2716f8",
+          "sameLocalBytesAsLabProof": true
+        },
+        "productionHistorical": {
+          "bytes": 97661912,
+          "sha256": "d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e",
+          "source": "crm-csv-r2-directed-result-20261017/REPORT.md",
+          "fullImageInExaminedPinnedArtifacts": false,
+          "ELFClosure": "NOT_CONFERRED_UNKNOWN"
+        },
+        "localUsrBinNode": "ABSENT_LOCAL_ONLY_NO_PRODUCTION_INFERENCE",
+        "noReadelfLddFallbackOrExecution": true
+      },
+      "realConsumptionBoundary": {
+        "systemStart": "apps() daemon-presence -> pm2_input.start -> sealed FD -> System.run([PM,start,alias/FD,--only,name])",
+        "pm2Path": "/home/deploy/.npm-global/bin/pm2",
+        "pm2Shebang": "/usr/bin/env node",
+        "sourceFile": "return-before-commit/ops.py (same relevant System code across modes)",
+        "cleanPath": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "childTransport": "explicit python/python3/node are bootstrapped; basename pm2 is passed through",
+        "missing": "actual PATH/shebang resolution and immutable/protected PM2/Node/consumed module chain; configuration FD alone cannot certify these"
+      },
+      "policyPredecessorLeaf": {
+        "source": "scripts/crm_csv_predecessor/runtime.py",
+        "futurePath": "window/policy_predecessor.py",
+        "sha256": "46e71c30fa44d454272f7a1e96ac5094182f4ec6f3fa7de57b153681ccd3b595",
+        "implementedInCurrentStaticKit": false,
+        "imports": [],
+        "directImporters": [
+          "window/csv_contract.py",
+          "window/original_checks.py",
+          "window/root_readonly.py",
+          "window/pre_install.py",
+          "window/admit_gates.py"
+        ],
+        "futureIndexes": [
+          "source/object provenance and eager dependency/import DAG before scan/seal",
+          "ORIGINAL closure through original_checks without candidate executables",
+          "original-only review, window/sequencer-manifest and package review",
+          "phase manifest files/imports/dependencies with real metadata; owner anchor last"
+        ],
+        "preAuthorityGap": "root_readonly/pre_install must load the same owner-reviewed script+leaf bytes before phase authority exists; current source factory alone does not authenticate that launch",
+        "newRootLibraryOrPermitRequired": false
+      },
+      "notAvailableInStaticKit": {
+        "modeDataCount": 32,
+        "namesPerMode": [
+          "backup-manifest.json",
+          "baseline.private.json",
+          "candidate.config.private.json",
+          "candidate.ecosystem.config.cjs",
+          "plan.private.json",
+          "proof-bindings.private.json",
+          "return.config.private.json",
+          "return.ecosystem.config.cjs"
+        ],
+        "currentDataFabricated": false
+      },
+      "missingOfflineEvidence": [
+        "production Node full image/ELF resolution and pin map in the examined artifact set",
+        "actual installed action-dependent PM2 module closure comparison",
+        "current protected file metadata/chains/alias and toolchain binding"
+      ],
+      "operationalRequirements": [
+        "selected interpreter/shebang/PATH and Node ELF frontier",
+        "PM2 transitives matching approved byte references and protected from substitution",
+        "protected libraries/launchers/helper/sudoers/alias installation/current verification",
+        "current phase/profile/manifest metadata and root-issued authority"
+      ],
+      "notNewRequirements": "Python/stdlib/env/sudo/system utilities remain canonical OS trust boundaries; no new whole-OS hashing mandate; SQL tools stay separate",
+      "historicalsPreserved": true,
+      "readyForWindow": false
     }
   }
 }

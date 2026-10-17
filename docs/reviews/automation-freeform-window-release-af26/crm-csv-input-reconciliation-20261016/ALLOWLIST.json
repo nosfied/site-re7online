@@ -1,6 +1,6 @@
 {
-  "base": "5243771041210fed3f53fb621cb10abb90277a0e",
-  "scope": "LOCAL_PREDECESSOR_SOURCE_RECONCILIATION_ONLY_NO_OPERATIONAL_COMPOSITION",
+  "base": "a8d257e63845a77345d48d3e306fc82060d2fcc9",
+  "scope": "DOCUMENTATION_ONLY_OFFLINE_TOOLCHAIN_RECONCILIATION_AND_LIMITED_PREDECESSOR_ACCEPTANCE",
   "files": [
     "docs/BACKLOG_TECH.md",
     "docs/RUNBOOK_WHATSAPP_AGENT.md",
@@ -8,12 +8,7 @@
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MANIFEST.sha256",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
-    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/PREDECESSOR_PROOFS.json",
     "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
-    "docs/saas/DOCUMENTATION_INDEX.md",
-    "scripts/crm_csv_predecessor/installer.source",
-    "scripts/crm_csv_predecessor/runtime.py",
-    "scripts/crm_csv_predecessor/sources.py",
-    "scripts/crm_csv_predecessor/test_predecessor.py"
+    "docs/saas/DOCUMENTATION_INDEX.md"
   ]
 }

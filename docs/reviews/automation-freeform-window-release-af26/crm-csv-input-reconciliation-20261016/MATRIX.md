@@ -1,3 +1,20 @@
+# Fechamento offline do toolchain —17/10/2026, basea8d257e6
+
+Predecessor **ACCEPT LOCAL somente nas11 provas/interfaces declaradas**; integração futura ainda pendente. [Relatório consolidado](REPORT.md#fechamento-offline-do-toolchain-17102026-basea8d257e6); resultados completos em `INPUT_MATRIX.json.currentReconciliation.toolchainOffline`. Sem testes repetidos ou novo pacote.
+
+| Fronteira real | Bytes/provas aproveitáveis conferidos offline | Falta exata / dependência |
+| --- | --- | --- |
+| Context/Loader/Bridge/Operations, quatro modos e protected |123 caminhos/57 objetos por hash; nove entradas protected; referências de imports declarados presentes | Dados/metadados de fase, proteção/instalação atuais, não certificação produtiva.32 dados de modo/16 renderizações continuam ausentes no kit estático |
+| Diagnóstico RPC |26 arquivos locais iguais aos pins:18 JS+8 JSON de resolução; alcance de codec preservado | Node builtins/ELF/CLI/daemon não fazem parte dessa closure |
+| PM2/CLI e transitivos locais de referência | Tar pinado a309…;133 membros comparados ao índice; bin/package seeds já observados;4552 arquivos do índice conservador local correspondem, sem faltantes; dez arquivos de entrada listados na matriz JSON | Conjunto efetivamente consumido na VPS e proteção contra substituição.4552 não é meta nem trace. Shebang env node sob CLEAN.PATH precisa vínculo efetivo |
+| FD→PM2 real de laboratório | Prova completa B4 reutilizada; Node22 local af8d… ainda coincide; CLI/daemon/IPC/filhos reais | Não transfere o aceite para Node produtivo d016… nem para root/Context/alias operacional |
+| Node efetivo e ELF | Hash/metadados históricos d016…,97.661.912B; não há imagem correspondente no conjunto pinado examinado | PT_INTERP/DT_NEEDED/RPATH/RUNPATH, loader/libs/resolução/proteção UNKNOWN. Primeiro impedimento factual de certificação; exige autorização operacional dirigida. Sem readelf/ldd/alternativa executada |
+| policy_predecessor | Folha window/policy_predecessor.py, SHA46e71c30…; cinco importadores exatos no relatório | Integrar antes do scan/selagem em imports/dependencies/files, review ORIGINAL/shared/package e manifest de fase. root_readonly/pre_install pré-autoridade precisam carregar os mesmos bytes revisados, não import mutável ou Context fabricado |
+
+**Primeiro impedimento operacional:** imagem/ELF Node e resolução/proteção PM2 efetivos. **Próximo delta local separado:** ligar compose_inputs+folha+lançamento pré-autoridade ao compositor futuro, sem modificar kit histórico. SQL/ownership, saved/fallback/identidades e16 vínculos/autoridade continuam pendentes. Event775 não reparado; frontend não reaberto. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
+
+---
+
 # Atualização local do predecessor —17/10/2026
 
 Fonte e2a5 reconciliada no produtor/transformações futuros, sem fallback, instalação ou emissão. Ver [relatório](REPORT.md#reconciliação-local-do-predecessor-17102026-base52437710) e [provas](PREDECESSOR_PROOFS.json). Contrato, root/pre-A/admissão e CAS têm papéis distintos; política original-only não autoriza ida. Imutáveis atuais preservados. Kit histórico permanece fa113 até futura materialização revisada; nenhum input operacional promovido. Restam saved/fallback/identidades, SQL/ownership, toolchain protegido e vínculos/autoridade/closure atual.11 testes focados; não certificação operacional.
