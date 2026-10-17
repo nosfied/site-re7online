@@ -1,0 +1,9 @@
+from pathlib import Path
+from csv_contract import check
+from csv_boundary import stage_boundary
+def authorize_start(d):
+ d=Path(d)
+ if d.name=='return-before-commit':
+  from recovery_start import authorize_original_start
+  return authorize_original_start(d)
+ check(d.parent,live=True);stage_boundary(d.parent,d.name)

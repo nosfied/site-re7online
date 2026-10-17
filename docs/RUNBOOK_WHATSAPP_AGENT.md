@@ -1,5 +1,8 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**B4 FUTURO 16/10 — não executar na VPS.** [Composição/ordem de selagem, instalador e negativos](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/REPORT.md). Kit estático não é manifest de fase nem âncora; verificação de bytes PASS e certificação operacional DENY. Instalador usa owner/root, hash aprovado, estado prévio fresco e lock canônico; não instala política de fase nem emite permit.18 testes lab/visudo e PM2 CLI→daemon→filhos reais sintéticos; proteção root e pacote operacional não certificados. Quatro lacunas do fechamento transitivo permanecem explícitas. INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso. Crons/guarda38/out.15 e épocas não acessados.
+
+
 **B3 FUTURO 16/10 — sem autorização operacional.** [Contrato/inventário e limites](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md): novo transporte de System.start usa snapshot JSON/CJS/parser e memfd selado, preservando start_mode/permits, intent, gates e revalidação. PRESTOP não parte; ORIGINAL não requer candidato.25 provas locais; parser PM2 real, daemon/OS produtivos simulados. B4 deve provisionar/atestar alias root, toolchain e pacote quatro modos; não usar este delta como instalação/janela. CSV SUSPENSO / INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY.
 
 

@@ -1,0 +1,88 @@
+{
+  "allocatedKitBytes": 655360,
+  "baseCommit": "67ce9076c489f025d7a24727eca7ccac093edf30",
+  "codeSha256": {
+    "compose_static.py": "1be769c9e820938744d9ef56a90241ce26edde5fd1bbbe2aa5ff0492e03e805e",
+    "install_static.py": "a7a46fb4e666bda148defca6a78d6a9470cf370cf4d448b16d712ece9aff6139",
+    "lab_pm2.py": "54ccde4e9cda11f9af013990891b2b27273392e42a255ef0e093c1ab388d920c",
+    "reproduce.py": "405869b1f2de6ad47704963547ed5c20d9fe33155524d99ae7c03644a57567d2",
+    "test_b4.py": "402f1ad54717d013fb3a6876d196b003648a511c867069ccdc4e5c26ee6bcbdb",
+    "verify_static.py": "0972481ef2fe85fd2d4c43e6959b33f9110d4185724d3b25b1e0bc9b6c41ac79"
+  },
+  "completePM2Lab": "PM2_LAB_PROOF.json",
+  "compositionReviewSha256": "0217eb536c65fd0dd49512eaced4ec2bd3b31c60af193653aa928d15519f8f72",
+  "diffCheck": {
+    "allStaged": "4 warnings in 3 exact accepted source snapshots plus duplicated patch line; no canonical byte normalization",
+    "inheritedObjects": {
+      "3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a": "accepted root_store.py EOF blank",
+      "4427aa5e31089083efac3d17ae00f57ac856970714ab9cbe4bc1f0fceaa302ef": "accepted canonical_renew_proofs.py EOF blank",
+      "edf775c12520f21cf50809f82e716665e614edf8f57de5858cc3976f7dea37d7": "accepted preparation-bindings.cjs trailing space"
+    },
+    "newCodeAndDocs": "PASS when excluding literal source objects and FULL_DELTA.patch"
+  },
+  "directedTestsOutputSha256": "cf52263ac00e00309df0407aa0840755451e9fb1740679cc25c2c182e735b4c0",
+  "eagerDagNodes": 122,
+  "exactReproductionOutputSha256": "40c6a9399c2dd65988103411afbf39e03ce74c22d78a2f30e7dbba15c772ce47",
+  "focusedTests": 18,
+  "integrationBlocks": [
+    {
+      "consumer": "recovery_bridge.Bridge.verify_recovery_exit",
+      "reason": "implicit import ops has no mode-specific authenticated map; must not map globally to switch for ORIGINAL"
+    },
+    {
+      "consumer": "sequencer.Bridge.app_matches",
+      "reason": "accepted transform still requests self.switch/ops.py; ORIGINAL closure cannot silently include candidate code"
+    },
+    {
+      "consumer": "check_current.check_current",
+      "reason": "implicit ops and inline node -e require of switch/preparation-bindings.cjs not routed through authenticated child bootstrap"
+    },
+    {
+      "consumer": "node_bootstrap.checkedRequire",
+      "reason": "node:assert/strict is real Node builtin but absent from accepted allowedBuiltins; waiting-work consumers DENY"
+    }
+  ],
+  "localHarnessCorrections": [
+    "fixture initial intermediate directories inherited775: subject correctly denied; valid fixture declares755 before subject, explicit775 negative added",
+    "full PM2 initial sandbox socket refusal; authorized unsandboxed local namespace used",
+    "npmrc duplicate /dev/null loading denied before install; separate empty files used"
+  ],
+  "missingInputs": 67,
+  "open": [
+    "mode-specific ops resolution and original-independent Bridge configuration checks",
+    "check_current inline Node binding consumption",
+    "Node assert/strict allowlist gap",
+    "current operational inputs and16 namespace bindings",
+    "root install/authority/toolchain certification"
+  ],
+  "operationalCertification": "DENY_INTEGRATION_AND_OPERATIONAL_INPUTS",
+  "operationalGenerationCreated": false,
+  "ownerAnchorOrPermitEmitted": false,
+  "paths": 122,
+  "phaseManifestEmitted": false,
+  "productionEffects": false,
+  "real": [
+    "static source byte reconstruction and deduplication",
+    "temporary filesystem writes/locks/renames/fsync/receipts",
+    "visudo -cf on temporary future rule",
+    "Node loader denial of assert/strict",
+    "complete PM2 CLI/daemon/IPC/forked synthetic Node children and namespace shutdown"
+  ],
+  "result": "STATIC_PREPARATION_AND_LAB_PROOFS_PASS_OPERATIONAL_CERTIFICATION_DENIED",
+  "reusedWithoutRerun": [
+    "R1/R2 recovery proofs",
+    "prestop prevention",
+    "R3 authority split",
+    "B2 lineage and child transports",
+    "B1 canonical diagnostics",
+    "B3 Context/System-to-FD proofs",
+    "runtime/grant/SQL/restore"
+  ],
+  "simulated": [
+    "root EUID and UID/ancestor trust in lab installer",
+    "root authority/actual phase not invoked",
+    "no active Operations/OS/HTTP/DB application flow in complete PM2 proof"
+  ],
+  "uniqueCodeBytes": 353374,
+  "uniqueContents": 56
+}

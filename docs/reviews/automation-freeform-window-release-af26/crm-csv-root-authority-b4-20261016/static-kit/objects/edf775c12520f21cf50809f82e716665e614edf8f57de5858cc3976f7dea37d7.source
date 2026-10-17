@@ -1,0 +1,24 @@
+const fs = require('fs'), path = require('path'), assert = require('assert'), crypto = require('crypto');
+const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+module.exports = {
+  sql: require('./waiting-work.cjs').sqlFor(JSON.parse(fs.readFileSync(path.join(__dirname,'../window/waiting-work.private.json')))),
+  noWork(q) {
+    const expected = JSON.parse(fs.readFileSync(path.join(__dirname, '../window/waiting-work.private.json')));
+    const f=require('./waiting-work.cjs');
+    f.noWork(q, expected);f.verifyReceipt(q,expected);
+    f.validateGuard(JSON.parse(fs.readFileSync('/var/lib/re7/campaign-operations/state.json')),expected,['.lock','.uncertain'].map(s=>fs.existsSync('/var/lib/re7/campaign-operations/state.json'+s))); 
+  },
+  baseline(dir, q) {
+    const b=JSON.parse(fs.readFileSync(path.join(dir,'baseline.private.json')));
+    for (const k of ['flags','connected','auth']) assert.deepStrictEqual(q[k], b[k], 'identity baseline divergence: '+k);
+  },
+  frontend(dir, build) {
+    const b=JSON.parse(fs.readFileSync(path.join(dir,'baseline.private.json')));
+    assert.equal(build,b.frontendBuild,'frontend BUILD_ID diverges from prepared artifact');
+  },
+  proofs(dir) {
+    const cp = require('child_process');
+    const receipt=JSON.parse(cp.execFileSync('/usr/bin/python3',['-B','-I','-S',path.join(dir,'../window/restore_contract.py'),dir],{encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:10000}));
+    assert.equal(receipt.result,'RESTORE_CONTRACT_PASS');
+  }
+};

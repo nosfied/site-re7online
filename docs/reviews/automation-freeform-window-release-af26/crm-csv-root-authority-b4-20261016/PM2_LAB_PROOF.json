@@ -1,0 +1,21 @@
+{
+  "FDInheritanceReal": true,
+  "actualAuthorityQuery": false,
+  "daemonAndChildrenExitObserved": true,
+  "namespaceShutdownConfirmed": true,
+  "node": "v22.13.0",
+  "nodeExecutableSha256": "af8d5d1e234beb26b3095e6bebf80edc781f79c9435553a383037eccec2716f8",
+  "normalizationIPCAndChildrenReal": true,
+  "packageLockSha256": "8a96586f6981e972f0c619416b016459c1381c7d248c16d3a8bc53baabd90c71",
+  "pm2": "6.0.14",
+  "productionEffects": false,
+  "replacedCjsExecuted": false,
+  "result": "FULL_PM2_CLI_DAEMON_IPC_CHILDREN_PASS",
+  "rootAliasMetadataReal": false,
+  "selectedOrder": [
+    "re7-whatsapp-agent",
+    "re7-whatsapp-web-worker"
+  ],
+  "toolchainFilesCount": 4552,
+  "toolchainIndexSha256": "46180a0c52cbf9768ba750903fad5fa807c2c8b33dd2e20ef97d50ecb6c4fee7"
+}

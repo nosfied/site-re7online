@@ -1,5 +1,8 @@
 # Documentation Index
 
+**B4 16/10 — revisão estática:** [fontes deduplicadas, manifests, instalador futuro, provas e bloqueios](../reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/REPORT.md).122 caminhos/56 conteúdos;18 testes e PM2 completo local. Inputs operacionais não fabricados; autoridade/política não instaladas. PREPARED LOCALLY / INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso.
+
+
 **Revisão B3 16/10:** [consumo PM2, fontes,25 provas e condição B4](../reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md). Incremento local de autoridade; nenhum daemon/serviço iniciado. Fechamento operacional condicionado ao pacote/instalador B4, ainda aberto. INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso.
 
 

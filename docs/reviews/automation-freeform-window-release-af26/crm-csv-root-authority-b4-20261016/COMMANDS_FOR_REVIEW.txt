@@ -1,0 +1,89 @@
+B4 STATIC REVIEW ONLY — CSV SUSPENDED / INTEGRATION BLOCKED / NOT WINDOW READY
+
+1. LOCAL READ ONLY, from repository/worktree root:
+
+python3 -B docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/verify_static.py --root docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/static-kit --review-sha256 0217eb536c65fd0dd49512eaced4ec2bd3b31c60af193653aa928d15519f8f72
+
+Expected: STATIC_BYTES_VERIFIED_OPERATIONAL_CERTIFICATION_DENIED.
+The same command with --require-operational MUST DENY. It does not create data.
+
+2. LOCAL reproducibility, no network/installation or operational entrypoints:
+
+python3 -B docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/reproduce.py
+
+Optional complete PM2 lab: add --toolchain /path/to/disposable/local/toolchain.
+No download/install is implicit. Node and /usr/sbin/visudo must be available.
+The toolchain must contain PM2 6.0.14; compare package-lock.lab.json,
+TOOLCHAIN_FILES.sha256 and PM2_LAB_PROOF.json. No productive PM2_HOME may be used.
+
+Toolchain reconstruction notes (NOT an instruction to install on a VPS):
+package-lock.lab.json is the actual lab lock; its pm2 reference is
+file:../re7-b3-pm2-6.0.14.tgz. In a new temporary parent, obtain that PUBLIC
+npm tarball, verify B3/SOURCE_PROVENANCE.json dist.integrity/SHA256, place
+it under that exact basename, and put the lock into a child toolchain folder.
+Use npm ci --ignore-scripts --no-audit --no-fund with empty, DISTINCT
+user/global npmrc and explicit public registry. Never load .env or production
+profiles. No runtime or node_modules is included in this review delivery.
+
+3. FUTURE owner static installation — BLOCKED / NOT AUTHORIZED / DO NOT RUN:
+
+Dependencies: four code-integration issues resolved/reviewed; actual prior
+root target inventory separately captured and approved; protected canonical
+lock/custody directories present; explicit owner installation authorization.
+No such inventory or authorization is manufactured in this package.
+
+install_static.py CLI interface:
+--owner-install-static PACKAGE REVIEW_SHA256 PRIOR_JSON PRIOR_SHA256
+INSTALL_STATIC_ONLY_NO_EMISSION
+
+PACKAGE is the concrete static-kit; REVIEW_SHA256 is
+0217eb536c65fd0dd49512eaced4ec2bd3b31c60af193653aa928d15519f8f72.
+PRIOR_JSON/PRIOR_SHA256 do NOT exist in the delivery. They are not inferable
+from this code manifest. The owner must approve them from current observations.
+
+To avoid hash-then-execute of a replaceable deploy-owned installer path, the
+future reviewed owner command must read it through one O_NOFOLLOW FD, check
+THESE bytes, then compile THE SAME bytes under the trusted root interpreter.
+The following is a review skeleton, not a ready installation command:
+
+sudo -n /usr/bin/python3 -I -S - INSTALLER PACKAGE PRIOR_JSON PRIOR_SHA256 <<'ROOT_REVIEW_ONLY'
+import hashlib, json, os, stat, sys
+from pathlib import Path
+source, package, prior_path, prior_hash = sys.argv[1:]
+assert os.geteuid() == 0
+fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
+try:
+    s = os.fstat(fd)
+    assert stat.S_ISREG(s.st_mode)
+    with os.fdopen(fd, 'rb', closefd=False) as stream:
+        code = stream.read()
+finally:
+    os.close(fd)
+assert hashlib.sha256(code).hexdigest() == 'a7a46fb4e666bda148defca6a78d6a9470cf370cf4d448b16d712ece9aff6139'
+module = {'__name__': 'reviewed_static_installer', '__file__': source}
+exec(compile(code, source, 'exec'), module)
+result = module['install'](package,
+    '0217eb536c65fd0dd49512eaced4ec2bd3b31c60af193653aa928d15519f8f72',
+    Path(prior_path).read_bytes(), prior_hash, owner_action=True)
+print(json.dumps(result, sort_keys=True))
+ROOT_REVIEW_ONLY
+
+The argument/digest is NOT automatic authority: the supplier is the owner
+reviewing/authorizing this exact root-interpreter command. It is not delegated
+by the proposed sudoers and has no env fallback. The static installer itself
+checks explicit owner/euid0, reviewed package and prior-state bytes, fixed
+targets, root protection and canonical lock before replacing anything.
+
+4. Static install != phase authority != recovery permit != process start.
+
+This installer neither calls root_store.Store.install_owner_once nor
+root_store.Store.issue_owner_once. Those accepted owner-only APIs remain
+separate and require the real phase contract/policy/profiles/manifest first;
+issuance additionally requires fenced phase, fresh classification, exact
+execution and explicit ORIGINAL/CANDIDATE decision. Query never issues/renews.
+There is no new sudo rule for these APIs and no ready emission command.
+
+Partial/timeout: preserve static intent/backups. No replay, automatic rollback
+or start. Future inspection uses install_static.inspect with the same reviewed
+bytes and reports exact target satisfaction; it cannot issue authority or
+repair files. Any new installation/recovery requires its own review/decision.

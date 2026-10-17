@@ -1,5 +1,8 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**B4 16/10 — composição estática / INTEGRATION BLOCKED.** [Entrega, instalador e lacunas](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/REPORT.md):122 caminhos/56 conteúdos deduplicados,18 testes e PM2 completo real em namespace sintético encerrado. Quatro lacunas concretas de imports/ORIGINAL/Node e67 pendências inventariadas; não fabricar perfis,16 bindings, root ou permits. Instalador futuro só estático, ensaiado em destino lab; sem VPS/emissão/geração. REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso. Próximo delta local: resolução autenticada de ops por modo sem dependência candidata em ORIGINAL. Revisão21/10 ou gatilho preservada.
+
+
 **B3 16/10 — consumo PM2 validado localmente, fechamento condicionado a B4.** [Delta/provas](reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b3-20261016/REPORT.md): System conserva barreiras e passa JSON autenticado por FD selado;25 PASS incluindo cadeia Operations→System→parser PM2 e API→worker, sem daemon/processos reais. Alias root/PM2 toolchain e quatro manifests concretos ainda exigem B4; nenhuma instalação/emissão/geração. B1/B2/R3 preservados. INTEGRATION BLOCKED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; CSV suspenso.
 
 

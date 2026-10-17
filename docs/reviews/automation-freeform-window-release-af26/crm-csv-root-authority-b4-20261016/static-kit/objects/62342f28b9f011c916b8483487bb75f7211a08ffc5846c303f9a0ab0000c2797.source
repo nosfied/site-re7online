@@ -1,0 +1,6 @@
+table inet re7_campaign_transition {
+ chain api_input {
+ type filter hook input priority -10; policy accept;
+ tcp dport { 3000, 3001 } counter reject with tcp reset
+ }
+}

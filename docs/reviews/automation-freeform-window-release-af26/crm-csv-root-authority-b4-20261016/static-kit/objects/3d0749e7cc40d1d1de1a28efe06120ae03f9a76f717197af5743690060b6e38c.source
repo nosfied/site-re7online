@@ -1,0 +1,469 @@
+"""Split-role adapter: no sudo execution, unchanged executor exit barriers."""
+import hashlib
+import fcntl
+import json
+import os
+import re
+import secrets
+import sys
+import time
+from contextlib import contextmanager
+from pathlib import Path
+
+import ops
+BOUND_PREPARATION = Path('/opt/re7online/backups/converta-persistent/preparations/incident-csv-operational-review-v3-20261016')
+from baseline_contract import operational, validate_preparation
+
+ACTIONS = {'preflight', 'prepare-containment', 'contain', 'stop-pair',
+           'recover-partial', 'start:re7-whatsapp-agent',
+           'start:re7-whatsapp-web-worker',
+           'unfence', 'verify-unfenced', 'restore-controls'}
+ABSENT = {'preflight', 'prepare-containment', 'verify-unfenced', 'restore-controls'}
+MAX_AGE = 300
+
+
+@contextmanager
+def operation_lock(root):
+    # Shared by switch and every return mode on this host. A stopped process
+    # releases flock, but the history file remains; no stale-lock deletion.
+    path = Path(root).parent / 'window' / 'operator.lock'
+    with path.open('a+') as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def request_path(root, action, attempt=None):
+    ops.require(action in ACTIONS, 'unknown_delegated_action')
+    base = Path(root) / ('owner-request-' + action.replace(':', '-') + '.json')
+    if attempt is None:
+        attempt = latest_attempt(root, action) or 1
+    return base if attempt == 1 else base.with_name(base.stem + f'.renewal-{attempt:04d}.json')
+
+
+def proof_path(root, action, attempt=None):
+    p = request_path(root, action, attempt)
+    return p.with_name(p.name.replace('owner-request-', 'owner-proof-'))
+
+
+def consumed_path(root, action, attempt=None):
+    return proof_path(root, action, attempt).with_suffix('.consumed.json')
+
+
+def latest_attempt(root, action):
+    base = Path(root) / ('owner-request-' + action.replace(':', '-') + '.json')
+    attempts = {1} if base.exists() else set()
+    prefix = base.stem + '.renewal-'
+    for p in base.parent.glob(prefix + '*.json'):
+        suffix = p.name[len(prefix):-5]
+        ops.require(bool(re.fullmatch(r'[0-9]{4}', suffix)), 'invalid_proof_history')
+        attempts.add(int(suffix))
+    if not attempts:
+        return 0
+    ops.require(attempts == set(range(1, max(attempts) + 1)), 'proof_history_gap')
+    return max(attempts)
+
+
+def bindings(root, action, guard):
+    validate_preparation(Path(root).parent, [Path(root).name])
+    root = Path(root)
+    guard = ops.guard_state(guard)
+    result = {'action': action, 'root': str(root.resolve()),
+            'guardGeneration': guard['generation'],
+            'direction': json.loads((root / 'plan.private.json').read_text())['direction'],
+            'configurationHash': hashlib.sha256((root / 'candidate.config.private.json').read_bytes()).hexdigest()}
+    if action == 'start:' + ops.WORKER:
+        binding_file = root.parent / 'window' / 'db-owner-bindings.private.json'
+        result['dbOwnerBindingsHash'] = hashlib.sha256(binding_file.read_bytes()).hexdigest()
+    result['executionIntentSha256'] = __phase_authority__.execution_hash()
+    return result
+
+
+def reconfirm_for_renewal(root, action, driver, prior_binding):
+    """Read-only gate before issuing a new nonce after an expired/failed proof."""
+    root = Path(root)
+    op = ops.Operations(root, driver)
+    op.restore_proof()
+    if action == 'preflight':
+        ops.Controls(root, driver).scheduled().verify('before')
+        ops.require(not (root / 'old-exit-confirmed.json').exists(), 'operation_already_progressed')
+        live = {a['name']: a for a in driver.apps()}
+        ops.require(set(live) == ops.NAMES, 'preflight_process_drift')
+        for n, cfg in op.source.items():
+            op.config(live[n], cfg)
+        return
+    if action in {'prepare-containment', 'contain', 'stop-pair', 'stop-front',
+                  'recover-partial', 'unfence'} or action.startswith('start:'):
+        op.guard()
+    if action in {'contain', 'stop-pair', 'stop-front', 'recover-partial', 'unfence'} or action.startswith('start:'):
+        driver.renewal_containment(op.window)
+    if action.startswith('start:'):
+        name = action.split(':', 1)[1]
+        ops.require(not (root / ('start-intent-' + name + '.json')).exists() and
+                    not (root / ('started-' + name + '.json')).exists(),
+                    'start_already_attempted')
+        op.certificate('frontend-exit-confirmed.json' if name == ops.FRONT else
+                       'old-exit-confirmed.json', name)
+        expected = {ops.API: {ops.FRONT}, ops.WORKER: {ops.FRONT, ops.API},
+                    ops.FRONT: {ops.API, ops.WORKER}}[name].copy()
+        if op.plan.get('frontendAbsentAtRecovery') and name != ops.FRONT:
+            expected.discard(ops.FRONT)
+        live = {a['name']: a for a in driver.apps()}
+        ops.require(set(live) == expected, 'successor_order_or_owner_conflict')
+        if ops.FRONT in expected and not (root / ('started-' + ops.FRONT + '.json')).exists():
+            prior = op.certificate('old-exit-confirmed.json', name)['frontend']
+            ops.require(prior and live[ops.FRONT]['pid'] == prior['pid'] and
+                        ops.same_process(prior['identity'], driver.identity(live[ops.FRONT]['pid'])),
+                        'frontend_identity_changed')
+        for n in expected:
+            op.config(live[n], op.source[n] if n == ops.FRONT else op.target[n])
+            marker = root / ('started-' + n + '.json')
+            if marker.exists():
+                saved = json.loads(marker.read_text())
+                ops.require(saved['pid'] == live[n]['pid'] and
+                            ops.same_process(saved['identity'], driver.identity(live[n]['pid'])),
+                            'successor_identity_changed')
+        ops.require(driver.path_exists(op.target[name]['script']), 'successor_artifact_missing')
+        driver.validate_bindings(op.window, {name: op.target[name]})
+        op.db_gate_for_start(name, live, binding_proof=prior_binding)
+    elif action in {'stop-pair', 'stop-front', 'recover-partial'}:
+        prefix = 'front' if action == 'stop-front' else 'pair'
+        ops.require(not (root / (prefix + '-stop-start.json')).exists() and
+                    not (root / ('frontend-exit-confirmed.json' if action == 'stop-front'
+                                else 'old-exit-confirmed.json')).exists(),
+                    'stop_already_attempted')
+        if action == 'stop-front':
+            op.certificate('old-exit-confirmed.json', ops.FRONT)
+        live = {a['name']: a for a in driver.apps()}
+        ops.require(set(live) <= ops.NAMES, 'unknown_pm2_process')
+        if action == 'recover-partial':
+            ops.require(op.plan.get('recovery'), 'recovery_not_bound')
+            prior = json.loads((root.parent / 'switch' / 'stop-start.json').read_text())
+            op.old_absent(prior)
+            if op.plan.get('frontendAbsentAtRecovery'):
+                prior_front = json.loads((root.parent / 'switch' / 'front-stop-start.json').read_text())
+                op.old_absent(prior_front)
+        else:
+            ops.require(set(live) == ops.NAMES, 'unexpected_partial_composition')
+        for n, app in live.items():
+            cfg = op.target[n] if action == 'stop-front' and n != ops.FRONT else op.source[n]
+            op.config(app, cfg)
+    elif action == 'unfence':
+        ops.require(not (root / 'owner-unfence-authorized.json').exists(), 'unfence_already_attempted')
+        op.certificate('old-exit-confirmed.json', ops.API)
+        live = {a['name']: a for a in driver.apps()}
+        ops.require(set(live) == ops.NAMES, 'incomplete_process_set')
+        for n, cfg in op.target.items():
+            op.config(live[n], cfg, fresh=True)
+        driver.validate_bindings(op.window, op.target)
+        if op.source[ops.FRONT] != op.target[ops.FRONT]:
+            op.certificate('frontend-exit-confirmed.json', ops.FRONT)
+        elif not (root / ('started-' + ops.FRONT + '.json')).exists():
+            prior = op.certificate('old-exit-confirmed.json', ops.FRONT)['frontend']
+            ops.require(prior and live[ops.FRONT]['pid'] == prior['pid'] and
+                        ops.same_process(prior['identity'], driver.identity(live[ops.FRONT]['pid'])),
+                        'frontend_identity_changed')
+    elif action == 'prepare-containment':
+        ops.require(not (root / 'old-exit-confirmed.json').exists(), 'operation_already_progressed')
+        ops.require(driver.run(['crontab', '-l']).encode() ==
+                    (op.window / 'deploy.crontab.before').read_bytes(), 'prepare_already_applied')
+        ops.require(Path('/etc/cron.d/re7-converta-backup').read_bytes() ==
+                    (op.window / 're7-converta-backup.before').read_bytes(), 'system_cron_drift')
+        initial = operational(json.loads((op.window / 'initial.private.json').read_text()))
+        ops.require(driver.run(['systemctl', 'show', 'pm2-deploy.service',
+                                '--property=ActiveState,UnitFileState']) == initial['supervision'],
+                    'supervision_drift')
+    elif action == 'contain':
+        ops.require(not (root / 'old-exit-confirmed.json').exists(), 'operation_already_progressed')
+        ops.require(driver.run(['crontab', '-l']).encode() ==
+                    (op.window / 'deploy.crontab.window').read_bytes(), 'window_cron_drift')
+    elif action == 'verify-unfenced':
+        ops.require((root / 'owner-unfence-authorized.json').exists() and
+                    not (root / 'after-unfence.json').exists(), 'unfence_stage_drift')
+        live = {a['name']: a for a in driver.apps()}
+        ops.require(set(live) == ops.NAMES, 'incomplete_process_set')
+        for n, cfg in op.target.items():
+            op.config(live[n], cfg, fresh=True)
+    elif action == 'restore-controls':
+        ops.require((root / 'after-unfence.json').exists(), 'technical_validation_missing')
+        ops.require(driver.run(['crontab', '-l']).encode() ==
+                    (op.window / 'deploy.crontab.window').read_bytes(), 'controls_already_restored')
+        ops.require(Path('/etc/cron.d/re7-converta-backup').read_bytes() ==
+                    (op.window / 're7-converta-backup.before').read_bytes(), 'system_cron_restore_failed')
+        initial = operational(json.loads((op.window / 'initial.private.json').read_text()))
+        ops.require(driver.run(['systemctl', 'show', 'pm2-deploy.service',
+                                '--property=ActiveState,UnitFileState']) == initial['supervision'],
+                    'supervision_restore_failed')
+
+
+def request(root, action, guard=None, now=None, driver=None):
+    root = Path(root)
+    ops.Operations(root, driver).restore_proof()
+    now = time.time() if now is None else now
+    guard = ops.System().guard() if guard is None else guard
+    bound = bindings(root, action, guard)
+    previous = latest_attempt(root, action)
+    if previous:
+        prior = json.loads(request_path(root, action, previous).read_text())
+        ops.require(all(prior.get(k) == v for k, v in bound.items()), 'renewal_binding_drift')
+        proof = proof_path(root, action, previous)
+        consumed = consumed_path(root, action, previous)
+        ops.require(not (proof.exists() and consumed.exists()), 'invalid_proof_history')
+        prior_binding = {'request': prior}
+        if proof.exists():
+            prior_binding = json.loads(proof.read_text())
+            ops.require(prior_binding.get('request') == prior, 'prior_proof_request_mismatch')
+            observed = prior_binding['observedAt']
+            ops.require(now - observed > MAX_AGE, 'prior_proof_still_valid')
+        elif consumed.exists():
+            prior_binding = json.loads(consumed.read_text())
+            ops.require(prior_binding.get('request') == prior, 'prior_proof_request_mismatch')
+            ops.require(action.startswith('start:'), 'completed_action_cannot_renew')
+        else:
+            ops.require(now - prior['requestedAt'] > MAX_AGE, 'prior_request_still_valid')
+        reconfirm_for_renewal(root, action, driver or DelegatedSystem(root, action), prior_binding)
+    attempt = previous + 1
+    p = request_path(root, action, attempt)
+    value = dict(bound, nonce=secrets.token_hex(24), requestedAt=now, attempt=attempt)
+    with p.open('x') as f:
+        json.dump(value, f)
+    return value
+
+
+def record(root, action, nft, nonce, now=None, guard=None):
+    now = time.time() if now is None else now
+    attempt = latest_attempt(root, action)
+    ops.require(attempt > 0, 'owner_request_missing')
+    r = json.loads(request_path(root, action, attempt).read_text())
+    ops.require(r['attempt'] == attempt and r['nonce'] == nonce, 'owner_request_replay_or_wrong_nonce')
+    current = bindings(root, action, ops.System().guard() if guard is None else guard)
+    ops.require(r.get('root') == current['root'] and r.get('action') == action,
+                'owner_request_binding_drift')
+    ops.require(all(r.get(k) == v for k, v in current.items()),
+                'owner_request_generation_or_configuration_drift')
+    ops.require(0 <= now - r['requestedAt'] <= MAX_AGE, 'owner_request_expired')
+    validate_nft(action, nft)
+    value = {'request': r, 'observedAt': now, 'nft': nft}
+    p = proof_path(root, action, attempt)
+    with p.open('x') as f:
+        json.dump(value, f)
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def validate_nft(action, nft):
+    if action in ABSENT:
+        ops.require('nftables' in nft, 'invalid_nft_proof')
+        ops.require(not any(x.get('table', {}).get('name') ==
+                            're7_campaign_transition' for x in nft['nftables']),
+                    'transition_fence_still_present')
+    else:
+        ops.check_fence(nft)
+
+
+class DelegatedSystem(ops.System):
+    def __init__(self, root, action, clock=time.time):
+        self.root, self.action, self.clock = Path(root), action, clock
+
+    def run(self, args, text=None):
+        ops.require(args[0] != 'sudo', 'executor_must_not_use_sudo')
+        return super().run(args, text)
+
+    def renewal_containment(self, window):
+        # The owner supplies a new privileged nft snapshot at record().
+        # These independent unprivileged checks precede the new nonce.
+        ops.require('UnitFileState=disabled' in self.run([
+            'systemctl', 'show', 'pm2-deploy.service', '--property=UnitFileState']),
+            'supervision_not_disabled')
+        ops.require(Path('/etc/cron.d/re7-converta-backup').read_bytes() ==
+                    (window / 're7-converta-backup.window').read_bytes(), 'system_cron_drift')
+        ops.require(self.run(['crontab', '-l']).encode() ==
+                    (window / 'deploy.crontab.window').read_bytes(), 'deploy_cron_drift')
+        import socket
+        for port in [3000, 3001]:
+            try:
+                with socket.create_connection(('127.0.0.1', port), timeout=2):
+                    raise RuntimeError('fence_absent')
+            except (ConnectionRefusedError, TimeoutError):
+                pass
+
+    def proof(self):
+        self.attempt = latest_attempt(self.root, self.action)
+        ops.require(self.attempt > 0, 'owner_request_missing')
+        r = json.loads(request_path(self.root, self.action, self.attempt).read_text())
+        p = json.loads(proof_path(self.root, self.action, self.attempt).read_text())
+        ops.require(r['attempt'] == self.attempt, 'owner_proof_replay')
+        current = bindings(self.root, self.action, self.guard())
+        ops.require(r.get('root') == current['root'] and r.get('action') == self.action,
+                    'owner_request_binding_drift')
+        ops.require(all(r.get(k) == v for k, v in current.items()),
+                    'owner_proof_generation_or_configuration_drift')
+        ops.require(p['request'] == r, 'owner_proof_request_mismatch')
+        age = self.clock() - p['observedAt']
+        ops.require(0 <= age <= MAX_AGE, 'owner_proof_expired')
+        validate_nft(self.action, p['nft'])
+        return p
+
+    def containment(self, window):
+        ops.require(self.action not in ABSENT, 'wrong_proof_for_containment')
+        self.proof()
+        ops.require('UnitFileState=disabled' in self.run([
+            'systemctl', 'show', 'pm2-deploy.service', '--property=UnitFileState']),
+            'supervision_not_disabled')
+        ops.require(Path('/etc/cron.d/re7-converta-backup').read_bytes() ==
+                    (window / 're7-converta-backup.window').read_bytes(), 'system_cron_drift')
+        ops.require(self.run(['crontab', '-l']).encode() ==
+                    (window / 'deploy.crontab.window').read_bytes(), 'deploy_cron_drift')
+        import socket
+        for port in [3000, 3001]:
+            try:
+                with socket.create_connection(('127.0.0.1', port), timeout=2):
+                    raise RuntimeError('fence_absent')
+            except (ConnectionRefusedError, TimeoutError):
+                pass
+
+
+class DelegatedControls(ops.Controls):
+    def prepare(self):
+        self.scheduled().verify('before')
+        ops.Operations(self.root, self.d).restore_proof()
+        self.d.proof()
+        ops.Operations(self.root, self.d).guard()
+        ops.require('ActiveState=inactive' in self.initial['supervision'],
+                    'unexpected_initial_supervision')
+        ops.require(self.d.run(['systemctl', 'show', 'pm2-deploy.service',
+                               '--property=ActiveState,UnitFileState']) ==
+                    self.initial['supervision'], 'supervision_drift')
+        ops.require(Path('/etc/cron.d/re7-converta-backup').read_bytes() ==
+                    (self.window / 're7-converta-backup.before').read_bytes(), 'system_cron_drift')
+        ops.require(self.d.run(['crontab', '-l']).encode() ==
+                    (self.window / 'deploy.crontab.before').read_bytes(), 'deploy_cron_drift')
+        self.d.run(['crontab', '-'], (self.window / 'deploy.crontab.window').read_text())
+        ops.require(self.d.run(['crontab', '-l']).encode() ==
+                    (self.window / 'deploy.crontab.window').read_bytes(), 'deploy_cron_install_failed')
+
+    def enter(self):
+        ops.Operations(self.root, self.d).restore_proof()
+        ops.Operations(self.root, self.d).guard()
+        self.d.containment(self.window)
+
+    def unfence(self):
+        ops.Operations(self.root, self.d).restore_proof()
+        self.d.containment(self.window)
+        operation = ops.Operations(self.root, self.d)
+        operation.guard()
+        operation.certificate('old-exit-confirmed.json', ops.API)
+        current = {a['name']: a for a in self.d.apps()}
+        ops.require(set(current) == ops.NAMES, 'incomplete_process_set')
+        for name, cfg in operation.target.items():
+            operation.config(current[name], cfg, fresh=True)
+        self.d.validate_bindings(self.window, operation.target)
+        if operation.source[ops.FRONT] != operation.target[ops.FRONT]:
+            operation.certificate('frontend-exit-confirmed.json', ops.FRONT)
+        elif not (self.root / ('started-' + ops.FRONT + '.json')).exists():
+            prior = operation.certificate('old-exit-confirmed.json', ops.FRONT)['frontend']
+            ops.require(prior and current[ops.FRONT]['pid'] == prior['pid'] and
+                        ops.same_process(prior['identity'], self.d.identity(current[ops.FRONT]['pid'])),
+                        'frontend_identity_changed')
+        self.d.run([ops.PM, 'save'])
+        self.d.run(['install', '-m', '600', '/home/deploy/.pm2/dump.pm2',
+                    '/home/deploy/.pm2/dump.pm2.bak'])
+        self.d.run(['cmp', '/home/deploy/.pm2/dump.pm2', '/home/deploy/.pm2/dump.pm2.bak'])
+        operation.write_once('owner-unfence-authorized.json', {
+            'direction': operation.plan['direction'], 'configHash': ops.digest(operation.target),
+            'generation': operation.guard()['generation']})
+
+    def finish(self):
+        self.scheduled().known()
+        ops.Operations(self.root, self.d).restore_proof()
+        self.d.proof()
+        validation = json.loads((self.root / 'after-unfence.json').read_text())
+        ops.require(validation['workerHealth'] and all(x['ok'] and x['db'] == 'ok'
+                    for x in validation['health']), 'technical_validation_failed')
+        cfg = json.loads((self.root / 'candidate.config.private.json').read_text())['apps']
+        ops.require(validation['guard']['build'] == cfg[0]['env']['CAMPAIGN_BUILD_ID'],
+                    'validation_build_drift')
+        current = {a['name']: a for a in self.d.apps()}
+        ops.require(set(current) == ops.NAMES, 'incomplete_process_set')
+        for c in cfg:
+            a = current[c['name']]
+            self.d.check_config(a, c)
+            ops.require(a['pm2_env']['status'] == 'online' and
+                        a['pm2_env']['watch'] is False and a['pm2_env']['restart_time'] == 0,
+                        'unstable_process_set')
+        g = ops.guard_state(self.d.guard())
+        ops.require(g['open'] == self.initial['guard']['open'] and not g['tasks'] and
+                    not g.get('ledgerFault'), 'guard_not_restored')
+        ops.require(Path('/etc/cron.d/re7-converta-backup').read_bytes() ==
+                    (self.window / 're7-converta-backup.before').read_bytes(), 'system_cron_restore_failed')
+        ops.require(self.d.run(['systemctl', 'show', 'pm2-deploy.service',
+                               '--property=ActiveState,UnitFileState']) ==
+                    self.initial['supervision'], 'supervision_restore_failed')
+        ops.require(self.d.run(['crontab', '-l']).encode() ==
+                    (self.window / 'deploy.crontab.window').read_bytes(), 'window_cron_drift')
+        self.scheduled().restore_deploy()
+
+
+def main():
+    __phase_authority__.revalidate()
+    command, action, root = sys.argv[1:4]
+    root = Path(root).resolve()
+    ops.require(root.parent == BOUND_PREPARATION,
+                'not_bound_remote_preparation')
+    ops.require(root.name in {'switch', 'return', 'return-partial', 'return-before-commit'},
+                'unknown_direction')
+    for line in (root / 'scripts.sha256').read_text().splitlines():
+        h, name = line.split('  ', 1)
+        ops.require(Path(name).name == name and hashlib.sha256((root / name).read_bytes()).hexdigest() == h,
+                    'bound_script_hash_mismatch')
+    if command == 'request':
+        print(json.dumps(request(root, action)))
+        return
+    if command == 'record':
+        ops.require(len(sys.argv) == 5, 'owner_nonce_required')
+        print(record(root, action, json.load(sys.stdin), sys.argv[4]))
+        return
+    ops.require(command == 'execute', 'unknown_command')
+    driver = DelegatedSystem(root, action)
+    driver.proof()
+    if action != 'preflight':
+        gates = json.loads((root.parent / 'window/execution-gates.private.json').read_text())
+        ops.require(all(gates.get(k) is True for k in ['ownerAuthorized', 'preflightReviewed',
+                    'artifactsVerified', 'restoreVerified', 'discrepanciesResolved']), 'execution_gates_incomplete')
+    try:
+        op, control = ops.Operations(root, driver), DelegatedControls(root, driver)
+        op.restore_proof()
+        if action == 'preflight':
+            control.scheduled().verify('before')
+        elif action == 'prepare-containment':
+            control.prepare()
+        elif action == 'contain':
+            control.enter()
+        elif action in {'stop-pair', 'recover-partial'}:
+            op.stop(recovery=action == 'recover-partial')
+        elif action.startswith('start:'):
+            op.start(action.split(':', 1)[1])
+        elif action == 'unfence':
+            control.unfence()
+        elif action == 'verify-unfenced':
+            permit = json.loads((root / 'owner-unfence-authorized.json').read_text())
+            ops.require(permit['configHash'] == ops.digest(op.target) and
+                        permit['generation'] == op.guard()['generation'] and
+                        permit['direction'] == op.plan['direction'], 'unfence_permit_drift')
+        elif action == 'restore-controls':
+            control.finish()
+        else:
+            raise RuntimeError('unknown_action')
+    finally:
+        p = proof_path(root, action, driver.attempt)
+        p.rename(consumed_path(root, action, driver.attempt))
+
+
+if __name__ == '__main__':
+    os.umask(0o077)
+    root = Path(sys.argv[3]).resolve()
+    ops.require(root.parent == BOUND_PREPARATION,
+                'not_bound_remote_preparation')
+    with operation_lock(root):
+        main()

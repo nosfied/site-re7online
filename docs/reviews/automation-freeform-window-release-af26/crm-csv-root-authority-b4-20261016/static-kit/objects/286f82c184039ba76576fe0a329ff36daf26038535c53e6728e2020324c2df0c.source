@@ -1,0 +1,95 @@
+"""Static, complete PM2 configuration correspondence; never execute a CJS input.
+
+Every ecosystem is a deterministic serialization of its JSON source. Comparing
+the complete bytes covers all fields (including env and supervision), rejects
+extra executable code and never includes private values in diagnostics.
+"""
+import json
+import os
+from pathlib import Path
+import sys
+
+MODES = ('switch', 'return', 'return-partial', 'return-before-commit')
+NAMES = {'re7-whatsapp-agent', 're7-whatsapp-web-worker', 're7-admin-front'}
+
+
+def require(ok, reason):
+    if not ok:
+        raise RuntimeError(reason)
+
+
+def source_bytes(raw):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            require(key not in result, 'ecosystem_duplicate_json_key')
+            result[key] = value
+        return result
+    try:
+        value = json.loads(raw.decode('utf-8') if isinstance(raw, bytes) else raw, object_pairs_hook=unique,
+                           parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
+    except (ValueError, UnicodeError):
+        raise RuntimeError('ecosystem_source_invalid_json') from None
+    require(type(value) is dict and set(value) == {'apps'} and
+            type(value['apps']) is list and len(value['apps']) == 3,
+            'ecosystem_source_invalid_shape')
+    require(all(type(a) is dict for a in value['apps']), 'ecosystem_app_invalid')
+    require({a.get('name') for a in value['apps']} == NAMES, 'ecosystem_app_set_invalid')
+    for app in value['apps']:
+        require(all(type(app.get(k)) is str and app[k] for k in ('cwd', 'script')) and
+                type(app.get('env')) is dict and type(app.get('watch')) is bool and
+                app['watch'] is False, 'ecosystem_app_contract_invalid')
+    return value
+
+
+def source(path):
+    path = Path(path)
+    require(path.is_file() and not path.is_symlink(), 'ecosystem_source_missing_or_symlink')
+    return source_bytes(path.read_bytes())
+
+
+def rendered(value):
+    return ('"use strict";\nmodule.exports = ' +
+            json.dumps(value, ensure_ascii=True, sort_keys=True, allow_nan=False,
+                       separators=(',', ':')) + ';\n').encode()
+
+
+def generate_mode(root):
+    root = Path(root)
+    for variant in ('candidate', 'return'):
+        data = rendered(source(root / (variant + '.config.private.json')))
+        path = root / (variant + '.ecosystem.config.cjs')
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'wb') as out:
+            out.write(data)
+            out.flush()
+            os.fsync(out.fileno())
+    validate_mode(root)
+
+
+def validate_mode(root):
+    root = Path(root)
+    for variant in ('candidate', 'return'):
+        expected = rendered(source(root / (variant + '.config.private.json')))
+        path = root / (variant + '.ecosystem.config.cjs')
+        require(path.is_file() and not path.is_symlink(),
+                'ecosystem_missing_or_symlink:' + root.name + '/' + variant)
+        require(path.read_bytes() == expected,
+                'ecosystem_json_drift:' + root.name + '/' + variant)
+
+
+def validate_all(root, modes=MODES):
+    for mode in modes:
+        require(mode in MODES, 'ecosystem_mode_denied')
+        validate_mode(Path(root) / mode)
+
+
+if __name__ == '__main__':
+    require(len(sys.argv) == 3 and sys.argv[1] in {'generate', 'validate'},
+            'ecosystem_exact_arguments_required')
+    if sys.argv[1] == 'generate':
+        for mode in MODES:
+            generate_mode(Path(sys.argv[2]) / mode)
+    else:
+        validate_all(sys.argv[2])
+    print('ECOSYSTEM_JSON_CONTRACT_PASS')

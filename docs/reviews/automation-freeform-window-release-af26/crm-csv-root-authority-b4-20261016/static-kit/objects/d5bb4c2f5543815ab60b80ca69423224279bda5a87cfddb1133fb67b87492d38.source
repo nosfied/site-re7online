@@ -1,0 +1,3 @@
+from pathlib import Path
+from ops import main
+main('unfence', Path(__file__).resolve().parent)

@@ -1,0 +1,23 @@
+test_absent_dependency_denies_before_mutation (__main__.B4Tests.test_absent_dependency_denies_before_mutation) ... ok
+test_canonical_checker_missing_contract_denies_before_effect (__main__.B4Tests.test_canonical_checker_missing_contract_denies_before_effect) ... ok
+test_code_only_never_claims_operational_certification (__main__.B4Tests.test_code_only_never_claims_operational_certification) ... ok
+test_dag_cycle_and_unknown_dependency_denied (__main__.B4Tests.test_dag_cycle_and_unknown_dependency_denied) ... ok
+test_dedup_and_all_four_modes (__main__.B4Tests.test_dedup_and_all_four_modes) ... ok
+test_exact_accepted_protected_bytes (__main__.B4Tests.test_exact_accepted_protected_bytes) ... ok
+test_manifest_review_hash_tamper_denied (__main__.B4Tests.test_manifest_review_hash_tamper_denied) ... ok
+test_partial_retains_intent_without_receipt_no_retry (__main__.B4Tests.test_partial_retains_intent_without_receipt_no_retry) ... ok
+test_payload_tamper_denies_before_mutation (__main__.B4Tests.test_payload_tamper_denies_before_mutation) ... ok
+test_prior_drift_denied_before_mutation (__main__.B4Tests.test_prior_drift_denied_before_mutation) ... ok
+test_query_only_sudoers_no_owner_emission_privilege (__main__.B4Tests.test_query_only_sudoers_no_owner_emission_privilege) ... ok
+test_readonly_verifier_denies_operational_and_checks_integrity (__main__.B4Tests.test_readonly_verifier_denies_operational_and_checks_integrity) ... ok
+test_real_lab_install_fixed_targets_alias_receipt_no_authority (__main__.B4Tests.test_real_lab_install_fixed_targets_alias_receipt_no_authority) ... ok
+test_real_node_loader_rejects_existing_builtin_gap (__main__.B4Tests.test_real_node_loader_rejects_existing_builtin_gap) ... ok
+test_repeat_static_install_denied (__main__.B4Tests.test_repeat_static_install_denied) ... ok
+test_unresolved_consumers_are_not_hidden (__main__.B4Tests.test_unresolved_consumers_are_not_hidden) ... ok
+test_unsafe_lab_parent_denies_no_auto_repair (__main__.B4Tests.test_unsafe_lab_parent_denies_no_auto_repair) ... ok
+test_wrong_alias_denies_before_mutation (__main__.B4Tests.test_wrong_alias_denies_before_mutation) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 2.249s
+
+OK

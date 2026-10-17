@@ -1,0 +1,33 @@
+{
+  "allocatedUniqueBytes": 33935360,
+  "fileIndexSha256": "46180a0c52cbf9768ba750903fad5fa807c2c8b33dd2e20ef97d50ecb6c4fee7",
+  "files": 4552,
+  "kind": "LAB_TOOLCHAIN_ONLY_NOT_PRODUCTION_SELECTION",
+  "lockSha256": "8a96586f6981e972f0c619416b016459c1381c7d248c16d3a8bc53baabd90c71",
+  "logicalBytes": 20700935,
+  "node": "v22.13.0",
+  "node20Certified": false,
+  "npmInstallScriptsExecuted": false,
+  "pm2": "6.0.14",
+  "rootOwnedToolchainCertified": false,
+  "symlinks": {
+    "node_modules/.bin/blessed": "../@pm2/blessed/bin/tput.js",
+    "node_modules/.bin/escodegen": "../escodegen/bin/escodegen.js",
+    "node_modules/.bin/esgenerate": "../escodegen/bin/esgenerate.js",
+    "node_modules/.bin/esparse": "../esprima/bin/esparse.js",
+    "node_modules/.bin/esvalidate": "../esprima/bin/esvalidate.js",
+    "node_modules/.bin/js-yaml": "../js-yaml/bin/js-yaml.js",
+    "node_modules/.bin/mkdirp": "../mkdirp/bin/cmd.js",
+    "node_modules/.bin/needle": "../needle/bin/needle",
+    "node_modules/.bin/pm2": "../pm2/bin/pm2",
+    "node_modules/.bin/pm2-dev": "../pm2/bin/pm2-dev",
+    "node_modules/.bin/pm2-docker": "../pm2/bin/pm2-docker",
+    "node_modules/.bin/pm2-runtime": "../pm2/bin/pm2-runtime",
+    "node_modules/.bin/resolve": "../resolve/bin/resolve",
+    "node_modules/.bin/semver": "../semver/bin/semver.js",
+    "node_modules/.bin/systeminformation": "../systeminformation/lib/cli.js",
+    "node_modules/@pm2/agent/node_modules/.bin/semver": "../semver/bin/semver.js",
+    "node_modules/@pm2/io/node_modules/.bin/semver": "../semver/bin/semver.js"
+  },
+  "tarballReference": "B3/SOURCE_PROVENANCE.json npm dist.integrity"
+}

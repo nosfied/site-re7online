@@ -1,0 +1,35 @@
+from pathlib import Path
+import json
+assert str(Path(__file__).resolve()).startswith('/opt/re7online/backups/converta-persistent/preparations/incident-csv-operational-review-v3-20261016/')
+g=json.loads((Path(__file__).resolve().parent.parent/'window/execution-gates.private.json').read_text())
+assert g['preflightReviewed']
+import json,subprocess,hashlib,datetime,os,re
+from pathlib import Path
+P=Path
+p=P('/home/deploy/.pm2/pm2.pid');assert p.exists() and P('/proc',p.read_text().strip()).exists()
+a=json.loads(subprocess.check_output(['/home/deploy/.npm-global/bin/pm2','jlist'],text=True))
+processes=[]
+for app in a:
+ e=app['pm2_env'];pid=app['pid'];cwd=P(os.readlink(f'/proc/{pid}/cwd'))
+ env=dict(x.split('=',1) for x in P(f'/proc/{pid}/environ').read_bytes().decode().split('\0') if '=' in x)
+ files={}
+ for folder in ['dist','.next/server','.next/static']:
+  for f in sorted((cwd/folder).rglob('*')):
+   if f.is_file():files[str(f.relative_to(cwd))]=hashlib.sha256(f.read_bytes()).hexdigest()
+ schema=cwd/'node_modules/.prisma/client/schema.prisma'
+ processes.append({'name':app['name'],'pid':pid,'cwd':str(cwd),'script':e.get('pm_exec_path'),'online':e.get('status'),'watch':e.get('watch'),'restarts':e.get('restart_time'),'node':subprocess.check_output([os.readlink(f'/proc/{pid}/exe'),'--version'],text=True).strip(),'schedulerDisabled':env.get('CAMPAIGN_SCHEDULE_PROCESSOR_DISABLED'),'artifactFiles':files,'schemaSha256':hashlib.sha256(schema.read_bytes()).hexdigest() if schema.exists() else None,'buildId':(cwd/'.next/BUILD_ID').read_text().strip() if (cwd/'.next/BUILD_ID').exists() else None})
+sql='''SELECT json_build_object('jobs',(SELECT coalesce(json_agg(x),'[]') FROM (SELECT status,count(*) FROM "CampaignExecutionJob" GROUP BY status) x),'groups',(SELECT count(*) FROM "CampaignExecutionBatch"),'leases',(SELECT count(*) FROM "TenantCampaignExecutionLease"),'campaignSending',(SELECT count(*) FROM "Campaign" WHERE status='sending'),'scheduled',(SELECT json_build_object('overdue',count(*) FILTER(WHERE "scheduledAt"<=now()),'future',count(*) FILTER(WHERE "scheduledAt">now())) FROM "Campaign" WHERE status='scheduled'),'automationOptInTrue',(SELECT count(*) FROM "TenantOperationalConfig" WHERE config->'allowAutomationConversationsInInbox'='true'::jsonb),'migrations',(SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL),'sessions',(SELECT json_agg(x) FROM (SELECT status,count(*) FROM "ChannelAccount" WHERE provider='web_session' GROUP BY status) x),'authRecords',(SELECT count(*) FROM "ChannelAccountSecret" WHERE "secretKind"='baileysAuthState.v1'),'accounts',(SELECT json_agg(id) FROM "ChannelAccount" WHERE provider='web_session'),'locks',(SELECT json_agg(x) FROM (SELECT l.pid,l.classid::text,l.objid::text,l.granted,a.client_port FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid WHERE l.locktype='advisory' AND a.datname=current_database()) x))'''
+r=subprocess.run(['docker','exec','-i','wa-agent-postgres','psql','-X','-U','wa_agent','-d','whatsapp_agent','-Atq','-v','ON_ERROR_STOP=1'],input="BEGIN READ ONLY; SET LOCAL statement_timeout='10s'; "+sql+'; ROLLBACK;',text=True,capture_output=True);assert r.returncode==0,r.stderr
+q=json.loads(r.stdout);accounts=q.pop('accounts') or [];locks=q.pop('locks') or [];keys={int.from_bytes(hashlib.sha256(('web-session-account:'+i).encode()).digest()[:8],'big') for i in accounts}
+sockets=subprocess.check_output(['ss','-ntpH'],text=True);owners=[]
+for l in locks:
+ if (int(l['classid'])<<32)+int(l['objid']) not in keys:continue
+ port=str(l['client_port']);lines=[s for s in sockets.splitlines() if re.search(r':'+port+r'\s',s)]
+ owners.append({'dbPid':l['pid'],'granted':l['granted'],'localPids':sorted(set(int(x) for line in lines for x in re.findall(r'pid=(\d+)',line)))})
+import ops
+g=ops.guard_state(json.loads(P('/var/lib/re7/campaign-operations/state.json').read_text()));guard={k:g.get(k) for k in ['open','generation','ledgerFault']};guard['tasks']=len(g['tasks'])
+saved={}
+for n in ['dump.pm2','dump.pm2.bak']:
+ f=P('/home/deploy/.pm2')/n;saved[n]={'sha256':hashlib.sha256(f.read_bytes()).hexdigest(),'apps':[{'name':x.get('name'),'cwd':x.get('pm_cwd'),'script':x.get('pm_exec_path'),'watch':x.get('watch')} for x in json.loads(f.read_text())]}
+cron=subprocess.check_output(['crontab','-l'],text=True);v=os.statvfs('/opt/re7online/backups/converta-persistent')
+print(json.dumps({'utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'processes':processes,'database':q,'sessionOwners':owners,'guard':guard,'saved':saved,'cronSha256':hashlib.sha256(cron.encode()).hexdigest(),'cronDeployLines':sum('deploy' in l.lower() and not l.lstrip().startswith('#') for l in cron.splitlines()),'boot':subprocess.check_output(['systemctl','show','pm2-deploy.service','--property=ActiveState,UnitFileState'],text=True),'backupFreeBytes':v.f_bavail*v.f_frsize},indent=2))

@@ -1,0 +1,86 @@
+{
+  "closureBlocks": [
+    {
+      "consumer": "recovery_bridge.Bridge.verify_recovery_exit",
+      "reason": "implicit import ops has no mode-specific authenticated map; must not map globally to switch for ORIGINAL"
+    },
+    {
+      "consumer": "sequencer.Bridge.app_matches",
+      "reason": "accepted transform still requests self.switch/ops.py; ORIGINAL closure cannot silently include candidate code"
+    },
+    {
+      "consumer": "check_current.check_current",
+      "reason": "implicit ops and inline node -e require of switch/preparation-bindings.cjs not routed through authenticated child bootstrap"
+    },
+    {
+      "consumer": "node_bootstrap.checkedRequire",
+      "reason": "node:assert/strict is real Node builtin but absent from accepted allowedBuiltins; waiting-work consumers DENY"
+    }
+  ],
+  "cycleMeaning": "call/import graph only; not a new canonical hash-cycle rejection; no phase manifest was emitted",
+  "entries": [
+    {
+      "bytes": "accepted B1 bootstrap, authority, diagnostic, original verified_loader; root file protections NOT installed",
+      "caller": "bootstrap/main -> Context -> Loader",
+      "proof": "accepted B1/B2 reused; concrete outputs hashed"
+    },
+    {
+      "bytes": "B2 transform on every concrete delegated.py; B1 child transport",
+      "caller": "Bridge.protocol -> delegated request/record/execute",
+      "proof": "B2 accepted real child-chain proof reused; bindings/profiles absent in this composition"
+    },
+    {
+      "bytes": "B1 launchers + B2 execution-check transformation + canonical baseline/parser for each mode",
+      "caller": "Bridge.node -> Node bootstrap -> Python bootstrap -> baseline",
+      "proof": "B2 accepted chain reused; assert/strict and ops closure blocks enumerated"
+    },
+    {
+      "bytes": "R3/B2 then B3 transforms, per-mode canonical parser, JSON/CJS absent",
+      "caller": "Operations.start -> System.start -> pm2_input -> PM2",
+      "proof": "B3 Context/System proof reused; complete actual CLI/toolchain/daemon/children newly proved with sealed_fd, no real root authority"
+    },
+    {
+      "bytes": "new B4 installer; fixed targets and package/prior pins",
+      "caller": "owner static installer",
+      "proof": "actual lab filesystem/visudo; root UID/chains simulated; no owner emission"
+    },
+    {
+      "bytes": "accepted root_extension.helper/sudoers only",
+      "caller": "root helper query -> Store",
+      "proof": "rendered/hashed; no query/helper execution or new sudo action"
+    }
+  ],
+  "fourModes": [
+    "switch",
+    "return",
+    "return-partial",
+    "return-before-commit"
+  ],
+  "hashSealOrder": [
+    "static leaf objects + protected libraries",
+    "four mode code/data (data absent)",
+    "original-only immutable references/review",
+    "recovery contract (no self pin)",
+    "policy with current identities (absent)",
+    "phase code manifest DAG + metadata (absent)",
+    "owner-reviewed anchor (absent)",
+    "owner static install once",
+    "fresh classification + separate owner recovery permit once (when applicable)"
+  ],
+  "lateImportCallCycles": [
+    "dependency_cycle:return-before-commit/contain.py -> return-before-commit/ops.py -> window/csv_start_gate.py -> window/recovery_start.py -> window/recovery.py -> window/recovery_bridge.py -> window/csv_cli.py -> window/recovery.py"
+  ],
+  "missingInputsManifest": "static-kit/MISSING_INPUTS.json",
+  "protected": [
+    "authority.py",
+    "child_transport.py",
+    "incident-6683-window-control.py",
+    "privileged_output.py",
+    "re7-incident-6683-window",
+    "recovery-launch.py",
+    "recovery-node-launch.cjs",
+    "root_store.py",
+    "verified_loader.py"
+  ],
+  "status": "PREPARED LOCALLY / INTEGRATION BLOCKED / NOT DEPLOYED / NOT WINDOW READY"
+}
