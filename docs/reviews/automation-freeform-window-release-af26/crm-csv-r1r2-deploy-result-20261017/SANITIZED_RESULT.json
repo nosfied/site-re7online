@@ -1,0 +1,174 @@
+{
+  "authorizedCommit": "1f51505816334b5b606afa55a60de676648b9e2a",
+  "collectionResult": "COMPLEMENT_READS_COMPLETE",
+  "custodyResult": "R1R2_COMPLEMENT_CUSTODY_COMPLETE_NOT_CERTIFIED",
+  "collectionStartedUtc": "2026-10-17T01:54:56.720312+00:00",
+  "collectionFinishedUtc": "2026-10-17T01:54:56.880586+00:00",
+  "custodyUtc": "2026-10-17T01:55:06.330391+00:00",
+  "transferExit": 0,
+  "transferUtc": "2026-10-17T01:55:06.313625+00:00",
+  "sourceBytes": 24914,
+  "sourceSha256": "a2e898cc429ec72a1f3948479c7f9772984ea78230e8921be88d236ea498f35c",
+  "commands": [
+    {
+      "id": "boot-id",
+      "startedUtc": "2026-10-17T01:54:56.720712+00:00",
+      "finishedUtc": "2026-10-17T01:54:56.811244+00:00",
+      "exitCode": 0,
+      "accepted": true,
+      "stdinBytes": 19147,
+      "stdinSha256": "4b3696d6e12e53f4f4fdfa63af3b024950babecf84d38da40a4992a0b178a4a1",
+      "stdoutBytes": 1646,
+      "stdoutSha256": "95f27e6a5276486995049f74bda5ea793c3867f4c8059e96291ae9709a994bfe",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "errno": null
+    },
+    {
+      "id": "deploy-cron",
+      "startedUtc": "2026-10-17T01:54:56.811552+00:00",
+      "finishedUtc": "2026-10-17T01:54:56.815771+00:00",
+      "exitCode": 0,
+      "accepted": true,
+      "stdinBytes": 0,
+      "stdinSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutBytes": 2017,
+      "stdoutSha256": "ff827e698a4a67b90d5818b57abfbc1d4214c6edb13ffe2b805199abdabaa742",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "errno": null
+    },
+    {
+      "id": "supervision",
+      "startedUtc": "2026-10-17T01:54:56.816074+00:00",
+      "finishedUtc": "2026-10-17T01:54:56.826827+00:00",
+      "exitCode": 0,
+      "accepted": true,
+      "stdinBytes": 0,
+      "stdinSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutBytes": 43,
+      "stdoutSha256": "ce5c1c72984173c2a33e8550e0a25aaa97b21b9c7e5be1d5ac3b062059c19a25",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "errno": null
+    },
+    {
+      "id": "process-discovery",
+      "startedUtc": "2026-10-17T01:54:56.827134+00:00",
+      "finishedUtc": "2026-10-17T01:54:56.861577+00:00",
+      "exitCode": 0,
+      "accepted": true,
+      "stdinBytes": 0,
+      "stdinSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutBytes": 9944,
+      "stdoutSha256": "bb8b12fadb8fa559d75d8e93aedae7992c8b773d3d18d444754d44b0e2b32b7c",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "errno": null
+    },
+    {
+      "id": "listener-discovery",
+      "startedUtc": "2026-10-17T01:54:56.861999+00:00",
+      "finishedUtc": "2026-10-17T01:54:56.876741+00:00",
+      "exitCode": 0,
+      "accepted": true,
+      "stdinBytes": 0,
+      "stdinSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutBytes": 1339,
+      "stdoutSha256": "445d24f617e05ef6010aa561f155669e86f2f3cd8a4b9250c576870b9098abcc",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "errno": null
+    },
+    {
+      "id": "tool-path-discovery",
+      "startedUtc": "2026-10-17T01:54:56.877093+00:00",
+      "finishedUtc": "2026-10-17T01:54:56.880254+00:00",
+      "exitCode": 0,
+      "accepted": true,
+      "stdinBytes": 0,
+      "stdinSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutBytes": 50,
+      "stdoutSha256": "2b4da6ef073a43f39c743ba888774521b5c0bf0a47e909c233554b4f3ef3578e",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "errno": null
+    }
+  ],
+  "analysis": {
+    "boot": {
+      "result": "RAW_BOOT_ID_COMPLETE",
+      "observations": 1,
+      "formatVerified": true,
+      "bytes": 37,
+      "retroactiveBootIdentityProven": false
+    },
+    "deployCron": {
+      "activeNonCommentLines": 6,
+      "commentedLines": 23,
+      "stderrEmpty": true,
+      "jobExecutedManually": false
+    },
+    "supervision": {
+      "ActiveState": "inactive",
+      "UnitFileState": "enabled"
+    },
+    "processDiscovery": {
+      "rowsExcludingHeader": 164,
+      "scope": "ps metadata/comm only; no arguments/env; comm may contain spaces/custom names; no current identity or writer-coverage certificate"
+    },
+    "listenerDiscovery": {
+      "rowsExcludingHeader": 12,
+      "stderrEmpty": true,
+      "scope": "deploy visibility only; not root ownership/health/proxy proof"
+    },
+    "toolPaths": {
+      "node": "/usr/bin/node",
+      "pm2": "not_resolved_in_fixed_PATH"
+    },
+    "toolchainClosed": false,
+    "supervisionRequiresDirectedReview": true
+  },
+  "files": {
+    "complement-capture.private.jsonl": {
+      "bytes": 24914,
+      "sha256": "a2e898cc429ec72a1f3948479c7f9772984ea78230e8921be88d236ea498f35c",
+      "mode": "0600"
+    },
+    "privileged-output.private.jsonl": {
+      "bytes": 25407,
+      "sha256": "9f5964bf6b7a8feffe22d116ce0a554b8680af651dd3ca49bb52b266a0ceed78",
+      "mode": "0600"
+    },
+    "sequencer.journal.jsonl": {
+      "bytes": 893,
+      "sha256": "46ef280ed64b30aef8f4e0490fb54fa757aa2a4e6933827259c0ef0e08efd790",
+      "mode": "0600"
+    },
+    "transfer.stderr.private": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": "0600"
+    },
+    "transfer.stdout.private": {
+      "bytes": 33703,
+      "sha256": "4efb87fb2a20c596e7505ef4aa0670d569894580246e16b2d6577beb0b0fa93f",
+      "mode": "0600"
+    }
+  },
+  "previousCustodiesUnchanged": true,
+  "originalCollectionCompleted": false,
+  "atomicSnapshot": false,
+  "newRemoteReads": 6,
+  "sudoInvoked": false,
+  "operationalCertification": false,
+  "remoteIdentitySource": "SSH deploy target and reviewed file owner checks; no sudo or extra identity command",
+  "executionResults": {
+    "originPrecondition": 0,
+    "newToolsDirectory": 0,
+    "singleScp": 0,
+    "singleCollection": 0,
+    "singleCustody": 0
+  },
+  "result": "COMPLEMENT_CONSUMED_COMPLETE_NOT_CERTIFIED"
+}

@@ -1,5 +1,8 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+**CSV R1/R2 — complemento deploy CONSUMED/COMPLETE_NOT_CERTIFIED,16/10 às22:54 Fortaleza.** [Resultado sanitizado e hashes](reviews/automation-freeform-window-release-af26/crm-csv-r1r2-deploy-result-20261017/REPORT.md): seis comandos exit0 SEM sudo, custódia canônica concluída;24.914B byte-exatos. Dois DENYs/18 observações permanecem históricos e intactos, sem snapshot atômico/boot retroativo. Supervisão observada inactive/enabled e PM2 não resolvido no PATH fixo exigem leitura dirigida futura; não implicam parada da API/worker nem reparo autorizado. Nenhum retry/R3/R4/SQL/instalação/backup/janela. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher/guarda38/out.15 não alterados, sem recertificação completa. Deifson; revisão21/10 ou mudança.
+
+
 **CSV R1/R2 — complemento deploy SEM sudo, somente LOCAL para revisão.** [Delta,4 provas de launcher completo e roteiro novo](reviews/automation-freeform-window-release-af26/crm-csv-r1r2-deploy-complement-20261017/REPORT.md): Python boot direto;64B/FD/no-follow e private_record preservados. UID1000, sudo indisponível, export/custódia reais locais; cinco respostas e SSH sintéticos. Dois DENYs e18 observações com horários originais intactos, sem COMPLETE retroativo/snapshot atômico. Nenhuma VPS, instalação, backup, pin/binding, R3/R4 ou replay. CSV SUSPENSO / LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 intocados. Deifson; próxima revisão21/10 ou mudança.
 
 

@@ -1,0 +1,36 @@
+{
+  "authorizedCommit": "1f51505816334b5b606afa55a60de676648b9e2a",
+  "script": "crm-csv-r1r2-deploy-complement-20261017/COMMANDS.md",
+  "readerSha256": "4b3696d6e12e53f4f4fdfa63af3b024950babecf84d38da40a4992a0b178a4a1",
+  "writerSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+  "packageManifestSha256": "adfa2547258eb760b9d37673302c43de994637b53c72799e3b25b9ff45d1be38",
+  "newRawSha256": "a2e898cc429ec72a1f3948479c7f9772984ea78230e8921be88d236ea498f35c",
+  "newRawBytes": 24914,
+  "oldCustodyAllFilesMetadataAndBytesUnchanged": true,
+  "preservedDenys": [
+    {
+      "resultCommit": "37ae6051f0f7bb75a31064f793da274f97f00a2c",
+      "rawSha256": "931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529",
+      "bytes": 87778,
+      "observations": 18,
+      "intervalUtc": [
+        "2026-10-17T01:22:00.199522+00:00",
+        "2026-10-17T01:22:00.349350+00:00"
+      ]
+    },
+    {
+      "resultCommit": "96a9bef74896b0d0286b904ce208efb9eda098e5",
+      "rawSha256": "2a8afe5a15cc1a90be5658828125fd219ba631e013887a3a498798f114b52e99",
+      "bytes": 1630,
+      "observations": 0,
+      "intervalUtc": [
+        "2026-10-17T01:40:39.463180+00:00",
+        "2026-10-17T01:40:39.479116+00:00"
+      ]
+    }
+  ],
+  "privateArtifactsPublished": false,
+  "atomicSnapshot": false,
+  "remoteRetry": false,
+  "privilegeEscalationOnVps": false
+}
