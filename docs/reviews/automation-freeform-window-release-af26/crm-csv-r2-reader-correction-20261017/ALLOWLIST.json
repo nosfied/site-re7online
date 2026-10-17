@@ -1,0 +1,25 @@
+{
+  "base": "6889671ea5345c8771cdf2a438a64306b8d3e7b1",
+  "files": [
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-reader-correction-20261017/correction.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-reader-correction-20261017/test_correction.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-reader-correction-20261017/READER_DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-reader-correction-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-reader-correction-20261017/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-reader-correction-20261017/PROVENANCE.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-reader-correction-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-reader-correction-20261017/MANIFEST.sha256",
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ],
+  "excluded": [
+    "__pycache__",
+    "private custody bytes",
+    "frontend-reference.private.json",
+    ".data",
+    "local-evidence",
+    "runtime",
+    "operational generation"
+  ]
+}

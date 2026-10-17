@@ -1,0 +1,202 @@
+--- consumed/read_package.py@66f337fb
++++ future/read_package.py
+@@ -287 +287,53 @@
+-def process(role,hint,procroot,cache):
++FRONTEND_REFERENCE_SHA = 'e9a5dc97acc3b984f79670b33eed75167007137db64f012abfe9e768c67277e3'
++FRONTEND_REFERENCE_PROVENANCE = {
++    'approvedContext': 'crm-csv-staging-20261016/capture-context-v2.private.json',
++    'reviewedComparisonCommit': '6889671ea5345c8771cdf2a438a64306b8d3e7b1',
++    'sourceSha256': FRONTEND_REFERENCE_SHA,
++    'selector': 'processReferences.processes[pid=188897]',
++    'scope': 'historical representation only; not current configuration authority',
++}
++FRONTEND_SCRIPT_UNKNOWN = {
++    'state': 'UNKNOWN', 'decision': 'DENY',
++    'reason': 'canonical_frontend_configuration_proof_missing',
++}
++
++
++def frontend_reference(path):
++    require(path is not None, 'frontend_reference_required')
++    raw, metadata = stable_file(path)
++    require(metadata['uid'] == os.getuid() and stat.S_IMODE(metadata['mode']) == 0o600,
++            'frontend_reference_permissions')
++    require(sha(raw) == FRONTEND_REFERENCE_SHA, 'frontend_reference_integrity')
++    value = json.loads(raw)
++    hint = HISTORICAL_CANDIDATES['frontend']
++    rows = [r for r in value['processReferences']['processes'] if r['pid'] == hint['pid']]
++    require(len(rows) == 1, 'frontend_reference_identity')
++    profiles = [a for a in value['sourceProfile']['apps'] if a['name'] == 're7-admin-front']
++    require(len(profiles) == 1 and profiles[0]['cwd'] == hint['cwd'] and
++            profiles[0]['script'] == hint['script'], 'frontend_reference_profile')
++    require(rows[0]['cwd'] == hint['cwd'] and re.fullmatch(r'[0-9a-f]{64}', rows[0]['cmdlineSha256'])
++            is not None, 'frontend_reference_shape')
++    return {'cmdlineSha256': rows[0]['cmdlineSha256'],
++            'provenance': dict(FRONTEND_REFERENCE_PROVENANCE)}
++
++
++def validate_frontend_observation(row, reference_path):
++    reference = frontend_reference(reference_path)  # re-read authenticated source at use
++    require(row['representation'] == {'state': 'HISTORICAL_MATCH',
++            'cmdlineSha256': row['cmdlineSha256'], 'provenance': reference['provenance']} and
++            row['cmdlineSha256'] == reference['cmdlineSha256'], 'frontend_representation_drift')
++    # The historical title has no script marker. A distinct explicit environment
++    # marker may be observed, but neither is a current configuration certificate.
++    marker = row['selectedEnvironment'].get('pm_exec_path') == HISTORICAL_CANDIDATES['frontend']['script']
++    require(row['scriptMarkerConfirmed'] is marker and
++            row['scriptCertification'] == FRONTEND_SCRIPT_UNKNOWN,
++            'frontend_script_certification_unproven')
++
++
++def validate_frontend_certification(row):
++    # No admissible current configuration proof source exists in this reader.
++    # Do not accept a caller-supplied VERIFIED boolean or arbitrary new schema.
++    require(False, 'canonical_frontend_configuration_proof_missing')
++
++
++def process(role,hint,procroot,cache,frontend_reference_path=None):
+@@ -309 +361,10 @@
+-            require(script_seen,'process_script_unconfirmed');row['scriptMarkerConfirmed']=True
++            if role == 'frontend':
++                reference = frontend_reference(frontend_reference_path)
++                require(sha(command) == reference['cmdlineSha256'], 'frontend_representation_drift')
++                row['representation'] = {'state':'HISTORICAL_MATCH', 'cmdlineSha256':sha(command),
++                                         'provenance':reference['provenance']}
++                row['scriptMarkerConfirmed'] = bool(script_seen)
++                row['scriptCertification'] = dict(FRONTEND_SCRIPT_UNKNOWN)
++                validate_frontend_observation(row, frontend_reference_path)
++            else:
++                require(script_seen,'process_script_unconfirmed');row['scriptMarkerConfirmed']=True
+@@ -322,0 +384,3 @@
++        if role == 'frontend':
++            require(read_at(fd,'cmdline',16384)==command, 'frontend_representation_changed')
++            validate_frontend_observation(row, frontend_reference_path)
+@@ -363,0 +428,23 @@
++def proxy_arguments(raw):
++    require(type(raw) is bytes and 0 < len(raw) <= 16384 and raw.endswith(b'\0'), 'proxy_argv_shape')
++    argv = raw[:-1].split(b'\0')
++    require(argv[0] == b'/usr/bin/docker-proxy', 'proxy_not_confirmed')
++    require(len(argv) <= 12 and all(argv), 'proxy_argv_shape')
++    valued = {b'-host-ip', b'-host-port', b'-container-ip', b'-container-port', b'-proto'}
++    values = {}; flags = []; i = 1
++    while i < len(argv):
++        key = argv[i]
++        if key == b'-use-listen-fd':
++            require(not flags, 'proxy_flag_duplicate')
++            flags.append('-use-listen-fd'); i += 1
++        else:
++            require(key in valued, 'proxy_flag_unknown')
++            require(key.decode() not in values, 'proxy_flag_duplicate')
++            require(i+1 < len(argv) and bool(argv[i+1]) and not argv[i+1].startswith(b'-'),
++                    'proxy_value_missing')
++            values[key.decode()] = argv[i+1].decode(); i += 2
++    require(set(values) == {k.decode() for k in valued}, 'proxy_options_missing')
++    require(values['-proto'] == 'tcp' and values['-host-port'] == '5432', 'proxy_endpoint_changed')
++    return values, flags
++
++
+@@ -368,10 +455,9 @@
+-        before=proc_identity(read_at(fd,'stat',4096));argv=read_at(fd,'cmdline',16384).rstrip(b'\0').split(b'\0')
+-        require(argv and argv[0]==b'/usr/bin/docker-proxy','proxy_not_confirmed')
+-        allowed={b'-host-ip',b'-host-port',b'-container-ip',b'-container-port',b'-proto'}
+-        require(len(argv)%2==1 and len(argv)<=17,'proxy_argv_shape')
+-        values={}
+-        for k,v in zip(argv[1::2],argv[2::2]):
+-            require(k in allowed and k.decode()not in values,'proxy_flag_unknown');values[k.decode()]=v.decode()
+-        require(values.get('-proto')=='tcp'and values.get('-host-port')=='5432','proxy_endpoint_changed')
+-        after=proc_identity(read_at(fd,'stat',4096));require(before['ticks']==after['ticks']and before['ppid']==after['ppid'],'proxy_identity_changed')
+-        return {'identity':before,'uid':os.fstat(fd).st_uid,'args':values,
++        before=proc_identity(read_at(fd,'stat',4096))
++        require(before['pid']==177517 and before['ticks']=='96580070' and os.fstat(fd).st_uid==0,
++                'proxy_candidate_identity_changed')
++        raw=read_at(fd,'cmdline',16384);values,flags=proxy_arguments(raw)
++        after=proc_identity(read_at(fd,'stat',4096))
++        require(all(before[k]==after[k] for k in ('pid','ppid','ticks')), 'proxy_identity_changed')
++        require(read_at(fd,'cmdline',16384)==raw, 'proxy_representation_changed')
++        return {'identity':before,'uid':os.fstat(fd).st_uid,'args':values,'flags':flags,
++                'cmdlineSha256':sha(raw),
+@@ -403 +489 @@
+-def interval_checks(rows,procroot):
++def interval_checks(rows,procroot,frontend_reference_path=None):
+@@ -411,0 +498,3 @@
++            if role == 'frontend':
++                validate_frontend_observation(old, frontend_reference_path)
++                require(sha(read_at(fd,'cmdline',16384))==old['cmdlineSha256'], 'frontend_interval_representation_changed')
+@@ -432,0 +522,4 @@
++    proxy_now=proxy_channel(procroot)
++    prior_proxy=by['sql-proxy']
++    require(all(proxy_now['identity'][k]==prior_proxy['identity'][k] for k in ('pid','ppid','ticks')) and
++            all(proxy_now[k]==prior_proxy[k] for k in ('uid','args','flags','cmdlineSha256')), 'proxy_interval_changed')
+@@ -435 +528 @@
+-    return {'freshProcTuplesRechecked':True,'listenerFdRelationsConfirmed':True,
++    return {'frontendScriptCertification':dict(FRONTEND_SCRIPT_UNKNOWN), 'freshProcTuplesRechecked':True,'listenerFdRelationsConfirmed':True,
+@@ -447 +540 @@
+-def directed_inventory(procroot=Path('/proc')):
++def directed_inventory(procroot=Path('/proc'),frontend_reference_path=None):
+@@ -462 +555 @@
+-        value=attempt('process-'+role,lambda role=role,hint=hint:process(role,hint,procroot,cache))
++        value=attempt('process-'+role,lambda role=role,hint=hint:process(role,hint,procroot,cache,frontend_reference_path))
+@@ -475 +568 @@
+-    if not errors:attempt('interval-checks',lambda:interval_checks(rows,procroot))
++    if not errors:attempt('interval-checks',lambda:interval_checks(rows,procroot,frontend_reference_path))
+@@ -478,0 +572,2 @@
++    frontend=next((r['value'] for r in rows if r['label']=='process-frontend'),None)
++    if frontend is not None:attempt('frontend-script-certification',lambda:validate_frontend_certification(frontend))
+@@ -484 +579 @@
+-def validate_directed_inventory(value):
++def validate_directed_inventory(value,frontend_reference_path=None):
+@@ -495 +590,5 @@
+-        if role!='daemon':require(r['identity']['ppid']==HISTORICAL_CANDIDATES['daemon']['pid']and r['scriptMarkerConfirmed'],'directed_process_relation')
++        if role=='frontend':
++            validate_frontend_observation(r,frontend_reference_path)
++            validate_frontend_certification(r)
++        if role!='daemon':require(r['identity']['ppid']==HISTORICAL_CANDIDATES['daemon']['pid'],'directed_process_relation')
++        if role in ('api','worker'):require(r['scriptMarkerConfirmed'] is True,'directed_process_relation')
+@@ -499,5 +598,5 @@
+-def specs(raw):
+-    return [('directed-proc',['/usr/bin/python3','-B','-I','-S','-','directed'],raw)]
+-
+-
+-def collect(package, raw, target=REMOTE, run=subprocess.run):
++def specs(raw,frontend_reference_path=None):
++    return [('directed-proc',['/usr/bin/python3','-B','-I','-S','-','directed',str(frontend_reference_path)],raw)]
++
++
++def collect(package, raw, target=REMOTE, run=subprocess.run, *, frontend_reference_path=None):
+@@ -506 +605 @@
+-           'commandIds':[x[0]for x in specs(raw)],'certification':False})
++           'commandIds':[x[0]for x in specs(raw,frontend_reference_path)],'certification':False})
+@@ -508 +607 @@
+-    for ident,args,stdin in specs(raw):
++    for ident,args,stdin in specs(raw,frontend_reference_path):
+@@ -522 +621 @@
+-                validate_directed_inventory(json.loads(stdout))
++                validate_directed_inventory(json.loads(stdout),frontend_reference_path)
+@@ -543 +642 @@
+-def validate_capture(raw, reader_raw):
++def validate_capture(raw, reader_raw, *, frontend_reference_path=None):
+@@ -546 +645 @@
+-    begin,end=lines[0],lines[-1];expected=[x[0]for x in specs(b'')]
++    begin,end=lines[0],lines[-1];expected=[x[0]for x in specs(b'',frontend_reference_path)]
+@@ -553 +652 @@
+-        require(row['argv']==next(x[1]for x in specs(b'')if x[0]==ident),'command_argv')
++        require(row['argv']==next(x[1]for x in specs(b'',frontend_reference_path)if x[0]==ident),'command_argv')
+@@ -562 +661 @@
+-            validate_directed_inventory(json.loads(base64.b64decode(row['stdoutBase64'])))
++            validate_directed_inventory(json.loads(base64.b64decode(row['stdoutBase64'])),frontend_reference_path)
+@@ -568 +667 @@
+-def custody(package, raw, target=LOCAL, run=subprocess.run):
++def custody(package, raw, target=LOCAL, run=subprocess.run, *, frontend_reference_path=None):
+@@ -591 +690 @@
+-        lines=validate_capture(original,raw)
++        lines=validate_capture(original,raw,frontend_reference_path=frontend_reference_path)
+@@ -603 +702 @@
+-    require(len(sys.argv)==2,'exact_action_required');action=sys.argv[1]
++    require(len(sys.argv) in (2,3),'exact_action_required');action=sys.argv[1]
+@@ -605 +704 @@
+-        value=directed_inventory();print(json.dumps(value,sort_keys=True));return not value['errors']
++        value=directed_inventory(frontend_reference_path=sys.argv[2] if len(sys.argv)==3 else None);print(json.dumps(value,sort_keys=True));return not value['errors']
+@@ -613 +712,2 @@
+-    ok=collect(package,raw)if action=='collect'else custody(package,raw)
++    reference=package/'frontend-reference.private.json'
++    ok=collect(package,raw,frontend_reference_path=reference)if action=='collect'else custody(package,raw,frontend_reference_path=reference)

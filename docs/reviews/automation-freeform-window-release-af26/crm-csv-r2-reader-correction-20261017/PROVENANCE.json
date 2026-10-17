@@ -1,0 +1,66 @@
+{
+  "referenceCommit": "6889671ea5345c8771cdf2a438a64306b8d3e7b1",
+  "editableSource": "correction.py",
+  "derivedFutureReader": {
+    "materializedOnlyIn": "temporary isolated laboratory",
+    "sha256": "f4056bb066ac58dbfdbb59637e21e7a4cfb6e2010886374e3f6e7d80bfda44f2",
+    "notOperationalGeneration": true
+  },
+  "versionedReusedSources": [
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/read_package.py",
+      "bytes": 35507,
+      "sha256": "66f337fbe47d69ae02902f38f6b0e474241222c90967580d9c569dce21796691"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/test_directed.py",
+      "bytes": 16339,
+      "sha256": "2b7fed9ab424b6a60cf1f61f921efb8efe73042d91dd673a9946610a1377a02e"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/COMMANDS.md",
+      "bytes": 9598,
+      "sha256": "9bc7af3a93be7a455eb8e319dd9e26d5b7bd69c8e13777a01f9d526858116dde"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/privileged_output.source",
+      "bytes": 3303,
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-gap-result-20261017/REPORT.md",
+      "bytes": 7292,
+      "sha256": "2863246a74cdbb8449f2a6e4c93b47379878fe8ea6cec73841d06a7cd76b960a"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-gap-rehearsal-20261017/PROOFS.json",
+      "bytes": 1512,
+      "sha256": "e7b23f0dd459f0917da3cd1f6e995d0b9bfb5fbaea78e551eccfb01b653b8224"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+      "bytes": 9345,
+      "sha256": "f7aa1931b2dd4461672422d24cede6b16b0368e640ebb47928de1ce7cd2a6360"
+    }
+  ],
+  "privateSources": [
+    {
+      "reference": "crm-csv-staging-20261016/capture-context-v2.private.json",
+      "sha256": "e9a5dc97acc3b984f79670b33eed75167007137db64f012abfe9e768c67277e3",
+      "scope": "historical representation/context; not phase authority"
+    },
+    {
+      "reference": "csv-r2-gap-diagnostic-20261017-v1/gap-capture.private.jsonl",
+      "sha256": "d19f335f38531d2cc14a40fffe9946eb1d0630a2aa1161ae9a0c94b512f3ecaf",
+      "bytes": 3059,
+      "intervalUtc": [
+        "2026-10-17T11:16:07.055634+00:00",
+        "2026-10-17T11:16:08.208736+00:00"
+      ],
+      "scope": "read-only fixture inputs; not observations made now"
+    }
+  ],
+  "privateBytesPublished": false,
+  "readerPatchScope": "only derived future reader vs pinned consumed reader; not the whole Git delta",
+  "otherConsumersChanged": false
+}

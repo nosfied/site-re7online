@@ -1,0 +1,97 @@
+{
+  "result": "LOCAL_VALIDATED_FRONTEND_SCRIPT_UNKNOWN_DENY",
+  "base": "6889671ea5345c8771cdf2a438a64306b8d3e7b1",
+  "futureReaderSha256": "f4056bb066ac58dbfdbb59637e21e7a4cfb6e2010886374e3f6e7d80bfda44f2",
+  "uniqueFocusedTests": 21,
+  "runs": [
+    {
+      "scope": "20 final-reader tests (before added absent-reference test)",
+      "tests": 20,
+      "seconds": 4.438,
+      "result": "PASS"
+    },
+    {
+      "scope": "extended duplicate grammar counterexamples only; reader unchanged",
+      "tests": 1,
+      "seconds": 0.001,
+      "result": "PASS"
+    },
+    {
+      "scope": "new absent-reference test only; reader unchanged",
+      "tests": 1,
+      "seconds": 0.001,
+      "result": "PASS"
+    }
+  ],
+  "cases": {
+    "ReaderCorrection": [
+      "test_real_representations_complete_launcher_and_custody_deny_script_only",
+      "test_frontend_title_tamper",
+      "test_reference_tamper",
+      "test_frontend_ticks_divergence",
+      "test_api_marker_still_required",
+      "test_worker_database_still_required",
+      "test_proxy_ticks_divergence",
+      "test_frontend_concurrent_title_change_at_use",
+      "test_proxy_concurrent_identity_change_at_use",
+      "test_frontend_interval_revalidates_representation",
+      "test_proxy_interval_revalidates_representation",
+      "test_proxy_scheduler_state_is_not_identity_drift",
+      "test_complete_validator_cannot_promote_unknown",
+      "test_reference_read_denied"
+    ],
+    "Interfaces": [
+      "test_proxy_actual_and_no_unitary",
+      "test_proxy_format_counterexamples",
+      "test_reference_and_validator_no_forged_certification",
+      "test_actual_environment_marker_does_not_certify_configuration",
+      "test_reference_replacement_between_lstat_and_open",
+      "test_absent_reference_denies",
+      "test_source_integrity_and_import_has_no_entrypoint"
+    ]
+  },
+  "integrationExpected": {
+    "frontendObservation": "HISTORICAL_MATCH",
+    "scriptMarkerConfirmed": false,
+    "scriptCertification": {
+      "state": "UNKNOWN",
+      "decision": "DENY",
+      "reason": "canonical_frontend_configuration_proof_missing"
+    },
+    "proxy": "five value options plus known unitary flag accepted",
+    "intervalChecks": "observation relationships rechecked only",
+    "inventory": "DIRECTED_INVENTORY_DENY",
+    "custody": "R2_DIRECTED_CUSTODY_DENY with raw byte-exact preservation"
+  },
+  "real": [
+    "Bash/Python launcher",
+    "authenticated same-byte reader child stdin",
+    "bounded no-follow file and proc representation reads",
+    "image FD hashing",
+    "canonical private_record",
+    "export envelope",
+    "custody with original-origin and transfer validation",
+    "kernel EACCES",
+    "local subprocesses"
+  ],
+  "simulated": [
+    "SSH executable transports to local exporter",
+    "procfs identities/listeners/configuration fixtures",
+    "Node image represented by local Python executable",
+    "UID0 in unprivileged user namespace mapped solely to host UID1000; capabilities dropped"
+  ],
+  "historicalPrivateReused": [
+    "exact frontend and proxy bytes from gap capture",
+    "approved context bytes with pinned digest",
+    "canonical original DENY origin"
+  ],
+  "allPriorPrivateArtifactsComparedUnchanged": 25,
+  "operationalScriptCertificateCreated": false,
+  "operationalCertification": false,
+  "atomicSnapshot": false,
+  "remoteExecuted": false,
+  "sqlExecuted": false,
+  "pm2Executed": false,
+  "dockerExecuted": false,
+  "runtimeRebuilt": false
+}
