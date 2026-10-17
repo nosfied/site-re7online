@@ -1,0 +1,16 @@
+{
+  "base": "617280e321bfc35d69c154ed6ef4c3e172753bc0",
+  "scope": "DOCUMENTATION_ONLY_NOT_OPERATIONAL_COMMAND_EXECUTION",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/COMMANDS_FOR_REVIEW.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/SOURCE_INDEX.json",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ]
+}

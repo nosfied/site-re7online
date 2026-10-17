@@ -1,0 +1,77 @@
+{
+  "readOnlyReview": true,
+  "references": [
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-original-chain-20261016/static-kit/COMPOSITION.json",
+      "sha256": "f9a0a44a83073739ad3bcddfdbd697eb5723c89a88d31a0c68519a87005307df",
+      "commit": "617280e321bfc35d69c154ed6ef4c3e172753bc0"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-original-chain-20261016/static-kit/MISSING_INPUTS.json",
+      "sha256": "fec6a1cd14e7f700d930393902119d37a958d61ec25f48ede8b676f644026848",
+      "commit": "617280e321bfc35d69c154ed6ef4c3e172753bc0"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-recovery-precert-20261016/BINDING_PLAN.json",
+      "sha256": "7cf7c8dad869e3f73512094b1863a8d077ec7e9ffb9761eb41213c1e90731774",
+      "commit": "617280e321bfc35d69c154ed6ef4c3e172753bc0"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged.py",
+      "sha256": "8de358fd60c6e7c880166651b45d7ebd60c8f9b102759ff7f7628796fda1b212",
+      "commit": "617280e321bfc35d69c154ed6ef4c3e172753bc0"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged_output.py",
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+      "commit": "617280e321bfc35d69c154ed6ef4c3e172753bc0"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/capture_imports.py",
+      "sha256": "52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f",
+      "commit": "617280e321bfc35d69c154ed6ef4c3e172753bc0"
+    },
+    {
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-root-authority-b4-20261016/INSTALL_PLAN.json",
+      "sha256": "5e9eec28e920be49f400e714f3504555947655381084ca18b3db71e8c317fdac",
+      "commit": "617280e321bfc35d69c154ed6ef4c3e172753bc0"
+    }
+  ],
+  "logicalConsumers": [
+    {
+      "logicalPath": "protected/authority.py",
+      "object": "objects/b31b59cfee6c7d48d7e9e88ff4b348106aaf317b530fc8791f94eb43b2b83cf6.source",
+      "sha256": "b31b59cfee6c7d48d7e9e88ff4b348106aaf317b530fc8791f94eb43b2b83cf6"
+    },
+    {
+      "logicalPath": "window/check_current.py",
+      "object": "objects/198c75956d594d33679589db6f76e3ee6775c74559091ab53e88583e6159c02b.source",
+      "sha256": "198c75956d594d33679589db6f76e3ee6775c74559091ab53e88583e6159c02b"
+    },
+    {
+      "logicalPath": "window/original_checks.py",
+      "object": "objects/8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82.source",
+      "sha256": "8467c1ba1033f103598b2c6baaaf55ee6970af0e7bd225f64d90a5fe97733f82"
+    },
+    {
+      "logicalPath": "window/prestop_contract.py",
+      "object": "objects/208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b.source",
+      "sha256": "208f2ef53e3ba5c208006022c85bbf537961ddf339fe8894c07553ce1b626c2b"
+    },
+    {
+      "logicalPath": "window/recovery_contract.py",
+      "object": "objects/529e209b841661069175ccddf9e3885c3624365efbf235d990d00a79352a16b9.source",
+      "sha256": "529e209b841661069175ccddf9e3885c3624365efbf235d990d00a79352a16b9"
+    },
+    {
+      "logicalPath": "window/restore_contract.py",
+      "object": "objects/af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b.source",
+      "sha256": "af0d552fc5fd4090ce7a2f7ddc584a935f63157b206ed13d28c0ea087e8ddf2b"
+    },
+    {
+      "logicalPath": "window/root_readonly.py",
+      "object": "objects/cb63a97fffe735fd52c80eed872751873593c23a3f8b3e3663b6c0fd741aa7ab.source",
+      "sha256": "cb63a97fffe735fd52c80eed872751873593c23a3f8b3e3663b6c0fd741aa7ab"
+    }
+  ]
+}
