@@ -1,0 +1,150 @@
+{
+  "base": "ea4a80c44c1153fb9b8e36908af7daf69f32b695",
+  "result": "DENY_PRESERVED_NO_RETRY",
+  "scope": "one execution of each reviewed literal block; no code changes",
+  "review": {
+    "commandsSha256": "6175de5c4368c895d898b9b71cf77b39d4755528c2d114225ec61104ff74ce15",
+    "manifestSha256": "707726e11f30ada8ef9f80f2fc7b6f84a1a737eca1b614738cf57f99c14f7dfa",
+    "sourceFiles": 7
+  },
+  "blocks": {
+    "materialize": {
+      "startedUtc": "2026-10-17T15:26:55.090656+00:00",
+      "finishedUtc": "2026-10-17T15:26:55.142314+00:00",
+      "exitCode": 0,
+      "errorClass": null,
+      "errno": null,
+      "stdoutBytes": 32,
+      "stdoutSha256": "120a7df7935e0537377e2532f4b07ef8533f297ac58d34a89994af53fdda95c6",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privateJournal": {
+        "bytes": 1062,
+        "sha256": "1d739d526da94508e7c8386e5065283a3c01bc83797109304ea6855dabc33c50"
+      }
+    },
+    "collect": {
+      "startedUtc": "2026-10-17T15:28:54.876893+00:00",
+      "finishedUtc": "2026-10-17T15:28:57.850384+00:00",
+      "exitCode": 1,
+      "errorClass": null,
+      "errno": null,
+      "stdoutBytes": 32,
+      "stdoutSha256": "341902eb3a324a02be233a33a373c3ad934456a675a6f2ce4efe923ad73dca41",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privateJournal": {
+        "bytes": 1058,
+        "sha256": "b08f4492da9472530a1a1a6199268cde03a1bde965694fb608a3c489742b3f7e"
+      }
+    },
+    "receive-analyze": {
+      "startedUtc": "2026-10-17T15:30:02.137993+00:00",
+      "finishedUtc": "2026-10-17T15:30:02.180072+00:00",
+      "exitCode": 1,
+      "errorClass": null,
+      "errno": null,
+      "stdoutBytes": 0,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privateJournal": {
+        "bytes": 1021,
+        "sha256": "43217e6cdf6a54e1d31d8590d353314dc4d3a30e5c1517cc27fdac250ee7d5f5"
+      }
+    }
+  },
+  "localTool": {
+    "resolved": "/usr/bin/x86_64-linux-gnu-readelf",
+    "bytes": 789280,
+    "sha256": "64c58e15274bbbb5153f31078e455e9e77ee5f51489e709bba5bb788ce9df2b0",
+    "uid": 0,
+    "mode": "0o755",
+    "version": "GNU readelf (GNU Binutils for Ubuntu) 2.42",
+    "execution": "--version only; no captured image analyzed",
+    "commandStartedUtc": "2026-10-17T15:26:55.134417+00:00",
+    "commandFinishedUtc": "2026-10-17T15:26:55.137902+00:00",
+    "exitCode": 0
+  },
+  "remote": {
+    "inactiveSourceFiles": 7,
+    "inactiveSourceBytes": 71045,
+    "endUtc": "2026-10-17T15:28:57.749791+00:00",
+    "result": "DENY_NO_RETRY",
+    "denialStage": "remote-budget",
+    "denialReason": "remote-budget_not_proven",
+    "errorClass": "RuntimeError",
+    "errno": null,
+    "requiredOperationBudgetBytes": 536870912,
+    "availableBytes": "NOT_RECORDED",
+    "capacityCause": "NOT_DETERMINED; do not infer global disk or tmpfs size",
+    "observationCommands": 0,
+    "publishedImages": 0,
+    "publishedElfBytes": 0,
+    "readelfOrOtherAnalyzerExecuted": false
+  },
+  "custody": {
+    "verifiedByteExact": true,
+    "event": "TOOLCHAIN_DISCOVERY_CUSTODY_PRESERVED_NOT_CERTIFIED",
+    "gatePass": false,
+    "capture": {
+      "bytes": 2244,
+      "sha256": "c6b86a6ff3d9c2168b844661059e42a622a78091dcd751381dffaf88e9892d72"
+    },
+    "transferStdout": {
+      "bytes": 3575,
+      "sha256": "581227e8093f25adb5ea69382e8ac8cdc60eb4cdc1f8376857aa23b2186cafb7"
+    },
+    "transferStderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "canonicalJournal": {
+      "bytes": 8761,
+      "sha256": "482eb1cacee7b6977a489a2063738cee33748d652210bb40708ce7e9ef92a9d1"
+    },
+    "receipt": {
+      "bytes": 367,
+      "sha256": "bbd690a8fa494ceae4c38447fbba9aa10a80c0719bf815a3942993cc4a5b29f2"
+    },
+    "atomicSnapshot": false
+  },
+  "localAnalysis": {
+    "endUtc": "2026-10-17T15:30:02.178748+00:00",
+    "result": "DENY_NO_RETRY",
+    "denialStage": "source-custody",
+    "denialReason": "source-custody_not_proven",
+    "sourceReceiptMatched": true,
+    "imageSetCount": 0,
+    "firstUnsatisfiedPredicateFromOfflineReconciliation": "image_set (requires 0 < count <= 64)",
+    "scpExecuted": false,
+    "elfAnalysisExecuted": false,
+    "journal": {
+      "bytes": 210,
+      "sha256": "0fed305656ce1f14d25d42cd6cd6b28aae0ca72c0db3db61ecfc58436b272c75"
+    }
+  },
+  "demonstrated": [
+    "reviewed seven source files matched",
+    "local readelf available and stable for --version at preflight",
+    "remote operation denied at budget stage before image observations",
+    "DENY export and canonical custody byte-exact",
+    "local analysis denied with zero published images before SCP"
+  ],
+  "unknown": [
+    "remote statvfs numeric values and exact capacity cause",
+    "currently selected/running Node image",
+    "ELF PT_INTERP/DT_NEEDED/RPATH/RUNPATH and mapped dependencies",
+    "current PM2 PATH/shebang and protection/transitives",
+    "complete operational closure/protection",
+    "SQL/ownership and final identities/authority"
+  ],
+  "nextBlocker": "remote-budget: reconcile exact destination capacity and budget with explicit numeric evidence in a separately reviewed/authorized directed procedure; no retry, repair, lower limits or relocation now",
+  "consumption": "all three actions consumed; preserve destinations, material and DENYs; no rerun",
+  "noProductionMutation": true,
+  "status": [
+    "CSV_SUSPENDED",
+    "NOT_DEPLOYED",
+    "NOT_WINDOW_READY"
+  ]
+}

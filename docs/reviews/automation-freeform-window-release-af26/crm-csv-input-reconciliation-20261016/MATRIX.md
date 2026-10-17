@@ -1,3 +1,20 @@
+# Execução autorizada ea4a80c4 —17/10/2026: DENY preservado
+
+Três blocos consumidos uma vez cada, sem retry. [Resultado sanitizado](../crm-csv-toolchain-discovery-20261017/RESULT.json); relatório detalha UTC/Fortaleza e custódia. Código/manifest707726e1/COMMANDS6175de5c intactos.
+
+| Requisito | Observado nesta tentativa | Não demonstrado / próximo passo |
+| --- | --- | --- |
+| Ferramenta local |readelf2.42/root0/0755, SHA64c58e15…, --version por FD, exit0 |Não foi analisado ELF produtivo; disponibilidade local não certifica closure |
+| Fontes/transporte |7fontes inativas autenticadas, export/journal2244B c6b86a6f…/recibo canônico byte-exato |Custódia PASS de integridade com gatePass=false; não gate operacional PASS |
+| Orçamento remoto |DENY remote-budget/remote-budget_not_proven antes de todas as leituras de imagem |Valores statvfs não registrados; causa exata UNKNOWN. Primeiro bloqueio: evidência numérica dirigida do destino512MiB, mediante revisão/autorização futura |
+| Bytes/análise |0ELF publicados; bloco3 DENY source-custody; offline recibo corresponde e predicado image_set tem contagem0 |Sem SCP/análise de imagem. Não deduzir falha da custódia pelo nome amplo do stage |
+| Node/PM2/ELF/proteção |Nenhuma observação atual alcançada; históricos inalterados |Continua UNKNOWN; não preencher usando provas simuladas ou referências históricas |
+| SQL/identidades/autoridade/Event775 |Fora do alcance desta execução |Sem ação, reparo, redução de limites ou novo pacote |
+
+CSV SUSPENSO / DENY PRESERVED / NOT DEPLOYED / NOT WINDOW READY. Materiais/destinosv2 consumidos, NÃO REPETIR. Checkpoints anteriores abaixo são históricos.
+
+---
+
 # Correção da dependência de descoberta —17/10/2026, base002b46a6
 
 **Roteiro anterior NÃO EXECUTAR**: dependia de readelf remoto após ENOENT conhecido, cuja causa executável/loader não foi discriminada. [Procedimento corrigido](../crm-csv-toolchain-discovery-20261017/COMMANDS.md): localpreflight → remoto somente bytes/metadados → SCP/custódia/análise LOCAL.7provas afetadas, sem VPS. Nenhuma closure/proteção certificada.

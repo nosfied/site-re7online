@@ -1,5 +1,43 @@
 # CRM/CSV — reconciliação dos inputs e próxima conferência
 
+## Execução única do roteiroea4a80c4 —17/10/2026: DENY preservado
+
+**RESULTADO: DENY / CUSTÓDIA VERIFICADA / NENHUM ELF CAPTURADO OU ANALISADO / CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.** Três blocos literais de COMMANDS.md executados uma vez cada, na ordem autorizada, sem editar código, hashes, limites ou destinos. Materialização, coleta e análisev2 estão **consumidas**; não repetir. Sete fontes revisadas e todos os privados/DENYs anteriores preservados. [RESULT.json](../crm-csv-toolchain-discovery-20261017/RESULT.json) contém somente resultados sanitizados, intervalos e hashes/procedência.
+
+### Revisão e alcance efetivamente executado
+
+HEAD/branch/remoto iniciais:ea4a80c44c1153fb9b8e36908af7daf69f32b695, review/campaign-recovery-20260926. Manifest707726e1… e COMMANDS6175de5c… conferidos contra os literais publicados; sete fontes, parent privado owner700 e destinos locais exclusivos aprovados. Nenhum teste/suíte/build repetido. Vercel permanece deploymentEnabled=false nessa branch; único CI versionado aceita push/PR somente main/develop, sem alteração de configuração.
+
+| Bloco | Intervalo UTC (17/10) / Fortaleza | Resultado e limite |
+| --- | --- | --- |
+|1materialização/preflight LOCAL|15:26:55.090656–15:26:55.142314 /12:26:55|exit0, MATERIALIZED_INACTIVE_NO_REMOTE; sete fontes inativas e analisador local conferidos; sem SSH |
+|2coleta deploy SEM sudo|15:28:54.876893–15:28:57.850384 /12:28:54–12:28:57|exit1; CUSTODY_PRESERVED_DENY_NO_RETRY. DENY remoto às15:28:57.749791 em `remote-budget`, motivo estático `remote-budget_not_proven`, RuntimeError/errno=null |
+|3recepção/análise LOCAL|15:30:02.137993–15:30:02.180072 /12:30:02|exit1, DENY local às15:30:02.178748, `source-custody` / `source-custody_not_proven`; zero objetos publicados, sem SCP/readelf de imagem |
+
+O bloco3 foi executado uma única vez conforme o contrato que admite análise de parciais e nega sem transferência quando não há objetos. A reconciliação offline confirma que recibo, manifest, tamanho e SHA da captura correspondem; **custódia não está inválida**. O primeiro predicado não satisfeito nessa sequência é `image_set` (exige0<count<=64; observado0). O diagnóstico usa o stage amplo source-custody; o nome não autoriza inferir corrupção do recibo. Nenhum DENY da origem foi transformado em PASS.
+
+### Fatos demonstrados e integridade da custódia
+
+Preflight LOCAL real, sem simulação: GNU readelf (GNU Binutils for Ubuntu)2.42, `/usr/bin/x86_64-linux-gnu-readelf`,789.280B, SHA64c58e15274bbbb5153f31078e455e9e77ee5f51489e709bba5bb788ce9df2b0, root0/0755; alias/cadeia/FD estáveis pelo leitor canônico. Único argv readelf executado: `--version`, exit0 entre15:26:55.134417 e15:26:55.137902. **Não** houve análise de binário capturado nem execução de Node/PM2/loader/ldd.
+
+Remoto: sete fontes inativas materializadas e conferidas pelos seus hashes, mais o manifest do pacote. O runner negou no primeiro estágio de orçamento, antes de PM2/CLEAN.PATH, Node, boot/PID/exe/maps ou qualquer command de observação. Publicados0ELF/0bytes ELF. Os512MiB são **orçamento específico desta operação**; não reserva canônica deploy/PostgreSQL. Os registros não guardam f_bavail/f_frsize ou bytes disponíveis, nem uma medição de capacidade. A negativa comprova que esse estágio não foi satisfeito; não autoriza dizer que o disco global está cheio, que o tmpfs tem determinado tamanho ou que a imagem Node mudou.
+
+A exportação ocorreu na mesma resposta, inclusive em DENY, e foi ingerida pelo private_record existente. Conferência offline adicional usa os mesmos bytes do reader canônico e valida envelope, canais, manifest, fontes e recibo; não executa entrypoint consumido. Captura privada2244B, SHA **c6b86a6ff3d9c2168b844661059e42a622a78091dcd751381dffaf88e9892d72**. Recibo canônico367B, SHAbbd690a8fa494ceae4c38447fbba9aa10a80c0719bf815a3942993cc4a5b29f2, `TOOLCHAIN_DISCOVERY_CUSTODY_PRESERVED_NOT_CERTIFIED`, gatePass=false. Journal local da análise210B, SHA0fed305656ce1f14d25d42cd6cd6b28aae0ca72c0db3db61ecfc58436b272c75. Canais/journals/intervalos individuais e hashes completos em RESULT.json; nenhum bruto, journal, configuração ou imagem vai ao Git.
+
+Materiais privados e destinosv2 permanecem intactos. Nenhuma imagem foi recebida: não existe diretório local images na análise; nenhuma transferência SCP foi tentada. Os arquivos inativos remotos não são instalação nem implantação. A leitura posterior de registros foi exclusivamente LOCAL; a visão sandbox de /dev/shm não continha a materialização, então a leitura offline foi feita na mesma visão local da execução, sem recaptura ou nova consulta à VPS.
+
+### Dependências desconhecidas e primeiro bloqueio
+
+Demonstrado: revisão de sete fontes, analisador **local** disponível/estável no preflight, negativa remota anterior às leituras, custódia byte-exata de DENY e negativa local por população vazia antes de SCP/análise. O ambiente produtivo não foi simulado nesta execução; as provas de laboratório anteriores continuam separadas e não preenchem os fatos não alcançados.
+
+Permanecem **desconhecidos nesta tentativa**: imagem Node atualmente selecionada/executada, PM2 shebang/PATH e proteção efetivos, PT_INTERP/DT_NEEDED/RPATH/RUNPATH, arquivos mapeados e suas dependências, closure/proteção operacional completas. As referências d016/PM2 históricas conservam seus horários/hashes e não são atualizadas por esta execução. SQL/ownership, saved/fallback/identidades finais,16vínculos/autoridade e Event775 continuam pendentes e fora do escopo executado.
+
+**Primeiro bloqueio concreto: remote-budget.** É necessário reconciliar o orçamento de512MiB com a capacidade do destino exato por evidência numérica dirigida, em etapa futura separadamente revisada/autorizada; a captura atual não contém esses números. Não baixar limite, mover destino, reparar ou executar nova coleta agora. Não se preparou outro launcher/pacote nem se repetiu qualquer ação. Fonte DENY e destinações consumidas permanecem como evidência. A certificação ELF não avançou; não há janela pronta.
+
+Nenhuma instalação, sudo, reparo, SQL, backup, emissão, stop/start, contenção, importação, envio ou alteração de produção/controles. NEWauth+NEWDB+NEWcipher, ambos crons, guarda38/out.15 e fases aceitas preservados pelo escopo sem efeitos; não se realizou nova certificação de health/UI/produção. Responsável Deifson; revisão17/10, próxima21/10 ou mudança. Publicação restrita a resultado sanitizado/checkpoints e índices de revisão; código, manifest executado, COMMANDS e provas anteriores inalterados.
+
+---
+
 ## Correção da dependência de descoberta —17/10/2026, base002b46a6
 
 **PROCEDIMENTO REMOTO/LOCAL SEPARADO / LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.** Integração anterior permanece ACCEPT LOCAL no alcance já documentado. Esta seção substitui SOMENTE a dependência do procedimento de descoberta; não modifica a composição, contratos de execução, autoridade ou recuperação.
