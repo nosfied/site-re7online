@@ -1,0 +1,19 @@
+--- a/docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-20261017/read_package.py
++++ b/docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-deploy-complement-20261017/read_package.py
+@@ -2 +2 @@
+-Root mode only reads fixed paths. Every journal uses canonical private_record.
++Unprivileged boot mode only reads boot_id. Every journal uses canonical private_record.
+@@ -17,2 +17,2 @@
+-REMOTE = '/dev/shm/re7-csv-r1r2-complement-read-20261017-v1'
+-LOCAL = '/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/csv-r1r2-complement-read-20261017-v1'
++REMOTE = '/dev/shm/re7-csv-r1r2-deploy-complement-read-20261017-v1'
++LOCAL = '/home/deifson-oliveira/DEIFSON/re7-private-retention-custody/csv-r1r2-deploy-complement-read-20261017-v1'
+@@ -225 +225 @@
+-    return [('boot-id',['sudo','-n','/usr/bin/python3','-B','-I','-S','-','root'],raw),
++    return [('boot-id',['/usr/bin/python3','-B','-I','-S','-','boot'],raw),
+@@ -334 +334 @@
+-    if action=='root':
++    if action=='boot':
+@@ -340 +340 @@
+-    # Launcher supplies already reviewed bytes, also used unchanged as stdin to root/export.
++    # Launcher supplies already reviewed bytes, also used unchanged as stdin to boot/export.

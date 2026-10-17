@@ -1,5 +1,8 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**CSV R1/R2 — complemento deploy SEM sudo, somente LOCAL para revisão.** [Delta,4 provas de launcher completo e roteiro novo](reviews/automation-freeform-window-release-af26/crm-csv-r1r2-deploy-complement-20261017/REPORT.md): Python boot direto;64B/FD/no-follow e private_record preservados. UID1000, sudo indisponível, export/custódia reais locais; cinco respostas e SSH sintéticos. Dois DENYs e18 observações com horários originais intactos, sem COMPLETE retroativo/snapshot atômico. Nenhuma VPS, instalação, backup, pin/binding, R3/R4 ou replay. CSV SUSPENSO / LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 intocados. Deifson; próxima revisão21/10 ou mudança.
+
+
 **CSV complemento R1/R2 — CONSUMED/DENY,16/10 às22:40 Fortaleza.** [Resultado sanitizado e próximos R3/R4 propostos](reviews/automation-freeform-window-release-af26/crm-csv-r1r2-complement-result-20261017/REPORT.md): sudo-n exigiu senha, sem resposta do reader/boot_id; cinco comandos seguintes não rodaram. Única transferência exit0 preservou1.630B byte-exatos; ingestão canônica command_count/R1R2_COMPLEMENT_CUSTODY_DENY, sem COMPLETE. As18 observações de22:22 e o DENY original permanecem históricos e intactos; sem união atômica/boot retroativo. Nenhuma nova autenticação/replay, R3/R4/SQL, reparo, instalação ou backup. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher/controles/guarda38/out.15 não alterados, sem nova certificação. Revisão21/10 ou mudança.
 
 

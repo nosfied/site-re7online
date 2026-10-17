@@ -1,0 +1,46 @@
+{
+  "result": "LOCAL_LAUNCHER_CHAIN_PASS",
+  "tests": 4,
+  "testNames": [
+    "test_complete_published_chain_no_sudo",
+    "test_failure_preserved_by_export_and_canonical_custody",
+    "test_reviewed_hash_denies_before_any_capture",
+    "test_minimal_delta_and_no_privileged_call"
+  ],
+  "uid": 1000,
+  "sudoUnavailable": {
+    "PATHLookup": "not found",
+    "absoluteExecution": "denied",
+    "mechanism": "non-executable file bind over /usr/bin/sudo; /usr/local/bin replaced by synthetic command directory; cap-drop ALL"
+  },
+  "real": [
+    "unmodified documented check-origin/collect/custody bash blocks",
+    "Python subprocess boot via stdin; real local procfs; 37-byte UUID/newline validated, never published",
+    "FD/no-follow/stability and hash validators",
+    "canonical private_record; real local export subprocess",
+    "byte-exact transfer frame validation and custody ingestion",
+    "exclusive700 directories/600 files; no replay on existing targets",
+    "historical origin validator against actual read-only private source; second DENY hash checked"
+  ],
+  "synthetic": [
+    "crontab/systemctl/ps/ss replies",
+    "node/pm2 paths (discovered but never executed)",
+    "ssh executable: local subprocess export; no network connection",
+    "remote and custody destination namespaces mapped to disposable /tmp directories"
+  ],
+  "limits": [
+    "No VPS observations renewed",
+    "No SSH authentication/network behavior proved",
+    "Local UID1000 is unprivileged owner, not a claim of observing remote deploy",
+    "Network namespace isolation unavailable; all invoked transport is a local SSH fixture",
+    "Reproduction requires bwrap and the two existing private DENY captures, intentionally not delivered",
+    "Six-command success is synthetic operational discovery, not remote certification"
+  ],
+  "failuresProved": [
+    "synthetic crontab exit7 stops remaining commands; original raw DENY transferred and preserved by custody DENY",
+    "tool source hash tampering denies before journal/subprocess",
+    "existing collect/custody destinations deny without changed journals or command replay"
+  ],
+  "priorProofsReused": "16-case complement proof for read64/format/errno/FD substitutions retained; exact deterministic source comparison proves these functions unchanged",
+  "privateValuesPublished": false
+}
