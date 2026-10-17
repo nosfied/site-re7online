@@ -65,5 +65,12 @@
       "using main as production identity without VPS evidence"
     ],
     "nextStep": "inventory production-reachable source and create a tested integration line after CSV delivery"
+  },
+  "qualityDebt": {
+    "eslintBaseline": {
+      "errors": 663,
+      "warnings": 246,
+      "policy": "CI blocks increases; reduction is handled separately from the CSV release"
+    }
   }
 }

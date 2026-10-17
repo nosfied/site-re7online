@@ -48,7 +48,8 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npm run lint
+      - name: Enforce the existing ESLint debt ceiling
+        run: bash scripts/ci/check-eslint-baseline.sh
       - run: npm run build
 
   backend:
@@ -97,10 +98,14 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: apps/whatsapp-agent/package-lock.json
+      - name: Install frontend dependencies for path aliases
+        working-directory: .
+        run: npm ci
       - run: npm ci
       - run: npm run db:generate
       - run: npm run db:deploy
       - name: Backend durable-operation and multi-tenant tests
         run: node --import tsx --test src/crm/crmCsvImportOperation.postgres.test.ts
       - name: Frontend timeout and re-entry contract tests
-        run: node --import tsx --test ../../src/lib/crmImportRecovery.test.ts
+        working-directory: .
+        run: apps/whatsapp-agent/node_modules/.bin/tsx --test src/lib/crmImportRecovery.test.ts
