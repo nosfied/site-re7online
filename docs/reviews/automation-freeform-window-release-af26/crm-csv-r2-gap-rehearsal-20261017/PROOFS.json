@@ -1,0 +1,49 @@
+{
+  "result": "EXACT_PUBLISHED_BLOCKS_LOCAL_PASS",
+  "tests": 8,
+  "elapsedSeconds": 3.558,
+  "commandsChanged": false,
+  "commandsSha256": "6daa22ad7248b46f2cbabc57c5e231bfcfec8ad912218f7f87d254688519891d",
+  "blockSha256": [
+    "8105c9e742000682496c765c38676d7741fb7b80391af20228a376cf16fbeb5c",
+    "5b3ae3f8e9671990d8b1bec07956f3f1ac71e980bd2810f5b1d1c856bad1d178"
+  ],
+  "cases": [
+    "exact launcher/read/export/custody and destination collision",
+    "frontend PID mismatch",
+    "proxy ticks mismatch with frontend partial",
+    "EACCES errno13",
+    "proxy UID mismatch via actual fstat",
+    "lost SSH response exit255",
+    "truncated response exit0",
+    "helper hash mismatch before new destination"
+  ],
+  "validators": "published bytes, no PASS callbacks",
+  "real": [
+    "Python/Bash launcher",
+    "bounded FD reads and metadata checks",
+    "private_record",
+    "export byte envelope",
+    "custody validations",
+    "kernel EACCES"
+  ],
+  "simulated": [
+    "SSH endpoint via local subprocess",
+    "procfs fixtures",
+    "frontend no-marker argv (historical raw unavailable)",
+    "Node executable interface (Python image)"
+  ],
+  "historical": [
+    "proxy 12-argument representation with -use-listen-fd",
+    "frontend identity/cwd",
+    "boot bytes used only privately"
+  ],
+  "uidSimulation": {
+    "hostUid": 1000,
+    "namespaceUid": 0,
+    "effectiveCapabilities": 0,
+    "productionUidDistinctionCertified": false
+  },
+  "remoteExecuted": false,
+  "oldCustodiesUnchanged": true
+}

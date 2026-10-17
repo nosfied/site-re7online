@@ -1,5 +1,8 @@
 # Documentation Index
 
+**CSV R2 diagnóstico delimitado — ensaio LOCAL, oito provas.** [Blocos intactos, limites e procedência](../reviews/automation-freeform-window-release-af26/crm-csv-r2-gap-rehearsal-20261017/REPORT.md): launcher/leitura/exportação/custódia reais no laboratório; SSH/procfs/UID externos simulados, sem validação por PASS. Negativas preservam parcial e DENYs. Execução remota única condicionada à publicação destas provas, ainda não realizada. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; produção e históricos intocados. Revisão21/10 ou mudança.
+
+
 **CSV R2 dirigido — CONSUMED/DENY,16/10 às23:23 Fortaleza.** [Raw preservado e reconciliação local](../reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-result-20261017/REPORT.md):2 negativas de representação (frontend script/proxy argv),11 rótulos preservados;34.809B byte-exatos off-host, recibo R2_DIRECTED_CUSTODY_DENY, sem certificado completo. Daemon/API/worker e Node/PM2 observados com limites; frontend/proxy/interval-checks pendentes. Sem retry/sudo/reparo; supervisão não reaberta. Comandos mínimos adicionais somente para revisão, não executados. Dois DENYs/18 observações e complemento anterior intactos. SQL/16 vínculos/root/toolchain/autoridade continuam pendentes. CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY; NEWauth+NEWDB+NEWcipher/guarda38/out.15 intocados. Deifson; revisão21/10 ou mudança.
 
 

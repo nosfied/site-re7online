@@ -1,0 +1,9 @@
+{
+  "base": "68575192cf3283c49b2a404b87c2bd9e5d2efa42",
+  "sources": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-result-20261017/NEXT_COMMANDS.md": "6daa22ad7248b46f2cbabc57c5e231bfcfec8ad912218f7f87d254688519891d",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/read_package.py": "66f337fbe47d69ae02902f38f6b0e474241222c90967580d9c569dce21796691",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/privileged_output.source": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a"
+  },
+  "privateInputsPublished": false
+}
