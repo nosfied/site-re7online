@@ -1,6 +1,9 @@
 # Documentation Index
 
 
+**CSV17/10 — análise/diagnóstico pós-RPC LOCAL.** [Relatório e provas](../reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/REPORT.md): RPC custodiado e três referências históricas conferidos; população/PIDs/campos retornados compatíveis, sem certificar `/proc` ou configuração atual. Estabilidade pós-consulta de socket/pm2.pid permanece indeterminada no DENY consumido; sem atribuição retrospectiva a atime. Comparação passa a reutilizar metadata canônico (nove campos, SO_PEERCRED intacto); etapas/motivos estáticos e evidências privadas pelo Capture/private_record existentes. Nove ensaios literais completos e duas provas de stat locais; sem VPS/coleta/SELECT. ELF operacional NÃO CONFERIDA; ownership UNKNOWN. CSV SUSPENSO / LOCAL VALIDATED no alcance ensaiado / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. Destinos/DENYs/históricos e NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 preservados. Deifson; revisão21/10 ou mudança.
+
+
 **CSV17/10 às09:46 Fortaleza — diagnóstico sem ELF CONSUMED/DENY.** [Resultado/custódia e limites](../reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-result-20261017/REPORT.md): provas9afc2197 publicadas antes da execução única. Fontes/closure26 PASS; readelf não chamado, ELF/closure operacional NÃO CONFERIDA, sem PASS de toolchain. RPC real exit0 e peer antes/depois PASS; DENY posterior sem reason específico no journal, antes de concluir configuração; rota/psql não alcançados. População/PIDs retornados conferem, sem certificar identidades kernel.60.158B custodiados byte-exatos, gatePass=false; ownership UNKNOWN. Sem retry/fallback/outra mudança, SELECT/root/sudo/reparo/instalação/backup/janela. Provas e DENY anterior intactos; NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 não alterados. CSV SUSPENSO / NOT WINDOW READY; nova análise/correção exige revisão. Revisão21/10 ou novo escopo.
 
 

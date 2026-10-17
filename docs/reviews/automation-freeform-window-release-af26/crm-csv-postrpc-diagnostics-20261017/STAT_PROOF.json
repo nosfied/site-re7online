@@ -1,0 +1,22 @@
+{
+  "result": "LOCAL_VALIDATED",
+  "tests": 2,
+  "sourceSha256": "1683e262dcc871469e0ced7874b0ff053a1af2599776439aa05d65243db54a0f",
+  "real": "Local AF_UNIX socket initial lstat; pinned canonical meta function",
+  "controlled": "Native stat_result vectors changing only atime, then each of nine canonical fields",
+  "notProved": "No production attribution; no claim of atime-only filesystem mutation (utime may change ctime)",
+  "canonicalFields": [
+    "dev",
+    "ino",
+    "mode",
+    "uid",
+    "gid",
+    "nlink",
+    "size",
+    "mtime_ns",
+    "ctime_ns"
+  ],
+  "fullStatAtimeOnlyDifferent": true,
+  "canonicalMetaAtimeOnlyEqual": true,
+  "eachCanonicalFieldDriftRejected": true
+}

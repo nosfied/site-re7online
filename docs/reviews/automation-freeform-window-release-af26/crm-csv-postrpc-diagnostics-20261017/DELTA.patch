@@ -1,0 +1,187 @@
+--- accepted-noelf/runner.py
++++ local-diagnostic/runner.py
+@@ -67,0 +68,64 @@
++# Inline diagnostic integration; no independent checker or operational authority.
++class DiagnosticDenied(RuntimeError):
++    def __init__(self,stage,reason):
++        super().__init__(reason);self.stage=stage;self.reason=reason
++
++CANONICAL_REASONS={
++ 'process_not_stable':'CANONICAL_PROCESS_NOT_STABLE',
++ 'successor_restarted':'CANONICAL_SUCCESSOR_RESTARTED',
++ 'process_config_drift':'CANONICAL_PROCESS_CONFIG_DRIFT',
++ 'cwd_drift':'CANONICAL_CWD_DRIFT','executable_drift':'CANONICAL_EXECUTABLE_DRIFT',
++ 'environment_drift':'CANONICAL_ENVIRONMENT_DRIFT','process_missing':'CANONICAL_PROCESS_MISSING',
++ 'frontend_before_schema':'HISTORICAL_FRONTEND_SCHEMA_INVALID',
++ 'frontend_environment_not_scalar':'HISTORICAL_FRONTEND_ENV_SCHEMA_INVALID',
++}
++
++def checked(cap,stage,reason,fn,allowed=None,preserve_exception=False):
++    cap.event('verification_begin',stage=stage,denyReason=reason)
++    try:value=cap.observe(stage,fn)
++    except DiagnosticDenied as e:
++        cap.event('verification_denied',stage=stage,reason=e.reason,originStage=e.stage);raise
++    except Exception as e:
++        # Only exact fixed canonical literals are translated, never arbitrary error text.
++        if allowed and type(e)is RuntimeError and len(e.args)==1 and type(e.args[0])is str:
++            reason=allowed.get(e.args[0],reason)
++        cap.event('verification_denied',stage=stage,reason=reason,errorClass=type(e).__name__,errno=getattr(e,'errno',None))
++        if preserve_exception:raise
++        raise DiagnosticDenied(stage,reason)from None
++    cap.event('verification_pass',stage=stage)
++    return value
++
++def guard(cap,stage,reason,predicate):
++    def evaluate():
++        cap.lib['require'](predicate(),reason)
++        return {'predicateSatisfied':True}
++    return checked(cap,stage,reason,evaluate)
++
++def stat_observation(path,lib):
++    s=path.lstat()
++    return {'metadata':lib['meta'](s),'atimeNs':s.st_atime_ns}
++
++def private_file_observation(path,lib,limit=None):
++    raw,m=lib['stable_file'](path)if limit is None else lib['stable_file'](path,limit)
++    return {'metadata':m,'bytes':len(raw),'sha256':lib['sha'](raw),'bytesBase64':base64.b64encode(raw).decode()}
++
++def canonical_io(cap,system,stage,fn):
++    # Tap exactly the Path operations of the pinned methods, returning their real result.
++    # read_text evidence is the consumed (newline-normalized) text, not raw fd bytes.
++    scope=system.identity.__func__.__globals__;original=scope['Path'];count=0
++    class Tap:
++        def __init__(self,*args):self.path=original(*args)
++        def ident(self):
++            nonlocal count
++            count+=1;return stage+'-io-'+str(count)
++        def read_text(self,*a,**kw):
++            return checked(cap,self.ident(),'CANONICAL_TEXT_READ_FAILED',lambda:self.path.read_text(*a,**kw),preserve_exception=True)
++        def resolve(self,*a,**kw):
++            held={}
++            def read():held['path']=self.path.resolve(*a,**kw);return str(held['path'])
++            checked(cap,self.ident(),'CANONICAL_PATH_RESOLVE_FAILED',read,preserve_exception=True)
++            return held['path']
++    scope['Path']=Tap
++    try:return fn()
++    finally:scope['Path']=original
++
+@@ -75 +139,2 @@
+-    cap.observe('daemon-before',lambda:{'identity':system.identity(18676),'socket':lib['meta'](meta),'pidSha256':lib['sha'](pidraw)})
++    cap.observe('daemon-before',lambda:{'identity':system.identity(18676),'socket':lib['meta'](meta),
++        'socketAtimeNs':meta.st_atime_ns,'pidSha256':lib['sha'](pidraw),'pidBytesBase64':base64.b64encode(pidraw).decode(),'pidMetadata':pm})
+@@ -86,15 +151,32 @@
+-        require(endpoint.lstat()==meta and lib['stable_file']('/home/deploy/.pm2/pm2.pid',64)[0]==pidraw,'daemon_changed')
+-    apps=json.loads(raw);by={a['name']:a for a in apps}
+-    require(len(apps)==len(by)==3 and set(by)==set(EXPECTED),'application_population')
+-    for name,(pid,ticks) in EXPECTED.items():
+-        identity=system.identity(pid)
+-        require(by[name]['pid']==pid and identity and identity['ticks']==ticks and identity['state']not in ('Z','X'),'application_identity')
+-    def historical(name):
+-        raw,m=lib['stable_file'](P/name);require(lib['sha'](raw)==HISTORY[name],'historical_drift')
+-        cap.observe('reference-'+name,lambda:{'sha256':lib['sha'](raw),'bytes':len(raw),'metadata':m})
+-        return json.loads(raw)
+-    saved=historical('saved-dump.pm2.private.json');profiles=historical('source.profile.private.json')
+-    before=next(a for a in saved if a['name']=='re7-admin-front')
+-    for cfg in profiles['apps']:
+-        if cfg['name']!='re7-admin-front':op.config(by[cfg['name']],cfg)
+-    cap.observe('frontend-contract',lambda:c['compare_frontend'](by['re7-admin-front'],before,op))
++        after=checked(cap,'postrpc-socket-stat','POSTRPC_SOCKET_STAT_UNAVAILABLE',lambda:stat_observation(endpoint,lib))
++        guard(cap,'postrpc-socket-type-owner','POSTRPC_SOCKET_TYPE_OWNER',lambda:stat.S_ISSOCK(after['metadata']['mode'])and after['metadata']['uid']==os.getuid())
++        guard(cap,'postrpc-socket-metadata','POSTRPC_SOCKET_METADATA_DRIFT',lambda:after['metadata']==lib['meta'](meta))
++        pid_after=checked(cap,'postrpc-pid-read','POSTRPC_PID_READ_UNSTABLE',lambda:private_file_observation(Path('/home/deploy/.pm2/pm2.pid'),lib,64))
++        guard(cap,'postrpc-pid-content','POSTRPC_PID_CONTENT_DRIFT',lambda:base64.b64decode(pid_after['bytesBase64'],validate=True)==pidraw)
++    apps=checked(cap,'rpc-json','RPC_JSON_INVALID',lambda:json.loads(raw))
++    by=checked(cap,'rpc-index','RPC_STRUCTURE_INVALID',lambda:{a['name']:a for a in apps})
++    guard(cap,'rpc-population','RPC_POPULATION_MISMATCH',lambda:len(apps)==len(by)==3 and set(by)==set(EXPECTED))
++    for index,(name,(pid,ticks))in enumerate(EXPECTED.items()):
++        stage='application-'+str(index)
++        identity=checked(cap,stage+'-identity','APPLICATION_IDENTITY_READ_FAILED',lambda:canonical_io(cap,system,stage,lambda:system.identity(pid)))
++        guard(cap,stage+'-returned-pid','APPLICATION_RETURNED_PID_DRIFT',lambda:by[name]['pid']==pid)
++        guard(cap,stage+'-present','APPLICATION_IDENTITY_ABSENT',lambda:identity is not None)
++        guard(cap,stage+'-ticks','APPLICATION_START_TICKS_DRIFT',lambda:identity['ticks']==ticks)
++        guard(cap,stage+'-state','APPLICATION_STATE_UNSAFE',lambda:identity['state']not in('Z','X'))
++    def historical(name,stage):
++        value=checked(cap,stage+'-read','HISTORICAL_READ_UNSTABLE',lambda:private_file_observation(P/name,lib))
++        guard(cap,stage+'-hash','HISTORICAL_HASH_DRIFT',lambda:value['sha256']==HISTORY[name])
++        data=checked(cap,stage+'-json','HISTORICAL_JSON_INVALID',lambda:json.loads(base64.b64decode(value['bytesBase64'],validate=True)))
++        cap.observe('reference-'+name,lambda:{'sha256':value['sha256'],'bytes':value['bytes'],'metadata':value['metadata']})
++        return data
++    saved=historical('saved-dump.pm2.private.json','saved-reference')
++    profiles=historical('source.profile.private.json','profile-reference')
++    before=checked(cap,'frontend-reference','HISTORICAL_FRONTEND_MISSING',lambda:next(a for a in saved if a['name']=='re7-admin-front'))
++    cfgs=checked(cap,'profile-apps','HISTORICAL_PROFILE_SCHEMA_INVALID',lambda:profiles['apps'])
++    for index,cfg in enumerate(cfgs):
++        stage='pair-config-'+str(index)
++        name=checked(cap,stage+'-name','HISTORICAL_PROFILE_SCHEMA_INVALID',lambda:cfg['name'])
++        if name!='re7-admin-front':
++            checked(cap,stage,'CANONICAL_PAIR_CONFIG_DENIED',lambda:canonical_io(cap,system,stage,lambda:op.config(by[name],cfg)),CANONICAL_REASONS)
++    allowed={**CANONICAL_REASONS,**{'frontend_live_field:'+field:'FRONTEND_FIELD_'+field.upper()+'_DRIFT'for field in c['LIVE_FIELDS']}}
++    checked(cap,'frontend-contract','CANONICAL_FRONTEND_CONFIG_DENIED',lambda:canonical_io(cap,system,'frontend-config',lambda:c['compare_frontend'](by['re7-admin-front'],before,op)),allowed)
+@@ -102 +184 @@
+-        raw,m=lib['stable_file'](Path('/home/deploy/.pm2')/name)
++        value,m=lib['stable_file'](Path('/home/deploy/.pm2')/name)
+@@ -104 +186 @@
+-        now=next(a for a in json.loads(raw)if a['name']=='re7-admin-front')
++        now=next(a for a in json.loads(value)if a['name']=='re7-admin-front')
+@@ -106,2 +188,2 @@
+-    for name,(pid,ticks) in EXPECTED.items():
+-        identity=system.identity(pid);require(identity and identity['ticks']==ticks and identity['state']not in ('Z','X'),'identity_after')
++    for name,(pid,ticks)in EXPECTED.items():
++        identity=system.identity(pid);require(identity and identity['ticks']==ticks and identity['state']not in('Z','X'),'identity_after')
+@@ -180 +262 @@
+-        cap.event('end',result='DENY_NO_RETRY',errorClass=type(e).__name__,errno=getattr(e,'errno',None),ownership='UNKNOWN')
++        cap.event('end',result='DENY_NO_RETRY',errorClass=type(e).__name__,errno=getattr(e,'errno',None),ownership='UNKNOWN',denialStage=e.stage if isinstance(e,DiagnosticDenied)else None,denialReason=e.reason if isinstance(e,DiagnosticDenied)else None)
+--- accepted-noelf/driver.py
++++ local-diagnostic/driver.py
+@@ -6 +6 @@
+-NAME='crm-csv-three-gaps-noelf-20261017'
++NAME='crm-csv-postrpc-diagnostics-20261017'
+@@ -8 +8 @@
+-MATERIAL=Path('/dev/shm/re7-csv-three-gaps-material-noelf-20261017-v1')
++MATERIAL=Path('/dev/shm/re7-csv-postrpc-material-20261017-v1')
+@@ -10,2 +10,2 @@
+-TOOLS='/dev/shm/re7-csv-three-gaps-executable-tools-noelf-20261017-v1'
+-OUTPUT='/dev/shm/re7-csv-three-gaps-executable-read-noelf-20261017-v1'
++TOOLS='/dev/shm/re7-csv-postrpc-tools-20261017-v1'
++OUTPUT='/dev/shm/re7-csv-postrpc-read-20261017-v1'
+@@ -127 +127 @@
+-    folder=lib['new_directory'](CUSTODY/('csv-three-gaps-executable-noelf-20261017-v1'+suffix))
++    folder=lib['new_directory'](CUSTODY/('csv-postrpc-diagnostics-20261017-v1'+suffix))
+@@ -132 +132 @@
+-            previous=CUSTODY/'csv-three-gaps-executable-noelf-20261017-v1'
++            previous=CUSTODY/'csv-postrpc-diagnostics-20261017-v1'
+--- accepted-noelf/launch.py
++++ local-diagnostic/launch.py
+@@ -52 +52 @@
+-    folder=parent/('csv-three-gaps-launcher-noelf-20261017-v1-'+action);folder.mkdir(mode=0o700)
++    folder=parent/('csv-postrpc-launcher-20261017-v1-'+action);folder.mkdir(mode=0o700)
+--- accepted-noelf/lab.py
++++ local-diagnostic/lab.py
+@@ -17,0 +18 @@
++    peer_calls=0;replacements=[]
+@@ -23,0 +25,6 @@
++        def lstat(self,*a,**kw):
++            s=super().lstat(*a,**kw)
++            if CASE=='socket-atime'and peer_calls>=2 and str(self)==str(fake/'home/deploy/.pm2/rpc.sock'):
++                values=list(s);values[7]+=2
++                return os.stat_result(values,{'st_atime':s.st_atime+2,'st_atime_ns':s.st_atime_ns+2000000000,'st_mtime':s.st_mtime,'st_mtime_ns':s.st_mtime_ns,'st_ctime':s.st_ctime,'st_ctime_ns':s.st_ctime_ns})
++            return s
+@@ -25,0 +33 @@
++            nonlocal peer_calls
+@@ -29,0 +38,13 @@
++                peer_calls+=1
++                if peer_calls==2:
++                    endpoint=fake/'home/deploy/.pm2/rpc.sock'
++                    if CASE=='socket-replaced':
++                        endpoint.unlink();replacement=realsocket(socket.AF_UNIX);replacement.bind(str(endpoint));replacements.append(replacement)
++                    if CASE=='pid-changed':(fake/'home/deploy/.pm2/pm2.pid').write_bytes(b'18677\n')
++                    if CASE=='identity-absent':(fake/'proc/936386/stat').unlink()
++                    if CASE=='ticks-changed':
++                        p=fake/'proc/936386/stat';p.write_bytes(p.read_bytes().replace(b'2193413108',b'2193413109'))
++                    ref=fake/'opt/re7online/backups/converta-persistent/preparations/incident-6683-v4-csv-staged-v2-20261016T094000Z/window/saved-dump.pm2.private.json'
++                    if CASE=='reference-hash':ref.write_bytes(ref.read_bytes()+b' ')
++                    if CASE=='reference-absent':ref.unlink()
++                    if CASE=='canonical-env':(fake/'proc/936386/environ').write_bytes(b'DATABASE_URL=SYNTHETIC_PRIVATE_MARKER\0')
+@@ -66 +87 @@
+-                RealPath('/dev/shm/re7-csv-three-gaps-executable-tools-noelf-20261017-v1/pm2_rpc_fd.cjs').write_text("throw Error('MUTABLE_FILE_EXECUTED');")
++                RealPath('/dev/shm/re7-csv-postrpc-tools-20261017-v1/pm2_rpc_fd.cjs').write_text("throw Error('MUTABLE_FILE_EXECUTED');")

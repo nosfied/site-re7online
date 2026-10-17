@@ -1,0 +1,186 @@
+{
+  "firstCodeBoundaryAfterPeerAfter": "socket/pm2.pid post-query stability remains indeterminate",
+  "firstReplayableBoundaryFromRecordedRpc": "JSON/population/returned PIDs and returned-field comparisons",
+  "frontendReturnedFields": [
+    {
+      "field": "pm_cwd",
+      "presentInReference": true,
+      "presentInRpc": true,
+      "referenceType": "str",
+      "returnedType": "str",
+      "sameValue": true
+    },
+    {
+      "field": "pm_exec_path",
+      "presentInReference": true,
+      "presentInRpc": true,
+      "referenceType": "str",
+      "returnedType": "str",
+      "sameValue": true
+    },
+    {
+      "field": "exec_interpreter",
+      "presentInReference": true,
+      "presentInRpc": true,
+      "referenceType": "str",
+      "returnedType": "str",
+      "sameValue": true
+    },
+    {
+      "field": "args",
+      "presentInReference": true,
+      "presentInRpc": true,
+      "referenceType": "list",
+      "returnedType": "list",
+      "sameValue": true
+    },
+    {
+      "field": "node_args",
+      "presentInReference": true,
+      "presentInRpc": true,
+      "referenceType": "list",
+      "returnedType": "list",
+      "sameValue": true
+    },
+    {
+      "field": "namespace",
+      "presentInReference": true,
+      "presentInRpc": true,
+      "referenceType": "str",
+      "returnedType": "str",
+      "sameValue": true
+    },
+    {
+      "field": "exec_mode",
+      "presentInReference": true,
+      "presentInRpc": true,
+      "referenceType": "str",
+      "returnedType": "str",
+      "sameValue": true
+    },
+    {
+      "field": "watch",
+      "presentInReference": true,
+      "presentInRpc": true,
+      "referenceType": "bool",
+      "returnedType": "bool",
+      "sameValue": true
+    },
+    {
+      "field": "autorestart",
+      "presentInReference": true,
+      "presentInRpc": true,
+      "referenceType": "bool",
+      "returnedType": "bool",
+      "sameValue": true
+    },
+    {
+      "field": "stop_exit_codes",
+      "presentInReference": true,
+      "presentInRpc": true,
+      "referenceType": "int",
+      "returnedType": "int",
+      "sameValue": true
+    }
+  ],
+  "indeterminate": [
+    "socket stat_result before/after including atime",
+    "pm2.pid content/metadata after query",
+    "application kernel identities/start ticks/state",
+    "current /proc cwd/exe/environ",
+    "live historical reference bytes/metadata",
+    "current saved/fallback"
+  ],
+  "perApplication": [
+    {
+      "application": "re7-whatsapp-agent",
+      "canonicalConfigurationCertified": false,
+      "envMirrorExpectedSubsetEqual": true,
+      "envMirrorIsObject": true,
+      "pm2EnvIsObject": true,
+      "pmCwdMatchesReference": true,
+      "pmExecPathMatchesReference": true,
+      "procCwdExeEnvironmentObserved": false,
+      "procIdentityObserved": false,
+      "requiredReturnedFieldsPresent": true,
+      "returnedInterpreterMatchesReference": true,
+      "returnedPidMatches": true,
+      "statusOnline": true,
+      "watchIsFalse": true
+    },
+    {
+      "application": "re7-whatsapp-web-worker",
+      "canonicalConfigurationCertified": false,
+      "envMirrorExpectedSubsetEqual": true,
+      "envMirrorIsObject": true,
+      "pm2EnvIsObject": true,
+      "pmCwdMatchesReference": true,
+      "pmExecPathMatchesReference": true,
+      "procCwdExeEnvironmentObserved": false,
+      "procIdentityObserved": false,
+      "requiredReturnedFieldsPresent": true,
+      "returnedInterpreterMatchesReference": true,
+      "returnedPidMatches": true,
+      "statusOnline": true,
+      "watchIsFalse": true
+    },
+    {
+      "application": "re7-admin-front",
+      "canonicalConfigurationCertified": false,
+      "envMirrorExpectedSubsetEqual": true,
+      "envMirrorIsObject": true,
+      "pm2EnvIsObject": true,
+      "pmCwdMatchesReference": true,
+      "pmExecPathMatchesReference": true,
+      "procCwdExeEnvironmentObserved": false,
+      "procIdentityObserved": false,
+      "requiredReturnedFieldsPresent": true,
+      "returnedInterpreterMatchesReference": true,
+      "returnedPidMatches": true,
+      "statusOnline": true,
+      "watchIsFalse": true
+    }
+  ],
+  "productionCertification": false,
+  "references": [
+    {
+      "bytes": 26270,
+      "historicalNotCurrent": true,
+      "matchesReviewedReference": true,
+      "member": "window/saved-dump.pm2.private.json",
+      "memberMtime": 1792144012.932158,
+      "sha256": "c9c54c02b9694328a5aeaa4335efb88135f9bd948b4f786c8e9e4e851efd51e3"
+    },
+    {
+      "bytes": 15179,
+      "historicalNotCurrent": true,
+      "matchesReviewedReference": true,
+      "member": "window/source.profile.private.json",
+      "memberMtime": 1792141107.8946116,
+      "sha256": "a062c7020353cb39b0578653ea51475f8e9f9f68a588d1c55eb87cbbd68b6b9e"
+    },
+    {
+      "bytes": 365,
+      "historicalNotCurrent": true,
+      "matchesReviewedReference": true,
+      "member": "window/db-owner-bindings.private.json",
+      "memberMtime": 1792141107.8931894,
+      "sha256": "1d67ff65fc300b7bb0fb165e31a69d415d9adb5d111d3b91e444137a3a8eaeeb"
+    }
+  ],
+  "retroactiveAtimeAttribution": false,
+  "rpc": {
+    "bytes": 25655,
+    "namesMatch": true,
+    "rowCount": 3,
+    "sha256": "ec71e5a5364035d06ac72e1cef728ce20836cb2e223e5d0dbaa7ad0d4559687a",
+    "uniqueNames": 3
+  },
+  "scope": "LOCAL_CUSTODY_ONLY_NO_PROC_SIMULATION",
+  "sourceHashes": {
+    "capture": "18add4ba10e9509cf1527241ff4a6e48e35205519d7bce70713bd07923b58b7d",
+    "contracts": "8b6fd62ccaf1a9e0c866908eee57041e464156d62dbe9b9031493ef55695d198",
+    "historicalArchive": "32e0cb1de5dac716027fc8face5cc60f8b996ec0ca9de6b18363cbbb84b30076",
+    "runner": "49ec618a703c8c0a6caf91fb1a4be3f165e2707fe7cbc244592a877e5b54200a"
+  }
+}

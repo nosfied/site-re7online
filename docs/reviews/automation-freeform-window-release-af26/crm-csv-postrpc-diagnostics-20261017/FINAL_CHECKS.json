@@ -1,0 +1,14 @@
+{
+  "result": "LOCAL_DELIVERY_CHECKED",
+  "sourceDigestsMatchPinnedGit": true,
+  "frontierDigestMatches": true,
+  "allNineCasesBoundToFinalCommandsAndManifest": true,
+  "patchMatchesFourDeclaredFiles": true,
+  "pythonCompilationWithoutImport": true,
+  "secretPatternScan": "No API key/private key/connection credential detected; exact synthetic fixture URL excluded; manually reviewed new files and delta",
+  "trackedHistoricalFilesChanged": false,
+  "remoteObservedBeforePublication": "4f5bb477ece1cd605c1ad94a0af78a3ed7019292",
+  "ci": "only .github/workflows/ci.yml push/PR main,develop",
+  "vercelBranchDeploymentEnabled": false,
+  "noVps": true
+}

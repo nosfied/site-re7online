@@ -1,0 +1,29 @@
+{
+  "scope": "Only new local post-RPC package and three brief canonical checkpoints; no raw/private data",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/COMMANDS.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/DELIVERY.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/FINAL_CHECKS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/LOCAL_ANALYSIS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/MANIFEST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/SOURCE_INDEX.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/STAT_PROOF.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/analyze_custody.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/compose.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/driver.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/frontier.source",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/lab.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/launch.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/runner.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/seal.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/test_blocks.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/test_stat_contract.py",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ]
+}

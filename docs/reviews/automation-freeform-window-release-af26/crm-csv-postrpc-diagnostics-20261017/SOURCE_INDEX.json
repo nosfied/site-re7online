@@ -1,0 +1,37 @@
+{
+  "base": "4f5bb477ece1cd605c1ad94a0af78a3ed7019292",
+  "frontierSha256": "65f7e994770d4a69b02fb3d63b225e622b57be981ca7db2c1a5a6ad09908cb05",
+  "noOperationalAuthorization": true,
+  "sources": {
+    "driver.py": {
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/driver.py",
+      "sha256": "25324f0ddeebdec1825c8afb964184a6c0429383183327e37820bee9ad1f3e54"
+    },
+    "lab.py": {
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/lab.py",
+      "sha256": "d3da0e8e534bc584daf71c7b0371872e7cee2a7a48211317bacb611cd3405abf"
+    },
+    "launch.py": {
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/launch.py",
+      "sha256": "2eb0b322656e0872648f2cc4d296ef6608a74d52248a93e69b7b2ef1362bba8a"
+    },
+    "runner.py": {
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/runner.py",
+      "sha256": "49ec618a703c8c0a6caf91fb1a4be3f165e2707fe7cbc244592a877e5b54200a"
+    },
+    "seal.py": {
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/seal.py",
+      "sha256": "c00747bf1f781dcebaf20bd0fedaa2b43677566dd002254cd8e02471e9ca805b"
+    },
+    "test_blocks.py": {
+      "commit": "9afc2197e4bbc58a6f6a7ae0d9f94d92189ad3a2",
+      "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-noelf-20261017/test_blocks.py",
+      "sha256": "afccb43d8acfb4f17108410e67b064643fc1456f79b995ddad3f0c83affd7d9a"
+    }
+  }
+}

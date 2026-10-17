@@ -1,0 +1,283 @@
+{
+  "base": "4f5bb477ece1cd605c1ad94a0af78a3ed7019292",
+  "closureProvenance": {
+    "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/CLOSURE.json",
+    "sha256": "1e35a77626fea39d8b8f02695ddc4b10594ad7af37b44fba5ddcb2d309b1cd3b"
+  },
+  "files": {
+    "capture_imports.source": {
+      "bootstrap": false,
+      "bytes": 3976,
+      "relativeSource": "../crm-csv-operational-20261016/capture_imports.py",
+      "sha256": "52d6e914872e55c64925dc8852bf57e69dda982679f473111401ec8db2bf8f2f",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-operational-20261016/capture_imports.py"
+    },
+    "contracts.py": {
+      "bootstrap": true,
+      "bytes": 3239,
+      "relativeSource": "../crm-csv-three-gaps-procedure-20261017/contracts.py",
+      "sha256": "8b6fd62ccaf1a9e0c866908eee57041e464156d62dbe9b9031493ef55695d198",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/contracts.py"
+    },
+    "driver.py": {
+      "bootstrap": true,
+      "bytes": 10339,
+      "relativeSource": "driver.py",
+      "sha256": "a739a70920c3221d3bb27851e7656be6f5d522ee22d04cd5ead7689af5fd6820",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/driver.py"
+    },
+    "identity.sql": {
+      "bootstrap": false,
+      "bytes": 1374,
+      "relativeSource": "../crm-csv-three-gaps-procedure-20261017/identity.sql",
+      "sha256": "ed4eb8826e4bc68e1b9a2f98c9676898b8e3f068add747881566613d172ac138",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/identity.sql"
+    },
+    "imports.sql": {
+      "bootstrap": false,
+      "bytes": 582,
+      "relativeSource": "../crm-csv-three-gaps-procedure-20261017/imports.sql",
+      "sha256": "cbb92b53c4f2c8b298016e57a6d52dcef2e0b1c4ddc003a69e07a04398cfaf12",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/imports.sql"
+    },
+    "launch.py": {
+      "bootstrap": true,
+      "bytes": 4569,
+      "relativeSource": "launch.py",
+      "sha256": "19389532ecdd9b8fc3360fb8c424dbf5bba1c17003c6f4a4f415799a6f7bd280",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/launch.py"
+    },
+    "node_snapshot.cjs": {
+      "bootstrap": true,
+      "bytes": 1615,
+      "relativeSource": "../crm-csv-three-gaps-executable-20261017/node_snapshot.cjs",
+      "sha256": "1a53c533d104b78af4202ed3da2d98a6c00b42b9d643c43887bced6923574c87",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-executable-20261017/node_snapshot.cjs"
+    },
+    "ops.source": {
+      "bootstrap": false,
+      "bytes": 28444,
+      "relativeSource": "../crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source",
+      "sha256": "c84a5e059cbc75ee8114bbb36f90f92d7de7516f4433de4680cc46b592ae6d3e",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-review-publication-20261016/code-sources/ops.py.c84a5e059cbc.source"
+    },
+    "ownership.sql": {
+      "bootstrap": false,
+      "bytes": 494,
+      "relativeSource": "../crm-csv-three-gaps-procedure-20261017/ownership.sql",
+      "sha256": "989f3371f3e2fc2886ddba4808180869e1c646b5dca550c1c36b940a68e32efd",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/ownership.sql"
+    },
+    "pm2_rpc_fd.cjs": {
+      "bootstrap": false,
+      "bytes": 1481,
+      "relativeSource": "../crm-csv-three-gaps-procedure-20261017/pm2_rpc_fd.cjs",
+      "sha256": "d590608ba53ad63e883e308e9764c2125451a921372191379d5ebed9b4b75760",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-three-gaps-procedure-20261017/pm2_rpc_fd.cjs"
+    },
+    "privileged_output.source": {
+      "bootstrap": true,
+      "bytes": 3303,
+      "relativeSource": "../crm-csv-r2-directed-20261017/privileged_output.source",
+      "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/privileged_output.source"
+    },
+    "read_package.py": {
+      "bootstrap": true,
+      "bytes": 35507,
+      "relativeSource": "../crm-csv-r2-directed-20261017/read_package.py",
+      "sha256": "66f337fbe47d69ae02902f38f6b0e474241222c90967580d9c569dce21796691",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-r2-directed-20261017/read_package.py"
+    },
+    "rpc/node_modules/amp-message/index.js": {
+      "bootstrap": false,
+      "bytes": 2424,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp-message/index.js",
+      "sha256": "7215025169eb555640d6de3e0b99a600d7af04d6fabf65389bec65afbc47142e",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp-message/index.js"
+    },
+    "rpc/node_modules/amp-message/package.json": {
+      "bootstrap": false,
+      "bytes": 453,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp-message/package.json",
+      "sha256": "96ff6642f0cf1f9355bc0d0314b6f304f85f570640c04f06595a4ff9d33e3b47",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp-message/package.json"
+    },
+    "rpc/node_modules/amp/index.js": {
+      "bootstrap": false,
+      "bytes": 128,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp/index.js",
+      "sha256": "e976e5f23fc1772674bd32d1a8541b3b4122675134474688366ec179fe8b3274",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp/index.js"
+    },
+    "rpc/node_modules/amp/lib/decode.js": {
+      "bootstrap": false,
+      "bytes": 458,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/decode.js",
+      "sha256": "53070d736cdc23c16e46e91ba2b78aa45d8d60131b52af2e25ee9525c30f76fa",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/decode.js"
+    },
+    "rpc/node_modules/amp/lib/encode.js": {
+      "bootstrap": false,
+      "bytes": 616,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/encode.js",
+      "sha256": "6b3be5fd8f6ed5af1fb56f8cdf0b5d91eec515e6a9cca2ef117812753fb9aaf1",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/encode.js"
+    },
+    "rpc/node_modules/amp/lib/stream.js": {
+      "bootstrap": false,
+      "bytes": 2219,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/stream.js",
+      "sha256": "151e262054bb7435af73a0049190ed9e53d5055acbc336921089c5b5817474d5",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp/lib/stream.js"
+    },
+    "rpc/node_modules/amp/package.json": {
+      "bootstrap": false,
+      "bytes": 370,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/amp/package.json",
+      "sha256": "e7f86738e989dab385a911729409603938cf3e087d82f0e03239d3e62c2bf302",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/amp/package.json"
+    },
+    "rpc/node_modules/debug/package.json": {
+      "bootstrap": false,
+      "bytes": 1479,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/debug/package.json",
+      "sha256": "ea8e33d63fe5f3a4c36609b6c3df8e2ef1f8b8ba2fc3a2e1e53cb27291f384af",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/debug/package.json"
+    },
+    "rpc/node_modules/debug/src/common.js": {
+      "bootstrap": false,
+      "bytes": 6915,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/debug/src/common.js",
+      "sha256": "dbe83d2bb5837f3c4d7fe537b8004c585987270eceed5b06b8e078deb0ae214a",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/debug/src/common.js"
+    },
+    "rpc/node_modules/debug/src/index.js": {
+      "bootstrap": false,
+      "bytes": 314,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/debug/src/index.js",
+      "sha256": "aa127ff1752b7d9c7415c5c7bb6994d9aa722b81bcbcab4bd48316b013d23bf3",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/debug/src/index.js"
+    },
+    "rpc/node_modules/debug/src/node.js": {
+      "bootstrap": false,
+      "bytes": 4728,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/debug/src/node.js",
+      "sha256": "d7b26d7c92f8ea7794b77ce11f3c11cd18c9084df7c357e3c7025344fa28aac6",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/debug/src/node.js"
+    },
+    "rpc/node_modules/has-flag/index.js": {
+      "bootstrap": false,
+      "bytes": 330,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/has-flag/index.js",
+      "sha256": "e9e921d4734fee9405bef5886c010c80a8f10fe958e5d71bd5d8eed5e616e78d",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/has-flag/index.js"
+    },
+    "rpc/node_modules/has-flag/package.json": {
+      "bootstrap": false,
+      "bytes": 696,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/has-flag/package.json",
+      "sha256": "3fef4b52efbeabeadfffd5994e90b1025eb24263286e34170675956637d368b1",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/has-flag/package.json"
+    },
+    "rpc/node_modules/ms/index.js": {
+      "bootstrap": false,
+      "bytes": 3024,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/ms/index.js",
+      "sha256": "e5f0b6a946a9b2b356a28557728410717df54ea2f599edb619f9839df6b7b0e9",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/ms/index.js"
+    },
+    "rpc/node_modules/ms/package.json": {
+      "bootstrap": false,
+      "bytes": 732,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/ms/package.json",
+      "sha256": "1a6b4d9739790c0b94ab96c8cc0507e281c164c311ff4fbf5e57fb8d26290b40",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/ms/package.json"
+    },
+    "rpc/node_modules/pm2-axon-rpc/lib/client.js": {
+      "bootstrap": false,
+      "bytes": 1113,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon-rpc/lib/client.js",
+      "sha256": "f105ec1a2916fe5d57a68ac645c00443fe35b1c47fab8718cffd4527f2ba6f91",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon-rpc/lib/client.js"
+    },
+    "rpc/node_modules/pm2-axon-rpc/package.json": {
+      "bootstrap": false,
+      "bytes": 754,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon-rpc/package.json",
+      "sha256": "9ba8348ee5e75f6c5b2c3f6ac6bb5f065aa65341e8702f2094caf7b03c60b7fe",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon-rpc/package.json"
+    },
+    "rpc/node_modules/pm2-axon/lib/configurable/index.js": {
+      "bootstrap": false,
+      "bytes": 48,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/configurable/index.js",
+      "sha256": "246fddc47d614c7985c4e924d3482a8702dccff38f17dff00af28a5406735dcd",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/configurable/index.js"
+    },
+    "rpc/node_modules/pm2-axon/lib/configurable/lib/configurable.js": {
+      "bootstrap": false,
+      "bytes": 738,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/configurable/lib/configurable.js",
+      "sha256": "91993730e20717572137853fd8ff9b065d89a510427e8fbbea925b5e43d46000",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/configurable/lib/configurable.js"
+    },
+    "rpc/node_modules/pm2-axon/lib/plugins/queue.js": {
+      "bootstrap": false,
+      "bytes": 1237,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/plugins/queue.js",
+      "sha256": "ce90875571b2966b6e58ed687dc5570f2d82e5023e0800a9648610225bb4f1be",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/plugins/queue.js"
+    },
+    "rpc/node_modules/pm2-axon/lib/sockets/req.js": {
+      "bootstrap": false,
+      "bytes": 1906,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/sockets/req.js",
+      "sha256": "d418b6124cb48fc97279ded7dd08ca17922c4550bf42a5199f7651188f36df77",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/sockets/req.js"
+    },
+    "rpc/node_modules/pm2-axon/lib/sockets/sock.js": {
+      "bootstrap": false,
+      "bytes": 9121,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/sockets/sock.js",
+      "sha256": "75c923af407dcc005f5da934fce43d0c0adf7d5275d3fd599475b91847f253c6",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/sockets/sock.js"
+    },
+    "rpc/node_modules/pm2-axon/lib/utils.js": {
+      "bootstrap": false,
+      "bytes": 255,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/utils.js",
+      "sha256": "561edbe0a58aba85e0e97dd667c4479384b1f9543935f2a6372df4ae321f302f",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/lib/utils.js"
+    },
+    "rpc/node_modules/pm2-axon/package.json": {
+      "bootstrap": false,
+      "bytes": 845,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/package.json",
+      "sha256": "55a069a32a1cafbb1c139f2b3ac87d013fd331c36693a1a5938711f4d4fdbe58",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/pm2-axon/package.json"
+    },
+    "rpc/node_modules/supports-color/index.js": {
+      "bootstrap": false,
+      "bytes": 2748,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/supports-color/index.js",
+      "sha256": "479fd04f71a0fed642baa7e57c7e0701ae6f4a450bde8179f96815e6a26752b0",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/supports-color/index.js"
+    },
+    "rpc/node_modules/supports-color/package.json": {
+      "bootstrap": false,
+      "bytes": 817,
+      "relativeSource": "../../../../../../../../../../../../tmp/re7-b4-toolchain-20261016/node_modules/supports-color/package.json",
+      "sha256": "d410a772f9f64b224482ec13815a4bbf1837c533e1be04b3687755c48b2efa1f",
+      "source": "/tmp/re7-b4-toolchain-20261016/node_modules/supports-color/package.json"
+    },
+    "runner.py": {
+      "bootstrap": true,
+      "bytes": 18336,
+      "relativeSource": "runner.py",
+      "sha256": "aa3ae7f3c40d2fd64e8f90a0037675c30e821de50fb0be0a63ca8259084ad5b8",
+      "source": "docs/reviews/automation-freeform-window-release-af26/crm-csv-postrpc-diagnostics-20261017/runner.py"
+    }
+  },
+  "scope": "inactive diagnostic only; not installed phase authority"
+}
