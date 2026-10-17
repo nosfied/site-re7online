@@ -1,0 +1,51 @@
+{
+  "base": "f54691a6612c43087f8093f14768a5eaa0ff732f",
+  "editableLocalCorrection": "contracts.py",
+  "derivation": {
+    "source": "crm-csv-three-gaps-procedure-20261017/contracts.py",
+    "sha256": "8b6fd62ccaf1a9e0c866908eee57041e464156d62dbe9b9031493ef55695d198",
+    "onlyChangedFunctions": [
+      "frontend_expected",
+      "compare_frontend"
+    ]
+  },
+  "sourceCodeAndPriorEvidence": {
+    "old_contract": {
+      "path": "crm-csv-three-gaps-procedure-20261017/contracts.py",
+      "sha256": "8b6fd62ccaf1a9e0c866908eee57041e464156d62dbe9b9031493ef55695d198"
+    },
+    "preserved_environment": {
+      "path": "preventive-api-frontend3227-prepared-20261010/preserved_frontend_environment.py",
+      "sha256": "5b4a0f2bdf741ce639c66a00c2e63c4e37c5ccfe2a643ef5355028d3db97deba"
+    },
+    "crm-csv-staging-20261016/capture_source.py": {
+      "path": "crm-csv-staging-20261016/capture_source.py",
+      "sha256": "47b10e0b3fa5c2916f942a6980543e105d62a5e7ca0620f9bc5c3728e955b53a"
+    },
+    "crm-csv-staging-20261016/bind_window_v2.py": {
+      "path": "crm-csv-staging-20261016/bind_window_v2.py",
+      "sha256": "12899c690b01f3b12e7bbfeb90e891ab5abb75f5fa997d7fd8f57ff2d3ca5d00"
+    },
+    "crm-csv-operational-20261016/compose.py": {
+      "path": "crm-csv-operational-20261016/compose.py",
+      "sha256": "64079638f1e99a673c60e4d8b622c0a355fd521c182bdae15148df558db759d0"
+    },
+    "v4-sequencer/sequencer.py": {
+      "path": "v4-sequencer/sequencer.py",
+      "sha256": "b6abd49db636cc77d9255fbdfcde8089af3a98699240e3235dab45ee4451e86d"
+    },
+    "crm-csv-original-recovery-20261016/recover_original.py": {
+      "path": "crm-csv-original-recovery-20261016/recover_original.py",
+      "sha256": "78fdca8eb4750a325a837322b7e5833f977fe255e1f3d941759bb973f9532283"
+    },
+    "preventive-api-frontend3227-prepared-20261010/verification-results.json": {
+      "path": "preventive-api-frontend3227-prepared-20261010/verification-results.json",
+      "sha256": "c067d59ab04bacbcb682879eaa3aa8183ca09a751cf78c7b3f73304ecaaa6169"
+    },
+    "crm-csv-original-recovery-20261016/RECOVERY_COMPLETE.md": {
+      "path": "crm-csv-original-recovery-20261016/RECOVERY_COMPLETE.md",
+      "sha256": "6f902b7107a333efdffa1e14aad5219fe7cf0a4fe10133441591430a06d34901"
+    }
+  },
+  "noOperationalIntegration": true
+}

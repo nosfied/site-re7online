@@ -1,0 +1,339 @@
+{
+  "result": "INCORRECT_READER_ADAPTATION_DEMONSTRATED_OFFLINE",
+  "base": "f54691a6612c43087f8093f14768a5eaa0ff732f",
+  "originalBacklog": "docs/BACKLOG_TECH.md#crm--importa\u00e7\u00e3o-csv-com-resultado-desconhecido-na-interface-e-totais-amb\u00edguos--10102026",
+  "newProductionObservation": false,
+  "recordedIntervalUtc": [
+    "2026-10-17T13:14:45.048113+00:00",
+    "2026-10-17T13:14:46.062476+00:00"
+  ],
+  "privateSources": {
+    "capture": {
+      "bytes": 358887,
+      "sha256": "67d9a84669f7941d1783a3b917d9a26d568ee3e7e531e7b4c070f805ae810f5e"
+    },
+    "acceptedRecoveryArchive": {
+      "bytes": 686080,
+      "sha256": "32e0cb1de5dac716027fc8face5cc60f8b996ec0ca9de6b18363cbbb84b30076"
+    },
+    "preWindowDump": {
+      "bytes": 26270,
+      "sha256": "c9c54c02b9694328a5aeaa4335efb88135f9bd948b4f786c8e9e4e851efd51e3"
+    },
+    "originalOsSourceProfile": {
+      "bytes": 15179,
+      "sha256": "a062c7020353cb39b0578653ea51475f8e9f9f68a588d1c55eb87cbbd68b6b9e"
+    }
+  },
+  "oldAdaptationResult": "DENY_environment_drift",
+  "correctedOfflineReplay": "CANONICAL_CONFIGURATION_ACCEPTED_FOR_RECORDED_BYTES_ONLY",
+  "originalOsReferenceVariables": 30,
+  "observedOsVariables": 30,
+  "originalOsReferenceExactlyEqualsObserved": true,
+  "applicationProjectionVariables": 31,
+  "applicationProjectionExactlyEqualsEnvelopeAndRpc": true,
+  "embeddedEnvelopePathsMatchRpc": true,
+  "applicationFieldProvenance": [
+    {
+      "name": "DBUS_SESSION_BUS_ADDRESS",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "HOME",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "LANG",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "LC_ALL",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "LC_CTYPE",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "LOGNAME",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "NEXT_PUBLIC_CONVERTA_WEBCHAT_API_BASE_URL",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "NEXT_PUBLIC_CONVERTA_WEBCHAT_SITE_ID",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "NEXT_TELEMETRY_DISABLED",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "NODE_ENV",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "OLDPWD",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "PATH",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "different",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "PM2_HOME",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "PM2_JSON_PROCESSING",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "PM2_USAGE",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "PWD",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "different",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "RE7_FRONT_CONTROL",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "RE7_FRONT_RUN",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "SHELL",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "SHLVL",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "SSH_CLIENT",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "different",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "SSH_CONNECTION",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "different",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "USER",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "XDG_RUNTIME_DIR",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "XDG_SESSION_CLASS",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "XDG_SESSION_ID",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "different",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "XDG_SESSION_TYPE",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "equal",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "_",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "different",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "re7-admin-front",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    },
+    {
+      "name": "unique_id",
+      "origin": "saved-dump.front.env; same key/value in serialized OS pm2_env.env and RPC pm2_env.env",
+      "savedEqualsEnvelopeApplicationValue": true,
+      "savedEqualsRpcApplicationValue": true,
+      "osTopLevelComparison": "absent",
+      "individualOriginalAssignmentSource": "not established beyond preserved PM2/OS records; no inference from variable name"
+    }
+  ],
+  "sourceCodeAndPriorEvidence": {
+    "old_contract": {
+      "path": "crm-csv-three-gaps-procedure-20261017/contracts.py",
+      "sha256": "8b6fd62ccaf1a9e0c866908eee57041e464156d62dbe9b9031493ef55695d198"
+    },
+    "preserved_environment": {
+      "path": "preventive-api-frontend3227-prepared-20261010/preserved_frontend_environment.py",
+      "sha256": "5b4a0f2bdf741ce639c66a00c2e63c4e37c5ccfe2a643ef5355028d3db97deba"
+    },
+    "crm-csv-staging-20261016/capture_source.py": {
+      "path": "crm-csv-staging-20261016/capture_source.py",
+      "sha256": "47b10e0b3fa5c2916f942a6980543e105d62a5e7ca0620f9bc5c3728e955b53a"
+    },
+    "crm-csv-staging-20261016/bind_window_v2.py": {
+      "path": "crm-csv-staging-20261016/bind_window_v2.py",
+      "sha256": "12899c690b01f3b12e7bbfeb90e891ab5abb75f5fa997d7fd8f57ff2d3ca5d00"
+    },
+    "crm-csv-operational-20261016/compose.py": {
+      "path": "crm-csv-operational-20261016/compose.py",
+      "sha256": "64079638f1e99a673c60e4d8b622c0a355fd521c182bdae15148df558db759d0"
+    },
+    "v4-sequencer/sequencer.py": {
+      "path": "v4-sequencer/sequencer.py",
+      "sha256": "b6abd49db636cc77d9255fbdfcde8089af3a98699240e3235dab45ee4451e86d"
+    },
+    "crm-csv-original-recovery-20261016/recover_original.py": {
+      "path": "crm-csv-original-recovery-20261016/recover_original.py",
+      "sha256": "78fdca8eb4750a325a837322b7e5833f977fe255e1f3d941759bb973f9532283"
+    },
+    "preventive-api-frontend3227-prepared-20261010/verification-results.json": {
+      "path": "preventive-api-frontend3227-prepared-20261010/verification-results.json",
+      "sha256": "c067d59ab04bacbcb682879eaa3aa8183ca09a751cf78c7b3f73304ecaaa6169"
+    },
+    "crm-csv-original-recovery-20261016/RECOVERY_COMPLETE.md": {
+      "path": "crm-csv-original-recovery-20261016/RECOVERY_COMPLETE.md",
+      "sha256": "6f902b7107a333efdffa1e14aad5219fe7cf0a4fe10133441591430a06d34901"
+    }
+  },
+  "operationalDriftDemonstratedInObservedFrontendContract": false,
+  "globalOperationalDriftExcluded": false,
+  "priorProductionDenialReceiptUnchanged": true,
+  "priorUninstrumentedDenialCauseStillUnknown": true,
+  "freshnessNotRenewed": true,
+  "twoFreshEnvironmentReadsClaimed": false,
+  "operationalCertification": false,
+  "notProven": [
+    "state after recorded interval",
+    "saved/fallback completion of denied collection",
+    "route/SQL/ownership",
+    "ELF operational closure/protected toolchain",
+    "current authority/pins/16 bindings",
+    "individual historical assignment of each PM2 variable beyond preserved records"
+  ]
+}

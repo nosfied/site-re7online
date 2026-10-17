@@ -1,0 +1,15 @@
+{
+  "baseVerified": "f54691a6612c43087f8093f14768a5eaa0ff732f",
+  "onlyTwoCorrectedFunctions": true,
+  "privateSourcesHashVerified": true,
+  "reusedSourcesUnchangedInGit": true,
+  "helperPredatesFrontendExpected": true,
+  "proofBoundToFinalCode": true,
+  "patchExactTwoFunctionDelta": true,
+  "sanitized": true,
+  "historicalOrConsumedCodeChanged": false,
+  "newCollectorLauncherOrOperationalPackage": false,
+  "deployEnabledForBranch": false,
+  "workflowApplicableToPush": false,
+  "noOperationalEffects": true
+}

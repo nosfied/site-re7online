@@ -1,0 +1,20 @@
+{
+  "scope": "Only offline two-function correction, directed tests/replay, sanitized provenance and canonical checkpoints; no private bytes or operational kit",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/ANALYSIS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/DELTA.patch",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/FINAL_CHECKS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/HASHES.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/SOURCE_INDEX.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/analyze_offline.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/contracts.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/evidence.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-frontend-reconciliation-20261017/test_reconciliation.py",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ]
+}

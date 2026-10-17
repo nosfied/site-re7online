@@ -1,0 +1,31 @@
+--- historical-procedure/contracts.py
++++ offline-correction/contracts.py
+@@ -34 +34 @@
+-def frontend_expected(before):
++def frontend_expected(before,source_profile):
+@@ -36 +35,0 @@
+-    # Only the actual pre-window saved environment, never the SSH-session profile.
+@@ -38,2 +37,11 @@
+-    return {'name':before['name'],'cwd':before['pm_cwd'],'script':before['pm_exec_path'],
+-            'interpreter':before['exec_interpreter'],'env':dict(before['env'])}
++    # source_profile is the independently sealed original OS preservation profile.
++    # The caller must authenticate that reference; no fallback to a PM2 projection.
++    require(type(source_profile)is dict and type(source_profile.get('apps'))is list,'frontend_source_profile_missing')
++    fronts=[a for a in source_profile['apps']if type(a)is dict and a.get('name')==before['name']]
++    require(len(fronts)==1,'frontend_source_profile_ambiguous')
++    cfg=fronts[0]
++    require(all(k in cfg for k in ('cwd','script','interpreter','env')) and type(cfg['env'])is dict,'frontend_source_profile_schema')
++    require(all(isinstance(v,(str,int,float,bool)) for v in cfg['env'].values()),'frontend_os_environment_not_scalar')
++    require(cfg['cwd']==before['pm_cwd'] and cfg['script']==before['pm_exec_path'] and cfg['interpreter']==before['exec_interpreter'],'frontend_source_profile_paths')
++    return {'name':cfg['name'],'cwd':cfg['cwd'],'script':cfg['script'],
++            'interpreter':cfg['interpreter'],'env':dict(cfg['env'])}
+@@ -42 +50 @@
+-def compare_frontend(live,before,operations):
++def compare_frontend(live,before,operations,source_profile):
+@@ -46,2 +54,4 @@
+-    operations.config(live,frontend_expected(before))
+-    return {'canonicalConfig':True,'source':'pre-window saved dump; current fields must be independently observed'}
++    # Retain the whole application projection separately; do not discard its fields.
++    require(live['pm2_env'].get('env')==before['env'],'frontend_application_environment_drift')
++    operations.config(live,frontend_expected(before,source_profile))
++    return {'canonicalConfig':True,'source':'sealed OS preservation profile plus pre-window PM2 projection; recorded observations only'}

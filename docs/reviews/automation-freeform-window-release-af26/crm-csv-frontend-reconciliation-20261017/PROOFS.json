@@ -1,0 +1,11 @@
+{
+  "result": "OFFLINE_RECONCILIATION_LOCAL_VALIDATED",
+  "tests": 11,
+  "contractsSha256": "53de3ac796228c908157930cd465993f6b2b8a14e1bc550607ff7e39f5970943",
+  "testsSha256": "41731e1e40f36bea549acf9cda421ebe87dd09f2c36f83f6dbb318f6c302f4d1",
+  "evidenceLoaderSha256": "bf4006c1cb85ddca6ff3a859a58714900aad290265b5d2e42aea39d3c30d91ca",
+  "realConsumers": "Pinned System.identity/check_config, Operations.config, original preservation capture and compare_saved",
+  "externalEffects": "None; /proc mapped to real synthetic files or exact recorded custody observations; no production execution",
+  "historicalPm2ProofReused": "preventive-api-frontend3227-prepared-20261010/verification-results.json pm2Environment",
+  "noNewOperationalPackage": true
+}
