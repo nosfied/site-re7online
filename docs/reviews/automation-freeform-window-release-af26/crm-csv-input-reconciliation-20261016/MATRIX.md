@@ -1,5 +1,27 @@
 # Matriz dos 57 grupos — requisitos, não capturas
 
+## Atualização de17/10 — pendências restantes, base a60a00cb
+
+Revisão da integração frontend: **ACCEPT LOCAL no alcance dos quatro ensaios**, em conjunto com as onze provas de reconciliação. São provas locais/fixtures, não observações ou certificação produtiva. [Integração](../crm-csv-diagnostic-integration-20261017/REPORT.md) e [reconciliação](../crm-csv-frontend-reconciliation-20261017/REPORT.md) não são reabertas. A seção histórica dos57 IDs abaixo permanece intacta; `INPUT_MATRIX.json.currentReconciliation` registra somente esta atualização, sem preencher inputs.
+
+| Pendência / consumidores | Evidência reaproveitável | Conclusão offline | Faltante exato e dependência operacional |
+|---|---|---|---|
+| Saved/fallback e identidades finais — LIVE, I02/I10/I18/I26/I34/I49/I50; Bridge/Contract/compare_saved/System | Restauração original e UI aceitas16/10; referências hash-conferidas; RPC/identidades iniciais/API-worker de17/10 às10:14; frontend reconciliado localmente | Proveniência e contrato correto disponíveis; mapas OS/PM2 não são intercambiáveis. Sem necessidade de nova investigação frontend | A coleta consumida não chegou a ler saved/fallback atuais nem repetir boot/identidades ao final. Faltam essas comparações completas, owner/modo600 e vínculo ao intervalo de uma observação futura autorizada. Não promover o stat inicial a observação final |
+| SQL/ownership — I37/I38/I41/I52; db_container/db_backends/identity.sql/classify/db_owner_set_gate | Canal NEWDB documentado, configuração loopback5432 e proxy; binding histórico1d67ff65; SQLs/classificador e inventário Event terminais históricos | Consumidores/canal pretendido/consultas estão definidos, sem conexão ou novo resultado | Rota/ID/imagem/rede/publicação e cliente psql não foram alcançados; depois, SELECT autorizado para cluster/database/role/privilégios/fronteira/importações; atribuição por tuplas socket/proxy/backend com observador canônico root. SELECT sozinho não fecha ownership. Produção ativa não exige zero artificial; saída/fence/duas amostras são prova da janela, não de leitura preparatória |
+| Toolchain protegido — TOOLCHAIN/I57 e ROOT/I53; Context/pm2_input/parser/install_static | Hash Node d01614ef, seeds CLI/package com tar pinado, closure26 diagnóstica e provas locais PM2/FD/B3/B4 | Reusar fontes e prova de consumo FD; conferir apenas closure declarada contra fontes pinadas já disponíveis. Isso não prova a imagem/dependências instaladas | Faltam closure JS/ELF efetivamente consumida e proteção real de toolchain/bibliotecas/alias. R1 observou futuros alvos ausentes. Não repetir readelf nem instalar alternativa;4552 não é meta de captura. Observações residuais e instalação protegida requerem escopos próprios |
+|16 vínculos, fonte root e autoridade — PATHS/DERIVED/ROOT/ANCHOR/PERMIT; path_bindings/checkers/Store/Context | BINDING_PLAN, composição estática ORIGINAL/quatro modos e provas aceitas; R1 e2a5/helper8de/sudoers62b5; inspeção de alvos ausentes | Mapas/ordem de selagem conhecidos; não há16 capturas. **Incoerência de fonte root fa113/e2a5 ainda aberta**; pode ser revisada localmente com os bytes preservados | Namespace/perfis/caminhos/metadados atuais precedem as quatro renderizações por modo (ops/execution-check/delegated/read-state). Só depois índices→contrato→política→manifest→âncora, sem ciclos. Instalação estática, âncora e emissão owner são decisões separadas. Permit recovery não existe por consulta e não é requisito da ida/PRESTOP |
+
+**Impedimento pré-contenção já observado:** os cinco pais Event775 da R1 continuam incompatíveis com event_parents. É evidência datada, não nova medição. Se inalterados, a ida nega antes de contain/stop. Exige decisão operacional específica e revisão restrita de permissões/consumidores antes de qualquer execução; nunca chmod genérico, dispensa do predicado ou ajuste automático. ORIGINAL permanece independente do código candidato.
+
+Os conjuntos acima dependem de ROOT/LIVE/SQL/TOOLCHAIN;32 arquivos de modo são derivados, não novas observações independentes. Os alvos root futuros ausentes não são reparados por documentação. Fonte e2a5 observada não é certificado root atual; o Context/permit não pode ser fabricado para completar a matriz.
+
+O restore certificado retido/parado continua reutilizável apenas se schema/fronteira/ferramentas permanecerem compatíveis; preservar temporaryDatabaseRemoved=false. Não renovar backup/RPO/root agora: RPO curto pertence à sequência coordenada futura, root por último. Supervision/cron before já comparados não são reabertos; futura admissão/encerramento exigem suas revalidações próprias.
+
+**Primeiro bloqueio e sequência única:** ver [atualização do relatório](REPORT.md). Os comandos antigos e destinos consumidos não são um roteiro autorizado novo.
+
+---
+
+
 Cada ID reproduz literalmente um item de MISSING_INPUTS. O JSON adjacente contém consumidor, fonte, reuso, observação, momento e frescor **por item**. Os agrupamentos abaixo não atestam nenhum input.
 
 | Grupo | Consumidor/predicado | Fonte / reuso | Observação e momento |

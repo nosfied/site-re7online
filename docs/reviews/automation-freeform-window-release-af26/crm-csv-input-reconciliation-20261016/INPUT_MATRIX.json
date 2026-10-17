@@ -801,5 +801,120 @@
       "originalRule": null,
       "readyOperationalInput": false
     }
-  ]
+  ],
+  "currentReconciliation": {
+    "base": "a60a00cbd23e64c21ad71bd8d915333582b5f8ec",
+    "date": "2026-10-17",
+    "scope": "DOCUMENTATION_ONLY_RECONCILIATION_NO_OPERATIONAL_EFFECTS",
+    "integrationReview": "ACCEPT_LOCAL_IN_TESTED_SCOPE_ONLY",
+    "integrationEvidence": "../crm-csv-diagnostic-integration-20261017/PROOFS.json",
+    "historicalRowsUnchanged": 57,
+    "readyForWindow": false,
+    "firstConcreteBlocker": {
+      "scope": "LOCAL_COMPOSITION_PREDECESSOR_POLICY_BINDING",
+      "fact": "Current static csv_contract/original_checks/root_readonly/pre_install consumers still bind predecessor fa113e; R1 preserved policy bytes hash e2a5ffab match original-only recovery. No source reconciliation applied.",
+      "reusableEvidence": "../crm-csv-r1r2-result-20261017/PROVENANCE.json; private capture 87778B SHA931c9c39a6332ab4bea8a57869767c78a57eecce164ecd006346e85f44983529, policy2751B SHAe2a5ffab807f457b4179a6981e15cbf52800cbf975bce921c31ee3a9a989860b",
+      "nextLocalAction": "Apply the already documented BINDING_PLAN predecessor reconciliation coherently to future producer/checkers/root capture/pre_install/admission/installer CAS and immutable references, with explicit model/actions review and negative proofs; no isolated pin replacement, installation or package in this round.",
+      "operationalDependency": "Fresh predecessor CAS and separate owner installation decision later; R1 is dated evidence, not current root certificate."
+    },
+    "groups": [
+      {
+        "group": "LIVE_SAVED_FINAL",
+        "ids": [
+          "I02",
+          "I10",
+          "I18",
+          "I26",
+          "I34",
+          "I49",
+          "I50"
+        ],
+        "consumers": "Bridge.apps/app_matches/identity; Contract/check_original; compare_saved; System.check_config; baseline_all4",
+        "reusable": "Accepted16/10 original restoration/UI, original profiles/saved references;17/10 13:14UTC RPC/peer/socket/pm2.pid/initial identities/API-worker observations and local accepted frontend reconciliation/integration.",
+        "offlineConclusion": "Source provenance and complete OS/PM2 representation distinction are resolved locally; no new final runtime certificate.",
+        "exactMissing": "Live saved and fallback complete contract comparison/owner600 plus final boot/PID/ticks/state rereads in one future bounded observation. The latest collection stopped before these steps.",
+        "dependency": "Corrected source integration review accepted; coherent future source bindings; future directed authorization. Existing observation timestamps remain unchanged.",
+        "requiresOperationalObservation": true
+      },
+      {
+        "group": "SQL_OWNERSHIP",
+        "ids": [
+          "I37",
+          "I38",
+          "I41",
+          "I52"
+        ],
+        "consumers": "System.db_container/db_backends; identity.sql; capture_imports.classify; csv_boundary.exit_and_imports; db_owner_set_gate.verify",
+        "reusable": "NEWDB legitimate channel decisions; configuration points to loopback5432/database/role; proxy representation preserved; historical container binding1d67ff65; byte-exact SELECT/classifier code and prior terminal Event inventory.",
+        "offlineConclusion": "Transport/SQL/ownership contracts are defined; available records do not certify current route, server identity or complete attribution.",
+        "exactMissing": "Current container ID/image/network/publication and psql path/version gate; separately authorized SELECT cluster/server/database/session/effective-role/read-only/privilege/frontier/import activity; canonical root+process socket/proxy/backend attribution.",
+        "dependency": "Route gate before SQL; explicit SELECT authorization; verified canonical root observer source/delegation and distinct authorization for attribution. Post-exit two-sample/fence/zero proof only in authorized window; do not require artificial zero while production runs.",
+        "requiresOperationalObservation": true
+      },
+      {
+        "group": "PROTECTED_TOOLCHAIN",
+        "ids": [
+          "I53",
+          "I57"
+        ],
+        "consumers": "Context.snapshot/protected_bytes; pm2_input.start; ecosystem parser; install_static/verify_static",
+        "reusable": "Observed Node image hashd01614ef and PM2 CLI/package seeds against pinned local tar; closure26 diagnostic sources; B3/B4 FD/parser/PM2 local proof and code manifest/DAG.",
+        "offlineConclusion": "Code/FD consumption and local sources are reusable; diagnostic closure26 and real local PM2 proof do not establish installed ELF/transitive closure or protected ancestors.",
+        "exactMissing": "Exact consumed Node/PM2/shebang/CLI/parser/JS+ELF dependent files and their approved bytes/metadata; protected libraries/launchers/alias/root chains actually installed and verified. R1 observed future targets absent.",
+        "dependency": "Offline compare declared closure against pinned available sources; authorize only unresolved observations later. Installation separate after static bytes review. No readelf retry/alternative installation,4552-file quota or download/build.",
+        "requiresOperationalObservation": true
+      },
+      {
+        "group": "BINDINGS_AUTHORITY",
+        "ids": [
+          "I03",
+          "I04",
+          "I05",
+          "I07",
+          "I08",
+          "I11",
+          "I12",
+          "I13",
+          "I15",
+          "I16",
+          "I19",
+          "I20",
+          "I21",
+          "I23",
+          "I24",
+          "I27",
+          "I28",
+          "I29",
+          "I31",
+          "I32",
+          "I33",
+          "I36",
+          "I40",
+          "I42",
+          "I44",
+          "I45",
+          "I47",
+          "I51",
+          "I53",
+          "I54",
+          "I55",
+          "I56"
+        ],
+        "consumers": "path_bindings/original_bindings; original_checks/csv_contract; Event parents; root Store/Context/Loader/start_mode; installer CAS",
+        "reusable": "BINDING_PLAN and current static four-mode composition,57 inventory IDs,16 namespace renderings; accepted R1/R2/authority/R3/B1-B4/ORIGINAL local proofs and canonical owner/root/helper trust design.",
+        "offlineConclusion": "16 means four source renderings across four modes, not16 captures. Authorities remain proposed, not installed/emitted.",
+        "exactMissing": "Predecessor policy reconciliation; actual namespace and current profile/path metadata; resolved sixteen renderings/manifests/DAG without cycles; Event writable-parent condition; protected static installation and owner-approved anchor/phase/decision/profile/policy context. Recovery-specific permit only when applicable.",
+        "dependency": "Current operational inputs plus source/toolchain review precede materialization; root installation/anchor emission/execution are separate approvals. R1 Event five parents775 would deny before containment if unchanged. No automatic permission repair or recovery permit for forward switch/PRESTOP.",
+        "requiresOperationalObservation": true
+      }
+    ],
+    "notRenewed": [
+      "backup/RPO",
+      "root short-lived certificate",
+      "bindings/pins/permit",
+      "operational observations"
+    ],
+    "status": "CSV_SUSPENDED_NOT_DEPLOYED_NOT_WINDOW_READY",
+    "nextReview": "2026-10-21 or earlier on change"
+  }
 }
