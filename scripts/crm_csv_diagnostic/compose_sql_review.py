@@ -4,7 +4,7 @@ Existing output denies; never alter a consumed package.
 from pathlib import Path
 import json,hashlib,ast,base64,os
 if __name__!='__main__':raise RuntimeError('offline_composition_cli_only')
-r=Path.cwd();rv=r/'docs/reviews/automation-freeform-window-release-af26';d=rv/'crm-csv-delivery-review-20261017';old=d/'directed-diagnostic';out=d/'sql-review';h=lambda b:hashlib.sha256(b).hexdigest()
+r=Path.cwd();rv=r/'docs/reviews/automation-freeform-window-release-af26';d=rv/'crm-csv-delivery-review-20261017';old=d/'directed-diagnostic';out=d/'sql-review-v2';h=lambda b:hashlib.sha256(b).hexdigest()
 out.mkdir(exist_ok=False)
 manifest=json.loads((old/'MANIFEST.json').read_bytes());assert h((old/'MANIFEST.json').read_bytes())=='1a0ac094b9276b5fdfa09e2716946210e08c73d9f0172548be73d39d8217ffa9'
 def accepted(n):
@@ -12,17 +12,19 @@ def accepted(n):
 raw=accepted('runner.py');tree=ast.parse(raw);nodes=[n for n in tree.body if isinstance(n,(ast.FunctionDef,ast.ClassDef))and n.name in('load','Capture','DiagnosticDenied','checked')]
 assert len(nodes)==4
 source=r/'scripts/crm_csv_diagnostic/sql_execution.source';body=source.read_bytes()
+assert h(body)=='faf73df1af85c73ff3c6e8b2a8d00f6d82f6b7e60b3397c77c61d01467e0ab32','accepted_libpq_source'
+# The reviewed source is the exact prefix of the bytes sealed as runner.py.
 runner=body.decode()+'\n'+ast.unparse(ast.Module(body=nodes,type_ignores=[]))+'\n'
 # Names resolve at invocation, after all accepted definitions have loaded; no imports by mutable path.
 (out/'runner.py').write_text(runner)
 launch=accepted('launch.py').decode();driver=accepted('driver.py').decode()
 for a,b in {
- 're7-csv-directed-material-20261017-v1':'re7-csv-sql-material-20261017-v1',
- 're7-csv-directed-tools-20261017-v1':'re7-csv-sql-tools-20261017-v1',
- 're7-csv-directed-read-20261017-v1':'re7-csv-sql-read-20261017-v1',
- 'csv-directed-diagnostic-20261017-v1':'csv-sql-read-20261017-v1',
- 'csv-directed-launcher-20261017-v1':'csv-sql-launcher-20261017-v1',
- 'crm-csv-delivery-review-20261017/directed-diagnostic':'crm-csv-delivery-review-20261017/sql-review'}.items():launch=launch.replace(a,b);driver=driver.replace(a,b)
+ 're7-csv-directed-material-20261017-v1':'re7-csv-sql-material-20261017-v2',
+ 're7-csv-directed-tools-20261017-v1':'re7-csv-sql-tools-20261017-v2',
+ 're7-csv-directed-read-20261017-v1':'re7-csv-sql-read-20261017-v2',
+ 'csv-directed-diagnostic-20261017-v1':'csv-sql-read-20261017-v2',
+ 'csv-directed-launcher-20261017-v1':'csv-sql-launcher-20261017-v2',
+ 'crm-csv-delivery-review-20261017/directed-diagnostic':'crm-csv-delivery-review-20261017/sql-review-v2'}.items():launch=launch.replace(a,b);driver=driver.replace(a,b)
 # Same canonical stable reader/format, explicit export bound for SQL journal selected before read.
 oldlib="def libraries(blobs=None):return libload('read_package.py',blobs),libload('privileged_output.source',blobs)['private_record']"
 newlib='''def libraries(blobs=None):
@@ -73,5 +75,5 @@ for n in('identity.sql','ownership.sql','imports.sql'):add(n,rv/'crm-csv-three-g
 add('capture_imports.source',rv/'crm-csv-operational-20261016/capture_imports.py')
 files['channel.private.json']={'source':'derived-from-pinned-private-capture','relativeSource':'not-a-path-derived-in-memory','bytes':len(channel),'sha256':h(channel),'bootstrap':False,
  'derivedFrom':{'captureSha256':'f6873eb97f5a70709675ad16b8b4879ff1a1953dc58464c704a80e735b5af8d5','commandIds':['db-route','sql-client-path','sql-client-version']}}
-(out/'MANIFEST.json').write_text(json.dumps({'base':'88126c975abcb4cc70e2f55f6ac4ff256b942e0b','scope':'review-only three pinned SQLs; no trio/control refresh, no operational authority','files':files,'journalReadLimit':96*1024*1024},indent=2,sort_keys=True)+'\n')
+(out/'MANIFEST.json').write_text(json.dumps({'base':'c5b6dbc4acbd09d609a0bc71beb1f925b6bcb91e','editableRunnerSourceSha256':h(body),'scope':'review-only three pinned SQLs; no trio/control refresh, no operational authority','files':files,'journalReadLimit':96*1024*1024},indent=2,sort_keys=True)+'\n')
 print('SQL_REVIEW_COMPOSED_12_INPUTS_PRIVATE_CHANNEL_NOT_PUBLISHED')

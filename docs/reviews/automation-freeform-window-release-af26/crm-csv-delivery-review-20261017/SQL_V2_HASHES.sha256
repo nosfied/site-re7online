@@ -1,0 +1,16 @@
+b5b0dbe33a7460eb0727f2ec6a93372f8383d353ece9935600e89a78aca11f4b  scripts/crm_csv_diagnostic/compose_sql_review.py
+dd9caf236b0275702513f397579a3a67dae9878e9545c4b2c9d49d5f90a51f64  docs/BACKLOG_TECH.md
+685bbaaad8e76b00d309ccd013b7e7185a1d48ec83cefc84b6592ca0937bbff3  docs/RUNBOOK_WHATSAPP_AGENT.md
+2b9790d9548f2e11454c7d5fd8f4b90840d463172667f4c92bb7d3742727c2be  docs/saas/DOCUMENTATION_INDEX.md
+b9c92204284a64061c18aa257873fb8018e1affcbb4c0a41b4dd76dfad84b642  docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md
+a8ceda3859d882e5c863ea0342ae10c21b0526d842f56dfa96e9dd2bf12d17d9  docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/MATRIX.md
+c5a2026568d42146271b7761420bc60e59dc48d155358365b6680f5d1524ed0b  docs/reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/INPUT_MATRIX.json
+7a41154b7922f8975353768ee2a77da8459b51ba6034cd30d8844ec0c7173116  docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review-v2/MANIFEST.json
+7f555f78b6feeead7cbd556a6700c810cd67c8119e4a3f8b39accc54ce87e22d  docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review-v2/launch.py
+10447e4dada9e54f4a936c535426241fa19b2a9d37fd90e5ac56cffe86cfe547  docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review-v2/driver.py
+6ca49a8f37e45904c1195c72145c610de0c27298d6ffee7ad6e21a57026522b7  docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review-v2/runner.py
+1d0eb35486e07a4bacc73e19bf44db02cc53fed6d79eab486d326f249503ad6b  docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/test_sql_v2_blocks.py
+bdac4ed533e24f8d5e2d6bbe847ecb9a0cb90fb09e4ab832f2e125d464ef2fec  docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md
+27a36f75d4f080ac59af41c2cbc8689aed79f94095c5982cf0a1c22831c5a976  docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_PROOFS.json
+b0b99297380910795caa593988e3e96e764a7a8008b95fd2d5092cc9878bac64  docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_SOURCES.json
+cd6b0bc6afe0f8a61bb5dfced6666fe1325bd12c450d094890844819a95262cc  docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_ALLOWLIST.json

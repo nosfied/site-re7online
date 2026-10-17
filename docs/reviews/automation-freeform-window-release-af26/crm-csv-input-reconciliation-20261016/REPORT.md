@@ -1,3 +1,80 @@
+## Preparação SQL corrigida v2 — basec5b6dbc4
+
+**LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. CSV SUSPENSO.**
+Única entrada vigente para eventual decisão SQL:
+[SQL_V2_COMMANDS_FOR_REVIEW.md](../crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md).
+O roteiro anterior `SQL_COMMANDS_FOR_REVIEW.md` e sql-review/v1 estão **CONSUMED/DENY**;
+seus bytes, manifests, comandos e diagnósticos continuam intactos. Não repetir.
+A nova preparação não autoriza VPS/SELECT nem significa janela CSV pronta.
+
+### Composição entregue e ligação comprovada
+
+O compositor editável `scripts/crm_csv_diagnostic/compose_sql_review.py` foi executado
+uma vez localmente em destino novo `sql-review-v2`. Confere o digest da fonte libpq
+aceita em c5b6dbc4 e usa seus bytes como prefixo exato do runner; compõe os mesmos
+quatro ASTs aceitos. Launcher/driver derivados dos fontes aceitos, com substituição
+somente de destinos/nomes e manifest coerente. Nenhum build/download, credencial nova,
+perfil atual, permit ou autoridade fabricados. São12 entradas;11 fontes publicáveis e
+um canal privado derivado em memória, não12 novas cópias. Somente launch/driver/runner/
+manifest são novos arquivos empacotados; oito dependências públicas são referenciadas.
+
+[Manifest](../crm-csv-delivery-review-20261017/sql-review-v2/MANIFEST.json):
+`7a41154b7922f8975353768ee2a77da8459b51ba6034cd30d8844ec0c7173116`.
+Launcher:`7f555f78b6feeead7cbd556a6700c810cd67c8119e4a3f8b39accc54ce87e22d`.
+Runner:`6ca49a8f37e45904c1195c72145c610de0c27298d6ffee7ad6e21a57026522b7`.
+Canal/SQLs/role/database/controles/limites permanecem os mesmos. A comparação do
+manifest demonstra que o derivado privado inteiro tem o mesmo hash/tamanho/procedência
+v1. A fonte datada f6873eb9 continua referência, jamais observação atual nesta rodada.
+Destinos v2 exclusivos estão no roteiro: material/tools/read em /dev/shm; custódia e
+canais csv-sql-*-20261017-v2 no parent privado legítimo. Existência/falha/deriva nega.
+
+### Quatro ensaios incrementais completos;13 provas anteriores reutilizadas
+
+[Provas](../crm-csv-delivery-review-20261017/SQL_V2_PROOFS.json) e
+[harness reproduzível](../crm-csv-delivery-review-20261017/test_sql_v2_blocks.py).
+Foram extraídos e executados **literalmente os dois blocos Bash publicados**, sem
+substituição de hashes/caminhos no texto dos blocos. Namespace filesystem/user UID1000/
+rede isolados; mounts desviam somente destinos para o laboratório e shims SSH/Docker.
+O parent de custódia real fica oculto pelo mount; a captura legítima é copiada para a
+fixture com hash conferido. Nenhum destino publicado foi consumido fora do namespace.
+
+Percurso positivo: bloco1→FD do launcher→manifest→bootstrap dos mesmos bytes→derivação
+canal/materialização integral→bloco2→verificação bundle→shim SSH→programa remoto exato
+transportado no argv→verificação manifest/fontes→runner **empacotado**→System.db_container/
+fronteiras→sql_argv→shell/psql→três SQLs reais→export/ingest/private_record. Bundle e runner
+recebidos foram comparados byte-exatamente ao pacote; journal recebido igual ao emitido.
+São quatro fronteiras e identity/ownership/imports na ordem, sem reconstrução de argv.
+
+Shell/psql/PostgreSQL16, codec, materialização, arquivos/canais e custódia reais.
+SSH/Docker/rota/caminho-versão psql simulados com a representação histórica preservada;
+nenhuma consulta externa. Mesmo modelo explícito Docker -e das13 provas: nove
+atribuições (incluindo vazios), ambiente conflitante, apenas PGHOST socket/PGPORT5432
+mapeados ao socket isolado/56438; tail completo produzido é executado. Não usa self.env.
+Fixture PostgreSQL reutilizada, não novas regras produtivas, sem GRANT/senha/sudo.
+
+Contraprovas novas: runner adulterado nega bloco1 e bloco2 não é chamado; bundle
+adulterado nega antes do SSH; resposta parcial preserva37 bytes/canais/recibo DENY,
+com uma tentativa e sem replay.13 provas SQL_LIBPQ anteriores (privilégios, identidade,
+100001, resposta perdida, limites e ambientes) não foram reexecutadas/regravadas.
+Nenhum mock aprova verificadores ou substitui resultados SQL. Não é prova de Docker real,
+privilégio produtivo, capacidade/RAM, snapshot atômico ou atribuição completa de ownership.
+
+### Sequência única restante
+
+1. Revisar os hashes/novos bytes e os **dois blocos v2**; autorização futura expressa.
+2. Se autorizado: bloco1 local PASS antes de bloco2 deploy/no sudo uma vez; falha,
+   timeout ou resposta perdida encerra, preserva canais/custódia e não repete.
+3. Reconciliar identity/visibilidade/backends/imports; ownership permanece UNKNOWN
+   sem atribuição canônica própria. Não exigir banco vazio em produção viva.
+4. Só depois dos requisitos válidos:16 vínculos/autoridade/materialização final,
+   janela CSV/frescor/R0/root e decisões específicas API→frontend. Nenhuma dessas
+   ações foi preparada como autorizada ou executada aqui.
+
+M1 CONSUMED; ELF PAUSADO. NEWauth+NEWDB+NEWcipher, multitenancy, crons, guarda38/out.15
+preservados. Checkpoints anteriores abaixo conservam a cronologia; não são entrypoints.
+
+---
+
 ## Correção libpq + harness — LOCAL VALIDATED / REVIEW PENDING
 
 Base06fc3c92,17/10/2026. **CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.**

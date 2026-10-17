@@ -1,0 +1,66 @@
+{
+  "base": "c5b6dbc4acbd09d609a0bc71beb1f925b6bcb91e",
+  "composer": "scripts/crm_csv_diagnostic/compose_sql_review.py",
+  "acceptedEditableSource": {
+    "path": "scripts/crm_csv_diagnostic/sql_execution.source",
+    "sha256": "faf73df1af85c73ff3c6e8b2a8d00f6d82f6b7e60b3397c77c61d01467e0ab32"
+  },
+  "packagedFiles": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review-v2/MANIFEST.json": {
+      "sha256": "7a41154b7922f8975353768ee2a77da8459b51ba6034cd30d8844ec0c7173116",
+      "bytes": 4778
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review-v2/launch.py": {
+      "sha256": "7f555f78b6feeead7cbd556a6700c810cd67c8119e4a3f8b39accc54ce87e22d",
+      "bytes": 4543
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review-v2/driver.py": {
+      "sha256": "10447e4dada9e54f4a936c535426241fa19b2a9d37fd90e5ac56cffe86cfe547",
+      "bytes": 11635
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review-v2/runner.py": {
+      "sha256": "6ca49a8f37e45904c1195c72145c610de0c27298d6ffee7ad6e21a57026522b7",
+      "bytes": 11770
+    }
+  },
+  "unchangedConsumed": {
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review/MANIFEST.json": {
+      "sha256": "c35bfd260ec4745def21f71a45a6e0e5e107a41ca539e51ffa364bc3f4463343",
+      "bytes": 4669
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review/runner.py": {
+      "sha256": "223162c4eefe7df4f29470c01d7ce0deab39a73f6deb5b20a6dbc158a55b3290",
+      "bytes": 10820
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review/driver.py": {
+      "sha256": "5fb89e0d797700e47e0c528d2b36455010e40bd4e1988dfb525ce0238418fafa",
+      "bytes": 11632
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/sql-review/launch.py": {
+      "sha256": "c5cf760be017f83e56c459da72760e8a108f92b57fc7d42a999a3c6f51c78fa9",
+      "bytes": 4543
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_COMMANDS_FOR_REVIEW.md": {
+      "sha256": "9aed6b028f43bb00cc009015d2f08833683d68bb532d88d2279a4e4d8f078ff6",
+      "bytes": 11086
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_RESULT.json": {
+      "sha256": "842da994fd85055beb0230317f0babb04e1e6a0e0a6404ce05049594f73eeb83",
+      "bytes": 5746
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_PROOFS.json": {
+      "sha256": "bda66a1dee0d5cc8a4c525d78e5910a8e43648eb68c8b72dd81078e2f16c69e2",
+      "bytes": 5941
+    },
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_REPRODUCTION.json": {
+      "sha256": "fa2cec8fa41e663b4bc7602ef9f6e7bccec2dca39174ada9cdd797b30424fd08",
+      "bytes": 624
+    }
+  },
+  "reused13Proofs": {
+    "path": "docs/reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_PROOFS.json",
+    "sha256": "bda66a1dee0d5cc8a4c525d78e5910a8e43648eb68c8b72dd81078e2f16c69e2"
+  },
+  "privateSourceReused": "Same f6873eb9 capture/provenance; private bytes not published; no fresh observation",
+  "packageBytes": 32726
+}

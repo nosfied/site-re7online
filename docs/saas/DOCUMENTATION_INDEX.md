@@ -1,5 +1,19 @@
 # Documentation Index
 
+## SQL corrigido v2 — entrada vigente para revisão, basec5b6dbc4
+
+[ÚNICO roteiro SQL vigente: dois blocos v2](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md),
+[composição/limites/sequência](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[4 provas dos blocos literais](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_PROOFS.json).
+13 provas libpq reutilizadas; runner empacotado/corrigido→shell/psql/PG16→custódia
+comprovados no laboratório; SSH/Docker e endpoint simulados explicitamente.
+Roteiro anterior SQL_COMMANDS_FOR_REVIEW.md/sql-review/v1 **CONSUMED/DENY**, intacto;
+não repetir. Destinos v2 novos; execução futura exige autorização própria após revisão.
+Sem VPS/SELECT produtivo/build/backup nesta rodada. Ownership UNKNOWN; M1 consumido;
+ELF pausado. CSV SUSPENSO / LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+Checkpoints datados abaixo preservam a cronologia e não substituem esta entrada.
+
+
 ## Delta local vigente — libpq e harness, base06fc3c92
 
 **LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.**

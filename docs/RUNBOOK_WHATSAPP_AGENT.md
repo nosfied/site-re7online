@@ -1,5 +1,19 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## SQL corrigido v2 — entrada vigente para revisão, basec5b6dbc4
+
+[ÚNICO roteiro SQL vigente: dois blocos v2](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md),
+[composição/limites/sequência](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
+[4 provas dos blocos literais](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_PROOFS.json).
+13 provas libpq reutilizadas; runner empacotado/corrigido→shell/psql/PG16→custódia
+comprovados no laboratório; SSH/Docker e endpoint simulados explicitamente.
+Roteiro anterior SQL_COMMANDS_FOR_REVIEW.md/sql-review/v1 **CONSUMED/DENY**, intacto;
+não repetir. Destinos v2 novos; execução futura exige autorização própria após revisão.
+Sem VPS/SELECT produtivo/build/backup nesta rodada. Ownership UNKNOWN; M1 consumido;
+ELF pausado. CSV SUSPENSO / LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY.
+Checkpoints datados abaixo preservam a cronologia e não substituem esta entrada.
+
+
 ## Continuidade CSV — estado vigente e metodologia
 
 **17/10/2026,17:16 Fortaleza: SQL CONSUMED/DENY; CSV SUSPENSO / NOT DEPLOYED /
@@ -18,15 +32,16 @@ Não são instruções atuais de execução. [Relatório único e sequência](re
 | SQL blocos1/2 |CONSUMED/DENY às17:16:before-identity canal PASS, identity cliente exit2(service vazio), ownership/imports não executados; custódia íntegra |
 | ELF |PAUSADO; sem retorno à descoberta/budget como consequência desse DENY |
 
-**Correção local concluída para revisão (base06fc3c92):** fonte libpq e harness corrigidos,
-sem pacote operacional/VPS. [Relatório integrado e limites](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md#correção-libpq--harness--local-validated--review-pending)
-e [13 contraprovas](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_LIBPQ_PROOFS.json).
-Comando histórico vazio reproduzido; comando futuro gerado executado no laboratório com
-as nove opções Docker, shell/psql/PG16 reais e remapeamento declarado do endpoint.
-DENY17:16/pacote/comandos consumidos preservados. Próximo: revisão local; eventual
-novo pacote/destinos/autorização separados, sem replay. Identidade produtiva/imports
-continuam desconhecidos; ownership UNKNOWN. LOCAL VALIDATED / REVIEW PENDING;
-sem promoção das simulações a certificação produtiva.
+**Preparação SQL corrigida v2 concluída LOCALMENTE para revisão (basec5b6dbc4):**
+[ÚNICA entrada SQL vigente: dois blocos novos](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md),
+[composição/alcance](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md#preparação-sql-corrigida-v2--basec5b6dbc4)
+e [4 ensaios literais](reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/SQL_V2_PROOFS.json).
+13 provas libpq reutilizadas, sem repetição. Novo manifest/launcher vincula o runner
+empacotado corrigido ao shell/psql/PG16 e custódia reais no laboratório, com SSH/Docker/
+endpoint simulados explicitamente. O roteiro anterior e v1 CONSUMED/DENY ficam intactos;
+não executar seus blocos. Próximo: revisão e autorização separada da v2, sem VPS nesta
+rodada nem prontidão de janela. Dados SQL produtivos continuam ausentes; ownership
+UNKNOWN. M1 consumido; ELF pausado.
 
 Consultar os princípios **completos**, não apenas este resumo: [Principios operacionais](#principios-operacionais),
 [Retenção operacional permanente](#retenção-operacional-permanente), [Change Policy](saas/CHANGE_POLICY.md),
@@ -43,8 +58,8 @@ saída/ownership, CAS, classificação, revalidação no uso, consumo e replay. 
 observada não prova atividade completa nem executor encerrado. Não inventar pins,
 perfis, permit, lock cooperado, coletor ou autoridade. Fontes antigas não são fatos atuais.
 
-Depois da correção/revisão local, eventual novo roteiro terá destinos e autorização
-próprios. Só com dados válidos: atribuição/16 vínculos/controles protegidos/autoridade→
+O roteiro SQL v2 tem destinos novos e exige autorização própria após esta revisão.
+Não executar o v1 consumido. Só com dados válidos: atribuição/16 vínculos/controles protegidos/autoridade→
 materialização final quatro modos→janela coordenada/frescor/R0/root/review→decisão A/
 admissão/saída/CAS→API→validação UUID/GET/ledger→fronteira frontend real→decisão frontend.
 Incerteza exige inspeção e decisão correspondente, sem replay. ORIGINAL só pré-seleção

@@ -1,0 +1,51 @@
+{
+  "base": "c5b6dbc4acbd09d609a0bc71beb1f925b6bcb91e",
+  "tests": 4,
+  "cases": [
+    {
+      "case": "valid",
+      "materializeExit": 0,
+      "collectExit": 0,
+      "literalBlocks": true,
+      "manifestSha256": "7a41154b7922f8975353768ee2a77da8459b51ba6034cd30d8844ec0c7173116",
+      "runnerSha256": "6ca49a8f37e45904c1195c72145c610de0c27298d6ffee7ad6e21a57026522b7",
+      "custody": "THREE_GAPS_CUSTODY_PRESERVED_NOT_CERTIFIED",
+      "sshAttempts": 1,
+      "localNetworkNamespace": true
+    },
+    {
+      "case": "source",
+      "materializeExit": 1,
+      "collectNotInvoked": true,
+      "noSsh": true
+    },
+    {
+      "case": "bundle",
+      "materializeExit": 0,
+      "collectExit": 1,
+      "literalBlocks": true,
+      "manifestSha256": "7a41154b7922f8975353768ee2a77da8459b51ba6034cd30d8844ec0c7173116",
+      "runnerSha256": "6ca49a8f37e45904c1195c72145c610de0c27298d6ffee7ad6e21a57026522b7",
+      "custody": "THREE_GAPS_CUSTODY_DENY_NO_RETRY",
+      "sshAttempts": 0,
+      "localNetworkNamespace": true
+    },
+    {
+      "case": "partial",
+      "materializeExit": 0,
+      "collectExit": 1,
+      "literalBlocks": true,
+      "manifestSha256": "7a41154b7922f8975353768ee2a77da8459b51ba6034cd30d8844ec0c7173116",
+      "runnerSha256": "6ca49a8f37e45904c1195c72145c610de0c27298d6ffee7ad6e21a57026522b7",
+      "custody": "THREE_GAPS_CUSTODY_DENY_NO_RETRY",
+      "sshAttempts": 1,
+      "localNetworkNamespace": true
+    }
+  ],
+  "reused": "13 unchanged SQL_LIBPQ_PROOFS.json cases, not rerun",
+  "real": "literal Bash blocks, launcher/manifest/full materialization, exact verified remote bootstrap/runner, /bin/sh/psql/PostgreSQL16, SQL validators, export/ingest/private_record, namespace UID1000",
+  "simulated": "SSH and Docker inspect/exec with recorded channel fixture; PGHOST/PGPORT endpoint mapping only; recorded psql path/version; partial-response injection",
+  "noVps": true,
+  "ownership": "UNKNOWN",
+  "status": "LOCAL VALIDATED / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY"
+}

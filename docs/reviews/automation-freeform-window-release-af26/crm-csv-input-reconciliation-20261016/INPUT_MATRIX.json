@@ -1718,6 +1718,19 @@
       "ownership": "UNKNOWN",
       "M1": "CONSUMED",
       "ELF": "PAUSED"
+    },
+    "sqlV2Preparation": {
+      "base": "c5b6dbc4acbd09d609a0bc71beb1f925b6bcb91e",
+      "status": "PREPARED LOCALLY / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY",
+      "entrypoint": "../crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md",
+      "packageManifestSha256": "7a41154b7922f8975353768ee2a77da8459b51ba6034cd30d8844ec0c7173116",
+      "runnerSha256": "6ca49a8f37e45904c1195c72145c610de0c27298d6ffee7ad6e21a57026522b7",
+      "incrementalLiteralBlockTests": 4,
+      "previous13ProofsReusedNotRerun": true,
+      "v1": "CONSUMED/DENY unchanged",
+      "productionExecution": false,
+      "ownership": "UNKNOWN",
+      "next": "Review two v2 blocks for separate authorization; not deployment/window approval"
     }
   }
 }

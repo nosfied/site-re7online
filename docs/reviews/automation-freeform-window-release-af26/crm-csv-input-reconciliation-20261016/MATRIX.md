@@ -1,3 +1,14 @@
+## Preparação corrigida v2 — única entrada SQL vigente para revisão
+
+[Dois blocos novos](../crm-csv-delivery-review-20261017/SQL_V2_COMMANDS_FOR_REVIEW.md),
+[ligação e limites](REPORT.md#preparação-sql-corrigida-v2--basec5b6dbc4),
+[4 ensaios incrementais](../crm-csv-delivery-review-20261017/SQL_V2_PROOFS.json).
+Pacote composto contém fonte corrigida;13 provas anteriores reutilizadas. V1/roteiro
+anterior CONSUMED/DENY, intactos. Nenhum destino real v2 consumido, nenhuma VPS.
+Próximo: revisão/autorização separada dos blocos1/2 v2, depois reconciliação SQL/atribuição
+→16 vínculos/autoridade→materialização/janela API→frontend. Ownership UNKNOWN.
+M1 consumido; ELF pausado; CSV SUSPENSO / NOT DEPLOYED / NOT WINDOW READY.
+
 ## Atualização local libpq/harness — base06fc3c92
 
 [Correção e limites](REPORT.md#correção-libpq--harness--local-validated--review-pending),
