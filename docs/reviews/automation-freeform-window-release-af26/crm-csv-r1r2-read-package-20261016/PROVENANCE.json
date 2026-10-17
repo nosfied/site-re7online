@@ -1,0 +1,18 @@
+{
+  "base": "6fbb36f9f8e0af1cf7ac3deed46f1d9bf13425d3",
+  "canonicalWriter": {
+    "source": "docs/reviews/automation-freeform-window-release-af26/v4-sequencer/privileged_output.py",
+    "sha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+    "delivered": "privileged_output.source",
+    "byteExact": true,
+    "changed": false
+  },
+  "inventory": {
+    "composition": "docs/reviews/automation-freeform-window-release-af26/crm-csv-original-chain-20261016/static-kit/COMPOSITION.json",
+    "sha256": "f9a0a44a83073739ad3bcddfdbd697eb5723c89a88d31a0c68519a87005307df",
+    "installerTargets": "crm-csv-root-authority-b4-20261016/install_static.py:TARGETS/ALIAS",
+    "installedStateClaimed": false
+  },
+  "readerSha256": "d01961f5388fc49b65130ac4beace468327ac3faae22d3bb6a6599005d3a73e8",
+  "implementationScope": "new review-only reader/transport/custody commands; no change to operational consumers"
+}

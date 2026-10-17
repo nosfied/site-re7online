@@ -1,0 +1,102 @@
+{
+  "result": "LOCAL_COMMAND_PACKAGE_VALIDATED",
+  "testCount": 17,
+  "tests": [
+    {
+      "name": "test_inventory_covers_every_target_and_alias_without_following",
+      "result": "PASS"
+    },
+    {
+      "name": "test_absent_targets_are_observations_not_created",
+      "result": "PASS"
+    },
+    {
+      "name": "test_parent_symlink_denies_without_following",
+      "result": "PASS"
+    },
+    {
+      "name": "test_read_denied_is_not_absence",
+      "result": "PASS"
+    },
+    {
+      "name": "test_substitution_during_file_read_denies",
+      "result": "PASS"
+    },
+    {
+      "name": "test_round_trip_exact_bytes_and_canonical_ingestion",
+      "result": "PASS"
+    },
+    {
+      "name": "test_timeout_stops_and_preserves_partial_no_retry",
+      "result": "PASS"
+    },
+    {
+      "name": "test_invalid_root_reply_stops_after_first_command",
+      "result": "PASS"
+    },
+    {
+      "name": "test_incomplete_transfer_preserved_and_no_complete",
+      "result": "PASS"
+    },
+    {
+      "name": "test_hash_tampering_denies_ingestion",
+      "result": "PASS"
+    },
+    {
+      "name": "test_command_bytes_tampering_denies",
+      "result": "PASS"
+    },
+    {
+      "name": "test_wrong_private_directory_denies_before_transport",
+      "result": "PASS"
+    },
+    {
+      "name": "test_consumed_collection_and_custody_are_not_repeated",
+      "result": "PASS"
+    },
+    {
+      "name": "test_lost_transport_response_does_not_repeat_or_claim_custody",
+      "result": "PASS"
+    },
+    {
+      "name": "test_export_symlink_and_wrong_mode_deny",
+      "result": "PASS"
+    },
+    {
+      "name": "test_unknown_tool_paths_are_discovery_not_dependency",
+      "result": "PASS"
+    },
+    {
+      "name": "test_canonical_writer_tamper_denies_before_creation",
+      "result": "PASS"
+    }
+  ],
+  "observedRun": "python3 -B -m unittest discover -s docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016 -p test_read_package.py -v",
+  "elapsedSeconds": 1.029,
+  "readerSha256": "d01961f5388fc49b65130ac4beace468327ac3faae22d3bb6a6599005d3a73e8",
+  "canonicalWriterSha256": "93a114516a19b6d0acee5d2d810f298d856efd22c6905452d81651db65e3271a",
+  "real": [
+    "Linux no-follow directory/file FDs in disposable fixture",
+    "hash/base64/byte-exact export and ingestion",
+    "canonical private_record append/fsync/modes",
+    "local Python child pipes for synthetic command responses"
+  ],
+  "simulated": [
+    "sudo/root identity and filesystem namespace",
+    "ssh network and remote authenticated host",
+    "production process/listener/cron/systemd command responses",
+    "PermissionError injection for reliable negative"
+  ],
+  "notExecuted": [
+    "VPS/SSH/SCP/sudo",
+    "production commands or prior operational suites",
+    "installation/authority/permit/backup/window"
+  ],
+  "publishedCommandChecks": {
+    "bashSyntaxBlocks": 5,
+    "changedScriptDeniedBeforeDispatch": true,
+    "protectedInventoryCoverage": 10,
+    "allObservedPaths": 19,
+    "remoteCommandsExecuted": false
+  }
+}

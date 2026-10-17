@@ -1,0 +1,85 @@
+{
+  "compositionSha256": "f9a0a44a83073739ad3bcddfdbd697eb5723c89a88d31a0c68519a87005307df",
+  "purpose": "DISCOVERY_NOT_INSTALLED_STATE_ASSERTION",
+  "targets": [
+    {
+      "path": "/usr/local/libexec/re7/authority.py",
+      "kind": "file",
+      "proposedSha256": "b31b59cfee6c7d48d7e9e88ff4b348106aaf317b530fc8791f94eb43b2b83cf6",
+      "proposedMode": "0644",
+      "proposedUid": 0,
+      "source": "protected/authority.py"
+    },
+    {
+      "path": "/usr/local/libexec/re7/root_store.py",
+      "kind": "file",
+      "proposedSha256": "3ee5dc72a8fd26320c702a95ab290d5f1792db8d0080f507bb1fd2774ce2a00a",
+      "proposedMode": "0644",
+      "proposedUid": 0,
+      "source": "protected/root_store.py"
+    },
+    {
+      "path": "/usr/local/libexec/re7/verified_loader.py",
+      "kind": "file",
+      "proposedSha256": "1c7b1068b3b9457aee12abf62f709a3ee9de593447f9e70b4ce8d100d491fcea",
+      "proposedMode": "0644",
+      "proposedUid": 0,
+      "source": "protected/verified_loader.py"
+    },
+    {
+      "path": "/usr/local/libexec/re7/child_transport.py",
+      "kind": "file",
+      "proposedSha256": "baefd76ac4fe4b2cf3fc40a7ae43aa3b2b131ebb9c19b7ceeccab441fd9e9292",
+      "proposedMode": "0644",
+      "proposedUid": 0,
+      "source": "protected/child_transport.py"
+    },
+    {
+      "path": "/usr/local/libexec/re7/privileged_output.py",
+      "kind": "file",
+      "proposedSha256": "19359d904460b96d5f093d9f85fc109e75358860776857e6c8507ce3f5575021",
+      "proposedMode": "0644",
+      "proposedUid": 0,
+      "source": "protected/privileged_output.py"
+    },
+    {
+      "path": "/usr/local/libexec/re7/recovery-launch.py",
+      "kind": "file",
+      "proposedSha256": "97aa1f2e0317bc73b5127a8e19cf8c95f99a30aea35eb60fb490ac032f906c15",
+      "proposedMode": "0644",
+      "proposedUid": 0,
+      "source": "protected/recovery-launch.py"
+    },
+    {
+      "path": "/usr/local/libexec/re7/recovery-node-launch.cjs",
+      "kind": "file",
+      "proposedSha256": "92abb274adf52ce7d786021f291361d3dea8f2a2fb90ef9b9742fcb7836f2f01",
+      "proposedMode": "0644",
+      "proposedUid": 0,
+      "source": "protected/recovery-node-launch.cjs"
+    },
+    {
+      "path": "/usr/local/libexec/re7/incident-6683-window-control.py",
+      "kind": "file",
+      "proposedSha256": "19a67b9eb748b69b72ffc0e144e2a85a89e12ba9b78271b00eec5e61efc02fd5",
+      "proposedMode": "0644",
+      "proposedUid": 0,
+      "source": "protected/incident-6683-window-control.py"
+    },
+    {
+      "path": "/etc/sudoers.d/re7-incident-6683-window",
+      "kind": "file",
+      "proposedSha256": "a6fc80e845709dc35ff6ac2ecd8e26732ba6ef3137b8406c7618a273263ab7dd",
+      "proposedMode": "0440",
+      "proposedUid": 0,
+      "source": "protected/re7-incident-6683-window"
+    },
+    {
+      "path": "/usr/local/libexec/re7/pm2-input.json",
+      "kind": "symlink",
+      "proposedTarget": "/proc/self/fd",
+      "proposedUid": 0,
+      "source": "install_static.ALIAS"
+    }
+  ]
+}

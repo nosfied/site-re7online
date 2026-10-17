@@ -1,0 +1,19 @@
+{
+  "base": "6fbb36f9f8e0af1cf7ac3deed46f1d9bf13425d3",
+  "scope": "R1_R2_REVIEW_ONLY_NO_REMOTE_EXECUTION",
+  "files": [
+    "docs/BACKLOG_TECH.md",
+    "docs/RUNBOOK_WHATSAPP_AGENT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/ALLOWLIST.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/COMMANDS.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/MANIFEST.sha256",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/PROOFS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/PROVENANCE.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/REPORT.md",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/TARGETS.json",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/privileged_output.source",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/read_package.py",
+    "docs/reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/test_read_package.py",
+    "docs/saas/DOCUMENTATION_INDEX.md"
+  ]
+}

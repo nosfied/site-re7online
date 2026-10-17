@@ -1,5 +1,8 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+**CSV16/10 — primeira conferência R1/R2 preparada somente para revisão.** [Roteiro único, inventário e17 provas locais](reviews/automation-freeform-window-release-af26/crm-csv-r1r2-read-package-20261016/REPORT.md): dez alvos estáticos (nove arquivos+alias), nove auxiliares; ausências registradas sem reparo. Destinos privados fixos, transferência byte-exata e ingestão pelo private_record canônico; seis comandos com canais/hashes/resultados e DENY sem retry. Coleta não atômica nem certificação; SSH/sudo e observações produtivas não executados. SQL/ownership/toolchain transitivo ficam dirigidos pelos resultados, sem impedir a proposta inicial. Nenhum pin/binding/implementação operacional alterado. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY. NEWauth+NEWDB+NEWcipher/crons/guarda38/out.15 e históricos consumidos preservados; revisão21/10 ou mudança.
+
+
 **CSV16/10 — inputs reconciliados, leituras para revisão.** [Matriz57/16 vínculos, comandos e bloqueios](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md):32 dados de modo +20 observações/contratos +5 owner/root/toolchain; leituras deduplicadas, R1/R2 concretas para coleta bruta e R3/R4 parciais com faltantes explícitos. Fonte root histórica/pin divergente exige futura observação e revisão, sem corrigir código/bindings nesta rodada. Reuso de restore/provas válidos; nenhum backup ou prova perecível renovados. Instalação estática, âncora, permit e janela separados. CSV SUSPENSO / REVIEW PENDING / NOT DEPLOYED / NOT WINDOW READY; nenhuma VPS ou implementação. NEWauth+NEWDB+NEWcipher, crons, guarda38/out.15 e históricos consumidos preservados. Deifson; revisão16/10/próxima21/10 ou mudança.
 
 
