@@ -2,7 +2,8 @@
 
 Este documento versiona o processo comprovado na promoção CRM/CSV de 17/10/2026.
 Ele complementa o deploy Git fast-forward existente; não autoriza uma janela e não
-é um script executável.
+é um script executável. Os requisitos técnicos obrigatórios estão no
+[`ARTIFACT_RELEASE_ENGINEERING_STANDARD.md`](ARTIFACT_RELEASE_ENGINEERING_STANDARD.md).
 
 ## Quando usar
 
@@ -73,3 +74,15 @@ tenant IDs e UUIDs não entram no Git.
 O registro da promoção CRM/CSV está em
 [`releases/CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json`](releases/CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json)
 e é validado pela CI.
+
+## Regra para futuras releases
+
+A janela excepcional CRM/CSV de 18/10/2026 pode terminar com verificador privado
+corrigido e autenticado. Depois dela, nenhuma nova release por artefato pode ser
+promovida por executor improvisado. O executor canônico deverá estar versionado,
+testado pelos fixtures do padrão de engenharia e aprovado na CI.
+
+Em toda seleção, `PRE_SELECTION_SNAPSHOT` é persistido antes do
+`pm2 delete`. O verificador candidato nunca relê o PID original removido. A
+prova `server.started` usa cursor do log candidato capturado antes da seleção,
+e o relatório completo é sincronizado antes de qualquer rollback.

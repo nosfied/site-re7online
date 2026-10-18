@@ -1,0 +1,177 @@
+# Padrão de engenharia para releases por artefato
+
+Status: `CANONICAL / CI GUARDED`.
+
+Este documento transforma as falhas observadas em 18/10/2026 em requisitos
+reutilizáveis. Ele complementa o
+[`ARTIFACT_RELEASE_RUNBOOK.md`](ARTIFACT_RELEASE_RUNBOOK.md). O runbook define
+a ordem operacional; este padrão define como construtores, empacotadores,
+materializadores, verificadores e rollback devem se comportar.
+
+## Regra de adoção
+
+Após a janela CRM/CSV iniciada em 18/10/2026, nenhuma nova promoção por artefato
+pode depender de comandos improvisados durante a janela. Antes da próxima release
+desse tipo, o executor canônico deve estar versionado, ter testes de regressão e
+produzir os estados e relatórios definidos aqui. Uma release já iniciada pode
+concluir com executor privado novo, desde que ele passe os mesmos fixtures antes
+da seleção e tenha SHA-256 registrado.
+
+## Máquina de estados
+
+A sequência válida é:
+
+1. `SOURCE_PINNED`
+2. `BUILT_OFFHOST`
+3. `PACKAGED`
+4. `STAGED_INERT`
+5. `PRE_SELECTION_SNAPSHOT`
+6. `API_SELECTED`
+7. `API_VERIFIED`
+8. `FRONTEND_SELECTED`
+9. `RELEASE_VERIFIED`
+10. `PM2_SAVED`
+11. `DOCUMENTED`
+
+Qualquer negativa produz `DENIED_<STATE>`. Se algum processo já foi selecionado,
+o retorno produz `ROLLED_BACK_<COMPONENT>`. Nenhum estado posterior pode ser
+inferido, e um estado observado depois do rollback não pode reclassificar o estado
+anterior.
+
+## Contrato do builder
+
+- A fonte completa de build e cada overlay devem possuir proveniência autenticada.
+- O builder deve registrar Node, npm, arquitetura, glibc, lockfiles e memória.
+- API TypeScript: `tsconfig.json` é resolvido com base em
+  `apps/whatsapp-agent`; `rootDir`, `outDir` e `fileName` devem pertencer
+  à mesma raiz. Nunca suprimir `TS6059`.
+- Frontend: `node_modules` deve existir fisicamente dentro da raiz aceita pelo
+  Turbopack. Symlink externo, `npm install`, `npm ci` ou resolução de versão
+  durante a janela são proibidos.
+- Dependências copiadas são comparadas por caminho, tipo, tamanho, SHA-256 e
+  destino literal de symlink.
+- Build e empacotamento são fases diferentes. Um erro de pacote nunca autoriza
+  recompilar automaticamente um build aprovado.
+
+## Contrato do pacote
+
+- Árvore de empacotamento separada da árvore de build.
+- Diretórios `0755`; arquivos regulares `0644`; executáveis somente quando
+  declarados; symlinks preservados sem dereferência.
+- Tar em ordem lexicográfica, `uid/gid=0`, nomes vazios e timestamp fixado pelo
+  commit candidato.
+- Extração Python sempre com `tarfile.data_filter` e processo single-thread com
+  `umask 0022`, restaurado em `finally`.
+- O filtro seguro não preserva modo de diretório; o umask explícito é parte do
+  contrato, não uma adaptação posterior.
+- A extração independente deve coincidir integralmente com o índice. Não aplicar
+  `chmod` para transformar uma negativa em PASS.
+- Um pacote aprovado é reutilizado por hash; não é reconstruído sem mudança de
+  fonte ou defeito comprovado em seus bytes.
+
+## Contrato do staging
+
+- Cada tentativa usa raiz exclusiva; tentativas negativas são preservadas.
+- A raiz começa somente com `incoming`.
+- Helpers de extração recebem destinos inexistentes e continuam fail-closed.
+- Payload é extraído e validado antes de suportes, `public`, dependências ou
+  vínculos de dados.
+- Complementos exigem destino ausente e origem autenticada; nunca sobrescrever.
+- Propriedade e modos são aplicados e verificados apenas na composição inerte.
+- Nenhum preflight de memória deve confundir `MemAvailable` com espaço em disco.
+
+## PRE_SELECTION_SNAPSHOT
+
+Antes de qualquer `pm2 delete`, persistir atomicamente e sincronizar em disco:
+
+- horário monotônico e UTC;
+- nome/ID PM2 original;
+- PID original e start ticks já lidos;
+- cwd, executável, `pm_exec_path`, SHA-256 do entrypoint;
+- status e contadores de restart;
+- identidades de frontend e worker que devem permanecer estáveis;
+- hash do dump vigente e do retorno;
+- para cada arquivo de log autorizado: caminho, device, inode e offset;
+- definição candidata e definição de retorno por SHA-256.
+
+Depois de persistido, o snapshot original é dado imutável. O verificador do
+candidato é proibido de reler `/proc/<pid-original>`: o PID original pode e
+normalmente deve desaparecer durante a substituição.
+
+## Verificador do candidato
+
+Cada predicado deve produzir registro próprio com `PASS`, `FAIL` ou
+`ERROR`, horário e evidência sanitizada. Uma exceção em um predicado não pode
+apagar os demais.
+
+As três amostras observam exclusivamente o PID candidato:
+
+- mesmo PID e start ticks nas três amostras;
+- PM2 online;
+- cwd, executável e `pm_exec_path` esperados;
+- SHA-256 do entrypoint esperado;
+- restart e unstable restart dentro do contrato;
+- health local e, quando previsto, público.
+
+O verificador deve persistir cada amostra antes da próxima. A decisão agregada só
+ocorre depois que todas estiverem gravadas.
+
+### Prova `server.started`
+
+Antes da seleção, capturar cursor do caminho de stdout que a definição candidata
+realmente usará. Depois da seleção:
+
+1. confirmar que o PM2 registrou o mesmo caminho autorizado;
+2. ler apenas bytes adicionados depois do cursor;
+3. aguardar por intervalo limitado enquanto a identidade candidata permanece
+   estável;
+4. exigir evento JSON `server.started` posterior ao início da seleção;
+5. registrar rotação, truncamento, caminho divergente ou timeout como negativas
+   distintas.
+
+Ausência do evento não pode ser convertida em PASS por health, mas também não
+pode interromper a coleta das três amostras.
+
+## Decisão e rollback
+
+- Primeiro persistir e sincronizar o relatório completo; depois decidir.
+- Rollback só começa por predicado nominal negativo já gravado.
+- Antes do retorno, gravar última identidade candidata observada.
+- O retorno remove somente o componente selecionado e usa definição previamente
+  autenticada.
+- A inspeção pós-retorno prova apenas a restauração; nunca é usada para alegar
+  que o candidato caiu antes.
+- Sem `pm2 save` em tentativa negativa.
+
+## Fixtures obrigatórios do executor canônico
+
+1. PID original desaparece após snapshot; candidato continua verificável.
+2. Um predicado lança exceção; os demais e as três amostras são persistidos.
+3. `server.started` aparece depois do cursor.
+4. Evento ausente gera timeout nominal sem apagar amostras.
+5. Log rotacionado ou truncado gera negativa específica.
+6. Relatório existe e está sincronizado antes da chamada de rollback.
+7. Runtime de staging preexistente é negado sem sobreposição.
+8. `data_filter` sob umask inicial `0002` produz `0755/0644` porque o
+   executor fixa temporariamente `0022`.
+9. `node_modules` externo é negado antes do Next build.
+10. API TypeScript usa raiz correta e não produz `TS6059`.
+
+## Registro das dificuldades de 18/10/2026
+
+| Falha | Causa | Regra permanente |
+| --- | --- | --- |
+| `TS6059` | `fileName` fora do `rootDir` efetivo | Resolver tsconfig e fontes na raiz da API |
+| Turbopack negou dependências | symlink externo | Dependências físicas e inventariadas na raiz |
+| `0664` virou `0644` | política segura do tar | Normalizar antes do tar |
+| diretório virou `0775` | `data_filter` + umask `0002` | Extração single-thread com umask `0022` |
+| `FileExistsError` | suporte criado antes do payload | Extrair em destino inexistente antes dos complementos |
+| amostras falharam | releitura do PID original removido | Snapshot completo antes do delete; candidato não consulta PID original |
+| marcador não localizado | cursor/caminho/tempo não individualizados | Cursor do log candidato e espera nominal persistida |
+
+## Proibições permanentes
+
+Não expor tokens, cookies, tenants ou UUIDs; não fabricar evidência; não adaptar
+gates depois do efeito; não executar POST, replay, SQL ou migration fora do
+manifesto; não usar estado pós-rollback para reconstruir retrospectivamente a
+tentativa.

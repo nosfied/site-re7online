@@ -36,6 +36,8 @@ jobs:
         run: python3 scripts/ci/verify-release-manifest.py docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18.json
       - name: Validate deployed CSV release record
         run: python3 scripts/ci/verify-deployment-record.py docs/saas/releases/CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json
+      - name: Validate artifact release engineering standard
+        run: python3 scripts/ci/verify-artifact-release-standard.py
       - name: Validate deploy impact classifier
         run: bash scripts/test-deploy-impact-matrix.sh
       - name: Validate deploy orchestration boundaries

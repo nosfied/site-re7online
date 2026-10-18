@@ -7,7 +7,8 @@
 > datadas abaixo preservam a cronologia e **não são instruções executáveis atuais**;
 > estados como `CSV SUSPENSO`, `NOT DEPLOYED` e `NOT WINDOW READY` foram superados
 > pela promoção documentada no commit `4ca6f32c`.
-> Processo versionado: [runbook de release por artefato](ARTIFACT_RELEASE_RUNBOOK.md) e
+> Processo versionado: [runbook de release por artefato](ARTIFACT_RELEASE_RUNBOOK.md),
+> [padrão de engenharia protegido pela CI](ARTIFACT_RELEASE_ENGINEERING_STANDARD.md) e
 > [registro sanitizado da implantação](releases/CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json).
 > Convergência: [plano seguro de branches](BRANCH_CONVERGENCE_PLAN_2026-10-18.md),
 > atualmente `PREPARED / NO MERGE EXECUTED`.

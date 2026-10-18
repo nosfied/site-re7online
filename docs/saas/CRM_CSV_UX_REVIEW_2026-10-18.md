@@ -117,3 +117,17 @@ para suportes antes de chamar o helper fail-closed que exige destino inexistente
 A raiz parcial foi preservada. O handoff agora determina raiz VPS nova, extração
 primeiro e complementos autenticados depois, sem afrouxar o helper, rebuild ou
 nova transferência.
+
+## Rollback da primeira seleção e correção estrutural — 18/10/2026
+
+A API candidata foi selecionada e retornada. O verificador tentou reler os start
+ticks do PID original depois da remoção e invalidou as três observações; o evento
+`server.started` também permaneceu ausente no trecho consultado. Produção foi
+restaurada e permaneceu saudável. A retomada exige snapshot completo antes do
+delete, observações exclusivamente candidatas, cursor do log candidato e
+relatório sincronizado antes do rollback.
+
+As dificuldades desta janela foram consolidadas em
+[`ARTIFACT_RELEASE_ENGINEERING_STANDARD.md`](ARTIFACT_RELEASE_ENGINEERING_STANDARD.md),
+protegido pela CI. Após esta janela, uma nova release por artefato dependerá de
+executor canônico versionado e fixtures de regressão.

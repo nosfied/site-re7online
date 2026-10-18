@@ -218,6 +218,41 @@ executar nova leitura curta de frescor: saúde, identidades PM2, worker, dump e
 retorno. Nenhum rollback é necessário enquanto nenhum processo tiver sido
 selecionado.
 
+## Correção do verificador antes de nova seleção API
+
+A primeira seleção a partir da raiz VPS completa foi retornada. As três amostras
+falharam porque o verificador releu os start ticks do PID original depois do
+`pm2 delete`. Isso viola o
+[`ARTIFACT_RELEASE_ENGINEERING_STANDARD.md`](../ARTIFACT_RELEASE_ENGINEERING_STANDARD.md).
+O evento `server.started` também não foi localizado e permanece negativa
+independente.
+
+Antes de nova seleção:
+
+1. preservar os relatórios, definições e staging atuais; não reconstruir nem
+   rematerializar os runtimes candidatos;
+2. criar uma nova versão do verificador e registrar seu SHA-256;
+3. antes do delete, capturar e persistir atomicamente `PRE_SELECTION_SNAPSHOT`
+   com PID/start ticks originais, identidades que permanecem, dump/retorno e
+   cursores dos logs que a definição candidata realmente usará;
+4. executar fixture local em que o snapshot original existe, o PID original é
+   removido e três amostras do candidato ainda passam. A fixture deve provar que
+   nenhuma função tenta reler `/proc/<pid-original>`;
+5. capturar o cursor do stdout candidato por caminho, device, inode e offset.
+   Depois da seleção, confirmar o caminho efetivo no PM2 e aguardar por tempo
+   limitado o JSON `server.started` somente nos bytes novos;
+6. coletar e persistir todos os predicados das três amostras do candidato mesmo
+   se um deles gerar `FAIL` ou `ERROR`;
+7. sincronizar o relatório completo antes de decidir pelo retorno. Rollback só
+   pode usar uma negativa nominal já gravada.
+
+A raiz inerte completa
+`/opt/re7online/releases/crm-csv-ux-phone-normalization-36dacbc8-20261018T122527Z-r2`
+é reutilizável após reconferência. Antes da nova seleção, fazer preflight curto e
+criar retorno timestampado do dump corrente. Se `server.started` continuar
+ausente após a espera nominal, retornar a API e investigar o caminho/rotação do
+log; health não substitui esse gate.
+
 ## Sequência executável
 
 1. Fazer preflight somente leitura: saúde pública/local, identidade dos três processos,
