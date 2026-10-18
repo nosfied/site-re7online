@@ -71,3 +71,12 @@ um tenant foi reutilizado como autoridade para outro.
 O manifesto e a sequência exata de build/promoção estão em
 [`CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_HANDOFF.md`](releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_HANDOFF.md).
 Este registro não afirma build, staging ou deploy.
+
+## Negativa de build e correção — 18/10/2026
+
+A primeira tentativa off-host parou antes do primeiro output com `TS6059`.
+O invocador usou um `fileName` relativo à raiz do monorepo contra o
+`rootDir: src` da API. Produção, staging, PM2, banco e importação permaneceram
+intocados. O handoff agora fixa a base `apps/whatsapp-agent`, o parse absoluto
+do tsconfig, os dois mapeamentos de saída e um novo destino exclusivo. A tentativa
+parcial foi preservada como evidência e não deve ser usada como candidato.

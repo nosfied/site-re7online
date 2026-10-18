@@ -28,6 +28,37 @@ Testes do manifesto são evidência e não entram nos pacotes de runtime.
 Fora do escopo: worker, Prisma, SQL, migrations, configuração de tenant, RBAC,
 credenciais, replay, importação e qualquer POST de confirmação.
 
+## Correção do invocador TypeScript após a negativa TS6059
+
+A primeira tentativa off-host de 18/10 foi interrompida antes do primeiro output:
+o invocador entregou a `transpileModule` um `fileName` relativo à raiz do
+monorepo, embora `rootDir: src` seja relativo a `apps/whatsapp-agent`. Isso é
+falha do invocador de empacotamento, não do candidato nem do TypeScript da API.
+
+Na retomada, a resolução é obrigatoriamente esta:
+
+1. definir `apiRoot` como o caminho absoluto da árvore
+   `apps/whatsapp-agent` materializada no commit candidato;
+2. ler `apiRoot/tsconfig.json` e chamar
+   `ts.parseJsonConfigFileContent(config, ts.sys, apiRoot)`, para que
+   `rootDir` e `outDir` sejam resolvidos na base correta;
+3. fornecer a `transpileModule` o `fileName` absoluto
+   `apiRoot/src/crm/<módulo>.ts` (ou `src/crm/<módulo>.ts` somente se o
+   processo estiver explicitamente em `apiRoot`);
+4. manter `reportDiagnostics: true` e negar antes de escrever qualquer output
+   se houver diagnóstico de erro;
+5. mapear explicitamente somente:
+   - `src/crm/crmContactUpsert.ts` → `dist/crm/crmContactUpsert.js`;
+   - `src/crm/crmWhatsappIdentity.ts` → `dist/crm/crmWhatsappIdentity.js`.
+
+Não remover `rootDir`, não filtrar o TS6059 e não alterar opções semânticas para
+fazer o gate passar. A raiz parcial
+`/tmp/crm-csv-ux-phone-normalization-36dacbc8-20261018T115500Z` permanece como
+evidência. Criar um novo destino local exclusivo para a retomada; fontes e
+toolchain já autenticados podem ser reutilizados somente após reconferir seus
+hashes. Como produção não foi tocada, não há rollback a executar. Antes de
+qualquer futura seleção PM2, refazer apenas o preflight de frescor.
+
 ## Sequência executável
 
 1. Fazer preflight somente leitura: saúde pública/local, identidade dos três processos,
