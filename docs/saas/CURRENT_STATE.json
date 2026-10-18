@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAtUtc": "2026-10-17T22:21:00Z",
-  "basedOnCommit": "d7d37c4f13728cd572f8253ab9ad0264b93b46a0",
+  "updatedAtUtc": "2026-10-18T02:31:09Z",
+  "basedOnCommit": "3868cc0aa314aec6e9cfdb93e211ef788a5a1329",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "sourcePriority": [
     "fresh read-only VPS evidence for live state",
@@ -10,18 +10,39 @@
     "dated reports only for the scope and time they explicitly certify"
   ],
   "production": {
-    "status": "LIVE_REVALIDATION_REQUIRED",
-    "lastDocumentedApiLine": "afbb",
-    "lastDocumentedFrontendLine": "af26",
+    "status": "DEPLOYED_VERIFIED",
+    "promotedAtUtc": "2026-10-18T02:31:09Z",
+    "promotedAtFortaleza": "2026-10-17T23:31:09-03:00",
+    "lastDocumentedApiLine": "crm-csv-recovery-d7d37c4f",
+    "lastDocumentedFrontendLine": "crm-csv-recovery-d7d37c4f",
     "lastDocumentedWorkerLine": "minimal-reactive",
-    "certifiedByThisFile": false
+    "certifiedByThisFile": false,
+    "api": {
+      "pid": 1238268,
+      "selectedAtUtc": "2026-10-18T02:08:55.415Z",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontend": {
+      "pid": 1241028,
+      "selectedAtUtc": "2026-10-18T02:25:24.023Z",
+      "buildId": "7IRWBhOwtCfwsLkfI9S0K"
+    },
+    "worker": {
+      "pid": 936540,
+      "preserved": true
+    },
+    "pm2": {
+      "savedOnce": true,
+      "dumpSha256": "521f941394c451891f661d06abf00cfd3cf90153dd5678b979293d2a12cd73e2",
+      "rollbackSha256": "05fd82d48d240f82043f33c792abcb8456727e76149da5d93748c47940ac5157"
+    }
   },
   "csvDelivery": {
     "functionalBackendCommit": "a27e2d16265220b17b8d1fb9d0be9c1c8364d310",
     "functionalFrontendCommit": "111cc5433a1985de3e05cd421e9087e0d40c6a5d",
     "staticPreparationCommit": "d7d37c4f13728cd572f8253ab9ad0264b93b46a0",
     "releaseManifest": "docs/saas/releases/CRM_CSV_RECOVERY_2026-10-17.json",
-    "state": "LOCAL_VALIDATED_NOT_DEPLOYED",
+    "state": "DEPLOYED_VERIFIED",
     "migrationRequired": false,
     "workerChanged": false,
     "deploymentOrder": [
@@ -35,7 +56,16 @@
       "SQL-v2",
       "historical diagnostic and discovery commands"
     ],
-    "nextAllowedAction": "READ_ONLY_LIVE_PREFLIGHT",
+    "windowMutations": {
+      "postRequests": 0,
+      "imports": 0,
+      "sqlStatements": 0,
+      "migrations": 0
+    },
+    "tenantNegativeIsolation": "LIVE_VERIFIED",
+    "durablePositiveRecovery": "LIVE_DEFERRED_UNTIL_FIRST_LEGITIMATE_IMPORT",
+    "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED",
+    "nextAllowedAction": "OBSERVE_FIRST_LEGITIMATE_IMPORT_BY_GET_ONLY",
     "liveExitCriteria": [
       "active API, frontend and worker identities captured without mutation",
       "candidate delta proven to exclude migrations, tenant policy, RBAC, credentials and worker",
