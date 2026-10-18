@@ -2,6 +2,23 @@
 
 Status: `DEPLOYED / VERIFIED / DEMO PREVIEW PENDING / IMPORT NOT RUN`.
 
+## Correção local do acompanhamento terminal — revisão pendente
+
+Foi confirmado no código que a tela abria o modal pela presença de um UUID no
+`localStorage`, antes de consultar a operação, e que “Fechar acompanhamento” apenas
+ocultava o modal. A referência terminal permanecia e reabria o acompanhamento na próxima
+entrada, cobrindo a lista já atualizada.
+
+O delta local passa a consultar primeiro o GET existente. `PROCESSING`/`UNKNOWN` mantêm
+a referência e o polling sem POST; `FAILED` continua disponível para consulta; um
+`COMPLETED` recuperado limpa somente a chave do tenant/usuário, atualiza a página 1 e não
+abre o modal. O fechamento explícito de `COMPLETED`/`FAILED` usa comparação do UUID antes
+da remoção, preserva falhas recuperáveis e mantém “Preparar outra importação” separado.
+Filtros permanecem intactos e recebem aviso de que podem ocultar contatos importados.
+
+Status deste delta: `LOCAL VALIDATED / DEPLOYMENT PENDING`. O estado da release viva
+acima não é alterado por esta preparação local.
+
 O resultado vivo e as identidades completas estão no
 [registro sanitizado da implantação](releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json).
 API e frontend foram promovidos em ordem, o worker foi preservado, o dump PM2 foi

@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { importRecoveryKey, importIsTerminal, importOperationMessage, mergeImportObservation } from "./crmImportRecovery";
+import {
+ clearTerminalImportRecovery,
+ finalizeTerminalImportRecovery,
+ importRecoveryKey,
+ importIsTerminal,
+ importOperationMessage,
+ mergeImportObservation,
+ recoverStoredImportOperation,
+} from "./crmImportRecovery";
 import { confirmAppCrmContactCsvImport, fetchAppCrmImportOperation, type AppCrmImportOperation, type AppSession } from "./appClientApi";
 const session = {baseUrl:"https://synthetic.invalid",token:"synthetic-test-token",user:{id:"user",clientId:"tenant",role:"ADMIN"}} as AppSession;
 const operation = (status: AppCrmImportOperation['status'], id="00000000-0000-4000-8000-000000000001"):AppCrmImportOperation=>({ok:true,status,operationId:id,progress:null,summary:null});
@@ -54,4 +62,89 @@ test("reference without observed admission remains unknown and explicitly forbid
   assert.match(importOperationMessage(missing), /admissão ainda não foi comprovada/);
   assert.match(importOperationMessage(missing), /Não repita/);
   assert.doesNotMatch(importOperationMessage(missing), /foi recusada antes/);
+});
+
+const memoryStorage = (entries: Record<string, string> = {}) => {
+ const values = new Map(Object.entries(entries));
+ return {
+  getItem: (key: string) => values.get(key) ?? null,
+  removeItem: (key: string) => { values.delete(key); },
+  value: (key: string) => values.get(key) ?? null,
+ };
+};
+
+test("saved PROCESSING is fetched before tracking opens and preserves the exact reference without POST", async () => {
+ const key = importRecoveryKey(session), id = operation("PROCESSING").operationId;
+ const storage = memoryStorage({ [key]: id });
+ const methods: string[] = [];
+ const recovered = await recoverStoredImportOperation(key, storage, async (operationId) => {
+  methods.push("GET"); assert.equal(operationId, id); return operation("PROCESSING", operationId);
+ });
+ assert.equal(recovered?.operation.status, "PROCESSING");
+ assert.equal(storage.value(key), id); assert.deepEqual(methods, ["GET"]);
+});
+
+test("saved UNKNOWN or lost GET preserves recovery and never submits an import", async () => {
+ const key = importRecoveryKey(session), id = operation("UNKNOWN").operationId;
+ const storage = memoryStorage({ [key]: id });
+ const methods: string[] = [];
+ const recovered = await recoverStoredImportOperation(key, storage, async () => {
+  methods.push("GET"); throw new Error("synthetic response loss");
+ });
+ assert.equal(recovered?.operation.status, "UNKNOWN");
+ assert.equal(storage.value(key), id); assert.deepEqual(methods, ["GET"]);
+});
+
+test("saved COMPLETED is cleared only after GET and allows page-one refresh without opening tracking", async () => {
+ const key = importRecoveryKey(session), id = operation("COMPLETED").operationId;
+ const storage = memoryStorage({ [key]: id });
+ const calls: string[] = [];
+ const recovered = await recoverStoredImportOperation(key, storage, async (operationId) => {
+  calls.push("GET"); return operation("COMPLETED", operationId);
+ });
+ assert.equal(recovered?.operation.status, "COMPLETED");
+ clearTerminalImportRecovery(key, recovered!.operation, storage);
+ calls.push("CONTACTS_PAGE_1");
+ assert.equal(storage.value(key), null); assert.deepEqual(calls, ["GET", "CONTACTS_PAGE_1"]);
+});
+
+test("terminal close prevents COMPLETED and FAILED from reopening while keeping prepare-another separate", async () => {
+ for (const status of ["COMPLETED", "FAILED"] as const) {
+  const key = importRecoveryKey(session), terminal = operation(status);
+  const storage = memoryStorage({ [key]: terminal.operationId });
+  clearTerminalImportRecovery(key, terminal, storage);
+  assert.equal(await recoverStoredImportOperation(key, storage, async () => { throw new Error("must not GET"); }), null);
+ }
+});
+
+test("tenant/user scoping and compare-before-remove never clear another recovery reference", () => {
+ const tenantAKey = importRecoveryKey(session);
+ const tenantBKey = importRecoveryKey({ ...session, user: { ...session.user, clientId: "tenant-b" } });
+ const terminal = operation("COMPLETED");
+ const storage = memoryStorage({ [tenantAKey]: terminal.operationId, [tenantBKey]: "tenant-b-operation" });
+ clearTerminalImportRecovery(tenantAKey, terminal, storage);
+ assert.equal(storage.value(tenantAKey), null); assert.equal(storage.value(tenantBKey), "tenant-b-operation");
+ const changed = memoryStorage({ [tenantAKey]: "newer-operation" });
+ assert.throws(() => clearTerminalImportRecovery(tenantAKey, terminal, changed), /reference_changed/);
+ assert.equal(changed.value(tenantAKey), "newer-operation");
+});
+
+test("storage removal failures remain recoverable and never erase the terminal reference", () => {
+ const key = importRecoveryKey(session), terminal = operation("COMPLETED");
+ const storage = {
+  getItem: () => terminal.operationId,
+  removeItem: () => { throw new Error("synthetic storage denial"); },
+ };
+ assert.throws(() => clearTerminalImportRecovery(key, terminal, storage), /storage denial/);
+ assert.equal(storage.getItem(), terminal.operationId);
+});
+
+test("contact refresh failure is reported after the terminal reference is safely cleared", async () => {
+ const key = importRecoveryKey(session), terminal = operation("COMPLETED");
+ const storage = memoryStorage({ [key]: terminal.operationId });
+ const loaded = await finalizeTerminalImportRecovery(key, terminal, storage, async () => {
+  throw new Error("synthetic contacts failure");
+ });
+ assert.equal(loaded, false);
+ assert.equal(storage.value(key), null);
 });

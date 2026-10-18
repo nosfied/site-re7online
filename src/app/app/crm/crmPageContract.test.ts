@@ -113,8 +113,9 @@ test("CRM CSV import modal uses one secondary action per import state", () => {
     pageSource.indexOf("function CsvImportModal"),
     pageSource.indexOf("export default function AppCrmContactsPage")
   );
-  assert.ok(importBlock.includes('{reportVisible ? "Fechar" : "Cancelar"}'));
-  assert.ok(importBlock.includes('aria-label={reportVisible ? "Fechar importação" : "Cancelar importação"}'));
+  assert.ok(importBlock.includes('{operationId ? "Fechar acompanhamento" : reportVisible ? "Fechar" : "Cancelar"}'));
+  assert.ok(importBlock.includes('aria-label={operationId ? "Fechar acompanhamento" : "Fechar importação"}'));
+  assert.ok(importBlock.includes("onClick={() => void closeTracking()}"));
   assert.ok(!importBlock.includes("Cancelar importação\n                </button>"));
   assert.ok(!importBlock.includes("resetImportState"));
 });
@@ -178,7 +179,7 @@ test("CRM CSV import requires preview before confirmation and locks duplicate pr
   assert.ok(modalBlock.includes("previewMappingDirty || preview.readyToImport === 0"));
   assert.ok(modalBlock.includes("{(inspection || preview) && !reportVisible ? ("));
   assert.ok(modalBlock.includes("Confirmar importação"));
-  assert.ok(modalBlock.includes('{reportVisible ? "Fechar" : "Cancelar"}'));
+  assert.ok(modalBlock.includes('{operationId ? "Fechar acompanhamento" : reportVisible ? "Fechar" : "Cancelar"}'));
   assert.ok(!modalBlock.includes("Cancelar importação\n                </button>"));
 });
 
@@ -191,8 +192,32 @@ test("CRM CSV import hides cancel and import actions after completed summary", (
   assert.ok(modalBlock.includes("!reportVisible ? (\n                <button"));
   assert.ok(modalBlock.includes("const previewReady = Boolean(preview && !reportVisible);"));
   assert.ok(modalBlock.includes("{previewReady ? ("));
-  assert.ok(modalBlock.includes('{reportVisible ? "Fechar" : "Cancelar"}'));
+  assert.ok(modalBlock.includes('{operationId ? "Fechar acompanhamento" : reportVisible ? "Fechar" : "Cancelar"}'));
   assert.ok(!modalBlock.includes("resetImportState"));
+});
+
+test("CRM CSV re-entry resolves persisted operation by GET before deciding whether to open tracking", () => {
+  const pageBlock = pageSource.slice(pageSource.indexOf("export default function AppCrmContactsPage"));
+  assert.ok(pageBlock.includes("recoverStoredImportOperation("));
+  assert.ok(pageBlock.includes("(operationId) => fetchAppCrmImportOperation(session, operationId)"));
+  assert.ok(pageBlock.indexOf("recoverStoredImportOperation(") < pageBlock.indexOf("setCsvModalOpen(true)"));
+  assert.ok(pageBlock.includes('if (recovered.operation.status !== "COMPLETED")'));
+  assert.ok(pageBlock.includes("await finalizeTerminalImportRecovery("));
+  assert.ok(pageBlock.includes("await loadContacts(session, 1)"));
+  assert.ok(pageBlock.includes("Os filtros atuais foram preservados e podem ocultar contatos importados."));
+  assert.ok(!pageBlock.includes("localStorage.getItem(importRecoveryKey(session))) setCsvModalOpen(true)"));
+});
+
+test("CRM CSV terminal close clears only the scoped reference and keeps retryable failures visible", () => {
+  const modalBlock = pageSource.slice(
+    pageSource.indexOf("function CsvImportModal"),
+    pageSource.indexOf("export default function AppCrmContactsPage")
+  );
+  assert.ok(modalBlock.includes("await onTerminalClose(operation)"));
+  assert.ok(modalBlock.includes("initialOperation?.summary ?? null"));
+  assert.ok(modalBlock.includes("A referência foi preservada; tente novamente."));
+  assert.ok(modalBlock.includes("clearTerminalImportRecovery(recoveryKey, operation, localStorage)"));
+  assert.ok(modalBlock.includes("Preparar outra importação"));
 });
 
 test("CRM CSV import can refresh preview after column mapping changes", () => {

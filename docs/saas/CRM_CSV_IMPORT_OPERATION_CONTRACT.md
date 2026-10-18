@@ -51,6 +51,17 @@ O recibo de recuperação guarda contadores e até 200 motivos/números de linha
 
 Reentrada consulta o mesmo UUID e recupera o resumo. Respostas antigas não substituem terminal nem progresso maior. Polling GET a cada 2s, limitado por ciclo; consulta manual disponível. Fechar acompanhamento não cancela o servidor. Uma operação não resolvida exige inspeção/decisão explícita futura, fora desta correção. Não existe endpoint de apagar intent ou retomar lote parcial. A referência só pode ser descartada pelo fluxo normal após terminal.
 
+Na reentrada, a mera presença da referência local não abre o acompanhamento: o cliente
+consulta primeiro o GET autenticado da operação. `PROCESSING` e `UNKNOWN` preservam a
+referência exata por base URL, tenant e usuário e nunca disparam novo POST. `FAILED` pode
+ser consultado até o usuário encerrar o acompanhamento. `COMPLETED` recuperado ao entrar
+remove somente a referência correspondente, atualiza a página 1 e permanece fora do
+modal. Com o modal aberto, `COMPLETED` e `FAILED` conservam o resultado até “Fechar
+acompanhamento”; essa ação compara o UUID salvo antes de removê-lo, volta à lista e não
+substitui “Preparar outra importação”. Falha de armazenamento preserva o acompanhamento;
+falha ao atualizar a lista é informada e pode ser recuperada por recarga. Filtros não são
+alterados silenciosamente e a interface avisa que podem ocultar contatos importados.
+
 ## Reconciliação
 
 Linhas são registros de dados interpretados pelo parser canônico, excluindo cabeçalho, não número de quebras de linha físicas. Categorias da classificação são exclusivas: elegíveis, telefone inválido, situação inválida, duplicadas no arquivo, excluídas, provisórias e conflito de identidade. Elegíveis = novos + existentes; existentes = atualizações previstas + sem alterações previstas. Prévia é observação, não promessa de resultado sob concorrência.

@@ -43,7 +43,15 @@ import { hasCapability } from "@/lib/appFeatures";
 import { getAppErrorUxMessage, getChannelUxLabel, getConversationStatusUxLabel } from "@/lib/appUxLabels";
 import { formatUserDisplayName } from "@/lib/userDisplayName";
 
-import { importRecoveryKey, importIsTerminal, importOperationMessage, mergeImportObservation } from "@/lib/crmImportRecovery";
+import {
+  clearTerminalImportRecovery,
+  finalizeTerminalImportRecovery,
+  importRecoveryKey,
+  importIsTerminal,
+  importOperationMessage,
+  mergeImportObservation,
+  recoverStoredImportOperation,
+} from "@/lib/crmImportRecovery";
 
 const PAGE_LIMIT = 50;
 const PERSISTENT_CRM_NOTICES = new Set([
@@ -1272,16 +1280,19 @@ function CreateContactModal({
 }
 
 function CsvImportModal({
-  recoveryKey, onStatus,
+  recoveryKey, initialOperation, onStatus,
   onClose,
+  onTerminalClose,
   onInspect,
   onPreview,
 	  onConfirm,
 		}: {
 		  onClose: () => void;
+		  onTerminalClose: (operation: AppCrmImportOperation) => Promise<void>;
 		  onInspect: (payload: { csvText: string }) => Promise<AppCrmContactImportInspectResponse>;
 		  onPreview: (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmContactImportPreviewResponse>;
 		  recoveryKey: string;
+      initialOperation: AppCrmImportOperation | null;
       onStatus: (operationId: string) => Promise<AppCrmImportOperation>;
       onConfirm: (payload: { operationId: string; csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmImportOperation>;
 		}) {
@@ -1306,16 +1317,14 @@ function CsvImportModal({
 		  const [mappingTouched, setMappingTouched] = useState<Record<CsvMappingField, boolean>>(initialMappingTouched);
   const [inspection, setInspection] = useState<AppCrmContactImportInspectResponse | null>(null);
   const [preview, setPreview] = useState<AppCrmContactImportPreviewResponse | null>(null);
-  const [summary, setSummary] = useState<AppCrmContactImportConfirmResponse | null>(null);
-  const [operationId, setOperationId] = useState<string | null>(null);
-  const [operation, setOperation] = useState<AppCrmImportOperation | null>(null);
+  const [summary, setSummary] = useState<AppCrmContactImportConfirmResponse | null>(initialOperation?.summary ?? null);
+  const [operationId, setOperationId] = useState<string | null>(initialOperation?.operationId ?? null);
+  const [operation, setOperation] = useState<AppCrmImportOperation | null>(initialOperation);
   const statusSeq = useRef(0);
-  const submitIntent = useRef<string | null>(null);
+  const submitIntent = useRef<string | null>(initialOperation?.operationId ?? null);
   useEffect(() => {
-    try { const id = localStorage.getItem(recoveryKey); submitIntent.current = id; setOperationId(id); }
-    catch { setLocalError("Não foi possível consultar a referência da importação neste navegador."); }
     return () => { statusSeq.current += 1; };
-  }, [recoveryKey]);
+  }, []);
   const recover = useCallback(async (id: string) => {
     const seq = ++statusSeq.current;
     try {
@@ -1342,6 +1351,7 @@ function CsvImportModal({
 	  const [inspectLoading, setInspectLoading] = useState(false);
 	  const [previewLoading, setPreviewLoading] = useState(false);
 	  const [importLoading, setImportLoading] = useState(false);
+	  const [terminalClosing, setTerminalClosing] = useState(false);
 	  const [localError, setLocalError] = useState<string | null>(null);
 	  const [previewMappingKey, setPreviewMappingKey] = useState("");
 	  const previewRequestSeq = useRef(0);
@@ -1367,6 +1377,46 @@ function CsvImportModal({
 	  const mappingKey = JSON.stringify(mapping);
 	  const loading = inspectLoading || previewLoading || importLoading;
 	  const reportVisible = Boolean(summary);
+
+  const closeTracking = async () => {
+    if (!operationId || !operation || !importIsTerminal(operation)) {
+      onClose();
+      return;
+    }
+    setTerminalClosing(true);
+    setLocalError(null);
+    try {
+      await onTerminalClose(operation);
+      statusSeq.current += 1;
+      submitIntent.current = null;
+      setOperationId(null);
+      setOperation(null);
+      setSummary(null);
+      onClose();
+    } catch {
+      setLocalError("Não foi possível encerrar este acompanhamento. A referência foi preservada; tente novamente.");
+    } finally {
+      setTerminalClosing(false);
+    }
+  };
+
+  const prepareAnotherImport = () => {
+    if (!operationId || !operation || !importIsTerminal(operation)) return;
+    try {
+      clearTerminalImportRecovery(recoveryKey, operation, localStorage);
+    } catch {
+      setLocalError("Não foi possível encerrar este acompanhamento. A referência foi preservada; tente novamente.");
+      return;
+    }
+    statusSeq.current += 1;
+    submitIntent.current = null;
+    setOperationId(null);
+    setOperation(null);
+    setSummary(null);
+    setCsvText("");
+    setPreview(null);
+    setInspection(null);
+  };
 
 		  const resetColumnMapping = () => {
 		    setPhoneColumn("");
@@ -1683,7 +1733,7 @@ function CsvImportModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-3 py-4 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <button type="button" aria-label={operationId ? "Fechar acompanhamento" : "Fechar importação"} className="absolute inset-0 cursor-default disabled:cursor-wait" onClick={onClose} disabled={loading} />
+      <button type="button" aria-label={operationId ? "Fechar acompanhamento" : "Fechar importação"} className="absolute inset-0 cursor-default disabled:cursor-wait" onClick={() => void closeTracking()} disabled={loading || terminalClosing} />
       <section className="theme-bg relative grid max-h-[calc(100vh-2rem)] w-full max-w-3xl grid-rows-[auto_1fr] overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
         <header className="theme-surface-strong border-b p-4">
           <h2 className="text-lg font-bold text-white">Importar CSV</h2>
@@ -1714,11 +1764,7 @@ function CsvImportModal({
                   <p>{operation ? importOperationMessage(operation) : "Consultando a operação registrada..."}</p>
                   <p className="theme-soft break-all text-xs">Referência: {operationId}</p>
                   <button type="button" className="theme-nav-link mt-2 mr-2 rounded-md border px-3 py-2" onClick={() => void recover(operationId)}>Consultar resultado</button>
-                  {importIsTerminal(operation) ? <button type="button" className="theme-nav-link mt-2 rounded-md border px-3 py-2" onClick={() => {
-                    statusSeq.current += 1; submitIntent.current = null;
-                    localStorage.removeItem(recoveryKey); setOperationId(null); setOperation(null); setSummary(null);
-                    setCsvText(""); setPreview(null); setInspection(null);
-                  }}>Preparar outra importação</button> : null}
+                  {importIsTerminal(operation) ? <button type="button" className="theme-nav-link mt-2 rounded-md border px-3 py-2" onClick={prepareAnotherImport}>Preparar outra importação</button> : null}
                 </div> : null}
             {(inspection || preview) && !reportVisible ? (
               <div className="grid gap-3 rounded-md border border-white/10 bg-slate-950/20 p-3">
@@ -1911,7 +1957,7 @@ function CsvImportModal({
               <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 p-3 text-sm text-rose-100">{localError}</div>
             ) : null}
             <div className="flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={onClose} disabled={loading} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={() => void closeTracking()} disabled={loading || terminalClosing} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
                 {operationId ? "Fechar acompanhamento" : reportVisible ? "Fechar" : "Cancelar"}
               </button>
               {!reportVisible ? (
@@ -1963,6 +2009,7 @@ export default function AppCrmContactsPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [csvInitialOperation, setCsvInitialOperation] = useState<AppCrmImportOperation | null>(null);
   const noticeIsPersistent = Boolean(notice && PERSISTENT_CRM_NOTICES.has(notice));
   const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || (notice && !noticeIsPersistent)), () => {
     setError(null);
@@ -2392,13 +2439,15 @@ export default function AppCrmContactsPage() {
   );
 
   const observedCsvCompletion = useRef<string | null>(null);
+  const csvFiltersActive = Boolean(q || status || channel || (canViewCrmHistory && hasConversation) || optOut || operationalStatus !== "active");
+  const csvFilterNotice = csvFiltersActive ? " Os filtros atuais foram preservados e podem ocultar contatos importados." : "";
   const acceptCsvCompletion = useCallback(async (response: AppCrmImportOperation) => {
     if (!session || response.status !== "COMPLETED" || !response.summary || observedCsvCompletion.current === response.operationId) return;
     observedCsvCompletion.current = response.operationId;
-    setNotice(`Importação concluída: ${response.summary.created} criado(s), ${response.summary.updated} atualizado(s), ${response.summary.unchanged ?? 0} sem alteração.`);
+    setNotice(`Importação concluída: ${response.summary.created} criado(s), ${response.summary.updated} atualizado(s), ${response.summary.unchanged ?? 0} sem alteração.${csvFilterNotice}`);
     setPage(1);
     try { await loadContacts(session, 1); } catch { setError("Importação concluída; não foi possível atualizar a lista agora."); }
-  }, [loadContacts, session]);
+  }, [csvFilterNotice, loadContacts, session]);
   const confirmCsvImport = useCallback(async (payload: { operationId: string; csvText: string; mapping: AppCrmContactCsvMapping }) => {
     if (!session) throw new Error("Sessão indisponível.");
     const response = await confirmAppCrmContactCsvImport(session, payload);
@@ -2411,9 +2460,73 @@ export default function AppCrmContactsPage() {
     await acceptCsvCompletion(response);
     return response;
   }, [acceptCsvCompletion, session]);
+
+  const closeTerminalCsvImport = useCallback(async (operation: AppCrmImportOperation) => {
+    if (!session) throw new Error("Sessão indisponível.");
+    const contactsLoaded = await finalizeTerminalImportRecovery(
+      importRecoveryKey(session),
+      operation,
+      localStorage,
+      () => loadContacts(session, 1)
+    );
+    setCsvInitialOperation(null);
+    setPage(1);
+    if (!contactsLoaded) {
+      setError("Acompanhamento encerrado; não foi possível atualizar a lista. Tente recarregar a página.");
+    } else if (operation.status === "COMPLETED" && csvFiltersActive) {
+      setNotice(`Acompanhamento encerrado. Os filtros atuais foram preservados e podem ocultar contatos importados.`);
+    }
+  }, [csvFiltersActive, loadContacts, session]);
+
   useEffect(() => {
-    try { if (session && canManageCrmContacts && localStorage.getItem(importRecoveryKey(session))) setCsvModalOpen(true); } catch { /* Modal will explain storage failure; never submit without intent. */ }
-  }, [session, canManageCrmContacts]);
+    if (!session || !canManageCrmContacts) return;
+    let cancelled = false;
+    const recoveryKey = importRecoveryKey(session);
+    recoverStoredImportOperation(
+      recoveryKey,
+      localStorage,
+      (operationId) => fetchAppCrmImportOperation(session, operationId)
+    ).then(async (recovered) => {
+      if (cancelled || !recovered) return;
+      if (recovered.operation.status !== "COMPLETED") {
+        setCsvInitialOperation(recovered.operation);
+        setCsvModalOpen(true);
+        return;
+      }
+      let contactsLoaded: boolean;
+      try {
+        contactsLoaded = await finalizeTerminalImportRecovery(
+          recoveryKey,
+          recovered.operation,
+          localStorage,
+          async () => {
+            const response = await fetchAppCrmContacts(session, { page: 1, limit: PAGE_LIMIT });
+            setContacts(response);
+          }
+        );
+      } catch {
+        if (cancelled) return;
+        setCsvInitialOperation(recovered.operation);
+        setCsvModalOpen(true);
+        setError("A importação terminou, mas não foi possível encerrar o acompanhamento neste navegador.");
+        return;
+      }
+      if (cancelled) return;
+      observedCsvCompletion.current = recovered.operation.operationId;
+      setCsvInitialOperation(null);
+      setPage(1);
+      if (recovered.operation.summary) {
+        const summary = recovered.operation.summary;
+        setNotice(`Importação concluída: ${summary.created} criado(s), ${summary.updated} atualizado(s), ${summary.unchanged ?? 0} sem alteração.`);
+      } else {
+        setNotice("Importação concluída. A lista de contatos foi atualizada.");
+      }
+      if (!contactsLoaded) setError("Importação concluída; não foi possível atualizar a lista. Tente recarregar a página.");
+    }).catch(() => {
+      if (!cancelled) setError("Não foi possível consultar a referência da importação neste navegador.");
+    });
+    return () => { cancelled = true; };
+  }, [canManageCrmContacts, session]);
 
   const copyReference = useCallback(async (value: string) => {
     if (!value) {
@@ -2739,8 +2852,10 @@ export default function AppCrmContactsPage() {
         <CsvImportModal
           key={session ? importRecoveryKey(session) : "none"}
           recoveryKey={session ? importRecoveryKey(session) : "none"}
+          initialOperation={csvInitialOperation}
           onStatus={recoverCsvImport}
-          onClose={() => setCsvModalOpen(false)}
+          onClose={() => { setCsvModalOpen(false); setCsvInitialOperation(null); }}
+          onTerminalClose={closeTerminalCsvImport}
           onInspect={inspectCsvImport}
           onPreview={previewCsvImport}
           onConfirm={confirmCsvImport}

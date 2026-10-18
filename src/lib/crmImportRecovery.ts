@@ -1,6 +1,57 @@
 import type { AppCrmImportOperation, AppSession } from "./appClientApi";
 export const importRecoveryKey = (s: AppSession) => `crm-import:${s.baseUrl}:${s.user.clientId}:${s.user.id}`;
 export const importIsTerminal = (o: AppCrmImportOperation | null) => o?.status === "COMPLETED" || o?.status === "FAILED";
+
+type ImportRecoveryStorage = Pick<Storage, "getItem" | "removeItem">;
+
+export type StoredImportRecovery = {
+  operationId: string;
+  operation: AppCrmImportOperation;
+};
+
+export async function recoverStoredImportOperation(
+  recoveryKey: string,
+  storage: ImportRecoveryStorage,
+  fetchOperation: (operationId: string) => Promise<AppCrmImportOperation>
+): Promise<StoredImportRecovery | null> {
+  const operationId = storage.getItem(recoveryKey);
+  if (!operationId) return null;
+  try {
+    return { operationId, operation: await fetchOperation(operationId) };
+  } catch {
+    return {
+      operationId,
+      operation: { ok: true, operationId, status: "UNKNOWN", summary: null, progress: null },
+    };
+  }
+}
+
+export function clearTerminalImportRecovery(
+  recoveryKey: string,
+  operation: AppCrmImportOperation,
+  storage: ImportRecoveryStorage
+) {
+  if (!importIsTerminal(operation)) throw new Error("import_operation_not_terminal");
+  if (storage.getItem(recoveryKey) !== operation.operationId) throw new Error("import_recovery_reference_changed");
+  storage.removeItem(recoveryKey);
+  if (storage.getItem(recoveryKey) !== null) throw new Error("import_recovery_reference_not_removed");
+}
+
+export async function finalizeTerminalImportRecovery(
+  recoveryKey: string,
+  operation: AppCrmImportOperation,
+  storage: ImportRecoveryStorage,
+  refreshContactsPageOne: () => Promise<void>
+) {
+  clearTerminalImportRecovery(recoveryKey, operation, storage);
+  try {
+    await refreshContactsPageOne();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function importOperationMessage(o: AppCrmImportOperation) {
   if (o.status === "COMPLETED") return "Importação concluída. O resumo abaixo corresponde à operação registrada.";
   if (o.status === "FAILED") return "A importação foi recusada antes de gravar contatos. Consulte o motivo antes de iniciar outra.";
