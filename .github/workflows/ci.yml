@@ -108,6 +108,11 @@ jobs:
       - run: npm run db:deploy
       - name: Backend durable-operation and multi-tenant tests
         run: node --import tsx --test src/crm/crmCsvImportOperation.postgres.test.ts
+      - name: CRM phone identity and import normalization tests
+        run: >-
+          node --import tsx --test
+          src/crm/crmWhatsappIdentity.test.ts
+          src/crm/crmContactUpsert.test.ts
       - name: Frontend timeout, re-entry and CRM CSV UX contract tests
         working-directory: .
         run: |

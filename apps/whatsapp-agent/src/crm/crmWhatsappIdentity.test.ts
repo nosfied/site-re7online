@@ -35,3 +35,20 @@ test("CRM WhatsApp identity candidates include stored domestic legacy records an
     ["84951957784", "5584951957784", "558451957784", "8451957784"]
   );
 });
+
+test("CRM WhatsApp identity accepts the Brazilian domestic trunk prefix before a valid DDD", () => {
+  for (const [input, expected] of [
+    ["084 99904-9614", "5584999049614"],
+    ["084 3303-7349", "558433037349"],
+    ["055 99140-0002", "5555991400002"],
+  ] as const) {
+    assert.equal(normalizeCrmWhatsappIdentity(input)?.crmCanonicalPhone, expected);
+  }
+});
+
+test("CRM WhatsApp identity does not reinterpret carrier prefixes or malformed leading zeros", () => {
+  assert.equal(normalizeCrmWhatsappIdentity("021 84 99904-9614"), null);
+  assert.equal(normalizeCrmWhatsappIdentity("001 84 99904-9614"), null);
+  assert.equal(normalizeCrmWhatsappIdentity("+1 415 555 0100"), null);
+});
+

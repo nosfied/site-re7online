@@ -31,10 +31,18 @@ function isValidBrazilDdd(value: string) {
   return BRAZIL_DDDS.has(value);
 }
 
+function stripBrazilDomesticTrunkPrefix(digits: string) {
+  if (!digits.startsWith("0")) return digits;
+  const national = digits.slice(1);
+  return national.length === 10 || national.length === 11 ? national : digits;
+}
+
 function parseBrazilSubscriber(digits: string) {
+  const dialingDigits = stripBrazilDomesticTrunkPrefix(digits);
   const hasBrazilCountryCode =
-    digits.startsWith(BRAZIL_COUNTRY_CODE) && (digits.length === 12 || digits.length === 13);
-  const national = hasBrazilCountryCode ? digits.slice(2) : digits;
+    dialingDigits.startsWith(BRAZIL_COUNTRY_CODE) &&
+    (dialingDigits.length === 12 || dialingDigits.length === 13);
+  const national = hasBrazilCountryCode ? dialingDigits.slice(2) : dialingDigits;
   if (national.length !== 10 && national.length !== 11) return null;
   const ddd = national.slice(0, 2);
   if (!isValidBrazilDdd(ddd)) return null;

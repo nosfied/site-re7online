@@ -19,8 +19,10 @@ ou alteração produtiva foi executado.
 4. A classificação `invalid_phone` valida estrutura brasileira, DDD e quantidade de
    dígitos. Ela não consulta o WhatsApp e não prova que um número esteja ou não
    cadastrado no provedor.
-5. O CSV anexado pelo usuário não ficou disponível no ambiente de auditoria. Por isso,
-   nenhuma regra de normalização foi ampliada por suposição.
+5. O relatório recebido depois da primeira revisão contém 50 ocorrências: 37
+   `INVALID_PHONE` e 13 `DUPLICATE`. As 37 rejeições usam exclusivamente o formato
+   nacional `0 + DDD + número`; após retirar somente o zero de tronco, todas passam
+   pela validação brasileira já existente, sem colisões entre si.
 
 ## Correções no candidato
 
@@ -34,6 +36,9 @@ ou alteração produtiva foi executado.
 - mapeamento secundário reorganizado em duas colunas, com largura mínima segura;
 - linguagem alterada para “telefone brasileiro inválido ou incompleto” e explicação
   de que não existe consulta de registro no WhatsApp;
+- normalizador central existente ampliado somente para `0 + DDD + número`, mantendo
+  DDD, comprimentos, regras de assinante e aliases já aprovados;
+- prefixos de operadora, zeros malformados e número estrangeiro permanecem rejeitados;
 - contrato automatizado específico incluído no job crítico da CI;
 - a ativação experimental do arquivo histórico completo revelou três asserções antigas
   obsoletas e antes não executadas; elas ficaram registradas como dívida fora deste
@@ -45,12 +50,18 @@ ou alteração produtiva foi executado.
 
 Não confirmar a importação no Demo antes de:
 
-1. receber novamente o CSV de erros;
-2. classificar os formatos rejeitados sem expor números no repositório ou no chat;
-3. implementar somente normalizações inequívocas, com testes de aceitação e rejeição;
-4. criar um novo manifesto de candidato, buildar fora da VPS e promover com rollback
+1. concluir CI do candidato com a normalização específica;
+2. criar um novo manifesto de candidato, buildar fora da VPS e promover com rollback
    fixado;
-5. gerar nova prévia no tenant Demo e obter confirmação humana antes do único POST.
+3. gerar nova prévia no tenant Demo e obter confirmação humana antes do único POST.
 
 A natureza multi-tenant permanece preservada: nenhum dado, UUID, token ou resultado de
 um tenant foi reutilizado como autoridade para outro.
+
+## Evidência sanitizada do relatório recebido
+
+- SHA-256 do arquivo analisado: `54fce84a1694f01d4471c7c9406632844aae71675aff729da17a258296e1f594`;
+- 50 ocorrências na amostra;
+- 37 rejeições de formato, todas recuperáveis pela regra de tronco nacional;
+- 13 duplicidades, que continuam duplicidades e não são convertidas em erro de formato;
+- nenhum telefone completo foi versionado ou publicado.

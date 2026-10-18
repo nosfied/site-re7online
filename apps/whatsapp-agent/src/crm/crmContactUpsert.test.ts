@@ -909,3 +909,21 @@ test("CRM CSV import reports unique persistence races as identity conflicts", as
   assert.equal(result.identityConflicts, 1);
   assert.equal(result.failed, 0);
 });
+
+test("CRM CSV import reuses the canonical identity normalizer for Brazilian trunk-prefixed phones", async () => {
+  const prisma = makeUpsertPrisma();
+
+  const preview = await previewCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText: "phone,name\n084999049614,Móvel nacional\n08433037349,Fixo nacional\n",
+    mapping: { phoneColumn: "phone", nameColumn: "name" },
+  });
+
+  assert.equal(preview.invalidRows, 0);
+  assert.equal(preview.readyToImport, 2);
+  assert.deepEqual(
+    preview.rows?.map((row) => row.normalizedPhone),
+    ["5584999049614", "558433037349"]
+  );
+});
+
