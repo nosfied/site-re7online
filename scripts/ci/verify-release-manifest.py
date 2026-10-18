@@ -17,12 +17,16 @@ def require(condition: bool, reason: str) -> None:
         raise SystemExit(f"RELEASE_MANIFEST_INVALID: {reason}")
 
 
-def git_blob(path: Path) -> str:
-    return subprocess.check_output(
-        ["git", "hash-object", "--", str(path.relative_to(ROOT))],
-        cwd=ROOT,
-        text=True,
-    ).strip()
+def git_output(*args: str) -> str:
+    return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
+
+
+def manifest_blob(commit: str, path_text: str) -> str:
+    return git_output("rev-parse", f"{commit}:{path_text}")
+
+
+def blob_size(blob_sha: str) -> int:
+    return int(git_output("cat-file", "-s", blob_sha))
 
 
 def main() -> None:
@@ -36,6 +40,13 @@ def main() -> None:
     require(data.get("workerChanged") is False, "worker must remain excluded")
     require(data.get("automaticReplayForbidden") is True, "replay guard")
 
+    candidate_commit = str(data.get("candidateCommit", "")).strip()
+    require(bool(candidate_commit), "candidateCommit")
+    try:
+        git_output("cat-file", "-e", f"{candidate_commit}^{{commit}}")
+    except subprocess.CalledProcessError:
+        require(False, f"candidate commit unavailable: {candidate_commit}")
+
     runtime = data.get("runtimeFiles", {})
     require(set(runtime) == {"api", "frontend"}, "runtime roles")
     entries = runtime["api"] + runtime["frontend"] + data.get("validationFiles", [])
@@ -47,15 +58,18 @@ def main() -> None:
         path_text = entry.get("path", "")
         path = (ROOT / path_text).resolve()
         require(path.is_relative_to(ROOT), f"path outside repository: {path_text}")
-        require(path.is_file(), f"missing path: {path_text}")
-        require(path.stat().st_size == entry.get("bytes"), f"byte drift: {path_text}")
-        require(git_blob(path) == entry.get("gitBlobSha"), f"blob drift: {path_text}")
+        try:
+            blob_sha = manifest_blob(candidate_commit, path_text)
+        except subprocess.CalledProcessError:
+            require(False, f"missing path at candidate commit: {path_text}")
+        require(blob_size(blob_sha) == entry.get("bytes"), f"byte drift at candidate commit: {path_text}")
+        require(blob_sha == entry.get("gitBlobSha"), f"blob drift at candidate commit: {path_text}")
 
     forbidden_prefixes = ("apps/whatsapp-agent/prisma/", "apps/whatsapp-web-worker/")
     for path_text in paths:
         require(not path_text.startswith(forbidden_prefixes),
                 f"excluded runtime surface: {path_text}")
-    print(f"RELEASE_MANIFEST_OK: {len(entries)} pinned files; api then frontend")
+    print(f"RELEASE_MANIFEST_OK: {len(entries)} pinned files at {candidate_commit[:12]}; api then frontend")
 
 
 if __name__ == "__main__":
