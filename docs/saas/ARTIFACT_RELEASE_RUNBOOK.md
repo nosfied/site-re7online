@@ -39,7 +39,7 @@ na mesma janela.
    em `start --update-env` para trocar `cwd` ou entrypoint de processo já registrado.
 7. Persistir cada predicado antes da decisão: PM2 online, PID e start ticks, `cwd`,
    `pm_exec_path`, `/proc/<pid>/cwd`, `/proc/<pid>/exe`, SHA do entrypoint, contadores
-   de restart, propriedade direta do socket de escuta e health. Repetir três amostras
+   de restart, propriedade direta do socket de escuta (`candidate_owns_listening_socket`) e health. Repetir três amostras
    da mesma identidade. `server.started` é evidência complementar, não substitui o
    vínculo PID→socket→porta→health. O caminho JavaScript
    literal em `/proc/<pid>/cmdline` não é gate válido sob PM2.
