@@ -53,7 +53,8 @@ def main() -> None:
                  active_prefix(ROOT / "docs/saas/CRM_CSV_UX_REVIEW_2026-10-18.md",
                                "## Negativa de build e correção"))
     operation = json.loads((ROOT / OPERATION_RECORD).read_text(encoding="utf-8"))
-    require(operation.get("status") == "OBS2_ROTATED_VERIFIED_OBS1_PENDING",
+    require(operation.get("status") ==
+            "OBS2_CONTINGENCY_CLOSED_SAFE_RETURN_READY_OBS1_PENDING",
             "active credential rotation status")
 
     manifest = json.loads((ROOT / "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18.json").read_text(encoding="utf-8"))

@@ -30,8 +30,8 @@
   não foi repetida. Totais da operação não registrados permanecem sem inferência.
 - Histórico de 993 linhas: `LEGACY_UNCORRELATED / NOT CLAIMED`.
 - Janela: zero POST CSV, importação, SQL e migration.
-- Credenciais: OBS-2 `ROTATED / VERIFIED`; OBS-1 `PENDING / UNTOUCHED` para
-  uma janela separada.
+- Credenciais: OBS-2 `CONTINGENCY CLOSED / SAFE POST-ROTATION RETURN READY`;
+  OBS-1 `PENDING / UNTOUCHED` para uma janela separada.
 
 ## Governança
 

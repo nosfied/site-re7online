@@ -51,7 +51,8 @@ def main() -> None:
     require(path.is_relative_to(ROOT) and path.is_file(), "record path")
     record = read_json(path)
     require(record.get("schemaVersion") == 1, "schemaVersion")
-    require(record.get("status") == "OBS2_ROTATED_VERIFIED_OBS1_PENDING",
+    require(record.get("status") ==
+            "OBS2_CONTINGENCY_CLOSED_SAFE_RETURN_READY_OBS1_PENDING",
             "status")
     require(record.get("operationType") == "CREDENTIAL_ROTATION",
             "operation type")
@@ -115,6 +116,20 @@ def main() -> None:
     require(all(bool(SHA256.fullmatch(pm2.get(key, ""))) for key in (
         "dumpSha256", "rollbackSha256",
     )), "PM2 identities")
+    require(pm2.get("dumpSha256") == pm2.get("rollbackSha256"),
+            "post-rotation return must match current dump")
+    closure = record.get("contingencyClosure", {})
+    require(closure.get("status") == "OBS2_PREVIOUS_VALUE_DESTROYED" and
+            closure.get("previousValueDestroyed") is True and
+            closure.get("knownPreviousCopiesRemoved") == 10 and
+            closure.get("restartExecuted") is False and
+            closure.get("pm2SaveExecuted") is False,
+            "contingency closure")
+    previous = closure.get("previousRollback", {})
+    require(previous.get("classification") ==
+            "NON_EXECUTABLE_EXPOSED_SECRET" and
+            previous.get("disposition") == "REMOVED",
+            "previous rollback disposition")
 
     mutations = record.get("windowMutations", {})
     require(mutations == {
@@ -142,7 +157,7 @@ def main() -> None:
     require(production.get("pm2", {}).get("dumpSha256") == pm2.get("dumpSha256") and
             production.get("pm2", {}).get("rollbackSha256") ==
             pm2.get("rollbackSha256"), "current PM2 identities")
-    print("CREDENTIAL_ROTATION_RECORD_OK: OBS-2 rotated; OBS-1 untouched")
+    print("CREDENTIAL_ROTATION_RECORD_OK: OBS-2 contingency closed; OBS-1 untouched")
 
 
 if __name__ == "__main__":

@@ -47,7 +47,8 @@ def main() -> None:
     operation = read_json(operation_path)
     require(operation.get("schemaVersion") == 1 and
             operation.get("operationType") == "CREDENTIAL_ROTATION" and
-            operation.get("status") == "OBS2_ROTATED_VERIFIED_OBS1_PENDING",
+            operation.get("status") ==
+            "OBS2_CONTINGENCY_CLOSED_SAFE_RETURN_READY_OBS1_PENDING",
             "operational record identity")
     base = operation.get("baseDeploymentRecord", {})
     require((ROOT / base.get("path", "")).resolve() == record_path and
@@ -90,6 +91,13 @@ def main() -> None:
     for key in ("dumpSha256", "rollbackSha256"):
         require(pm2.get(key) == record_pm2.get(key) and
                 bool(SHA256.fullmatch(str(pm2.get(key, "")))), f"PM2 {key}")
+    require(pm2.get("dumpSha256") == pm2.get("rollbackSha256"),
+            "post-OBS-2 return identity")
+    require(pm2.get("previousRollback") == {
+        "sha256": "33e3d65e78b4e4bd27349a06e28ff125551535085e0721281f3848dece5590d1",
+        "classification": "NON_EXECUTABLE_EXPOSED_SECRET",
+        "disposition": "REMOVED",
+    }, "previous rollback is not executable")
 
     csv = state.get("csvDelivery", {})
     require(csv.get("state") == "DEPLOYED_VERIFIED", "CSV state")
@@ -127,7 +135,7 @@ def main() -> None:
         "status": "RECORDED_PRIVATELY",
         "values": "NOT_VERSIONED",
         "rotationAssessment": "PARTIAL",
-        "obs2": "ROTATED_VERIFIED",
+        "obs2": "CONTINGENCY_CLOSED_SAFE_RETURN_READY",
         "obs1": "PENDING_UNTOUCHED",
         "activeRecord": state.get("activeOperationalRecord"),
     }, "credential inspection incident")

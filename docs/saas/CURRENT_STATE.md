@@ -17,11 +17,11 @@ dos filtros foi promovida e verificada em 18/10/2026, às 15:21:18 em Fortaleza
 - Frontend ativo: BUILD_ID `2nrVvTyK7pcyD_oMa_fOv`.
 - PM2 após a rotação OBS-2: dump vigente SHA-256
   `20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e`;
-  retorno imediatamente anterior preservado com SHA-256
-  `33e3d65e78b4e4bd27349a06e28ff125551535085e0721281f3848dece5590d1`.
+  retorno operacional pós-OBS-2 com o mesmo SHA-256, criado atomicamente em
+  `dump.pm2.obs2-post-rotation-20261018T193258Z.rollback`, modo `0600`.
 - API e worker permaneceram sem alteração.
 
-Na observação final de `2026-10-18T19:14:53.593473+00:00`, os PIDs eram API
+Na observação final de `2026-10-18T19:34:37.825579+00:00`, os PIDs eram API
 `1377194`, frontend `1362964` e worker `936540`. PIDs são observações datadas;
 as identidades duráveis são o hash do entrypoint da API, o BUILD_ID do frontend
 e os hashes do dump e retorno.
@@ -35,9 +35,12 @@ health local/público e início de um novo estado OAuth sem concluir autorizaç�
 provedor. Frontend e worker permaneceram com suas identidades anteriores.
 
 Estados OAuth emitidos antes da rotação foram invalidados; eventual login Meta em
-andamento deve ser reiniciado. O valor anterior permanece somente em custódia privada
-durante a contingência registrada. OBS-1 permanece `PENDING / UNTOUCHED` e não foi
-acessada nem alterada nesta janela.
+andamento deve ser reiniciado. A contingência encerrou após o prazo e uma nova
+conferência de estabilidade. A cópia explícita do valor anterior foi destruída e os
+artefatos conhecidos que continham o ambiente anterior foram removidos por caminho
+exato após registro privado. O rollback pré-rotação foi classificado como
+`NON_EXECUTABLE_EXPOSED_SECRET` antes da remoção. OBS-1 permanece
+`PENDING / UNTOUCHED` e não foi acessada nem alterada nesta janela.
 
 ## Resultado e limites
 
@@ -60,9 +63,8 @@ acessada nem alterada nesta janela.
 
 ## Próximos atos
 
-1. Destruir o valor anterior de OBS-2 somente depois da condição de contingência
-   registrada no relatório privado e na ausência de regressão OAuth.
-2. Manter OBS-1 pendente para uma janela de provedor separadamente autorizada.
+1. Manter OBS-1 pendente para uma janela de provedor separadamente autorizada.
+2. Revalidar o retorno pós-OBS-2 somente antes de uma futura operação que dependa dele.
 
 Os campos verificáveis estão em [`CURRENT_STATE.json`](CURRENT_STATE.json). A CI
 valida este arquivo, o manifesto de origem e o registro ativo da implantação.
