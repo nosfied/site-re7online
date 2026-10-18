@@ -2062,6 +2062,11 @@ export default function AppCrmContactsPage() {
     [buildFilters, page]
   );
 
+  const loadContactsRef = useRef(loadContacts);
+  useEffect(() => {
+    loadContactsRef.current = loadContacts;
+  }, [loadContacts]);
+
   useEffect(() => {
     const stored = loadAppSession();
     if (!stored?.token) {
@@ -2499,10 +2504,7 @@ export default function AppCrmContactsPage() {
           recoveryKey,
           recovered.operation,
           localStorage,
-          async () => {
-            const response = await fetchAppCrmContacts(session, { page: 1, limit: PAGE_LIMIT });
-            setContacts(response);
-          }
+          () => loadContactsRef.current(session, 1)
         );
       } catch {
         if (cancelled) return;

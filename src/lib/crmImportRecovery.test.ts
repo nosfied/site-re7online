@@ -95,17 +95,27 @@ test("saved UNKNOWN or lost GET preserves recovery and never submits an import",
  assert.equal(storage.value(key), id); assert.deepEqual(methods, ["GET"]);
 });
 
-test("saved COMPLETED is cleared only after GET and allows page-one refresh without opening tracking", async () => {
+test("saved COMPLETED clears only its scoped reference and refreshes page one with active filters without POST", async () => {
  const key = importRecoveryKey(session), id = operation("COMPLETED").operationId;
- const storage = memoryStorage({ [key]: id });
- const calls: string[] = [];
+ const otherKey = importRecoveryKey({ ...session, user: { ...session.user, clientId: "tenant-b", id: "user-b" } });
+ const storage = memoryStorage({ [key]: id, [otherKey]: "tenant-b-operation" });
+ const filters = { q: "Ana", status: "LEAD", channel: "WHATSAPP", hasConversation: true, optOut: false, operationalStatus: "active", page: 1, limit: 50 };
+ const calls: Array<{ method: "GET" | "POST"; target: string; filters?: typeof filters }> = [];
  const recovered = await recoverStoredImportOperation(key, storage, async (operationId) => {
-  calls.push("GET"); return operation("COMPLETED", operationId);
+  calls.push({ method: "GET", target: "operation" }); return operation("COMPLETED", operationId);
  });
  assert.equal(recovered?.operation.status, "COMPLETED");
- clearTerminalImportRecovery(key, recovered!.operation, storage);
- calls.push("CONTACTS_PAGE_1");
- assert.equal(storage.value(key), null); assert.deepEqual(calls, ["GET", "CONTACTS_PAGE_1"]);
+ const loaded = await finalizeTerminalImportRecovery(key, recovered!.operation, storage, async () => {
+  calls.push({ method: "GET", target: "contacts", filters });
+ });
+ assert.equal(loaded, true);
+ assert.equal(storage.value(key), null);
+ assert.equal(storage.value(otherKey), "tenant-b-operation");
+ assert.deepEqual(calls, [
+  { method: "GET", target: "operation" },
+  { method: "GET", target: "contacts", filters },
+ ]);
+ assert.equal(calls.some(({ method }) => method === "POST"), false);
 });
 
 test("terminal close prevents COMPLETED and FAILED from reopening while keeping prepare-another separate", async () => {

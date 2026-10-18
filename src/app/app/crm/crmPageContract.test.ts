@@ -203,7 +203,11 @@ test("CRM CSV re-entry resolves persisted operation by GET before deciding wheth
   assert.ok(pageBlock.indexOf("recoverStoredImportOperation(") < pageBlock.indexOf("setCsvModalOpen(true)"));
   assert.ok(pageBlock.includes('if (recovered.operation.status !== "COMPLETED")'));
   assert.ok(pageBlock.includes("await finalizeTerminalImportRecovery("));
-  assert.ok(pageBlock.includes("await loadContacts(session, 1)"));
+  assert.ok(pageBlock.includes("const loadContactsRef = useRef(loadContacts);"));
+  assert.ok(pageBlock.includes("loadContactsRef.current = loadContacts;"));
+  assert.ok(pageBlock.includes("() => loadContactsRef.current(session, 1)"));
+  assert.ok(pageBlock.includes("fetchAppCrmContacts(activeSession, buildFilters(targetPage))"));
+  assert.ok(pageBlock.includes("}, [canManageCrmContacts, session]);"));
   assert.ok(pageBlock.includes("Os filtros atuais foram preservados e podem ocultar contatos importados."));
   assert.ok(!pageBlock.includes("localStorage.getItem(importRecoveryKey(session))) setCsvModalOpen(true)"));
 });
