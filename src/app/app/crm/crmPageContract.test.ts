@@ -271,3 +271,27 @@ test("CRM CSV import uses campaign-style preview/report tables and localized res
   assert.ok(!modalBlock.includes("{row.operation}</td>"));
   assert.ok(!modalBlock.includes("Arquivo selecionado:"));
 });
+
+test("CRM contacts expose progress and scroll every preview row returned by the API", () => {
+  const modalBlock = pageSource.slice(
+    pageSource.indexOf("function CsvImportModal"),
+    pageSource.indexOf("export default function AppCrmContactsPage")
+  );
+  assert.ok(pageSource.includes("Carregando página {page}..."));
+  assert.ok(pageSource.includes('role="status" aria-live="polite"'));
+  assert.ok(pageSource.includes("aria-busy={loading}"));
+  assert.ok(modalBlock.includes("Lendo e analisando o arquivo..."));
+  assert.ok(modalBlock.includes("max-h-[360px] overflow-auto"));
+  assert.ok(modalBlock.includes("max-h-[420px] overflow-auto"));
+  assert.ok(modalBlock.includes("sticky top-0 z-10"));
+  assert.ok(modalBlock.includes("{rows.map((error) => ("));
+  assert.ok(modalBlock.includes("{preview.rows.map((row) => ("));
+  assert.ok(!modalBlock.includes("rows.slice(0, 8)"));
+  assert.ok(!modalBlock.includes("preview.rows.slice(0, 8)"));
+  assert.ok(modalBlock.includes("A tabela e o CSV baixado contêm somente as ocorrências exibidas acima."));
+  assert.ok(modalBlock.includes("Ela não consulta se o número possui conta no WhatsApp."));
+  assert.ok(modalBlock.includes('className="grid gap-3 sm:grid-cols-2"'));
+  assert.ok(modalBlock.includes('className="grid min-w-0 gap-1.5 text-sm"'));
+  assert.ok(modalBlock.includes('className="theme-input h-10 w-full min-w-0'));
+});
+

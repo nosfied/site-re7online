@@ -256,7 +256,7 @@ function getCrmImportIssueCodeLabel(code: string | null | undefined, reason: str
   switch (code || reason) {
     case "INVALID_PHONE":
     case "invalid_phone":
-      return "Telefone inválido";
+      return "Telefone inválido ou incompleto";
     case "INVALID_CRM_STATUS":
     case "invalid_crm_status":
       return "Situação no CRM não encontrada";
@@ -1601,7 +1601,10 @@ function CsvImportModal({
     return (
       <div className={`grid gap-3 rounded-md border p-3 text-sm ${toneClasses}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="font-semibold">{summary ? "Erros detalhados" : "Erros da prévia"}</span>
+          <span className="font-semibold">
+            {summary ? "Erros detalhados" : "Erros da prévia"}{" "}
+            <span className="font-normal opacity-80">({rows.length} {rows.length === 1 ? "ocorrência exibida" : "ocorrências exibidas"})</span>
+          </span>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={copyErrorReport} disabled={loading} className={`rounded-md border px-2 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${actionBorder}`}>
               Copiar
@@ -1611,9 +1614,9 @@ function CsvImportModal({
             </button>
           </div>
         </div>
-        <div className="overflow-x-auto rounded-md border border-white/10">
+        <div className="max-h-[360px] overflow-auto rounded-md border border-white/10">
           <table className="w-full min-w-[760px] text-sm">
-            <thead className="bg-white/10 text-left text-white">
+            <thead className="sticky top-0 z-10 bg-slate-900 text-left text-white shadow-sm">
               <tr>
                 <th className="px-3 py-2">Linha</th>
                 <th className="px-3 py-2">Telefone</th>
@@ -1623,7 +1626,7 @@ function CsvImportModal({
               </tr>
             </thead>
             <tbody>
-              {rows.slice(0, 8).map((error) => (
+              {rows.map((error) => (
                 <tr key={`${error.rowNumber}:${error.reason}:${error.inputPhone ?? ""}`} className="border-t border-white/10">
                   <td className="px-3 py-2">{error.rowNumber}</td>
                   <td className="px-3 py-2 font-mono text-xs text-white">{error.normalizedPhoneDisplay ?? error.normalizedPhone ?? error.inputPhone ?? error.phoneDisplay ?? "-"}</td>
@@ -1639,7 +1642,11 @@ function CsvImportModal({
             </tbody>
           </table>
         </div>
-        {options.truncated ? <div className="text-xs">Há mais erros no arquivo.</div> : null}
+        {options.truncated ? (
+          <div className="text-xs">
+            Há mais ocorrências no arquivo do que a amostra retornada pela API. A tabela e o CSV baixado contêm somente as ocorrências exibidas acima.
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -1697,6 +1704,12 @@ function CsvImportModal({
                 className="theme-input rounded-md border p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
               />
 	            </div>
+                {loading && !operationId ? (
+                  <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-md border border-sky-300/30 bg-sky-400/10 p-3 text-sm text-sky-100">
+                    <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-sky-100/30 border-t-sky-100" />
+                    {inspectLoading ? "Lendo e analisando o arquivo..." : previewLoading ? "Gerando a prévia..." : "Processando a importação..."}
+                  </div>
+                ) : null}
                 {operationId ? <div role="status" className="rounded-md border p-3 text-sm">
                   <p>{operation ? importOperationMessage(operation) : "Consultando a operação registrada..."}</p>
                   <p className="theme-soft break-all text-xs">Referência: {operationId}</p>
@@ -1710,53 +1723,53 @@ function CsvImportModal({
             {(inspection || preview) && !reportVisible ? (
               <div className="grid gap-3 rounded-md border border-white/10 bg-slate-950/20 p-3">
 		                <div className="grid gap-3 sm:grid-cols-3">
-	                  <label className="grid gap-1.5 text-sm">
+	                  <label className="grid min-w-0 gap-1.5 text-sm">
 	                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do telefone</span>
-	                    <select value={phoneColumn} onChange={(event) => updatePhoneColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+	                    <select value={phoneColumn} onChange={(event) => updatePhoneColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 w-full min-w-0 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
                       <option value="">Selecionar coluna</option>
                       {headers.map((header) => <option key={header} value={header}>{header}</option>)}
                     </select>
                   </label>
-                  <label className="grid gap-1.5 text-sm">
+                  <label className="grid min-w-0 gap-1.5 text-sm">
                     <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do nome</span>
-                    <select value={nameColumn} onChange={(event) => updateNameColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+                    <select value={nameColumn} onChange={(event) => updateNameColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 w-full min-w-0 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
                       <option value="">Sem nome</option>
 	                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 	                    </select>
 	                  </label>
-	                  <label className="grid gap-1.5 text-sm">
+	                  <label className="grid min-w-0 gap-1.5 text-sm">
 	                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Situação no CRM</span>
-	                    <select value={crmSituationColumn} onChange={(event) => updateCrmSituationColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+	                    <select value={crmSituationColumn} onChange={(event) => updateCrmSituationColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 w-full min-w-0 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
 	                      <option value="">Preservar/default</option>
 	                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 	                    </select>
 		                  </label>
 		                </div>
-		                <div className="grid gap-3 sm:grid-cols-4">
-		                  <label className="grid gap-1.5 text-sm">
+		                <div className="grid gap-3 sm:grid-cols-2">
+		                  <label className="grid min-w-0 gap-1.5 text-sm">
 		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Empresa</span>
-		                    <select value={companyColumn} onChange={(event) => updateCompanyColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                    <select value={companyColumn} onChange={(event) => updateCompanyColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 w-full min-w-0 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
 		                      <option value="">Preservar</option>
 		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 		                    </select>
 		                  </label>
-		                  <label className="grid gap-1.5 text-sm">
+		                  <label className="grid min-w-0 gap-1.5 text-sm">
 		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Cidade</span>
-		                    <select value={cityColumn} onChange={(event) => updateCityColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                    <select value={cityColumn} onChange={(event) => updateCityColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 w-full min-w-0 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
 		                      <option value="">Preservar</option>
 		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 		                    </select>
 		                  </label>
-		                  <label className="grid gap-1.5 text-sm">
+		                  <label className="grid min-w-0 gap-1.5 text-sm">
 		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">E-mail</span>
-		                    <select value={emailColumn} onChange={(event) => updateEmailColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                    <select value={emailColumn} onChange={(event) => updateEmailColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 w-full min-w-0 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
 		                      <option value="">Preservar</option>
 		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 		                    </select>
 		                  </label>
-		                  <label className="grid gap-1.5 text-sm">
+		                  <label className="grid min-w-0 gap-1.5 text-sm">
 		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Serviço / interesse</span>
-		                    <select value={serviceColumn} onChange={(event) => updateServiceColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                    <select value={serviceColumn} onChange={(event) => updateServiceColumn(event.target.value)} disabled={loading || Boolean(operationId)} className="theme-input h-10 w-full min-w-0 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
 		                      <option value="">Preservar</option>
 		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 		                    </select>
@@ -1808,12 +1821,17 @@ function CsvImportModal({
                     </div>
                   </div>
 	                ) : null}
-                {preview ? <p className="theme-soft text-sm">Amostra de até 200 linhas: {preview.rows?.length ?? 0} de {preview.readyToImport} elegíveis. A importação considera todas as linhas elegíveis. Elegíveis = novos + atualizações + sem alteração; existentes = atualizações + sem alteração (subtotal).</p> : null}
+                {preview ? (
+                  <div className="grid gap-1 text-sm theme-soft">
+                    <p>Amostra de até 200 linhas: {preview.rows?.length ?? 0} de {preview.readyToImport} elegíveis. A importação considera todas as linhas elegíveis. Elegíveis = novos + atualizações + sem alteração; existentes = atualizações + sem alteração (subtotal).</p>
+                    <p>A validação do telefone confere formato brasileiro, DDD e quantidade de dígitos. Ela não consulta se o número possui conta no WhatsApp.</p>
+                  </div>
+                ) : null}
 
 	                {preview?.rows?.length ? (
-	                  <div className="overflow-x-auto rounded-md border border-white/10">
+	                  <div className="max-h-[420px] overflow-auto rounded-md border border-white/10">
 			                    <table className="w-full min-w-[900px] text-left text-sm">
-		                      <thead className="bg-white/10 text-white">
+		                      <thead className="sticky top-0 z-10 bg-slate-900 text-white shadow-sm">
 	                        <tr>
 	                          <th className="px-3 py-2">Linha</th>
 	                          <th className="px-3 py-2">Contato</th>
@@ -1824,7 +1842,7 @@ function CsvImportModal({
 	                        </tr>
 	                      </thead>
 	                      <tbody>
-	                        {preview.rows.slice(0, 8).map((row) => (
+	                        {preview.rows.map((row) => (
 	                          <tr key={`${row.rowNumber}:${row.normalizedPhone}`} className="border-t border-white/10">
 	                            <td className="px-3 py-2">{row.rowNumber}</td>
 	                            <td className="px-3 py-2 text-white">{row.name || "-"}</td>
@@ -2548,6 +2566,12 @@ export default function AppCrmContactsPage() {
                   ? `${formatNumber(contacts.totals?.tenantVisible ?? contacts.pagination.total)} contatos no escopo; ${formatNumber(contacts.pagination.total)} encontrados; ${contacts.items.length} nesta página`
                   : "Carregando contatos"}
               </span>
+              {loading && contacts ? (
+                <span role="status" aria-live="polite" className="inline-flex items-center gap-2 rounded-full border border-sky-300/30 bg-sky-400/10 px-3 py-1 text-xs text-sky-100">
+                  <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-100/30 border-t-sky-100" />
+                  Carregando página {page}...
+                </span>
+              ) : null}
               <span className="text-xs theme-soft">Registros anonimizados ficam ocultos por padrão.</span>
               {contacts ? (
                 <span>
@@ -2650,7 +2674,7 @@ export default function AppCrmContactsPage() {
             </p>
           </div>
         ) : contacts ? (
-          <div className="theme-surface overflow-hidden rounded-xl border shadow-sm">
+          <div className={`theme-surface overflow-hidden rounded-xl border shadow-sm transition-opacity ${loading ? "opacity-70" : ""}`} aria-busy={loading}>
             <div className="overflow-x-auto">
               <table className={`${canViewCrmHistory ? "min-w-[1280px]" : "min-w-[1080px]"} w-full text-left text-sm`}>
                 <thead className="border-b border-white/10 bg-white/[0.04] text-xs uppercase tracking-[0.12em] theme-soft">

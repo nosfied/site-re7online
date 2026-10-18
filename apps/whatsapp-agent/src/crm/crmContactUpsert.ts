@@ -343,7 +343,7 @@ function buildExistingMatch(params: {
 function getImportIssueLabel(reason: CrmContactImportIssueReason) {
   switch (reason) {
     case "invalid_phone":
-      return "Número de WhatsApp inválido";
+      return "Telefone brasileiro inválido ou incompleto";
     case "duplicate_in_file":
       return "Este número aparece mais de uma vez no arquivo";
     case "invalid_crm_status":
