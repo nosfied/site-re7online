@@ -108,3 +108,12 @@ diretórios a cargo do umask; com `0002`, o resultado foi `0775`. O handoff
 agora fixa `umask 0022` no processo single-thread de extração, restaura o valor
 anterior em `finally` e mantém o filtro e a igualdade integral. Não haverá novo
 build nem novo tar.
+
+## Negativa de ordem de staging — 18/10/2026
+
+Extração independente, manifesto frontend, preflight e transferência passaram.
+O staging parou antes do PM2 porque o orquestrador criou `frontend-runtime`
+para suportes antes de chamar o helper fail-closed que exige destino inexistente.
+A raiz parcial foi preservada. O handoff agora determina raiz VPS nova, extração
+primeiro e complementos autenticados depois, sem afrouxar o helper, rebuild ou
+nova transferência.

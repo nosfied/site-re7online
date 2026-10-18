@@ -174,6 +174,50 @@ staging inerte da VPS, seguido de validação integral e aplicação/verificaç�
 propriedade `deploy:deploy`. Isso torna o resultado independente do umask do
 host sem enfraquecer `data_filter`.
 
+## Ordem de materialização na VPS após a negativa FileExistsError
+
+A quinta tentativa aprovou a extração independente, emitiu o manifesto frontend,
+passou no preflight fresco e transferiu os artefatos. O staging parou antes do
+PM2 porque o orquestrador criou `frontend-runtime` para copiar suportes e depois
+chamou o helper que, por contrato, cria somente um destino inexistente.
+
+Não permitir extração em diretório preexistente e não completar a raiz parcial.
+Na retomada:
+
+1. preservar sem alterações a raiz parcial
+   `/opt/re7online/releases/crm-csv-ux-phone-normalization-36dacbc8-20261018T122527Z`;
+2. criar uma raiz exclusiva nova com sufixo `-r2`, inicialmente contendo apenas
+   `incoming`; `api-runtime` e `frontend-runtime` devem estar ausentes;
+3. copiar para o novo `incoming` somente os pacotes e manifests já autenticados,
+   sem rebuild nem nova transferência, e reconferir:
+   - API tar
+     `3cf17abb52004bb8a16d2ddd4703b5179ad0c9cb66c6e2433613a2f6be06b2c0`;
+   - API manifest
+     `fca745ed42240ba23cecb5be5e5e2001dd4c9803251fe492fcbe65e03d701079`;
+   - frontend tar
+     `e9f6644ee5d08cacd0e1bd4d1cee4b0c068341a22f68038ec045e7962860c341`;
+   - frontend manifest
+     `e8f543f47791796f6c31d71053a670de23d406cb002da9b12fd76cfbfabf559a`;
+4. chamar os helpers fail-closed com destinos inexistentes, cada um criando seu
+   runtime. Para o frontend, usar `umask 0022` e `filter="data"` conforme já
+   aprovado;
+5. validar integralmente os payloads extraídos antes de qualquer complemento;
+6. somente depois da extração frontend, copiar para dentro de
+   `frontend-runtime` os arquivos de suporte e `public` previstos pelo
+   contrato produtivo, conferindo previamente origem, destino ausente, hash,
+   tamanho, modo e contagem;
+7. criar por último os vínculos de dependências/dados previstos, após autenticar
+   seus destinos. Nenhum vínculo pode escapar dos destinos já autorizados;
+8. aplicar e validar `deploy:deploy` e os modos canônicos na composição inerte
+   completa; revalidar BUILD_ID `Ebyc7UWY8nwjFyA5Zjyfj`, entrypoints, índices
+   e ausência de caminhos inesperados.
+
+Se qualquer suporte já existir no payload ou divergir do contrato, negar sem
+sobrescrever. O helper de extração permanece inalterado. Antes da seleção PM2,
+executar nova leitura curta de frescor: saúde, identidades PM2, worker, dump e
+retorno. Nenhum rollback é necessário enquanto nenhum processo tiver sido
+selecionado.
+
 ## Sequência executável
 
 1. Fazer preflight somente leitura: saúde pública/local, identidade dos três processos,
