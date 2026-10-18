@@ -1,5 +1,13 @@
 # Documentation Index
 
+> [!IMPORTANT]
+> **Estado operacional vigente:** CRM/CSV `DEPLOYED / VERIFIED` em 17/10/2026
+> (Fortaleza). Consulte [CURRENT_STATE.md](CURRENT_STATE.md) e
+> [CURRENT_STATE.json](CURRENT_STATE.json) antes de qualquer decisão. As entradas CSV
+> datadas abaixo preservam a cronologia e **não são instruções executáveis atuais**;
+> estados como `CSV SUSPENSO`, `NOT DEPLOYED` e `NOT WINDOW READY` foram superados
+> pela promoção documentada no commit `4ca6f32c`.
+
 ## CSV — contrato/perfis/caminhos/quatro modos efetivamente compostos
 
 [Resultado/seqüência restante](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),

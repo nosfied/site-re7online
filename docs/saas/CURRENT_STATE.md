@@ -14,6 +14,8 @@ nem uma leitura atual da VPS.
 - Frontend está no runtime candidato com PID `1241028` e BUILD_ID
   `7IRWBhOwtCfwsLkfI9S0K`.
 - Worker foi preservado no runtime anterior, PID `936540`.
+- Os PIDs são evidência observacional datada; após qualquer restart devem ser
+  revalidados. As identidades duráveis são os hashes, BUILD_ID e dumps registrados.
 - O dump PM2 vigente tem SHA-256
   `521f941394c451891f661d06abf00cfd3cf90153dd5678b979293d2a12cd73e2`;
   o rollback anterior permanece preservado com SHA-256

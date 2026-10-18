@@ -35,6 +35,15 @@
       "savedOnce": true,
       "dumpSha256": "521f941394c451891f661d06abf00cfd3cf90153dd5678b979293d2a12cd73e2",
       "rollbackSha256": "05fd82d48d240f82043f33c792abcb8456727e76149da5d93748c47940ac5157"
+    },
+    "processIdentitySemantics": {
+      "pids": "dated observational evidence; revalidate after any process restart",
+      "durable": [
+        "api.entrySha256",
+        "frontend.buildId",
+        "pm2.dumpSha256",
+        "pm2.rollbackSha256"
+      ]
     }
   },
   "csvDelivery": {
@@ -74,12 +83,12 @@
       "explicit production window authority recorded"
     ],
     "postDeployCriteria": [
-      "API health succeeds before frontend promotion",
-      "same operationId is recovered by GET without another POST",
-      "tenant isolation remains enforced",
-      "993-row reference totals remain internally reconciled",
-      "CRM and Inbox authenticated smoke succeed",
-      "no CSV replay or historical repair is executed"
+      "API health succeeded before frontend promotion",
+      "tenant-negative GETs returned UNKNOWN without progress, totals, summary or cross-tenant metadata",
+      "CRM and Inbox authenticated smoke succeeded without asset failures",
+      "no CSV replay, POST, historical repair, SQL or migration was executed in the window",
+      "durable positive recovery remains deferred until the first legitimate import and must be observed by GET only",
+      "historical 993-row evidence remains uncorrelated and is not claimed as a live validation"
     ]
   },
   "branchConvergence": {

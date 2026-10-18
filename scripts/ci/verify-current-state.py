@@ -35,12 +35,19 @@ def main() -> None:
             "documentation cannot certify live production")
     production = data.get("production", {})
     require(production.get("status") == "DEPLOYED_VERIFIED", "production status")
-    require(production.get("api", {}).get("pid") == 1238268, "API PID")
-    require(production.get("frontend", {}).get("pid") == 1241028, "frontend PID")
+    require(isinstance(production.get("api", {}).get("pid"), int) and
+            production["api"]["pid"] > 0, "API PID evidence")
+    require(isinstance(production.get("frontend", {}).get("pid"), int) and
+            production["frontend"]["pid"] > 0, "frontend PID evidence")
     require(production.get("frontend", {}).get("buildId") == "7IRWBhOwtCfwsLkfI9S0K",
             "frontend BUILD_ID")
-    require(production.get("worker", {}) == {"pid": 936540, "preserved": True},
-            "worker preservation")
+    worker = production.get("worker", {})
+    require(isinstance(worker.get("pid"), int) and worker["pid"] > 0 and
+            worker.get("preserved") is True, "worker preservation")
+    semantics = production.get("processIdentitySemantics", {})
+    require(semantics.get("pids") ==
+            "dated observational evidence; revalidate after any process restart",
+            "PID observation semantics")
     require(production.get("pm2", {}).get("savedOnce") is True, "PM2 save")
 
     csv = data.get("csvDelivery", {})
@@ -58,7 +65,14 @@ def main() -> None:
             "historical 993")
     require(set(csv.get("windowMutations", {}).values()) == {0}, "window mutations")
     require(len(csv.get("liveExitCriteria", [])) >= 5, "live exit criteria")
-    require(len(csv.get("postDeployCriteria", [])) >= 6, "post-deploy criteria")
+    post_deploy = csv.get("postDeployCriteria", [])
+    require(len(post_deploy) >= 6, "post-deploy criteria")
+    require(any("durable positive recovery remains deferred" in item
+                for item in post_deploy), "deferred positive recovery criterion")
+    require(any("historical 993-row evidence remains uncorrelated" in item
+                for item in post_deploy), "historical 993 criterion")
+    require(not any("993-row reference totals remain internally reconciled" in item
+                    for item in post_deploy), "stale 993 claim")
     for field in SHA_FIELDS:
         value = csv.get(field, "")
         require(len(value) == 40 and all(c in "0123456789abcdef" for c in value), field)

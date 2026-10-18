@@ -1,5 +1,12 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+> [!IMPORTANT]
+> **Estado operacional vigente:** CRM/CSV `DEPLOYED / VERIFIED` em 17/10/2026
+> (Fortaleza). A fonte canônica é [saas/CURRENT_STATE.md](saas/CURRENT_STATE.md) e
+> [saas/CURRENT_STATE.json](saas/CURRENT_STATE.json). As entradas CSV datadas abaixo
+> são histórico auditável, não roteiro atual; `CSV SUSPENSO`, `NOT DEPLOYED` e
+> `NOT WINDOW READY` foram superados pela promoção registrada em `4ca6f32c`.
+
 ## CSV — contrato/perfis/caminhos/quatro modos efetivamente compostos
 
 [Resultado/seqüência restante](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),
