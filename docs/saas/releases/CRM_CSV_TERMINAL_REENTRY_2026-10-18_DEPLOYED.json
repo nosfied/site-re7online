@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 3,
+  "status": "DEPLOYED_VERIFIED",
+  "releaseType": "FRONTEND_ONLY",
+  "deployedAtUtc": "2026-10-18T18:21:18.971249+00:00",
+  "deployedAtFortaleza": "2026-10-18T15:21:18.971249-03:00",
+  "sourceReleaseManifest": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18.json",
+  "sourceCommits": [
+    "c35d876906c59a7448d0bcfb0c5b076e9385fdc8",
+    "b8cc113dc3e27a6818a1074f51c38eaa0e569448"
+  ],
+  "baseDeploymentRecord": {
+    "path": "docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json",
+    "sha256": "19ae77b07e24706ceb4bdda41be9d2b88932e4ff9445a4426ed97893a42539d8"
+  },
+  "deploymentOrder": ["frontend"],
+  "stagingRoot": "/opt/re7online/releases/crm-csv-terminal-reentry-b8cc113d-20261018T143000Z",
+  "artifacts": {
+    "api": {
+      "preserved": true,
+      "runtime": "crm-csv-ux-phone-normalization-36dacbc8",
+      "entrypoint": "api-runtime/dist/index.js",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontend": {
+      "package": "crm-csv-terminal-reentry-frontend-b8cc113d.tar.gz",
+      "packageBytes": 5289816,
+      "packageSha256": "406adf955126c02a6c4510cf3c6e7bfff0c721ffb91bf4a60d35a063b1822196",
+      "manifest": "frontend.release.manifest.json",
+      "manifestSha256": "38e59a9165db9134fe612c04ac729c2d1286314f9387d518c31870cb89d13790",
+      "index": "frontend.index.json",
+      "indexEntries": 1929,
+      "indexSha256": "8604a92b1cc56d9c1a253c417875e765fd3028770324076df9e411be82fbedab",
+      "reproducible": true,
+      "independentExtractionEqual": true,
+      "runtime": "frontend-runtime",
+      "launcherSha256": "131a92d08fe7c6484585ed0a1e18e1bf9f9a1851907337b02ae13ca99e110fef",
+      "controlledEntrySha256": "c230a7297ba9dd98b5f57855846c186521346ce06a3a33d86faff15386c916fc",
+      "controlSha256": "320aa4f3646777aeb276410938482f52fcdef014f3d4a778cf106cfae5bac08f",
+      "buildId": "2nrVvTyK7pcyD_oMa_fOv",
+      "testModulesInRuntime": false
+    },
+    "worker": {"preserved": true}
+  },
+  "observedProcesses": {
+    "observedAtUtc": "2026-10-18T18:21:18.971249+00:00",
+    "semantics": "dated observation; PIDs must be revalidated after any process restart",
+    "apiPid": 1328029,
+    "frontendPid": 1362964,
+    "workerPid": 936540
+  },
+  "frontendVerification": {
+    "result": "FRONTEND_CANDIDATE_STABLE",
+    "selectedAtUtc": "2026-10-18T17:37:21.274289+00:00",
+    "completedAtUtc": "2026-10-18T17:37:25.552533+00:00",
+    "verificationReportSha256": "175e1868d2250b9f3e2e96a99dec5ad6009849e174b37861c4706aae871c7d38",
+    "snapshotSha256": "bc6a767c30d32e9abb3f4935bebd67074a847324ce18f183385c581c96c964bc",
+    "verifierSha256": "adca4d42507c11b2993107eb2ea748b7727e3d57d5dfa40f91aa339ad9ede546",
+    "candidateDefinitionSha256": "e657381dc032984767aa0d98b2626ae9ef070e3349e155bd16f153b486c64243",
+    "returnDefinitionSha256": "a7b4b5480668f6628ef22f3afb0f04b12e095f17b118ff1ee7684d9e420c5d4a",
+    "pid": 1362964,
+    "startTicks": 2212943622,
+    "samples": [
+      {"sample": 1, "fromUtc": "2026-10-18T17:37:21.617178+00:00", "toUtc": "2026-10-18T17:37:22.103474+00:00", "result": "PASS"},
+      {"sample": 2, "fromUtc": "2026-10-18T17:37:23.449553+00:00", "toUtc": "2026-10-18T17:37:23.888399+00:00", "result": "PASS"},
+      {"sample": 3, "fromUtc": "2026-10-18T17:37:25.176984+00:00", "toUtc": "2026-10-18T17:37:25.552533+00:00", "result": "PASS"}
+    ],
+    "identityStable": true,
+    "healthStable": true,
+    "cwdLauncherControlNonceJournalVerified": true,
+    "journalSha256": "20a2c0155bfe1a30313b41b921f69bc12d74096ce9332cdb39d1723ce3a39fa4",
+    "journalEvents": ["parent", "application_identity", "application_released"],
+    "loginInboxCrmHttp200": true,
+    "publicAssets": {"checked": 13, "http200": 13, "http404": 0},
+    "rollbackExecuted": false
+  },
+  "functionalVerification": {
+    "tenant": "Demo",
+    "method": "GET_ONLY_REENTRY",
+    "terminalStateObserved": "COMPLETED",
+    "terminalReferenceRemoved": true,
+    "otherTenantOrUserReferencesModified": false,
+    "modalOpened": false,
+    "pageLoaded": 1,
+    "activeFiltersPreserved": true,
+    "contactsInScope": 966,
+    "contactsFound": 965,
+    "contactsOnPage": 50,
+    "awayAndBackReentryObserved": true,
+    "csvPostRequests": 0,
+    "networkRequestsObserved": 25,
+    "operationTotalsPersistedVerified": false,
+    "durablePositiveRecovery": "LIVE_DEFERRED_OPERATION_TOTALS_NOT_RECORDED",
+    "privateEvidenceSha256": {
+      "network": "7c7600dd232b8e2e5034b357df67fe2406033a171140423bd8624c6bb582a6e6",
+      "csvPostFilter": "061cc0e1c2e13e9b3cd2df29c5a87165cfafe08041ff045b5521992f75671f02",
+      "storageReferenceCount": "70973e0d848fcbc960e8688dcfd5f277b0e0192ff47c1dc172ec0a9ad53c7359"
+    }
+  },
+  "windowMutations": {
+    "csvPostRequests": 0,
+    "imports": 0,
+    "sqlStatements": 0,
+    "migrations": 0,
+    "apiChanges": 0,
+    "workerChanges": 0
+  },
+  "pm2": {
+    "savedExactlyOnce": true,
+    "savedAtUtc": "2026-10-18T18:21:18.971249+00:00",
+    "dumpSha256": "33e3d65e78b4e4bd27349a06e28ff125551535085e0721281f3848dece5590d1",
+    "rollbackFile": "dump.pm2.crm-csv-terminal-reentry-b8cc113d-20261018T143000Z.rollback",
+    "rollbackSha256": "f6276a42ee8644088a5917ad0366f64ceba2b8d5441b8b46e52de9998303f7b5",
+    "finalizationReportSha256": "6bc004610b2cb7b87c423c7df441fef60c36fca20ca6caa185f1f5bc17087bc3"
+  },
+  "credentialRotation": "DEFERRED_SEPARATE_WINDOW"
+}

@@ -33,7 +33,7 @@ def main() -> None:
     require(record_path.is_relative_to(ROOT) and record_path.is_file(),
             "active deployment record")
     record = read_json(record_path)
-    require(record.get("schemaVersion") == 2, "deployment record schema")
+    require(record.get("schemaVersion") in (2, 3), "deployment record schema")
     require(record.get("status") == "DEPLOYED_VERIFIED", "deployment record status")
 
     production = state.get("production", {})
@@ -76,28 +76,30 @@ def main() -> None:
 
     csv = state.get("csvDelivery", {})
     require(csv.get("state") == "DEPLOYED_VERIFIED", "CSV state")
-    require(csv.get("candidateCommit") == record.get("candidateCommit"),
-            "candidate commit")
+    record_commit = (record.get("sourceCommits") or [record.get("candidateCommit")])[-1]
+    require(csv.get("candidateCommit") == record_commit, "candidate commit")
     require(csv.get("releaseManifest") == record.get("sourceReleaseManifest"),
             "release manifest")
     require(csv.get("migrationRequired") is False, "migration guard")
     require(csv.get("workerChanged") is False, "worker guard")
-    require(csv.get("deploymentOrder") == ["api", "frontend"], "deployment order")
+    require(csv.get("deploymentOrder") == record.get("deploymentOrder"),
+            "deployment order")
     require(csv.get("automaticReplayForbidden") is True, "replay guard")
     require(csv.get("windowActivity") == {
         "csvPostRequests": 0,
-        "automaticNonCsvPostRequests": 1,
+        "automaticNonCsvPostRequests": 0,
         "imports": 0,
         "sqlStatements": 0,
         "migrations": 0,
     }, "window activity classification")
     require(csv.get("tenantNegativeIsolation") == "LIVE_VERIFIED", "tenant isolation")
     require(csv.get("durablePositiveRecovery") ==
-            "LIVE_DEFERRED_UNTIL_FIRST_LEGITIMATE_IMPORT", "durable recovery")
+            "LIVE_DEFERRED_OPERATION_TOTALS_NOT_RECORDED", "durable recovery")
+    require(csv.get("terminalReentry") == "LIVE_VERIFIED", "terminal reentry")
     require(csv.get("historical993") == "LEGACY_UNCORRELATED_NOT_CLAIMED",
             "historical 993")
-    require(csv.get("demoPreview") == "PENDING_WITHOUT_IMPORT_CONFIRMATION",
-            "Demo preview")
+    require(csv.get("demoPreview") == "COMPLETED_REFERENCE_CLEARED_LIST_RESTORED",
+            "Demo terminal reentry")
 
     incident = state.get("credentialInspectionIncident", {})
     require(incident == {

@@ -1,8 +1,8 @@
 # Revisão CRM/CSV — carregamento, prévia e telefones — 18/10/2026
 
-Status: `DEPLOYED / VERIFIED / DEMO PREVIEW PENDING / IMPORT NOT RUN`.
+Status: `DEPLOYED / VERIFIED / TERMINAL REENTRY LIVE VERIFIED / NO IMPORT RUN`.
 
-## Correção local do acompanhamento terminal — revisão pendente
+## Correção do acompanhamento terminal — implantada e verificada
 
 Foi confirmado no código que a tela abria o modal pela presença de um UUID no
 `localStorage`, antes de consultar a operação, e que “Fechar acompanhamento” apenas
@@ -16,14 +16,16 @@ abre o modal. O fechamento explícito de `COMPLETED`/`FAILED` usa comparação d
 da remoção, preserva falhas recuperáveis e mantém “Preparar outra importação” separado.
 Filtros permanecem intactos e recebem aviso de que podem ocultar contatos importados.
 
-Status deste delta: `LOCAL VALIDATED / DEPLOYMENT PENDING`. O estado da release viva
-acima não é alterado por esta preparação local.
+Status deste delta: `DEPLOYED / VERIFIED`. A prova no tenant Demo recuperou
+`COMPLETED`, removeu a referência exata, manteve o modal fechado e carregou a página 1
+com os filtros ativos. O painel de rede confirmou zero chamadas a `contacts/import`.
+Os totais persistidos da operação não foram registrados; por isso a classificação mais
+ampla de recuperação positiva durável continua adiada.
 
 O resultado vivo e as identidades completas estão no
-[registro sanitizado da implantação](releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json).
-API e frontend foram promovidos em ordem, o worker foi preservado, o dump PM2 foi
-salvo uma vez e nenhuma importação, POST CSV, SQL ou migration ocorreu. O único POST
-automático observado pertenceu à Inbox e está classificado separadamente no registro.
+[registro sanitizado da implantação](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json).
+Somente o frontend foi promovido; API e worker foram preservados, o dump PM2 foi salvo
+uma vez e nenhuma importação, POST CSV, SQL ou migration ocorreu.
 
 ## Escopo auditado
 
@@ -71,10 +73,9 @@ ou alteração produtiva foi executado.
 
 ## Decisão operacional vigente
 
-Build isolado e promoção API → frontend foram concluídos e verificados. O próximo ato
-funcional é gerar uma nova prévia manual no tenant Demo, sem confirmar a importação.
-Separadamente, deve ser feita avaliação sanitizada das credenciais potencialmente
-expostas pela inspeção ampla; os valores e nomes sensíveis permanecem privados.
+O build isolado e a promoção exclusiva do frontend foram concluídos e verificados.
+Rotações de credenciais pertencem a outra janela. Uma futura importação legítima poderá
+completar a prova dos totais persistidos somente por GET, sem repetir o POST.
 
 A natureza multi-tenant permanece preservada: nenhum dado, UUID, token ou resultado de
 um tenant foi reutilizado como autoridade para outro.

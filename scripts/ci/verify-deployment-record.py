@@ -41,12 +41,138 @@ def walk_keys(value: object) -> set[str]:
     return set()
 
 
+def verify_frontend_only(record_path: Path, record: dict) -> None:
+    require(record.get("releaseType") == "FRONTEND_ONLY", "frontend release type")
+    require(record.get("deploymentOrder") == ["frontend"], "frontend deployment order")
+    require(not (walk_keys(record) & FORBIDDEN_KEYS),
+            "sensitive identifier key in sanitized record")
+
+    source_path = (ROOT / record.get("sourceReleaseManifest", "")).resolve()
+    require(source_path.is_relative_to(ROOT) and source_path.is_file(), "source manifest")
+    source = read_json(source_path)
+    require(source.get("statusAtCreation") == "LOCAL_VALIDATED_NOT_DEPLOYED",
+            "source creation status")
+    require(source.get("deploymentRecord") == record_path.relative_to(ROOT).as_posix(),
+            "source deployment record link")
+    require(source.get("sourceCommits") == record.get("sourceCommits") and
+            len(record.get("sourceCommits", [])) == 2,
+            "source commit chain")
+    require(source.get("deploymentOrder") == ["frontend"], "source deployment order")
+    require(source.get("apiChanged") is False and source.get("workerChanged") is False,
+            "API and worker preservation")
+    require(source.get("migrationRequired") is False and source.get("sqlRequired") is False,
+            "database guards")
+    require(source.get("csvPostForbidden") is True and
+            source.get("automaticReplayForbidden") is True, "CSV mutation guards")
+    runtime_sources = source.get("runtimeSources", [])
+    require([x.get("path") for x in runtime_sources] == [
+        "src/app/app/crm/page.tsx", "src/lib/crmImportRecovery.ts"
+    ], "runtime source allowlist")
+    for item in runtime_sources:
+        require(bool(SHA256.fullmatch(item.get("sha256", ""))) and
+                bool(re.fullmatch(r"[0-9a-f]{40}", item.get("gitBlobSha", ""))) and
+                item.get("bytes", 0) > 0, "runtime source identity")
+
+    base = record.get("baseDeploymentRecord", {})
+    base_path = (ROOT / base.get("path", "")).resolve()
+    require(base_path.is_relative_to(ROOT) and base_path.is_file(), "base deployment record")
+    require(sha256(base_path) == base.get("sha256"), "base deployment record hash")
+
+    artifacts = record.get("artifacts", {})
+    api = artifacts.get("api", {})
+    require(api.get("preserved") is True and
+            bool(SHA256.fullmatch(api.get("entrySha256", ""))) and
+            bool(api.get("entrypoint")), "preserved API identity")
+    require(artifacts.get("worker") == {"preserved": True}, "worker preservation")
+    frontend = artifacts.get("frontend", {})
+    for field in ("packageSha256", "manifestSha256", "indexSha256",
+                  "launcherSha256", "controlledEntrySha256", "controlSha256"):
+        require(bool(SHA256.fullmatch(frontend.get(field, ""))),
+                f"invalid frontend.{field}")
+    require(frontend.get("reproducible") is True and
+            frontend.get("independentExtractionEqual") is True and
+            frontend.get("testModulesInRuntime") is False and
+            frontend.get("indexEntries", 0) > 0 and frontend.get("packageBytes", 0) > 0,
+            "frontend package contract")
+    require(bool(frontend.get("buildId")), "frontend buildId")
+
+    verification = record.get("frontendVerification", {})
+    require(verification.get("result") == "FRONTEND_CANDIDATE_STABLE" and
+            verification.get("identityStable") is True and
+            verification.get("healthStable") is True and
+            verification.get("cwdLauncherControlNonceJournalVerified") is True and
+            verification.get("rollbackExecuted") is False,
+            "frontend verification")
+    samples = verification.get("samples", [])
+    require(len(samples) == 3, "frontend sample count")
+    for number, sample in enumerate(samples, 1):
+        require(sample.get("sample") == number and sample.get("result") == "PASS" and
+                sample.get("fromUtc") and sample.get("toUtc"),
+                f"frontend sample {number}")
+    require(verification.get("journalEvents") == [
+        "parent", "application_identity", "application_released"
+    ], "launcher journal events")
+    require(verification.get("loginInboxCrmHttp200") is True and
+            verification.get("publicAssets") == {"checked": 13, "http200": 13, "http404": 0},
+            "frontend HTTP verification")
+
+    functional = record.get("functionalVerification", {})
+    require(functional.get("method") == "GET_ONLY_REENTRY" and
+            functional.get("terminalStateObserved") == "COMPLETED" and
+            functional.get("terminalReferenceRemoved") is True and
+            functional.get("otherTenantOrUserReferencesModified") is False and
+            functional.get("modalOpened") is False and
+            functional.get("pageLoaded") == 1 and
+            functional.get("activeFiltersPreserved") is True and
+            functional.get("awayAndBackReentryObserved") is True and
+            functional.get("csvPostRequests") == 0,
+            "terminal reentry behavior")
+    require(functional.get("operationTotalsPersistedVerified") is False and
+            functional.get("durablePositiveRecovery") ==
+            "LIVE_DEFERRED_OPERATION_TOTALS_NOT_RECORDED",
+            "durable recovery claim boundary")
+    for digest in functional.get("privateEvidenceSha256", {}).values():
+        require(bool(SHA256.fullmatch(digest)), "private evidence hash")
+
+    require(record.get("windowMutations") == {
+        "csvPostRequests": 0, "imports": 0, "sqlStatements": 0,
+        "migrations": 0, "apiChanges": 0, "workerChanges": 0,
+    }, "window mutation guards")
+    pm2 = record.get("pm2", {})
+    require(pm2.get("savedExactlyOnce") is True, "PM2 save count")
+    for field in ("dumpSha256", "rollbackSha256", "finalizationReportSha256"):
+        require(bool(SHA256.fullmatch(pm2.get(field, ""))), f"PM2 {field}")
+
+    observed = record.get("observedProcesses", {})
+    require(observed.get("frontendPid") == verification.get("pid") and
+            all(isinstance(observed.get(k), int) and observed[k] > 0
+                for k in ("apiPid", "frontendPid", "workerPid")),
+            "dated process observations")
+
+    state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
+    require(state.get("activeDeploymentRecord") ==
+            record_path.relative_to(ROOT).as_posix(), "active record selection")
+    require(state.get("production", {}).get("api", {}).get("entrySha256") ==
+            api.get("entrySha256"), "current API identity")
+    require(state.get("production", {}).get("frontend", {}).get("buildId") ==
+            frontend.get("buildId"), "current frontend identity")
+    require(state.get("production", {}).get("pm2", {}).get("dumpSha256") ==
+            pm2.get("dumpSha256"), "current PM2 dump")
+    require(state.get("production", {}).get("pm2", {}).get("rollbackSha256") ==
+            pm2.get("rollbackSha256"), "current rollback")
+    print("DEPLOYMENT_RECORD_OK: frontend-only identities, samples and terminal reentry agree")
+
+
 def main() -> None:
     require(len(sys.argv) == 2, "usage: verify-deployment-record.py RECORD")
     record_path = (ROOT / sys.argv[1]).resolve()
     require(record_path.is_relative_to(ROOT) and record_path.is_file(),
             "record outside repository or missing")
     record = read_json(record_path)
+
+    if record.get("schemaVersion") == 3:
+        verify_frontend_only(record_path, record)
+        return
 
     require(record.get("schemaVersion") == 2, "schemaVersion")
     require(record.get("status") == "DEPLOYED_VERIFIED", "deployment status")

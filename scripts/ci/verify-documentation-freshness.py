@@ -7,9 +7,9 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-NEW_RECORD = "docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json"
+NEW_RECORD = "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json"
 OLD_RECORD = "CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json"
-OLD_BUILD_ID = "7IRWBhOwtCfwsLkfI9S0K"
+OLD_BUILD_IDS = ("7IRWBhOwtCfwsLkfI9S0K", "Ebyc7UWY8nwjFyA5Zjyfj")
 STALE_STATUSES = ("NOT DEPLOYED", "CSV SUSPENSO")
 
 
@@ -26,7 +26,8 @@ def active_prefix(path: Path, historical_heading: str | None = None) -> str:
 
 
 def reject_stale(label: str, text: str) -> None:
-    require(OLD_BUILD_ID not in text, f"{label}: previous BUILD_ID")
+    for build_id in OLD_BUILD_IDS:
+        require(build_id not in text, f"{label}: previous BUILD_ID")
     require(OLD_RECORD not in text, f"{label}: previous deployment record is active")
     for status in STALE_STATUSES:
         require(status not in text, f"{label}: stale status {status}")
@@ -48,15 +49,12 @@ def main() -> None:
                  active_prefix(ROOT / "docs/saas/CRM_CSV_UX_REVIEW_2026-10-18.md",
                                "## Negativa de build e correção"))
 
-    manifest = json.loads((ROOT / "docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18.json").read_text(encoding="utf-8"))
+    manifest = json.loads((ROOT / "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18.json").read_text(encoding="utf-8"))
     require("status" not in manifest, "release manifest has ambiguous current status")
     require(bool(manifest.get("statusAtCreation")), "release manifest creation status")
     require(manifest.get("deploymentRecord") == NEW_RECORD,
             "release manifest active deployment link")
 
-    handoff = (ROOT / "docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_HANDOFF.md").read_text(encoding="utf-8")
-    require("Status: `COMPLETED / HISTORICAL / DO NOT EXECUTE`." in handoff,
-            "handoff historical status")
     print("DOCUMENTATION_FRESHNESS_OK: active surfaces identify the current deployment")
 
 

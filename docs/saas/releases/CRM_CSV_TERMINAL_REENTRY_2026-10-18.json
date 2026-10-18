@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "statusAtCreation": "LOCAL_VALIDATED_NOT_DEPLOYED",
+  "releaseType": "FRONTEND_ONLY",
+  "deploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
+  "baseDeploymentRecord": "docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json",
+  "sourceCommits": [
+    "c35d876906c59a7448d0bcfb0c5b076e9385fdc8",
+    "b8cc113dc3e27a6818a1074f51c38eaa0e569448"
+  ],
+  "deploymentOrder": ["frontend"],
+  "runtimeSources": [
+    {
+      "path": "src/app/app/crm/page.tsx",
+      "commit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
+      "gitBlobSha": "38faf39ebfc5ef58160191978407bf79cc9da566",
+      "sha256": "ca25a9572a0dc4ab7d0a655ef899d4a751fb43639082a16267689e18200bb000",
+      "bytes": 131353
+    },
+    {
+      "path": "src/lib/crmImportRecovery.ts",
+      "commit": "c35d876906c59a7448d0bcfb0c5b076e9385fdc8",
+      "gitBlobSha": "c61d7e260368f6655c5ae4dd4481f73c82d678a0",
+      "sha256": "8eb126e7abf9ff84e992c2ef43e95be1992c83ef5136b3e113efa1a411778e4f",
+      "bytes": 3202
+    }
+  ],
+  "validationOnlySources": [
+    "src/app/app/crm/crmPageContract.test.ts",
+    "src/lib/crmImportRecovery.test.ts"
+  ],
+  "apiChanged": false,
+  "workerChanged": false,
+  "migrationRequired": false,
+  "sqlRequired": false,
+  "csvPostForbidden": true,
+  "automaticReplayForbidden": true
+}

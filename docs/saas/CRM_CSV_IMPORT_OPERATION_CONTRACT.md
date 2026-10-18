@@ -13,23 +13,27 @@ estático tecnicamente revisado não é preparação executável nem certificaç
 [Materialização e alcance](../reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md).
 
 
-### Estado de implantação17/10 — contrato funcional preservado
+### Estado vigente em 18/10 — contrato implantado e reentrada corrigida
 
-Este contrato descreve código/provas locais, **não a API produtiva atual**. [Estado vigente,
-consumidos e metodologia](../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia):
-CSV SUSPENSO / NOT DEPLOYED. SQL v1 negou no cliente; v2 consumido17:44 obteve
-os três resultados. Correlação legada corrigida **somente localmente**: criação contém
+O contrato de operação foi implantado na composição anterior; a correção isolada do
+frontend para reentrada terminal e preservação de filtros foi implantada e verificada
+em 18/10. O [estado vigente](CURRENT_STATE.md) e o
+[registro ativo](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json) são as
+autoridades de continuidade. A preparação histórica de 17/10 registrou que SQL v1
+negou no cliente e v2 consumido17:44 obteve os três resultados. Naquele alcance, a
+correlação legada corrigida **somente localmente** estabeleceu: criação contém
 leadId + UUID da chamada + hash de linha, resumo contém prefixo + o mesmo UUID. O join
 permitido é tenant + UUID explícito, sem telefone/hash como identidade ou proximidade
 temporal. Os1784 eventos custodiados preservados agrupam20 resumos/operações; o resultado
 histórico do leitor antigo não é reescrito. Órfãos/ambiguidade/controles não terminais
 continuam negativos. Um resumo legado não é ledger durável nem prova de atividade
 completa. Saída/ownership/knownActivityScope/fence e autoridade continuam obrigatórios;
-nenhum banco vazio é exigido com produção viva. A auditoria não autoriza reimportação.
-As cláusulas funcionais abaixo e a ordem API→frontend permanecem.
+nenhum banco vazio é exigido com produção viva. A auditoria e esta implantação não
+autorizam reimportação. As cláusulas funcionais abaixo permanecem.
 
 
-Estado: **LOCAL VALIDATED / FOR REVIEW / NOT DEPLOYED**, 15/10/2026. [Entrega e provas](../reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/REPORT.md). Complementa os contratos existentes de identidade, upsert, auditoria, exclusão operacional e anonimização; não altera retenção por conversa ou operação explícita por titular.
+O estado `LOCAL VALIDATED / FOR REVIEW / NOT DEPLOYED` abaixo pertence à preparação de
+15/10/2026 e é histórico. [Entrega e provas históricas](../reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/REPORT.md). O contrato complementa identidade, upsert, auditoria, exclusão operacional e anonimização; não altera retenção por conversa ou operação explícita por titular.
 
 ## Lacuna auditada e persistência
 
@@ -91,7 +95,7 @@ Ao recuperar COMPLETED por GET, aplicar o mesmo reconhecimento de conclusão do 
 A [matriz de publicação coordenada](../reviews/automation-freeform-window-release-af26/crm-csv-operation-20261015/COORDINATED_PUBLICATION.md) é obrigatória: API nova integral antes do frontend novo, sem tráfego misto para API antiga. Abas antigas sem UUID recebem400 sem gravação e requerem recarga explícita; não exige logout. Interface nova/API antiga é combinação proibida, pois a API antiga pode ignorar o UUID. Não existe handshake ou controle de rollout implantado por esta correção. Retorno deve preservar o contrato ou suspender confirmações.
 
 
-## Retomada da preparação local17/10/2026
+## Arquivo histórico: retomada da preparação local17/10/2026
 
 [Composição e próximo ato para revisão](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/DELIVERY.json),
 [sequência coordenada restante](../reviews/automation-freeform-window-release-af26/crm-csv-delivery-review-20261017/NEXT_OPERATION_FOR_REVIEW.md).

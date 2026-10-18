@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "updatedAtUtc": "2026-10-18T13:26:09.249088+00:00",
-  "basedOnCommit": "d9f1fb5b853868e0fd02b5bc9b5af0d6939c6ab6",
+  "updatedAtUtc": "2026-10-18T18:21:18.971249+00:00",
+  "basedOnCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json",
+  "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
   "sourcePriority": [
     "fresh read-only production evidence for live state",
     "active deployment record for the durable release identity",
@@ -12,33 +12,33 @@
   ],
   "production": {
     "status": "DEPLOYED_VERIFIED",
-    "promotedAtUtc": "2026-10-18T13:26:09.249088+00:00",
-    "promotedAtFortaleza": "2026-10-18T10:26:09.249088-03:00",
+    "promotedAtUtc": "2026-10-18T18:21:18.971249+00:00",
+    "promotedAtFortaleza": "2026-10-18T15:21:18.971249-03:00",
     "certifiedByThisFile": false,
     "api": {
       "runtimeLine": "crm-csv-ux-phone-normalization-36dacbc8",
       "entrypoint": "api-runtime/dist/index.js",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
       "observedPid": 1328029,
-      "observedAtUtc": "2026-10-18T13:26:09.249088+00:00"
+      "observedAtUtc": "2026-10-18T18:21:18.971249+00:00"
     },
     "frontend": {
-      "runtimeLine": "crm-csv-ux-phone-normalization-36dacbc8",
-      "buildId": "Ebyc7UWY8nwjFyA5Zjyfj",
-      "observedPid": 1329631,
-      "observedAtUtc": "2026-10-18T13:26:09.249088+00:00"
+      "runtimeLine": "crm-csv-terminal-reentry-b8cc113d",
+      "buildId": "2nrVvTyK7pcyD_oMa_fOv",
+      "observedPid": 1362964,
+      "observedAtUtc": "2026-10-18T18:21:18.971249+00:00"
     },
     "worker": {
       "runtimeLine": "minimal-reactive",
       "preserved": true,
       "observedPid": 936540,
-      "observedAtUtc": "2026-10-18T13:26:09.249088+00:00"
+      "observedAtUtc": "2026-10-18T18:21:18.971249+00:00"
     },
     "pm2": {
       "savedExactlyOnce": true,
-      "savedAtUtc": "2026-10-18T13:26:08.581309+00:00",
-      "dumpSha256": "f6276a42ee8644088a5917ad0366f64ceba2b8d5441b8b46e52de9998303f7b5",
-      "rollbackSha256": "521f941394c451891f661d06abf00cfd3cf90153dd5678b979293d2a12cd73e2"
+      "savedAtUtc": "2026-10-18T18:21:18.971249+00:00",
+      "dumpSha256": "33e3d65e78b4e4bd27349a06e28ff125551535085e0721281f3848dece5590d1",
+      "rollbackSha256": "f6276a42ee8644088a5917ad0366f64ceba2b8d5441b8b46e52de9998303f7b5"
     },
     "identitySemantics": {
       "pids": "dated observational evidence; revalidate after any process restart",
@@ -51,28 +51,31 @@
     }
   },
   "csvDelivery": {
-    "candidateCommit": "36dacbc8eb1e4163d6907d92f7decae4efdfc3a7",
-    "releaseManifest": "docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18.json",
+    "candidateCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
+    "releaseManifest": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18.json",
     "state": "DEPLOYED_VERIFIED",
     "migrationRequired": false,
     "workerChanged": false,
-    "deploymentOrder": ["api", "frontend"],
+    "deploymentOrder": [
+      "frontend"
+    ],
     "automaticReplayForbidden": true,
     "windowActivity": {
       "csvPostRequests": 0,
-      "automaticNonCsvPostRequests": 1,
+      "automaticNonCsvPostRequests": 0,
       "imports": 0,
       "sqlStatements": 0,
       "migrations": 0
     },
     "tenantNegativeIsolation": "LIVE_VERIFIED",
-    "durablePositiveRecovery": "LIVE_DEFERRED_UNTIL_FIRST_LEGITIMATE_IMPORT",
+    "durablePositiveRecovery": "LIVE_DEFERRED_OPERATION_TOTALS_NOT_RECORDED",
     "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED",
-    "demoPreview": "PENDING_WITHOUT_IMPORT_CONFIRMATION"
+    "demoPreview": "COMPLETED_REFERENCE_CLEARED_LIST_RESTORED",
+    "terminalReentry": "LIVE_VERIFIED"
   },
   "nextActions": [
-    "perform a sanitized assessment of credentials potentially exposed by broad inspection; values remain private",
-    "generate a new manual preview in the Demo tenant without confirming the import"
+    "perform credential rotations only in the separately authorized window; do not mix them with this frontend release",
+    "capture persisted operation totals by GET after a future legitimate import without repeating its POST"
   ],
   "credentialInspectionIncident": {
     "status": "RECORDED_PRIVATELY",
@@ -82,7 +85,12 @@
   "branchConvergence": {
     "state": "CONTROLLED_DIVERGENCE",
     "plan": "docs/saas/BRANCH_CONVERGENCE_PLAN_2026-10-18.md",
-    "forbidden": ["force push", "destructive rebase", "blind merge into main", "using main as production identity without live evidence"]
+    "forbidden": [
+      "force push",
+      "destructive rebase",
+      "blind merge into main",
+      "using main as production identity without live evidence"
+    ]
   },
   "qualityDebt": {
     "eslintBaseline": {

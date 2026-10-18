@@ -1,53 +1,50 @@
 # Estado canônico do Converta
 
 Este é o ponto de entrada vigente para decisões e continuidade. Relatórios datados
-são evidência histórica no alcance e horário que declaram. A identidade ativa está no
-[registro sanitizado da implantação](releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json).
+são evidência histórica apenas no alcance e horário que declaram. A identidade ativa
+está no [registro sanitizado da implantação](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json).
 
 ## Release viva
 
-`CRM CSV UX e normalização de telefone` foi promovida e verificada em
-18/10/2026, às 10:26:09 em Fortaleza (13:26:09 UTC).
+A correção isolada do frontend para reentrada terminal da importação CSV e preservação
+dos filtros foi promovida e verificada em 18/10/2026, às 15:21:18 em Fortaleza
+(18:21:18 UTC), sobre a composição `CRM CSV UX e normalização de telefone`.
 
-- API: `api-runtime/dist/index.js`, SHA-256
+- API preservada: `api-runtime/dist/index.js`, SHA-256
   `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`.
-- Frontend: BUILD_ID `Ebyc7UWY8nwjFyA5Zjyfj`.
+- Frontend ativo: BUILD_ID `2nrVvTyK7pcyD_oMa_fOv`.
 - PM2: dump vigente SHA-256
-  `f6276a42ee8644088a5917ad0366f64ceba2b8d5441b8b46e52de9998303f7b5`;
+  `33e3d65e78b4e4bd27349a06e28ff125551535085e0721281f3848dece5590d1`;
   retorno anterior preservado com SHA-256
-  `521f941394c451891f661d06abf00cfd3cf90153dd5678b979293d2a12cd73e2`.
-- Worker: preservado sem alteração.
+  `f6276a42ee8644088a5917ad0366f64ceba2b8d5441b8b46e52de9998303f7b5`.
+- API e worker permaneceram sem alteração.
 
-Na observação final de `2026-10-18T13:26:09.249088+00:00`, os PIDs eram API
-`1328029`, frontend `1329631` e worker `936540`. PIDs são observações datadas e
-devem ser revalidados depois de qualquer reinício. As identidades duráveis são o
-hash do entrypoint da API, o BUILD_ID do frontend e os hashes do dump e retorno.
+Na observação final de `2026-10-18T18:21:18.971249+00:00`, os PIDs eram API
+`1328029`, frontend `1362964` e worker `936540`. PIDs são observações datadas;
+as identidades duráveis são o hash do entrypoint da API, o BUILD_ID do frontend
+e os hashes do dump e retorno.
 
 ## Resultado e limites
 
-- A API passou três amostras consecutivas de identidade, estabilidade, posse do
-  socket LISTEN/3001 e health local/público.
-- O frontend passou três amostras, controle imutável, BUILD_ID, login, Inbox, CRM
-  e assets.
-- Isolamento negativo entre tenants: `LIVE VERIFIED`; GET de operação inexistente
-  e prova cruzada reutilizada retornaram `HTTP 200 + UNKNOWN` sem progresso,
-  resumo, total ou metadados cruzados.
-- Recuperação positiva durável: `LIVE DEFERRED` até a primeira importação legítima.
-- As ocorrências históricas de 993 linhas são `LEGACY_UNCORRELATED / NOT CLAIMED`.
-- A janela executou zero POST CSV, importação, SQL ou migration.
-- O smoke da Inbox gerou um único POST automático para
-  `/agent-api/app/inbox/events`; ele é tráfego da Inbox e não POST CSV.
-- A inspeção ampla de ambiente está registrada somente como
-  `RECORDED_PRIVATELY / VALUES NOT VERSIONED / ROTATION ASSESSMENT PENDING`.
+- O frontend passou três amostras de identidade e estabilidade, controle imutável,
+  nonce, journal, BUILD_ID, login, Inbox, CRM e treze assets públicos.
+- No tenant Demo, a reentrada recuperou `COMPLETED`, removeu somente a referência
+  local da sessão, não abriu o modal e carregou a página 1 pelo caminho canônico,
+  preservando os filtros ativos.
+- A lista exibiu 966 contatos no escopo, 965 encontrados e 50 na página. Esses
+  números pertencem à lista e não são tratados como totais persistidos da operação.
+- O painel de rede registrou 25 requisições e zero chamadas a `contacts/import`.
+  A janela executou zero POST CSV, importação, SQL ou migration.
+- Recuperação positiva durável continua `LIVE DEFERRED`: o estado terminal foi
+  comprovado, mas os totais persistidos da operação não foram registrados nesta prova.
+- As ocorrências históricas de 993 linhas continuam `LEGACY_UNCORRELATED / NOT CLAIMED`.
+- A rotação das credenciais avaliadas permanece uma janela separada.
 
 ## Próximos atos
 
-1. Fazer avaliação sanitizada das credenciais potencialmente expostas, mantendo
-   nomes sensíveis e valores fora do Git.
-2. Gerar nova prévia manual no tenant Demo, sem confirmar a importação.
-
-Nenhum POST deve ser criado apenas para testar recuperação. O caminho positivo vivo
-será observado por GET após a primeira importação legítima.
+1. Tratar rotações somente em janela separadamente autorizada.
+2. Após uma importação legítima futura, registrar os totais persistidos por GET,
+   sem repetir o POST para testar recuperação.
 
 Os campos verificáveis estão em [`CURRENT_STATE.json`](CURRENT_STATE.json). A CI
 valida este arquivo, o manifesto de origem e o registro ativo da implantação.
