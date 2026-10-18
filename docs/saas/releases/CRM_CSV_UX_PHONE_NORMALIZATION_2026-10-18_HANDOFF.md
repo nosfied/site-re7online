@@ -103,6 +103,44 @@ contornar o erro por configuração. Como nada chegou à VPS, não há staging n
 rollback a desfazer. O preflight de frescor continua necessário somente antes
 da futura seleção PM2.
 
+## Política canônica de modos após a negativa da extração frontend
+
+A terceira tentativa off-host concluiu o build frontend, inclusive TypeScript e
+50 páginas, com BUILD_ID `Ebyc7UWY8nwjFyA5Zjyfj`. O pacote continha os mesmos
+1.642 caminhos, bytes, tamanhos e hashes, mas o filtro seguro `tarfile.data_filter`
+converteu arquivos de `0664` para `0644`. O modo `0664` era efeito do umask
+do builder, não requisito do runtime.
+
+Não repetir o build. Na retomada:
+
+1. preservar integralmente `-r3`, seu `.next`, BUILD_ID e o inventário de
+   dependências
+   `f25489e9b874b60592a32e16d6e6048aa78348bb5c662159c5f9598423da4844`;
+2. reconferir o BUILD_ID e o índice de caminhos/bytes/hashes do `.next` aprovado;
+3. criar uma raiz exclusiva `-r4` somente para empacotamento e copiar para ela o
+   runtime aprovado; não recompilar API ou frontend;
+4. na cópia de empacotamento, aplicar a política explícita:
+   - diretórios: `0755`;
+   - arquivos regulares: `0644`;
+   - symlinks: preservar exatamente o texto do destino, sem dereferenciar;
+   - negar se aparecer arquivo executável ou tipo diferente não previsto;
+5. gerar o índice integral canônico depois da normalização, registrando caminho,
+   tipo, tamanho, SHA-256 e modo; para symlinks, registrar o destino literal;
+6. criar o tar em ordem lexicográfica e normalizar seus metadados: `uid=0`,
+   `gid=0`, nomes de usuário/grupo vazios, `mtime` inteiro derivado do timestamp
+   do commit candidato e sem cabeçalhos PAX incidentais;
+7. extrair independentemente com o mesmo filtro seguro `data`. A árvore extraída
+   deve coincidir integralmente com o índice canônico, inclusive modos
+   `0644/0755`, tipos e destinos de symlink;
+8. emitir o manifesto final somente depois dessa igualdade. A propriedade
+   `deploy:deploy` será aplicada e validada na futura materialização inerte na
+   VPS; ela não deve depender de proprietário local nem do uid/gid do tar.
+
+É proibido apenas relaxar a comparação para aceitar a divergência, extrair sem
+filtro seguro ou alterar o `.next` original de `-r3`. Como a VPS não foi
+acessada, não há staging nem rollback a desfazer. O preflight de frescor continua
+adiado até imediatamente antes da seleção PM2.
+
 ## Sequência executável
 
 1. Fazer preflight somente leitura: saúde pública/local, identidade dos três processos,

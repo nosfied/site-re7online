@@ -89,3 +89,13 @@ raiz aceita pelo Turbopack. O handoff agora determina cópia física preservada 
 árvore autenticada, inventário byte a byte, proibição de reinstalação e nova raiz
 frontend exclusiva. O pacote API aprovado deve ser reutilizado após reconferência,
 sem recompilação. Produção e VPS permaneceram intocadas.
+
+## Negativa de metadados e política de modos — 18/10/2026
+
+O build frontend da terceira tentativa concluiu com BUILD_ID
+`Ebyc7UWY8nwjFyA5Zjyfj`. A validação independente negou apenas a diferença
+`0664` → `0644` introduzida pelo filtro seguro de extração; caminhos e
+conteúdos eram idênticos. O handoff agora define árvore de empacotamento separada,
+modos canônicos `0755/0644`, tar reprodutível e igualdade integral após
+extração. API e frontend não devem ser reconstruídos. VPS e produção continuaram
+intocadas.
