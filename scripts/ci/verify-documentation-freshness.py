@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 NEW_RECORD = "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json"
+OPERATION_RECORD = "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json"
 OLD_RECORD = "CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json"
 OLD_BUILD_IDS = ("7IRWBhOwtCfwsLkfI9S0K", "Ebyc7UWY8nwjFyA5Zjyfj")
 STALE_STATUSES = ("NOT DEPLOYED", "CSV SUSPENSO", "DEPLOYMENT PENDING",
@@ -38,6 +39,8 @@ def main() -> None:
     state_path = ROOT / "docs/saas/CURRENT_STATE.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
     require(state.get("activeDeploymentRecord") == NEW_RECORD, "active deployment record")
+    require(state.get("activeOperationalRecord") == OPERATION_RECORD,
+            "active operational record")
     require(state.get("production", {}).get("status") == "DEPLOYED_VERIFIED",
             "active production status")
     reject_stale("CURRENT_STATE.json", state_path.read_text(encoding="utf-8"))
@@ -49,6 +52,9 @@ def main() -> None:
     reject_stale("CRM_CSV_UX_REVIEW_2026-10-18.md",
                  active_prefix(ROOT / "docs/saas/CRM_CSV_UX_REVIEW_2026-10-18.md",
                                "## Negativa de build e correção"))
+    operation = json.loads((ROOT / OPERATION_RECORD).read_text(encoding="utf-8"))
+    require(operation.get("status") == "OBS2_ROTATED_VERIFIED_OBS1_PENDING",
+            "active credential rotation status")
 
     manifest = json.loads((ROOT / "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18.json").read_text(encoding="utf-8"))
     require("status" not in manifest, "release manifest has ambiguous current status")

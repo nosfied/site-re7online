@@ -5,12 +5,15 @@
 > promovida e verificada em 18/10/2026. Comece por [CURRENT_STATE.md](CURRENT_STATE.md)
 > e [CURRENT_STATE.json](CURRENT_STATE.json). O registro ativo é
 > [CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json).
+> A alteração operacional posterior é a
+> [rotação OBS-2](releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json).
 
 ## Estado e continuidade
 
 - [Estado canônico legível](CURRENT_STATE.md)
 - [Estado canônico verificável](CURRENT_STATE.json)
 - [Registro ativo da implantação](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json)
+- [Registro operacional ativo — rotação OBS-2](releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json)
 - [Manifesto da correção frontend](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18.json)
 - [Contrato da operação CSV](CRM_CSV_IMPORT_OPERATION_CONTRACT.md)
 - [Runbook de operação](../RUNBOOK_WHATSAPP_AGENT.md)
@@ -27,7 +30,8 @@
   não foi repetida. Totais da operação não registrados permanecem sem inferência.
 - Histórico de 993 linhas: `LEGACY_UNCORRELATED / NOT CLAIMED`.
 - Janela: zero POST CSV, importação, SQL e migration.
-- Credenciais: qualquer rotação pertence a uma janela separada.
+- Credenciais: OBS-2 `ROTATED / VERIFIED`; OBS-1 `PENDING / UNTOUCHED` para
+  uma janela separada.
 
 ## Governança
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from pathlib import Path
 
@@ -22,6 +23,10 @@ def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def main() -> None:
     state = read_json(STATE)
     require(state.get("schemaVersion") == 2, "schemaVersion")
@@ -35,6 +40,18 @@ def main() -> None:
     record = read_json(record_path)
     require(record.get("schemaVersion") in (2, 3), "deployment record schema")
     require(record.get("status") == "DEPLOYED_VERIFIED", "deployment record status")
+
+    operation_path = (ROOT / state.get("activeOperationalRecord", "")).resolve()
+    require(operation_path.is_relative_to(ROOT) and operation_path.is_file(),
+            "active operational record")
+    operation = read_json(operation_path)
+    require(operation.get("schemaVersion") == 1 and
+            operation.get("operationType") == "CREDENTIAL_ROTATION" and
+            operation.get("status") == "OBS2_ROTATED_VERIFIED_OBS1_PENDING",
+            "operational record identity")
+    base = operation.get("baseDeploymentRecord", {})
+    require((ROOT / base.get("path", "")).resolve() == record_path and
+            base.get("sha256") == sha256(record_path), "operational base record")
 
     production = state.get("production", {})
     require(production.get("status") == record.get("status"), "production status")
@@ -50,7 +67,7 @@ def main() -> None:
     require(production.get("worker", {}).get("preserved") is True and
             artifacts.get("worker") == {"preserved": True}, "worker preservation")
 
-    observed = record.get("observedProcesses", {})
+    observed = operation.get("observedProcesses", {})
     for component, key in (("api", "apiPid"), ("frontend", "frontendPid"),
                            ("worker", "workerPid")):
         require(production.get(component, {}).get("observedPid") == observed.get(key) and
@@ -67,7 +84,7 @@ def main() -> None:
         "pm2.rollbackSha256"}, "durable identity fields")
 
     pm2 = production.get("pm2", {})
-    record_pm2 = record.get("pm2", {})
+    record_pm2 = operation.get("pm2", {})
     require(pm2.get("savedExactlyOnce") is True and
             record_pm2.get("savedExactlyOnce") is True, "PM2 save")
     for key in ("dumpSha256", "rollbackSha256"):
@@ -109,7 +126,10 @@ def main() -> None:
     require(incident == {
         "status": "RECORDED_PRIVATELY",
         "values": "NOT_VERSIONED",
-        "rotationAssessment": "PENDING",
+        "rotationAssessment": "PARTIAL",
+        "obs2": "ROTATED_VERIFIED",
+        "obs1": "PENDING_UNTOUCHED",
+        "activeRecord": state.get("activeOperationalRecord"),
     }, "credential inspection incident")
     require(len(state.get("nextActions", [])) == 2, "next actions")
 

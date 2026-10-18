@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAtUtc": "2026-10-18T18:45:30+00:00",
+  "updatedAtUtc": "2026-10-18T19:14:53.593473+00:00",
   "basedOnCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
@@ -19,26 +19,26 @@
       "runtimeLine": "crm-csv-ux-phone-normalization-36dacbc8",
       "entrypoint": "api-runtime/dist/index.js",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
-      "observedPid": 1328029,
-      "observedAtUtc": "2026-10-18T18:21:18.971249+00:00"
+      "observedPid": 1377194,
+      "observedAtUtc": "2026-10-18T19:14:53.593473+00:00"
     },
     "frontend": {
       "runtimeLine": "crm-csv-terminal-reentry-b8cc113d",
       "buildId": "2nrVvTyK7pcyD_oMa_fOv",
       "observedPid": 1362964,
-      "observedAtUtc": "2026-10-18T18:21:18.971249+00:00"
+      "observedAtUtc": "2026-10-18T19:14:53.593473+00:00"
     },
     "worker": {
       "runtimeLine": "minimal-reactive",
       "preserved": true,
       "observedPid": 936540,
-      "observedAtUtc": "2026-10-18T18:21:18.971249+00:00"
+      "observedAtUtc": "2026-10-18T19:14:53.593473+00:00"
     },
     "pm2": {
       "savedExactlyOnce": true,
-      "savedAtUtc": "2026-10-18T18:21:18.971249+00:00",
-      "dumpSha256": "33e3d65e78b4e4bd27349a06e28ff125551535085e0721281f3848dece5590d1",
-      "rollbackSha256": "f6276a42ee8644088a5917ad0366f64ceba2b8d5441b8b46e52de9998303f7b5"
+      "savedAtUtc": "2026-10-18T19:14:53.593473+00:00",
+      "dumpSha256": "20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e",
+      "rollbackSha256": "33e3d65e78b4e4bd27349a06e28ff125551535085e0721281f3848dece5590d1"
     },
     "identitySemantics": {
       "pids": "dated observational evidence; revalidate after any process restart",
@@ -48,7 +48,8 @@
         "pm2.dumpSha256",
         "pm2.rollbackSha256"
       ]
-    }
+    },
+    "lastOperationalChangeAtUtc": "2026-10-18T19:14:53.593473+00:00"
   },
   "csvDelivery": {
     "candidateCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
@@ -76,13 +77,16 @@
     "terminalReentry": "LIVE_VERIFIED"
   },
   "nextActions": [
-    "perform credential rotations only in the separately authorized window; do not mix them with this frontend release",
-    "do not replay the consumed Demo terminal reference; any future legitimate operation remains GET-only for recovery"
+    "destroy the previous OBS-2 value only after the recorded contingency condition is satisfied",
+    "keep OBS-1 pending for a separately authorized provider window"
   ],
   "credentialInspectionIncident": {
     "status": "RECORDED_PRIVATELY",
     "values": "NOT_VERSIONED",
-    "rotationAssessment": "PENDING"
+    "rotationAssessment": "PARTIAL",
+    "obs2": "ROTATED_VERIFIED",
+    "obs1": "PENDING_UNTOUCHED",
+    "activeRecord": "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json"
   },
   "branchConvergence": {
     "state": "CONTROLLED_DIVERGENCE",
@@ -100,5 +104,6 @@
       "warnings": 246,
       "policy": "CI blocks increases; reduction is handled separately from this release"
     }
-  }
+  },
+  "activeOperationalRecord": "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json"
 }

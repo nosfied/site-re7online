@@ -160,10 +160,19 @@ def verify_frontend_only(record_path: Path, record: dict) -> None:
             api.get("entrySha256"), "current API identity")
     require(state.get("production", {}).get("frontend", {}).get("buildId") ==
             frontend.get("buildId"), "current frontend identity")
+    operation_path_value = state.get("activeOperationalRecord")
+    if operation_path_value:
+        operation_path = (ROOT / operation_path_value).resolve()
+        require(operation_path.is_relative_to(ROOT) and operation_path.is_file(),
+                "active operational record")
+        operation = read_json(operation_path)
+        current_pm2 = operation.get("pm2", {})
+    else:
+        current_pm2 = pm2
     require(state.get("production", {}).get("pm2", {}).get("dumpSha256") ==
-            pm2.get("dumpSha256"), "current PM2 dump")
+            current_pm2.get("dumpSha256"), "current PM2 dump")
     require(state.get("production", {}).get("pm2", {}).get("rollbackSha256") ==
-            pm2.get("rollbackSha256"), "current rollback")
+            current_pm2.get("rollbackSha256"), "current rollback")
     print("DEPLOYMENT_RECORD_OK: frontend-only identities, samples and terminal reentry agree")
 
 
