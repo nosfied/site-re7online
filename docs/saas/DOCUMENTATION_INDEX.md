@@ -12,7 +12,9 @@
 > Convergência: [plano seguro de branches](BRANCH_CONVERGENCE_PLAN_2026-10-18.md),
 > atualmente `PREPARED / NO MERGE EXECUTED`.
 > Ajustes posteriores de UX/validação CSV: [revisão de 18/10](CRM_CSV_UX_REVIEW_2026-10-18.md),
-> atualmente `CI VERIFIED / NOT DEPLOYED / IMPORT NOT RUN`.
+> atualmente `MANIFESTED / SOURCE CI VERIFIED / NOT BUILT / NOT STAGED / NOT DEPLOYED / IMPORT NOT RUN`.
+> Continuidade: [manifesto](releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18.json) e
+> [handoff operacional](releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_HANDOFF.md).
 
 ## CSV — contrato/perfis/caminhos/quatro modos efetivamente compostos
 

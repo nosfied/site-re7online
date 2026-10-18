@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "crm-csv-ux-phone-normalization-2026-10-18",
+  "candidateCommit": "36dacbc8eb1e4163d6907d92f7decae4efdfc3a7",
+  "functionalCommits": [
+    "1df565d1a4ab259753f122c291f341d6519f6623",
+    "36dacbc8eb1e4163d6907d92f7decae4efdfc3a7"
+  ],
+  "deploymentOrder": [
+    "api",
+    "frontend"
+  ],
+  "migrationRequired": false,
+  "workerChanged": false,
+  "automaticReplayForbidden": true,
+  "runtimeFiles": {
+    "api": [
+      {
+        "path": "apps/whatsapp-agent/src/crm/crmContactUpsert.ts",
+        "gitBlobSha": "728b10422df933df2c1ac10dae9cc67c5c0bf7f3",
+        "bytes": 51135
+      },
+      {
+        "path": "apps/whatsapp-agent/src/crm/crmWhatsappIdentity.ts",
+        "gitBlobSha": "ad0a5075259b60253f45d6b3d5b006f673b1a361",
+        "bytes": 4737
+      }
+    ],
+    "frontend": [
+      {
+        "path": "src/app/app/crm/page.tsx",
+        "gitBlobSha": "60845ad192a2e9afef48d022a5523d72acdada1e",
+        "bytes": 127072
+      }
+    ]
+  },
+  "validationFiles": [
+    {
+      "path": "apps/whatsapp-agent/src/crm/crmWhatsappIdentity.test.ts",
+      "gitBlobSha": "f8cf818eaa22326f27de3ac4234c3a4517cb8a55",
+      "bytes": 2492
+    },
+    {
+      "path": "apps/whatsapp-agent/src/crm/crmContactUpsert.test.ts",
+      "gitBlobSha": "baf1391650beac6ade65893b5b4c05d7a1461867",
+      "bytes": 32766
+    },
+    {
+      "path": "src/app/app/crm/crmPageContract.test.ts",
+      "gitBlobSha": "1d0b98f6dda6eb2321709631774f7bc216713fb3",
+      "bytes": 18321
+    }
+  ],
+  "excludedScopes": [
+    "apps/whatsapp-agent/prisma",
+    "apps/whatsapp-web-worker",
+    "tenant configuration",
+    "RBAC policy",
+    "credentials and secrets"
+  ],
+  "requiredChecks": [
+    "Repository contracts",
+    "Frontend build and lint",
+    "Backend build",
+    "CSV recovery and tenant isolation"
+  ],
+  "baseDeploymentRecord": "docs/saas/releases/CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json",
+  "evidence": {
+    "sourceReportSha256": "54fce84a1694f01d4471c7c9406632844aae71675aff729da17a258296e1f594",
+    "sanitizedRows": 50,
+    "recoverableDomesticTrunkPrefixRows": 37,
+    "preservedDuplicateRows": 13
+  },
+  "status": "PREPARED_CI_VERIFIED_NOT_DEPLOYED"
+}

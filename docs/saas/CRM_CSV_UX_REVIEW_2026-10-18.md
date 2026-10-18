@@ -1,6 +1,6 @@
 # Revisão CRM/CSV — carregamento, prévia e telefones — 18/10/2026
 
-Status: `CI VERIFIED / NOT DEPLOYED / IMPORT NOT RUN`.
+Status: `MANIFESTED / SOURCE CI VERIFIED / NOT BUILT / NOT STAGED / NOT DEPLOYED / IMPORT NOT RUN`.
 
 ## Escopo auditado
 
@@ -50,9 +50,9 @@ ou alteração produtiva foi executado.
 
 Não confirmar a importação no Demo antes de:
 
-1. concluir CI do candidato com a normalização específica;
-2. criar um novo manifesto de candidato, buildar fora da VPS e promover com rollback
-   fixado;
+1. manifesto imutável e CI do candidato: concluídos;
+2. construir fora da VPS e promover API → frontend conforme o handoff versionado, com
+   rollback fixado e sem alterar worker, banco ou tenants;
 3. gerar nova prévia no tenant Demo e obter confirmação humana antes do único POST.
 
 A natureza multi-tenant permanece preservada: nenhum dado, UUID, token ou resultado de
@@ -65,3 +65,9 @@ um tenant foi reutilizado como autoridade para outro.
 - 37 rejeições de formato, todas recuperáveis pela regra de tronco nacional;
 - 13 duplicidades, que continuam duplicidades e não são convertidas em erro de formato;
 - nenhum telefone completo foi versionado ou publicado.
+
+## Continuidade operacional
+
+O manifesto e a sequência exata de build/promoção estão em
+[`CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_HANDOFF.md`](releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_HANDOFF.md).
+Este registro não afirma build, staging ou deploy.
