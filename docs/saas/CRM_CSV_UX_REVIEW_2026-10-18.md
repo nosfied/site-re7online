@@ -99,3 +99,12 @@ conteúdos eram idênticos. O handoff agora define árvore de empacotamento sepa
 modos canônicos `0755/0644`, tar reprodutível e igualdade integral após
 extração. API e frontend não devem ser reconstruídos. VPS e produção continuaram
 intocadas.
+
+## Negativa de umask e extração determinística — 18/10/2026
+
+O tar canônico de `-r4` foi preservado. A divergência do diretório `.next`
+decorreu da semântica documentada de `tarfile.data_filter`, que deixa o modo de
+diretórios a cargo do umask; com `0002`, o resultado foi `0775`. O handoff
+agora fixa `umask 0022` no processo single-thread de extração, restaura o valor
+anterior em `finally` e mantém o filtro e a igualdade integral. Não haverá novo
+build nem novo tar.

@@ -141,6 +141,39 @@ filtro seguro ou alterar o `.next` original de `-r3`. Como a VPS não foi
 acessada, não há staging nem rollback a desfazer. O preflight de frescor continua
 adiado até imediatamente antes da seleção PM2.
 
+## Extração determinística de diretórios após a negativa de umask
+
+A quarta tentativa não refez os builds e produziu um tar canônico correto, mas a
+extração independente criou `.next` como `0775`. Em Python, o
+`tarfile.data_filter` ignora deliberadamente o modo do membro para diretórios;
+o modo efetivo passa a ser `0777 & umask`. O builder estava com umask `0002`.
+
+Não recriar o tar. Na retomada:
+
+1. preservar `-r4` e reconferir:
+   - tar SHA-256
+     `e9f6644ee5d08cacd0e1bd4d1cee4b0c068341a22f68038ec045e7962860c341`;
+   - índice SHA-256
+     `084e3391dfbe79780e7414ae9058b1640c9c59ea006f1f4f8aa7b81a52d8e479`;
+   - 1.642 arquivos, BUILD_ID `Ebyc7UWY8nwjFyA5Zjyfj` e metadados canônicos
+     dos membros do tar;
+2. criar raiz exclusiva `-r5` somente para a extração independente e o
+   manifesto final;
+3. no processo single-thread que chama `extractall`, definir explicitamente
+   `old_umask = os.umask(0o022)`, extrair com `filter="data"` e restaurar
+   `old_umask` em bloco `finally`;
+4. não substituir o filtro seguro, não aplicar chmod corretivo depois da
+   extração e não relaxar a comparação;
+5. exigir novamente igualdade integral com o índice: caminhos, tipos, bytes,
+   tamanhos, SHA-256, modos `0755/0644` e destinos literais de symlink;
+6. emitir o manifesto frontend somente após PASS, referenciando exatamente o
+   tar de SHA-256 `e9f664...0c341`.
+
+O mesmo helper de extração com umask explícito `0022` deve ser usado no futuro
+staging inerte da VPS, seguido de validação integral e aplicação/verificação de
+propriedade `deploy:deploy`. Isso torna o resultado independente do umask do
+host sem enfraquecer `data_filter`.
+
 ## Sequência executável
 
 1. Fazer preflight somente leitura: saúde pública/local, identidade dos três processos,
