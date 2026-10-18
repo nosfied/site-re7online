@@ -9,6 +9,8 @@
 > pela promoção documentada no commit `4ca6f32c`.
 > Processo versionado: [runbook de release por artefato](ARTIFACT_RELEASE_RUNBOOK.md) e
 > [registro sanitizado da implantação](releases/CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json).
+> Convergência: [plano seguro de branches](BRANCH_CONVERGENCE_PLAN_2026-10-18.md),
+> atualmente `PREPARED / NO MERGE EXECUTED`.
 
 ## CSV — contrato/perfis/caminhos/quatro modos efetivamente compostos
 

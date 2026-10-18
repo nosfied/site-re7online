@@ -51,7 +51,12 @@ resultado da promoção nem permite repetir uma importação.
 
 ## Branches
 
-`review/campaign-recovery-20260926` é a linha operacional atual e está fortemente
-divergente de `main`. Até a entrega CSV, são proibidos force-push, rebase destrutivo e
-merge cego. A convergência começará por inventário da fonte realmente alcançável em
-produção, seguida de uma linha de integração testada; histórico não será apagado.
+`review/campaign-recovery-20260926` é a linha operacional atual; `main` permanece
+a linha do site público Vercel. No snapshot de 18/10/2026, a linha operacional estava
+1.182 commits à frente e 124 atrás de `main`, com merge-base `36c91e5f`.
+Force-push, rebase destrutivo e merge cego continuam proibidos.
+
+O [plano de convergência](BRANCH_CONVERGENCE_PLAN_2026-10-18.md) começa por uma
+branch de integração inerte, reconcilia o pequeno diff líquido exclusivo de `main`
+e exige CI antes de qualquer decisão sobre `main`. Nenhuma convergência de branch
+identifica ou altera produção por si só.

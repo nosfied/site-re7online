@@ -93,17 +93,32 @@
   },
   "branchConvergence": {
     "mainRelationshipAtAudit": {
-      "ahead": 1176,
-      "behind": 124
+      "auditedAtUtc": "2026-10-18T02:55:26Z",
+      "mainHead": "b1692623ef1c7ae2ca076934a532efa1eb0f3264",
+      "operationalHead": "2a3f901a0e878b8aa2f308730f40ce6dda435447",
+      "mergeBase": "36c91e5fcd943289bf60d223ae0269a3cf3ed242",
+      "ahead": 1182,
+      "behind": 124,
+      "netMainOnlyPaths": [
+        "vercel.json",
+        "scripts/vercel-ignore-build.sh",
+        "scripts/test-vercel-ignore-build.sh",
+        "docs/saas/VERCEL_PRODUCTION_LINEAGE_AUDIT_2026-09-19.md",
+        "docs/BACKLOG_TECH.md",
+        "docs/DEPLOY_TOPOLOGY_RE7.md",
+        "docs/saas/DOCUMENTATION_INDEX.md",
+        "scripts/README.md"
+      ]
     },
     "state": "CONTROLLED_DIVERGENCE",
+    "plan": "docs/saas/BRANCH_CONVERGENCE_PLAN_2026-10-18.md",
     "forbidden": [
       "force push",
       "destructive rebase",
       "blind merge into main",
       "using main as production identity without VPS evidence"
     ],
-    "nextStep": "inventory production-reachable source and create a tested integration line after CSV delivery"
+    "nextStep": "create an isolated integration branch from the green operational head; reconcile the net main-only Vercel surface without deployment"
   },
   "qualityDebt": {
     "eslintBaseline": {
