@@ -93,8 +93,12 @@ def main() -> None:
         "migrations": 0,
     }, "window activity classification")
     require(csv.get("tenantNegativeIsolation") == "LIVE_VERIFIED", "tenant isolation")
-    require(csv.get("durablePositiveRecovery") ==
-            "LIVE_DEFERRED_OPERATION_TOTALS_NOT_RECORDED", "durable recovery")
+    require(csv.get("durablePositiveRecovery") == "LIVE_VERIFIED",
+            "durable recovery")
+    require(csv.get("operationTotalsEvidence") == "NOT_RECORDED_NO_INFERENCE",
+            "operation totals claim boundary")
+    require(csv.get("terminalReferenceProof") ==
+            "CONSUMED_AS_EXPECTED_NOT_REPEATABLE", "terminal reference proof")
     require(csv.get("terminalReentry") == "LIVE_VERIFIED", "terminal reentry")
     require(csv.get("historical993") == "LEGACY_UNCORRELATED_NOT_CLAIMED",
             "historical 993")

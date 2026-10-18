@@ -128,9 +128,13 @@ def verify_frontend_only(record_path: Path, record: dict) -> None:
             functional.get("csvPostRequests") == 0,
             "terminal reentry behavior")
     require(functional.get("operationTotalsPersistedVerified") is False and
-            functional.get("durablePositiveRecovery") ==
-            "LIVE_DEFERRED_OPERATION_TOTALS_NOT_RECORDED",
-            "durable recovery claim boundary")
+            functional.get("operationTotalsEvidence") == "NOT_RECORDED_NO_INFERENCE" and
+            functional.get("durablePositiveRecovery") == "LIVE_VERIFIED" and
+            functional.get("terminalReferenceProof") ==
+            "CONSUMED_AS_EXPECTED_NOT_REPEATABLE" and
+            functional.get("proofRepetition") ==
+            "NOT_REPEATED_REFERENCE_CORRECTLY_CONSUMED",
+            "durable recovery and totals claim boundary")
     for digest in functional.get("privateEvidenceSha256", {}).values():
         require(bool(SHA256.fullmatch(digest)), "private evidence hash")
 

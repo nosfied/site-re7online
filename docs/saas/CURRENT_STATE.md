@@ -35,16 +35,19 @@ e os hashes do dump e retorno.
   números pertencem à lista e não são tratados como totais persistidos da operação.
 - O painel de rede registrou 25 requisições e zero chamadas a `contacts/import`.
   A janela executou zero POST CSV, importação, SQL ou migration.
-- Recuperação positiva durável continua `LIVE DEFERRED`: o estado terminal foi
-  comprovado, mas os totais persistidos da operação não foram registrados nesta prova.
+- A recuperação positiva durável está `LIVE VERIFIED`: o GET reconheceu `COMPLETED`,
+  a referência exata do tenant/usuário Demo foi consumida, a página 1 voltou pelo
+  caminho canônico com filtros preservados e saída/reentrada não reabriu o modal.
+  A prova não foi repetida porque seu consumo é o resultado correto. Os totais
+  persistidos da operação não constam da evidência preservada e não são inferidos.
 - As ocorrências históricas de 993 linhas continuam `LEGACY_UNCORRELATED / NOT CLAIMED`.
 - A rotação das credenciais avaliadas permanece uma janela separada.
 
 ## Próximos atos
 
 1. Tratar rotações somente em janela separadamente autorizada.
-2. Após uma importação legítima futura, registrar os totais persistidos por GET,
-   sem repetir o POST para testar recuperação.
+2. Não repetir a referência terminal consumida; futuras recuperações legítimas
+   continuam exclusivamente por GET, sem repetir o POST.
 
 Os campos verificáveis estão em [`CURRENT_STATE.json`](CURRENT_STATE.json). A CI
 valida este arquivo, o manifesto de origem e o registro ativo da implantação.

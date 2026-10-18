@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 NEW_RECORD = "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json"
 OLD_RECORD = "CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json"
 OLD_BUILD_IDS = ("7IRWBhOwtCfwsLkfI9S0K", "Ebyc7UWY8nwjFyA5Zjyfj")
-STALE_STATUSES = ("NOT DEPLOYED", "CSV SUSPENSO")
+STALE_STATUSES = ("NOT DEPLOYED", "CSV SUSPENSO", "DEPLOYMENT PENDING",
+                  "LIVE_DEFERRED")
 
 
 def require(condition: bool, reason: str) -> None:

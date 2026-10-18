@@ -23,7 +23,8 @@
 
 - Frontend: `DEPLOYED / VERIFIED`; API e worker preservados.
 - Reentrada terminal: `LIVE VERIFIED`; modal encerrado, página 1 carregada e filtros preservados.
-- Recuperação positiva durável: adiada porque os totais persistidos da operação não foram registrados.
+- Recuperação positiva durável: `LIVE VERIFIED`; a referência foi corretamente consumida e
+  não foi repetida. Totais da operação não registrados permanecem sem inferência.
 - Histórico de 993 linhas: `LEGACY_UNCORRELATED / NOT CLAIMED`.
 - Janela: zero POST CSV, importação, SQL e migration.
 - Credenciais: qualquer rotação pertence a uma janela separada.

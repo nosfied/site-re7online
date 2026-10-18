@@ -19,7 +19,11 @@ O contrato de operação foi implantado na composição anterior; a correção i
 frontend para reentrada terminal e preservação de filtros foi implantada e verificada
 em 18/10. O [estado vigente](CURRENT_STATE.md) e o
 [registro ativo](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json) são as
-autoridades de continuidade. A preparação histórica de 17/10 registrou que SQL v1
+autoridades de continuidade. A recuperação positiva durável do tenant Demo está
+`LIVE VERIFIED`: `COMPLETED` foi reconhecido por GET, a referência exata foi consumida,
+a lista retornou pelo caminho canônico com filtros preservados e o modal não reabriu.
+A prova não é repetível depois do consumo correto da referência; totais da operação que
+não constam da evidência preservada não são inferidos. A preparação histórica de 17/10 registrou que SQL v1
 negou no cliente e v2 consumido17:44 obteve os três resultados. Naquele alcance, a
 correlação legada corrigida **somente localmente** estabeleceu: criação contém
 leadId + UUID da chamada + hash de linha, resumo contém prefixo + o mesmo UUID. O join

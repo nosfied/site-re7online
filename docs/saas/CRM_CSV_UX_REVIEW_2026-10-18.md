@@ -19,8 +19,10 @@ Filtros permanecem intactos e recebem aviso de que podem ocultar contatos import
 Status deste delta: `DEPLOYED / VERIFIED`. A prova no tenant Demo recuperou
 `COMPLETED`, removeu a referência exata, manteve o modal fechado e carregou a página 1
 com os filtros ativos. O painel de rede confirmou zero chamadas a `contacts/import`.
-Os totais persistidos da operação não foram registrados; por isso a classificação mais
-ampla de recuperação positiva durável continua adiada.
+A recuperação positiva durável está `LIVE VERIFIED`. A referência terminal não foi
+repetida porque foi corretamente consumida pela prova; isso não representa ausência de
+evidência. Os totais persistidos da operação não constam da evidência preservada e não
+são inferidos nem reconstruídos.
 
 O resultado vivo e as identidades completas estão no
 [registro sanitizado da implantação](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json).
@@ -74,8 +76,8 @@ ou alteração produtiva foi executado.
 ## Decisão operacional vigente
 
 O build isolado e a promoção exclusiva do frontend foram concluídos e verificados.
-Rotações de credenciais pertencem a outra janela. Uma futura importação legítima poderá
-completar a prova dos totais persistidos somente por GET, sem repetir o POST.
+Rotações de credenciais pertencem a outra janela. A referência terminal consumida não
+deve ser recriada ou repetida; futuras recuperações legítimas permanecem somente por GET.
 
 A natureza multi-tenant permanece preservada: nenhum dado, UUID, token ou resultado de
 um tenant foi reutilizado como autoridade para outro.

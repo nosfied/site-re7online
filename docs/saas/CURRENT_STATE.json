@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAtUtc": "2026-10-18T18:21:18.971249+00:00",
+  "updatedAtUtc": "2026-10-18T18:45:30+00:00",
   "basedOnCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
@@ -68,14 +68,16 @@
       "migrations": 0
     },
     "tenantNegativeIsolation": "LIVE_VERIFIED",
-    "durablePositiveRecovery": "LIVE_DEFERRED_OPERATION_TOTALS_NOT_RECORDED",
+    "durablePositiveRecovery": "LIVE_VERIFIED",
+    "operationTotalsEvidence": "NOT_RECORDED_NO_INFERENCE",
+    "terminalReferenceProof": "CONSUMED_AS_EXPECTED_NOT_REPEATABLE",
     "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED",
     "demoPreview": "COMPLETED_REFERENCE_CLEARED_LIST_RESTORED",
     "terminalReentry": "LIVE_VERIFIED"
   },
   "nextActions": [
     "perform credential rotations only in the separately authorized window; do not mix them with this frontend release",
-    "capture persisted operation totals by GET after a future legitimate import without repeating its POST"
+    "do not replay the consumed Demo terminal reference; any future legitimate operation remains GET-only for recovery"
   ],
   "credentialInspectionIncident": {
     "status": "RECORDED_PRIVATELY",

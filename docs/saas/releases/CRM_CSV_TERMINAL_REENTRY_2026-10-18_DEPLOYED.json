@@ -90,7 +90,10 @@
     "csvPostRequests": 0,
     "networkRequestsObserved": 25,
     "operationTotalsPersistedVerified": false,
-    "durablePositiveRecovery": "LIVE_DEFERRED_OPERATION_TOTALS_NOT_RECORDED",
+    "operationTotalsEvidence": "NOT_RECORDED_NO_INFERENCE",
+    "durablePositiveRecovery": "LIVE_VERIFIED",
+    "terminalReferenceProof": "CONSUMED_AS_EXPECTED_NOT_REPEATABLE",
+    "proofRepetition": "NOT_REPEATED_REFERENCE_CORRECTLY_CONSUMED",
     "privateEvidenceSha256": {
       "network": "7c7600dd232b8e2e5034b357df67fe2406033a171140423bd8624c6bb582a6e6",
       "csvPostFilter": "061cc0e1c2e13e9b3cd2df29c5a87165cfafe08041ff045b5521992f75671f02",
