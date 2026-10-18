@@ -1,13 +1,14 @@
 # Release Checklist
 
-### Aplicação vigente CSV17/10 — não executar exemplos genéricos
+### Estado vigente CRM/CSV — consultar antes dos exemplos genéricos
 
-[Continuidade canônica e consumidos](../RUNBOOK_WHATSAPP_AGENT.md#continuidade-csv--estado-vigente-e-metodologia):
-CSV não implantado; SQL negou no cliente, sem ownership/imports observados. A próxima
-correção é local e não autoriza janela, rebuild, conexão ou reuso dos blocos consumidos.
-Os SQLs e provas locais são reutilizáveis no alcance declarado; o conjunto efetivo PG*
-do transporte não foi ensaiado. Ler as normas e contratos completos vinculados no runbook;
-esta nota não cria checks operacionais ou altera o checklist histórico abaixo.
+A entrega CRM/CSV está **DEPLOYED / VERIFIED** desde 17/10/2026 (Fortaleza).
+A fonte canônica é [CURRENT_STATE.md](CURRENT_STATE.md); o fluxo específico de
+composição, seleção e retorno está em
+[ARTIFACT_RELEASE_RUNBOOK.md](ARTIFACT_RELEASE_RUNBOOK.md). Entradas históricas
+`CSV SUSPENSO` abaixo preservam cronologia e não autorizam replay, POST, SQL,
+migration nem repetição de diagnósticos consumidos. A recuperação positiva durável
+permanece adiada até a primeira importação legítima, observada somente por GET.
 
 
 Status: checklist operacional atual do Converta. Este documento nao altera runtime.

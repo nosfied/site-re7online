@@ -44,6 +44,16 @@ O deploy integrado faz `git pull --ff-only`, calcula o range publicado, para em
 `REVIEW_REQUIRED=YES` ou `UNKNOWN_RUNTIME_IMPACT=YES`, builda todos os runtimes
 afetados e somente depois recarrega os processos PM2 correspondentes.
 
+## Release por artefato
+
+Quando o runtime ativo for uma composição autenticada, e não um checkout Git
+integral, não usar o fluxo `deploy-vps.sh` como substituto. O contrato de build
+off-host, seleção PM2, provas nomeadas e rollback está em
+[`docs/saas/ARTIFACT_RELEASE_RUNBOOK.md`](../docs/saas/ARTIFACT_RELEASE_RUNBOOK.md).
+O registro sanitizado da promoção CRM/CSV é conferido por
+`scripts/ci/verify-deployment-record.py`. O validador não acessa produção e não
+executa PM2, rede, banco ou importação.
+
 ## `operational-retention-report.py`
 
 Rotina LOCAL PARA REVISÃO vinculada ao [runbook canônico](../docs/RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente). Não instalada na VPS/cron. Não tem apply, subprocess, SQL, provider, PM2 ou exclusão. Inventaria metadados de raízes locais explícitas, sem ler conteúdo nem seguir symlinks; conta blocos únicos por device/inode, registra hardlinks externos e limites. Tamanho igual sugere revisão, não igualdade de hash ou autorização de retirada. Reflinks e snapshots exigem medição própria.

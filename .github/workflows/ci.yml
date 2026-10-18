@@ -32,6 +32,8 @@ jobs:
         run: python3 scripts/ci/verify-current-state.py
       - name: Validate pinned CSV release surface
         run: python3 scripts/ci/verify-release-manifest.py docs/saas/releases/CRM_CSV_RECOVERY_2026-10-17.json
+      - name: Validate deployed CSV release record
+        run: python3 scripts/ci/verify-deployment-record.py docs/saas/releases/CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json
       - name: Validate deploy impact classifier
         run: bash scripts/test-deploy-impact-matrix.sh
       - name: Validate deploy orchestration boundaries

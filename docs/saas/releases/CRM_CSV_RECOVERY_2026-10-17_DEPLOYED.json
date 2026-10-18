@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "crm-csv-recovery-2026-10-17",
+  "status": "DEPLOYED_VERIFIED",
+  "recordedAtUtc": "2026-10-18T02:31:09Z",
+  "sourceReleaseManifest": "docs/saas/releases/CRM_CSV_RECOVERY_2026-10-17.json",
+  "candidateCommit": "d7d37c4f13728cd572f8253ab9ad0264b93b46a0",
+  "controlHead": "3868cc0aa314aec6e9cfdb93e211ef788a5a1329",
+  "deploymentOrder": ["api", "frontend"],
+  "artifacts": {
+    "api": {
+      "packageSha256": "e47a0fc978ac1c2ed832276eafb7aca70cd10721ba2c398c49dd664c81f967f0",
+      "manifestSha256": "63e8ce0565233b97d641d2e3a150ed0ee4f7d7261f5075d3101b79e860765c07",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontend": {
+      "packageSha256": "13cd764f7f0aea1c56d8dd5742ffb18a53c7af731231285ea672505795fec09b",
+      "manifestSha256": "2d71aafdbd2fe4a2000a2190b16fd48b279edfe77b8d0258bcde05f434386bd0",
+      "buildId": "7IRWBhOwtCfwsLkfI9S0K",
+      "launcherSha256": "c230a7297ba9dd98b5f57855846c186521346ce06a3a33d86faff15386c916fc"
+    },
+    "worker": {"preserved": true}
+  },
+  "pm2": {
+    "savedExactlyOnce": true,
+    "dumpSha256": "521f941394c451891f661d06abf00cfd3cf90153dd5678b979293d2a12cd73e2",
+    "rollbackSha256": "05fd82d48d240f82043f33c792abcb8456727e76149da5d93748c47940ac5157"
+  },
+  "verification": {
+    "namedPredicatesPersistedBeforeDecision": true,
+    "consecutiveIdentitySamples": 3,
+    "apiHealthBeforeFrontend": true,
+    "tenantNegativeIsolation": {
+      "method": "GET_ONLY",
+      "result": "HTTP_200_UNKNOWN_NO_CROSS_TENANT_DATA"
+    },
+    "authenticatedCrmAndInboxSmoke": true,
+    "browserAutomaticPostCount": 0
+  },
+  "windowMutations": {
+    "postRequests": 0,
+    "imports": 0,
+    "sqlStatements": 0,
+    "migrations": 0
+  },
+  "durablePositiveRecovery": "LIVE_DEFERRED_UNTIL_FIRST_LEGITIMATE_IMPORT_GET_ONLY",
+  "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED",
+  "processIdentitySemantics": {
+    "pids": "dated observational evidence; not a durable release identifier",
+    "durable": ["api entry SHA-256", "frontend BUILD_ID", "PM2 dump SHA-256", "rollback SHA-256"]
+  }
+}
