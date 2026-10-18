@@ -39,7 +39,9 @@ na mesma janela.
    em `start --update-env` para trocar `cwd` ou entrypoint de processo já registrado.
 7. Persistir cada predicado antes da decisão: PM2 online, PID e start ticks, `cwd`,
    `pm_exec_path`, `/proc/<pid>/cwd`, `/proc/<pid>/exe`, SHA do entrypoint, contadores
-   de restart e health. Repetir três amostras da mesma identidade. O caminho JavaScript
+   de restart, propriedade direta do socket de escuta e health. Repetir três amostras
+   da mesma identidade. `server.started` é evidência complementar, não substitui o
+   vínculo PID→socket→porta→health. O caminho JavaScript
    literal em `/proc/<pid>/cmdline` não é gate válido sob PM2.
 8. Executar somente GETs autorizados de isolamento negativo. Não fabricar operação
    positiva, não repetir POST e não expor tenant, token ou UUID em logs públicos.
@@ -84,5 +86,7 @@ testado pelos fixtures do padrão de engenharia e aprovado na CI.
 
 Em toda seleção, `PRE_SELECTION_SNAPSHOT` é persistido antes do
 `pm2 delete`. O verificador candidato nunca relê o PID original removido. A
-prova `server.started` usa cursor do log candidato capturado antes da seleção,
-e o relatório completo é sincronizado antes de qualquer rollback.
+prova principal usa o socket de escuta pertencente ao PID candidato e health; o
+`server.started` permanece evidência complementar. O relatório completo é
+sincronizado antes de qualquer rollback. Consultas PM2 usam allowlist fixa e
+nunca despejam ambiente por filtro amplo.

@@ -116,21 +116,31 @@ As três amostras observam exclusivamente o PID candidato:
 O verificador deve persistir cada amostra antes da próxima. A decisão agregada só
 ocorre depois que todas estiverem gravadas.
 
-### Prova `server.started`
+### Prova de escuta e evidência `server.started`
 
-Antes da seleção, capturar cursor do caminho de stdout que a definição candidata
-realmente usará. Depois da seleção:
+O gate de disponibilidade combina identidade candidata, propriedade direta do
+socket e health:
 
-1. confirmar que o PM2 registrou o mesmo caminho autorizado;
-2. ler apenas bytes adicionados depois do cursor;
-3. aguardar por intervalo limitado enquanto a identidade candidata permanece
-   estável;
-4. exigir evento JSON `server.started` posterior ao início da seleção;
-5. registrar rotação, truncamento, caminho divergente ou timeout como negativas
-   distintas.
+1. obter os inodes `socket:[N]` em `/proc/<pid-candidato>/fd`;
+2. localizar em `/proc/<pid-candidato>/net/tcp` e `tcp6` um inode do mesmo
+   conjunto em estado `LISTEN` na porta esperada;
+3. repetir a propriedade do socket nas três amostras;
+4. exigir health local e, quando previsto, público.
 
-Ausência do evento não pode ser convertida em PASS por health, mas também não
-pode interromper a coleta das três amostras.
+Esse vínculo é o predicado nominal
+`candidate_owns_listening_socket`. Ele prova que o processo autenticado possui
+a porta, sem depender da nomenclatura de logs do PM2.
+
+O evento JSON `server.started` continua sendo coletado como evidência
+complementar. Antes da seleção, capturar cursores dos caminhos de stdout
+autorizados conhecidos. Depois, registrar o caminho efetivamente resolvido,
+bytes novos, rotação, truncamento e presença ou ausência do evento. Divergência
+de caminho ou ausência do evento não causa rollback quando
+`candidate_owns_listening_socket`, identidade e health passam; continua
+`WARN` explícito para correção de observabilidade.
+
+Nunca listar ambiente para descobrir logs. Campos PM2 são lidos por allowlist
+fixa; filtros amplos por nomes ou substrings como `LOG` são proibidos.
 
 ## Decisão e rollback
 
@@ -147,9 +157,9 @@ pode interromper a coleta das três amostras.
 
 1. PID original desaparece após snapshot; candidato continua verificável.
 2. Um predicado lança exceção; os demais e as três amostras são persistidos.
-3. `server.started` aparece depois do cursor.
-4. Evento ausente gera timeout nominal sem apagar amostras.
-5. Log rotacionado ou truncado gera negativa específica.
+3. O PID candidato possui diretamente o socket da porta esperada nas três amostras.
+4. `server.started` aparece depois do cursor e é registrado como evidência complementar.
+5. Evento ausente, caminho divergente, log rotacionado ou truncado gera `WARN` nominal sem apagar amostras.
 6. Relatório existe e está sincronizado antes da chamada de rollback.
 7. Runtime de staging preexistente é negado sem sobreposição.
 8. `data_filter` sob umask inicial `0002` produz `0755/0644` porque o
@@ -167,11 +177,11 @@ pode interromper a coleta das três amostras.
 | diretório virou `0775` | `data_filter` + umask `0002` | Extração single-thread com umask `0022` |
 | `FileExistsError` | suporte criado antes do payload | Extrair em destino inexistente antes dos complementos |
 | amostras falharam | releitura do PID original removido | Snapshot completo antes do delete; candidato não consulta PID original |
-| marcador não localizado | cursor/caminho/tempo não individualizados | Cursor do log candidato e espera nominal persistida |
+| marcador não localizado | caminho de log PM2 pode variar ou receber sufixo de PID | Socket pertencente ao candidato é gate; log é evidência complementar |
 
 ## Proibições permanentes
 
-Não expor tokens, cookies, tenants ou UUIDs; não fabricar evidência; não adaptar
+Não expor tokens, cookies, tenants ou UUIDs; nunca inspecionar ambiente PM2 por filtro amplo; usar somente allowlist fixa e saída redigida; não fabricar evidência; não adaptar
 gates depois do efeito; não executar POST, replay, SQL ou migration fora do
 manifesto; não usar estado pós-rollback para reconstruir retrospectivamente a
 tentativa.

@@ -253,6 +253,40 @@ criar retorno timestampado do dump corrente. Se `server.started` continuar
 ausente após a espera nominal, retornar a API e investigar o caminho/rotação do
 log; health não substitui esse gate.
 
+## Correção final do gate de prontidão API
+
+A tentativa seguinte aprovou definição, fixture, preflight e todas as três
+amostras. O único bloqueio foi `server_started_after_cursor`, porque o PM2
+resolveu stdout diferente do caminho previsto. A tentativa permanece
+`ROLLED_BACK_API`; não é reclassificada.
+
+Na nova tentativa, não perseguir a nomenclatura de logs. Atualizar somente o
+verificador:
+
+1. manter identidade, cwd, entrypoint, SHA, estabilidade, restart e health já
+   aprovados;
+2. adicionar `candidate_owns_listening_socket`: cruzar os inodes
+   `socket:[N]` de `/proc/<pid-candidato>/fd` com `tcp/tcp6` em estado
+   `LISTEN` na porta 3001;
+3. exigir esse vínculo nas três amostras e persistir cada resultado;
+4. coletar `server.started` e o caminho efetivo de stdout como evidência
+   complementar. Divergência ou ausência gera `WARN`, não rollback, quando
+   socket, identidade e health passam;
+5. executar fixture local/VPS do vínculo PID→socket e registrar o SHA-256 da nova
+   versão do verificador;
+6. usar somente allowlist fixa de campos PM2. É proibida qualquer busca por
+   substring no ambiente.
+
+Não refazer build, pacote, transferência, staging ou definições PM2. Reutilizar a
+raiz `-r2` após hashes e preflight curto. Criar novo retorno timestampado antes
+da seleção. Se o socket não pertencer ao candidato, qualquer amostra de
+identidade/health falhar ou houver restart, retornar somente a API.
+
+A saída sensível exibida pela inspeção ampla anterior deve ser tratada como
+incidente: registrar apenas os nomes das variáveis potencialmente expostas, sem
+valores. Credenciais realmente exibidas devem entrar em rotação coordenada
+separada; não despejar novamente o ambiente para identificá-las.
+
 ## Sequência executável
 
 1. Fazer preflight somente leitura: saúde pública/local, identidade dos três processos,

@@ -131,3 +131,13 @@ As dificuldades desta janela foram consolidadas em
 [`ARTIFACT_RELEASE_ENGINEERING_STANDARD.md`](ARTIFACT_RELEASE_ENGINEERING_STANDARD.md),
 protegido pela CI. Após esta janela, uma nova release por artefato dependerá de
 executor canônico versionado e fixtures de regressão.
+
+## Gate de log substituído por vínculo de socket — 18/10/2026
+
+Definições e três amostras passaram; a tentativa foi retornada somente porque o
+PM2 resolveu stdout diferente do cursor. A nova prova obrigatória vincula
+diretamente PID candidato, inode de socket, porta 3001 e health. O evento
+`server.started` permanece evidência complementar. A tentativa anterior
+continua classificada como rollback. A inspeção ampla que exibiu ambiente foi
+proibida; futuras leituras usam allowlist fixa e eventual rotação de credenciais
+será tratada separadamente.

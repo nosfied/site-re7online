@@ -13,7 +13,9 @@ REQUIRED = {
     "runbook": [
         "PRE_SELECTION_SNAPSHOT",
         "nunca relê o PID original",
+        "candidate_owns_listening_socket",
         "server.started",
+        "allowlist fixa",
         "sincronizado antes de qualquer rollback",
     ],
     "standard": [
@@ -25,13 +27,17 @@ REQUIRED = {
         "FileExistsError",
         "PRE_SELECTION_SNAPSHOT",
         "proibido de reler",
+        "candidate_owns_listening_socket",
         "server.started",
+        "allowlist fixa",
         "Fixtures obrigatórios",
     ],
     "handoff": [
         "Correção do verificador antes de nova seleção API",
         "PRE_SELECTION_SNAPSHOT",
         "nenhuma função tenta reler",
+        "candidate_owns_listening_socket",
+        "allowlist fixa",
         "relatório completo antes de decidir",
     ],
 }
