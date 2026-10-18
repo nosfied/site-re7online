@@ -33,6 +33,7 @@ REQUIRED = {
         "Fixtures obrigatórios",
     ],
     "handoff": [
+        "COMPLETED / HISTORICAL / DO NOT EXECUTE",
         "Correção do verificador antes de nova seleção API",
         "PRE_SELECTION_SNAPSHOT",
         "nenhuma função tenta reler",
@@ -52,4 +53,4 @@ for label, path in FILES.items():
                 f"ARTIFACT_RELEASE_STANDARD_INVALID: {label} missing marker {marker!r}"
             )
 
-print("ARTIFACT_RELEASE_STANDARD_OK: runbook, engineering standard and active handoff")
+print("ARTIFACT_RELEASE_STANDARD_OK: runbook, engineering standard and historical handoff")

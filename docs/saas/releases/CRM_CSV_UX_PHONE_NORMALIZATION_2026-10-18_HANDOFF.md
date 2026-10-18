@@ -1,6 +1,10 @@
 # Handoff — CRM CSV UX e normalização — 18/10/2026
 
-Status: `MANIFESTED / SOURCE CI VERIFIED / NOT BUILT / NOT STAGED / NOT DEPLOYED / IMPORT NOT RUN`.
+Status: `COMPLETED / HISTORICAL / DO NOT EXECUTE`.
+
+> Este roteiro foi consumido pela implantação registrada em
+> [`CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json`](CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json).
+> Os comandos e gates abaixo preservam a cronologia e não são instruções atuais.
 
 ## Autoridade e base
 
@@ -282,10 +286,10 @@ raiz `-r2` após hashes e preflight curto. Criar novo retorno timestampado antes
 da seleção. Se o socket não pertencer ao candidato, qualquer amostra de
 identidade/health falhar ou houver restart, retornar somente a API.
 
-A saída sensível exibida pela inspeção ampla anterior deve ser tratada como
-incidente: registrar apenas os nomes das variáveis potencialmente expostas, sem
-valores. Credenciais realmente exibidas devem entrar em rotação coordenada
-separada; não despejar novamente o ambiente para identificá-las.
+A saída sensível exibida pela inspeção ampla anterior está registrada somente como
+`RECORDED_PRIVATELY / VALUES NOT VERSIONED / ROTATION ASSESSMENT PENDING`.
+Nomes sensíveis e valores não pertencem ao Git; não despejar novamente o ambiente
+para identificá-los.
 
 ## Sequência executável
 
@@ -316,7 +320,7 @@ separada; não despejar novamente o ambiente para identificá-las.
     após todos os gates passarem. Em qualquer negativa explícita, retornar somente o
     componente alterado e interromper.
 11. Publicar registro sanitizado da implantação e atualizar `CURRENT_STATE.md/.json`.
-    Até isso ocorrer, a classificação continua `NOT DEPLOYED`.
+    Esta etapa foi concluída; o deployment record é a autoridade vigente.
 
 ## Validação funcional após a promoção
 

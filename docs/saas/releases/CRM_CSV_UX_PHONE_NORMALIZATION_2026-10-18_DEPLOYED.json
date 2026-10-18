@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 2,
+  "status": "DEPLOYED_VERIFIED",
+  "deployedAtUtc": "2026-10-18T13:26:09.249088+00:00",
+  "deployedAtFortaleza": "2026-10-18T10:26:09.249088-03:00",
+  "sourceReleaseManifest": "docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18.json",
+  "candidateCommit": "36dacbc8eb1e4163d6907d92f7decae4efdfc3a7",
+  "documentationBaseCommit": "d9f1fb5b853868e0fd02b5bc9b5af0d6939c6ab6",
+  "deploymentOrder": [
+    "api",
+    "frontend"
+  ],
+  "stagingRoot": "/opt/re7online/releases/crm-csv-ux-phone-normalization-36dacbc8-20261018T122527Z-r2",
+  "artifacts": {
+    "api": {
+      "package": "crm-csv-ux-api-36dacbc8-r2.tar",
+      "packageBytes": 8601600,
+      "packageSha256": "3cf17abb52004bb8a16d2ddd4703b5179ad0c9cb66c6e2433613a2f6be06b2c0",
+      "manifest": "crm-csv-ux-api-36dacbc8-r2.manifest.json",
+      "manifestSha256": "fca745ed42240ba23cecb5be5e5e2001dd4c9803251fe492fcbe65e03d701079",
+      "runtime": "api-runtime",
+      "entrypoint": "api-runtime/dist/index.js",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+      "changedOutputs": [
+        "dist/crm/crmContactUpsert.js",
+        "dist/crm/crmWhatsappIdentity.js"
+      ]
+    },
+    "frontend": {
+      "package": "crm-csv-ux-frontend-36dacbc8-r4.tar.gz",
+      "packageBytes": 5246004,
+      "packageSha256": "e9f6644ee5d08cacd0e1bd4d1cee4b0c068341a22f68038ec045e7962860c341",
+      "manifest": "crm-csv-ux-frontend-36dacbc8-r5.manifest.json",
+      "manifestSha256": "e8f543f47791796f6c31d71053a670de23d406cb002da9b12fd76cfbfabf559a",
+      "runtime": "frontend-runtime",
+      "launcherSha256": "131a92d08fe7c6484585ed0a1e18e1bf9f9a1851907337b02ae13ca99e110fef",
+      "controlledEntrySha256": "c230a7297ba9dd98b5f57855846c186521346ce06a3a33d86faff15386c916fc",
+      "controlSha256": "a94a259844ec4d8f88d87005d9d4798ae2626ab2a6fbd71d38d1d78c75c4adca",
+      "buildId": "Ebyc7UWY8nwjFyA5Zjyfj"
+    },
+    "worker": {
+      "preserved": true
+    }
+  },
+  "observedProcesses": {
+    "observedAtUtc": "2026-10-18T13:26:09.249088+00:00",
+    "semantics": "dated observation; PIDs must be revalidated after any process restart",
+    "apiPid": 1328029,
+    "frontendPid": 1329631,
+    "workerPid": 936540
+  },
+  "apiVerification": {
+    "result": "API_CANDIDATE_STABLE",
+    "reportSha256": "ae39723ae4e9bcbc25575ccf59c847847b7324a461a45f5635819de689380db4",
+    "snapshotSha256": "00982902878ff288109266dbc519a0ee2fd42a4a866917d971e83a7df28acaac",
+    "verifierSha256": "e3922b0f53692e64c0427b1317114ad5bd4c98b241877e0887c67db496bd7e5e",
+    "candidateCapturedAtUtc": "2026-10-18T13:16:06.547428+00:00",
+    "verificationCompletedUtc": "2026-10-18T13:16:18.392510+00:00",
+    "decisionUtc": "2026-10-18T13:16:18.401253+00:00",
+    "pid": 1328029,
+    "startTicks": 2211376743,
+    "cwd": "/opt/re7online/releases/crm-csv-ux-phone-normalization-36dacbc8-20261018T122527Z-r2/api-runtime",
+    "executable": "/usr/bin/node",
+    "entrypoint": "/opt/re7online/releases/crm-csv-ux-phone-normalization-36dacbc8-20261018T122527Z-r2/api-runtime/dist/index.js",
+    "serverStartedEvidence": {
+      "status": "WARN",
+      "reason": "stdout_path_diverged",
+      "role": "complementary evidence; identity, socket ownership and health were mandatory"
+    },
+    "samples": [
+      {
+        "sample": 1,
+        "fromUtc": "2026-10-18T13:16:07.104502+00:00",
+        "toUtc": "2026-10-18T13:16:10.192345+00:00",
+        "pid": 1328029,
+        "startTicks": 2211376743,
+        "pm2Online": true,
+        "cwdMatches": true,
+        "entrypointMatches": true,
+        "executableMatches": true,
+        "entrySha256Matches": true,
+        "restartTime": 0,
+        "unstableRestarts": 0,
+        "candidateOwnsListeningSocket": true,
+        "listeningPort": 3001,
+        "localHealthHttp": 200,
+        "publicHealthHttp": 200,
+        "result": "PASS"
+      },
+      {
+        "sample": 2,
+        "fromUtc": "2026-10-18T13:16:11.232999+00:00",
+        "toUtc": "2026-10-18T13:16:13.860860+00:00",
+        "pid": 1328029,
+        "startTicks": 2211376743,
+        "pm2Online": true,
+        "cwdMatches": true,
+        "entrypointMatches": true,
+        "executableMatches": true,
+        "entrySha256Matches": true,
+        "restartTime": 0,
+        "unstableRestarts": 0,
+        "candidateOwnsListeningSocket": true,
+        "listeningPort": 3001,
+        "localHealthHttp": 200,
+        "publicHealthHttp": 200,
+        "result": "PASS"
+      },
+      {
+        "sample": 3,
+        "fromUtc": "2026-10-18T13:16:14.891242+00:00",
+        "toUtc": "2026-10-18T13:16:17.358974+00:00",
+        "pid": 1328029,
+        "startTicks": 2211376743,
+        "pm2Online": true,
+        "cwdMatches": true,
+        "entrypointMatches": true,
+        "executableMatches": true,
+        "entrySha256Matches": true,
+        "restartTime": 0,
+        "unstableRestarts": 0,
+        "candidateOwnsListeningSocket": true,
+        "listeningPort": 3001,
+        "localHealthHttp": 200,
+        "publicHealthHttp": 200,
+        "result": "PASS"
+      }
+    ],
+    "socketBinding": {
+      "proof": "candidate PID file-descriptor socket inode intersected tcp/tcp6 LISTEN inode",
+      "pid": 1328029,
+      "port": 3001,
+      "samples": 3,
+      "result": "PASS"
+    },
+    "rollbackExecuted": false
+  },
+  "frontendVerification": {
+    "result": "FRONTEND_CANDIDATE_STABLE",
+    "selectedAtUtc": "2026-10-18T13:24:34.912761+00:00",
+    "completedAtUtc": "2026-10-18T13:24:46.054221+00:00",
+    "selectionReportSha256": "d3143650138a291025792c50fc27195640c7efa44253f3bfd19d008b95943ed2",
+    "snapshotSha256": "5cb12a2e5c931b8a0d4ed7d0a6990a9d9f8cc20aeb2c32ced87a3fd06626f267",
+    "verificationReportSha256": "66b5cba53629a6d9fcfd670c18a14e43b5225b20f3123de8e5c929d4b25787ba",
+    "verifierSha256": "adca4d42507c11b2993107eb2ea748b7727e3d57d5dfa40f91aa339ad9ede546",
+    "pid": 1329631,
+    "startTicks": 2211427722,
+    "samples": 3,
+    "identityStable": true,
+    "healthStable": true,
+    "loginInboxCrmHttp200": true,
+    "assetsWithoutError": true,
+    "rollbackExecuted": false
+  },
+  "getValidation": {
+    "method": "GET_ONLY",
+    "nonexistentOperation": {
+      "httpStatus": 200,
+      "state": "UNKNOWN",
+      "progress": null,
+      "summary": null,
+      "total": null,
+      "crossTenantMetadataPresent": false,
+      "result": "PASS"
+    },
+    "crossTenant": {
+      "evidenceMode": "REUSED_LIVE_PROOF",
+      "executedInThisWindow": false,
+      "sourceRecord": "docs/saas/releases/CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json",
+      "sourceRecordSha256": "5019aa1835c55c0660a1c9cf81d2f9d0795952ab1d7011985ba4e9cd83c97726",
+      "result": "HTTP_200_UNKNOWN_NO_CROSS_TENANT_DATA"
+    }
+  },
+  "httpPostObservations": {
+    "csvPostRequests": 0,
+    "automaticNonCsvPostRequests": [
+      {
+        "component": "Inbox",
+        "path": "/agent-api/app/inbox/events",
+        "httpStatus": 200,
+        "classification": "AUTOMATIC_NON_CSV_POST"
+      }
+    ],
+    "privateNetworkEvidenceSha256": "bdbf7f87f556fd4793213f37f8881cd88e7f212764674630b0cec68d9b0074dd"
+  },
+  "windowMutations": {
+    "csvPostRequests": 0,
+    "imports": 0,
+    "sqlStatements": 0,
+    "migrations": 0
+  },
+  "pm2": {
+    "savedExactlyOnce": true,
+    "savedAtUtc": "2026-10-18T13:26:08.581309+00:00",
+    "dumpSha256": "f6276a42ee8644088a5917ad0366f64ceba2b8d5441b8b46e52de9998303f7b5",
+    "rollbackFile": "dump.pm2.crm-csv-ux-phone-normalization-v5-20261018T131602Z.rollback",
+    "rollbackSha256": "521f941394c451891f661d06abf00cfd3cf90153dd5678b979293d2a12cd73e2",
+    "finalizationReportSha256": "93805749fefeb9f0b7ca72d66b2141968057029c5482c260a258605048bc2228"
+  },
+  "durablePositiveRecovery": "LIVE_DEFERRED_UNTIL_FIRST_LEGITIMATE_IMPORT_GET_ONLY",
+  "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED",
+  "credentialInspectionIncident": {
+    "status": "RECORDED_PRIVATELY",
+    "values": "NOT_VERSIONED",
+    "rotationAssessment": "PENDING"
+  },
+  "nextActions": [
+    "SANITIZED_CREDENTIAL_EXPOSURE_ASSESSMENT",
+    "DEMO_TENANT_MANUAL_PREVIEW_WITHOUT_IMPORT_CONFIRMATION"
+  ]
+}

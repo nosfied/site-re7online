@@ -71,5 +71,6 @@
     "recoverableDomesticTrunkPrefixRows": 37,
     "preservedDuplicateRows": 13
   },
-  "status": "PREPARED_CI_VERIFIED_NOT_DEPLOYED"
+  "statusAtCreation": "PREPARED_CI_VERIFIED_NOT_DEPLOYED",
+  "deploymentRecord": "docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json"
 }

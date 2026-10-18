@@ -1,6 +1,12 @@
 # Revisão CRM/CSV — carregamento, prévia e telefones — 18/10/2026
 
-Status: `MANIFESTED / SOURCE CI VERIFIED / NOT BUILT / NOT STAGED / NOT DEPLOYED / IMPORT NOT RUN`.
+Status: `DEPLOYED / VERIFIED / DEMO PREVIEW PENDING / IMPORT NOT RUN`.
+
+O resultado vivo e as identidades completas estão no
+[registro sanitizado da implantação](releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json).
+API e frontend foram promovidos em ordem, o worker foi preservado, o dump PM2 foi
+salvo uma vez e nenhuma importação, POST CSV, SQL ou migration ocorreu. O único POST
+automático observado pertenceu à Inbox e está classificado separadamente no registro.
 
 ## Escopo auditado
 
@@ -46,14 +52,12 @@ ou alteração produtiva foi executado.
 - manifesto histórico passou a ser validado no commit fixado pelo próprio manifesto,
   evitando reescrever a prova do release implantado quando o código futuro evolui.
 
-## Decisão operacional
+## Decisão operacional vigente
 
-Não confirmar a importação no Demo antes de:
-
-1. manifesto imutável e CI do candidato: concluídos;
-2. construir fora da VPS e promover API → frontend conforme o handoff versionado, com
-   rollback fixado e sem alterar worker, banco ou tenants;
-3. gerar nova prévia no tenant Demo e obter confirmação humana antes do único POST.
+Build isolado e promoção API → frontend foram concluídos e verificados. O próximo ato
+funcional é gerar uma nova prévia manual no tenant Demo, sem confirmar a importação.
+Separadamente, deve ser feita avaliação sanitizada das credenciais potencialmente
+expostas pela inspeção ampla; os valores e nomes sensíveis permanecem privados.
 
 A natureza multi-tenant permanece preservada: nenhum dado, UUID, token ou resultado de
 um tenant foi reutilizado como autoridade para outro.
@@ -68,9 +72,11 @@ um tenant foi reutilizado como autoridade para outro.
 
 ## Continuidade operacional
 
-O manifesto e a sequência exata de build/promoção estão em
-[`CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_HANDOFF.md`](releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_HANDOFF.md).
-Este registro não afirma build, staging ou deploy.
+O [manifesto](releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18.json) preserva a
+origem. O
+[handoff](releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_HANDOFF.md) está
+concluído e é arquivo histórico; não deve ser executado novamente. A continuidade
+vigente parte do deployment record e de `CURRENT_STATE`, não da sequência histórica.
 
 ## Negativa de build e correção — 18/10/2026
 
@@ -138,6 +144,6 @@ Definições e três amostras passaram; a tentativa foi retornada somente porque
 PM2 resolveu stdout diferente do cursor. A nova prova obrigatória vincula
 diretamente PID candidato, inode de socket, porta 3001 e health. O evento
 `server.started` permanece evidência complementar. A tentativa anterior
-continua classificada como rollback. A inspeção ampla que exibiu ambiente foi
-proibida; futuras leituras usam allowlist fixa e eventual rotação de credenciais
-será tratada separadamente.
+continua classificada como rollback. A inspeção ampla que exibiu ambiente está
+`RECORDED_PRIVATELY / VALUES NOT VERSIONED / ROTATION ASSESSMENT PENDING`;
+futuras leituras usam allowlist fixa.

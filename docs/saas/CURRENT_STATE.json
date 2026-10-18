@@ -1,42 +1,46 @@
 {
-  "schemaVersion": 1,
-  "updatedAtUtc": "2026-10-18T02:31:09Z",
-  "basedOnCommit": "3868cc0aa314aec6e9cfdb93e211ef788a5a1329",
+  "schemaVersion": 2,
+  "updatedAtUtc": "2026-10-18T13:26:09.249088+00:00",
+  "basedOnCommit": "d9f1fb5b853868e0fd02b5bc9b5af0d6939c6ab6",
   "canonicalBranch": "review/campaign-recovery-20260926",
+  "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18_DEPLOYED.json",
   "sourcePriority": [
-    "fresh read-only VPS evidence for live state",
-    "Git commit plus passing CI for candidate state",
-    "this file for current decision and continuation",
+    "fresh read-only production evidence for live state",
+    "active deployment record for the durable release identity",
+    "Git commit plus passing CI for source and documentation",
     "dated reports only for the scope and time they explicitly certify"
   ],
   "production": {
     "status": "DEPLOYED_VERIFIED",
-    "promotedAtUtc": "2026-10-18T02:31:09Z",
-    "promotedAtFortaleza": "2026-10-17T23:31:09-03:00",
-    "lastDocumentedApiLine": "crm-csv-recovery-d7d37c4f",
-    "lastDocumentedFrontendLine": "crm-csv-recovery-d7d37c4f",
-    "lastDocumentedWorkerLine": "minimal-reactive",
+    "promotedAtUtc": "2026-10-18T13:26:09.249088+00:00",
+    "promotedAtFortaleza": "2026-10-18T10:26:09.249088-03:00",
     "certifiedByThisFile": false,
     "api": {
-      "pid": 1238268,
-      "selectedAtUtc": "2026-10-18T02:08:55.415Z",
-      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+      "runtimeLine": "crm-csv-ux-phone-normalization-36dacbc8",
+      "entrypoint": "api-runtime/dist/index.js",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+      "observedPid": 1328029,
+      "observedAtUtc": "2026-10-18T13:26:09.249088+00:00"
     },
     "frontend": {
-      "pid": 1241028,
-      "selectedAtUtc": "2026-10-18T02:25:24.023Z",
-      "buildId": "7IRWBhOwtCfwsLkfI9S0K"
+      "runtimeLine": "crm-csv-ux-phone-normalization-36dacbc8",
+      "buildId": "Ebyc7UWY8nwjFyA5Zjyfj",
+      "observedPid": 1329631,
+      "observedAtUtc": "2026-10-18T13:26:09.249088+00:00"
     },
     "worker": {
-      "pid": 936540,
-      "preserved": true
+      "runtimeLine": "minimal-reactive",
+      "preserved": true,
+      "observedPid": 936540,
+      "observedAtUtc": "2026-10-18T13:26:09.249088+00:00"
     },
     "pm2": {
-      "savedOnce": true,
-      "dumpSha256": "521f941394c451891f661d06abf00cfd3cf90153dd5678b979293d2a12cd73e2",
-      "rollbackSha256": "05fd82d48d240f82043f33c792abcb8456727e76149da5d93748c47940ac5157"
+      "savedExactlyOnce": true,
+      "savedAtUtc": "2026-10-18T13:26:08.581309+00:00",
+      "dumpSha256": "f6276a42ee8644088a5917ad0366f64ceba2b8d5441b8b46e52de9998303f7b5",
+      "rollbackSha256": "521f941394c451891f661d06abf00cfd3cf90153dd5678b979293d2a12cd73e2"
     },
-    "processIdentitySemantics": {
+    "identitySemantics": {
       "pids": "dated observational evidence; revalidate after any process restart",
       "durable": [
         "api.entrySha256",
@@ -47,26 +51,16 @@
     }
   },
   "csvDelivery": {
-    "functionalBackendCommit": "a27e2d16265220b17b8d1fb9d0be9c1c8364d310",
-    "functionalFrontendCommit": "111cc5433a1985de3e05cd421e9087e0d40c6a5d",
-    "staticPreparationCommit": "d7d37c4f13728cd572f8253ab9ad0264b93b46a0",
-    "releaseManifest": "docs/saas/releases/CRM_CSV_RECOVERY_2026-10-17.json",
+    "candidateCommit": "36dacbc8eb1e4163d6907d92f7decae4efdfc3a7",
+    "releaseManifest": "docs/saas/releases/CRM_CSV_UX_PHONE_NORMALIZATION_2026-10-18.json",
     "state": "DEPLOYED_VERIFIED",
     "migrationRequired": false,
     "workerChanged": false,
-    "deploymentOrder": [
-      "api",
-      "frontend"
-    ],
+    "deploymentOrder": ["api", "frontend"],
     "automaticReplayForbidden": true,
-    "consumedActionsMustNotBeRepeated": [
-      "M1",
-      "SQL-v1",
-      "SQL-v2",
-      "historical diagnostic and discovery commands"
-    ],
-    "windowMutations": {
-      "postRequests": 0,
+    "windowActivity": {
+      "csvPostRequests": 0,
+      "automaticNonCsvPostRequests": 1,
       "imports": 0,
       "sqlStatements": 0,
       "migrations": 0
@@ -74,57 +68,27 @@
     "tenantNegativeIsolation": "LIVE_VERIFIED",
     "durablePositiveRecovery": "LIVE_DEFERRED_UNTIL_FIRST_LEGITIMATE_IMPORT",
     "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED",
-    "nextAllowedAction": "OBSERVE_FIRST_LEGITIMATE_IMPORT_BY_GET_ONLY",
-    "liveExitCriteria": [
-      "active API, frontend and worker identities captured without mutation",
-      "candidate delta proven to exclude migrations, tenant policy, RBAC, credentials and worker",
-      "compatible return path pinned before API selection",
-      "isolated candidate API and frontend artifacts match reviewed manifests",
-      "explicit production window authority recorded"
-    ],
-    "postDeployCriteria": [
-      "API health succeeded before frontend promotion",
-      "tenant-negative GETs returned UNKNOWN without progress, totals, summary or cross-tenant metadata",
-      "CRM and Inbox authenticated smoke succeeded without asset failures",
-      "no CSV replay, POST, historical repair, SQL or migration was executed in the window",
-      "durable positive recovery remains deferred until the first legitimate import and must be observed by GET only",
-      "historical 993-row evidence remains uncorrelated and is not claimed as a live validation"
-    ]
+    "demoPreview": "PENDING_WITHOUT_IMPORT_CONFIRMATION"
+  },
+  "nextActions": [
+    "perform a sanitized assessment of credentials potentially exposed by broad inspection; values remain private",
+    "generate a new manual preview in the Demo tenant without confirming the import"
+  ],
+  "credentialInspectionIncident": {
+    "status": "RECORDED_PRIVATELY",
+    "values": "NOT_VERSIONED",
+    "rotationAssessment": "PENDING"
   },
   "branchConvergence": {
-    "mainRelationshipAtAudit": {
-      "auditedAtUtc": "2026-10-18T02:55:26Z",
-      "mainHead": "b1692623ef1c7ae2ca076934a532efa1eb0f3264",
-      "operationalHead": "2a3f901a0e878b8aa2f308730f40ce6dda435447",
-      "mergeBase": "36c91e5fcd943289bf60d223ae0269a3cf3ed242",
-      "ahead": 1182,
-      "behind": 124,
-      "netMainOnlyPaths": [
-        "vercel.json",
-        "scripts/vercel-ignore-build.sh",
-        "scripts/test-vercel-ignore-build.sh",
-        "docs/saas/VERCEL_PRODUCTION_LINEAGE_AUDIT_2026-09-19.md",
-        "docs/BACKLOG_TECH.md",
-        "docs/DEPLOY_TOPOLOGY_RE7.md",
-        "docs/saas/DOCUMENTATION_INDEX.md",
-        "scripts/README.md"
-      ]
-    },
     "state": "CONTROLLED_DIVERGENCE",
     "plan": "docs/saas/BRANCH_CONVERGENCE_PLAN_2026-10-18.md",
-    "forbidden": [
-      "force push",
-      "destructive rebase",
-      "blind merge into main",
-      "using main as production identity without VPS evidence"
-    ],
-    "nextStep": "create an isolated integration branch from the green operational head; reconcile the net main-only Vercel surface without deployment"
+    "forbidden": ["force push", "destructive rebase", "blind merge into main", "using main as production identity without live evidence"]
   },
   "qualityDebt": {
     "eslintBaseline": {
       "errors": 663,
       "warnings": 246,
-      "policy": "CI blocks increases; reduction is handled separately from the CSV release"
+      "policy": "CI blocks increases; reduction is handled separately from this release"
     }
   }
 }
