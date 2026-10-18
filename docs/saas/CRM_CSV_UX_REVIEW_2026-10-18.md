@@ -34,7 +34,10 @@ ou alteração produtiva foi executado.
 - mapeamento secundário reorganizado em duas colunas, com largura mínima segura;
 - linguagem alterada para “telefone brasileiro inválido ou incompleto” e explicação
   de que não existe consulta de registro no WhatsApp;
-- contrato automatizado incluído no job crítico da CI;
+- contrato automatizado específico incluído no job crítico da CI;
+- a ativação experimental do arquivo histórico completo revelou três asserções antigas
+  obsoletas e antes não executadas; elas ficaram registradas como dívida fora deste
+  escopo, enquanto o contrato novo é executado nominalmente;
 - manifesto histórico passou a ser validado no commit fixado pelo próprio manifesto,
   evitando reescrever a prova do release implantado quando o código futuro evolui.
 

@@ -108,9 +108,10 @@ jobs:
       - run: npm run db:deploy
       - name: Backend durable-operation and multi-tenant tests
         run: node --import tsx --test src/crm/crmCsvImportOperation.postgres.test.ts
-      - name: Frontend timeout, re-entry and CRM page contract tests
+      - name: Frontend timeout, re-entry and CRM CSV UX contract tests
         working-directory: .
-        run: >-
-          apps/whatsapp-agent/node_modules/.bin/tsx --test
-          src/lib/crmImportRecovery.test.ts
-          src/app/app/crm/crmPageContract.test.ts
+        run: |
+          apps/whatsapp-agent/node_modules/.bin/tsx --test src/lib/crmImportRecovery.test.ts
+          apps/whatsapp-agent/node_modules/.bin/tsx --test \
+            --test-name-pattern "CRM contacts expose progress and scroll every preview row returned by the API" \
+            src/app/app/crm/crmPageContract.test.ts
