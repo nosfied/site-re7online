@@ -59,6 +59,50 @@ toolchain já autenticados podem ser reutilizados somente após reconferir seus
 hashes. Como produção não foi tocada, não há rollback a executar. Antes de
 qualquer futura seleção PM2, refazer apenas o preflight de frescor.
 
+## Correção da raiz de dependências frontend após a negativa Turbopack
+
+A segunda tentativa off-host de 18/10 concluiu o pacote API e parou no primeiro
+erro do frontend. O `node_modules` era um symlink para fora da árvore
+materializada; o Turbopack negou porque o destino real escapava da raiz do
+filesystem do build. Isso é falha da composição local, não do código da página.
+
+Na retomada:
+
+1. preservar integralmente a raiz `-r2`, o pacote API
+   `crm-csv-ux-api-36dacbc8-r2.tar` e seu manifesto;
+2. antes de reutilizar o pacote API, reconferir:
+   - pacote SHA-256
+     `3cf17abb52004bb8a16d2ddd4703b5179ad0c9cb66c6e2433613a2f6be06b2c0`;
+   - manifesto SHA-256
+     `fca745ed42240ba23cecb5be5e5e2001dd4c9803251fe492fcbe65e03d701079`;
+   - índice integral e extração independente já produzidos;
+3. criar uma nova raiz frontend exclusiva `-r3`; não reconstruir a API;
+4. materializar a árvore de dependências autenticada como diretório físico
+   `<frontendRoot>/node_modules`, usando cópia de preservação
+   (`cp -a --reflink=auto` quando suportado, com fallback para `cp -a`);
+   é proibido usar symlink externo, `npm install`, `npm ci`, atualização ou
+   resolução de novas versões;
+5. antes do build, comparar fonte e cópia por inventário determinístico:
+   caminhos relativos, tipo, tamanho e SHA-256 de cada arquivo, além do texto de
+   destino de cada symlink. Os conjuntos e valores devem ser idênticos;
+6. negar se qualquer symlink da cópia resolver para fora de
+   `<frontendRoot>/node_modules`, exceto vínculos internos expressamente
+   presentes e autenticados na origem;
+7. reconferir `package.json`, `package-lock.json`, Node `v20.20.0`, npm
+   `10.8.2`, arquitetura e glibc; remover somente uma eventual `.next` da
+   nova raiz ainda inerte;
+8. executar, a partir de `frontendRoot`, o binário local
+   `./node_modules/.bin/next build`, com heap de 4096 MiB e telemetria
+   desabilitada;
+9. autenticar BUILD_ID, índice integral e extração independente do pacote
+   frontend. Empacotar somente o runtime requerido pelo mecanismo produtivo,
+   nunca a árvore fonte ou a cópia de build inteira.
+
+Não elevar a raiz permitida do Turbopack, não desativar a verificação e não
+contornar o erro por configuração. Como nada chegou à VPS, não há staging nem
+rollback a desfazer. O preflight de frescor continua necessário somente antes
+da futura seleção PM2.
+
 ## Sequência executável
 
 1. Fazer preflight somente leitura: saúde pública/local, identidade dos três processos,

@@ -80,3 +80,12 @@ O invocador usou um `fileName` relativo à raiz do monorepo contra o
 intocados. O handoff agora fixa a base `apps/whatsapp-agent`, o parse absoluto
 do tsconfig, os dois mapeamentos de saída e um novo destino exclusivo. A tentativa
 parcial foi preservada como evidência e não deve ser usada como candidato.
+
+## Negativa frontend e correção — 18/10/2026
+
+Na segunda tentativa off-host, a API foi composta e autenticada com sucesso. O
+frontend parou antes do build porque `node_modules` era um symlink externo à
+raiz aceita pelo Turbopack. O handoff agora determina cópia física preservada da
+árvore autenticada, inventário byte a byte, proibição de reinstalação e nova raiz
+frontend exclusiva. O pacote API aprovado deve ser reutilizado após reconferência,
+sem recompilação. Produção e VPS permaneceram intocadas.
