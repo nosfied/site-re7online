@@ -116,6 +116,24 @@ As três amostras observam exclusivamente o PID candidato:
 O verificador deve persistir cada amostra antes da próxima. A decisão agregada só
 ocorre depois que todas estiverem gravadas.
 
+### Encadeamento state-bound API → frontend
+
+Verificadores state-bound são gerados para o estado imediatamente anterior à
+etapa que validam. Em uma release coordenada API → frontend, o snapshot frontend
+nasce somente depois que o verificador API persistiu `API_VERIFIED`; ele deve
+esperar a identidade autenticada da API candidata, sem enfraquecer o predicado de
+PID. Um snapshot de S0 não pode validar o frontend em S2.
+
+Controle, nonce, journal, snapshot e relatório privados são single-use. Journal
+criado sem marker consome o controle de primeira execução e exige controle/nonce
+novos; nunca apagar o journal para reutilizar o controle. A ativação permanente
+cria marker somente depois de journal, identidade e health aprovados. `pm2 save`
+ocorre depois de `supervised-candidate`, nunca antes.
+
+Antes de uma janela produtiva, uma única fixture deve comprovar a sequência
+completa S0 → S1 → S2 → S3 e a negativa S0 → S1 → S2_DENIED → R. Testes
+isolados dos componentes não satisfazem esse gate.
+
 ### Prova de escuta e evidência `server.started`
 
 O gate de disponibilidade combina identidade candidata, propriedade direta do
@@ -166,6 +184,14 @@ fixa; filtros amplos por nomes ou substrings como `LOG` são proibidos.
    executor fixa temporariamente `0022`.
 9. `node_modules` externo é negado antes do Next build.
 10. API TypeScript usa raiz correta e não produz `TS6059`.
+11. Release API → frontend usa snapshot frontend posterior ao PASS autenticado da
+    API, com PIDs distintos em S0, S1 e S2.
+12. Journal candidato precede marker, supervisão precede save e um controle com
+    journal sem marker é recusado para nova primeira execução.
+13. Uma negativa frontend retorna atomicamente ao frontend supervisionado e à API
+    original, preservando worker, health e dump seguro.
+14. A fixture combinada termina em `END_TO_END_COMBINED_RELEASE_FIXTURE_PASS`;
+    fixtures isoladas não autorizam janela.
 
 ## Registro das dificuldades de 18/10/2026
 

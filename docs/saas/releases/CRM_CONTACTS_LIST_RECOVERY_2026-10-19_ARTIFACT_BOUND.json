@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "crm-contacts-list-recovery-f5028de1",
+  "status": "ARTIFACT_BOUND_COMBINED_RELEASE_READY",
+  "productionChanged": false,
+  "safeDumpSha256": "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0",
+  "preparationDestination": "/opt/re7online/backups/converta-persistent/preparations/crm-contacts-list-f5028de1-artifact-bound-20261019T234809Z",
+  "api": {
+    "verifierFile": "api-verifier-v6-r4.py",
+    "verifierSha256": "3ce469f2db79d43a08ed1cee2dcce88fba32d44139c31eb96b94b66d12e114e6",
+    "candidateDefinitionSha256": "d022f7b7b28ddd4e1122657b84059c887b35820815e24885472674ae910e7a76",
+    "returnDefinitionSha256": "fda2b1fe25f8c07e39416aca8bd8fb3db92838c62c2791443d50f94ce514cec7",
+    "candidateCwd": "/opt/re7online/releases/crm-contacts-list-recovery-f5028de1-20261019T201659Z/api-runtime",
+    "candidateEntry": "/opt/re7online/releases/crm-contacts-list-recovery-f5028de1-20261019T201659Z/api-runtime/dist/index.js",
+    "returnCwd": "/opt/re7online/releases/crm-csv-ux-phone-normalization-36dacbc8-20261018T122527Z-r2/api-runtime",
+    "returnEntry": "/opt/re7online/releases/crm-csv-ux-phone-normalization-36dacbc8-20261018T122527Z-r2/api-runtime/dist/index.js",
+    "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+  },
+  "frontend": {
+    "controlFile": "candidate-v2.run.private.json",
+    "controlSha256": "b10fc8f082e39984fa93f3f89a7f1e9d52a9ff24670ee21e9afb3e97c7af2c51",
+    "configurationFile": "candidate-v2.tracked.config.cjs",
+    "configurationSha256": "ce65305e1954c20b379b88fe3698eefd6f62cc614275f45a1e24121c7851c917",
+    "release": "/opt/re7online/releases/crm-contacts-list-recovery-f5028de1-20261019T201659Z/frontend-runtime",
+    "entry": "/opt/re7online/releases/crm-contacts-list-recovery-f5028de1-20261019T201659Z/frontend-runtime/node_modules/next/dist/bin/next",
+    "entrySha256": "c230a7297ba9dd98b5f57855846c186521346ce06a3a33d86faff15386c916fc",
+    "launcher": "/opt/re7online/backups/converta-persistent/preparations/frontend-contacts-list-f5028de1-canonical-20261019T225126Z/launcher.cjs",
+    "buildId": "bt9-BI1dCQD7_gj8ktOvz",
+    "journalPath": "/opt/re7online/backups/converta-persistent/preparations/crm-contacts-list-f5028de1-artifact-bound-20261019T234809Z/candidate-v2.startup.private.jsonl",
+    "markerPath": "/opt/re7online/backups/converta-persistent/preparations/crm-contacts-list-f5028de1-artifact-bound-20261019T234809Z/candidate-v2.run.private.json.permanent",
+    "nonce": "PRIVATE_NOT_VERSIONED",
+    "snapshotTiming": "AFTER_API_PASS"
+  },
+  "return": {
+    "release": "/opt/re7online/releases/crm-csv-terminal-reentry-b8cc113d-20261018T143000Z/frontend-runtime",
+    "launcher": "/opt/re7online/backups/converta-persistent/preparations/frontend-contacts-list-f5028de1-canonical-20261019T225126Z/launcher.cjs",
+    "buildId": "2nrVvTyK7pcyD_oMa_fOv",
+    "controlSha256": "748f1cc899150f7375adbad7c2ffeeb4ddd25ae62553a6b84db856e1257add8a",
+    "configurationSha256": "0792f4424d8c97ec6913ec23dc946c6eb8d83209de821dd3cb5b560d6d88f08b",
+    "lifecycle": "ACTIVE_PERMANENT"
+  },
+  "policy": {
+    "file": "permanent-policy.proposed.private.json",
+    "sha256": "10539fe3e013a9acdc64ebee0c27ddc94b29d8ef773201a1a0b64947776a0a3a",
+    "fixesPriorControlHash": false,
+    "acceptsFreshControlWithoutChange": true,
+    "candidateRoleMatchesControlTuple": true,
+    "predicate": "permanent_run_scope"
+  },
+  "plans": {
+    "selectSha256": "5493ee824fb3831b1615b176a034762cce61af6e464fe4d08b7d1439fc179380",
+    "rollbackSha256": "582a28b3f7238931722ba03d87b470ddfc4dc6b61f86d7190cff255902f67ad1",
+    "executorSha256": "0708a530915650be6f1463ef19c88d069c85acb3769600ee94a3709a15f8a953",
+    "atomicFixtureSha256": "1473c356fa1d205ba9125d476a3ed4298a31470661a2e927102a98db76faf1c0",
+    "atomicFixtureResult": "PASS"
+  },
+  "worker": {
+    "identitySource": "authenticated S0 snapshot; equality-only preservation",
+    "cwd": "S0_AUTHENTICATED_WORKER_CWD",
+    "entry": "S0_AUTHENTICATED_WORKER_ENTRY",
+    "entrySha256": "S0_AUTHENTICATED_WORKER_ENTRY_SHA256"
+  },
+  "privateArtifacts": {
+    "api-candidate.config.cjs": "d022f7b7b28ddd4e1122657b84059c887b35820815e24885472674ae910e7a76",
+    "api-return.config.cjs": "fda2b1fe25f8c07e39416aca8bd8fb3db92838c62c2791443d50f94ce514cec7",
+    "api-verifier-v6-r4.py": "3ce469f2db79d43a08ed1cee2dcce88fba32d44139c31eb96b94b66d12e114e6",
+    "candidate-v2.run.private.json": "b10fc8f082e39984fa93f3f89a7f1e9d52a9ff24670ee21e9afb3e97c7af2c51",
+    "candidate-v2.tracked.config.cjs": "ce65305e1954c20b379b88fe3698eefd6f62cc614275f45a1e24121c7851c917",
+    "frontend-selection-artifact-bound.py": "0708a530915650be6f1463ef19c88d069c85acb3769600ee94a3709a15f8a953",
+    "frontend-selection-artifact-bound-fixture.py": "1473c356fa1d205ba9125d476a3ed4298a31470661a2e927102a98db76faf1c0",
+    "permanent-policy.proposed.private.json": "10539fe3e013a9acdc64ebee0c27ddc94b29d8ef773201a1a0b64947776a0a3a",
+    "rollback-to-supervised-return.plan.private.json": "582a28b3f7238931722ba03d87b470ddfc4dc6b61f86d7190cff255902f67ad1",
+    "select-candidate.plan.private.json": "5493ee824fb3831b1615b176a034762cce61af6e464fe4d08b7d1439fc179380"
+  },
+  "limits": {
+    "pm2RealInvocations": 0,
+    "rootAuthentication": false,
+    "policyInstalled": false,
+    "markerCreated": false,
+    "journalCreated": false,
+    "dumpChanged": false,
+    "productionChanged": false
+  }
+}

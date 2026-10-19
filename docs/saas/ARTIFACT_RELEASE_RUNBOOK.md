@@ -43,14 +43,20 @@ na mesma janela.
    da mesma identidade. `server.started` é evidência complementar, não substitui o
    vínculo PID→socket→porta→health. O caminho JavaScript
    literal em `/proc/<pid>/cmdline` não é gate válido sob PM2.
-8. Executar somente GETs autorizados de isolamento negativo. Não fabricar operação
+8. Em release API → frontend, persistir o PASS autenticado da API e somente então
+   criar o snapshot frontend. O snapshot deve esperar a identidade candidata da
+   API e conservar frontend/worker observados nesse instante. Materializar controle,
+   nonce e destinos frontend novos; todos são single-use.
+9. Executar somente GETs autorizados de isolamento negativo. Não fabricar operação
    positiva, não repetir POST e não expor tenant, token ou UUID em logs públicos.
-9. Selecionar o frontend pelo controle candidato; conferir BUILD_ID, launcher, assets,
+10. Selecionar o frontend pelo controle candidato; conferir BUILD_ID, launcher, assets,
    login, Inbox e CRM autenticados. Reentrada deve permanecer GET-only e sem POST
    automático.
-10. Revalidar API, frontend e worker; salvar PM2 exatamente uma vez; registrar hashes
+11. Validar o journal real, ativar o binding permanente e exigir
+    `supervised-candidate`. Um journal sem marker consome o controle e nega replay.
+12. Revalidar API, frontend e worker; salvar PM2 exatamente uma vez; registrar hashes
     do dump vigente e do retorno preservado.
-11. Publicar o registro sanitizado e atualizar `CURRENT_STATE` sem transformar PIDs
+13. Publicar o registro sanitizado e atualizar `CURRENT_STATE` sem transformar PIDs
     observados em identidade durável.
 
 ## Regra de rollback
@@ -90,3 +96,8 @@ prova principal usa o socket de escuta pertencente ao PID candidato e health; o
 `server.started` permanece evidência complementar. O relatório completo é
 sincronizado antes de qualquer rollback. Consultas PM2 usam allowlist fixa e
 nunca despejam ambiente por filtro amplo.
+
+Uma janela coordenada API → frontend exige previamente uma única fixture integral
+com `END_TO_END_COMBINED_RELEASE_FIXTURE_PASS`, cobrindo promoção, supervisão,
+save simulado e rollback completo. O snapshot frontend é state-bound ao S1 e não
+pode ser reutilizado de S0. Destinos privados, controles e nonces são single-use.

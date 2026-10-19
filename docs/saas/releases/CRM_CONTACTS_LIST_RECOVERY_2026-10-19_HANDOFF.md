@@ -102,6 +102,14 @@ Nenhuma dessas negativas produziu staging ou efeito produtivo.
 
 ## Plano de promoção futura
 
+Antes desta sequência, aplicar o gate combinado documentado em
+[`CRM_CONTACTS_LIST_RECOVERY_2026-10-19_COMBINED_REHEARSAL.md`](CRM_CONTACTS_LIST_RECOVERY_2026-10-19_COMBINED_REHEARSAL.md).
+O fechamento com os arquivos concretos está em
+[`CRM_CONTACTS_LIST_RECOVERY_2026-10-19_ARTIFACT_BOUND.md`](CRM_CONTACTS_LIST_RECOVERY_2026-10-19_ARTIFACT_BOUND.md).
+O snapshot frontend deve ser materializado depois do PASS da API. O controle
+candidato anterior produziu journal sem marker e está consumido; a próxima
+tentativa exige controle, nonce e destinos privados novos.
+
 Uma autorização futura deve continuar no estado `STAGED_INERT`, nunca diretamente
 em seleção:
 

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "crm-contacts-list-recovery-f5028de1",
+  "status": "COMBINED_API_FRONTEND_RELEASE_END_TO_END_REHEARSED",
+  "productionChanged": false,
+  "pm2RealInvocations": 0,
+  "fixture": {
+    "path": "scripts/ci/verify-combined-release-rehearsal.py",
+    "sha256": "619fbdc24ea338d3cf79a48298042d6e71ca4a4ec89c5836153881fe0950561c",
+    "result": "END_TO_END_COMBINED_RELEASE_FIXTURE_PASS",
+    "resultSha256": "a520088f67b0039508f719531e49213ea3ca6c7a9d0be8ff37a06f29a3bfb67a"
+  },
+  "bindings": {
+    "safeDumpSha256": "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0",
+    "permanentPolicySha256": "10539fe3e013a9acdc64ebee0c27ddc94b29d8ef773201a1a0b64947776a0a3a",
+    "fixtureCandidateControlSha256": "afb02ba32441072853e49c53697f2bbf5a175b36cb080b9f1f09d7b8b25ae571",
+    "fixtureCandidateBindingSha256": "c895af0cb40f0490581e1304fb4094734b116597cd7cb546a74dc28d8da027b5f",
+    "fixturePostApiFrontendSnapshotSha256": "1e29caeb2cbaef5a607ba36bd8dbbcaae3b1430fcaf8a0afa96e966587e019cf",
+    "fixtureFinalDumpSha256": "6add678de2f06de304e9194ba956c07c2dc05c006534d2731f6f251c5c19b012"
+  },
+  "offhostPreparation": {
+    "privateRoot": "/tmp/crm-contacts-combined-release-f5028de1-20261019-r1",
+    "apiVerifierCurrentBoundSha256": "3ce469f2db79d43a08ed1cee2dcce88fba32d44139c31eb96b94b66d12e114e6",
+    "apiVerifierAllowlistedDiffSha256": "6232792ab00f7ab9be1573059d6d76c2e2e61109d70cd4d97d4bfe1da9c58692",
+    "privatePlanSha256": "ac753dc8079808b9f336f04e5e220a46eed5fbe10d3f5d784666ae6f25a9c046",
+    "manifestSha256": "cd11a3b49bc7f4112ab6ae04ea0e6c8ae7ddeec8ef07c1665967f3fab97e7a7f",
+    "apiFixture": "PASS",
+    "frontendFinalControlState": "MATERIALIZE_AFTER_AUTHENTICATED_S1"
+  },
+  "stateTransitions": {
+    "success": ["S0", "S1", "S2", "S3"],
+    "negativeAndRollback": ["S0", "S1", "S2_DENIED", "R"]
+  },
+  "mechanicalDelta": {
+    "pidProtectionChanged": false,
+    "frontendSnapshotSource": "authenticated API verifier output produced in S1",
+    "frontendSnapshotTiming": "after API verification and before frontend selection",
+    "candidateControl": "fresh nonce and journal path for each future attempt",
+    "rootPolicy": "byte-identical because the authorized release/entry/hash/BUILD_ID tuple is unchanged",
+    "candidatePermanentBinding": "created only after the real candidate journal passes",
+    "privateDestinations": "single-use"
+  },
+  "proof": {
+    "successPredicatesPersisted": 19,
+    "rollbackPredicatesPersisted": 20,
+    "rollbackFailurePersistedBeforeEffects": true,
+    "atomicAuthorizationsSingleRead": 6,
+    "workerPreserved": true,
+    "journalBeforeMarker": true,
+    "saveAfterSupervision": true,
+    "failedFirstRunControlReusable": false,
+    "rollbackSafeDumpPreserved": true
+  },
+  "limits": {
+    "fixtureBindingsAreProductionAuthority": false,
+    "futureStateBoundBytesMayBeFinalizedBeforeS1": false,
+    "installationPerformed": false,
+    "promotionPerformed": false,
+    "pm2SavePerformed": false,
+    "rootAuthenticationPerformed": false,
+    "vpsAccessPerformed": false
+  }
+}
