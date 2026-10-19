@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAtUtc": "2026-10-18T19:34:37.825579+00:00",
+  "updatedAtUtc": "2026-10-19T12:01:34Z",
   "basedOnCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
@@ -84,7 +84,9 @@
     "terminalReentry": "LIVE_VERIFIED"
   },
   "nextActions": [
-    "keep OBS-1 pending for a separately authorized provider window",
+    "prepare branch convergence phase 1 on an inert review branch without deployment or runtime changes",
+    "confirm the correct Meta application manually in the habitual browser and stop before secret reveal or reset",
+    "schedule and authorize OBS-1 rotation outside Monday-Friday 08:00-17:00 America/Fortaleza",
     "revalidate the post-OBS-2 return only before a future operation that depends on it"
   ],
   "credentialInspectionIncident": {
@@ -92,8 +94,9 @@
     "values": "NOT_VERSIONED",
     "rotationAssessment": "PARTIAL",
     "obs2": "CONTINGENCY_CLOSED_SAFE_RETURN_READY",
-    "obs1": "PENDING_UNTOUCHED",
-    "activeRecord": "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json"
+    "obs1": "PREPARED_SCHEDULED_WINDOW_REQUIRED_NO_CHANGE",
+    "activeRecord": "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json",
+    "obs1Record": "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json"
   },
   "branchConvergence": {
     "state": "CONTROLLED_DIVERGENCE",
@@ -112,5 +115,25 @@
       "policy": "CI blocks increases; reduction is handled separately from this release"
     }
   },
-  "activeOperationalRecord": "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json"
+  "activeOperationalRecord": "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json",
+  "activeProductMap": "docs/saas/PRODUCT_MAP_CURRENT_2026-10-19.md",
+  "obs1Rotation": {
+    "status": "PREPARED_SCHEDULED_WINDOW_REQUIRED_NO_CHANGE",
+    "record": "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json",
+    "confirmedValueExposure": true,
+    "externalExploitationEvidence": "NONE_OBSERVED",
+    "sharedApplicationMultiTenantImpact": true,
+    "apiRestartRequired": true,
+    "oldSecretReliableRollback": false,
+    "recoveryModel": "FORWARD_RECOVERY",
+    "providerReset": "NOT_STARTED",
+    "productionChange": false,
+    "protectedBusinessHours": {
+      "timezone": "America/Fortaleza",
+      "days": "MONDAY_TO_FRIDAY",
+      "start": "08:00",
+      "end": "17:00",
+      "mutationPolicy": "DENY"
+    }
+  }
 }

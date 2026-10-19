@@ -131,15 +131,41 @@ def main() -> None:
             "Demo terminal reentry")
 
     incident = state.get("credentialInspectionIncident", {})
+    obs1_record = "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json"
     require(incident == {
         "status": "RECORDED_PRIVATELY",
         "values": "NOT_VERSIONED",
         "rotationAssessment": "PARTIAL",
         "obs2": "CONTINGENCY_CLOSED_SAFE_RETURN_READY",
-        "obs1": "PENDING_UNTOUCHED",
+        "obs1": "PREPARED_SCHEDULED_WINDOW_REQUIRED_NO_CHANGE",
         "activeRecord": state.get("activeOperationalRecord"),
+        "obs1Record": obs1_record,
     }, "credential inspection incident")
-    require(len(state.get("nextActions", [])) == 2, "next actions")
+    obs1_path = (ROOT / obs1_record).resolve()
+    require(obs1_path.is_relative_to(ROOT) and obs1_path.is_file(),
+            "OBS-1 preparation record")
+    obs1 = read_json(obs1_path)
+    require(obs1.get("status") ==
+            "PREPARED_SCHEDULED_WINDOW_REQUIRED_NO_CHANGE" and
+            obs1.get("readiness", {}).get("providerReset") == "NOT_STARTED" and
+            obs1.get("readiness", {}).get("productionChange") is False,
+            "OBS-1 no-change boundary")
+    window = obs1.get("changeWindow", {})
+    require(window.get("timezone") == "America/Fortaleza" and
+            window.get("protectedBusinessHours") == {
+                "days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+                "start": "08:00",
+                "end": "17:00",
+                "mutationPolicy": "DENY_PROVIDER_RESET_API_RESTART_OR_PM2_SAVE",
+            }, "OBS-1 protected business hours")
+    require(state.get("obs1Rotation", {}).get("record") == obs1_record and
+            state.get("obs1Rotation", {}).get("productionChange") is False and
+            state.get("obs1Rotation", {}).get("providerReset") == "NOT_STARTED",
+            "OBS-1 canonical state")
+    product_map = state.get("activeProductMap", "")
+    require(product_map == "docs/saas/PRODUCT_MAP_CURRENT_2026-10-19.md" and
+            (ROOT / product_map).is_file(), "active product map")
+    require(len(state.get("nextActions", [])) == 4, "next actions")
 
     convergence = state.get("branchConvergence", {})
     require(convergence.get("state") == "CONTROLLED_DIVERGENCE", "branch state")

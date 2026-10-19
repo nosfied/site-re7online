@@ -5,6 +5,8 @@ são evidência histórica apenas no alcance e horário que declaram. A identida
 release está no [registro sanitizado da implantação](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json)
 e a alteração operacional posterior está no
 [registro da rotação OBS-2](releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json).
+A preparação sanitizada, ainda sem mudança produtiva, está no
+[registro OBS-1](releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json).
 
 ## Release viva
 
@@ -42,6 +44,30 @@ exato após registro privado. O rollback pré-rotação foi classificado como
 `NON_EXECUTABLE_EXPOSED_SECRET` antes da remoção. OBS-1 permanece
 `PENDING / UNTOUCHED` e não foi acessada nem alterada nesta janela.
 
+## Preparação OBS-1 e proteção do expediente
+
+OBS-1 é o segredo do aplicativo compartilhado do Instagram Business Login. O valor
+teve exposição confirmada em saída operacional, sem evidência observada de exploração
+externa. Deve ser tratado como potencialmente comprometido e rotacionado em prazo curto,
+mas a rotação não será executada durante o uso regular dos clientes.
+
+De segunda a sexta-feira, entre 08:00 e 17:00 em `America/Fortaleza`, ficam negados
+reset no provedor, restart da API, seleção PM2 e `pm2 save` relacionados à OBS-1.
+A janela exige autorização expressa, aviso operacional, identificação manual do
+aplicativo correto e canal de captura sem eco. Frontend, worker, banco e contatos
+ficam fora do delta.
+
+O reset no provedor pode invalidar imediatamente o segredo anterior. Por isso, o
+retorno não pode depender desse valor: eventual falha será corrigida para frente com
+o novo segredo ou com outro reset no provedor. A indisponibilidade potencial alcança
+todos os tenants que usam o aplicativo Meta compartilhado, sobretudo novas conexões
+e reconexões OAuth durante o corte. A operação cotidiana com tokens já persistidos
+deve ser preservada, mas precisa de verificação viva após a rotação.
+
+O estado atual é `PREPARED / SCHEDULED WINDOW REQUIRED / NO CHANGE`. App ID esperado,
+verificador e canal seguro estão prontos; login/2FA no navegador habitual e confirmação
+manual do aplicativo ainda são necessários. Nenhum segredo foi acessado ou redefinido.
+
 ## Resultado e limites
 
 - O frontend passou três amostras de identidade e estabilidade, controle imutável,
@@ -63,8 +89,10 @@ exato após registro privado. O rollback pré-rotação foi classificado como
 
 ## Próximos atos
 
-1. Manter OBS-1 pendente para uma janela de provedor separadamente autorizada.
-2. Revalidar o retorno pós-OBS-2 somente antes de uma futura operação que dependa dele.
+1. Preparar a fase 1 inerte da convergência de branches, sem mover `main`, sem deploy e sem tocar em runtime.
+2. Confirmar manualmente o aplicativo Meta correto no navegador habitual, parando antes de revelar ou redefinir o segredo.
+3. Agendar e autorizar a rotação OBS-1 fora de segunda a sexta-feira, 08:00–17:00, com aviso operacional e retorno por recuperação progressiva.
+4. Revalidar o retorno pós-OBS-2 somente antes de uma futura operação que dependa dele.
 
 Os campos verificáveis estão em [`CURRENT_STATE.json`](CURRENT_STATE.json). A CI
 valida este arquivo, o manifesto de origem e o registro ativo da implantação.

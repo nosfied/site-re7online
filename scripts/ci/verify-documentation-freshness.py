@@ -9,6 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 NEW_RECORD = "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json"
 OPERATION_RECORD = "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json"
+OBS1_RECORD = "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json"
+PRODUCT_MAP = "docs/saas/PRODUCT_MAP_CURRENT_2026-10-19.md"
 OLD_RECORD = "CRM_CSV_RECOVERY_2026-10-17_DEPLOYED.json"
 OLD_BUILD_IDS = ("7IRWBhOwtCfwsLkfI9S0K", "Ebyc7UWY8nwjFyA5Zjyfj")
 STALE_STATUSES = ("NOT DEPLOYED", "CSV SUSPENSO", "DEPLOYMENT PENDING",
@@ -52,10 +54,20 @@ def main() -> None:
     reject_stale("CRM_CSV_UX_REVIEW_2026-10-18.md",
                  active_prefix(ROOT / "docs/saas/CRM_CSV_UX_REVIEW_2026-10-18.md",
                                "## Negativa de build e correção"))
+    reject_stale("PRODUCT_MAP_CURRENT_2026-10-19.md",
+                 active_prefix(ROOT / PRODUCT_MAP))
     operation = json.loads((ROOT / OPERATION_RECORD).read_text(encoding="utf-8"))
     require(operation.get("status") ==
             "OBS2_CONTINGENCY_CLOSED_SAFE_RETURN_READY_OBS1_PENDING",
             "active credential rotation status")
+    obs1 = json.loads((ROOT / OBS1_RECORD).read_text(encoding="utf-8"))
+    require(obs1.get("status") ==
+            "PREPARED_SCHEDULED_WINDOW_REQUIRED_NO_CHANGE" and
+            obs1.get("readiness", {}).get("providerReset") == "NOT_STARTED" and
+            obs1.get("readiness", {}).get("productionChange") is False,
+            "OBS-1 prepared without production change")
+    require(state.get("activeProductMap") == PRODUCT_MAP,
+            "active product map identity")
 
     manifest = json.loads((ROOT / "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18.json").read_text(encoding="utf-8"))
     require("status" not in manifest, "release manifest has ambiguous current status")
