@@ -1,0 +1,85 @@
+{
+  "base": {
+    "deploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
+    "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "manifestSha256": "fca745ed42240ba23cecb5be5e5e2001dd4c9803251fe492fcbe65e03d701079",
+    "packageSha256": "3cf17abb52004bb8a16d2ddd4703b5179ad0c9cb66c6e2433613a2f6be06b2c0"
+  },
+  "candidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
+  "changedOutputs": [
+    "dist/contacts/contactOperationalExclusion.js",
+    "dist/crm/crmContactsReadModel.js",
+    "dist/http/routes.js"
+  ],
+  "component": "api",
+  "deltas": [
+    {
+      "beforeBytes": 4433,
+      "beforeSha256": "fa95f953a282d03f3380078151fce7172552b9558c8f184c78c3ce6af17bb941",
+      "candidateBytes": 4760,
+      "candidateSha256": "14178c089b47bd7a349cbd6ab788e27323bfc7938dccc5ca0812814a0b68345a",
+      "outputPath": "dist/contacts/contactOperationalExclusion.js",
+      "sourceBlobSha": "8dcc69abcc965d8d91454303df664533a26fcc29",
+      "sourceBytes": 6153,
+      "sourcePath": "apps/whatsapp-agent/src/contacts/contactOperationalExclusion.ts",
+      "sourceSha256": "8b6403e8c5018d18d99264d0b55eae6b0562a1d5cfd6d1fb57016e4f4fc40d77"
+    },
+    {
+      "beforeBytes": 50734,
+      "beforeSha256": "c60a21db79880a1a8067611ed7613eb87b28c73ae07fca39fd60ed0194f6c1d1",
+      "candidateBytes": 52013,
+      "candidateSha256": "d5e6bb7a0dc1120ecc827c2c8746c44964435e1dfe1f1eaf904f07db4a10736f",
+      "outputPath": "dist/crm/crmContactsReadModel.js",
+      "sourceBlobSha": "7d7e4ea5dc2e56ffa49c0d0fdc64c9cd8aa27d47",
+      "sourceBytes": 55396,
+      "sourcePath": "apps/whatsapp-agent/src/crm/crmContactsReadModel.ts",
+      "sourceSha256": "6e0aa23c4ee53927eb85aaa6f6eeb44187f2eaec266d470cdebc8eb3582a34b0"
+    },
+    {
+      "beforeBytes": 1603018,
+      "beforeSha256": "d2a2f2fb075fa87cf5053b98cb0cffb84b7387b25445f762357813299254d510",
+      "candidateBytes": 1603114,
+      "candidateSha256": "0be441922bf74ac35422f23ca02ecb55899687e336274d5c79f8231c7a90ec7f",
+      "outputPath": "dist/http/routes.js",
+      "sourceBlobSha": "05c0e50866b4c57a745b62b0fcd69f23b8ff67d2",
+      "sourceBytes": 1440552,
+      "sourcePath": "apps/whatsapp-agent/src/http/routes.ts",
+      "sourceSha256": "0d1e4cc8fccc6108d55261f851b045fbfb451c9efaec22e4cae1209c11808d88"
+    }
+  ],
+  "nodeCheck": [
+    "dist/contacts/contactOperationalExclusion.js",
+    "dist/crm/crmContactsReadModel.js",
+    "dist/http/routes.js",
+    "dist/index.js"
+  ],
+  "package": {
+    "bytes": 8171520,
+    "entries": 505,
+    "file": "crm-contacts-list-recovery-api-f5028de1.tar",
+    "independentExtractionEqual": true,
+    "index": "api-runtime.index.json",
+    "indexSha256": "44b8d57cdf4118ab42ec45b634ce5ce9cdac6bb089a8dd2ae7d11e95d94040a9",
+    "reproducible": true,
+    "sha256": "93b6a60e47118e6b63c1c858128fb903c404a32914d46ae5475ea6f2aff3f2d9"
+  },
+  "prohibitionsObserved": {
+    "csvPostRequests": 0,
+    "imports": 0,
+    "migrations": 0,
+    "pm2Actions": 0,
+    "productionChanges": 0,
+    "sqlStatements": 0,
+    "vpsAccess": 0,
+    "workerChanges": 0
+  },
+  "schemaVersion": 1,
+  "status": "OFFHOST_BUILT_LOCALLY_VERIFIED_NOT_STAGED_NOT_DEPLOYED",
+  "toolchain": {
+    "node": "v20.20.0",
+    "nodeSha256": "d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e",
+    "typescript": "5.9.3",
+    "typescriptJsSha256": "3ae902c92cc44dace175c0e69e13a4b0899f6983c6121d76b9ab8dd5795e7675"
+  },
+  "typescriptDiagnostics": "PASS_IN_PRESERVED_R2"
+}

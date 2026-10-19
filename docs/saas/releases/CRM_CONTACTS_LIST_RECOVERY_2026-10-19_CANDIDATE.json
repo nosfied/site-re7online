@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "status": "OFFHOST_BUILT_LOCALLY_VERIFIED_NOT_STAGED_NOT_DEPLOYED",
+  "releaseId": "crm-contacts-list-recovery-f5028de1",
+  "canonicalBranch": "review/campaign-recovery-20260926",
+  "candidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
+  "parentCommit": "ab7634eacfae02b165f532ede9774ac3985822b5",
+  "sourceCi": {
+    "run": 39267594391,
+    "result": "PASS_4_OF_4"
+  },
+  "sourceReleaseManifest": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19.json",
+  "baseDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
+  "deploymentOrder": [
+    "api",
+    "frontend"
+  ],
+  "artifacts": {
+    "api": {
+      "package": "crm-contacts-list-recovery-api-f5028de1.tar",
+      "packageSha256": "93b6a60e47118e6b63c1c858128fb903c404a32914d46ae5475ea6f2aff3f2d9",
+      "manifest": "CRM_CONTACTS_LIST_RECOVERY_2026-10-19_API.json",
+      "manifestSha256": "757fbecc9d4d01395b78c63c3324798efcdcef0527de2114d4a813f0dfaf748d",
+      "index": "api-runtime.index.json",
+      "indexSha256": "44b8d57cdf4118ab42ec45b634ce5ce9cdac6bb089a8dd2ae7d11e95d94040a9"
+    },
+    "frontend": {
+      "package": "crm-contacts-list-recovery-frontend-f5028de1.tar.gz",
+      "packageSha256": "1fed8e3b70b103920d0216dba2686d5baf7053e4391fefde571a147ba3b16a75",
+      "manifest": "CRM_CONTACTS_LIST_RECOVERY_2026-10-19_FRONTEND.json",
+      "manifestSha256": "70c36c6b65815cb7d5220cca8c280b1cfca5630e3ce9a8529ecc8ce550972cdd",
+      "index": "frontend-runtime.index.json",
+      "indexSha256": "a979d6001b42519ccad25913680d51fd5ffeb8871c866230e94aa760fac5eb7e",
+      "buildId": "bt9-BI1dCQD7_gj8ktOvz"
+    }
+  },
+  "runtimeDelta": {
+    "apiOutputs": [
+      "dist/contacts/contactOperationalExclusion.js",
+      "dist/crm/crmContactsReadModel.js",
+      "dist/http/routes.js"
+    ],
+    "frontendSources": [
+      "src/app/app/crm/page.tsx",
+      "src/lib/appClientApi.ts",
+      "src/lib/crmContactsInitialLoad.ts"
+    ],
+    "workerChanged": false,
+    "dependenciesChanged": false,
+    "schemaChanged": false
+  },
+  "validation": {
+    "apiTypeScriptDiagnostics": "PASS",
+    "apiNodeCheck": "PASS",
+    "apiRelativeImports": "PASS",
+    "apiIntegralIndex": "PASS",
+    "apiReproduciblePackage": "PASS",
+    "apiIndependentExtraction": "PASS",
+    "frontendBuild": "PASS",
+    "frontendTypeScriptAndRoutes": "PASS",
+    "frontendPhysicalAuthenticatedDependencies": "PASS",
+    "frontendNoExternalSymlinks": "PASS",
+    "frontendNoTestsOrCacheInRuntime": "PASS",
+    "frontendIntegralIndex": "PASS",
+    "frontendReproduciblePackage": "PASS",
+    "frontendIndependentExtraction": "PASS",
+    "sourceCi": "PASS_4_OF_4"
+  },
+  "productionEffects": {
+    "vpsAccess": 0,
+    "staging": 0,
+    "pm2Actions": 0,
+    "csvPostRequests": 0,
+    "imports": 0,
+    "sqlStatements": 0,
+    "migrations": 0,
+    "productionChanges": 0
+  },
+  "binaryArtifactsVersioned": false,
+  "promotionAuthorized": false
+}

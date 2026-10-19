@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "crm-contacts-list-recovery-2026-10-19",
+  "statusAtCreation": "OFFHOST_BUILT_LOCALLY_VERIFIED_NOT_STAGED_NOT_DEPLOYED",
+  "candidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
+  "parentCommit": "ab7634eacfae02b165f532ede9774ac3985822b5",
+  "deploymentOrder": ["api", "frontend"],
+  "migrationRequired": false,
+  "workerChanged": false,
+  "automaticReplayForbidden": true,
+  "runtimeFiles": {
+    "api": [
+      {"path": "apps/whatsapp-agent/src/contacts/contactOperationalExclusion.ts", "gitBlobSha": "8dcc69abcc965d8d91454303df664533a26fcc29", "bytes": 6153},
+      {"path": "apps/whatsapp-agent/src/crm/crmContactsReadModel.ts", "gitBlobSha": "7d7e4ea5dc2e56ffa49c0d0fdc64c9cd8aa27d47", "bytes": 55396},
+      {"path": "apps/whatsapp-agent/src/http/routes.ts", "gitBlobSha": "05c0e50866b4c57a745b62b0fcd69f23b8ff67d2", "bytes": 1440552}
+    ],
+    "frontend": [
+      {"path": "src/app/app/crm/page.tsx", "gitBlobSha": "ca0dda401012926480585b55260b5f5e21bc736c", "bytes": 132688},
+      {"path": "src/lib/appClientApi.ts", "gitBlobSha": "3eb601d93c6c17844aecfb420a7778253821a81c", "bytes": 165336},
+      {"path": "src/lib/crmContactsInitialLoad.ts", "gitBlobSha": "746dd53c34368c08aabe3fca8770912217f44359", "bytes": 1418}
+    ]
+  },
+  "validationFiles": [
+    {"path": "apps/whatsapp-agent/src/contacts/contactOperationalExclusion.test.ts", "gitBlobSha": "b33f4c19e0ab46320dc91b9f9b2d3e959ee66c63", "bytes": 4584},
+    {"path": "apps/whatsapp-agent/src/crm/crmContactsTotals.test.ts", "gitBlobSha": "c3847f1a334b9abe5ab7f70cd9e013e8a9bfb86a", "bytes": 2562},
+    {"path": "apps/whatsapp-agent/src/http/crmCapabilityRoutes.test.ts", "gitBlobSha": "1bb390757908391fe5d51154e5958459295acce4", "bytes": 77954},
+    {"path": "src/app/app/crm/crmPageContract.test.ts", "gitBlobSha": "9d853a2b036638bb79a1f2919bfe46da5e8c9690", "bytes": 21111},
+    {"path": "src/lib/crmContactsInitialLoad.test.ts", "gitBlobSha": "b6f55e275b9d01f5ce93b9c5b332d73f55b61261", "bytes": 3720}
+  ],
+  "baseDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
+  "candidateRecord": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19_CANDIDATE.json",
+  "promotionAuthorized": false,
+  "binaryArtifactsVersioned": false
+}

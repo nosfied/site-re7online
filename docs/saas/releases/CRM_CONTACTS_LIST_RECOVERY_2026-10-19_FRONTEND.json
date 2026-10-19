@@ -1,0 +1,91 @@
+{
+  "base": {
+    "buildId": "2nrVvTyK7pcyD_oMa_fOv",
+    "deploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json"
+  },
+  "build": {
+    "buildId": "bt9-BI1dCQD7_gj8ktOvz",
+    "cacheInRuntime": false,
+    "externalSymlinks": false,
+    "stderrSha256": "d1da1cc738c8c7f6da0a3d72aee62517e6d4ea50ecb583de3f32a9ccdb3295c7",
+    "stdoutSha256": "263cc8eb0df0e7f1b9c62cfc43a0c348e0824f915de48c782f7e411ddb09f0fb",
+    "testModulesInRuntime": false,
+    "typescriptAndRoutes": "PASS"
+  },
+  "candidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
+  "component": "frontend",
+  "package": {
+    "bytes": 5250628,
+    "entries": 1925,
+    "file": "crm-contacts-list-recovery-frontend-f5028de1.tar.gz",
+    "independentExtractionEqual": true,
+    "index": "frontend-runtime.index.json",
+    "indexSha256": "a979d6001b42519ccad25913680d51fd5ffeb8871c866230e94aa760fac5eb7e",
+    "reproducible": true,
+    "sha256": "1fed8e3b70b103920d0216dba2686d5baf7053e4391fefde571a147ba3b16a75"
+  },
+  "prohibitionsObserved": {
+    "csvPostRequests": 0,
+    "imports": 0,
+    "migrations": 0,
+    "pm2Actions": 0,
+    "productionChanges": 0,
+    "sqlStatements": 0,
+    "vpsAccess": 0,
+    "workerChanges": 0
+  },
+  "runtimeSources": [
+    {
+      "bytes": 132688,
+      "gitBlobSha": "ca0dda401012926480585b55260b5f5e21bc736c",
+      "path": "src/app/app/crm/page.tsx",
+      "sha256": "3ac77bcd2c165b6c5a58e3b40467763585a75834c12c216712bfddd5da1bee69"
+    },
+    {
+      "bytes": 165336,
+      "gitBlobSha": "3eb601d93c6c17844aecfb420a7778253821a81c",
+      "path": "src/lib/appClientApi.ts",
+      "sha256": "42dfaf3c92494b84b2e52dba1bd905881f8881d2f1b3dd37568cac6744034886"
+    },
+    {
+      "bytes": 1418,
+      "gitBlobSha": "746dd53c34368c08aabe3fca8770912217f44359",
+      "path": "src/lib/crmContactsInitialLoad.ts",
+      "sha256": "7e0f03c1e85027a3952d14f6d283264366e80e186e464b3f2079e72f4e268dcc"
+    }
+  ],
+  "schemaVersion": 1,
+  "status": "OFFHOST_BUILT_LOCALLY_VERIFIED_NOT_STAGED_NOT_DEPLOYED",
+  "toolchain": {
+    "architecture": "x86_64",
+    "buildInputNamesOnly": [
+      "NEXT_PUBLIC_CONVERTA_WEBCHAT_API_BASE_URL",
+      "NEXT_PUBLIC_CONVERTA_WEBCHAT_SITE_ID",
+      "NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID",
+      "NEXT_TELEMETRY_DISABLED",
+      "NODE_ENV"
+    ],
+    "buildInputSha256": "b9c46be4fb0e43919178ee1fec2c179f802ff20537ca64acfcad03f0bdaa21eb",
+    "glibc": "2.39",
+    "heapMb": 4096,
+    "lockfileSha256": "add66bbb579b4c2424746ccd26b7a41ec24faecf77d324447b9f8b463c73726a",
+    "node": "v20.20.0",
+    "nodeModulesInventorySha256": "f25489e9b874b60592a32e16d6e6048aa78348bb5c662159c5f9598423da4844",
+    "nodeSha256": "d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e",
+    "npm": "10.8.2"
+  },
+  "validationOnlySources": [
+    {
+      "bytes": 21111,
+      "gitBlobSha": "9d853a2b036638bb79a1f2919bfe46da5e8c9690",
+      "path": "src/app/app/crm/crmPageContract.test.ts",
+      "sha256": "b107c7afafed8dbec28bc5961a4364603c463ea39889a796984787fb296bd464"
+    },
+    {
+      "bytes": 3720,
+      "gitBlobSha": "b6f55e275b9d01f5ce93b9c5b332d73f55b61261",
+      "path": "src/lib/crmContactsInitialLoad.test.ts",
+      "sha256": "4618ed429a8373fd576e390e20e75f1c24e353331b9d98736cb588cf7e20c857"
+    }
+  ]
+}
