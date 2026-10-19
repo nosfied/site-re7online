@@ -23,6 +23,11 @@
 - [Baseline operacional](OPERATIONAL_BASELINE.md)
 - [Mapa vigente do produto — 19/10](PRODUCT_MAP_CURRENT_2026-10-19.md)
 
+## Backlog ativo
+
+- [Adequar encerramento e pesquisa CSAT à janela de 24h do WhatsApp](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
+  — prioridade alta; todos os tenants e transportes WhatsApp; `CONFIRMED GAP / NOT FIXED`.
+
 ## Situação vigente
 
 - Frontend: `DEPLOYED / VERIFIED`; API e worker preservados.
