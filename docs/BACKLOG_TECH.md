@@ -7,6 +7,17 @@
 > são histórico auditável, não roteiro atual; `CSV SUSPENSO`, `NOT DEPLOYED` e
 > `NOT WINDOW READY` foram superados pela promoção registrada em `4ca6f32c`.
 
+## CRM — listagem após importação CSV (`LOCAL VALIDATED / NOT DEPLOYED`)
+
+Em 19/10/2026 foi corrigida localmente a cadeia que podia deixar a lista sem
+resultado após a importação: timeout frontend menor que a transação, acoplamento de
+statuses/contacts e três projeções completas no caminho admin. A correção separa as
+leituras, protege contra resposta obsoleta, usa timeout explícito de 20s e evita a
+projeção excluída quando a sondagem tenant-scoped não encontra exclusões. Totais,
+filtros, RBAC e zero POST permanecem. Evidência e limites:
+[relatório técnico](saas/CRM_CONTACTS_LIST_RECOVERY_2026-10-19.md). Próximo passo:
+revisão do commit e CI limpa; implantação exige autorização própria.
+
 ## CSV — contrato/perfis/caminhos/quatro modos efetivamente compostos
 
 [Resultado/seqüência restante](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),

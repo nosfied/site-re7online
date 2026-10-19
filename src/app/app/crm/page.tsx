@@ -52,6 +52,7 @@ import {
   mergeImportObservation,
   recoverStoredImportOperation,
 } from "@/lib/crmImportRecovery";
+import { createLatestResponseGuard, startIndependentCrmLoad } from "@/lib/crmContactsInitialLoad";
 
 const PAGE_LIMIT = 50;
 const PERSISTENT_CRM_NOTICES = new Set([
@@ -2019,6 +2020,7 @@ export default function AppCrmContactsPage() {
   const canManageCrmContacts = canViewCrmHistory;
   const canExcludeCrmContacts = String(session?.user.role ?? "").trim().toUpperCase() === "ADMIN";
   const canOpenContactPrivacy = canExcludeCrmContacts;
+  const contactsResponseGuard = useRef(createLatestResponseGuard());
 
   useEffect(() => {
     if (!selectedLeadId) return;
@@ -2054,12 +2056,29 @@ export default function AppCrmContactsPage() {
     [canExcludeCrmContacts, canViewCrmHistory, channel, hasConversation, operationalStatus, optOut, page, q, status]
   );
 
+  const loadContactsWithFilters = useCallback(
+    async (activeSession: AppSession, filters: Parameters<typeof fetchAppCrmContacts>[1]) => {
+      const requestId = contactsResponseGuard.current.begin();
+      try {
+        const response = await fetchAppCrmContacts(activeSession, filters);
+        if (!contactsResponseGuard.current.isCurrent(requestId)) return false;
+        setContacts(response);
+        return true;
+      } catch (err) {
+        if (!contactsResponseGuard.current.isCurrent(requestId)) return false;
+        throw err;
+      } finally {
+        if (contactsResponseGuard.current.isCurrent(requestId)) setLoading(false);
+      }
+    },
+    []
+  );
+
   const loadContacts = useCallback(
     async (activeSession: AppSession, targetPage = page) => {
-      const response = await fetchAppCrmContacts(activeSession, buildFilters(targetPage));
-      setContacts(response);
+      await loadContactsWithFilters(activeSession, buildFilters(targetPage));
     },
-    [buildFilters, page]
+    [buildFilters, loadContactsWithFilters, page]
   );
 
   const loadContactsRef = useRef(loadContacts);
@@ -2080,29 +2099,43 @@ export default function AppCrmContactsPage() {
       setError("CRM indisponível para esta organização.");
       return;
     }
-    let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([fetchAppCrmStatuses(stored), fetchAppCrmContacts(stored, { page: 1, limit: PAGE_LIMIT })])
-      .then(([statusesResponse, contactsResponse]) => {
-        if (cancelled) return;
+    const responseGuard = contactsResponseGuard.current;
+    const requestId = responseGuard.begin();
+    const cancel = startIndependentCrmLoad({
+      loadStatuses: () => fetchAppCrmStatuses(stored),
+      loadContacts: () => fetchAppCrmContacts(stored, { page: 1, limit: PAGE_LIMIT }),
+      onStatuses: (statusesResponse) => {
         setStatuses(statusesResponse.settings.crmBusinessStatuses.filter((item) => item.isActive !== false));
-        setContacts(contactsResponse);
-      })
-      .catch((err) => {
-        if (cancelled) return;
+      },
+      onContacts: (contactsResponse) => {
+        if (responseGuard.isCurrent(requestId)) setContacts(contactsResponse);
+      },
+      onStatusesError: (err) => {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setError(normalizeAppErrorMessage(typed, "Não foi possível carregar as situações do CRM."));
+      },
+      onContactsError: (err) => {
+        if (!responseGuard.isCurrent(requestId)) return;
         const typed = err as AppApiError;
         if (typed.status === 401) {
           handleUnauthorized();
           return;
         }
         setError(normalizeAppErrorMessage(typed, "Não foi possível carregar os contatos."));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      },
+      onContactsSettled: () => {
+        if (responseGuard.isCurrent(requestId)) setLoading(false);
+      },
+    });
     return () => {
-      cancelled = true;
+      cancel();
+      if (responseGuard.isCurrent(requestId)) responseGuard.invalidate();
     };
   }, [handleUnauthorized, router]);
 
@@ -2119,8 +2152,7 @@ export default function AppCrmContactsPage() {
           return;
         }
         setError(normalizeAppErrorMessage(typed, "Não foi possível aplicar os filtros."));
-      })
-      .finally(() => setLoading(false));
+      });
   }, [handleUnauthorized, loadContacts, session]);
 
   const clearFilters = useCallback(() => {
@@ -2134,8 +2166,7 @@ export default function AppCrmContactsPage() {
     if (!session) return;
     setLoading(true);
     setError(null);
-    fetchAppCrmContacts(session, { page: 1, limit: PAGE_LIMIT, operationalStatus: "active" })
-      .then(setContacts)
+    loadContactsWithFilters(session, { page: 1, limit: PAGE_LIMIT, operationalStatus: "active" })
       .catch((err) => {
         const typed = err as AppApiError;
         if (typed.status === 401) {
@@ -2143,9 +2174,8 @@ export default function AppCrmContactsPage() {
           return;
         }
         setError(normalizeAppErrorMessage(typed, "Não foi possível limpar os filtros."));
-      })
-      .finally(() => setLoading(false));
-  }, [handleUnauthorized, session]);
+      });
+  }, [handleUnauthorized, loadContactsWithFilters, session]);
 
   const goToPage = useCallback(
     (targetPage: number) => {
@@ -2162,8 +2192,7 @@ export default function AppCrmContactsPage() {
             return;
           }
           setError(normalizeAppErrorMessage(typed, "Não foi possível carregar a página."));
-        })
-        .finally(() => setLoading(false));
+        });
     },
     [handleUnauthorized, loadContacts, session]
   );

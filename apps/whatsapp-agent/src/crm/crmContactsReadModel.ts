@@ -271,6 +271,45 @@ function normalizeOperationalStatus(value: unknown): "active" | "excluded" {
   return normalizeText(value).toLowerCase() === "excluded" ? "excluded" : "active";
 }
 
+export function isUnfilteredCrmOperationalScope(
+  query: CrmContactsQuery,
+  operationalStatus: "active" | "excluded"
+) {
+  return (
+    normalizeOptionalText(query.q) === null &&
+    normalizeStatus(query.status) === null &&
+    normalizeChannel(query.channel) === null &&
+    normalizeBooleanFilter(query.hasConversation) === null &&
+    normalizeBooleanFilter(query.optOut) === null &&
+    parseDateFilter(query.updatedFrom) === null &&
+    parseDateFilter(query.updatedTo) === null &&
+    normalizeOperationalStatus(query.operationalStatus) === operationalStatus
+  );
+}
+
+export async function resolveCrmContactsTotals(params: {
+  filtered: CrmContactsPayload;
+  effectiveQuery: CrmContactsQuery;
+  isAdmin: boolean;
+  hasExcluded: () => Promise<boolean>;
+  buildScope: (operationalStatus: "active" | "excluded") => Promise<CrmContactsPayload>;
+}) {
+  const activeScope = isUnfilteredCrmOperationalScope(params.effectiveQuery, "active")
+    ? params.filtered
+    : await params.buildScope("active");
+  const excludedExists = params.isAdmin ? await params.hasExcluded() : false;
+  const excludedScope = !excludedExists
+    ? null
+    : isUnfilteredCrmOperationalScope(params.effectiveQuery, "excluded")
+      ? params.filtered
+      : await params.buildScope("excluded");
+  return {
+    tenantVisible: activeScope.pagination.total + (excludedScope?.pagination.total ?? 0),
+    filtered: params.filtered.pagination.total,
+    pageCount: params.filtered.items.length,
+  };
+}
+
 function formatCrmPhoneDisplay(value: string | null | undefined) {
   const digits = normalizeWaIdDigits(String(value ?? ""));
   if (!digits) return null;

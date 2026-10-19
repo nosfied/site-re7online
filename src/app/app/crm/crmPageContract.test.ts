@@ -206,7 +206,7 @@ test("CRM CSV re-entry resolves persisted operation by GET before deciding wheth
   assert.ok(pageBlock.includes("const loadContactsRef = useRef(loadContacts);"));
   assert.ok(pageBlock.includes("loadContactsRef.current = loadContacts;"));
   assert.ok(pageBlock.includes("() => loadContactsRef.current(session, 1)"));
-  assert.ok(pageBlock.includes("fetchAppCrmContacts(activeSession, buildFilters(targetPage))"));
+  assert.ok(pageBlock.includes("loadContactsWithFilters(activeSession, buildFilters(targetPage))"));
   assert.ok(pageBlock.includes("}, [canManageCrmContacts, session]);"));
   assert.ok(pageBlock.includes("Os filtros atuais foram preservados e podem ocultar contatos importados."));
   assert.ok(!pageBlock.includes("localStorage.getItem(importRecoveryKey(session))) setCsvModalOpen(true)"));
@@ -322,5 +322,15 @@ test("CRM contacts expose progress and scroll every preview row returned by the 
   assert.ok(modalBlock.includes('className="grid gap-3 sm:grid-cols-2"'));
   assert.ok(modalBlock.includes('className="grid min-w-0 gap-1.5 text-sm"'));
   assert.ok(modalBlock.includes('className="theme-input h-10 w-full min-w-0'));
+});
+
+test("CRM initial list is independent from statuses and rejects obsolete responses", () => {
+  const pageBlock = pageSource.slice(pageSource.indexOf("export default function AppCrmContactsPage"));
+  assert.ok(pageBlock.includes("startIndependentCrmLoad({"));
+  assert.ok(pageBlock.includes("contactsResponseGuard.current.begin()"));
+  assert.ok(pageBlock.includes("responseGuard.isCurrent(requestId)"));
+  assert.ok(pageBlock.includes('Não foi possível carregar os contatos.'));
+  assert.ok(pageBlock.includes('Não foi possível carregar as situações do CRM.'));
+  assert.ok(!pageBlock.includes("Promise.all([fetchAppCrmStatuses"));
 });
 

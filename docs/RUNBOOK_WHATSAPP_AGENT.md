@@ -1,5 +1,15 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## CRM — diagnóstico de lista após CSV
+
+O delta de 19/10/2026 está `LOCAL VALIDATED / NOT DEPLOYED`. O GET de contatos
+possui timeout explícito de 20s e deve carregar a lista independentemente do GET de
+statuses. `contacts=null` após o término da leitura é erro recuperável, nunca página
+vazia. A rota preserva o total permitido e só constrói o escopo excluído quando uma
+sondagem por `clientId` comprova que existe exclusão. Consulte o
+[relatório](saas/CRM_CONTACTS_LIST_RECOVERY_2026-10-19.md). Não use esta entrada como
+autorização de deploy ou repetição de importação.
+
 ## CSV — contrato/perfis/caminhos/quatro modos efetivamente compostos
 
 [Resultado/seqüência restante](reviews/automation-freeform-window-release-af26/crm-csv-input-reconciliation-20261016/REPORT.md),

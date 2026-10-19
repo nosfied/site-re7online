@@ -102,7 +102,7 @@ import {
 } from "../config/tenantOperationalConfig.js";
 import { applyAgentSignature } from "../inbox/agentSignature.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
-import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
+import { hasOperationallyExcludedContact, loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
 import { checkRateLimit } from "./rateLimit.js";
 import {
   fetchMediaContent,
@@ -423,7 +423,7 @@ import {
   type OperationsBoardCursor,
   type OperationsBoardStatus,
 } from "../operations/operationsBoardReadModel.js";
-import { buildCrmContactDetailPayload, buildCrmContactsPayload } from "../crm/crmContactsReadModel.js";
+import { buildCrmContactDetailPayload, buildCrmContactsPayload, resolveCrmContactsTotals } from "../crm/crmContactsReadModel.js";
 import { buildCrmWhatsappIdentityCandidates, normalizeCrmWhatsappIdentity } from "../crm/crmWhatsappIdentity.js";
 import {
   resolveEffectiveWhatsappOutboundTransport,
@@ -11466,22 +11466,30 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             clientStatus: client.status,
           });
       const payload = await prisma.$transaction(async tx => {
+        const effectiveQuery = isAgentRole(clientAuth.role)
+          ? { ...query, hasConversation: null, operationalStatus: null }
+          : query;
         const filtered = await buildCrmContactsPayload(tx as unknown as typeof prisma, {
-        clientId: client.id,
-        query: isAgentRole(clientAuth.role) ? { ...query, hasConversation: null, operationalStatus: null } : query,
-        statuses: resolvedStatuses.statuses,
-        canStartWhatsappFreeform: startReadiness.allowed,
-        startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
-        includeCampaignRelationships: getFeatures(client).campaigns,
-      });
-        // The allowed universe is role-defined, never narrowed by a selected filter.
-        const activeScope = await buildCrmContactsPayload(tx as unknown as typeof prisma, {
-          clientId: client.id, query: { operationalStatus: "active" }, statuses: resolvedStatuses.statuses,
+          clientId: client.id,
+          query: effectiveQuery,
+          statuses: resolvedStatuses.statuses,
+          canStartWhatsappFreeform: startReadiness.allowed,
+          startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
+          includeCampaignRelationships: getFeatures(client).campaigns,
         });
-        const excludedScope = isAdminRole(clientAuth.role) ? await buildCrmContactsPayload(tx as unknown as typeof prisma, {
-          clientId: client.id, query: { operationalStatus: "excluded" }, statuses: resolvedStatuses.statuses,
-        }) : null;
-        return { ...filtered, totals: { tenantVisible: activeScope.pagination.total + (excludedScope?.pagination.total ?? 0), filtered: filtered.pagination.total, pageCount: filtered.items.length } };
+        // The allowed universe is role-defined, never narrowed by a selected filter.
+        const totals = await resolveCrmContactsTotals({
+          filtered,
+          effectiveQuery,
+          isAdmin: isAdminRole(clientAuth.role),
+          hasExcluded: () => hasOperationallyExcludedContact(tx as unknown as typeof prisma, client.id),
+          buildScope: (operationalStatus) => buildCrmContactsPayload(tx as unknown as typeof prisma, {
+            clientId: client.id,
+            query: { operationalStatus },
+            statuses: resolvedStatuses.statuses,
+          }),
+        });
+        return { ...filtered, totals };
       }, { isolationLevel: "RepeatableRead", maxWait: 1000, timeout: 15000 });
       json(res, 200, isAgentRole(clientAuth.role) ? stripCrmHistoryFromContactsPayload(payload) : payload);
     } catch (error) {

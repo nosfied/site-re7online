@@ -25,6 +25,8 @@
 
 ## Backlog ativo
 
+- [Listagem CRM após importação CSV](CRM_CONTACTS_LIST_RECOVERY_2026-10-19.md)
+  — causa confirmada em código; candidato validado localmente, release viva inalterada.
 - [Adequar encerramento e pesquisa CSAT à janela de 24h do WhatsApp](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
   — prioridade alta; todos os tenants e transportes WhatsApp; `CONFIRMED GAP / NOT FIXED`.
 

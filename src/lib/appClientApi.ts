@@ -4722,7 +4722,7 @@ export async function fetchAppCrmContacts(
     params.set("limit", String(Math.max(1, Math.floor(filters.limit))));
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  return requestAppJson(session, `/app/crm/contacts${suffix}`);
+  return requestAppJson(session, `/app/crm/contacts${suffix}`, { timeoutMs: 20000 });
 }
 
 export async function fetchAppCampaignAudiencePreview(

@@ -1535,10 +1535,10 @@ test("CRM contact campaign relationship follows provider chronology without requ
   assert.equal(aliasDetail.body.campaignRelationshipHistory.items[0]?.recipientStatus, "FAILED");
 });
 
-test("CRM contact campaign relationship list projection remains bounded with 500 contacts", async () => {
+test("CRM contact list remains complete and bounded with more than 500 contacts", async () => {
   const createdAt = new Date("2026-09-05T10:00:00.000Z");
   await prisma.lead.createMany({
-    data: Array.from({ length: 500 }, (_, index) => ({
+    data: Array.from({ length: 501 }, (_, index) => ({
       tenantId: businessClientId,
       waId: `${prefix}-perf-${index}`,
       waIdCanonical: `${prefix}-perf-${index}`,
@@ -1551,7 +1551,7 @@ test("CRM contact campaign relationship list projection remains bounded with 500
   });
 
   const page20StartedAt = Date.now();
-  const page20 = await request<{ ok: boolean; items: Array<{ campaignRelationship: { campaignCount: number } }> }>(
+  const page20 = await request<{ ok: boolean; items: Array<{ campaignRelationship: { campaignCount: number } }>; pagination: { total: number } }>(
     "GET",
     "/app/crm/contacts?limit=20",
     businessAdmin
@@ -1560,6 +1560,7 @@ test("CRM contact campaign relationship list projection remains bounded with 500
   assert.equal(page20.status, 200);
   assert.equal(page20.body.ok, true);
   assert.ok(page20.body.items.length <= 20);
+  assert.ok(page20.body.pagination.total > 500);
   assert.ok(page20DurationMs < 2_500);
 
   const page100StartedAt = Date.now();

@@ -2,9 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   contactOperationalIdentityKeys,
+  hasOperationallyExcludedContact,
   isOperationallyExcludedContact,
   loadOperationallyExcludedWaIds,
 } from "./contactOperationalExclusion.js";
+
+test("excluded-scope existence uses a tenant-scoped probe without scanning identities", async () => {
+  const calls: unknown[] = [];
+  const prisma = { contact: { findFirst: async (args: unknown) => { calls.push(args); return null; } } };
+  assert.equal(await hasOperationallyExcludedContact(prisma, "tenant-only"), false);
+  assert.deepEqual(calls, [{
+    where: { clientId: "tenant-only", operationallyExcludedAt: { not: null } },
+    select: { id: true },
+  }]);
+});
 
 test("contact operational exclusion state comes from Contact.operationallyExcludedAt", async () => {
   const prisma = {

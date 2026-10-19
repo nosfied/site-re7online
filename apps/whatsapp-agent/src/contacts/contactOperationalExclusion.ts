@@ -5,7 +5,7 @@ export const CRM_CONTACT_REACTIVATED_EVENT = "crm.contact.reactivated";
 
 type ContactExclusionPrisma = {
   contact?: {
-    findMany(args: unknown): Promise<Array<{
+    findMany?(args: unknown): Promise<Array<{
       id?: string | null;
       waId?: string | null;
       externalUserRef?: string | null;
@@ -26,6 +26,20 @@ type ContactExclusionPrisma = {
     create?(args: { data: Record<string, unknown> }): Promise<unknown>;
   };
 };
+
+export async function hasOperationallyExcludedContact(
+  prisma: ContactExclusionPrisma,
+  clientId: string
+) {
+  if (!prisma.contact?.findFirst) return false;
+  return Boolean(await prisma.contact.findFirst({
+    where: {
+      clientId,
+      operationallyExcludedAt: { not: null },
+    },
+    select: { id: true },
+  }));
+}
 
 export function normalizeOperationalContactIdentity(value: unknown) {
   return String(value ?? "").trim();
