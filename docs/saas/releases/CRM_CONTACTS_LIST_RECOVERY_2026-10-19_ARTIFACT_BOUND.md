@@ -2,6 +2,14 @@
 
 Status: `EXECUTION DEPENDENCY CLOSURE VERIFIED / ARTIFACT-BOUND PREPARATION COMPLETE / PRODUCTION UNCHANGED`.
 
+> Revisão offline de 20/10: a preparação acima fechou consumidores, mas omitiu o
+> produtor de `runtime.private.json` e `daemon.private.json` usado com sucesso na
+> FASE 1. Sem esses arquivos, `ready-candidate` não podia produzir a readiness e a
+> ativação permanente era inalcançável. O caminho corrigido reutiliza o produtor e
+> os schemas da FASE 1 e está registrado em
+> `CRM_CONTACTS_LIST_RECOVERY_2026-10-20_FINAL_SUPERVISION.json`. Esta preparação
+> histórica não deve ser executada isoladamente.
+
 O ensaio integral foi repetido com os caminhos e SHA-256 dos artefatos privados
 da próxima janela. A execução terminou em `ARTIFACT_BOUND_END_TO_END_PASS`, com
 PM2 substituído por shim e zero acesso de mutação à produção. A preparação liga

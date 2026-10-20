@@ -60,6 +60,13 @@ na mesma janela.
    automático.
 11. Validar o journal real, ativar o binding permanente e exigir
     `supervised-candidate`. Um journal sem marker consome o controle e nega replay.
+    O produtor reutilizado da FASE 1 deve executar `capture` depois do PASS da API
+    e antes da seleção frontend. Ele persiste, em destinos exclusivos modo `0600`,
+    os schemas canônicos `runtime.private.json` e `daemon.private.json`. Depois do
+    PASS frontend, `ready-candidate` produz a readiness; `seal-readiness` a vincula
+    ao mesmo executionId, identidades e controle antes de
+    `enable-supervision-candidate`. A ausência desses arquivos antes da execução é
+    esperada; a ausência do produtor executável é DENY antes da janela.
 12. Revalidar API, frontend e worker; salvar PM2 exatamente uma vez; registrar hashes
     do dump vigente e do retorno preservado.
 13. Publicar o registro sanitizado e atualizar `CURRENT_STATE` sem transformar PIDs

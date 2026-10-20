@@ -204,6 +204,14 @@ fixa; filtros amplos por nomes ou substrings como `LOG` são proibidos.
 14. A fixture combinada termina em `END_TO_END_COMBINED_RELEASE_FIXTURE_PASS`;
     fixtures isoladas não autorizam janela.
 
+Quando o launcher permanente exigir `runtime.private.json`,
+`daemon.private.json` e readiness, a closure inclui o produtor executável que a
+FASE 1 comprovou. `runtime` e `daemon` são capturados após o PASS da API e antes
+da seleção frontend; `ready-candidate` produz a readiness depois do PASS
+frontend. Todos são single-use, modo `0600`, vinculados ao mesmo executionId e
+persistidos antes de `enable-supervision-candidate`. Declarar somente os
+consumidores ou antecipar esses bytes durante a preparação nega a janela.
+
 ## Registro das dificuldades de 18/10/2026
 
 | Falha | Causa | Regra permanente |

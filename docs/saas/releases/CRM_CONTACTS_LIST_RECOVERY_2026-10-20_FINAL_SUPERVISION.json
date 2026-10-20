@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "crm-contacts-list-recovery-f5028de1",
+  "status": "FINAL_SUPERVISION_ACTIVATION_PATH_REUSED_FROM_PHASE1_OFFLINE_VERIFIED",
+  "productionChanged": false,
+  "phase1Reference": {
+    "result": "FRONTEND_SAFE_RETURN_LIVE_VERIFIED_PERMANENTLY_SUPERVISED_DUMP_SAVED_RESTARTABLE",
+    "preservedProducer": "/tmp/prepare_frontend_canonical_window.py",
+    "preservedProducerSha256": "1a73a8bc3003b79620e700755c9c7dd49afe73a61c8038d0471fff52f422218c",
+    "runtimeSchema": "runtime.private.json/processes[name,pid,startTicks,status,pm_cwd,pm_exec_path,exec_interpreter,restart_time,exec_mode]",
+    "daemonSchema": "daemon.private.json[pid,ticks]",
+    "readinessProducer": "frontend-check.py ready-candidate"
+  },
+  "cause": {
+    "runtimeAndDaemon": "The successful Phase 1 producer remained an unversioned preparation utility and was omitted from the artifact-bound execution closure.",
+    "readiness": "The canonical ready-candidate action existed, but the published sequence had no executable producer for its runtime.private.json and daemon.private.json prerequisites, so it was never reachable.",
+    "directWindowEffect": "Direct PM2 selection created a legitimate journal but bypassed Phase 1 capture and ready-candidate, leaving no readiness PASS and therefore no lawful marker producer."
+  },
+  "policySha256": "10539fe3e013a9acdc64ebee0c27ddc94b29d8ef773201a1a0b64947776a0a3a",
+  "safeDumpSha256": "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0",
+  "executionDependencies": {
+    "historicalPreparationExecutableDependencyCount": 0,
+    "sourceEvidenceOnly": {
+      "executionClosureSha256": "a99067609b4f39bba393b43453781c2d85f4c37153b2376e9f369385880c3cb2",
+      "artifactRecordSha256": "cbcdf0f23390e0c9639675c67bbbabcbc06f6142f386d13232414a94911dfd3b"
+    },
+    "windowRule": "All executable bytes are copied by authenticated hash into one new exclusive preparation root; evidence paths are never executed."
+  },
+  "artifacts": {
+    "stateProducer": {
+      "path": "scripts/crm-contacts-phase1-state-producer.py",
+      "sha256": "bca365be97a74eec57c041cd141c8b55cf74d207b7704bf602d8643728b9b824",
+      "role": "exact Phase 1 runtime/daemon schema capture plus readiness binding"
+    },
+    "frontendChecker": {
+      "path": "frontend-check.py",
+      "sha256": "ea3e6944667c2dd513ef54abc4a504fe3698451670b8d24b8f3de8d5c7243201",
+      "actions": [
+        "ready-candidate",
+        "enable-supervision-candidate",
+        "supervised-candidate"
+      ]
+    },
+    "frontendSelector": {
+      "path": "frontend-selection-artifact-bound.py",
+      "sha256": "0708a530915650be6f1463ef19c88d069c85acb3769600ee94a3709a15f8a953"
+    },
+    "frontendRollbackPlan": {
+      "path": "rollback-to-supervised-return.plan.private.json",
+      "sha256": "582a28b3f7238931722ba03d87b470ddfc4dc6b61f86d7190cff255902f67ad1",
+      "lifecycle": "ACTIVE_PERMANENT"
+    },
+    "apiEntrypoint": {
+      "sha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontendEntrypoint": {
+      "sha256": "c230a7297ba9dd98b5f57855846c186521346ce06a3a33d86faff15386c916fc"
+    },
+    "frontendBuildId": "bt9-BI1dCQD7_gj8ktOvz"
+  },
+  "singleUseOutputs": [
+    {
+      "path": "candidate-v2.run.private.json",
+      "initialState": "ABSENT",
+      "producer": "frontend-check.py init-candidate",
+      "mode": "0600",
+      "sha256": "RECORDED_AT_INITIALIZATION"
+    },
+    {
+      "path": "candidate-v2.tracked.config.cjs",
+      "initialState": "ABSENT",
+      "producer": "canonical Phase 1 definition materializer",
+      "mode": "0600",
+      "sha256": "RECORDED_AT_INITIALIZATION"
+    },
+    {
+      "path": "runtime.private.json",
+      "initialState": "ABSENT",
+      "producer": "stateProducer capture",
+      "mode": "0600",
+      "sha256": "RECORDED_AT_CAPTURE"
+    },
+    {
+      "path": "daemon.private.json",
+      "initialState": "ABSENT",
+      "producer": "stateProducer capture",
+      "mode": "0600",
+      "sha256": "RECORDED_AT_CAPTURE"
+    },
+    {
+      "path": "phase1-state-binding.private.json",
+      "initialState": "ABSENT",
+      "producer": "stateProducer capture",
+      "mode": "0600",
+      "sha256": "RECORDED_AT_CAPTURE"
+    },
+    {
+      "path": "candidate-v2.startup.private.jsonl",
+      "initialState": "ABSENT",
+      "producer": "canonical launcher",
+      "mode": "0600",
+      "sha256": "RECORDED_AFTER_FRONTEND_START"
+    },
+    {
+      "path": "candidate-v2.readiness.private.jsonl",
+      "initialState": "ABSENT",
+      "producer": "frontend-check.py ready-candidate",
+      "mode": "0600",
+      "sha256": "RECORDED_AFTER_READINESS"
+    },
+    {
+      "path": "candidate-v2.readiness-binding.private.json",
+      "initialState": "ABSENT",
+      "producer": "stateProducer seal-readiness",
+      "mode": "0600",
+      "sha256": "RECORDED_AFTER_READINESS"
+    },
+    {
+      "path": "candidate-v2.run.private.json.permanent",
+      "initialState": "ABSENT",
+      "producer": "frontend-check.py enable-supervision-candidate",
+      "mode": "0600",
+      "sha256": "RECORDED_AFTER_SUPERVISION"
+    }
+  ],
+  "orderedWindow": [
+    "materialize one exclusive preparation root and init-candidate",
+    "API_CANDIDATE_STABLE",
+    "stateProducer capture",
+    "select-candidate",
+    "frontend technical PASS and legitimate journal",
+    "frontend-check.py ready-candidate",
+    "stateProducer seal-readiness",
+    "frontend-check.py enable-supervision-candidate",
+    "frontend-check.py supervised-candidate",
+    "manual tenant-scoped acceptance",
+    "pm2 save exactly once"
+  ],
+  "rollback": {
+    "beforeSaveOnAnyDenial": [
+      "rollback-to-supervised-return",
+      "return API",
+      "verify health and worker",
+      "do not save"
+    ],
+    "durableReturnRemainsExecutable": true
+  },
+  "fixture": {
+    "path": "scripts/ci/verify-phase1-supervision-reuse.py",
+    "sha256": "3663ac9a4576d4190e7a733d55bf67b86e1e56eca3c1bd6821ae36883089428d",
+    "result": "FINAL_SUPERVISION_PHASE1_REUSE_END_TO_END_PASS",
+    "realPm2Invocations": 0
+  },
+  "closedWindowFileSet": {
+    "staticHashesRequiredBeforeEffects": [
+      "stateProducer",
+      "frontendChecker",
+      "frontendSelector",
+      "frontendRollbackPlan",
+      "policy",
+      "API and frontend entrypoints"
+    ],
+    "runtimeHashesRequiredBeforeConsumption": [
+      "candidate control and definition",
+      "runtime.private.json",
+      "daemon.private.json",
+      "phase1-state-binding.private.json",
+      "candidate journal",
+      "candidate readiness",
+      "candidate readiness binding",
+      "candidate permanent marker"
+    ],
+    "unlistedExecutableAllowed": false
+  }
+}
