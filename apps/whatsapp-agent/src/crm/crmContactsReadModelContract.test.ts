@@ -47,7 +47,8 @@ test("interactive CRM listing selects by keyset and enriches only selected page 
   assert.ok(listing.includes("selectedLeadIds: selection.rows.map((row) => row.id)"));
   assert.ok(listing.includes("projected.items.length !== selection.rows.length"));
   assert.ok(source.includes("LIMIT ${limit + 1}"));
-  assert.ok(source.includes("decodeCrmContactsCursor(params.query.cursor, params.query)"));
-  assert.ok(source.includes("filterHash: crmContactsFilterHash(query)"));
+  assert.ok(source.includes("decodeCrmContactsCursor(params.query.cursor, {"));
+  assert.ok(source.includes("contextHash: crmContactsCursorContextHash(params)"));
+  assert.ok(source.includes("normalizePage(params.query.page) !== Number(parsed.page) + 1"));
   assert.ok(source.includes("countCrmContactsScope"));
 });

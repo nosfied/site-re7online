@@ -54,7 +54,7 @@ import {
   recoverStoredImportOperation,
 } from "@/lib/crmImportRecovery";
 import { createLatestResponseGuard, startIndependentCrmLoad } from "@/lib/crmContactsInitialLoad";
-import { CrmContactsCursorHistory } from "@/lib/crmContactsCursorHistory";
+import { acceptCurrentCrmContactsResponse, CrmContactsCursorHistory } from "@/lib/crmContactsCursorHistory";
 import { ScreenProcessingRegistry, type ScreenProcessingOperation } from "@/lib/screenProcessing";
 
 const PAGE_LIMIT = 50;
@@ -2043,15 +2043,16 @@ export default function AppCrmContactsPage() {
   const canExcludeCrmContacts = String(session?.user.role ?? "").trim().toUpperCase() === "ADMIN";
   const canOpenContactPrivacy = canExcludeCrmContacts;
   const contactsResponseGuard = useRef(createLatestResponseGuard());
+  const mountedRef = useRef(true);
 
   const beginProcessing = useCallback((message: string) => {
     const id = processingRegistry.current.begin("Contatos", message);
-    setProcessing(processingRegistry.current.current());
+    if (mountedRef.current) setProcessing(processingRegistry.current.current());
     return id;
   }, []);
   const endProcessing = useCallback((id: number) => {
-    processingRegistry.current.end(id);
-    setProcessing(processingRegistry.current.current());
+    const removed = processingRegistry.current.end(id);
+    if (removed && mountedRef.current) setProcessing(processingRegistry.current.current());
   }, []);
   const handleCsvBlockingChange = useCallback((message: string | null) => {
     if (csvProcessingId.current !== null) {
@@ -2060,8 +2061,13 @@ export default function AppCrmContactsPage() {
     }
     if (message) csvProcessingId.current = beginProcessing(message);
   }, [beginProcessing, endProcessing]);
-  useEffect(() => () => {
-    processingRegistry.current.clear();
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      contactsResponseGuard.current.invalidate();
+      processingRegistry.current.clear();
+    };
   }, []);
 
   useEffect(() => {
@@ -2107,22 +2113,33 @@ export default function AppCrmContactsPage() {
   );
 
   const loadContactsWithFilters = useCallback(
-    async (activeSession: AppSession, filters: Parameters<typeof fetchAppCrmContacts>[1], message = "Carregando contatos…") => {
+    async (
+      activeSession: AppSession,
+      filters: Parameters<typeof fetchAppCrmContacts>[1],
+      message = "Carregando contatos…",
+      commit: (response: AppCrmContactsResponse) => void = (response) => {
+        setContacts(response);
+        setPage(response.pagination.page);
+      }
+    ) => {
       const requestId = contactsResponseGuard.current.begin();
       const operationId = beginProcessing(message);
       try {
         const response = await fetchAppCrmContacts(activeSession, filters);
-        if (!contactsResponseGuard.current.isCurrent(requestId)) return false;
-        setContacts(response);
-        const loadedPage = response.pagination.page;
-        cursorHistory.current.recordNext(loadedPage, response.pageInfo.nextCursor);
-        return true;
+        const accepted = acceptCurrentCrmContactsResponse({
+          history: cursorHistory.current,
+          requestId,
+          isCurrent: contactsResponseGuard.current.isCurrent,
+          response,
+          commit,
+        });
+        return accepted ? response : null;
       } catch (err) {
-        if (!contactsResponseGuard.current.isCurrent(requestId)) return false;
+        if (!contactsResponseGuard.current.isCurrent(requestId)) return null;
         throw err;
       } finally {
         endProcessing(operationId);
-        if (contactsResponseGuard.current.isCurrent(requestId)) setLoading(false);
+        if (mountedRef.current && contactsResponseGuard.current.isCurrent(requestId)) setLoading(false);
       }
     },
     [beginProcessing, endProcessing]
@@ -2130,7 +2147,7 @@ export default function AppCrmContactsPage() {
 
   const loadContacts = useCallback(
     async (activeSession: AppSession, targetPage = page, message = "Atualizando contatos…") => {
-      await loadContactsWithFilters(activeSession, buildFilters(targetPage), message);
+      return loadContactsWithFilters(activeSession, buildFilters(targetPage), message);
     },
     [buildFilters, loadContactsWithFilters, page]
   );
@@ -2166,10 +2183,16 @@ export default function AppCrmContactsPage() {
         setStatuses(statusesResponse.settings.crmBusinessStatuses.filter((item) => item.isActive !== false));
       },
       onContacts: (contactsResponse) => {
-        if (responseGuard.isCurrent(requestId)) {
-          setContacts(contactsResponse);
-          cursorHistory.current.recordNext(1, contactsResponse.pageInfo.nextCursor);
-        }
+        acceptCurrentCrmContactsResponse({
+          history: cursorHistory.current,
+          requestId,
+          isCurrent: responseGuard.isCurrent,
+          response: contactsResponse,
+          commit: (response) => {
+            setContacts(response);
+            setPage(response.pagination.page);
+          },
+        });
       },
       onStatusesError: (err) => {
         const typed = err as AppApiError;
@@ -2195,6 +2218,7 @@ export default function AppCrmContactsPage() {
     });
     return () => {
       cancel();
+      processingRegistry.current.end(initialOperationId);
       if (responseGuard.isCurrent(requestId)) responseGuard.invalidate();
     };
   }, [beginProcessing, endProcessing, handleUnauthorized, router]);
@@ -2203,11 +2227,18 @@ export default function AppCrmContactsPage() {
     if (!session) return;
     setLoading(true);
     setError(null);
-    setPage(1);
-    cursorHistory.current.reset();
     const filters = buildDraftFilters();
-    appliedFilters.current = filters;
-    loadContactsWithFilters(session, { ...filters, page: 1, limit: PAGE_LIMIT, cursor: null }, "Aplicando filtros…")
+    loadContactsWithFilters(
+      session,
+      { ...filters, page: 1, limit: PAGE_LIMIT, cursor: null },
+      "Aplicando filtros…",
+      (response) => {
+        cursorHistory.current.reset();
+        appliedFilters.current = filters;
+        setContacts(response);
+        setPage(response.pagination.page);
+      }
+    )
       .catch((err) => {
         const typed = err as AppApiError;
         if (typed.status === 401) {
@@ -2219,19 +2250,27 @@ export default function AppCrmContactsPage() {
   }, [buildDraftFilters, handleUnauthorized, loadContactsWithFilters, session]);
 
   const clearFilters = useCallback(() => {
-    setQ("");
-    setStatus("");
-    setChannel("");
-    setHasConversation("");
-    setOptOut("");
-    setOperationalStatus("active");
-    setPage(1);
-    cursorHistory.current.reset();
-    appliedFilters.current = { operationalStatus: "active" };
     if (!session) return;
     setLoading(true);
     setError(null);
-    loadContactsWithFilters(session, { page: 1, limit: PAGE_LIMIT, operationalStatus: "active", cursor: null }, "Limpando filtros…")
+    const clearedFilters = { operationalStatus: "active" as const };
+    loadContactsWithFilters(
+      session,
+      { page: 1, limit: PAGE_LIMIT, ...clearedFilters, cursor: null },
+      "Limpando filtros…",
+      (response) => {
+        setQ("");
+        setStatus("");
+        setChannel("");
+        setHasConversation("");
+        setOptOut("");
+        setOperationalStatus("active");
+        cursorHistory.current.reset();
+        appliedFilters.current = clearedFilters;
+        setContacts(response);
+        setPage(response.pagination.page);
+      }
+    )
       .catch((err) => {
         const typed = err as AppApiError;
         if (typed.status === 401) {
@@ -2249,7 +2288,6 @@ export default function AppCrmContactsPage() {
       if (!cursorHistory.current.canLoad(safePage)) return;
       setLoading(true);
       setError(null);
-      setPage(safePage);
       loadContacts(session, safePage, safePage > page ? "Carregando próxima página…" : "Carregando página anterior…")
         .catch((err) => {
           const typed = err as AppApiError;
@@ -2573,7 +2611,7 @@ export default function AppCrmContactsPage() {
       importRecoveryKey(session),
       operation,
       localStorage,
-      () => loadContacts(session, 1)
+      async () => { await loadContacts(session, 1); }
     );
     setCsvInitialOperation(null);
     setPage(1);
@@ -2605,7 +2643,7 @@ export default function AppCrmContactsPage() {
           recoveryKey,
           recovered.operation,
           localStorage,
-          () => loadContactsRef.current(session, 1)
+          async () => { await loadContactsRef.current(session, 1); }
         );
       } catch {
         if (cancelled) return;

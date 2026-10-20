@@ -21,3 +21,19 @@ export class CrmContactsCursorHistory {
     }
   }
 }
+
+export function acceptCurrentCrmContactsResponse<T extends {
+  pagination: { page: number };
+  pageInfo: { nextCursor: string | null };
+}>(params: {
+  history: CrmContactsCursorHistory;
+  requestId: number;
+  isCurrent: (requestId: number) => boolean;
+  response: T;
+  commit: (response: T) => void;
+}) {
+  if (!params.isCurrent(params.requestId)) return false;
+  params.commit(params.response);
+  params.history.recordNext(params.response.pagination.page, params.response.pageInfo.nextCursor);
+  return true;
+}

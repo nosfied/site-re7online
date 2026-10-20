@@ -153,7 +153,7 @@ type CrmContactsCursor = {
   updatedAt: string;
   createdAt: string;
   id: string;
-  filterHash: string;
+  contextHash: string;
   page: number;
 };
 
@@ -280,31 +280,53 @@ function normalizedCursorFilters(query: CrmContactsQuery) {
   };
 }
 
-function crmContactsFilterHash(query: CrmContactsQuery) {
+function crmContactsCursorContextHash(params: {
+  clientId: string;
+  query: CrmContactsQuery;
+  limit: number;
+  includeAnonymized: boolean;
+}) {
   return crypto.createHash("sha256")
-    .update(JSON.stringify(normalizedCursorFilters(query)))
+    .update(JSON.stringify({
+      v: 1,
+      clientId: params.clientId,
+      filters: normalizedCursorFilters(params.query),
+      limit: params.limit,
+      includeAnonymized: params.includeAnonymized,
+    }))
     .digest("hex");
 }
 
-function encodeCrmContactsCursor(row: CrmContactPageRow, query: CrmContactsQuery, page: number) {
+function encodeCrmContactsCursor(row: CrmContactPageRow, params: {
+  clientId: string;
+  query: CrmContactsQuery;
+  limit: number;
+  includeAnonymized: boolean;
+  page: number;
+}) {
   return Buffer.from(JSON.stringify({
     v: 1,
     updatedAt: row.updatedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     id: row.id,
-    filterHash: crmContactsFilterHash(query),
-    page,
+    contextHash: crmContactsCursorContextHash(params),
+    page: params.page,
   } satisfies CrmContactsCursor)).toString("base64url");
 }
 
-function decodeCrmContactsCursor(value: unknown, query: CrmContactsQuery): CrmContactsCursor | null {
+function decodeCrmContactsCursor(value: unknown, params: {
+  clientId: string;
+  query: CrmContactsQuery;
+  limit: number;
+  includeAnonymized: boolean;
+}): CrmContactsCursor | null {
   const raw = normalizeOptionalText(value);
   if (!raw) return null;
   if (raw.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(raw)) throw new CrmContactsCursorError("Malformed CRM contacts cursor");
   try {
     const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as Partial<CrmContactsCursor>;
     const keys = Object.keys(parsed).sort();
-    if (JSON.stringify(keys) !== JSON.stringify(["createdAt", "filterHash", "id", "page", "updatedAt", "v"])) {
+    if (JSON.stringify(keys) !== JSON.stringify(["contextHash", "createdAt", "id", "page", "updatedAt", "v"])) {
       throw new Error("cursor fields");
     }
     const updatedAt = new Date(String(parsed.updatedAt ?? ""));
@@ -313,7 +335,8 @@ function decodeCrmContactsCursor(value: unknown, query: CrmContactsQuery): CrmCo
         !Number.isFinite(createdAt.getTime()) ||
         typeof parsed.id !== "string" || !parsed.id || parsed.id.length > 200 ||
         !Number.isInteger(parsed.page) || Number(parsed.page) < 1 ||
-        parsed.filterHash !== crmContactsFilterHash(query)) {
+        normalizePage(params.query.page) !== Number(parsed.page) + 1 ||
+        parsed.contextHash !== crmContactsCursorContextHash(params)) {
       throw new Error("cursor values");
     }
     return parsed as CrmContactsCursor;
@@ -687,6 +710,10 @@ function crmLeadIdentityMatch(alias: Prisma.Sql) {
   )`;
 }
 
+function escapeCrmLikeLiteral(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
 function buildCrmContactsSqlWhere(params: {
   clientId: string;
   query: CrmContactsQuery;
@@ -700,13 +727,14 @@ function buildCrmContactsSqlWhere(params: {
   if (filters.updatedFrom) conditions.push(Prisma.sql`l."updatedAt" >= ${new Date(filters.updatedFrom)}`);
   if (filters.updatedTo) conditions.push(Prisma.sql`l."updatedAt" <= ${new Date(filters.updatedTo)}`);
   if (filters.q) {
-    const pattern = `%${filters.q}%`;
+    const pattern = `%${escapeCrmLikeLiteral(filters.q)}%`;
+    const escapeCharacter = "\\";
     const search = [
-      Prisma.sql`l."name" ILIKE ${pattern}`,
-      Prisma.sql`l."company" ILIKE ${pattern}`,
-      Prisma.sql`l."email" ILIKE ${pattern}`,
-      Prisma.sql`l."city" ILIKE ${pattern}`,
-      Prisma.sql`l."service" ILIKE ${pattern}`,
+      Prisma.sql`l."name" ILIKE ${pattern} ESCAPE ${escapeCharacter}`,
+      Prisma.sql`l."company" ILIKE ${pattern} ESCAPE ${escapeCharacter}`,
+      Prisma.sql`l."email" ILIKE ${pattern} ESCAPE ${escapeCharacter}`,
+      Prisma.sql`l."city" ILIKE ${pattern} ESCAPE ${escapeCharacter}`,
+      Prisma.sql`l."service" ILIKE ${pattern} ESCAPE ${escapeCharacter}`,
     ];
     if (digits) {
       const digitPattern = `%${digits}%`;
@@ -787,7 +815,12 @@ export async function selectCrmContactsPage(prisma: PrismaClient, params: {
   if (!params.query.cursor && requestedPage > 1) {
     throw new CrmContactsCursorError("Cursor is required after the first CRM contacts page");
   }
-  const cursor = decodeCrmContactsCursor(params.query.cursor, params.query);
+  const cursor = decodeCrmContactsCursor(params.query.cursor, {
+    clientId: params.clientId,
+    query: params.query,
+    limit,
+    includeAnonymized: params.includeAnonymized,
+  });
   const where = buildCrmContactsSqlWhere(params);
   const cursorWhere = cursor
     ? Prisma.sql`AND (
@@ -821,7 +854,13 @@ export async function selectCrmContactsPage(prisma: PrismaClient, params: {
     hasNextPage,
     hasPreviousPage: page > 1,
     nextCursor: hasNextPage && pageRows.length > 0
-      ? encodeCrmContactsCursor(pageRows[pageRows.length - 1], params.query, page)
+      ? encodeCrmContactsCursor(pageRows[pageRows.length - 1], {
+          clientId: params.clientId,
+          query: params.query,
+          limit,
+          includeAnonymized: params.includeAnonymized,
+          page,
+        })
       : null,
   };
 }
@@ -929,15 +968,16 @@ async function buildCrmContactsBatch(
   const includeAnonymized = params.includeAnonymized === true;
   const requiresPostFilter = true;
 
-  const baseWhere = buildLeadWhere({
-    clientId: params.clientId,
-    q,
-    status,
-    channel,
-    updatedFrom: updatedFromDate,
-    updatedTo: updatedToDate,
-  });
-  if (params.selectedLeadIds) baseWhere.id = { in: params.selectedLeadIds };
+  const baseWhere: Prisma.LeadWhereInput = params.selectedLeadIds
+    ? { tenantId: params.clientId, id: { in: params.selectedLeadIds } }
+    : buildLeadWhere({
+        clientId: params.clientId,
+        q,
+        status,
+        channel,
+        updatedFrom: updatedFromDate,
+        updatedTo: updatedToDate,
+      });
 
   // Post-filters define visibility; never label a candidate prefix as the total.
   const candidateTake = params.candidateOffset !== undefined ? 500 : params.audienceAnalysisLimit ? limit : undefined;

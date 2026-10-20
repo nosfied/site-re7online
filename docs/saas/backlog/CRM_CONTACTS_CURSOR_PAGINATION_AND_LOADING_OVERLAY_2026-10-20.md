@@ -18,9 +18,13 @@ representavam operações concorrentes.
 
 - A listagem interativa seleciona no banco no máximo `limit + 1`, com limite padrão 50
   e máximo defensivo 200.
-- A ordem é `updatedAt DESC, createdAt DESC, id ASC`. O cursor opaco contém somente
-  essas chaves técnicas, versão, página e fingerprint SHA-256 dos filtros. Não contém
-  nome, telefone, e-mail ou outra informação pessoal.
+- A ordem é `updatedAt DESC, createdAt DESC, id ASC`. O cursor é codificado em
+  base64url e tratado como opaco pelo cliente; não é criptograficamente autenticado e
+  nunca funciona como autorização. Ele contém somente essas chaves técnicas, versão,
+  página e fingerprint SHA-256 de `clientId`, filtros normalizados, limite e política
+  de visibilidade. Não contém nome, telefone, e-mail ou outra informação pessoal.
+- Tenant e RBAC continuam determinados exclusivamente pela sessão. Cursor de outro
+  tenant, limite, política de visibilidade, filtros ou página esperada é negado.
 - Cursor malformado, cursor de outro conjunto de filtros e `page > 1` sem cursor são
   negados com `invalid_cursor`.
 - A volta usa histórico local de cursores já observado. Alterar ou limpar filtros
@@ -60,7 +64,10 @@ ON "Lead" ("tenantId", "updatedAt" DESC, "createdAt" DESC, "id" ASC);
 
 Cardinalidade esperada: muitas linhas por `tenantId`, com páginas de 50. A consulta a
 medir por `EXPLAIN (ANALYZE, BUFFERS)` é a seleção tenant-scoped com a condição keyset e
-`LIMIT 51`. Esta tarefa não cria migration e não executa SQL em produção.
+`LIMIT 51`. O código pode ser revisado e merged, mas o deploy em base de alta
+cardinalidade exige essa prova no ambiente autorizado. Um eventual índice exige
+autorização própria. Esta tarefa não cria migration, não executa SQL em produção e não
+afirma ganho final de latência antes dessa medição.
 
 ## Compatibilidade
 

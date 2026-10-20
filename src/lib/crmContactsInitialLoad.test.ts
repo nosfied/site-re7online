@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createLatestResponseGuard, startIndependentCrmLoad } from "./crmContactsInitialLoad";
 import { fetchAppCrmContacts, type AppSession } from "./appClientApi";
+import { ScreenProcessingRegistry } from "./screenProcessing";
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -59,6 +60,29 @@ test("latest response guard rejects an obsolete contacts response", () => {
   assert.equal(guard.isCurrent(second), true);
   guard.invalidate();
   assert.equal(guard.isCurrent(second), false);
+});
+
+test("cancellation during initial loading ends its token and ignores later completion", async () => {
+  const contacts = deferred<{ items: string[] }>();
+  const overlay = new ScreenProcessingRegistry();
+  const operationId = overlay.begin("Contatos", "Carregando contatos…");
+  const events: string[] = [];
+  const cancel = startIndependentCrmLoad({
+    loadStatuses: async () => [],
+    loadContacts: () => contacts.promise,
+    onStatuses: () => undefined,
+    onContacts: () => events.push("contacts"),
+    onStatusesError: () => undefined,
+    onContactsError: () => events.push("error"),
+    onContactsSettled: () => events.push("settled"),
+  });
+  cancel();
+  overlay.end(operationId);
+  contacts.resolve({ items: ["late"] });
+  await settle();
+  assert.deepEqual(events, []);
+  assert.equal(overlay.size, 0);
+  assert.equal(overlay.end(operationId), false);
 });
 
 test("contacts GET uses an explicit timeout above the backend transaction and never POSTs", async () => {

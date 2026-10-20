@@ -76,6 +76,21 @@ test("read model keyset pagination counts beyond old candidate cap without dupli
  const filtered=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{q:'Target',page:1,limit:50},statuses:[]});assert.equal(filtered.pagination.total,5);assert.equal(filtered.items.length,5);
  const other=await fixture();assert.equal((await buildCrmContactsPayload(db,{clientId:other.clientId,query:{},statuses:[]})).pagination.total,0);
 });
+test("manual SQL search preserves literal LIKE metacharacters, accents and formatted phone semantics",async()=>{
+ const p=await fixture();
+ const leads=await Promise.all([
+  db.lead.create({data:{tenantId:p.clientId,waId:`${phone(6001)}-percent`,name:"Literal % marker",status:"NEW"}}),
+  db.lead.create({data:{tenantId:p.clientId,waId:`${phone(6002)}-underscore`,name:"Literal _ marker",status:"NEW"}}),
+  db.lead.create({data:{tenantId:p.clientId,waId:`${phone(6003)}-slash`,name:"Literal \\ marker",status:"NEW"}}),
+  db.lead.create({data:{tenantId:p.clientId,waId:`${phone(6004)}-accent`,name:"Ação Única",status:"NEW"}}),
+  db.lead.create({data:{tenantId:p.clientId,waId:phone(6005),phone:"(84) 91000-6005",name:"Formatted phone",status:"NEW"}}),
+  db.lead.create({data:{tenantId:p.clientId,waId:`${phone(6006)}-control`,name:"Plain marker",status:"NEW"}}),
+ ]);
+ for(const [q,expectedId] of [["%",leads[0].id],["_",leads[1].id],["\\",leads[2].id],["ação",leads[3].id],["(84) 91000-6005",leads[4].id]] as const){
+  const result=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{q,page:1,limit:50},statuses:[]});
+  assert.equal(result.pagination.total,1,q);assert.deepEqual(result.items.map(item=>item.leadId),[expectedId],q);
+ }
+});
 test("only control receipts gain critical protection; no tenant policy changed; recovered errors omit CSV identities",async()=>{
  const {classifyEventRetentionPolicy}=await import('../events/eventRetentionPolicy.js');
  for(const name of Object.values(IMPORT_EVENTS))assert.equal(classifyEventRetentionPolicy(name),'CRITICAL');
