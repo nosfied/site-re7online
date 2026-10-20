@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "crm-contacts-list-recovery-f5028de1",
+  "deploymentClass": "NORMAL_RELEASE",
+  "baseCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
+  "functionalCandidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
+  "components": ["api", "frontend"],
+  "executor": "scripts/deploy-normal-release.sh",
+  "authorization": "DEPLOY_APPROVED_SHA_EQUALS_PREPARED_TARGET_COMMIT",
+  "changeBoundary": {
+    "workerChanged": false,
+    "databaseChanged": false,
+    "schemaChanged": false,
+    "dependenciesChanged": false,
+    "credentialsChanged": false,
+    "rootOrNetworkChanged": false
+  },
+  "requiredGates": [
+    "ci_pass",
+    "read_only_impact_plan",
+    "isolated_build",
+    "sealed_payload_manifest",
+    "exact_sha_authorization",
+    "api_health",
+    "frontend_health",
+    "worker_preserved",
+    "pm2_save_once_after_health"
+  ],
+  "rollback": "AUTOMATIC_BEFORE_PM2_SAVE",
+  "promotionAuthorized": false,
+  "state": "STAGED_INERT_NOT_DEPLOYED"
+}

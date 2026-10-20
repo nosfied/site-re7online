@@ -1,62 +1,33 @@
 {
-  "schemaVersion": 3,
-  "updatedAtUtc": "2026-10-20T09:23:02Z",
-  "basedOnCommit": "cfcecf96d499cc008ba88a21f12d3c3fd83b2be8",
+  "schemaVersion": 4,
+  "updatedAtUtc": "2026-10-20T13:53:00Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
   "activeOperationalRecord": "docs/saas/releases/FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
+  "normalReleaseExecutor": "scripts/deploy-normal-release.sh",
   "production": {
     "status": "DEPLOYED_VERIFIED_SAFE_RETURN",
     "certifiedByThisFile": false,
-    "api": {
-      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
-      "lastReportedPid": 1601629
-    },
-    "frontend": {
-      "buildId": "2nrVvTyK7pcyD_oMa_fOv",
-      "lastReportedPid": 1601491,
-      "supervision": "PERMANENTLY_SUPERVISED_RESTARTABLE"
-    },
-    "worker": {
-      "lastReportedPid": 936540,
-      "preserved": true
-    },
-    "pm2": {
-      "dumpSha256": "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0",
-      "previousRollbackSha256": "20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e",
-      "mode": "0600"
-    },
-    "identitySemantics": {
-      "lastReportedPids": "dated observations without a preserved common timestamp; revalidate before mutation",
-      "durable": [
-        "api.entrySha256",
-        "frontend.buildId",
-        "pm2.dumpSha256"
-      ]
-    }
+    "api": {"entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1", "lastReportedPid": 1601629},
+    "frontend": {"buildId": "2nrVvTyK7pcyD_oMa_fOv", "lastReportedPid": 1601491, "supervision": "PERMANENTLY_SUPERVISED_RESTARTABLE"},
+    "worker": {"lastReportedPid": 936540, "preserved": true},
+    "pm2": {"dumpSha256": "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0", "previousRollbackSha256": "20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e", "mode": "0600"}
   },
-  "csvDelivery": {
-    "state": "DEPLOYED_VERIFIED",
-    "tenantNegativeIsolation": "LIVE_VERIFIED",
-    "durablePositiveRecovery": "LIVE_VERIFIED",
-    "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED"
-  },
+  "csvDelivery": {"state": "DEPLOYED_VERIFIED", "tenantNegativeIsolation": "LIVE_VERIFIED", "durablePositiveRecovery": "LIVE_VERIFIED", "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED"},
   "contactsListRecovery": {
     "releaseId": "crm-contacts-list-recovery-f5028de1",
-    "candidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
+    "functionalCandidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
+    "baseCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
     "state": "STAGED_INERT_NOT_DEPLOYED",
     "deploymentClass": "NORMAL_RELEASE",
-    "deployV2Manifest": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19_DEPLOY_V2.json",
+    "manifest": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_NORMAL_RELEASE.json",
+    "components": ["api", "frontend"],
     "workerChanged": false,
     "databaseChanged": false,
-    "credentialsChanged": false,
-    "deployV2Adapter": "TWO_PHASE_POST_SELECTION_ACCEPTANCE_LOCAL_VALIDATED_NOT_EXECUTED",
-    "runtimeBinding": "SCHEMA_V2_DATA_ONLY_NOT_MATERIALIZED",
-    "rollback": "FULL_FIDELITY_PRIVATE_CONFIGURATION_VERIFIED",
-    "frontendIdentity": "CONTROL_RUN_JOURNAL_MARKER_VERIFIED",
-    "saveAtomicity": "POST_SAVE_FAILURE_RESTORES_PRIOR_DUMP"
+    "credentialsChanged": false
   },
+  "historicalDeployV2": {"status": "RETIRED_FROM_NORMAL_RELEASE", "recordsPreserved": true},
   "credentialInspectionIncident": {
     "values": "NOT_VERSIONED",
     "obs2": "CONTINGENCY_CLOSED_SAFE_RETURN_READY",
@@ -65,17 +36,9 @@
     "obs1Record": "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json"
   },
   "nextActions": [
-    "materialize a private schema-v2 data-only binding and authorize promote to stop at AWAITING_ACCEPTANCE",
-    "create acceptance only after selection, bound to executionId, hashes, candidate PIDs/start ticks and BUILD_ID",
-    "authorize resume to revalidate all live identities and execute transactional save-once"
+    "plan exact base-to-target impact and require API plus frontend only",
+    "prepare isolated immutable payload without touching PM2",
+    "authorize exact SHA and activate with health, automatic rollback and one PM2 save"
   ],
-  "branchConvergence": {
-    "state": "CONTROLLED_DIVERGENCE",
-    "plan": "docs/saas/BRANCH_CONVERGENCE_PLAN_2026-10-18.md",
-    "forbidden": [
-      "force push",
-      "destructive rebase",
-      "blind merge into main"
-    ]
-  }
+  "branchConvergence": {"state": "CONTROLLED_DIVERGENCE", "plan": "docs/saas/BRANCH_CONVERGENCE_PLAN_2026-10-18.md", "forbidden": ["force push", "destructive rebase", "blind merge into main"]}
 }

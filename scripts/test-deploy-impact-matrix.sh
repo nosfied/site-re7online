@@ -102,13 +102,14 @@ run_historical_case() {
   }
 }
 
-run_case "backend-only" "apps/whatsapp-agent/src/http/routes.ts" YES YES NO NO
+run_case "backend-only" "apps/whatsapp-agent/src/http/routes.ts" YES NO NO NO
 run_case "worker-only" "apps/whatsapp-web-worker/src/whatsappWebSessionWorker.ts" NO YES NO NO
 run_case "shared-backend-worker" "apps/whatsapp-agent/src/web-session/webSessionInbound.ts" YES YES NO NO
 run_case "frontend-only" "src/app/app/inbox/page.tsx" NO NO YES NO
 run_case "docs-only" "docs/saas/runbook-re7.md" NO NO NO NO
 run_case "prisma-schema" "apps/whatsapp-agent/prisma/schema.prisma" YES YES NO YES
 run_case "unknown-path" "ops/custom-runtime-hook.sh" YES YES YES NO 2
+run_case "root-lockfile" "package-lock.json" YES YES YES NO 2
 
 run_historical_case 40ec4535 YES YES NO NO
 run_historical_case 13acec7e YES YES NO NO

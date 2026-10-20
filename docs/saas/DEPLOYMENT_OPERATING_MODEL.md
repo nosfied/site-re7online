@@ -1,92 +1,75 @@
 # Modelo operacional de implantação do Converta
 
-**Status: CANÔNICO / DEPLOY V2 / PRODUÇÃO VIVA**
+**Status: CANÔNICO / NORMAL RELEASE V1 / PRODUÇÃO VIVA**
 
-Este documento define a rota normal de entrega. O objetivo é manter segurança,
-multitenancy e retorno verificável sem transformar cada release em um novo sistema
-de implantação.
+Este documento é a única rota normal de entrega. O objetivo é permitir releases
+pequenas e frequentes sem transformar cada alteração em um projeto de infraestrutura.
+
+## Diagnóstico encerrado em 20/10/2026
+
+A correção funcional da listagem de contatos terminou em `f5028de1`. Depois dela,
+17 commits e 4.646 linhas foram acrescentados sem alterar runtime: executores em duas
+fases, bindings, nonces, journals, markers e verificadores single-use. A primeira
+closure ainda omitiu os produtores de `runtime.private.json` e
+`daemon.private.json`. O deploy deixou de falhar pela aplicação e passou a falhar
+pela própria instrumentação.
+
+`Deploy V2` e as preparações artifact-bound permanecem como evidência histórica.
+Não são gates nem executores da faixa normal.
 
 ## Princípios invariáveis
 
-- produção viva: nenhuma mudança pode depender de indisponibilidade não programada;
-- multitenancy: autorização, dados, evidências e testes permanecem tenant-scoped;
-- auditoria antes de criação: reutilizar componentes, artefatos e contratos válidos;
-- release imutável e retorno capturado antes da seleção;
-- documentação e evidência sanitizadas, sem segredos ou identificadores sensíveis;
-- efeitos externos explícitos: POST, importação, retry, SQL, migration e rotação de
-  credencial nunca são inferidos;
-- nenhum gate novo é criado durante a janela. Falha de preparação encerra a janela.
+- produção viva e rollback preparado antes do primeiro reload;
+- release identificada por commit completo e artefatos construídos fora do runtime;
+- apenas os componentes realmente alterados são recarregados;
+- worker, banco, schema, credenciais, root e rede ficam intocados na faixa normal;
+- autorização humana vincula exatamente o SHA preparado;
+- nenhum teste, gate ou script novo é criado durante a janela;
+- falha de health restaura os diretórios anteriores e não executa `pm2 save`;
+- documentação registra fatos observados; `NOT EXERCISED` nunca vira `PASS`.
 
-## Faixa 1 — NORMAL_RELEASE (padrão)
+## NORMAL_RELEASE — rota padrão
 
-Aplicável quando a mudança não altera schema, credenciais, rede/root, ownership do
-worker ou protocolo de drenagem. A correção da listagem de contatos pertence a esta
-faixa.
+Executor único: `scripts/deploy-normal-release.sh`.
 
-1. CI produz ou autentica artefatos imutáveis e um manifesto somente de dados.
-2. Preflight somente leitura confirma saúde, espaço, identidades e retorno.
-3. Staging inerte confere hashes e extração sem selecionar processos.
-4. Um executor estável lê o manifesto; ele não contém PID, dump, timestamp ou caminho
-   single-use fixado no código.
-5. O adaptador built-in captura o estado vivo uma vez, cria retorno privado de
-   configuração integral e promove API → frontend; o binding não transporta comandos.
-6. A fase `promote` verifica candidatos e supervisão e termina em
-   `AWAITING_ACCEPTANCE`, com executionId, hashes, PIDs e start ticks persistidos.
-7. O aceite GET-only ou humano nasce depois da seleção e vincula exatamente esse
-   checkpoint. A fase `resume` revalida API, frontend, worker e supervisão.
-8. `pm2 save` ocorre uma única vez depois do aceite integral. Seu estado
-   transacional autentica o novo dump e restaura o anterior se o pós-check falhar.
-9. Qualquer negativa anterior ao commit do save usa o snapshot capturado e retorna
-   os componentes já alterados.
+1. CI aprova build, testes e o contrato do executor.
+2. `plan <base> <target>` classifica o diff sem mutação.
+3. `prepare <base> <target>` cria worktree isolada, constrói API/frontend e sela
+   manifesto e hashes em `/opt/re7online/releases`; PM2 e produção não são tocados.
+4. O owner autoriza o SHA completo em `DEPLOY_APPROVED_SHA`.
+5. `activate <release-dir>` adquire lock exclusivo, captura PM2/dump privados e
+   descobre os diretórios vivos pela configuração atual do PM2.
+6. A API é trocada, recarregada e validada; depois o frontend segue a mesma ordem.
+7. Qualquer negativa restaura os diretórios anteriores e recarrega somente os
+   componentes já alterados. O worker nunca é recarregado.
+8. Com ambos saudáveis e worker preservado, `pm2 save` ocorre exatamente uma vez.
 
-PIDs, start ticks, dump vigente, caminhos de relatório e timestamps são dados de
-execução. Eles nunca fazem parte do código do verificador ou do manifesto da release.
+Comandos:
 
-## Faixa 2 — BREAK_GLASS (excepcional)
+```bash
+scripts/deploy-normal-release.sh plan <base-ref> <target-ref>
+scripts/deploy-normal-release.sh prepare <base-ref> <target-ref>
+DEPLOY_APPROVED_SHA=<sha-completo> scripts/deploy-normal-release.sh activate <release-dir>
+```
 
-Aplicável somente a schema/migration, rotação de credencial, mudança root/rede,
-ownership ou drain do worker, contenção de incidente ou composição produtiva que não
-possa ser representada pelo Deploy V2 normal.
+## Classificação de impacto
 
-Exige janela própria, autorização explícita e o runbook por artefato. Um incidente
-não pode promover seu mecanismo excepcional a padrão de todas as releases futuras.
+Código de API em `apps/whatsapp-agent/src` não implica automaticamente mudança no
+worker. O worker só é impactado pelos módulos compartilhados que ele realmente
+compila: `web-session`, `db.ts`, `channelAccountSecretCrypto.ts`,
+`clientFeatures.ts` e `logger.ts`. Dependências, lockfiles, migrations, schema e
+caminhos desconhecidos são negados na faixa normal.
 
-## Classificador
+## BREAK_GLASS — excepcional
 
-| Pergunta | Sim | Não |
-| --- | --- | --- |
-| Há migration ou alteração de schema? | BREAK_GLASS | continuar |
-| Há rotação de segredo, root, rede ou proxy? | BREAK_GLASS | continuar |
-| Worker, ownership ou drain mudam? | BREAK_GLASS | continuar |
-| Há incidente ativo ou composição não representável? | BREAK_GLASS | NORMAL_RELEASE |
+É obrigatório para migration/schema, dependências, credenciais, root/rede/proxy,
+worker/drain, contenção de incidente ou mudança que não caiba no executor normal.
+Exige janela própria, autorização explícita e runbook específico. Um mecanismo de
+incidente não pode voltar a ser requisito das releases comuns.
 
-## Estado da correção de contatos
+## Release pendente
 
-- classe: `NORMAL_RELEASE`;
-- ordem: API → frontend;
-- banco/schema/worker/credenciais: fora do delta;
-- artefatos: já construídos, autenticados e staged inertemente;
-- promoção: não executada;
-- próxima etapa: implementar e ensaiar o executor estável do Deploy V2, então abrir
-  uma única janela com o manifesto versionado.
-
-
-## Implementação do Deploy V2
-
-O núcleo estável está versionado em `scripts/deploy-v2.py`. Ele valida o manifesto,
-consome uma autorização com prazo, vincula SHA-256 de manifesto/executor/adaptador,
-persiste journal antes dos efeitos, bloqueia replay e executa rollback conservador.
-
-O [contrato do adaptador](DEPLOY_V2_ADAPTER_CONTRACT.md) define as ações ambientais.
-O adaptador built-in implementa operações fixas; bindings schema v2 contêm apenas
-identidades e dados estáticos da release. `actions`, `argv`, comandos executáveis e
-destinos single-use no binding são negados. Captura, destinos e definições de retorno
-com configuração PM2 integral são derivados somente na raiz exclusiva da execução.
-
-As negativas e o rollback foram ensaiados com superfícies falsas separadas de PM2,
-`/proc`, socket, HTTP, helper de supervisão e dump. O aceite tenant-scoped permanece
-um registro privado separado, GET-only ou checkpoint humano autenticado, sem token,
-cookie, UUID ou tenant no binding. Aceite anterior à seleção é inválido; `resume`
-compara a identidade aceita com o processo vivo e exige controle, nonce, journal e
-marker frontend coerentes. O candidato continua `STAGED_INERT / NOT DEPLOYED`;
-nenhuma janela foi aberta por esta implementação.
+A correção da listagem de contatos é `NORMAL_RELEASE`, com base operacional
+`b8cc113dc3e27a6818a1074f51c38eaa0e569448`, fonte funcional `f5028de1e530666623dcc95519e744350671cb02`
+e componentes API + frontend. Worker, banco, schema, dependências e credenciais não
+mudam. Ela permanece `STAGED_INERT / NOT DEPLOYED` até uma execução real registrada.

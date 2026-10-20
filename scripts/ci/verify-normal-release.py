@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""Validate the small, stable NORMAL_RELEASE contract."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def require(value: bool, reason: str) -> None:
+    if not value:
+        raise SystemExit(f"NORMAL_RELEASE_INVALID: {reason}")
+
+
+model = (ROOT / "docs/saas/DEPLOYMENT_OPERATING_MODEL.md").read_text(encoding="utf-8")
+script = (ROOT / "scripts/deploy-normal-release.sh").read_text(encoding="utf-8")
+manifest = json.loads((ROOT / "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_NORMAL_RELEASE.json").read_text(encoding="utf-8"))
+
+for marker in ("NORMAL_RELEASE", "BREAK_GLASS", "produção viva", "DEPLOY_APPROVED_SHA", "rollback"):
+    require(marker in model, f"model marker {marker}")
+for marker in ("PREPARED_INERT", "DEPLOY_APPROVED_SHA", "flock -n", "pm2 save", "rollback_all", "worker was not touched"):
+    require(marker in script, f"executor marker {marker}")
+require(manifest["deploymentClass"] == "NORMAL_RELEASE", "release class")
+require(manifest["components"] == ["api", "frontend"], "component order")
+require(all(value is False for value in manifest["changeBoundary"].values()), "change boundary")
+require(manifest["executor"] == "scripts/deploy-normal-release.sh", "executor")
+require(manifest["promotionAuthorized"] is False, "manifest cannot authorize itself")
+require(manifest["state"] == "STAGED_INERT_NOT_DEPLOYED", "candidate state")
+
+print("NORMAL_RELEASE_OK: isolated prepare, exact-SHA activation and rollback contract")
