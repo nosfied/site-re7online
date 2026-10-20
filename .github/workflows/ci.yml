@@ -113,16 +113,27 @@ jobs:
       - run: npm run db:generate
       - run: npm run db:deploy
       - name: Backend durable-operation and multi-tenant tests
-        run: node --import tsx --test src/crm/crmCsvImportOperation.postgres.test.ts
+        run: >-
+          node --import tsx --test
+          src/crm/crmCsvImportOperation.postgres.test.ts
+          src/crm/crmContactsCursor.test.ts
+          src/crm/crmContactsTotals.test.ts
+          src/crm/crmContactsReadModelContract.test.ts
       - name: CRM phone identity and import normalization tests
         run: >-
           node --import tsx --test
           src/crm/crmWhatsappIdentity.test.ts
           src/crm/crmContactUpsert.test.ts
+      - name: CRM cursor filters, RBAC and tenant isolation routes
+        run: node --import tsx --test src/http/crmCapabilityRoutes.test.ts
       - name: Frontend timeout, re-entry and CRM CSV UX contract tests
         working-directory: .
         run: |
-          apps/whatsapp-agent/node_modules/.bin/tsx --test src/lib/crmImportRecovery.test.ts
           apps/whatsapp-agent/node_modules/.bin/tsx --test \
-            --test-name-pattern "CRM contacts expose progress and scroll every preview row returned by the API" \
+            src/lib/crmImportRecovery.test.ts \
+            src/lib/crmContactsInitialLoad.test.ts \
+            src/lib/crmContactsCursorHistory.test.ts \
+            src/lib/screenProcessing.test.ts
+          apps/whatsapp-agent/node_modules/.bin/tsx --test \
+            --test-name-pattern "CRM contacts expose progress|CRM initial list|CRM list uses cursor" \
             src/app/app/crm/crmPageContract.test.ts

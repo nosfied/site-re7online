@@ -16,6 +16,7 @@
 
 ## Backlog ativo separado
 
+- [Paginação por cursor e overlay de processamento do CRM](backlog/CRM_CONTACTS_CURSOR_PAGINATION_AND_LOADING_OVERLAY_2026-10-20.md)
 - [Adequar encerramento e CSAT à janela de 24h](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
 - OBS-1 — preparação concluída; rotação exige janela própria.
 

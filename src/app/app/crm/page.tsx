@@ -5,6 +5,7 @@ import type { KeyboardEvent } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
+import ScreenProcessingOverlay from "@/components/app/ScreenProcessingOverlay";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
   AppApiError,
@@ -53,6 +54,8 @@ import {
   recoverStoredImportOperation,
 } from "@/lib/crmImportRecovery";
 import { createLatestResponseGuard, startIndependentCrmLoad } from "@/lib/crmContactsInitialLoad";
+import { acceptCurrentCrmContactsResponse, CrmContactsCursorHistory } from "@/lib/crmContactsCursorHistory";
+import { ScreenProcessingRegistry, type ScreenProcessingOperation } from "@/lib/screenProcessing";
 
 const PAGE_LIMIT = 50;
 const PERSISTENT_CRM_NOTICES = new Set([
@@ -1287,6 +1290,7 @@ function CsvImportModal({
   onInspect,
   onPreview,
 	  onConfirm,
+	  onBlockingChange,
 		}: {
 		  onClose: () => void;
 		  onTerminalClose: (operation: AppCrmImportOperation) => Promise<void>;
@@ -1296,6 +1300,7 @@ function CsvImportModal({
       initialOperation: AppCrmImportOperation | null;
       onStatus: (operationId: string) => Promise<AppCrmImportOperation>;
       onConfirm: (payload: { operationId: string; csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmImportOperation>;
+	  onBlockingChange?: (message: string | null) => void;
 		}) {
 		  type CsvMappingField = keyof AppCrmContactCsvMapping;
 		  const initialMappingTouched: Record<CsvMappingField, boolean> = {
@@ -1377,6 +1382,18 @@ function CsvImportModal({
 		  const getMappingKey = (value: AppCrmContactCsvMapping) => JSON.stringify(value);
 	  const mappingKey = JSON.stringify(mapping);
 	  const loading = inspectLoading || previewLoading || importLoading;
+	  useEffect(() => {
+	    onBlockingChange?.(
+	      inspectLoading
+	        ? "Lendo e analisando o arquivo…"
+	        : previewLoading
+	          ? "Gerando a prévia…"
+	          : importLoading
+	            ? "Processando importação…"
+	            : null
+	    );
+	    return () => onBlockingChange?.(null);
+	  }, [importLoading, inspectLoading, onBlockingChange, previewLoading]);
 	  const reportVisible = Boolean(summary);
 
   const closeTracking = async () => {
@@ -2002,6 +2019,11 @@ export default function AppCrmContactsPage() {
   const [operationalStatus, setOperationalStatus] = useState<"active" | "excluded">("active");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const processingRegistry = useRef(new ScreenProcessingRegistry());
+  const [processing, setProcessing] = useState<ScreenProcessingOperation | null>(null);
+  const cursorHistory = useRef(new CrmContactsCursorHistory());
+  const appliedFilters = useRef<Parameters<typeof fetchAppCrmContacts>[1]>({ operationalStatus: "active" });
+  const csvProcessingId = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -2021,6 +2043,32 @@ export default function AppCrmContactsPage() {
   const canExcludeCrmContacts = String(session?.user.role ?? "").trim().toUpperCase() === "ADMIN";
   const canOpenContactPrivacy = canExcludeCrmContacts;
   const contactsResponseGuard = useRef(createLatestResponseGuard());
+  const mountedRef = useRef(true);
+
+  const beginProcessing = useCallback((message: string) => {
+    const id = processingRegistry.current.begin("Contatos", message);
+    if (mountedRef.current) setProcessing(processingRegistry.current.current());
+    return id;
+  }, []);
+  const endProcessing = useCallback((id: number) => {
+    const removed = processingRegistry.current.end(id);
+    if (removed && mountedRef.current) setProcessing(processingRegistry.current.current());
+  }, []);
+  const handleCsvBlockingChange = useCallback((message: string | null) => {
+    if (csvProcessingId.current !== null) {
+      endProcessing(csvProcessingId.current);
+      csvProcessingId.current = null;
+    }
+    if (message) csvProcessingId.current = beginProcessing(message);
+  }, [beginProcessing, endProcessing]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      contactsResponseGuard.current.invalidate();
+      processingRegistry.current.clear();
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedLeadId) return;
@@ -2042,41 +2090,64 @@ export default function AppCrmContactsPage() {
     router.replace("/app/login");
   }, [router]);
 
-  const buildFilters = useCallback(
-    (targetPage = page) => ({
+  const buildDraftFilters = useCallback(
+    () => ({
       q: q || null,
       status: status || null,
       channel: channel || null,
       hasConversation: canViewCrmHistory && hasConversation !== "" ? hasConversation === "true" : null,
       optOut: optOut === "" ? null : optOut === "true",
       operationalStatus: canExcludeCrmContacts ? operationalStatus : "active",
+    }),
+    [canExcludeCrmContacts, canViewCrmHistory, channel, hasConversation, operationalStatus, optOut, q, status]
+  );
+
+  const buildFilters = useCallback(
+    (targetPage = page) => ({
+      ...appliedFilters.current,
       page: targetPage,
       limit: PAGE_LIMIT,
+      cursor: cursorHistory.current.cursorFor(targetPage) ?? null,
     }),
-    [canExcludeCrmContacts, canViewCrmHistory, channel, hasConversation, operationalStatus, optOut, page, q, status]
+    [page]
   );
 
   const loadContactsWithFilters = useCallback(
-    async (activeSession: AppSession, filters: Parameters<typeof fetchAppCrmContacts>[1]) => {
+    async (
+      activeSession: AppSession,
+      filters: Parameters<typeof fetchAppCrmContacts>[1],
+      message = "Carregando contatos…",
+      commit: (response: AppCrmContactsResponse) => void = (response) => {
+        setContacts(response);
+        setPage(response.pagination.page);
+      }
+    ) => {
       const requestId = contactsResponseGuard.current.begin();
+      const operationId = beginProcessing(message);
       try {
         const response = await fetchAppCrmContacts(activeSession, filters);
-        if (!contactsResponseGuard.current.isCurrent(requestId)) return false;
-        setContacts(response);
-        return true;
+        const accepted = acceptCurrentCrmContactsResponse({
+          history: cursorHistory.current,
+          requestId,
+          isCurrent: contactsResponseGuard.current.isCurrent,
+          response,
+          commit,
+        });
+        return accepted ? response : null;
       } catch (err) {
-        if (!contactsResponseGuard.current.isCurrent(requestId)) return false;
+        if (!contactsResponseGuard.current.isCurrent(requestId)) return null;
         throw err;
       } finally {
-        if (contactsResponseGuard.current.isCurrent(requestId)) setLoading(false);
+        endProcessing(operationId);
+        if (mountedRef.current && contactsResponseGuard.current.isCurrent(requestId)) setLoading(false);
       }
     },
-    []
+    [beginProcessing, endProcessing]
   );
 
   const loadContacts = useCallback(
-    async (activeSession: AppSession, targetPage = page) => {
-      await loadContactsWithFilters(activeSession, buildFilters(targetPage));
+    async (activeSession: AppSession, targetPage = page, message = "Atualizando contatos…") => {
+      return loadContactsWithFilters(activeSession, buildFilters(targetPage), message);
     },
     [buildFilters, loadContactsWithFilters, page]
   );
@@ -2101,6 +2172,8 @@ export default function AppCrmContactsPage() {
     }
     setLoading(true);
     setError(null);
+    cursorHistory.current.reset();
+    const initialOperationId = beginProcessing("Carregando contatos…");
     const responseGuard = contactsResponseGuard.current;
     const requestId = responseGuard.begin();
     const cancel = startIndependentCrmLoad({
@@ -2110,7 +2183,16 @@ export default function AppCrmContactsPage() {
         setStatuses(statusesResponse.settings.crmBusinessStatuses.filter((item) => item.isActive !== false));
       },
       onContacts: (contactsResponse) => {
-        if (responseGuard.isCurrent(requestId)) setContacts(contactsResponse);
+        acceptCurrentCrmContactsResponse({
+          history: cursorHistory.current,
+          requestId,
+          isCurrent: responseGuard.isCurrent,
+          response: contactsResponse,
+          commit: (response) => {
+            setContacts(response);
+            setPage(response.pagination.page);
+          },
+        });
       },
       onStatusesError: (err) => {
         const typed = err as AppApiError;
@@ -2130,21 +2212,33 @@ export default function AppCrmContactsPage() {
         setError(normalizeAppErrorMessage(typed, "Não foi possível carregar os contatos."));
       },
       onContactsSettled: () => {
+        endProcessing(initialOperationId);
         if (responseGuard.isCurrent(requestId)) setLoading(false);
       },
     });
     return () => {
       cancel();
+      processingRegistry.current.end(initialOperationId);
       if (responseGuard.isCurrent(requestId)) responseGuard.invalidate();
     };
-  }, [handleUnauthorized, router]);
+  }, [beginProcessing, endProcessing, handleUnauthorized, router]);
 
   const applyFilters = useCallback(() => {
     if (!session) return;
     setLoading(true);
     setError(null);
-    setPage(1);
-    loadContacts(session, 1)
+    const filters = buildDraftFilters();
+    loadContactsWithFilters(
+      session,
+      { ...filters, page: 1, limit: PAGE_LIMIT, cursor: null },
+      "Aplicando filtros…",
+      (response) => {
+        cursorHistory.current.reset();
+        appliedFilters.current = filters;
+        setContacts(response);
+        setPage(response.pagination.page);
+      }
+    )
       .catch((err) => {
         const typed = err as AppApiError;
         if (typed.status === 401) {
@@ -2153,20 +2247,30 @@ export default function AppCrmContactsPage() {
         }
         setError(normalizeAppErrorMessage(typed, "Não foi possível aplicar os filtros."));
       });
-  }, [handleUnauthorized, loadContacts, session]);
+  }, [buildDraftFilters, handleUnauthorized, loadContactsWithFilters, session]);
 
   const clearFilters = useCallback(() => {
-    setQ("");
-    setStatus("");
-    setChannel("");
-    setHasConversation("");
-    setOptOut("");
-    setOperationalStatus("active");
-    setPage(1);
     if (!session) return;
     setLoading(true);
     setError(null);
-    loadContactsWithFilters(session, { page: 1, limit: PAGE_LIMIT, operationalStatus: "active" })
+    const clearedFilters = { operationalStatus: "active" as const };
+    loadContactsWithFilters(
+      session,
+      { page: 1, limit: PAGE_LIMIT, ...clearedFilters, cursor: null },
+      "Limpando filtros…",
+      (response) => {
+        setQ("");
+        setStatus("");
+        setChannel("");
+        setHasConversation("");
+        setOptOut("");
+        setOperationalStatus("active");
+        cursorHistory.current.reset();
+        appliedFilters.current = clearedFilters;
+        setContacts(response);
+        setPage(response.pagination.page);
+      }
+    )
       .catch((err) => {
         const typed = err as AppApiError;
         if (typed.status === 401) {
@@ -2181,10 +2285,10 @@ export default function AppCrmContactsPage() {
     (targetPage: number) => {
       if (!session) return;
       const safePage = Math.max(1, targetPage);
+      if (!cursorHistory.current.canLoad(safePage)) return;
       setLoading(true);
       setError(null);
-      setPage(safePage);
-      loadContacts(session, safePage)
+      loadContacts(session, safePage, safePage > page ? "Carregando próxima página…" : "Carregando página anterior…")
         .catch((err) => {
           const typed = err as AppApiError;
           if (typed.status === 401) {
@@ -2194,7 +2298,7 @@ export default function AppCrmContactsPage() {
           setError(normalizeAppErrorMessage(typed, "Não foi possível carregar a página."));
         });
     },
-    [handleUnauthorized, loadContacts, session]
+    [handleUnauthorized, loadContacts, page, session]
   );
 
   const loadContactDetail = useCallback(
@@ -2279,6 +2383,7 @@ export default function AppCrmContactsPage() {
       successMessage: string,
       fallbackMessage: string
     ) => {
+      const operationId = beginProcessing("Atualizando contato…");
       try {
         const response = await action();
         replaceContactFromDetail(response);
@@ -2296,9 +2401,11 @@ export default function AppCrmContactsPage() {
             : message
         );
         setError(message);
+      } finally {
+        endProcessing(operationId);
       }
     },
-    [handleUnauthorized, replaceContactFromDetail]
+    [beginProcessing, endProcessing, handleUnauthorized, replaceContactFromDetail]
   );
 
   const updateContactBasics = useCallback(
@@ -2422,6 +2529,7 @@ export default function AppCrmContactsPage() {
   const createContact = useCallback(
     async (payload: { name: string | null; phone: string }) => {
       if (!session) return;
+      const operationId = beginProcessing("Salvando contato…");
       try {
         const response = await createAppCrmContact(session, payload);
         replaceContactFromDetail(response);
@@ -2451,9 +2559,11 @@ export default function AppCrmContactsPage() {
           return;
         }
         throw typed;
+      } finally {
+        endProcessing(operationId);
       }
     },
-    [handleUnauthorized, loadContacts, replaceContactFromDetail, session]
+    [beginProcessing, endProcessing, handleUnauthorized, loadContacts, replaceContactFromDetail, session]
   );
 
 		  const previewCsvImport = useCallback(
@@ -2501,7 +2611,7 @@ export default function AppCrmContactsPage() {
       importRecoveryKey(session),
       operation,
       localStorage,
-      () => loadContacts(session, 1)
+      async () => { await loadContacts(session, 1); }
     );
     setCsvInitialOperation(null);
     setPage(1);
@@ -2533,7 +2643,7 @@ export default function AppCrmContactsPage() {
           recoveryKey,
           recovered.operation,
           localStorage,
-          () => loadContactsRef.current(session, 1)
+          async () => { await loadContactsRef.current(session, 1); }
         );
       } catch {
         if (cancelled) return;
@@ -2592,7 +2702,12 @@ export default function AppCrmContactsPage() {
       subtitle="Lista operacional de contatos por organização."
       titleSurface="strong"
     >
-      <section className="grid min-h-0 gap-4">
+      <section className="relative grid min-h-0 gap-4" aria-busy={Boolean(processing)}>
+        <ScreenProcessingOverlay
+          active={Boolean(processing)}
+          title={processing?.title ?? "Contatos"}
+          message={processing?.message ?? "Carregando contatos…"}
+        />
         <div className="sticky top-[242px] z-30 grid gap-2 sm:top-[256px] lg:fixed lg:left-5 lg:right-5 lg:top-[156px] lg:mx-auto lg:w-[calc(100%-2.5rem)] lg:max-w-[1400px] min-[1441px]:top-[210px]">
           <div className="theme-surface-strong theme-shadow rounded-xl border p-4 backdrop-blur">
             <div
@@ -2776,16 +2891,6 @@ export default function AppCrmContactsPage() {
                 >
                   {">"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => goToPage(Math.max(contacts.pagination.totalPages, 1))}
-                  disabled={!contacts.pagination.hasNextPage || loading}
-                  title="Última página"
-                  aria-label="Última página"
-                  className="theme-nav-link inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {">>"}
-                </button>
               </div>
             ) : null}
           </div>
@@ -2890,6 +2995,7 @@ export default function AppCrmContactsPage() {
           onInspect={inspectCsvImport}
           onPreview={previewCsvImport}
           onConfirm={confirmCsvImport}
+          onBlockingChange={handleCsvBlockingChange}
         />
       ) : null}
       {selectedLeadId ? (

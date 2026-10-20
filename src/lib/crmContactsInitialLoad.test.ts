@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createLatestResponseGuard, startIndependentCrmLoad } from "./crmContactsInitialLoad";
 import { fetchAppCrmContacts, type AppSession } from "./appClientApi";
+import { ScreenProcessingRegistry } from "./screenProcessing";
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -61,16 +62,41 @@ test("latest response guard rejects an obsolete contacts response", () => {
   assert.equal(guard.isCurrent(second), false);
 });
 
+test("cancellation during initial loading ends its token and ignores later completion", async () => {
+  const contacts = deferred<{ items: string[] }>();
+  const overlay = new ScreenProcessingRegistry();
+  const operationId = overlay.begin("Contatos", "Carregando contatos…");
+  const events: string[] = [];
+  const cancel = startIndependentCrmLoad({
+    loadStatuses: async () => [],
+    loadContacts: () => contacts.promise,
+    onStatuses: () => undefined,
+    onContacts: () => events.push("contacts"),
+    onStatusesError: () => undefined,
+    onContactsError: () => events.push("error"),
+    onContactsSettled: () => events.push("settled"),
+  });
+  cancel();
+  overlay.end(operationId);
+  contacts.resolve({ items: ["late"] });
+  await settle();
+  assert.deepEqual(events, []);
+  assert.equal(overlay.size, 0);
+  assert.equal(overlay.end(operationId), false);
+});
+
 test("contacts GET uses an explicit timeout above the backend transaction and never POSTs", async () => {
   const originalFetch = globalThis.fetch;
   const originalSetTimeout = globalThis.setTimeout;
   const methods: string[] = [];
+  const urls: string[] = [];
   const timeouts: number[] = [];
   globalThis.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
     timeouts.push(timeout ?? 0);
     return originalSetTimeout(handler, timeout, ...args);
   }) as typeof setTimeout;
-  globalThis.fetch = async (_input, init) => {
+  globalThis.fetch = async (input, init) => {
+    urls.push(String(input));
     methods.push(init?.method ?? "GET");
     return new Response(JSON.stringify({ ok: true, items: [], pagination: { page: 1, limit: 50, total: 0 } }), {
       status: 200,
@@ -79,8 +105,10 @@ test("contacts GET uses an explicit timeout above the backend transaction and ne
   };
   const session = { baseUrl: "https://synthetic.invalid", token: "synthetic", user: { id: "user", clientId: "tenant", role: "ADMIN" } } as AppSession;
   try {
-    await fetchAppCrmContacts(session, { page: 1, limit: 50 });
+    await fetchAppCrmContacts(session, { page: 2, limit: 50, cursor: "opaque-cursor" });
     assert.deepEqual(methods, ["GET"]);
+    assert.match(urls[0], /page=2/);
+    assert.match(urls[0], /cursor=opaque-cursor/);
     assert.ok(timeouts.includes(20_000));
     assert.ok(20_000 > 15_000);
   } finally {

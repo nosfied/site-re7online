@@ -205,8 +205,8 @@ test("CRM CSV re-entry resolves persisted operation by GET before deciding wheth
   assert.ok(pageBlock.includes("await finalizeTerminalImportRecovery("));
   assert.ok(pageBlock.includes("const loadContactsRef = useRef(loadContacts);"));
   assert.ok(pageBlock.includes("loadContactsRef.current = loadContacts;"));
-  assert.ok(pageBlock.includes("() => loadContactsRef.current(session, 1)"));
-  assert.ok(pageBlock.includes("loadContactsWithFilters(activeSession, buildFilters(targetPage))"));
+  assert.ok(pageBlock.includes("async () => { await loadContactsRef.current(session, 1); }"));
+  assert.ok(pageBlock.includes("loadContactsWithFilters(activeSession, buildFilters(targetPage), message)"));
   assert.ok(pageBlock.includes("}, [canManageCrmContacts, session]);"));
   assert.ok(pageBlock.includes("Os filtros atuais foram preservados e podem ocultar contatos importados."));
   assert.ok(!pageBlock.includes("localStorage.getItem(importRecoveryKey(session))) setCsvModalOpen(true)"));
@@ -332,5 +332,19 @@ test("CRM initial list is independent from statuses and rejects obsolete respons
   assert.ok(pageBlock.includes('Não foi possível carregar os contatos.'));
   assert.ok(pageBlock.includes('Não foi possível carregar as situações do CRM.'));
   assert.ok(!pageBlock.includes("Promise.all([fetchAppCrmStatuses"));
+});
+
+test("CRM list uses cursor history and one centralized blocking overlay", () => {
+  const pageBlock = pageSource.slice(pageSource.indexOf("export default function AppCrmContactsPage"));
+  assert.ok(pageBlock.includes("acceptCurrentCrmContactsResponse({"));
+  assert.ok(pageBlock.includes("setPage(response.pagination.page)"));
+  assert.ok(!pageBlock.includes("setPage(safePage)"));
+  assert.ok(pageBlock.includes("cursorHistory.current.reset()"));
+  assert.ok(pageBlock.includes("!cursorHistory.current.canLoad(safePage)"));
+  assert.ok(pageBlock.includes("Carregando próxima página…"));
+  assert.ok(pageBlock.includes("Carregando página anterior…"));
+  assert.ok(pageBlock.includes("<ScreenProcessingOverlay"));
+  assert.ok(pageBlock.includes("aria-busy={Boolean(processing)}"));
+  assert.ok(!pageBlock.includes('title="Última página"'));
 });
 

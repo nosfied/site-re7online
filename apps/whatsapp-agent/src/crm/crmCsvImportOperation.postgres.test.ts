@@ -69,11 +69,27 @@ test("lost final commit response recovered as COMPLETED from durable receipt",as
 test("stale processing is UNKNOWN without failed/rollback receipt",async()=>{
  const p=await fixture();await db.event.create({data:{clientId:p.clientId,eventName:IMPORT_EVENTS.started,requestId:p.operationId,payloadJson:{inputHash:'synthetic'},createdAt:new Date('2020-01-01')}});const r=await read(db,p.clientId,p.operationId);assert.equal(r.status,"UNKNOWN");assert.equal(r.summary,null);
 });
-test("read model counts beyond old candidate cap;empty page retains filtered total;other tenant empty",async()=>{
+test("read model keyset pagination counts beyond old candidate cap without duplicates;other tenant empty",async()=>{
  const p=await fixture();await db.lead.createMany({data:Array.from({length:4105},(_,i)=>({tenantId:p.clientId,waId:phone(i),name:i<4100?'Synthetic':'Target',status:'NEW'}))});
  const list=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{page:1,limit:50},statuses:[]});assert.equal(list.pagination.total,4105);assert.equal(list.items.length,50);
- const filtered=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{q:'Target',page:2,limit:50},statuses:[]});assert.equal(filtered.pagination.total,5);assert.equal(filtered.items.length,0);
+ assert.ok(list.pageInfo.nextCursor);const second=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{page:2,limit:50,cursor:list.pageInfo.nextCursor},statuses:[]});assert.equal(second.pagination.total,4105);assert.equal(second.items.length,50);assert.equal(new Set([...list.items,...second.items].map(item=>item.leadId)).size,100);
+ const filtered=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{q:'Target',page:1,limit:50},statuses:[]});assert.equal(filtered.pagination.total,5);assert.equal(filtered.items.length,5);
  const other=await fixture();assert.equal((await buildCrmContactsPayload(db,{clientId:other.clientId,query:{},statuses:[]})).pagination.total,0);
+});
+test("manual SQL search preserves literal LIKE metacharacters, accents and formatted phone semantics",async()=>{
+ const p=await fixture();
+ const leads=await Promise.all([
+  db.lead.create({data:{tenantId:p.clientId,waId:`${phone(6001)}-percent`,name:"Literal % marker",status:"NEW"}}),
+  db.lead.create({data:{tenantId:p.clientId,waId:`${phone(6002)}-underscore`,name:"Literal _ marker",status:"NEW"}}),
+  db.lead.create({data:{tenantId:p.clientId,waId:`${phone(6003)}-slash`,name:"Literal \\ marker",status:"NEW"}}),
+  db.lead.create({data:{tenantId:p.clientId,waId:`${phone(6004)}-accent`,name:"Ação Única",status:"NEW"}}),
+  db.lead.create({data:{tenantId:p.clientId,waId:phone(6005),phone:"(84) 91000-6005",name:"Formatted phone",status:"NEW"}}),
+  db.lead.create({data:{tenantId:p.clientId,waId:`${phone(6006)}-control`,name:"Plain marker",status:"NEW"}}),
+ ]);
+ for(const [q,expectedId] of [["%",leads[0].id],["_",leads[1].id],["\\",leads[2].id],["ação",leads[3].id],["(84) 91000-6005",leads[4].id]] as const){
+  const result=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{q,page:1,limit:50},statuses:[]});
+  assert.equal(result.pagination.total,1,q);assert.deepEqual(result.items.map(item=>item.leadId),[expectedId],q);
+ }
 });
 test("only control receipts gain critical protection; no tenant policy changed; recovered errors omit CSV identities",async()=>{
  const {classifyEventRetentionPolicy}=await import('../events/eventRetentionPolicy.js');
