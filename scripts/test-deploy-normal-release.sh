@@ -39,16 +39,36 @@ prepare_bin="$plan_fixture/prepare-bin"
 mkdir -p "$prepare_bin"
 cat > "$prepare_bin/npm" <<'NPM'
 #!/usr/bin/env bash
-exit 73
+set -euo pipefail
+printf '%s\n' "$*" >> "$TEST_NPM_LOG"
+[[ "$1" == "--prefix" ]]
+prefix="$2"
+if [[ "${3:-} ${4:-}" == "run build" ]]; then
+  if [[ "$prefix" == */apps/whatsapp-agent ]]; then
+    mkdir -p "$prefix/dist"
+    printf 'api-build\n' > "$prefix/dist/version"
+  else
+    mkdir -p "$prefix/.next"
+    printf 'frontend-build\n' > "$prefix/.next/version"
+  fi
+fi
 NPM
 chmod +x "$prepare_bin/npm"
-set +e
+prepare_release="$plan_fixture/releases/normal-${target:0:12}"
 output="$(WORKDIR="$control_worktree" RELEASES_DIR="$plan_fixture/releases" \
-  PATH="$prepare_bin:$PATH" "$script" prepare "$base" "$target" 2>&1)"
-status=$?
-set -e
-[[ $status -eq 73 ]]
-! grep -q 'not a git worktree' <<<"$output"
+  TEST_NPM_LOG="$plan_fixture/npm.log" PATH="$prepare_bin:$PATH" \
+  "$script" prepare "$base" "$target")"
+grep -q 'PREPARED_INERT' <<<"$output"
+[[ -f "$prepare_release/manifest.json" ]]
+[[ -f "$prepare_release/payload/api-dist/version" ]]
+[[ -f "$prepare_release/payload/frontend-next/version" ]]
+mapfile -t npm_calls < "$plan_fixture/npm.log"
+[[ "${#npm_calls[@]}" -eq 5 ]]
+[[ "${npm_calls[0]}" == "--prefix $prepare_release/source/apps/whatsapp-agent ci --include=dev" ]]
+[[ "${npm_calls[1]}" == "--prefix $prepare_release/source/apps/whatsapp-agent run db:generate" ]]
+[[ "${npm_calls[2]}" == "--prefix $prepare_release/source/apps/whatsapp-agent run build" ]]
+[[ "${npm_calls[3]}" == "--prefix $prepare_release/source ci" ]]
+[[ "${npm_calls[4]}" == "--prefix $prepare_release/source run build" ]]
 
 set +e
 output="$(DEPLOY_APPROVED_SHA=wrong "$script" activate /does/not/exist 2>&1)"
@@ -56,7 +76,7 @@ status=$?
 set -e
 [[ $status -ne 0 ]]
 grep -q 'invalid release directory' <<<"$output"
-echo 'normal release contract tests passed'
+echo 'normal release plan and full preparation tests passed'
 
 fixture="$(mktemp -d)"
 home_dir="$fixture/home"

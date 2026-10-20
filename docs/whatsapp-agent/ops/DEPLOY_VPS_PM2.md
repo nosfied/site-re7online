@@ -27,6 +27,11 @@ O checkout produtivo pode permanecer detached. Ele não recebe `pull`, `switch` 
 scripts/deploy-normal-release.sh prepare <base-ref> <target-ref>
 ```
 
+A preparação da API espelha o CI: `npm ci --include=dev`, depois
+`npm run db:generate` e somente então `npm run build`. Se uma preparação for
+interrompida antes dos manifests, preserve seu inventário e mova o diretório para
+`/opt/re7online/releases/failed-preparations/`; nunca reutilize o payload parcial.
+
 ## Ativar o SHA aprovado
 
 ```bash

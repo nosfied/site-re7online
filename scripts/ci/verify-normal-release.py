@@ -25,7 +25,13 @@ for marker in ("PREPARED_INERT", "DEPLOY_APPROVED_SHA", "flock -n", "pm2 save", 
 require("http://127.0.0.1:3000/app/login" in script, "canonical frontend health URL")
 require("/opt/re7online/site-re7online" not in script, "executor must not default to the live checkout")
 require('rev-parse --is-inside-work-tree' in script, "linked worktree support")
+require("run db:generate" in script, "Prisma Client generation before API build")
+require(
+    script.index("ci --include=dev") < script.index("run db:generate") < script.index("run build"),
+    "API preparation order",
+)
 require("/opt/re7online/deploy-control" in model, "detached control worktree")
+require("failed-preparations" in model, "interrupted preparation quarantine")
 require(manifest["deploymentClass"] == "NORMAL_RELEASE", "release class")
 require(manifest["components"] == ["api", "frontend"], "component order")
 require(all(value is False for value in manifest["changeBoundary"].values()), "change boundary")

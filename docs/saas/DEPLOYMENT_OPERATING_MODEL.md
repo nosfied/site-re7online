@@ -37,8 +37,10 @@ Executor único: `scripts/deploy-normal-release.sh`.
    destacado no SHA canônico aprovado. O checkout produtivo pode permanecer detached
    e não é atualizado, reconstruído nem usado como mecanismo de entrega.
 3. `plan <base> <target>` classifica o diff sem mutação.
-4. `prepare <base> <target>` cria worktree isolada, constrói API/frontend e sela
-   manifesto e hashes em `/opt/re7online/releases`; PM2 e produção não são tocados.
+4. `prepare <base> <target>` cria worktree isolada. Para a API executa exatamente
+   `npm ci --include=dev`, `npm run db:generate` e `npm run build`; depois
+   constrói o frontend e sela manifesto e hashes em `/opt/re7online/releases`.
+   PM2, banco e produção não são tocados.
 5. O owner autoriza o SHA completo em `DEPLOY_APPROVED_SHA`.
 6. `activate <release-dir>` adquire lock exclusivo, captura PM2/dump privados e
    descobre os diretórios vivos pela configuração atual do PM2.
@@ -63,6 +65,12 @@ DEPLOY_APPROVED_SHA=<sha-completo> scripts/deploy-normal-release.sh activate <re
 Não se executa `pull`, `switch` ou `checkout` no checkout produtivo para uma
 release normal. O executor deriva seu repositório de controle do próprio caminho;
 `WORKDIR` só é usado explicitamente em testes ou recuperação supervisionada.
+
+Uma preparação interrompida nunca é reutilizada nem sobrescrita. Seu diretório é
+inventariado e movido, de forma recuperável, para
+`/opt/re7online/releases/failed-preparations/` antes de uma nova preparação do
+mesmo SHA. A ausência de `manifest.json` e `manifest.sha256` prova que ela não
+chegou ao estado `PREPARED_INERT`.
 
 ## Classificação de impacto
 
