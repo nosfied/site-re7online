@@ -48,7 +48,7 @@ assert_clean_control_tree() {
 
 classify() {
   local base_sha="$1" target_sha="$2" output="$3"
-  "$WORKDIR/scripts/deploy-impact-matrix.sh" "$base_sha" "$target_sha" >"$output" || {
+  DEPLOY_REPO_ROOT="$WORKDIR" "$WORKDIR/scripts/deploy-impact-matrix.sh" "$base_sha" "$target_sha" >"$output" || {
     cat "$output"
     die "impact matrix denied NORMAL_RELEASE"
   }
@@ -105,7 +105,7 @@ prepare_release() {
   git -C "$WORKDIR" worktree add --detach "$source_dir" "$target_sha"
 
   matrix="$(mktemp)"
-  "$WORKDIR/scripts/deploy-impact-matrix.sh" "$base_sha" "$target_sha" >"$matrix"
+  DEPLOY_REPO_ROOT="$WORKDIR" "$WORKDIR/scripts/deploy-impact-matrix.sh" "$base_sha" "$target_sha" >"$matrix"
   local api_build frontend_build
   api_build="$(matrix_value BACKEND_BUILD "$matrix")"
   frontend_build="$(matrix_value FRONTEND_BUILD "$matrix")"

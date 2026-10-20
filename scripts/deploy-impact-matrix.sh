@@ -10,7 +10,8 @@ else
 fi
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(git -C "$script_dir" rev-parse --show-toplevel)"; cd "$repo_root"
+repo_root="${DEPLOY_REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || git -C "$script_dir" rev-parse --show-toplevel)}"
+cd "$repo_root"
 git rev-parse --verify --quiet "$base^{commit}" >/dev/null || { echo "ERROR: invalid base commit: $base" >&2; exit 64; }
 git rev-parse --verify --quiet "$head^{commit}" >/dev/null || { echo "ERROR: invalid head commit: $head" >&2; exit 64; }
 mapfile -t changed_files < <(git diff --name-only "$base" "$head")
