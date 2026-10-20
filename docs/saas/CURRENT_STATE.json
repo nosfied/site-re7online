@@ -1,11 +1,11 @@
 {
   "schemaVersion": 4,
-  "updatedAtUtc": "2026-10-20T13:53:00Z",
+  "updatedAtUtc": "2026-10-20T17:08:28Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
   "activeOperationalRecord": "docs/saas/releases/FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
-  "normalReleaseExecutor": "scripts/deploy-normal-release.sh",
+  "normalReleaseExecutor": "scripts/deploy-immutable-release.py",
   "production": {
     "status": "DEPLOYED_VERIFIED_SAFE_RETURN",
     "certifiedByThisFile": false,
@@ -20,7 +20,7 @@
     "functionalCandidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
     "baseCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
     "state": "STAGED_INERT_NOT_DEPLOYED",
-    "deploymentClass": "NORMAL_RELEASE",
+    "deploymentClass": "IMMUTABLE_RELEASE",
     "manifest": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_NORMAL_RELEASE.json",
     "components": ["api", "frontend"],
     "workerChanged": false,
@@ -36,9 +36,9 @@
     "obs1Record": "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json"
   },
   "nextActions": [
-    "plan exact base-to-target impact and require API plus frontend only",
-    "prepare isolated immutable payload without touching PM2",
-    "authorize exact SHA and activate with health, automatic rollback and one PM2 save"
+    "prepare the complete immutable release externally with Node 20.20.0",
+    "probe the real frontend runtime on an alternate local port",
+    "promote complete runtimes, accept, then commit with one PM2 save"
   ],
   "branchConvergence": {"state": "CONTROLLED_DIVERGENCE", "plan": "docs/saas/BRANCH_CONVERGENCE_PLAN_2026-10-18.md", "forbidden": ["force push", "destructive rebase", "blind merge into main"]}
 }

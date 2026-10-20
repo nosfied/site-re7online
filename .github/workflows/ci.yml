@@ -38,12 +38,12 @@ jobs:
         run: python3 scripts/ci/verify-documentation-freshness.py
       - name: Keep artifact engineering as break-glass only
         run: python3 scripts/ci/verify-artifact-release-standard.py
-      - name: Validate canonical normal release
+      - name: Validate canonical immutable release
         run: python3 scripts/ci/verify-normal-release.py
       - name: Validate deploy impact classifier
         run: bash scripts/test-deploy-impact-matrix.sh
-      - name: Validate normal release activation and rollback
-        run: bash scripts/test-deploy-normal-release.sh
+      - name: Validate immutable release activation and rollback
+        run: python3 scripts/ci/verify-immutable-release.py
 
   frontend:
     name: Frontend build and lint

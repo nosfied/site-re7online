@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cat >&2 <<'EOF'
+DENIED: deploy-normal-release.sh is historical and must not be used.
+It copied payloads into active CWDs and did not prove rollback command success.
+Use scripts/deploy-immutable-release.py and the immutable-release runbook.
+EOF
+exit 78
+
 # Canonical NORMAL_RELEASE deploy for the Converta single-VPS/PM2 topology.
 # prepare is inert; activate requires an exact-SHA authorization and rolls back
 # API/frontend artifacts automatically. Worker, database and credentials are out.

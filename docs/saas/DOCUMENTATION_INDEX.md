@@ -11,7 +11,7 @@
 - [Estado canônico verificável](CURRENT_STATE.json)
 - [Registro do retorno seguro](releases/FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json)
 - [Release funcional ativa](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json)
-- [Modelo operacional — Normal Release V1](DEPLOYMENT_OPERATING_MODEL.md)
+- [Modelo operacional — Immutable Release V2](DEPLOYMENT_OPERATING_MODEL.md)
 - [Política de mudanças](CHANGE_POLICY.md)
 - [Mapa vigente do produto](PRODUCT_MAP_CURRENT_2026-10-19.md)
 
@@ -19,7 +19,7 @@
 
 - [Análise funcional da listagem CRM](CRM_CONTACTS_LIST_RECOVERY_2026-10-19.md)
 - [Manifesto normal vigente](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_NORMAL_RELEASE.json)
-- Executor: `scripts/deploy-normal-release.sh`.
+- Executor: `scripts/deploy-immutable-release.py`.
 - Estado: `STAGED_INERT / NOT DEPLOYED`.
 
 ## Backlog ativo
@@ -36,4 +36,4 @@
 - [Plano de convergência de branches](BRANCH_CONVERGENCE_PLAN_2026-10-18.md)
 
 Preparações, rehearsals e verificadores single-use anteriores são evidência histórica.
-Não autorizam repetição e não são dependências de `NORMAL_RELEASE`.
+Não autorizam repetição e não são dependências de `IMMUTABLE_RELEASE`.

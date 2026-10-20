@@ -28,11 +28,13 @@ O manifesto vigente é
 
 ## Método de implantação
 
-O executor canônico da faixa normal é `scripts/deploy-normal-release.sh`, com três
-atos claros: `plan`, `prepare` inerte e `activate` mediante autorização do SHA exato.
-Ele constrói fora do runtime, troca somente API/frontend, valida health, preserva o
-worker e restaura automaticamente os artefatos anteriores antes de qualquer
-`pm2 save` se houver falha.
+O executor canônico é `scripts/deploy-immutable-release.py`. `prepare` constrói
+externamente com Node `20.20.0`; `probe-frontend` valida em porta alternativa;
+`promote` seleciona runtimes integrais e termina em `AWAITING_ACCEPTANCE`; `commit`
+revalida o trio e salva PM2 uma única vez. O retorno restaura definições PM2
+completas e só declara sucesso depois de identidade e health comprovados.
+
+`scripts/deploy-normal-release.sh` está `REPROVADO / HISTÓRICO / NÃO UTILIZÁVEL`.
 
 `Deploy V2`, bindings, nonces, journals, markers e closures single-use foram
 reclassificados como históricos da tentativa de 19–20/10. Não são dependências da
@@ -40,11 +42,10 @@ rota normal. O fluxo artifact-bound permanece disponível somente como `BREAK_GL
 
 ## Próximos atos
 
-1. Rodar `plan` da base operacional ao commit de entrega aprovado e exigir impacto
-   somente em API + frontend.
-2. Rodar `prepare` e registrar a raiz inerte e o SHA completo, sem tocar PM2.
-3. Autorizar esse SHA e executar `activate`; registrar health, worker preservado,
-   `pm2 save` único e o resultado funcional GET-only.
+1. Rodar `prepare` fora da VPS e exigir impacto somente em API + frontend.
+2. Rodar `probe-frontend` local, transferir o pacote autenticado e extrair em raiz nova.
+3. Executar `promote`, aceite GET-only e `commit`; registrar health, worker preservado
+   e `pm2 save` único.
 
 OBS-1 continua separado: `PREPARED / SCHEDULED WINDOW REQUIRED / NO CHANGE`.
 Nenhum segredo é versionado.

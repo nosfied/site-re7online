@@ -1,6 +1,6 @@
 # Modelo operacional de implantação do Converta
 
-**Status: CANÔNICO / NORMAL RELEASE V1 / PRODUÇÃO VIVA**
+**Status: CANÔNICO / IMMUTABLE RELEASE V2 / PRODUÇÃO VIVA**
 
 Este documento é a única rota normal de entrega. O objetivo é permitir releases
 pequenas e frequentes sem transformar cada alteração em um projeto de infraestrutura.
@@ -28,46 +28,54 @@ Não são gates nem executores da faixa normal.
 - falha de health restaura os diretórios anteriores e não executa `pm2 save`;
 - documentação registra fatos observados; `NOT EXERCISED` nunca vira `PASS`.
 
-## NORMAL_RELEASE — rota padrão
+## IMMUTABLE_RELEASE — rota padrão
 
-Executor único: `scripts/deploy-normal-release.sh`.
+Executor único: `scripts/deploy-immutable-release.py`.
 
 1. CI aprova build, testes e o contrato do executor.
 2. Um worktree de controle descartável é criado em `/opt/re7online/deploy-control`,
    destacado no SHA canônico aprovado. O checkout produtivo pode permanecer detached
    e não é atualizado, reconstruído nem usado como mecanismo de entrega.
-3. `plan <base> <target>` classifica o diff sem mutação.
-4. `prepare <base> <target>` cria worktree isolada. Para a API executa exatamente
-   `npm ci --include=dev`, `npm run db:generate` e `npm run build`; depois
-   constrói o frontend e sela manifesto e hashes em `/opt/re7online/releases`.
-   PM2, banco e produção não são tocados.
-5. O owner autoriza o SHA completo em `DEPLOY_APPROVED_SHA`.
-6. `activate <release-dir>` adquire lock exclusivo, captura PM2/dump privados e
-   descobre os diretórios vivos pela configuração atual do PM2. Em shell SSH não
-   interativo, o executor resolve `pm2` no PATH ou nas instalações usuais
-   `~/.npm-global/bin`, `~/.local/bin` e `/usr/local/bin`, sem alterar o
-   ambiente global.
-7. A API é trocada, recarregada e validada; depois o frontend é validado em
-   `http://127.0.0.1:3000/app/login`.
-8. Qualquer negativa restaura os diretórios anteriores e recarrega somente os
-   componentes já alterados. O worker nunca é recarregado.
-9. Com ambos saudáveis e worker preservado, `pm2 save` ocorre exatamente uma vez.
+3. `prepare` roda externamente com Node `20.20.0`, classifica o diff, constrói apenas
+   componentes afetados e produz runtimes completos, índice integral, tar
+   reprodutível e extração independente. Nenhum build normal ocorre na VPS.
+4. `probe-frontend` inicia o runtime frontend integral em porta alternativa, usando
+   o mesmo launcher definitivo. Login, Inbox, CRM, asset e três identidades estáveis
+   são obrigatórios. A API não recebe probe paralelo sem modo inerte comprovado.
+5. O pacote imutável é transferido e extraído numa raiz nova sob
+   `/opt/re7online/releases`; hashes e índice são revalidados antes de PM2.
+6. `promote` captura dump e definições PM2 completas em uma transação privada 0600,
+   seleciona por componente a release integral e termina em `AWAITING_ACCEPTANCE`.
+7. Cada componente exige PID/start ticks estáveis, CWD, entrypoint, interpreter,
+   SHA, contadores e health. A API também exige propriedade direta de LISTEN:3001.
+8. Worker permanece intacto quando não impactado; quando a matriz marca mudança,
+   recebe runtime, definição, verificação e retorno próprios.
+9. `commit` vincula o aceite ao target, revalida as três identidades e executa
+   `pm2 save` exatamente uma vez.
+10. `rollback` restaura definições anteriores. Só declara `ROLLED_BACK` após todos
+    os comandos, identidades e health passarem; qualquer negativa termina em
+    `ROLLBACK_FAILED` e código não zero.
 
 Comandos:
 
 ```bash
-git -C /opt/re7online/site-re7online fetch origin review/campaign-recovery-20260926
-git -C /opt/re7online/site-re7online worktree add --detach \
-  /opt/re7online/deploy-control/<sha-canônico-curto> <sha-canônico-completo>
-cd /opt/re7online/deploy-control/<sha-canônico-curto>
-scripts/deploy-normal-release.sh plan <base-ref> <target-ref>
-scripts/deploy-normal-release.sh prepare <base-ref> <target-ref>
-DEPLOY_APPROVED_SHA=<sha-completo> scripts/deploy-normal-release.sh activate <release-dir>
+nvm exec 20.20.0 scripts/deploy-immutable-release.py prepare \
+  --repo <worktree-de-controle> --base <base-ref> --target <target-ref> \
+  --output <raiz-local-exclusiva>
+scripts/deploy-immutable-release.py probe-frontend \
+  --release <raiz-local-exclusiva> --pm2 <pm2-cli-local> --port 3100
+scripts/deploy-immutable-release.py promote \
+  --release <release-extraida> --transaction <transacao-privada-exclusiva>
+scripts/deploy-immutable-release.py commit \
+  --transaction <transacao-privada-exclusiva> --acceptance <aceite-privado-0600>
 ```
 
-Não se executa `pull`, `switch` ou `checkout` no checkout produtivo para uma
-release normal. O executor deriva seu repositório de controle do próprio caminho;
-`WORKDIR` só é usado explicitamente em testes ou recuperação supervisionada.
+Não se executa `pull`, `switch`, `checkout`, `npm`, Prisma ou build no checkout
+produtivo para uma release normal.
+
+`scripts/deploy-normal-release.sh` está **REPROVADO / HISTÓRICO / NÃO UTILIZÁVEL**:
+copiava payload para CWD ativo, validava depois da substituição e podia imprimir
+`ROLLED_BACK` mesmo com comandos de retorno falhos.
 
 Uma preparação interrompida nunca é reutilizada nem sobrescrita. Seu diretório é
 inventariado e movido, de forma recuperável, para
@@ -92,7 +100,7 @@ incidente não pode voltar a ser requisito das releases comuns.
 
 ## Release pendente
 
-A correção da listagem de contatos é `NORMAL_RELEASE`, com base operacional
+A correção da listagem de contatos é `IMMUTABLE_RELEASE`, com base operacional
 `b8cc113dc3e27a6818a1074f51c38eaa0e569448`, fonte funcional `f5028de1e530666623dcc95519e744350671cb02`
 e componentes API + frontend. Worker, banco, schema, dependências e credenciais não
 mudam. Ela permanece `STAGED_INERT / NOT DEPLOYED` até uma execução real registrada.

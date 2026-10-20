@@ -1,12 +1,12 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "releaseId": "crm-contacts-list-recovery-f5028de1",
-  "deploymentClass": "NORMAL_RELEASE",
+  "deploymentClass": "IMMUTABLE_RELEASE",
   "baseCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
   "functionalCandidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
   "components": ["api", "frontend"],
-  "executor": "scripts/deploy-normal-release.sh",
-  "authorization": "DEPLOY_APPROVED_SHA_EQUALS_PREPARED_TARGET_COMMIT",
+  "executor": "scripts/deploy-immutable-release.py",
+  "authorization": "POST_SELECTION_ACCEPTANCE_BOUND_TO_TARGET_AND_CANDIDATE_IDENTITIES",
   "changeBoundary": {
     "workerChanged": false,
     "databaseChanged": false,
@@ -18,15 +18,16 @@
   "requiredGates": [
     "ci_pass",
     "read_only_impact_plan",
-    "isolated_build",
-    "sealed_payload_manifest",
-    "exact_sha_authorization",
-    "api_health",
-    "frontend_health",
+    "external_node_20_20_0_build",
+    "independent_extraction",
+    "real_frontend_candidate_on_alternate_port",
+    "sealed_complete_runtime_manifest",
+    "api_identity_socket_and_health",
+    "frontend_identity_build_id_assets_and_health",
     "worker_preserved",
     "pm2_save_once_after_health"
   ],
-  "rollback": "AUTOMATIC_BEFORE_PM2_SAVE",
+  "rollback": "RESTORE_FULL_PM2_DEFINITIONS_AND_VERIFY_BEFORE_ROLLED_BACK",
   "promotionAuthorized": false,
   "state": "STAGED_INERT_NOT_DEPLOYED"
 }

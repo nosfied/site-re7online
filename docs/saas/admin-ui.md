@@ -23,7 +23,9 @@ pm2 env 0 | awk -F': ' '/^ADMIN_TOKEN:/{print $2; exit}'
 
 ## Deploy do frontend admin
 
-O frontend admin e servido pelo processo PM2 `re7-admin-front` e o build roda na raiz do repo na VPS:
+O frontend admin é servido pelo processo PM2 `re7-admin-front`. O build ocorre
+externamente com Node 20.20.0; a VPS recebe e seleciona uma release integral e
+imutável. O antigo build na raiz do repo na VPS é histórico:
 
 ```bash
 cd /opt/re7online/site-re7online

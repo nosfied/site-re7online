@@ -1,5 +1,12 @@
 # DEPLOY LOG
 
+> **HISTÓRICO / NÃO CANÔNICO.** Este arquivo deixou de receber registros em abril
+> de 2026 e não representa a linhagem produtiva de agosto/setembro. Novos deploys
+> são registrados como uma linha JSON validável em [`DEPLOY_LOG.jsonl`](DEPLOY_LOG.jsonl),
+> conforme [`DEPLOY_LOG.schema.json`](DEPLOY_LOG.schema.json). Os registros abaixo
+> permanecem somente como evidência histórica; não devem ser completados por
+> inferência retrospectiva.
+
 Registro minimo dos deploys manuais do `whatsapp-agent`.
 
 Preencher a cada deploy:

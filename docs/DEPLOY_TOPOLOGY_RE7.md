@@ -2,6 +2,12 @@
 
 Documento operacional para evitar erro de deploy entre Vercel, VPS e dominios publicos.
 
+> **Topologia canônica desde 20/10/2026:** Converta usa releases completas,
+> imutáveis e versionadas sob `/opt/re7online/releases`. O checkout
+> `/opt/re7online/site-re7online` é somente fonte/controle histórico e nunca é CWD
+> de uma nova release. Build de API, frontend e worker ocorre externamente com
+> Node `20.20.0`; a VPS de 1,9 GiB não é ambiente de build.
+
 ## Estado atual
 
 ### Dominio publico
@@ -120,44 +126,43 @@ Usar quando mudar:
 - `src/lib/whatsappAdminApi.ts`
 - frontend operacional servido pela VPS
 
-Passos basicos na VPS:
+Fluxo canônico:
 
 ```bash
-cd /opt/re7online/site-re7online
-git fetch origin
-git checkout <commit>
-git rev-parse --short HEAD
-
-npm run build
-
-pm2 restart re7-admin-front --update-env
-
-sleep 3
-pm2 status
+nvm exec 20.20.0 scripts/deploy-immutable-release.py prepare \
+  --repo <worktree-de-controle> --base <base> --target <target> \
+  --output <raiz-local-exclusiva>
+scripts/deploy-immutable-release.py probe-frontend \
+  --release <raiz-local-exclusiva> --pm2 <pm2-cli-local> --port <porta-alternativa>
 ```
+
+O pacote validado é transferido e extraído em uma raiz nova. A promoção troca a
+definição PM2 para o runtime integral; nunca copia `.next` para um CWD ativo.
 
 ### 3. API / WhatsApp Agent (`api.re7online.com` e `re7-whatsapp-agent`)
 Usar quando mudar:
 - `apps/whatsapp-agent/**`
 - backend, webhook, auth, inbox API, media, chatbot, campanhas
 
-Passos basicos na VPS:
+Fluxo canônico:
 
 ```bash
-cd /opt/re7online/site-re7online
-git fetch origin
-git checkout <commit>
-git rev-parse --short HEAD
-
-cd /opt/re7online/site-re7online/apps/whatsapp-agent
-npm run build
-
-pm2 restart re7-whatsapp-agent --update-env
-
-sleep 3
-pm2 status
-curl -sS http://127.0.0.1:3001/health
+scripts/deploy-immutable-release.py promote \
+  --release <release-extraida> --transaction <transacao-privada-exclusiva>
 ```
+
+O executor captura antes do primeiro efeito as definições PM2 completas. Seleciona
+API, worker quando a matriz exigir, e frontend por definições explícitas. O aceite
+gera um arquivo privado separado; `commit` revalida identidades e executa `pm2 save`
+uma única vez. Rollback restaura as definições anteriores e só declara
+`ROLLED_BACK` depois de identidade e health aprovados.
+
+### Fluxo histórico — não usar
+
+O procedimento `git pull/checkout → build no checkout vivo → pm2 reload/restart`
+foi o modelo de agosto de 2026. Entre 25 e 29/09, os runtimes migraram para releases,
+mas a documentação e o controle não migraram juntos. Esse fluxo é preservado apenas
+como evidência histórica e não autoriza deploy.
 
 ## Diagnostico rapido
 

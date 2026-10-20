@@ -13,6 +13,24 @@ permanece adiada até a primeira importação legítima, observada somente por G
 
 Status: checklist operacional atual do Converta. Este documento nao altera runtime.
 
+## Gate canônico de release imutável
+
+- Build obrigatório fora da VPS com Node `20.20.0`.
+- `scripts/deploy-immutable-release.py prepare` produz runtime integral, índice,
+  manifesto, tar reprodutível e extração independente.
+- Frontend candidato deve executar antes da promoção em porta alternativa, com o
+  mesmo launcher do runtime definitivo, três amostras estáveis, BUILD_ID e HTTP 200
+  para Login, Inbox, CRM e asset do build.
+- API paralela é `DENY` enquanto não existir modo comprovado sem consumidores, jobs,
+  campanhas, importações ou efeitos externos.
+- Promoção seleciona CWD/entrypoint versionados no PM2; nunca copia `dist` ou `.next`
+  para um runtime ativo.
+- Retorno restaura definições PM2 privadas capturadas integralmente. Qualquer comando,
+  identidade ou health negativo produz `ROLLBACK_FAILED` e código não zero.
+- Worker só é selecionado quando a matriz produzir `WORKER_BUILD: YES`.
+- `pm2 save` ocorre exatamente uma vez, após aceite e revalidação final.
+- `scripts/deploy-normal-release.sh` está reprovado e bloqueado.
+
 ## Escopo
 
 Usar este checklist antes de qualquer deploy do RE7ONLINE WhatsApp Agent / Converta.
@@ -91,7 +109,8 @@ npm run db:generate
 npm run build
 ```
 
-Em VPS com cerca de 2 GiB RAM, executar o build backend antes do frontend. Nao rodar build backend/frontend em paralelo enquanto `docs/saas/OPERATIONAL_BASELINE.md` indicar baixa memoria ou ausencia de swap.
+Não executar build backend ou frontend na VPS de aproximadamente 1,9 GiB. O build
+canônico é externo, sequencial e usa Node `20.20.0`.
 
 Lint:
 

@@ -309,7 +309,8 @@ Nao executar carga nesta sprint.
 
 1. Abrir `78O.1 - Inbox Read Query Path Investigation` para investigar p95 `2.085,30 ms` em `20 VUs`.
 2. Manter `OPERATIONAL_BASELINE.md` atualizado em toda mudanca de VPS, swap, PM2, PostgreSQL, build, HA ou laboratorio de carga.
-3. Continuar build sequencial backend -> frontend enquanto a VPS permanecer nessa classe de memoria.
+3. Não executar builds normais na VPS enquanto ela permanecer nessa classe de
+   memória; construir externamente com Node 20.20.0 e promover artefatos imutáveis.
 
 ## Capacidade e retenção operacional
 

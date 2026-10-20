@@ -16,7 +16,7 @@ active = "\n".join((ROOT / p).read_text() for p in (
 for marker in (
     "20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e",
     "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0",
-    "STAGED_INERT / NOT DEPLOYED", "scripts/deploy-normal-release.sh"):
+    "STAGED_INERT / NOT DEPLOYED", "scripts/deploy-immutable-release.py"):
     require(marker in active, f"active marker {marker}")
 require("Deploy V2 histórico" in active or "Deploy V2`" in active, "Deploy V2 historical classification")
 print("DOCUMENTATION_FRESHNESS_OK: one normal path and historical evidence are explicit")
