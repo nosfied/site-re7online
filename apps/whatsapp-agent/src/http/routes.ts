@@ -423,7 +423,13 @@ import {
   type OperationsBoardCursor,
   type OperationsBoardStatus,
 } from "../operations/operationsBoardReadModel.js";
-import { buildCrmContactDetailPayload, buildCrmContactsPayload, resolveCrmContactsTotals } from "../crm/crmContactsReadModel.js";
+import {
+  buildCrmContactDetailPayload,
+  buildCrmContactsPayload,
+  countCrmContactsScope,
+  CrmContactsCursorError,
+  resolveCrmContactsTotals,
+} from "../crm/crmContactsReadModel.js";
 import { buildCrmWhatsappIdentityCandidates, normalizeCrmWhatsappIdentity } from "../crm/crmWhatsappIdentity.js";
 import {
   resolveEffectiveWhatsappOutboundTransport,
@@ -11483,16 +11489,19 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           effectiveQuery,
           isAdmin: isAdminRole(clientAuth.role),
           hasExcluded: () => hasOperationallyExcludedContact(tx as unknown as typeof prisma, client.id),
-          buildScope: (operationalStatus) => buildCrmContactsPayload(tx as unknown as typeof prisma, {
+          countScope: (operationalStatus) => countCrmContactsScope(tx as unknown as typeof prisma, {
             clientId: client.id,
             query: { operationalStatus },
-            statuses: resolvedStatuses.statuses,
           }),
         });
         return { ...filtered, totals };
       }, { isolationLevel: "RepeatableRead", maxWait: 1000, timeout: 15000 });
       json(res, 200, isAgentRole(clientAuth.role) ? stripCrmHistoryFromContactsPayload(payload) : payload);
     } catch (error) {
+      if (error instanceof CrmContactsCursorError) {
+        json(res, 400, httpError(error.code, "Invalid or incompatible CRM contacts cursor"));
+        return;
+      }
       logger.error({
         event: "app.crm.contacts.error",
         message: (error as Error).message,

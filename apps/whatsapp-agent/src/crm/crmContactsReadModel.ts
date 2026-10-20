@@ -1,5 +1,6 @@
 import { isAnonymizedMarker } from "./crmWhatsappIdentity.js";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import crypto from "node:crypto";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import {
   CONTACT_OPT_OUT_RECORDED_EVENT,
   CONTACT_OPT_OUT_REVOKED_EVENT,
@@ -64,6 +65,7 @@ export type CrmContactsQuery = {
   updatedTo?: string | null;
   page?: string | number | null;
   limit?: string | number | null;
+  cursor?: string | null;
 };
 
 export type CrmContactListItem = {
@@ -136,9 +138,34 @@ export type CrmContactsPayload = {
     hasNextPage: boolean;
     hasPreviousPage: boolean;
   };
+  pageInfo: {
+    nextCursor: string | null;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+    limit: number;
+  };
   items: CrmContactListItem[];
   generatedAt: string;
 };
+
+type CrmContactsCursor = {
+  v: 1;
+  updatedAt: string;
+  createdAt: string;
+  id: string;
+  filterHash: string;
+  page: number;
+};
+
+type CrmContactPageRow = {
+  id: string;
+  updatedAt: Date;
+  createdAt: Date;
+};
+
+export class CrmContactsCursorError extends Error {
+  readonly code = "invalid_cursor";
+}
 
 export type CrmContactDetailConversation = {
   conversationId: string;
@@ -240,6 +267,61 @@ function normalizeLimit(value: unknown) {
     : DEFAULT_LIMIT;
 }
 
+function normalizedCursorFilters(query: CrmContactsQuery) {
+  return {
+    q: normalizeOptionalText(query.q),
+    status: normalizeStatus(query.status),
+    channel: normalizeChannel(query.channel),
+    hasConversation: normalizeBooleanFilter(query.hasConversation),
+    optOut: normalizeBooleanFilter(query.optOut),
+    operationalStatus: normalizeOperationalStatus(query.operationalStatus),
+    updatedFrom: parseDateFilter(query.updatedFrom)?.toISOString() ?? null,
+    updatedTo: parseDateFilter(query.updatedTo)?.toISOString() ?? null,
+  };
+}
+
+function crmContactsFilterHash(query: CrmContactsQuery) {
+  return crypto.createHash("sha256")
+    .update(JSON.stringify(normalizedCursorFilters(query)))
+    .digest("hex");
+}
+
+function encodeCrmContactsCursor(row: CrmContactPageRow, query: CrmContactsQuery, page: number) {
+  return Buffer.from(JSON.stringify({
+    v: 1,
+    updatedAt: row.updatedAt.toISOString(),
+    createdAt: row.createdAt.toISOString(),
+    id: row.id,
+    filterHash: crmContactsFilterHash(query),
+    page,
+  } satisfies CrmContactsCursor)).toString("base64url");
+}
+
+function decodeCrmContactsCursor(value: unknown, query: CrmContactsQuery): CrmContactsCursor | null {
+  const raw = normalizeOptionalText(value);
+  if (!raw) return null;
+  if (raw.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(raw)) throw new CrmContactsCursorError("Malformed CRM contacts cursor");
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as Partial<CrmContactsCursor>;
+    const keys = Object.keys(parsed).sort();
+    if (JSON.stringify(keys) !== JSON.stringify(["createdAt", "filterHash", "id", "page", "updatedAt", "v"])) {
+      throw new Error("cursor fields");
+    }
+    const updatedAt = new Date(String(parsed.updatedAt ?? ""));
+    const createdAt = new Date(String(parsed.createdAt ?? ""));
+    if (parsed.v !== 1 || !Number.isFinite(updatedAt.getTime()) ||
+        !Number.isFinite(createdAt.getTime()) ||
+        typeof parsed.id !== "string" || !parsed.id || parsed.id.length > 200 ||
+        !Number.isInteger(parsed.page) || Number(parsed.page) < 1 ||
+        parsed.filterHash !== crmContactsFilterHash(query)) {
+      throw new Error("cursor values");
+    }
+    return parsed as CrmContactsCursor;
+  } catch {
+    throw new CrmContactsCursorError("Malformed or incompatible CRM contacts cursor");
+  }
+}
+
 function normalizeBooleanFilter(value: unknown) {
   if (value === true || value === "true" || value === "1") return true;
   if (value === false || value === "false" || value === "0") return false;
@@ -292,19 +374,19 @@ export async function resolveCrmContactsTotals(params: {
   effectiveQuery: CrmContactsQuery;
   isAdmin: boolean;
   hasExcluded: () => Promise<boolean>;
-  buildScope: (operationalStatus: "active" | "excluded") => Promise<CrmContactsPayload>;
+  countScope: (operationalStatus: "active" | "excluded") => Promise<number>;
 }) {
   const activeScope = isUnfilteredCrmOperationalScope(params.effectiveQuery, "active")
-    ? params.filtered
-    : await params.buildScope("active");
+    ? params.filtered.pagination.total
+    : await params.countScope("active");
   const excludedExists = params.isAdmin ? await params.hasExcluded() : false;
   const excludedScope = !excludedExists
-    ? null
+    ? 0
     : isUnfilteredCrmOperationalScope(params.effectiveQuery, "excluded")
-      ? params.filtered
-      : await params.buildScope("excluded");
+      ? params.filtered.pagination.total
+      : await params.countScope("excluded");
   return {
-    tenantVisible: activeScope.pagination.total + (excludedScope?.pagination.total ?? 0),
+    tenantVisible: activeScope + excludedScope,
     filtered: params.filtered.pagination.total,
     pageCount: params.filtered.items.length,
   };
@@ -588,24 +670,219 @@ function buildLeadWhere(params: {
   };
 }
 
+function crmSqlAnonymized(value: Prisma.Sql) {
+  return Prisma.sql`(
+    lower(coalesce(${value}, '')) LIKE 'anon:%' OR
+    lower(coalesce(${value}, '')) LIKE 'hash:anon:%' OR
+    lower(coalesce(${value}, '')) IN ('[mensagem anonimizada]', 'usuario anonimizado', 'usuário anonimizado') OR
+    position('******' in lower(coalesce(${value}, ''))) > 0
+  )`;
+}
+
+function crmLeadIdentityMatch(alias: Prisma.Sql) {
+  return Prisma.sql`(
+    ${alias}."waId" IN (l."waId", l."waIdCanonical", l."phone") OR
+    ${alias}."externalUserRef" IN (l."waId", l."waIdCanonical", l."phone") OR
+    ${alias}."legacyWaId" IN (l."waId", l."waIdCanonical", l."phone")
+  )`;
+}
+
+function buildCrmContactsSqlWhere(params: {
+  clientId: string;
+  query: CrmContactsQuery;
+  includeAnonymized: boolean;
+}) {
+  const filters = normalizedCursorFilters(params.query);
+  const digits = normalizeWaIdDigits(filters.q ?? "");
+  const conditions: Prisma.Sql[] = [Prisma.sql`l."tenantId" = ${params.clientId}::uuid`];
+  if (filters.status) conditions.push(Prisma.sql`l."status" = ${filters.status}`);
+  if (filters.channel) conditions.push(Prisma.sql`lower(coalesce(l."channel", '')) = ${filters.channel}`);
+  if (filters.updatedFrom) conditions.push(Prisma.sql`l."updatedAt" >= ${new Date(filters.updatedFrom)}`);
+  if (filters.updatedTo) conditions.push(Prisma.sql`l."updatedAt" <= ${new Date(filters.updatedTo)}`);
+  if (filters.q) {
+    const pattern = `%${filters.q}%`;
+    const search = [
+      Prisma.sql`l."name" ILIKE ${pattern}`,
+      Prisma.sql`l."company" ILIKE ${pattern}`,
+      Prisma.sql`l."email" ILIKE ${pattern}`,
+      Prisma.sql`l."city" ILIKE ${pattern}`,
+      Prisma.sql`l."service" ILIKE ${pattern}`,
+    ];
+    if (digits) {
+      const digitPattern = `%${digits}%`;
+      search.push(
+        Prisma.sql`regexp_replace(coalesce(l."phone", ''), '[^0-9]', '', 'g') LIKE ${digitPattern}`,
+        Prisma.sql`regexp_replace(l."waId", '[^0-9]', '', 'g') LIKE ${digitPattern}`,
+        Prisma.sql`regexp_replace(coalesce(l."waIdCanonical", ''), '[^0-9]', '', 'g') LIKE ${digitPattern}`,
+      );
+    }
+    conditions.push(Prisma.sql`(${Prisma.join(search, " OR ")})`);
+  }
+
+  const conversationExists = Prisma.sql`EXISTS (
+    SELECT 1 FROM "Conversation" cv
+    WHERE cv."clientId" = l."tenantId"
+      AND cv."deletedAt" IS NULL AND cv."anonymizedAt" IS NULL
+      AND (cv."waId" IN (l."waId", l."waIdCanonical", l."phone") OR
+           cv."waIdCanonical" IN (l."waId", l."waIdCanonical", l."phone"))
+  )`;
+  if (filters.hasConversation !== null) {
+    conditions.push(filters.hasConversation ? conversationExists : Prisma.sql`NOT (${conversationExists})`);
+  }
+
+  const latestOptOut = Prisma.sql`(
+    SELECT e."eventName" FROM "Event" e
+    WHERE e."clientId" = l."tenantId"
+      AND e."eventName" IN (${CONTACT_OPT_OUT_RECORDED_EVENT}, ${CONTACT_OPT_OUT_REVOKED_EVENT})
+      AND (e."waIdCanonical" IN (l."waId", l."waIdCanonical", l."phone") OR
+           e."waId" IN (l."waId", l."waIdCanonical", l."phone"))
+    ORDER BY e."createdAt" DESC, e."id" DESC LIMIT 1
+  )`;
+  if (filters.optOut !== null) {
+    conditions.push(filters.optOut
+      ? Prisma.sql`${latestOptOut} = ${CONTACT_OPT_OUT_RECORDED_EVENT}`
+      : Prisma.sql`coalesce(${latestOptOut}, '') <> ${CONTACT_OPT_OUT_RECORDED_EVENT}`);
+  }
+
+  const matchingContact = crmLeadIdentityMatch(Prisma.raw("c"));
+  const selectedContactLifecycle = Prisma.sql`coalesce((
+    SELECT c."lifecycle"::text FROM "Contact" c
+    WHERE c."clientId" = l."tenantId" AND
+      (c."id" = ci."contactId" OR ${matchingContact})
+    ORDER BY (c."id" = ci."contactId") DESC, c."updatedAt" DESC, c."id" ASC LIMIT 1
+  ), 'ACTIVE')`;
+  conditions.push(Prisma.sql`${selectedContactLifecycle} = 'ACTIVE'`);
+  const excluded = Prisma.sql`EXISTS (
+    SELECT 1 FROM "Contact" c
+    WHERE c."clientId" = l."tenantId" AND c."operationallyExcludedAt" IS NOT NULL
+      AND (c."id" = ci."contactId" OR ${matchingContact})
+  )`;
+  conditions.push(filters.operationalStatus === "excluded" ? excluded : Prisma.sql`NOT (${excluded})`);
+
+  if (!params.includeAnonymized) {
+    const leadMarkers = ["waId", "waIdCanonical", "externalUserHash", "name", "phone"]
+      .map((field) => crmSqlAnonymized(Prisma.raw(`l."${field}"`)));
+    const identityMarkers = ["displayName", "externalUserHash"]
+      .map((field) => crmSqlAnonymized(Prisma.raw(`ci."${field}"`)));
+    const contactMarkers = ["waId", "name", "externalUserHash"]
+      .map((field) => crmSqlAnonymized(Prisma.raw(`c."${field}"`)));
+    conditions.push(Prisma.sql`NOT (${Prisma.join(leadMarkers, " OR ")})`);
+    conditions.push(Prisma.sql`NOT (${Prisma.join(identityMarkers, " OR ")})`);
+    conditions.push(Prisma.sql`NOT EXISTS (
+      SELECT 1 FROM "Contact" c
+      WHERE c."clientId" = l."tenantId" AND (c."id" = ci."contactId" OR ${matchingContact})
+        AND (${Prisma.join(contactMarkers, " OR ")})
+    )`);
+  }
+  return Prisma.sql`${Prisma.join(conditions, " AND ")}`;
+}
+
+export async function selectCrmContactsPage(prisma: PrismaClient, params: {
+  clientId: string;
+  query: CrmContactsQuery;
+  includeAnonymized: boolean;
+}) {
+  const limit = normalizeLimit(params.query.limit);
+  const requestedPage = normalizePage(params.query.page);
+  if (!params.query.cursor && requestedPage > 1) {
+    throw new CrmContactsCursorError("Cursor is required after the first CRM contacts page");
+  }
+  const cursor = decodeCrmContactsCursor(params.query.cursor, params.query);
+  const where = buildCrmContactsSqlWhere(params);
+  const cursorWhere = cursor
+    ? Prisma.sql`AND (
+        l."updatedAt" < ${cursor.updatedAt}::timestamp(3) OR
+        (l."updatedAt" = ${cursor.updatedAt}::timestamp(3) AND l."createdAt" < ${cursor.createdAt}::timestamp(3)) OR
+        (l."updatedAt" = ${cursor.updatedAt}::timestamp(3) AND l."createdAt" = ${cursor.createdAt}::timestamp(3) AND l."id" > ${cursor.id})
+      )`
+    : Prisma.empty;
+  const joins = Prisma.sql`LEFT JOIN "ContactChannelIdentity" ci
+    ON ci."id" = l."contactChannelIdentityId" AND ci."clientId" = l."tenantId"`;
+  const [rows, countRows] = await Promise.all([
+    prisma.$queryRaw<CrmContactPageRow[]>(Prisma.sql`
+      SELECT l."id", l."updatedAt", l."createdAt"
+      FROM "Lead" l ${joins}
+      WHERE ${where} ${cursorWhere}
+      ORDER BY l."updatedAt" DESC, l."createdAt" DESC, l."id" ASC
+      LIMIT ${limit + 1}
+    `),
+    prisma.$queryRaw<Array<{ total: bigint | number }>>(Prisma.sql`
+      SELECT count(*) AS total FROM "Lead" l ${joins} WHERE ${where}
+    `),
+  ]);
+  const hasNextPage = rows.length > limit;
+  const pageRows = rows.slice(0, limit);
+  const page = cursor ? cursor.page + 1 : 1;
+  return {
+    rows: pageRows,
+    total: Number(countRows[0]?.total ?? 0),
+    limit,
+    page,
+    hasNextPage,
+    hasPreviousPage: page > 1,
+    nextCursor: hasNextPage && pageRows.length > 0
+      ? encodeCrmContactsCursor(pageRows[pageRows.length - 1], params.query, page)
+      : null,
+  };
+}
+
+export async function countCrmContactsScope(prisma: PrismaClient, params: {
+  clientId: string;
+  query: CrmContactsQuery;
+  includeAnonymized?: boolean;
+}) {
+  const where = buildCrmContactsSqlWhere({
+    clientId: params.clientId,
+    query: params.query,
+    includeAnonymized: params.includeAnonymized === true,
+  });
+  const rows = await prisma.$queryRaw<Array<{ total: bigint | number }>>(Prisma.sql`
+    SELECT count(*) AS total
+    FROM "Lead" l
+    LEFT JOIN "ContactChannelIdentity" ci
+      ON ci."id" = l."contactChannelIdentityId" AND ci."clientId" = l."tenantId"
+    WHERE ${where}
+  `);
+  return Number(rows[0]?.total ?? 0);
+}
+
 // Scan bounded projection batches under the caller's snapshot, counting the same visible entities as the page.
 export async function buildCrmContactsPayload(prisma: PrismaClient, params: Parameters<typeof buildCrmContactsBatch>[1]): Promise<CrmContactsPayload> {
   const project = async (reader: PrismaClient) => {
     if (params.audienceAnalysisLimit) {
-      const { scanned: _scanned, ...result } = await buildCrmContactsBatch(reader, params); return result;
+      return buildCrmContactsBatch(reader, params);
     }
-    const page = normalizePage(params.query.page), limit = normalizeLimit(params.query.limit);
-    const start = (page - 1) * limit; let total = 0, offset = 0;
-    const items: CrmContactListItem[] = []; let result: CrmContactsPayload;
-    while (true) {
-      const { scanned, ...batch } = await buildCrmContactsBatch(reader, { ...params, candidateOffset: offset, query: { ...params.query, page: 1 } });
-      result = batch;
-      for (const item of batch.items) { if (total >= start && items.length < limit) items.push(item); total += 1; }
-      offset += scanned;
-      if (scanned < 500) break;
+    const selection = await selectCrmContactsPage(reader, {
+      clientId: params.clientId,
+      query: params.query,
+      includeAnonymized: params.includeAnonymized === true,
+    });
+    const projected: CrmContactsPayload = await buildCrmContactsBatch(reader, {
+      ...params,
+      selectedLeadIds: selection.rows.map((row) => row.id),
+      query: { ...params.query, page: 1, limit: selection.limit },
+    });
+    if (projected.items.length !== selection.rows.length) {
+      throw new Error("CRM cursor selection and page projection diverged");
     }
-    const totalPages = total ? Math.ceil(total / limit) : 0;
-    return { ...result!, items, pagination: { page, limit, total, totalPages, hasNextPage: page < totalPages, hasPreviousPage: page > 1 } };
+    const totalPages = selection.total > 0 ? Math.ceil(selection.total / selection.limit) : 0;
+    return {
+      ...projected,
+      pagination: {
+        page: selection.page,
+        limit: selection.limit,
+        total: selection.total,
+        totalPages,
+        hasNextPage: selection.hasNextPage,
+        hasPreviousPage: selection.hasPreviousPage,
+      },
+      pageInfo: {
+        nextCursor: selection.nextCursor,
+        hasNextPage: selection.hasNextPage,
+        hasPreviousPage: selection.hasPreviousPage,
+        limit: selection.limit,
+      },
+    };
   };
   if (typeof prisma.$transaction === "function") return prisma.$transaction(tx => project(tx as unknown as PrismaClient),
     { isolationLevel: "RepeatableRead", maxWait: 1000, timeout: 15000 });
@@ -629,6 +906,7 @@ async function buildCrmContactsBatch(
     includeCampaignRelationships?: boolean;
     audienceAnalysisLimit?: number;
     candidateOffset?: number;
+    selectedLeadIds?: string[];
   }
 ): Promise<CrmContactsPayload & { scanned: number }> {
   const q = normalizeOptionalText(params.query.q);
@@ -640,7 +918,13 @@ async function buildCrmContactsBatch(
   const updatedFromDate = parseDateFilter(params.query.updatedFrom);
   const updatedToDate = parseDateFilter(params.query.updatedTo);
   const page = normalizePage(params.query.page);
-  const limit = params.candidateOffset !== undefined ? 500 : params.audienceAnalysisLimit ? Math.min(5000, Math.max(1, params.audienceAnalysisLimit)) : normalizeLimit(params.query.limit);
+  const limit = params.selectedLeadIds
+    ? normalizeLimit(params.query.limit)
+    : params.candidateOffset !== undefined
+      ? 500
+      : params.audienceAnalysisLimit
+        ? Math.min(5000, Math.max(1, params.audienceAnalysisLimit))
+        : normalizeLimit(params.query.limit);
   const statusLabelById = buildStatusLabelMap(params.statuses);
   const includeAnonymized = params.includeAnonymized === true;
   const requiresPostFilter = true;
@@ -653,13 +937,14 @@ async function buildCrmContactsBatch(
     updatedFrom: updatedFromDate,
     updatedTo: updatedToDate,
   });
+  if (params.selectedLeadIds) baseWhere.id = { in: params.selectedLeadIds };
 
   // Post-filters define visibility; never label a candidate prefix as the total.
   const candidateTake = params.candidateOffset !== undefined ? 500 : params.audienceAnalysisLimit ? limit : undefined;
   const candidateSkip = params.candidateOffset ?? (requiresPostFilter ? 0 : (page - 1) * limit);
 
   const [totalBeforePostFilter, leads] = await Promise.all([
-    prisma.lead.count({ where: baseWhere }),
+    params.selectedLeadIds ? Promise.resolve(params.selectedLeadIds.length) : prisma.lead.count({ where: baseWhere }),
     prisma.lead.findMany({
       where: baseWhere,
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
@@ -711,6 +996,12 @@ async function buildCrmContactsBatch(
         hasNextPage: false,
         hasPreviousPage: page > 1,
       },
+      pageInfo: {
+        nextCursor: null,
+        hasNextPage: false,
+        hasPreviousPage: page > 1,
+        limit,
+      },
       items: [],
       generatedAt: (params.now ?? new Date()).toISOString(),
     };
@@ -718,7 +1009,6 @@ async function buildCrmContactsBatch(
 
   const identityKeys = Array.from(new Set(leads.flatMap((lead) => buildCrmWhatsappIdentityCandidates([lead.phone, lead.waIdCanonical, lead.waId]))));
   const identityHashes = buildExternalUserHashCandidates(identityKeys);
-  const waIds = Array.from(new Set(leads.flatMap((lead) => buildCrmWhatsappIdentityCandidates([lead.waId]))));
   const canonicalWaIds = Array.from(new Set(leads.flatMap((lead) => buildCrmWhatsappIdentityCandidates([lead.waIdCanonical ?? lead.waId, lead.phone]))));
   const optOutCanonicalWaIds = Array.from(
     new Set(leads.flatMap((lead) => getOptOutCanonicalCandidates(lead)))
@@ -913,7 +1203,6 @@ async function buildCrmContactsBatch(
   const allItemsWithInternal = leads
     .map((lead) => {
       const key = getIdentityKey(lead);
-      const canonical = lead.waIdCanonical ?? lead.waId;
       const seedLeadCandidates = buildLeadIdentityCandidates(lead);
       const identity = lead.contactChannelIdentityId
         ? identityById.get(lead.contactChannelIdentityId)
@@ -1067,6 +1356,12 @@ async function buildCrmContactsBatch(
       totalPages,
       hasNextPage: page < totalPages,
       hasPreviousPage: page > 1,
+    },
+    pageInfo: {
+      nextCursor: null,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+      limit,
     },
     items: pagedItems,
     generatedAt: (params.now ?? new Date()).toISOString(),

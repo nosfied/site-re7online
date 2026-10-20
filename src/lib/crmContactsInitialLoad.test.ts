@@ -65,12 +65,14 @@ test("contacts GET uses an explicit timeout above the backend transaction and ne
   const originalFetch = globalThis.fetch;
   const originalSetTimeout = globalThis.setTimeout;
   const methods: string[] = [];
+  const urls: string[] = [];
   const timeouts: number[] = [];
   globalThis.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
     timeouts.push(timeout ?? 0);
     return originalSetTimeout(handler, timeout, ...args);
   }) as typeof setTimeout;
-  globalThis.fetch = async (_input, init) => {
+  globalThis.fetch = async (input, init) => {
+    urls.push(String(input));
     methods.push(init?.method ?? "GET");
     return new Response(JSON.stringify({ ok: true, items: [], pagination: { page: 1, limit: 50, total: 0 } }), {
       status: 200,
@@ -79,8 +81,10 @@ test("contacts GET uses an explicit timeout above the backend transaction and ne
   };
   const session = { baseUrl: "https://synthetic.invalid", token: "synthetic", user: { id: "user", clientId: "tenant", role: "ADMIN" } } as AppSession;
   try {
-    await fetchAppCrmContacts(session, { page: 1, limit: 50 });
+    await fetchAppCrmContacts(session, { page: 2, limit: 50, cursor: "opaque-cursor" });
     assert.deepEqual(methods, ["GET"]);
+    assert.match(urls[0], /page=2/);
+    assert.match(urls[0], /cursor=opaque-cursor/);
     assert.ok(timeouts.includes(20_000));
     assert.ok(20_000 > 15_000);
   } finally {

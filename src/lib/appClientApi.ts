@@ -335,6 +335,7 @@ export type AppCrmContactsFilter = {
   updatedTo?: string | null;
   page?: number;
   limit?: number;
+  cursor?: string | null;
 };
 
 export type AppCrmContactItem = {
@@ -607,6 +608,12 @@ export type AppCrmContactsResponse = {
     totalPages: number;
     hasNextPage: boolean;
     hasPreviousPage: boolean;
+  };
+  pageInfo: {
+    nextCursor: string | null;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+    limit: number;
   };
   totals?: { tenantVisible: number; filtered: number; pageCount: number };
   items: AppCrmContactItem[];
@@ -4715,12 +4722,15 @@ export async function fetchAppCrmContacts(
   if (filters?.operationalStatus === "excluded") {
     params.set("operationalStatus", "excluded");
   }
+  if (filters?.updatedFrom?.trim()) params.set("updatedFrom", filters.updatedFrom.trim());
+  if (filters?.updatedTo?.trim()) params.set("updatedTo", filters.updatedTo.trim());
   if (typeof filters?.page === "number" && Number.isFinite(filters.page)) {
     params.set("page", String(Math.max(1, Math.floor(filters.page))));
   }
   if (typeof filters?.limit === "number" && Number.isFinite(filters.limit)) {
     params.set("limit", String(Math.max(1, Math.floor(filters.limit))));
   }
+  if (filters?.cursor) params.set("cursor", filters.cursor);
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/crm/contacts${suffix}`, { timeoutMs: 20000 });
 }

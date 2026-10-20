@@ -40,3 +40,14 @@ test("CRM Inbox action uses only human-Inbox-projectable conversations", () => {
   assert.ok(!source.includes("lastConversationId: lastConversation?.id ?? null"));
   assert.ok(!source.includes("lastConversationIdentity: lastConversation ? getIdentityKey(lastConversation) : null"));
 });
+
+test("interactive CRM listing selects by keyset and enriches only selected page IDs", () => {
+  const listing = source.slice(source.indexOf("export async function buildCrmContactsPayload"), source.indexOf("async function buildCrmContactsBatch"));
+  assert.ok(listing.includes("selectCrmContactsPage"));
+  assert.ok(listing.includes("selectedLeadIds: selection.rows.map((row) => row.id)"));
+  assert.ok(listing.includes("projected.items.length !== selection.rows.length"));
+  assert.ok(source.includes("LIMIT ${limit + 1}"));
+  assert.ok(source.includes("decodeCrmContactsCursor(params.query.cursor, params.query)"));
+  assert.ok(source.includes("filterHash: crmContactsFilterHash(query)"));
+  assert.ok(source.includes("countCrmContactsScope"));
+});

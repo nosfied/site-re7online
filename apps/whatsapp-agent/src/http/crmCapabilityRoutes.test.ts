@@ -1535,7 +1535,7 @@ test("CRM contact campaign relationship follows provider chronology without requ
   assert.equal(aliasDetail.body.campaignRelationshipHistory.items[0]?.recipientStatus, "FAILED");
 });
 
-test("CRM contact list remains complete and bounded with more than 500 contacts", async () => {
+test("CRM contact list remains complete and bounded with keyset pages beyond 500 contacts", async () => {
   const createdAt = new Date("2026-09-05T10:00:00.000Z");
   await prisma.lead.createMany({
     data: Array.from({ length: 501 }, (_, index) => ({
@@ -1575,16 +1575,44 @@ test("CRM contact list remains complete and bounded with more than 500 contacts"
   assert.ok(page100.body.items.length <= 100);
   assert.ok(page100DurationMs < 2_500);
 
-  const page3StartedAt = Date.now();
-  const page3 = await request<{ ok: boolean; items: Array<{ campaignRelationship: { campaignCount: number } }> }>(
+  const keysetPage1 = await request<{
+    ok: boolean;
+    items: Array<{ leadId: string }>;
+    pageInfo: { nextCursor: string | null };
+  }>(
     "GET",
-    "/app/crm/contacts?limit=200&page=3",
+    "/app/crm/contacts?limit=200",
+    businessAdmin
+  );
+  assert.equal(keysetPage1.status, 200);
+  assert.ok(keysetPage1.body.pageInfo.nextCursor);
+  const keysetPage2 = await request<{
+    ok: boolean;
+    items: Array<{ leadId: string }>;
+    pageInfo: { nextCursor: string | null };
+  }>(
+    "GET",
+    `/app/crm/contacts?limit=200&page=2&cursor=${encodeURIComponent(keysetPage1.body.pageInfo.nextCursor ?? "")}`,
+    businessAdmin
+  );
+  assert.equal(keysetPage2.status, 200);
+  assert.ok(keysetPage2.body.pageInfo.nextCursor);
+  const page3StartedAt = Date.now();
+  const page3 = await request<{ ok: boolean; items: Array<{ leadId: string }> }>(
+    "GET",
+    `/app/crm/contacts?limit=200&page=3&cursor=${encodeURIComponent(keysetPage2.body.pageInfo.nextCursor ?? "")}`,
     businessAdmin
   );
   const page3DurationMs = Date.now() - page3StartedAt;
   assert.equal(page3.status, 200);
   assert.equal(page3.body.ok, true);
   assert.ok(page3.body.items.length >= 100);
+  assert.equal(new Set([
+    ...keysetPage1.body.items,
+    ...keysetPage2.body.items,
+    ...page3.body.items,
+  ].map((item) => item.leadId)).size,
+  keysetPage1.body.items.length + keysetPage2.body.items.length + page3.body.items.length);
   assert.ok(page3DurationMs < 2_500);
 });
 
