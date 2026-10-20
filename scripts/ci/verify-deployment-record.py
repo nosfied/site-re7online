@@ -166,13 +166,23 @@ def verify_frontend_only(record_path: Path, record: dict) -> None:
         require(operation_path.is_relative_to(ROOT) and operation_path.is_file(),
                 "active operational record")
         operation = read_json(operation_path)
-        current_pm2 = operation.get("pm2", {})
+        current_pm2 = operation.get("production", {}).get(
+            "pm2", operation.get("pm2", {})
+        )
     else:
         current_pm2 = pm2
-    require(state.get("production", {}).get("pm2", {}).get("dumpSha256") ==
-            current_pm2.get("dumpSha256"), "current PM2 dump")
-    require(state.get("production", {}).get("pm2", {}).get("rollbackSha256") ==
-            current_pm2.get("rollbackSha256"), "current rollback")
+    state_pm2 = state.get("production", {}).get("pm2", {})
+    require(state_pm2.get("dumpSha256") == current_pm2.get("dumpSha256"),
+            "current PM2 dump")
+    expected_previous = (
+        current_pm2.get("previousRollbackSha256")
+        or current_pm2.get("rollbackSha256")
+    )
+    require(
+        state_pm2.get("previousRollbackSha256", state_pm2.get("rollbackSha256"))
+        == expected_previous,
+        "current rollback lineage",
+    )
     print("DEPLOYMENT_RECORD_OK: frontend-only identities, samples and terminal reentry agree")
 
 
