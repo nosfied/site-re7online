@@ -34,6 +34,19 @@ USAGE
 
 require_cmd() { command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"; }
 
+ensure_pm2_path() {
+  command -v pm2 >/dev/null 2>&1 && return
+  local directory
+  for directory in "$HOME/.npm-global/bin" "$HOME/.local/bin" /usr/local/bin; do
+    if [[ -x "$directory/pm2" ]]; then
+      PATH="$directory:${PATH:-/usr/bin:/bin}"
+      export PATH
+      return
+    fi
+  done
+  die "required command not found: pm2 (checked PATH and user-local install directories)"
+}
+
 matrix_value() {
   local key="$1" file="$2"
   awk -F': ' -v key="$key" '$1 == key { print $2; found=1; exit } END { if (!found) exit 1 }' "$file"
@@ -158,7 +171,8 @@ PY
 activate_release() {
   local release_dir="$1"
   [[ -f "$release_dir/manifest.json" && -f "$release_dir/manifest.sha256" ]] || die "invalid release directory"
-  require_cmd flock; require_cmd pm2; require_cmd curl; require_cmd python3; require_cmd sha256sum
+  require_cmd flock; require_cmd curl; require_cmd python3; require_cmd sha256sum
+  ensure_pm2_path
   local expected_manifest actual_manifest target_sha
   expected_manifest="$(tr -d '[:space:]' < "$release_dir/manifest.sha256")"
   actual_manifest="$(sha256sum "$release_dir/manifest.json" | awk '{print $1}')"

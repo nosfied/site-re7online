@@ -43,7 +43,10 @@ Executor único: `scripts/deploy-normal-release.sh`.
    PM2, banco e produção não são tocados.
 5. O owner autoriza o SHA completo em `DEPLOY_APPROVED_SHA`.
 6. `activate <release-dir>` adquire lock exclusivo, captura PM2/dump privados e
-   descobre os diretórios vivos pela configuração atual do PM2.
+   descobre os diretórios vivos pela configuração atual do PM2. Em shell SSH não
+   interativo, o executor resolve `pm2` no PATH ou nas instalações usuais
+   `~/.npm-global/bin`, `~/.local/bin` e `/usr/local/bin`, sem alterar o
+   ambiente global.
 7. A API é trocada, recarregada e validada; depois o frontend é validado em
    `http://127.0.0.1:3000/app/login`.
 8. Qualquer negativa restaura os diretórios anteriores e recarrega somente os
