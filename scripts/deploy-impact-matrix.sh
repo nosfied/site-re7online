@@ -65,4 +65,7 @@ echo "UNKNOWN_RUNTIME_IMPACT: $unknown_runtime_impact"
 echo "REVIEW_REQUIRED: $review_required"
 echo 'REASON:'
 if [[ ${#reasons[@]} -eq 0 ]]; then echo '  none'; else printf '  %s\n' "${reasons[@]}"; fi
-[[ "$review_required" == NO ]] || exit 2
+# A known migration is a complete impact report (exit 0) that NORMAL_RELEASE
+# subsequently refuses by policy. Exit 2 is reserved for an unknown surface,
+# where even the impact report itself is not trustworthy without review.
+[[ "$unknown_runtime_impact" == NO ]] || exit 2
