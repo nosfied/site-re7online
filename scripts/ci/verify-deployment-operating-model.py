@@ -64,7 +64,8 @@ for marker in ("DEPLOY_V2_AWAITING_ACCEPTANCE", "--promote", "--resume",
                "executionStateSha256", "acceptance_candidate_identity"):
     require(marker in executor_source, f"two-phase executor marker {marker}")
 for marker in ("FRONTEND_LIVE_CONTROL", "FRONTEND_LIVE_RUN",
-               "ABORTED_DUMP_RESTORED", "ROLLBACK_PRIVATE_ENV_UNAVAILABLE"):
+               "ABORTED_DUMP_RESTORED", "ROLLBACK_PRIVATE_ENV_UNAVAILABLE",
+               "ROLLBACK_INTERPRETER", "DUMP_MODE"):
     require(marker in adapter_source, f"adapter safety marker {marker}")
 acceptance = manifest.get("acceptancePolicy", {})
 require(acceptance.get("separateFromBinding") is True and

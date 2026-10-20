@@ -19,6 +19,8 @@ as chaves `actions`, `argv`, `commands`, `destinations` e
 
 - snapshot dos três processos e retorno byte-exato do dump;
 - definições executáveis de retorno para API, frontend e worker;
+- `exec_interpreter` convertido explicitamente em `interpreter` e incluído no
+  fingerprint integral do retorno;
 - ambiente privado necessário à execução, inclusive `RE7_FRONT_CONTROL` e
   `RE7_FRONT_RUN`, sem registrar seus valores em stdout ou no journal sanitizado;
 - caminhos de logs e políticas PM2 relevantes, preservados no retorno;
@@ -61,6 +63,8 @@ capturadas.
 
 `save-once` revalida aceite e estado vivo, persiste `PREPARED`, executa exatamente
 um `pm2 save`, lê o novo dump e compara fingerprints integrais dos três processos.
+Na captura, após o save e após restauração, o dump precisa ser arquivo regular e o
+modo real medido por `fstat` precisa ser `0600`; o relatório registra essa medição.
 Somente depois grava a identidade do dump e `COMMITTED`. Se uma falha ocorrer após
 o retorno bem-sucedido do PM2 e antes do commit, o adaptador restaura atomicamente o
 dump anterior autenticado e registra `ABORTED_DUMP_RESTORED`; então o executor

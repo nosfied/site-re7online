@@ -19,7 +19,7 @@ PM_FIELDS = ("status", "pm_cwd", "pm_exec_path", "exec_interpreter", "args", "no
              "kill_retry_time", "listen_timeout", "restart_delay", "exp_backoff_restart_delay",
              "min_uptime", "max_restarts", "treekill", "wait_ready", "RE7_FRONT_CONTROL",
              "RE7_FRONT_RUN")
-POLICY_FIELDS = ("interpreter", "args", "node_args", "instances", "watch", "namespace",
+POLICY_FIELDS = ("args", "node_args", "instances", "watch", "namespace",
                  "exec_mode", "autorestart", "stop_exit_codes", "merge_logs", "log_date_format",
                  "time", "max_memory_restart", "kill_retry_time", "listen_timeout",
                  "restart_delay", "exp_backoff_restart_delay", "min_uptime", "max_restarts",
@@ -53,6 +53,24 @@ def read_json(path):
     raw = read_bytes(path); value = json.loads(raw)
     if not isinstance(value, dict): raise Denied("JSON_OBJECT")
     return value, raw
+
+def read_dump(path):
+    """Read one stable regular dump and return its measured mode."""
+    path=Path(path); fd=os.open(path,os.O_RDONLY|getattr(os,"O_NOFOLLOW",0))
+    try:
+        before=os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode): raise Denied("DUMP_NOT_REGULAR")
+        mode=stat.S_IMODE(before.st_mode)
+        if mode!=0o600: raise Denied("DUMP_MODE")
+        chunks=[]
+        while True:
+            chunk=os.read(fd,1024*1024)
+            if not chunk: break
+            chunks.append(chunk)
+        after=os.fstat(fd)
+        if (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_mode)!=(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_mode): raise Denied("DUMP_CHANGED")
+        return b"".join(chunks),mode
+    finally: os.close(fd)
 
 def atomic_write(path, raw, mode=0o600, exclusive=False):
     path = Path(path); path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -160,7 +178,9 @@ class Adapter:
         private=dict(env["env"])
         for key in ("RE7_FRONT_CONTROL","RE7_FRONT_RUN"):
             if isinstance(env.get(key),str): private[key]=env[key]
-        app={"name":row["name"],"cwd":env.get("pm_cwd"),"script":env.get("pm_exec_path")}
+        interpreter=env.get("exec_interpreter")
+        if not isinstance(interpreter,str) or not Path(interpreter).is_absolute(): raise Denied("ROLLBACK_INTERPRETER")
+        app={"name":row["name"],"cwd":env.get("pm_cwd"),"script":env.get("pm_exec_path"),"interpreter":interpreter}
         for key in POLICY_FIELDS:
             if key in env and env[key] is not None: app[key]=env[key]
         for src,dst in (("pm_out_log_path","out_file"),("pm_err_log_path","error_file"),("pm_log_path","log_file")):
@@ -176,7 +196,9 @@ class Adapter:
     def capture(self):
         if self.capture_path.exists(): raise Denied("CAPTURE_REPLAY")
         rows=self.rows(); processes={n:self.identity(r) for n,r in rows.items()}; self.helper_check()
-        dump_raw=read_bytes(self.surface.path(PM2_HOME/"dump.pm2")); rollback=self.root/"rollback/dump.pm2"; atomic_write(rollback,dump_raw,exclusive=True)
+        dump_raw,dump_mode=read_dump(self.surface.path(PM2_HOME/"dump.pm2")); rollback=self.root/"rollback/dump.pm2"; atomic_write(rollback,dump_raw,exclusive=True)
+        rollback_raw,rollback_mode=read_dump(rollback)
+        if rollback_raw!=dump_raw: raise Denied("ROLLBACK_DUMP_COPY")
         definitions={}
         for label,name in self.binding["processes"].items():
             raw=canonical(self.private_definition(rows[name])); path=self.root/"rollback"/f"{label}.json"; atomic_write(path,raw,exclusive=True)
@@ -186,7 +208,7 @@ class Adapter:
         control_raw=read_bytes(self.surface.path(control_value)); control=json.loads(control_raw); build=self.surface.path(Path(processes[front]["cwd"])/".next/BUILD_ID").read_text().strip()
         api=self.binding["processes"]["api"]; sockets=self.socket_matches(processes[api]["pid"],self.binding["api"]["port"])
         value={"schemaVersion":2,"capturedAtUnixNs":time.time_ns(),"processes":processes,
-               "dump":{"source":str(PM2_HOME/"dump.pm2"),"sha256":digest(dump_raw),"size":len(dump_raw),"rollback":str(rollback),"mode":"0600"},
+               "dump":{"source":str(PM2_HOME/"dump.pm2"),"sha256":digest(dump_raw),"size":len(dump_raw),"rollback":str(rollback),"mode":f"{dump_mode:04o}","rollbackMode":f"{rollback_mode:04o}"},
                "rollbackDefinitions":definitions,"apiSocket":{"port":self.binding["api"]["port"],"ownedByApi":bool(sockets),"inodes":sockets},
                "frontend":{"control":control_value,"run":run_value,"controlSha256":digest(control_raw),"buildId":build,"launcher":processes[front]["pm"]["pm_exec_path"],"launcherSha256":digest(read_bytes(self.surface.path(processes[front]["pm"]["pm_exec_path"]))),"journal":self.artifact_state(control.get("journal")),"marker":self.artifact_state(control_value+".permanent")},
                "supervision":self.binding["supervision"],"destinations":{"snapshot":str(self.capture_path),"reports":str(self.actions),"journal":str(self.root/"events.jsonl")}}
@@ -283,21 +305,23 @@ class Adapter:
     def save_once(self):
         self.validate_acceptance(); marker=self.actions/"pm2-save.completed"; transaction=self.root/"save-transaction.json"
         if marker.exists() or transaction.exists(): raise Denied("SAVE_REPLAY")
-        self.verify("api"); self.verify("frontend",True); self.verify_worker(); captured=self.captured(); rollback_raw=read_bytes(captured["dump"]["rollback"])
+        self.verify("api"); self.verify("frontend",True); self.verify_worker(); captured=self.captured(); rollback_raw,rollback_mode=read_dump(captured["dump"]["rollback"])
+        if f"{rollback_mode:04o}"!=captured["dump"]["rollbackMode"]: raise Denied("SAVE_ROLLBACK_DUMP_MODE")
         if digest(rollback_raw)!=captured["dump"]["sha256"]: raise Denied("SAVE_ROLLBACK_DUMP_SHA")
         atomic_write(transaction,canonical({"state":"PREPARED","oldDumpSha256":captured["dump"]["sha256"],"atUnixNs":time.time_ns()}),exclusive=True); saved=False
         try:
             if self.surface.pm2("save").returncode!=0: raise Denied("PM2_SAVE")
             saved=True
             if self.surface.injected("postSaveFailure"): raise Denied("SAVE_POSTCHECK_INJECTED")
-            dump_path=self.surface.path(PM2_HOME/"dump.pm2"); new_raw=read_bytes(dump_path); expected={n:self.config_fingerprint(r) for n,r in self.rows().items()}
+            dump_path=self.surface.path(PM2_HOME/"dump.pm2"); new_raw,new_mode=read_dump(dump_path); expected={n:self.config_fingerprint(r) for n,r in self.rows().items()}
             if self.dump_fingerprints(new_raw)!=expected: raise Denied("SAVE_DUMP_IDENTITY")
-            identity={"sha256":digest(new_raw),"size":len(new_raw),"mode":"0600"}; atomic_write(self.root/"saved-dump.json",canonical(identity),exclusive=True); atomic_write(transaction,canonical({"state":"COMMITTED",**identity,"atUnixNs":time.time_ns()})); atomic_write(marker,canonical({"result":"PASS",**identity,"atUnixNs":time.time_ns()}),exclusive=True)
+            identity={"sha256":digest(new_raw),"size":len(new_raw),"mode":f"{new_mode:04o}"}; atomic_write(self.root/"saved-dump.json",canonical(identity),exclusive=True); atomic_write(transaction,canonical({"state":"COMMITTED",**identity,"atUnixNs":time.time_ns()})); atomic_write(marker,canonical({"result":"PASS",**identity,"atUnixNs":time.time_ns()}),exclusive=True)
         except Exception:
             if saved:
                 dump_path=self.surface.path(PM2_HOME/"dump.pm2"); atomic_write(dump_path,rollback_raw)
-                if digest(read_bytes(dump_path))!=captured["dump"]["sha256"]: raise Denied("SAVE_POSTFAIL_DUMP_RESTORE_CRITICAL")
-                atomic_write(transaction,canonical({"state":"ABORTED_DUMP_RESTORED","restoredDumpSha256":captured["dump"]["sha256"],"atUnixNs":time.time_ns()}))
+                restored_raw,restored_mode=read_dump(dump_path)
+                if digest(restored_raw)!=captured["dump"]["sha256"]: raise Denied("SAVE_POSTFAIL_DUMP_RESTORE_CRITICAL")
+                atomic_write(transaction,canonical({"state":"ABORTED_DUMP_RESTORED","restoredDumpSha256":captured["dump"]["sha256"],"restoredDumpMode":f"{restored_mode:04o}","atUnixNs":time.time_ns()}))
             raise
     def execute(self,action):
         methods={"capture":self.capture,"select-api":lambda:self.select("api"),"verify-api":lambda:self.verify("api"),"select-frontend":lambda:self.select("frontend"),"verify-frontend":lambda:self.verify("frontend",self.scope=="resume"),"enable-supervision":self.enable_supervision,"verify-supervision":self.verify_supervision,"verify-worker":self.verify_worker,"checkpoint":self.checkpoint,"rollback-all":self.rollback_all,"save-once":self.save_once}

@@ -30,19 +30,25 @@ def proc(app):
   q.symlink_to('socket:[9001]')
 args=sys.argv[1:];record(args);apps=json.loads(state.read_text());key=' '.join(args[:2])
 if fail.get('pm2') in (args[0],key):raise SystemExit(9)
-if args==['jlist']:print(json.dumps(apps));raise SystemExit()
+if args==['jlist']:
+ if fail.get('missingInterpreter'):
+  apps=json.loads(json.dumps(apps));apps[0]['pm2_env'].pop('exec_interpreter',None)
+ print(json.dumps(apps));raise SystemExit()
 if args[0]=='delete':save([x for x in apps if x['name']!=args[1]]);raise SystemExit()
 if args[0]=='start':
  d=json.loads(Path(args[1]).read_text())['apps'][0];name=args[3];counter=int((r/'state/counter').read_text())+1;(r/'state/counter').write_text(str(counter));private=d.get('env',{})
  if name=='fixture-api' and d['cwd']=='/srv/api-old' and private.get('API_PRIVATE_REQUIRED')!='fixture-private-api-value-never-report':raise SystemExit(11)
  if name=='fixture-front' and d['cwd']=='/srv/front-old' and (private.get('RE7_FRONT_CONTROL')!='/private/front-old-control.json' or private.get('RE7_FRONT_RUN')!='old-run'):raise SystemExit(12)
- env={'status':'online','pm_cwd':d['cwd'],'pm_exec_path':d['script'],'exec_interpreter':d.get('interpreter','/usr/bin/node'),'args':d.get('args',[]),'node_args':d.get('node_args',[]),'instances':d.get('instances',1),'watch':d.get('watch',False),'namespace':d.get('namespace','default'),'exec_mode':d.get('exec_mode','fork_mode'),'autorestart':d.get('autorestart',True),'stop_exit_codes':d.get('stop_exit_codes',[]),'restart_time':0,'unstable_restarts':0,'pm_out_log_path':d.get('out_file'), 'pm_err_log_path':d.get('error_file'),'pm_log_path':d.get('log_file'),'merge_logs':d.get('merge_logs',True),'log_date_format':d.get('log_date_format','YYYY'),'time':d.get('time',False),'env':private}
+ interpreter=d.get('interpreter')
+ if fail.get('rollbackInterpreterDiverges') and d['cwd'] in ('/srv/api-old','/srv/front-old'):interpreter='/usr/bin/false'
+ env={'status':'online','pm_cwd':d['cwd'],'pm_exec_path':d['script'],'exec_interpreter':interpreter,'args':d.get('args',[]),'node_args':d.get('node_args',[]),'instances':d.get('instances',1),'watch':d.get('watch',False),'namespace':d.get('namespace','default'),'exec_mode':d.get('exec_mode','fork_mode'),'autorestart':d.get('autorestart',True),'stop_exit_codes':d.get('stop_exit_codes',[]),'restart_time':0,'unstable_restarts':0,'pm_out_log_path':d.get('out_file'), 'pm_err_log_path':d.get('error_file'),'pm_log_path':d.get('log_file'),'merge_logs':d.get('merge_logs',True),'log_date_format':d.get('log_date_format','YYYY'),'time':d.get('time',False),'env':private}
  env.update({k:v for k,v in private.items() if k in ('RE7_FRONT_CONTROL','RE7_FRONT_RUN')});app={'name':name,'pid':counter,'startTicks':counter*10,'pm2_env':env};apps=[x for x in apps if x['name']!=name]+[app];save(apps);proc(app)
  control=env.get('RE7_FRONT_CONTROL')
  if control:
   c=json.loads((r/control.lstrip('/')).read_text());j=r/c['journal'].lstrip('/');j.parent.mkdir(parents=True,exist_ok=True);j.write_text('\n'.join(json.dumps({'event':event,'nonce':c['nonce']}) for event in ['parent','application_identity','application_released'])+'\n')
  raise SystemExit()
-if args==['save']:(r/'home/deploy/.pm2/dump.pm2').write_text(json.dumps(apps,sort_keys=True));os.chmod(r/'home/deploy/.pm2/dump.pm2',0o600);raise SystemExit()
+if args==['save']:
+ dump=r/'home/deploy/.pm2/dump.pm2';dump.write_text(json.dumps(apps,sort_keys=True));os.chmod(dump,0o644 if fail.get('dumpModeAfterSave') else 0o600);raise SystemExit()
 raise SystemExit(8)
 '''
 HEALTH_FAKE=r'''#!/usr/bin/env python3
@@ -88,7 +94,9 @@ def auth(base,phase,manifest,binding,extra=None):
     value={"schemaVersion":2,"decision":"AUTHORIZED","phase":phase,"releaseId":"deploy-v2-fixture","manifestSha256":digest(manifest),"executorSha256":digest(EXECUTOR),"adapterSha256":digest(ADAPTER),"bindingSha256":digest(binding),"notAfterUtc":"2099-01-01T00:00:00Z"};value.update(extra or {});path=base/(phase.lower()+"-authorization.json");put(path,value);return path
 def promote(base,failure=None):
     surface,manifest,binding=make_surface(base)
-    if failure:put(surface/"state/fail.json",failure)
+    if failure:
+        put(surface/"state/fail.json",failure)
+        if failure.get("dumpModeAtCapture"): os.chmod(mapped(surface,"/home/deploy/.pm2/dump.pm2"),0o644)
     authorization=auth(base,"PROMOTE",manifest,binding);work=base/"execution";cmd=[str(EXECUTOR),"--manifest",str(manifest),"--promote","--adapter",str(ADAPTER),"--adapter-sha256",digest(ADAPTER),"--binding",str(binding),"--binding-sha256",digest(binding),"--authorization",str(authorization),"--authorization-sha256",digest(authorization),"--work-dir",str(work)];env={**os.environ,"DEPLOY_V2_FIXTURE_ROOT":str(surface)};result=subprocess.run(cmd,text=True,capture_output=True,check=False,env=env);return result,work,surface,manifest,binding,env
 def acceptance_for(base,work,manifest,binding,mutate=None):
     state=json.loads((work/"execution-state.json").read_text());candidate=state["candidate"]
@@ -104,10 +112,14 @@ with tempfile.TemporaryDirectory(prefix="deploy-v2-two-phase-") as tmp:
     root=Path(tmp)
     # A successful promote stops before acceptance and before save.
     first,work,surface,manifest,binding,env=promote(root/"success");assert first.returncode==0,(first.stdout,first.stderr);assert first.stdout.strip()=="DEPLOY_V2_AWAITING_ACCEPTANCE";assert ["save"] not in [x["call"] for x in pm_calls(surface)]
+    for component in ("api","frontend"):
+        rollback_definition=json.loads((work/"rollback"/f"{component}.json").read_text())["apps"][0]
+        assert rollback_definition["interpreter"]=="/usr/bin/node"
     # Acceptance is generated after selection and is bound to both candidate PIDs/ticks.
     second=resume(root/"success",work,surface,manifest,binding,env);assert second.returncode==0,(second.stdout,second.stderr)
     calls=[x["call"] for x in pm_calls(surface)];assert calls.count(["save"])==1
     assert json.loads((work/"result.json").read_text())["status"]=="DEPLOYED_VERIFIED"
+    assert json.loads((work/"saved-dump.json").read_text())["mode"]=="0600"
     # Frontend live control and run are allowlisted and checked; no generic environment walk.
     state=json.loads((surface/"state/pm2.json").read_text());front=next(x for x in state if x["name"]=="fixture-front");assert front["pm2_env"]["RE7_FRONT_CONTROL"]=="/private/front-new-control.json" and front["pm2_env"]["RE7_FRONT_RUN"]=="new-run"
     # Full-fidelity rollback: API private value, frontend control/run, logging and policies survive.
@@ -122,6 +134,15 @@ with tempfile.TemporaryDirectory(prefix="deploy-v2-two-phase-") as tmp:
     # A post-save failure restores the old dump before runtime rollback.
     promoted,run,s,mp,bp,e=promote(root/"post-save");assert promoted.returncode==0;old_dump=digest(mapped(s,"/home/deploy/.pm2/dump.pm2"));failed=resume(root/"post-save",run,s,mp,bp,e,failure={"postSaveFailure":True});assert failed.returncode==1,(failed.stdout,failed.stderr);assert digest(mapped(s,"/home/deploy/.pm2/dump.pm2"))==old_dump;assert json.loads((run/"save-transaction.json").read_text())["state"]=="ABORTED_DUMP_RESTORED"
     restored={x["name"]:x for x in json.loads((s/"state/pm2.json").read_text())};assert restored["fixture-api"]["pm2_env"]["pm_cwd"]=="/srv/api-old" and restored["fixture-front"]["pm2_env"]["pm_cwd"]=="/srv/front-old";assert [x["call"] for x in pm_calls(s)].count(["save"])==1
+    assert json.loads((run/"save-transaction.json").read_text())["restoredDumpMode"]=="0600"
+    # A dump with a measured mode other than 0600 is denied after save and restored.
+    bad_capture,_,_,_,_,_=promote(root/"dump-mode-capture",failure={"dumpModeAtCapture":True});assert bad_capture.returncode==1 and "DUMP_MODE" in bad_capture.stderr
+    promoted,run,s,mp,bp,e=promote(root/"dump-mode");assert promoted.returncode==0;old_dump=digest(mapped(s,"/home/deploy/.pm2/dump.pm2"));mode_denied=resume(root/"dump-mode",run,s,mp,bp,e,failure={"dumpModeAfterSave":True});assert mode_denied.returncode==1;assert digest(mapped(s,"/home/deploy/.pm2/dump.pm2"))==old_dump;assert (mapped(s,"/home/deploy/.pm2/dump.pm2").stat().st_mode&0o777)==0o600
+    # Missing interpreter is denied at capture; divergent interpreter is denied after rollback.
+    missing,_,_,_,_,_=promote(root/"missing-interpreter",failure={"missingInterpreter":True});assert missing.returncode==1 and "ROLLBACK_INTERPRETER" in missing.stderr
+    promoted,run,s,mp,bp,e=promote(root/"divergent-interpreter");assert promoted.returncode==0
+    drift=json.loads((s/"state/pm2.json").read_text());next(x for x in drift if x["name"]=="fixture-front")["pm2_env"]["RE7_FRONT_RUN"]="drifted";put(s/"state/pm2.json",drift)
+    divergent=resume(root/"divergent-interpreter",run,s,mp,bp,e,failure={"rollbackInterpreterDiverges":True});assert divergent.returncode==2;assert "ROLLBACK_CONFIGURATION" in (run/"result.json").read_text()
     # Acceptance referring to a different candidate is denied; no save occurs.
     promoted,run,s,mp,bp,e=promote(root/"stale-acceptance");assert promoted.returncode==0
     stale=resume(root/"stale-acceptance",run,s,mp,bp,e,mutate=lambda x:x["api"].update(pid=999999));assert stale.returncode==1;assert ["save"] not in [x["call"] for x in pm_calls(s)]
@@ -132,3 +153,5 @@ print("DEPLOY_V2_POST_SELECTION_ACCEPTANCE_READY")
 print("FULL_FIDELITY_ROLLBACK_VERIFIED")
 print("ACTIVE_FRONTEND_CONTROL_VERIFIED")
 print("SAVE_FAILURE_ATOMICITY_VERIFIED")
+print("DEPLOY_V2_EXPLICIT_INTERPRETER_ROLLBACK_PASS")
+print("DUMP_MODE_VERIFIED")
