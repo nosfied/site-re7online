@@ -33,24 +33,36 @@ Não são gates nem executores da faixa normal.
 Executor único: `scripts/deploy-normal-release.sh`.
 
 1. CI aprova build, testes e o contrato do executor.
-2. `plan <base> <target>` classifica o diff sem mutação.
-3. `prepare <base> <target>` cria worktree isolada, constrói API/frontend e sela
+2. Um worktree de controle descartável é criado em `/opt/re7online/deploy-control`,
+   destacado no SHA canônico aprovado. O checkout produtivo pode permanecer detached
+   e não é atualizado, reconstruído nem usado como mecanismo de entrega.
+3. `plan <base> <target>` classifica o diff sem mutação.
+4. `prepare <base> <target>` cria worktree isolada, constrói API/frontend e sela
    manifesto e hashes em `/opt/re7online/releases`; PM2 e produção não são tocados.
-4. O owner autoriza o SHA completo em `DEPLOY_APPROVED_SHA`.
-5. `activate <release-dir>` adquire lock exclusivo, captura PM2/dump privados e
+5. O owner autoriza o SHA completo em `DEPLOY_APPROVED_SHA`.
+6. `activate <release-dir>` adquire lock exclusivo, captura PM2/dump privados e
    descobre os diretórios vivos pela configuração atual do PM2.
-6. A API é trocada, recarregada e validada; depois o frontend segue a mesma ordem.
-7. Qualquer negativa restaura os diretórios anteriores e recarrega somente os
+7. A API é trocada, recarregada e validada; depois o frontend é validado em
+   `http://127.0.0.1:3000/app/login`.
+8. Qualquer negativa restaura os diretórios anteriores e recarrega somente os
    componentes já alterados. O worker nunca é recarregado.
-8. Com ambos saudáveis e worker preservado, `pm2 save` ocorre exatamente uma vez.
+9. Com ambos saudáveis e worker preservado, `pm2 save` ocorre exatamente uma vez.
 
 Comandos:
 
 ```bash
+git -C /opt/re7online/site-re7online fetch origin review/campaign-recovery-20260926
+git -C /opt/re7online/site-re7online worktree add --detach \
+  /opt/re7online/deploy-control/<sha-canônico-curto> <sha-canônico-completo>
+cd /opt/re7online/deploy-control/<sha-canônico-curto>
 scripts/deploy-normal-release.sh plan <base-ref> <target-ref>
 scripts/deploy-normal-release.sh prepare <base-ref> <target-ref>
 DEPLOY_APPROVED_SHA=<sha-completo> scripts/deploy-normal-release.sh activate <release-dir>
 ```
+
+Não se executa `pull`, `switch` ou `checkout` no checkout produtivo para uma
+release normal. O executor deriva seu repositório de controle do próprio caminho;
+`WORKDIR` só é usado explicitamente em testes ou recuperação supervisionada.
 
 ## Classificação de impacto
 

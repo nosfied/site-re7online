@@ -11,9 +11,15 @@ e é executado por `scripts/deploy-normal-release.sh`.
 ## Planejar sem efeito
 
 ```bash
-cd /opt/re7online/site-re7online
+git -C /opt/re7online/site-re7online fetch origin review/campaign-recovery-20260926
+git -C /opt/re7online/site-re7online worktree add --detach \
+  /opt/re7online/deploy-control/<sha-canônico-curto> <sha-canônico-completo>
+cd /opt/re7online/deploy-control/<sha-canônico-curto>
 scripts/deploy-normal-release.sh plan <base-ref> <target-ref>
 ```
+
+O checkout produtivo pode permanecer detached. Ele não recebe `pull`, `switch` ou
+`checkout`; o worktree de controle fica preso ao SHA canônico aprovado.
 
 ## Preparar sem tocar PM2
 
@@ -30,6 +36,7 @@ DEPLOY_APPROVED_SHA=<sha-completo> \
 
 A faixa normal recusa migration/schema, dependências, worker, credenciais,
 root/rede e impacto desconhecido. Esses casos usam `BREAK_GLASS` em janela própria.
+O healthcheck frontend canônico é `http://127.0.0.1:3000/app/login`.
 
 O caminho legado `apps/whatsapp-agent/scripts/deploy-vps.sh` aceita somente
 `--dry-run`; qualquer tentativa de mutação termina com erro e direciona ao executor

@@ -64,6 +64,7 @@ PM2
 cat > "$bin_dir/curl" <<'CURL'
 #!/usr/bin/env bash
 set -euo pipefail
+printf '%s\n' "${*: -1}" >> "$TEST_CURL_LOG"
 if [[ "${TEST_FAIL_FRONTEND:-false}" == true && "${*: -1}" == *3000* ]]; then exit 22; fi
 exit 0
 CURL
@@ -94,7 +95,7 @@ data = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
 PY
 
 TEST_API_CWD="$api_cwd" TEST_FRONTEND_CWD="$frontend_cwd" TEST_WORKER_CWD="$worker_cwd" \
-TEST_PM2_LOG="$fixture/pm2.log" HOME="$home_dir" PATH="$bin_dir:$PATH" LOCK_FILE="$fixture/lock" \
+TEST_PM2_LOG="$fixture/pm2.log" TEST_CURL_LOG="$fixture/curl.log" HOME="$home_dir" PATH="$bin_dir:$PATH" LOCK_FILE="$fixture/lock" \
 DEPLOY_APPROVED_SHA="$TARGET_SHA" "$script" activate "$release_dir"
 grep -q new-api "$api_cwd/dist/version"
 grep -q new-front "$frontend_cwd/.next/version"
@@ -102,6 +103,8 @@ grep -q old-api "$release_dir/rollback/api-dist/version"
 grep -q old-front "$release_dir/rollback/frontend-next/version"
 [[ "$(grep -c '^save$' "$fixture/pm2.log")" -eq 1 ]]
 ! grep -q re7-whatsapp-web-worker "$fixture/pm2.log"
+grep -Fxq 'http://127.0.0.1:3000/app/login' "$fixture/curl.log"
+! grep -Fxq 'http://127.0.0.1:3000/login' "$fixture/curl.log"
 
 echo 'normal release activation tests passed'
 
@@ -128,7 +131,7 @@ data = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
 PY
 set +e
 TEST_API_CWD="$api_cwd" TEST_FRONTEND_CWD="$frontend_cwd" TEST_WORKER_CWD="$worker_cwd" \
-TEST_PM2_LOG="$fixture/pm2.log" TEST_FAIL_FRONTEND=true HOME="$home_dir" PATH="$bin_dir:$PATH" \
+TEST_PM2_LOG="$fixture/pm2.log" TEST_CURL_LOG="$fixture/curl.log" TEST_FAIL_FRONTEND=true HOME="$home_dir" PATH="$bin_dir:$PATH" \
 LOCK_FILE="$fixture/lock" DEPLOY_APPROVED_SHA="$FAILED_TARGET" "$script" activate "$failed_release" >/dev/null 2>&1
 failed_status=$?
 set -e
