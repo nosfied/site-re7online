@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "status": "SAFE_RETURN_LIVE_VERIFIED_RESTARTABLE",
+  "recordedAtUtc": "2026-10-20T01:02:47Z",
+  "observationTime": "NOT_RECORDED_NO_INFERENCE",
+  "canonicalBranch": "review/campaign-recovery-20260926",
+  "baseDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
+  "operation": "FRONTEND_SAFE_RETURN_AND_PERMANENT_SUPERVISION",
+  "production": {
+    "api": {
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+      "lastReportedPid": 1601629,
+      "candidateState": "ROLLED_BACK_NOT_DEPLOYED"
+    },
+    "frontend": {
+      "buildId": "2nrVvTyK7pcyD_oMa_fOv",
+      "lastReportedPid": 1601491,
+      "supervision": "PERMANENTLY_SUPERVISED_RESTARTABLE"
+    },
+    "worker": {
+      "lastReportedPid": 936540,
+      "preserved": true
+    },
+    "pm2": {
+      "dumpSha256": "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0",
+      "previousRollbackSha256": "20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e",
+      "dumpMode": "0600"
+    }
+  },
+  "contactsListCandidate": {
+    "releaseId": "crm-contacts-list-recovery-f5028de1",
+    "state": "STAGED_INERT_NOT_DEPLOYED",
+    "deploymentClass": "NORMAL_RELEASE"
+  },
+  "prohibitedEffectsObserved": {
+    "csvPostRequests": 0,
+    "imports": 0,
+    "retries": 0,
+    "sqlStatements": 0,
+    "migrations": 0
+  },
+  "claimBoundary": "PIDS_ARE_LAST_REPORTED_OBSERVATIONS_REVALIDATE_BEFORE_MUTATION"
+}
+

@@ -44,12 +44,8 @@ jobs:
         run: python3 scripts/ci/verify-documentation-freshness.py
       - name: Validate artifact release engineering standard
         run: python3 scripts/ci/verify-artifact-release-standard.py
-      - name: Rehearse combined API and frontend release lifecycle
-        run: python3 -B -I -S scripts/ci/verify-combined-release-rehearsal.py
-      - name: Validate artifact-bound combined release preparation
-        run: python3 -B -I -S scripts/ci/verify-artifact-bound-combined-release.py
-      - name: Validate execution dependency closure
-        run: python3 -B -I -S scripts/ci/verify-execution-dependency-closure.py
+      - name: Validate normal and break-glass deployment lanes
+        run: python3 scripts/ci/verify-deployment-operating-model.py
       - name: Validate deploy impact classifier
         run: bash scripts/test-deploy-impact-matrix.sh
       - name: Validate deploy orchestration boundaries

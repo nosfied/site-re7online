@@ -1,20 +1,15 @@
 {
-  "schemaVersion": 1,
-  "status": "OFFHOST_BUILT_LOCALLY_VERIFIED_NOT_STAGED_NOT_DEPLOYED",
+  "schemaVersion": 2,
+  "status": "STAGED_INERT_NOT_DEPLOYED",
+  "deploymentClass": "NORMAL_RELEASE",
   "releaseId": "crm-contacts-list-recovery-f5028de1",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "candidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
-  "parentCommit": "ab7634eacfae02b165f532ede9774ac3985822b5",
-  "sourceCi": {
-    "run": 39267594391,
-    "result": "PASS_4_OF_4"
-  },
+  "sourceCi": {"run": 39267594391, "result": "PASS_4_OF_4"},
   "sourceReleaseManifest": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19.json",
+  "deployV2Manifest": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19_DEPLOY_V2.json",
   "baseDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
-  "deploymentOrder": [
-    "api",
-    "frontend"
-  ],
+  "deploymentOrder": ["api", "frontend"],
   "artifacts": {
     "api": {
       "package": "crm-contacts-list-recovery-api-f5028de1.tar",
@@ -35,46 +30,38 @@
     }
   },
   "runtimeDelta": {
-    "apiOutputs": [
-      "dist/contacts/contactOperationalExclusion.js",
-      "dist/crm/crmContactsReadModel.js",
-      "dist/http/routes.js"
-    ],
-    "frontendSources": [
-      "src/app/app/crm/page.tsx",
-      "src/lib/appClientApi.ts",
-      "src/lib/crmContactsInitialLoad.ts"
-    ],
+    "apiOutputs": ["dist/contacts/contactOperationalExclusion.js", "dist/crm/crmContactsReadModel.js", "dist/http/routes.js"],
+    "frontendSources": ["src/app/app/crm/page.tsx", "src/lib/appClientApi.ts", "src/lib/crmContactsInitialLoad.ts"],
     "workerChanged": false,
     "dependenciesChanged": false,
-    "schemaChanged": false
+    "schemaChanged": false,
+    "credentialsChanged": false
   },
   "validation": {
     "apiTypeScriptDiagnostics": "PASS",
     "apiNodeCheck": "PASS",
     "apiRelativeImports": "PASS",
     "apiIntegralIndex": "PASS",
-    "apiReproduciblePackage": "PASS",
     "apiIndependentExtraction": "PASS",
     "frontendBuild": "PASS",
     "frontendTypeScriptAndRoutes": "PASS",
-    "frontendPhysicalAuthenticatedDependencies": "PASS",
     "frontendNoExternalSymlinks": "PASS",
-    "frontendNoTestsOrCacheInRuntime": "PASS",
     "frontendIntegralIndex": "PASS",
-    "frontendReproduciblePackage": "PASS",
     "frontendIndependentExtraction": "PASS",
     "sourceCi": "PASS_4_OF_4"
   },
+  "staging": {
+    "state": "STAGED_INERT",
+    "runtimeSelected": false,
+    "candidateJournalOrMarkerRequiredByDeployV2": false
+  },
   "productionEffects": {
-    "vpsAccess": 0,
-    "staging": 0,
-    "pm2Actions": 0,
+    "candidateCurrentlySelected": false,
+    "pm2SavedForCandidate": false,
     "csvPostRequests": 0,
     "imports": 0,
     "sqlStatements": 0,
-    "migrations": 0,
-    "productionChanges": 0
+    "migrations": 0
   },
   "binaryArtifactsVersioned": false,
   "promotionAuthorized": false

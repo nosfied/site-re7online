@@ -1,5 +1,12 @@
 # Padrão de engenharia para releases por artefato
 
+> [!WARNING]
+> **BREAK_GLASS / NOT DEFAULT.** Este fluxo é excepcional e não é a rota normal de
+> releases. Use o [modelo operacional Deploy V2](DEPLOYMENT_OPERATING_MODEL.md) para
+> mudanças comuns. Preparações single-use anteriores são evidência histórica e não
+> devem ser repetidas como dependência de uma nova release.
+
+
 Status: `CANONICAL / CI GUARDED`.
 
 Este documento transforma as falhas observadas em 18/10/2026 em requisitos

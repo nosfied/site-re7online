@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "crm-contacts-list-recovery-f5028de1",
+  "deploymentClass": "NORMAL_RELEASE",
+  "candidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
+  "candidateRecord": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19_CANDIDATE.json",
+  "deploymentOrder": ["api", "frontend"],
+  "artifacts": {
+    "api": {
+      "packageSha256": "93b6a60e47118e6b63c1c858128fb903c404a32914d46ae5475ea6f2aff3f2d9",
+      "manifestSha256": "757fbecc9d4d01395b78c63c3324798efcdcef0527de2114d4a813f0dfaf748d",
+      "indexSha256": "44b8d57cdf4118ab42ec45b634ce5ce9cdac6bb089a8dd2ae7d11e95d94040a9"
+    },
+    "frontend": {
+      "packageSha256": "1fed8e3b70b103920d0216dba2686d5baf7053e4391fefde571a147ba3b16a75",
+      "manifestSha256": "70c36c6b65815cb7d5220cca8c280b1cfca5630e3ce9a8529ecc8ce550972cdd",
+      "indexSha256": "a979d6001b42519ccad25913680d51fd5ffeb8871c866230e94aa760fac5eb7e",
+      "buildId": "bt9-BI1dCQD7_gj8ktOvz"
+    }
+  },
+  "changeBoundary": {
+    "workerChanged": false,
+    "databaseChanged": false,
+    "schemaChanged": false,
+    "credentialsChanged": false,
+    "rootOrNetworkChanged": false
+  },
+  "runtimeStatePolicy": {
+    "captureAtExecution": ["pid", "startTicks", "cwd", "entrypoint", "pm2Dump", "rollback", "reportPaths", "timestamps"],
+    "embeddedRuntimeStateForbidden": true
+  },
+  "requiredGates": [
+    "preflight_read_only",
+    "rollback_captured",
+    "api_identity_health_and_socket",
+    "tenant_scoped_get_only",
+    "frontend_identity_http_and_assets",
+    "worker_unchanged",
+    "pm2_save_exactly_once_after_acceptance"
+  ],
+  "forbiddenEffects": ["csv_post", "import", "retry", "sql", "migration", "credential_rotation"],
+  "promotionAuthorized": false
+}
+

@@ -1,105 +1,56 @@
 # Estado canônico do Converta
 
-Este é o ponto de entrada vigente para decisões e continuidade. Relatórios datados
-são evidência histórica apenas no alcance e horário que declaram. A identidade da
-release está no [registro sanitizado da implantação](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json)
-e a alteração operacional posterior está no
-[registro da rotação OBS-2](releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json).
-A preparação sanitizada, ainda sem mudança produtiva, está no
-[registro OBS-1](releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json).
+Este é o ponto de entrada vigente. A identidade funcional continua sendo a release
+terminal-reentry; a alteração operacional mais recente é o retorno seguro e
+permanentemente supervisionado do frontend.
 
-## Release viva
+## Produção viva
 
-A correção isolada do frontend para reentrada terminal da importação CSV e preservação
-dos filtros foi promovida e verificada em 18/10/2026, às 15:21:18 em Fortaleza
-(18:21:18 UTC), sobre a composição `CRM CSV UX e normalização de telefone`.
+- API: entrypoint SHA-256 `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`.
+- Frontend: BUILD_ID `2nrVvTyK7pcyD_oMa_fOv`, retorno seguro reiniciável.
+- Worker: preservado.
+- Dump PM2 seguro: `a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0`.
+- Dump anterior preservado: `20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e`.
 
-- API preservada: `api-runtime/dist/index.js`, SHA-256
-  `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`.
-- Frontend ativo: BUILD_ID `2nrVvTyK7pcyD_oMa_fOv`.
-- PM2 após a rotação OBS-2: dump vigente SHA-256
-  `20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e`;
-  retorno operacional pós-OBS-2 com o mesmo SHA-256, criado atomicamente em
-  `dump.pm2.obs2-post-rotation-20261018T193258Z.rollback`, modo `0600`.
-- API e worker permaneceram sem alteração.
+Os últimos PIDs reportados após o rollback da FASE 2 foram API `1601629`, frontend
+`1601491` e worker `936540`. Não existe timestamp comum preservado para essa leitura;
+portanto eles são referência histórica, não identidade de execução. Revalidar antes
+de qualquer mutação.
 
-Na observação final de `2026-10-18T19:34:37.825579+00:00`, os PIDs eram API
-`1377194`, frontend `1362964` e worker `936540`. PIDs são observações datadas;
-as identidades duráveis são o hash do entrypoint da API, o BUILD_ID do frontend
-e os hashes do dump e retorno.
+O registro operacional sanitizado é
+[`FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json`](releases/FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json).
 
-## Rotação OBS-2
+## CSV
 
-O segredo HMAC local do estado OAuth foi rotacionado isoladamente e verificado.
-A categoria anterior “observabilidade” descrevia o canal da exposição, não o tipo
-da credencial. A API passou três amostras, propriedade direta do socket `3001`,
-health local/público e início de um novo estado OAuth sem concluir autorização no
-provedor. Frontend e worker permaneceram com suas identidades anteriores.
+A importação CSV, isolamento negativo e recuperação terminal permanecem
+`DEPLOYED / LIVE VERIFIED`. O histórico de 993 linhas permanece
+`LEGACY_UNCORRELATED / NOT CLAIMED`.
 
-Estados OAuth emitidos antes da rotação foram invalidados; eventual login Meta em
-andamento deve ser reiniciado. A contingência encerrou após o prazo e uma nova
-conferência de estabilidade. A cópia explícita do valor anterior foi destruída e os
-artefatos conhecidos que continham o ambiente anterior foram removidos por caminho
-exato após registro privado. O rollback pré-rotação foi classificado como
-`NON_EXECUTABLE_EXPOSED_SECRET` antes da remoção. OBS-1 permanece
-`PENDING / UNTOUCHED` e não foi acessada nem alterada nesta janela.
+## Correção da listagem de contatos
 
-## Preparação OBS-1 e proteção do expediente
+A correção está construída, autenticada e staged inertemente, mas **não foi
+implantada**. API e frontend candidatos foram devolvidos nas tentativas anteriores.
 
-OBS-1 é o segredo do aplicativo compartilhado do Instagram Business Login. O valor
-teve exposição confirmada em saída operacional, sem evidência observada de exploração
-externa. Deve ser tratado como potencialmente comprometido e rotacionado em prazo curto,
-mas a rotação não será executada durante o uso regular dos clientes.
+Ela foi reclassificada corretamente como `NORMAL_RELEASE`: não altera banco, schema,
+worker, credenciais, root ou rede. O manifesto de dados está em
+[`CRM_CONTACTS_LIST_RECOVERY_2026-10-19_DEPLOY_V2.json`](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19_DEPLOY_V2.json).
 
-De segunda a sexta-feira, entre 08:00 e 17:00 em `America/Fortaleza`, ficam negados
-reset no provedor, restart da API, seleção PM2 e `pm2 save` relacionados à OBS-1.
-A janela exige autorização expressa, aviso operacional, identificação manual do
-aplicativo correto e canal de captura sem eco. Frontend, worker, banco e contatos
-ficam fora do delta.
+## Método de implantação
 
-O reset no provedor pode invalidar imediatamente o segredo anterior. Por isso, o
-retorno não pode depender desse valor: eventual falha será corrigida para frente com
-o novo segredo ou com outro reset no provedor. A indisponibilidade potencial alcança
-todos os tenants que usam o aplicativo Meta compartilhado, sobretudo novas conexões
-e reconexões OAuth durante o corte. A operação cotidiana com tokens já persistidos
-deve ser preservada, mas precisa de verificação viva após a rotação.
+O [modelo operacional](DEPLOYMENT_OPERATING_MODEL.md) passa a ter duas faixas:
 
-O estado atual é `PREPARED / SCHEDULED WINDOW REQUIRED / NO CHANGE`. App ID esperado,
-verificador e canal seguro estão prontos; login/2FA no navegador habitual e confirmação
-manual do aplicativo ainda são necessários. Nenhum segredo foi acessado ou redefinido.
+- `NORMAL_RELEASE`, padrão simples, estável e orientado por manifesto;
+- `BREAK_GLASS`, somente para migration, credencial, root/rede, worker/drain ou incidente.
 
-## Resultado e limites
-
-- O frontend passou três amostras de identidade e estabilidade, controle imutável,
-  nonce, journal, BUILD_ID, login, Inbox, CRM e treze assets públicos.
-- No tenant Demo, a reentrada recuperou `COMPLETED`, removeu somente a referência
-  local da sessão, não abriu o modal e carregou a página 1 pelo caminho canônico,
-  preservando os filtros ativos.
-- A lista exibiu 966 contatos no escopo, 965 encontrados e 50 na página. Esses
-  números pertencem à lista e não são tratados como totais persistidos da operação.
-- O painel de rede registrou 25 requisições e zero chamadas a `contacts/import`.
-  A janela executou zero POST CSV, importação, SQL ou migration.
-- A recuperação positiva durável está `LIVE VERIFIED`: o GET reconheceu `COMPLETED`,
-  a referência exata do tenant/usuário Demo foi consumida, a página 1 voltou pelo
-  caminho canônico com filtros preservados e saída/reentrada não reabriu o modal.
-  A prova não foi repetida porque seu consumo é o resultado correto. Os totais
-  persistidos da operação não constam da evidência preservada e não são inferidos.
-- As ocorrências históricas de 993 linhas continuam `LEGACY_UNCORRELATED / NOT CLAIMED`.
-- A rotação das credenciais avaliadas permanece uma janela separada.
+O runbook por artefato permanece como mecanismo excepcional. Ensaios single-use da
+release de contatos são evidência histórica e não são gates ativos de novas releases.
 
 ## Próximos atos
 
-1. Preparar a fase 1 inerte da convergência de branches, sem mover `main`, sem deploy e sem tocar em runtime.
-2. Confirmar manualmente o aplicativo Meta correto no navegador habitual, parando antes de revelar ou redefinir o segredo.
-3. Agendar e autorizar a rotação OBS-1 fora de segunda a sexta-feira, 08:00–17:00, com aviso operacional e retorno por recuperação progressiva.
-4. Revalidar o retorno pós-OBS-2 somente antes de uma futura operação que dependa dele.
+1. Implementar o executor estável do Deploy V2, sem PID, dump ou caminho single-use no código.
+2. Validar sucesso e rollback determinísticos na CI.
+3. Abrir uma única janela autorizada para promover e verificar a correção já staged.
 
-Os campos verificáveis estão em [`CURRENT_STATE.json`](CURRENT_STATE.json). A CI
-valida este arquivo, o manifesto de origem e o registro ativo da implantação.
+OBS-1 continua separado: `PREPARED / SCHEDULED WINDOW REQUIRED / NO CHANGE`, fora do
+expediente protegido. Nenhum segredo é versionado.
 
-## Branches
-
-`review/campaign-recovery-20260926` é a linha operacional. `main` continua a linha
-do site público Vercel. Force-push, rebase destrutivo e merge cego permanecem
-proibidos; o [plano de convergência](BRANCH_CONVERGENCE_PLAN_2026-10-18.md) é uma
-atividade separada e não identifica produção por si só.

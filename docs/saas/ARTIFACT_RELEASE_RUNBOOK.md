@@ -1,5 +1,11 @@
 # Runbook de release por artefato
 
+> [!WARNING]
+> **BREAK_GLASS / NOT DEFAULT.** Este fluxo é excepcional e não é a rota normal de
+> releases. Use o [modelo operacional Deploy V2](DEPLOYMENT_OPERATING_MODEL.md) para
+> mudanças comuns. Preparações single-use anteriores são evidência histórica e não
+> devem ser repetidas como dependência de uma nova release.
+
 Este documento versiona o processo comprovado na promoção CRM/CSV de 17/10/2026.
 Ele complementa o deploy Git fast-forward existente; não autoriza uma janela e não
 é um script executável. Os requisitos técnicos obrigatórios estão no

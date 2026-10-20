@@ -1,139 +1,69 @@
 {
-  "schemaVersion": 2,
-  "updatedAtUtc": "2026-10-19T12:01:34Z",
-  "basedOnCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
+  "schemaVersion": 3,
+  "updatedAtUtc": "2026-10-20T01:02:47Z",
+  "basedOnCommit": "14f815f9c5701d63c71b1697654306ab36786b4b",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
-  "sourcePriority": [
-    "fresh read-only production evidence for live state",
-    "active deployment record for the durable release identity",
-    "Git commit plus passing CI for source and documentation",
-    "dated reports only for the scope and time they explicitly certify"
-  ],
+  "activeOperationalRecord": "docs/saas/releases/FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json",
+  "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "production": {
-    "status": "DEPLOYED_VERIFIED",
-    "promotedAtUtc": "2026-10-18T18:21:18.971249+00:00",
-    "promotedAtFortaleza": "2026-10-18T15:21:18.971249-03:00",
+    "status": "DEPLOYED_VERIFIED_SAFE_RETURN",
     "certifiedByThisFile": false,
     "api": {
-      "runtimeLine": "crm-csv-ux-phone-normalization-36dacbc8",
-      "entrypoint": "api-runtime/dist/index.js",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
-      "observedPid": 1377194,
-      "observedAtUtc": "2026-10-18T19:34:37.825579+00:00"
+      "lastReportedPid": 1601629
     },
     "frontend": {
-      "runtimeLine": "crm-csv-terminal-reentry-b8cc113d",
       "buildId": "2nrVvTyK7pcyD_oMa_fOv",
-      "observedPid": 1362964,
-      "observedAtUtc": "2026-10-18T19:34:37.825579+00:00"
+      "lastReportedPid": 1601491,
+      "supervision": "PERMANENTLY_SUPERVISED_RESTARTABLE"
     },
     "worker": {
-      "runtimeLine": "minimal-reactive",
-      "preserved": true,
-      "observedPid": 936540,
-      "observedAtUtc": "2026-10-18T19:34:37.825579+00:00"
+      "lastReportedPid": 936540,
+      "preserved": true
     },
     "pm2": {
-      "savedExactlyOnce": true,
-      "savedAtUtc": "2026-10-18T19:14:53.593473+00:00",
-      "dumpSha256": "20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e",
-      "rollbackSha256": "20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e",
-      "rollbackFile": "dump.pm2.obs2-post-rotation-20261018T193258Z.rollback",
-      "rollbackMode": "0600",
-      "previousRollback": {
-        "sha256": "33e3d65e78b4e4bd27349a06e28ff125551535085e0721281f3848dece5590d1",
-        "classification": "NON_EXECUTABLE_EXPOSED_SECRET",
-        "disposition": "REMOVED"
-      }
+      "dumpSha256": "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0",
+      "previousRollbackSha256": "20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e",
+      "mode": "0600"
     },
     "identitySemantics": {
-      "pids": "dated observational evidence; revalidate after any process restart",
-      "durable": [
-        "api.entrySha256",
-        "frontend.buildId",
-        "pm2.dumpSha256",
-        "pm2.rollbackSha256"
-      ]
-    },
-    "lastOperationalChangeAtUtc": "2026-10-18T19:32:58.751287+00:00"
+      "lastReportedPids": "dated observations without a preserved common timestamp; revalidate before mutation",
+      "durable": ["api.entrySha256", "frontend.buildId", "pm2.dumpSha256"]
+    }
   },
   "csvDelivery": {
-    "candidateCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
-    "releaseManifest": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18.json",
     "state": "DEPLOYED_VERIFIED",
-    "migrationRequired": false,
-    "workerChanged": false,
-    "deploymentOrder": [
-      "frontend"
-    ],
-    "automaticReplayForbidden": true,
-    "windowActivity": {
-      "csvPostRequests": 0,
-      "automaticNonCsvPostRequests": 0,
-      "imports": 0,
-      "sqlStatements": 0,
-      "migrations": 0
-    },
     "tenantNegativeIsolation": "LIVE_VERIFIED",
     "durablePositiveRecovery": "LIVE_VERIFIED",
-    "operationTotalsEvidence": "NOT_RECORDED_NO_INFERENCE",
-    "terminalReferenceProof": "CONSUMED_AS_EXPECTED_NOT_REPEATABLE",
-    "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED",
-    "demoPreview": "COMPLETED_REFERENCE_CLEARED_LIST_RESTORED",
-    "terminalReentry": "LIVE_VERIFIED"
+    "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED"
   },
-  "nextActions": [
-    "prepare branch convergence phase 1 on an inert review branch without deployment or runtime changes",
-    "confirm the correct Meta application manually in the habitual browser and stop before secret reveal or reset",
-    "schedule and authorize OBS-1 rotation outside Monday-Friday 08:00-17:00 America/Fortaleza",
-    "revalidate the post-OBS-2 return only before a future operation that depends on it"
-  ],
+  "contactsListRecovery": {
+    "releaseId": "crm-contacts-list-recovery-f5028de1",
+    "candidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
+    "state": "STAGED_INERT_NOT_DEPLOYED",
+    "deploymentClass": "NORMAL_RELEASE",
+    "deployV2Manifest": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19_DEPLOY_V2.json",
+    "workerChanged": false,
+    "databaseChanged": false,
+    "credentialsChanged": false
+  },
   "credentialInspectionIncident": {
-    "status": "RECORDED_PRIVATELY",
     "values": "NOT_VERSIONED",
-    "rotationAssessment": "PARTIAL",
     "obs2": "CONTINGENCY_CLOSED_SAFE_RETURN_READY",
     "obs1": "PREPARED_SCHEDULED_WINDOW_REQUIRED_NO_CHANGE",
-    "activeRecord": "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json",
+    "obs2Record": "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json",
     "obs1Record": "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json"
   },
+  "nextActions": [
+    "implement the stable data-driven Deploy V2 executor without release-specific bindings",
+    "run deterministic success and rollback fixtures in CI",
+    "open one authorized window to promote and verify the staged contacts-list release"
+  ],
   "branchConvergence": {
     "state": "CONTROLLED_DIVERGENCE",
     "plan": "docs/saas/BRANCH_CONVERGENCE_PLAN_2026-10-18.md",
-    "forbidden": [
-      "force push",
-      "destructive rebase",
-      "blind merge into main",
-      "using main as production identity without live evidence"
-    ]
-  },
-  "qualityDebt": {
-    "eslintBaseline": {
-      "errors": 663,
-      "warnings": 246,
-      "policy": "CI blocks increases; reduction is handled separately from this release"
-    }
-  },
-  "activeOperationalRecord": "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json",
-  "activeProductMap": "docs/saas/PRODUCT_MAP_CURRENT_2026-10-19.md",
-  "obs1Rotation": {
-    "status": "PREPARED_SCHEDULED_WINDOW_REQUIRED_NO_CHANGE",
-    "record": "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json",
-    "confirmedValueExposure": true,
-    "externalExploitationEvidence": "NONE_OBSERVED",
-    "sharedApplicationMultiTenantImpact": true,
-    "apiRestartRequired": true,
-    "oldSecretReliableRollback": false,
-    "recoveryModel": "FORWARD_RECOVERY",
-    "providerReset": "NOT_STARTED",
-    "productionChange": false,
-    "protectedBusinessHours": {
-      "timezone": "America/Fortaleza",
-      "days": "MONDAY_TO_FRIDAY",
-      "start": "08:00",
-      "end": "17:00",
-      "mutationPolicy": "DENY"
-    }
+    "forbidden": ["force push", "destructive rebase", "blind merge into main"]
   }
 }
+
