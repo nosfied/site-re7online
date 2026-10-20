@@ -146,17 +146,22 @@ def main() -> None:
             "private evidence identity")
 
     state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
-    require(state.get("activeOperationalRecord") == path.relative_to(ROOT).as_posix(),
-            "active operational record")
+    require(
+        state.get("credentialInspectionIncident", {}).get("obs2Record")
+        == path.relative_to(ROOT).as_posix(),
+        "OBS-2 historical record link",
+    )
+    require(state.get("credentialInspectionIncident", {}).get("obs2") ==
+            "CONTINGENCY_CLOSED_SAFE_RETURN_READY", "OBS-2 canonical status")
     production = state.get("production", {})
-    require(production.get("api", {}).get("observedPid") == observed.get("apiPid") and
-            production.get("frontend", {}).get("observedPid") ==
-            observed.get("frontendPid") and
-            production.get("worker", {}).get("observedPid") ==
-            observed.get("workerPid"), "current process observations")
-    require(production.get("pm2", {}).get("dumpSha256") == pm2.get("dumpSha256") and
-            production.get("pm2", {}).get("rollbackSha256") ==
-            pm2.get("rollbackSha256"), "current PM2 identities")
+    require(production.get("api", {}).get("entrySha256") ==
+            artifacts.get("api", {}).get("entrySha256"), "preserved API identity")
+    require(production.get("frontend", {}).get("buildId") ==
+            artifacts.get("frontend", {}).get("buildId"), "preserved frontend identity")
+    require(production.get("worker", {}).get("preserved") is True,
+            "preserved worker identity")
+    require(production.get("pm2", {}).get("previousRollbackSha256") ==
+            pm2.get("dumpSha256"), "OBS-2 return retained in rollback lineage")
     print("CREDENTIAL_ROTATION_RECORD_OK: OBS-2 contingency closed; OBS-1 untouched")
 
 
