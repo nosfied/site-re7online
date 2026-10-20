@@ -194,7 +194,8 @@ backend build
 frontend build
 ```
 
-Enquanto a VPS permanecer com cerca de 2 GiB de RAM, builds backend/frontend nao devem ser executados em paralelo. O objetivo e reduzir risco de OOM Killer (`137`) durante deploy.
+Com cerca de 2 GiB de RAM, a VPS não é builder. API e frontend são construídos
+externamente com Node v20.20.0 e promovidos como release imutável integral.
 
 ## Swap
 
@@ -309,7 +310,8 @@ Nao executar carga nesta sprint.
 
 1. Abrir `78O.1 - Inbox Read Query Path Investigation` para investigar p95 `2.085,30 ms` em `20 VUs`.
 2. Manter `OPERATIONAL_BASELINE.md` atualizado em toda mudanca de VPS, swap, PM2, PostgreSQL, build, HA ou laboratorio de carga.
-3. Continuar build sequencial backend -> frontend enquanto a VPS permanecer nessa classe de memoria.
+3. Manter build externo enquanto a VPS permanecer nessa classe de memória; não
+   executar build normal no host produtivo.
 
 ## Capacidade e retenção operacional
 

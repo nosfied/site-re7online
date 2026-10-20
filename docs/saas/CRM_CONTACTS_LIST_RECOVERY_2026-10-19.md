@@ -1,6 +1,10 @@
 # CRM contacts list recovery — 19/10/2026
 
-Status: `LOCAL VALIDATED / NOT DEPLOYED`.
+Status na criação: `LOCAL VALIDATED / NOT DEPLOYED`.
+
+> Histórico superado quanto ao estado produtivo. A implantação foi concluída em
+> 20/10/2026 e está registrada em
+> [CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json).
 
 ## Productive observation
 

@@ -1,33 +1,80 @@
 {
-  "schemaVersion": 4,
-  "updatedAtUtc": "2026-10-20T13:53:00Z",
+  "schemaVersion": 5,
+  "updatedAtUtc": "2026-10-20T18:57:47Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
-  "activeOperationalRecord": "docs/saas/releases/FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json",
+  "activeDeploymentRecord": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json",
+  "activeOperationalRecord": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
-  "normalReleaseExecutor": "scripts/deploy-normal-release.sh",
   "production": {
-    "status": "DEPLOYED_VERIFIED_SAFE_RETURN",
+    "status": "DEPLOYED_VERIFIED",
     "certifiedByThisFile": false,
-    "api": {"entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1", "lastReportedPid": 1601629},
-    "frontend": {"buildId": "2nrVvTyK7pcyD_oMa_fOv", "lastReportedPid": 1601491, "supervision": "PERMANENTLY_SUPERVISED_RESTARTABLE"},
-    "worker": {"lastReportedPid": 936540, "preserved": true},
-    "pm2": {"dumpSha256": "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0", "previousRollbackSha256": "20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e", "mode": "0600"}
+    "releaseId": "immutable-f5028de1-20261020T181603Z",
+    "releasePath": "/opt/re7online/releases/immutable-f5028de1-20261020T181603Z",
+    "targetCommit": "f5028de1e530666623dcc95519e744350671cb02",
+    "api": {
+      "stablePath": "/opt/re7online/current/api",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+      "lastReportedPid": 1763306,
+      "lastReportedStartTicks": 2230691889
+    },
+    "frontend": {
+      "stablePath": "/opt/re7online/current/frontend",
+      "buildId": "tWMOJcXoyjKezPbKzVD_i",
+      "execMode": "fork_mode",
+      "instances": 1,
+      "lastReportedPid": 1763532,
+      "lastReportedStartTicks": 2230694791
+    },
+    "worker": {
+      "lastReportedPid": 936540,
+      "lastReportedStartTicks": 2193413523,
+      "preserved": true
+    },
+    "pm2": {
+      "dumpSha256": "ba18a647d15fdc176ce72a81b229ae1c0a821d69196c989ca78c12aeac65a0e2",
+      "rollbackSha256": "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0",
+      "mode": "0600",
+      "savedExactlyOnce": true
+    }
   },
-  "csvDelivery": {"state": "DEPLOYED_VERIFIED", "tenantNegativeIsolation": "LIVE_VERIFIED", "durablePositiveRecovery": "LIVE_VERIFIED", "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED"},
   "contactsListRecovery": {
     "releaseId": "crm-contacts-list-recovery-f5028de1",
     "functionalCandidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
     "baseCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
-    "state": "STAGED_INERT_NOT_DEPLOYED",
-    "deploymentClass": "NORMAL_RELEASE",
-    "manifest": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_NORMAL_RELEASE.json",
+    "state": "DEPLOYED_VERIFIED",
+    "deploymentRecord": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json",
     "components": ["api", "frontend"],
     "workerChanged": false,
     "databaseChanged": false,
     "credentialsChanged": false
   },
-  "historicalDeployV2": {"status": "RETIRED_FROM_NORMAL_RELEASE", "recordsPreserved": true},
+  "csvDelivery": {
+    "state": "DEPLOYED_VERIFIED",
+    "tenantNegativeIsolation": "LIVE_VERIFIED",
+    "durablePositiveRecovery": "LIVE_VERIFIED",
+    "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED"
+  },
+  "canonicalTopology": {
+    "build": "EXTERNAL_LINUX_X86_64_NODE_20_20_0_NPM_10_8_2",
+    "releaseModel": "IMMUTABLE_VERSIONED_RELEASE",
+    "promotionOrder": ["api", "frontend"],
+    "frontendMode": "FORK_MODE_SINGLE_INSTANCE_DIRECT_NEXT",
+    "smoke": "GET_ONLY",
+    "rollback": "RESTORE_SYMLINKS_AND_FULL_PM2_DEFINITIONS"
+  },
+  "obsoleteMechanisms": [
+    "BUILD_ON_VPS",
+    "LIVE_CHECKOUT_AS_RUNTIME",
+    "scripts/deploy-normal-release.sh",
+    "PR_190_EXPERIMENTAL_PIPELINE",
+    "NEXT_CLUSTER_MODE",
+    "DIRECT_PM2_PID_SOCKET_EQUALITY_GATE"
+  ],
+  "historicalDeployV2": {
+    "status": "FROZEN_FUTURE_IMPROVEMENT_NOT_RELEASE_GATE",
+    "recordsPreserved": true
+  },
+  "historicalRecordsPreserved": true,
   "credentialInspectionIncident": {
     "values": "NOT_VERSIONED",
     "obs2": "CONTINGENCY_CLOSED_SAFE_RETURN_READY",
@@ -35,10 +82,9 @@
     "obs2Record": "docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json",
     "obs1Record": "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json"
   },
-  "nextActions": [
-    "plan exact base-to-target impact and require API plus frontend only",
-    "prepare isolated immutable payload without touching PM2",
-    "authorize exact SHA and activate with health, automatic rollback and one PM2 save"
-  ],
-  "branchConvergence": {"state": "CONTROLLED_DIVERGENCE", "plan": "docs/saas/BRANCH_CONVERGENCE_PLAN_2026-10-18.md", "forbidden": ["force push", "destructive rebase", "blind merge into main"]}
+  "branchConvergence": {
+    "state": "CONTROLLED_DIVERGENCE",
+    "plan": "docs/saas/BRANCH_CONVERGENCE_PLAN_2026-10-18.md",
+    "forbidden": ["force push", "destructive rebase", "blind merge into main"]
+  }
 }

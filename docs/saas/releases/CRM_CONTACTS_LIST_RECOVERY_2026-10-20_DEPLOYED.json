@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 4,
+  "recordType": "IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_VERIFIED",
+  "result": "DEPLOYED_FIXED_CURRENT_RUNTIME_ESTABLISHED_PRODUCTION_HEALTHY",
+  "releaseId": "immutable-f5028de1-20261020T181603Z",
+  "sourceReleaseId": "crm-contacts-list-recovery-f5028de1",
+  "canonicalBranch": "review/campaign-recovery-20260926",
+  "baseCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
+  "targetCommit": "f5028de1e530666623dcc95519e744350671cb02",
+  "components": ["api", "frontend"],
+  "build": {
+    "location": "OFF_HOST",
+    "platform": "linux",
+    "architecture": "x86_64",
+    "nodeVersion": "v20.20.0",
+    "npmVersion": "10.8.2"
+  },
+  "artifacts": {
+    "releasePath": "/opt/re7online/releases/immutable-f5028de1-20261020T181603Z",
+    "packageSha256": "53559320b90b20d39f1f40991d2f38b7e14904b269832bc8854f2a398e39f210",
+    "manifestSha256": "ac1f2a6bb7f65989501adf700f0621f6f344502cfb2483d91290d1e578584f78",
+    "indexSha256": "26d9fb3c21139841b6925507dc82bae760c8d4fe32c121b4ebf4cf742c0686ca",
+    "api": {
+      "stablePath": "/opt/re7online/current/api",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontend": {
+      "stablePath": "/opt/re7online/current/frontend",
+      "buildId": "tWMOJcXoyjKezPbKzVD_i",
+      "execMode": "fork_mode",
+      "instances": 1,
+      "entrypoint": "node_modules/next/dist/bin/next",
+      "args": ["start", "-p", "3000"]
+    },
+    "worker": {"preserved": true}
+  },
+  "deploymentOrder": ["api", "frontend"],
+  "verification": {
+    "api": {
+      "pid": 1763306,
+      "startTicks": 2230691889,
+      "socketPort": 3001,
+      "socketOwnerPid": 1763306,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [1763306],
+      "samples": 3,
+      "localHealthHttp": 200,
+      "publicHealthHttp": 200
+    },
+    "frontend": {
+      "pid": 1763532,
+      "startTicks": 2230694791,
+      "socketPort": 3000,
+      "socketOwnerPid": 1763532,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [1763532],
+      "samples": 3,
+      "loginLocalHttp": 200,
+      "loginPublicHttp": 200,
+      "inboxHttp": 200,
+      "crmHttp": 200,
+      "assetHttp": 200
+    },
+    "worker": {
+      "pid": 936540,
+      "startTicks": 2193413523,
+      "restartCount": 0,
+      "preserved": true
+    },
+    "smoke": "GET_ONLY",
+    "tenantScopedAutomatedSmoke": "NOT_EXECUTED_NO_AUTHORIZED_AUTOMATABLE_SESSION"
+  },
+  "pm2": {
+    "savedExactlyOnce": true,
+    "dumpSha256": "ba18a647d15fdc176ce72a81b229ae1c0a821d69196c989ca78c12aeac65a0e2",
+    "dumpMode": "0600",
+    "rollbackSha256": "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0"
+  },
+  "rollback": {
+    "fullDefinitionsCaptured": true,
+    "symlinkStateCaptured": true,
+    "strategy": "RESTORE_PREVIOUS_PM2_DEFINITIONS_AND_SYMLINKS",
+    "automaticRetryForbidden": true
+  },
+  "window": {
+    "date": "2026-10-20",
+    "timezone": "America/Fortaleza",
+    "startedApproximately": "15:53",
+    "finishedApproximately": "15:57"
+  },
+  "windowMutations": {
+    "functionalPostRequests": 0,
+    "imports": 0,
+    "retries": 0,
+    "sqlStatements": 0,
+    "migrations": 0,
+    "campaigns": 0,
+    "messagesSent": 0,
+    "workerChanges": 0
+  },
+  "privateEvidence": {
+    "versioned": false,
+    "containsSecrets": false,
+    "locationPublished": false
+  }
+}

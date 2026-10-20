@@ -1,39 +1,39 @@
 # Índice documental vigente
 
 > [!IMPORTANT]
-> Comece pelo [estado canônico](CURRENT_STATE.md) e pelo
-> [modelo operacional](DEPLOYMENT_OPERATING_MODEL.md). A produção está saudável na
-> versão anterior; a correção de contatos está staged, não implantada.
+> Comece pelo [estado canônico](CURRENT_STATE.md). A única instrução operacional
+> vigente de deploy é o
+> [modelo de releases imutáveis](DEPLOYMENT_OPERATING_MODEL.md).
 
-## Estado e continuidade
+## Estado ativo
 
-- [Estado canônico legível](CURRENT_STATE.md)
-- [Estado canônico verificável](CURRENT_STATE.json)
-- [Registro do retorno seguro](releases/FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json)
-- [Release funcional ativa](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json)
-- [Modelo operacional — Normal Release V1](DEPLOYMENT_OPERATING_MODEL.md)
+- [Estado legível](CURRENT_STATE.md)
+- [Estado verificável](CURRENT_STATE.json)
+- [Deploy CRM Contacts List Recovery](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json)
+- [Topologia de domínios e runtimes](../DEPLOY_TOPOLOGY_RE7.md)
+- [Checklist de release](RELEASE_CHECKLIST.md)
 - [Política de mudanças](CHANGE_POLICY.md)
-- [Mapa vigente do produto](PRODUCT_MAP_CURRENT_2026-10-19.md)
 
-## Próxima release normal
-
-- [Análise funcional da listagem CRM](CRM_CONTACTS_LIST_RECOVERY_2026-10-19.md)
-- [Manifesto normal vigente](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_NORMAL_RELEASE.json)
-- Executor: `scripts/deploy-normal-release.sh`.
-- Estado: `STAGED_INERT / NOT DEPLOYED`.
-
-## Backlog ativo
+## Backlog ativo separado
 
 - [Adequar encerramento e CSAT à janela de 24h](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
-  — prioridade alta; `CONFIRMED GAP / NOT FIXED`.
-- OBS-1 — preparação concluída, rotação em janela separada fora do expediente protegido.
+- OBS-1 — preparação concluída; rotação exige janela própria.
 
-## BREAK_GLASS e arquivo técnico
+## Arquivo histórico
 
-- [Padrão excepcional por artefato](ARTIFACT_RELEASE_ENGINEERING_STANDARD.md)
-- [Runbook excepcional por artefato](ARTIFACT_RELEASE_RUNBOOK.md)
-- [Contrato Deploy V2 histórico](DEPLOY_V2_ADAPTER_CONTRACT.md)
-- [Plano de convergência de branches](BRANCH_CONVERGENCE_PLAN_2026-10-18.md)
+- [Log Markdown legado](../DEPLOY_LOG.md) — incompleto após abril de 2026; arquivo,
+  não instrução operacional.
+- [Manifesto da preparação normal reprovada](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_NORMAL_RELEASE.json)
+  — estado na criação, não estado produtivo.
+- [Análise funcional da correção](CRM_CONTACTS_LIST_RECOVERY_2026-10-19.md)
+  — evidência local anterior ao deploy.
+- [Padrão artifact-bound](ARTIFACT_RELEASE_ENGINEERING_STANDARD.md),
+  [runbook artifact-bound](ARTIFACT_RELEASE_RUNBOOK.md) e
+  [Deploy V2](DEPLOY_V2_ADAPTER_CONTRACT.md) — tentativas históricas/break-glass,
+  não gates atuais.
+- Preparações, rehearsals, controles e verificadores single-use de 19–20/10 são
+  preservados como evidência e não podem ser executados novamente.
 
-Preparações, rehearsals e verificadores single-use anteriores são evidência histórica.
-Não autorizam repetição e não são dependências de `NORMAL_RELEASE`.
+O checkout produtivo, build na VPS, `deploy-normal-release.sh`, PR #190 e Next em
+`cluster_mode` estão obsoletos. Nenhum documento histórico prevalece sobre o
+modelo operacional canônico.
