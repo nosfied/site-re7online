@@ -1,15 +1,14 @@
-# DEPLOY LOG
+# DEPLOY LOG — histórico legado
 
-Registro minimo dos deploys manuais do `whatsapp-agent`.
+Este arquivo parou em abril de 2026 e é preservado como histórico incompleto. Ele
+não é a fonte vigente de topologia nem um runbook executável.
 
-Preencher a cada deploy:
-- branch
-- commit real (`git rev-parse --short HEAD`)
-- horario
-- migration
-- executado por
-- resultado
-- observacoes
+O deploy ativo está no registro estruturado
+[`CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json`](saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json).
+A única instrução operacional vigente é
+[`DEPLOYMENT_OPERATING_MODEL.md`](saas/DEPLOYMENT_OPERATING_MODEL.md).
+
+As entradas abaixo mantêm sua redação histórica.
 
 ## 2026-04-12 18:12 BRT
 

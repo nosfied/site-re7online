@@ -41,6 +41,69 @@ def walk_keys(value: object) -> set[str]:
     return set()
 
 
+def verify_immutable_release(record_path: Path, record: dict) -> None:
+    require(record.get("recordType") == "IMMUTABLE_RELEASE_DEPLOYMENT",
+            "immutable record type")
+    require(record.get("status") == "DEPLOYED_VERIFIED", "deployment status")
+    require(record.get("result") ==
+            "DEPLOYED_FIXED_CURRENT_RUNTIME_ESTABLISHED_PRODUCTION_HEALTHY",
+            "deployment result")
+    require(not (walk_keys(record) & FORBIDDEN_KEYS),
+            "sensitive identifier key in sanitized record")
+    require(re.fullmatch(r"[0-9a-f]{40}", record.get("targetCommit", "")),
+            "target commit")
+    require(record.get("components") == ["api", "frontend"], "components")
+    build = record.get("build", {})
+    require(build == {
+        "location": "OFF_HOST", "platform": "linux", "architecture": "x86_64",
+        "nodeVersion": "v20.20.0", "npmVersion": "10.8.2",
+    }, "build identity")
+    artifacts = record.get("artifacts", {})
+    for field in ("packageSha256", "manifestSha256", "indexSha256"):
+        require(bool(SHA256.fullmatch(artifacts.get(field, ""))), field)
+    require(artifacts.get("releasePath") ==
+            "/opt/re7online/releases/immutable-f5028de1-20261020T181603Z",
+            "release path")
+    api = artifacts.get("api", {})
+    frontend = artifacts.get("frontend", {})
+    require(api.get("stablePath") == "/opt/re7online/current/api" and
+            bool(SHA256.fullmatch(api.get("entrySha256", ""))), "API artifact")
+    require(frontend.get("stablePath") == "/opt/re7online/current/frontend" and
+            frontend.get("buildId") == "tWMOJcXoyjKezPbKzVD_i" and
+            frontend.get("execMode") == "fork_mode" and
+            frontend.get("instances") == 1 and
+            frontend.get("entrypoint") == "node_modules/next/dist/bin/next" and
+            frontend.get("args") == ["start", "-p", "3000"],
+            "frontend artifact")
+    require(artifacts.get("worker") == {"preserved": True}, "worker artifact")
+    require(record.get("deploymentOrder") == ["api", "frontend"], "order")
+    verification = record.get("verification", {})
+    for component, port in (("api", 3001), ("frontend", 3000)):
+        observed = verification.get(component, {})
+        require(observed.get("samples") == 3 and observed.get("socketPort") == port and
+                observed.get("pid") == observed.get("socketOwnerPid") and
+                observed.get("startTicks", 0) > 0, f"{component} samples")
+    require(verification.get("worker", {}).get("preserved") is True and
+            verification.get("worker", {}).get("restartCount") == 0,
+            "worker verification")
+    require(verification.get("smoke") == "GET_ONLY", "GET-only smoke")
+    pm2 = record.get("pm2", {})
+    require(pm2.get("savedExactlyOnce") is True and pm2.get("dumpMode") == "0600",
+            "PM2 save and mode")
+    require(bool(SHA256.fullmatch(pm2.get("dumpSha256", ""))) and
+            bool(SHA256.fullmatch(pm2.get("rollbackSha256", ""))), "PM2 hashes")
+    require(all(value == 0 for value in record.get("windowMutations", {}).values()),
+            "window mutations")
+    state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
+    require(state.get("activeDeploymentRecord") ==
+            record_path.relative_to(ROOT).as_posix(), "active record")
+    require(state.get("production", {}).get("targetCommit") ==
+            record.get("targetCommit"), "active target")
+    require(state.get("production", {}).get("pm2", {}).get("dumpSha256") ==
+            pm2.get("dumpSha256"), "active dump")
+    print("DEPLOYMENT_RECORD_OK: immutable artifacts, fixed paths and live verification agree")
+
+
 def verify_frontend_only(record_path: Path, record: dict) -> None:
     require(record.get("releaseType") == "FRONTEND_ONLY", "frontend release type")
     require(record.get("deploymentOrder") == ["frontend"], "frontend deployment order")
@@ -192,6 +255,10 @@ def main() -> None:
     require(record_path.is_relative_to(ROOT) and record_path.is_file(),
             "record outside repository or missing")
     record = read_json(record_path)
+
+    if record.get("schemaVersion") == 4:
+        verify_immutable_release(record_path, record)
+        return
 
     if record.get("schemaVersion") == 3:
         verify_frontend_only(record_path, record)

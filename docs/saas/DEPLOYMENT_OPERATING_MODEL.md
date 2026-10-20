@@ -1,98 +1,81 @@
-# Modelo operacional de implantação do Converta
+# Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / NORMAL RELEASE V1 / PRODUÇÃO VIVA**
+**Status: CANÔNICO / COMPROVADO EM PRODUÇÃO EM 20/10/2026**
 
-Este documento é a única rota normal de entrega. O objetivo é permitir releases
-pequenas e frequentes sem transformar cada alteração em um projeto de infraestrutura.
+Esta é a única fonte de instrução operacional vigente para deploy do Converta.
+Runbooks, preparações e executores anteriores permanecem como evidência histórica e
+não autorizam repetição.
 
-## Diagnóstico encerrado em 20/10/2026
+## Topologia canônica
 
-A correção funcional da listagem de contatos terminou em `f5028de1`. Depois dela,
-17 commits e 4.646 linhas foram acrescentados sem alterar runtime: executores em duas
-fases, bindings, nonces, journals, markers e verificadores single-use. A primeira
-closure ainda omitiu os produtores de `runtime.private.json` e
-`daemon.private.json`. O deploy deixou de falhar pela aplicação e passou a falhar
-pela própria instrumentação.
+- O build ocorre fora da VPS em Linux `x86_64`, com Node `v20.20.0` e npm
+  `10.8.2`.
+- API e frontend são artefatos completos, versionados e validados por índice,
+  manifesto, extração independente e SHA-256.
+- Releases são imutáveis e residem em `/opt/re7online/releases/<release-id>`.
+- O PM2 aponta somente para `/opt/re7online/current/api` e
+  `/opt/re7online/current/frontend`.
+- Cada caminho estável é um symlink trocado atomicamente para a release aprovada.
+  `/proc/<pid>/cwd` resolve o symlink e mostra o destino físico.
+- A API usa `/usr/bin/node` e o entrypoint integral da release.
+- O frontend usa `/usr/bin/node`, `node_modules/next/dist/bin/next`, argumentos
+  `start -p 3000`, `fork_mode` e uma instância. Next não roda em `cluster_mode`.
+- O worker fica fora do deploy normal quando a matriz de impacto não o altera.
 
-`Deploy V2` e as preparações artifact-bound permanecem como evidência histórica.
-Não são gates nem executores da faixa normal.
+## Sequência de promoção
 
-## Princípios invariáveis
+1. Validar o pacote fora da VPS e transferir somente o artefato imutável e hashes.
+2. Extrair em raiz nova e comprovar igualdade integral antes da seleção.
+3. Adquirir o lock global e capturar dump PM2 e definições completas de retorno em
+   arquivos privados `0600`.
+4. Criar symlinks temporários e promovê-los por rename atômico.
+5. Selecionar primeiro a API. Exigir três amostras estáveis, identidade, CWD físico
+   da release, entrypoint/hash, Node, socket 3001 e health local/público.
+6. Selecionar o frontend em `fork_mode`. Exigir três amostras estáveis, BUILD_ID,
+   socket 3000, Login, Inbox, CRM e asset `_next`.
+7. Confirmar o worker inalterado e executar somente smoke GET/read-only. Aceite
+   autenticado tenant-scoped é gate humano separado quando não houver sessão
+   automatizável autorizada.
+8. Executar `pm2 save` exatamente uma vez, somente depois dos gates e do aceite
+   aplicável. Conferir dump regular, modo real `0600` e SHA-256.
+9. Criar o marker `DEPLOYED` apenas depois da validação do dump.
 
-- produção viva e rollback preparado antes do primeiro reload;
-- release identificada por commit completo e artefatos construídos fora do runtime;
-- apenas os componentes realmente alterados são recarregados;
-- worker, banco, schema, credenciais, root e rede ficam intocados na faixa normal;
-- autorização humana vincula exatamente o SHA preparado;
-- nenhum teste, gate ou script novo é criado durante a janela;
-- falha de health restaura os diretórios anteriores e não executa `pm2 save`;
-- documentação registra fatos observados; `NOT EXERCISED` nunca vira `PASS`.
+O socket é válido quando pertence ao PID PM2 ou a um descendente comprovado por
+uma cadeia contínua de PPIDs. Um socket pertencente ao daemon PM2 não comprova a
+identidade do frontend. Igualdade direta entre PID PM2 e socket também não pode ser
+exigida quando o launcher comprovado cria descendente legítimo.
 
-## NORMAL_RELEASE — rota padrão
+## Retorno
 
-Executor único: `scripts/deploy-normal-release.sh`.
+Antes do primeiro efeito, preservar as definições PM2 completas, incluindo cwd,
+script, interpreter, argumentos, ambiente, controle/run frontend e políticas de
+log. Em negativa:
 
-1. CI aprova build, testes e o contrato do executor.
-2. Um worktree de controle descartável é criado em `/opt/re7online/deploy-control`,
-   destacado no SHA canônico aprovado. O checkout produtivo pode permanecer detached
-   e não é atualizado, reconstruído nem usado como mecanismo de entrega.
-3. `plan <base> <target>` classifica o diff sem mutação.
-4. `prepare <base> <target>` cria worktree isolada. Para a API executa exatamente
-   `npm ci --include=dev`, `npm run db:generate` e `npm run build`; depois
-   constrói o frontend e sela manifesto e hashes em `/opt/re7online/releases`.
-   PM2, banco e produção não são tocados.
-5. O owner autoriza o SHA completo em `DEPLOY_APPROVED_SHA`.
-6. `activate <release-dir>` adquire lock exclusivo, captura PM2/dump privados e
-   descobre os diretórios vivos pela configuração atual do PM2. Em shell SSH não
-   interativo, o executor resolve `pm2` no PATH ou nas instalações usuais
-   `~/.npm-global/bin`, `~/.local/bin` e `/usr/local/bin`, sem alterar o
-   ambiente global.
-7. A API é trocada, recarregada e validada; depois o frontend é validado em
-   `http://127.0.0.1:3000/app/login`.
-8. Qualquer negativa restaura os diretórios anteriores e recarrega somente os
-   componentes já alterados. O worker nunca é recarregado.
-9. Com ambos saudáveis e worker preservado, `pm2 save` ocorre exatamente uma vez.
+1. restaurar as definições anteriores de frontend e API;
+2. restaurar ou remover os symlinks conforme o snapshot inicial;
+3. validar identidades, sockets, health e worker;
+4. não executar `pm2 save` nem tentar novamente.
 
-Comandos:
+`ROLLED_BACK` só pode ser declarado depois da restauração comprovada. Falha em
+qualquer comando de retorno mantém a execução em falha.
 
-```bash
-git -C /opt/re7online/site-re7online fetch origin review/campaign-recovery-20260926
-git -C /opt/re7online/site-re7online worktree add --detach \
-  /opt/re7online/deploy-control/<sha-canônico-curto> <sha-canônico-completo>
-cd /opt/re7online/deploy-control/<sha-canônico-curto>
-scripts/deploy-normal-release.sh plan <base-ref> <target-ref>
-scripts/deploy-normal-release.sh prepare <base-ref> <target-ref>
-DEPLOY_APPROVED_SHA=<sha-completo> scripts/deploy-normal-release.sh activate <release-dir>
-```
+## Mecanismos obsoletos
 
-Não se executa `pull`, `switch` ou `checkout` no checkout produtivo para uma
-release normal. O executor deriva seu repositório de controle do próprio caminho;
-`WORKDIR` só é usado explicitamente em testes ou recuperação supervisionada.
+Os itens abaixo são históricos e **não utilizáveis**:
 
-Uma preparação interrompida nunca é reutilizada nem sobrescrita. Seu diretório é
-inventariado e movido, de forma recuperável, para
-`/opt/re7online/releases/failed-preparations/` antes de uma nova preparação do
-mesmo SHA. A ausência de `manifest.json` e `manifest.sha256` prova que ela não
-chegou ao estado `PREPARED_INERT`.
+- build de API ou frontend diretamente na VPS;
+- checkout produtivo como runtime ou destino de build/cópia;
+- `scripts/deploy-normal-release.sh` e seu fluxo de cópia para o runtime ativo;
+- pipeline experimental da PR #190;
+- frontend Next em `cluster_mode`;
+- gate que exige socket diretamente no PID PM2 sem considerar launcher/descendência;
+- Deploy V2, controles single-use e preparações de incidente como rota normal.
 
-## Classificação de impacto
+## Release comprovada em 20/10/2026
 
-Código de API em `apps/whatsapp-agent/src` não implica automaticamente mudança no
-worker. O worker só é impactado pelos módulos compartilhados que ele realmente
-compila: `web-session`, `db.ts`, `channelAccountSecretCrypto.ts`,
-`clientFeatures.ts` e `logger.ts`. Dependências, lockfiles, migrations, schema e
-caminhos desconhecidos são negados na faixa normal.
-
-## BREAK_GLASS — excepcional
-
-É obrigatório para migration/schema, dependências, credenciais, root/rede/proxy,
-worker/drain, contenção de incidente ou mudança que não caiba no executor normal.
-Exige janela própria, autorização explícita e runbook específico. Um mecanismo de
-incidente não pode voltar a ser requisito das releases comuns.
-
-## Release pendente
-
-A correção da listagem de contatos é `NORMAL_RELEASE`, com base operacional
-`b8cc113dc3e27a6818a1074f51c38eaa0e569448`, fonte funcional `f5028de1e530666623dcc95519e744350671cb02`
-e componentes API + frontend. Worker, banco, schema, dependências e credenciais não
-mudam. Ela permanece `STAGED_INERT / NOT DEPLOYED` até uma execução real registrada.
+O registro estruturado vigente é
+[`CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json`](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json).
+O target `f5028de1e530666623dcc95519e744350671cb02` foi promovido como
+`immutable-f5028de1-20261020T181603Z`, com API e frontend nos caminhos estáveis,
+worker preservado, um único `pm2 save` e resultado
+`DEPLOYED / FIXED CURRENT RUNTIME ESTABLISHED / PRODUCTION HEALTHY`.

@@ -1,52 +1,15 @@
-# Deploy em VPS com PM2
+# Deploy VPS / PM2
 
-> [!WARNING]
-> O antigo fluxo `git pull → build no checkout vivo → reload` foi retirado. Ele não
-> possui rollback integral e não é rota de produção.
+> Fonte canônica: [modelo operacional do Converta](../../saas/DEPLOYMENT_OPERATING_MODEL.md).
 
-O procedimento canônico está em
-[`docs/saas/DEPLOYMENT_OPERATING_MODEL.md`](../../saas/DEPLOYMENT_OPERATING_MODEL.md)
-e é executado por `scripts/deploy-normal-release.sh`.
+O PM2 seleciona releases imutáveis exclusivamente por
+`/opt/re7online/current/api` e `/opt/re7online/current/frontend`. O build é
+externo com Node v20.20.0; a VPS não executa build normal.
 
-## Planejar sem efeito
+A promoção é API→frontend. O frontend executa o Next diretamente em `fork_mode`,
+uma instância. O worker permanece intacto quando não houver impacto. Health e smoke
+são GET-only, e `pm2 save` ocorre uma vez após todos os gates.
 
-```bash
-git -C /opt/re7online/site-re7online fetch origin review/campaign-recovery-20260926
-git -C /opt/re7online/site-re7online worktree add --detach \
-  /opt/re7online/deploy-control/<sha-canônico-curto> <sha-canônico-completo>
-cd /opt/re7online/deploy-control/<sha-canônico-curto>
-scripts/deploy-normal-release.sh plan <base-ref> <target-ref>
-```
-
-O checkout produtivo pode permanecer detached. Ele não recebe `pull`, `switch` ou
-`checkout`; o worktree de controle fica preso ao SHA canônico aprovado.
-
-## Preparar sem tocar PM2
-
-```bash
-scripts/deploy-normal-release.sh prepare <base-ref> <target-ref>
-```
-
-A preparação da API espelha o CI: `npm ci --include=dev`, depois
-`npm run db:generate` e somente então `npm run build`. Se uma preparação for
-interrompida antes dos manifests, preserve seu inventário e mova o diretório para
-`/opt/re7online/releases/failed-preparations/`; nunca reutilize o payload parcial.
-
-## Ativar o SHA aprovado
-
-```bash
-DEPLOY_APPROVED_SHA=<sha-completo> \
-  scripts/deploy-normal-release.sh activate /opt/re7online/releases/normal-<sha-curto>
-```
-
-O executor resolve o PM2 mesmo em shell SSH não interativo, consultando o PATH e,
-em seguida, `~/.npm-global/bin`, `~/.local/bin` e `/usr/local/bin`. Não é
-necessário editar perfil de shell nem exportar PATH manualmente.
-
-A faixa normal recusa migration/schema, dependências, worker, credenciais,
-root/rede e impacto desconhecido. Esses casos usam `BREAK_GLASS` em janela própria.
-O healthcheck frontend canônico é `http://127.0.0.1:3000/app/login`.
-
-O caminho legado `apps/whatsapp-agent/scripts/deploy-vps.sh` aceita somente
-`--dry-run`; qualquer tentativa de mutação termina com erro e direciona ao executor
-canônico.
+O fluxo antigo `git pull → build no checkout → reload`,
+`scripts/deploy-normal-release.sh`, PR #190 e Next em `cluster_mode` são
+históricos/obsoletos e não devem ser executados.

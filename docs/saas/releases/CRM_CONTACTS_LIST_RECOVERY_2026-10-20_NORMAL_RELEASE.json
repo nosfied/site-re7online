@@ -5,7 +5,9 @@
   "baseCommit": "b8cc113dc3e27a6818a1074f51c38eaa0e569448",
   "functionalCandidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
   "components": ["api", "frontend"],
-  "executor": "scripts/deploy-normal-release.sh",
+  "executorAtCreation": "scripts/deploy-normal-release.sh",
+  "executorStatus": "OBSOLETE_NOT_USABLE",
+  "deploymentRecord": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json",
   "authorization": "DEPLOY_APPROVED_SHA_EQUALS_PREPARED_TARGET_COMMIT",
   "changeBoundary": {
     "workerChanged": false,
@@ -28,5 +30,6 @@
   ],
   "rollback": "AUTOMATIC_BEFORE_PM2_SAVE",
   "promotionAuthorized": false,
-  "state": "STAGED_INERT_NOT_DEPLOYED"
+  "statusAtCreation": "STAGED_INERT_NOT_DEPLOYED",
+  "currentStatus": "DEPLOYED_VERIFIED"
 }

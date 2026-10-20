@@ -6,17 +6,42 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
-def require(value, reason):
-    if not value: raise SystemExit(f"DOCUMENTATION_FRESHNESS_INVALID: {reason}")
 
-require(state["activeOperationalRecord"] == "docs/saas/releases/FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json", "active record")
-require(state["contactsListRecovery"]["state"] == "STAGED_INERT_NOT_DEPLOYED", "candidate not live")
-active = "\n".join((ROOT / p).read_text() for p in (
-    "docs/saas/CURRENT_STATE.md", "docs/saas/DOCUMENTATION_INDEX.md", "docs/saas/DEPLOYMENT_OPERATING_MODEL.md"))
+
+def require(value, reason):
+    if not value:
+        raise SystemExit(f"DOCUMENTATION_FRESHNESS_INVALID: {reason}")
+
+
+record = "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json"
+require(state["activeDeploymentRecord"] == record, "active deployment record")
+require(state["activeOperationalRecord"] == record, "active operational record")
+require(state["contactsListRecovery"]["state"] == "DEPLOYED_VERIFIED",
+        "contacts deployed")
+active_paths = (
+    "docs/saas/CURRENT_STATE.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
+    "docs/DEPLOY_TOPOLOGY_RE7.md",
+)
+active = "\n".join((ROOT / p).read_text() for p in active_paths)
 for marker in (
-    "20bb96ce1b79c8c358960ba18edee676b147a8343955a88784b48349f128cc4e",
-    "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0",
-    "STAGED_INERT / NOT DEPLOYED", "scripts/deploy-normal-release.sh"):
+    "f5028de1e530666623dcc95519e744350671cb02",
+    "immutable-f5028de1-20261020T181603Z",
+    "/opt/re7online/current/api",
+    "/opt/re7online/current/frontend",
+    "fork_mode",
+    "ba18a647d15fdc176ce72a81b229ae1c0a821d69196c989ca78c12aeac65a0e2",
+):
     require(marker in active, f"active marker {marker}")
-require("Deploy V2 histórico" in active or "Deploy V2`" in active, "Deploy V2 historical classification")
-print("DOCUMENTATION_FRESHNESS_OK: one normal path and historical evidence are explicit")
+for stale in (
+    "a correção de contatos está staged, não implantada",
+    "correção da listagem de contatos continua pronta, mas ainda não implantada",
+    "Release pendente",
+):
+    require(stale not in active, f"stale active claim {stale}")
+require("scripts/deploy-normal-release.sh" in active and "obsoleto" in active,
+        "obsolete executor classification")
+require("PR #190" in active and "cluster_mode" in active,
+        "obsolete pipeline and frontend mode")
+print("DOCUMENTATION_FRESHNESS_OK: active surfaces describe the deployed immutable release")

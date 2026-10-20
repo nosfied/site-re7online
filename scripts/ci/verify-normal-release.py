@@ -1,44 +1,31 @@
 #!/usr/bin/env python3
-"""Validate the small, stable NORMAL_RELEASE contract."""
+"""Ensure the retired normal-release path is not presented as canonical."""
 
-from __future__ import annotations
-
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+model = (ROOT / "docs/saas/DEPLOYMENT_OPERATING_MODEL.md").read_text()
+topology = (ROOT / "docs/DEPLOY_TOPOLOGY_RE7.md").read_text()
+checklist = (ROOT / "docs/saas/RELEASE_CHECKLIST.md").read_text()
 
 
-def require(value: bool, reason: str) -> None:
+def require(value, reason):
     if not value:
-        raise SystemExit(f"NORMAL_RELEASE_INVALID: {reason}")
+        raise SystemExit(f"DEPLOY_ROUTE_INVALID: {reason}")
 
 
-model = (ROOT / "docs/saas/DEPLOYMENT_OPERATING_MODEL.md").read_text(encoding="utf-8")
-script = (ROOT / "scripts/deploy-normal-release.sh").read_text(encoding="utf-8")
-manifest = json.loads((ROOT / "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_NORMAL_RELEASE.json").read_text(encoding="utf-8"))
-
-for marker in ("NORMAL_RELEASE", "BREAK_GLASS", "produção viva", "DEPLOY_APPROVED_SHA", "rollback"):
+for marker in (
+    "build ocorre fora da VPS",
+    "/opt/re7online/current/api",
+    "/opt/re7online/current/frontend",
+    "fork_mode",
+    "pm2 save",
+    "scripts/deploy-normal-release.sh",
+    "PR #190",
+):
     require(marker in model, f"model marker {marker}")
-for marker in ("PREPARED_INERT", "DEPLOY_APPROVED_SHA", "flock -n", "pm2 save", "rollback_all", "worker was not touched"):
-    require(marker in script, f"executor marker {marker}")
-require("http://127.0.0.1:3000/app/login" in script, "canonical frontend health URL")
-require("/opt/re7online/site-re7online" not in script, "executor must not default to the live checkout")
-require('rev-parse --is-inside-work-tree' in script, "linked worktree support")
-require("run db:generate" in script, "Prisma Client generation before API build")
-require("ensure_pm2_path" in script, "non-interactive PM2 resolution")
-require("$HOME/.npm-global/bin" in script, "user-local PM2 path")
-require(
-    script.index("ci --include=dev") < script.index("run db:generate") < script.index("run build"),
-    "API preparation order",
-)
-require("/opt/re7online/deploy-control" in model, "detached control worktree")
-require("failed-preparations" in model, "interrupted preparation quarantine")
-require(manifest["deploymentClass"] == "NORMAL_RELEASE", "release class")
-require(manifest["components"] == ["api", "frontend"], "component order")
-require(all(value is False for value in manifest["changeBoundary"].values()), "change boundary")
-require(manifest["executor"] == "scripts/deploy-normal-release.sh", "executor")
-require(manifest["promotionAuthorized"] is False, "manifest cannot authorize itself")
-require(manifest["state"] == "STAGED_INERT_NOT_DEPLOYED", "candidate state")
-
-print("NORMAL_RELEASE_OK: isolated Prisma-generated prepare, exact-SHA activation and rollback contract")
+require("não utilizáveis" in model, "obsolete classification")
+require("checkout produtivo não é runtime" in topology, "checkout retirement")
+require("Não executar build backend ou frontend na VPS" in checklist,
+        "off-host build")
+print("DEPLOY_ROUTE_OK: immutable fixed-path topology is canonical; normal-release is obsolete")

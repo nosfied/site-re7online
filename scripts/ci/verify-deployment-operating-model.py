@@ -1,96 +1,43 @@
 #!/usr/bin/env python3
-"""Validate the two-lane deployment model and the normal contacts release manifest."""
-
-from __future__ import annotations
+"""Validate the canonical immutable-release operating model."""
 
 import json
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SHA = re.compile(r"[0-9a-f]{64}")
 
 
-def require(value: bool, reason: str) -> None:
+def require(value, reason):
     if not value:
         raise SystemExit(f"DEPLOYMENT_OPERATING_MODEL_INVALID: {reason}")
 
 
-model = (ROOT / "docs/saas/DEPLOYMENT_OPERATING_MODEL.md").read_text(encoding="utf-8")
-for marker in ("NORMAL_RELEASE", "BREAK_GLASS", "produção viva", "tenant-scoped",
-               "nenhum gate novo é criado durante a janela"):
+model = (ROOT / "docs/saas/DEPLOYMENT_OPERATING_MODEL.md").read_text()
+for marker in (
+    "única fonte de instrução operacional vigente",
+    "build ocorre fora da VPS",
+    "/opt/re7online/releases",
+    "/opt/re7online/current/api",
+    "/opt/re7online/current/frontend",
+    "fork_mode",
+    "uma instância",
+    "GET/read-only",
+    "pm2 save",
+    "scripts/deploy-normal-release.sh",
+    "pipeline experimental da PR #190",
+    "cluster_mode",
+):
     require(marker in model, f"operating model marker {marker}")
-
-manifest = json.loads((ROOT / "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19_DEPLOY_V2.json").read_text(encoding="utf-8"))
-require(manifest["deploymentClass"] == "NORMAL_RELEASE", "contacts release class")
-require(manifest["deploymentOrder"] == ["api", "frontend"], "deployment order")
-require(all(value is False for value in manifest["changeBoundary"].values()), "change boundary")
-require(manifest["runtimeStatePolicy"]["embeddedRuntimeStateForbidden"] is True,
-        "runtime state must be captured at execution")
-require(manifest["promotionAuthorized"] is False, "manifest must not self-authorize")
-executor = manifest.get("executorContract", {})
-require(executor.get("path") == "scripts/deploy-v2.py", "stable executor path")
-require(executor.get("adapterContract") == "docs/saas/DEPLOY_V2_ADAPTER_CONTRACT.md",
-        "adapter contract")
-require(executor.get("promoteAuthorizationBinds") ==
-        ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256"],
-        "promote authorization identity binding")
-require(executor.get("resumeAuthorizationBinds") ==
-        ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256",
-         "executionId", "executionStateSha256", "acceptanceSha256"],
-        "resume authorization identity binding")
-require(executor.get("productionAdapter") == "scripts/deploy-v2-pm2-adapter.py",
-        "production adapter path")
-require(executor.get("adapterState") ==
-        "TWO_PHASE_POST_SELECTION_ACCEPTANCE_LOCAL_VALIDATED_NOT_EXECUTED",
-        "production adapter claim boundary")
-require(executor.get("runtimeBindingSchema") == 2, "data-only binding schema")
-require(executor.get("runtimeBindingState") == "DATA_ONLY_NOT_MATERIALIZED",
-        "private runtime binding claim boundary")
-require(set(executor.get("runtimeBindingForbiddenKeys", [])) ==
-        {"actions", "argv", "commands", "destinations", "executableSha256"},
-        "binding executable content denied")
-require((ROOT / executor["path"]).is_file(), "stable executor exists")
-require((ROOT / executor["productionAdapter"]).is_file(), "production adapter exists")
-require((ROOT / executor["adapterContract"]).is_file(), "adapter contract exists")
-adapter_source = (ROOT / executor["productionAdapter"]).read_text(encoding="utf-8")
-executor_source = (ROOT / executor["path"]).read_text(encoding="utf-8")
-for operation in ("capture", "select-api", "verify-api", "select-frontend",
-                  "verify-frontend", "enable-supervision", "verify-supervision",
-                  "verify-worker", "checkpoint", "rollback-all", "save-once"):
-    require(f'"{operation}"' in adapter_source, f"built-in operation {operation}")
-require("run_plan(" not in adapter_source, "generic release plan executor removed")
-for marker in ("DEPLOY_V2_AWAITING_ACCEPTANCE", "--promote", "--resume",
-               "executionStateSha256", "acceptance_candidate_identity"):
-    require(marker in executor_source, f"two-phase executor marker {marker}")
-for marker in ("FRONTEND_LIVE_CONTROL", "FRONTEND_LIVE_RUN",
-               "ABORTED_DUMP_RESTORED", "ROLLBACK_PRIVATE_ENV_UNAVAILABLE",
-               "ROLLBACK_INTERPRETER", "DUMP_MODE"):
-    require(marker in adapter_source, f"adapter safety marker {marker}")
-acceptance = manifest.get("acceptancePolicy", {})
-require(acceptance.get("separateFromBinding") is True and
-        acceptance.get("saveRequiresAcceptance") is True and
-        acceptance.get("forbidIdentifiersAndCredentials") is True and
-        acceptance.get("acceptanceCreatedAfterSelection") is True and
-        acceptance.get("resumeRevalidates") ==
-        ["api", "frontend", "worker", "supervision"],
-        "separate tenant-scoped acceptance")
-for artifact in manifest["artifacts"].values():
-    for key, value in artifact.items():
-        if key.endswith("Sha256"):
-            require(bool(SHA.fullmatch(value)), f"valid {key}")
-
-require(set(manifest["runtimeStatePolicy"]["captureAtExecution"]) == {
-    "pid", "startTicks", "cwd", "entrypoint", "pm2Dump", "rollback",
-    "pm2PrivateConfiguration", "reportPaths", "timestamps",
-}, "complete execution-time state capture")
-for forbidden_key in ("observedPid", "expectedPid", "startTicks", "dumpSha256"):
-    require(forbidden_key not in manifest, f"embedded live value {forbidden_key}")
-
-candidate = json.loads((ROOT / manifest["candidateRecord"]).read_text(encoding="utf-8"))
-require(candidate["releaseId"] == manifest["releaseId"], "candidate identity")
-require(candidate["deploymentClass"] == "NORMAL_RELEASE", "candidate class")
-require(candidate["status"] == "STAGED_INERT_NOT_DEPLOYED", "candidate state")
-
-print("DEPLOYMENT_OPERATING_MODEL_OK: normal release separated from break-glass")
-
+require("não utilizáveis" in model, "obsolete mechanisms")
+state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
+require(state["canonicalTopology"] == {
+    "build": "EXTERNAL_LINUX_X86_64_NODE_20_20_0_NPM_10_8_2",
+    "releaseModel": "IMMUTABLE_VERSIONED_RELEASE",
+    "promotionOrder": ["api", "frontend"],
+    "frontendMode": "FORK_MODE_SINGLE_INSTANCE_DIRECT_NEXT",
+    "smoke": "GET_ONLY",
+    "rollback": "RESTORE_SYMLINKS_AND_FULL_PM2_DEFINITIONS",
+}, "canonical topology")
+require(state["historicalDeployV2"]["status"] ==
+        "FROZEN_FUTURE_IMPROVEMENT_NOT_RELEASE_GATE", "Deploy V2 frozen")
+print("DEPLOYMENT_OPERATING_MODEL_OK: immutable fixed-path release is the sole active route")

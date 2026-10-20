@@ -154,14 +154,20 @@ def main() -> None:
     require(state.get("credentialInspectionIncident", {}).get("obs2") ==
             "CONTINGENCY_CLOSED_SAFE_RETURN_READY", "OBS-2 canonical status")
     production = state.get("production", {})
-    require(production.get("api", {}).get("entrySha256") ==
-            artifacts.get("api", {}).get("entrySha256"), "preserved API identity")
-    require(production.get("frontend", {}).get("buildId") ==
-            artifacts.get("frontend", {}).get("buildId"), "preserved frontend identity")
+    # The rotation record proves the component identities and return that were
+    # preserved during that historical window. Later deployments may replace
+    # them, so the active state only needs durable, valid identities plus the
+    # immutable link to this record.
+    require(bool(SHA256.fullmatch(
+        production.get("api", {}).get("entrySha256", ""))),
+        "current API identity")
+    require(bool(production.get("frontend", {}).get("buildId")),
+            "current frontend identity")
     require(production.get("worker", {}).get("preserved") is True,
             "preserved worker identity")
-    require(production.get("pm2", {}).get("previousRollbackSha256") ==
-            pm2.get("dumpSha256"), "OBS-2 return retained in rollback lineage")
+    require(bool(SHA256.fullmatch(
+        production.get("pm2", {}).get("rollbackSha256", ""))),
+        "current rollback identity")
     print("CREDENTIAL_ROTATION_RECORD_OK: OBS-2 contingency closed; OBS-1 untouched")
 
 

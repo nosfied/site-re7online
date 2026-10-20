@@ -1,14 +1,14 @@
 # Release Checklist
 
-### Estado vigente CRM/CSV — consultar antes dos exemplos genéricos
+### Estado vigente — consultar antes dos exemplos históricos
 
-A entrega CRM/CSV está **DEPLOYED / VERIFIED** desde 17/10/2026 (Fortaleza).
-A fonte canônica é [CURRENT_STATE.md](CURRENT_STATE.md); o fluxo específico de
-composição, seleção e retorno está em
-[ARTIFACT_RELEASE_RUNBOOK.md](ARTIFACT_RELEASE_RUNBOOK.md). Entradas históricas
-`CSV SUSPENSO` abaixo preservam cronologia e não autorizam replay, POST, SQL,
-migration nem repetição de diagnósticos consumidos. A recuperação positiva durável
-permanece adiada até a primeira importação legítima, observada somente por GET.
+A fonte canônica é [CURRENT_STATE.md](CURRENT_STATE.md), e a única rota de deploy
+vigente é [DEPLOYMENT_OPERATING_MODEL.md](DEPLOYMENT_OPERATING_MODEL.md). A release
+CRM Contacts List Recovery está **DEPLOYED / VERIFIED** desde 20/10/2026.
+
+Build na VPS, checkout produtivo como runtime, `deploy-normal-release.sh`, PR #190,
+Deploy V2 e Next em `cluster_mode` são históricos/obsoletos. Exemplos antigos neste
+arquivo não os reautorizam.
 
 
 Status: checklist operacional atual do Converta. Este documento nao altera runtime.
@@ -84,14 +84,15 @@ Diretorio:
 cd apps/whatsapp-agent
 ```
 
-Validacoes:
+Validações no builder externo Linux x86_64 com Node v20.20.0/npm 10.8.2:
 
 ```bash
 npm run db:generate
 npm run build
 ```
 
-Em VPS com cerca de 2 GiB RAM, executar o build backend antes do frontend. Nao rodar build backend/frontend em paralelo enquanto `docs/saas/OPERATIONAL_BASELINE.md` indicar baixa memoria ou ausencia de swap.
+Não executar build backend ou frontend na VPS. O artefato integral deve ser selado,
+extraído e comparado fora da produção antes da transferência.
 
 Lint:
 
@@ -376,9 +377,9 @@ Pacote operacional SIMAE:
   - modelo de comunicacao de incidente.
 - Nao incluir telefones pessoais, credenciais, tokens, dumps ou dados privados no dossie do contrato.
 
-## Frontend
+## Frontend — builder externo
 
-Diretorio raiz do repo:
+Diretório raiz do worktree isolado:
 
 ```bash
 npm run build
@@ -395,23 +396,20 @@ Observacao:
 - O frontend raiz possui script `lint`.
 - Se a release for somente backend/docs e o tempo operacional exigir corte menor, registrar no result report quando o lint nao for executado.
 
-## Operacao VPS
+## Operação VPS
 
-Ordem padrao sem migration:
+1. validar e extrair a release imutável em raiz nova;
+2. capturar dump e definições completas de retorno;
+3. trocar atomicamente `/opt/re7online/current/api` e selecionar a API;
+4. validar identidade, socket 3001 e health;
+5. trocar `/opt/re7online/current/frontend` e selecionar Next diretamente em
+   `fork_mode`, uma instância;
+6. validar BUILD_ID, socket 3000, Login, Inbox, CRM e asset;
+7. confirmar worker preservado e smoke GET-only;
+8. executar `pm2 save` exatamente uma vez.
 
-1. `git pull`
-2. instalar dependencias se `package.json` ou lock mudar
-3. build backend
-4. build frontend
-5. PM2 reload
-6. health check
-
-PM2:
-
-```bash
-pm2 reload re7-whatsapp-agent --update-env
-pm2 reload re7-admin-front --update-env
-```
+Não usar `git pull`, build na VPS, cópia para runtime ativo, `reload --update-env`
+ou checkout produtivo como mecanismo de promoção.
 
 Health:
 
@@ -455,7 +453,8 @@ Resultado esperado:
 - Se a release tocar alerting futuro, validar primeiro com `alerting=false` e sem envio externo.
 - Alertas reais devem permanecer atras de flag explicita e rollback por flag.
 - Se a release tocar HA/escala/infra, registrar explicitamente: SPOFs afetados, backup antes da mudanca, plano de rollback, health pos-reload e impacto em PM2/Postgres/Nginx/DNS/storage.
-- Em VPS com pouca RAM, manter builds sequenciais e evitar build frontend/backend em paralelo.
+- A VPS não executa builds normais; capacidade insuficiente foi comprovada por OOM
+  e o build canônico é externo.
 - Se a release tocar swap, confirmar `free -m`, `swapon --show`, rollback por `swapoff` e atualizar `OPERATIONAL_BASELINE.md`. Criacao de swap exige acesso administrativo; nao simular por caminho paralelo.
 - Se a release tocar backup/restore, confirmar: ultimo backup valido, tamanho nao-zero, destino local/offsite, checksum quando existir, plano de restore e que nenhum secret/dump sera enviado por chat ou versionado no Git.
 - Restore validation deve usar banco temporario isolado e deve confirmar `TEMP_DB_REMAINING=0` ao final.
