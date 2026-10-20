@@ -39,6 +39,10 @@ DEPLOY_APPROVED_SHA=<sha-completo> \
   scripts/deploy-normal-release.sh activate /opt/re7online/releases/normal-<sha-curto>
 ```
 
+O executor resolve o PM2 mesmo em shell SSH não interativo, consultando o PATH e,
+em seguida, `~/.npm-global/bin`, `~/.local/bin` e `/usr/local/bin`. Não é
+necessário editar perfil de shell nem exportar PATH manualmente.
+
 A faixa normal recusa migration/schema, dependências, worker, credenciais,
 root/rede e impacto desconhecido. Esses casos usam `BREAK_GLASS` em janela própria.
 O healthcheck frontend canônico é `http://127.0.0.1:3000/app/login`.

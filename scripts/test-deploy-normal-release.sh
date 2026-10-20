@@ -85,7 +85,7 @@ api_cwd="$fixture/live-api"
 frontend_cwd="$fixture/live-front"
 worker_cwd="$fixture/live-worker"
 release_dir="$fixture/release"
-mkdir -p "$home_dir/.pm2" "$bin_dir" "$api_cwd/dist" "$frontend_cwd/.next" "$worker_cwd" \
+mkdir -p "$home_dir/.pm2" "$home_dir/.npm-global/bin" "$bin_dir" "$api_cwd/dist" "$frontend_cwd/.next" "$worker_cwd" \
   "$release_dir/payload/api-dist" "$release_dir/payload/frontend-next"
 printf 'old-api\n' > "$api_cwd/dist/version"
 printf 'old-front\n' > "$frontend_cwd/.next/version"
@@ -93,7 +93,7 @@ printf 'new-api\n' > "$release_dir/payload/api-dist/version"
 printf 'new-front\n' > "$release_dir/payload/frontend-next/version"
 printf '{}\n' > "$home_dir/.pm2/dump.pm2"
 
-cat > "$bin_dir/pm2" <<'PM2'
+cat > "$home_dir/.npm-global/bin/pm2" <<'PM2'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1" == jlist ]]; then
@@ -113,7 +113,7 @@ cat > "$bin_dir/sleep" <<'SLEEP'
 #!/usr/bin/env bash
 exit 0
 SLEEP
-chmod +x "$bin_dir/pm2" "$bin_dir/curl" "$bin_dir/sleep"
+chmod +x "$home_dir/.npm-global/bin/pm2" "$bin_dir/curl" "$bin_dir/sleep"
 
 TARGET_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 RELEASE_DIR="$release_dir" TARGET_SHA="$TARGET_SHA" python3 - <<'PY'
@@ -136,7 +136,7 @@ data = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
 PY
 
 TEST_API_CWD="$api_cwd" TEST_FRONTEND_CWD="$frontend_cwd" TEST_WORKER_CWD="$worker_cwd" \
-TEST_PM2_LOG="$fixture/pm2.log" TEST_CURL_LOG="$fixture/curl.log" HOME="$home_dir" PATH="$bin_dir:$PATH" LOCK_FILE="$fixture/lock" \
+TEST_PM2_LOG="$fixture/pm2.log" TEST_CURL_LOG="$fixture/curl.log" HOME="$home_dir" PATH="$bin_dir:/usr/bin:/bin" LOCK_FILE="$fixture/lock" \
 DEPLOY_APPROVED_SHA="$TARGET_SHA" "$script" activate "$release_dir"
 grep -q new-api "$api_cwd/dist/version"
 grep -q new-front "$frontend_cwd/.next/version"

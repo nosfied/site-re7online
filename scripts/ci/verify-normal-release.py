@@ -26,6 +26,8 @@ require("http://127.0.0.1:3000/app/login" in script, "canonical frontend health 
 require("/opt/re7online/site-re7online" not in script, "executor must not default to the live checkout")
 require('rev-parse --is-inside-work-tree' in script, "linked worktree support")
 require("run db:generate" in script, "Prisma Client generation before API build")
+require("ensure_pm2_path" in script, "non-interactive PM2 resolution")
+require("$HOME/.npm-global/bin" in script, "user-local PM2 path")
 require(
     script.index("ci --include=dev") < script.index("run db:generate") < script.index("run build"),
     "API preparation order",
