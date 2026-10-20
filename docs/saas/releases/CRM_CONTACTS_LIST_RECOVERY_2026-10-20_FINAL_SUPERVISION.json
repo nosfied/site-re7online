@@ -34,6 +34,7 @@
     },
     "frontendChecker": {
       "path": "frontend-check.py",
+      "versionedCiSource": "scripts/release-assets/frontend-check.py",
       "sha256": "ea3e6944667c2dd513ef54abc4a504fe3698451670b8d24b8f3de8d5c7243201",
       "actions": [
         "ready-candidate",
@@ -147,9 +148,18 @@
   },
   "fixture": {
     "path": "scripts/ci/verify-phase1-supervision-reuse.py",
-    "sha256": "3663ac9a4576d4190e7a733d55bf67b86e1e56eca3c1bd6821ae36883089428d",
+    "sha256": "b218202a9d90f736c88f4c91e925e03dfb47aadf22f5458fb720f13e62219888",
     "result": "FINAL_SUPERVISION_PHASE1_REUSE_END_TO_END_PASS",
-    "realPm2Invocations": 0
+    "realPm2Invocations": 0,
+    "canonicalInterfacesExecuted": [
+      "canonical launcher journal production",
+      "frontend-check.py ready-candidate",
+      "stateProducer seal-readiness",
+      "frontend-check.py enable-supervision-candidate",
+      "frontend-check.py supervised-candidate",
+      "authenticated PM2 shim save exactly once",
+      "authenticated PM2 shim frontend and API rollback with zero save"
+    ]
   },
   "closedWindowFileSet": {
     "staticHashesRequiredBeforeEffects": [
