@@ -119,7 +119,7 @@ def proc(pid, require_alive=True):
     text = Path(f'/proc/{pid}/stat').read_text().split(') ', 1)[1].split()
     if require_alive:
         require(text[0] not in ['Z', 'X', 'x'], 'dead_process')
-    return {'pid': pid, 'ticks': text[19], 'parent': int(text[1]), 'state': text[0], 'group': int(text[2])}
+    return {'pid': pid, 'ticks': int(text[19]), 'parent': int(text[1]), 'state': text[0], 'group': int(text[2])}
 
 def rows(timeout=3):
     if FIXTURE_SURFACE is not None:return fixture_surface()['pm2Rows']

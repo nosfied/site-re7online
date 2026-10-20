@@ -88,7 +88,35 @@ def process(name: str, pid: int, cwd: str, entry: str) -> dict[str, object]:
 
 def proc_identity(pid: int) -> dict[str, object]:
     fields = Path(f"/proc/{pid}/stat").read_text().split(") ", 1)[1].split()
-    return {"ticks": fields[19], "parent": int(fields[1]), "state": fields[0], "group": int(fields[2])}
+    return {"ticks": int(fields[19]), "parent": int(fields[1]), "state": fields[0], "group": int(fields[2])}
+
+
+def verify_ticks_type_contract(producer) -> dict[str, object]:
+    pid = os.getpid()
+    producer_ticks = producer.proc_ticks(pid)
+    fixture_ticks = proc_identity(pid)["ticks"]
+    probe = (
+        "import importlib.util,json,os,sys;"
+        "p=sys.argv[1];"
+        "s=importlib.util.spec_from_file_location('frontend_checker_ticks_probe',p);"
+        "m=importlib.util.module_from_spec(s);"
+        "s.loader.exec_module(m);"
+        "v=m.proc(int(sys.argv[2]))['ticks'];"
+        "print(json.dumps({'type':type(v).__name__,'value':v}))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", probe, str(CHECKER), str(pid)],
+        text=True,
+        capture_output=True,
+        check=True,
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+    )
+    checker = json.loads(result.stdout)
+    if type(producer_ticks) is not int or type(fixture_ticks) is not int or checker["type"] != "int":
+        raise RuntimeError("ticks_type_contract")
+    if producer_ticks != fixture_ticks or producer_ticks != checker["value"]:
+        raise RuntimeError("ticks_value_contract")
+    return {"producer": "int", "checkerRealProc": "int", "fixtureSurface": "int", "sameObservedValue": True}
 
 
 def wait_for_journal(path: Path) -> list[dict[str, object]]:
@@ -182,6 +210,10 @@ def prepare_attempt(base: Path, name: str, producer):
         raise RuntimeError("node_unavailable")
     launch = subprocess.Popen([node, str(launcher)], cwd=returned, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "RE7_FRONT_CONTROL": str(control_path), "RE7_FRONT_RUN": control["nonce"]}, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     records = wait_for_journal(journal)
+    for record in records:
+        if "ticks" in record:
+            record["ticks"] = int(record["ticks"])
+    journal.write_text("".join(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n" for record in records))
     child = int(next(row["pid"] for row in records if row["event"] == "application_identity"))
     current_rows = [before_rows[0], before_rows[1], process("re7-admin-front", launch.pid, str(target), str(launcher))]
     current_rows[2]["pm2_env"].update(watch=False, autorestart=True, stop_exit_codes=[78], RE7_FRONT_CONTROL=str(control_path), RE7_FRONT_RUN=control["nonce"])
@@ -274,6 +306,7 @@ def main() -> None:
     if any(value in source for value in forbidden):
         raise RuntimeError("checker_monkeypatch_present")
     producer = load_producer()
+    ticks_type_contract = verify_ticks_type_contract(producer)
     predicate_comparison = compare_predicates()
     schema = json.loads(SCHEMA.read_text())
     if schema["additionalProperties"] is not False or set(schema["required"]) != {"schemaVersion", "candidateRoot", "returnRoot", "launcher", "target", "pm2Pid"}:
@@ -292,7 +325,7 @@ def main() -> None:
             stop(first);stop(second)
     if first_result["root"] == second_result["root"]:
         raise RuntimeError("exclusive_roots_alias")
-    print(json.dumps({"result": "RELOCATABLE_CHECKER_CLI_END_TO_END_PASS", "checkerSha256": sha256(CHECKER), "bindingSchemaSha256": sha256(SCHEMA), "predicateComparison": predicate_comparison, "monkeypatch": False, "exclusiveRoots": 2, "first": first_result, "second": second_result, "realPm2Invocations": 0, "productionChanged": False}, sort_keys=True))
+    print(json.dumps({"result": "RELOCATABLE_CHECKER_CLI_END_TO_END_PASS", "checkerSha256": sha256(CHECKER), "bindingSchemaSha256": sha256(SCHEMA), "predicateComparison": predicate_comparison, "ticksTypeContract": ticks_type_contract, "monkeypatch": False, "exclusiveRoots": 2, "first": first_result, "second": second_result, "realPm2Invocations": 0, "productionChanged": False}, sort_keys=True))
 
 
 if __name__ == "__main__":

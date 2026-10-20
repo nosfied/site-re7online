@@ -35,7 +35,7 @@
     "frontendChecker": {
       "path": "frontend-check.py",
       "versionedCiSource": "scripts/release-assets/frontend-check.py",
-      "sha256": "9b8174064edd7d3782f15d7be6fca902467f7bcb569f8d7e8ad9d5fec1e0d004",
+      "sha256": "91752006ac3ab9e6889dd276e8bf77c02fa7d6a1e765188f7093965404210643",
       "predicateBaselineSha256": "ea3e6944667c2dd513ef54abc4a504fe3698451670b8d24b8f3de8d5c7243201",
       "bindingSchema": {
         "path": "docs/saas/releases/FRONTEND_CHECKER_BINDING_V1.schema.json",
@@ -160,7 +160,7 @@
   },
   "fixture": {
     "path": "scripts/ci/verify-phase1-supervision-reuse.py",
-    "sha256": "d786eae9f7963fe7460c73f81b03c35f7c68326f8fa200470d8969c24670ad3d",
+    "sha256": "64c5df79f21cac6c16f56721bc2e0e211cf63d9516fbc7b899a5d2f36fdf2fec",
     "result": "RELOCATABLE_CHECKER_CLI_END_TO_END_PASS",
     "realPm2Invocations": 0,
     "checkerCliExclusiveRoots": 2,
@@ -173,7 +173,13 @@
       "frontend-check.py supervised-candidate",
       "authenticated PM2 shim save exactly once",
       "authenticated PM2 shim frontend and API rollback with zero save"
-    ]
+    ],
+    "ticksTypeContract": {
+      "producer": "int",
+      "checkerRealProc": "int",
+      "fixtureSurface": "int",
+      "sameObservedValue": true
+    }
   },
   "closedWindowFileSet": {
     "staticHashesRequiredBeforeEffects": [
