@@ -9,6 +9,7 @@
     "status": "DEPLOYED_VERIFIED",
     "certifiedByThisFile": false,
     "releaseId": "immutable-f5028de1-20261020T181603Z",
+    "releasePath": "/opt/re7online/releases/immutable-f5028de1-20261020T181603Z",
     "targetCommit": "f5028de1e530666623dcc95519e744350671cb02",
     "api": {
       "stablePath": "/opt/re7online/current/api",

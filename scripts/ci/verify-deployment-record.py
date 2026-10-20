@@ -41,6 +41,33 @@ def walk_keys(value: object) -> set[str]:
     return set()
 
 
+def positive_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def verify_socket_owner(observed: dict, component: str) -> None:
+    pm2_pid = observed.get("pid")
+    owner_pid = observed.get("socketOwnerPid")
+    relation = observed.get("socketOwnerRelation")
+    chain = observed.get("socketOwnerChain")
+    require(positive_int(pm2_pid), f"{component} PM2 PID")
+    require(positive_int(owner_pid), f"{component} socket owner PID")
+    require(isinstance(chain, list) and chain and
+            all(positive_int(pid) for pid in chain),
+            f"{component} socket owner chain")
+    require(len(chain) == len(set(chain)), f"{component} socket owner chain loop")
+    require(chain[0] == owner_pid, f"{component} socket owner chain start")
+    require(chain[-1] == pm2_pid, f"{component} socket owner chain end")
+    if relation == "DIRECT":
+        require(len(chain) == 1 and owner_pid == pm2_pid,
+                f"{component} DIRECT socket relation")
+    elif relation == "DESCENDANT":
+        require(len(chain) >= 2 and owner_pid != pm2_pid,
+                f"{component} DESCENDANT socket relation")
+    else:
+        require(False, f"{component} socket owner relation")
+
+
 def verify_immutable_release(record_path: Path, record: dict) -> None:
     require(record.get("recordType") == "IMMUTABLE_RELEASE_DEPLOYMENT",
             "immutable record type")
@@ -50,8 +77,10 @@ def verify_immutable_release(record_path: Path, record: dict) -> None:
             "deployment result")
     require(not (walk_keys(record) & FORBIDDEN_KEYS),
             "sensitive identifier key in sanitized record")
-    require(re.fullmatch(r"[0-9a-f]{40}", record.get("targetCommit", "")),
-            "target commit")
+    for field in ("baseCommit", "targetCommit"):
+        require(bool(re.fullmatch(r"[0-9a-f]{40}", record.get(field, ""))), field)
+    require(bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*",
+                              record.get("releaseId", ""))), "releaseId")
     require(record.get("components") == ["api", "frontend"], "components")
     build = record.get("build", {})
     require(build == {
@@ -61,15 +90,17 @@ def verify_immutable_release(record_path: Path, record: dict) -> None:
     artifacts = record.get("artifacts", {})
     for field in ("packageSha256", "manifestSha256", "indexSha256"):
         require(bool(SHA256.fullmatch(artifacts.get(field, ""))), field)
-    require(artifacts.get("releasePath") ==
-            "/opt/re7online/releases/immutable-f5028de1-20261020T181603Z",
-            "release path")
+    release_path = Path(artifacts.get("releasePath", ""))
+    require(release_path.is_absolute() and
+            release_path.parent == Path("/opt/re7online/releases") and
+            release_path.name == record.get("releaseId"), "release path")
     api = artifacts.get("api", {})
     frontend = artifacts.get("frontend", {})
-    require(api.get("stablePath") == "/opt/re7online/current/api" and
+    require(Path(api.get("stablePath", "")).is_absolute() and
             bool(SHA256.fullmatch(api.get("entrySha256", ""))), "API artifact")
-    require(frontend.get("stablePath") == "/opt/re7online/current/frontend" and
-            frontend.get("buildId") == "tWMOJcXoyjKezPbKzVD_i" and
+    require(Path(frontend.get("stablePath", "")).is_absolute() and
+            isinstance(frontend.get("buildId"), str) and
+            bool(frontend.get("buildId")) and
             frontend.get("execMode") == "fork_mode" and
             frontend.get("instances") == 1 and
             frontend.get("entrypoint") == "node_modules/next/dist/bin/next" and
@@ -80,11 +111,15 @@ def verify_immutable_release(record_path: Path, record: dict) -> None:
     verification = record.get("verification", {})
     for component, port in (("api", 3001), ("frontend", 3000)):
         observed = verification.get(component, {})
-        require(observed.get("samples") == 3 and observed.get("socketPort") == port and
-                observed.get("pid") == observed.get("socketOwnerPid") and
-                observed.get("startTicks", 0) > 0, f"{component} samples")
-    require(verification.get("worker", {}).get("preserved") is True and
-            verification.get("worker", {}).get("restartCount") == 0,
+        require(observed.get("samples") == 3 and
+                observed.get("socketPort") == port and
+                positive_int(observed.get("startTicks")), f"{component} samples")
+        verify_socket_owner(observed, component)
+    worker = verification.get("worker", {})
+    require(worker.get("preserved") is True and
+            worker.get("restartCount") == 0 and
+            positive_int(worker.get("pid")) and
+            positive_int(worker.get("startTicks")),
             "worker verification")
     require(verification.get("smoke") == "GET_ONLY", "GET-only smoke")
     pm2 = record.get("pm2", {})
@@ -97,10 +132,29 @@ def verify_immutable_release(record_path: Path, record: dict) -> None:
     state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
     require(state.get("activeDeploymentRecord") ==
             record_path.relative_to(ROOT).as_posix(), "active record")
-    require(state.get("production", {}).get("targetCommit") ==
-            record.get("targetCommit"), "active target")
-    require(state.get("production", {}).get("pm2", {}).get("dumpSha256") ==
-            pm2.get("dumpSha256"), "active dump")
+    production = state.get("production", {})
+    require(production.get("releaseId") == record.get("releaseId"), "active release")
+    require(production.get("releasePath") == artifacts.get("releasePath"),
+            "active release path")
+    require(production.get("targetCommit") == record.get("targetCommit"),
+            "active target")
+    require(production.get("api", {}).get("stablePath") == api.get("stablePath") and
+            production.get("api", {}).get("entrySha256") == api.get("entrySha256"),
+            "active API")
+    require(production.get("frontend", {}).get("stablePath") ==
+            frontend.get("stablePath") and
+            production.get("frontend", {}).get("buildId") ==
+            frontend.get("buildId") and
+            production.get("frontend", {}).get("execMode") ==
+            frontend.get("execMode") and
+            production.get("frontend", {}).get("instances") ==
+            frontend.get("instances"), "active frontend")
+    state_pm2 = production.get("pm2", {})
+    require(state_pm2.get("dumpSha256") == pm2.get("dumpSha256") and
+            state_pm2.get("rollbackSha256") == pm2.get("rollbackSha256") and
+            state_pm2.get("mode") == pm2.get("dumpMode") and
+            state_pm2.get("savedExactlyOnce") == pm2.get("savedExactlyOnce"),
+            "active PM2 state")
     print("DEPLOYMENT_RECORD_OK: immutable artifacts, fixed paths and live verification agree")
 
 

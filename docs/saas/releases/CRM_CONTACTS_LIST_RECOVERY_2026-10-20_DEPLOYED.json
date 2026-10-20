@@ -42,6 +42,8 @@
       "startTicks": 2230691889,
       "socketPort": 3001,
       "socketOwnerPid": 1763306,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [1763306],
       "samples": 3,
       "localHealthHttp": 200,
       "publicHealthHttp": 200
@@ -51,6 +53,8 @@
       "startTicks": 2230694791,
       "socketPort": 3000,
       "socketOwnerPid": 1763532,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [1763532],
       "samples": 3,
       "loginLocalHttp": 200,
       "loginPublicHttp": 200,

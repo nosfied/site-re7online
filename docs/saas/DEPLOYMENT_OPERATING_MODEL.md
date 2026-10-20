@@ -45,6 +45,10 @@ uma cadeia contínua de PPIDs. Um socket pertencente ao daemon PM2 não comprova
 identidade do frontend. Igualdade direta entre PID PM2 e socket também não pode ser
 exigida quando o launcher comprovado cria descendente legítimo.
 
+O registro estruturado representa essa prova com `socketOwnerRelation` (`DIRECT`
+ou `DESCENDANT`) e `socketOwnerChain`, ordenada do proprietário do socket até o PID
+do processo de aplicação registrado pelo PM2. A cadeia nunca termina no daemon PM2.
+
 ## Retorno
 
 Antes do primeiro efeito, preservar as definições PM2 completas, incluindo cwd,

@@ -630,7 +630,11 @@ Todo deploy deve registrar:
 - build backend: OK/falhou/nao aplicavel
 - build frontend: OK/falhou/nao aplicavel
 - migrations: sim/nao
-- PM2 reload: OK/falhou
+- promoção/seleção PM2 por caminhos fixos: OK/falhou
+- frontend `fork_mode`, uma instância: OK/falhou/não aplicável
+- `pm2 save`: quantidade executada
+- dump PM2: SHA-256 e modo real
+- rollback: não acionado/OK/falhou/não aplicável
 - health: OK/falhou
 - smoke inbox: OK/falhou/nao executado
 - shadow compare WhatsApp: OK/falhou/nao executado
