@@ -33,17 +33,32 @@ require(executor.get("path") == "scripts/deploy-v2.py", "stable executor path")
 require(executor.get("adapterContract") == "docs/saas/DEPLOY_V2_ADAPTER_CONTRACT.md",
         "adapter contract")
 require(executor.get("authorizationBinds") ==
-        ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256"],
+        ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256", "acceptanceSha256"],
         "authorization identity binding")
 require(executor.get("productionAdapter") == "scripts/deploy-v2-pm2-adapter.py",
         "production adapter path")
-require(executor.get("adapterState") == "LOCAL_VALIDATED_NOT_EXECUTED",
+require(executor.get("adapterState") == "BUILTIN_LOCAL_VALIDATED_NOT_EXECUTED",
         "production adapter claim boundary")
-require(executor.get("runtimeBindingState") == "BLOCKED_NOT_AVAILABLE_FIELDS",
+require(executor.get("runtimeBindingSchema") == 2, "data-only binding schema")
+require(executor.get("runtimeBindingState") == "DATA_ONLY_NOT_MATERIALIZED",
         "private runtime binding claim boundary")
+require(set(executor.get("runtimeBindingForbiddenKeys", [])) ==
+        {"actions", "argv", "commands", "destinations", "executableSha256"},
+        "binding executable content denied")
 require((ROOT / executor["path"]).is_file(), "stable executor exists")
 require((ROOT / executor["productionAdapter"]).is_file(), "production adapter exists")
 require((ROOT / executor["adapterContract"]).is_file(), "adapter contract exists")
+adapter_source = (ROOT / executor["productionAdapter"]).read_text(encoding="utf-8")
+for operation in ("capture", "select-api", "verify-api", "select-frontend",
+                  "verify-frontend", "enable-supervision", "verify-worker",
+                  "rollback-all", "save-once"):
+    require(f'"{operation}"' in adapter_source, f"built-in operation {operation}")
+require("run_plan(" not in adapter_source, "generic release plan executor removed")
+acceptance = manifest.get("acceptancePolicy", {})
+require(acceptance.get("separateFromBinding") is True and
+        acceptance.get("saveRequiresAcceptance") is True and
+        acceptance.get("forbidIdentifiersAndCredentials") is True,
+        "separate tenant-scoped acceptance")
 for artifact in manifest["artifacts"].values():
     for key, value in artifact.items():
         if key.endswith("Sha256"):

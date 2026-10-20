@@ -7,10 +7,12 @@
   "executorContract": {
     "path": "scripts/deploy-v2.py",
     "adapterContract": "docs/saas/DEPLOY_V2_ADAPTER_CONTRACT.md",
-    "authorizationBinds": ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256"],
+    "authorizationBinds": ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256", "acceptanceSha256"],
     "productionAdapter": "scripts/deploy-v2-pm2-adapter.py",
-    "adapterState": "LOCAL_VALIDATED_NOT_EXECUTED",
-    "runtimeBindingState": "BLOCKED_NOT_AVAILABLE_FIELDS"
+    "adapterState": "BUILTIN_LOCAL_VALIDATED_NOT_EXECUTED",
+    "runtimeBindingSchema": 2,
+    "runtimeBindingState": "DATA_ONLY_NOT_MATERIALIZED",
+    "runtimeBindingForbiddenKeys": ["actions", "argv", "commands", "destinations", "executableSha256"]
   },
   "deploymentOrder": ["api", "frontend"],
   "artifacts": {
@@ -36,6 +38,12 @@
   "runtimeStatePolicy": {
     "captureAtExecution": ["pid", "startTicks", "cwd", "entrypoint", "pm2Dump", "rollback", "reportPaths", "timestamps"],
     "embeddedRuntimeStateForbidden": true
+  },
+  "acceptancePolicy": {
+    "separateFromBinding": true,
+    "modes": ["AUTOMATED_GET_ONLY", "OWNER_MANUAL_AUTHENTICATED"],
+    "forbidIdentifiersAndCredentials": true,
+    "saveRequiresAcceptance": true
   },
   "requiredGates": [
     "preflight_read_only",

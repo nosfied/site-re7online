@@ -47,14 +47,17 @@ release de contatos são evidência histórica e não são gates ativos de novas
 
 ## Próximos atos
 
-1. Completar privadamente o runtime binding com comandos autenticados de
-   runtime/supervisão, referência autorizada do aceite GET-only e destinos single-use.
-2. Revalidar o binding completo em ensaio sem PM2 real.
-3. Abrir uma única janela autorizada para promover e verificar a correção já staged.
+1. Materializar privadamente um binding schema v2 somente de dados para a release
+   staged, sem comandos, credenciais ou destinos antecipados.
+2. Preparar separadamente o aceite GET-only tenant-scoped ou checkpoint manual
+   autenticado e a autorização vinculada aos hashes finais.
+3. Abrir uma única janela autorizada para executar o adaptador built-in e verificar a
+   correção já staged.
 
-O núcleo `scripts/deploy-v2.py` e o adaptador genérico
-`scripts/deploy-v2-pm2-adapter.py` estão validados localmente. Nenhum deles autoriza
-promoção enquanto o binding privado contiver `NOT_AVAILABLE`.
+O núcleo `scripts/deploy-v2.py` e o adaptador built-in
+`scripts/deploy-v2-pm2-adapter.py` estão validados localmente com superfícies falsas
+realistas. Bindings transportam somente dados estáticos; `actions`, `argv`, comandos
+e destinos single-use são negados. Esta condição não autoriza promoção.
 
 OBS-1 continua separado: `PREPARED / SCHEDULED WINDOW REQUIRED / NO CHANGE`, fora do
 expediente protegido. Nenhum segredo é versionado.

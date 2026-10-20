@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
-  "updatedAtUtc": "2026-10-20T01:52:42Z",
-  "basedOnCommit": "365211b026aa7402b54f6342416212b9db338d4b",
+  "updatedAtUtc": "2026-10-20T02:09:59Z",
+  "basedOnCommit": "cfcecf96d499cc008ba88a21f12d3c3fd83b2be8",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
   "activeOperationalRecord": "docs/saas/releases/FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json",
@@ -51,8 +51,8 @@
     "workerChanged": false,
     "databaseChanged": false,
     "credentialsChanged": false,
-    "deployV2Adapter": "LOCAL_VALIDATED_NOT_EXECUTED",
-    "runtimeBinding": "BLOCKED_MISSING_AUTHENTICATED_COMMANDS_ACCEPTANCE_AND_SINGLE_USE_DESTINATIONS"
+    "deployV2Adapter": "BUILTIN_LOCAL_VALIDATED_NOT_EXECUTED",
+    "runtimeBinding": "SCHEMA_V2_DATA_ONLY_NOT_MATERIALIZED"
   },
   "credentialInspectionIncident": {
     "values": "NOT_VERSIONED",
@@ -62,8 +62,8 @@
     "obs1Record": "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json"
   },
   "nextActions": [
-    "complete the private runtime binding with authenticated runtime and supervision commands, authorized tenant-scoped GET acceptance and single-use destinations",
-    "rehearse the completed binding without real PM2",
+    "materialize a private schema-v2 data-only binding without commands, credentials or prefilled single-use destinations",
+    "prepare the separate authenticated GET-only or owner-manual acceptance checkpoint and time-bounded authorization",
     "open one authorized window to promote and verify the staged contacts-list release"
   ],
   "branchConvergence": {

@@ -1,74 +1,77 @@
 # Contrato do adaptador operacional Deploy V2
 
-**Status: CANÔNICO / ADAPTADOR GENÉRICO IMPLEMENTADO E VALIDADO LOCALMENTE**
+**Status: CANÔNICO / BUILT-IN ADAPTER LOCALMENTE VALIDADO / NÃO EXECUTADO**
 
 O executor [`scripts/deploy-v2.py`](../../scripts/deploy-v2.py) controla autorização,
-ordem, journal, decisão e rollback. O adaptador traduz ações estáveis para PM2,
-launcher frontend e health do ambiente. Ele é autenticado por SHA-256 e copiado para
-a raiz exclusiva da execução antes do primeiro efeito.
+ordem, journal, decisão e rollback. O adaptador permanente
+[`scripts/deploy-v2-pm2-adapter.py`](../../scripts/deploy-v2-pm2-adapter.py) contém a
+implementação fixa das operações PM2, `/proc`, socket, HTTP, supervisão e dump.
 
-A autorização da janela vincula os hashes do manifesto, do executor e do adaptador.
-Ela também vincula o SHA-256 do runtime binding privado e o `releaseId`.
+Bindings são somente dados. Eles nunca transportam comandos executáveis, `actions`,
+`argv`, executáveis por ação ou destinos single-use. O executor autentica por SHA-256
+manifesto, executor, adaptador, binding, aceite separado e autorização, lê os mesmos
+bytes com `O_NOFOLLOW` e os copia para a raiz exclusiva da execução.
 
-## Runtime binding
+## Binding estático schema v2
 
-`scripts/deploy-v2-pm2-adapter.py` não contém identidade de release ou estado vivo.
-O binding privado autenticado fornece nomes PM2, staging, candidatos, retorno
-capturado, dump/rollback, identidade API/frontend/worker, supervisão, destinos
-single-use e aceite GET-only tenant-scoped. O executor lê esses bytes uma vez com
-`O_NOFOLLOW`, verifica estabilidade de inode, vincula o hash à autorização e copia
-os mesmos bytes para a raiz exclusiva antes de qualquer efeito.
+O binding contém somente:
 
-Cada ação contém apenas argv estruturado para executável absoluto autenticado por
-SHA-256. Shell, `sudo`, ambiente completo e texto arbitrário de erro são negados.
-`NOT_AVAILABLE` em qualquer campo fecha a execução antes da criação da raiz.
+- nomes exatos dos processos API, frontend e worker;
+- raiz de staging e configurações candidatas autenticadas;
+- cwd, entrypoint e SHA-256 da API candidata;
+- cwd, launcher, BUILD_ID, controle e hashes do frontend candidato;
+- URLs allowlisted e porta de health;
+- SHA-256 durável do entrypoint do worker;
+- helper de supervisão e hashes esperados do helper e da política;
+- modo de aceite `GET_ONLY_TENANT_SCOPED_OR_OWNER_MANUAL` e proibição de POST.
 
-## Interface
+São negadas recursivamente as chaves `actions`, `argv`, `commands`, `destinations` e
+`executableSha256`. PID, start ticks, dump, retorno, relatório, snapshot, journal de
+execução e timestamps nascem somente no `capture` dentro da raiz exclusiva.
 
-```text
-ADAPTER ACTION --manifest MANIFEST --work-dir EXECUTION_ROOT
-```
+## Operações internas fixas
 
-O stdout deve conter exatamente um objeto JSON sanitizado:
-
-```json
-{"result":"PASS","reason":null}
-```
-
-Qualquer exit code diferente de zero, JSON inválido ou `result` diferente de `PASS`
-é negativa. Segredos, cookies, tokens, ambiente completo e identificadores tenant não
-podem aparecer no stdout/stderr.
-
-## Ações e pós-condições
-
-| Ação | Obrigação |
+| Operação | Pós-condição |
 | --- | --- |
-| `capture` | Ler estado vivo uma vez, criar retorno compatível e persistir identidades antes de mutar. |
-| `select_api` | Seleção direcionada da API candidata; operação tratada como possivelmente parcial. |
-| `verify_api` | PM2, PID/start ticks, cwd/entrypoint, SHA, socket 3001 e health; GET tenant-scoped quando exigido. |
-| `select_frontend` | Seleção direcionada do frontend pelo launcher/control canônico. |
-| `verify_frontend` | PM2, identidade, BUILD_ID, HTTP e assets; sem POST automático de importação. |
-| `activate_frontend_supervision` | Ativar e verificar pelo helper allowlisted somente após frontend aprovado. |
-| `verify_worker` | Provar que PID/start ticks/cwd/entrypoint do worker não mudaram. |
-| `verify_acceptance` | Executar somente o aceite GET-only tenant-scoped autenticado no binding. |
-| `save_pm2` | Executar uma vez, somente depois de todos os gates anteriores. |
-| `rollback_frontend` | Retornar idempotentemente ao frontend capturado. |
-| `rollback_api` | Retornar idempotentemente à API capturada. |
-| `verify_rollback` | Provar identidades anteriores, health e worker preservado. |
+| `capture` | Captura os três processos, `/proc`, socket, dump e retorno 0600, definições de rollback, controle, BUILD_ID e política; cria destinos exclusivos. |
+| `select-api` | Faz substituição direcionada da API pela configuração candidata autenticada. |
+| `verify-api` | Executa três amostras de PID/ticks/cwd/entrypoint, SHA, socket 3001 e health local/público. |
+| `select-frontend` | Faz substituição direcionada do frontend pela configuração candidata autenticada. |
+| `verify-frontend` | Executa três amostras, confere launcher, controle, BUILD_ID e HTTP/assets. |
+| `enable-supervision` | Revalida helper/política pelo helper autorizado e ativa a supervisão somente depois do frontend aprovado. |
+| `verify-worker` | Exige igualdade integral com a identidade capturada e SHA do entrypoint. |
+| `rollback-all` | Retorna frontend e API pelas definições capturadas e confirma suas identidades; não salva dump. |
+| `save-once` | Exige aceite separado autenticado, com zero POST/import/retry, e executa `pm2 save` uma vez. |
 
-## Invariantes
+O adaptador não aceita uma operação desconhecida e não oferece avaliação de shell ou
+plano genérico.
 
-- O adaptador não escolhe a ordem e não autoriza a execução.
-- `capture` não pode inferir estado de documento antigo.
-- Se uma seleção negar depois de efeito parcial, rollback continua obrigatório.
-- Ações de rollback devem ser idempotentes.
-- Nenhum `pm2 save` durante rollback; o retorno usa o snapshot capturado.
-- Banco, schema, worker, credenciais, root/rede e Nginx ficam fora de `NORMAL_RELEASE`.
-- Testes funcionais são GET-only e tenant-scoped, sem fabricar operação ou credencial.
-- Não há fallback silencioso entre transportes, controles ou runtimes.
+## Aceite tenant-scoped separado
 
-O adaptador e o executor estão aptos para ensaio local. A release de contatos ainda
-nega prontidão porque a leitura disponível não contém comandos genéricos autenticados
-de runtime/supervisão, referência autorizada para o GET tenant-scoped nem destinos
-single-use. Esses dados devem vir de nova preparação privada; não podem ser inferidos.
+O aceite não pertence ao binding. Seu registro privado autenticado declara somente o
+modo (`AUTOMATED_GET_ONLY` ou `OWNER_MANUAL_AUTHENTICATED`), decisão e contadores zero
+de POST CSV, importação e retry. Token, cookie, UUID e tenant ID não são persistidos no
+binding ou no Git. Quando não existe sessão automatizável, o checkpoint humano
+autenticado é permitido, mas continua obrigatório antes de `save-once`.
 
+## Captura e retorno
+
+`capture` cria atomicamente, na raiz exclusiva, snapshot, relatório por ação, retorno
+do dump modo 0600 e definições de rollback dos três processos. Ele registra somente
+campos PM2 allowlisted e nunca enumera ambiente. A política root é validada pelo
+helper autorizado; o adaptador não lê seus bytes por privilégio próprio.
+
+Seleção é considerada possivelmente parcial. Qualquer negativa depois da primeira
+seleção chama o único `rollback-all`, preserva o worker e proíbe `save-once`. Replay da
+raiz, da ação ou do marcador de save é negado.
+
+## Provas
+
+`scripts/ci/verify-deploy-v2-executor.py` usa superfícies falsas distintas e
+realistas para PM2, `/proc`, socket, HTTP, helper e dump. Ela cobre sucesso, negativa
+em cada fase, replay, worker preservado, rollback integral e save único depois do
+aceite. Nenhum PM2, sudo, root ou serviço real é invocado.
+
+O adaptador está pronto para receber um binding privado schema v2 em uma futura
+janela autorizada. Esta validação local não autoriza promoção nem preenche o binding
+da release atual.

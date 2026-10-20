@@ -28,7 +28,7 @@ faixa.
 3. Staging inerte confere hashes e extração sem selecionar processos.
 4. Um executor estável lê o manifesto; ele não contém PID, dump, timestamp ou caminho
    single-use fixado no código.
-5. O executor captura o estado vivo uma vez, cria o retorno e promove API → frontend.
+5. O adaptador built-in captura o estado vivo uma vez, cria o retorno e promove API → frontend; o binding não transporta comandos.
 6. Health, identidade, isolamento tenant-scoped e smoke tests validam a release.
 7. `pm2 save` ocorre uma única vez depois do aceite integral.
 8. Qualquer negativa usa o snapshot capturado e retorna os componentes já alterados.
@@ -72,7 +72,13 @@ consome uma autorização com prazo, vincula SHA-256 de manifesto/executor/adapt
 persiste journal antes dos efeitos, bloqueia replay e executa rollback conservador.
 
 O [contrato do adaptador](DEPLOY_V2_ADAPTER_CONTRACT.md) define as ações ambientais.
-O adaptador genérico está implementado e suas negativas/rollback foram ensaiados com
-shims inertes. O binding privado atual permanece fail-closed: faltam comandos
-autenticados de runtime/supervisão, referência autorizada do aceite GET-only e
-destinos single-use. Portanto o candidato continua `STAGED_INERT / NOT DEPLOYED`.
+O adaptador built-in implementa operações fixas; bindings schema v2 contêm apenas
+identidades e dados estáticos da release. `actions`, `argv`, comandos executáveis e
+destinos single-use no binding são negados. Captura, destinos, retorno e definições de
+rollback são derivados somente na raiz exclusiva da execução.
+
+As negativas e o rollback foram ensaiados com superfícies falsas separadas de PM2,
+`/proc`, socket, HTTP, helper de supervisão e dump. O aceite tenant-scoped permanece
+um registro privado separado, GET-only ou checkpoint humano autenticado, sem token,
+cookie, UUID ou tenant no binding. O candidato continua `STAGED_INERT / NOT DEPLOYED`;
+nenhuma janela foi aberta por esta implementação.
