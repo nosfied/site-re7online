@@ -29,6 +29,27 @@ grep -q 'WORKER_BUILD: NO' <<<"$output"
 grep -q 'MIGRATION_REVIEW: NO' <<<"$output"
 grep -q 'NORMAL_RELEASE_PLAN_OK' <<<"$output"
 
+control_worktree="$plan_fixture/control-worktree"
+git -C "$plan_repo" worktree add -q --detach "$control_worktree" "$target"
+[[ -f "$control_worktree/.git" ]]
+output="$(WORKDIR="$control_worktree" "$script" plan "$base" "$target")"
+grep -q 'NORMAL_RELEASE_PLAN_OK' <<<"$output"
+
+prepare_bin="$plan_fixture/prepare-bin"
+mkdir -p "$prepare_bin"
+cat > "$prepare_bin/npm" <<'NPM'
+#!/usr/bin/env bash
+exit 73
+NPM
+chmod +x "$prepare_bin/npm"
+set +e
+output="$(WORKDIR="$control_worktree" RELEASES_DIR="$plan_fixture/releases" \
+  PATH="$prepare_bin:$PATH" "$script" prepare "$base" "$target" 2>&1)"
+status=$?
+set -e
+[[ $status -eq 73 ]]
+! grep -q 'not a git worktree' <<<"$output"
+
 set +e
 output="$(DEPLOY_APPROVED_SHA=wrong "$script" activate /does/not/exist 2>&1)"
 status=$?

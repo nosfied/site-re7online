@@ -88,7 +88,7 @@ wait_http() {
 prepare_release() {
   local base_ref="$1" target_ref="$2"
   require_cmd git; require_cmd npm; require_cmd python3; require_cmd sha256sum
-  [[ -d "$WORKDIR/.git" ]] || die "not a git repository: $WORKDIR"
+  [[ "$(git -C "$WORKDIR" rev-parse --is-inside-work-tree 2>/dev/null)" == "true" ]] || die "not a git worktree: $WORKDIR"
   assert_clean_control_tree
 
   local base_sha target_sha matrix release_id release_dir source_dir
