@@ -22,6 +22,9 @@ for marker in ("NORMAL_RELEASE", "BREAK_GLASS", "produção viva", "DEPLOY_APPRO
     require(marker in model, f"model marker {marker}")
 for marker in ("PREPARED_INERT", "DEPLOY_APPROVED_SHA", "flock -n", "pm2 save", "rollback_all", "worker was not touched"):
     require(marker in script, f"executor marker {marker}")
+require("http://127.0.0.1:3000/app/login" in script, "canonical frontend health URL")
+require("/opt/re7online/site-re7online" not in script, "executor must not default to the live checkout")
+require("/opt/re7online/deploy-control" in model, "detached control worktree")
 require(manifest["deploymentClass"] == "NORMAL_RELEASE", "release class")
 require(manifest["components"] == ["api", "frontend"], "component order")
 require(all(value is False for value in manifest["changeBoundary"].values()), "change boundary")

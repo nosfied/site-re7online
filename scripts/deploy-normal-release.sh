@@ -5,13 +5,14 @@ set -euo pipefail
 # prepare is inert; activate requires an exact-SHA authorization and rolls back
 # API/frontend artifacts automatically. Worker, database and credentials are out.
 
-WORKDIR="${WORKDIR:-/opt/re7online/site-re7online}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+WORKDIR="${WORKDIR:-$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)}"
 RELEASES_DIR="${RELEASES_DIR:-/opt/re7online/releases}"
 API_PM2_NAME="${API_PM2_NAME:-re7-whatsapp-agent}"
 FRONTEND_PM2_NAME="${FRONTEND_PM2_NAME:-re7-admin-front}"
 WORKER_PM2_NAME="${WORKER_PM2_NAME:-re7-whatsapp-web-worker}"
 API_HEALTH_URL="${API_HEALTH_URL:-http://127.0.0.1:3001/health}"
-FRONTEND_HEALTH_URL="${FRONTEND_HEALTH_URL:-http://127.0.0.1:3000/login}"
+FRONTEND_HEALTH_URL="${FRONTEND_HEALTH_URL:-http://127.0.0.1:3000/app/login}"
 LOCK_FILE="${LOCK_FILE:-/opt/re7online/.deploy-normal-release.lock}"
 
 log() { printf '[normal-release] %s\n' "$*"; }
