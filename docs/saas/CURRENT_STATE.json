@@ -29,7 +29,11 @@
     },
     "identitySemantics": {
       "lastReportedPids": "dated observations without a preserved common timestamp; revalidate before mutation",
-      "durable": ["api.entrySha256", "frontend.buildId", "pm2.dumpSha256"]
+      "durable": [
+        "api.entrySha256",
+        "frontend.buildId",
+        "pm2.dumpSha256"
+      ]
     }
   },
   "csvDelivery": {
@@ -56,14 +60,17 @@
     "obs1Record": "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json"
   },
   "nextActions": [
-    "implement the stable data-driven Deploy V2 executor without release-specific bindings",
-    "run deterministic success and rollback fixtures in CI",
+    "implement and authenticate the production adapter for the supervised PM2/frontend runtime",
+    "run a read-only off-host rehearsal against a fresh sanitized production snapshot",
     "open one authorized window to promote and verify the staged contacts-list release"
   ],
   "branchConvergence": {
     "state": "CONTROLLED_DIVERGENCE",
     "plan": "docs/saas/BRANCH_CONVERGENCE_PLAN_2026-10-18.md",
-    "forbidden": ["force push", "destructive rebase", "blind merge into main"]
+    "forbidden": [
+      "force push",
+      "destructive rebase",
+      "blind merge into main"
+    ]
   }
 }
-

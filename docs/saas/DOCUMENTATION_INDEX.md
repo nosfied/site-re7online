@@ -12,6 +12,7 @@
 - [Registro do retorno seguro](releases/FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json)
 - [Release funcional ativa](releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json)
 - [Modelo operacional — Deploy V2](DEPLOYMENT_OPERATING_MODEL.md)
+- [Contrato do adaptador Deploy V2](DEPLOY_V2_ADAPTER_CONTRACT.md)
 - [Política de mudanças](CHANGE_POLICY.md)
 - [Checklist de release](RELEASE_CHECKLIST.md)
 - [Mapa vigente do produto](PRODUCT_MAP_CURRENT_2026-10-19.md)

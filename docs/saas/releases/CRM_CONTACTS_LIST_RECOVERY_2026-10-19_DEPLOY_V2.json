@@ -4,6 +4,12 @@
   "deploymentClass": "NORMAL_RELEASE",
   "candidateCommit": "f5028de1e530666623dcc95519e744350671cb02",
   "candidateRecord": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19_CANDIDATE.json",
+  "executorContract": {
+    "path": "scripts/deploy-v2.py",
+    "adapterContract": "docs/saas/DEPLOY_V2_ADAPTER_CONTRACT.md",
+    "authorizationBinds": ["manifestSha256", "executorSha256", "adapterSha256"],
+    "productionAdapter": "NOT_IMPLEMENTED"
+  },
   "deploymentOrder": ["api", "frontend"],
   "artifacts": {
     "api": {

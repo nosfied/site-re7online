@@ -47,9 +47,12 @@ release de contatos são evidência histórica e não são gates ativos de novas
 
 ## Próximos atos
 
-1. Implementar o executor estável do Deploy V2, sem PID, dump ou caminho single-use no código.
-2. Validar sucesso e rollback determinísticos na CI.
+1. Implementar e autenticar o adaptador produtivo para o PM2/launcher supervisionado.
+2. Ensaiar esse adaptador somente leitura contra um snapshot fresco e sanitizado.
 3. Abrir uma única janela autorizada para promover e verificar a correção já staged.
+
+O núcleo estável `scripts/deploy-v2.py` e suas fixtures de sucesso/rollback já estão
+versionados. Ele ainda não autoriza promoção sem o adaptador produtivo autenticado.
 
 OBS-1 continua separado: `PREPARED / SCHEDULED WINDOW REQUIRED / NO CHANGE`, fora do
 expediente protegido. Nenhum segredo é versionado.

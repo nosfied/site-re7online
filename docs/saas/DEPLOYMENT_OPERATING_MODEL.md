@@ -64,3 +64,13 @@ não pode promover seu mecanismo excepcional a padrão de todas as releases futu
 - próxima etapa: implementar e ensaiar o executor estável do Deploy V2, então abrir
   uma única janela com o manifesto versionado.
 
+
+## Implementação do Deploy V2
+
+O núcleo estável está versionado em `scripts/deploy-v2.py`. Ele valida o manifesto,
+consome uma autorização com prazo, vincula SHA-256 de manifesto/executor/adaptador,
+persiste journal antes dos efeitos, bloqueia replay e executa rollback conservador.
+
+O [contrato do adaptador](DEPLOY_V2_ADAPTER_CONTRACT.md) define as ações ambientais.
+O adaptador produtivo ainda não foi implementado; portanto o candidato permanece
+`STAGED_INERT / NOT DEPLOYED`.

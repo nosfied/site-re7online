@@ -28,6 +28,17 @@ require(all(value is False for value in manifest["changeBoundary"].values()), "c
 require(manifest["runtimeStatePolicy"]["embeddedRuntimeStateForbidden"] is True,
         "runtime state must be captured at execution")
 require(manifest["promotionAuthorized"] is False, "manifest must not self-authorize")
+executor = manifest.get("executorContract", {})
+require(executor.get("path") == "scripts/deploy-v2.py", "stable executor path")
+require(executor.get("adapterContract") == "docs/saas/DEPLOY_V2_ADAPTER_CONTRACT.md",
+        "adapter contract")
+require(executor.get("authorizationBinds") ==
+        ["manifestSha256", "executorSha256", "adapterSha256"],
+        "authorization identity binding")
+require(executor.get("productionAdapter") == "NOT_IMPLEMENTED",
+        "production adapter claim boundary")
+require((ROOT / executor["path"]).is_file(), "stable executor exists")
+require((ROOT / executor["adapterContract"]).is_file(), "adapter contract exists")
 for artifact in manifest["artifacts"].values():
     for key, value in artifact.items():
         if key.endswith("Sha256"):
