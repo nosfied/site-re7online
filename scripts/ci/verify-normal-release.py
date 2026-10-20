@@ -39,4 +39,4 @@ require(manifest["executor"] == "scripts/deploy-normal-release.sh", "executor")
 require(manifest["promotionAuthorized"] is False, "manifest cannot authorize itself")
 require(manifest["state"] == "STAGED_INERT_NOT_DEPLOYED", "candidate state")
 
-print("NORMAL_RELEASE_OK: isolated prepare, exact-SHA activation and rollback contract")
+print("NORMAL_RELEASE_OK: isolated Prisma-generated prepare, exact-SHA activation and rollback contract")
