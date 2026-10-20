@@ -50,6 +50,10 @@ def dry_run(private):
   m.proc=lambda pid,require_alive=True:{'pid':pid,'ticks':{100:'1000',101:'1001',102:'1002'}[pid],'parent':0,'state':'S','group':101}
   assert m.tracked_live('candidate')[0]==control
   assert m.control_path('return')==r/'return.run.private.json'
+  dependency=Path(private).parent/'evidence/canonical-dependencies/permanent_observation_client.py'
+  m.PERMANENT_CLIENT=dependency
+  module=m.load_bound_module('frontend_permanent_client_fixture',dependency,'34dae9ac861aeb89c6787871a27dd244ca931ca1038163423efd9af2996cb374')
+  assert callable(module.read)
  return 'FRONTEND_CHECKER_ARTIFACT_BOUND_DRY_RUN_PASS'
 
 def main():
