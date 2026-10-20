@@ -115,6 +115,7 @@ prepare_release() {
 
   if [[ "$api_build" == "YES" ]]; then
     npm --prefix "$source_dir/apps/whatsapp-agent" ci --include=dev
+    npm --prefix "$source_dir/apps/whatsapp-agent" run db:generate
     npm --prefix "$source_dir/apps/whatsapp-agent" run build
     cp -a "$source_dir/apps/whatsapp-agent/dist" "$release_dir/payload/api-dist"
   fi
