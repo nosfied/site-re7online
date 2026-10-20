@@ -26,6 +26,10 @@ mark_unknown(){ backend_build=YES; worker_build=YES; frontend_build=YES; unknown
 for path in "${changed_files[@]}"; do
   case "$path" in
     apps/whatsapp-agent/prisma/schema.prisma|apps/whatsapp-agent/prisma/migrations/*)
+      # The generated Prisma client is consumed by both Node runtimes. This is
+      # still refused by NORMAL_RELEASE, but the impact report must remain
+      # complete for the break-glass lane and its historical contract tests.
+      mark_backend "$path"; mark_worker "$path"
       migration_review=YES; review_required=YES; reasons+=("migration_review:$path") ;;
     apps/whatsapp-agent/src/channels/channelAccountSecretCrypto.ts|apps/whatsapp-agent/src/db.ts|apps/whatsapp-agent/src/features/clientFeatures.ts|apps/whatsapp-agent/src/logger/logger.ts|apps/whatsapp-agent/src/web-session/*|apps/whatsapp-agent/src/web-session/**/*)
       mark_backend "$path"; mark_worker "$path" ;;
