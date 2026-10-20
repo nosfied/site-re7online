@@ -26,7 +26,9 @@ ACTIONS = (
     "verify_api",
     "select_frontend",
     "verify_frontend",
+    "activate_frontend_supervision",
     "verify_worker",
+    "verify_acceptance",
     "save_pm2",
 )
 
@@ -51,7 +53,7 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def read_json_no_follow(path: Path) -> tuple[dict, bytes]:
+def read_bytes_no_follow(path: Path) -> bytes:
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(path, flags)
     try:
@@ -71,6 +73,11 @@ def read_json_no_follow(path: Path) -> tuple[dict, bytes]:
             raise DeployDenied(f"changed_while_reading:{path.name}")
     finally:
         os.close(fd)
+    return raw
+
+
+def read_json_no_follow(path: Path) -> tuple[dict, bytes]:
+    raw = read_bytes_no_follow(path)
     value = json.loads(raw)
     if not isinstance(value, dict):
         raise DeployDenied(f"not_object:{path.name}")
@@ -100,6 +107,40 @@ def validate_manifest(value: dict) -> None:
                 raise DeployDenied(f"artifact_hash:{key}")
 
 
+def validate_binding(value: dict, manifest: dict) -> None:
+    if value.get("schemaVersion") != 1:
+        raise DeployDenied("binding_schema")
+    if value.get("releaseId") != manifest["releaseId"]:
+        raise DeployDenied("binding_release")
+    required = (
+        "processes", "staging", "api", "frontend", "worker", "pm2",
+        "supervision", "destinations", "acceptance", "actions",
+    )
+    if any(not isinstance(value.get(key), dict) for key in required):
+        raise DeployDenied("binding_sections")
+    if value["acceptance"].get("mode") != "GET_ONLY_TENANT_SCOPED":
+        raise DeployDenied("binding_acceptance_mode")
+    if value["acceptance"].get("forbidPost") is not True:
+        raise DeployDenied("binding_acceptance_post")
+    if any(item == "NOT_AVAILABLE" for item in walk_scalars(value)):
+        raise DeployDenied("binding_not_available")
+    if set(value["actions"]) != set(ACTIONS) | {
+        "rollback_frontend", "rollback_api", "verify_rollback"
+    }:
+        raise DeployDenied("binding_actions")
+
+
+def walk_scalars(value: object):
+    if isinstance(value, dict):
+        for item in value.values():
+            yield from walk_scalars(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from walk_scalars(item)
+    else:
+        yield value
+
+
 def parse_utc(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
@@ -108,7 +149,8 @@ def parse_utc(value: str) -> datetime:
 
 
 def validate_authorization(value: dict, manifest: dict, manifest_sha: str,
-                           executor_sha: str) -> None:
+                           executor_sha: str, adapter_sha: str,
+                           binding_sha: str) -> None:
     if value.get("schemaVersion") != 1 or value.get("decision") != "AUTHORIZED":
         raise DeployDenied("execution_not_authorized")
     if value.get("releaseId") != manifest["releaseId"]:
@@ -117,6 +159,10 @@ def validate_authorization(value: dict, manifest: dict, manifest_sha: str,
         raise DeployDenied("authorization_manifest")
     if value.get("executorSha256") != executor_sha:
         raise DeployDenied("authorization_executor")
+    if value.get("adapterSha256") != adapter_sha:
+        raise DeployDenied("authorization_adapter")
+    if value.get("bindingSha256") != binding_sha:
+        raise DeployDenied("authorization_binding")
     if parse_utc(str(value.get("notAfterUtc", ""))) <= datetime.now(timezone.utc):
         raise DeployDenied("authorization_expired")
 
@@ -148,8 +194,8 @@ class Journal:
             os.close(fd)
 
 
-def call_adapter(adapter: Path, action: str, manifest: Path, root: Path,
-                 journal: Journal, timeout: int) -> dict:
+def call_adapter(adapter: Path, action: str, manifest: Path, binding: Path,
+                 binding_sha: str, root: Path, journal: Journal, timeout: int) -> dict:
     journal.write("ACTION_STARTED", action=action)
     adapter_env = {
         key: os.environ[key]
@@ -158,7 +204,8 @@ def call_adapter(adapter: Path, action: str, manifest: Path, root: Path,
     }
     adapter_env.setdefault("PATH", "/usr/local/bin:/usr/bin:/bin")
     result = subprocess.run(
-        [str(adapter), action, "--manifest", str(manifest), "--work-dir", str(root)],
+        [str(adapter), action, "--manifest", str(manifest), "--binding", str(binding),
+         "--binding-sha256", binding_sha, "--work-dir", str(root)],
         check=False,
         capture_output=True,
         text=True,
@@ -182,25 +229,34 @@ def call_adapter(adapter: Path, action: str, manifest: Path, root: Path,
     return payload
 
 
-def execute(args: argparse.Namespace, manifest: dict, manifest_sha: str,
+def execute(args: argparse.Namespace, manifest: dict, manifest_raw: bytes, manifest_sha: str,
             executor_sha: str) -> int:
     adapter = args.adapter.resolve()
     if not adapter.is_file() or not os.access(adapter, os.X_OK):
         raise DeployDenied("adapter_not_executable")
     if not SHA256.fullmatch(args.adapter_sha256 or ""):
         raise DeployDenied("adapter_sha_argument")
-    if sha256_file(adapter) != args.adapter_sha256:
+    adapter_bytes = read_bytes_no_follow(adapter)
+    if sha256_bytes(adapter_bytes) != args.adapter_sha256:
         raise DeployDenied("adapter_sha_mismatch")
+
+    binding, binding_raw = read_json_no_follow(args.binding.resolve())
+    binding_sha = sha256_bytes(binding_raw)
+    if args.binding_sha256 != binding_sha:
+        raise DeployDenied("binding_sha_mismatch")
+    validate_binding(binding, manifest)
 
     authorization, authorization_raw = read_json_no_follow(args.authorization.resolve())
     if args.authorization_sha256 != sha256_bytes(authorization_raw):
         raise DeployDenied("authorization_sha_mismatch")
-    validate_authorization(authorization, manifest, manifest_sha, executor_sha)
+    validate_authorization(authorization, manifest, manifest_sha, executor_sha,
+                           args.adapter_sha256, binding_sha)
 
     root = args.work_dir.resolve()
     journal = Journal(root)
     execution_adapter = root / "adapter"
-    adapter_bytes = adapter.read_bytes()
+    execution_binding = root / "binding.json"
+    execution_manifest = root / "manifest.json"
     fd = os.open(execution_adapter, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o700)
     try:
         os.write(fd, adapter_bytes)
@@ -209,12 +265,29 @@ def execute(args: argparse.Namespace, manifest: dict, manifest_sha: str,
         os.close(fd)
     if sha256_file(execution_adapter) != args.adapter_sha256:
         raise DeployDenied("adapter_copy_sha_mismatch")
+    fd = os.open(execution_binding, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.write(fd, binding_raw)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    if sha256_file(execution_binding) != binding_sha:
+        raise DeployDenied("binding_copy_sha_mismatch")
+    fd = os.open(execution_manifest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.write(fd, manifest_raw)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    if sha256_file(execution_manifest) != manifest_sha:
+        raise DeployDenied("manifest_copy_sha_mismatch")
     journal.write(
         "AUTHORIZED_COMMITTED",
         releaseId=manifest["releaseId"],
         manifestSha256=manifest_sha,
         executorSha256=executor_sha,
         adapterSha256=args.adapter_sha256,
+        bindingSha256=binding_sha,
         authorizationSha256=args.authorization_sha256,
     )
     api_selected = False
@@ -227,7 +300,8 @@ def execute(args: argparse.Namespace, manifest: dict, manifest_sha: str,
             # before invoking it so rollback is conservative and idempotent.
             api_selected = api_selected or action == "select_api"
             frontend_selected = frontend_selected or action == "select_frontend"
-            call_adapter(execution_adapter, action, args.manifest.resolve(), root,
+            call_adapter(execution_adapter, action, execution_manifest,
+                         execution_binding, binding_sha, root,
                          journal, args.timeout)
             completed.append(action)
             saved = saved or action == "save_pm2"
@@ -239,22 +313,26 @@ def execute(args: argparse.Namespace, manifest: dict, manifest_sha: str,
     except Exception as error:
         journal.write("DEPLOYMENT_DENIED", reason=str(error))
         rollback: list[str] = []
-        rollback_error: str | None = None
-        try:
-            if frontend_selected:
-                call_adapter(execution_adapter, "rollback_frontend", args.manifest.resolve(),
-                             root, journal, args.timeout)
-                rollback.append("rollback_frontend")
-            if api_selected:
-                call_adapter(execution_adapter, "rollback_api", args.manifest.resolve(),
-                             root, journal, args.timeout)
-                rollback.append("rollback_api")
-            if rollback:
-                call_adapter(execution_adapter, "verify_rollback", args.manifest.resolve(),
-                             root, journal, args.timeout)
-                rollback.append("verify_rollback")
-        except Exception as rollback_exception:
-            rollback_error = str(rollback_exception)
+        rollback_errors: list[str] = []
+        rollback_plan = []
+        if frontend_selected:
+            rollback_plan.append("rollback_frontend")
+        if api_selected:
+            rollback_plan.append("rollback_api")
+        if rollback_plan:
+            rollback_plan.append("verify_rollback")
+        for rollback_action in rollback_plan:
+            try:
+                call_adapter(execution_adapter, rollback_action, execution_manifest,
+                             execution_binding, binding_sha, root, journal, args.timeout)
+                rollback.append(rollback_action)
+            except Exception as rollback_exception:
+                reason = f"{rollback_action}:{rollback_exception}"
+                rollback_errors.append(reason)
+                journal.write("ROLLBACK_ACTION_DENIED", action=rollback_action,
+                              reason=str(rollback_exception))
+        rollback_error = ";".join(rollback_errors) or None
+        if rollback_error:
             journal.write("ROLLBACK_CRITICAL", reason=rollback_error)
         status = "ROLLBACK_CRITICAL" if rollback_error else "ROLLED_BACK"
         journal.finish({"status": status, "reason": str(error),
@@ -270,6 +348,8 @@ def main() -> int:
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--adapter", type=Path)
     parser.add_argument("--adapter-sha256")
+    parser.add_argument("--binding", type=Path)
+    parser.add_argument("--binding-sha256")
     parser.add_argument("--authorization", type=Path)
     parser.add_argument("--authorization-sha256")
     parser.add_argument("--work-dir", type=Path)
@@ -284,10 +364,11 @@ def main() -> int:
             print(json.dumps({"result": "DEPLOY_V2_PLAN_OK", "releaseId": manifest["releaseId"],
                               "manifestSha256": manifest_sha}, sort_keys=True))
             return 0
-        if not all((args.adapter, args.adapter_sha256, args.authorization,
+        if not all((args.adapter, args.adapter_sha256, args.binding,
+                    args.binding_sha256, args.authorization,
                     args.authorization_sha256, args.work_dir)):
             raise DeployDenied("execute_arguments")
-        return execute(args, manifest, manifest_sha, executor_sha)
+        return execute(args, manifest, manifest_raw, manifest_sha, executor_sha)
     except (DeployDenied, FileExistsError, json.JSONDecodeError, OSError) as error:
         print(f"DEPLOY_V2_DENIED: {error}", file=sys.stderr)
         return 64

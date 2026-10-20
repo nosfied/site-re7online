@@ -72,5 +72,7 @@ consome uma autorização com prazo, vincula SHA-256 de manifesto/executor/adapt
 persiste journal antes dos efeitos, bloqueia replay e executa rollback conservador.
 
 O [contrato do adaptador](DEPLOY_V2_ADAPTER_CONTRACT.md) define as ações ambientais.
-O adaptador produtivo ainda não foi implementado; portanto o candidato permanece
-`STAGED_INERT / NOT DEPLOYED`.
+O adaptador genérico está implementado e suas negativas/rollback foram ensaiados com
+shims inertes. O binding privado atual permanece fail-closed: faltam comandos
+autenticados de runtime/supervisão, referência autorizada do aceite GET-only e
+destinos single-use. Portanto o candidato continua `STAGED_INERT / NOT DEPLOYED`.

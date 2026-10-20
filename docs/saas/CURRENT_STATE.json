@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
-  "updatedAtUtc": "2026-10-20T01:02:47Z",
-  "basedOnCommit": "14f815f9c5701d63c71b1697654306ab36786b4b",
+  "updatedAtUtc": "2026-10-20T01:52:42Z",
+  "basedOnCommit": "365211b026aa7402b54f6342416212b9db338d4b",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
   "activeOperationalRecord": "docs/saas/releases/FRONTEND_SAFE_RETURN_2026-10-19_DEPLOYED.json",
@@ -50,7 +50,9 @@
     "deployV2Manifest": "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19_DEPLOY_V2.json",
     "workerChanged": false,
     "databaseChanged": false,
-    "credentialsChanged": false
+    "credentialsChanged": false,
+    "deployV2Adapter": "LOCAL_VALIDATED_NOT_EXECUTED",
+    "runtimeBinding": "BLOCKED_MISSING_AUTHENTICATED_COMMANDS_ACCEPTANCE_AND_SINGLE_USE_DESTINATIONS"
   },
   "credentialInspectionIncident": {
     "values": "NOT_VERSIONED",
@@ -60,8 +62,8 @@
     "obs1Record": "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json"
   },
   "nextActions": [
-    "implement and authenticate the production adapter for the supervised PM2/frontend runtime",
-    "run a read-only off-host rehearsal against a fresh sanitized production snapshot",
+    "complete the private runtime binding with authenticated runtime and supervision commands, authorized tenant-scoped GET acceptance and single-use destinations",
+    "rehearse the completed binding without real PM2",
     "open one authorized window to promote and verify the staged contacts-list release"
   ],
   "branchConvergence": {

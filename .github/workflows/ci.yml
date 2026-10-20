@@ -46,7 +46,7 @@ jobs:
         run: python3 scripts/ci/verify-artifact-release-standard.py
       - name: Validate normal and break-glass deployment lanes
         run: python3 scripts/ci/verify-deployment-operating-model.py
-      - name: Rehearse stable Deploy V2 executor and rollback
+      - name: Rehearse Deploy V2 executor, production adapter and rollback
         run: python3 scripts/ci/verify-deploy-v2-executor.py
       - name: Validate deploy impact classifier
         run: bash scripts/test-deploy-impact-matrix.sh

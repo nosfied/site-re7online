@@ -47,12 +47,14 @@ release de contatos são evidência histórica e não são gates ativos de novas
 
 ## Próximos atos
 
-1. Implementar e autenticar o adaptador produtivo para o PM2/launcher supervisionado.
-2. Ensaiar esse adaptador somente leitura contra um snapshot fresco e sanitizado.
+1. Completar privadamente o runtime binding com comandos autenticados de
+   runtime/supervisão, referência autorizada do aceite GET-only e destinos single-use.
+2. Revalidar o binding completo em ensaio sem PM2 real.
 3. Abrir uma única janela autorizada para promover e verificar a correção já staged.
 
-O núcleo estável `scripts/deploy-v2.py` e suas fixtures de sucesso/rollback já estão
-versionados. Ele ainda não autoriza promoção sem o adaptador produtivo autenticado.
+O núcleo `scripts/deploy-v2.py` e o adaptador genérico
+`scripts/deploy-v2-pm2-adapter.py` estão validados localmente. Nenhum deles autoriza
+promoção enquanto o binding privado contiver `NOT_AVAILABLE`.
 
 OBS-1 continua separado: `PREPARED / SCHEDULED WINDOW REQUIRED / NO CHANGE`, fora do
 expediente protegido. Nenhum segredo é versionado.

@@ -33,11 +33,16 @@ require(executor.get("path") == "scripts/deploy-v2.py", "stable executor path")
 require(executor.get("adapterContract") == "docs/saas/DEPLOY_V2_ADAPTER_CONTRACT.md",
         "adapter contract")
 require(executor.get("authorizationBinds") ==
-        ["manifestSha256", "executorSha256", "adapterSha256"],
+        ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256"],
         "authorization identity binding")
-require(executor.get("productionAdapter") == "NOT_IMPLEMENTED",
+require(executor.get("productionAdapter") == "scripts/deploy-v2-pm2-adapter.py",
+        "production adapter path")
+require(executor.get("adapterState") == "LOCAL_VALIDATED_NOT_EXECUTED",
         "production adapter claim boundary")
+require(executor.get("runtimeBindingState") == "BLOCKED_NOT_AVAILABLE_FIELDS",
+        "private runtime binding claim boundary")
 require((ROOT / executor["path"]).is_file(), "stable executor exists")
+require((ROOT / executor["productionAdapter"]).is_file(), "production adapter exists")
 require((ROOT / executor["adapterContract"]).is_file(), "adapter contract exists")
 for artifact in manifest["artifacts"].values():
     for key, value in artifact.items():

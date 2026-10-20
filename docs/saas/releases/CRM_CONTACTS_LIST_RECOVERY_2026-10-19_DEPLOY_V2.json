@@ -7,8 +7,10 @@
   "executorContract": {
     "path": "scripts/deploy-v2.py",
     "adapterContract": "docs/saas/DEPLOY_V2_ADAPTER_CONTRACT.md",
-    "authorizationBinds": ["manifestSha256", "executorSha256", "adapterSha256"],
-    "productionAdapter": "NOT_IMPLEMENTED"
+    "authorizationBinds": ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256"],
+    "productionAdapter": "scripts/deploy-v2-pm2-adapter.py",
+    "adapterState": "LOCAL_VALIDATED_NOT_EXECUTED",
+    "runtimeBindingState": "BLOCKED_NOT_AVAILABLE_FIELDS"
   },
   "deploymentOrder": ["api", "frontend"],
   "artifacts": {
