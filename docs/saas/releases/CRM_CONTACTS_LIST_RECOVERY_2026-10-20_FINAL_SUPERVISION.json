@@ -35,7 +35,12 @@
     "frontendChecker": {
       "path": "frontend-check.py",
       "versionedCiSource": "scripts/release-assets/frontend-check.py",
-      "sha256": "ea3e6944667c2dd513ef54abc4a504fe3698451670b8d24b8f3de8d5c7243201",
+      "sha256": "9b8174064edd7d3782f15d7be6fca902467f7bcb569f8d7e8ad9d5fec1e0d004",
+      "predicateBaselineSha256": "ea3e6944667c2dd513ef54abc4a504fe3698451670b8d24b8f3de8d5c7243201",
+      "bindingSchema": {
+        "path": "docs/saas/releases/FRONTEND_CHECKER_BINDING_V1.schema.json",
+        "sha256": "a91baefc2cde96e33f454532a9a37fbc2a7585ce1af2043330bceb11bb25b5a8"
+      },
       "actions": [
         "ready-candidate",
         "enable-supervision-candidate",
@@ -60,6 +65,13 @@
     "frontendBuildId": "bt9-BI1dCQD7_gj8ktOvz"
   },
   "singleUseOutputs": [
+    {
+      "path": "frontend-check.binding.private.json",
+      "initialState": "ABSENT",
+      "producer": "authenticated window materializer",
+      "mode": "0600",
+      "sha256": "RECORDED_AT_INITIALIZATION"
+    },
     {
       "path": "candidate-v2.run.private.json",
       "initialState": "ABSENT",
@@ -125,7 +137,7 @@
     }
   ],
   "orderedWindow": [
-    "materialize one exclusive preparation root and init-candidate",
+    "materialize one exclusive preparation root, authenticated checker binding and init-candidate",
     "API_CANDIDATE_STABLE",
     "stateProducer capture",
     "select-candidate",
@@ -148,9 +160,11 @@
   },
   "fixture": {
     "path": "scripts/ci/verify-phase1-supervision-reuse.py",
-    "sha256": "b218202a9d90f736c88f4c91e925e03dfb47aadf22f5458fb720f13e62219888",
-    "result": "FINAL_SUPERVISION_PHASE1_REUSE_END_TO_END_PASS",
+    "sha256": "d786eae9f7963fe7460c73f81b03c35f7c68326f8fa200470d8969c24670ad3d",
+    "result": "RELOCATABLE_CHECKER_CLI_END_TO_END_PASS",
     "realPm2Invocations": 0,
+    "checkerCliExclusiveRoots": 2,
+    "checkerMonkeypatch": false,
     "canonicalInterfacesExecuted": [
       "canonical launcher journal production",
       "frontend-check.py ready-candidate",

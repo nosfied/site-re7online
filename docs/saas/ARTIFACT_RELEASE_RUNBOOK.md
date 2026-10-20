@@ -52,7 +52,11 @@ na mesma janela.
 8. Em release API → frontend, persistir o PASS autenticado da API e somente então
    criar o snapshot frontend. O snapshot deve esperar a identidade candidata da
    API e conservar frontend/worker observados nesse instante. Materializar controle,
-   nonce e destinos frontend novos; todos são single-use.
+   nonce e destinos frontend novos; todos são single-use. Materializar também o
+   binding privado do checker conforme `FRONTEND_CHECKER_BINDING_V1.schema.json`,
+   com modo `0600`, caminhos absolutos e SHA-256 fixado antes da seleção. Invocar
+   o checker somente com `--binding` e `--binding-sha256`; não reutilizar binding
+   ou raiz candidata que já possua marker.
 9. Executar somente GETs autorizados de isolamento negativo. Não fabricar operação
    positiva, não repetir POST e não expor tenant, token ou UUID em logs públicos.
 10. Selecionar o frontend pelo controle candidato; conferir BUILD_ID, launcher, assets,

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://converta.re7online.com/schemas/frontend-checker-binding-v1.json",
+  "title": "Frontend checker runtime binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "candidateRoot",
+    "returnRoot",
+    "launcher",
+    "target",
+    "pm2Pid"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "candidateRoot": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "returnRoot": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "launcher": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "target": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "pm2Pid": {
+      "type": "string",
+      "pattern": "^/"
+    }
+  }
+}

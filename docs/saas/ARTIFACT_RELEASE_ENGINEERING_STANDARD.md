@@ -137,6 +137,15 @@ novos; nunca apagar o journal para reutilizar o controle. A ativação permanent
 cria marker somente depois de journal, identidade e health aprovados. `pm2 save`
 ocorre depois de `supervised-candidate`, nunca antes.
 
+O checker frontend recebe um binding explícito conforme
+`FRONTEND_CHECKER_BINDING_V1.schema.json`; não contém raiz operacional embutida.
+O binding é privado e autenticado por SHA-256, arquivo regular `0600`, aberto com
+`O_NOFOLLOW` e metadados estáveis. Ele admite somente caminhos absolutos para
+`candidateRoot`, `returnRoot`, `launcher`, `target` e `pm2Pid`, sem comandos,
+argumentos, ambiente ou credenciais. Cada raiz candidata e seu binding são
+single-use; ausência, campo extra, symlink, hash divergente ou raiz consumida
+negam a execução.
+
 Antes de uma janela produtiva, uma única fixture deve comprovar a sequência
 completa S0 → S1 → S2 → S3 e a negativa S0 → S1 → S2_DENIED → R. Testes
 isolados dos componentes não satisfazem esse gate.

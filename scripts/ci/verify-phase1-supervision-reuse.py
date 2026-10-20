@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Run the canonical Phase 1 supervision actions with real fixture interfaces."""
+"""Exercise the relocatable canonical checker through its subprocess CLI."""
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
@@ -18,26 +19,62 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCER = ROOT / "scripts/crm-contacts-phase1-state-producer.py"
 CHECKER = ROOT / "scripts/release-assets/frontend-check.py"
+SCHEMA = ROOT / "docs/saas/releases/FRONTEND_CHECKER_BINDING_V1.schema.json"
 LAUNCHER_SOURCE = ROOT / "docs/reviews/automation-freeform-window-release-af26/frontend-9f4cbe0f-prepared/launcher.cjs"
 BOOTSTRAP_SOURCE = ROOT / "docs/reviews/automation-freeform-window-release-af26/frontend-9f4cbe0f-prepared/bootstrap.cjs"
-POLICY_SHA = "10539fe3e013a9acdc64ebee0c27ddc94b29d8ef773201a1a0b64947776a0a3a"
-CHECKER_SHA = "ea3e6944667c2dd513ef54abc4a504fe3698451670b8d24b8f3de8d5c7243201"
 BUILD_ID = "bt9-BI1dCQD7_gj8ktOvz"
-EXECUTION_ID = "crm-contacts-final-fixture-20261020"
+PREDICATE_BASELINE = "49adff02f54f318e01345977d336483624741600"
 
 
-def load_module(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def load_producer():
+    spec = importlib.util.spec_from_file_location("phase1_state_producer", PRODUCER)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"module_import:{name}")
+        raise RuntimeError("producer_import")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
 
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def compare_predicates() -> dict[str, object]:
+    previous = subprocess.check_output(["git", "show", f"{PREDICATE_BASELINE}:scripts/release-assets/frontend-check.py"], text=True, cwd=ROOT)
+    current = CHECKER.read_text()
+
+    class NormalizeBindings(ast.NodeTransformer):
+        names = {"CANDIDATE_ROOT": "P", "RETURN_ROOT": "RETURN_P", "LAUNCHER_PATH": "LAUNCHER", "TARGET_PATH": "TARGET", "PM2_PID_PATH": "PM_PID"}
+
+        def visit_Name(self, node):
+            node.id = self.names.get(node.id, node.id)
+            return node
+
+    def functions(source: str):
+        return {node.name: node for node in ast.parse(source).body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    old = functions(previous)
+    new = functions(current)
+    binding_surface = {"proc", "rows", "ready", "main"}
+    compared = sorted((set(old) & set(new)) - binding_surface)
+    for name in compared:
+        before = ast.dump(NormalizeBindings().visit(ast.fix_missing_locations(old[name])), include_attributes=False)
+        after = ast.dump(NormalizeBindings().visit(ast.fix_missing_locations(new[name])), include_attributes=False)
+        if before != after:
+            raise RuntimeError(f"predicate_changed:{name}")
+    def require_codes(source: str):
+        result = set()
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "require" and len(node.args) > 1 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
+                result.add(node.args[1].value)
+        return result
+
+    old_codes = require_codes(previous)
+    new_codes = {node.value for node in ast.walk(ast.parse(current)) if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+    if not old_codes.issubset(new_codes):
+        raise RuntimeError("predicate_code_removed")
+    return {"baseline": PREDICATE_BASELINE, "unchangedFunctions": len(compared), "removedFunctions": sorted(set(old) - set(new)), "addedBindingFunctions": sorted(set(new) - set(old))}
 
 
 def write_json(path: Path, value: object, mode: int = 0o600) -> None:
@@ -49,9 +86,9 @@ def process(name: str, pid: int, cwd: str, entry: str) -> dict[str, object]:
     return {"name": name, "pid": pid, "pm2_env": {"status": "online", "pm_cwd": cwd, "pm_exec_path": entry, "exec_interpreter": "/usr/bin/node", "restart_time": 0, "exec_mode": "fork_mode"}}
 
 
-def assert_mode(path: Path) -> None:
-    if stat.S_IMODE(path.stat().st_mode) != 0o600:
-        raise RuntimeError(f"mode_not_0600:{path.name}")
+def proc_identity(pid: int) -> dict[str, object]:
+    fields = Path(f"/proc/{pid}/stat").read_text().split(") ", 1)[1].split()
+    return {"ticks": fields[19], "parent": int(fields[1]), "state": fields[0], "group": int(fields[2])}
 
 
 def wait_for_journal(path: Path) -> list[dict[str, object]]:
@@ -65,193 +102,197 @@ def wait_for_journal(path: Path) -> list[dict[str, object]]:
     raise RuntimeError("canonical_launcher_journal_timeout")
 
 
-class HttpPass:
-    status = 200
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_args):
-        return False
-
-    def read(self, _size=-1):
-        return b"ok"
-
-
 PM2_SHIM_SOURCE = r'''#!/usr/bin/env python3
 import json, sys
 from pathlib import Path
 state_path, log_path, action, *args = sys.argv[1:]
 state = json.loads(Path(state_path).read_text())
-entry = {"action": action, "args": args}
-if action == "delete":
-    state[args[0]] = None
+if action == "delete": state[args[0]] = None
 elif action == "start":
     component, definition = args
-    if not Path(definition).is_file(): raise SystemExit(41)
     state[component] = json.loads(Path(definition).read_text())["identity"]
-elif action == "save":
-    state["saveCalls"] += 1
-else:
-    raise SystemExit(42)
-with Path(log_path).open("a") as stream:
-    stream.write(json.dumps(entry, sort_keys=True) + "\n")
-Path(state_path).write_text(json.dumps(state, sort_keys=True) + "\n")
+elif action == "save": state["saveCalls"] += 1
+else: raise SystemExit(42)
+with Path(log_path).open("a") as stream: stream.write(json.dumps({"action":action,"args":args},sort_keys=True)+"\n")
+Path(state_path).write_text(json.dumps(state,sort_keys=True)+"\n")
 '''
 
 
-def make_pm2_shim(root: Path, initial: dict[str, object]) -> tuple[Path, Path, Path, str]:
+def make_shim(root: Path, initial: dict[str, object]):
     shim = root / "pm2-shim"
     shim.write_text(PM2_SHIM_SOURCE)
     shim.chmod(0o700)
-    state = root / "pm2-shim-state.private.json"
-    log = root / "pm2-shim-log.private.jsonl"
+    state = root / "pm2-state.private.json"
+    log = root / "pm2-log.private.jsonl"
     write_json(state, initial)
     return shim, state, log, sha256(shim)
 
 
-def run_shim(shim: Path, expected_sha: str, state: Path, log: Path, *args: str) -> None:
-    if sha256(shim) != expected_sha or not stat.S_ISREG(shim.stat().st_mode):
+def shim_call(shim: Path, digest: str, state: Path, log: Path, *args: str) -> None:
+    if sha256(shim) != digest or not stat.S_ISREG(shim.stat().st_mode):
         raise RuntimeError("pm2_shim_identity")
     subprocess.run([str(shim), str(state), str(log), *args], check=True, env={"PATH": "/usr/bin:/bin"})
-    if sha256(shim) != expected_sha:
+    if sha256(shim) != digest:
         raise RuntimeError("pm2_shim_changed")
 
 
-def base_inputs(root: Path, producer):
-    root.mkdir(mode=0o700)
-    control_path = root / "candidate-v2.run.private.json"
-    journal = root / "candidate-v2.startup.private.jsonl"
-    release = root / "frontend-runtime"
-    (release / ".next").mkdir(parents=True)
-    (release / ".next/BUILD_ID").write_text(BUILD_ID)
-    entry = release / "fixture-entry.cjs"
+def checker_call(binding: Path, surface: Path, action: str, *, expected: str | None = None, binding_sha: str | None = None) -> subprocess.CompletedProcess[str]:
+    command = [sys.executable, "-B", str(CHECKER), "--binding", str(binding), "--binding-sha256", binding_sha or sha256(binding), "--fixture-surface", str(surface), action]
+    result = subprocess.run(command, text=True, capture_output=True, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")})
+    if expected is not None:
+        if result.returncode or expected not in result.stdout:
+            raise RuntimeError(f"checker_cli:{action}:{result.returncode}:{result.stderr[-300:]}")
+    return result
+
+
+def prepare_attempt(base: Path, name: str, producer):
+    attempt = base / name
+    candidate = attempt / "candidate"
+    returned = attempt / "return"
+    target = candidate / "frontend-runtime"
+    attempt.mkdir(mode=0o700)
+    candidate.mkdir(mode=0o700)
+    target.mkdir()
+    (target / ".next").mkdir()
+    returned.mkdir(mode=0o700)
+    (target / ".next/BUILD_ID").write_text(BUILD_ID)
+    entry = target / "fixture-entry.cjs"
     entry.write_text("setInterval(() => {}, 1000);\n")
-    launcher = root / "launcher.cjs"
+    launcher = returned / "launcher.cjs"
     shutil.copyfile(LAUNCHER_SOURCE, launcher)
-    shutil.copyfile(BOOTSTRAP_SOURCE, root / "bootstrap.cjs")
-    control = {"release": str(release), "entry": str(entry), "entrySha256": sha256(entry), "buildId": BUILD_ID, "nonce": "phase1-reused-candidate-nonce", "journal": str(journal), "args": [], "bootId": Path("/proc/sys/kernel/random/boot_id").read_text().strip(), "preExisting": {}}
+    shutil.copyfile(BOOTSTRAP_SOURCE, returned / "bootstrap.cjs")
+    control_path = candidate / "candidate-v2.run.private.json"
+    journal = candidate / "candidate-v2.startup.private.jsonl"
+    control = {"release": str(target), "entry": str(entry), "entrySha256": sha256(entry), "buildId": BUILD_ID, "nonce": f"{name}-candidate-nonce", "journal": str(journal), "args": [], "bootId": Path("/proc/sys/kernel/random/boot_id").read_text().strip(), "preExisting": {}}
     write_json(control_path, control)
-    policy_path = root / "permanent-policy.proposed.private.json"
-    policy = {"roles": {"candidate": {key: control[key] for key in ("release", "entry", "entrySha256", "buildId")}}}
-    write_json(policy_path, policy)
-    api_report_path = root / "api-report.private.json"
-    write_json(api_report_path, {"result": "API_CANDIDATE_STABLE", "candidateCapture": {"status": "PASS", "pid": 102, "startTicks": 1002}})
+    policy = candidate / "policy.private.json"
+    write_json(policy, {"roles": {"candidate": {key: control[key] for key in ("release", "entry", "entrySha256", "buildId")}}})
+    report = candidate / "api-report.private.json"
+    write_json(report, {"result": "API_CANDIDATE_STABLE", "candidateCapture": {"status": "PASS", "pid": 102, "startTicks": 1002}})
     ticks = {102: 1002, 201: 2001, 301: 3001, 401: 4001}
-    rows = [process("re7-whatsapp-web-worker", 301, "/runtime/worker", "/runtime/worker/index.js"), process("re7-whatsapp-agent", 102, "/runtime/api-candidate", "/runtime/api-candidate/index.js"), process("re7-admin-front", 201, "/runtime/frontend-return", str(launcher))]
-    return api_report_path, control_path, policy_path, ticks, rows, control, producer.sha256(policy_path), launcher, journal
-
-
-def bind_checker(checker, root: Path, launcher: Path, control: dict[str, object], ticks: dict[int, int], rows: list[dict[str, object]], launcher_pid: int, child_pid: int):
-    actual_proc = checker.proc
-
-    def fixture_proc(pid: int, require_alive: bool = True):
-        if pid in (launcher_pid, child_pid):
-            return actual_proc(pid, require_alive=require_alive)
-        if pid not in ticks:
-            raise ProcessLookupError(pid)
-        return {"pid": pid, "ticks": ticks[pid], "parent": 1, "state": "S", "group": pid}
-
-    current = [rows[0], rows[1], process("re7-admin-front", launcher_pid, control["release"], str(launcher))]
-    current[2]["pm2_env"].update(watch=False, autorestart=True, stop_exit_codes=[78], RE7_FRONT_CONTROL=str(root / "candidate-v2.run.private.json"), RE7_FRONT_RUN=control["nonce"])
-    checker.P = root
-    checker.RETURN_P = root / "return"
-    checker.LAUNCHER = launcher
-    checker.TARGET = control["release"]
-    checker.PM_PID = root / "pm2.pid"
-    checker.PM_PID.write_text("401\n")
-    checker.proc = fixture_proc
-    checker.rows = lambda timeout=3: current
-    checker.urllib.request.urlopen = lambda *_args, **_kwargs: HttpPass()
-    return current
-
-
-def successful_path(base: Path, producer, checker) -> dict[str, object]:
-    root = base / "success"
-    api_report, control_path, policy_path, ticks, rows, control, policy_sha, launcher, journal = base_inputs(root, producer)
-    outputs = [root / "runtime.private.json", root / "daemon.private.json", root / "phase1-state-binding.private.json", root / "candidate-v2.readiness.private.jsonl", root / "candidate-v2.readiness-binding.private.json", Path(str(control_path) + ".permanent")]
-    if any(path.exists() for path in outputs):
-        raise RuntimeError("outputs_not_initially_absent")
-    binding = producer.capture(root, EXECUTION_ID, api_report, control_path, policy_path, policy_sha, rows=rows, daemon_pid=401, tick_reader=ticks.__getitem__)
-    for path in outputs[:3]:
-        assert_mode(path)
+    before_rows = [process("re7-whatsapp-web-worker", 301, "/runtime/worker", "/runtime/worker/index.js"), process("re7-whatsapp-agent", 102, "/runtime/api-candidate", "/runtime/api-candidate/index.js"), process("re7-admin-front", 201, "/runtime/frontend-return", str(launcher))]
+    execution_id = f"crm-contacts-{name}-20261020"
+    producer.capture(candidate, execution_id, report, control_path, policy, sha256(policy), rows=before_rows, daemon_pid=401, tick_reader=ticks.__getitem__)
+    pm2_pid = candidate / "pm2.pid"
+    pm2_pid.write_text("401\n")
+    binding = attempt / "frontend-check.binding.private.json"
+    write_json(binding, {"schemaVersion": 1, "candidateRoot": str(candidate), "returnRoot": str(returned), "launcher": str(launcher), "target": str(target), "pm2Pid": str(pm2_pid)})
     node = shutil.which("node")
     if node is None:
         raise RuntimeError("node_unavailable")
-    launcher_process = subprocess.Popen([node, str(launcher)], cwd=root, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "RE7_FRONT_CONTROL": str(control_path), "RE7_FRONT_RUN": control["nonce"]}, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-    try:
-        records = wait_for_journal(journal)
-        child_pid = int(next(row["pid"] for row in records if row["event"] == "application_identity"))
-        bind_checker(checker, root, launcher, control, ticks, rows, launcher_process.pid, child_pid)
-        checker.main("ready-candidate")
-        readiness = root / "candidate-v2.readiness.private.jsonl"
-        assert_mode(readiness)
-        if json.loads(readiness.read_text().splitlines()[-1])["result"] != "PASS":
-            raise RuntimeError("canonical_readiness_not_pass")
-        sealed = producer.seal_readiness(root, EXECUTION_ID, rows=checker.rows(), tick_reader=lambda pid: checker.proc(pid)["ticks"])
-        checker.main("enable-supervision-candidate")
-        marker = Path(str(control_path) + ".permanent")
-        assert_mode(marker)
-        if marker.stat().st_mtime_ns < journal.stat().st_mtime_ns:
-            raise RuntimeError("marker_before_journal")
-        checker.main("supervised-candidate")
-        acceptance = root / "manual-acceptance.private.json"
-        producer.atomic_json(acceptance, {"executionId": EXECUTION_ID, "decision": "ACCEPTED", "api": binding["apiIdentity"], "frontend": sealed["frontendIdentity"], "buildId": BUILD_ID})
-        shim, state, log, shim_sha = make_pm2_shim(root, {"api": "candidate", "frontend": "candidate", "worker": "preserved", "saveCalls": 0})
-        run_shim(shim, shim_sha, state, log, "save")
-        final_state = json.loads(state.read_text())
-        calls = [json.loads(line) for line in log.read_text().splitlines()]
-        if final_state["saveCalls"] != 1 or calls != [{"action": "save", "args": []}]:
-            raise RuntimeError("save_once_not_executed")
-        return {"states": ["API_PASS", "PHASE1_CAPTURED", "FRONTEND_PASS", "READINESS_PASS", "JOURNAL_VALID", "ACTIVE_PERMANENT", "OWNER_ACCEPTED", "SAVED_ONCE"], "canonicalActions": ["ready-candidate", "seal-readiness", "enable-supervision-candidate", "supervised-candidate"], "saveCalls": final_state["saveCalls"], "pm2ShimSha256": shim_sha, "realPm2Calls": 0}
-    finally:
-        launcher_process.terminate()
-        try:
-            launcher_process.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            launcher_process.kill()
-            launcher_process.wait(timeout=3)
+    launch = subprocess.Popen([node, str(launcher)], cwd=returned, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "RE7_FRONT_CONTROL": str(control_path), "RE7_FRONT_RUN": control["nonce"]}, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    records = wait_for_journal(journal)
+    child = int(next(row["pid"] for row in records if row["event"] == "application_identity"))
+    current_rows = [before_rows[0], before_rows[1], process("re7-admin-front", launch.pid, str(target), str(launcher))]
+    current_rows[2]["pm2_env"].update(watch=False, autorestart=True, stop_exit_codes=[78], RE7_FRONT_CONTROL=str(control_path), RE7_FRONT_RUN=control["nonce"])
+    processes = {str(pid): {"ticks": value, "parent": 1, "state": "S", "group": pid} for pid, value in ticks.items()}
+    processes[str(launch.pid)] = proc_identity(launch.pid)
+    processes[str(child)] = proc_identity(child)
+    surface = attempt / "checker-surface.private.json"
+    write_json(surface, {"schemaVersion": 1, "pm2Rows": current_rows, "processes": processes, "httpStatus": 200})
+    return {"attempt": attempt, "candidate": candidate, "return": returned, "binding": binding, "surface": surface, "control": control_path, "journal": journal, "launch": launch, "rows": current_rows, "ticks": ticks, "executionId": execution_id}
 
 
-def rollback_path(base: Path) -> dict[str, object]:
-    root = base / "rollback"
-    root.mkdir(mode=0o700)
-    api_return = root / "api-return.private.json"
-    frontend_return = root / "frontend-supervised-return.private.json"
+def exercise(attempt: dict[str, object], producer) -> dict[str, object]:
+    binding = attempt["binding"]
+    surface = attempt["surface"]
+    checker_call(binding, surface, "ready-candidate", expected="ready-candidate:PASS")
+    sealed = producer.seal_readiness(attempt["candidate"], attempt["executionId"], rows=attempt["rows"], tick_reader=lambda pid: int(json.loads(surface.read_text())["processes"][str(pid)]["ticks"]))
+    checker_call(binding, surface, "enable-supervision-candidate", expected="enable-supervision-candidate:PASS")
+    checker_call(binding, surface, "supervised-candidate", expected="supervised-candidate:PASS")
+    marker = Path(str(attempt["control"]) + ".permanent")
+    if marker.stat().st_mtime_ns < attempt["journal"].stat().st_mtime_ns or sealed["result"] != "PHASE1_READINESS_BOUND_PASS":
+        raise RuntimeError("supervision_order")
+    replay = checker_call(binding, surface, "ready-candidate")
+    if replay.returncode == 0 or "candidate_root_consumed" not in replay.stderr:
+        raise RuntimeError("consumed_root_replay_allowed")
+    return {"root": str(attempt["candidate"]), "bindingSha256": sha256(binding), "markerProducer": "enable-supervision-candidate"}
+
+
+def negative_bindings(attempt: dict[str, object]) -> None:
+    binding = attempt["binding"]
+    surface = attempt["surface"]
+    no_binding = subprocess.run([sys.executable, "-B", str(CHECKER), "ready-candidate"], text=True, capture_output=True)
+    if no_binding.returncode == 0:
+        raise RuntimeError("missing_binding_allowed")
+    altered = binding.with_name("altered-binding.private.json")
+    shutil.copyfile(binding, altered);altered.chmod(0o600)
+    original_sha = sha256(altered)
+    altered.write_text(altered.read_text() + "\n")
+    if checker_call(altered, surface, "ready-candidate", binding_sha=original_sha).returncode == 0:
+        raise RuntimeError("altered_binding_allowed")
+    symlink = binding.with_name("binding-link.private.json")
+    symlink.symlink_to(binding)
+    if checker_call(symlink, surface, "ready-candidate", binding_sha=sha256(binding)).returncode == 0:
+        raise RuntimeError("binding_symlink_allowed")
+    for label, transform in (
+        ("relative", lambda value: {**value, "candidateRoot": "relative"}),
+        ("extra", lambda value: {**value, "argv": []}),
+    ):
+        path = binding.with_name(f"{label}-binding.private.json")
+        transform_value = transform(json.loads(binding.read_text()))
+        write_json(path, transform_value)
+        if checker_call(path, surface, "ready-candidate").returncode == 0:
+            raise RuntimeError(f"invalid_binding_allowed:{label}")
+
+
+def finish_success(attempt: dict[str, object]) -> dict[str, object]:
+    shim, state, log, digest = make_shim(attempt["attempt"], {"api": "candidate", "frontend": "candidate", "worker": "preserved", "saveCalls": 0})
+    shim_call(shim, digest, state, log, "save")
+    value = json.loads(state.read_text())
+    if value["saveCalls"] != 1 or len(log.read_text().splitlines()) != 1:
+        raise RuntimeError("save_once")
+    return {"saveCalls": 1, "pm2ShimSha256": digest}
+
+
+def finish_rollback(attempt: dict[str, object]) -> dict[str, object]:
+    api_return = attempt["attempt"] / "api-return.private.json"
+    frontend_return = attempt["attempt"] / "frontend-return.private.json"
     write_json(api_return, {"identity": "API_ORIGINAL"})
     write_json(frontend_return, {"identity": "FRONTEND_ACTIVE_PERMANENT"})
-    shim, state, log, shim_sha = make_pm2_shim(root, {"api": "candidate", "frontend": "candidate", "worker": "preserved", "saveCalls": 0})
-    run_shim(shim, shim_sha, state, log, "delete", "frontend")
-    run_shim(shim, shim_sha, state, log, "start", "frontend", str(frontend_return))
-    run_shim(shim, shim_sha, state, log, "delete", "api")
-    run_shim(shim, shim_sha, state, log, "start", "api", str(api_return))
-    final_state = json.loads(state.read_text())
-    calls = [json.loads(line) for line in log.read_text().splitlines()]
-    expected = [{"action": "delete", "args": ["frontend"]}, {"action": "start", "args": ["frontend", str(frontend_return)]}, {"action": "delete", "args": ["api"]}, {"action": "start", "args": ["api", str(api_return)]}]
-    if calls != expected or final_state != {"api": "API_ORIGINAL", "frontend": "FRONTEND_ACTIVE_PERMANENT", "worker": "preserved", "saveCalls": 0}:
+    shim, state, log, digest = make_shim(attempt["attempt"], {"api": "candidate", "frontend": "candidate", "worker": "preserved", "saveCalls": 0})
+    for args in (("delete", "frontend"), ("start", "frontend", str(frontend_return)), ("delete", "api"), ("start", "api", str(api_return))):
+        shim_call(shim, digest, state, log, *args)
+    value = json.loads(state.read_text())
+    if value != {"api": "API_ORIGINAL", "frontend": "FRONTEND_ACTIVE_PERMANENT", "worker": "preserved", "saveCalls": 0}:
         raise RuntimeError("rollback_not_integral")
-    return {"states": ["FRONTEND_DENIED", "ROLLBACK_INTEGRAL"], **final_state, "pm2ShimSha256": shim_sha, "realPm2Calls": 0}
+    return {"saveCalls": 0, "pm2ShimSha256": digest, "state": value}
+
+
+def stop(attempt: dict[str, object]) -> None:
+    process = attempt["launch"]
+    process.terminate()
+    try:
+        process.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        process.kill();process.wait(timeout=3)
 
 
 def main() -> None:
-    if sha256(CHECKER) != CHECKER_SHA:
-        raise RuntimeError("canonical_checker_hash")
-    producer = load_module("phase1_state_producer", PRODUCER)
-    checker = load_module("canonical_frontend_checker", CHECKER)
-    with tempfile.TemporaryDirectory(prefix="phase1-supervision-reuse-") as temporary:
-        root = Path(temporary)
-        success = successful_path(root, producer, checker)
-        rollback = rollback_path(root)
-    if success["realPm2Calls"] or rollback["realPm2Calls"]:
-        raise RuntimeError("real_pm2_invocation")
-    record = json.loads((ROOT / "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_FINAL_SUPERVISION.json").read_text())
-    if record["policySha256"] != POLICY_SHA or record["artifacts"]["stateProducer"]["sha256"] != producer.sha256(PRODUCER):
-        raise RuntimeError("public_manifest_binding")
-    if record["artifacts"]["frontendChecker"]["sha256"] != sha256(CHECKER):
-        raise RuntimeError("public_checker_binding")
-    if [item["initialState"] for item in record["singleUseOutputs"]] != ["ABSENT"] * len(record["singleUseOutputs"]):
-        raise RuntimeError("single_use_initial_state")
-    print(json.dumps({"result": "FINAL_SUPERVISION_PHASE1_REUSE_END_TO_END_PASS", "success": success, "rollback": rollback, "checkerSha256": sha256(CHECKER), "producerSha256": producer.sha256(PRODUCER), "productionChanged": False}, sort_keys=True))
+    source = Path(__file__).read_text()
+    forbidden = ("bind"+"_checker", *("checker."+name+" =" for name in ("P","RETURN_P","LAUNCHER","TARGET","PM_PID","proc","rows")), "checker."+"urllib")
+    if any(value in source for value in forbidden):
+        raise RuntimeError("checker_monkeypatch_present")
+    producer = load_producer()
+    predicate_comparison = compare_predicates()
+    schema = json.loads(SCHEMA.read_text())
+    if schema["additionalProperties"] is not False or set(schema["required"]) != {"schemaVersion", "candidateRoot", "returnRoot", "launcher", "target", "pm2Pid"}:
+        raise RuntimeError("binding_schema")
+    with tempfile.TemporaryDirectory(prefix="relocatable-checker-cli-") as temporary:
+        base = Path(temporary)
+        first = prepare_attempt(base, "exclusive-one", producer)
+        second = prepare_attempt(base, "exclusive-two", producer)
+        try:
+            negative_bindings(first)
+            first_result = exercise(first, producer)
+            first_result.update(finish_success(first))
+            second_result = exercise(second, producer)
+            second_result.update(finish_rollback(second))
+        finally:
+            stop(first);stop(second)
+    if first_result["root"] == second_result["root"]:
+        raise RuntimeError("exclusive_roots_alias")
+    print(json.dumps({"result": "RELOCATABLE_CHECKER_CLI_END_TO_END_PASS", "checkerSha256": sha256(CHECKER), "bindingSchemaSha256": sha256(SCHEMA), "predicateComparison": predicate_comparison, "monkeypatch": False, "exclusiveRoots": 2, "first": first_result, "second": second_result, "realPm2Invocations": 0, "productionChanged": False}, sort_keys=True))
 
 
 if __name__ == "__main__":
