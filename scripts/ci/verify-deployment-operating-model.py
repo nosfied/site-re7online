@@ -32,12 +32,17 @@ executor = manifest.get("executorContract", {})
 require(executor.get("path") == "scripts/deploy-v2.py", "stable executor path")
 require(executor.get("adapterContract") == "docs/saas/DEPLOY_V2_ADAPTER_CONTRACT.md",
         "adapter contract")
-require(executor.get("authorizationBinds") ==
-        ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256", "acceptanceSha256"],
-        "authorization identity binding")
+require(executor.get("promoteAuthorizationBinds") ==
+        ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256"],
+        "promote authorization identity binding")
+require(executor.get("resumeAuthorizationBinds") ==
+        ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256",
+         "executionId", "executionStateSha256", "acceptanceSha256"],
+        "resume authorization identity binding")
 require(executor.get("productionAdapter") == "scripts/deploy-v2-pm2-adapter.py",
         "production adapter path")
-require(executor.get("adapterState") == "BUILTIN_LOCAL_VALIDATED_NOT_EXECUTED",
+require(executor.get("adapterState") ==
+        "TWO_PHASE_POST_SELECTION_ACCEPTANCE_LOCAL_VALIDATED_NOT_EXECUTED",
         "production adapter claim boundary")
 require(executor.get("runtimeBindingSchema") == 2, "data-only binding schema")
 require(executor.get("runtimeBindingState") == "DATA_ONLY_NOT_MATERIALIZED",
@@ -49,15 +54,25 @@ require((ROOT / executor["path"]).is_file(), "stable executor exists")
 require((ROOT / executor["productionAdapter"]).is_file(), "production adapter exists")
 require((ROOT / executor["adapterContract"]).is_file(), "adapter contract exists")
 adapter_source = (ROOT / executor["productionAdapter"]).read_text(encoding="utf-8")
+executor_source = (ROOT / executor["path"]).read_text(encoding="utf-8")
 for operation in ("capture", "select-api", "verify-api", "select-frontend",
-                  "verify-frontend", "enable-supervision", "verify-worker",
-                  "rollback-all", "save-once"):
+                  "verify-frontend", "enable-supervision", "verify-supervision",
+                  "verify-worker", "checkpoint", "rollback-all", "save-once"):
     require(f'"{operation}"' in adapter_source, f"built-in operation {operation}")
 require("run_plan(" not in adapter_source, "generic release plan executor removed")
+for marker in ("DEPLOY_V2_AWAITING_ACCEPTANCE", "--promote", "--resume",
+               "executionStateSha256", "acceptance_candidate_identity"):
+    require(marker in executor_source, f"two-phase executor marker {marker}")
+for marker in ("FRONTEND_LIVE_CONTROL", "FRONTEND_LIVE_RUN",
+               "ABORTED_DUMP_RESTORED", "ROLLBACK_PRIVATE_ENV_UNAVAILABLE"):
+    require(marker in adapter_source, f"adapter safety marker {marker}")
 acceptance = manifest.get("acceptancePolicy", {})
 require(acceptance.get("separateFromBinding") is True and
         acceptance.get("saveRequiresAcceptance") is True and
-        acceptance.get("forbidIdentifiersAndCredentials") is True,
+        acceptance.get("forbidIdentifiersAndCredentials") is True and
+        acceptance.get("acceptanceCreatedAfterSelection") is True and
+        acceptance.get("resumeRevalidates") ==
+        ["api", "frontend", "worker", "supervision"],
         "separate tenant-scoped acceptance")
 for artifact in manifest["artifacts"].values():
     for key, value in artifact.items():
@@ -66,7 +81,7 @@ for artifact in manifest["artifacts"].values():
 
 require(set(manifest["runtimeStatePolicy"]["captureAtExecution"]) == {
     "pid", "startTicks", "cwd", "entrypoint", "pm2Dump", "rollback",
-    "reportPaths", "timestamps",
+    "pm2PrivateConfiguration", "reportPaths", "timestamps",
 }, "complete execution-time state capture")
 for forbidden_key in ("observedPid", "expectedPid", "startTicks", "dumpSha256"):
     require(forbidden_key not in manifest, f"embedded live value {forbidden_key}")

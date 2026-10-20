@@ -7,9 +7,10 @@
   "executorContract": {
     "path": "scripts/deploy-v2.py",
     "adapterContract": "docs/saas/DEPLOY_V2_ADAPTER_CONTRACT.md",
-    "authorizationBinds": ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256", "acceptanceSha256"],
+    "promoteAuthorizationBinds": ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256"],
+    "resumeAuthorizationBinds": ["manifestSha256", "executorSha256", "adapterSha256", "bindingSha256", "executionId", "executionStateSha256", "acceptanceSha256"],
     "productionAdapter": "scripts/deploy-v2-pm2-adapter.py",
-    "adapterState": "BUILTIN_LOCAL_VALIDATED_NOT_EXECUTED",
+    "adapterState": "TWO_PHASE_POST_SELECTION_ACCEPTANCE_LOCAL_VALIDATED_NOT_EXECUTED",
     "runtimeBindingSchema": 2,
     "runtimeBindingState": "DATA_ONLY_NOT_MATERIALIZED",
     "runtimeBindingForbiddenKeys": ["actions", "argv", "commands", "destinations", "executableSha256"]
@@ -36,23 +37,28 @@
     "rootOrNetworkChanged": false
   },
   "runtimeStatePolicy": {
-    "captureAtExecution": ["pid", "startTicks", "cwd", "entrypoint", "pm2Dump", "rollback", "reportPaths", "timestamps"],
+    "captureAtExecution": ["pid", "startTicks", "cwd", "entrypoint", "pm2Dump", "rollback", "pm2PrivateConfiguration", "reportPaths", "timestamps"],
     "embeddedRuntimeStateForbidden": true
   },
   "acceptancePolicy": {
     "separateFromBinding": true,
     "modes": ["AUTOMATED_GET_ONLY", "OWNER_MANUAL_AUTHENTICATED"],
     "forbidIdentifiersAndCredentials": true,
-    "saveRequiresAcceptance": true
+    "saveRequiresAcceptance": true,
+    "acceptanceCreatedAfterSelection": true,
+    "acceptanceBindsCandidateIdentity": ["executionId", "apiPid", "apiStartTicks", "frontendPid", "frontendStartTicks", "buildId", "executionHashes"],
+    "resumeRevalidates": ["api", "frontend", "worker", "supervision"]
   },
   "requiredGates": [
     "preflight_read_only",
     "rollback_captured",
     "api_identity_health_and_socket",
-    "tenant_scoped_get_only",
+    "awaiting_acceptance_checkpoint",
+    "tenant_scoped_get_only_post_selection",
     "frontend_identity_http_and_assets",
     "worker_unchanged",
-    "pm2_save_exactly_once_after_acceptance"
+    "active_frontend_control_run_journal_marker",
+    "pm2_save_transactional_exactly_once_after_acceptance"
   ],
   "forbiddenEffects": ["csv_post", "import", "retry", "sql", "migration", "credential_rotation"],
   "promotionAuthorized": false

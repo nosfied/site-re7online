@@ -1,77 +1,82 @@
 # Contrato do adaptador operacional Deploy V2
 
-**Status: CANÔNICO / BUILT-IN ADAPTER LOCALMENTE VALIDADO / NÃO EXECUTADO**
+**Status: CANÔNICO / DUAS FASES LOCALMENTE VALIDADAS / NÃO EXECUTADO**
 
-O executor [`scripts/deploy-v2.py`](../../scripts/deploy-v2.py) controla autorização,
-ordem, journal, decisão e rollback. O adaptador permanente
-[`scripts/deploy-v2-pm2-adapter.py`](../../scripts/deploy-v2-pm2-adapter.py) contém a
-implementação fixa das operações PM2, `/proc`, socket, HTTP, supervisão e dump.
+O executor [`scripts/deploy-v2.py`](../../scripts/deploy-v2.py) separa promoção e
+aceite. O adaptador permanente
+[`scripts/deploy-v2-pm2-adapter.py`](../../scripts/deploy-v2-pm2-adapter.py) contém
+as operações fixas de PM2, `/proc`, socket, HTTP, supervisão, retorno e dump. O
+binding schema v2 contém somente dados estáticos; nunca contém comandos.
 
-Bindings são somente dados. Eles nunca transportam comandos executáveis, `actions`,
-`argv`, executáveis por ação ou destinos single-use. O executor autentica por SHA-256
-manifesto, executor, adaptador, binding, aceite separado e autorização, lê os mesmos
-bytes com `O_NOFOLLOW` e os copia para a raiz exclusiva da execução.
+## Binding e captura
 
-## Binding estático schema v2
+O binding declara nomes dos três processos, staging, configurações candidatas,
+identidades de arquivo, health, worker e helper/política. São negadas recursivamente
+as chaves `actions`, `argv`, `commands`, `destinations` e
+`executableSha256`. PID, ticks, dump, retorno e destinos nascem no `capture`.
 
-O binding contém somente:
+`capture` lê uma allowlist fechada de campos PM2 e cria, em custódia privada 0600:
 
-- nomes exatos dos processos API, frontend e worker;
-- raiz de staging e configurações candidatas autenticadas;
-- cwd, entrypoint e SHA-256 da API candidata;
-- cwd, launcher, BUILD_ID, controle e hashes do frontend candidato;
-- URLs allowlisted e porta de health;
-- SHA-256 durável do entrypoint do worker;
-- helper de supervisão e hashes esperados do helper e da política;
-- modo de aceite `GET_ONLY_TENANT_SCOPED_OR_OWNER_MANUAL` e proibição de POST.
+- snapshot dos três processos e retorno byte-exato do dump;
+- definições executáveis de retorno para API, frontend e worker;
+- ambiente privado necessário à execução, inclusive `RE7_FRONT_CONTROL` e
+  `RE7_FRONT_RUN`, sem registrar seus valores em stdout ou no journal sanitizado;
+- caminhos de logs e políticas PM2 relevantes, preservados no retorno;
+- fingerprints da configuração privada para conferir o retorno sem publicá-la.
 
-São negadas recursivamente as chaves `actions`, `argv`, `commands`, `destinations` e
-`executableSha256`. PID, start ticks, dump, retorno, relatório, snapshot, journal de
-execução e timestamps nascem somente no `capture` dentro da raiz exclusiva.
+## Promoção, checkpoint e resume
 
-## Operações internas fixas
+`--promote` executa `capture`, seleção e verificação da API, seleção e verificação
+do frontend, ativação da supervisão, verificação do worker e `checkpoint`. Ele
+termina obrigatoriamente em `AWAITING_ACCEPTANCE`; não recebe aceite e não executa
+`pm2 save`.
 
-| Operação | Pós-condição |
-| --- | --- |
-| `capture` | Captura os três processos, `/proc`, socket, dump e retorno 0600, definições de rollback, controle, BUILD_ID e política; cria destinos exclusivos. |
-| `select-api` | Faz substituição direcionada da API pela configuração candidata autenticada. |
-| `verify-api` | Executa três amostras de PID/ticks/cwd/entrypoint, SHA, socket 3001 e health local/público. |
-| `select-frontend` | Faz substituição direcionada do frontend pela configuração candidata autenticada. |
-| `verify-frontend` | Executa três amostras, confere launcher, controle, BUILD_ID e HTTP/assets. |
-| `enable-supervision` | Revalida helper/política pelo helper autorizado e ativa a supervisão somente depois do frontend aprovado. |
-| `verify-worker` | Exige igualdade integral com a identidade capturada e SHA do entrypoint. |
-| `rollback-all` | Retorna frontend e API pelas definições capturadas e confirma suas identidades; não salva dump. |
-| `save-once` | Exige aceite separado autenticado, com zero POST/import/retry, e executa `pm2 save` uma vez. |
+O checkpoint persiste um `executionId` novo, os hashes autenticados e as identidades
+observadas de API e frontend: PID, start ticks, BUILD_ID, controle e nonce. O aceite
+schema v2 é criado depois da seleção e precisa vincular exatamente executionId,
+estado da execução, hashes, PID/ticks dos dois candidatos e BUILD_ID. Um aceite
+anterior à seleção não possui esses dados e é inválido.
 
-O adaptador não aceita uma operação desconhecida e não oferece avaliação de shell ou
-plano genérico.
+`--resume` exige uma nova autorização com prazo, vinculada ao checkpoint e ao hash
+do aceite. Antes de salvar, reexecuta integralmente `verify-api`,
+`verify-frontend`, `verify-supervision` e `verify-worker`. Qualquer identidade viva
+divergente ou aceite stale nega e chama `rollback-all` com as definições privadas
+capturadas.
 
-## Aceite tenant-scoped separado
+## Identidade frontend ativa
 
-O aceite não pertence ao binding. Seu registro privado autenticado declara somente o
-modo (`AUTOMATED_GET_ONLY` ou `OWNER_MANUAL_AUTHENTICATED`), decisão e contadores zero
-de POST CSV, importação e retry. Token, cookie, UUID e tenant ID não são persistidos no
-binding ou no Git. Quando não existe sessão automatizável, o checkpoint humano
-autenticado é permitido, mas continua obrigatório antes de `save-once`.
+`verify-frontend` lê somente os campos allowlisted `RE7_FRONT_CONTROL` e
+`RE7_FRONT_RUN`. Ele exige:
 
-## Captura e retorno
+- controle vivo igual ao controle candidato autenticado;
+- nonce vivo igual ao nonce do controle;
+- launcher, release, entrypoint, SHA e BUILD_ID coerentes;
+- journal legítimo com o mesmo nonce;
+- marker ausente antes da ativação e válido depois dela.
 
-`capture` cria atomicamente, na raiz exclusiva, snapshot, relatório por ação, retorno
-do dump modo 0600 e definições de rollback dos três processos. Ele registra somente
-campos PM2 allowlisted e nunca enumera ambiente. A política root é validada pelo
-helper autorizado; o adaptador não lê seus bytes por privilégio próprio.
+`enable-supervision` cria o marker somente depois da validação do journal real.
+`verify-supervision` e `save-once` exigem marker, journal e identidade vivos.
 
-Seleção é considerada possivelmente parcial. Qualquer negativa depois da primeira
-seleção chama o único `rollback-all`, preserva o worker e proíbe `save-once`. Replay da
-raiz, da ação ou do marcador de save é negado.
+## Save transacional
 
-## Provas
+`save-once` revalida aceite e estado vivo, persiste `PREPARED`, executa exatamente
+um `pm2 save`, lê o novo dump e compara fingerprints integrais dos três processos.
+Somente depois grava a identidade do dump e `COMMITTED`. Se uma falha ocorrer após
+o retorno bem-sucedido do PM2 e antes do commit, o adaptador restaura atomicamente o
+dump anterior autenticado e registra `ABORTED_DUMP_RESTORED`; então o executor
+retorna os runtimes. Depois de `COMMITTED`, uma falha apenas na escrita de evidência
+não provoca retorno dos runtimes, evitando dump candidato com runtime anterior.
 
-`scripts/ci/verify-deploy-v2-executor.py` usa superfícies falsas distintas e
-realistas para PM2, `/proc`, socket, HTTP, helper e dump. Ela cobre sucesso, negativa
-em cada fase, replay, worker preservado, rollback integral e save único depois do
-aceite. Nenhum PM2, sudo, root ou serviço real é invocado.
+## Operações fixas e provas
 
-O adaptador está pronto para receber um binding privado schema v2 em uma futura
-janela autorizada. Esta validação local não autoriza promoção nem preenche o binding
-da release atual.
+`capture`, `select-api`, `verify-api`, `select-frontend`, `verify-frontend`,
+`enable-supervision`, `verify-supervision`, `verify-worker`, `checkpoint`,
+`rollback-all` e `save-once` são as únicas operações. Relatórios são separados por
+fase (`promote`, `resume` e rollback), impedindo replay e permitindo as
+revalidações previstas.
+
+As fixtures em `scripts/ci/verify-deploy-v2-executor.py` usam superfícies falsas
+separadas para PM2, `/proc`, socket, HTTP, helper e dump. Elas comprovam aceite
+pós-seleção, identidade frontend ativa, retorno com configuração privada completa,
+worker preservado, save único e restauração do dump numa falha imediatamente após
+o save. Nenhum PM2, sudo, root ou serviço real é invocado.

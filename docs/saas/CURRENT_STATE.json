@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "updatedAtUtc": "2026-10-20T02:09:59Z",
+  "updatedAtUtc": "2026-10-20T09:23:02Z",
   "basedOnCommit": "cfcecf96d499cc008ba88a21f12d3c3fd83b2be8",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CRM_CSV_TERMINAL_REENTRY_2026-10-18_DEPLOYED.json",
@@ -51,8 +51,11 @@
     "workerChanged": false,
     "databaseChanged": false,
     "credentialsChanged": false,
-    "deployV2Adapter": "BUILTIN_LOCAL_VALIDATED_NOT_EXECUTED",
-    "runtimeBinding": "SCHEMA_V2_DATA_ONLY_NOT_MATERIALIZED"
+    "deployV2Adapter": "TWO_PHASE_POST_SELECTION_ACCEPTANCE_LOCAL_VALIDATED_NOT_EXECUTED",
+    "runtimeBinding": "SCHEMA_V2_DATA_ONLY_NOT_MATERIALIZED",
+    "rollback": "FULL_FIDELITY_PRIVATE_CONFIGURATION_VERIFIED",
+    "frontendIdentity": "CONTROL_RUN_JOURNAL_MARKER_VERIFIED",
+    "saveAtomicity": "POST_SAVE_FAILURE_RESTORES_PRIOR_DUMP"
   },
   "credentialInspectionIncident": {
     "values": "NOT_VERSIONED",
@@ -62,9 +65,9 @@
     "obs1Record": "docs/saas/releases/OBS1_META_APP_SECRET_ROTATION_2026-10-19_PREPARED.json"
   },
   "nextActions": [
-    "materialize a private schema-v2 data-only binding without commands, credentials or prefilled single-use destinations",
-    "prepare the separate authenticated GET-only or owner-manual acceptance checkpoint and time-bounded authorization",
-    "open one authorized window to promote and verify the staged contacts-list release"
+    "materialize a private schema-v2 data-only binding and authorize promote to stop at AWAITING_ACCEPTANCE",
+    "create acceptance only after selection, bound to executionId, hashes, candidate PIDs/start ticks and BUILD_ID",
+    "authorize resume to revalidate all live identities and execute transactional save-once"
   ],
   "branchConvergence": {
     "state": "CONTROLLED_DIVERGENCE",

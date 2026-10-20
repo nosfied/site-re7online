@@ -28,10 +28,16 @@ faixa.
 3. Staging inerte confere hashes e extração sem selecionar processos.
 4. Um executor estável lê o manifesto; ele não contém PID, dump, timestamp ou caminho
    single-use fixado no código.
-5. O adaptador built-in captura o estado vivo uma vez, cria o retorno e promove API → frontend; o binding não transporta comandos.
-6. Health, identidade, isolamento tenant-scoped e smoke tests validam a release.
-7. `pm2 save` ocorre uma única vez depois do aceite integral.
-8. Qualquer negativa usa o snapshot capturado e retorna os componentes já alterados.
+5. O adaptador built-in captura o estado vivo uma vez, cria retorno privado de
+   configuração integral e promove API → frontend; o binding não transporta comandos.
+6. A fase `promote` verifica candidatos e supervisão e termina em
+   `AWAITING_ACCEPTANCE`, com executionId, hashes, PIDs e start ticks persistidos.
+7. O aceite GET-only ou humano nasce depois da seleção e vincula exatamente esse
+   checkpoint. A fase `resume` revalida API, frontend, worker e supervisão.
+8. `pm2 save` ocorre uma única vez depois do aceite integral. Seu estado
+   transacional autentica o novo dump e restaura o anterior se o pós-check falhar.
+9. Qualquer negativa anterior ao commit do save usa o snapshot capturado e retorna
+   os componentes já alterados.
 
 PIDs, start ticks, dump vigente, caminhos de relatório e timestamps são dados de
 execução. Eles nunca fazem parte do código do verificador ou do manifesto da release.
@@ -74,11 +80,13 @@ persiste journal antes dos efeitos, bloqueia replay e executa rollback conservad
 O [contrato do adaptador](DEPLOY_V2_ADAPTER_CONTRACT.md) define as ações ambientais.
 O adaptador built-in implementa operações fixas; bindings schema v2 contêm apenas
 identidades e dados estáticos da release. `actions`, `argv`, comandos executáveis e
-destinos single-use no binding são negados. Captura, destinos, retorno e definições de
-rollback são derivados somente na raiz exclusiva da execução.
+destinos single-use no binding são negados. Captura, destinos e definições de retorno
+com configuração PM2 integral são derivados somente na raiz exclusiva da execução.
 
 As negativas e o rollback foram ensaiados com superfícies falsas separadas de PM2,
 `/proc`, socket, HTTP, helper de supervisão e dump. O aceite tenant-scoped permanece
 um registro privado separado, GET-only ou checkpoint humano autenticado, sem token,
-cookie, UUID ou tenant no binding. O candidato continua `STAGED_INERT / NOT DEPLOYED`;
+cookie, UUID ou tenant no binding. Aceite anterior à seleção é inválido; `resume`
+compara a identidade aceita com o processo vivo e exige controle, nonce, journal e
+marker frontend coerentes. O candidato continua `STAGED_INERT / NOT DEPLOYED`;
 nenhuma janela foi aberta por esta implementação.
