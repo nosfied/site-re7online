@@ -1,6 +1,6 @@
 # Fechamento artifact-bound — CRM contacts list recovery
 
-Status: `ARTIFACT-BOUND COMBINED RELEASE READY / NOT INSTALLED / PRODUCTION UNCHANGED`.
+Status: `EXECUTION DEPENDENCY CLOSURE VERIFIED / ARTIFACT-BOUND PREPARATION COMPLETE / PRODUCTION UNCHANGED`.
 
 O ensaio integral foi repetido com os caminhos e SHA-256 dos artefatos privados
 da próxima janela. A execução terminou em `ARTIFACT_BOUND_END_TO_END_PASS`, com
@@ -8,6 +8,12 @@ PM2 substituído por shim e zero acesso de mutação à produção. A preparaç�
 o verificador API v6-r4, as definições API, o snapshot frontend posterior ao PASS
 da API, o controle candidato novo, a seleção atômica, o retorno supervisionado e
 o dump seguro `a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0`.
+
+## Correção do checker e closure fechada
+
+O checker copiado na primeira preparação ainda apontava para a raiz canônica anterior. A instância artifact-bound conserva predicados e decisões e altera somente a resolução da preparação, controle/definição candidato, journal/marker e destinos single-use. Seu SHA-256 é `965bd09834a052a5509e963e56a1f0175a6e83692b725021809ac5fd8b10b10c`.
+
+O inventário fechado `CRM_CONTACTS_LIST_RECOVERY_2026-10-19_EXECUTION_CLOSURE.json` contém 22 dependências estáticas, 17 executáveis e oito destinos single-use. Os únicos caminhos admitidos na raiz anterior são o retorno durável, o launcher canônico e os clientes de observação autenticados. Os resultados exigidos são `EXECUTION_DEPENDENCY_CLOSURE_PASS`, `FRONTEND_CHECKER_ARTIFACT_BOUND_DRY_RUN_PASS` e `ARTIFACT_BOUND_END_TO_END_PASS`, com zero PM2 real.
 
 ## Política e controle
 

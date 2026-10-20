@@ -101,3 +101,7 @@ Uma janela coordenada API → frontend exige previamente uma única fixture inte
 com `END_TO_END_COMBINED_RELEASE_FIXTURE_PASS`, cobrindo promoção, supervisão,
 save simulado e rollback completo. O snapshot frontend é state-bound ao S1 e não
 pode ser reutilizado de S0. Destinos privados, controles e nonces são single-use.
+
+## Gate de closure executável
+
+Antes de abrir a janela, execute `python3 -B -I -S scripts/ci/verify-execution-dependency-closure.py`. Qualquer executável, arquivo lido ou destino single-use ausente do manifesto nega a janela.

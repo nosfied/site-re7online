@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "crm-contacts-list-recovery-f5028de1",
+  "status": "EXECUTION_DEPENDENCY_CLOSURE_VERIFIED",
+  "preparationRoot": "/opt/re7online/backups/converta-persistent/preparations/crm-contacts-list-f5028de1-artifact-bound-20261019T234809Z",
+  "canonicalReturnRoot": "/opt/re7online/backups/converta-persistent/preparations/frontend-contacts-list-f5028de1-canonical-20261019T225126Z",
+  "safeDumpSha256": "a99667587ccee0ee884ed31aa304c714e276e86f6db86ba418238171508a2cf0",
+  "staticDependencies": [
+    {
+      "role": "apiVerifier",
+      "path": "api-verifier-v6-r4.py",
+      "sha256": "3ce469f2db79d43a08ed1cee2dcce88fba32d44139c31eb96b94b66d12e114e6",
+      "executable": true
+    },
+    {
+      "role": "apiCandidateDefinition",
+      "path": "api-candidate.config.cjs",
+      "sha256": "d022f7b7b28ddd4e1122657b84059c887b35820815e24885472674ae910e7a76",
+      "executable": true
+    },
+    {
+      "role": "apiReturnDefinition",
+      "path": "api-return.config.cjs",
+      "sha256": "fda2b1fe25f8c07e39416aca8bd8fb3db92838c62c2791443d50f94ce514cec7",
+      "executable": true
+    },
+    {
+      "role": "frontendChecker",
+      "path": "frontend-check.py",
+      "sha256": "965bd09834a052a5509e963e56a1f0175a6e83692b725021809ac5fd8b10b10c",
+      "executable": true
+    },
+    {
+      "role": "frontendCandidateControl",
+      "path": "candidate-v2.run.private.json",
+      "sha256": "b10fc8f082e39984fa93f3f89a7f1e9d52a9ff24670ee21e9afb3e97c7af2c51",
+      "executable": false
+    },
+    {
+      "role": "frontendCandidateDefinition",
+      "path": "candidate-v2.tracked.config.cjs",
+      "sha256": "ce65305e1954c20b379b88fe3698eefd6f62cc614275f45a1e24121c7851c917",
+      "executable": true
+    },
+    {
+      "role": "transactionalExecutor",
+      "path": "frontend-selection-artifact-bound.py",
+      "sha256": "0708a530915650be6f1463ef19c88d069c85acb3769600ee94a3709a15f8a953",
+      "executable": true
+    },
+    {
+      "role": "selectPlan",
+      "path": "select-candidate.plan.private.json",
+      "sha256": "5493ee824fb3831b1615b176a034762cce61af6e464fe4d08b7d1439fc179380",
+      "executable": false
+    },
+    {
+      "role": "rollbackPlan",
+      "path": "rollback-to-supervised-return.plan.private.json",
+      "sha256": "582a28b3f7238931722ba03d87b470ddfc4dc6b61f86d7190cff255902f67ad1",
+      "executable": false
+    },
+    {
+      "role": "permanentPolicy",
+      "path": "permanent-policy.proposed.private.json",
+      "sha256": "10539fe3e013a9acdc64ebee0c27ddc94b29d8ef773201a1a0b64947776a0a3a",
+      "executable": false
+    },
+    {
+      "role": "returnControl",
+      "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-contacts-list-f5028de1-canonical-20261019T225126Z/return.run.private.json",
+      "sha256": "748f1cc899150f7375adbad7c2ffeeb4ddd25ae62553a6b84db856e1257add8a",
+      "executable": false,
+      "oldRootJustification": "durableReturn"
+    },
+    {
+      "role": "returnDefinition",
+      "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-contacts-list-f5028de1-canonical-20261019T225126Z/return.tracked.config.cjs",
+      "sha256": "0792f4424d8c97ec6913ec23dc946c6eb8d83209de821dd3cb5b560d6d88f08b",
+      "executable": true,
+      "oldRootJustification": "durableReturn"
+    },
+    {
+      "role": "frontendLauncher",
+      "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-contacts-list-f5028de1-canonical-20261019T225126Z/launcher.cjs",
+      "sha256": "131a92d08fe7c6484585ed0a1e18e1bf9f9a1851907337b02ae13ca99e110fef",
+      "executable": true,
+      "oldRootJustification": "canonicalLauncher"
+    },
+    {
+      "role": "socketObservationClient",
+      "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-contacts-list-f5028de1-canonical-20261019T225126Z/socket_observation_client.py",
+      "sha256": "130e4aba02b055d28ab4857375b43f5e1f79bf3dfe63604c3776d058df44607e",
+      "executable": true,
+      "oldRootJustification": "canonicalReturnObservation"
+    },
+    {
+      "role": "socketObservationContract",
+      "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-contacts-list-f5028de1-canonical-20261019T225126Z/socket_observation_contract.py",
+      "sha256": "2f7e5aedb4cf3ecad8098eaf8521d0c7babb445f4a5ed2c274c42d1d395b90a3",
+      "executable": true,
+      "oldRootJustification": "canonicalReturnObservation"
+    },
+    {
+      "role": "permanentObserverHelper",
+      "path": "/usr/local/libexec/re7/frontend-permanent-observer.py",
+      "sha256": "976272ee36d6900111877c02ea6d0b72dc9dad705237c819a18861c47bfaec3d",
+      "executable": true
+    },
+    {
+      "role": "permanentObservationClient",
+      "path": "/opt/re7online/backups/converta-persistent/preparations/frontend-contacts-list-f5028de1-canonical-20261019T225126Z/permanent_observation_client.py",
+      "sha256": "34dae9ac861aeb89c6787871a27dd244ca931ca1038163423efd9af2996cb374",
+      "executable": true,
+      "oldRootJustification": "canonicalReturnObservation"
+    },
+    {
+      "role": "pythonInterpreter",
+      "path": "/usr/bin/python3",
+      "sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f",
+      "executable": true
+    },
+    {
+      "role": "nodeInterpreter",
+      "path": "/usr/bin/node",
+      "sha256": "d01614ef369e36eee9ab8d86fbfa93ddf44931010add45e5262a63e3ddda784e",
+      "executable": true
+    },
+    {
+      "role": "pm2Cli",
+      "path": "/home/deploy/.npm-global/bin/pm2",
+      "sha256": "bbb586713050b21d86aa41bde704a3a4776aa300ddcbd9710e81fa7c0089256d",
+      "executable": true
+    },
+    {
+      "role": "apiCandidateEntrypoint",
+      "path": "/opt/re7online/releases/crm-contacts-list-recovery-f5028de1-20261019T201659Z/api-runtime/dist/index.js",
+      "sha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+      "executable": true
+    },
+    {
+      "role": "frontendCandidateEntrypoint",
+      "path": "/opt/re7online/releases/crm-contacts-list-recovery-f5028de1-20261019T201659Z/frontend-runtime/node_modules/next/dist/bin/next",
+      "sha256": "c230a7297ba9dd98b5f57855846c186521346ce06a3a33d86faff15386c916fc",
+      "executable": true
+    }
+  ],
+  "singleUseDestinations": [
+    {
+      "role": "apiSnapshot",
+      "path": "/opt/re7online/releases/crm-contacts-list-recovery-f5028de1-20261019T201659Z/api-pre-selection-snapshot-v6-r4.private.json",
+      "initialState": "ABSENT"
+    },
+    {
+      "role": "apiReport",
+      "path": "/opt/re7online/releases/crm-contacts-list-recovery-f5028de1-20261019T201659Z/api-promotion-report-v6-r4.private.json",
+      "initialState": "ABSENT"
+    },
+    {
+      "role": "frontendSourceSnapshot",
+      "path": "source-tree.private.json",
+      "initialState": "ABSENT"
+    },
+    {
+      "role": "frontendCandidateSnapshot",
+      "path": "candidate-v2-tree.private.json",
+      "initialState": "ABSENT"
+    },
+    {
+      "role": "frontendReadinessReport",
+      "path": "candidate-v2.readiness.private.jsonl",
+      "initialState": "ABSENT"
+    },
+    {
+      "role": "candidateJournal",
+      "path": "candidate-v2.startup.private.jsonl",
+      "initialState": "ABSENT"
+    },
+    {
+      "role": "candidateMarker",
+      "path": "candidate-v2.run.private.json.permanent",
+      "initialState": "ABSENT"
+    },
+    {
+      "role": "authorizationCommit",
+      "path": "select-candidate.authorization-committed.private.json",
+      "initialState": "ABSENT"
+    }
+  ],
+  "results": {
+    "executionDependencyClosure": "EXECUTION_DEPENDENCY_CLOSURE_PASS",
+    "artifactBoundEndToEnd": "ARTIFACT_BOUND_END_TO_END_PASS",
+    "frontendCheckerDryRun": "FRONTEND_CHECKER_ARTIFACT_BOUND_DRY_RUN_PASS",
+    "pm2RealInvocations": 0
+  }
+}

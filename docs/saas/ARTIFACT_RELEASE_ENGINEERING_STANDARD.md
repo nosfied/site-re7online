@@ -134,7 +134,11 @@ Antes de uma janela produtiva, uma única fixture deve comprovar a sequência
 completa S0 → S1 → S2 → S3 e a negativa S0 → S1 → S2_DENIED → R. Testes
 isolados dos componentes não satisfazem esse gate.
 
-### Prova de escuta e evidência `server.started`
+### Closure executável integral
+
+Todo arquivo executável ou lido pela sequência produtiva DEVE constar do manifesto de closure com caminho e SHA-256 esperado. Destinos produzidos durante a janela DEVEM constar com produtor e estado inicial ausente, sem SHA inventado. O CI DEVE negar checker, executor, definição, plano, política, launcher, helper ou cliente importado ausente do inventário.
+
+## Prova de escuta e evidência `server.started`
 
 O gate de disponibilidade combina identidade candidata, propriedade direta do
 socket e health:

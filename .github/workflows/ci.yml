@@ -48,6 +48,8 @@ jobs:
         run: python3 -B -I -S scripts/ci/verify-combined-release-rehearsal.py
       - name: Validate artifact-bound combined release preparation
         run: python3 -B -I -S scripts/ci/verify-artifact-bound-combined-release.py
+      - name: Validate execution dependency closure
+        run: python3 -B -I -S scripts/ci/verify-execution-dependency-closure.py
       - name: Validate deploy impact classifier
         run: bash scripts/test-deploy-impact-matrix.sh
       - name: Validate deploy orchestration boundaries

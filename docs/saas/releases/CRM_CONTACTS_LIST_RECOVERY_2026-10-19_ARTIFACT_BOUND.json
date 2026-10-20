@@ -29,7 +29,9 @@
     "journalPath": "/opt/re7online/backups/converta-persistent/preparations/crm-contacts-list-f5028de1-artifact-bound-20261019T234809Z/candidate-v2.startup.private.jsonl",
     "markerPath": "/opt/re7online/backups/converta-persistent/preparations/crm-contacts-list-f5028de1-artifact-bound-20261019T234809Z/candidate-v2.run.private.json.permanent",
     "nonce": "PRIVATE_NOT_VERSIONED",
-    "snapshotTiming": "AFTER_API_PASS"
+    "snapshotTiming": "AFTER_API_PASS",
+    "checkerFile": "frontend-check.py",
+    "checkerSha256": "965bd09834a052a5509e963e56a1f0175a6e83692b725021809ac5fd8b10b10c"
   },
   "return": {
     "release": "/opt/re7online/releases/crm-csv-terminal-reentry-b8cc113d-20261018T143000Z/frontend-runtime",
@@ -70,7 +72,8 @@
     "frontend-selection-artifact-bound-fixture.py": "1473c356fa1d205ba9125d476a3ed4298a31470661a2e927102a98db76faf1c0",
     "permanent-policy.proposed.private.json": "10539fe3e013a9acdc64ebee0c27ddc94b29d8ef773201a1a0b64947776a0a3a",
     "rollback-to-supervised-return.plan.private.json": "582a28b3f7238931722ba03d87b470ddfc4dc6b61f86d7190cff255902f67ad1",
-    "select-candidate.plan.private.json": "5493ee824fb3831b1615b176a034762cce61af6e464fe4d08b7d1439fc179380"
+    "select-candidate.plan.private.json": "5493ee824fb3831b1615b176a034762cce61af6e464fe4d08b7d1439fc179380",
+    "frontend-check.py": "965bd09834a052a5509e963e56a1f0175a6e83692b725021809ac5fd8b10b10c"
   },
   "limits": {
     "pm2RealInvocations": 0,
@@ -80,5 +83,10 @@
     "journalCreated": false,
     "dumpChanged": false,
     "productionChanged": false
+  },
+  "executionDependencyClosure": "CRM_CONTACTS_LIST_RECOVERY_2026-10-19_EXECUTION_CLOSURE.json",
+  "results": {
+    "executionDependencyClosure": "EXECUTION_DEPENDENCY_CLOSURE_PASS",
+    "artifactBoundEndToEnd": "ARTIFACT_BOUND_END_TO_END_PASS"
   }
 }
