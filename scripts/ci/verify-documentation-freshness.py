@@ -13,35 +13,56 @@ def require(value, reason):
         raise SystemExit(f"DOCUMENTATION_FRESHNESS_INVALID: {reason}")
 
 
-record = "docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json"
-require(state["activeDeploymentRecord"] == record, "active deployment record")
-require(state["activeOperationalRecord"] == record, "active operational record")
+record_value = state["activeDeploymentRecord"]
+require(state["activeOperationalRecord"] == record_value,
+        "active operational record")
+record_path = ROOT / record_value
+require(record_path.is_file(), "active deployment record exists")
+record = json.loads(record_path.read_text())
+require(record.get("status") == "DEPLOYED_VERIFIED", "active record deployed")
 require(state["contactsListRecovery"]["state"] == "DEPLOYED_VERIFIED",
         "contacts deployed")
+require(state["contactsListRecovery"]["deploymentRecord"] == record_value,
+        "contacts deployment record")
+
 active_paths = (
     "docs/saas/CURRENT_STATE.md",
     "docs/saas/DOCUMENTATION_INDEX.md",
     "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
     "docs/DEPLOY_TOPOLOGY_RE7.md",
 )
-active = "\n".join((ROOT / p).read_text() for p in active_paths)
-for marker in (
-    "f5028de1e530666623dcc95519e744350671cb02",
-    "immutable-f5028de1-20261020T181603Z",
-    "/opt/re7online/current/api",
-    "/opt/re7online/current/frontend",
-    "fork_mode",
-    "ba18a647d15fdc176ce72a81b229ae1c0a821d69196c989ca78c12aeac65a0e2",
-):
+active_by_path = {p: (ROOT / p).read_text() for p in active_paths}
+active = "\n".join(active_by_path.values())
+
+production = state["production"]
+markers = (
+    production["targetCommit"],
+    production["releaseId"],
+    production["api"]["stablePath"],
+    production["frontend"]["stablePath"],
+    production["frontend"]["buildId"],
+    production["frontend"]["execMode"],
+    production["pm2"]["dumpSha256"],
+)
+for marker in markers:
     require(marker in active, f"active marker {marker}")
+for path in (
+    "docs/saas/CURRENT_STATE.md",
+    "docs/saas/DOCUMENTATION_INDEX.md",
+    "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
+):
+    require(Path(record_value).name in active_by_path[path],
+            f"active record link in {path}")
 for stale in (
     "a correção de contatos está staged, não implantada",
     "correção da listagem de contatos continua pronta, mas ainda não implantada",
     "Release pendente",
+    "LOCAL VALIDATED / NOT DEPLOYED",
+    "DEPLOYMENT PENDING",
 ):
     require(stale not in active, f"stale active claim {stale}")
 require("scripts/deploy-normal-release.sh" in active and "obsoleto" in active,
         "obsolete executor classification")
 require("PR #190" in active and "cluster_mode" in active,
         "obsolete pipeline and frontend mode")
-print("DOCUMENTATION_FRESHNESS_OK: active surfaces describe the deployed immutable release")
+print("DOCUMENTATION_FRESHNESS_OK: active surfaces derive from CURRENT_STATE and the active deployment record")

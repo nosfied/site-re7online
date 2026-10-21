@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 4,
+  "recordType": "IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_VERIFIED",
+  "result": "DEPLOYED_FIXED_CURRENT_RUNTIME_ESTABLISHED_PRODUCTION_HEALTHY",
+  "displayStatus": "DEPLOYED / PRODUCTION HEALTHY",
+  "releaseId": "immutable-c085e53f-20261021T094952Z",
+  "sourceReleaseId": "crm-contacts-cursor-read-model-c085e53f",
+  "canonicalBranch": "review/campaign-recovery-20260926",
+  "baseCommit": "f5028de1e530666623dcc95519e744350671cb02",
+  "targetCommit": "c085e53f752a9b31fa7dd6d03896da07e3f159e3",
+  "reviewedHead": "6c6fd3f920ec8863982fc157c1dd1198740f28a0",
+  "review": {
+    "pullRequests": [192, 193],
+    "approvedCiRun": 39576117351,
+    "approvedCiRunNumber": 547,
+    "approvedCiJobs": 4,
+    "approvedCiResult": "PASS",
+    "mergeAndReviewedHeadTreesEqual": true
+  },
+  "components": ["api", "frontend"],
+  "build": {
+    "location": "OFF_HOST",
+    "platform": "linux",
+    "architecture": "x86_64",
+    "nodeVersion": "v20.20.0",
+    "npmVersion": "10.8.2"
+  },
+  "artifacts": {
+    "releasePath": "/opt/re7online/releases/immutable-c085e53f-20261021T094952Z",
+    "packageSha256": "dcf7de85154ff15208b8c7ac5090979c92d904de025e54af837e830194d108c5",
+    "manifestSha256": "b8d464fa2a914f60828e439a323983760ec5b5aa36be3b1209cd4b8397621786",
+    "indexSha256": "258993af9789f555ae4540ea11784d35fc65f38bebbeca76969238c30e2f8b7b",
+    "apiTreeIndexSha256": "7a3837fb15417dd031fa140287db300a05925550b3e52640e7551f693915eb48",
+    "frontendTreeIndexSha256": "c64806d69adddaaffa8ea7f4286f46ad370683bbc88e69279c576b1b98dfbd40",
+    "api": {
+      "stablePath": "/opt/re7online/current/api",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontend": {
+      "stablePath": "/opt/re7online/current/frontend",
+      "buildId": "nU1xG2ZoXQXicAagrcjtp",
+      "execMode": "fork_mode",
+      "instances": 1,
+      "entrypoint": "node_modules/next/dist/bin/next",
+      "args": ["start", "-p", "3000"]
+    },
+    "worker": {"preserved": true}
+  },
+  "deliveredFunctionality": {
+    "keysetOrder": "updatedAt DESC, createdAt DESC, id ASC",
+    "cursorBinding": ["tenant", "normalizedFilters", "limit", "visibilityPolicy"],
+    "pageEnrichmentRestrictedToSelectedIds": true,
+    "setBasedReadModel": true,
+    "directContactLinkPriority": true,
+    "legacyFallbackOnlyWithoutDirectContact": true,
+    "tenantScopedSets": [
+      "lifecycle",
+      "exclusion",
+      "anonymization",
+      "conversation",
+      "optOut"
+    ],
+    "exactTotalsIncludingEmptyCursorPage": true,
+    "deterministicExternalOrder": true,
+    "safeForwardBackwardHistory": true,
+    "centralizedTokenizedOverlay": true,
+    "statusesIndependentFromContacts": true,
+    "migrationAdded": false,
+    "indexAdded": false
+  },
+  "performanceValidation": {
+    "syntheticPrimaryTenantLeads": 100000,
+    "syntheticSecondaryTenantLeads": 10000,
+    "firstPageMedianSeconds": 1.020,
+    "secondPageMedianSeconds": 1.069,
+    "fullReadModelSeconds": 1.251,
+    "completeMatrixWorstSecondsBelow": 2.6,
+    "baselineTimeoutSeconds": 15,
+    "baselineTimedOutScenarios": 11,
+    "baselineScenarioCount": 13,
+    "pagesVerifiedWithoutDuplicationOrLoss": 20,
+    "secondaryTenantIsolationVerified": true,
+    "additionalIndexRequired": false,
+    "migrationRequired": false
+  },
+  "deploymentOrder": ["api", "frontend"],
+  "verification": {
+    "observedAtUtc": "2026-10-21T10:24:54Z",
+    "pidSemantics": "dated observations; hashes, BUILD_ID and dump are durable identities",
+    "api": {
+      "pid": 1887618,
+      "startTicks": 2236191937,
+      "socketPort": 3001,
+      "socketOwnerPid": 1887618,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [1887618],
+      "samples": 3,
+      "localHealthHttp": 200,
+      "publicHealthHttp": 200
+    },
+    "frontend": {
+      "pid": 1887719,
+      "startTicks": 2236192803,
+      "socketPort": 3000,
+      "socketOwnerPid": 1887719,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [1887719],
+      "samples": 3,
+      "loginLocalHttp": 200,
+      "loginPublicHttp": 200,
+      "inboxHttp": 200,
+      "crmHttp": 200,
+      "assetHttp": 200
+    },
+    "worker": {
+      "pid": 936540,
+      "startTicks": 2193413523,
+      "restartCount": 0,
+      "preserved": true
+    },
+    "smoke": "GET_ONLY",
+    "tenantScopedManualSmoke": "OWNER_ACCEPTED_PASS"
+  },
+  "pm2": {
+    "savedExactlyOnce": true,
+    "saveExitCode": 0,
+    "dumpSha256": "46be827b038f32175036ff547ca1c4ff1914146f6403b76efdebb740a4bf2d66",
+    "dumpMode": "0600",
+    "rollbackSha256": "ba18a647d15fdc176ce72a81b229ae1c0a821d69196c989ca78c12aeac65a0e2"
+  },
+  "rollback": {
+    "previousReleasePreserved": true,
+    "fullDefinitionsCaptured": true,
+    "symlinkStateCaptured": true,
+    "strategy": "RESTORE_PREVIOUS_PM2_DEFINITIONS_AND_SYMLINKS",
+    "automaticRetryForbidden": true
+  },
+  "marker": {
+    "name": "DEPLOYED",
+    "sha256": "9729708a1db558ab16d74eaf63bd88fc4d95dc73a458143c0527d393e3cff937"
+  },
+  "window": {
+    "date": "2026-10-21",
+    "timezone": "America/Fortaleza",
+    "startedAt": "07:11:57",
+    "finishedAt": "07:24:54",
+    "durationSeconds": 777
+  },
+  "windowMutations": {
+    "functionalPostRequests": 0,
+    "imports": 0,
+    "retries": 0,
+    "sqlStatements": 0,
+    "migrations": 0,
+    "campaigns": 0,
+    "messagesSent": 0,
+    "workerChanges": 0
+  },
+  "privateEvidence": {
+    "versioned": false,
+    "containsSecrets": false,
+    "locationPublished": false
+  }
+}

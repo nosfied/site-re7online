@@ -9,21 +9,27 @@
 
 - [Estado legível](CURRENT_STATE.md)
 - [Estado verificável](CURRENT_STATE.json)
-- [Deploy CRM Contacts List Recovery](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json)
+- [Deploy CRM Contacts Cursor/Read Model](releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json)
 - [Topologia de domínios e runtimes](../DEPLOY_TOPOLOGY_RE7.md)
 - [Checklist de release](RELEASE_CHECKLIST.md)
 - [Política de mudanças](CHANGE_POLICY.md)
 
-## Backlog ativo separado
+## Evidência funcional entregue
 
 - [Redesenho set based do read model de contatos](CRM_CONTACTS_READ_MODEL_REDESIGN_2026-10-20.md)
+  — implantado e verificado em 21/10/2026.
 - [Paginação por cursor e overlay de processamento do CRM](backlog/CRM_CONTACTS_CURSOR_PAGINATION_AND_LOADING_OVERLAY_2026-10-20.md)
-  — contexto histórico substituído pelo redesenho set based.
+  — implementação entregue; contexto inicial preservado como histórico.
+
+## Backlog ativo separado
+
 - [Adequar encerramento e CSAT à janela de 24h](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
 - OBS-1 — preparação concluída; rotação exige janela própria.
 
 ## Arquivo histórico
 
+- [Deploy anterior da recuperação da lista](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json)
+  — release substituída, preservada como evidência.
 - [Log Markdown legado](../DEPLOY_LOG.md) — incompleto após abril de 2026; arquivo,
   não instrução operacional.
 - [Manifesto da preparação normal reprovada](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_NORMAL_RELEASE.json)

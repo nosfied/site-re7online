@@ -304,8 +304,14 @@ def verify_frontend_only(record_path: Path, record: dict) -> None:
 
 
 def main() -> None:
-    require(len(sys.argv) == 2, "usage: verify-deployment-record.py RECORD")
-    record_path = (ROOT / sys.argv[1]).resolve()
+    require(len(sys.argv) in (1, 2),
+            "usage: verify-deployment-record.py [RECORD]")
+    if len(sys.argv) == 2:
+        record_value = sys.argv[1]
+    else:
+        state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
+        record_value = state.get("activeDeploymentRecord", "")
+    record_path = (ROOT / record_value).resolve()
     require(record_path.is_relative_to(ROOT) and record_path.is_file(),
             "record outside repository or missing")
     record = read_json(record_path)

@@ -31,7 +31,7 @@ jobs:
       - name: Validate CRM contacts list recovery candidate
         run: python3 scripts/ci/verify-release-manifest.py docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-19.json
       - name: Validate active immutable deployment record
-        run: python3 scripts/ci/verify-deployment-record.py docs/saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json
+        run: python3 scripts/ci/verify-deployment-record.py
       - name: Validate deployment socket ownership relations
         run: python3 scripts/ci/test-verify-deployment-record.py
       - name: Validate active OBS-2 credential rotation record
