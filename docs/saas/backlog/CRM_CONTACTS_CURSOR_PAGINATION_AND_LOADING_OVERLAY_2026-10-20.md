@@ -1,12 +1,16 @@
 # CRM Contacts — paginação por cursor e overlay de processamento
 
-Status: `SUPERSEDED BY SET-BASED READ MODEL / HISTORICAL CONTEXT`
+Status: `DEPLOYED 21/10/2026 / SUPERSEDED BY SET-BASED READ MODEL / HISTORICAL CONTEXT`
 
 O diagnóstico de alta cardinalidade e o redesenho que substitui a recomendação de
 índice isolado estão em
 [CRM_CONTACTS_READ_MODEL_REDESIGN_2026-10-20.md](../CRM_CONTACTS_READ_MODEL_REDESIGN_2026-10-20.md).
 Este arquivo preserva o contexto da primeira implementação de cursor; a recomendação
 de índice abaixo não é uma instrução vigente.
+
+O cursor, o histórico seguro de avanço/retorno, o overlay centralizado por tokens e o
+carregamento independente de status foram implantados com o read model set based no
+target `c085e53f752a9b31fa7dd6d03896da07e3f159e3`, sem migration ou índice novo.
 
 ## Problema confirmado
 

@@ -1,6 +1,6 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / COMPROVADO EM PRODUÇÃO EM 20/10/2026**
+**Status: CANÔNICO / COMPROVADO EM PRODUÇÃO EM 20/10/2026 / RECONFIRMADO EM 21/10/2026**
 
 Esta é a única fonte de instrução operacional vigente para deploy do Converta.
 Runbooks, preparações e executores anteriores permanecem como evidência histórica e
@@ -75,11 +75,11 @@ Os itens abaixo são históricos e **não utilizáveis**:
 - gate que exige socket diretamente no PID PM2 sem considerar launcher/descendência;
 - Deploy V2, controles single-use e preparações de incidente como rota normal.
 
-## Release comprovada em 20/10/2026
+## Release produtiva observada em 21/10/2026
 
 O registro estruturado vigente é
-[`CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json`](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json).
-O target `f5028de1e530666623dcc95519e744350671cb02` foi promovido como
-`immutable-f5028de1-20261020T181603Z`, com API e frontend nos caminhos estáveis,
+[`CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json`](releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json).
+O target `c085e53f752a9b31fa7dd6d03896da07e3f159e3` foi promovido como
+`immutable-c085e53f-20261021T094952Z`, com API e frontend nos caminhos estáveis,
 worker preservado, um único `pm2 save` e resultado
-`DEPLOYED / FIXED CURRENT RUNTIME ESTABLISHED / PRODUCTION HEALTHY`.
+`DEPLOYED / PRODUCTION HEALTHY`.

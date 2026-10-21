@@ -4,7 +4,7 @@ Este arquivo parou em abril de 2026 e é preservado como histórico incompleto. 
 não é a fonte vigente de topologia nem um runbook executável.
 
 O deploy ativo está no registro estruturado
-[`CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json`](saas/releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json).
+[`CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json`](saas/releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json).
 A única instrução operacional vigente é
 [`DEPLOYMENT_OPERATING_MODEL.md`](saas/DEPLOYMENT_OPERATING_MODEL.md).
 

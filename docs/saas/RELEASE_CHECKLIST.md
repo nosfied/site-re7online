@@ -4,7 +4,7 @@
 
 A fonte canônica é [CURRENT_STATE.md](CURRENT_STATE.md), e a única rota de deploy
 vigente é [DEPLOYMENT_OPERATING_MODEL.md](DEPLOYMENT_OPERATING_MODEL.md). A release
-CRM Contacts List Recovery está **DEPLOYED / VERIFIED** desde 20/10/2026.
+CRM Contacts Cursor/Read Model está **DEPLOYED / VERIFIED** desde 21/10/2026.
 
 Build na VPS, checkout produtivo como runtime, `deploy-normal-release.sh`, PR #190,
 Deploy V2 e Next em `cluster_mode` são históricos/obsoletos. Exemplos antigos neste

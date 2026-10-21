@@ -1,6 +1,11 @@
 # CRM Contacts — redesenho set based do read model
 
-Status: `REDESIGN_VALIDATED_READY_FOR_REVIEW / LOCAL ONLY / NOT DEPLOYED`
+Status: `DEPLOYED / VERIFIED` em 21/10/2026 pelo target
+`c085e53f752a9b31fa7dd6d03896da07e3f159e3`. Registro produtivo:
+[CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json](releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json).
+
+Status na criação: `REDESIGN_VALIDATED_READY_FOR_REVIEW / LOCAL ONLY / NOT DEPLOYED`.
+Essa classificação é histórica e foi substituída pelo status produtivo acima.
 
 Base: `7f17da83d8456061d53b7214e3ab80bc68343c00`
 
@@ -63,6 +68,12 @@ vez e 10.000 contatos duas vezes, com 5.591 blocos em cache e 4.374/4.678 blocos
 temporários lidos/escritos. O custo agora soma populações tenant scoped; não multiplica
 Leads por contatos/identidades.
 
+Depois das correções de total em página vazia e ordenação externa, a medição dirigida
+final registrou medianas aproximadas de 1,020 s para a primeira página e 1,069 s para
+a segunda. O read model completo permaneceu em aproximadamente 1,251 s; o pior cenário
+da matriz completa ficou abaixo de 2,6 s. A sequência até a página 20 não apresentou
+duplicação ou perda, e o segundo tenant permaneceu isolado.
+
 Nos filtros G e H, aliases de conversa/evento chegam a Leads por índices e os vínculos
 diretos chegam a identidade/contato por chave primária. Esses lookups têm loops iguais
 ao conjunto previamente filtrado, mas não varrem `Contact` ou
@@ -109,6 +120,7 @@ custo dominante e não integra a implementação. Não há migration.
   `f3a39fc9414748d1035fbd55f2e71885356aefbda10c02b5769315e20d075bbd`.
 - 150 planos JSON preservados localmente.
 
-Os dados são sintéticos e a medição ocorreu em PostgreSQL local descartável. Não houve
-acesso à VPS, deploy, SQL produtivo, migration, POST funcional, importação, campanha
-ou envio.
+Os dados são sintéticos e a medição ocorreu em PostgreSQL local descartável. Na etapa
+de validação não houve acesso à VPS, SQL produtivo, migration, POST funcional,
+importação, campanha ou envio. A implantação posterior foi uma janela separada,
+GET-only, registrada no deployment record de 21/10/2026.
