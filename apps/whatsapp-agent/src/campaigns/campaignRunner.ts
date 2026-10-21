@@ -62,7 +62,7 @@ import {
 const CAMPAIGN_THROTTLE_MS = 1000;
 const CAMPAIGN_SCHEDULE_TICK_MS = 60_000;
 const CAMPAIGN_EXCLUSION_LOOKUP_BATCH_SIZE = 50;
-const CAMPAIGN_BATCH_CHUNK_SIZE = 1000;
+export const CAMPAIGN_BATCH_CHUNK_SIZE = 1000;
 const CAMPAIGN_BATCH_MAX_ANALYZED = 5000;
 const campaignSubmitStartedRequestId = (campaignId: string, position: number) =>
   `campaign-message-submit-started:${campaignId}:${position}`;
@@ -222,6 +222,11 @@ export function startCampaignRun(params: StartCampaignRunParams) {
 export function getRunningCampaignPromiseForTests(campaignId: string) {
   if (process.env.NODE_ENV === "production") return null;
   return runningCampaigns.get(campaignId) ?? null;
+}
+
+export function getRunningCampaignPromisesForTests() {
+  if (process.env.NODE_ENV === "production") return [];
+  return [...runningCampaigns.entries()];
 }
 
 export function setCampaignRunnerSleepForTests(fn: ((ms: number) => Promise<void>) | null) {
@@ -530,10 +535,10 @@ function formatCampaignBatchChunkName(name: string, index: number, count: number
   return `${name} — ${String(index).padStart(width, "0")}/${String(count).padStart(width, "0")}`;
 }
 
-function chunkArray<T>(items: T[], size: number) {
+export function chunkCampaignRecipients<T>(items: T[]) {
   const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
+  for (let index = 0; index < items.length; index += CAMPAIGN_BATCH_CHUNK_SIZE) {
+    chunks.push(items.slice(index, index + CAMPAIGN_BATCH_CHUNK_SIZE));
   }
   return chunks;
 }
@@ -578,6 +583,7 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
     clientId: params.clientId,
     tenant,
   });
+  if (process.env.NODE_ENV !== "production") await batchMaterializationHook?.("after_status_resolution");
   const status = resolvedStatuses.statuses.find((item) => item.id === statusId && item.isActive !== false);
   if (!status) return { ok: false, reason: "crm_status_not_found" };
 
@@ -599,6 +605,7 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
     },
   });
   if (leads.length > CAMPAIGN_BATCH_MAX_ANALYZED) return { ok: false, reason: "dynamic_batch_limit_exceeded" };
+  if (process.env.NODE_ENV !== "production") await batchMaterializationHook?.("before_eligibility");
 
   const recipients: string[] = [];
   const componentsByWaId: Record<string, CampaignTemplateComponents> = {};
@@ -628,6 +635,7 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
     recipients.push(canonical);
     if (components) componentsByWaId[canonical] = components;
   }
+  if (process.env.NODE_ENV !== "production") await batchMaterializationHook?.("after_eligibility");
 
   await persistEvent({
     clientId: params.clientId,
@@ -658,7 +666,14 @@ async function resolveDynamicCampaignRecipientsForBatch(params: {
   return (await readSnapshot()) ?? { ok: false, reason: "batch_snapshot_missing" };
 }
 
-let batchMaterializationHook: ((phase: "after_snapshot" | "before_enqueue") => Promise<void> | void) | null = null;
+type BatchMaterializationPhase =
+  | "after_status_resolution"
+  | "before_eligibility"
+  | "after_eligibility"
+  | "after_snapshot"
+  | "before_enqueue"
+  | "after_enqueue";
+let batchMaterializationHook: ((phase: BatchMaterializationPhase) => Promise<void> | void) | null = null;
 export function setCampaignBatchMaterializationHookForTests(hook: typeof batchMaterializationHook) {
   if (process.env.NODE_ENV === "production") throw new Error("campaign_runner_test_hook_unavailable");
   batchMaterializationHook = hook;
@@ -826,7 +841,7 @@ async function materializeDynamicBatchJob(params: {
   }
 
   if (process.env.NODE_ENV !== "production") await batchMaterializationHook?.("after_snapshot");
-  const recipientChunks = chunkArray(snapshot.recipients, CAMPAIGN_BATCH_CHUNK_SIZE);
+  const recipientChunks = chunkCampaignRecipients(snapshot.recipients);
   await prisma.$transaction(async (tx) => {
     await lockCampaignExecutionBatch(tx, params.job.clientId, batch.id);
     const current = await tx.campaignExecutionBatch.findUniqueOrThrow({ where: { id: batch.id } });
@@ -925,6 +940,7 @@ async function materializeDynamicBatchJob(params: {
         kind: "batch_chunk", eligibleAt: params.now, idempotencyKey: `batch:${batch.id}:chunk:${child.chunkIndex}`,
         metadata: { source: "dynamic_batch_materialized", recipientCount: child.recipientCount } });
     }
+    if (process.env.NODE_ENV !== "production") await batchMaterializationHook?.("after_enqueue");
   });
   const state = await prisma.campaignExecutionBatch.findUniqueOrThrow({ where: { id: batch.id } });
   await finishCampaignExecutionJob({

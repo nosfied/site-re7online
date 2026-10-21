@@ -1,5 +1,6 @@
 // Test fixture: use the real operational opening API with a fresh isolated file.
 // No production bypass or implicit opening exists in campaignOperations.
+import "./campaignProviderTestGuard.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

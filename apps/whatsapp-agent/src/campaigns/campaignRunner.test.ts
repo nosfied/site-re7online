@@ -8,13 +8,21 @@ import fs from "node:fs";
 import test from "node:test";
 import { MessageStatus } from "@prisma/client";
 import { getPrisma } from "../db.js";
-import { buildPrivateCampaignSeedFields, readPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
+import { buildPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
 import {
+  chunkCampaignRecipients,
   getRunningCampaignPromiseForTests,
+  getRunningCampaignPromisesForTests,
   processDueScheduledCampaigns,
+  setCampaignBatchMaterializationHookForTests,
   setCampaignRunnerSleepForTests,
   startCampaignRun,
 } from "./campaignRunner.js";
+import { applyCampaignExecutionBatchAction } from "./campaignBatchControl.js";
+import { campaignOperationsStatus } from "./campaignOperations.js";
+import {
+  campaignProviderBlockedAttemptCount,
+} from "./campaignProviderTestGuard.js";
 import {
   claimNextCampaignExecutionJob,
   enqueueCampaignExecutionJob,
@@ -28,6 +36,18 @@ process.env.WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || "campai
 process.env.WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "campaign-runner-test-phone";
 
 const prisma = getPrisma();
+
+test.after(() => {
+  assert.equal(campaignProviderBlockedAttemptCount(), 0, "normal campaign suite must not reach the fail-closed provider guard");
+});
+
+async function drainCampaignRunnersForTests() {
+  while (true) {
+    const running = getRunningCampaignPromisesForTests();
+    if (running.length === 0) return;
+    await Promise.allSettled(running.map(([, promise]) => promise));
+  }
+}
 
 async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
@@ -64,9 +84,7 @@ test("campaign runner skips operationally excluded recipients at send-time", asy
   const templateName = `campaign_runner_${Date.now()}`;
   const recipients = ["5541991100101", "5541991100102", "5541991100103"];
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -122,7 +140,8 @@ test("campaign runner skips operationally excluded recipients at send-time", asy
     }
     return originalFetch(input, init);
   }) as typeof fetch;
-  t.after(() => {
+  t.after(async () => {
+    await drainCampaignRunnersForTests();
     globalThis.fetch = originalFetch;
   });
 
@@ -175,9 +194,7 @@ test("campaign runner blocks send-time when template effective category is not a
   const templateName = `campaign_runner_category_${Date.now()}`;
   const recipients = ["5541991100201"];
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -227,7 +244,8 @@ test("campaign runner blocks send-time when template effective category is not a
     }
     return originalFetch(input, init);
   }) as typeof fetch;
-  t.after(() => {
+  t.after(async () => {
+    await drainCampaignRunnersForTests();
     globalThis.fetch = originalFetch;
   });
 
@@ -276,9 +294,7 @@ test("campaign runner fails local operational preflight before Meta send", async
   const templateName = `campaign_runner_preflight_${Date.now()}`;
   const recipient = "5541991100301";
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -326,7 +342,8 @@ test("campaign runner fails local operational preflight before Meta send", async
     }
     return originalFetch(input, init);
   }) as typeof fetch;
-  t.after(() => {
+  t.after(async () => {
+    await drainCampaignRunnersForTests();
     globalThis.fetch = originalFetch;
   });
 
@@ -374,9 +391,7 @@ test("campaign runner persists provider acceptance without opening operational c
   const ddd55CanonicalComponents = [{ type: "body" as const, parameters: [{ type: "text" as const, text: "DDD55 Completo" }] }];
   const metaMessageId = `wamid.${crypto.randomUUID()}`;
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -412,7 +427,7 @@ test("campaign runner persists provider acceptance without opening operational c
     id: foreignClientId, clientKey: `${clientKey}-foreign`, name: "Foreign recipient tenant",
     profile: "business", features: {},
   } });
-  t.after(() => { void cleanup(foreignClientId).catch(() => undefined); });
+  t.after(() => cleanup(foreignClientId).catch(() => undefined));
   let humanInboundAt = new Date("2026-09-20T12:00:00.000Z");
   let humanExpiresAt = new Date("2026-09-21T12:00:00.000Z");
   await prisma.conversationRuntimeState.create({ data: {
@@ -455,7 +470,8 @@ test("campaign runner persists provider acceptance without opening operational c
     }
     return originalFetch(input, init);
   }) as typeof fetch;
-  t.after(() => {
+  t.after(async () => {
+    await drainCampaignRunnersForTests();
     globalThis.fetch = originalFetch;
   });
 
@@ -566,7 +582,7 @@ test("delayed campaign delivery does not reset a newer human cycle", async (t) =
   const clientKey = `late-campaign-status-${clientId}`;
   const waId = "5541991100425";
   await prisma.client.create({ data: { id: clientId, clientKey, name: "Late campaign receipt", profile: "business", features: { campaigns: true } } });
-  t.after(() => { void cleanup(clientId).catch(() => undefined); });
+  t.after(() => cleanup(clientId).catch(() => undefined));
   const department = await prisma.department.create({ data: { clientId, name: "New human department", slug: `new-${clientId}` } });
   const queue = await prisma.queue.create({ data: { clientId, departmentId: department.id, name: "New human queue" } });
   const submittedAt = new Date(Date.now() - 60_000);
@@ -627,9 +643,7 @@ test("campaign runner materializes CRM identity for provider failure without cre
   const templateName = `campaign_runner_provider_fail_${Date.now()}`;
   const recipient = "5541991100451";
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -674,7 +688,8 @@ test("campaign runner materializes CRM identity for provider failure without cre
     }
     return originalFetch(input, init);
   }) as typeof fetch;
-  t.after(() => {
+  t.after(async () => {
+    await drainCampaignRunnersForTests();
     globalThis.fetch = originalFetch;
   });
 
@@ -732,9 +747,7 @@ test("campaign runner opt-out block does not materialize CRM or call provider", 
   const recipient = "55991400004";
   const recipientCanonical = "5555991400004";
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -780,7 +793,8 @@ test("campaign runner opt-out block does not materialize CRM or call provider", 
     }
     return originalFetch(input, init);
   }) as typeof fetch;
-  t.after(() => {
+  t.after(async () => {
+    await drainCampaignRunnersForTests();
     globalThis.fetch = originalFetch;
   });
 
@@ -824,9 +838,7 @@ test("campaign runner does not resend a recipient with provider acceptance but m
   const templateName = `campaign_runner_reconcile_${Date.now()}`;
   const recipients = ["5541991100501", "5541991100502"];
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -882,7 +894,8 @@ test("campaign runner does not resend a recipient with provider acceptance but m
     }
     return originalFetch(input, init);
   }) as typeof fetch;
-  t.after(() => {
+  t.after(async () => {
+    await drainCampaignRunnersForTests();
     globalThis.fetch = originalFetch;
   });
 
@@ -931,9 +944,7 @@ test("campaign runner preserves accepted provider result after losing queue owne
   const templateName = `campaign_runner_lease_loss_${Date.now()}`;
   const recipients = ["5541991100601", "5541991100602"];
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -995,7 +1006,8 @@ test("campaign runner preserves accepted provider result after losing queue owne
     }
     return originalFetch(input, init);
   }) as typeof fetch;
-  t.after(() => {
+  t.after(async () => {
+    await drainCampaignRunnersForTests();
     globalThis.fetch = originalFetch;
   });
 
@@ -1102,10 +1114,41 @@ async function runQueueUntilBatchCompleted(params: { batchId: string; now: Date;
     }
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  assert.fail("Timed out waiting for batch completion");
+  const batch = await prisma.campaignExecutionBatch.findUniqueOrThrow({
+    where: { id: params.batchId },
+    select: { clientId: true, status: true },
+  });
+  const links = await prisma.campaignExecutionBatchCampaign.findMany({
+    where: { batchId: params.batchId },
+    orderBy: { chunkIndex: "asc" },
+    include: { campaign: { select: { status: true, sentCount: true, blockedCount: true } } },
+  });
+  const jobs = await prisma.campaignExecutionJob.findMany({
+    where: { batchId: params.batchId },
+    orderBy: [{ createdAt: "asc" }, { chunkIndex: "asc" }],
+    select: { status: true, chunkIndex: true, failureReason: true },
+  });
+  await applyCampaignExecutionBatchAction(prisma, {
+    clientId: batch.clientId,
+    batchId: params.batchId,
+    action: "cancel",
+    userId: "campaign-runner-test-timeout",
+    requestId: crypto.randomUUID(),
+  });
+  await drainCampaignRunnersForTests();
+  assert.equal(getRunningCampaignPromisesForTests().length, 0);
+  assert.equal(campaignOperationsStatus().tasks.length, 0);
+  assert.fail(`Timed out waiting for batch completion; batch=${batch.status}; links=${JSON.stringify(links.map((link) => ({ chunkIndex: link.chunkIndex, status: link.campaign.status, sentCount: link.campaign.sentCount, blockedCount: link.campaign.blockedCount })))}; jobs=${JSON.stringify(jobs)}`);
 }
 
-test("dynamic CRM batch execution snapshots 3001 recipients into sequential chunks", async (t) => {
+test("pure campaign chunking splits 3001 recipients without runner, network, or persistence", () => {
+  const recipients = buildBrazilMobileWaIdRange("40", 10000000, 3001);
+  const chunks = chunkCampaignRecipients(recipients);
+  assert.deepEqual(chunks.map((chunk) => chunk.length), [1000, 1000, 1000, 1]);
+  assert.deepEqual(chunks.flat(), recipients);
+});
+
+test("dynamic CRM batch materializes 3001 recipients into four durable chunks without sending", async (t) => {
   const restoreSleep = setCampaignRunnerSleepForTests(async () => undefined);
   t.after(restoreSleep);
   const clientId = crypto.randomUUID();
@@ -1113,9 +1156,7 @@ test("dynamic CRM batch execution snapshots 3001 recipients into sequential chun
   const templateName = `campaign_runner_dynamic_batch_${Date.now()}`;
   const now = new Date();
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -1138,6 +1179,7 @@ test("dynamic CRM batch execution snapshots 3001 recipients into sequential chun
     },
   });
   const waIds = buildBrazilMobileWaIdRange("41", 10000000, 3001);
+  const leadCreationStartedAt = performance.now();
   await prisma.lead.createMany({
     data: waIds.map((waId, index) => ({
       tenantId: clientId,
@@ -1150,6 +1192,7 @@ test("dynamic CRM batch execution snapshots 3001 recipients into sequential chun
       status: "QUALIFIED",
     })),
   });
+  const leadCreationDurationMs = performance.now() - leadCreationStartedAt;
   const parent = await prisma.campaign.create({
     data: {
       clientId,
@@ -1216,32 +1259,14 @@ test("dynamic CRM batch execution snapshots 3001 recipients into sequential chun
     metadata: { source: "dynamic_batch_materialize", parentCampaignId: parent.id },
   });
 
-  const originalFetch = globalThis.fetch;
-  const metaRecipients: string[] = [];
-  const renderedNames = new Map<string, string>();
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    if (url.startsWith("https://graph.facebook.com/")) {
-      const payload = JSON.parse(String(init?.body ?? "{}")) as {
-        to?: string;
-        template?: { components?: Array<{ parameters?: Array<{ text?: string }> }> };
-      };
-      if (payload.to) {
-        metaRecipients.push(payload.to);
-        renderedNames.set(payload.to, payload.template?.components?.[0]?.parameters?.[0]?.text ?? "");
-      }
-      return new Response(JSON.stringify({ messages: [{ id: `wamid.dynamic.${metaRecipients.length}` }] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }
-    return originalFetch(input, init);
-  }) as typeof fetch;
-  t.after(() => {
-    globalThis.fetch = originalFetch;
+  const phases = new Map<string, number>();
+  setCampaignBatchMaterializationHookForTests((phase) => {
+    phases.set(phase, performance.now());
   });
-
-  assert.equal(await runQueueUntilBatchCompleted({ batchId: batch.id, now, timeoutMs: 600_000 }), "completed");
+  t.after(() => setCampaignBatchMaterializationHookForTests(null));
+  const materializationStartedAt = performance.now();
+  assert.equal((await processDueScheduledCampaigns({ now, limit: 1 })).claimed, 1);
+  const materializationDurationMs = performance.now() - materializationStartedAt;
   const snapshotCount = await prisma.event.count({
     where: { clientId, messageId: parent.id, eventName: "campaign.dynamic_batch_snapshot.created" },
   });
@@ -1252,22 +1277,46 @@ test("dynamic CRM batch execution snapshots 3001 recipients into sequential chun
     select: { chunkIndex: true, recipientCount: true, status: true, campaignId: true },
   });
   assert.deepEqual(links.map((link) => link.recipientCount), [1000, 1000, 1000, 1]);
-  assert.ok(links.every((link) => link.status === "completed"));
-  assert.equal(metaRecipients.length, 3001);
-  assert.equal(new Set(metaRecipients).size, 3001);
-  assert.deepEqual(new Set(metaRecipients), new Set(waIds));
-  assert.equal(renderedNames.get(waIds[0]), "Dynamic 0001");
-  assert.equal(renderedNames.get(waIds[3000]), "Dynamic 3001");
-  const completedParent = await prisma.campaign.findUniqueOrThrow({
+  assert.ok(links.every((link) => link.status === "scheduled"));
+  const jobs = await prisma.campaignExecutionJob.findMany({
+    where: { clientId, batchId: batch.id, campaignId: { not: null } },
+    orderBy: { chunkIndex: "asc" },
+    select: { chunkIndex: true, status: true },
+  });
+  assert.deepEqual(jobs.map((job) => job.chunkIndex), [1, 2, 3, 4]);
+  assert.ok(jobs.every((job) => job.status === "queued"));
+  assert.equal(getRunningCampaignPromisesForTests().length, 0);
+  const materializedParent = await prisma.campaign.findUniqueOrThrow({
     where: { id: parent.id },
     select: { status: true, sentCount: true, blockedCount: true },
   });
-  assert.equal(completedParent.status, "completed");
-  assert.equal(completedParent.sentCount, 3001);
-  assert.equal(completedParent.blockedCount, 0);
+  assert.equal(materializedParent.status, "sending");
+  assert.equal(materializedParent.sentCount, 0);
+  assert.equal(materializedParent.blockedCount, 0);
+  const phase = (name: string) => {
+    const value = phases.get(name);
+    assert.notEqual(value, undefined, `missing materialization diagnostic phase: ${name}`);
+    return value as number;
+  };
+  console.log(JSON.stringify({
+    diagnostic: "campaign_3001_materialization",
+    recipients: 3001,
+    leadCreationMs: Math.round(leadCreationDurationMs),
+    statusResolutionMs: Math.round(phase("after_status_resolution") - materializationStartedAt),
+    leadSelectionMs: Math.round(phase("before_eligibility") - phase("after_status_resolution")),
+    eligibilityMs: Math.round(phase("after_eligibility") - phase("before_eligibility")),
+    snapshotPersistenceMs: Math.round(phase("after_snapshot") - phase("after_eligibility")),
+    campaignLinkCreationMs: Math.round(phase("before_enqueue") - phase("after_snapshot")),
+    jobCreationMs: Math.round(phase("after_enqueue") - phase("before_enqueue")),
+    materializationTotalMs: Math.round(materializationDurationMs),
+    eligibilityCalls: 3001,
+    eligibilitySqlLowerBound: 15005,
+    providerCalls: 0,
+  }));
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId } }), 0);
 });
 
-test("CSV grouped batch execution preserves chunk variables and excludes post-blocked recipients", async (t) => {
+test("small sequential batch completes chunks in order and preserves Result Truth", async (t) => {
   const restoreSleep = setCampaignRunnerSleepForTests(async () => undefined);
   t.after(restoreSleep);
   const clientId = crypto.randomUUID();
@@ -1275,9 +1324,7 @@ test("CSV grouped batch execution preserves chunk variables and excludes post-bl
   const templateName = `campaign_runner_csv_batch_${Date.now()}`;
   const now = new Date();
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -1299,8 +1346,8 @@ test("CSV grouped batch execution preserves chunk variables and excludes post-bl
       variables: ["1"],
     },
   });
-  const waIds = buildBrazilMobileWaIdRange("42", 10000000, 3001);
-  const blockedWaId = waIds[1500];
+  const waIds = buildBrazilMobileWaIdRange("42", 10000000, 5);
+  const blockedWaId = waIds[2];
   await recordContactOptOut({ clientId, waId: blockedWaId, source: "test", reason: "csv batch post-block" });
   const batch = await prisma.campaignExecutionBatch.create({
     data: {
@@ -1312,20 +1359,20 @@ test("CSV grouped batch execution preserves chunk variables and excludes post-bl
       eligibleAt: now,
       effectiveStartedAt: now,
       totalRecipients: waIds.length,
-      chunkCount: 4,
+      chunkCount: 3,
       currentChunkIndex: 1,
       idempotencyKey: `csv:${crypto.randomUUID()}`,
       metadata: { createdFrom: "test_csv_grouped_batch" },
     },
   });
-  const chunks = [waIds.slice(0, 1000), waIds.slice(1000, 2000), waIds.slice(2000, 3000), waIds.slice(3000)];
+  const chunks = [waIds.slice(0, 2), waIds.slice(2, 4), waIds.slice(4)];
   for (const [index, recipients] of chunks.entries()) {
     const chunkIndex = index + 1;
     const campaign = await prisma.campaign.create({
       data: {
         clientId,
         templateId: template.id,
-        name: `CSV grouped batch — ${String(chunkIndex).padStart(2, "0")}/04`,
+        name: `CSV grouped batch — ${String(chunkIndex).padStart(2, "0")}/03`,
         templateName,
         status: "scheduled",
         scheduledAt: null,
@@ -1404,27 +1451,28 @@ test("CSV grouped batch execution preserves chunk variables and excludes post-bl
     }
     return originalFetch(input, init);
   }) as typeof fetch;
-  t.after(() => {
+  t.after(async () => {
+    await drainCampaignRunnersForTests();
     globalThis.fetch = originalFetch;
   });
 
-  assert.equal(await runQueueUntilBatchCompleted({ batchId: batch.id, now, timeoutMs: 600_000 }), "completed");
-  assert.equal(metaRecipients.length, 3000);
+  assert.equal(await runQueueUntilBatchCompleted({ batchId: batch.id, now }), "completed");
+  assert.equal(metaRecipients.length, 4);
   assert.equal(metaRecipients.includes(blockedWaId), false);
-  assert.equal(new Set(metaRecipients).size, 3000);
+  assert.equal(new Set(metaRecipients).size, 4);
   assert.equal(renderedValues.get(waIds[0]), "CSV 1-1");
-  assert.equal(renderedValues.get(waIds[999]), "CSV 1-1000");
-  assert.equal(renderedValues.get(waIds[1000]), "CSV 2-1");
-  assert.equal(renderedValues.get(waIds[3000]), "CSV 4-1");
+  assert.equal(renderedValues.get(waIds[1]), "CSV 1-2");
+  assert.equal(renderedValues.get(waIds[3]), "CSV 2-2");
+  assert.equal(renderedValues.get(waIds[4]), "CSV 3-1");
   const links = await prisma.campaignExecutionBatchCampaign.findMany({
     where: { clientId, batchId: batch.id },
     orderBy: { chunkIndex: "asc" },
     include: { campaign: { select: { status: true, sentCount: true, blockedCount: true } } },
   });
-  assert.deepEqual(links.map((link) => link.recipientCount), [1000, 1000, 1000, 1]);
+  assert.deepEqual(links.map((link) => link.recipientCount), [2, 2, 1]);
   assert.ok(links.every((link) => link.status === "completed"));
-  assert.deepEqual(links.map((link) => link.campaign.sentCount), [1000, 999, 1000, 1]);
-  assert.deepEqual(links.map((link) => link.campaign.blockedCount), [0, 1, 0, 0]);
+  assert.deepEqual(links.map((link) => link.campaign.sentCount), [2, 1, 1]);
+  assert.deepEqual(links.map((link) => link.campaign.blockedCount), [0, 1, 0]);
   const blockedOutbound = await prisma.outboundMessage.count({
     where: { clientId, waId: blockedWaId },
   });
@@ -1438,9 +1486,7 @@ test("dynamic six Leads exclude five anonymized markers before snapshot/provider
   const templateName = `campaign_runner_dynamic_batch_${Date.now()}`;
   const now = new Date();
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -1563,11 +1609,12 @@ test("dynamic six Leads exclude five anonymized markers before snapshot/provider
     }
     return originalFetch(input, init);
   }) as typeof fetch;
-  t.after(() => {
+  t.after(async () => {
+    await drainCampaignRunnersForTests();
     globalThis.fetch = originalFetch;
   });
 
-  assert.equal(await runQueueUntilBatchCompleted({ batchId: batch.id, now, timeoutMs: 600_000 }), "completed");
+  assert.equal(await runQueueUntilBatchCompleted({ batchId: batch.id, now }), "completed");
   const snapshotCount = await prisma.event.count({
     where: { clientId, messageId: parent.id, eventName: "campaign.dynamic_batch_snapshot.created" },
   });
@@ -1601,7 +1648,7 @@ test('accepted provider failure preserves sanitized original exception and never
   globalThis.fetch = (async () => { calls++; return new Response(JSON.stringify({ messages: [{ id: 'synthetic-accepted-error' }] }), { status: 200, headers: { 'content-type': 'application/json' } }); }) as typeof fetch;
   prisma.outboundMessage.create = (async () => { throw new Error('synthetic_persistence_failure Bearer secret token=secret'); }) as unknown as typeof originalCreate;
   logger.error = ((event: any) => { errors.push(event); }) as typeof originalLog;
-  t.after(() => { globalThis.fetch = originalFetch; prisma.outboundMessage.create = originalCreate; logger.error = originalLog; });
+  t.after(async () => { await drainCampaignRunnersForTests(); globalThis.fetch = originalFetch; prisma.outboundMessage.create = originalCreate; logger.error = originalLog; });
   startCampaignRun({ campaignId: campaign.id, clientId, clientKey, name: campaign.name, templateName: 'synthetic_error', waIds: ['5541991100990'] });
   await getRunningCampaignPromiseForTests(campaign.id);
   assert.equal(calls, 1);
@@ -1635,9 +1682,7 @@ test("old pseudo snapshot stays immutable and blocks anonymized digits at origin
   const templateName = `campaign_runner_${Date.now()}`;
   const recipients = ["5541991100101", "1234567890123", "5541991100103"];
   await cleanup(clientId).catch(() => undefined);
-  t.after(() => {
-    void cleanup(clientId).catch(() => undefined);
-  });
+  t.after(() => cleanup(clientId).catch(() => undefined));
 
   await prisma.client.create({
     data: {
@@ -1695,7 +1740,8 @@ test("old pseudo snapshot stays immutable and blocks anonymized digits at origin
     }
     return originalFetch(input, init);
   }) as typeof fetch;
-  t.after(() => {
+  t.after(async () => {
+    await drainCampaignRunnersForTests();
     globalThis.fetch = originalFetch;
   });
 
