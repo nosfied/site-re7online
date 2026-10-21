@@ -51,4 +51,10 @@ test("interactive CRM listing selects by keyset and enriches only selected page 
   assert.ok(source.includes("contextHash: crmContactsCursorContextHash(params)"));
   assert.ok(source.includes("normalizePage(params.query.page) !== Number(parsed.page) + 1"));
   assert.ok(source.includes("countCrmContactsScope"));
+  assert.ok(source.includes("base_leads AS MATERIALIZED"));
+  assert.ok(source.includes("contact_alias_facts AS MATERIALIZED"));
+  assert.ok(source.includes("eligible_leads AS MATERIALIZED"));
+  assert.ok(source.includes('a1.alias = b."waId" AND b."directContactId" IS NULL'));
+  assert.ok(!source.includes('SELECT c."lifecycle"::text FROM "Contact" c'));
+  assert.ok(!source.includes("const conversationExists = Prisma.sql`EXISTS"));
 });

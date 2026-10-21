@@ -157,10 +157,21 @@ type CrmContactsCursor = {
   page: number;
 };
 
-type CrmContactPageRow = {
+type CrmContactCursorRow = {
   id: string;
   updatedAt: Date;
   createdAt: Date;
+};
+
+type CrmContactPageRow = CrmContactCursorRow & {
+  scopeTotal: bigint | number;
+};
+
+type CrmContactPageQueryRow = {
+  id: string | null;
+  updatedAt: Date | null;
+  createdAt: Date | null;
+  scopeTotal: bigint | number;
 };
 
 export class CrmContactsCursorError extends Error {
@@ -297,7 +308,7 @@ function crmContactsCursorContextHash(params: {
     .digest("hex");
 }
 
-function encodeCrmContactsCursor(row: CrmContactPageRow, params: {
+function encodeCrmContactsCursor(row: CrmContactCursorRow, params: {
   clientId: string;
   query: CrmContactsQuery;
   limit: number;
@@ -702,30 +713,22 @@ function crmSqlAnonymized(value: Prisma.Sql) {
   )`;
 }
 
-function crmLeadIdentityMatch(alias: Prisma.Sql) {
-  return Prisma.sql`(
-    ${alias}."waId" IN (l."waId", l."waIdCanonical", l."phone") OR
-    ${alias}."externalUserRef" IN (l."waId", l."waIdCanonical", l."phone") OR
-    ${alias}."legacyWaId" IN (l."waId", l."waIdCanonical", l."phone")
-  )`;
-}
-
 function escapeCrmLikeLiteral(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
-function buildCrmContactsSqlWhere(params: {
+function buildCrmContactsSqlScope(params: {
   clientId: string;
   query: CrmContactsQuery;
   includeAnonymized: boolean;
 }) {
   const filters = normalizedCursorFilters(params.query);
   const digits = normalizeWaIdDigits(filters.q ?? "");
-  const conditions: Prisma.Sql[] = [Prisma.sql`l."tenantId" = ${params.clientId}::uuid`];
-  if (filters.status) conditions.push(Prisma.sql`l."status" = ${filters.status}`);
-  if (filters.channel) conditions.push(Prisma.sql`lower(coalesce(l."channel", '')) = ${filters.channel}`);
-  if (filters.updatedFrom) conditions.push(Prisma.sql`l."updatedAt" >= ${new Date(filters.updatedFrom)}`);
-  if (filters.updatedTo) conditions.push(Prisma.sql`l."updatedAt" <= ${new Date(filters.updatedTo)}`);
+  const leadConditions: Prisma.Sql[] = [Prisma.sql`l."tenantId" = ${params.clientId}::uuid`];
+  if (filters.status) leadConditions.push(Prisma.sql`l."status" = ${filters.status}`);
+  if (filters.channel) leadConditions.push(Prisma.sql`lower(coalesce(l."channel", '')) = ${filters.channel}`);
+  if (filters.updatedFrom) leadConditions.push(Prisma.sql`l."updatedAt" >= ${new Date(filters.updatedFrom)}`);
+  if (filters.updatedTo) leadConditions.push(Prisma.sql`l."updatedAt" <= ${new Date(filters.updatedTo)}`);
   if (filters.q) {
     const pattern = `%${escapeCrmLikeLiteral(filters.q)}%`;
     const escapeCharacter = "\\";
@@ -744,65 +747,185 @@ function buildCrmContactsSqlWhere(params: {
         Prisma.sql`regexp_replace(coalesce(l."waIdCanonical", ''), '[^0-9]', '', 'g') LIKE ${digitPattern}`,
       );
     }
-    conditions.push(Prisma.sql`(${Prisma.join(search, " OR ")})`);
+    leadConditions.push(Prisma.sql`(${Prisma.join(search, " OR ")})`);
   }
 
-  const conversationExists = Prisma.sql`EXISTS (
-    SELECT 1 FROM "Conversation" cv
-    WHERE cv."clientId" = l."tenantId"
-      AND cv."deletedAt" IS NULL AND cv."anonymizedAt" IS NULL
-      AND (cv."waId" IN (l."waId", l."waIdCanonical", l."phone") OR
-           cv."waIdCanonical" IN (l."waId", l."waIdCanonical", l."phone"))
-  )`;
-  if (filters.hasConversation !== null) {
-    conditions.push(filters.hasConversation ? conversationExists : Prisma.sql`NOT (${conversationExists})`);
-  }
-
-  const latestOptOut = Prisma.sql`(
-    SELECT e."eventName" FROM "Event" e
-    WHERE e."clientId" = l."tenantId"
-      AND e."eventName" IN (${CONTACT_OPT_OUT_RECORDED_EVENT}, ${CONTACT_OPT_OUT_REVOKED_EVENT})
-      AND (e."waIdCanonical" IN (l."waId", l."waIdCanonical", l."phone") OR
-           e."waId" IN (l."waId", l."waIdCanonical", l."phone"))
-    ORDER BY e."createdAt" DESC, e."id" DESC LIMIT 1
-  )`;
-  if (filters.optOut !== null) {
-    conditions.push(filters.optOut
-      ? Prisma.sql`${latestOptOut} = ${CONTACT_OPT_OUT_RECORDED_EVENT}`
-      : Prisma.sql`coalesce(${latestOptOut}, '') <> ${CONTACT_OPT_OUT_RECORDED_EVENT}`);
-  }
-
-  const matchingContact = crmLeadIdentityMatch(Prisma.raw("c"));
-  const selectedContactLifecycle = Prisma.sql`coalesce((
-    SELECT c."lifecycle"::text FROM "Contact" c
-    WHERE c."clientId" = l."tenantId" AND
-      (c."id" = ci."contactId" OR ${matchingContact})
-    ORDER BY (c."id" = ci."contactId") DESC, c."updatedAt" DESC, c."id" ASC LIMIT 1
-  ), 'ACTIVE')`;
-  conditions.push(Prisma.sql`${selectedContactLifecycle} = 'ACTIVE'`);
-  const excluded = Prisma.sql`EXISTS (
-    SELECT 1 FROM "Contact" c
-    WHERE c."clientId" = l."tenantId" AND c."operationallyExcludedAt" IS NOT NULL
-      AND (c."id" = ci."contactId" OR ${matchingContact})
-  )`;
-  conditions.push(filters.operationalStatus === "excluded" ? excluded : Prisma.sql`NOT (${excluded})`);
-
+  const eligibilityConditions: Prisma.Sql[] = [
+    Prisma.sql`coalesce(cf.lifecycle, 'ACTIVE') = 'ACTIVE'`,
+    filters.operationalStatus === "excluded"
+      ? Prisma.sql`coalesce(cf.excluded, false)`
+      : Prisma.sql`NOT coalesce(cf.excluded, false)`,
+  ];
   if (!params.includeAnonymized) {
     const leadMarkers = ["waId", "waIdCanonical", "externalUserHash", "name", "phone"]
-      .map((field) => crmSqlAnonymized(Prisma.raw(`l."${field}"`)));
-    const identityMarkers = ["displayName", "externalUserHash"]
-      .map((field) => crmSqlAnonymized(Prisma.raw(`ci."${field}"`)));
-    const contactMarkers = ["waId", "name", "externalUserHash"]
-      .map((field) => crmSqlAnonymized(Prisma.raw(`c."${field}"`)));
-    conditions.push(Prisma.sql`NOT (${Prisma.join(leadMarkers, " OR ")})`);
-    conditions.push(Prisma.sql`NOT (${Prisma.join(identityMarkers, " OR ")})`);
-    conditions.push(Prisma.sql`NOT EXISTS (
-      SELECT 1 FROM "Contact" c
-      WHERE c."clientId" = l."tenantId" AND (c."id" = ci."contactId" OR ${matchingContact})
-        AND (${Prisma.join(contactMarkers, " OR ")})
-    )`);
+      .map((field) => crmSqlAnonymized(Prisma.raw(`b."${field}"`)));
+    const identityMarkers = ["identityDisplayName", "identityExternalUserHash"]
+      .map((field) => crmSqlAnonymized(Prisma.raw(`b."${field}"`)));
+    eligibilityConditions.push(Prisma.sql`NOT (${Prisma.join(leadMarkers, " OR ")})`);
+    eligibilityConditions.push(Prisma.sql`NOT (${Prisma.join(identityMarkers, " OR ")})`);
+    eligibilityConditions.push(Prisma.sql`NOT coalesce(cf.anonymized, false)`);
   }
-  return Prisma.sql`${Prisma.join(conditions, " AND ")}`;
+
+  const preScopeCtes: Prisma.Sql[] = [];
+  if (filters.hasConversation !== null) {
+    preScopeCtes.push(Prisma.sql`conversation_aliases AS MATERIALIZED (
+      SELECT cv."waId" AS alias
+      FROM "Conversation" cv
+      WHERE cv."clientId" = ${params.clientId}::uuid
+        AND cv."deletedAt" IS NULL AND cv."anonymizedAt" IS NULL
+      UNION
+      SELECT cv."waIdCanonical"
+      FROM "Conversation" cv
+      WHERE cv."clientId" = ${params.clientId}::uuid
+        AND cv."deletedAt" IS NULL AND cv."anonymizedAt" IS NULL
+        AND cv."waIdCanonical" IS NOT NULL
+    ),
+    lead_conversation_matches AS MATERIALIZED (
+      SELECT lead.id AS "leadId" FROM conversation_aliases aliases
+      JOIN "Lead" lead ON lead."tenantId" = ${params.clientId}::uuid AND lead."waId" = aliases.alias
+      UNION ALL
+      SELECT lead.id FROM conversation_aliases aliases
+      JOIN "Lead" lead ON lead."tenantId" = ${params.clientId}::uuid AND lead."waIdCanonical" = aliases.alias
+      UNION ALL
+      SELECT lead.id FROM conversation_aliases aliases
+      JOIN "Lead" lead ON lead."tenantId" = ${params.clientId}::uuid AND lead.phone = aliases.alias
+    ),
+    lead_conversations AS MATERIALIZED (
+      SELECT DISTINCT matches."leadId" FROM lead_conversation_matches matches
+    )`);
+    leadConditions.push(filters.hasConversation
+      ? Prisma.sql`l.id IN (SELECT conversations."leadId" FROM lead_conversations conversations)`
+      : Prisma.sql`l.id NOT IN (SELECT conversations."leadId" FROM lead_conversations conversations)`);
+  }
+
+  if (filters.optOut !== null) {
+    preScopeCtes.push(Prisma.sql`opt_out_alias_rows AS MATERIALIZED (
+      SELECT e.id, e."eventName", e."createdAt", e."waId" AS alias
+      FROM "Event" e
+      WHERE e."clientId" = ${params.clientId}::uuid
+        AND e."eventName" IN (${CONTACT_OPT_OUT_RECORDED_EVENT}, ${CONTACT_OPT_OUT_REVOKED_EVENT})
+        AND e."waId" IS NOT NULL
+      UNION ALL
+      SELECT e.id, e."eventName", e."createdAt", e."waIdCanonical"
+      FROM "Event" e
+      WHERE e."clientId" = ${params.clientId}::uuid
+        AND e."eventName" IN (${CONTACT_OPT_OUT_RECORDED_EVENT}, ${CONTACT_OPT_OUT_REVOKED_EVENT})
+        AND e."waIdCanonical" IS NOT NULL AND e."waIdCanonical" IS DISTINCT FROM e."waId"
+    ),
+    latest_opt_out_by_alias AS MATERIALIZED (
+      SELECT DISTINCT ON (rows.alias) rows.alias, rows.id, rows."eventName", rows."createdAt"
+      FROM opt_out_alias_rows rows
+      ORDER BY rows.alias, rows."createdAt" DESC, rows.id DESC
+    ),
+    lead_opt_out_matches AS MATERIALIZED (
+      SELECT lead.id AS "leadId", events.id, events."eventName", events."createdAt"
+      FROM latest_opt_out_by_alias events
+      JOIN "Lead" lead ON lead."tenantId" = ${params.clientId}::uuid AND lead."waId" = events.alias
+      UNION ALL
+      SELECT lead.id, events.id, events."eventName", events."createdAt"
+      FROM latest_opt_out_by_alias events
+      JOIN "Lead" lead ON lead."tenantId" = ${params.clientId}::uuid AND lead."waIdCanonical" = events.alias
+      UNION ALL
+      SELECT lead.id, events.id, events."eventName", events."createdAt"
+      FROM latest_opt_out_by_alias events
+      JOIN "Lead" lead ON lead."tenantId" = ${params.clientId}::uuid AND lead.phone = events.alias
+    ),
+    lead_opt_out AS MATERIALIZED (
+      SELECT DISTINCT ON (matches."leadId") matches."leadId", matches."eventName"
+      FROM lead_opt_out_matches matches
+      ORDER BY matches."leadId", matches."createdAt" DESC, matches.id DESC
+    ),
+    active_opt_out_leads AS MATERIALIZED (
+      SELECT optout."leadId" FROM lead_opt_out optout
+      WHERE optout."eventName" = ${CONTACT_OPT_OUT_RECORDED_EVENT}
+    )`);
+    leadConditions.push(filters.optOut
+      ? Prisma.sql`l.id IN (SELECT optout."leadId" FROM active_opt_out_leads optout)`
+      : Prisma.sql`l.id NOT IN (SELECT optout."leadId" FROM active_opt_out_leads optout)`);
+  }
+
+  const preScopePrefix = preScopeCtes.length > 0
+    ? Prisma.sql`${Prisma.join(preScopeCtes, ",")},`
+    : Prisma.empty;
+
+  return Prisma.sql`WITH
+    ${preScopePrefix}
+    base_leads AS MATERIALIZED (
+      SELECT l.*,
+        ci."contactId" AS "identityContactId",
+        ci."displayName" AS "identityDisplayName",
+        ci."externalUserHash" AS "identityExternalUserHash",
+        dc.id AS "directContactId",
+        dc.lifecycle::text AS "directLifecycle",
+        dc."updatedAt" AS "directContactUpdatedAt",
+        dc."operationallyExcludedAt" IS NOT NULL AS "directExcluded",
+        (${crmSqlAnonymized(Prisma.raw('dc."waId"'))} OR
+         ${crmSqlAnonymized(Prisma.raw('dc."name"'))} OR
+         ${crmSqlAnonymized(Prisma.raw('dc."externalUserHash"'))}) AS "directAnonymized"
+      FROM "Lead" l
+      LEFT JOIN "ContactChannelIdentity" ci
+        ON ci.id = l."contactChannelIdentityId" AND ci."clientId" = l."tenantId"
+      LEFT JOIN "Contact" dc
+        ON dc.id = ci."contactId" AND dc."clientId" = l."tenantId"
+      WHERE ${Prisma.join(leadConditions, " AND ")}
+    ),
+    tenant_contacts AS MATERIALIZED (
+      SELECT c.id, c."waId", c."externalUserRef", c."legacyWaId", c.lifecycle::text AS lifecycle,
+        c."updatedAt", c."operationallyExcludedAt" IS NOT NULL AS excluded,
+        (${crmSqlAnonymized(Prisma.raw('c."waId"'))} OR
+         ${crmSqlAnonymized(Prisma.raw('c."name"'))} OR
+         ${crmSqlAnonymized(Prisma.raw('c."externalUserHash"'))}) AS anonymized
+      FROM "Contact" c
+      WHERE c."clientId" = ${params.clientId}::uuid
+    ),
+    contact_alias_rows AS MATERIALIZED (
+      SELECT tc.id, tc.lifecycle, tc."updatedAt", tc.excluded, tc.anonymized, tc."waId" AS alias
+      FROM tenant_contacts tc
+      UNION ALL
+      SELECT tc.id, tc.lifecycle, tc."updatedAt", tc.excluded, tc.anonymized, tc."externalUserRef"
+      FROM tenant_contacts tc WHERE tc."externalUserRef" IS NOT NULL
+      UNION ALL
+      SELECT tc.id, tc.lifecycle, tc."updatedAt", tc.excluded, tc.anonymized, tc."legacyWaId"
+      FROM tenant_contacts tc WHERE tc."legacyWaId" IS NOT NULL
+    ),
+    contact_alias_facts AS MATERIALIZED (
+      SELECT rows.alias,
+        (array_agg(rows.id ORDER BY rows."updatedAt" DESC, rows.id ASC))[1] AS id,
+        (array_agg(rows.lifecycle ORDER BY rows."updatedAt" DESC, rows.id ASC))[1] AS lifecycle,
+        max(rows."updatedAt") AS "updatedAt",
+        (array_agg(rows.excluded ORDER BY rows."updatedAt" DESC, rows.id ASC))[1] AS excluded,
+        (array_agg(rows.anonymized ORDER BY rows."updatedAt" DESC, rows.id ASC))[1] AS anonymized
+      FROM contact_alias_rows rows
+      WHERE rows.alias IS NOT NULL AND rows.alias <> ''
+      GROUP BY rows.alias
+    ),
+    contact_facts AS MATERIALIZED (
+      SELECT b.id AS "leadId",
+        CASE WHEN b."directContactId" IS NOT NULL THEN b."directLifecycle" ELSE fallback.lifecycle END AS lifecycle,
+        CASE WHEN b."directContactId" IS NOT NULL THEN b."directExcluded" ELSE fallback.excluded END AS excluded,
+        CASE WHEN b."directContactId" IS NOT NULL THEN b."directAnonymized" ELSE fallback.anonymized END AS anonymized
+      FROM base_leads b
+      LEFT JOIN contact_alias_facts a1 ON a1.alias = b."waId" AND b."directContactId" IS NULL
+      LEFT JOIN contact_alias_facts a2 ON a2.alias = b."waIdCanonical" AND b."directContactId" IS NULL
+      LEFT JOIN contact_alias_facts a3 ON a3.alias = b.phone AND b."directContactId" IS NULL
+      LEFT JOIN LATERAL (
+        SELECT candidates.lifecycle, candidates.excluded, candidates.anonymized
+        FROM (VALUES
+          (a1.id, a1.lifecycle, a1."updatedAt", a1.excluded, a1.anonymized),
+          (a2.id, a2.lifecycle, a2."updatedAt", a2.excluded, a2.anonymized),
+          (a3.id, a3.lifecycle, a3."updatedAt", a3.excluded, a3.anonymized)
+        ) candidates(id, lifecycle, "updatedAt", excluded, anonymized)
+        WHERE candidates.id IS NOT NULL
+        ORDER BY candidates."updatedAt" DESC, candidates.id ASC
+        LIMIT 1
+      ) fallback ON true
+    ),
+    eligible_leads AS MATERIALIZED (
+      SELECT b.id, b."updatedAt", b."createdAt"
+      FROM base_leads b
+      LEFT JOIN contact_facts cf ON cf."leadId" = b.id
+      WHERE ${Prisma.join(eligibilityConditions, " AND ")}
+    )`;
 }
 
 export async function selectCrmContactsPage(prisma: PrismaClient, params: {
@@ -821,34 +944,50 @@ export async function selectCrmContactsPage(prisma: PrismaClient, params: {
     limit,
     includeAnonymized: params.includeAnonymized,
   });
-  const where = buildCrmContactsSqlWhere(params);
+  const scope = buildCrmContactsSqlScope(params);
   const cursorWhere = cursor
     ? Prisma.sql`AND (
-        l."updatedAt" < ${cursor.updatedAt}::timestamp(3) OR
-        (l."updatedAt" = ${cursor.updatedAt}::timestamp(3) AND l."createdAt" < ${cursor.createdAt}::timestamp(3)) OR
-        (l."updatedAt" = ${cursor.updatedAt}::timestamp(3) AND l."createdAt" = ${cursor.createdAt}::timestamp(3) AND l."id" > ${cursor.id})
+        e."updatedAt" < ${cursor.updatedAt}::timestamp(3) OR
+        (e."updatedAt" = ${cursor.updatedAt}::timestamp(3) AND e."createdAt" < ${cursor.createdAt}::timestamp(3)) OR
+        (e."updatedAt" = ${cursor.updatedAt}::timestamp(3) AND e."createdAt" = ${cursor.createdAt}::timestamp(3) AND e.id > ${cursor.id})
       )`
     : Prisma.empty;
-  const joins = Prisma.sql`LEFT JOIN "ContactChannelIdentity" ci
-    ON ci."id" = l."contactChannelIdentityId" AND ci."clientId" = l."tenantId"`;
-  const [rows, countRows] = await Promise.all([
-    prisma.$queryRaw<CrmContactPageRow[]>(Prisma.sql`
-      SELECT l."id", l."updatedAt", l."createdAt"
-      FROM "Lead" l ${joins}
-      WHERE ${where} ${cursorWhere}
-      ORDER BY l."updatedAt" DESC, l."createdAt" DESC, l."id" ASC
+  const rows = await prisma.$queryRaw<CrmContactPageQueryRow[]>(Prisma.sql`
+    ${scope}
+    SELECT page.id, page."updatedAt", page."createdAt", summary."scopeTotal"
+    FROM (SELECT count(*) AS "scopeTotal" FROM eligible_leads) summary
+    LEFT JOIN LATERAL (
+      SELECT e.id, e."updatedAt", e."createdAt"
+      FROM eligible_leads e
+      WHERE true ${cursorWhere}
+      ORDER BY e."updatedAt" DESC, e."createdAt" DESC, e.id ASC
       LIMIT ${limit + 1}
-    `),
-    prisma.$queryRaw<Array<{ total: bigint | number }>>(Prisma.sql`
-      SELECT count(*) AS total FROM "Lead" l ${joins} WHERE ${where}
-    `),
-  ]);
-  const hasNextPage = rows.length > limit;
-  const pageRows = rows.slice(0, limit);
+    ) page ON true
+    ORDER BY
+      page."updatedAt" DESC NULLS LAST,
+      page."createdAt" DESC NULLS LAST,
+      page.id ASC NULLS LAST
+  `);
+  const selectedRows: CrmContactPageRow[] = rows.flatMap((row) => (
+    row.id !== null && row.updatedAt !== null && row.createdAt !== null
+      ? [{
+          id: row.id,
+          updatedAt: row.updatedAt,
+          createdAt: row.createdAt,
+          scopeTotal: row.scopeTotal,
+        }]
+      : []
+  ));
+  const hasNextPage = selectedRows.length > limit;
+  const pageRows: CrmContactCursorRow[] = selectedRows.slice(0, limit).map((row) => ({
+    id: row.id,
+    updatedAt: row.updatedAt,
+    createdAt: row.createdAt,
+  }));
   const page = cursor ? cursor.page + 1 : 1;
   return {
     rows: pageRows,
-    total: Number(countRows[0]?.total ?? 0),
+    total: Number(rows[0]?.scopeTotal ?? 0),
     limit,
     page,
     hasNextPage,
@@ -870,17 +1009,14 @@ export async function countCrmContactsScope(prisma: PrismaClient, params: {
   query: CrmContactsQuery;
   includeAnonymized?: boolean;
 }) {
-  const where = buildCrmContactsSqlWhere({
+  const scope = buildCrmContactsSqlScope({
     clientId: params.clientId,
     query: params.query,
     includeAnonymized: params.includeAnonymized === true,
   });
   const rows = await prisma.$queryRaw<Array<{ total: bigint | number }>>(Prisma.sql`
-    SELECT count(*) AS total
-    FROM "Lead" l
-    LEFT JOIN "ContactChannelIdentity" ci
-      ON ci."id" = l."contactChannelIdentityId" AND ci."clientId" = l."tenantId"
-    WHERE ${where}
+    ${scope}
+    SELECT count(*) AS total FROM eligible_leads
   `);
   return Number(rows[0]?.total ?? 0);
 }
@@ -1084,6 +1220,7 @@ async function buildCrmContactsBatch(
           externalUserRef: true,
           legacyWaId: true,
           lifecycle: true,
+          operationallyExcludedAt: true,
           updatedAt: true,
         },
       }))).then((groups) => Array.from(new Map(groups.flat().map((contact) => [contact.id, contact])).values())),
@@ -1119,6 +1256,7 @@ async function buildCrmContactsBatch(
                   externalUserRef: true,
                   legacyWaId: true,
                   lifecycle: true,
+                  operationallyExcludedAt: true,
                   updatedAt: true,
                 },
               },
@@ -1264,7 +1402,9 @@ async function buildCrmContactsBatch(
       const templateCandidate = buildTemplateCandidate(lead, activeOptOut);
       const isAnonymized = isAnonymizedContactRecord(lead, contact, identity);
       const isOperationalContact = !contact || isOperationalContactLifecycle(contact.lifecycle);
-      const isOperationallyExcluded = leadCandidates.some((candidate) => operationallyExcludedWaIds.has(candidate));
+      const isOperationallyExcluded = contact
+        ? Boolean(contact.operationallyExcludedAt)
+        : leadCandidates.some((candidate) => operationallyExcludedWaIds.has(candidate));
       const lastInboxConversation =
         conversationSummary.values.find((conversation) => {
           const runtime = runtimeByKey.get(getIdentityKey(conversation)) ?? null;
