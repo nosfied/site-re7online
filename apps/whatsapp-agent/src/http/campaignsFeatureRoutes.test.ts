@@ -856,6 +856,122 @@ test.after(async () => {
   await fs.rm(tempRoot, { recursive: true, force: true });
 });
 
+function mediaForm(purpose: "TEMPLATE_EXAMPLE" | "CAMPAIGN" = "TEMPLATE_EXAMPLE", bytes = new Uint8Array([0xff, 0xd8, 0xff, 1])) {
+  const form = new FormData();
+  form.set("kind", "IMAGE");
+  form.set("purpose", purpose);
+  form.set("file", new File([bytes], "header.jpg", { type: "image/jpeg" }));
+  return form;
+}
+
+test("template media routes enforce role, active tenant, purpose capabilities and tenant ownership behaviorally", async () => {
+  const adminUpload = await requestMultipart<{ asset: { id: string } }>("/app/templates/media", businessAdmin, mediaForm());
+  assert.equal(adminUpload.status, 201, JSON.stringify(adminUpload.body));
+  const supervisorUpload = await requestMultipart<{ asset: { id: string } }>("/app/templates/media", businessSupervisor, mediaForm());
+  assert.equal(supervisorUpload.status, 201, JSON.stringify(supervisorUpload.body));
+  const campaignUpload = await requestMultipart<{ asset: { id: string } }>("/app/templates/media", businessAdmin, mediaForm("CAMPAIGN"));
+  assert.equal(campaignUpload.status, 201, JSON.stringify(campaignUpload.body));
+  assert.equal((await requestMultipart("/app/templates/media", businessAgent, mediaForm())).status, 403);
+
+  assert.equal((await requestBlob("GET", `/app/templates/media/${adminUpload.body.asset.id}`, businessAdmin)).status, 200);
+  assert.equal((await requestBlob("GET", `/app/templates/media/${supervisorUpload.body.asset.id}`, businessAdmin)).status, 404, "unreferenced media belongs to its creator");
+  assert.equal((await requestBlob("GET", `/app/templates/media/${adminUpload.body.asset.id}`, businessAgent)).status, 403);
+  assert.equal((await requestBlob("GET", `/app/templates/media/${adminUpload.body.asset.id}`, governmentAdmin)).status, 404);
+  assert.equal((await request("DELETE", `/app/templates/media/${adminUpload.body.asset.id}`, governmentAdmin)).status, 404);
+
+  const current = await prisma.client.findUniqueOrThrow({ where: { id: businessClientId }, select: { features: true, status: true } });
+  const features = current.features && typeof current.features === "object" && !Array.isArray(current.features)
+    ? current.features as Record<string, unknown>
+    : {};
+  try {
+    await prisma.client.update({ where: { id: businessClientId }, data: { features: { ...features, campaigns: false } } });
+    assert.equal((await requestMultipart("/app/templates/media", businessAdmin, mediaForm("CAMPAIGN"))).status, 403);
+    assert.equal((await requestBlob("GET", `/app/templates/media/${campaignUpload.body.asset.id}`, businessAdmin)).status, 403);
+    await prisma.client.update({ where: { id: businessClientId }, data: { features: { ...features, templates: false } } });
+    assert.equal((await requestMultipart("/app/templates/media", businessAdmin, mediaForm())).status, 403);
+    await prisma.client.update({ where: { id: businessClientId }, data: { status: "INACTIVE", features: features as Prisma.InputJsonValue } });
+    assert.equal((await requestMultipart("/app/templates/media", businessAdmin, mediaForm())).status, 401);
+  } finally {
+    await prisma.client.update({ where: { id: businessClientId }, data: { status: current.status, features: features as Prisma.InputJsonValue } });
+  }
+
+  const referenced = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `media_ref_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Media",
+      headerType: "IMAGE",
+      exampleMediaId: adminUpload.body.asset.id,
+    },
+  });
+  const adminRequest = await prisma.templateRequest.create({
+    data: {
+      clientId: businessClientId,
+      name: `media_admin_${safeTemplatePrefix}`,
+      content: "Media",
+      category: "UTILITY",
+      status: "requested",
+      headerType: "IMAGE",
+      exampleMediaId: adminUpload.body.asset.id,
+    },
+  });
+  const adminMedia = await fetch(`${baseUrl}/admin/templates/requests/${adminRequest.id}/media`, {
+    headers: { "x-admin-token": businessAdminToken },
+  });
+  assert.equal(adminMedia.status, 200);
+  assert.equal(adminMedia.headers.get("content-type"), "image/jpeg");
+  assert.equal((await fetch(`${baseUrl}/admin/templates/requests/${adminRequest.id}/media`)).status, 401);
+  assert.equal((await request("DELETE", `/app/templates/media/${adminUpload.body.asset.id}`, businessAdmin)).status, 409);
+  await prisma.templateRequest.delete({ where: { id: adminRequest.id } });
+  await prisma.template.delete({ where: { id: referenced.id } });
+  assert.equal((await request("DELETE", `/app/templates/media/${adminUpload.body.asset.id}`, businessAdmin)).status, 200);
+  assert.equal((await request("DELETE", `/app/templates/media/${supervisorUpload.body.asset.id}`, businessSupervisor)).status, 200);
+  assert.equal((await request("DELETE", `/app/templates/media/${campaignUpload.body.asset.id}`, businessAdmin)).status, 200);
+
+  const mismatchUpload = await requestMultipart<{ asset: { id: string } }>("/app/templates/media", businessAdmin, mediaForm());
+  assert.equal(mismatchUpload.status, 201);
+  await prisma.templateMediaAsset.update({ where: { id: mismatchUpload.body.asset.id }, data: { sha256: "0".repeat(64) } });
+  assert.equal((await requestBlob("GET", `/app/templates/media/${mismatchUpload.body.asset.id}`, businessAdmin)).status, 409);
+  const missingUpload = await requestMultipart<{ asset: { id: string } }>("/app/templates/media", businessAdmin, mediaForm());
+  assert.equal(missingUpload.status, 201);
+  await prisma.templateMediaAsset.update({ where: { id: missingUpload.body.asset.id }, data: { storageKey: `${businessClientId}/missing/not-present.jpg` } });
+  assert.equal((await requestBlob("GET", `/app/templates/media/${missingUpload.body.asset.id}`, businessAdmin)).status, 404);
+});
+
+test("template media multipart rejects malformed, truncated, oversized and false MIME bodies", async () => {
+  const falseMime = new FormData();
+  falseMime.set("kind", "IMAGE");
+  falseMime.set("purpose", "TEMPLATE_EXAMPLE");
+  falseMime.set("file", new File([new Uint8Array([1, 2, 3, 4])], "header.jpg", { type: "image/jpeg" }));
+  assert.equal((await requestMultipart("/app/templates/media", businessAdmin, falseMime)).status, 400);
+
+  const boundary = "re7-truncated-boundary";
+  const truncated = `--${boundary}\r\nContent-Disposition: form-data; name="kind"\r\n\r\nIMAGE\r\n--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="x.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`;
+  const truncatedResponse = await fetch(`${baseUrl}/app/templates/media`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${authToken(businessAdmin)}`, "content-type": `multipart/form-data; boundary=${boundary}` },
+    body: truncated,
+  });
+  assert.equal(truncatedResponse.status, 400);
+
+  const oversizedBody = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array(17 * 1024 * 1024 + 1024));
+      controller.close();
+    },
+  });
+  const oversized = await fetch(`${baseUrl}/app/templates/media`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${authToken(businessAdmin)}`, "content-type": `multipart/form-data; boundary=${boundary}` },
+    body: oversizedBody,
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+  assert.equal(oversized.status, 413);
+});
+
 test("business profile default can access campaigns route", async () => {
   const response = await request<{ ok: boolean; count: number }>(
     "GET",

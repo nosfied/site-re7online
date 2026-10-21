@@ -10,6 +10,7 @@ export type TenantOutboundCredentials = {
   accessToken: string;
   phoneNumberId: string;
   source: "tenant_meta" | "tenant_config" | "env";
+  credentialGeneration?: string;
 };
 
 export async function resolveTenantOutboundCredentials(params: {
@@ -23,11 +24,12 @@ export async function resolveTenantOutboundCredentials(params: {
       select: {
         businessToken: true,
         phoneNumberId: true,
+        updatedAt: true,
       },
     }),
     prisma.waPhoneNumber.findFirst({
       where: { clientId: params.clientId },
-      select: { phoneNumberId: true },
+      select: { phoneNumberId: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     }),
     resolveWhatsappTransportRoutingSettings({
@@ -56,6 +58,7 @@ export async function resolveTenantOutboundCredentials(params: {
       accessToken: tenantMetaBusinessToken,
       phoneNumberId: tenantMetaPhoneNumberId,
       source: "tenant_meta",
+      credentialGeneration: `tenant_meta:${tenantMetaConfig?.updatedAt.toISOString() ?? "unknown"}`,
     };
   }
 
@@ -64,6 +67,7 @@ export async function resolveTenantOutboundCredentials(params: {
       accessToken: envAccessToken,
       phoneNumberId: dbPhoneNumberId,
       source: "tenant_config",
+      credentialGeneration: `tenant_config:${waPhoneNumber?.createdAt.toISOString() ?? "unknown"}`,
     };
   }
 
@@ -80,6 +84,7 @@ export async function resolveTenantOutboundCredentials(params: {
         accessToken: envAccessToken,
         phoneNumberId: tenantConfigPhoneNumberId,
         source: "tenant_config",
+        credentialGeneration: "tenant_json:process",
       };
     }
   }
@@ -89,6 +94,7 @@ export async function resolveTenantOutboundCredentials(params: {
       accessToken: envAccessToken,
       phoneNumberId: envPhoneNumberId,
       source: "env",
+      credentialGeneration: "env:process",
     };
   }
 

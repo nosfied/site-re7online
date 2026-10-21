@@ -21,3 +21,13 @@ test("clear invalidates all pending operations on unmount", () => {
   registry.clear();
   assert.equal(registry.size, 0);
 });
+
+test("ending an operation is idempotent and cannot close another token", () => {
+  const registry = new ScreenProcessingRegistry();
+  const upload = registry.begin("Upload", "Enviando mídia…");
+  const submit = registry.begin("Solicitação", "Salvando solicitação…");
+  assert.equal(registry.end(upload), true);
+  assert.equal(registry.end(upload), false);
+  assert.equal(registry.current()?.id, submit);
+  assert.equal(registry.size, 1);
+});

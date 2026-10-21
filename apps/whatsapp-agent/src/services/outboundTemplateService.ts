@@ -11,11 +11,10 @@ import {
   isWhatsappTemplateCategoryAllowedForTenant,
   WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
 } from "../meta/templateCategoryPolicy.js";
-import crypto from "node:crypto";
 import type { CampaignTemplateComponents } from "../templates/templateComponents.js";
 import { assertTemplateMediaCompatibility, withHeaderMediaComponent } from "../templates/templateComponents.js";
-import { resolveTemplateMediaFile } from "../templates/templateMediaStorage.js";
-import { uploadMedia } from "../whatsapp/whatsapp.client.js";
+import { invalidateConfirmedTemplateMedia, isExplicitTemplateMediaRejection, resolveAccountScopedTemplateMedia } from "../templates/templateMediaAccountUpload.js";
+import { runTemplateProviderSubmissionGate } from "./templateProviderSubmissionGate.js";
 
 export type OutboundTemplateParams = {
   toE164: string;
@@ -78,6 +77,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
   const resolvedPhoneNumberId = credentials?.phoneNumberId || env.WHATSAPP_PHONE_NUMBER_ID;
   const resolvedAccessToken = credentials?.accessToken || env.WHATSAPP_ACCESS_TOKEN;
   const credentialSource = credentials?.source ?? "env";
+  const credentialGeneration = credentials?.credentialGeneration ?? "env:process";
   const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${resolvedPhoneNumberId}/messages`;
   let resolvedComponents = params.components;
 
@@ -179,39 +179,40 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
 
   // All asynchronous credential/template/usage work is complete. No provider call
   // can precede the campaign's final current-tenant eligibility observation.
-  const eligibilityReason = await params.beforeSubmit?.();
-  if (eligibilityReason) return { ok: false, blockedByEligibility: true, errorBody: eligibilityReason };
-
-  if (params.media && params.clientId) {
-    const prisma = getPrisma();
-    const asset = await prisma.templateMediaAsset.findFirst({
-      where: { id: params.media.assetId, clientId: params.clientId, state: { not: "deleted" } },
-      select: { id: true, kind: true, storageKey: true, mimeType: true, sha256: true, originalFilename: true },
-    });
-    if (!asset || asset.kind !== params.media.kind || asset.sha256 !== params.media.sha256) {
-      return { ok: false, status: 409, errorBody: "template_media_snapshot_mismatch" };
-    }
-    const stored = await resolveTemplateMediaFile(asset.storageKey).catch(() => null);
-    if (!stored || crypto.createHash("sha256").update(stored.content).digest("hex") !== asset.sha256) {
-      return { ok: false, status: 409, errorBody: "template_media_content_mismatch" };
-    }
-    const uploaded = await uploadMedia(
-      new Blob([new Uint8Array(stored.content)], { type: asset.mimeType }),
-      asset.mimeType,
-      { accessToken: resolvedAccessToken, phoneNumberId: resolvedPhoneNumberId },
-      asset.originalFilename
-    );
-    if (!uploaded.ok) {
-      return { ok: false, status: uploaded.status ?? 502, errorBody: "template_media_upload_failed" };
-    }
-    await prisma.templateMediaAsset.updateMany({
-      where: { id: asset.id, clientId: params.clientId },
-      data: { metaMediaId: uploaded.mediaId, metaMediaUploadedAt: new Date(), state: "ready" },
-    });
-    resolvedComponents = withHeaderMediaComponent(resolvedComponents, {
-      kind: params.media.kind,
-      mediaId: uploaded.mediaId,
-    });
+  const media = params.media;
+  const mediaClientId = params.clientId;
+  const finalGate = await runTemplateProviderSubmissionGate({
+    beforeSubmit: params.beforeSubmit,
+    resolveMedia: media && mediaClientId ? async () => {
+      const prisma = getPrisma();
+      const asset = await prisma.templateMediaAsset.findFirst({
+        where: { id: media.assetId, clientId: mediaClientId, state: { in: ["stored", "ready"] } },
+        select: { id: true, kind: true, storageKey: true, mimeType: true, sha256: true, originalFilename: true },
+      });
+      if (!asset || asset.kind !== media.kind || asset.sha256 !== media.sha256) {
+        return { ok: false as const, status: 409, errorBody: "template_media_snapshot_mismatch" };
+      }
+      const uploaded = await resolveAccountScopedTemplateMedia({
+        clientId: mediaClientId,
+        assetId: asset.id,
+        assetSha256: asset.sha256,
+        kind: media.kind,
+        phoneNumberId: resolvedPhoneNumberId,
+        credentialGeneration,
+        storageKey: asset.storageKey,
+        mimeType: asset.mimeType,
+        originalFilename: asset.originalFilename,
+        accessToken: resolvedAccessToken,
+      });
+      if (!uploaded.ok) {
+        return { ok: false as const, status: uploaded.error === "content_mismatch" ? 409 : 502, errorBody: `template_media_${uploaded.error}` };
+      }
+      return { ok: true as const, mediaId: uploaded.mediaId };
+    } : undefined,
+  });
+  if (!finalGate.ok) return finalGate;
+  if (params.media && finalGate.mediaId) {
+    resolvedComponents = withHeaderMediaComponent(resolvedComponents, { kind: params.media.kind, mediaId: finalGate.mediaId });
   }
   const payload = {
     messaging_product: "whatsapp",
@@ -305,6 +306,16 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
     }
 
     const errorText = await response.text().catch(() => "");
+    if (media && mediaClientId && finalGate.mediaId && isExplicitTemplateMediaRejection(response.status, errorText)) {
+      await invalidateConfirmedTemplateMedia({
+        clientId: mediaClientId,
+        assetId: media.assetId,
+        assetSha256: media.sha256,
+        kind: media.kind,
+        phoneNumberId: resolvedPhoneNumberId,
+        credentialGeneration,
+      }, finalGate.mediaId);
+    }
     await runtimeStorage.appendOutboundEvent({
       direction: "outbound",
       messageId: params.messageId ?? params.rid ?? "",

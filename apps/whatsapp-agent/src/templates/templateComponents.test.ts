@@ -54,6 +54,10 @@ test("provider sync preserves known local media identity on partial responses", 
 });
 
 test("runtime media header is added once without changing body variables", () => {
+  assert.deepEqual(
+    withHeaderMediaComponent(undefined, { kind: "IMAGE", mediaId: "media-image" }),
+    [{ type: "header", parameters: [{ type: "image", image: { id: "media-image" } }] }]
+  );
   const components = withHeaderMediaComponent(
     [{ type: "body", parameters: [{ type: "text", text: "Maria" }] }],
     { kind: "VIDEO", mediaId: "media-1" }

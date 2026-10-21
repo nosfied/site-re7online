@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
+import ScreenProcessingOverlay, { useScreenProcessingOperations } from "@/components/app/ScreenProcessingOverlay";
 import {
   AdminTemplateCatalogItem,
   AdminTemplateRequestItem,
@@ -181,6 +182,9 @@ export default function ManageTemplatesAdminPage() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
+  const processing = useScreenProcessingOperations([
+    { key: "admin-template-action", active: Boolean(actingId), title: "Atualizando modelo", message: "Processando submissão ou sincronização…" },
+  ]);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [requests, setRequests] = useState<AdminTemplateRequestItem[]>([]);
@@ -403,6 +407,8 @@ export default function ManageTemplatesAdminPage() {
   }, [connection, selectedRequest?.exampleMediaId, selectedRequest?.headerType, selectedRequest?.id]);
 
   return (
+    <>
+      <ScreenProcessingOverlay active={Boolean(processing)} title={processing?.title ?? "Modelos"} message={processing?.message ?? "Processando…"} />
     <div className="px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
@@ -891,5 +897,6 @@ export default function ManageTemplatesAdminPage() {
         </section>
       </div>
     </div>
+    </>
   );
 }

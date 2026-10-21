@@ -131,10 +131,18 @@ jobs:
           node --import tsx --test
           src/templates/templateComponents.test.ts
           src/templates/templateMediaStorage.test.ts
+          src/templates/templateMediaUploadAdmission.test.ts
           src/templates/templateMediaRoutesContract.test.ts
           src/templates/templateMediaPersistence.postgres.test.ts
+          src/templates/templateMediaAccountUpload.postgres.test.ts
+          src/services/templateProviderSubmissionGate.test.ts
           src/meta/metaTemplateMedia.test.ts
           src/campaigns/campaignSeedPrivacy.test.ts
+      - name: Template media behavioral HTTP authorization and multipart tests
+        run: >-
+          node --import tsx --test
+          --test-name-pattern "template media routes enforce|template media multipart rejects"
+          src/http/campaignsFeatureRoutes.test.ts
       - name: Frontend timeout, re-entry and CRM CSV UX contract tests
         working-directory: .
         run: |
@@ -142,7 +150,8 @@ jobs:
             src/lib/crmImportRecovery.test.ts \
             src/lib/crmContactsInitialLoad.test.ts \
             src/lib/crmContactsCursorHistory.test.ts \
-            src/lib/screenProcessing.test.ts
+            src/lib/screenProcessing.test.ts \
+            src/lib/templateMediaOverlay.test.ts
           apps/whatsapp-agent/node_modules/.bin/tsx --test \
             --test-name-pattern "CRM contacts expose progress|CRM initial list|CRM list uses cursor" \
             src/app/app/crm/crmPageContract.test.ts

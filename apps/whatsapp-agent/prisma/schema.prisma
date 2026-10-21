@@ -95,6 +95,7 @@ model Client {
   templates     Template[]
   templateRequests TemplateRequest[]
   templateMediaAssets TemplateMediaAsset[]
+  templateMediaAccountUploads TemplateMediaAccountUpload[]
   slaConfig      SLAConfig?
   retentionConfig RetentionConfig?
   operationalConfig TenantOperationalConfig?
@@ -1148,8 +1149,6 @@ model TemplateMediaAsset {
   state               String   @default("stored")
   metaHandle          String?
   metaHandleCreatedAt DateTime?
-  metaMediaId         String?
-  metaMediaUploadedAt DateTime?
   createdBy           String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -1158,11 +1157,39 @@ model TemplateMediaAsset {
   templateRequests TemplateRequest[] @relation("TemplateRequestExampleMedia")
   templates Template[] @relation("TemplateExampleMedia")
   campaigns Campaign[] @relation("CampaignTemplateMedia")
+  accountUploads TemplateMediaAccountUpload[]
 
   @@unique([clientId, id])
   @@index([clientId, purpose, createdAt])
   @@index([clientId, sha256])
   @@index([state, updatedAt])
+}
+
+model TemplateMediaAccountUpload {
+  id                   String   @id @default(uuid())
+  clientId             String   @db.Uuid
+  assetId              String
+  assetSha256          String
+  kind                 String
+  phoneNumberId        String
+  credentialGeneration String
+  state                String   @default("uploading")
+  mediaId              String?
+  attemptId            String
+  leaseExpiresAt       DateTime?
+  validUntil           DateTime?
+  uploadedAt           DateTime?
+  lastErrorCode        String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  asset  TemplateMediaAsset @relation(fields: [clientId, assetId], references: [clientId, id], onDelete: Cascade)
+
+  @@unique([clientId, assetId, assetSha256, kind, phoneNumberId, credentialGeneration], name: "template_media_account_upload_scope", map: "TemplateMediaAccountUpload_scope_key")
+  @@index([clientId, phoneNumberId, state], map: "TemplateMediaAccountUpload_client_phone_state_idx")
+  @@index([state, leaseExpiresAt], map: "TemplateMediaAccountUpload_state_lease_idx")
+  @@index([validUntil], map: "TemplateMediaAccountUpload_validUntil_idx")
 }
 
 model Lead {

@@ -5,6 +5,7 @@ import { createCampaignRelationReads } from "@/lib/campaignRelationReads";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
+import ScreenProcessingOverlay, { useScreenProcessingOperations } from "@/components/app/ScreenProcessingOverlay";
 import CampaignBatchPanel from "@/components/app/CampaignBatchPanel";
 import {
   buildCampaignReuseState,
@@ -848,6 +849,13 @@ export default function AppCampaignsPage() {
   const [resumingCampaign, setResumingCampaign] = useState(false);
   const [batchAction, setBatchAction] = useState<"pause" | "resume" | "cancel" | null>(null);
   const [testingCampaign, setTestingCampaign] = useState(false);
+  const processing = useScreenProcessingOperations([
+    { key: "campaign-media-upload", active: uploadingTemplateMedia, title: "Enviando mídia", message: "Validando a mídia da campanha…" },
+    { key: "campaign-create", active: creating || creatingDraft || creatingCsvDraft, title: "Criando campanha", message: "Salvando o rascunho e seus destinatários…" },
+    { key: "campaign-schedule", active: schedulingDraft, title: "Agendando campanha", message: "Validando e registrando o agendamento…" },
+    { key: "campaign-test", active: testingCampaign, title: "Enviando teste", message: "Validando o destinatário e enviando o modelo…" },
+    { key: "campaign-send", active: sendingDraft, title: "Iniciando envio", message: "Abrindo o lote de envio com segurança…" },
+  ]);
   const [composerScheduleInput, setComposerScheduleInput] = useState("");
   const [detailScheduleInput, setDetailScheduleInput] = useState("");
   const detailScheduleBoundary = useRef<string | null>(null);
@@ -3326,6 +3334,7 @@ export default function AppCampaignsPage() {
       title="Campanhas"
       subtitle="Crie campanhas com modelos aprovados pela Meta, usando contatos elegíveis do CRM."
     >
+      <ScreenProcessingOverlay active={Boolean(processing)} title={processing?.title ?? "Campanhas"} message={processing?.message ?? "Processando…"} />
       <div className="fixed right-4 top-4 z-[90] grid w-[min(30rem,calc(100vw-2rem))] gap-2">
         {error ? (
           <div className="rounded-md border border-red-400/30 bg-red-950/95 p-3 text-sm text-red-50 shadow-2xl backdrop-blur">

@@ -26,8 +26,6 @@ CREATE TABLE "TemplateMediaAsset" (
   "state" TEXT NOT NULL DEFAULT 'stored',
   "metaHandle" TEXT,
   "metaHandleCreatedAt" TIMESTAMP(3),
-  "metaMediaId" TEXT,
-  "metaMediaUploadedAt" TIMESTAMP(3),
   "createdBy" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -51,3 +49,31 @@ ALTER TABLE "TemplateRequest" ADD CONSTRAINT "TemplateRequest_clientId_exampleMe
   FOREIGN KEY ("clientId", "exampleMediaId") REFERENCES "TemplateMediaAsset"("clientId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "Campaign" ADD CONSTRAINT "Campaign_clientId_templateMediaAssetId_fkey"
   FOREIGN KEY ("clientId", "templateMediaAssetId") REFERENCES "TemplateMediaAsset"("clientId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+CREATE TABLE "TemplateMediaAccountUpload" (
+  "id" TEXT NOT NULL,
+  "clientId" UUID NOT NULL,
+  "assetId" TEXT NOT NULL,
+  "assetSha256" TEXT NOT NULL,
+  "kind" TEXT NOT NULL,
+  "phoneNumberId" TEXT NOT NULL,
+  "credentialGeneration" TEXT NOT NULL,
+  "state" TEXT NOT NULL DEFAULT 'uploading',
+  "mediaId" TEXT,
+  "attemptId" TEXT NOT NULL,
+  "leaseExpiresAt" TIMESTAMP(3),
+  "validUntil" TIMESTAMP(3),
+  "uploadedAt" TIMESTAMP(3),
+  "lastErrorCode" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "TemplateMediaAccountUpload_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "TemplateMediaAccountUpload_scope_key" ON "TemplateMediaAccountUpload"("clientId", "assetId", "assetSha256", "kind", "phoneNumberId", "credentialGeneration");
+CREATE INDEX "TemplateMediaAccountUpload_client_phone_state_idx" ON "TemplateMediaAccountUpload"("clientId", "phoneNumberId", "state");
+CREATE INDEX "TemplateMediaAccountUpload_state_lease_idx" ON "TemplateMediaAccountUpload"("state", "leaseExpiresAt");
+CREATE INDEX "TemplateMediaAccountUpload_validUntil_idx" ON "TemplateMediaAccountUpload"("validUntil");
+ALTER TABLE "TemplateMediaAccountUpload" ADD CONSTRAINT "TemplateMediaAccountUpload_clientId_fkey"
+  FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "TemplateMediaAccountUpload" ADD CONSTRAINT "TemplateMediaAccountUpload_clientId_assetId_fkey"
+  FOREIGN KEY ("clientId", "assetId") REFERENCES "TemplateMediaAsset"("clientId", "id") ON DELETE CASCADE ON UPDATE CASCADE;

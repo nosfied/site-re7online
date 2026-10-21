@@ -159,6 +159,7 @@ import {
   type TemplateMediaKind,
   type TemplateMediaPurpose,
 } from "../templates/templateMediaStorage.js";
+import { tryAdmitTemplateMediaUpload } from "../templates/templateMediaUploadAdmission.js";
 import {
   CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT,
   filterOptedOutCampaignRecipients,
@@ -4885,8 +4886,21 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         endpoint: pathname,
         requestId,
       }))) return;
-      const upload = await readTemplateMediaMultipartBody(req, res);
+      const releaseUploadAdmission = tryAdmitTemplateMediaUpload(client.id);
+      if (!releaseUploadAdmission) {
+        res.setHeader("Retry-After", "5");
+        json(res, 429, httpError("template_media_upload_busy", "Já existe um upload de mídia em processamento."));
+        return;
+      }
+      const upload = await readTemplateMediaMultipartBody(req, res).finally(releaseUploadAdmission);
       if (!upload) return;
+      if (upload.purpose === "CAMPAIGN" && !(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
       const stored = await storeTemplateMedia({
         clientId: client.id,
         purpose: upload.purpose,
@@ -4939,14 +4953,54 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
     if (!clientAuth) return;
     try {
       const assetId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+      if (!isAdminOrSupervisorRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Sem permissão para acessar mídia de template."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client || client.status !== "ACTIVE") {
+        json(res, client ? 403 : 404, httpError(client ? "client_inactive" : "client_not_found", "Tenant indisponível."));
+        return;
+      }
       const asset = await prisma.templateMediaAsset.findFirst({
-        where: { id: assetId, clientId: clientAuth.clientId, state: { not: "deleted" } },
-        select: { storageKey: true, mimeType: true, sizeBytes: true, sha256: true },
+        where: { id: assetId, clientId: clientAuth.clientId, state: { in: ["stored", "ready"] } },
+        select: {
+          purpose: true,
+          storageKey: true,
+          mimeType: true,
+          sizeBytes: true,
+          sha256: true,
+          createdBy: true,
+          _count: { select: { templates: true, templateRequests: true, campaigns: true } },
+        },
       });
       if (!asset) {
         json(res, 404, httpError("template_media_not_found", "Mídia não encontrada."));
         return;
       }
+      if (
+        asset.createdBy !== clientAuth.userId &&
+        asset._count.templates === 0 &&
+        asset._count.templateRequests === 0 &&
+        asset._count.campaigns === 0
+      ) {
+        json(res, 404, httpError("template_media_not_found", "Mídia não encontrada."));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      if (asset.purpose === "CAMPAIGN" && !(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
       const stored = await resolveTemplateMediaFile(asset.storageKey);
       if (
         stored.sizeBytes !== asset.sizeBytes ||
@@ -4980,11 +5034,18 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         json(res, 403, httpError("forbidden", "Forbidden"));
         return;
       }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client || client.status !== "ACTIVE") {
+        json(res, client ? 403 : 404, httpError(client ? "client_inactive" : "client_not_found", "Tenant indisponível."));
+        return;
+      }
       const assetId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
       const asset = await prisma.templateMediaAsset.findFirst({
         where: { id: assetId, clientId: clientAuth.clientId },
         select: {
           id: true,
+          purpose: true,
+          createdBy: true,
           storageKey: true,
           _count: { select: { templates: true, templateRequests: true, campaigns: true } },
         },
@@ -4993,6 +5054,29 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         json(res, 404, httpError("template_media_not_found", "Mídia não encontrada."));
         return;
       }
+      if (
+        asset.createdBy !== clientAuth.userId &&
+        asset._count.templates === 0 &&
+        asset._count.templateRequests === 0 &&
+        asset._count.campaigns === 0
+      ) {
+        json(res, 404, httpError("template_media_not_found", "Mídia não encontrada."));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      if (asset.purpose === "CAMPAIGN" && !(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
       if (asset._count.templates || asset._count.templateRequests || asset._count.campaigns) {
         json(res, 409, httpError("template_media_in_use", "A mídia está vinculada e não pode ser removida."));
         return;
@@ -27071,7 +27155,7 @@ async function resolveTemplateExampleMedia(
       id: params.exampleMediaId,
       clientId: params.clientId,
       purpose: "TEMPLATE_EXAMPLE",
-      state: { not: "deleted" },
+      state: { in: ["stored", "ready"] },
     },
     select: { id: true, kind: true, storageKey: true, mimeType: true, originalFilename: true },
   });
@@ -31920,7 +32004,7 @@ async function resolveCampaignTemplateMedia(
     return { ok: false, status: 400, error: "template_media_required", message: "Selecione uma mídia compatível para a campanha." };
   }
   const asset = await prisma.templateMediaAsset.findFirst({
-    where: { id: assetId, clientId: params.clientId, purpose: "CAMPAIGN", state: { not: "deleted" } },
+    where: { id: assetId, clientId: params.clientId, purpose: "CAMPAIGN", state: { in: ["stored", "ready"] } },
     select: { id: true, kind: true, sha256: true, mimeType: true, sizeBytes: true },
   });
   if (!asset) {

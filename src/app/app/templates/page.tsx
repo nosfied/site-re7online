@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
+import ScreenProcessingOverlay, { useScreenProcessingOperations } from "@/components/app/ScreenProcessingOverlay";
 import {
   AppApiError,
   AppCannedReplyItem,
@@ -509,6 +510,12 @@ export default function AppTemplatesPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [mediaUploading, setMediaUploading] = useState(false);
+  const processing = useScreenProcessingOperations([
+    { key: "template-media-upload", active: mediaUploading, title: "Enviando mídia", message: "Validando e armazenando o arquivo…" },
+    { key: "template-request", active: submitting, title: "Criando solicitação", message: "Salvando e submetendo o modelo…" },
+    { key: "template-sync-all", active: syncingAll, title: "Sincronizando modelos", message: "Consultando a Meta…" },
+    { key: "template-sync-one", active: Boolean(syncingTemplateId), title: "Atualizando modelo", message: "Reconciliando o estado atual…" },
+  ]);
   const [selectedStoredMediaUrl, setSelectedStoredMediaUrl] = useState<string | null>(null);
   const cannedBodyRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaPreviewUrl = useMemo(
@@ -1219,6 +1226,7 @@ export default function AppTemplatesPage() {
       title="Mensagens"
       subtitle="Gerencie respostas prontas e modelos oficiais usados nos atendimentos."
     >
+      <ScreenProcessingOverlay active={Boolean(processing)} title={processing?.title ?? "Modelos"} message={processing?.message ?? "Processando…"} />
       <FeedbackToast message={success} onClose={() => setSuccess(null)} />
       <FeedbackToast message={error} variant="error" onClose={() => setError(null)} />
       {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}

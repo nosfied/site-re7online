@@ -29,6 +29,9 @@ imutável com a campanha.
   nome original sanitizado, chave interna de armazenamento e estado;
 - handles de exemplo e media IDs da Meta ficam separados e nunca substituem o
   arquivo privado durável;
+- `TemplateMediaAccountUpload` vincula cada media ID ao tenant, asset, SHA-256,
+  tipo, `phoneNumberId` e geração não secreta da credencial. O asset não possui
+  media ID global;
 - `Campaign.templateMediaAssetId` mais `templateMediaSnapshot` preservam
   `assetId`, tipo e SHA-256 no rascunho e na intenção imutável;
 - FKs compostas `(clientId, id)` impedem vínculos de mídia entre tenants;
@@ -62,15 +65,29 @@ A referência primária usada foi a coleção oficial da Meta para
 [upload dos bytes](https://www.postman.com/meta/whatsapp-business-platform/request/13382743-871ea332-a6a4-4ad0-800a-0be9796b1933) e
 [envio de template com mídia](https://www.postman.com/meta/whatsapp-business-platform/request/2qbotrb/send-message-template-media).
 
+O parser multipart nativo ainda materializa o arquivo para a validação final.
+Enquanto a troca por parser streaming não ocorre, a admissão limita um upload
+por tenant e, por padrão, um upload global (`TEMPLATE_MEDIA_UPLOAD_CONCURRENCY`,
+máximo 2). Com corpo multipart limitado a 17 MiB e estimativa conservadora de
+quatro cópias transitórias, o teto padrão é aproximadamente 68 MiB; a
+configuração máxima fica limitada a aproximadamente 136 MiB. Excesso recebe
+`429`, e a reserva é liberada de forma idempotente em sucesso, erro ou
+cancelamento.
+
 Cleanup é explícito: composição ainda não persistida tenta `DELETE`; um asset
 referenciado por template, solicitação ou campanha recebe `409` e não é apagado.
-Retenção automática por idade fica pendente e não pode remover referências
-auditáveis.
+`npm run template-media:cleanup -- --older-than-hours 168` é dry-run.
+`--apply` precisa ser deliberado e pode ser limitado por `--client-id`. O
+processo seleciona somente assets antigos sem relações, reclama o estado,
+revalida as relações, não segue symlinks e registra apenas contagens. Este PR
+não instala cron.
 
 ## Fluxo de template
 
 1. `ADMIN` ou `SUPERVISOR` autenticado envia exemplo tenant-scoped. `AGENT` é
-   negado e a feature `templates` continua obrigatória.
+   negado, o tenant precisa estar ativo e `templates` é obrigatória. A finalidade
+   `CAMPAIGN` também exige `campaigns`. GET e DELETE repetem RBAC/capabilities
+   do `purpose`; asset não referenciado só é visível ao usuário que o criou.
 2. A solicitação grava header/componentes e permite preview autenticado. Nenhum
    caminho interno, handle ou token chega à UI admin.
 3. Na submissão, o backend cria a sessão Resumable Upload, envia os bytes e usa
@@ -97,11 +114,18 @@ autenticado e preserva a referência em:
 - rascunho, agendamento, reload, teste, pausa/retomada e reutilização.
 
 O runner continua chamando o único `sendTemplate`. Depois do último gate de
-eligibilidade e antes do provider, ele revalida tenant, tipo e SHA do snapshot,
-faz upload just-in-time pela infraestrutura existente e injeta o parâmetro
-oficial `header.image.id` ou `header.video.id`. Erro anterior ao provider é
-bloqueio técnico; aceitação ambígua posterior segue Result Truth e nunca libera
-reenvio cego.
+eligibilidade e antes do provider, ele revalida tenant, tipo e SHA do snapshot.
+O primeiro destinatário final elegível adquire um lease tenant/account-scoped,
+faz o upload e confirma o media ID; os demais reutilizam a confirmação durante
+`TEMPLATE_MEDIA_META_TTL_SECONDS` (24 horas por padrão). Single-flight no
+processo, unicidade e lease no PostgreSQL evitam duplicação entre execuções.
+Expiração permite nova aquisição controlada. Transporte incerto fica em
+`uncertain` por 30 minutos e não gera retry cego. Tenant, conta, hash, tipo ou
+geração de credencial diferente nunca reutilizam a confirmação anterior.
+
+O header oficial é injetado somente após confirmação. Nenhum upload ou mensagem
+ocorre antes do guard final do destinatário. Erro anterior à mensagem é bloqueio
+técnico; aceitação ambígua posterior segue Result Truth.
 
 Fechar detalhe não cancela campanha. O descarte da composição continua uma ação
 separada. A mídia persistida nunca é removida pelo descarte de outra campanha ou
@@ -120,13 +144,20 @@ tenant.
 | logs/Event | sem binário, caminho, token, URL assinada ou PII de mídia |
 | retrocompatibilidade | `NONE` e campos nulos mantêm templates textuais |
 
+Uploads, criação/submissão/sincronização de modelos e criação/agendamento/teste/
+início de campanhas usam o `ScreenProcessingOverlay` central. Cada operação tem
+token próprio: encerrar uma não fecha outra em curso, e desmontar a tela invalida
+todos os tokens.
+
 ## Validação e limites
 
 Validação local cobre componentes legados/IMAGE/VIDEO, incompatibilidades,
 magic bytes/MIME/extensão/tamanho/vazio, raiz com symlink, respostas e timeout
 do upload Meta por fake, sync parcial, propagação por todos os modos de campanha,
 resposta obsoleta no frontend, lifecycle do composer, migration integral,
-FK cross-tenant, batch >1.000, pausa/cancelamento/Result Truth e builds.
+FK cross-tenant, cache por conta, 1.001 destinatários com um upload,
+concorrência, expiração, resultado incerto, limpeza dry-run, backpressure,
+batch >1.000, pausa/cancelamento/Result Truth e builds.
 
 Nenhuma chamada real à Meta, submissão, envio, campanha, importação ou deploy foi
 executada. Antes de homologação ainda são necessários: migration autorizada em

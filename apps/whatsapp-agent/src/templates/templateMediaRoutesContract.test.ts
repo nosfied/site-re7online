@@ -8,6 +8,8 @@ const outbound = fs.readFileSync(path.join(process.cwd(), "src/services/outbound
 const runner = fs.readFileSync(path.join(process.cwd(), "src/campaigns/campaignRunner.ts"), "utf8");
 const csvBatch = fs.readFileSync(path.join(process.cwd(), "src/campaigns/campaignCsvBatch.ts"), "utf8");
 const storage = fs.readFileSync(path.join(process.cwd(), "src/templates/templateMediaStorage.ts"), "utf8");
+const accountUpload = fs.readFileSync(path.join(process.cwd(), "src/templates/templateMediaAccountUpload.ts"), "utf8");
+const submissionGate = fs.readFileSync(path.join(process.cwd(), "src/services/templateProviderSubmissionGate.ts"), "utf8");
 
 test("template media routes are tenant-scoped, role-gated and bounded before storage", () => {
   const upload = routes.slice(
@@ -20,7 +22,7 @@ test("template media routes are tenant-scoped, role-gated and bounded before sto
   assert.ok(upload.includes("enforceAppFeature"));
   assert.ok(routes.includes("receivedBytes > maxMultipartBytes"));
   assert.ok(storage.includes("validateTemplateMediaUpload"));
-  assert.ok(routes.includes('state: { not: "deleted" }'));
+  assert.ok(routes.includes('state: { in: ["stored", "ready"] }'));
 });
 
 test("campaign creation snapshots the same media across manual, CRM, CSV and split flows", () => {
@@ -36,11 +38,14 @@ test("campaign creation snapshots the same media across manual, CRM, CSV and spl
 test("central template sender validates and uploads media after the final eligibility gate", () => {
   assert.ok(outbound.includes("export async function sendTemplate"));
   assert.ok(outbound.includes("assertTemplateMediaCompatibility"));
-  assert.ok(outbound.indexOf("await params.beforeSubmit?.()") < outbound.indexOf("await uploadMedia("));
-  assert.ok(outbound.includes("id: params.media.assetId, clientId: params.clientId"));
-  assert.ok(outbound.includes("asset.sha256 !== params.media.sha256"));
+  assert.ok(outbound.includes("runTemplateProviderSubmissionGate"));
+  assert.ok(submissionGate.indexOf("await params.beforeSubmit?.()") < submissionGate.indexOf("params.resolveMedia()"));
+  assert.ok(outbound.includes("id: media.assetId, clientId: mediaClientId"));
+  assert.ok(outbound.includes("asset.sha256 !== media.sha256"));
   assert.ok(outbound.includes("withHeaderMediaComponent"));
   assert.equal((outbound.match(/export async function sendTemplate/g) ?? []).length, 1);
+  assert.ok(accountUpload.includes("credentialGeneration"));
+  assert.ok(accountUpload.includes('"uncertain"'));
 });
 
 test("template submission preserves ambiguous upload state and never exposes provider credentials", () => {
