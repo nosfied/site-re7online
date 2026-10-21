@@ -30,21 +30,17 @@ export function useScreenProcessingOperations(operations: ScreenProcessingOperat
     }
     const current = registry.current.current();
     setVisible(current ? { key: String(current.id), active: true, title: current.title, message: current.message } : null);
-    return () => {
-      // Each render owns only its reconciliation. Component unmount clears every
-      // outstanding token so late promises cannot leave a screen blocked.
-      if (operations.every((item) => !item.active)) {
-        tokens.current.clear();
-        registry.current.clear();
-      }
-    };
   // The serialized operation contract prevents function/object identity churn
   // from reopening the overlay while preserving independent operation tokens.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
-  useEffect(() => () => {
-    tokens.current.clear();
-    registry.current.clear();
+  useEffect(() => {
+    const mountedTokens = tokens.current;
+    const mountedRegistry = registry.current;
+    return () => {
+      mountedTokens.clear();
+      mountedRegistry.clear();
+    };
   }, []);
   return visible;
 }
