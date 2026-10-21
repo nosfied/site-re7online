@@ -6,15 +6,24 @@ import {
   resolveWhatsappTransportRoutingSettings,
 } from "../config/tenantOperationalConfig.js";
 import { logger } from "../logger/logger.js";
+import { uploadMetaTemplateExample } from "./metaTemplateMedia.js";
+import {
+  mergeProviderTemplateComponents,
+  normalizeTemplateHeaderType,
+  readCanonicalTemplateComponents,
+  type TemplateHeaderType,
+} from "../templates/templateComponents.js";
 
 type TenantMetaTemplateConfig = {
   businessToken?: string | null;
   wabaId?: string | null;
+  appId?: string | null;
 };
 
 type MetaTemplateCredentials = {
   businessToken: string;
   wabaId: string;
+  appId: string | null;
   source: "tenant_meta" | "env_matched_phone";
 };
 
@@ -24,15 +33,13 @@ type TemplateForMeta = {
   language: string;
   content: string;
   variables?: unknown;
+  headerType?: TemplateHeaderType;
+  exampleMediaId?: string | null;
 };
 
-type MetaTemplateComponent = {
-  type: "BODY";
-  text: string;
-  example?: {
-    body_text: string[][];
-  };
-};
+type MetaTemplateComponent =
+  | { type: "HEADER"; format: "IMAGE" | "VIDEO"; example: { header_handle: string[] } }
+  | { type: "BODY"; text: string; example?: { body_text: string[][] } };
 
 type MetaTemplatePayload = {
   name: string;
@@ -58,6 +65,7 @@ type MetaTemplateSubmitSuccess = {
   errorMessage: null;
   rawResponse: Record<string, unknown>;
   providerError: null;
+  headerHandle: string | null;
 };
 
 type MetaTemplateSubmitFailure = {
@@ -67,6 +75,7 @@ type MetaTemplateSubmitFailure = {
   errorMessage: string;
   rawResponse: Record<string, unknown> | null;
   providerError: MetaTemplateProviderError | null;
+  headerHandle: null;
 };
 
 export type MetaTemplateSubmitResult =
@@ -89,7 +98,11 @@ export class MetaTemplateServiceError extends Error {
       | "meta_template_submit_invalid_json"
       | "meta_template_sync_not_found"
       | "meta_template_sync_invalid_json"
-      | "meta_template_sync_failed",
+      | "meta_template_sync_failed"
+      | "meta_template_media_required"
+      | "meta_template_media_invalid"
+      | "meta_template_media_upload_failed"
+      | "meta_template_media_upload_uncertain",
     public readonly status?: number,
     public readonly errorBody?: string
   ) {
@@ -98,7 +111,6 @@ export class MetaTemplateServiceError extends Error {
   }
 }
 
-const META_TEMPLATE_API_VERSION = "v18.0";
 const TEMPLATE_NAME_PATTERN = /^[a-z0-9_]+$/;
 const TEMPLATE_LANGUAGE_PATTERN = /^[a-z]{2}_[A-Z]{2}$/;
 const META_ALLOWED_CATEGORIES = new Set(["MARKETING", "UTILITY", "AUTHENTICATION"]);
@@ -119,6 +131,7 @@ export async function resolveMetaTemplateCredentialsForClient(params: {
       select: {
         businessToken: true,
         wabaId: true,
+        rawPayload: true,
       },
     }),
     resolveWhatsappTransportRoutingSettings({
@@ -128,6 +141,10 @@ export async function resolveMetaTemplateCredentialsForClient(params: {
   ]);
   const tenantBusinessToken = normalizeOptionalString(tenantMetaConfig?.businessToken);
   const tenantWabaId = normalizeOptionalString(tenantMetaConfig?.wabaId);
+  const rawPayload = tenantMetaConfig?.rawPayload && typeof tenantMetaConfig.rawPayload === "object" && !Array.isArray(tenantMetaConfig.rawPayload)
+    ? (tenantMetaConfig.rawPayload as Record<string, unknown>)
+    : null;
+  const tenantAppId = normalizeOptionalString(rawPayload?.appId ?? rawPayload?.applicationId);
   if (
     !isWhatsappTransportEnabledForRouting(
       routingSettings.settings,
@@ -141,6 +158,7 @@ export async function resolveMetaTemplateCredentialsForClient(params: {
     return {
       businessToken: tenantBusinessToken,
       wabaId: tenantWabaId,
+      appId: tenantAppId || normalizeOptionalString(getEnv().META_APP_ID) || null,
       source: "tenant_meta",
     };
   }
@@ -167,6 +185,7 @@ export async function resolveMetaTemplateCredentialsForClient(params: {
   return {
     businessToken: envBusinessToken,
     wabaId: envWabaId,
+    appId: normalizeOptionalString(currentEnv.META_APP_ID) || null,
     source: "env_matched_phone",
   };
 }
@@ -249,7 +268,7 @@ function buildMetaExamples(content: string, variables: unknown) {
   };
 }
 
-function buildMetaTemplatePayload(template: TemplateForMeta): MetaTemplatePayload {
+function buildMetaTemplatePayload(template: TemplateForMeta, headerHandle?: string | null): MetaTemplatePayload {
   const content = template.content.trim();
   const placeholderIndexes = extractPlaceholderIndexes(content);
 
@@ -258,6 +277,13 @@ function buildMetaTemplatePayload(template: TemplateForMeta): MetaTemplatePayloa
     category: template.category.trim().toUpperCase(),
     language: template.language.trim(),
     components: [
+      ...(normalizeTemplateHeaderType(template.headerType) !== "NONE" && headerHandle
+        ? [{
+            type: "HEADER" as const,
+            format: normalizeTemplateHeaderType(template.headerType) as "IMAGE" | "VIDEO",
+            example: { header_handle: [headerHandle] },
+          }]
+        : []),
       {
         type: "BODY",
         text: content,
@@ -366,11 +392,19 @@ export function validateTemplateForMeta(template: TemplateForMeta) {
       }
     }
   }
+  const headerType = normalizeTemplateHeaderType(template.headerType);
+  if (headerType !== "NONE" && !normalizeOptionalString(template.exampleMediaId)) {
+    throw new MetaTemplateValidationError("template_media_required");
+  }
+  if (headerType === "NONE" && normalizeOptionalString(template.exampleMediaId)) {
+    throw new MetaTemplateValidationError("template_media_not_allowed");
+  }
 }
 
 export async function submitTemplateToMeta(params: {
   tenantConfig: TenantMetaTemplateConfig;
   template: TemplateForMeta;
+  exampleMedia?: { content: Buffer; mimeType: string; fileName: string; kind: "IMAGE" | "VIDEO" } | null;
 }): Promise<MetaTemplateSubmitResult> {
   const businessToken = normalizeOptionalString(params.tenantConfig.businessToken);
   const wabaId = normalizeOptionalString(params.tenantConfig.wabaId);
@@ -380,9 +414,37 @@ export async function submitTemplateToMeta(params: {
   }
 
   validateTemplateForMeta(params.template);
+  const headerType = normalizeTemplateHeaderType(params.template.headerType);
+  let headerHandle: string | null = null;
+  if (headerType !== "NONE") {
+    if (!params.exampleMedia || params.exampleMedia.kind !== headerType) {
+      throw new MetaTemplateServiceError("meta_template_media_required", "meta_template_media_required", 400);
+    }
+    const appId = normalizeOptionalString(params.tenantConfig.appId ?? getEnv().META_APP_ID);
+    if (!appId) throw new MetaTemplateServiceError("meta_config_missing", "meta_config_missing", 400);
+    const uploaded = await uploadMetaTemplateExample({
+      apiVersion: getEnv().WHATSAPP_API_VERSION,
+      appId,
+      accessToken: businessToken,
+      content: params.exampleMedia.content,
+      mimeType: params.exampleMedia.mimeType,
+      fileName: params.exampleMedia.fileName,
+    });
+    if (!uploaded.ok) {
+      throw new MetaTemplateServiceError(
+        uploaded.code,
+        uploaded.code === "meta_upload_result_uncertain"
+          ? "meta_template_media_upload_uncertain"
+          : "meta_template_media_upload_failed",
+        uploaded.status ?? 502,
+        uploaded.details ?? undefined
+      );
+    }
+    headerHandle = uploaded.handle;
+  }
 
-  const payload = buildMetaTemplatePayload(params.template);
-  const url = `https://graph.facebook.com/${META_TEMPLATE_API_VERSION}/${wabaId}/message_templates`;
+  const payload = buildMetaTemplatePayload(params.template, headerHandle);
+  const url = `https://graph.facebook.com/${getEnv().WHATSAPP_API_VERSION}/${wabaId}/message_templates`;
 
   const response = await fetch(url, {
     method: "POST",
@@ -444,6 +506,7 @@ export async function submitTemplateToMeta(params: {
         "meta_template_submit_failed",
       rawResponse,
       providerError,
+      headerHandle: null,
     };
   }
 
@@ -454,6 +517,7 @@ export async function submitTemplateToMeta(params: {
     errorMessage: null,
     rawResponse: rawResponse ?? {},
     providerError: null,
+    headerHandle,
   };
 }
 
@@ -501,8 +565,12 @@ export async function syncTemplateStatus(templateId: string) {
       submittedCategory: true,
       wasRecategorized: true,
       language: true,
+      content: true,
       status: true,
       metaTemplateId: true,
+      components: true,
+      headerType: true,
+      exampleMediaId: true,
       client: {
         select: {
           clientKey: true,
@@ -521,7 +589,7 @@ export async function syncTemplateStatus(templateId: string) {
   }
 
   const params = new URLSearchParams({ name: template.name });
-  const url = `https://graph.facebook.com/${META_TEMPLATE_API_VERSION}/${credentials.wabaId}/message_templates?${params.toString()}`;
+  const url = `https://graph.facebook.com/${getEnv().WHATSAPP_API_VERSION}/${credentials.wabaId}/message_templates?${params.toString()}`;
   const response = await fetch(url, {
     method: "GET",
     headers: {
@@ -590,13 +658,29 @@ export async function syncTemplateStatus(templateId: string) {
   const nextStatus = normalizeMetaTemplateSyncStatus(typedMatch.status);
   const metaCategory = normalizeMetaTemplateCategory(typedMatch.category);
   const rejectionReason = extractMetaRejectionReason(typedMatch);
+  const providerComponents = Array.isArray(typedMatch.components) ? typedMatch.components : null;
+  const nextComponents = providerComponents
+    ? mergeProviderTemplateComponents({
+        current: template.components,
+        fallback: {
+          body: template.content,
+          headerType: template.headerType,
+          exampleMediaId: template.exampleMediaId,
+        },
+        providerComponents,
+      })
+    : readCanonicalTemplateComponents(template.components, {
+        body: template.content,
+        headerType: template.headerType,
+        exampleMediaId: template.exampleMediaId,
+      });
   const submittedCategory = normalizeMetaTemplateCategory(template.submittedCategory);
   const nextCategory = metaCategory ?? template.category;
   const nextWasRecategorized = Boolean(
     submittedCategory && metaCategory && metaCategory !== submittedCategory
   );
 
-  if (!nextStatus && nextCategory === template.category && nextWasRecategorized === template.wasRecategorized) {
+  if (!nextStatus && !providerComponents && nextCategory === template.category && nextWasRecategorized === template.wasRecategorized) {
     return {
       ok: true as const,
       templateId: template.id,
@@ -642,6 +726,8 @@ export async function syncTemplateStatus(templateId: string) {
       category: nextCategory,
       submittedCategory: submittedCategory ?? undefined,
       wasRecategorized: nextWasRecategorized,
+      components: nextComponents as unknown as import("@prisma/client").Prisma.InputJsonValue,
+      headerType: nextComponents.header.type,
       status: nextStatus ?? template.status,
       rejectionReason: nextStatus === "rejected" ? rejectionReason ?? undefined : null,
     },

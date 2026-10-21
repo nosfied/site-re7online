@@ -34,14 +34,17 @@ import {
   createAppCampaignDraft,
   createAppCampaignDraftSplit,
   createAppCampaignDraftFromCsv,
+  deleteAppTemplateMedia,
   discardAppCampaignDraft,
   fetchAppCampaignAudiencePreview,
   fetchAppCrmContactDetail,
   fetchAppCampaignReturnDestinations,
   fetchAppCrmStatuses,
+  fetchAppTemplateMedia,
   getAppCampaign,
   listAppCampaigns,
   listAppTemplates,
+  uploadAppTemplateMedia,
   loadAppSession,
   pauseAppCampaign,
   pauseAppCampaignBatch,
@@ -86,6 +89,8 @@ type CampaignFormState = {
   returnDestinationType: "human_department" | "automated_flow";
   returnDepartmentId: string;
   returnFlowId: string;
+  templateMediaAssetId: string;
+  templateMediaFileName: string;
 };
 
 type TemplateVariableSource = "" | "contact.displayName" | "lead.companyName" | "lead.city" | "fixed";
@@ -144,6 +149,8 @@ const EMPTY_FORM: CampaignFormState = {
   returnDestinationType: "human_department",
   returnDepartmentId: "",
   returnFlowId: "",
+  templateMediaAssetId: "",
+  templateMediaFileName: "",
 };
 
 const EMPTY_AUDIENCE_FILTERS: AudiencePreviewFilters = {
@@ -831,6 +838,9 @@ export default function AppCampaignsPage() {
   const [refreshingList, setRefreshingList] = useState(false);
   const [refreshingDetail, setRefreshingDetail] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [uploadingTemplateMedia, setUploadingTemplateMedia] = useState(false);
+  const [templateMediaPreviewUrl, setTemplateMediaPreviewUrl] = useState<string | null>(null);
+  const templateMediaUploadGenerationRef = useRef(0);
   const [cancelling, setCancelling] = useState(false);
   const [discardingDraft, setDiscardingDraft] = useState(false);
   const [schedulingDraft, setSchedulingDraft] = useState(false);
@@ -1073,6 +1083,70 @@ export default function AppCampaignsPage() {
   const selectedTemplateEffectiveCategory = String(
     selectedTemplate?.effectiveCategory ?? selectedTemplate?.category ?? ""
   ).toUpperCase();
+  const selectedTemplateHeaderType = selectedTemplate?.headerType ?? "NONE";
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    setTemplateMediaPreviewUrl(null);
+    if (!session || !form.templateMediaAssetId || selectedTemplateHeaderType === "NONE") {
+      return () => controller.abort();
+    }
+    fetchAppTemplateMedia(session, form.templateMediaAssetId, { signal: controller.signal })
+      .then(({ blob }) => {
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setTemplateMediaPreviewUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setTemplateMediaPreviewUrl(null);
+      });
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [form.templateMediaAssetId, selectedTemplateHeaderType, session]);
+
+  const handleCampaignMediaFile = async (file: File | null) => {
+    const generation = ++templateMediaUploadGenerationRef.current;
+    const previousAssetId = form.templateMediaAssetId;
+    if (!session || !file || selectedTemplateHeaderType === "NONE") {
+      setForm((current) => ({ ...current, templateMediaAssetId: "", templateMediaFileName: "" }));
+      return;
+    }
+    setUploadingTemplateMedia(true);
+    setFormError(null);
+    try {
+      const uploaded = await uploadAppTemplateMedia(session, {
+        file,
+        kind: selectedTemplateHeaderType,
+        purpose: "CAMPAIGN",
+      });
+      if (generation !== templateMediaUploadGenerationRef.current) {
+        await deleteAppTemplateMedia(session, uploaded.asset.id).catch(() => undefined);
+        return;
+      }
+      setForm((current) => ({
+        ...current,
+        templateMediaAssetId: uploaded.asset.id,
+        templateMediaFileName: uploaded.asset.originalFilename ?? file.name,
+      }));
+      if (previousAssetId && previousAssetId !== uploaded.asset.id) {
+        await deleteAppTemplateMedia(session, previousAssetId).catch(() => undefined);
+      }
+    } catch (error) {
+      if (generation === templateMediaUploadGenerationRef.current) {
+        setFormError(getCampaignUserFacingError(error as { message?: string }, "Não foi possível enviar a mídia da campanha."));
+      }
+    } finally {
+      if (generation === templateMediaUploadGenerationRef.current) setUploadingTemplateMedia(false);
+    }
+  };
+
+  const discardUnpersistedTemplateMedia = useCallback(async (assetId: string) => {
+    if (!session || !assetId) return;
+    await deleteAppTemplateMedia(session, assetId).catch(() => undefined);
+  }, [session]);
 
   const templateVariableLabels = useMemo(
     () => getTemplateVariablePositions(selectedTemplate),
@@ -1300,6 +1374,7 @@ export default function AppCampaignsPage() {
             className={campaignComposerControlClasses}
             value={form.templateId}
             onChange={(event) => {
+              void discardUnpersistedTemplateMedia(form.templateMediaAssetId);
               const template = templates.find((item) => item.id === event.target.value) ?? null;
               const labels = getTemplateVariablePositions(template);
               setForm((prev) => ({
@@ -1308,6 +1383,8 @@ export default function AppCampaignsPage() {
                 templateName: template?.name ?? "",
                 templateVariables: syncTemplateVariables(prev.templateVariables, labels.length),
                 templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, labels),
+                templateMediaAssetId: "",
+                templateMediaFileName: "",
               }));
               setCsvPreview(null);
               setCsvImportReport(null);
@@ -1322,6 +1399,47 @@ export default function AppCampaignsPage() {
           </select>
         </label>
       </div>
+      {selectedTemplateHeaderType !== "NONE" ? (
+        <div className="rounded-lg border border-sky-300/20 bg-sky-900/10 p-3">
+          <label className="grid gap-1 text-sm text-white/75">
+            {selectedTemplateHeaderType === "IMAGE" ? "Imagem da campanha" : "Vídeo da campanha"}
+            <input
+              type="file"
+              accept={selectedTemplateHeaderType === "IMAGE" ? "image/jpeg,image/png" : "video/mp4,video/3gpp"}
+              onChange={(event) => void handleCampaignMediaFile(event.target.files?.[0] ?? null)}
+              disabled={uploadingTemplateMedia}
+              className={campaignComposerControlClasses}
+            />
+          </label>
+          <p className="mt-2 text-xs text-white/55">
+            {uploadingTemplateMedia
+              ? "Enviando mídia com segurança..."
+              : form.templateMediaAssetId
+                ? `Mídia pronta: ${form.templateMediaFileName || "arquivo validado"}`
+                : "A mídia compatível é obrigatória e fica vinculada ao snapshot da campanha."}
+          </p>
+          {selectedTemplateHeaderType === "IMAGE" && templateMediaPreviewUrl ? (
+            // Blob URLs are authenticated, ephemeral previews and cannot use Next image optimization.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={templateMediaPreviewUrl} alt="Prévia da imagem da campanha" className="mt-3 max-h-52 w-full rounded-lg object-cover" />
+          ) : null}
+          {selectedTemplateHeaderType === "VIDEO" && templateMediaPreviewUrl ? (
+            <video src={templateMediaPreviewUrl} controls className="mt-3 max-h-52 w-full rounded-lg" aria-label="Prévia do vídeo da campanha" />
+          ) : null}
+          {form.templateMediaAssetId ? (
+            <button
+              type="button"
+              onClick={() => {
+                void discardUnpersistedTemplateMedia(form.templateMediaAssetId);
+                setForm((current) => ({ ...current, templateMediaAssetId: "", templateMediaFileName: "" }));
+              }}
+              className="mt-3 rounded-md border border-white/15 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
+            >
+              Remover mídia desta composição
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {templates.length === 0 ? (
         <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
           <p className="font-semibold">Não há modelos ativos disponíveis para campanha.</p>
@@ -1527,9 +1645,10 @@ export default function AppCampaignsPage() {
 
   const handleDiscardComposer = useCallback(() => {
     if (composerBusy || !confirmComposerDiscard()) return;
+    void discardUnpersistedTemplateMedia(form.templateMediaAssetId);
     resetCampaignComposer();
     showToast("info", "Campanha descartada", "As informações que ainda não haviam sido salvas foram removidas.");
-  }, [composerBusy, confirmComposerDiscard, resetCampaignComposer, showToast]);
+  }, [composerBusy, confirmComposerDiscard, discardUnpersistedTemplateMedia, form.templateMediaAssetId, resetCampaignComposer, showToast]);
 
   const handleCampaignTabChange = useCallback(
     (tab: CampaignCenterTab) => {
@@ -1539,12 +1658,13 @@ export default function AppCampaignsPage() {
         return;
       }
       if (activeTab === "create" && !confirmComposerDiscard()) return;
+      if (activeTab === "create") void discardUnpersistedTemplateMedia(form.templateMediaAssetId);
       resetCampaignComposer();
       setActiveTab(tab);
       setStatusFilter(getTabStatusFilter(tab));
       setCurrentPage(1);
     },
-    [activeTab, composerBusy, confirmComposerDiscard, resetCampaignComposer, showToast]
+    [activeTab, composerBusy, confirmComposerDiscard, discardUnpersistedTemplateMedia, form.templateMediaAssetId, resetCampaignComposer, showToast]
   );
 
   const representedCampaigns = useMemo(() => campaignListRepresentatives(campaigns), [campaigns]);
@@ -1900,6 +2020,7 @@ export default function AppCampaignsPage() {
         recipients,
         ...(templateParams.length > 0 ? { templateParams } : {}),
         returnDestination: returnDestination.value,
+        ...(form.templateMediaAssetId ? { templateMediaAssetId: form.templateMediaAssetId } : {}),
       });
       await refreshCampaigns(session, created.campaign.campaignId);
       if (created.campaign.campaignId) {
@@ -2331,6 +2452,8 @@ export default function AppCampaignsPage() {
       returnDestinationType: returnDestination?.type ?? EMPTY_FORM.returnDestinationType,
       returnDepartmentId: returnDestination?.type === "human_department" ? returnDestination.departmentId ?? "" : "",
       returnFlowId: returnDestination?.type === "automated_flow" ? returnDestination.flowId ?? "" : "",
+      templateMediaAssetId: draftSeed?.templateMedia?.assetId ?? sourceCampaign.templateMedia?.assetId ?? "",
+      templateMediaFileName: draftSeed?.templateMedia || sourceCampaign.templateMedia ? "mídia preservada da campanha" : "",
     });
     setActiveTab("create");
     setExpandedCreationPanel(reuseState.mode === "csv" ? "csv" : reuseState.mode === "manual" ? "manual" : "audience");
@@ -2476,6 +2599,7 @@ export default function AppCampaignsPage() {
         templateId,
         selectedLeadIds,
         returnDestination: returnDestination.value,
+        ...(form.templateMediaAssetId ? { templateMediaAssetId: form.templateMediaAssetId } : {}),
         ...(templateVariableLabels.length > 0
           ? { templateVariableMappings: buildTemplateVariableMappingsPayload(form.templateVariableMappings) }
           : {}),
@@ -2543,6 +2667,7 @@ export default function AppCampaignsPage() {
           ? { version: 1 as const, crmBusinessStatusId: audienceFilters.status }
           : null,
         returnDestination: returnDestination.value,
+        ...(form.templateMediaAssetId ? { templateMediaAssetId: form.templateMediaAssetId } : {}),
         ...(templateVariableLabels.length > 0
           ? { templateVariableMappings: buildTemplateVariableMappingsPayload(form.templateVariableMappings) }
           : {}),
@@ -2676,6 +2801,7 @@ export default function AppCampaignsPage() {
         templateId,
         selectedLeadIds: [],
         returnDestination: returnDestination.value,
+        ...(form.templateMediaAssetId ? { templateMediaAssetId: form.templateMediaAssetId } : {}),
         selectionMode: "DYNAMIC_CRM_FILTER",
         dynamicFilter: { version: 1, crmBusinessStatusId },
         ...(templateVariableLabels.length > 0
@@ -2939,6 +3065,7 @@ export default function AppCampaignsPage() {
         requestId: csvCreationRequestRef.current.id,
         mapping: buildCsvMappingPayload(),
         returnDestination: returnDestination.value,
+        ...(form.templateMediaAssetId ? { templateMediaAssetId: form.templateMediaAssetId } : {}),
       });
       const firstCampaign = created.campaign ?? created.campaigns?.[0];
       if (!firstCampaign) throw new Error("O conjunto não retornou uma campanha para revisão.");
@@ -3828,7 +3955,7 @@ export default function AppCampaignsPage() {
                         <option value="">Selecione</option>
                         {mappedCsvGenericFields.map((field) => (
                           <option key={field.key} value={field.key}>
-                            {field.label} · coluna "{csvGenericFieldColumns[field.key]}"
+                            {field.label} · coluna &quot;{csvGenericFieldColumns[field.key]}&quot;
                           </option>
                         ))}
                       </select>

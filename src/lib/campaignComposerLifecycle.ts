@@ -11,6 +11,8 @@ export type CampaignComposerDirtySnapshot = {
     returnDestinationType: string;
     returnDepartmentId: string;
     returnFlowId: string;
+    templateMediaAssetId?: string;
+    templateMediaFileName?: string;
   };
   audienceFilters: {
     q: string;
@@ -49,7 +51,9 @@ export function isCampaignComposerDirty(snapshot: CampaignComposerDirtySnapshot)
     form.recipientsInput.trim() !== "" ||
     form.returnDestinationType !== "human_department" ||
     form.returnDepartmentId !== "" ||
-    form.returnFlowId !== "";
+    form.returnFlowId !== "" ||
+    (form.templateMediaAssetId ?? "") !== "" ||
+    (form.templateMediaFileName ?? "") !== "";
   const audienceIsDirty =
     audienceFilters.q.trim() !== "" ||
     audienceFilters.status !== "" ||

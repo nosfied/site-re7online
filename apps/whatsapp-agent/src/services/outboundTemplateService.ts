@@ -11,6 +11,11 @@ import {
   isWhatsappTemplateCategoryAllowedForTenant,
   WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
 } from "../meta/templateCategoryPolicy.js";
+import crypto from "node:crypto";
+import type { CampaignTemplateComponents } from "../templates/templateComponents.js";
+import { assertTemplateMediaCompatibility, withHeaderMediaComponent } from "../templates/templateComponents.js";
+import { resolveTemplateMediaFile } from "../templates/templateMediaStorage.js";
+import { uploadMedia } from "../whatsapp/whatsapp.client.js";
 
 export type OutboundTemplateParams = {
   toE164: string;
@@ -18,10 +23,8 @@ export type OutboundTemplateParams = {
   intent: ConversationIntent | undefined;
   templateName: string;
   lang?: string;
-  components?: Array<{
-    type: "body";
-    parameters: Array<{ type: "text"; text: string }>;
-  }>;
+  components?: CampaignTemplateComponents;
+  media?: { assetId: string; kind: "IMAGE" | "VIDEO"; sha256: string };
   isFallback?: boolean;
   fallbackReason?: string;
   requestId?: string;
@@ -76,16 +79,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
   const resolvedAccessToken = credentials?.accessToken || env.WHATSAPP_ACCESS_TOKEN;
   const credentialSource = credentials?.source ?? "env";
   const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${resolvedPhoneNumberId}/messages`;
-  const payload = {
-    messaging_product: "whatsapp",
-    to: params.toE164,
-    type: "template",
-    template: {
-      name: params.templateName,
-      language: { code: resolvedLang },
-      ...(params.components ? { components: params.components } : {}),
-    },
-  };
+  let resolvedComponents = params.components;
 
   logger.info({
     event: "outbound.template.sending",
@@ -115,8 +109,18 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
       },
       select: {
         category: true,
+        headerType: true,
       },
     });
+    try {
+      assertTemplateMediaCompatibility({
+        headerType: template?.headerType ?? "NONE",
+        mediaKind: params.media?.kind,
+        mediaAssetId: params.media?.assetId,
+      });
+    } catch (error) {
+      return { ok: false, status: 400, errorBody: (error as Error).message };
+    }
     const categoryDecision = await isWhatsappTemplateCategoryAllowedForTenant({
       prisma,
       clientId: params.clientId,
@@ -177,6 +181,48 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
   // can precede the campaign's final current-tenant eligibility observation.
   const eligibilityReason = await params.beforeSubmit?.();
   if (eligibilityReason) return { ok: false, blockedByEligibility: true, errorBody: eligibilityReason };
+
+  if (params.media && params.clientId) {
+    const prisma = getPrisma();
+    const asset = await prisma.templateMediaAsset.findFirst({
+      where: { id: params.media.assetId, clientId: params.clientId, state: { not: "deleted" } },
+      select: { id: true, kind: true, storageKey: true, mimeType: true, sha256: true, originalFilename: true },
+    });
+    if (!asset || asset.kind !== params.media.kind || asset.sha256 !== params.media.sha256) {
+      return { ok: false, status: 409, errorBody: "template_media_snapshot_mismatch" };
+    }
+    const stored = await resolveTemplateMediaFile(asset.storageKey).catch(() => null);
+    if (!stored || crypto.createHash("sha256").update(stored.content).digest("hex") !== asset.sha256) {
+      return { ok: false, status: 409, errorBody: "template_media_content_mismatch" };
+    }
+    const uploaded = await uploadMedia(
+      new Blob([new Uint8Array(stored.content)], { type: asset.mimeType }),
+      asset.mimeType,
+      { accessToken: resolvedAccessToken, phoneNumberId: resolvedPhoneNumberId },
+      asset.originalFilename
+    );
+    if (!uploaded.ok) {
+      return { ok: false, status: uploaded.status ?? 502, errorBody: "template_media_upload_failed" };
+    }
+    await prisma.templateMediaAsset.updateMany({
+      where: { id: asset.id, clientId: params.clientId },
+      data: { metaMediaId: uploaded.mediaId, metaMediaUploadedAt: new Date(), state: "ready" },
+    });
+    resolvedComponents = withHeaderMediaComponent(resolvedComponents, {
+      kind: params.media.kind,
+      mediaId: uploaded.mediaId,
+    });
+  }
+  const payload = {
+    messaging_product: "whatsapp",
+    to: params.toE164,
+    type: "template",
+    template: {
+      name: params.templateName,
+      language: { code: resolvedLang },
+      ...(resolvedComponents ? { components: resolvedComponents } : {}),
+    },
+  };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
 

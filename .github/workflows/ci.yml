@@ -126,6 +126,15 @@ jobs:
           src/crm/crmContactUpsert.test.ts
       - name: CRM cursor filters, RBAC and tenant isolation routes
         run: node --import tsx --test src/http/crmCapabilityRoutes.test.ts
+      - name: Template media validation, Meta contract and tenant isolation
+        run: >-
+          node --import tsx --test
+          src/templates/templateComponents.test.ts
+          src/templates/templateMediaStorage.test.ts
+          src/templates/templateMediaRoutesContract.test.ts
+          src/templates/templateMediaPersistence.postgres.test.ts
+          src/meta/metaTemplateMedia.test.ts
+          src/campaigns/campaignSeedPrivacy.test.ts
       - name: Frontend timeout, re-entry and CRM CSV UX contract tests
         working-directory: .
         run: |
@@ -137,3 +146,9 @@ jobs:
           apps/whatsapp-agent/node_modules/.bin/tsx --test \
             --test-name-pattern "CRM contacts expose progress|CRM initial list|CRM list uses cursor" \
             src/app/app/crm/crmPageContract.test.ts
+      - name: Campaign media composer and lifecycle contracts
+        working-directory: .
+        run: >-
+          apps/whatsapp-agent/node_modules/.bin/tsx --test
+          src/app/app/campaigns/campaignsPageContract.test.ts
+          src/lib/campaignComposerLifecycle.test.ts

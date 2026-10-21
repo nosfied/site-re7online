@@ -1,5 +1,14 @@
 # CRA-PR Readiness Notes
 
+## Implementação local de templates/campanhas com mídia — 21/10/2026
+
+`LOCAL VALIDATED / NOT DEPLOYED / CRA ACCEPTANCE PENDING`. O contrato técnico
+agora representa headers `IMAGE`/`VIDEO`, exemplo privado, submissão/sync e mídia
+imutável nas campanhas manual, CRM, CSV, split, agendamento, teste e reuso. A
+categoria continua sujeita à política do tenant; suporte técnico não autoriza
+`MARKETING`. Migration, chamadas Meta, submissão, envio e aceite CRA não foram
+executados. Fonte técnica: [`META_TEMPLATE_MEDIA_SUPPORT.md`](../../../saas/META_TEMPLATE_MEDIA_SUPPORT.md).
+
 ## Janela autorizada 02/10 - impedimento operacional, sem aceite CRA
 
 BLOCKED BEFORE CONTAINMENT / NOT DEPLOYED. [Registro](../../../reviews/automation-freeform-window-release-af26/ACTIVATION_ATTEMPT_2026-10-02.md).

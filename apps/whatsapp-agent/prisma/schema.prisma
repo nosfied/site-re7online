@@ -94,6 +94,7 @@ model Client {
   tenantCampaignExecutionLease TenantCampaignExecutionLease?
   templates     Template[]
   templateRequests TemplateRequest[]
+  templateMediaAssets TemplateMediaAsset[]
   slaConfig      SLAConfig?
   retentionConfig RetentionConfig?
   operationalConfig TenantOperationalConfig?
@@ -958,6 +959,8 @@ model Campaign {
   templateId      String?
   name            String
   templateName    String
+  templateMediaAssetId String?
+  templateMediaSnapshot Json?
   status          String
   totalRecipients Int      @default(0)
   sentCount       Int      @default(0)
@@ -968,6 +971,7 @@ model Campaign {
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   template Template? @relation(fields: [templateId], references: [id])
+  templateMediaAsset TemplateMediaAsset? @relation("CampaignTemplateMedia", fields: [clientId, templateMediaAssetId], references: [clientId, id])
   executionBatchLinks CampaignExecutionBatchCampaign[]
   executionJobs CampaignExecutionJob[]
 
@@ -975,6 +979,7 @@ model Campaign {
   @@index([clientId, status, createdAt])
   @@index([clientId, status, scheduledAt])
   @@index([templateId])
+  @@index([clientId, templateMediaAssetId])
 }
 
 model CampaignExecutionBatch {
@@ -1090,6 +1095,9 @@ model Template {
   status          String
   content         String
   variables       Json?
+  components      Json?
+  headerType      String   @default("NONE")
+  exampleMediaId  String?
   metaTemplateId  String?
   rejectionReason String?
   createdAt       DateTime @default(now())
@@ -1097,10 +1105,12 @@ model Template {
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   campaigns Campaign[]
+  exampleMedia TemplateMediaAsset? @relation("TemplateExampleMedia", fields: [clientId, exampleMediaId], references: [clientId, id])
 
   @@unique([clientId, name])
   @@index([clientId, status])
   @@index([clientId, name])
+  @@index([clientId, exampleMediaId])
 }
 
 model TemplateRequest {
@@ -1109,6 +1119,9 @@ model TemplateRequest {
   name      String
   content   String
   variables Json?
+  components Json?
+  headerType String   @default("NONE")
+  exampleMediaId String?
   category  String
   status    String
   notes     String?
@@ -1116,8 +1129,40 @@ model TemplateRequest {
   createdAt DateTime @default(now())
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  exampleMedia TemplateMediaAsset? @relation("TemplateRequestExampleMedia", fields: [clientId, exampleMediaId], references: [clientId, id])
 
   @@index([clientId, status])
+  @@index([clientId, exampleMediaId])
+}
+
+model TemplateMediaAsset {
+  id                  String   @id @default(uuid())
+  clientId            String   @db.Uuid
+  purpose             String
+  kind                String
+  storageKey          String   @unique
+  mimeType            String
+  sizeBytes           Int
+  sha256              String
+  originalFilename    String?
+  state               String   @default("stored")
+  metaHandle          String?
+  metaHandleCreatedAt DateTime?
+  metaMediaId         String?
+  metaMediaUploadedAt DateTime?
+  createdBy           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  templateRequests TemplateRequest[] @relation("TemplateRequestExampleMedia")
+  templates Template[] @relation("TemplateExampleMedia")
+  campaigns Campaign[] @relation("CampaignTemplateMedia")
+
+  @@unique([clientId, id])
+  @@index([clientId, purpose, createdAt])
+  @@index([clientId, sha256])
+  @@index([state, updatedAt])
 }
 
 model Lead {

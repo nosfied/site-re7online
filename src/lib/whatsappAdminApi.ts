@@ -524,6 +524,14 @@ export type CampaignItem = {
   scheduledAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  templateMedia?: {
+    version: 1;
+    assetId: string;
+    kind: "IMAGE" | "VIDEO";
+    sha256: string;
+    mimeType: string;
+    sizeBytes: number;
+  } | null;
   progress: {
     totalRecipients: number;
     sentCount: number;
@@ -654,6 +662,14 @@ export type CampaignItem = {
       flowId?: string | null;
     } | null;
     source?: string | null;
+    templateMedia?: {
+      version: 1;
+      assetId: string;
+      kind: "IMAGE" | "VIDEO";
+      sha256: string;
+      mimeType: string;
+      sizeBytes: number;
+    } | null;
   };
   draftReview?: {
     summary: CampaignDraftSummary;
@@ -728,6 +744,10 @@ export type AdminTemplateRequestItem = {
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
+  headerType?: "NONE" | "IMAGE" | "VIDEO";
+  exampleMediaId?: string | null;
+  mediaPreviewUrl?: string | null;
+  components?: unknown;
 };
 
 export type TenantOnboardingExchangePayload = {
@@ -2639,6 +2659,16 @@ export async function fetchAdminTemplateRequests(
   if (filters?.category) params.set("category", filters.category);
   if (filters?.search) params.set("search", filters.search);
   return requestJson(connection, `/admin/templates/requests${params.size ? `?${params.toString()}` : ""}`);
+}
+
+export async function fetchAdminTemplateRequestMedia(
+  connection: AdminConnection,
+  requestId: string
+) {
+  return requestAdminBlob(
+    connection,
+    `/admin/templates/requests/${encodeURIComponent(requestId)}/media`
+  );
 }
 
 export async function approveAdminTemplateRequest(

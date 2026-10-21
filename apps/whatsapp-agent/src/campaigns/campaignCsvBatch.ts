@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { buildPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
 import type { resolveCampaignRecipientImportPlan } from "./campaignRecipientImport.js";
+import type { TemplateMediaReference } from "../templates/templateComponents.js";
 
 type ImportPlan = Awaited<ReturnType<typeof resolveCampaignRecipientImportPlan>>;
 
@@ -20,6 +21,7 @@ export async function createCsvCampaignBatch(prisma: PrismaClient, params: {
   clientId: string; actorId: string; requestId: string; name: string;
   templateId: string; templateName: string; payload: unknown;
   returnDestination: Prisma.InputJsonValue; plan: ImportPlan;
+  templateMedia?: (TemplateMediaReference & { version: 1; mimeType: string; sizeBytes: number }) | null;
   beforeChild?: (index: number) => void | Promise<void>;
 }) {
   const key = `csv-group:${params.requestId}`;
@@ -56,6 +58,8 @@ export async function createCsvCampaignBatch(prisma: PrismaClient, params: {
         clientId: params.clientId, templateId: params.templateId, templateName: params.templateName,
         name: `${params.name} — ${String(index + 1).padStart(2, "0")}/${String(chunks.length).padStart(2, "0")}`,
         totalRecipients: rows.length, status: "draft",
+        templateMediaAssetId: params.templateMedia?.assetId ?? null,
+        templateMediaSnapshot: params.templateMedia ?? undefined,
       } });
       await tx.campaignExecutionBatchCampaign.create({ data: { clientId: params.clientId, batchId: batch.id, campaignId: campaign.id, chunkIndex: index + 1, recipientCount: rows.length, status: "draft" } });
       const recipients = rows.map((row) => row.waIdCanonical);
@@ -66,6 +70,7 @@ export async function createCsvCampaignBatch(prisma: PrismaClient, params: {
           ...buildPrivateCampaignSeedFields({ clientId: params.clientId, waIds: recipients, componentsByWaId }),
           manualRecipientInputCount: rows.length, templateParams: [], templateVariableMappings: [],
           returnDestination: params.returnDestination, source: "recipient_import:csv",
+          templateMedia: params.templateMedia ?? null,
           summary: { ...plan.preview.summary, received: rows.length, valid: rows.length, readyToImport: rows.length },
         },
       } });

@@ -12,6 +12,7 @@ import {
   disableAdminTemplate,
   enableAdminTemplate,
   fetchAdminTemplateRequests,
+  fetchAdminTemplateRequestMedia,
   fetchTemplatesObservability,
   formatDateTime,
   syncAdminTemplateRequest,
@@ -131,6 +132,8 @@ function TemplateWhatsappPreview({
   language,
   status,
   templateName,
+  headerType = "NONE",
+  mediaPreviewUrl = null,
 }: {
   body: string;
   variableExamples: Array<{ key: string; example: string }>;
@@ -138,6 +141,8 @@ function TemplateWhatsappPreview({
   language: string;
   status: string;
   templateName: string;
+  headerType?: "NONE" | "IMAGE" | "VIDEO";
+  mediaPreviewUrl?: string | null;
 }) {
   const previewBody = buildTemplatePreviewWithExamples(body, variableExamples);
   return (
@@ -153,6 +158,14 @@ function TemplateWhatsappPreview({
       <p className="mt-1 text-xs text-white/50">{templateName}</p>
       <div className="mt-3 rounded-xl border border-emerald-200/10 bg-[#0b2b24] p-4">
         <div className="ml-auto max-w-[88%] rounded-2xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-sm leading-relaxed text-slate-950 shadow">
+          {headerType === "IMAGE" && mediaPreviewUrl ? (
+            // Blob URLs are authenticated, ephemeral previews and cannot use Next image optimization.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={mediaPreviewUrl} alt="Prévia autenticada da imagem do header" className="mb-2 max-h-52 w-full rounded-lg object-cover" />
+          ) : null}
+          {headerType === "VIDEO" && mediaPreviewUrl ? (
+            <video src={mediaPreviewUrl} controls className="mb-2 max-h-52 w-full rounded-lg" aria-label="Prévia autenticada do vídeo do header" />
+          ) : null}
           <p className="whitespace-pre-wrap">{previewBody || "Sem conteúdo textual."}</p>
         </div>
       </div>
@@ -173,6 +186,7 @@ export default function ManageTemplatesAdminPage() {
   const [requests, setRequests] = useState<AdminTemplateRequestItem[]>([]);
   const [catalog, setCatalog] = useState<AdminTemplateCatalogItem[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [selectedMediaPreviewUrl, setSelectedMediaPreviewUrl] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftById, setDraftById] = useState<Record<string, {
     name: string;
@@ -367,6 +381,26 @@ export default function ManageTemplatesAdminPage() {
     [selectedRequestId, visibleRequests]
   );
   const selectedProviderError = useMemo(() => readProviderError(selectedRequest), [selectedRequest]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setSelectedMediaPreviewUrl(null);
+    if (!selectedRequest?.exampleMediaId || selectedRequest.headerType === "NONE") return;
+    fetchAdminTemplateRequestMedia(connection, selectedRequest.id)
+      .then(({ blob }) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSelectedMediaPreviewUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedMediaPreviewUrl(null);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [connection, selectedRequest?.exampleMediaId, selectedRequest?.headerType, selectedRequest?.id]);
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
@@ -787,6 +821,8 @@ export default function ManageTemplatesAdminPage() {
                 language={selectedRequest.language || "pt_BR"}
                 status={selectedRequest.status}
                 templateName={selectedRequest.name}
+                headerType={selectedRequest.headerType ?? "NONE"}
+                mediaPreviewUrl={selectedMediaPreviewUrl}
               />
             </div>
           ) : (

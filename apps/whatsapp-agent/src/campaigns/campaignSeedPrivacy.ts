@@ -3,14 +3,10 @@ import type { Prisma } from "@prisma/client";
 import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
 import { normalizeWaIdDigits } from "../utils/waid.js";
 import { encryptEpochSeed, newSeedMetadata, readEpochSeed, seedWriteEpoch, type SeedReadContext } from "./campaignSeedEpoch.js";
+import type { CampaignTemplateComponents } from "../templates/templateComponents.js";
 
 const CIPHER_PREFIX = "v1:";
 const CAMPAIGN_SEED_SECRET_REF = "CAMPAIGN_SEED_SECRET|CHANNEL_ACCOUNT_SECRET_KEY|APP_AUTH_SECRET";
-
-type CampaignTemplateComponents = Array<{
-  type: "body";
-  parameters: Array<{ type: "text"; text: string }>;
-}>;
 
 function getSeedSecret() {
   return (

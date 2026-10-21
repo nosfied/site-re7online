@@ -28,6 +28,8 @@ The new-campaign composer keeps the following only in React state:
   validation error;
 - response destination mode, Department or automated Flow selection and
   derived destination preview;
+- media asset reference and authenticated preview when the selected template
+  requires an IMAGE/VIDEO header;
 - expanded creation row, loading/preflight flags, form errors and composer
   toast.
 
@@ -77,7 +79,7 @@ cannot repopulate a discarded attempt. It is safe to call repeatedly.
 
 One `isComposerDirty` contract covers meaningful name, template, variables,
 manual recipients, audience filters/preview, CSV data/mappings/preview/report
-and destination/schedule changes. Explicit discard and internal Campaign-tab navigation
+media and destination/schedule changes. Explicit discard and internal Campaign-tab navigation
 ask for confirmation only when this contract is true. Empty composers reset
 without confirmation. Operations that are actively saving or previewing are
 allowed to finish before tab navigation.
@@ -90,8 +92,11 @@ application does not auto-select the first Department/Flow as hidden state.
 ## Scope and safety
 
 - no backend discard endpoint was added because unsaved composition has no
-  server identity or record;
-- no schema or migration is necessary;
+  campaign identity or record; an unreferenced media upload has its own guarded
+  DELETE and referenced assets are preserved;
+- the original composer cleanup required no schema. The 2026-10-21 template
+  media delta adds a separate, additive persistence model documented in
+  [Templates e campanhas WhatsApp com mídia](META_TEMPLATE_MEDIA_SUPPORT.md);
 - no provider call or real send is part of validation;
 - no tenant hardcode or cross-tenant cleanup exists;
 - Demo `****9614` historical identity residue is untouched and remains a
