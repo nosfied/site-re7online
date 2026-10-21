@@ -52,6 +52,10 @@ test("keyset sequence reads limit plus one, accepts normalized filters, and pres
   assert.match(firstReader.queries[0].strings.join(" "), /contact_alias_facts AS MATERIALIZED/);
   assert.match(firstReader.queries[0].strings.join(" "), /SELECT count\(\*\) AS "scopeTotal" FROM eligible_leads/);
   assert.match(firstReader.queries[0].strings.join(" "), /LEFT JOIN LATERAL/);
+  assert.match(
+    firstReader.queries[0].strings.join(" "),
+    /\) page ON true\s+ORDER BY\s+page\."updatedAt" DESC NULLS LAST,\s+page\."createdAt" DESC NULLS LAST,\s+page\.id ASC NULLS LAST/
+  );
 
   const secondReader = reader(Array.from({ length: 51 }, (_, index) => row(index + 50)));
   const second = await selectCrmContactsPage(secondReader.prisma as never, {

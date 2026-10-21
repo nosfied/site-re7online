@@ -963,6 +963,10 @@ export async function selectCrmContactsPage(prisma: PrismaClient, params: {
       ORDER BY e."updatedAt" DESC, e."createdAt" DESC, e.id ASC
       LIMIT ${limit + 1}
     ) page ON true
+    ORDER BY
+      page."updatedAt" DESC NULLS LAST,
+      page."createdAt" DESC NULLS LAST,
+      page.id ASC NULLS LAST
   `);
   const selectedRows: CrmContactPageRow[] = rows.flatMap((row) => (
     row.id !== null && row.updatedAt !== null && row.createdAt !== null

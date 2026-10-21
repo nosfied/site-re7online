@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { executeCrmImportOperation as execute, readCrmImportOperation as read, IMPORT_EVENTS, CrmImportOperationError } from "./crmCsvImportOperation.js";
 import { previewCrmContactCsvImport, upsertCrmContact } from "./crmContactUpsert.js";
-import { buildCrmContactsPayload } from "./crmContactsReadModel.js";
+import { buildCrmContactsPayload, selectCrmContactsPage } from "./crmContactsReadModel.js";
 const url = new URL(process.env.DATABASE_URL || "");
 assert.equal(url.hostname,"127.0.0.1"); assert.equal(url.port,"55781"); assert.equal(url.pathname,"/retention_lab");
 const db = new PrismaClient(); const clients: string[] = [];
@@ -75,6 +75,21 @@ test("read model keyset pagination counts beyond old candidate cap without dupli
  assert.ok(list.pageInfo.nextCursor);const second=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{page:2,limit:50,cursor:list.pageInfo.nextCursor},statuses:[]});assert.equal(second.pagination.total,4105);assert.equal(second.items.length,50);assert.equal(new Set([...list.items,...second.items].map(item=>item.leadId)).size,100);
  const filtered=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{q:'Target',page:1,limit:50},statuses:[]});assert.equal(filtered.pagination.total,5);assert.equal(filtered.items.length,5);
  const other=await fixture();assert.equal((await buildCrmContactsPayload(db,{clientId:other.clientId,query:{},statuses:[]})).pagination.total,0);
+});
+test("external ordering keeps tied keyset pages deterministic and an emptied later page preserves total",async()=>{
+ const p=await fixture();const tiedAt=new Date("2026-10-20T12:00:00.000Z");
+ const ids=Array.from({length:101},(_,i)=>`order-tie-${p.clientId}-${String(i).padStart(3,"0")}`);
+ await db.lead.createMany({data:ids.map((id,i)=>({id,tenantId:p.clientId,waId:`order-tie-${i}`,name:`Order tie ${i}`,status:"NEW",createdAt:tiedAt,updatedAt:tiedAt}))});
+ const first=await selectCrmContactsPage(db,{clientId:p.clientId,query:{page:1,limit:50},includeAnonymized:false});
+ assert.deepEqual(first.rows.map(row=>row.id),ids.slice(0,50));assert.equal(first.total,101);assert.equal(first.hasNextPage,true);assert.ok(first.nextCursor);
+ const firstCursor=JSON.parse(Buffer.from(first.nextCursor,"base64url").toString("utf8"));assert.equal(firstCursor.id,ids[49]);
+ const second=await selectCrmContactsPage(db,{clientId:p.clientId,query:{page:2,limit:50,cursor:first.nextCursor},includeAnonymized:false});
+ assert.deepEqual(second.rows.map(row=>row.id),ids.slice(50,100));assert.equal(second.total,101);assert.equal(second.hasNextPage,true);assert.ok(second.nextCursor);
+ assert.equal(new Set([...first.rows,...second.rows].map(row=>row.id)).size,100);
+ const secondCursor=JSON.parse(Buffer.from(second.nextCursor,"base64url").toString("utf8"));assert.equal(secondCursor.id,ids[99]);
+ await db.lead.delete({where:{id:ids[100]}});
+ const emptied=await selectCrmContactsPage(db,{clientId:p.clientId,query:{page:3,limit:50,cursor:second.nextCursor},includeAnonymized:false});
+ assert.deepEqual(emptied.rows,[]);assert.equal(emptied.total,100);assert.equal(emptied.hasNextPage,false);assert.equal(emptied.nextCursor,null);
 });
 test("manual SQL search preserves literal LIKE metacharacters, accents and formatted phone semantics",async()=>{
  const p=await fixture();
