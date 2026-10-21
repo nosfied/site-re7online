@@ -24,6 +24,8 @@
 ## Backlog ativo separado
 
 - [Adequar encerramento e CSAT à janela de 24h](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
+- [Templates e campanhas WhatsApp com mídia](META_TEMPLATE_MEDIA_SUPPORT.md)
+  — implementação local para revisão; **NOT DEPLOYED**.
 - OBS-1 — preparação concluída; rotação exige janela própria.
 
 ## Arquivo histórico

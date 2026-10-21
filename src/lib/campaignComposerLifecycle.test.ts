@@ -102,6 +102,13 @@ test("department, flow and destination mode mark composer dirty", () => {
   }
 });
 
+test("a selected template media asset marks the composer dirty", () => {
+  const state = pristine();
+  state.form.templateMediaAssetId = "asset-1";
+  state.form.templateMediaFileName = "header.jpg";
+  assert.equal(isCampaignComposerDirty(state), true);
+});
+
 test("composer schedule alone is dirty and its reset is pristine", () => {
   const snapshot = pristine();
   snapshot.scheduleInput = "2026-10-07T12:40";

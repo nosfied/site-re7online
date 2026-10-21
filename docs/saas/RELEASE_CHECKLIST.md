@@ -111,6 +111,21 @@ npm run db:deploy
 
 Somente executar `db:deploy` quando a release tiver migration aprovada.
 
+Templates/campanhas com header de mídia:
+
+- confirmar `TemplateMediaAsset` tenant-scoped e FKs compostas antes do deploy;
+- provisionar `TEMPLATE_MEDIA_ROOT` persistente, privado, fora do release e do
+  `public` do Next; conferir owner, diretórios `0700` e arquivos `0600`;
+- validar upgrade a partir de dados textuais existentes e rollback de código sem
+  remover tabela ou bytes referenciados;
+- reconferir MIME/limites na documentação oficial da Meta;
+- executar submissão/upload/provider real somente em homologação autorizada;
+- comprovar que categoria do tenant, guard, opt-out, leases, idempotência e Result
+  Truth continuam ativos para IMAGE/VIDEO;
+- smoke futuro deve cobrir solicitação, preview autenticado, sync, rascunho,
+  reload, teste, agendamento e execução; não usar dados pessoais em mídia;
+- esta checklist não autoriza migration, chamada Meta, campanha ou envio.
+
 Webhooks Public API:
 
 - Releases que criam ou rotacionam segredo de webhook exigem `WEBHOOK_SECRET_ENCRYPTION_KEY` configurada em producao.

@@ -18,6 +18,7 @@ import {
   recordMetaUsageLedgerEvent,
 } from "../billing/metaUsageLedger.js";
 import type { CampaignTemplateComponents } from "./campaignService.js";
+import type { TemplateMediaReference } from "../templates/templateComponents.js";
 import { isCampaignTerminalStatus } from "./campaignLifecycle.js";
 import {
   resolveCampaignRecipientConversationTarget,
@@ -81,6 +82,7 @@ export type StartCampaignRunParams = {
   waIds: string[];
   components?: CampaignTemplateComponents;
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
+  media?: TemplateMediaReference;
   returnDestination?: OutboundReturnDestination | null;
   source?: Extract<MetaUsageSource, "campaign" | "manual_campaign_send">;
   executionJob?: ClaimedCampaignExecutionJob;
@@ -92,6 +94,7 @@ type ScheduledCampaignSeed = {
   templateParams: string[];
   components?: CampaignTemplateComponents;
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
+  media?: TemplateMediaReference;
   returnDestination?: OutboundReturnDestination | null;
   selectionMode: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
   dynamicFilter?: {
@@ -342,16 +345,27 @@ function extractScheduledCampaignSeed(value: unknown, clientId: string): Schedul
     (templateParams.length > 0
       ? [{ type: "body" as const, parameters: templateParams.map((text) => ({ type: "text" as const, text })) }]
       : undefined);
+  const media = extractTemplateMediaReference(value.templateMedia);
   return {
     recipients,
     templateParams,
     components,
     componentsByWaId: extractComponentsByWaId(privateSeed.componentsByWaId),
+    media,
     returnDestination: parseOutboundReturnDestination(value.returnDestination),
     selectionMode,
     dynamicFilter,
     templateVariableMappings: extractTemplateVariableMappings(value.templateVariableMappings),
   };
+}
+
+function extractTemplateMediaReference(value: unknown): TemplateMediaReference | undefined {
+  if (!isRecord(value)) return undefined;
+  const assetId = String(value.assetId ?? "").trim();
+  const kind = value.kind === "IMAGE" || value.kind === "VIDEO" ? value.kind : null;
+  const sha256 = String(value.sha256 ?? "").trim().toLowerCase();
+  if (!assetId || !kind || !/^[a-f0-9]{64}$/.test(sha256)) return undefined;
+  return { assetId, kind, sha256 };
 }
 
 function resolveDynamicMappingValue(mapping: CampaignTemplateVariableMapping, lead: DynamicLeadRecipient) {
@@ -1120,6 +1134,7 @@ async function processDueScheduledCampaignsAdmitted(params: { now?: Date; limit?
       waIds: executionSeed.recipients,
       components: seed.components,
       componentsByWaId: executionSeed.componentsByWaId ?? seed.componentsByWaId,
+      media: seed.media ?? extractTemplateMediaReference(campaign.templateMediaSnapshot),
       returnDestination: seed.returnDestination,
       executionJob: job,
     });
@@ -1660,6 +1675,7 @@ async function runCampaignInBackground(
             templateName: params.templateName,
             lang: language,
             components,
+            media: params.media,
             requestId,
             rid: campaignRunId,
             messageId,

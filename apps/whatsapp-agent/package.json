@@ -20,6 +20,7 @@
     "dev:webhook:re7": "FROM=558499049614 PHONE_NUMBER_ID=1018032104719713 node scripts/send-signed-webhook.mjs",
     "dev:webhook:help": "node scripts/send-signed-webhook.mjs --help",
     "media:cleanup": "node scripts/cleanup-local-media.mjs",
+    "template-media:cleanup": "node --import tsx scripts/cleanup-template-media.ts",
     "backup:postgres": "bash scripts/backup-postgres.sh",
     "backup:postgres:alerted": "bash scripts/backup-postgres-with-alert.sh",
     "backup:postgres:check": "node --import tsx scripts/postgres-backup-alert.ts check",

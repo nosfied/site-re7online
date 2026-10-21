@@ -1,11 +1,7 @@
 import { getPrisma } from "../db.js";
 import { CAMPAIGN_STATUSES, type CampaignStatus } from "./campaignLifecycle.js";
+export type { CampaignTemplateComponents } from "../templates/templateComponents.js";
 export { CAMPAIGN_STATUSES, type CampaignStatus } from "./campaignLifecycle.js";
-
-export type CampaignTemplateComponents = Array<{
-  type: "body";
-  parameters: Array<{ type: "text"; text: string }>;
-}>;
 
 export type CreateCampaignParams = {
   clientId: string;
@@ -15,6 +11,8 @@ export type CreateCampaignParams = {
   totalRecipients: number;
   status?: CampaignStatus;
   scheduledAt?: Date | null;
+  templateMediaAssetId?: string | null;
+  templateMediaSnapshot?: unknown;
 };
 
 export class CampaignNameConflictError extends Error {
@@ -60,6 +58,10 @@ export async function createCampaign(params: CreateCampaignParams) {
       status: params.status ?? "sending",
       totalRecipients: params.totalRecipients,
       scheduledAt: params.scheduledAt ?? null,
+      templateMediaAssetId: params.templateMediaAssetId ?? null,
+      ...(params.templateMediaSnapshot !== undefined
+        ? { templateMediaSnapshot: params.templateMediaSnapshot as never }
+        : {}),
     },
   });
 }

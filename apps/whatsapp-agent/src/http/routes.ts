@@ -145,6 +145,22 @@ import {
   renderTemplateBody,
 } from "../templates/templateRendering.js";
 import {
+  buildCanonicalTemplateComponents,
+  normalizeTemplateHeaderType,
+  type TemplateHeaderType,
+  type TemplateMediaReference,
+} from "../templates/templateComponents.js";
+import {
+  removeUnreferencedTemplateMedia,
+  resolveTemplateMediaFile,
+  storeTemplateMedia,
+  TemplateMediaError,
+  TEMPLATE_VIDEO_MAX_BYTES,
+  type TemplateMediaKind,
+  type TemplateMediaPurpose,
+} from "../templates/templateMediaStorage.js";
+import { tryAdmitTemplateMediaUpload } from "../templates/templateMediaUploadAdmission.js";
+import {
   CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT,
   filterOptedOutCampaignRecipients,
   normalizeOptOutWaId,
@@ -1565,6 +1581,15 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         });
         return;
       }
+      const templateMedia = await resolveCampaignTemplateMedia(prisma, {
+        clientId: publicAuth.clientId,
+        headerType: resolvedTemplate.headerType,
+        mediaAssetId: body.templateMediaAssetId,
+      });
+      if (!templateMedia.ok) {
+        json(res, templateMedia.status, { error: { code: templateMedia.error, message: templateMedia.message, requestId } });
+        return;
+      }
       let campaign;
       try {
         campaign = await createCampaign({
@@ -1574,6 +1599,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           name,
           totalRecipients: 0,
           status: "draft",
+          templateMediaAssetId: templateMedia.media?.assetId ?? null,
+          templateMediaSnapshot: templateMedia.media ?? null,
         });
       } catch (error) {
         if (isCampaignNameConflictError(error)) {
@@ -4838,6 +4865,232 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
     return;
   }
 
+  if (req.method === "POST" && pathname === "/app/templates/media") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (!isAdminOrSupervisorRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Apenas ADMIN ou SUPERVISOR pode enviar mídia de template."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client || client.status !== "ACTIVE") {
+        json(res, client ? 403 : 404, httpError(client ? "client_inactive" : "client_not_found", "Tenant indisponível."));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const releaseUploadAdmission = tryAdmitTemplateMediaUpload(client.id);
+      if (!releaseUploadAdmission) {
+        res.setHeader("Retry-After", "5");
+        json(res, 429, httpError("template_media_upload_busy", "Já existe um upload de mídia em processamento."));
+        return;
+      }
+      const upload = await readTemplateMediaMultipartBody(req, res).finally(releaseUploadAdmission);
+      if (!upload) return;
+      if (upload.purpose === "CAMPAIGN" && !(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const stored = await storeTemplateMedia({
+        clientId: client.id,
+        purpose: upload.purpose,
+        upload: { ...upload.file, kind: upload.kind },
+      });
+      try {
+        const asset = await prisma.templateMediaAsset.create({
+          data: {
+            clientId: client.id,
+            purpose: upload.purpose,
+            kind: stored.kind,
+            storageKey: stored.storageKey,
+            mimeType: stored.mimeType,
+            sizeBytes: stored.sizeBytes,
+            sha256: stored.sha256,
+            originalFilename: stored.originalFilename,
+            createdBy: clientAuth.userId,
+          },
+          select: {
+            id: true,
+            purpose: true,
+            kind: true,
+            mimeType: true,
+            sizeBytes: true,
+            sha256: true,
+            originalFilename: true,
+            state: true,
+            createdAt: true,
+          },
+        });
+        json(res, 201, { ok: true, asset: serializeTemplateMediaAsset(asset) });
+      } catch (error) {
+        await removeUnreferencedTemplateMedia(stored.storageKey).catch(() => undefined);
+        throw error;
+      }
+    } catch (error) {
+      if (error instanceof TemplateMediaError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
+      logger.error({ event: "app.templates.media.upload.error", requestId, message: (error as Error).message });
+      json(res, 500, httpError("server_error", "Não foi possível armazenar a mídia."));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && /^\/app\/templates\/media\/[^/]+$/.test(pathname)) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const assetId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+      if (!isAdminOrSupervisorRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Sem permissão para acessar mídia de template."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client || client.status !== "ACTIVE") {
+        json(res, client ? 403 : 404, httpError(client ? "client_inactive" : "client_not_found", "Tenant indisponível."));
+        return;
+      }
+      const asset = await prisma.templateMediaAsset.findFirst({
+        where: { id: assetId, clientId: clientAuth.clientId, state: { in: ["stored", "ready"] } },
+        select: {
+          purpose: true,
+          storageKey: true,
+          mimeType: true,
+          sizeBytes: true,
+          sha256: true,
+          createdBy: true,
+          _count: { select: { templates: true, templateRequests: true, campaigns: true } },
+        },
+      });
+      if (!asset) {
+        json(res, 404, httpError("template_media_not_found", "Mídia não encontrada."));
+        return;
+      }
+      if (
+        asset.createdBy !== clientAuth.userId &&
+        asset._count.templates === 0 &&
+        asset._count.templateRequests === 0 &&
+        asset._count.campaigns === 0
+      ) {
+        json(res, 404, httpError("template_media_not_found", "Mídia não encontrada."));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      if (asset.purpose === "CAMPAIGN" && !(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const stored = await resolveTemplateMediaFile(asset.storageKey);
+      if (
+        stored.sizeBytes !== asset.sizeBytes ||
+        crypto.createHash("sha256").update(stored.content).digest("hex") !== asset.sha256
+      ) {
+        json(res, 409, httpError("template_media_content_mismatch", "Mídia indisponível para visualização."));
+        return;
+      }
+      res.statusCode = 200;
+      res.setHeader("Content-Type", asset.mimeType);
+      res.setHeader("Content-Length", String(stored.sizeBytes));
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.end(stored.content);
+    } catch (error) {
+      if (error instanceof TemplateMediaError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
+      json(res, 500, httpError("server_error", "Não foi possível carregar a mídia."));
+    }
+    return;
+  }
+
+  if (req.method === "DELETE" && /^\/app\/templates\/media\/[^/]+$/.test(pathname)) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (!isAdminOrSupervisorRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Forbidden"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client || client.status !== "ACTIVE") {
+        json(res, client ? 403 : 404, httpError(client ? "client_inactive" : "client_not_found", "Tenant indisponível."));
+        return;
+      }
+      const assetId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+      const asset = await prisma.templateMediaAsset.findFirst({
+        where: { id: assetId, clientId: clientAuth.clientId },
+        select: {
+          id: true,
+          purpose: true,
+          createdBy: true,
+          storageKey: true,
+          _count: { select: { templates: true, templateRequests: true, campaigns: true } },
+        },
+      });
+      if (!asset) {
+        json(res, 404, httpError("template_media_not_found", "Mídia não encontrada."));
+        return;
+      }
+      if (
+        asset.createdBy !== clientAuth.userId &&
+        asset._count.templates === 0 &&
+        asset._count.templateRequests === 0 &&
+        asset._count.campaigns === 0
+      ) {
+        json(res, 404, httpError("template_media_not_found", "Mídia não encontrada."));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      if (asset.purpose === "CAMPAIGN" && !(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      if (asset._count.templates || asset._count.templateRequests || asset._count.campaigns) {
+        json(res, 409, httpError("template_media_in_use", "A mídia está vinculada e não pode ser removida."));
+        return;
+      }
+      await prisma.templateMediaAsset.update({ where: { id: asset.id }, data: { state: "deleted" } });
+      await removeUnreferencedTemplateMedia(asset.storageKey);
+      json(res, 200, { ok: true });
+    } catch (error) {
+      logger.error({ event: "app.templates.media.delete.error", requestId, message: (error as Error).message });
+      json(res, 500, httpError("server_error", "Não foi possível remover a mídia."));
+    }
+    return;
+  }
+
   if (req.method === "POST" && pathname === "/app/templates/request") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -4845,6 +5098,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
     try {
       const body = await readJsonBody(req, res);
       if (!body) return;
+      if (!isAdminOrSupervisorRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Apenas ADMIN ou SUPERVISOR pode solicitar templates."));
+        return;
+      }
       const parsed = parseTemplateRequestInput(body);
       if (!parsed.ok) {
         json(res, 400, {
@@ -4854,7 +5111,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         });
         return;
       }
-      const { name, content, category, language, variableDetails, variablesPayload, warnings } = parsed;
+      const { name, content, category, language, variableDetails, variablesPayload, warnings, headerType, exampleMediaId } = parsed;
 
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
@@ -4881,6 +5138,15 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           category: categoryPolicyBlock.category,
           allowedCategories: categoryPolicyBlock.allowedCategories,
         }));
+        return;
+      }
+      const exampleMedia = await resolveTemplateExampleMedia(prisma, {
+        clientId: client.id,
+        headerType,
+        exampleMediaId,
+      });
+      if (!exampleMedia.ok) {
+        json(res, exampleMedia.status, httpError(exampleMedia.error, exampleMedia.message));
         return;
       }
 
@@ -4985,6 +5251,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           status: "requested",
           createdBy: clientAuth.userId,
           variables: variablesPayload,
+          headerType,
+          exampleMediaId,
+          components: buildCanonicalTemplateComponents({ body: content, headerType, exampleMediaId }) as unknown as Prisma.InputJsonValue,
         },
         select: {
           id: true,
@@ -4996,6 +5265,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           notes: true,
           createdBy: true,
           createdAt: true,
+          headerType: true,
+          exampleMediaId: true,
+          components: true,
         },
       });
 
@@ -5010,6 +5282,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           language,
           requestedBy: clientAuth.userId,
           autoSubmitRequested: body.autoSubmit === true,
+          headerType,
+          exampleMediaId,
         },
       });
 
@@ -5276,6 +5550,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           status: true,
           content: true,
           variables: true,
+          components: true,
+          headerType: true,
+          exampleMediaId: true,
           metaTemplateId: true,
           rejectionReason: true,
           createdAt: true,
@@ -15372,6 +15649,15 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         json(res, error.status, httpError(error.error, error.message));
         return;
       }
+      const templateMedia = await resolveCampaignTemplateMedia(prisma, {
+        clientId: client.id,
+        headerType: resolvedTemplate.headerType,
+        mediaAssetId: body.templateMediaAssetId,
+      });
+      if (!templateMedia.ok) {
+        json(res, templateMedia.status, httpError(templateMedia.error, templateMedia.message));
+        return;
+      }
       const parsed = buildCampaignImportRecipientsFromCsv({
         csvText: String(body.csvText ?? ""),
         mapping: normalizeCampaignCsvMapping(body.mapping),
@@ -15436,9 +15722,18 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           created = await createCsvCampaignBatch(prisma, {
             clientId: client.id, actorId: clientAuth.userId, requestId: String(body.requestId ?? requestId).trim(),
             name, templateId: resolvedTemplate.templateId, templateName: resolvedTemplate.templateName,
-            payload: { name, templateId: resolvedTemplate.templateId, csvText: String(body.csvText ?? ""), mapping: normalizeCampaignCsvMapping(body.mapping), returnDestination: returnDestination.destination },
+            payload: {
+              name,
+              templateId: resolvedTemplate.templateId,
+              csvText: String(body.csvText ?? ""),
+              mapping: normalizeCampaignCsvMapping(body.mapping),
+              returnDestination: returnDestination.destination,
+              templateMediaAssetId: templateMedia.media?.assetId ?? null,
+              templateMediaSha256: templateMedia.media?.sha256 ?? null,
+            },
             returnDestination: returnDestination.destination as unknown as Prisma.InputJsonValue,
             plan: importPlan,
+            templateMedia: templateMedia.media,
           });
         } catch (error) {
           if (!(error instanceof CampaignBatchIdempotencyConflict)) throw error;
@@ -15469,6 +15764,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         name,
         totalRecipients: 0,
         status: "draft",
+        templateMediaAssetId: templateMedia.media?.assetId ?? null,
+        templateMediaSnapshot: templateMedia.media ?? null,
       });
       const imported = await importCampaignRecipients(prisma, {
         clientId: client.id,
@@ -15904,6 +16201,15 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         json(res, error.status, httpError(error.error, error.message));
         return;
       }
+      const templateMedia = await resolveCampaignTemplateMedia(prisma, {
+        clientId: client.id,
+        headerType: resolvedTemplate.headerType,
+        mediaAssetId: body.templateMediaAssetId,
+      });
+      if (!templateMedia.ok) {
+        json(res, templateMedia.status, httpError(templateMedia.error, templateMedia.message));
+        return;
+      }
       const variableMappings = parseCampaignTemplateVariableMappings(
         body.templateVariableMappings,
         resolvedTemplate.variableKeys
@@ -15931,6 +16237,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         returnDestination: returnDestination.destination,
         selectionMode,
         dynamicFilter,
+        templateMedia: templateMedia.media,
       });
       if (!created.ok) {
         json(
@@ -16008,6 +16315,15 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           message: "Modelo aprovado não encontrado.",
         };
         json(res, error.status, httpError(error.error, error.message));
+        return;
+      }
+      const templateMedia = await resolveCampaignTemplateMedia(prisma, {
+        clientId: client.id,
+        headerType: resolvedTemplate.headerType,
+        mediaAssetId: body.templateMediaAssetId,
+      });
+      if (!templateMedia.ok) {
+        json(res, templateMedia.status, httpError(templateMedia.error, templateMedia.message));
         return;
       }
       const variableMappings = parseCampaignTemplateVariableMappings(
@@ -16095,6 +16411,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         sourceDescription: plan.sourceDescription,
         audienceSignature: plan.audienceSignature,
         requestId: splitRequestId,
+        templateMedia: templateMedia.media,
       });
       if ("error" in created && created.error === "no_eligible_recipients") {
         json(res, 400, httpError("no_eligible_recipients", "Nenhum destinatário está elegível para esta campanha.", {
@@ -16800,6 +17117,15 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         json(res, resolvedTemplate.status, httpError(resolvedTemplate.error, resolvedTemplate.message));
         return;
       }
+      const templateMedia = await resolveCampaignTemplateMedia(prisma, {
+        clientId: client.id,
+        headerType: resolvedTemplate.headerType,
+        mediaAssetId: body.templateMediaAssetId,
+      });
+      if (!templateMedia.ok) {
+        json(res, templateMedia.status, httpError(templateMedia.error, templateMedia.message));
+        return;
+      }
 
       const manualVariables =
         resolvedTemplate.variableKeys.length > 0
@@ -16878,6 +17204,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           .filter((value) => value.length > 0),
         components,
         returnDestination: returnDestination.destination,
+        templateMedia: templateMedia.media,
       });
 
       json(res, 200, {
@@ -24852,6 +25179,15 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           json(res, resolvedTemplate.status, httpError(resolvedTemplate.error, resolvedTemplate.message));
           return;
         }
+        const templateMedia = await resolveCampaignTemplateMedia(prisma, {
+          clientId: client.id,
+          headerType: resolvedTemplate.headerType,
+          mediaAssetId: body.templateMediaAssetId,
+        });
+        if (!templateMedia.ok) {
+          json(res, templateMedia.status, httpError(templateMedia.error, templateMedia.message));
+          return;
+        }
         const returnDestination = await resolveCampaignReturnDestinationOrHttpError(prisma, {
           clientId: client.id,
           input: body.returnDestination as OutboundReturnDestinationInput,
@@ -24873,6 +25209,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           })),
           components,
           returnDestination: returnDestination.destination,
+          templateMedia: templateMedia.media,
         });
 
         if (pathname === "/admin/campaigns") {
@@ -25225,6 +25562,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             notes: true,
             createdBy: true,
             createdAt: true,
+            headerType: true,
+            exampleMediaId: true,
+            components: true,
             client: {
               select: {
                 clientKey: true,
@@ -25283,6 +25623,54 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
     }
 
     if (
+      req.method === "GET" &&
+      pathname.startsWith("/admin/templates/requests/") &&
+      pathname.split("/").length === 6 &&
+      pathname.endsWith("/media")
+    ) {
+      try {
+        const templateRequestId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+        const templateRequest = await prisma.templateRequest.findFirst({
+          where: {
+            id: templateRequestId,
+            ...(tenantAdmin ? { clientId: adminAuth.clientId } : {}),
+          },
+          select: {
+            exampleMedia: {
+              select: { storageKey: true, mimeType: true, sizeBytes: true, sha256: true },
+            },
+          },
+        });
+        if (!templateRequest?.exampleMedia) {
+          json(res, 404, { error: "template_media_not_found" });
+          return;
+        }
+        const stored = await resolveTemplateMediaFile(templateRequest.exampleMedia.storageKey);
+        if (
+          stored.sizeBytes !== templateRequest.exampleMedia.sizeBytes ||
+          crypto.createHash("sha256").update(stored.content).digest("hex") !== templateRequest.exampleMedia.sha256
+        ) {
+          json(res, 409, { error: "template_media_content_mismatch" });
+          return;
+        }
+        res.statusCode = 200;
+        res.setHeader("Content-Type", templateRequest.exampleMedia.mimeType);
+        res.setHeader("Content-Length", String(stored.sizeBytes));
+        res.setHeader("Cache-Control", "private, no-store");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.end(stored.content);
+      } catch (error) {
+        if (error instanceof TemplateMediaError) {
+          json(res, error.status, { error: error.code });
+          return;
+        }
+        logger.error({ event: "admin.templates.requests.media.error", requestId, message: (error as Error).message });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
       req.method === "PATCH" &&
       pathname.startsWith("/admin/templates/requests/") &&
       pathname.split("/").length === 5
@@ -25311,6 +25699,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             notes: true,
             createdBy: true,
             createdAt: true,
+            headerType: true,
+            exampleMediaId: true,
+            components: true,
           },
         });
         if (!existing) {
@@ -25331,6 +25722,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           category: body.category ?? existing.category,
           language: body.language ?? extractTemplateRequestLanguage(existing.variables),
           variableDetails: body.variableDetails ?? extractTemplateRequestVariableDetails(existing.variables),
+          headerType: existing.headerType,
+          exampleMediaId: existing.exampleMediaId,
         });
         if (!merged.ok) {
           json(res, 400, {
@@ -25356,6 +25749,11 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             variables: merged.variablesPayload,
             status,
             notes,
+            components: buildCanonicalTemplateComponents({
+              body: merged.content,
+              headerType: existing.headerType,
+              exampleMediaId: existing.exampleMediaId,
+            }) as unknown as Prisma.InputJsonValue,
           },
           select: {
             id: true,
@@ -25368,6 +25766,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             notes: true,
             createdBy: true,
             createdAt: true,
+            headerType: true,
+            exampleMediaId: true,
+            components: true,
           },
         });
         await persistEvent({
@@ -25417,6 +25818,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             variables: true,
             category: true,
             status: true,
+            headerType: true,
+            exampleMediaId: true,
+            components: true,
           },
         });
         if (!templateRequest) {
@@ -25445,6 +25849,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             notes: true,
             createdBy: true,
             createdAt: true,
+            headerType: true,
+            exampleMediaId: true,
+            components: true,
           },
         });
         await persistEvent({
@@ -25560,6 +25967,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             notes: true,
             createdBy: true,
             createdAt: true,
+            headerType: true,
+            exampleMediaId: true,
+            components: true,
           },
         });
         if (!existing) {
@@ -25587,6 +25997,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             notes: true,
             createdBy: true,
             createdAt: true,
+            headerType: true,
+            exampleMediaId: true,
+            components: true,
           },
         });
         await persistEvent({
@@ -25640,6 +26053,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             notes: true,
             createdBy: true,
             createdAt: true,
+            headerType: true,
+            exampleMediaId: true,
+            components: true,
           },
         });
         if (!templateRequest) {
@@ -25679,6 +26095,9 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             notes: true,
             createdBy: true,
             createdAt: true,
+            headerType: true,
+            exampleMediaId: true,
+            components: true,
           },
         });
         await persistEvent({
@@ -26406,6 +26825,7 @@ const TEMPLATE_REQUEST_OPEN_STATUSES = [
   "adjustment_requested",
   "internal_approved",
   "submitted_to_meta",
+  "submission_unknown",
 ];
 
 const TEMPLATE_REQUEST_APP_CANCELABLE_STATUSES = ["requested"];
@@ -26431,6 +26851,7 @@ const TEMPLATE_REQUEST_SYNCABLE_STATUSES = [
   "meta_approved",
   "rejected_meta",
   "meta_rejected",
+  "submission_unknown",
 ];
 const TEMPLATE_REQUEST_LOCKED_STATUSES = [
   "submitted_to_meta",
@@ -26439,6 +26860,7 @@ const TEMPLATE_REQUEST_LOCKED_STATUSES = [
   "meta_approved",
   "rejected_meta",
   "meta_rejected",
+  "submission_unknown",
   "approved",
   "rejected",
   "cancelled",
@@ -26468,6 +26890,7 @@ function normalizeTemplateRequestStatus(status: unknown) {
       "approved",
       "rejected",
       "failed",
+      "submission_unknown",
       "cancelled",
     ].includes(normalized)
   ) {
@@ -26499,6 +26922,8 @@ function getTemplateRequestStatusLabel(status: string) {
       return "Rejeitado pela Meta";
     case "failed":
       return "Falha";
+    case "submission_unknown":
+      return "Resultado de submissão incerto";
     case "cancelled":
       return "Cancelada";
     default:
@@ -26624,6 +27049,8 @@ function parseTemplateRequestInput(body: Record<string, unknown>):
       variableDetails: TemplateVariableDetail[];
       variablesPayload: Prisma.InputJsonObject;
       warnings: string[];
+      headerType: TemplateHeaderType;
+      exampleMediaId: string | null;
     }
   | { ok: false; code: string; message: string } {
   const name = String(body.name ?? "").trim();
@@ -26632,6 +27059,10 @@ function parseTemplateRequestInput(body: Record<string, unknown>):
   const language = normalizeTemplateLanguage(body.language);
   const placeholders = extractNumberedPlaceholders(content);
   const variableDetails = normalizeVariableDetails(body.variableDetails ?? body.variables);
+  const headerType = normalizeTemplateHeaderType(body.headerType);
+  const exampleMediaId = typeof body.exampleMediaId === "string" && body.exampleMediaId.trim()
+    ? body.exampleMediaId.trim()
+    : null;
 
   if (!name) return { ok: false, code: "template_name_required", message: "Informe o nome sugerido do template." };
   if (!content) return { ok: false, code: "template_content_required", message: "Informe o conteudo do template." };
@@ -26644,6 +27075,8 @@ function parseTemplateRequestInput(body: Record<string, unknown>):
       category,
       language,
       variables: placeholders.map((item) => item.key),
+      headerType,
+      exampleMediaId,
     });
   } catch (error) {
     if (error instanceof MetaTemplateValidationError) {
@@ -26697,7 +27130,42 @@ function parseTemplateRequestInput(body: Record<string, unknown>):
     variableDetails,
     variablesPayload: buildTemplateRequestVariablesPayload({ language, variableDetails }),
     warnings,
+    headerType,
+    exampleMediaId,
   };
+}
+
+async function resolveTemplateExampleMedia(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; headerType: TemplateHeaderType; exampleMediaId: string | null }
+): Promise<
+  | { ok: true; asset: null | { id: string; kind: "IMAGE" | "VIDEO"; storageKey: string; mimeType: string; originalFilename: string | null } }
+  | { ok: false; status: 400 | 404; error: string; message: string }
+> {
+  if (params.headerType === "NONE") {
+    return params.exampleMediaId
+      ? { ok: false, status: 400, error: "template_media_not_allowed", message: "Template textual não aceita mídia." }
+      : { ok: true, asset: null };
+  }
+  if (!params.exampleMediaId) {
+    return { ok: false, status: 400, error: "template_media_required", message: "Envie a mídia de exemplo do header." };
+  }
+  const asset = await prisma.templateMediaAsset.findFirst({
+    where: {
+      id: params.exampleMediaId,
+      clientId: params.clientId,
+      purpose: "TEMPLATE_EXAMPLE",
+      state: { in: ["stored", "ready"] },
+    },
+    select: { id: true, kind: true, storageKey: true, mimeType: true, originalFilename: true },
+  });
+  if (!asset) {
+    return { ok: false, status: 404, error: "template_media_not_found", message: "Mídia de exemplo não encontrada neste tenant." };
+  }
+  if (asset.kind !== params.headerType) {
+    return { ok: false, status: 400, error: "template_media_kind_mismatch", message: "A mídia não corresponde ao tipo do header." };
+  }
+  return { ok: true, asset: { ...asset, kind: asset.kind as "IMAGE" | "VIDEO" } };
 }
 
 function serializeTemplateRequest<T extends {
@@ -26710,6 +27178,9 @@ function serializeTemplateRequest<T extends {
   notes: string | null;
   createdBy: string | null;
   createdAt: Date;
+  headerType?: string;
+  exampleMediaId?: string | null;
+  components?: Prisma.JsonValue | null;
 }>(item: T) {
   const variablesPayload =
     item.variables && typeof item.variables === "object" && !Array.isArray(item.variables)
@@ -26729,6 +27200,16 @@ function serializeTemplateRequest<T extends {
     notes: item.notes,
     createdBy: item.createdBy,
     createdAt: item.createdAt,
+    headerType: normalizeTemplateHeaderType(item.headerType),
+    exampleMediaId: item.exampleMediaId ?? null,
+    components: item.components ?? buildCanonicalTemplateComponents({
+      body: item.content,
+      headerType: item.headerType,
+      exampleMediaId: item.exampleMediaId,
+    }),
+    mediaPreviewUrl: item.exampleMediaId
+      ? `/agent-api/app/templates/media/${encodeURIComponent(item.exampleMediaId)}`
+      : null,
   };
 }
 
@@ -26755,6 +27236,9 @@ async function submitTemplateRequestToMeta(params: {
       notes: true,
       createdBy: true,
       createdAt: true,
+      headerType: true,
+      exampleMediaId: true,
+      components: true,
     },
   });
   if (!templateRequest) throw new Error("template_request_not_found");
@@ -26788,7 +27272,18 @@ async function submitTemplateRequestToMeta(params: {
     category: templateRequest.category,
     language,
     variables: variableDetails.map((item) => item.key),
+    headerType: normalizeTemplateHeaderType(templateRequest.headerType),
+    exampleMediaId: templateRequest.exampleMediaId,
   });
+  const exampleMedia = await resolveTemplateExampleMedia(params.prisma, {
+    clientId: templateRequest.clientId,
+    headerType: normalizeTemplateHeaderType(templateRequest.headerType),
+    exampleMediaId: templateRequest.exampleMediaId,
+  });
+  if (!exampleMedia.ok) throw new Error(exampleMedia.error);
+  const exampleMediaFile = exampleMedia.asset
+    ? await resolveTemplateMediaFile(exampleMedia.asset.storageKey)
+    : null;
 
   const template = await params.prisma.template.upsert({
     where: {
@@ -26807,6 +27302,13 @@ async function submitTemplateRequestToMeta(params: {
       language,
       status: "submitting",
       variables: variablesPayload,
+      headerType: normalizeTemplateHeaderType(templateRequest.headerType),
+      exampleMediaId: templateRequest.exampleMediaId,
+      components: buildCanonicalTemplateComponents({
+        body: templateRequest.content,
+        headerType: templateRequest.headerType,
+        exampleMediaId: templateRequest.exampleMediaId,
+      }) as unknown as Prisma.InputJsonValue,
     },
     update: {
       content: templateRequest.content,
@@ -26817,6 +27319,13 @@ async function submitTemplateRequestToMeta(params: {
       status: "submitting",
       rejectionReason: null,
       variables: variablesPayload,
+      headerType: normalizeTemplateHeaderType(templateRequest.headerType),
+      exampleMediaId: templateRequest.exampleMediaId,
+      components: buildCanonicalTemplateComponents({
+        body: templateRequest.content,
+        headerType: templateRequest.headerType,
+        exampleMediaId: templateRequest.exampleMediaId,
+      }) as unknown as Prisma.InputJsonValue,
     },
     select: {
       id: true,
@@ -26825,13 +27334,66 @@ async function submitTemplateRequestToMeta(params: {
       language: true,
       content: true,
       variables: true,
+      headerType: true,
+      exampleMediaId: true,
+      components: true,
     },
   });
 
-  const result = await submitTemplateToMeta({
-    tenantConfig: tenantMetaConfig,
-    template,
-  });
+  let result: Awaited<ReturnType<typeof submitTemplateToMeta>>;
+  try {
+    result = await submitTemplateToMeta({
+      tenantConfig: tenantMetaConfig,
+      template: {
+        ...template,
+        headerType: normalizeTemplateHeaderType(template.headerType),
+      },
+      exampleMedia: exampleMedia.asset && exampleMediaFile
+        ? {
+            content: exampleMediaFile.content,
+            mimeType: exampleMedia.asset.mimeType,
+            fileName: exampleMedia.asset.originalFilename ?? `template-example.${exampleMedia.asset.kind === "IMAGE" ? "jpg" : "mp4"}`,
+            kind: exampleMedia.asset.kind,
+          }
+        : null,
+    });
+  } catch (error) {
+    if (error instanceof MetaTemplateServiceError && (
+      error.code === "meta_template_media_upload_uncertain" ||
+      error.code === "meta_template_media_upload_failed"
+    )) {
+      const uncertain = error.code === "meta_template_media_upload_uncertain";
+      const status = uncertain ? "submission_unknown" : "failed";
+      await params.prisma.$transaction([
+        params.prisma.template.update({
+          where: { id: template.id },
+          data: { status, rejectionReason: uncertain ? "meta_template_media_upload_uncertain" : "meta_template_media_upload_failed" },
+        }),
+        params.prisma.templateRequest.update({
+          where: { id: templateRequest.id },
+          data: { status, notes: uncertain ? "Resultado do upload de mídia incerto; sincronize antes de qualquer nova submissão." : "Falha no upload da mídia de exemplo." },
+        }),
+      ]);
+      await persistEvent({
+        clientId: templateRequest.clientId,
+        requestId: `template-request-media-upload:${templateRequest.id}:${Date.now()}`,
+        eventName: uncertain ? "template.request.submission_unknown" : "template.request.media_upload_failed",
+        payloadJson: {
+          templateRequestId: templateRequest.id,
+          templateId: template.id,
+          result: status,
+          providerCode: error.code,
+        },
+      });
+    }
+    throw error;
+  }
+  if (result.ok && result.headerHandle && exampleMedia.asset) {
+    await params.prisma.templateMediaAsset.updateMany({
+      where: { id: exampleMedia.asset.id, clientId: templateRequest.clientId },
+      data: { metaHandle: result.headerHandle, metaHandleCreatedAt: new Date(), state: "ready" },
+    });
+  }
   const updatedTemplate = await params.prisma.template.update({
     where: { id: template.id },
     data: result.ok
@@ -26863,12 +27425,19 @@ async function submitTemplateRequestToMeta(params: {
       rejectionReason: true,
       createdAt: true,
       updatedAt: true,
+      headerType: true,
+      exampleMediaId: true,
+      components: true,
     },
   });
   const updatedRequest = await params.prisma.templateRequest.update({
     where: { id: templateRequest.id },
     data: {
-      status: result.ok ? "submitted_to_meta" : "failed",
+      status: result.ok
+        ? "submitted_to_meta"
+        : result.errorMessage === "meta_template_media_upload_uncertain"
+          ? "submission_unknown"
+          : "failed",
       variables: result.providerError
         ? { ...variablesPayload, providerError: result.providerError }
         : variablesPayload,
@@ -26885,6 +27454,9 @@ async function submitTemplateRequestToMeta(params: {
       notes: true,
       createdBy: true,
       createdAt: true,
+      headerType: true,
+      exampleMediaId: true,
+      components: true,
     },
   });
   await persistEvent({
@@ -26925,7 +27497,7 @@ async function findTemplatesNeedingSync(
   const items = await prisma.template.findMany({
     where: {
       ...(where ?? {}),
-      status: { in: ["submitting", "PENDING"] },
+      status: { in: ["submitting", "PENDING", "submission_unknown"] },
     },
     orderBy: { updatedAt: "desc" },
     take: 5,
@@ -27201,6 +27773,9 @@ function buildAppTemplateCatalogItem(
     status: string;
     content: string;
     variables: Prisma.JsonValue | null;
+    components?: Prisma.JsonValue | null;
+    headerType?: string;
+    exampleMediaId?: string | null;
     metaTemplateId: string | null;
     rejectionReason: string | null;
     createdAt: Date;
@@ -27242,6 +27817,16 @@ function buildAppTemplateCatalogItem(
       ? `A Meta classificou este template como ${effectiveCategory}, diferente da categoria solicitada ${requestedCategory}.`
       : null,
     componentsSummary: summarizeTemplateComponents(item.content),
+    headerType: normalizeTemplateHeaderType(item.headerType),
+    components: item.components ?? buildCanonicalTemplateComponents({
+      body: item.content,
+      headerType: item.headerType,
+      exampleMediaId: item.exampleMediaId,
+    }),
+    exampleMediaId: item.exampleMediaId ?? null,
+    mediaPreviewUrl: item.exampleMediaId
+      ? `/agent-api/app/templates/media/${encodeURIComponent(item.exampleMediaId)}`
+      : null,
     variablesDetected: extractTemplateVariableKeys(item.content, item.variables),
     locallyDisabled,
     localAvailabilityUpdatedAt: localAvailability?.updatedAt ?? null,
@@ -27285,6 +27870,10 @@ function mapTemplateValidationMessage(code: string) {
       return "Informe um exemplo para cada variavel do template.";
     case "template_authentication_unsupported":
       return "Modelos de autenticação exigem o formato OTP específico da Meta e ainda não estão disponíveis neste editor.";
+    case "template_media_required":
+      return "Envie uma mídia de exemplo compatível com o header.";
+    case "template_media_not_allowed":
+      return "Remova a mídia de exemplo do template textual.";
     default:
       return "Nao foi possivel validar o template.";
   }
@@ -29710,6 +30299,8 @@ function serializeCampaign(campaign: {
   scheduledAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  templateMediaAssetId?: string | null;
+  templateMediaSnapshot?: Prisma.JsonValue | null;
 }) {
   return {
     id: campaign.id,
@@ -29724,6 +30315,7 @@ function serializeCampaign(campaign: {
     scheduledAt: campaign.scheduledAt ?? null,
     createdAt: campaign.createdAt,
     updatedAt: campaign.updatedAt,
+    templateMedia: extractCampaignTemplateMediaSnapshot(campaign.templateMediaSnapshot) ?? null,
     progress: {
       totalRecipients: campaign.totalRecipients,
       sentCount: campaign.sentCount,
@@ -29751,6 +30343,7 @@ type CampaignDraftSeed = {
   summary?: CampaignDraftRecipientSummary | null;
   selectionMode: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
   dynamicFilter?: CampaignDynamicCrmFilter | null;
+  templateMedia?: CampaignTemplateMediaSnapshot | null;
 };
 
 type CampaignDynamicCrmFilter = {
@@ -30026,6 +30619,7 @@ function extractCampaignDraftSeed(rawPayload: unknown, clientId: string): Campai
   const returnDestination = parseOutboundReturnDestination(typed.returnDestination);
   const selectionMode = normalizeCampaignSelectionMode(typed.selectionMode);
   const dynamicFilter = extractCampaignDynamicCrmFilter(typed.dynamicFilter);
+  const templateMedia = extractCampaignTemplateMediaSnapshot(typed.templateMedia);
   if (!name || !templateName) return null;
   return {
     name,
@@ -30045,7 +30639,22 @@ function extractCampaignDraftSeed(rawPayload: unknown, clientId: string): Campai
         : null,
     selectionMode,
     dynamicFilter,
+    templateMedia,
   };
+}
+
+function extractCampaignTemplateMediaSnapshot(value: unknown): CampaignTemplateMediaSnapshot | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const typed = value as Record<string, unknown>;
+  const assetId = String(typed.assetId ?? "").trim();
+  const kind = typed.kind === "IMAGE" || typed.kind === "VIDEO" ? typed.kind : null;
+  const sha256 = String(typed.sha256 ?? "").trim().toLowerCase();
+  const mimeType = String(typed.mimeType ?? "").trim().toLowerCase();
+  const sizeBytes = Number(typed.sizeBytes);
+  if (typed.version !== 1 || !assetId || !kind || !/^[a-f0-9]{64}$/.test(sha256) || !mimeType || !Number.isSafeInteger(sizeBytes) || sizeBytes <= 0) {
+    return null;
+  }
+  return { version: 1, assetId, kind, sha256, mimeType, sizeBytes };
 }
 
 function getCampaignBlockedReasonLabel(reason: CampaignDraftBlockedReason) {
@@ -31287,6 +31896,7 @@ async function resolveCampaignTemplateInput(
       language: string | null;
       variableKeys: string[];
       category: string | null;
+      headerType: TemplateHeaderType;
     }
   | { status: 400 | 403 | 404; error: string; message: string }
 > {
@@ -31308,6 +31918,7 @@ async function resolveCampaignTemplateInput(
       language: null,
       variableKeys: [],
       category: null,
+      headerType: "NONE",
     };
   }
 
@@ -31324,6 +31935,7 @@ async function resolveCampaignTemplateInput(
       language: true,
       content: true,
       variables: true,
+      headerType: true,
     },
   });
 
@@ -31365,6 +31977,52 @@ async function resolveCampaignTemplateInput(
     variableKeys: extractTemplatePlaceholderKeys(template.content).length > 0
       ? extractTemplatePlaceholderKeys(template.content)
       : extractTemplateVariableKeys(template.content, template.variables),
+    headerType: normalizeTemplateHeaderType(template.headerType),
+  };
+}
+
+type CampaignTemplateMediaSnapshot = TemplateMediaReference & {
+  version: 1;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+async function resolveCampaignTemplateMedia(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; headerType: TemplateHeaderType; mediaAssetId: unknown }
+): Promise<
+  | { ok: true; media: CampaignTemplateMediaSnapshot | null }
+  | { ok: false; status: 400 | 404; error: string; message: string }
+> {
+  const assetId = typeof params.mediaAssetId === "string" ? params.mediaAssetId.trim() : "";
+  if (params.headerType === "NONE") {
+    return assetId
+      ? { ok: false, status: 400, error: "template_media_not_allowed", message: "Este template não aceita mídia." }
+      : { ok: true, media: null };
+  }
+  if (!assetId) {
+    return { ok: false, status: 400, error: "template_media_required", message: "Selecione uma mídia compatível para a campanha." };
+  }
+  const asset = await prisma.templateMediaAsset.findFirst({
+    where: { id: assetId, clientId: params.clientId, purpose: "CAMPAIGN", state: { in: ["stored", "ready"] } },
+    select: { id: true, kind: true, sha256: true, mimeType: true, sizeBytes: true },
+  });
+  if (!asset) {
+    return { ok: false, status: 404, error: "template_media_not_found", message: "Mídia da campanha não encontrada neste tenant." };
+  }
+  if (asset.kind !== params.headerType) {
+    return { ok: false, status: 400, error: "template_media_kind_mismatch", message: "A mídia não corresponde ao header do template." };
+  }
+  return {
+    ok: true,
+    media: {
+      version: 1,
+      assetId: asset.id,
+      kind: asset.kind as "IMAGE" | "VIDEO",
+      sha256: asset.sha256,
+      mimeType: asset.mimeType,
+      sizeBytes: asset.sizeBytes,
+    },
   };
 }
 
@@ -36672,6 +37330,7 @@ async function createScopedCampaign(params: {
     parameters: Array<{ type: "text"; text: string }>;
   }> | undefined;
   returnDestination: OutboundReturnDestination;
+  templateMedia?: CampaignTemplateMediaSnapshot | null;
 }) {
   let campaign = await createCampaign({
     clientId: params.clientId,
@@ -36679,6 +37338,8 @@ async function createScopedCampaign(params: {
     name: params.name,
     templateName: params.templateName,
     totalRecipients: params.totalRecipients ?? params.waIds.length,
+    templateMediaAssetId: params.templateMedia?.assetId ?? null,
+    templateMediaSnapshot: params.templateMedia ?? null,
   });
   const optOutBlocked = params.optOutBlocked ?? [];
   const blockedCount = params.blockedCount ?? optOutBlocked.length;
@@ -36734,6 +37395,7 @@ async function createScopedCampaign(params: {
     components: params.components,
     returnDestination: params.returnDestination,
     summary: params.summary ?? null,
+    templateMedia: params.templateMedia ?? null,
   });
   await processDueScheduledCampaigns({ limit: 1 });
   return { campaign, campaignRunId: queueJob.id };
@@ -36969,6 +37631,7 @@ async function createScopedCampaignDraftSplit(params: {
   sourceDescription: string;
   audienceSignature: string;
   requestId: string;
+  templateMedia?: CampaignTemplateMediaSnapshot | null;
 }) {
   const prisma = getPrisma();
   const eventRequestId = `campaign-draft-split:${params.requestId}`;
@@ -37058,6 +37721,8 @@ async function createScopedCampaignDraftSplit(params: {
           templateName: params.templateName,
           status: "draft",
           totalRecipients: chunkLeadIds.length,
+          templateMediaAssetId: params.templateMedia?.assetId ?? null,
+          templateMediaSnapshot: params.templateMedia ?? undefined,
         },
       });
       await tx.campaignExecutionBatchCampaign.create({
@@ -37099,6 +37764,7 @@ async function createScopedCampaignDraftSplit(params: {
             summary,
             selectionMode: "STATIC_RECIPIENTS",
             dynamicFilter: null,
+            templateMedia: params.templateMedia ?? null,
           }) as Prisma.InputJsonValue,
         },
       });
@@ -37135,6 +37801,7 @@ async function createScopedCampaignDraft(params: {
   returnDestination: OutboundReturnDestination;
   selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
   dynamicFilter?: CampaignDynamicCrmFilter | null;
+  templateMedia?: CampaignTemplateMediaSnapshot | null;
 }) {
   const prisma = getPrisma();
   if (params.selectionMode === "DYNAMIC_CRM_FILTER") {
@@ -37158,6 +37825,8 @@ async function createScopedCampaignDraft(params: {
       templateName: params.templateName,
       totalRecipients: 0,
       status: "draft",
+      templateMediaAssetId: params.templateMedia?.assetId ?? null,
+      templateMediaSnapshot: params.templateMedia ?? null,
     });
     const summary = { requested: 0, accepted: 0, blocked: 0, duplicatesRemoved: 0, blockedByReason: [] };
     await persistCampaignDraftSeed({
@@ -37175,6 +37844,7 @@ async function createScopedCampaignDraft(params: {
       summary,
       selectionMode: "DYNAMIC_CRM_FILTER",
       dynamicFilter: params.dynamicFilter,
+      templateMedia: params.templateMedia ?? null,
     });
     return {
       ok: true as const,
@@ -37202,6 +37872,8 @@ async function createScopedCampaignDraft(params: {
     templateName: params.templateName,
     totalRecipients: recipients.acceptedWaIds.length,
     status: "draft",
+    templateMediaAssetId: params.templateMedia?.assetId ?? null,
+    templateMediaSnapshot: params.templateMedia ?? null,
   });
   await persistCampaignDraftSeed({
     clientId: params.clientId,
@@ -37218,6 +37890,7 @@ async function createScopedCampaignDraft(params: {
     summary: recipients.summary,
     selectionMode: "STATIC_RECIPIENTS",
     dynamicFilter: null,
+    templateMedia: params.templateMedia ?? null,
   });
   return { ok: true as const, campaign, recipients };
 }
@@ -37307,6 +37980,7 @@ async function sendScopedCampaignDraft(params: {
       summary: seed.summary ?? emptySummary,
       selectionMode: "DYNAMIC_CRM_FILTER",
       dynamicFilter: seed.dynamicFilter,
+      templateMedia: seed.templateMedia ?? null,
     });
     const batch = await prisma.campaignExecutionBatch.upsert({
       where: {
@@ -37427,6 +38101,7 @@ async function sendScopedCampaignDraft(params: {
       returnDestination: seed.returnDestination,
       source: seed.source ?? "crm_audience_preview",
       summary: recipients.summary,
+      templateMedia: seed.templateMedia ?? null,
     });
     return { ok: false as const, status: 400 as const, error: "no_eligible_recipients" as const, campaign, recipients };
   }
@@ -37454,6 +38129,7 @@ async function sendScopedCampaignDraft(params: {
     returnDestination: seed.returnDestination,
     source: seed.source ?? "crm_audience_preview",
     summary: recipients.summary,
+    templateMedia: seed.templateMedia ?? null,
   });
   await persistEvent({
     clientId: params.clientId,
@@ -37569,6 +38245,7 @@ async function scheduleScopedCampaignDraft(params: {
       summary: seed.summary ?? emptySummary,
       selectionMode: "DYNAMIC_CRM_FILTER",
       dynamicFilter: seed.dynamicFilter,
+      templateMedia: seed.templateMedia ?? null,
     });
     await persistEvent({
       clientId: params.clientId,
@@ -37718,6 +38395,7 @@ async function scheduleScopedCampaignDraft(params: {
     returnDestination: seed.returnDestination,
     source: seed.source ?? "crm_audience_preview",
     summary: recipients.summary,
+    templateMedia: seed.templateMedia ?? null,
   });
   await persistEvent({
     clientId: params.clientId,
@@ -37931,6 +38609,7 @@ async function sendScopedCampaignTest(params: {
     templateName: resolvedTemplate.templateName,
     lang: language,
     components,
+    media: extractCampaignTemplateMediaSnapshot(campaign.templateMediaSnapshot) ?? undefined,
     requestId,
     rid: requestId,
     messageId,
@@ -38304,10 +38983,7 @@ async function persistCampaignDraftSeed(params: {
   leadIds?: string[];
   waIds: string[];
   manualRecipientInput?: string[];
-  components?: Array<{
-    type: "body";
-    parameters: Array<{ type: "text"; text: string }>;
-  }>;
+  components?: CampaignTemplateComponents;
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
   templateVariableMappings?: CampaignTemplateVariableMapping[];
   returnDestination?: OutboundReturnDestination | null;
@@ -38315,6 +38991,7 @@ async function persistCampaignDraftSeed(params: {
   summary?: CampaignDraftRecipientSummary | null;
   selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
   dynamicFilter?: CampaignDynamicCrmFilter | null;
+  templateMedia?: CampaignTemplateMediaSnapshot | null;
 }) {
   await persistEvent({
     clientId: params.clientId,
@@ -38334,10 +39011,7 @@ function buildCampaignDraftSeedPayload(params: {
   leadIds?: string[];
   waIds: string[];
   manualRecipientInput?: string[];
-  components?: Array<{
-    type: "body";
-    parameters: Array<{ type: "text"; text: string }>;
-  }>;
+  components?: CampaignTemplateComponents;
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
   templateVariableMappings?: CampaignTemplateVariableMapping[];
   returnDestination?: OutboundReturnDestination | null;
@@ -38345,6 +39019,7 @@ function buildCampaignDraftSeedPayload(params: {
   summary?: CampaignDraftRecipientSummary | null;
   selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
   dynamicFilter?: CampaignDynamicCrmFilter | null;
+  templateMedia?: CampaignTemplateMediaSnapshot | null;
 }) {
   return {
     campaignId: params.campaignId,
@@ -38365,6 +39040,7 @@ function buildCampaignDraftSeedPayload(params: {
     summary: params.summary ?? null,
     selectionMode: params.selectionMode ?? "STATIC_RECIPIENTS",
     dynamicFilter: params.dynamicFilter ?? null,
+    templateMedia: params.templateMedia ?? null,
   };
 }
 
@@ -38674,6 +39350,89 @@ type ParsedMultipartBody = {
 };
 
 const MAX_MEDIA_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+function serializeTemplateMediaAsset(item: {
+  id: string;
+  purpose: string;
+  kind: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+  originalFilename: string | null;
+  state: string;
+  createdAt: Date;
+}) {
+  return {
+    id: item.id,
+    purpose: item.purpose,
+    kind: item.kind,
+    mimeType: item.mimeType,
+    sizeBytes: item.sizeBytes,
+    sha256: item.sha256,
+    originalFilename: item.originalFilename,
+    state: item.state,
+    createdAt: item.createdAt,
+    previewUrl: `/agent-api/app/templates/media/${encodeURIComponent(item.id)}`,
+  };
+}
+
+async function readTemplateMediaMultipartBody(req: IncomingMessage, res: ServerResponse) {
+  const maxMultipartBytes = TEMPLATE_VIDEO_MAX_BYTES + 1024 * 1024;
+  const contentLength = Number.parseInt(String(req.headers["content-length"] ?? ""), 10);
+  if (Number.isFinite(contentLength) && contentLength > maxMultipartBytes) {
+    json(res, 413, httpError("template_media_too_large", "Arquivo excede o limite permitido."));
+    return null;
+  }
+  const contentType = String(req.headers["content-type"] ?? "");
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!(boundaryMatch?.[1] ?? boundaryMatch?.[2] ?? "").trim()) {
+    json(res, 400, httpError("invalid_body", "Payload multipart inválido."));
+    return null;
+  }
+  try {
+    const chunks: Buffer[] = [];
+    let receivedBytes = 0;
+    for await (const chunk of req) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      receivedBytes += bytes.length;
+      if (receivedBytes > maxMultipartBytes) {
+        json(res, 413, httpError("template_media_too_large", "Arquivo excede o limite permitido."));
+        return null;
+      }
+      chunks.push(bytes);
+    }
+    const body = Buffer.concat(chunks, receivedBytes);
+    const request = new Request("http://localhost/template-media", {
+      method: req.method ?? "POST",
+      headers: req.headers as HeadersInit,
+      body,
+    });
+    const formData = await request.formData();
+    const file = formData.get("file");
+    const kindValue = String(formData.get("kind") ?? "").trim().toUpperCase();
+    const purposeValue = String(formData.get("purpose") ?? "").trim().toUpperCase();
+    const kind: TemplateMediaKind | null = kindValue === "IMAGE" || kindValue === "VIDEO" ? kindValue : null;
+    const purpose: TemplateMediaPurpose | null = purposeValue === "TEMPLATE_EXAMPLE" || purposeValue === "CAMPAIGN"
+      ? purposeValue
+      : null;
+    if (!(file instanceof File) || !kind || !purpose) {
+      json(res, 400, httpError("template_media_invalid", "Arquivo, tipo e finalidade são obrigatórios."));
+      return null;
+    }
+    return {
+      kind,
+      purpose,
+      file: {
+        fileName: file.name.trim() || null,
+        mimeType: file.type.trim() || "application/octet-stream",
+        content: Buffer.from(await file.arrayBuffer()),
+      },
+    };
+  } catch {
+    json(res, 400, httpError("invalid_body", "Payload multipart inválido."));
+    return null;
+  }
+}
 
 async function readMultipartBody(req: IncomingMessage, res: ServerResponse) {
   const contentType = String(req.headers["content-type"] ?? "");

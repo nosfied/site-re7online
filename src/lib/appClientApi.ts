@@ -1348,6 +1348,23 @@ export type AppTemplateItem = {
   } | null;
   createdAt: string;
   updatedAt: string;
+  headerType?: "NONE" | "IMAGE" | "VIDEO";
+  exampleMediaId?: string | null;
+  mediaPreviewUrl?: string | null;
+  components?: unknown;
+};
+
+export type AppTemplateMediaAsset = {
+  id: string;
+  purpose: "TEMPLATE_EXAMPLE" | "CAMPAIGN";
+  kind: "IMAGE" | "VIDEO";
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+  originalFilename: string | null;
+  state: string;
+  createdAt: string;
+  previewUrl: string;
 };
 
 export type AppCampaignReturnDestination =
@@ -1391,6 +1408,10 @@ export type AppTemplateRequestItem = {
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
+  headerType?: "NONE" | "IMAGE" | "VIDEO";
+  exampleMediaId?: string | null;
+  mediaPreviewUrl?: string | null;
+  components?: unknown;
 };
 
 export type AppChatbotFlowItem = {
@@ -5189,6 +5210,7 @@ export async function createAppCampaign(
     recipients: string[];
     templateParams?: string[];
     returnDestination: AppCampaignReturnDestination;
+    templateMediaAssetId?: string;
   }
 ): Promise<{ ok: true; campaign: CampaignItem & { campaignId: string; campaignRunId: string } }> {
   return requestAppJson(session, "/app/campaigns", {
@@ -5216,6 +5238,7 @@ export async function createAppCampaignDraft(
       value?: string;
       fallback?: string;
     }>;
+    templateMediaAssetId?: string;
   }
 ): Promise<{
   ok: true;
@@ -5249,6 +5272,7 @@ export async function previewAppCampaignDraftSplit(
       value?: string;
       fallback?: string;
     }>;
+    templateMediaAssetId?: string;
   }
 ): Promise<{
   ok: true;
@@ -5282,6 +5306,7 @@ export async function createAppCampaignDraftSplit(
       value?: string;
       fallback?: string;
     }>;
+    templateMediaAssetId?: string;
   }
 ): Promise<{
   ok: true;
@@ -5340,6 +5365,7 @@ export async function createAppCampaignDraftFromCsv(
       variableColumns?: Record<string, string | null>;
     };
     returnDestination: AppCampaignReturnDestination;
+    templateMediaAssetId?: string;
   }
 ): Promise<{
   ok: true;
@@ -5540,6 +5566,8 @@ export async function createAppTemplateRequest(
     variableDetails?: Array<{ key: string; description: string; example: string }>;
     category: string;
     language: string;
+    headerType?: "NONE" | "IMAGE" | "VIDEO";
+    exampleMediaId?: string | null;
   }
 ): Promise<{
   ok: true;
@@ -5552,6 +5580,43 @@ export async function createAppTemplateRequest(
     body: JSON.stringify(payload),
     timeoutMs: 25000,
   });
+}
+
+export async function uploadAppTemplateMedia(
+  session: AppSession,
+  payload: { file: File; kind: "IMAGE" | "VIDEO"; purpose: "TEMPLATE_EXAMPLE" | "CAMPAIGN" },
+  options?: { signal?: AbortSignal }
+): Promise<{ ok: true; asset: AppTemplateMediaAsset }> {
+  const formData = new FormData();
+  formData.set("file", payload.file);
+  formData.set("kind", payload.kind);
+  formData.set("purpose", payload.purpose);
+  return requestAppJson(session, "/app/templates/media", {
+    method: "POST",
+    body: formData,
+    timeoutMs: 60_000,
+    signal: options?.signal,
+  });
+}
+
+export async function fetchAppTemplateMedia(
+  session: AppSession,
+  mediaId: string,
+  options?: { signal?: AbortSignal }
+) {
+  return requestAppBlob(
+    session,
+    `/app/templates/media/${encodeURIComponent(mediaId)}`,
+    { signal: options?.signal }
+  );
+}
+
+export async function deleteAppTemplateMedia(session: AppSession, mediaId: string) {
+  return requestAppJson<{ ok: true }>(
+    session,
+    `/app/templates/media/${encodeURIComponent(mediaId)}`,
+    { method: "DELETE" }
+  );
 }
 
 export async function cancelAppTemplateRequest(

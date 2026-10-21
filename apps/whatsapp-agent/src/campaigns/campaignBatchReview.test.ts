@@ -199,7 +199,8 @@ test("review dynamic controller resumes without children and reuses snapshot acr
   const event = await prisma.event.findFirstOrThrow({ where: { clientId: f.c.id, messageId: children[0].campaignId, eventName: "campaign.seed.saved" } });
   const seed = readPrivateCampaignSeedFields(event.payloadJson);
   assert.deepEqual(new Set(seed.recipients), new Set(ids));
-  assert.equal(seed.componentsByWaId?.[ids[0]]?.[0].parameters[0].text, "Original 0");
+  const firstBody = seed.componentsByWaId?.[ids[0]]?.find((component) => component.type === "body");
+  assert.equal(firstBody?.parameters[0].text, "Original 0");
   assert.equal(await prisma.event.count({ where: { clientId: f.c.id, eventName: "campaign.dynamic_batch_snapshot.created" } }), 1);
   assert.equal(await prisma.campaignExecutionJob.count({ where: { batchId: f.batch.id, campaignId: { not: null }, status: "queued" } }), 1);
   // Recover the legacy gap where children were committed before their jobs.
