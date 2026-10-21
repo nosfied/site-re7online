@@ -1,6 +1,10 @@
-import "./campaignOperationsTestSupport.js";
+import {
+  createOpenCampaignOperationsTestLedger,
+  useCampaignOperationsTestLedger,
+} from "./campaignOperationsTestSupport.js";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import test from "node:test";
 import { MessageStatus } from "@prisma/client";
 import { getPrisma } from "../db.js";
@@ -1585,7 +1589,9 @@ test("dynamic six Leads exclude five anonymized markers before snapshot/provider
 test('accepted provider failure preserves sanitized original exception and never retries', async (t) => {
   const { logger } = await import('../logger/logger.js');
   const { campaignOperationsStatus } = await import('./campaignOperations.js');
+  createOpenCampaignOperationsTestLedger("campaign-accepted-failure");
   const clientId = crypto.randomUUID(), clientKey = `accepted-error-${clientId}`;
+  t.after(() => cleanup(clientId).catch(() => undefined));
   await prisma.client.create({ data: { id: clientId, clientKey, name: 'Synthetic', profile: 'business', features: { campaigns: true } } });
   await prisma.template.create({ data: { clientId, name: 'synthetic_error', category: 'UTILITY', language: 'pt_BR', status: 'approved', content: 'Synthetic' } });
   const campaign = await prisma.campaign.create({ data: { clientId, name: 'Synthetic accepted error', templateName: 'synthetic_error', status: 'sending', totalRecipients: 1 } });
@@ -1612,6 +1618,18 @@ test('accepted provider failure preserves sanitized original exception and never
   assert.equal(calls, 1);
 });
 test("old pseudo snapshot stays immutable and blocks anonymized digits at original position", async (t) => {
+  const { campaignOperationsStatus, campaignTask, setCampaignOperations } = await import('./campaignOperations.js');
+  const closedLedger = createOpenCampaignOperationsTestLedger("campaign-closed-regression");
+  void campaignTask("synthetic-pending-test-task", async () => new Promise<never>(() => undefined));
+  const openStatus = campaignOperationsStatus();
+  assert.equal(openStatus.open, true);
+  assert.equal(openStatus.tasks.length, 1);
+  setCampaignOperations(false, openStatus.generation!, "synthetic-test-fixture", "preserve fail-closed ledger across next test");
+  const closedLedgerBytes = fs.readFileSync(closedLedger.file);
+  const isolatedLedger = createOpenCampaignOperationsTestLedger("campaign-old-pseudo");
+  assert.notEqual(isolatedLedger.file, closedLedger.file);
+  assert.equal(isolatedLedger.status.open, true);
+  assert.equal(isolatedLedger.status.tasks.length, 0);
   const clientId = crypto.randomUUID();
   const clientKey = `campaign-runner-${process.pid}-${Date.now()}`;
   const templateName = `campaign_runner_${Date.now()}`;
@@ -1691,12 +1709,12 @@ test("old pseudo snapshot stays immutable and blocks anonymized digits at origin
   });
   assert.ok(runId);
 
-  await waitFor(async () => {
-    const refreshed = await prisma.campaign.findUnique({ where: { id: campaign.id } });
-    return refreshed?.status === "completed";
-  });
+  const runningPromise = getRunningCampaignPromiseForTests(campaign.id);
+  assert.ok(runningPromise);
+  await runningPromise;
 
   const completed = await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
+  assert.equal(completed.status, "completed");
   assert.equal(completed.sentCount, 2);
   assert.equal(completed.blockedCount, 1);
   assert.deepEqual(metaRecipients, [recipients[0], recipients[2]]);
@@ -1713,6 +1731,16 @@ test("old pseudo snapshot stays immutable and blocks anonymized digits at origin
     where: { clientId, waId: recipients[1], status: MessageStatus.SENT },
   });
   assert.equal(excludedOutbound, 0);
+  const isolatedStatus = campaignOperationsStatus();
+  assert.equal(isolatedStatus.open, true);
+  assert.equal(isolatedStatus.tasks.length, 0);
+  const preservedClosedStatus = useCampaignOperationsTestLedger(closedLedger.file);
+  assert.equal(preservedClosedStatus.open, false);
+  assert.equal(preservedClosedStatus.tasks.length, 1);
+  assert.deepEqual(fs.readFileSync(closedLedger.file), closedLedgerBytes);
+  const restoredIsolatedStatus = useCampaignOperationsTestLedger(isolatedLedger.file);
+  assert.equal(restoredIsolatedStatus.open, true);
+  assert.equal(restoredIsolatedStatus.tasks.length, 0);
   const blockedEvent = await prisma.event.findFirst({
     where: {
       clientId,
