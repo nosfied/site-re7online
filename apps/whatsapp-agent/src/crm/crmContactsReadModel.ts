@@ -167,6 +167,13 @@ type CrmContactPageRow = CrmContactCursorRow & {
   scopeTotal: bigint | number;
 };
 
+type CrmContactPageQueryRow = {
+  id: string | null;
+  updatedAt: Date | null;
+  createdAt: Date | null;
+  scopeTotal: bigint | number;
+};
+
 export class CrmContactsCursorError extends Error {
   readonly code = "invalid_cursor";
 }
@@ -945,17 +952,30 @@ export async function selectCrmContactsPage(prisma: PrismaClient, params: {
         (e."updatedAt" = ${cursor.updatedAt}::timestamp(3) AND e."createdAt" = ${cursor.createdAt}::timestamp(3) AND e.id > ${cursor.id})
       )`
     : Prisma.empty;
-  const rows = await prisma.$queryRaw<CrmContactPageRow[]>(Prisma.sql`
+  const rows = await prisma.$queryRaw<CrmContactPageQueryRow[]>(Prisma.sql`
     ${scope}
-    SELECT e.id, e."updatedAt", e."createdAt",
-      (SELECT count(*) FROM eligible_leads) AS "scopeTotal"
-    FROM eligible_leads e
-    WHERE true ${cursorWhere}
-    ORDER BY e."updatedAt" DESC, e."createdAt" DESC, e.id ASC
-    LIMIT ${limit + 1}
+    SELECT page.id, page."updatedAt", page."createdAt", summary."scopeTotal"
+    FROM (SELECT count(*) AS "scopeTotal" FROM eligible_leads) summary
+    LEFT JOIN LATERAL (
+      SELECT e.id, e."updatedAt", e."createdAt"
+      FROM eligible_leads e
+      WHERE true ${cursorWhere}
+      ORDER BY e."updatedAt" DESC, e."createdAt" DESC, e.id ASC
+      LIMIT ${limit + 1}
+    ) page ON true
   `);
-  const hasNextPage = rows.length > limit;
-  const pageRows: CrmContactCursorRow[] = rows.slice(0, limit).map((row) => ({
+  const selectedRows: CrmContactPageRow[] = rows.flatMap((row) => (
+    row.id !== null && row.updatedAt !== null && row.createdAt !== null
+      ? [{
+          id: row.id,
+          updatedAt: row.updatedAt,
+          createdAt: row.createdAt,
+          scopeTotal: row.scopeTotal,
+        }]
+      : []
+  ));
+  const hasNextPage = selectedRows.length > limit;
+  const pageRows: CrmContactCursorRow[] = selectedRows.slice(0, limit).map((row) => ({
     id: row.id,
     updatedAt: row.updatedAt,
     createdAt: row.createdAt,
