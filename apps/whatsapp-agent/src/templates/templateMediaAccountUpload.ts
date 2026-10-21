@@ -25,10 +25,30 @@ type UploadResult =
   | { ok: true; mediaId: string; reused: boolean }
   | { ok: false; error: "upload_failed" | "upload_uncertain" | "upload_in_progress" | "content_mismatch" };
 
+type ExistingUploadRow = {
+  state: string;
+  mediaId: string | null;
+  leaseExpiresAt: Date | null;
+  validUntil: Date | null;
+};
+
+type ExistingUploadDecision =
+  | { action: "reuse"; mediaId: string }
+  | { action: "deny"; error: "upload_failed" | "upload_uncertain" }
+  | { action: "wait" }
+  | { action: "reclaim" };
+
+type PersistentLeaseTestHooks = {
+  afterMissingRead?: () => Promise<void>;
+  afterCreateConflict?: () => Promise<void>;
+  afterConfirmedPersisted?: () => void;
+};
+
 const inFlight = new Map<string, Promise<UploadResult>>();
 const LEASE_MS = 30 * 1000;
 const FAILURE_BACKOFF_MS = 5 * 60 * 1000;
 const UNCERTAIN_BACKOFF_MS = 30 * 60 * 1000;
+let persistentLeaseTestHooks: PersistentLeaseTestHooks | null = null;
 
 function confirmedTtlMs() {
   const seconds = Number.parseInt(process.env.TEMPLATE_MEDIA_META_TTL_SECONDS ?? "86400", 10);
@@ -51,6 +71,45 @@ function uniqueWhere(scope: AccountUploadScope) {
   };
 }
 
+export function classifyExistingTemplateMediaUpload(row: ExistingUploadRow, now: Date): ExistingUploadDecision {
+  if (row.state === "confirmed" && row.mediaId && row.validUntil && row.validUntil > now) {
+    return { action: "reuse", mediaId: row.mediaId };
+  }
+  if ((row.state === "uncertain" || row.state === "failed") && row.validUntil && row.validUntil > now) {
+    return { action: "deny", error: row.state === "uncertain" ? "upload_uncertain" : "upload_failed" };
+  }
+  if (row.state === "uploading" && row.leaseExpiresAt && row.leaseExpiresAt > now) {
+    return { action: "wait" };
+  }
+  if (
+    row.state === "expired" ||
+    row.state === "confirmed" ||
+    row.state === "failed" ||
+    row.state === "uncertain" ||
+    row.state === "uploading"
+  ) {
+    return { action: "reclaim" };
+  }
+  return { action: "wait" };
+}
+
+function reclaimableStateWhere(now: Date) {
+  return {
+    OR: [
+      { state: "expired" },
+      { state: "uploading", OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }] },
+      { state: "confirmed", OR: [{ mediaId: null }, { validUntil: null }, { validUntil: { lte: now } }] },
+      { state: { in: ["failed", "uncertain"] }, OR: [{ validUntil: null }, { validUntil: { lte: now } }] },
+    ],
+  };
+}
+
+function terminalResult(decision: ExistingUploadDecision): UploadResult | null {
+  if (decision.action === "reuse") return { ok: true, mediaId: decision.mediaId, reused: true };
+  if (decision.action === "deny") return { ok: false, error: decision.error };
+  return null;
+}
+
 export async function resolveAccountScopedTemplateMediaWithPersistentLease(asset: UploadAsset): Promise<UploadResult> {
   const prisma = getPrisma();
   const now = new Date();
@@ -59,17 +118,16 @@ export async function resolveAccountScopedTemplateMediaWithPersistentLease(asset
     where: { template_media_account_upload_scope: where },
   });
 
-  if (row?.state === "confirmed" && row.mediaId && row.validUntil && row.validUntil > now) {
-    return { ok: true, mediaId: row.mediaId, reused: true };
-  }
-  if ((row?.state === "uncertain" || row?.state === "failed") && row.validUntil && row.validUntil > now) {
-    return { ok: false, error: row.state === "uncertain" ? "upload_uncertain" : "upload_failed" };
+  if (row) {
+    const terminal = terminalResult(classifyExistingTemplateMediaUpload(row, now));
+    if (terminal) return terminal;
   }
 
   const attemptId = crypto.randomUUID();
   const leaseExpiresAt = new Date(now.getTime() + LEASE_MS);
   let acquired = false;
   if (!row) {
+    await persistentLeaseTestHooks?.afterMissingRead?.();
     try {
       row = await prisma.templateMediaAccountUpload.create({
         data: { ...where, state: "uploading", attemptId, leaseExpiresAt },
@@ -77,24 +135,35 @@ export async function resolveAccountScopedTemplateMediaWithPersistentLease(asset
       acquired = true;
     } catch (error) {
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
+      await persistentLeaseTestHooks?.afterCreateConflict?.();
       row = await prisma.templateMediaAccountUpload.findUnique({
         where: { template_media_account_upload_scope: where },
       });
     }
   }
-  if (!acquired && row && (!row.leaseExpiresAt || row.leaseExpiresAt <= now || row.state !== "uploading")) {
-    const claimed = await prisma.templateMediaAccountUpload.updateMany({
-      where: { id: row.id, updatedAt: row.updatedAt },
-      data: {
-        state: "uploading",
-        attemptId,
-        leaseExpiresAt,
-        mediaId: null,
-        validUntil: null,
-        lastErrorCode: null,
-      },
-    });
-    acquired = claimed.count === 1;
+  if (!acquired && row) {
+    const claimNow = new Date();
+    const decision = classifyExistingTemplateMediaUpload(row, claimNow);
+    const terminal = terminalResult(decision);
+    if (terminal) return terminal;
+    if (decision.action === "reclaim") {
+      const claimed = await prisma.templateMediaAccountUpload.updateMany({
+        where: {
+          id: row.id,
+          updatedAt: row.updatedAt,
+          ...reclaimableStateWhere(claimNow),
+        },
+        data: {
+          state: "uploading",
+          attemptId,
+          leaseExpiresAt,
+          mediaId: null,
+          validUntil: null,
+          lastErrorCode: null,
+        },
+      });
+      acquired = claimed.count === 1;
+    }
   }
   if (!acquired) {
     for (let index = 0; index < 40; index += 1) {
@@ -102,11 +171,10 @@ export async function resolveAccountScopedTemplateMediaWithPersistentLease(asset
       const observed = await prisma.templateMediaAccountUpload.findUnique({
         where: { template_media_account_upload_scope: where },
       });
-      if (observed?.state === "confirmed" && observed.mediaId && observed.validUntil && observed.validUntil > new Date()) {
-        return { ok: true, mediaId: observed.mediaId, reused: true };
+      if (observed) {
+        const terminal = terminalResult(classifyExistingTemplateMediaUpload(observed, new Date()));
+        if (terminal) return terminal;
       }
-      if (observed?.state === "uncertain") return { ok: false, error: "upload_uncertain" };
-      if (observed?.state === "failed") return { ok: false, error: "upload_failed" };
     }
     return { ok: false, error: "upload_in_progress" };
   }
@@ -150,7 +218,7 @@ export async function resolveAccountScopedTemplateMediaWithPersistentLease(asset
   }
 
   const uploadedAt = new Date();
-  await prisma.templateMediaAccountUpload.updateMany({
+  const persisted = await prisma.templateMediaAccountUpload.updateMany({
     where: { id: row!.id, attemptId },
     data: {
       state: "confirmed",
@@ -161,6 +229,15 @@ export async function resolveAccountScopedTemplateMediaWithPersistentLease(asset
       lastErrorCode: null,
     },
   });
+  if (persisted.count !== 1) {
+    logger.warn({
+      event: "template.media.account_upload.owner_lost",
+      clientId: asset.clientId,
+      assetId: asset.assetId,
+    });
+    return { ok: false, error: "upload_uncertain" };
+  }
+  persistentLeaseTestHooks?.afterConfirmedPersisted?.();
   return { ok: true, mediaId: uploaded.mediaId, reused: false };
 }
 
@@ -175,6 +252,10 @@ export async function resolveAccountScopedTemplateMedia(asset: UploadAsset): Pro
 
 export function clearTemplateMediaUploadSingleFlightForTests() {
   inFlight.clear();
+}
+
+export function setTemplateMediaPersistentLeaseTestHooksForTests(hooks: PersistentLeaseTestHooks | null) {
+  persistentLeaseTestHooks = hooks;
 }
 
 export function isExplicitTemplateMediaRejection(status: number, body: string) {

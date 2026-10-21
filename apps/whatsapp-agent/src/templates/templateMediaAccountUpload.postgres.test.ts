@@ -5,7 +5,14 @@ import os from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
 import { getPrisma } from "../db.js";
-import { resolveAccountScopedTemplateMedia, resolveAccountScopedTemplateMediaWithPersistentLease, clearTemplateMediaUploadSingleFlightForTests, isExplicitTemplateMediaRejection } from "./templateMediaAccountUpload.js";
+import {
+  classifyExistingTemplateMediaUpload,
+  resolveAccountScopedTemplateMedia,
+  resolveAccountScopedTemplateMediaWithPersistentLease,
+  clearTemplateMediaUploadSingleFlightForTests,
+  isExplicitTemplateMediaRejection,
+  setTemplateMediaPersistentLeaseTestHooksForTests,
+} from "./templateMediaAccountUpload.js";
 import { storeTemplateMedia } from "./templateMediaStorage.js";
 import { sendTemplate } from "../services/outboundTemplateService.js";
 
@@ -74,6 +81,58 @@ test("only explicit provider media rejection permits controlled reacquisition", 
   assert.equal(isExplicitTemplateMediaRejection(400, "template parameter invalid"), false);
 });
 
+test("existing upload classification permits only explicit terminal reuse, denial or expiry reclaim", () => {
+  const now = new Date("2026-10-21T12:00:00.000Z");
+  const future = new Date(now.getTime() + 60_000);
+  const past = new Date(now.getTime() - 60_000);
+  assert.deepEqual(classifyExistingTemplateMediaUpload({ state: "confirmed", mediaId: "media-stable", validUntil: future, leaseExpiresAt: null }, now), { action: "reuse", mediaId: "media-stable" });
+  assert.deepEqual(classifyExistingTemplateMediaUpload({ state: "confirmed", mediaId: "media-expired", validUntil: past, leaseExpiresAt: null }, now), { action: "reclaim" });
+  assert.deepEqual(classifyExistingTemplateMediaUpload({ state: "uploading", mediaId: null, validUntil: null, leaseExpiresAt: future }, now), { action: "wait" });
+  assert.deepEqual(classifyExistingTemplateMediaUpload({ state: "uploading", mediaId: null, validUntil: null, leaseExpiresAt: past }, now), { action: "reclaim" });
+  assert.deepEqual(classifyExistingTemplateMediaUpload({ state: "failed", mediaId: null, validUntil: future, leaseExpiresAt: null }, now), { action: "deny", error: "upload_failed" });
+  assert.deepEqual(classifyExistingTemplateMediaUpload({ state: "uncertain", mediaId: null, validUntil: future, leaseExpiresAt: null }, now), { action: "deny", error: "upload_uncertain" });
+  assert.deepEqual(classifyExistingTemplateMediaUpload({ state: "failed", mediaId: null, validUntil: past, leaseExpiresAt: null }, now), { action: "reclaim" });
+  assert.deepEqual(classifyExistingTemplateMediaUpload({ state: "uncertain", mediaId: null, validUntil: past, leaseExpiresAt: null }, now), { action: "reclaim" });
+});
+
+test("P2002 loser reclassifies a rapidly confirmed row without reclaiming it", async (t) => {
+  const value = await fixture(t, "p2002-confirmed");
+  let uploadCalls = 0;
+  let missingReaders = 0;
+  let releaseMissingReaders!: () => void;
+  let markConfirmed!: () => void;
+  const bothObservedMissing = new Promise<void>((resolve) => { releaseMissingReaders = resolve; });
+  const confirmedPersisted = new Promise<void>((resolve) => { markConfirmed = resolve; });
+  setTemplateMediaPersistentLeaseTestHooksForTests({
+    afterMissingRead: async () => {
+      missingReaders += 1;
+      if (missingReaders === 2) releaseMissingReaders();
+      await bothObservedMissing;
+    },
+    afterCreateConflict: async () => confirmedPersisted,
+    afterConfirmedPersisted: markConfirmed,
+  });
+  t.after(() => setTemplateMediaPersistentLeaseTestHooksForTests(null));
+  globalThis.fetch = async () => {
+    uploadCalls += 1;
+    return new Response(JSON.stringify({ id: "media-p2002-winner" }), { status: 200 });
+  };
+
+  const results = await Promise.all([
+    resolveAccountScopedTemplateMediaWithPersistentLease(input(value)),
+    resolveAccountScopedTemplateMediaWithPersistentLease(input(value)),
+  ]);
+
+  assert.equal(missingReaders, 2);
+  assert.equal(uploadCalls, 1);
+  assert(results.every((result) => result.ok && result.mediaId === "media-p2002-winner"));
+  assert.equal(results.filter((result) => result.ok && result.reused).length, 1);
+  const persisted = await prisma.templateMediaAccountUpload.findFirstOrThrow({ where: { clientId: value.client.id } });
+  assert.equal(persisted.state, "confirmed");
+  assert.equal(persisted.mediaId, "media-p2002-winner");
+  assert(persisted.validUntil && persisted.validUntil > new Date());
+});
+
 test("one and 1001 eligible sends reuse one confirmed upload for the same tenant/account", async (t) => {
   const value = await fixture(t, "fanout");
   let uploadCalls = 0;
@@ -131,6 +190,87 @@ test("concurrency is single-flight and scopes phone, tenant, hash, expiration an
   const afterUncertainCalls = calls;
   assert.deepEqual(await resolveAccountScopedTemplateMedia(input(firstTenant)), { ok: false, error: "upload_uncertain" });
   assert.equal(calls, afterUncertainCalls, "uncertain result cannot trigger a blind retry");
+});
+
+test("expired reclaimable states elect one owner while active backoff denies without upload", async (t) => {
+  for (const state of ["confirmed", "uploading", "failed", "uncertain"] as const) {
+    await t.test(`${state} after its deadline has one owner`, async (subtest) => {
+      const value = await fixture(subtest, `expired-${state}`);
+      const expiredAt = new Date(Date.now() - 60_000);
+      await prisma.templateMediaAccountUpload.create({
+        data: {
+          clientId: value.client.id,
+          assetId: value.asset.id,
+          assetSha256: value.asset.sha256,
+          kind: value.asset.kind,
+          phoneNumberId: "phone-a",
+          credentialGeneration: "tenant_meta:g1",
+          state,
+          attemptId: crypto.randomUUID(),
+          mediaId: state === "confirmed" ? `expired-${state}` : null,
+          leaseExpiresAt: state === "uploading" ? expiredAt : null,
+          validUntil: state === "uploading" ? null : expiredAt,
+        },
+      });
+      let uploadCalls = 0;
+      globalThis.fetch = async () => {
+        uploadCalls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return new Response(JSON.stringify({ id: `renewed-${state}` }), { status: 200 });
+      };
+      const results = await Promise.all(Array.from({ length: 20 }, () => resolveAccountScopedTemplateMediaWithPersistentLease(input(value))));
+      assert.equal(uploadCalls, 1);
+      assert(results.every((result) => result.ok && result.mediaId === `renewed-${state}`));
+    });
+  }
+
+  for (const state of ["failed", "uncertain"] as const) {
+    await t.test(`${state} inside backoff is not retried`, async (subtest) => {
+      const value = await fixture(subtest, `backoff-${state}`);
+      await prisma.templateMediaAccountUpload.create({
+        data: {
+          clientId: value.client.id,
+          assetId: value.asset.id,
+          assetSha256: value.asset.sha256,
+          kind: value.asset.kind,
+          phoneNumberId: "phone-a",
+          credentialGeneration: "tenant_meta:g1",
+          state,
+          attemptId: crypto.randomUUID(),
+          validUntil: new Date(Date.now() + 60_000),
+        },
+      });
+      let uploadCalls = 0;
+      globalThis.fetch = async () => {
+        uploadCalls += 1;
+        throw new Error("upload must not run during backoff");
+      };
+      assert.deepEqual(await resolveAccountScopedTemplateMediaWithPersistentLease(input(value)), {
+        ok: false,
+        error: state === "failed" ? "upload_failed" : "upload_uncertain",
+      });
+      assert.equal(uploadCalls, 0);
+    });
+  }
+});
+
+test("an owner that loses attemptId cannot report its upload as persisted", async (t) => {
+  const value = await fixture(t, "lost-owner");
+  let uploadCalls = 0;
+  globalThis.fetch = async () => {
+    uploadCalls += 1;
+    await prisma.templateMediaAccountUpload.updateMany({
+      where: { clientId: value.client.id, assetId: value.asset.id, state: "uploading" },
+      data: { attemptId: "replacement-owner" },
+    });
+    return new Response(JSON.stringify({ id: "orphaned-provider-media" }), { status: 200 });
+  };
+  assert.deepEqual(await resolveAccountScopedTemplateMediaWithPersistentLease(input(value)), { ok: false, error: "upload_uncertain" });
+  assert.equal(uploadCalls, 1);
+  const persisted = await prisma.templateMediaAccountUpload.findFirstOrThrow({ where: { clientId: value.client.id } });
+  assert.equal(persisted.state, "uploading");
+  assert.equal(persisted.mediaId, null);
+  assert.equal(persisted.attemptId, "replacement-owner");
 });
 
 test("sendTemplate rechecks eligibility after a pending upload and retains confirmed media for reuse", async (t) => {
