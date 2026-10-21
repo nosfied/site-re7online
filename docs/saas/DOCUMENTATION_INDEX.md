@@ -16,7 +16,9 @@
 
 ## Backlog ativo separado
 
+- [Redesenho set based do read model de contatos](CRM_CONTACTS_READ_MODEL_REDESIGN_2026-10-20.md)
 - [Paginação por cursor e overlay de processamento do CRM](backlog/CRM_CONTACTS_CURSOR_PAGINATION_AND_LOADING_OVERLAY_2026-10-20.md)
+  — contexto histórico substituído pelo redesenho set based.
 - [Adequar encerramento e CSAT à janela de 24h](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
 - OBS-1 — preparação concluída; rotação exige janela própria.
 

@@ -8,6 +8,7 @@ function row(index: number) {
     id: `lead-${String(index).padStart(4, "0")}`,
     updatedAt: new Date(`2026-10-20T12:${String(59 - Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}.000Z`),
     createdAt: new Date(`2026-10-19T12:00:${String(index % 60).padStart(2, "0")}.000Z`),
+    scopeTotal: BigInt(620),
   };
 }
 
@@ -18,7 +19,7 @@ function reader(pageRows: ReturnType<typeof row>[], total = 620) {
     prisma: {
       $queryRaw: async (query: Prisma.Sql) => {
         queries.push(query);
-        return query.strings.join(" ").includes("count(*)") ? [{ total: BigInt(total) }] : pageRows;
+        return pageRows.map((item) => ({ ...item, scopeTotal: BigInt(total) }));
       },
     },
   };
@@ -36,6 +37,7 @@ test("keyset sequence reads limit plus one, accepts normalized filters, and pres
   });
   assert.equal(first.rows.length, 50);
   assert.equal(first.total, 620);
+  assert.equal(firstReader.queries.length, 1);
   assert.equal(first.hasNextPage, true);
   assert.ok(first.nextCursor);
   const cursorBody = JSON.parse(Buffer.from(first.nextCursor, "base64url").toString("utf8")) as Record<string, unknown>;
@@ -45,6 +47,8 @@ test("keyset sequence reads limit plus one, accepts normalized filters, and pres
     51
   );
   assert.match(firstReader.queries[0].strings.join(" "), /tenantId/);
+  assert.match(firstReader.queries[0].strings.join(" "), /contact_alias_facts AS MATERIALIZED/);
+  assert.match(firstReader.queries[0].strings.join(" "), /SELECT count\(\*\) FROM eligible_leads/);
 
   const secondReader = reader(Array.from({ length: 51 }, (_, index) => row(index + 50)));
   const second = await selectCrmContactsPage(secondReader.prisma as never, {

@@ -30,7 +30,7 @@ function intercept(onCreate:(data:any,run:()=>Promise<any>)=>Promise<any>,afterC
  }});
 }
 test.after(async()=>{
- for(const clientId of clients){await db.event.deleteMany({where:{clientId}});await db.lead.deleteMany({where:{tenantId:clientId}});await db.contactChannelIdentity.deleteMany({where:{clientId}});await db.contact.deleteMany({where:{clientId}});await db.client.delete({where:{id:clientId}});}
+ for(const clientId of clients){await db.event.deleteMany({where:{clientId}});await db.conversation.deleteMany({where:{clientId}});await db.lead.deleteMany({where:{tenantId:clientId}});await db.contactChannelIdentity.deleteMany({where:{clientId}});await db.contact.deleteMany({where:{clientId}});await db.client.delete({where:{id:clientId}});}
  await db.$disconnect();
 });
 test("993 =880 eligible+82 invalid+31 duplicates;879 new+1 updated;recover summary without writes",async()=>{
@@ -90,6 +90,37 @@ test("manual SQL search preserves literal LIKE metacharacters, accents and forma
   const result=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{q,page:1,limit:50},statuses:[]});
   assert.equal(result.pagination.total,1,q);assert.deepEqual(result.items.map(item=>item.leadId),[expectedId],q);
  }
+});
+test("set-based eligibility prefers direct contact and preserves legacy fallback, lifecycle, exclusion, anonymity, conversation and opt-out",async()=>{
+ const p=await fixture();
+ const direct=await db.contact.create({data:{clientId:p.clientId,waId:phone(7001),externalUserRef:"direct-only",name:"Direct active",lifecycle:"ACTIVE"}});
+ const aliasCollision=await db.contact.create({data:{clientId:p.clientId,waId:phone(7002),externalUserRef:"lead-direct",name:"Alias excluded",lifecycle:"ACTIVE",operationallyExcludedAt:new Date()}});
+ const identity=await db.contactChannelIdentity.create({data:{clientId:p.clientId,contactId:direct.id,channel:"whatsapp",provider:"web_session",channelAccountId:"test",externalUserHash:randomUUID(),externalUserRef:"lead-direct"}});
+ const directLead=await db.lead.create({data:{tenantId:p.clientId,waId:"lead-direct",waIdCanonical:"lead-direct",contactChannelIdentityId:identity.id,name:"Direct lead",status:"NEW"}});
+ await db.contact.create({data:{clientId:p.clientId,waId:phone(7003),externalUserRef:"lead-fallback",name:"Fallback active",lifecycle:"ACTIVE"}});
+ const fallbackLead=await db.lead.create({data:{tenantId:p.clientId,waId:"lead-fallback",waIdCanonical:"lead-fallback",name:"Fallback lead",status:"NEW"}});
+ await db.contact.create({data:{clientId:p.clientId,waId:phone(7004),externalUserRef:"lead-provisional",name:"Fallback provisional",lifecycle:"PROVISIONAL"}});
+ await db.lead.create({data:{tenantId:p.clientId,waId:"lead-provisional",waIdCanonical:"lead-provisional",name:"Provisional lead",status:"NEW"}});
+ const excluded=await db.contact.create({data:{clientId:p.clientId,waId:phone(7005),externalUserRef:"lead-excluded",name:"Fallback excluded",lifecycle:"ACTIVE",operationallyExcludedAt:new Date()}});
+ const excludedLead=await db.lead.create({data:{tenantId:p.clientId,waId:"lead-excluded",waIdCanonical:"lead-excluded",name:"Excluded lead",status:"NEW"}});
+ await db.contact.create({data:{clientId:p.clientId,waId:phone(7006),externalUserRef:"lead-anon",name:"Usuario anonimizado",lifecycle:"ACTIVE"}});
+ const anonymizedLead=await db.lead.create({data:{tenantId:p.clientId,waId:"lead-anon",waIdCanonical:"lead-anon",name:"Visible lead name",status:"NEW"}});
+ await db.conversation.create({data:{clientId:p.clientId,waId:"lead-fallback",waIdCanonical:"lead-fallback"}});
+ await db.event.create({data:{clientId:p.clientId,waId:"lead-fallback",waIdCanonical:"lead-fallback",eventName:"contact.opt_out.recorded",payloadJson:{}}});
+
+ const active=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{page:1,limit:50,operationalStatus:"active"},statuses:[]});
+ assert.deepEqual(new Set(active.items.map(item=>item.leadId)),new Set([directLead.id,fallbackLead.id]));
+ assert.equal(active.items.find(item=>item.leadId===directLead.id)?.contactId,direct.id);
+ assert.ok(!active.items.some(item=>item.contactId===aliasCollision.id));
+ const excludedResult=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{page:1,limit:50,operationalStatus:"excluded"},statuses:[]});
+ assert.deepEqual(excludedResult.items.map(item=>item.leadId),[excludedLead.id]);
+ assert.equal(excludedResult.items[0]?.contactId,excluded.id);
+ const withAnonymized=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{page:1,limit:50,operationalStatus:"active"},statuses:[],includeAnonymized:true});
+ assert.ok(withAnonymized.items.some(item=>item.leadId===anonymizedLead.id));
+ const conversation=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{page:1,limit:50,operationalStatus:"active",hasConversation:true},statuses:[]});
+ assert.deepEqual(conversation.items.map(item=>item.leadId),[fallbackLead.id]);
+ const optedOut=await buildCrmContactsPayload(db,{clientId:p.clientId,query:{page:1,limit:50,operationalStatus:"active",optOut:true},statuses:[]});
+ assert.deepEqual(optedOut.items.map(item=>item.leadId),[fallbackLead.id]);
 });
 test("only control receipts gain critical protection; no tenant policy changed; recovered errors omit CSV identities",async()=>{
  const {classifyEventRetentionPolicy}=await import('../events/eventRetentionPolicy.js');
