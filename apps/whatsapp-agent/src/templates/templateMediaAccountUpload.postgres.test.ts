@@ -7,6 +7,7 @@ import test, { type TestContext } from "node:test";
 import { getPrisma } from "../db.js";
 import { resolveAccountScopedTemplateMedia, resolveAccountScopedTemplateMediaWithPersistentLease, clearTemplateMediaUploadSingleFlightForTests, isExplicitTemplateMediaRejection } from "./templateMediaAccountUpload.js";
 import { storeTemplateMedia } from "./templateMediaStorage.js";
+import { sendTemplate } from "../services/outboundTemplateService.js";
 
 const prisma = getPrisma();
 const originalFetch = globalThis.fetch;
@@ -130,4 +131,100 @@ test("concurrency is single-flight and scopes phone, tenant, hash, expiration an
   const afterUncertainCalls = calls;
   assert.deepEqual(await resolveAccountScopedTemplateMedia(input(firstTenant)), { ok: false, error: "upload_uncertain" });
   assert.equal(calls, afterUncertainCalls, "uncertain result cannot trigger a blind retry");
+});
+
+test("sendTemplate rechecks eligibility after a pending upload and retains confirmed media for reuse", async (t) => {
+  const value = await fixture(t, "final-eligibility");
+  const clientKey = value.client.clientKey;
+  t.after(() => fs.rm(path.join(process.cwd(), ".data", clientKey), { recursive: true, force: true }));
+  const phoneNumberId = "phone-final-eligibility";
+  await prisma.tenantMetaConfig.create({
+    data: {
+      clientId: value.client.id,
+      businessToken: "test-only-token",
+      phoneNumberId,
+      rawPayload: {},
+    },
+  });
+  await prisma.template.create({
+    data: {
+      clientId: value.client.id,
+      name: "final_eligibility_media",
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Synthetic",
+      headerType: "IMAGE",
+    },
+  });
+
+  let eligibilityReason: string | null = null;
+  let eligibilityChecks = 0;
+  let uploadCalls = 0;
+  let messageCalls = 0;
+  let releaseUpload!: () => void;
+  let markUploadStarted!: () => void;
+  const uploadStarted = new Promise<void>((resolve) => { markUploadStarted = resolve; });
+  const uploadPending = new Promise<void>((resolve) => { releaseUpload = resolve; });
+  const beforeSubmit = async () => {
+    eligibilityChecks += 1;
+    return eligibilityReason;
+  };
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith(`/${phoneNumberId}/media`)) {
+      uploadCalls += 1;
+      markUploadStarted();
+      await uploadPending;
+      return new Response(JSON.stringify({ id: "confirmed-media" }), { status: 200 });
+    }
+    if (url.endsWith(`/${phoneNumberId}/messages`)) {
+      messageCalls += 1;
+      const payload = JSON.parse(String(init?.body)) as {
+        template?: { components?: Array<{ parameters?: Array<{ image?: { id?: string } }> }> };
+      };
+      assert.equal(payload.template?.components?.[0]?.parameters?.[0]?.image?.id, "confirmed-media");
+      return new Response(JSON.stringify({ messages: [{ id: "message-1" }] }), { status: 200 });
+    }
+    throw new Error("unexpected_provider_url");
+  };
+  const params = {
+    clientId: value.client.id,
+    clientKey,
+    waId: "5541991100961",
+    toE164: "5541991100961",
+    intent: undefined,
+    templateName: "final_eligibility_media",
+    lang: "pt_BR",
+    media: { assetId: value.asset.id, kind: "IMAGE" as const, sha256: value.asset.sha256 },
+    beforeSubmit,
+  };
+
+  const pending = sendTemplate(params);
+  await uploadStarted;
+  eligibilityReason = "active_opt_out";
+  releaseUpload();
+  const deniedAfterUpload = await pending;
+  assert.deepEqual(deniedAfterUpload, {
+    ok: false,
+    blockedByEligibility: true,
+    errorBody: "active_opt_out",
+  });
+  assert.equal(eligibilityChecks, 2);
+  assert.equal(uploadCalls, 1);
+  assert.equal(messageCalls, 0);
+  assert.equal(await prisma.templateMediaAccountUpload.count({
+    where: { clientId: value.client.id, assetId: value.asset.id, state: "confirmed", mediaId: "confirmed-media" },
+  }), 1, "the provider-confirmed media id remains persisted after the final gate denies");
+
+  const stillDenied = await sendTemplate(params);
+  assert.equal(stillDenied.blockedByEligibility, true);
+  assert.equal(uploadCalls, 1, "a blocked retry does not upload again");
+  assert.equal(messageCalls, 0);
+
+  eligibilityReason = null;
+  const restored = await sendTemplate(params);
+  assert.equal(restored.ok, true);
+  assert.equal(uploadCalls, 1, "restored eligibility reuses the confirmed media id");
+  assert.equal(messageCalls, 1);
 });

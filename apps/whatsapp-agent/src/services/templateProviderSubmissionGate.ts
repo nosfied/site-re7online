@@ -13,5 +13,11 @@ export async function runTemplateProviderSubmissionGate(params: {
   const eligibilityReason = await params.beforeSubmit?.();
   if (eligibilityReason) return { ok: false, blockedByEligibility: true, errorBody: eligibilityReason };
   if (!params.resolveMedia) return { ok: true };
-  return params.resolveMedia();
+  const media = await params.resolveMedia();
+  if (!media.ok) return media;
+  const postMediaEligibilityReason = await params.beforeSubmit?.();
+  if (postMediaEligibilityReason) {
+    return { ok: false, blockedByEligibility: true, errorBody: postMediaEligibilityReason };
+  }
+  return media;
 }
