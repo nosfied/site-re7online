@@ -657,6 +657,15 @@ Nao executar carga na sprint de bootstrap. Primeiro validar status, features e q
   igualdade literal; `false` admite somente a transformação determinística
   do sufixo `.log` ou `-<número>.log` para `-<pm_id>.log` no PM2 `6.0.14`.
 - Recusar a janela se o ensaio isolado não restaurar o retorno e seu socket/health.
+- Depois de cada `pm2 start`, executar `pm2-definition-control.py wait-readiness`;
+  não usar observador temporário em `/tmp`.
+- API e frontend usam prazo monotônico de 30 segundos, polling máximo de 500 ms e
+  três amostras consecutivas de PID/start ticks, symlink e socket estáveis.
+- Aceitar listener IPv4 ou IPv6 e propriedade `DIRECT` ou `DESCENDANT`; negar
+  daemon/ancestral, proprietário estranho e múltiplos listeners.
+- Executar health local e público somente depois da estabilidade do socket.
+- Em `READINESS_TIMEOUT:<component>:<port>`, executar rollback autenticado e manter
+  `pm2 save` e marker `DEPLOYED` ausentes.
 
 ## Pos-Deploy
 

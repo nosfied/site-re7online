@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "classification": "READINESS_RACE_SINGLE_SAMPLE",
+  "component": "api",
+  "port": 3001,
+  "pm2OnlineAtUtc": "2026-10-22T19:24:11Z",
+  "listenerReadyAtUtc": "2026-10-22T19:24:15.411Z",
+  "observedDelaySeconds": 4.411,
+  "originalObservationCount": 1,
+  "originalSocketOwnerCount": 0,
+  "permissionsValid": true,
+  "parserValid": true,
+  "networkNamespaceEqual": true,
+  "ipv6Supported": true,
+  "containsEnvironmentValues": false,
+  "containsTenantIdentifiers": false,
+  "containsCredentials": false
+}

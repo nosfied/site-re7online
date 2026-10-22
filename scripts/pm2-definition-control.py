@@ -15,9 +15,13 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 import tempfile
+import time
 import unicodedata
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
@@ -54,6 +58,9 @@ SOURCE_AUTHORITIES = {
     "candidate": "new-release-config",
     "rollback": "proven-production-definition",
 }
+READINESS_DEADLINES = {"api": 30.0, "frontend": 30.0}
+READINESS_POLL_MAX_SECONDS = 0.5
+READINESS_STABLE_SAMPLES = 3
 
 
 class Denied(ValueError):
@@ -513,6 +520,282 @@ def command_validate_pair(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def process_stat(pid: int) -> dict[str, int]:
+    raw = Path(f"/proc/{pid}/stat").read_text()
+    closing = raw.rfind(")")
+    if closing < 0:
+        deny("readiness_proc_stat")
+    fields = raw[closing + 2:].split()
+    return {"ppid": int(fields[1]), "ticks": int(fields[19])}
+
+
+def process_tree(root_pid: int) -> tuple[set[int], dict[int, int]]:
+    parents: dict[int, int] = {}
+    for item in Path("/proc").iterdir():
+        if not item.name.isdigit():
+            continue
+        try:
+            parents[int(item.name)] = process_stat(int(item.name))["ppid"]
+        except (FileNotFoundError, ProcessLookupError, PermissionError, ValueError):
+            continue
+    allowed = {root_pid}
+    changed = True
+    while changed:
+        changed = False
+        for pid, parent in parents.items():
+            if parent in allowed and pid not in allowed:
+                allowed.add(pid)
+                changed = True
+    return allowed, parents
+
+
+def listening_socket_inodes(port: int) -> set[str]:
+    wanted = f"{port:04X}"
+    inodes: set[str] = set()
+    for table in (Path("/proc/net/tcp"), Path("/proc/net/tcp6")):
+        for line in table.read_text().splitlines()[1:]:
+            fields = line.split()
+            if fields[1].rsplit(":", 1)[1].upper() == wanted and fields[3] == "0A":
+                inodes.add(fields[9])
+    return inodes
+
+
+def authorized_socket_owners(inodes: set[str], allowed: set[int]) -> tuple[set[int], set[int]]:
+    owners: set[int] = set()
+    denied_pids: set[int] = set()
+    for pid in allowed:
+        try:
+            handles = Path(f"/proc/{pid}/fd").iterdir()
+            for handle in handles:
+                try:
+                    target = os.readlink(handle)
+                except OSError:
+                    continue
+                if target.startswith("socket:[") and target[8:-1] in inodes:
+                    owners.add(pid)
+        except PermissionError:
+            denied_pids.add(pid)
+        except FileNotFoundError:
+            continue
+    return owners, denied_pids
+
+
+def owner_chain(owner: int, process_pid: int, parents: dict[int, int]) -> list[int]:
+    chain = [owner]
+    while chain[-1] != process_pid and chain[-1] in parents:
+        parent = parents[chain[-1]]
+        if parent <= 1 or parent in chain:
+            break
+        chain.append(parent)
+    if chain[-1] != process_pid:
+        deny("readiness_socket_owner_not_descendant")
+    return chain
+
+
+def symlink_identity(stable_path: Path, release_root: Path) -> dict[str, Any]:
+    metadata = stable_path.lstat()
+    if not stat.S_ISLNK(metadata.st_mode):
+        deny("readiness_stable_path_not_symlink")
+    resolved = stable_path.resolve(strict=True)
+    expected = release_root.resolve(strict=True)
+    if resolved != expected:
+        deny("readiness_symlink_wrong_release")
+    return {
+        "device": metadata.st_dev,
+        "inode": metadata.st_ino,
+        "textTarget": os.readlink(stable_path),
+        "resolvedTarget": str(resolved),
+    }
+
+
+def pm2_process_row(pm2: Path, process_name: str, environment: dict[str, str] | None = None) -> dict[str, Any]:
+    completed = subprocess.run([str(pm2), "jlist"], text=True, capture_output=True, timeout=10, env=environment)
+    if completed.returncode != 0:
+        deny("readiness_pm2_jlist")
+    try:
+        rows = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        deny("readiness_pm2_jlist_json")
+    matches = [row for row in rows if row.get("name") == process_name]
+    if len(matches) != 1:
+        deny("readiness_pm2_process_count")
+    return matches[0]
+
+
+def http_status(url: str, timeout_seconds: float) -> int:
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+            return int(response.status)
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return 0
+
+
+def validate_physical_release(component: str, app: dict[str, Any], release_identity: dict[str, Any], release_root: Path, pid: int) -> None:
+    physical_root = release_root.resolve(strict=True)
+    resolved_cwd = Path(app["cwd"]).resolve(strict=True)
+    resolved_script = Path(app["script"]).resolve(strict=True)
+    proc_cwd = Path(f"/proc/{pid}/cwd").resolve(strict=True)
+    proc_exe = Path(f"/proc/{pid}/exe").resolve(strict=True)
+    interpreter = Path(app["interpreter"]).resolve(strict=True)
+    if resolved_cwd != physical_root or proc_cwd != physical_root:
+        deny("readiness_physical_cwd")
+    if physical_root not in resolved_script.parents:
+        deny("readiness_physical_script_escape")
+    if proc_exe != interpreter:
+        deny("readiness_interpreter")
+    if component == "api" and digest(resolved_script.read_bytes()) != release_identity["apiEntrySha256"]:
+        deny("readiness_api_entry_sha256")
+    if component == "frontend":
+        if digest(resolved_script.read_bytes()) != release_identity["frontendEntrySha256"]:
+            deny("readiness_frontend_entry_sha256")
+        build_id = (physical_root / ".next/BUILD_ID").read_text().strip()
+        if build_id != release_identity["frontendBuildId"]:
+            deny("readiness_frontend_build_id")
+
+
+def wait_for_readiness(
+    *, component: str, port: int, app: dict[str, Any], release_identity: dict[str, Any],
+    pm2: Path, stable_path: Path, release_root: Path, local_health: str, public_health: str,
+    deadline_seconds: float, poll_seconds: float, stable_samples: int = READINESS_STABLE_SAMPLES,
+    monotonic: Callable[[], float] = time.monotonic, sleeper: Callable[[float], None] = time.sleep,
+    process_reader: Callable[[], dict[str, Any]] | None = None,
+    socket_reader: Callable[[int, set[int]], tuple[set[str], set[int], set[int], dict[int, int]]] | None = None,
+    symlink_reader: Callable[[], dict[str, Any]] | None = None,
+    health_reader: Callable[[str, float], int] = http_status,
+    pm2_environment: dict[str, str] | None = None,
+    event_log: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    if component not in READINESS_DEADLINES or deadline_seconds != READINESS_DEADLINES[component]:
+        deny("readiness_deadline_contract")
+    if poll_seconds <= 0 or poll_seconds > READINESS_POLL_MAX_SECONDS:
+        deny("readiness_poll_contract")
+    if stable_samples != READINESS_STABLE_SAMPLES:
+        deny("readiness_sample_contract")
+    started = monotonic()
+    deadline = started + deadline_seconds
+    stable = 0
+    total = 0
+    resets = 0
+    previous: tuple[Any, ...] | None = None
+    health_started: float | None = None
+    while True:
+        now = monotonic()
+        if now >= deadline:
+            deny(f"READINESS_TIMEOUT:{component}:{port}")
+        row = process_reader() if process_reader else pm2_process_row(pm2, app["name"], pm2_environment)
+        loaded = row.get("pm2_env", {})
+        pid = int(row.get("pid") or 0)
+        if pid <= 0 or loaded.get("status") != "online":
+            stable = 0; previous = None; resets += 1
+            sleeper(min(poll_seconds, max(0.0, deadline - monotonic())))
+            continue
+        if loaded.get("pm_cwd") != app["cwd"] or loaded.get("pm_exec_path") != app["script"]:
+            deny("readiness_pm2_lexical_identity")
+        current_ticks = process_stat(pid)["ticks"] if process_reader is None else int(row["ticks"])
+        link = symlink_reader() if symlink_reader else symlink_identity(stable_path, release_root)
+        if process_reader is None:
+            validate_physical_release(component, app, release_identity, release_root, pid)
+        allowed, parents = process_tree(pid) if process_reader is None else (set(row.get("allowedPids", [pid])), row.get("parents", {}))
+        if socket_reader:
+            inodes, owners, denied_pids, socket_parents = socket_reader(port, allowed)
+            parents = socket_parents
+        else:
+            inodes = listening_socket_inodes(port)
+            owners, denied_pids = authorized_socket_owners(inodes, allowed)
+        total += 1
+        if event_log is not None:
+            event_log.append({"atMonotonic": now, "pid": pid, "startTicks": current_ticks, "listenerCount": len(inodes), "ownerCount": len(owners), "permissionDeniedCount": len(denied_pids)})
+        if not inodes:
+            stable = 0; previous = None
+            sleeper(min(poll_seconds, max(0.0, deadline - monotonic())))
+            continue
+        if len(inodes) != 1:
+            deny("readiness_multiple_listeners")
+        if denied_pids:
+            deny("readiness_socket_permission")
+        if len(owners) != 1:
+            deny("readiness_socket_owner_mismatch" if not owners else "readiness_multiple_socket_owners")
+        owner = next(iter(owners))
+        chain = owner_chain(owner, pid, parents)
+        sample = (pid, current_ticks, tuple(sorted(inodes)), tuple(chain), link["device"], link["inode"], link["textTarget"], link["resolvedTarget"])
+        if previous == sample:
+            stable += 1
+        else:
+            if previous is not None: resets += 1
+            previous = sample; stable = 1
+        if stable >= stable_samples:
+            socket_stable = monotonic()
+            health_started = monotonic()
+            remaining = deadline - health_started
+            if remaining <= 0:
+                deny(f"READINESS_TIMEOUT:{component}:{port}")
+            local_status = health_reader(local_health, min(10.0, remaining))
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                deny(f"READINESS_TIMEOUT:{component}:{port}")
+            public_status = health_reader(public_health, min(10.0, remaining))
+            if local_status != 200 or public_status != 200:
+                deny(f"readiness_health:{component}")
+            finished = monotonic()
+            return {
+                "result": "READINESS_PASS", "component": component, "port": port,
+                "pid": pid, "startTicks": current_ticks,
+                "socketOwnerRelation": "DIRECT" if owner == pid else "DESCENDANT",
+                "socketOwnerChain": chain, "stableSamples": stable,
+                "totalSamples": total, "stabilityResets": resets,
+                "startedMonotonic": started, "socketStableMonotonic": socket_stable,
+                "healthStartedMonotonic": health_started, "finishedMonotonic": finished,
+                "elapsedSeconds": finished - started, "deadlineSeconds": deadline_seconds,
+                "pollSeconds": poll_seconds,
+                "localHealthStatus": local_status, "publicHealthStatus": public_status,
+            }
+        sleeper(min(poll_seconds, max(0.0, deadline - monotonic())))
+
+
+def command_wait_readiness(args: argparse.Namespace) -> dict[str, Any]:
+    binding = load_binding(args.request, args.source_artifact, args.source_sha256)
+    definition, raw, _ = read_private_json(args.definition)
+    if raw != binding["definitionRaw"]:
+        deny("definition_not_source_exact")
+    app = definition["apps"][0]
+    component = binding["request"]["component"]
+    expected_port = 3001 if component == "api" else 3000 if component == "frontend" else None
+    if expected_port is None or args.port != expected_port:
+        deny("readiness_port_contract")
+    if Path(app["cwd"]) != args.stable_path:
+        deny("readiness_stable_path_contract")
+    events: list[dict[str, Any]] = []
+    try:
+        result = wait_for_readiness(
+            component=component, port=args.port, app=app,
+            release_identity=binding["source"]["releaseIdentity"], pm2=args.pm2,
+            stable_path=args.stable_path, release_root=args.release_root,
+            local_health=args.local_health, public_health=args.public_health,
+            deadline_seconds=args.deadline_seconds, poll_seconds=args.poll_seconds,
+            event_log=events,
+        )
+    except Denied as error:
+        if args.report is not None:
+            failure = {
+                "result": "READINESS_DENY", "component": component, "port": args.port,
+                "reason": str(error), "sampleCount": len(events),
+                "startedMonotonic": events[0]["atMonotonic"] if events else None,
+                "finishedMonotonic": events[-1]["atMonotonic"] if events else None,
+                "samples": events,
+            }
+            write_private_exclusive(args.report, canonical(failure))
+        raise
+    result.update({
+        "releaseId": binding["source"]["releaseIdentity"]["releaseId"],
+        "configurationSha256": binding["configurationSha256"],
+        "sourceArtifactSha256": binding["sourceSha256"],
+    })
+    if args.report is not None:
+        write_private_exclusive(args.report, canonical(result))
+    return result
+
+
 def add_binding_arguments(command: argparse.ArgumentParser, prefix: str = "") -> None:
     option = f"{prefix}-" if prefix else ""
     attribute = f"{prefix.replace('-', '_')}_" if prefix else ""
@@ -538,6 +821,19 @@ def parser() -> argparse.ArgumentParser:
     add_binding_arguments(pair, "rollback")
     pair.add_argument("--rollback-definition", type=Path, required=True)
     pair.set_defaults(function=command_validate_pair)
+    readiness = commands.add_parser("wait-readiness")
+    add_binding_arguments(readiness)
+    readiness.add_argument("--definition", type=Path, required=True)
+    readiness.add_argument("--pm2", type=Path, required=True)
+    readiness.add_argument("--stable-path", type=Path, required=True)
+    readiness.add_argument("--release-root", type=Path, required=True)
+    readiness.add_argument("--port", type=int, required=True)
+    readiness.add_argument("--local-health", required=True)
+    readiness.add_argument("--public-health", required=True)
+    readiness.add_argument("--deadline-seconds", type=float, required=True)
+    readiness.add_argument("--poll-seconds", type=float, required=True)
+    readiness.add_argument("--report", type=Path)
+    readiness.set_defaults(function=command_wait_readiness)
     return value
 
 

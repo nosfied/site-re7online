@@ -33,9 +33,30 @@ for marker in (
     "identidades imutáveis de release",
     "pm_cwd`/`pm_exec_path` lexicais",
     "-<pm_id>.log",
+    "wait-readiness",
+    "READINESS_TIMEOUT:<component>:<port>",
+    "prazo monotônico de 30",
+    "polling de no máximo 500 ms",
+    "três amostras consecutivas",
 ):
     require(marker in model, f"operating model marker {marker}")
 require("não utilizáveis" in model, "obsolete mechanisms")
+require("executor de ativação temporário em `/tmp`" in model,
+        "temporary activation executor retired")
+control = (ROOT / "scripts/pm2-definition-control.py").read_text()
+for marker in (
+    'READINESS_DEADLINES = {"api": 30.0, "frontend": 30.0}',
+    "READINESS_POLL_MAX_SECONDS = 0.5",
+    "READINESS_STABLE_SAMPLES = 3",
+    'commands.add_parser("wait-readiness")',
+    'READINESS_TIMEOUT:{component}:{port}',
+):
+    require(marker in control, f"versioned readiness marker {marker}")
+fixture = json.loads((ROOT / "scripts/ci/fixtures/pm2-readiness-race.sanitized.json").read_text())
+require(fixture["classification"] == "READINESS_RACE_SINGLE_SAMPLE",
+        "readiness incident classification")
+require(fixture["observedDelaySeconds"] >= 4 and not fixture["containsEnvironmentValues"],
+        "sanitized readiness evidence")
 state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
 require(state["canonicalTopology"] == {
     "build": "EXTERNAL_LINUX_X86_64_NODE_20_20_0_NPM_10_8_2",

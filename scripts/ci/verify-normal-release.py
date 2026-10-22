@@ -28,4 +28,6 @@ require("não utilizáveis" in model, "obsolete classification")
 require("checkout produtivo não é runtime" in topology, "checkout retirement")
 require("Não executar build backend ou frontend na VPS" in checklist,
         "off-host build")
+require("wait-readiness" in checklist and "READINESS_TIMEOUT:<component>:<port>" in checklist,
+        "versioned readiness gate")
 print("DEPLOY_ROUTE_OK: immutable fixed-path topology is canonical; normal-release is obsolete")
