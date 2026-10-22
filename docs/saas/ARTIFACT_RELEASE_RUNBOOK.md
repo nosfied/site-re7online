@@ -1,4 +1,9 @@
-# Runbook de release por artefato
+# Runbook de release por artefato — HISTÓRICO
+
+Este documento é evidência histórica e não é uma instrução executável vigente. O
+caminho normal atual está exclusivamente em
+[`DEPLOY_RUNBOOK.md`](DEPLOY_RUNBOOK.md). `deploy-vps.sh`, Deploy V2 e os comandos
+deste arquivo não devem ser usados como rota normal.
 
 > [!WARNING]
 > **BREAK_GLASS / NOT DEFAULT.** Este fluxo é excepcional e não é a rota normal de

@@ -1,5 +1,16 @@
 # Operational Scripts
 
+## `converta-deploy.py` — caminho canônico
+
+Coordena exclusivamente releases imutáveis já construídas de API e frontend. Reusa
+`pm2-definition-control.py` para `validate`, `validate-pair` e `wait-readiness`,
+preserva o worker e exige aceite antes do único `pm2 save`.
+
+Os comandos `preflight`, `activate`, `finalize`, `rollback` e `status`, seus seis
+argumentos e resultados nominais estão no
+[`DEPLOY_RUNBOOK.md`](../docs/saas/DEPLOY_RUNBOOK.md). Este script não faz build,
+migration, SQL, Meta, campanha ou envio.
+
 ## `deploy-impact-matrix.sh`
 
 Calcula o impacto de runtime de um range Git:
@@ -26,9 +37,10 @@ para `apps/whatsapp-web-worker/dist/whatsapp-agent/src`.
 Se `REVIEW_REQUIRED=YES`, pare o deploy e classifique o caminho alterado antes
 de prosseguir.
 
-## `apps/whatsapp-agent/scripts/deploy-vps.sh`
+## `apps/whatsapp-agent/scripts/deploy-vps.sh` — histórico/obsoleto
 
-O deploy da VPS consome a matriz automaticamente:
+Este fluxo de checkout/build na VPS não é utilizável para deploy normal. Os comandos
+abaixo permanecem apenas como registro histórico:
 
 ```bash
 apps/whatsapp-agent/scripts/deploy-vps.sh
@@ -44,12 +56,11 @@ O deploy integrado faz `git pull --ff-only`, calcula o range publicado, para em
 `REVIEW_REQUIRED=YES` ou `UNKNOWN_RUNTIME_IMPACT=YES`, builda todos os runtimes
 afetados e somente depois recarrega os processos PM2 correspondentes.
 
-## Release por artefato
+## Release por artefato — histórico
 
-Quando o runtime ativo for uma composição autenticada, e não um checkout Git
-integral, não usar o fluxo `deploy-vps.sh` como substituto. O contrato de build
-off-host, seleção PM2, provas nomeadas e rollback está em
-[`docs/saas/ARTIFACT_RELEASE_RUNBOOK.md`](../docs/saas/ARTIFACT_RELEASE_RUNBOOK.md).
+O runbook artifact-bound preserva tentativas anteriores e não é a rota normal. A
+instrução executável vigente está em
+[`docs/saas/DEPLOY_RUNBOOK.md`](../docs/saas/DEPLOY_RUNBOOK.md).
 O registro sanitizado da promoção CRM/CSV é conferido por
 `scripts/ci/verify-deployment-record.py`. O validador não acessa produção e não
 executa PM2, rede, banco ou importação.

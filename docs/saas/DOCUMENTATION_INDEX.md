@@ -2,13 +2,15 @@
 
 > [!IMPORTANT]
 > Comece pelo [estado canônico](CURRENT_STATE.md). A única instrução operacional
-> vigente de deploy é o
-> [modelo de releases imutáveis](DEPLOYMENT_OPERATING_MODEL.md).
+> executável de deploy é o [runbook canônico](DEPLOY_RUNBOOK.md). O
+> [modelo de releases imutáveis](DEPLOYMENT_OPERATING_MODEL.md) define arquitetura
+> e princípios, sem substituir o runbook.
 
 ## Estado ativo
 
 - [Estado legível](CURRENT_STATE.md)
 - [Estado verificável](CURRENT_STATE.json)
+- [Runbook canônico de deploy](DEPLOY_RUNBOOK.md) — única instrução executável vigente
 - [Reativação do hardening de mídia com readiness versionado](releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json)
 - [Topologia de domínios e runtimes](../DEPLOY_TOPOLOGY_RE7.md)
 - [Checklist de release](RELEASE_CHECKLIST.md)

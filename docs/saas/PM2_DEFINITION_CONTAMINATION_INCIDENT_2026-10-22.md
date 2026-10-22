@@ -1,7 +1,8 @@
 # Incidente de contaminação de definição PM2 — 22/10/2026
 
-Status: correção local validada; sem nova tentativa produtiva; produção preservada no
-runtime anterior comprovado.
+Status: **RESOLVED / DEPLOYED**. O control plane corrigido e o readiness versionado
+foram usados na implantação registrada em
+[`TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json`](releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json).
 
 ## Escopo e evidência
 
