@@ -50,6 +50,10 @@ const FAILURE_BACKOFF_MS = 5 * 60 * 1000;
 const UNCERTAIN_BACKOFF_MS = 30 * 60 * 1000;
 let persistentLeaseTestHooks: PersistentLeaseTestHooks | null = null;
 
+function activePersistentLeaseTestHooks() {
+  return process.env.NODE_ENV === "production" ? null : persistentLeaseTestHooks;
+}
+
 function confirmedTtlMs() {
   const seconds = Number.parseInt(process.env.TEMPLATE_MEDIA_META_TTL_SECONDS ?? "86400", 10);
   const bounded = Number.isFinite(seconds) && seconds >= 300 && seconds <= 30 * 24 * 60 * 60 ? seconds : 86400;
@@ -127,7 +131,7 @@ export async function resolveAccountScopedTemplateMediaWithPersistentLease(asset
   const leaseExpiresAt = new Date(now.getTime() + LEASE_MS);
   let acquired = false;
   if (!row) {
-    await persistentLeaseTestHooks?.afterMissingRead?.();
+    await activePersistentLeaseTestHooks()?.afterMissingRead?.();
     try {
       row = await prisma.templateMediaAccountUpload.create({
         data: { ...where, state: "uploading", attemptId, leaseExpiresAt },
@@ -135,7 +139,7 @@ export async function resolveAccountScopedTemplateMediaWithPersistentLease(asset
       acquired = true;
     } catch (error) {
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
-      await persistentLeaseTestHooks?.afterCreateConflict?.();
+      await activePersistentLeaseTestHooks()?.afterCreateConflict?.();
       row = await prisma.templateMediaAccountUpload.findUnique({
         where: { template_media_account_upload_scope: where },
       });
@@ -237,7 +241,7 @@ export async function resolveAccountScopedTemplateMediaWithPersistentLease(asset
     });
     return { ok: false, error: "upload_uncertain" };
   }
-  persistentLeaseTestHooks?.afterConfirmedPersisted?.();
+  activePersistentLeaseTestHooks()?.afterConfirmedPersisted?.();
   return { ok: true, mediaId: uploaded.mediaId, reused: false };
 }
 
@@ -255,6 +259,9 @@ export function clearTemplateMediaUploadSingleFlightForTests() {
 }
 
 export function setTemplateMediaPersistentLeaseTestHooksForTests(hooks: PersistentLeaseTestHooks | null) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("template_media_test_hook_unavailable");
+  }
   persistentLeaseTestHooks = hooks;
 }
 

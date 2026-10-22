@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -131,6 +132,97 @@ test("P2002 loser reclassifies a rapidly confirmed row without reclaiming it", a
   assert.equal(persisted.state, "confirmed");
   assert.equal(persisted.mediaId, "media-p2002-winner");
   assert(persisted.validUntil && persisted.validUntil > new Date());
+  setTemplateMediaPersistentLeaseTestHooksForTests(null);
+});
+
+test("persistent lease test hooks are fail-closed in production without contaminating this process", () => {
+  const loader = new URL("../../node_modules/tsx/dist/loader.mjs", import.meta.url).href;
+  const moduleUrl = new URL("./templateMediaAccountUpload.ts", import.meta.url).href;
+  const storageUrl = new URL("./templateMediaStorage.ts", import.meta.url).href;
+  const dbUrl = new URL("../db.ts", import.meta.url).href;
+  const probe = spawnSync(process.execPath, ["--import", loader, "--input-type=module", "-e", `
+    import assert from "node:assert/strict";
+    import crypto from "node:crypto";
+    import fs from "node:fs/promises";
+    import os from "node:os";
+    import path from "node:path";
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "re7-template-hook-production-"));
+    process.env.TEMPLATE_MEDIA_ROOT = root;
+    process.env.NODE_ENV = "test";
+    const uploadModule = await import(${JSON.stringify(moduleUrl)});
+    const { storeTemplateMedia } = await import(${JSON.stringify(storageUrl)});
+    const { getPrisma } = await import(${JSON.stringify(dbUrl)});
+    const prisma = getPrisma();
+    let client;
+    let callbackCalls = 0;
+    let uploadCalls = 0;
+    try {
+      uploadModule.setTemplateMediaPersistentLeaseTestHooksForTests({
+        afterMissingRead: async () => { callbackCalls += 1; },
+        afterCreateConflict: async () => { callbackCalls += 1; },
+        afterConfirmedPersisted: () => { callbackCalls += 1; },
+      });
+      process.env.NODE_ENV = "production";
+      assert.throws(
+        () => uploadModule.setTemplateMediaPersistentLeaseTestHooksForTests(null),
+        /template_media_test_hook_unavailable/
+      );
+
+      client = await prisma.client.create({
+        data: { clientKey: "media-hook-production-" + crypto.randomUUID(), name: "production hook probe", status: "ACTIVE" },
+      });
+      const stored = await storeTemplateMedia({
+        clientId: client.id,
+        purpose: "CAMPAIGN",
+        upload: { content: Buffer.from([0xff, 0xd8, 0xff, 0x01]), mimeType: "image/jpeg", fileName: "header.jpg", kind: "IMAGE" },
+      });
+      const asset = await prisma.templateMediaAsset.create({
+        data: {
+          id: stored.id,
+          clientId: client.id,
+          purpose: "CAMPAIGN",
+          kind: "IMAGE",
+          storageKey: stored.storageKey,
+          mimeType: stored.mimeType,
+          sizeBytes: stored.sizeBytes,
+          sha256: stored.sha256,
+          originalFilename: stored.originalFilename,
+        },
+      });
+      globalThis.fetch = async () => {
+        uploadCalls += 1;
+        return new Response(JSON.stringify({ id: "media-production-normal" }), { status: 200 });
+      };
+      const result = await uploadModule.resolveAccountScopedTemplateMediaWithPersistentLease({
+        clientId: client.id,
+        assetId: asset.id,
+        assetSha256: asset.sha256,
+        kind: "IMAGE",
+        phoneNumberId: "phone-production-probe",
+        credentialGeneration: "tenant_meta:g1",
+        storageKey: asset.storageKey,
+        mimeType: asset.mimeType,
+        originalFilename: asset.originalFilename,
+        accessToken: "not-logged-test-token",
+      });
+      assert.deepEqual(result, { ok: true, mediaId: "media-production-normal", reused: false });
+      assert.equal(uploadCalls, 1);
+      assert.equal(callbackCalls, 0);
+      process.stdout.write("PRODUCTION_HOOK_FAIL_CLOSED_PASS\\n");
+    } finally {
+      if (client) await prisma.client.delete({ where: { id: client.id } }).catch(() => undefined);
+      await prisma.$disconnect();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  `], {
+    cwd: new URL("../..", import.meta.url),
+    env: { ...process.env, NODE_ENV: "test" },
+    encoding: "utf8",
+    timeout: 30_000,
+  });
+  assert.equal(probe.status, 0, probe.stderr || probe.stdout);
+  assert.match(probe.stdout, /PRODUCTION_HOOK_FAIL_CLOSED_PASS/);
 });
 
 test("one and 1001 eligible sends reuse one confirmed upload for the same tenant/account", async (t) => {
