@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 4,
+  "recordType": "IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_VERIFIED",
+  "result": "DEPLOYED_FIXED_CURRENT_RUNTIME_ESTABLISHED_PRODUCTION_HEALTHY",
+  "displayStatus": "DEPLOYED / PRODUCTION HEALTHY / META FUNCTIONAL ACCEPTANCE PENDING",
+  "releaseId": "immutable-5c339b2e-20261022T125717Z",
+  "canonicalBranch": "review/campaign-recovery-20260926",
+  "baseCommit": "dea2f69b2d1b283d0c0daf5187cb21f280f3d025",
+  "targetCommit": "5c339b2eeda52e21249844fc8b71a351d4311f03",
+  "controlPlane": {
+    "commit": "90f04d8f2e47e0cd87c43bb8c26ff1cf33a1098d",
+    "workflowDispatchRun": 39844648615,
+    "ciJobs": 4,
+    "ciResult": "PASS"
+  },
+  "components": [
+    "api",
+    "frontend"
+  ],
+  "build": {
+    "location": "OFF_HOST",
+    "platform": "linux",
+    "architecture": "x86_64",
+    "nodeVersion": "v20.20.0",
+    "npmVersion": "10.8.2"
+  },
+  "artifacts": {
+    "releasePath": "/opt/re7online/releases/immutable-5c339b2e-20261022T125717Z",
+    "packageSha256": "bf92c4773ce45d243097e19b39efc677b302ebec34fe29f2b79e8a5c3a72aeb9",
+    "manifestSha256": "18c165b861c4af80b21924c989f3f9c31115a5a3c5ce274638e0d31b0e9d5a87",
+    "indexSha256": "10616ad83518aab1d518aeb32f0c94839c733eb1b3d7771097f71144250fafc6",
+    "api": {
+      "stablePath": "/opt/re7online/current/api",
+      "entrypoint": "dist/index.js",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontend": {
+      "stablePath": "/opt/re7online/current/frontend",
+      "buildId": "9nXekPSOrJsLjOlofmaPI",
+      "execMode": "fork_mode",
+      "instances": 1,
+      "entrypoint": "node_modules/next/dist/bin/next",
+      "args": [
+        "start",
+        "-p",
+        "3000"
+      ]
+    },
+    "worker": {
+      "preserved": true
+    }
+  },
+  "deploymentOrder": [
+    "api",
+    "frontend"
+  ],
+  "readiness": {
+    "command": "scripts/pm2-definition-control.py wait-readiness",
+    "controlPlaneCommit": "90f04d8f2e47e0cd87c43bb8c26ff1cf33a1098d",
+    "deadlineSeconds": 30,
+    "maximumPollingMilliseconds": 500,
+    "requiredStableSamples": 3,
+    "api": {
+      "totalSamples": 3,
+      "stabilityResets": 0,
+      "elapsedSeconds": 2.7152375020086765
+    },
+    "frontend": {
+      "totalSamples": 3,
+      "stabilityResets": 0,
+      "elapsedSeconds": 2.4253326319158077
+    },
+    "healthEvaluatedAfterSocketStability": true
+  },
+  "verification": {
+    "observedAtUtc": "2026-10-22T20:30:39Z",
+    "pidSemantics": "dated observations; release, hashes, BUILD_ID and dump are durable identities",
+    "api": {
+      "pid": 2160744,
+      "startTicks": 2248483396,
+      "socketPort": 3001,
+      "socketOwnerPid": 2160744,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        2160744
+      ],
+      "samples": 3,
+      "localHealthHttp": 200,
+      "publicHealthHttp": 200
+    },
+    "frontend": {
+      "pid": 2160988,
+      "startTicks": 2248491338,
+      "socketPort": 3000,
+      "socketOwnerPid": 2160988,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        2160988
+      ],
+      "samples": 3,
+      "loginLocalHttp": 200,
+      "loginPublicHttp": 200,
+      "inboxHttp": 200,
+      "crmHttp": 200,
+      "templatesHttp": 200,
+      "campaignsHttp": 200,
+      "assetHttp": 200
+    },
+    "worker": {
+      "pid": 2005263,
+      "startTicks": 2241726284,
+      "restartCount": 0,
+      "preserved": true
+    },
+    "smoke": "GET_ONLY",
+    "technicalAcceptance": "PASS"
+  },
+  "migration": {
+    "classification": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+    "sqlExecuted": false,
+    "migrationExecuted": false
+  },
+  "pm2": {
+    "savedExactlyOnce": true,
+    "saveCount": 1,
+    "saveExitCode": 0,
+    "dumpSha256": "41830f80657ace643b42818865de810cb2c0bae3e77027b752004c1db06cfeb5",
+    "dumpMode": "0600",
+    "dumpOwner": "deploy",
+    "dumpGroup": "deploy",
+    "rollbackSha256": "398df404299f80658e45a593d910249e24adbe51f4d48942595b4e58544c2de6"
+  },
+  "rollback": {
+    "previousReleasePreserved": true,
+    "authenticatedDefinitionsPreserved": true,
+    "symlinkStateCaptured": true,
+    "strategy": "RESTORE_PREVIOUS_PM2_DEFINITIONS_AND_SYMLINKS",
+    "automaticRetryForbidden": true
+  },
+  "marker": {
+    "name": "DEPLOYED",
+    "createdAfterDumpValidation": true,
+    "sha256": "1a930d012bc8db9d6144192b6c8d7fd6820d7a6e5bf2cc1f7a3d8f2c9c6fe231"
+  },
+  "window": {
+    "date": "2026-10-22",
+    "timezone": "America/Fortaleza",
+    "startedAt": "17:07:00",
+    "finishedAt": "17:30:39",
+    "durationSeconds": 1419
+  },
+  "releaseReadiness": {
+    "technicalDeployment": "DEPLOYED",
+    "productionHealth": "HEALTHY",
+    "metaFunctionalAcceptance": "PENDING",
+    "commercialOperationalRelease": "PENDING"
+  },
+  "windowMutations": {
+    "functionalPostRequests": 0,
+    "metaCalls": 0,
+    "templateCreatesOrSubmissions": 0,
+    "campaigns": 0,
+    "imports": 0,
+    "messagesSent": 0,
+    "sqlStatements": 0,
+    "migrations": 0,
+    "workerChanges": 0
+  },
+  "privateEvidence": {
+    "versioned": false,
+    "containsSecrets": false,
+    "locationPublished": false
+  },
+  "persistentStorage": {
+    "templateMediaRoot": "/opt/re7online/content/template-campaign-media",
+    "owner": "deploy",
+    "group": "deploy",
+    "directoryMode": "0700",
+    "outsideImmutableRelease": true
+  }
+}

@@ -12,11 +12,12 @@ Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
 
 ## Implantação técnica
 
-O target `e2e7f17ac8fb9d0bdf7f73cf75455611101919b0` está ativo na release
-`immutable-e2e7f17a-20261022T005110Z`, conforme o
-[registro estruturado](releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json).
-API, frontend e worker executam o mesmo target. O BUILD_ID é
-`Tf6lBfPzPD-98Tt1mNRox`.
+O target `5c339b2eeda52e21249844fc8b71a351d4311f03` está ativo na release
+`immutable-5c339b2e-20261022T125717Z`, conforme o
+[registro estruturado](releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json).
+API e frontend foram selecionados com readiness versionado; o worker foi preservado
+no runtime anterior, sem seleção ou restart. O BUILD_ID ativo é
+`9nXekPSOrJsLjOlofmaPI`.
 
 A migration `20261021150000_add_template_campaign_media` foi aplicada exatamente
 uma vez. O primeiro cliente Prisma recebeu `SIGABRT` depois que a migration já estava

@@ -9,7 +9,7 @@
 
 - [Estado legível](CURRENT_STATE.md)
 - [Estado verificável](CURRENT_STATE.json)
-- [Deploy técnico de mídia em templates e campanhas](releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json)
+- [Reativação do hardening de mídia com readiness versionado](releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json)
 - [Topologia de domínios e runtimes](../DEPLOY_TOPOLOGY_RE7.md)
 - [Checklist de release](RELEASE_CHECKLIST.md)
 - [Controle de definições PM2 e incidente de contaminação](PM2_DEFINITION_CONTAMINATION_INCIDENT_2026-10-22.md)
@@ -33,6 +33,8 @@
 
 ## Arquivo histórico
 
+- [Deploy técnico inicial de mídia em templates e campanhas](releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json)
+  — release substituída, preservada como evidência da migration e do storage persistente.
 - [Deploy CRM Contacts Cursor/Read Model](releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json)
   — release substituída, preservada como evidência funcional da lista CRM.
 - [Deploy anterior da recuperação da lista](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json)

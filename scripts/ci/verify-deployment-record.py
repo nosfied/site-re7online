@@ -122,9 +122,46 @@ def verify_immutable_release(record_path: Path, record: dict) -> None:
             positive_int(worker.get("startTicks")),
             "worker verification")
     require(verification.get("smoke") == "GET_ONLY", "GET-only smoke")
+    if "controlPlane" in record:
+        control_plane = record.get("controlPlane", {})
+        require(bool(re.fullmatch(r"[0-9a-f]{40}", control_plane.get("commit", ""))) and
+                positive_int(control_plane.get("workflowDispatchRun")) and
+                control_plane.get("ciJobs") == 4 and
+                control_plane.get("ciResult") == "PASS", "control plane identity")
+        readiness = record.get("readiness", {})
+        require(readiness.get("command") ==
+                "scripts/pm2-definition-control.py wait-readiness" and
+                readiness.get("controlPlaneCommit") == control_plane.get("commit") and
+                readiness.get("deadlineSeconds") == 30 and
+                readiness.get("maximumPollingMilliseconds") == 500 and
+                readiness.get("requiredStableSamples") == 3 and
+                readiness.get("healthEvaluatedAfterSocketStability") is True,
+                "versioned readiness contract")
+        for component in ("api", "frontend"):
+            result = readiness.get(component, {})
+            require(result.get("totalSamples") == 3 and
+                    result.get("stabilityResets") == 0 and
+                    isinstance(result.get("elapsedSeconds"), (int, float)) and
+                    result.get("elapsedSeconds") > 0,
+                    f"{component} readiness result")
+        migration = record.get("migration", {})
+        require(migration == {
+            "classification": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+            "sqlExecuted": False,
+            "migrationExecuted": False,
+        }, "no-schema-change boundary")
+        marker = record.get("marker", {})
+        require(marker.get("name") == "DEPLOYED" and
+                marker.get("createdAfterDumpValidation") is True and
+                bool(SHA256.fullmatch(marker.get("sha256", ""))),
+                "authenticated deployed marker")
     pm2 = record.get("pm2", {})
     require(pm2.get("savedExactlyOnce") is True and pm2.get("dumpMode") == "0600",
             "PM2 save and mode")
+    if "saveCount" in pm2:
+        require(pm2.get("saveCount") == 1 and pm2.get("saveExitCode") == 0 and
+                pm2.get("dumpOwner") == "deploy" and
+                pm2.get("dumpGroup") == "deploy", "PM2 committed save")
     require(bool(SHA256.fullmatch(pm2.get("dumpSha256", ""))) and
             bool(SHA256.fullmatch(pm2.get("rollbackSha256", ""))), "PM2 hashes")
     require(all(value == 0 for value in record.get("windowMutations", {}).values()),

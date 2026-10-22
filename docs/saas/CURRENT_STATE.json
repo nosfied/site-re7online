@@ -1,44 +1,45 @@
 {
   "schemaVersion": 6,
-  "updatedAtUtc": "2026-10-22T01:42:06Z",
+  "updatedAtUtc": "2026-10-22T20:30:39Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json",
-  "activeOperationalRecord": "docs/saas/releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json",
+  "activeDeploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json",
+  "activeOperationalRecord": "docs/saas/releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "production": {
     "status": "DEPLOYED_VERIFIED",
     "certifiedByThisFile": false,
-    "releaseId": "immutable-e2e7f17a-20261022T005110Z",
-    "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z",
-    "targetCommit": "e2e7f17ac8fb9d0bdf7f73cf75455611101919b0",
+    "releaseId": "immutable-5c339b2e-20261022T125717Z",
+    "releasePath": "/opt/re7online/releases/immutable-5c339b2e-20261022T125717Z",
+    "targetCommit": "5c339b2eeda52e21249844fc8b71a351d4311f03",
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
-      "lastReportedPid": 2004819,
-      "lastReportedStartTicks": 2241718959
+      "lastReportedPid": 2160744,
+      "lastReportedStartTicks": 2248483396
     },
     "frontend": {
       "stablePath": "/opt/re7online/current/frontend",
-      "buildId": "Tf6lBfPzPD-98Tt1mNRox",
+      "buildId": "9nXekPSOrJsLjOlofmaPI",
       "execMode": "fork_mode",
       "instances": 1,
-      "lastReportedPid": 2005040,
-      "lastReportedStartTicks": 2241722491
+      "lastReportedPid": 2160988,
+      "lastReportedStartTicks": 2248491338
     },
     "worker": {
       "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z/worker-runtime",
       "entrySha256": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd",
       "lastReportedPid": 2005263,
       "lastReportedStartTicks": 2241726284,
-      "preserved": false,
-      "changed": true
+      "preserved": true,
+      "changed": false
     },
     "database": {
       "migration": "20261021150000_add_template_campaign_media",
       "appliedExactlyOnce": true,
       "appliedMigrationCount": 61,
       "pendingMigrationCount": 0,
-      "backupSha256": "dd7337b7468d15849053541b0eb83a42d8a5c23356c8ed54424444ce678c6a28"
+      "backupSha256": "dd7337b7468d15849053541b0eb83a42d8a5c23356c8ed54424444ce678c6a28",
+      "lastDeploymentMigration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
     },
     "persistentStorage": {
       "templateMediaRoot": "/opt/re7online/content/template-campaign-media",
@@ -47,14 +48,22 @@
       "directoryMode": "0700"
     },
     "pm2": {
-      "dumpSha256": "398df404299f80658e45a593d910249e24adbe51f4d48942595b4e58544c2de6",
-      "rollbackSha256": "46be827b038f32175036ff547ca1c4ff1914146f6403b76efdebb740a4bf2d66",
+      "dumpSha256": "41830f80657ace643b42818865de810cb2c0bae3e77027b752004c1db06cfeb5",
+      "rollbackSha256": "398df404299f80658e45a593d910249e24adbe51f4d48942595b4e58544c2de6",
       "mode": "0600",
       "owner": "deploy",
       "group": "deploy",
       "savedExactlyOnce": true
     },
-    "markerSha256": "26de23163d3ae5ca0b53703ee6462477649100dcc7278373c546583df3e98a1a"
+    "markerSha256": "1a930d012bc8db9d6144192b6c8d7fd6820d7a6e5bf2cc1f7a3d8f2c9c6fe231",
+    "controlPlaneCommit": "90f04d8f2e47e0cd87c43bb8c26ff1cf33a1098d",
+    "readiness": {
+      "command": "scripts/pm2-definition-control.py wait-readiness",
+      "deadlineSeconds": 30,
+      "maximumPollingMilliseconds": 500,
+      "requiredStableSamples": 3,
+      "healthAfterSocketStability": true
+    }
   },
   "contactsListRecovery": {
     "releaseId": "immutable-c085e53f-20261021T094952Z",
@@ -120,11 +129,11 @@
   },
   "templateCampaignMedia": {
     "state": "TECHNICALLY_DEPLOYED",
-    "deploymentRecord": "docs/saas/releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json",
+    "deploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json",
     "components": [
       "api",
       "frontend",
-      "worker"
+      "worker_preserved"
     ],
     "migrationApplied": true,
     "persistentStorageReady": true,
@@ -135,6 +144,7 @@
     "templatesCreatedOrSubmitted": false,
     "campaignsExecuted": false,
     "messagesSent": false,
-    "knownNonBlockingBacklog": "PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE"
+    "knownNonBlockingBacklog": "PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE",
+    "currentDeploymentMigration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
   }
 }
