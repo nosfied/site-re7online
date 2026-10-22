@@ -131,3 +131,43 @@ o pacote já havia passado suas validações e a falha ocorreu somente na compos
 definição PM2. Qualquer nova janela precisa obter os hashes autenticados das duas
 fontes antes da composição, executar `build`, `validate` e `validate-pair`, e concluir
 a prova isolada antes do primeiro efeito. Este relatório não autoriza retry.
+
+## Reconciliação sanitizada da superfície de ambiente
+
+A janela posterior foi encerrada antes do primeiro efeito porque a allowlist v1 não
+representava doze nomes observados nas fontes privadas. Somente nomes, tipos e hashes
+dos artefatos foram usados; nenhum valor foi copiado ou versionado. A matriz
+auditável está em
+[`pm2-production-env-surface.sanitized.json`](../../scripts/ci/fixtures/pm2-production-env-surface.sanitized.json).
+
+| Componente | Chave | Consumidor comprovado | Classificação | Escopo |
+|---|---|---|---|---|
+| API | `ADMIN_TOKEN` | `src/config/env.ts` | aplicação | `common` |
+| API | `CAMPAIGN_OPERATIONS_FILE` | `src/campaigns/campaignOperations.ts` | aplicação | `common` |
+| API | `CAMPAIGN_OPERATIONS_HOST_ID` | `src/campaigns/campaignOperations.ts` | aplicação | `common` |
+| API | `CAMPAIGN_OPERATIONS_TOPOLOGY` | `src/campaigns/campaignOperations.ts` | aplicação | `common` |
+| API | `CHANNEL_ACCOUNT_SECRET_KEY` | `src/channels/channelAccountSecretCrypto.ts` | aplicação | `common` |
+| API | `META_INSTAGRAM_BUSINESS_LOGIN_APP_SECRET` | `src/meta/instagramBusinessLogin.service.ts` | aplicação | `common` |
+| API | `META_INSTAGRAM_BUSINESS_LOGIN_STATE_SECRET` | `src/meta/instagramBusinessLogin.service.ts` | aplicação | `common` |
+| API | `MFA_SECRET_ENCRYPTION_KEY` | `src/auth/mfaService.ts` | aplicação | `common` |
+| API | `WEBHOOK_SECRET_ENCRYPTION_KEY` | `src/publicApi/publicApiWebhookService.ts` | aplicação | `common` |
+| Frontend | `NEXT_TELEMETRY_DISABLED` | runtime Next.js | framework | `common` |
+| Frontend | `RE7_FRONT_CONTROL` | checker/launcher histórico | controle operacional legado | `rollbackCompatibility` |
+| Frontend | `RE7_FRONT_RUN` | checker/launcher histórico | controle operacional legado | `rollbackCompatibility` |
+
+Não existe consumidor de `RE7_FRONT_CONTROL` ou `RE7_FRONT_RUN` na aplicação Next.
+Eles podem reproduzir byte a byte uma definição anterior autenticada, mas são
+negados em candidato. A allowlist é o conjunto máximo seguro de **nomes**; cada
+request escolhe um subconjunto. `rollbackCompatibility` não autoriza uso futuro nem
+promoção do campo para `common`.
+
+O schema v2 da allowlist separa `common`, `candidate` e
+`rollbackCompatibility` por componente. O rollback só pode selecionar uma chave de
+compatibilidade quando ela também existe na fonte física autenticada; a igualdade
+serial entre fonte e definição continua obrigatória. Assim, rollback fiel não é
+obtido por filtragem. Campos estruturais, internos PM2 e colisões Unicode continuam
+negados para todos os papéis.
+
+Antes de qualquer alteração futura na allowlist, o inventário sanitizado de nomes
+das fontes candidatas e de retorno é gate obrigatório. Divergência de nome ou papel
+interrompe a preparação antes do PM2.

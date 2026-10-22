@@ -25,6 +25,7 @@ ISOLATED_SPEC = importlib.util.spec_from_file_location("verify_pm2_definition_is
 assert ISOLATED_SPEC and ISOLATED_SPEC.loader
 ISOLATED = importlib.util.module_from_spec(ISOLATED_SPEC)
 ISOLATED_SPEC.loader.exec_module(ISOLATED)
+SURFACE_FIXTURE = ROOT / "scripts/ci/fixtures/pm2-production-env-surface.sanitized.json"
 
 
 def request(role="candidate", component="frontend"):
@@ -267,6 +268,116 @@ class DefinitionControlTests(unittest.TestCase):
         candidate["environmentKeys"] = ["NOT_REPOSITORY_AUTHORIZED"]
         with self.assertRaisesRegex(CONTROL.Denied, "environment_key_not_repository_allowed"):
             CONTROL.validate_request(candidate)
+
+    def test_role_scoped_real_environment_surface(self):
+        fixture = json.loads(SURFACE_FIXTURE.read_text())
+        self.assertEqual(fixture["schemaVersion"], 1)
+        self.assertEqual(len(fixture["entries"]), 12)
+        self.assertEqual(
+            {entry["key"] for entry in fixture["entries"] if entry["component"] == "api"},
+            {
+                "ADMIN_TOKEN", "CAMPAIGN_OPERATIONS_FILE", "CAMPAIGN_OPERATIONS_HOST_ID",
+                "CAMPAIGN_OPERATIONS_TOPOLOGY", "CHANNEL_ACCOUNT_SECRET_KEY",
+                "META_INSTAGRAM_BUSINESS_LOGIN_APP_SECRET",
+                "META_INSTAGRAM_BUSINESS_LOGIN_STATE_SECRET", "MFA_SECRET_ENCRYPTION_KEY",
+                "WEBHOOK_SECRET_ENCRYPTION_KEY",
+            },
+        )
+        self.assertEqual(
+            {entry["key"] for entry in fixture["entries"] if entry["component"] == "frontend"},
+            {"NEXT_TELEMETRY_DISABLED", "RE7_FRONT_CONTROL", "RE7_FRONT_RUN"},
+        )
+        for entry in fixture["entries"]:
+            self.assertEqual(
+                set(entry),
+                {"component", "key", "candidate", "rollback", "valueType", "consumer", "classification", "decision"},
+            )
+            self.assertEqual(entry["valueType"], "string")
+            if entry["consumer"].startswith("apps/"):
+                self.assertTrue((ROOT / entry["consumer"]).is_file())
+            for role in ("candidate", "rollback"):
+                selected = request(role, entry["component"])
+                selected["environmentKeys"] = [entry["key"]]
+                if entry["decision"] == "rollbackCompatibility" and role == "candidate":
+                    with self.subTest(key=entry["key"], role=role), self.assertRaisesRegex(
+                        CONTROL.Denied, "application_env_rollback_only"
+                    ):
+                        CONTROL.validate_request(selected)
+                else:
+                    with self.subTest(key=entry["key"], role=role):
+                        CONTROL.validate_request(selected)
+        for key in fixture["alwaysDenied"]:
+            selected = request("rollback")
+            selected["environmentKeys"] = [key]
+            with self.subTest(key=key), self.assertRaisesRegex(CONTROL.Denied, "structural_collision"):
+                CONTROL.validate_request(selected)
+
+    def test_candidate_cannot_inherit_legacy_frontend_controls(self):
+        for key in ("RE7_FRONT_CONTROL", "RE7_FRONT_RUN"):
+            selected = request("candidate")
+            selected["environmentKeys"] = [key]
+            with self.subTest(key=key), self.assertRaisesRegex(CONTROL.Denied, "application_env_rollback_only"):
+                CONTROL.validate_request(selected)
+
+    def test_exact_rollback_can_preserve_legacy_frontend_controls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            selected = request("rollback")
+            selected["environmentKeys"] = ["NODE_ENV", "PORT", "RE7_FRONT_CONTROL", "RE7_FRONT_RUN"]
+            rollback_source = source("rollback")
+            rollback_source["definition"]["apps"][0]["env"] = {
+                "NODE_ENV": "production",
+                "PORT": "43101",
+                "RE7_FRONT_CONTROL": "/private/proven-control.json",
+                "RE7_FRONT_RUN": "proven-run",
+            }
+            request_path = root / "request.json"
+            source_path = root / "source.json"
+            output_path = root / "definition.json"
+            write_private(request_path, selected)
+            write_private(source_path, rollback_source)
+            result = CONTROL.command_build(argparse.Namespace(
+                request=request_path,
+                source_artifact=source_path,
+                source_sha256=sha(source_path),
+                output=output_path,
+            ))
+            self.assertEqual(result["result"], "PM2_DEFINITION_BUILT")
+            self.assertEqual(output_path.read_bytes(), CONTROL.canonical(rollback_source["definition"]))
+
+    def test_candidate_and_rollback_may_use_distinct_environment_sets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pair = PrivatePair(root)
+            rollback_request = request("rollback")
+            rollback_request["environmentKeys"] = ["BUILD_ID", "NODE_ENV", "PORT", "RE7_FRONT_CONTROL", "RE7_FRONT_RUN"]
+            rollback_source = source("rollback")
+            rollback_source["definition"]["apps"][0]["env"].update({
+                "RE7_FRONT_CONTROL": "/private/proven-control.json",
+                "RE7_FRONT_RUN": "proven-run",
+            })
+            write_private(pair.rollback_request, rollback_request)
+            write_private(pair.rollback_source, rollback_source)
+            pair.rollback_definition.unlink()
+            CONTROL.command_build(argparse.Namespace(
+                request=pair.rollback_request,
+                source_artifact=pair.rollback_source,
+                source_sha256=sha(pair.rollback_source),
+                output=pair.rollback_definition,
+            ))
+            result = CONTROL.command_validate_pair(pair.pair_args())
+            self.assertEqual(result["result"], "PM2_DEFINITION_PAIR_VALID")
+            self.assertFalse(result["configurationDigestsEqual"])
+
+    def test_worker_allowlist_contract_is_unchanged(self):
+        common = CONTROL.load_repository_allowlist()["worker"]["common"]
+        self.assertEqual(common, {
+            "DATABASE_URL", "META_APP_ID", "META_APP_SECRET", "META_GRAPH_API_VERSION",
+            "NODE_ENV", "OPENAI_API_KEY", "TEMPLATE_MEDIA_ROOT", "TZ",
+            "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_WABA_ID",
+        })
+        self.assertEqual(CONTROL.load_repository_allowlist()["worker"]["candidate"], set())
+        self.assertEqual(CONTROL.load_repository_allowlist()["worker"]["rollbackCompatibility"], set())
 
     def test_nfkc_casefold_collision_is_denied(self):
         candidate = request()

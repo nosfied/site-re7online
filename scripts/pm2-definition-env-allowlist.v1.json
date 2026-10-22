@@ -1,13 +1,22 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "components": {
-    "api": [
+    "api": {
+      "common": [
+      "ADMIN_TOKEN",
       "APP_AUTH_SECRET",
       "APP_BASE_URL",
+      "CAMPAIGN_OPERATIONS_FILE",
+      "CAMPAIGN_OPERATIONS_HOST_ID",
+      "CAMPAIGN_OPERATIONS_TOPOLOGY",
+      "CHANNEL_ACCOUNT_SECRET_KEY",
       "DATABASE_URL",
       "META_APP_ID",
       "META_APP_SECRET",
       "META_GRAPH_API_VERSION",
+      "META_INSTAGRAM_BUSINESS_LOGIN_APP_SECRET",
+      "META_INSTAGRAM_BUSINESS_LOGIN_STATE_SECRET",
+      "MFA_SECRET_ENCRYPTION_KEY",
       "NODE_ENV",
       "OPENAI_API_KEY",
       "PORT",
@@ -20,12 +29,17 @@
       "SMTP_USER",
       "TEMPLATE_MEDIA_ROOT",
       "TZ",
+      "WEBHOOK_SECRET_ENCRYPTION_KEY",
       "WHATSAPP_ACCESS_TOKEN",
       "WHATSAPP_PHONE_NUMBER_ID",
       "WHATSAPP_VERIFY_TOKEN",
       "WHATSAPP_WABA_ID"
-    ],
-    "frontend": [
+      ],
+      "candidate": [],
+      "rollbackCompatibility": []
+    },
+    "frontend": {
+      "common": [
       "BUILD_ID",
       "HOSTNAME",
       "NEXT_PUBLIC_APP_URL",
@@ -34,11 +48,19 @@
       "NEXT_PUBLIC_META_EMBEDDED_SIGNUP_APP_ID",
       "NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID",
       "NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL",
+      "NEXT_TELEMETRY_DISABLED",
       "NODE_ENV",
       "PORT",
       "TZ"
-    ],
-    "worker": [
+      ],
+      "candidate": [],
+      "rollbackCompatibility": [
+        "RE7_FRONT_CONTROL",
+        "RE7_FRONT_RUN"
+      ]
+    },
+    "worker": {
+      "common": [
       "DATABASE_URL",
       "META_APP_ID",
       "META_APP_SECRET",
@@ -50,6 +72,9 @@
       "WHATSAPP_ACCESS_TOKEN",
       "WHATSAPP_PHONE_NUMBER_ID",
       "WHATSAPP_WABA_ID"
-    ]
+      ],
+      "candidate": [],
+      "rollbackCompatibility": []
+    }
   }
 }
