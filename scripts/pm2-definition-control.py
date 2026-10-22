@@ -114,39 +114,51 @@ def validate_string_list(value: Any, label: str) -> list[str]:
     return value
 
 
-def load_repository_allowlist() -> dict[str, set[str]]:
+ALLOWLIST_ROLES = {"common", "candidate", "rollbackCompatibility"}
+
+
+def load_repository_allowlist() -> dict[str, dict[str, set[str]]]:
     try:
         value = json.loads(ALLOWLIST_PATH.read_text())
     except (OSError, json.JSONDecodeError):
         deny("repository_allowlist_unreadable")
     validate_exact_keys(value, {"schemaVersion", "components"}, "repository_allowlist")
-    if value["schemaVersion"] != 1:
+    if value["schemaVersion"] != 2:
         deny("repository_allowlist_schema")
     components = validate_exact_keys(
         value["components"], {"api", "frontend", "worker"}, "repository_allowlist_components"
     )
-    result: dict[str, set[str]] = {}
-    for component, raw_keys in components.items():
-        keys = validate_string_list(raw_keys, f"repository_allowlist_{component}")
-        if keys != sorted(keys) or len(set(keys)) != len(keys):
-            deny(f"repository_allowlist_{component}_order")
-        if len({normalized_key(key) for key in keys}) != len(keys):
-            deny(f"repository_allowlist_{component}_normalized_duplicate")
-        for key in keys:
-            normalized = normalized_key(key)
-            if not ENV_NAME.fullmatch(key) or normalized in FORBIDDEN_ENV_KEYS or normalized.startswith("pm"):
-                deny(f"repository_allowlist_{component}_unsafe")
-        result[component] = set(keys)
+    result: dict[str, dict[str, set[str]]] = {}
+    for component, raw_roles in components.items():
+        roles = validate_exact_keys(raw_roles, ALLOWLIST_ROLES, f"repository_allowlist_{component}")
+        result[component] = {}
+        all_keys: list[str] = []
+        for role, raw_keys in roles.items():
+            keys = validate_string_list(raw_keys, f"repository_allowlist_{component}_{role}")
+            if keys != sorted(keys) or len(set(keys)) != len(keys):
+                deny(f"repository_allowlist_{component}_{role}_order")
+            if len({normalized_key(key) for key in keys}) != len(keys):
+                deny(f"repository_allowlist_{component}_{role}_normalized_duplicate")
+            for key in keys:
+                normalized = normalized_key(key)
+                if not ENV_NAME.fullmatch(key) or normalized in FORBIDDEN_ENV_KEYS or normalized.startswith("pm"):
+                    deny(f"repository_allowlist_{component}_{role}_unsafe")
+            result[component][role] = set(keys)
+            all_keys.extend(keys)
+        if len({normalized_key(key) for key in all_keys}) != len(all_keys):
+            deny(f"repository_allowlist_{component}_cross_role_duplicate")
     return result
 
 
-def validate_environment_keys(value: Any, component: str) -> list[str]:
+def validate_environment_keys(value: Any, component: str, role: str) -> list[str]:
     keys = validate_string_list(value, "environment_keys")
     if keys != sorted(keys) or len(set(keys)) != len(keys):
         deny("environment_keys_order_or_duplicate")
     if len({normalized_key(key) for key in keys}) != len(keys):
         deny("environment_keys_normalized_duplicate")
-    allowed = load_repository_allowlist()[component]
+    component_allowlist = load_repository_allowlist()[component]
+    role_scope = "candidate" if role == "candidate" else "rollbackCompatibility"
+    allowed = component_allowlist["common"] | component_allowlist[role_scope]
     for key in keys:
         normalized = normalized_key(key)
         if normalized in FORBIDDEN_ENV_KEYS or normalized.startswith("pm"):
@@ -154,6 +166,8 @@ def validate_environment_keys(value: Any, component: str) -> list[str]:
         if not ENV_NAME.fullmatch(key):
             deny("environment_key_invalid")
         if key not in allowed:
+            if role == "candidate" and key in component_allowlist["rollbackCompatibility"]:
+                deny(f"application_env_rollback_only:{key}")
             deny(f"environment_key_not_repository_allowed:{key}")
     return keys
 
@@ -170,7 +184,7 @@ def validate_request(value: Any) -> dict[str, Any]:
         deny("component")
     if request["sourceKind"] != SOURCE_KINDS[request["role"]]:
         deny("source_kind")
-    validate_environment_keys(request["environmentKeys"], request["component"])
+    validate_environment_keys(request["environmentKeys"], request["component"], request["role"])
     return request
 
 
@@ -228,7 +242,7 @@ def validate_definition_shape(value: Any, request: dict[str, Any]) -> dict[str, 
     env = app["env"]
     if not isinstance(env, dict):
         deny("application_env_values_not_object")
-    selected = validate_environment_keys(request["environmentKeys"], request["component"])
+    selected = validate_environment_keys(request["environmentKeys"], request["component"], request["role"])
     if set(env) != set(selected):
         deny("application_env_allowlist_mismatch")
     for key in selected:

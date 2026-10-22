@@ -57,6 +57,10 @@ Toda definição nova usa o contrato versionado de
 - a request escolhe somente um subconjunto da allowlist por componente versionada
   no repositório; estrutura e valores vêm do artefato-fonte privado canônico e nunca
   entram em relatório ou stdout;
+- a allowlist separa `common`, `candidate` e `rollbackCompatibility` por componente.
+  Compatibilidade de retorno não autoriza uso no candidato nem em releases futuras;
+  inventário sanitizado dos nomes presentes nas duas fontes é gate obrigatório antes
+  de alterar a allowlist;
 - chaves estruturais, internas `pm_*`, `PM2_HOME` e `NODE_APP_INSTANCE` são negadas
   no namespace de ambiente após normalização segura de nome;
 - o SHA-256 dos bytes de cada artefato-fonte é confrontado com um hash autenticado

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "sourceArtifacts": {
+    "deniedAttemptApiCandidateSha256": "d9fa032009d8f097d18585ad76c26cb458474b2a8df1f594d871f84ba579f4c3",
+    "deniedAttemptApiRollbackSha256": "d9fa032009d8f097d18585ad76c26cb458474b2a8df1f594d871f84ba579f4c3",
+    "deniedAttemptFrontendCandidateSha256": "616bbb28fe03605f4ff56d41cfb6e24ac883ae7bd06f0fb457542e0a94bf9480",
+    "deniedAttemptFrontendRollbackSha256": "616bbb28fe03605f4ff56d41cfb6e24ac883ae7bd06f0fb457542e0a94bf9480"
+  },
+  "entries": [
+    {"component":"api","key":"ADMIN_TOKEN","candidate":true,"rollback":true,"valueType":"string","consumer":"apps/whatsapp-agent/src/config/env.ts","classification":"application","decision":"common"},
+    {"component":"api","key":"CAMPAIGN_OPERATIONS_FILE","candidate":true,"rollback":true,"valueType":"string","consumer":"apps/whatsapp-agent/src/campaigns/campaignOperations.ts","classification":"application","decision":"common"},
+    {"component":"api","key":"CAMPAIGN_OPERATIONS_HOST_ID","candidate":true,"rollback":true,"valueType":"string","consumer":"apps/whatsapp-agent/src/campaigns/campaignOperations.ts","classification":"application","decision":"common"},
+    {"component":"api","key":"CAMPAIGN_OPERATIONS_TOPOLOGY","candidate":true,"rollback":true,"valueType":"string","consumer":"apps/whatsapp-agent/src/campaigns/campaignOperations.ts","classification":"application","decision":"common"},
+    {"component":"api","key":"CHANNEL_ACCOUNT_SECRET_KEY","candidate":true,"rollback":true,"valueType":"string","consumer":"apps/whatsapp-agent/src/channels/channelAccountSecretCrypto.ts","classification":"application","decision":"common"},
+    {"component":"api","key":"META_INSTAGRAM_BUSINESS_LOGIN_APP_SECRET","candidate":true,"rollback":true,"valueType":"string","consumer":"apps/whatsapp-agent/src/meta/instagramBusinessLogin.service.ts","classification":"application","decision":"common"},
+    {"component":"api","key":"META_INSTAGRAM_BUSINESS_LOGIN_STATE_SECRET","candidate":true,"rollback":true,"valueType":"string","consumer":"apps/whatsapp-agent/src/meta/instagramBusinessLogin.service.ts","classification":"application","decision":"common"},
+    {"component":"api","key":"MFA_SECRET_ENCRYPTION_KEY","candidate":true,"rollback":true,"valueType":"string","consumer":"apps/whatsapp-agent/src/auth/mfaService.ts","classification":"application","decision":"common"},
+    {"component":"api","key":"WEBHOOK_SECRET_ENCRYPTION_KEY","candidate":true,"rollback":true,"valueType":"string","consumer":"apps/whatsapp-agent/src/publicApi/publicApiWebhookService.ts","classification":"application","decision":"common"},
+    {"component":"frontend","key":"NEXT_TELEMETRY_DISABLED","candidate":true,"rollback":true,"valueType":"string","consumer":"Next.js runtime","classification":"framework","decision":"common"},
+    {"component":"frontend","key":"RE7_FRONT_CONTROL","candidate":true,"rollback":true,"valueType":"string","consumer":"scripts/release-assets/frontend-check.py","classification":"legacyOperationalControl","decision":"rollbackCompatibility"},
+    {"component":"frontend","key":"RE7_FRONT_RUN","candidate":true,"rollback":true,"valueType":"string","consumer":"scripts/release-assets/frontend-check.py","classification":"legacyOperationalControl","decision":"rollbackCompatibility"}
+  ],
+  "alwaysDenied": [
+    "args",
+    "script",
+    "cwd",
+    "exec_mode",
+    "instances",
+    "pm_exec_path",
+    "pm_cwd",
+    "PM2_HOME",
+    "NODE_APP_INSTANCE"
+  ]
+}

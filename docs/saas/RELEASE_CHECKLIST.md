@@ -634,6 +634,10 @@ Nao executar carga na sprint de bootstrap. Primeiro validar status, features e q
   allowlist específica por componente mantida no repositório.
   Conferir que nenhuma chave estrutural, `pm_*`, `PM2_HOME` ou
   `NODE_APP_INSTANCE` entrou em `env`.
+- Inventariar somente os nomes presentes nas fontes candidata e de retorno antes de
+  qualquer mudança na allowlist. Validar o papel de cada nome: `common`, `candidate`
+  ou `rollbackCompatibility`. Chave exclusiva do retorno deve ser negada no
+  candidato, e nunca pode ser criada quando ausente da fonte autenticada.
 - Construir candidato e retorno em arquivos separados, regulares e `0600`; conferir
   o SHA-256 dos bytes de cada fonte contra hashes autenticados externos e executar
   `validate-pair`. O retorno deve vir da última definição comprovada, não do

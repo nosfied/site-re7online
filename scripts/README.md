@@ -61,6 +61,12 @@ Constrói e valida descritores PM2 a partir de request e artefato-fonte privados
 no repositório. Estrutura e valores ficam no artefato físico, cujo SHA-256 esperado
 vem de um registro autenticado externo. O comando nunca imprime valores de ambiente.
 
+A allowlist schema v2 é separada por papel: `common` vale para candidato e retorno,
+`candidate` somente para a nova release e `rollbackCompatibility` somente para
+reproduzir uma definição anterior autenticada. Uma chave exclusiva de rollback é
+negada no candidato. A fonte continua obrigada a conter exatamente o subconjunto
+pedido; compatibilidade não permite inventar uma chave ausente nem filtrar a fonte.
+
 ```bash
 python3 scripts/pm2-definition-control.py build \
   --request /custodia/privada/frontend-candidate.request.private.json \
