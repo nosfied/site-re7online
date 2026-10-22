@@ -625,6 +625,35 @@ npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --m
 
 Nao executar carga na sprint de bootstrap. Primeiro validar status, features e quota.
 
+## Definições PM2 antes da janela
+
+- Usar o contrato versionado `scripts/pm2-definition-control.py`.
+- Definir estrutura PM2 explicitamente; nunca reutilizar `pm2_env`, `pm2_env.env`,
+  dump, `jlist` ou `/proc/<pid>/environ` como descritor executável.
+- Carregar ambiente somente do artefato-fonte privado canônico e por subconjunto da
+  allowlist específica por componente mantida no repositório.
+  Conferir que nenhuma chave estrutural, `pm_*`, `PM2_HOME` ou
+  `NODE_APP_INSTANCE` entrou em `env`.
+- Construir candidato e retorno em arquivos separados, regulares e `0600`; conferir
+  o SHA-256 dos bytes de cada fonte contra hashes autenticados externos e executar
+  `validate-pair`. O retorno deve vir da última definição comprovada, não do
+  candidato. Digest da configuração não autentica a fonte.
+- Vincular cada fonte à identidade imutável de sua release. Permitir definições PM2
+  iguais quando ambas usam `/opt/re7online/current/<componente>`, mas exigir fontes,
+  proveniências e identidades de release distintas.
+- Antes de tocar no PM2 produtivo, iniciar candidato e retorno com `PM2_HOME`
+  temporário e portas alternativas. Comparar definição pretendida, `jlist`, processo,
+  socket, health, BUILD_ID e estado após serialização/releitura. Exigir
+  `pm_cwd`/`pm_exec_path` lexicais no caminho estável; validar CWD e script resolvidos
+  dentro da release física, SHA do entrypoint, symlink estável, PID/start ticks e
+  `/proc/<pid>/exe` como interpretador Node.
+- Para frontend, exigir `fork_mode`, uma instância e `args` estrutural
+  `start -p <porta>`. Presença de `env.args` é negativa nominal.
+- Conferir separadamente logs canônicos e caminhos runtime: `merge_logs=true` exige
+  igualdade literal; `false` admite somente a transformação determinística
+  do sufixo `.log` ou `-<número>.log` para `-<pm_id>.log` no PM2 `6.0.14`.
+- Recusar a janela se o ensaio isolado não restaurar o retorno e seu socket/health.
+
 ## Pos-Deploy
 
 Verificar:

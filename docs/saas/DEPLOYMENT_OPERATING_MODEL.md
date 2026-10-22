@@ -42,6 +42,53 @@ não autorizam repetição.
    aplicável. Conferir dump regular, modo real `0600` e SHA-256.
 9. Criar o marker `DEPLOYED` apenas depois da validação do dump.
 
+## Definições PM2
+
+**Metadados de introspecção do PM2 nunca são uma definição executável.** Saídas de
+`jlist`, dumps, `pm2_env`, `pm2_env.env` e `/proc/<pid>/environ` servem somente para
+observar o estado. Elas não podem ser espalhadas em um descritor de aplicação.
+
+Toda definição nova usa o contrato versionado de
+[`scripts/pm2-definition-control.py`](../../scripts/pm2-definition-control.py):
+
+- `name`, `script`, `args`, `cwd`, `interpreter`, `exec_mode`, `instances`,
+  `namespace`, políticas de restart/ready, `node_args` e logs são estrutura
+  explícita;
+- a request escolhe somente um subconjunto da allowlist por componente versionada
+  no repositório; estrutura e valores vêm do artefato-fonte privado canônico e nunca
+  entram em relatório ou stdout;
+- chaves estruturais, internas `pm_*`, `PM2_HOME` e `NODE_APP_INSTANCE` são negadas
+  no namespace de ambiente após normalização segura de nome;
+- o SHA-256 dos bytes de cada artefato-fonte é confrontado com um hash autenticado
+  externamente. O digest da configuração não é autenticação da fonte;
+- candidato e retorno são construídos separadamente e `validate-pair` exige papéis,
+  requests, arquivos-fonte, proveniências e identidades imutáveis de release
+  criptograficamente distintos. A definição PM2 pode ser idêntica entre os papéis
+  quando usa `/opt/re7online/current/<componente>`; a seleção da release é provada
+  pelo manifesto, hash da árvore, BUILD_ID ou hash do entrypoint e destino resolvido
+  do symlink. O retorno parte da última fonte autenticada e comprovada, nunca do
+  candidato nem de introspecção;
+- antes da janela, ambos precisam iniciar em `PM2_HOME` isolado e portas alternativas.
+  A prova compara o arquivo pretendido, o descritor carregado, o processo real,
+  socket/health, BUILD_ID, serialização e restauração do retorno. A prova mantém
+  `pm_cwd`/`pm_exec_path` lexicais sob `/current`, valida `realpath(__filename)` e
+  `/proc/<pid>/cwd` dentro da release esperada e trata `/proc/<pid>/exe` somente como
+  identidade do interpretador;
+- somente definições privadas regulares `0600`, criadas em destinos novos, podem ser
+  consumidas.
+
+Os logs possuem duas identidades: `out_file`/`error_file`/`merge_logs` pertencem à
+definição canônica; `pm_out_log_path`/`pm_err_log_path` pertencem à identidade
+runtime. Para PM2 `6.0.14`, com `merge_logs=false`, o sufixo final `.log` ou
+`-<número>.log` vira `-<pm_id>.log`; sem `.log` e `/dev/null` não mudam. Com
+`merge_logs=true`, o caminho efetivo deve ser idêntico ao configurado. Qualquer outra
+alteração nega o gate.
+
+Para o frontend, `fork_mode`, uma instância, launcher explícito e argumentos
+estruturais `start -p <porta>` são obrigatórios. `env.args` é sempre uma colisão e
+nega a preparação antes de qualquer processo. O scope `production` fixa a porta
+`3000`; o scope `isolated-test` nega as portas produtivas `3000` e `3001`.
+
 O socket é válido quando pertence ao PID PM2 ou a um descendente comprovado por
 uma cadeia contínua de PPIDs. Um socket pertencente ao daemon PM2 não comprova a
 identidade do frontend. Igualdade direta entre PID PM2 e socket também não pode ser

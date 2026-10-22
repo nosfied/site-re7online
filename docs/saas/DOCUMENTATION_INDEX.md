@@ -12,6 +12,7 @@
 - [Deploy técnico de mídia em templates e campanhas](releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json)
 - [Topologia de domínios e runtimes](../DEPLOY_TOPOLOGY_RE7.md)
 - [Checklist de release](RELEASE_CHECKLIST.md)
+- [Controle de definições PM2 e incidente de contaminação](PM2_DEFINITION_CONTAMINATION_INCIDENT_2026-10-22.md)
 - [Política de mudanças](CHANGE_POLICY.md)
 
 ## Evidência funcional entregue

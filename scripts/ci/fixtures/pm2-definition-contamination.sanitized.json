@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "incident": "frontend_not_healthy_within_30s",
+  "composition": {
+    "function": "definition(row)",
+    "structuralSource": "pm2 jlist row.pm2_env",
+    "environmentSource": "/proc/<pid>/environ copied without an allowlist",
+    "definitionsProduced": [
+      "candidate",
+      "rollback"
+    ],
+    "pm2EnvFieldsReused": [
+      "pm_exec_path",
+      "pm_cwd",
+      "exec_interpreter",
+      "args",
+      "instances",
+      "exec_mode",
+      "autorestart",
+      "watch",
+      "merge_logs",
+      "pm_out_log_path",
+      "pm_err_log_path"
+    ],
+    "pm2EnvNestedEnvReused": false,
+    "dumpFieldsReusedInDefinition": [],
+    "jlistUse": "transport for the listed pm2_env fields",
+    "processEnvironmentUse": "every key was copied; values are intentionally absent from this fixture"
+  },
+  "collision": {
+    "key": "args",
+    "valueType": "string",
+    "effect": "environment namespace overrode structural frontend arguments after PM2 loaded the definition"
+  },
+  "validatorGap": "validated top-level intent but did not reject environment namespace collisions or compare the loaded PM2 definition and real process arguments",
+  "containsEnvironmentValues": false
+}

@@ -54,6 +54,49 @@ O registro sanitizado da promoção CRM/CSV é conferido por
 `scripts/ci/verify-deployment-record.py`. O validador não acessa produção e não
 executa PM2, rede, banco ou importação.
 
+## `pm2-definition-control.py`
+
+Constrói e valida descritores PM2 a partir de request e artefato-fonte privados
+`0600`. A request escolhe somente um subconjunto da allowlist por componente mantida
+no repositório. Estrutura e valores ficam no artefato físico, cujo SHA-256 esperado
+vem de um registro autenticado externo. O comando nunca imprime valores de ambiente.
+
+```bash
+python3 scripts/pm2-definition-control.py build \
+  --request /custodia/privada/frontend-candidate.request.private.json \
+  --source-artifact /custodia/privada/frontend-candidate.source.private.json \
+  --source-sha256 SHA256_AUTENTICADO_DA_FONTE \
+  --output /custodia/privada/frontend-candidate.pm2.private.json
+python3 scripts/pm2-definition-control.py validate \
+  --request /custodia/privada/frontend-candidate.request.private.json \
+  --source-artifact /custodia/privada/frontend-candidate.source.private.json \
+  --source-sha256 SHA256_AUTENTICADO_DA_FONTE \
+  --definition /custodia/privada/frontend-candidate.pm2.private.json
+python3 scripts/pm2-definition-control.py validate-pair \
+  --candidate-request /custodia/privada/frontend-candidate.request.private.json \
+  --candidate-source-artifact /custodia/privada/frontend-candidate.source.private.json \
+  --candidate-source-sha256 SHA256_AUTENTICADO_CANDIDATO \
+  --candidate-definition /custodia/privada/frontend-candidate.pm2.private.json \
+  --rollback-request /custodia/privada/frontend-rollback.request.private.json \
+  --rollback-source-artifact /custodia/privada/frontend-rollback.source.private.json \
+  --rollback-source-sha256 SHA256_AUTENTICADO_ROLLBACK \
+  --rollback-definition /custodia/privada/frontend-rollback.pm2.private.json
+```
+
+O rollback usa fonte `authenticated-proven-definition`, com bytes, evidência de
+proveniência e identidade imutável de release independentes do candidato. O digest
+da configuração não autentica a fonte e pode ser igual entre candidato e retorno
+quando a topologia usa o mesmo caminho lexical `/current`. A prova isolada exige que
+o PM2 preserve esse caminho lexical e que symlink, processo, BUILD_ID e entrypoint
+resolvam estritamente para a release física declarada. Antes de uma futura janela,
+executar a prova com PM2 pinado em `PM2_HOME` temporário:
+
+```bash
+python3 scripts/ci/verify-pm2-definition-isolated.py --pm2 /caminho/pinado/pm2
+```
+
+Essa prova local não autoriza promoção e não substitui os gates produtivos.
+
 ## `operational-retention-report.py`
 
 Rotina LOCAL PARA REVISÃO vinculada ao [runbook canônico](../docs/RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente). Não instalada na VPS/cron. Não tem apply, subprocess, SQL, provider, PM2 ou exclusão. Inventaria metadados de raízes locais explícitas, sem ler conteúdo nem seguir symlinks; conta blocos únicos por device/inode, registra hardlinks externos e limites. Tamanho igual sugere revisão, não igualdade de hash ou autorização de retirada. Reflinks e snapshots exigem medição própria.
