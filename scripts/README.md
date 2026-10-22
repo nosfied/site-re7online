@@ -67,6 +67,16 @@ reproduzir uma definição anterior autenticada. Uma chave exclusiva de rollback
 negada no candidato. A fonte continua obrigada a conter exatamente o subconjunto
 pedido; compatibilidade não permite inventar uma chave ausente nem filtrar a fonte.
 
+A superfície de runtime da API observada na fonte produtiva e comprovada por
+consumidores estáticos está registrada, somente por nomes e classificação, em
+[`pm2-api-runtime-env-surface.sanitized.json`](ci/fixtures/pm2-api-runtime-env-surface.sanitized.json).
+As 66 chaves reconciliadas são controles ou configurações funcionais usados em
+produção e pertencem a `api.common`: o candidato e o retorno podem selecioná-las,
+mas cada fonte privada continua obrigada a fornecer exatamente o subconjunto
+escolhido. A allowlist não autoriza ambiente integral. Nomes desconhecidos, hooks de
+teste, campos estruturais PM2, internos `pm_*` e colisões NFKC/casefold continuam
+negados.
+
 ```bash
 python3 scripts/pm2-definition-control.py build \
   --request /custodia/privada/frontend-candidate.request.private.json \
