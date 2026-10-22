@@ -13,7 +13,7 @@ test("template and campaign media operations use the central tokenized overlay",
     assert(source.includes("ScreenProcessingOverlay"));
     assert(source.includes("useScreenProcessingOperations"));
   }
-  for (const key of ["template-media-upload", "template-request", "template-sync-all", "campaign-media-upload", "campaign-create", "campaign-schedule", "campaign-test", "campaign-send"]) {
+  for (const key of ["template-media-upload", "template-media-inspection", "template-media-preview", "template-request", "template-sync-all", "campaign-media-upload", "campaign-media-inspection", "campaign-media-preview", "campaign-media-removal", "campaign-create", "campaign-schedule", "campaign-test", "campaign-send"]) {
     assert(`${templates}\n${campaigns}`.includes(key), `missing overlay token ${key}`);
   }
   assert(!campaigns.includes('key: "campaign-poll"'), "background polling must not block the screen");

@@ -6,7 +6,7 @@ Homologação funcional Meta: **PENDING**.
 
 Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
 
-Última atualização: 2026-10-21. Esta é a fonte canônica para headers `IMAGE` e
+Última atualização: 2026-10-22. Esta é a fonte canônica para cabeçalhos `IMAGE` e
 `VIDEO` em templates e campanhas. O estado produtivo geral continua em
 [`CURRENT_STATE.md`](CURRENT_STATE.md).
 
@@ -76,16 +76,38 @@ eliminando SSRF desse fluxo.
 
 Formatos validados nesta versão:
 
-| Header | MIME | Limite |
+| Cabeçalho | MIME | Limite decimal conservador |
 | --- | --- | ---: |
-| IMAGE | JPEG, PNG | 5 MiB |
-| VIDEO | MP4, 3GPP | 16 MiB |
+| IMAGE | JPEG, PNG | 5.000.000 bytes (5 MB) |
+| VIDEO | MP4, 3GPP | 16.000.000 bytes (16 MB) |
 
 Os limites devem ser reconferidos na documentação oficial antes de cada release.
 A referência primária usada foi a coleção oficial da Meta para
 [criação de sessão resumable](https://www.postman.com/meta/whatsapp-business-platform/request/vkmioqf/resumable-upload-create-an-upload-session),
 [upload dos bytes](https://www.postman.com/meta/whatsapp-business-platform/request/13382743-871ea332-a6a4-4ad0-800a-0be9796b1933) e
 [envio de template com mídia](https://www.postman.com/meta/whatsapp-business-platform/request/2qbotrb/send-message-template-media).
+
+Como a documentação publicada usa MB e não comprova unidade binária, frontend e
+backend adotam os valores decimais acima. O limite exato é aceito; um byte acima é
+negado. A interface separa requisitos obrigatórios de recomendação visual e usa
+1,91:1 (1200 × 628 px apenas como exemplo), sem transformar largura, altura ou
+proporção em bloqueio.
+
+Antes do upload, o navegador valida tipo escolhido, MIME informado, extensão,
+tamanho e arquivo vazio; quando o navegador consegue decodificar a mídia, também
+mostra dimensões, proporção e duração. A prévia compartilhada em Modelos e Campanhas
+exibe o arquivo completo com `object-contain`, fundo neutro e uma indicação separada
+de que a simulação do WhatsApp pode sofrer adaptação ou recorte. URLs autenticadas
+permanecem em Blob URLs locais, são revogadas e não passam pelo otimizador público do
+Next.
+
+O backend continua validando magic bytes/contêiner, MIME, extensão, tamanho, hash,
+escopo do tenant, symlink e path traversal. Sem adicionar binário nativo ou executar
+conteúdo enviado, esta versão não afirma inspecionar profundidade de cor, codec de
+vídeo ou quantidade/codec das faixas de áudio. JPEG/PNG em 8 bits RGB/RGBA, H.264 e
+AAC com no máximo uma faixa (ou vídeo sem áudio) são apresentados como requisitos;
+a compatibilidade final permanece sujeita à validação da Meta. A submissão de
+homologação será realizada manualmente pelo owner em etapa autorizada separada.
 
 O parser multipart nativo ainda materializa o arquivo para a validação final.
 Enquanto a troca por parser streaming não ocorre, a admissão limita um upload

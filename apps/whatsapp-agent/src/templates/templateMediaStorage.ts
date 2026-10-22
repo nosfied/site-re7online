@@ -3,8 +3,10 @@ import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-export const TEMPLATE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-export const TEMPLATE_VIDEO_MAX_BYTES = 16 * 1024 * 1024;
+// Meta publishes these limits in decimal MB. Keeping the byte caps explicit
+// prevents the API from accepting files larger than the user-facing limit.
+export const TEMPLATE_IMAGE_MAX_BYTES = 5_000_000;
+export const TEMPLATE_VIDEO_MAX_BYTES = 16_000_000;
 
 export type TemplateMediaKind = "IMAGE" | "VIDEO";
 export type TemplateMediaPurpose = "TEMPLATE_EXAMPLE" | "CAMPAIGN";

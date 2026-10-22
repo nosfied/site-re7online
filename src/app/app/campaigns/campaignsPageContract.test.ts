@@ -206,7 +206,8 @@ test("campaign reuse toast and shared composer controls keep owner-visible polis
   assert.ok(pageSource.includes('className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70"'));
   assert.ok(pageSource.includes("getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)"));
   assert.ok(!pageSource.includes("Categoria na Meta:"));
-  assert.equal(pageSource.match(/className=\{campaignComposerControlClasses\}/g)?.length ?? 0, 3);
+  assert.equal(pageSource.match(/className=\{campaignComposerControlClasses\}/g)?.length ?? 0, 2);
+  assert.ok(pageSource.includes("TemplateMediaFileInput"));
 });
 
 test("campaign media is preserved across every composer path without automatic sends", () => {
