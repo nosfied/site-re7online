@@ -15,12 +15,12 @@ def require(value, reason):
 
 
 state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
-require(state["schemaVersion"] == 5, "schema")
+require(state["schemaVersion"] == 6, "schema")
 require(state["production"]["status"] == "DEPLOYED_VERIFIED", "production status")
 record_path = ROOT / state["activeDeploymentRecord"]
 require(record_path.is_file(), "active record")
 record = json.loads(record_path.read_text())
-require(record["schemaVersion"] == 4 and record["status"] == "DEPLOYED_VERIFIED",
+require(record["schemaVersion"] == 5 and record["status"] == "DEPLOYED_VERIFIED",
         "record status")
 require(state["activeOperationalRecord"] == state["activeDeploymentRecord"],
         "single active record")
@@ -33,18 +33,39 @@ require(production["frontend"]["buildId"] ==
         record["artifacts"]["frontend"]["buildId"], "frontend identity")
 require(production["frontend"]["execMode"] == "fork_mode" and
         production["frontend"]["instances"] == 1, "frontend mode")
-require(production["worker"]["preserved"] is True, "worker preserved")
+require(production["worker"]["changed"] is True and
+        production["worker"]["preserved"] is False and
+        production["worker"]["entrySha256"] ==
+        record["artifacts"]["worker"]["entrySha256"], "worker target identity")
+require(production["database"]["migration"] == record["migration"]["name"] and
+        production["database"]["appliedExactlyOnce"] is True and
+        production["database"]["pendingMigrationCount"] == 0,
+        "database migration state")
+require(production["persistentStorage"]["templateMediaRoot"] ==
+        record["persistentStorage"]["templateMediaRoot"] and
+        production["persistentStorage"]["directoryMode"] == "0700",
+        "persistent media storage")
 require(bool(SHA.fullmatch(production["pm2"]["dumpSha256"])), "PM2 dump")
 require(production["pm2"]["dumpSha256"] == record["pm2"]["dumpSha256"],
         "PM2 identity")
 require(production["pm2"]["savedExactlyOnce"] is True, "PM2 save")
-candidate = state["contactsListRecovery"]
-require(candidate["state"] == "DEPLOYED_VERIFIED", "contacts state")
-require(candidate["deploymentRecord"] == state["activeDeploymentRecord"],
-        "contacts record")
-require(candidate["components"] == ["api", "frontend"], "components")
-require(candidate["workerChanged"] is False and candidate["databaseChanged"] is False,
-        "change boundary")
+contacts = state["contactsListRecovery"]
+require(contacts["state"] == "DEPLOYED_VERIFIED", "contacts state")
+require((ROOT / contacts["deploymentRecord"]).is_file(), "historical contacts record")
+media = state["templateCampaignMedia"]
+require(media["state"] == "TECHNICALLY_DEPLOYED" and
+        media["deploymentRecord"] == state["activeDeploymentRecord"],
+        "media active record")
+require(media["components"] == ["api", "frontend", "worker"] and
+        media["migrationApplied"] is True and
+        media["persistentStorageReady"] is True, "media deployment boundary")
+require(media["metaFunctionalAcceptance"] == "PENDING" and
+        media["commercialOperationalRelease"] == "PENDING" and
+        media["craPrRelease"] == "PENDING", "media pending acceptance")
+require(media["metaCallsExecuted"] is False and
+        media["templatesCreatedOrSubmitted"] is False and
+        media["campaignsExecuted"] is False and media["messagesSent"] is False,
+        "media external effects")
 required_obsolete = {"BUILD_ON_VPS", "LIVE_CHECKOUT_AS_RUNTIME",
                      "scripts/deploy-normal-release.sh",
                      "PR_190_EXPERIMENTAL_PIPELINE",

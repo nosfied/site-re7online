@@ -1,12 +1,34 @@
 # Templates e campanhas WhatsApp com mídia
 
-Status produtivo: **NOT DEPLOYED**.
+Status produtivo: **TECHNICALLY DEPLOYED / PRODUCTION HEALTHY**.
 
-Status desta implementação: **LOCAL VALIDATED / PR REVIEW PENDING**.
+Homologação funcional Meta: **PENDING**.
+
+Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
 
 Última atualização: 2026-10-21. Esta é a fonte canônica para headers `IMAGE` e
 `VIDEO` em templates e campanhas. O estado produtivo geral continua em
 [`CURRENT_STATE.md`](CURRENT_STATE.md).
+
+## Implantação técnica
+
+O target `e2e7f17ac8fb9d0bdf7f73cf75455611101919b0` está ativo na release
+`immutable-e2e7f17a-20261022T005110Z`, conforme o
+[registro estruturado](releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json).
+API, frontend e worker executam o mesmo target. O BUILD_ID é
+`Tf6lBfPzPD-98Tt1mNRox`.
+
+A migration `20261021150000_add_template_campaign_media` foi aplicada exatamente
+uma vez. O primeiro cliente Prisma recebeu `SIGABRT` depois que a migration já estava
+persistida; a verificação restrita posterior terminou com código zero, confirmou
+61/61 migrations e nenhuma pendência. Não houve segunda alteração do schema.
+
+O armazenamento persistente é
+`/opt/re7online/content/template-campaign-media`, `deploy:deploy`, modo `0700`, fora
+da release imutável. O backup PostgreSQL prévio foi validado e permanece preservado.
+O smoke técnico foi GET-only: API, Login, Inbox, CRM, Templates e Campanhas
+responderam HTTP 200. Não houve chamada Meta, upload real, criação/submissão de
+template, campanha, importação ou envio.
 
 ## Resultado da auditoria
 
@@ -39,8 +61,8 @@ imutável com a campanha.
 
 A migration é
 `apps/whatsapp-agent/prisma/migrations/20261021150000_add_template_campaign_media`.
-Ela foi aplicada somente a PostgreSQL descartável. **MIGRATION LOCAL ONLY /
-PRODUCTION NOT AUTHORIZED.**
+Ela está aplicada em produção exatamente uma vez, com 61/61 migrations confirmadas.
+Essa constatação não autoriza outra migration nem homologação funcional.
 
 ## Armazenamento
 
@@ -159,12 +181,16 @@ FK cross-tenant, cache por conta, 1.001 destinatários com um upload,
 concorrência, expiração, resultado incerto, limpeza dry-run, backpressure,
 batch >1.000, pausa/cancelamento/Result Truth e builds.
 
-Nenhuma chamada real à Meta, submissão, envio, campanha, importação ou deploy foi
-executada. Antes de homologação ainda são necessários: migration autorizada em
-ambiente isolado de homologação, configuração persistente de
-`TEMPLATE_MEDIA_ROOT`, App ID tenant-scoped confirmado, exemplos não sensíveis,
-submissão controlada à Meta, aprovação e um envio homologado explicitamente pelo
-owner. Botões de template não entram neste delta.
+Nenhuma chamada real à Meta, submissão, envio, campanha ou importação foi executada.
+A implantação técnica e a configuração persistente de `TEMPLATE_MEDIA_ROOT` estão
+concluídas. Antes de liberação ainda são necessários: ambiente de homologação
+autorizado, App ID tenant-scoped confirmado, exemplos não sensíveis, submissão
+controlada à Meta, aprovação e envio homologado explicitamente pelo owner. Botões de
+template não entram neste delta.
+
+A dívida `PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE` permanece no
+[backlog set based](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md). Ela é
+preexistente e não invalida este deploy técnico.
 
 Rollback futuro: parar criação/submissão, voltar API/frontend juntos e preservar
 tabela/arquivos aditivos até auditoria de referências. Não remover a migration ou
@@ -172,8 +198,8 @@ bytes referenciados durante rollback de código.
 
 ## CRA-PR
 
-O requisito técnico de `IMAGE`/`VIDEO` está implementado localmente, mas ainda
-não constitui evidência CRA nem autorização comercial. O aceite CRA permanece
+O requisito técnico de `IMAGE`/`VIDEO` está implantado, mas ainda não constitui
+evidência CRA nem autorização comercial. O aceite CRA permanece
 pendente de template/cópia/categoria oficiais, validação da Meta e autorização
-do owner. Não registrar `DEPLOYED`, `META APPROVED` ou envio real a partir deste
-trabalho.
+do owner. O registro `DEPLOYED` refere-se somente à implantação técnica; não registrar
+`META APPROVED`, liberação comercial ou envio real a partir deste trabalho.

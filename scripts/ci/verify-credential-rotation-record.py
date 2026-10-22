@@ -163,8 +163,15 @@ def main() -> None:
         "current API identity")
     require(bool(production.get("frontend", {}).get("buildId")),
             "current frontend identity")
-    require(production.get("worker", {}).get("preserved") is True,
-            "preserved worker identity")
+    current_worker = production.get("worker", {})
+    require(
+        current_worker.get("preserved") is True
+        or (
+            current_worker.get("changed") is True
+            and bool(SHA256.fullmatch(current_worker.get("entrySha256", "")))
+        ),
+        "current worker identity",
+    )
     require(bool(SHA256.fullmatch(
         production.get("pm2", {}).get("rollbackSha256", ""))),
         "current rollback identity")

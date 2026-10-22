@@ -33,7 +33,7 @@ state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
 require(state["canonicalTopology"] == {
     "build": "EXTERNAL_LINUX_X86_64_NODE_20_20_0_NPM_10_8_2",
     "releaseModel": "IMMUTABLE_VERSIONED_RELEASE",
-    "promotionOrder": ["api", "frontend"],
+    "promotionOrder": ["api", "frontend", "worker_when_impacted"],
     "frontendMode": "FORK_MODE_SINGLE_INSTANCE_DIRECT_NEXT",
     "smoke": "GET_ONLY",
     "rollback": "RESTORE_SYMLINKS_AND_FULL_PM2_DEFINITIONS",
