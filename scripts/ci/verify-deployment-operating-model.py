@@ -30,6 +30,8 @@ for marker in (
     "pm2-definition-control.py",
     "validate-pair",
     "O digest da configuração não é autenticação da fonte",
+    "identidades imutáveis de release",
+    "pm_cwd`/`pm_exec_path` lexicais",
     "-<pm_id>.log",
 ):
     require(marker in model, f"operating model marker {marker}")

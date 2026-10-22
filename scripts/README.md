@@ -83,10 +83,13 @@ python3 scripts/pm2-definition-control.py validate-pair \
   --rollback-definition /custodia/privada/frontend-rollback.pm2.private.json
 ```
 
-O rollback usa fonte `authenticated-proven-definition`, com bytes e evidência de
-proveniência independentes do candidato. O digest da configuração não autentica a
-fonte. Antes de uma futura janela, executar a prova com PM2 pinado em `PM2_HOME`
-temporário:
+O rollback usa fonte `authenticated-proven-definition`, com bytes, evidência de
+proveniência e identidade imutável de release independentes do candidato. O digest
+da configuração não autentica a fonte e pode ser igual entre candidato e retorno
+quando a topologia usa o mesmo caminho lexical `/current`. A prova isolada exige que
+o PM2 preserve esse caminho lexical e que symlink, processo, BUILD_ID e entrypoint
+resolvam estritamente para a release física declarada. Antes de uma futura janela,
+executar a prova com PM2 pinado em `PM2_HOME` temporário:
 
 ```bash
 python3 scripts/ci/verify-pm2-definition-isolated.py --pm2 /caminho/pinado/pm2

@@ -60,10 +60,12 @@ contrato v2 com configuração, proveniência e identidade runtime separadas:
 - `requestSha256`, `sourceArtifactSha256` e `configurationSha256` têm significados
   distintos. O antigo `identitySha256` era somente digest da configuração
   autodeclarada e não autenticava a fonte;
-- `validate-pair` exige papéis, fontes, evidências de proveniência, requests e
-  configurações distintos, além de compatibilidade operacional. O rollback precisa
-  corresponder byte a byte à definição comprovada anterior, e o candidato à
-  configuração privada da nova release;
+- `validate-pair` exige papéis, arquivos-fonte, hashes de fonte, evidências de
+  proveniência, requests e identidades de release distintos, além de compatibilidade
+  operacional. As configurações PM2 podem ser byte a byte iguais quando ambas usam
+  `/opt/re7online/current/<componente>`; nesse caso, a identidade imutável da release
+  (`releaseId`, manifesto, árvore e BUILD_ID/hash do entrypoint) distingue candidato
+  e retorno;
 - o ambiente privado usa somente um subconjunto da allowlist específica por
   componente mantida em `scripts/pm2-definition-env-allowlist.v1.json`;
 - normalização Unicode NFKC e comparação sem distinção de caixa;
@@ -83,16 +85,23 @@ Com Node `v20.20.0`, npm `10.8.2` e PM2 `6.0.14`, a prova real em `PM2_HOME`
 temporário confirmou:
 
 - fixture contaminada negada antes da criação do daemon;
-- candidato e retorno separados em `fork_mode`, uma instância;
+- candidato e retorno separados em `fork_mode`, uma instância, usando a mesma
+  definição PM2 lexical sob `current/frontend` e releases físicas distintas;
 - `args` estrutural preservado no arquivo, em `jlist`, no processo de fixture e no
   dump isolado;
-- socket `DIRECT`, CWD, script, interpreter, três amostras HTTP e BUILD_ID corretos;
+- a identidade lexical carregada pelo PM2 (`pm_cwd` e `pm_exec_path`) permaneceu no
+  caminho estável, enquanto `realpath(__filename)` e `/proc/<pid>/cwd` apontaram
+  estritamente para a release física esperada; `/proc/<pid>/exe` foi validado
+  separadamente como o interpretador Node;
+- symlink, destino textual, destino resolvido e inode permaneceram estáveis nas três
+  amostras; BUILD_ID e SHA-256 do entrypoint corresponderam ao manifesto da release;
+- socket `DIRECT`, três amostras HTTP e PID/start ticks corretos;
 - `save`, encerramento do daemon e `resurrect` isolados preservaram a semântica;
 - retorno substituiu o candidato e recuperou seu socket/health;
 - definição canônica de logs e caminho runtime foram validados separadamente. No
-  PM2 `6.0.14`, `merge_logs=false` acrescenta `-<pm_id>` somente antes de `.log`;
-  caminho sem `.log` e `/dev/null` ficam inalterados. Com `merge_logs=true`, o
-  caminho efetivo é literalmente o configurado;
+  PM2 `6.0.14`, `merge_logs=false` substitui o sufixo final `.log` ou
+  `-<número>.log` por `-<pm_id>.log`; caminho sem `.log` e `/dev/null` ficam
+  inalterados. Com `merge_logs=true`, o caminho efetivo é literalmente o configurado;
 - daemon e portas temporários foram encerrados;
 - PM2 produtivo não foi acessado.
 
@@ -110,6 +119,10 @@ Caracterização isolada da transformação de logs, sem conteúdo de log:
 | `gamma` | `false` | `2` | `gamma` |
 | `delta.log` | `true` | `3` | `delta.log` |
 | `/dev/null` | `false` ou `true` | `5`/`6` | `/dev/null` |
+| `frontend-2026.log` | `false` | `0` | `frontend-0.log` |
+| `frontend-0.log` | `false` | `1` | `frontend-1.log` |
+| `frontend-2026.log` | `true` | `2` | `frontend-2026.log` |
+| `frontend-0.log` | `true` | `3` | `frontend-0.log` |
 
 ## Disposição
 

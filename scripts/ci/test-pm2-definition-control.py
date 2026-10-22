@@ -20,6 +20,11 @@ SPEC = importlib.util.spec_from_file_location("pm2_definition_control", MODULE_P
 assert SPEC and SPEC.loader
 CONTROL = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CONTROL)
+ISOLATED_PATH = ROOT / "scripts/ci/verify-pm2-definition-isolated.py"
+ISOLATED_SPEC = importlib.util.spec_from_file_location("verify_pm2_definition_isolated", ISOLATED_PATH)
+assert ISOLATED_SPEC and ISOLATED_SPEC.loader
+ISOLATED = importlib.util.module_from_spec(ISOLATED_SPEC)
+ISOLATED_SPEC.loader.exec_module(ISOLATED)
 
 
 def request(role="candidate", component="frontend"):
@@ -63,8 +68,17 @@ def definition(tag="candidate", port="43101", component="frontend"):
     }
 
 
-def source(role="candidate", tag=None, evidence=None):
-    tag = tag or role
+def release_identity(role="candidate"):
+    return {
+        "releaseId": f"immutable-{role}-release",
+        "releaseManifestSha256": hashlib.sha256(f"{role}-manifest".encode()).hexdigest(),
+        "componentTreeSha256": hashlib.sha256(f"{role}-tree".encode()).hexdigest(),
+        "frontendBuildId": f"{role}-build-id",
+        "frontendEntrySha256": hashlib.sha256(f"{role}-entry".encode()).hexdigest(),
+    }
+
+
+def source(role="candidate", tag="stable-current", evidence=None):
     evidence = evidence or hashlib.sha256(f"{role}-evidence".encode()).hexdigest()
     return {
         "schemaVersion": 1,
@@ -75,6 +89,7 @@ def source(role="candidate", tag=None, evidence=None):
             "authority": CONTROL.SOURCE_AUTHORITIES[role],
             "evidenceSha256": evidence,
         },
+        "releaseIdentity": release_identity(role),
         "definition": definition(tag),
     }
 
@@ -159,7 +174,7 @@ class DefinitionControlTests(unittest.TestCase):
             with self.assertRaisesRegex(CONTROL.Denied, "source_artifact_role_mismatch"):
                 CONTROL.command_validate_pair(args)
 
-    def test_candidate_derived_rollback_configuration_is_denied(self):
+    def test_identical_pm2_configurations_are_allowed_for_distinct_releases(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             pair = PrivatePair(root)
@@ -167,9 +182,20 @@ class DefinitionControlTests(unittest.TestCase):
             rollback["definition"] = copy.deepcopy(source("candidate")["definition"])
             write_private(pair.rollback_source, rollback)
             write_private(pair.rollback_definition, rollback["definition"])
-            args = pair.pair_args()
-            with self.assertRaisesRegex(CONTROL.Denied, "pair_configuration_digest_equal"):
-                CONTROL.command_validate_pair(args)
+            result = CONTROL.command_validate_pair(pair.pair_args())
+            self.assertTrue(result["configurationDigestsEqual"])
+            self.assertTrue(result["releaseIdentitiesDistinct"])
+
+    def test_same_release_identity_is_denied(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pair = PrivatePair(root)
+            rollback = source("rollback")
+            rollback["releaseIdentity"] = release_identity("candidate")
+            write_private(pair.rollback_source, rollback)
+            write_private(pair.rollback_definition, rollback["definition"])
+            with self.assertRaisesRegex(CONTROL.Denied, "pair_release_identity_equal"):
+                CONTROL.command_validate_pair(pair.pair_args())
 
     def test_swapping_only_role_or_kind_is_denied(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -277,7 +303,8 @@ class DefinitionControlTests(unittest.TestCase):
                     rollback["definition"]["apps"][0][field] = value
                 write_private(pair.rollback_source, rollback)
                 write_private(pair.rollback_definition, rollback["definition"])
-                with self.assertRaisesRegex(CONTROL.Denied, f"pair_operational_{field}"):
+                predicate = "pair_operational_args" if field == "port" else f"pair_operational_{field}"
+                with self.assertRaisesRegex(CONTROL.Denied, predicate):
                     CONTROL.command_validate_pair(pair.pair_args())
 
     def test_pm2_6014_log_path_derivation(self):
@@ -289,6 +316,10 @@ class DefinitionControlTests(unittest.TestCase):
             ("/logs/app", True, 4, "/logs/app"),
             ("/dev/null", False, 5, "/dev/null"),
             ("/dev/null", True, 6, "/dev/null"),
+            ("/logs/frontend-2026.log", False, 0, "/logs/frontend-0.log"),
+            ("/logs/frontend-0.log", False, 1, "/logs/frontend-1.log"),
+            ("/logs/frontend-2026.log", True, 2, "/logs/frontend-2026.log"),
+            ("/logs/frontend-0.log", True, 3, "/logs/frontend-0.log"),
         )
         for configured, merge_logs, pm_id, expected in cases:
             with self.subTest(configured=configured, merge_logs=merge_logs, pm_id=pm_id):
@@ -330,6 +361,99 @@ class DefinitionControlTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(CONTROL.Denied, "runtime_out_log_path"):
             CONTROL.validate_runtime_log_paths(app, loaded)
+
+    def test_release_identity_schema_is_closed(self):
+        candidate = source("candidate")
+        candidate["releaseIdentity"]["freeForm"] = "not-allowed"
+        with self.assertRaisesRegex(CONTROL.Denied, "release_identity_keys"):
+            CONTROL.validate_source_artifact(candidate, request("candidate"))
+
+    def physical_fixture(self, root):
+        releases = root / "releases"
+        current = root / "current"
+        candidate = releases / "candidate"
+        rollback = releases / "rollback"
+        current.mkdir(parents=True)
+        ISOLATED.create_runtime(candidate, "candidate-build-id")
+        ISOLATED.create_runtime(rollback, "rollback-build-id")
+        stable = current / "frontend"
+        stable.symlink_to(candidate)
+        app = definition("stable-current")["apps"][0]
+        app["cwd"] = str(stable)
+        app["script"] = str(stable / "server.js")
+        app["interpreter"] = str(Path(sys.executable).resolve())
+        identity = release_identity("candidate")
+        identity["frontendBuildId"] = "candidate-build-id"
+        identity["frontendEntrySha256"] = sha(candidate / "server.js")
+        return releases, current, candidate, rollback, stable, app, identity
+
+    def test_pm2_lexical_identity_denies_physical_definition_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            releases, _, candidate, _, stable, app, _ = self.physical_fixture(Path(directory))
+            loaded = copy.deepcopy(app)
+            loaded.update({
+                "pm_cwd": str(candidate),
+                "pm_exec_path": str(candidate / "server.js"),
+                "exec_interpreter": app["interpreter"],
+                "pm_id": 0,
+            })
+            with self.assertRaisesRegex(AssertionError, "loaded_cwd"):
+                ISOLATED.validate_pm2_lexical_identity(loaded, app, stable)
+
+    def test_physical_identity_denies_wrong_release_and_split_cwd_script(self):
+        with tempfile.TemporaryDirectory() as directory:
+            releases, _, candidate, rollback, _, app, identity = self.physical_fixture(Path(directory))
+            with self.assertRaisesRegex(AssertionError, "process_script_wrong_release"):
+                ISOLATED.validate_physical_identity(
+                    app, rollback / "server.js", candidate, Path(sys.executable), candidate, releases, identity,
+                )
+            split = copy.deepcopy(app)
+            split["script"] = str(rollback / "server.js")
+            with self.assertRaisesRegex(AssertionError, "physical_script_wrong_release"):
+                ISOLATED.validate_physical_identity(
+                    split, rollback / "server.js", candidate, Path(sys.executable), candidate, releases, identity,
+                )
+
+    def test_symlink_identity_change_is_detected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            releases, _, candidate, rollback, stable, _, _ = self.physical_fixture(Path(directory))
+            before = ISOLATED.capture_symlink_identity(stable, candidate, releases)
+            ISOLATED.select_runtime(stable, rollback)
+            after = ISOLATED.capture_symlink_identity(stable, rollback, releases)
+            self.assertNotEqual(before, after)
+            with self.assertRaisesRegex(AssertionError, "stable_symlink_changed"):
+                ISOLATED.require_same_symlink_identity(before, after)
+            with self.assertRaisesRegex(AssertionError, "stable_symlink_wrong_release"):
+                ISOLATED.capture_symlink_identity(stable, candidate, releases)
+
+    def test_physical_identity_denies_build_id_and_entrypoint_hash_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            releases, _, candidate, _, _, app, identity = self.physical_fixture(Path(directory))
+            wrong_build = dict(identity, frontendBuildId="wrong")
+            with self.assertRaisesRegex(AssertionError, "build_id_file"):
+                ISOLATED.validate_physical_identity(
+                    app, candidate / "server.js", candidate, Path(sys.executable), candidate, releases, wrong_build,
+                )
+            wrong_hash = dict(identity, frontendEntrySha256="0" * 64)
+            with self.assertRaisesRegex(AssertionError, "entrypoint_sha256"):
+                ISOLATED.validate_physical_identity(
+                    app, candidate / "server.js", candidate, Path(sys.executable), candidate, releases, wrong_hash,
+                )
+
+    def test_real_tree_ancestry_denies_textual_prefix_and_intermediate_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            release = root / "releases" / "candidate"
+            similar = root / "releases-evil" / "candidate"
+            outside = root / "outside"
+            release.mkdir(parents=True)
+            similar.mkdir(parents=True)
+            outside.mkdir()
+            with self.assertRaisesRegex(AssertionError, "physical_path_outside_release"):
+                ISOLATED.resolved_within(similar, root / "releases")
+            (release / "escape").symlink_to(outside)
+            with self.assertRaisesRegex(AssertionError, "physical_path_outside_release"):
+                ISOLATED.resolved_within(release / "escape" / "..", release)
 
     def test_cli_validate_pair_uses_external_source_hashes(self):
         with tempfile.TemporaryDirectory() as directory:

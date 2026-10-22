@@ -27,8 +27,18 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ALLOWLIST_PATH = Path(__file__).with_name("pm2-definition-env-allowlist.v1.json")
 REQUEST_KEYS = {"schemaVersion", "scope", "role", "component", "sourceKind", "environmentKeys"}
-SOURCE_KEYS = {"schemaVersion", "role", "component", "sourceKind", "provenance", "definition"}
+SOURCE_KEYS = {
+    "schemaVersion", "role", "component", "sourceKind", "provenance",
+    "releaseIdentity", "definition",
+}
 PROVENANCE_KEYS = {"authority", "evidenceSha256"}
+RELEASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+RELEASE_COMMON_KEYS = {"releaseId", "releaseManifestSha256", "componentTreeSha256"}
+RELEASE_COMPONENT_KEYS = {
+    "api": RELEASE_COMMON_KEYS | {"apiEntrySha256"},
+    "frontend": RELEASE_COMMON_KEYS | {"frontendBuildId", "frontendEntrySha256"},
+    "worker": RELEASE_COMMON_KEYS | {"workerEntrySha256"},
+}
 REQUIRED_STRUCTURE_KEYS = {
     "name", "script", "args", "cwd", "interpreter", "exec_mode", "instances",
     "namespace", "autorestart", "restart_delay", "kill_timeout", "listen_timeout",
@@ -239,8 +249,34 @@ def validate_source_artifact(value: Any, request: dict[str, Any]) -> dict[str, A
         deny("source_provenance_authority")
     if not isinstance(provenance["evidenceSha256"], str) or not SHA256.fullmatch(provenance["evidenceSha256"]):
         deny("source_provenance_evidence_sha256")
+    validate_release_identity(source["releaseIdentity"], request["component"])
     validate_definition_shape(source["definition"], request)
     return source
+
+
+def validate_release_identity(value: Any, component: str) -> dict[str, Any]:
+    identity = validate_exact_keys(value, RELEASE_COMPONENT_KEYS[component], "release_identity")
+    if not isinstance(identity["releaseId"], str) or not RELEASE_ID.fullmatch(identity["releaseId"]):
+        deny("release_identity_release_id")
+    for key in ("releaseManifestSha256", "componentTreeSha256"):
+        if not isinstance(identity[key], str) or not SHA256.fullmatch(identity[key]):
+            deny(f"release_identity_{key}")
+    component_keys = RELEASE_COMPONENT_KEYS[component] - RELEASE_COMMON_KEYS
+    if component == "frontend":
+        build_id = identity["frontendBuildId"]
+        if not isinstance(build_id, str) or not build_id or len(build_id) > 128 or any(character.isspace() for character in build_id):
+            deny("release_identity_frontend_build_id")
+        digest_keys = component_keys - {"frontendBuildId"}
+    else:
+        digest_keys = component_keys
+    for key in digest_keys:
+        if not isinstance(identity[key], str) or not SHA256.fullmatch(identity[key]):
+            deny(f"release_identity_{key}")
+    return identity
+
+
+def release_identity_digest(identity: dict[str, Any]) -> str:
+    return digest(canonical(identity))
 
 
 def expected_pm2_log_path(configured: str, merge_logs: bool, pm_id: int) -> str:
@@ -387,6 +423,8 @@ def result_for(binding: dict[str, Any], result: str) -> dict[str, Any]:
         "requestSha256": digest(binding["requestRaw"]),
         "sourceArtifactSha256": binding["sourceSha256"],
         "configurationSha256": binding["configurationSha256"],
+        "releaseIdentitySha256": release_identity_digest(binding["source"]["releaseIdentity"]),
+        "releaseId": binding["source"]["releaseIdentity"]["releaseId"],
         "applicationEnvKeys": request["environmentKeys"],
     }
 
@@ -421,19 +459,19 @@ def pair_compatibility(candidate: dict[str, Any], rollback: dict[str, Any]) -> N
         deny("pair_source_file_equal")
     if candidate["sourceSha256"] == rollback["sourceSha256"]:
         deny("pair_source_digest_equal")
-    if candidate["configurationSha256"] == rollback["configurationSha256"]:
-        deny("pair_configuration_digest_equal")
     candidate_provenance = candidate["source"]["provenance"]
     rollback_provenance = rollback["source"]["provenance"]
     if candidate_provenance["evidenceSha256"] == rollback_provenance["evidenceSha256"]:
         deny("pair_provenance_evidence_equal")
+    candidate_release = candidate["source"]["releaseIdentity"]
+    rollback_release = rollback["source"]["releaseIdentity"]
+    if release_identity_digest(candidate_release) == release_identity_digest(rollback_release):
+        deny("pair_release_identity_equal")
     candidate_app = candidate["definition"]["apps"][0]
     rollback_app = rollback["definition"]["apps"][0]
-    for key in ("name", "namespace", "interpreter", "exec_mode", "instances"):
+    for key in ("name", "namespace", "script", "cwd", "interpreter", "exec_mode", "instances", "args"):
         if candidate_app[key] != rollback_app[key]:
             deny(f"pair_operational_{key}")
-    if candidate_request["component"] == "frontend" and candidate_app["args"][2] != rollback_app["args"][2]:
-        deny("pair_operational_port")
 
 
 def command_validate_pair(args: argparse.Namespace) -> dict[str, Any]:
@@ -455,7 +493,8 @@ def command_validate_pair(args: argparse.Namespace) -> dict[str, Any]:
         "candidate": result_for(candidate, "BOUND"),
         "rollback": result_for(rollback, "BOUND"),
         "sourceArtifactsCryptographicallyDistinct": True,
-        "configurationDigestsDistinct": True,
+        "releaseIdentitiesDistinct": True,
+        "configurationDigestsEqual": candidate["configurationSha256"] == rollback["configurationSha256"],
         "operationalCompatibility": True,
     }
 

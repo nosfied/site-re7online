@@ -62,19 +62,27 @@ Toda definição nova usa o contrato versionado de
 - o SHA-256 dos bytes de cada artefato-fonte é confrontado com um hash autenticado
   externamente. O digest da configuração não é autenticação da fonte;
 - candidato e retorno são construídos separadamente e `validate-pair` exige papéis,
-  requests, fontes e proveniências criptograficamente distintos. O retorno parte da
-  última definição autenticada e comprovada, nunca do candidato nem de introspecção;
+  requests, arquivos-fonte, proveniências e identidades imutáveis de release
+  criptograficamente distintos. A definição PM2 pode ser idêntica entre os papéis
+  quando usa `/opt/re7online/current/<componente>`; a seleção da release é provada
+  pelo manifesto, hash da árvore, BUILD_ID ou hash do entrypoint e destino resolvido
+  do symlink. O retorno parte da última fonte autenticada e comprovada, nunca do
+  candidato nem de introspecção;
 - antes da janela, ambos precisam iniciar em `PM2_HOME` isolado e portas alternativas.
   A prova compara o arquivo pretendido, o descritor carregado, o processo real,
-  socket/health, BUILD_ID, serialização e restauração do retorno;
+  socket/health, BUILD_ID, serialização e restauração do retorno. A prova mantém
+  `pm_cwd`/`pm_exec_path` lexicais sob `/current`, valida `realpath(__filename)` e
+  `/proc/<pid>/cwd` dentro da release esperada e trata `/proc/<pid>/exe` somente como
+  identidade do interpretador;
 - somente definições privadas regulares `0600`, criadas em destinos novos, podem ser
   consumidas.
 
 Os logs possuem duas identidades: `out_file`/`error_file`/`merge_logs` pertencem à
 definição canônica; `pm_out_log_path`/`pm_err_log_path` pertencem à identidade
-runtime. Para PM2 `6.0.14`, com `merge_logs=false`, somente o sufixo `.log` vira
-`-<pm_id>.log`; sem `.log` e `/dev/null` não mudam. Com `merge_logs=true`, o caminho
-efetivo deve ser idêntico ao configurado. Qualquer outra alteração nega o gate.
+runtime. Para PM2 `6.0.14`, com `merge_logs=false`, o sufixo final `.log` ou
+`-<número>.log` vira `-<pm_id>.log`; sem `.log` e `/dev/null` não mudam. Com
+`merge_logs=true`, o caminho efetivo deve ser idêntico ao configurado. Qualquer outra
+alteração nega o gate.
 
 Para o frontend, `fork_mode`, uma instância, launcher explícito e argumentos
 estruturais `start -p <porta>` são obrigatórios. `env.args` é sempre uma colisão e
