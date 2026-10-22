@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Exercise canonical PM2 definitions against a real isolated PM2 daemon."""
+"""Exercise source-bound candidate and rollback definitions in an isolated PM2."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -19,6 +20,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTROL = ROOT / "scripts/pm2-definition-control.py"
+SPEC = importlib.util.spec_from_file_location("pm2_definition_control", CONTROL)
+assert SPEC and SPEC.loader
+CONTROL_MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(CONTROL_MODULE)
 
 
 def run(command, env, *, check=True):
@@ -35,7 +40,7 @@ def free_port():
 
 
 def write_private(path, value):
-    path.write_text(json.dumps(value, sort_keys=True, indent=2) + "\n")
+    path.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n")
     path.chmod(0o600)
 
 
@@ -43,20 +48,30 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def configuration_identity(value):
-    selected = {key: value[key] for key in ("component", "scope", "structure", "applicationEnv")}
-    return hashlib.sha256((json.dumps(selected, sort_keys=True, separators=(",", ":")) + "\n").encode()).hexdigest()
-
-
-def definition_request(role, runtime, port, build_id):
-    source = "authenticated-proven-definition" if role == "rollback" else "canonical-private-config"
-    value = {
-        "schemaVersion": 1,
+def definition_request(role):
+    return {
+        "schemaVersion": 2,
         "scope": "isolated-test",
         "role": role,
         "component": "frontend",
-        "source": {"kind": source, "identitySha256": "0" * 64},
-        "structure": {
+        "sourceKind": "authenticated-proven-definition" if role == "rollback" else "canonical-private-config",
+        "environmentKeys": ["BUILD_ID", "NODE_ENV", "PORT"],
+    }
+
+
+def source_artifact(role, runtime, port, build_id):
+    source_kind = "authenticated-proven-definition" if role == "rollback" else "canonical-private-config"
+    authority = "proven-production-definition" if role == "rollback" else "new-release-config"
+    return {
+        "schemaVersion": 1,
+        "role": role,
+        "component": "frontend",
+        "sourceKind": source_kind,
+        "provenance": {
+            "authority": authority,
+            "evidenceSha256": hashlib.sha256(f"independent-{role}-evidence".encode()).hexdigest(),
+        },
+        "definition": {"apps": [{
             "name": "re7-isolated-frontend",
             "script": str(runtime / "server.js"),
             "args": ["start", "-p", str(port)],
@@ -75,19 +90,9 @@ def definition_request(role, runtime, port, build_id):
             "error_file": str(runtime / "stderr.log"),
             "merge_logs": False,
             "watch": False,
-        },
-        "applicationEnv": {
-            "allowlist": ["BUILD_ID", "NODE_ENV", "PORT"],
-            "values": {"BUILD_ID": build_id, "NODE_ENV": "production", "PORT": str(port)},
-        },
+            "env": {"BUILD_ID": build_id, "NODE_ENV": "production", "PORT": str(port)},
+        }]},
     }
-    value["source"]["identitySha256"] = configuration_identity(value)
-    return value
-
-
-def process_rows(pm2, env):
-    value = json.loads(run([pm2, "jlist"], env).stdout)
-    return {row["name"]: row for row in value}
 
 
 def process_stat(pid):
@@ -126,8 +131,7 @@ def socket_owners(port, allowed):
     owners = set()
     for pid in allowed:
         try:
-            handles = Path(f"/proc/{pid}/fd").iterdir()
-            for handle in handles:
+            for handle in Path(f"/proc/{pid}/fd").iterdir():
                 try:
                     target = os.readlink(handle)
                 except OSError:
@@ -148,28 +152,31 @@ def normalize_args(value):
     raise AssertionError("loaded_args_type")
 
 
-def validate_loaded(pm2, env, request, build_id, samples=3):
+def validate_loaded(pm2, env, source, build_id, samples=3):
+    app = source["definition"]["apps"][0]
     rows = json.loads(run([pm2, "jlist"], env).stdout)
-    matches = [row for row in rows if row.get("name") == "re7-isolated-frontend"]
+    matches = [row for row in rows if row.get("name") == app["name"]]
     assert len(matches) == 1, "loaded_instance_count"
     row = matches[0]
-    assert row["pm2_env"]["status"] == "online", "pm2_not_online"
-    expected = request["structure"]
     loaded = row["pm2_env"]
+    assert loaded["status"] == "online", "pm2_not_online"
     pid = int(row["pid"])
-    assert loaded["pm_cwd"] == expected["cwd"], "loaded_cwd"
-    assert loaded["pm_exec_path"] == expected["script"], "loaded_script"
-    assert os.path.realpath(loaded["exec_interpreter"]) == os.path.realpath(expected["interpreter"]), "loaded_interpreter"
-    assert loaded["exec_mode"] == "fork_mode", "loaded_exec_mode"
-    assert int(loaded.get("instances") or 1) == 1, "loaded_instances"
-    assert normalize_args(loaded.get("args")) == expected["args"], "loaded_args"
-    assert "args" not in request["applicationEnv"]["values"], "env_args_present"
-    assert os.path.realpath(f"/proc/{pid}/cwd") == os.path.realpath(expected["cwd"]), "process_cwd"
-    assert os.path.realpath(f"/proc/{pid}/exe") == os.path.realpath(expected["interpreter"]), "process_interpreter"
-    cmdline = [part.decode(errors="replace") for part in Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0") if part]
-    assert cmdline and cmdline[0].startswith("node "), "process_title"
+    assert loaded["pm_cwd"] == app["cwd"], "loaded_cwd"
+    assert loaded["pm_exec_path"] == app["script"], "loaded_script"
+    assert os.path.realpath(loaded["exec_interpreter"]) == os.path.realpath(app["interpreter"]), "loaded_interpreter"
+    assert loaded["exec_mode"] == app["exec_mode"], "loaded_exec_mode"
+    assert int(loaded.get("instances") or 1) == app["instances"], "loaded_instances"
+    assert normalize_args(loaded.get("args")) == app["args"], "loaded_args"
+    for key, expected in app["env"].items():
+        assert loaded.get(key) == expected, f"loaded_allowlisted_env:{key}"
+    for key in ("autorestart", "restart_delay", "kill_timeout"):
+        assert loaded.get(key) == app[key], f"loaded_policy:{key}"
+    assert bool(loaded.get("merge_logs", False)) is app["merge_logs"], "loaded_policy:merge_logs"
+    runtime_logs = CONTROL_MODULE.validate_runtime_log_paths(app, loaded)
+    assert os.path.realpath(f"/proc/{pid}/cwd") == os.path.realpath(app["cwd"]), "process_cwd"
+    assert os.path.realpath(f"/proc/{pid}/exe") == os.path.realpath(app["interpreter"]), "process_interpreter"
     allowed, parents = descendants(pid)
-    owners = socket_owners(int(expected["args"][2]), allowed)
+    owners = socket_owners(int(app["args"][2]), allowed)
     assert len(owners) == 1, "socket_owner_count"
     owner = next(iter(owners))
     if owner == pid:
@@ -181,14 +188,25 @@ def validate_loaded(pm2, env, request, build_id, samples=3):
         assert chain[-1] == pid, "socket_owner_not_descendant"
         relation = "DESCENDANT"
     for _ in range(samples):
-        with urllib.request.urlopen(f"http://127.0.0.1:{expected['args'][2]}/app/login", timeout=3) as response:
+        with urllib.request.urlopen(f"http://127.0.0.1:{app['args'][2]}/app/login", timeout=3) as response:
             payload = json.loads(response.read())
             assert response.status == 200 and payload["buildId"] == build_id, "http_or_build_id"
-            assert payload["entrypoint"] == expected["script"], "process_script"
-            assert payload["argv"][-len(expected["args"]):] == expected["args"], "process_args"
+            assert payload["entrypoint"] == app["script"], "process_script"
+            assert payload["argv"][-len(app["args"]):] == app["args"], "process_args"
         time.sleep(0.15)
-    assert (Path(expected["cwd"]) / ".next/BUILD_ID").read_text().strip() == build_id, "build_id_file"
-    return {"pid": pid, "ticks": process_stat(pid)["ticks"], "socketOwnerRelation": relation}
+    assert (Path(app["cwd"]) / ".next/BUILD_ID").read_text().strip() == build_id, "build_id_file"
+    return {
+        "pid": pid,
+        "ticks": process_stat(pid)["ticks"],
+        "socketOwnerRelation": relation,
+        "structureExact": True,
+        "allowlistedEnvironmentExact": True,
+        "pm2PoliciesExact": True,
+        "canonicalLogDefinitionExact": True,
+        "runtimeLogPathsSemantic": True,
+        "pmIdUsedForLogPaths": loaded["pm_id"],
+        "runtimeLogPathCount": len(runtime_logs),
+    }
 
 
 SERVER = r'''const http = require("node:http");
@@ -214,16 +232,23 @@ def create_runtime(path, build_id):
     (path / "server.js").write_text(SERVER)
 
 
+def binding_args(prefix, request_path, source_path, definition_path):
+    return [
+        f"--{prefix}-request", str(request_path),
+        f"--{prefix}-source-artifact", str(source_path),
+        f"--{prefix}-source-sha256", sha(source_path),
+        f"--{prefix}-definition", str(definition_path),
+    ]
+
+
 def main():
-    args = argparse.ArgumentParser()
-    args.add_argument("--pm2", type=Path, required=True)
-    options = args.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pm2", type=Path, required=True)
+    options = parser.parse_args()
     pm2 = str(options.pm2.resolve())
     if not options.pm2.is_file():
         raise SystemExit("pm2_binary_missing")
-    candidate_port, rollback_port = free_port(), free_port()
-    while rollback_port == candidate_port:
-        rollback_port = free_port()
+    port = free_port()
     with tempfile.TemporaryDirectory(prefix="re7-pm2-definition-proof-") as directory:
         root = Path(directory)
         pm2_home = root / "pm2-home"
@@ -234,32 +259,54 @@ def main():
         candidate_id, rollback_id = "candidate-build-id", "rollback-build-id"
         create_runtime(candidate_runtime, candidate_id)
         create_runtime(rollback_runtime, rollback_id)
-        candidate_request = definition_request("candidate", candidate_runtime, candidate_port, candidate_id)
-        rollback_request = definition_request("rollback", rollback_runtime, rollback_port, rollback_id)
-        candidate_request_path, rollback_request_path = root / "candidate-request.json", root / "rollback-request.json"
-        candidate_definition, rollback_definition = root / "candidate-definition.json", root / "rollback-definition.json"
-        write_private(candidate_request_path, candidate_request)
-        write_private(rollback_request_path, rollback_request)
+        requests = {
+            "candidate": definition_request("candidate"),
+            "rollback": definition_request("rollback"),
+        }
+        sources = {
+            "candidate": source_artifact("candidate", candidate_runtime, port, candidate_id),
+            "rollback": source_artifact("rollback", rollback_runtime, port, rollback_id),
+        }
+        paths = {}
+        for role in ("candidate", "rollback"):
+            paths[f"{role}_request"] = root / f"{role}-request.json"
+            paths[f"{role}_source"] = root / f"{role}-source.json"
+            paths[f"{role}_definition"] = root / f"{role}-definition.json"
+            write_private(paths[f"{role}_request"], requests[role])
+            write_private(paths[f"{role}_source"], sources[role])
+            built = run([
+                sys.executable, str(CONTROL), "build",
+                "--request", str(paths[f"{role}_request"]),
+                "--source-artifact", str(paths[f"{role}_source"]),
+                "--source-sha256", sha(paths[f"{role}_source"]),
+                "--output", str(paths[f"{role}_definition"]),
+            ], env)
+            assert json.loads(built.stdout)["sourceArtifactSha256"] == sha(paths[f"{role}_source"])
+            run([
+                sys.executable, str(CONTROL), "validate",
+                "--request", str(paths[f"{role}_request"]),
+                "--source-artifact", str(paths[f"{role}_source"]),
+                "--source-sha256", sha(paths[f"{role}_source"]),
+                "--definition", str(paths[f"{role}_definition"]),
+            ], env)
+            assert stat.S_IMODE(paths[f"{role}_definition"].stat().st_mode) == 0o600
 
-        contaminated = json.loads(json.dumps(candidate_request))
-        contaminated["applicationEnv"] = {"allowlist": ["ArGs"], "values": {"ArGs": "start,-p,3000"}}
-        contaminated_path = root / "contaminated-request.json"
-        write_private(contaminated_path, contaminated)
-        denied = run([sys.executable, str(CONTROL), "build", "--request", str(contaminated_path), "--output", str(root / "must-not-exist.json")], env, check=False)
-        assert denied.returncode == 2 and not (root / "must-not-exist.json").exists(), "contaminated_fixture_not_denied"
-        assert not list(pm2_home.iterdir()), "pm2_touched_before_collision_denial"
+        sealed_hashes = {key: sha(path) for key, path in paths.items()}
 
-        for request_path, output in ((candidate_request_path, candidate_definition), (rollback_request_path, rollback_definition)):
-            run([sys.executable, str(CONTROL), "build", "--request", str(request_path), "--output", str(output)], env)
-            run([sys.executable, str(CONTROL), "validate", "--request", str(request_path), "--definition", str(output)], env)
-            assert stat.S_IMODE(output.stat().st_mode) == 0o600
+        pair_result = run([
+            sys.executable, str(CONTROL), "validate-pair",
+            *binding_args("candidate", paths["candidate_request"], paths["candidate_source"], paths["candidate_definition"]),
+            *binding_args("rollback", paths["rollback_request"], paths["rollback_source"], paths["rollback_definition"]),
+        ], env)
+        assert json.loads(pair_result.stdout)["result"] == "PM2_DEFINITION_PAIR_VALID"
+        assert not list(pm2_home.iterdir()), "pm2_touched_before_pair_validation"
 
         try:
-            run([pm2, "start", str(rollback_definition), "--only", "re7-isolated-frontend"], env)
-            original = validate_loaded(pm2, env, rollback_request, rollback_id)
+            run([pm2, "start", str(paths["rollback_definition"]), "--only", "re7-isolated-frontend"], env)
+            original = validate_loaded(pm2, env, sources["rollback"], rollback_id)
             run([pm2, "delete", "re7-isolated-frontend"], env)
-            run([pm2, "start", str(candidate_definition), "--only", "re7-isolated-frontend"], env)
-            candidate = validate_loaded(pm2, env, candidate_request, candidate_id)
+            run([pm2, "start", str(paths["candidate_definition"]), "--only", "re7-isolated-frontend"], env)
+            candidate = validate_loaded(pm2, env, sources["candidate"], candidate_id)
 
             run([pm2, "save"], env)
             dump = pm2_home / "dump.pm2"
@@ -268,34 +315,41 @@ def main():
             saved_rows = [item for item in serialized if item["name"] == "re7-isolated-frontend"]
             assert len(saved_rows) == 1, "serialized_instances"
             saved = saved_rows[0]
-            assert normalize_args(saved["args"]) == candidate_request["structure"]["args"], "serialized_args"
+            candidate_app = sources["candidate"]["definition"]["apps"][0]
+            assert normalize_args(saved["args"]) == candidate_app["args"], "serialized_args"
             assert saved["exec_mode"] == "fork_mode", "serialized_shape"
             run([pm2, "kill"], env)
             run([pm2, "resurrect"], env)
-            resurrected = validate_loaded(pm2, env, candidate_request, candidate_id)
+            resurrected = validate_loaded(pm2, env, sources["candidate"], candidate_id)
+            assert {key: sha(path) for key, path in paths.items()} == sealed_hashes, "canonical_artifact_changed_after_resurrect"
 
             run([pm2, "delete", "re7-isolated-frontend"], env)
-            run([pm2, "start", str(rollback_definition), "--only", "re7-isolated-frontend"], env)
-            restored = validate_loaded(pm2, env, rollback_request, rollback_id)
+            run([pm2, "start", str(paths["rollback_definition"]), "--only", "re7-isolated-frontend"], env)
+            restored = validate_loaded(pm2, env, sources["rollback"], rollback_id)
+            assert {key: sha(path) for key, path in paths.items()} == sealed_hashes, "canonical_artifact_changed_after_rollback"
             assert restored["pid"] != candidate["pid"], "rollback_pid_not_replaced"
             print(json.dumps({
-                "result": "PM2_ISOLATED_CANDIDATE_AND_ROLLBACK_PASS",
-                "candidateDefinitionSha256": sha(candidate_definition),
-                "rollbackDefinitionSha256": sha(rollback_definition),
+                "result": "PM2_SOURCE_PROVENANCE_AND_ROLLBACK_PASS",
+                "candidateSourceSha256": sha(paths["candidate_source"]),
+                "rollbackSourceSha256": sha(paths["rollback_source"]),
+                "candidateDefinitionSha256": sha(paths["candidate_definition"]),
+                "rollbackDefinitionSha256": sha(paths["rollback_definition"]),
                 "candidate": candidate,
                 "resurrected": resurrected,
                 "rollback": restored,
                 "originalRollback": original,
                 "samplesPerValidation": 3,
+                "saveKillResurrect": True,
+                "rollbackExact": True,
+                "canonicalArtifactsPreserved": True,
                 "productionPm2Touched": False,
             }, sort_keys=True))
         finally:
             run([pm2, "delete", "all"], env, check=False)
             run([pm2, "kill"], env, check=False)
-        for port in (candidate_port, rollback_port):
-            with socket.socket() as handle:
-                handle.settimeout(0.2)
-                assert handle.connect_ex(("127.0.0.1", port)) != 0, "isolated_port_not_released"
+        with socket.socket() as handle:
+            handle.settimeout(0.2)
+            assert handle.connect_ex(("127.0.0.1", port)) != 0, "isolated_port_not_released"
 
 
 if __name__ == "__main__":

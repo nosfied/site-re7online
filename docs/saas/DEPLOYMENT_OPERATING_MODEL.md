@@ -54,17 +54,27 @@ Toda definição nova usa o contrato versionado de
 - `name`, `script`, `args`, `cwd`, `interpreter`, `exec_mode`, `instances`,
   `namespace`, políticas de restart/ready, `node_args` e logs são estrutura
   explícita;
-- o ambiente vem da configuração privada canônica e contém somente nomes
-  allowlisted; seus valores nunca entram em relatório ou stdout;
+- a request escolhe somente um subconjunto da allowlist por componente versionada
+  no repositório; estrutura e valores vêm do artefato-fonte privado canônico e nunca
+  entram em relatório ou stdout;
 - chaves estruturais, internas `pm_*`, `PM2_HOME` e `NODE_APP_INSTANCE` são negadas
   no namespace de ambiente após normalização segura de nome;
-- candidato e retorno são construídos e validados separadamente. O retorno parte da
+- o SHA-256 dos bytes de cada artefato-fonte é confrontado com um hash autenticado
+  externamente. O digest da configuração não é autenticação da fonte;
+- candidato e retorno são construídos separadamente e `validate-pair` exige papéis,
+  requests, fontes e proveniências criptograficamente distintos. O retorno parte da
   última definição autenticada e comprovada, nunca do candidato nem de introspecção;
 - antes da janela, ambos precisam iniciar em `PM2_HOME` isolado e portas alternativas.
   A prova compara o arquivo pretendido, o descritor carregado, o processo real,
   socket/health, BUILD_ID, serialização e restauração do retorno;
 - somente definições privadas regulares `0600`, criadas em destinos novos, podem ser
   consumidas.
+
+Os logs possuem duas identidades: `out_file`/`error_file`/`merge_logs` pertencem à
+definição canônica; `pm_out_log_path`/`pm_err_log_path` pertencem à identidade
+runtime. Para PM2 `6.0.14`, com `merge_logs=false`, somente o sufixo `.log` vira
+`-<pm_id>.log`; sem `.log` e `/dev/null` não mudam. Com `merge_logs=true`, o caminho
+efetivo deve ser idêntico ao configurado. Qualquer outra alteração nega o gate.
 
 Para o frontend, `fork_mode`, uma instância, launcher explícito e argumentos
 estruturais `start -p <porta>` são obrigatórios. `env.args` é sempre uma colisão e

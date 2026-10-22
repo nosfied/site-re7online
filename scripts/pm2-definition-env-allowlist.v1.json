@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "components": {
+    "api": [
+      "APP_AUTH_SECRET",
+      "APP_BASE_URL",
+      "DATABASE_URL",
+      "META_APP_ID",
+      "META_APP_SECRET",
+      "META_GRAPH_API_VERSION",
+      "NODE_ENV",
+      "OPENAI_API_KEY",
+      "PORT",
+      "PUBLIC_APP_BASE_URL",
+      "SMTP_FROM",
+      "SMTP_HOST",
+      "SMTP_PASSWORD",
+      "SMTP_PORT",
+      "SMTP_SECURE",
+      "SMTP_USER",
+      "TEMPLATE_MEDIA_ROOT",
+      "TZ",
+      "WHATSAPP_ACCESS_TOKEN",
+      "WHATSAPP_PHONE_NUMBER_ID",
+      "WHATSAPP_VERIFY_TOKEN",
+      "WHATSAPP_WABA_ID"
+    ],
+    "frontend": [
+      "BUILD_ID",
+      "HOSTNAME",
+      "NEXT_PUBLIC_APP_URL",
+      "NEXT_PUBLIC_CONVERTA_WEBCHAT_API_BASE_URL",
+      "NEXT_PUBLIC_CONVERTA_WEBCHAT_SITE_ID",
+      "NEXT_PUBLIC_META_EMBEDDED_SIGNUP_APP_ID",
+      "NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID",
+      "NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL",
+      "NODE_ENV",
+      "PORT",
+      "TZ"
+    ],
+    "worker": [
+      "DATABASE_URL",
+      "META_APP_ID",
+      "META_APP_SECRET",
+      "META_GRAPH_API_VERSION",
+      "NODE_ENV",
+      "OPENAI_API_KEY",
+      "TEMPLATE_MEDIA_ROOT",
+      "TZ",
+      "WHATSAPP_ACCESS_TOKEN",
+      "WHATSAPP_PHONE_NUMBER_ID",
+      "WHATSAPP_WABA_ID"
+    ]
+  }
+}

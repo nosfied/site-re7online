@@ -50,15 +50,28 @@ Ela registra somente nomes de campos e tipos, sem valores de configuração.
 ## Correção
 
 [`pm2-definition-control.py`](../../scripts/pm2-definition-control.py) introduz um
-contrato v1 com namespaces separados:
+contrato v2 com configuração, proveniência e identidade runtime separadas:
 
-- estrutura PM2 explícita e fechada;
-- ambiente privado por allowlist, com valores obrigatoriamente escalares de texto;
+- a request privada declara somente escopo, papel, componente, tipo de fonte e um
+  subconjunto da allowlist versionada pelo repositório;
+- a configuração PM2 completa vem de outro arquivo físico privado, regular, `0600`
+  e aberto com `O_NOFOLLOW`; o SHA-256 esperado dos bytes desse arquivo é fornecido
+  pelo registro autenticado externo;
+- `requestSha256`, `sourceArtifactSha256` e `configurationSha256` têm significados
+  distintos. O antigo `identitySha256` era somente digest da configuração
+  autodeclarada e não autenticava a fonte;
+- `validate-pair` exige papéis, fontes, evidências de proveniência, requests e
+  configurações distintos, além de compatibilidade operacional. O rollback precisa
+  corresponder byte a byte à definição comprovada anterior, e o candidato à
+  configuração privada da nova release;
+- o ambiente privado usa somente um subconjunto da allowlist específica por
+  componente mantida em `scripts/pm2-definition-env-allowlist.v1.json`;
 - normalização Unicode NFKC e comparação sem distinção de caixa;
 - negativa de estrutura, internos `pm_*`, `PM2_HOME`, `NODE_APP_INSTANCE`, objetos
-  aninhados, campos extras, symlink e arquivo privado fora do modo `0600`;
-- candidato com fonte `canonical-private-config`;
-- retorno independente com fonte `authenticated-proven-definition`.
+  aninhados, campos PM2 adicionais, symlink, modo diferente de `0600` e alteração
+  do arquivo durante a leitura;
+- candidato com fonte `canonical-private-config` e rollback com fonte
+  `authenticated-proven-definition`, ambos autenticados pelos bytes reais.
 
 O executor grava somente destino inexistente, faz `fsync` e publica o arquivo por
 link atômico. O stdout contém nomes das chaves preservadas e hashes, nunca seus
@@ -76,17 +89,32 @@ temporário confirmou:
 - socket `DIRECT`, CWD, script, interpreter, três amostras HTTP e BUILD_ID corretos;
 - `save`, encerramento do daemon e `resurrect` isolados preservaram a semântica;
 - retorno substituiu o candidato e recuperou seu socket/health;
+- definição canônica de logs e caminho runtime foram validados separadamente. No
+  PM2 `6.0.14`, `merge_logs=false` acrescenta `-<pm_id>` somente antes de `.log`;
+  caminho sem `.log` e `/dev/null` ficam inalterados. Com `merge_logs=true`, o
+  caminho efetivo é literalmente o configurado;
 - daemon e portas temporários foram encerrados;
 - PM2 produtivo não foi acessado.
 
-Os testes unitários cobrem colisões em `args`, `script`, `cwd`, `exec_mode`,
-`instances`, `interpreter`, `node_args`, campos internos, caixa, Unicode e valores
-string/array/objeto, inclusive retorno contaminado.
+Os testes unitários cobrem origem compartilhada, troca de papel, hash da request
+usado como falso hash da fonte, symlink, modo e corrida de leitura; colisões em
+campos estruturais; e caminhos de log com diretório, basename, extensão, `pm_id` ou
+sufixo divergente.
+
+Caracterização isolada da transformação de logs, sem conteúdo de log:
+
+| configuração-base | `merge_logs` | `pm_id` | caminho efetivo |
+|---|---:|---:|---|
+| `alpha.log` | `false` | `0` | `alpha-0.log` |
+| `beta.log` | `false` | `1` | `beta-1.log` |
+| `gamma` | `false` | `2` | `gamma` |
+| `delta.log` | `true` | `3` | `delta.log` |
+| `/dev/null` | `false` ou `true` | `5`/`6` | `/dev/null` |
 
 ## Disposição
 
 A release `immutable-5c339b2e-20261022T125717Z` continua reutilizável sem rebuild:
 o pacote já havia passado suas validações e a falha ocorreu somente na composição da
-definição PM2. Qualquer nova janela precisa gerar requests privados novos, construir
-candidato e retorno separadamente e concluir a prova isolada antes do primeiro
-efeito. Este relatório não autoriza retry.
+definição PM2. Qualquer nova janela precisa obter os hashes autenticados das duas
+fontes antes da composição, executar `build`, `validate` e `validate-pair`, e concluir
+a prova isolada antes do primeiro efeito. Este relatório não autoriza retry.

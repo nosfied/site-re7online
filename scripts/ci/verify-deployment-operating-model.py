@@ -28,6 +28,9 @@ for marker in (
     "cluster_mode",
     "Metadados de introspecção do PM2 nunca são uma definição executável",
     "pm2-definition-control.py",
+    "validate-pair",
+    "O digest da configuração não é autenticação da fonte",
+    "-<pm_id>.log",
 ):
     require(marker in model, f"operating model marker {marker}")
 require("não utilizáveis" in model, "obsolete mechanisms")

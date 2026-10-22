@@ -16,8 +16,9 @@ em `converta.re7online.com`, são servidos pela VPS via Nginx e PM2.
 - definições PM2: estrutura explícita e ambiente privado allowlisted pelo contrato
   versionado; introspecção (`jlist`, dump, `pm2_env` ou `/proc/.../environ`) nunca é
   definição executável;
-- candidato e retorno: definições independentes, provadas antes da janela em daemon
-  PM2 isolado, portas alternativas e comparação de arquivo, carga e processo real.
+- candidato e retorno: artefatos-fonte privados autenticados por hashes externos,
+  criptograficamente distintos e aprovados por `validate-pair`; depois provados em
+  daemon PM2 isolado com comparação de definição, carga e processo real.
 
 A instrução completa e única está em
 [DEPLOYMENT_OPERATING_MODEL.md](saas/DEPLOYMENT_OPERATING_MODEL.md). O estado vivo

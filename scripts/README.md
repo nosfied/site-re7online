@@ -56,23 +56,37 @@ executa PM2, rede, banco ou importação.
 
 ## `pm2-definition-control.py`
 
-Constrói e valida descritores PM2 a partir de um request privado versionado `0600`.
-Campos estruturais ficam fora de `env`; o ambiente contém somente nomes allowlisted.
-O comando nunca imprime valores de ambiente e nega colisões normalizadas com campos
-PM2, inclusive `args`, `script`, `cwd`, `pm_*`, `PM2_HOME` e `NODE_APP_INSTANCE`.
+Constrói e valida descritores PM2 a partir de request e artefato-fonte privados
+`0600`. A request escolhe somente um subconjunto da allowlist por componente mantida
+no repositório. Estrutura e valores ficam no artefato físico, cujo SHA-256 esperado
+vem de um registro autenticado externo. O comando nunca imprime valores de ambiente.
 
 ```bash
 python3 scripts/pm2-definition-control.py build \
   --request /custodia/privada/frontend-candidate.request.private.json \
+  --source-artifact /custodia/privada/frontend-candidate.source.private.json \
+  --source-sha256 SHA256_AUTENTICADO_DA_FONTE \
   --output /custodia/privada/frontend-candidate.pm2.private.json
 python3 scripts/pm2-definition-control.py validate \
   --request /custodia/privada/frontend-candidate.request.private.json \
+  --source-artifact /custodia/privada/frontend-candidate.source.private.json \
+  --source-sha256 SHA256_AUTENTICADO_DA_FONTE \
   --definition /custodia/privada/frontend-candidate.pm2.private.json
+python3 scripts/pm2-definition-control.py validate-pair \
+  --candidate-request /custodia/privada/frontend-candidate.request.private.json \
+  --candidate-source-artifact /custodia/privada/frontend-candidate.source.private.json \
+  --candidate-source-sha256 SHA256_AUTENTICADO_CANDIDATO \
+  --candidate-definition /custodia/privada/frontend-candidate.pm2.private.json \
+  --rollback-request /custodia/privada/frontend-rollback.request.private.json \
+  --rollback-source-artifact /custodia/privada/frontend-rollback.source.private.json \
+  --rollback-source-sha256 SHA256_AUTENTICADO_ROLLBACK \
+  --rollback-definition /custodia/privada/frontend-rollback.pm2.private.json
 ```
 
-O retorno usa outro request e `source.kind=authenticated-proven-definition`. Não se
-gera retorno a partir do candidato. Antes de uma futura janela, executar a prova com
-PM2 pinado em `PM2_HOME` temporário:
+O rollback usa fonte `authenticated-proven-definition`, com bytes e evidência de
+proveniência independentes do candidato. O digest da configuração não autentica a
+fonte. Antes de uma futura janela, executar a prova com PM2 pinado em `PM2_HOME`
+temporário:
 
 ```bash
 python3 scripts/ci/verify-pm2-definition-isolated.py --pm2 /caminho/pinado/pm2
