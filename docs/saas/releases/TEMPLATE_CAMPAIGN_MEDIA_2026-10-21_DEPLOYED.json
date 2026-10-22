@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 5,
+  "recordType": "IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_VERIFIED",
+  "result": "DEPLOYED_PRODUCTION_TECHNICALLY_HEALTHY",
+  "displayStatus": "TECHNICALLY DEPLOYED / PRODUCTION HEALTHY / META FUNCTIONAL ACCEPTANCE PENDING",
+  "releaseId": "immutable-e2e7f17a-20261022T005110Z",
+  "canonicalBranch": "review/campaign-recovery-20260926",
+  "baseCommit": "311efd7df4533b140745c51a598679b3f0ae97bb",
+  "targetCommit": "e2e7f17ac8fb9d0bdf7f73cf75455611101919b0",
+  "reviewedHead": "236aeab090afa020db92507b5f827a1f7dbb96b4",
+  "review": {
+    "pullRequests": [
+      195,
+      196
+    ],
+    "approvedCiRun": 39697644275,
+    "approvedCiJobs": 4,
+    "approvedCiResult": "PASS"
+  },
+  "components": [
+    "api",
+    "frontend",
+    "worker"
+  ],
+  "build": {
+    "location": "OFF_HOST",
+    "platform": "linux",
+    "architecture": "x86_64",
+    "nodeVersion": "v20.20.0",
+    "npmVersion": "10.8.2"
+  },
+  "artifacts": {
+    "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z",
+    "packageSha256": "893d01bef9c83526cef481adf59443fed05050b0ac7e1d7bf372b5d33520112d",
+    "manifestSha256": "98590f6fc2ebd765656ab7c8514cc28db2d4544ea240b83fa62a16e1e4327f02",
+    "indexSha256": "fa9cd842d02c4c1b2de630855b7c3d09bf77af0c2097aea1f8dd428aea90de8b",
+    "indexEntries": 42066,
+    "api": {
+      "stablePath": "/opt/re7online/current/api",
+      "entrypoint": "dist/index.js",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontend": {
+      "stablePath": "/opt/re7online/current/frontend",
+      "buildId": "Tf6lBfPzPD-98Tt1mNRox",
+      "execMode": "fork_mode",
+      "instances": 1,
+      "entrypoint": "node_modules/next/dist/bin/next",
+      "args": [
+        "start",
+        "-p",
+        "3000"
+      ]
+    },
+    "worker": {
+      "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z/worker-runtime",
+      "entrypoint": "dist/whatsapp-web-worker/src/index.js",
+      "entrySha256": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd"
+    }
+  },
+  "deploymentOrder": [
+    "api",
+    "frontend",
+    "worker"
+  ],
+  "migration": {
+    "name": "20261021150000_add_template_campaign_media",
+    "method": "PRISMA_MIGRATE_DEPLOY",
+    "appliedExactlyOnce": true,
+    "appliedMigrationCount": 61,
+    "pendingMigrationCount": 0,
+    "firstClientTermination": "SIGABRT_AFTER_MIGRATION_PERSISTED",
+    "restrictedVerificationExitCode": 0,
+    "schemaMutationRepeated": false
+  },
+  "databaseBackup": {
+    "sha256": "dd7337b7468d15849053541b0eb83a42d8a5c23356c8ed54424444ce678c6a28",
+    "mode": "0600",
+    "nonEmpty": true,
+    "restoreList": "PASS",
+    "contentVersioned": false
+  },
+  "persistentStorage": {
+    "templateMediaRoot": "/opt/re7online/content/template-campaign-media",
+    "owner": "deploy",
+    "group": "deploy",
+    "directoryMode": "0700",
+    "outsideImmutableRelease": true,
+    "writeReadProbe": "PASS"
+  },
+  "verification": {
+    "observedAtUtc": "2026-10-22T01:42:06Z",
+    "pidSemantics": "dated observations; hashes, BUILD_ID, release and dump are durable identities",
+    "api": {
+      "pid": 2004819,
+      "startTicks": 2241718959,
+      "socketPort": 3001,
+      "socketOwnerPid": 2004819,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        2004819
+      ],
+      "samples": 3,
+      "localHealthHttp": 200,
+      "publicHealthHttp": 200
+    },
+    "frontend": {
+      "pid": 2005040,
+      "startTicks": 2241722491,
+      "socketPort": 3000,
+      "socketOwnerPid": 2005040,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        2005040
+      ],
+      "samples": 3,
+      "loginLocalHttp": 200,
+      "loginPublicHttp": 200,
+      "inboxHttp": 200,
+      "crmHttp": 200,
+      "templatesHttp": 200,
+      "campaignsHttp": 200,
+      "assetHttp": 200
+    },
+    "worker": {
+      "pid": 2005263,
+      "startTicks": 2241726284,
+      "restartCount": 0,
+      "targetRelease": true
+    },
+    "smoke": "GET_ONLY",
+    "technicalAcceptance": "PASS"
+  },
+  "pm2": {
+    "savedExactlyOnce": true,
+    "saveExitCode": 0,
+    "dumpSha256": "398df404299f80658e45a593d910249e24adbe51f4d48942595b4e58544c2de6",
+    "dumpMode": "0600",
+    "dumpOwner": "deploy",
+    "dumpGroup": "deploy",
+    "previousDumpSha256": "46be827b038f32175036ff547ca1c4ff1914146f6403b76efdebb740a4bf2d66"
+  },
+  "rollback": {
+    "previousReleasePreserved": true,
+    "fullDefinitionsCaptured": true,
+    "symlinkStateCaptured": true,
+    "databaseBackupPreserved": true,
+    "strategy": "RESTORE_PREVIOUS_PM2_DEFINITIONS_AND_SYMLINKS_KEEP_ADDITIVE_SCHEMA",
+    "automaticRetryForbidden": true
+  },
+  "marker": {
+    "name": "DEPLOYED",
+    "sha256": "26de23163d3ae5ca0b53703ee6462477649100dcc7278373c546583df3e98a1a"
+  },
+  "window": {
+    "date": "2026-10-21",
+    "timezone": "America/Fortaleza",
+    "finishedAt": "22:42:06",
+    "apiActivatedAt": "22:33:08",
+    "frontendActivatedAt": "22:33:43",
+    "workerActivatedAt": "22:34:21"
+  },
+  "releaseReadiness": {
+    "technicalDeployment": "DEPLOYED",
+    "productionHealth": "HEALTHY",
+    "metaFunctionalAcceptance": "PENDING",
+    "commercialOperationalRelease": "PENDING",
+    "craPrRelease": "PENDING"
+  },
+  "windowMutations": {
+    "functionalPostRequests": 0,
+    "metaCalls": 0,
+    "templateCreatesOrSubmissions": 0,
+    "campaigns": 0,
+    "imports": 0,
+    "messagesSent": 0,
+    "authorizedMigrations": 1,
+    "otherMigrations": 0
+  },
+  "knownNonBlockingBacklog": {
+    "id": "PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE",
+    "path": "docs/saas/backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md",
+    "blocksTechnicalDeployment": false
+  },
+  "privateEvidence": {
+    "versioned": false,
+    "locationPublished": false,
+    "sensitiveValuesPublished": false
+  }
+}

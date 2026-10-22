@@ -1,41 +1,60 @@
 {
-  "schemaVersion": 5,
-  "updatedAtUtc": "2026-10-21T10:24:54Z",
+  "schemaVersion": 6,
+  "updatedAtUtc": "2026-10-22T01:42:06Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json",
-  "activeOperationalRecord": "docs/saas/releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json",
+  "activeDeploymentRecord": "docs/saas/releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json",
+  "activeOperationalRecord": "docs/saas/releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "production": {
     "status": "DEPLOYED_VERIFIED",
     "certifiedByThisFile": false,
-    "releaseId": "immutable-c085e53f-20261021T094952Z",
-    "releasePath": "/opt/re7online/releases/immutable-c085e53f-20261021T094952Z",
-    "targetCommit": "c085e53f752a9b31fa7dd6d03896da07e3f159e3",
+    "releaseId": "immutable-e2e7f17a-20261022T005110Z",
+    "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z",
+    "targetCommit": "e2e7f17ac8fb9d0bdf7f73cf75455611101919b0",
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
-      "lastReportedPid": 1887618,
-      "lastReportedStartTicks": 2236191937
+      "lastReportedPid": 2004819,
+      "lastReportedStartTicks": 2241718959
     },
     "frontend": {
       "stablePath": "/opt/re7online/current/frontend",
-      "buildId": "nU1xG2ZoXQXicAagrcjtp",
+      "buildId": "Tf6lBfPzPD-98Tt1mNRox",
       "execMode": "fork_mode",
       "instances": 1,
-      "lastReportedPid": 1887719,
-      "lastReportedStartTicks": 2236192803
+      "lastReportedPid": 2005040,
+      "lastReportedStartTicks": 2241722491
     },
     "worker": {
-      "lastReportedPid": 936540,
-      "lastReportedStartTicks": 2193413523,
-      "preserved": true
+      "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z/worker-runtime",
+      "entrySha256": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd",
+      "lastReportedPid": 2005263,
+      "lastReportedStartTicks": 2241726284,
+      "preserved": false,
+      "changed": true
+    },
+    "database": {
+      "migration": "20261021150000_add_template_campaign_media",
+      "appliedExactlyOnce": true,
+      "appliedMigrationCount": 61,
+      "pendingMigrationCount": 0,
+      "backupSha256": "dd7337b7468d15849053541b0eb83a42d8a5c23356c8ed54424444ce678c6a28"
+    },
+    "persistentStorage": {
+      "templateMediaRoot": "/opt/re7online/content/template-campaign-media",
+      "owner": "deploy",
+      "group": "deploy",
+      "directoryMode": "0700"
     },
     "pm2": {
-      "dumpSha256": "46be827b038f32175036ff547ca1c4ff1914146f6403b76efdebb740a4bf2d66",
-      "rollbackSha256": "ba18a647d15fdc176ce72a81b229ae1c0a821d69196c989ca78c12aeac65a0e2",
+      "dumpSha256": "398df404299f80658e45a593d910249e24adbe51f4d48942595b4e58544c2de6",
+      "rollbackSha256": "46be827b038f32175036ff547ca1c4ff1914146f6403b76efdebb740a4bf2d66",
       "mode": "0600",
+      "owner": "deploy",
+      "group": "deploy",
       "savedExactlyOnce": true
-    }
+    },
+    "markerSha256": "26de23163d3ae5ca0b53703ee6462477649100dcc7278373c546583df3e98a1a"
   },
   "contactsListRecovery": {
     "releaseId": "immutable-c085e53f-20261021T094952Z",
@@ -63,7 +82,8 @@
     "releaseModel": "IMMUTABLE_VERSIONED_RELEASE",
     "promotionOrder": [
       "api",
-      "frontend"
+      "frontend",
+      "worker_when_impacted"
     ],
     "frontendMode": "FORK_MODE_SINGLE_INSTANCE_DIRECT_NEXT",
     "smoke": "GET_ONLY",
@@ -97,5 +117,24 @@
       "destructive rebase",
       "blind merge into main"
     ]
+  },
+  "templateCampaignMedia": {
+    "state": "TECHNICALLY_DEPLOYED",
+    "deploymentRecord": "docs/saas/releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json",
+    "components": [
+      "api",
+      "frontend",
+      "worker"
+    ],
+    "migrationApplied": true,
+    "persistentStorageReady": true,
+    "metaFunctionalAcceptance": "PENDING",
+    "commercialOperationalRelease": "PENDING",
+    "craPrRelease": "PENDING",
+    "metaCallsExecuted": false,
+    "templatesCreatedOrSubmitted": false,
+    "campaignsExecuted": false,
+    "messagesSent": false,
+    "knownNonBlockingBacklog": "PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE"
   }
 }

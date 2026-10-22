@@ -9,13 +9,15 @@
 
 - [Estado legível](CURRENT_STATE.md)
 - [Estado verificável](CURRENT_STATE.json)
-- [Deploy CRM Contacts Cursor/Read Model](releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json)
+- [Deploy técnico de mídia em templates e campanhas](releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json)
 - [Topologia de domínios e runtimes](../DEPLOY_TOPOLOGY_RE7.md)
 - [Checklist de release](RELEASE_CHECKLIST.md)
 - [Política de mudanças](CHANGE_POLICY.md)
 
 ## Evidência funcional entregue
 
+- [Suporte a mídia em templates e campanhas](META_TEMPLATE_MEDIA_SUPPORT.md)
+  — tecnicamente implantado; homologação Meta e liberação aos clientes pendentes.
 - [Redesenho set based do read model de contatos](CRM_CONTACTS_READ_MODEL_REDESIGN_2026-10-20.md)
   — implantado e verificado em 21/10/2026.
 - [Paginação por cursor e overlay de processamento do CRM](backlog/CRM_CONTACTS_CURSOR_PAGINATION_AND_LOADING_OVERLAY_2026-10-20.md)
@@ -24,12 +26,14 @@
 ## Backlog ativo separado
 
 - [Adequar encerramento e CSAT à janela de 24h](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
-- [Templates e campanhas WhatsApp com mídia](META_TEMPLATE_MEDIA_SUPPORT.md)
-  — implementação local para revisão; **NOT DEPLOYED**.
+- [Elegibilidade set based de campanhas](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md)
+  — `PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE`; não bloqueia o deploy técnico.
 - OBS-1 — preparação concluída; rotação exige janela própria.
 
 ## Arquivo histórico
 
+- [Deploy CRM Contacts Cursor/Read Model](releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json)
+  — release substituída, preservada como evidência funcional da lista CRM.
 - [Deploy anterior da recuperação da lista](releases/CRM_CONTACTS_LIST_RECOVERY_2026-10-20_DEPLOYED.json)
   — release substituída, preservada como evidência.
 - [Log Markdown legado](../DEPLOY_LOG.md) — incompleto após abril de 2026; arquivo,

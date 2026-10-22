@@ -158,6 +158,147 @@ def verify_immutable_release(record_path: Path, record: dict) -> None:
     print("DEPLOYMENT_RECORD_OK: immutable artifacts, fixed paths and live verification agree")
 
 
+def verify_template_media_release(record_path: Path, record: dict) -> None:
+    require(record.get("recordType") == "IMMUTABLE_RELEASE_DEPLOYMENT",
+            "media immutable record type")
+    require(record.get("status") == "DEPLOYED_VERIFIED", "media deployment status")
+    require(record.get("result") == "DEPLOYED_PRODUCTION_TECHNICALLY_HEALTHY",
+            "media deployment result")
+    require(not (walk_keys(record) & FORBIDDEN_KEYS),
+            "sensitive identifier key in sanitized media record")
+    for field in ("baseCommit", "targetCommit", "reviewedHead"):
+        require(bool(re.fullmatch(r"[0-9a-f]{40}", record.get(field, ""))), field)
+    release_id = record.get("releaseId", "")
+    require(bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", release_id)),
+            "media releaseId")
+    require(record.get("components") == ["api", "frontend", "worker"],
+            "media components")
+    require(record.get("deploymentOrder") == ["api", "frontend", "worker"],
+            "media deployment order")
+    require(record.get("build") == {
+        "location": "OFF_HOST", "platform": "linux", "architecture": "x86_64",
+        "nodeVersion": "v20.20.0", "npmVersion": "10.8.2",
+    }, "media build identity")
+
+    artifacts = record.get("artifacts", {})
+    for field in ("packageSha256", "manifestSha256", "indexSha256"):
+        require(bool(SHA256.fullmatch(artifacts.get(field, ""))),
+                f"media artifact {field}")
+    require(positive_int(artifacts.get("indexEntries")), "media artifact index entries")
+    release_path = Path(artifacts.get("releasePath", ""))
+    require(release_path.is_absolute() and
+            release_path.parent == Path("/opt/re7online/releases") and
+            release_path.name == release_id, "media release path")
+    api = artifacts.get("api", {})
+    frontend = artifacts.get("frontend", {})
+    worker = artifacts.get("worker", {})
+    require(Path(api.get("stablePath", "")).is_absolute() and
+            api.get("entrypoint") == "dist/index.js" and
+            bool(SHA256.fullmatch(api.get("entrySha256", ""))), "media API artifact")
+    require(Path(frontend.get("stablePath", "")).is_absolute() and
+            bool(frontend.get("buildId")) and
+            frontend.get("execMode") == "fork_mode" and
+            frontend.get("instances") == 1 and
+            frontend.get("entrypoint") == "node_modules/next/dist/bin/next" and
+            frontend.get("args") == ["start", "-p", "3000"],
+            "media frontend artifact")
+    worker_path = Path(worker.get("releasePath", ""))
+    require(worker_path.is_absolute() and worker_path.is_relative_to(release_path) and
+            worker.get("entrypoint") == "dist/whatsapp-web-worker/src/index.js" and
+            bool(SHA256.fullmatch(worker.get("entrySha256", ""))),
+            "media worker artifact")
+
+    migration = record.get("migration", {})
+    require(bool(migration.get("name")) and
+            migration.get("method") == "PRISMA_MIGRATE_DEPLOY" and
+            migration.get("appliedExactlyOnce") is True and
+            positive_int(migration.get("appliedMigrationCount")) and
+            migration.get("pendingMigrationCount") == 0 and
+            migration.get("firstClientTermination") ==
+            "SIGABRT_AFTER_MIGRATION_PERSISTED" and
+            migration.get("restrictedVerificationExitCode") == 0 and
+            migration.get("schemaMutationRepeated") is False,
+            "media migration disposition")
+    backup = record.get("databaseBackup", {})
+    require(bool(SHA256.fullmatch(backup.get("sha256", ""))) and
+            backup.get("mode") == "0600" and backup.get("nonEmpty") is True and
+            backup.get("restoreList") == "PASS" and
+            backup.get("contentVersioned") is False, "media database backup")
+    storage = record.get("persistentStorage", {})
+    storage_path = Path(storage.get("templateMediaRoot", ""))
+    require(storage_path.is_absolute() and
+            not storage_path.is_relative_to(release_path) and
+            storage.get("owner") == "deploy" and storage.get("group") == "deploy" and
+            storage.get("directoryMode") == "0700" and
+            storage.get("outsideImmutableRelease") is True and
+            storage.get("writeReadProbe") == "PASS", "media persistent storage")
+
+    verification = record.get("verification", {})
+    for component, port in (("api", 3001), ("frontend", 3000)):
+        observed = verification.get(component, {})
+        require(observed.get("samples") == 3 and observed.get("socketPort") == port and
+                positive_int(observed.get("startTicks")),
+                f"media {component} samples")
+        verify_socket_owner(observed, component)
+    observed_worker = verification.get("worker", {})
+    require(observed_worker.get("targetRelease") is True and
+            observed_worker.get("restartCount") == 0 and
+            positive_int(observed_worker.get("pid")) and
+            positive_int(observed_worker.get("startTicks")),
+            "media worker verification")
+    require(verification.get("smoke") == "GET_ONLY" and
+            verification.get("technicalAcceptance") == "PASS",
+            "media technical acceptance")
+
+    readiness = record.get("releaseReadiness", {})
+    require(readiness == {
+        "technicalDeployment": "DEPLOYED",
+        "productionHealth": "HEALTHY",
+        "metaFunctionalAcceptance": "PENDING",
+        "commercialOperationalRelease": "PENDING",
+        "craPrRelease": "PENDING",
+    }, "media release readiness boundary")
+    mutations = record.get("windowMutations", {})
+    require(mutations == {
+        "functionalPostRequests": 0, "metaCalls": 0,
+        "templateCreatesOrSubmissions": 0, "campaigns": 0, "imports": 0,
+        "messagesSent": 0, "authorizedMigrations": 1, "otherMigrations": 0,
+    }, "media window mutation boundary")
+    backlog = record.get("knownNonBlockingBacklog", {})
+    require(backlog.get("id") == "PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE" and
+            backlog.get("blocksTechnicalDeployment") is False and
+            (ROOT / backlog.get("path", "")).is_file(), "media backlog boundary")
+
+    pm2 = record.get("pm2", {})
+    require(pm2.get("savedExactlyOnce") is True and pm2.get("saveExitCode") == 0 and
+            pm2.get("dumpMode") == "0600" and pm2.get("dumpOwner") == "deploy" and
+            pm2.get("dumpGroup") == "deploy" and
+            bool(SHA256.fullmatch(pm2.get("dumpSha256", ""))) and
+            bool(SHA256.fullmatch(pm2.get("previousDumpSha256", ""))),
+            "media PM2 state")
+    require(bool(SHA256.fullmatch(record.get("marker", {}).get("sha256", ""))),
+            "media marker")
+
+    state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
+    require(state.get("activeDeploymentRecord") ==
+            record_path.relative_to(ROOT).as_posix(), "active media record")
+    production = state.get("production", {})
+    require(production.get("releaseId") == release_id and
+            production.get("releasePath") == str(release_path) and
+            production.get("targetCommit") == record.get("targetCommit"),
+            "active media release")
+    require(production.get("api", {}).get("entrySha256") == api.get("entrySha256") and
+            production.get("frontend", {}).get("buildId") == frontend.get("buildId") and
+            production.get("worker", {}).get("entrySha256") == worker.get("entrySha256"),
+            "active media component identities")
+    require(production.get("pm2", {}).get("dumpSha256") == pm2.get("dumpSha256") and
+            production.get("pm2", {}).get("rollbackSha256") ==
+            pm2.get("previousDumpSha256"), "active media PM2 lineage")
+    require(state.get("templateCampaignMedia", {}).get("deploymentRecord") ==
+            record_path.relative_to(ROOT).as_posix(), "active media state link")
+    print("DEPLOYMENT_RECORD_OK: technical media release, migration, storage and pending provider acceptance agree")
+
+
 def verify_frontend_only(record_path: Path, record: dict) -> None:
     require(record.get("releaseType") == "FRONTEND_ONLY", "frontend release type")
     require(record.get("deploymentOrder") == ["frontend"], "frontend deployment order")
@@ -315,6 +456,10 @@ def main() -> None:
     require(record_path.is_relative_to(ROOT) and record_path.is_file(),
             "record outside repository or missing")
     record = read_json(record_path)
+
+    if record.get("schemaVersion") == 5:
+        verify_template_media_release(record_path, record)
+        return
 
     if record.get("schemaVersion") == 4:
         verify_immutable_release(record_path, record)

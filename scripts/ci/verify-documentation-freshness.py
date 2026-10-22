@@ -22,13 +22,21 @@ record = json.loads(record_path.read_text())
 require(record.get("status") == "DEPLOYED_VERIFIED", "active record deployed")
 require(state["contactsListRecovery"]["state"] == "DEPLOYED_VERIFIED",
         "contacts deployed")
-require(state["contactsListRecovery"]["deploymentRecord"] == record_value,
-        "contacts deployment record")
+require((ROOT / state["contactsListRecovery"]["deploymentRecord"]).is_file(),
+        "historical contacts deployment record")
+require(state["templateCampaignMedia"]["state"] == "TECHNICALLY_DEPLOYED",
+        "media technically deployed")
+require(state["templateCampaignMedia"]["deploymentRecord"] == record_value,
+        "media deployment record")
+require(state["templateCampaignMedia"]["metaFunctionalAcceptance"] == "PENDING" and
+        state["templateCampaignMedia"]["commercialOperationalRelease"] == "PENDING",
+        "media pending functional and commercial acceptance")
 
 active_paths = (
     "docs/saas/CURRENT_STATE.md",
     "docs/saas/DOCUMENTATION_INDEX.md",
     "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
+    "docs/saas/META_TEMPLATE_MEDIA_SUPPORT.md",
     "docs/DEPLOY_TOPOLOGY_RE7.md",
 )
 active_by_path = {p: (ROOT / p).read_text() for p in active_paths}
@@ -43,6 +51,7 @@ markers = (
     production["frontend"]["buildId"],
     production["frontend"]["execMode"],
     production["pm2"]["dumpSha256"],
+    state["templateCampaignMedia"]["knownNonBlockingBacklog"],
 )
 for marker in markers:
     require(marker in active, f"active marker {marker}")
@@ -59,6 +68,9 @@ for stale in (
     "Release pendente",
     "LOCAL VALIDATED / NOT DEPLOYED",
     "DEPLOYMENT PENDING",
+    "Status produtivo: **NOT DEPLOYED**",
+    "MIGRATION LOCAL ONLY",
+    "PRODUCTION NOT AUTHORIZED",
 ):
     require(stale not in active, f"stale active claim {stale}")
 require("scripts/deploy-normal-release.sh" in active and "obsoleto" in active,

@@ -20,7 +20,8 @@ não autorizam repetição.
 - A API usa `/usr/bin/node` e o entrypoint integral da release.
 - O frontend usa `/usr/bin/node`, `node_modules/next/dist/bin/next`, argumentos
   `start -p 3000`, `fork_mode` e uma instância. Next não roda em `cluster_mode`.
-- O worker fica fora do deploy normal quando a matriz de impacto não o altera.
+- O worker fica fora do deploy normal quando a matriz de impacto não o altera. Quando
+  impactado, ele usa o mesmo target imutável e é selecionado depois de API e frontend.
 
 ## Sequência de promoção
 
@@ -33,7 +34,8 @@ não autorizam repetição.
    da release, entrypoint/hash, Node, socket 3001 e health local/público.
 6. Selecionar o frontend em `fork_mode`. Exigir três amostras estáveis, BUILD_ID,
    socket 3000, Login, Inbox, CRM e asset `_next`.
-7. Confirmar o worker inalterado e executar somente smoke GET/read-only. Aceite
+7. Confirmar o worker inalterado ou, quando impactado, selecioná-lo na mesma release e
+   provar identidade e estabilidade. Executar somente smoke GET/read-only. Aceite
    autenticado tenant-scoped é gate humano separado quando não houver sessão
    automatizável autorizada.
 8. Executar `pm2 save` exatamente uma vez, somente depois dos gates e do aceite
@@ -78,8 +80,9 @@ Os itens abaixo são históricos e **não utilizáveis**:
 ## Release produtiva observada em 21/10/2026
 
 O registro estruturado vigente é
-[`CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json`](releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json).
-O target `c085e53f752a9b31fa7dd6d03896da07e3f159e3` foi promovido como
-`immutable-c085e53f-20261021T094952Z`, com API e frontend nos caminhos estáveis,
-worker preservado, um único `pm2 save` e resultado
-`DEPLOYED / PRODUCTION HEALTHY`.
+[`TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json`](releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json).
+O target `e2e7f17ac8fb9d0bdf7f73cf75455611101919b0` foi promovido como
+`immutable-e2e7f17a-20261022T005110Z`, com API e frontend nos caminhos estáveis,
+worker impactado na mesma release, migration aditiva, armazenamento persistente e um
+único `pm2 save`. O resultado técnico é `DEPLOYED / PRODUCTION HEALTHY`.
+Homologação funcional Meta e liberação comercial/operacional permanecem pendentes.
