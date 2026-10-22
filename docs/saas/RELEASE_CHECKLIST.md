@@ -5,7 +5,8 @@
 A fonte canônica é [CURRENT_STATE.md](CURRENT_STATE.md), e a única rota de deploy
 vigente é [DEPLOYMENT_OPERATING_MODEL.md](DEPLOYMENT_OPERATING_MODEL.md). A release
 de mídia em templates/campanhas está **TECHNICALLY DEPLOYED / PRODUCTION HEALTHY**
-desde 21/10/2026; homologação Meta e liberação aos clientes continuam pendentes.
+e o hardening de UX foi reativado em 22/10/2026; homologação Meta e liberação aos
+clientes continuam pendentes.
 
 Build na VPS, checkout produtivo como runtime, `deploy-normal-release.sh`, PR #190,
 Deploy V2 e Next em `cluster_mode` são históricos/obsoletos. Exemplos antigos neste
@@ -115,6 +116,8 @@ Somente executar `db:deploy` quando a release tiver migration aprovada.
 Templates/campanhas com header de mídia:
 
 - implantação técnica registrada em
+  `releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json`; o registro inicial
+  da migration permanece preservado em
   `releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json`;
 - não confundir runtime tecnicamente implantado com homologação Meta ou liberação
   comercial/operacional;

@@ -20,7 +20,7 @@ require(state["production"]["status"] == "DEPLOYED_VERIFIED", "production status
 record_path = ROOT / state["activeDeploymentRecord"]
 require(record_path.is_file(), "active record")
 record = json.loads(record_path.read_text())
-require(record["schemaVersion"] == 5 and record["status"] == "DEPLOYED_VERIFIED",
+require(record["schemaVersion"] in (4, 5) and record["status"] == "DEPLOYED_VERIFIED",
         "record status")
 require(state["activeOperationalRecord"] == state["activeDeploymentRecord"],
         "single active record")
@@ -33,14 +33,24 @@ require(production["frontend"]["buildId"] ==
         record["artifacts"]["frontend"]["buildId"], "frontend identity")
 require(production["frontend"]["execMode"] == "fork_mode" and
         production["frontend"]["instances"] == 1, "frontend mode")
-require(production["worker"]["changed"] is True and
-        production["worker"]["preserved"] is False and
-        production["worker"]["entrySha256"] ==
-        record["artifacts"]["worker"]["entrySha256"], "worker target identity")
-require(production["database"]["migration"] == record["migration"]["name"] and
-        production["database"]["appliedExactlyOnce"] is True and
-        production["database"]["pendingMigrationCount"] == 0,
-        "database migration state")
+if record["artifacts"]["worker"].get("preserved") is True:
+    require(production["worker"]["changed"] is False and
+            production["worker"]["preserved"] is True,
+            "worker preservation")
+    require(production["database"]["lastDeploymentMigration"] ==
+            "NOT_APPLICABLE_NO_SCHEMA_CHANGE" and
+            record["migration"]["classification"] ==
+            "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+            "no-schema-change deployment")
+else:
+    require(production["worker"]["changed"] is True and
+            production["worker"]["preserved"] is False and
+            production["worker"]["entrySha256"] ==
+            record["artifacts"]["worker"]["entrySha256"], "worker target identity")
+    require(production["database"]["migration"] == record["migration"]["name"] and
+            production["database"]["appliedExactlyOnce"] is True and
+            production["database"]["pendingMigrationCount"] == 0,
+            "database migration state")
 require(production["persistentStorage"]["templateMediaRoot"] ==
         record["persistentStorage"]["templateMediaRoot"] and
         production["persistentStorage"]["directoryMode"] == "0700",
@@ -56,7 +66,8 @@ media = state["templateCampaignMedia"]
 require(media["state"] == "TECHNICALLY_DEPLOYED" and
         media["deploymentRecord"] == state["activeDeploymentRecord"],
         "media active record")
-require(media["components"] == ["api", "frontend", "worker"] and
+require(media["components"] in (["api", "frontend", "worker"],
+                                ["api", "frontend", "worker_preserved"]) and
         media["migrationApplied"] is True and
         media["persistentStorageReady"] is True, "media deployment boundary")
 require(media["metaFunctionalAcceptance"] == "PENDING" and

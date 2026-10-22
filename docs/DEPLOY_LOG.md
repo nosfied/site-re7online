@@ -4,11 +4,22 @@ Este arquivo parou em abril de 2026 e é preservado como histórico incompleto. 
 não é a fonte vigente de topologia nem um runbook executável.
 
 O deploy ativo está no registro estruturado
-[`TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json`](saas/releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json).
+[`TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json`](saas/releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json).
 A única instrução operacional vigente é
 [`DEPLOYMENT_OPERATING_MODEL.md`](saas/DEPLOYMENT_OPERATING_MODEL.md).
 
 As entradas abaixo mantêm sua redação histórica.
+
+## Registro estruturado vigente — 2026-10-22 17:30:39 BRT
+
+- target: `5c339b2eeda52e21249844fc8b71a351d4311f03`
+- release: `immutable-5c339b2e-20261022T125717Z`
+- control plane: `90f04d8f2e47e0cd87c43bb8c26ff1cf33a1098d`
+- componentes selecionados: API e frontend; worker preservado
+- readiness: `wait-readiness` versionado, três amostras estáveis por componente
+- resultado: `DEPLOYED / PRODUCTION HEALTHY`
+- migration/SQL/Meta/templates/campanhas/importações/envios: zero
+- evidência: [registro sanitizado](saas/releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json)
 
 ## 2026-04-12 18:12 BRT
 

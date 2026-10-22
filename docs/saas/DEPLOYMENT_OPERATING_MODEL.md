@@ -1,6 +1,6 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / COMPROVADO EM PRODUÇÃO EM 20/10/2026 / RECONFIRMADO EM 21/10/2026**
+**Status: CANÔNICO / COMPROVADO EM PRODUÇÃO EM 20/10/2026 / RECONFIRMADO EM 22/10/2026**
 
 Esta é a única fonte de instrução operacional vigente para deploy do Converta.
 Runbooks, preparações e executores anteriores permanecem como evidência histórica e
@@ -169,12 +169,14 @@ Os itens abaixo são históricos e **não utilizáveis**:
   socket com amostra única logo após `pm2 start`;
 - Deploy V2, controles single-use e preparações de incidente como rota normal.
 
-## Release produtiva observada em 21/10/2026
+## Release produtiva observada em 22/10/2026
 
 O registro estruturado vigente é
-[`TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json`](releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json).
-O target `e2e7f17ac8fb9d0bdf7f73cf75455611101919b0` foi promovido como
-`immutable-e2e7f17a-20261022T005110Z`, com API e frontend nos caminhos estáveis,
-worker impactado na mesma release, migration aditiva, armazenamento persistente e um
-único `pm2 save`. O resultado técnico é `DEPLOYED / PRODUCTION HEALTHY`.
+[`TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json`](releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json).
+O target `5c339b2eeda52e21249844fc8b71a351d4311f03` foi promovido como
+`immutable-5c339b2e-20261022T125717Z` pelo control plane versionado
+`90f04d8f2e47e0cd87c43bb8c26ff1cf33a1098d`. API e frontend foram selecionados nos
+caminhos estáveis, o worker foi preservado, `wait-readiness` comprovou três amostras
+estáveis antes dos health checks e houve um único `pm2 save`. Nenhuma migration ou
+SQL foi executada. O resultado técnico é `DEPLOYED / PRODUCTION HEALTHY`.
 Homologação funcional Meta e liberação comercial/operacional permanecem pendentes.
