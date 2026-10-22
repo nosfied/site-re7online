@@ -6,6 +6,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import ScreenProcessingOverlay, { useScreenProcessingOperations } from "@/components/app/ScreenProcessingOverlay";
+import TemplateMediaInspectionPanel from "@/components/app/TemplateMediaInspectionPanel";
+import TemplateMessageComposition from "@/components/app/TemplateMessageComposition";
+import TemplateMediaRequirements from "@/components/app/TemplateMediaRequirements";
+import TemplateMediaFileInput from "@/components/app/TemplateMediaFileInput";
+import { inspectTemplateMediaBlob, inspectTemplateMediaFile, TemplateMediaInspectionCoordinator, TemplateMediaMetadata } from "@/lib/templateMediaUx";
 import CampaignBatchPanel from "@/components/app/CampaignBatchPanel";
 import {
   buildCampaignReuseState,
@@ -415,13 +420,20 @@ function buildTemplatePreview(content: string, values: string[]) {
   );
 }
 
-function CampaignMessagePreview({ content, detail }: { content: string | null; detail: string }) {
+function CampaignMessagePreview({ content, detail, headerType, mediaUrl, mediaLoading, mediaError }: {
+  content: string | null;
+  detail: string;
+  headerType: "NONE" | "IMAGE" | "VIDEO";
+  mediaUrl: string | null;
+  mediaLoading: boolean;
+  mediaError: string | null;
+}) {
   return (
     <div className="rounded-md border border-white/10 bg-re7-navy/50 p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Como a mensagem chegará</p>
       {content ? (
-        <div className="mt-2 max-w-2xl rounded-md border border-emerald-300/15 bg-emerald-950/25 px-3 py-2.5 text-sm text-white/85 shadow-sm">
-          <p className="whitespace-pre-wrap">{content}</p>
+        <div className="mt-2 max-w-2xl">
+          <TemplateMessageComposition body={content} headerType={headerType} mediaUrl={mediaUrl} mediaLoading={mediaLoading} mediaError={mediaError} emptyText="Selecione um modelo aprovado para visualizar a mensagem." />
         </div>
       ) : (
         <p className="mt-2 text-sm text-white/55">Selecione um modelo aprovado para visualizar a mensagem.</p>
@@ -840,8 +852,14 @@ export default function AppCampaignsPage() {
   const [refreshingDetail, setRefreshingDetail] = useState(false);
   const [creating, setCreating] = useState(false);
   const [uploadingTemplateMedia, setUploadingTemplateMedia] = useState(false);
+  const [inspectingTemplateMedia, setInspectingTemplateMedia] = useState(false);
+  const [loadingTemplateMediaPreview, setLoadingTemplateMediaPreview] = useState(false);
+  const [removingTemplateMedia, setRemovingTemplateMedia] = useState(false);
+  const [templateMediaMetadata, setTemplateMediaMetadata] = useState<TemplateMediaMetadata | null>(null);
+  const [templateMediaPreviewError, setTemplateMediaPreviewError] = useState<string | null>(null);
   const [templateMediaPreviewUrl, setTemplateMediaPreviewUrl] = useState<string | null>(null);
   const templateMediaUploadGenerationRef = useRef(0);
+  const templateMediaInspectionCoordinatorRef = useRef(new TemplateMediaInspectionCoordinator());
   const [cancelling, setCancelling] = useState(false);
   const [discardingDraft, setDiscardingDraft] = useState(false);
   const [schedulingDraft, setSchedulingDraft] = useState(false);
@@ -851,6 +869,9 @@ export default function AppCampaignsPage() {
   const [testingCampaign, setTestingCampaign] = useState(false);
   const processing = useScreenProcessingOperations([
     { key: "campaign-media-upload", active: uploadingTemplateMedia, title: "Enviando mídia", message: "Validando a mídia da campanha…" },
+    { key: "campaign-media-inspection", active: inspectingTemplateMedia, title: "Inspecionando mídia", message: "Lendo tipo, tamanho e metadados visuais…" },
+    { key: "campaign-media-preview", active: loadingTemplateMediaPreview, title: "Carregando prévia", message: "Abrindo a mídia autenticada…" },
+    { key: "campaign-media-removal", active: removingTemplateMedia, title: "Removendo mídia", message: "Atualizando a composição…" },
     { key: "campaign-create", active: creating || creatingDraft || creatingCsvDraft, title: "Criando campanha", message: "Salvando o rascunho e seus destinatários…" },
     { key: "campaign-schedule", active: schedulingDraft, title: "Agendando campanha", message: "Validando e registrando o agendamento…" },
     { key: "campaign-test", active: testingCampaign, title: "Enviando teste", message: "Validando o destinatário e enviando o modelo…" },
@@ -1097,34 +1118,58 @@ export default function AppCampaignsPage() {
     const controller = new AbortController();
     let objectUrl: string | null = null;
     setTemplateMediaPreviewUrl(null);
+    setTemplateMediaPreviewError(null);
+    setTemplateMediaMetadata(null);
+    setLoadingTemplateMediaPreview(false);
     if (!session || !form.templateMediaAssetId || selectedTemplateHeaderType === "NONE") {
       return () => controller.abort();
     }
+    setLoadingTemplateMediaPreview(true);
     fetchAppTemplateMedia(session, form.templateMediaAssetId, { signal: controller.signal })
-      .then(({ blob }) => {
+      .then(async ({ blob, contentType, fileName }) => {
+        if (controller.signal.aborted) return;
+        const metadata = await inspectTemplateMediaBlob(blob, selectedTemplateHeaderType, {
+          signal: controller.signal,
+          fileName: fileName || form.templateMediaFileName || null,
+        });
         if (controller.signal.aborted) return;
         objectUrl = URL.createObjectURL(blob);
+        setTemplateMediaMetadata({ ...metadata, mimeType: contentType || metadata.mimeType, sizeBytes: blob.size });
         setTemplateMediaPreviewUrl(objectUrl);
       })
       .catch(() => {
-        if (!controller.signal.aborted) setTemplateMediaPreviewUrl(null);
-      });
+        if (!controller.signal.aborted) {
+          setTemplateMediaPreviewUrl(null);
+          setTemplateMediaPreviewError("Não foi possível carregar a prévia autenticada.");
+        }
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoadingTemplateMediaPreview(false); });
     return () => {
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [form.templateMediaAssetId, selectedTemplateHeaderType, session]);
+  }, [form.templateMediaAssetId, form.templateMediaFileName, selectedTemplateHeaderType, session]);
+
+  useEffect(() => () => templateMediaInspectionCoordinatorRef.current.cancel(), []);
 
   const handleCampaignMediaFile = async (file: File | null) => {
     const generation = ++templateMediaUploadGenerationRef.current;
+    const inspection = templateMediaInspectionCoordinatorRef.current.begin();
     const previousAssetId = form.templateMediaAssetId;
     if (!session || !file || selectedTemplateHeaderType === "NONE") {
       setForm((current) => ({ ...current, templateMediaAssetId: "", templateMediaFileName: "" }));
+      setTemplateMediaMetadata(null);
       return;
     }
-    setUploadingTemplateMedia(true);
     setFormError(null);
     try {
+      setInspectingTemplateMedia(true);
+      const metadata = await inspectTemplateMediaFile(file, selectedTemplateHeaderType, { signal: inspection.signal });
+      if (generation !== templateMediaUploadGenerationRef.current || !templateMediaInspectionCoordinatorRef.current.isCurrent(inspection.generation)) return;
+      setTemplateMediaMetadata(metadata);
+      setInspectingTemplateMedia(false);
+      templateMediaInspectionCoordinatorRef.current.finish(inspection.generation);
+      setUploadingTemplateMedia(true);
       const uploaded = await uploadAppTemplateMedia(session, {
         file,
         kind: selectedTemplateHeaderType,
@@ -1144,10 +1189,15 @@ export default function AppCampaignsPage() {
       }
     } catch (error) {
       if (generation === templateMediaUploadGenerationRef.current) {
+        setTemplateMediaMetadata(null);
         setFormError(getCampaignUserFacingError(error as { message?: string }, "Não foi possível enviar a mídia da campanha."));
       }
     } finally {
-      if (generation === templateMediaUploadGenerationRef.current) setUploadingTemplateMedia(false);
+      if (generation === templateMediaUploadGenerationRef.current) {
+        setInspectingTemplateMedia(false);
+        setUploadingTemplateMedia(false);
+        templateMediaInspectionCoordinatorRef.current.finish(inspection.generation);
+      }
     }
   };
 
@@ -1382,7 +1432,12 @@ export default function AppCampaignsPage() {
             className={campaignComposerControlClasses}
             value={form.templateId}
             onChange={(event) => {
+              templateMediaUploadGenerationRef.current += 1;
+              templateMediaInspectionCoordinatorRef.current.cancel();
+              setInspectingTemplateMedia(false);
+              setUploadingTemplateMedia(false);
               void discardUnpersistedTemplateMedia(form.templateMediaAssetId);
+              setTemplateMediaMetadata(null);
               const template = templates.find((item) => item.id === event.target.value) ?? null;
               const labels = getTemplateVariablePositions(template);
               setForm((prev) => ({
@@ -1409,16 +1464,16 @@ export default function AppCampaignsPage() {
       </div>
       {selectedTemplateHeaderType !== "NONE" ? (
         <div className="rounded-lg border border-sky-300/20 bg-sky-900/10 p-3">
-          <label className="grid gap-1 text-sm text-white/75">
+          <div className="grid gap-1 text-sm text-white/75">
             {selectedTemplateHeaderType === "IMAGE" ? "Imagem da campanha" : "Vídeo da campanha"}
-            <input
-              type="file"
-              accept={selectedTemplateHeaderType === "IMAGE" ? "image/jpeg,image/png" : "video/mp4,video/3gpp"}
-              onChange={(event) => void handleCampaignMediaFile(event.target.files?.[0] ?? null)}
-              disabled={uploadingTemplateMedia}
-              className={campaignComposerControlClasses}
+            <TemplateMediaFileInput
+              kind={selectedTemplateHeaderType}
+              fileName={templateMediaMetadata?.fileName ?? form.templateMediaFileName}
+              onSelect={(file) => void handleCampaignMediaFile(file)}
+              disabled={uploadingTemplateMedia || inspectingTemplateMedia}
             />
-          </label>
+          </div>
+          <div className="mt-3"><TemplateMediaRequirements kind={selectedTemplateHeaderType} /></div>
           <p className="mt-2 text-xs text-white/55">
             {uploadingTemplateMedia
               ? "Enviando mídia com segurança..."
@@ -1426,21 +1481,31 @@ export default function AppCampaignsPage() {
                 ? `Mídia pronta: ${form.templateMediaFileName || "arquivo validado"}`
                 : "A mídia compatível é obrigatória e fica vinculada ao snapshot da campanha."}
           </p>
-          {selectedTemplateHeaderType === "IMAGE" && templateMediaPreviewUrl ? (
-            // Blob URLs are authenticated, ephemeral previews and cannot use Next image optimization.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={templateMediaPreviewUrl} alt="Prévia da imagem da campanha" className="mt-3 max-h-52 w-full rounded-lg object-cover" />
-          ) : null}
-          {selectedTemplateHeaderType === "VIDEO" && templateMediaPreviewUrl ? (
-            <video src={templateMediaPreviewUrl} controls className="mt-3 max-h-52 w-full rounded-lg" aria-label="Prévia do vídeo da campanha" />
+          {(templateMediaPreviewUrl || loadingTemplateMediaPreview || templateMediaPreviewError) ? (
+            <TemplateMediaInspectionPanel
+              kind={selectedTemplateHeaderType}
+              url={templateMediaPreviewUrl}
+              metadata={templateMediaMetadata}
+              loading={loadingTemplateMediaPreview}
+              error={templateMediaPreviewError}
+              className="mt-3"
+            />
           ) : null}
           {form.templateMediaAssetId ? (
             <button
               type="button"
               onClick={() => {
-                void discardUnpersistedTemplateMedia(form.templateMediaAssetId);
+                templateMediaUploadGenerationRef.current += 1;
+                templateMediaInspectionCoordinatorRef.current.cancel();
+                setInspectingTemplateMedia(false);
+                setUploadingTemplateMedia(false);
+                const assetId = form.templateMediaAssetId;
+                setRemovingTemplateMedia(true);
+                void discardUnpersistedTemplateMedia(assetId).finally(() => setRemovingTemplateMedia(false));
+                setTemplateMediaMetadata(null);
                 setForm((current) => ({ ...current, templateMediaAssetId: "", templateMediaFileName: "" }));
               }}
+              disabled={removingTemplateMedia}
               className="mt-3 rounded-md border border-white/15 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
             >
               Remover mídia desta composição
@@ -3509,6 +3574,10 @@ export default function AppCampaignsPage() {
           <CampaignMessagePreview
             content={templatePreview}
             detail="Prévia ilustrativa. Os valores finais serão calculados para cada contato selecionado no CRM."
+            headerType={selectedTemplateHeaderType}
+            mediaUrl={templateMediaPreviewUrl}
+            mediaLoading={loadingTemplateMediaPreview}
+            mediaError={templateMediaPreviewError}
           />
           </div>
           <div className="mt-3 grid gap-3 rounded-md border border-white/15 bg-white/[0.045] p-3">
@@ -3982,6 +4051,10 @@ export default function AppCampaignsPage() {
                     ? "Exemplo preenchido com os dados da primeira linha válida da pré-visualização."
                     : "As variáveis serão preenchidas pelas colunas mapeadas após a pré-visualização do arquivo."
                 }
+                headerType={selectedTemplateHeaderType}
+                mediaUrl={templateMediaPreviewUrl}
+                mediaLoading={loadingTemplateMediaPreview}
+                mediaError={templateMediaPreviewError}
               />
             </div>
             {csvPreviewError ? (
@@ -4284,6 +4357,10 @@ export default function AppCampaignsPage() {
                   <CampaignMessagePreview
                     content={manualTemplatePreview}
                     detail="Prévia com os valores informados para o envio imediato manual."
+                    headerType={selectedTemplateHeaderType}
+                    mediaUrl={templateMediaPreviewUrl}
+                    mediaLoading={loadingTemplateMediaPreview}
+                    mediaError={templateMediaPreviewError}
                   />
                 </div>
                 <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">

@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   TEMPLATE_IMAGE_MAX_BYTES,
+  TEMPLATE_VIDEO_MAX_BYTES,
   TemplateMediaError,
   resolveTemplateMediaFile,
   storeTemplateMedia,
@@ -14,16 +15,33 @@ import {
 const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
 const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
 const mp4 = Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]);
+const threeGpp = Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x33, 0x67, 0x70, 0x35]);
+
+function padded(signature: Buffer, size: number) {
+  const result = Buffer.alloc(size);
+  signature.copy(result);
+  return result;
+}
 
 test("validates image/video magic bytes, MIME, extension, emptiness and limits", () => {
   assert.equal(validateTemplateMediaUpload({ content: jpeg, mimeType: "image/jpeg", fileName: "a.jpg", kind: "IMAGE" }).mimeType, "image/jpeg");
   assert.equal(validateTemplateMediaUpload({ content: png, mimeType: "image/png", fileName: "a.png", kind: "IMAGE" }).mimeType, "image/png");
   assert.equal(validateTemplateMediaUpload({ content: mp4, mimeType: "video/mp4", fileName: "a.mp4", kind: "VIDEO" }).mimeType, "video/mp4");
+  assert.equal(validateTemplateMediaUpload({ content: threeGpp, mimeType: "video/3gpp", fileName: "a.3gp", kind: "VIDEO" }).mimeType, "video/3gpp");
   assert.throws(() => validateTemplateMediaUpload({ content: Buffer.alloc(0), mimeType: "image/png", fileName: "a.png", kind: "IMAGE" }), (error) => error instanceof TemplateMediaError && error.code === "template_media_empty");
   assert.throws(() => validateTemplateMediaUpload({ content: png, mimeType: "image/jpeg", fileName: "a.jpg", kind: "IMAGE" }), /MIME/);
   assert.throws(() => validateTemplateMediaUpload({ content: png, mimeType: "image/png", fileName: "a.mp4", kind: "IMAGE" }), /Extensão/);
   const tooLarge = Buffer.alloc(TEMPLATE_IMAGE_MAX_BYTES + 1, 0);
   assert.throws(() => validateTemplateMediaUpload({ content: tooLarge, mimeType: "image/jpeg", fileName: "a.jpg", kind: "IMAGE" }), (error) => error instanceof TemplateMediaError && error.code === "template_media_too_large");
+  assert.equal(validateTemplateMediaUpload({ content: padded(jpeg, TEMPLATE_IMAGE_MAX_BYTES), mimeType: "image/jpeg", fileName: "limite.jpg", kind: "IMAGE" }).sizeBytes, TEMPLATE_IMAGE_MAX_BYTES);
+  assert.throws(() => validateTemplateMediaUpload({ content: padded(jpeg, TEMPLATE_IMAGE_MAX_BYTES + 1), mimeType: "image/jpeg", fileName: "limite.jpg", kind: "IMAGE" }), (error) => error instanceof TemplateMediaError && error.code === "template_media_too_large");
+  assert.equal(validateTemplateMediaUpload({ content: padded(mp4, TEMPLATE_VIDEO_MAX_BYTES), mimeType: "video/mp4", fileName: "limite.mp4", kind: "VIDEO" }).sizeBytes, TEMPLATE_VIDEO_MAX_BYTES);
+  assert.throws(() => validateTemplateMediaUpload({ content: padded(mp4, TEMPLATE_VIDEO_MAX_BYTES + 1), mimeType: "video/mp4", fileName: "limite.mp4", kind: "VIDEO" }), (error) => error instanceof TemplateMediaError && error.code === "template_media_too_large");
+});
+
+test("accepts a structurally valid container without claiming provider-side codec validation", () => {
+  const structurallyValidUnknownCodec = padded(mp4, 128);
+  assert.equal(validateTemplateMediaUpload({ content: structurallyValidUnknownCodec, mimeType: "video/mp4", fileName: "provider-validates.mp4", kind: "VIDEO" }).mimeType, "video/mp4");
 });
 
 test("stores private tenant-scoped bytes and rejects symlinked roots", async (t) => {

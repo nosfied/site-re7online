@@ -4,6 +4,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import ScreenProcessingOverlay, { useScreenProcessingOperations } from "@/components/app/ScreenProcessingOverlay";
+import TemplateMediaInspectionPanel from "@/components/app/TemplateMediaInspectionPanel";
+import TemplateMessageComposition from "@/components/app/TemplateMessageComposition";
+import TemplateMediaRequirements from "@/components/app/TemplateMediaRequirements";
+import TemplateMediaFileInput from "@/components/app/TemplateMediaFileInput";
+import { inspectTemplateMediaBlob, inspectTemplateMediaFile, TemplateMediaInspectionCoordinator, TemplateMediaMetadata } from "@/lib/templateMediaUx";
 import {
   AppApiError,
   AppCannedReplyItem,
@@ -276,6 +281,8 @@ function TemplateWhatsappPreview({
   templateName,
   headerType = "NONE",
   mediaPreviewUrl = null,
+  mediaLoading = false,
+  mediaError = null,
   emptyText = "Informe uma mensagem para visualizar a prévia.",
 }: {
   body: string;
@@ -287,6 +294,8 @@ function TemplateWhatsappPreview({
   emptyText?: string;
   headerType?: "NONE" | "IMAGE" | "VIDEO";
   mediaPreviewUrl?: string | null;
+  mediaLoading?: boolean;
+  mediaError?: string | null;
 }) {
   const previewBody = buildTemplatePreviewWithExamples(body, variableExamples);
   return (
@@ -303,20 +312,8 @@ function TemplateWhatsappPreview({
         </div>
       </div>
       <div className="mt-3 rounded-xl border border-emerald-200/10 bg-[#0b2b24] p-4">
-        <div className="ml-auto max-w-[88%] rounded-2xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-sm leading-relaxed text-slate-950 shadow">
-          {headerType === "IMAGE" && mediaPreviewUrl ? (
-            // Blob URLs are authenticated, ephemeral previews and cannot use Next image optimization.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={mediaPreviewUrl} alt="Prévia da imagem do header" className="mb-2 max-h-52 w-full rounded-lg object-cover" />
-          ) : null}
-          {headerType === "VIDEO" && mediaPreviewUrl ? (
-            <video src={mediaPreviewUrl} controls className="mb-2 max-h-52 w-full rounded-lg" aria-label="Prévia do vídeo do header" />
-          ) : null}
-          {previewBody ? (
-            <p className="whitespace-pre-wrap">{previewBody}</p>
-          ) : (
-            <p className="text-slate-600">{emptyText}</p>
-          )}
+        <div className="ml-auto max-w-[88%]">
+          <TemplateMessageComposition body={previewBody} headerType={headerType} mediaUrl={mediaPreviewUrl} mediaLoading={mediaLoading} mediaError={mediaError} emptyText={emptyText} />
         </div>
       </div>
       <p className="mt-2 text-xs text-white/50">
@@ -510,8 +507,16 @@ export default function AppTemplatesPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaInspecting, setMediaInspecting] = useState(false);
+  const [mediaMetadata, setMediaMetadata] = useState<TemplateMediaMetadata | null>(null);
+  const [storedMediaLoading, setStoredMediaLoading] = useState(false);
+  const [storedMediaError, setStoredMediaError] = useState<string | null>(null);
+  const [storedMediaMetadata, setStoredMediaMetadata] = useState<TemplateMediaMetadata | null>(null);
+  const mediaInspectionCoordinatorRef = useRef(new TemplateMediaInspectionCoordinator());
   const processing = useScreenProcessingOperations([
     { key: "template-media-upload", active: mediaUploading, title: "Enviando mídia", message: "Validando e armazenando o arquivo…" },
+    { key: "template-media-inspection", active: mediaInspecting, title: "Inspecionando mídia", message: "Lendo tipo, tamanho e metadados visuais…" },
+    { key: "template-media-preview", active: storedMediaLoading, title: "Carregando prévia", message: "Abrindo a mídia autenticada…" },
     { key: "template-request", active: submitting, title: "Criando solicitação", message: "Salvando e submetendo o modelo…" },
     { key: "template-sync-all", active: syncingAll, title: "Sincronizando modelos", message: "Consultando a Meta…" },
     { key: "template-sync-one", active: Boolean(syncingTemplateId), title: "Atualizando modelo", message: "Reconciliando o estado atual…" },
@@ -526,6 +531,33 @@ export default function AppTemplatesPage() {
     if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
   }, [mediaPreviewUrl]);
   const detectedFormVariables = useMemo(() => extractNumberedVariables(form.content), [form.content]);
+  const handleTemplateMediaFile = useCallback(async (file: File | null) => {
+    const operation = mediaInspectionCoordinatorRef.current.begin();
+    if (!file || form.headerType === "NONE") {
+      setForm((current) => ({ ...current, mediaFile: null }));
+      setMediaMetadata(null);
+      return;
+    }
+    setMediaInspecting(true);
+    setFormError(null);
+    try {
+      const metadata = await inspectTemplateMediaFile(file, form.headerType, { signal: operation.signal });
+      if (!mediaInspectionCoordinatorRef.current.isCurrent(operation.generation)) return;
+      setForm((current) => ({ ...current, mediaFile: file }));
+      setMediaMetadata(metadata);
+    } catch (error) {
+      if (!mediaInspectionCoordinatorRef.current.isCurrent(operation.generation)) return;
+      setForm((current) => ({ ...current, mediaFile: null }));
+      setMediaMetadata(null);
+      setFormError(error instanceof Error ? error.message : "Não foi possível inspecionar a mídia.");
+    } finally {
+      if (mediaInspectionCoordinatorRef.current.isCurrent(operation.generation)) {
+        setMediaInspecting(false);
+        mediaInspectionCoordinatorRef.current.finish(operation.generation);
+      }
+    }
+  }, [form.headerType]);
+  useEffect(() => () => mediaInspectionCoordinatorRef.current.cancel(), []);
   const formWarnings = useMemo(() => {
     const warnings: string[] = [];
     if (form.category === "MARKETING") {
@@ -646,16 +678,31 @@ export default function AppTemplatesPage() {
     const controller = new AbortController();
     let objectUrl: string | null = null;
     setSelectedStoredMediaUrl(null);
-    if (!session || !mediaId || selectedItem?.headerType === "NONE") return () => controller.abort();
+    setStoredMediaError(null);
+    setStoredMediaMetadata(null);
+    setStoredMediaLoading(false);
+    const storedHeaderType = selectedItem?.headerType;
+    if (!session || !mediaId || !storedHeaderType || storedHeaderType === "NONE") return () => controller.abort();
+    setStoredMediaLoading(true);
     fetchAppTemplateMedia(session, mediaId, { signal: controller.signal })
-      .then(({ blob }) => {
+      .then(async ({ blob, contentType, fileName }) => {
+        if (controller.signal.aborted) return;
+        const metadata = await inspectTemplateMediaBlob(blob, storedHeaderType, {
+          signal: controller.signal,
+          fileName,
+        });
         if (controller.signal.aborted) return;
         objectUrl = URL.createObjectURL(blob);
+        setStoredMediaMetadata({ ...metadata, mimeType: contentType || metadata.mimeType, sizeBytes: blob.size });
         setSelectedStoredMediaUrl(objectUrl);
       })
       .catch(() => {
-        if (!controller.signal.aborted) setSelectedStoredMediaUrl(null);
-      });
+        if (!controller.signal.aborted) {
+          setSelectedStoredMediaUrl(null);
+          setStoredMediaError("Não foi possível carregar a prévia autenticada.");
+        }
+      })
+      .finally(() => { if (!controller.signal.aborted) setStoredMediaLoading(false); });
     return () => {
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -847,7 +894,7 @@ export default function AppTemplatesPage() {
       }
     }
     if (form.headerType !== "NONE" && !form.mediaFile) {
-      setFormError("Selecione a mídia de exemplo do header.");
+      setFormError("Selecione a mídia de exemplo do cabeçalho.");
       return;
     }
 
@@ -1833,6 +1880,15 @@ export default function AppTemplatesPage() {
                       </div>
                     ) : null}
                   </div>
+                  {selectedItem.headerType !== "NONE" ? (
+                    <TemplateMediaInspectionPanel
+                      kind={selectedItem.headerType}
+                      url={selectedStoredMediaUrl}
+                      metadata={storedMediaMetadata}
+                      loading={storedMediaLoading}
+                      error={storedMediaError}
+                    />
+                  ) : null}
                   <TemplateWhatsappPreview
                     body={selectedItem.content}
                     variableExamples={selectedVariableDetails}
@@ -1842,6 +1898,8 @@ export default function AppTemplatesPage() {
                     templateName={selectedItem.displayName}
                     headerType={selectedItem.headerType}
                     mediaPreviewUrl={selectedStoredMediaUrl}
+                    mediaLoading={storedMediaLoading}
+                    mediaError={storedMediaError}
                     emptyText="Este modelo não possui corpo textual registrado."
                   />
                 </div>
@@ -1916,21 +1974,26 @@ export default function AppTemplatesPage() {
                     <p className="mt-2 text-xs text-white/50">
                       {requestCategoryOptions.length === 0
                         ? "As categorias habilitadas para este tenant exigem um formato específico que ainda não está disponível neste editor."
-                        : "Utility: avisos e atendimento. Marketing: ofertas e comunicações promocionais."}
+                        : "Utilidade: avisos e atendimento. Marketing: ofertas e comunicações promocionais."}
                     </p>
                   </section>
                   <section className="rounded-lg border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs font-semibold uppercase text-re7-sky">2. Header</p>
+                    <p className="text-xs font-semibold uppercase text-re7-sky">2. Cabeçalho</p>
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                       <label className="grid gap-1 text-sm text-white/80">
                         Tipo de mídia
                         <select
                           value={form.headerType}
-                          onChange={(event) => setForm((current) => ({
-                            ...current,
-                            headerType: event.target.value as TemplateRequestFormState["headerType"],
-                            mediaFile: event.target.value === "NONE" ? null : current.mediaFile,
-                          }))}
+                          onChange={(event) => {
+                            mediaInspectionCoordinatorRef.current.cancel();
+                            setMediaInspecting(false);
+                            setMediaMetadata(null);
+                            setForm((current) => ({
+                              ...current,
+                              headerType: event.target.value as TemplateRequestFormState["headerType"],
+                              mediaFile: null,
+                            }));
+                          }}
                           disabled={submitting}
                           className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50"
                         >
@@ -1940,19 +2003,28 @@ export default function AppTemplatesPage() {
                         </select>
                       </label>
                       {form.headerType !== "NONE" ? (
-                        <label className="grid gap-1 text-sm text-white/80">
+                        <div className="grid gap-1 text-sm text-white/80">
                           Arquivo de exemplo
-                          <input
-                            type="file"
-                            accept={form.headerType === "IMAGE" ? "image/jpeg,image/png" : "video/mp4,video/3gpp"}
-                            onChange={(event) => setForm((current) => ({ ...current, mediaFile: event.target.files?.[0] ?? null }))}
-                            disabled={submitting}
-                            className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white"
+                          <TemplateMediaFileInput
+                            kind={form.headerType}
+                            fileName={mediaMetadata?.fileName}
+                            onSelect={(file) => void handleTemplateMediaFile(file)}
+                            disabled={submitting || mediaInspecting}
                           />
-                        </label>
+                        </div>
                       ) : null}
                     </div>
-                    <p className="mt-2 text-xs text-white/50">Imagem JPEG/PNG até 5 MB; vídeo MP4/3GPP até 16 MB. A validação também confere o conteúdo real do arquivo.</p>
+                    {form.headerType !== "NONE" ? <div className="mt-3"><TemplateMediaRequirements kind={form.headerType} /></div> : null}
+                    {form.headerType !== "NONE" && (mediaPreviewUrl || mediaInspecting || formError) ? (
+                      <TemplateMediaInspectionPanel
+                        kind={form.headerType}
+                        url={mediaPreviewUrl}
+                        metadata={mediaMetadata}
+                        loading={mediaInspecting}
+                        error={!mediaInspecting && !form.mediaFile ? formError : null}
+                        className="mt-3"
+                      />
+                    ) : null}
                   </section>
                   <section className="rounded-lg border border-white/10 bg-white/5 p-4">
                     <p className="text-xs font-semibold uppercase text-re7-sky">3. Mensagem</p>

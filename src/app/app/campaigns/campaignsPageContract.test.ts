@@ -206,7 +206,8 @@ test("campaign reuse toast and shared composer controls keep owner-visible polis
   assert.ok(pageSource.includes('className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70"'));
   assert.ok(pageSource.includes("getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)"));
   assert.ok(!pageSource.includes("Categoria na Meta:"));
-  assert.equal(pageSource.match(/className=\{campaignComposerControlClasses\}/g)?.length ?? 0, 3);
+  assert.equal(pageSource.match(/className=\{campaignComposerControlClasses\}/g)?.length ?? 0, 2);
+  assert.ok(pageSource.includes("TemplateMediaFileInput"));
 });
 
 test("campaign media is preserved across every composer path without automatic sends", () => {
@@ -222,6 +223,16 @@ test("campaign media is preserved across every composer path without automatic s
   assert.ok(pageSource.includes("scheduleAppCampaignDraft(session"));
   assert.ok(pageSource.includes("sendAppCampaignTest(session"));
   assert.ok(!pageSource.includes('fetch("/agent-api/app/campaigns/import"'));
+});
+
+test("CRM CSV and manual previews compose the selected media header with the filled body", () => {
+  assert.equal(pageSource.match(/<CampaignMessagePreview/g)?.length ?? 0, 3);
+  for (const prop of ["headerType={selectedTemplateHeaderType}", "mediaUrl={templateMediaPreviewUrl}", "mediaLoading={loadingTemplateMediaPreview}", "mediaError={templateMediaPreviewError}"]) {
+    assert.equal(pageSource.split(prop).length - 1, 3, `missing integrated preview prop ${prop}`);
+  }
+  assert.ok(pageSource.includes("content={templatePreview}"));
+  assert.ok(pageSource.includes("content={csvTemplatePreview}"));
+  assert.ok(pageSource.includes("content={manualTemplatePreview}"));
 });
 
 test("campaign selects use theme-aware colors in light and dark modes", () => {

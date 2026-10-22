@@ -2695,6 +2695,10 @@ async function requestAppBlob(
   const timeoutMs = typeof init?.timeoutMs === "number" ? init.timeoutMs : 20000;
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
+  const externalSignal = requestInit.signal;
+  const abortFromExternalSignal = () => controller.abort();
+  if (externalSignal?.aborted) controller.abort();
+  else externalSignal?.addEventListener("abort", abortFromExternalSignal, { once: true });
   let res: Response;
   try {
     res = await fetch(`${baseUrl}${path}`, {
@@ -2708,6 +2712,7 @@ async function requestAppBlob(
     });
   } catch (fetchError) {
     globalThis.clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
     const error = new Error("Sem resposta do servidor.") as AppApiError;
     error.status = 0;
     error.errorCode = "network_error";
@@ -2718,6 +2723,7 @@ async function requestAppBlob(
     throw error;
   }
   globalThis.clearTimeout(timeout);
+  externalSignal?.removeEventListener("abort", abortFromExternalSignal);
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
