@@ -144,6 +144,90 @@ class PrivatePair:
 
 
 class DefinitionControlTests(unittest.TestCase):
+    def readiness_fixture(self, *, delay=0.0, descendant=False, never=False, owner_mode="valid", churn=False):
+        clock = {"now": 0.0}
+        calls = {"health": [], "rollback": 0, "save": 0, "deployed": 0, "process": 0}
+        def monotonic(): return clock["now"]
+        def sleeper(seconds): clock["now"] += seconds
+        def process_reader():
+            calls["process"] += 1
+            pid = 102 if churn and calls["process"] >= 3 else 101
+            return {
+                "pid": pid, "ticks": 9002 if pid == 102 else 9001,
+                "pm2_env": {"status": "online", "pm_cwd": "/current/api", "pm_exec_path": "/current/api/dist/index.js"},
+                "allowedPids": [pid, pid + 100] if descendant else [pid],
+                "parents": {pid + 100: pid},
+            }
+        def socket_reader(port, allowed):
+            if never or clock["now"] < delay: return set(), set(), set(), {}
+            pid = 102 if churn and calls["process"] >= 3 else 101
+            if owner_mode == "missing": return {"inode-a"}, set(), set(), {}
+            if owner_mode == "ancestor": return {"inode-a"}, {1}, set(), {1: 0}
+            if owner_mode == "multiple": return {"inode-a", "inode-b"}, {pid}, set(), {}
+            if owner_mode == "permission": return {"inode-a"}, set(), {pid}, {}
+            owner = pid + 100 if descendant else pid
+            return {"inode-a"}, {owner}, set(), {owner: pid} if descendant else {}
+        def symlink_reader():
+            return {"device": 1, "inode": 2, "textTarget": "/releases/candidate/api-runtime", "resolvedTarget": "/releases/candidate/api-runtime"}
+        def health_reader(url, timeout):
+            calls["health"].append((url, clock["now"]))
+            return 200
+        app = {"name": "api", "cwd": "/current/api", "script": "/current/api/dist/index.js", "interpreter": "/usr/bin/node"}
+        kwargs = dict(
+            component="api", port=3001, app=app, release_identity={}, pm2=Path("/unused/pm2"),
+            stable_path=Path("/current/api"), release_root=Path("/releases/candidate/api-runtime"),
+            local_health="http://127.0.0.1:3001/health", public_health="https://example.invalid/health",
+            deadline_seconds=30.0, poll_seconds=0.5, monotonic=monotonic, sleeper=sleeper,
+            process_reader=process_reader, socket_reader=socket_reader, symlink_reader=symlink_reader,
+            health_reader=health_reader,
+        )
+        return kwargs, clock, calls
+
+    def test_readiness_direct_immediate_and_health_after_three_samples(self):
+        kwargs, _, calls = self.readiness_fixture()
+        result = CONTROL.wait_for_readiness(**kwargs)
+        self.assertEqual(result["socketOwnerRelation"], "DIRECT")
+        self.assertEqual(result["stableSamples"], 3)
+        self.assertGreaterEqual(result["healthStartedMonotonic"], result["socketStableMonotonic"])
+        self.assertEqual(len(calls["health"]), 2)
+
+    def test_readiness_descendant_is_accepted(self):
+        kwargs, _, _ = self.readiness_fixture(descendant=True)
+        result = CONTROL.wait_for_readiness(**kwargs)
+        self.assertEqual(result["socketOwnerRelation"], "DESCENDANT")
+        self.assertEqual(result["socketOwnerChain"], [201, 101])
+
+    def test_readiness_delayed_listener_four_seconds_passes(self):
+        kwargs, _, calls = self.readiness_fixture(delay=4.0)
+        result = CONTROL.wait_for_readiness(**kwargs)
+        self.assertGreaterEqual(result["healthStartedMonotonic"], 5.0)
+        self.assertTrue(all(at >= 5.0 for _, at in calls["health"]))
+        self.assertGreaterEqual(result["totalSamples"], 11)
+
+    def test_readiness_never_created_times_out_and_coordinator_rolls_back(self):
+        kwargs, _, calls = self.readiness_fixture(never=True)
+        with self.assertRaisesRegex(CONTROL.Denied, "READINESS_TIMEOUT:api:3001"):
+            try:
+                CONTROL.wait_for_readiness(**kwargs)
+            except CONTROL.Denied:
+                calls["rollback"] += 1
+                raise
+        self.assertEqual(calls["rollback"], 1)
+        self.assertEqual(calls["save"], 0)
+        self.assertEqual(calls["deployed"], 0)
+
+    def test_readiness_foreign_ancestor_multiple_and_permission_are_denied(self):
+        for mode, reason in (("missing", "owner_mismatch"), ("ancestor", "not_descendant"), ("multiple", "multiple_listeners"), ("permission", "socket_permission")):
+            with self.subTest(mode=mode):
+                kwargs, _, _ = self.readiness_fixture(owner_mode=mode)
+                with self.assertRaisesRegex(CONTROL.Denied, reason):
+                    CONTROL.wait_for_readiness(**kwargs)
+
+    def test_readiness_pid_churn_resets_stability(self):
+        kwargs, _, _ = self.readiness_fixture(churn=True)
+        result = CONTROL.wait_for_readiness(**kwargs)
+        self.assertEqual(result["pid"], 102)
+        self.assertGreaterEqual(result["stabilityResets"], 1)
     def test_api_runtime_surface_is_statically_proven_and_role_minimal(self):
         fixture = json.loads(API_RUNTIME_SURFACE_FIXTURE.read_text())
         entries = fixture["entries"]
@@ -702,6 +786,13 @@ class DefinitionControlTests(unittest.TestCase):
         fixture = json.loads((ROOT / "scripts/ci/fixtures/pm2-definition-contamination.sanitized.json").read_text())
         self.assertFalse(fixture["containsEnvironmentValues"])
         self.assertEqual(fixture["collision"]["key"], "args")
+
+        readiness = json.loads((ROOT / "scripts/ci/fixtures/pm2-readiness-race.sanitized.json").read_text())
+        self.assertEqual(readiness["classification"], "READINESS_RACE_SINGLE_SAMPLE")
+        self.assertGreaterEqual(readiness["observedDelaySeconds"], 4)
+        self.assertFalse(readiness["containsEnvironmentValues"])
+        self.assertFalse(readiness["containsTenantIdentifiers"])
+        self.assertFalse(readiness["containsCredentials"])
 
 
 if __name__ == "__main__":

@@ -150,6 +150,15 @@ def socket_owners(port, allowed):
     return owners
 
 
+def has_ipv6_wildcard_listener(port):
+    wanted = f"{port:04X}"
+    wildcard = "0" * 32
+    return any(
+        fields[1].rsplit(":", 1) == [wildcard, wanted] and fields[3] == "0A"
+        for fields in (line.split() for line in Path("/proc/net/tcp6").read_text().splitlines()[1:])
+    )
+
+
 def normalize_args(value):
     if isinstance(value, list):
         return [str(item) for item in value]
@@ -237,6 +246,15 @@ def validate_loaded(
     prestart_link_identity, samples=3,
 ):
     app = source["definition"]["apps"][0]
+    readiness = CONTROL_MODULE.wait_for_readiness(
+        component="frontend", port=int(app["args"][2]), app=app,
+        release_identity=source["releaseIdentity"], pm2=Path(pm2),
+        stable_path=Path(stable_runtime), release_root=Path(physical_runtime),
+        local_health=f"http://127.0.0.1:{app['args'][2]}/app/login",
+        public_health=f"http://127.0.0.1:{app['args'][2]}/app/login",
+        deadline_seconds=30.0, poll_seconds=0.5, pm2_environment=env,
+    )
+    assert has_ipv6_wildcard_listener(int(app["args"][2])), "ipv6_wildcard_listener"
     rows = json.loads(run([pm2, "jlist"], env).stdout)
     matches = [row for row in rows if row.get("name") == app["name"]]
     assert len(matches) == 1, "loaded_instance_count"
@@ -305,6 +323,10 @@ def validate_loaded(
         "pm2LexicalIdentityExact": True,
         "physicalReleaseIdentityExact": True,
         "symlinkIdentityStable": True,
+        "readinessStableSamples": readiness["stableSamples"],
+        "readinessElapsedSeconds": readiness["elapsedSeconds"],
+        "healthAfterSocket": readiness["healthStartedMonotonic"] >= readiness["socketStableMonotonic"],
+        "ipv6WildcardListener": True,
     }
 
 
@@ -315,13 +337,14 @@ const argv = process.argv.slice(2);
 if (argv.length !== 3 || argv[0] !== "start" || argv[1] !== "-p") process.exit(64);
 const port = Number(argv[2]);
 const buildId = fs.readFileSync(path.join(process.cwd(), ".next", "BUILD_ID"), "utf8").trim();
-http.createServer((req, res) => {
+const server = http.createServer((req, res) => {
   if (req.url === "/app/login") {
     res.writeHead(200, {"content-type": "application/json"});
     return res.end(JSON.stringify({buildId, entrypoint: __filename, argv: process.argv.slice(1)}));
   }
   res.writeHead(404); res.end("not found");
-}).listen(port, "127.0.0.1");
+});
+setTimeout(() => server.listen(port, "::"), 4000);
 '''
 
 

@@ -42,6 +42,45 @@ não autorizam repetição.
    aplicável. Conferir dump regular, modo real `0600` e SHA-256.
 9. Criar o marker `DEPLOYED` apenas depois da validação do dump.
 
+### Readiness depois da seleção PM2
+
+`online` no PM2 comprova que o processo foi iniciado; não comprova que a aplicação
+já abriu seu socket. Depois de cada `pm2 start`, o caminho canônico executa
+`scripts/pm2-definition-control.py wait-readiness` com prazo monotônico de 30
+segundos, polling de no máximo 500 ms e três amostras consecutivas estáveis.
+
+Cada amostra vincula PID, start ticks, identidade imutável da release, symlink
+`/opt/re7online/current/<componente>`, listener IPv4 ou IPv6 e cadeia de propriedade
+do socket. O proprietário precisa ser o PID PM2 (`DIRECT`) ou descendente contínuo
+dele (`DESCENDANT`); daemon/ancestral, listener estrangeiro e múltiplos listeners
+são negativas nominais. Mudança de PID reinicia a contagem de estabilidade dentro
+do mesmo prazo. Ausência temporária do listener apenas continua o polling.
+
+Health local e público são consultados somente depois das três amostras de socket.
+O prazo expirado produz `READINESS_TIMEOUT:<component>:<port>` e obriga o retorno
+pelas definições autenticadas, sem `pm2 save`, marker `DEPLOYED` ou segunda tentativa.
+Os tempos monotônicos, total de amostras e resets de estabilidade são persistidos
+sem ambiente ou segredos. API e frontend usam prazo de 30 segundos.
+
+Forma canônica, com caminhos privados concretos definidos pela janela:
+
+```bash
+python3 scripts/pm2-definition-control.py wait-readiness \
+  --request <request-privada-0600> \
+  --source-artifact <fonte-privada-0600> \
+  --source-sha256 <sha-autenticado-da-fonte> \
+  --definition <definicao-privada-0600> \
+  --pm2 <binario-pm2-validado> \
+  --stable-path /opt/re7online/current/<componente> \
+  --release-root /opt/re7online/releases/<release>/<runtime> \
+  --port <porta> --local-health <url-local> --public-health <url-publica> \
+  --deadline-seconds 30 --poll-seconds 0.5 \
+  --report <relatorio-privado-novo-0600>
+```
+
+O comando autentica novamente request, fonte e definição antes de observar o
+runtime. O relatório é exclusivo e não pode ser sobrescrito ou reutilizado.
+
 ## Definições PM2
 
 **Metadados de introspecção do PM2 nunca são uma definição executável.** Saídas de
@@ -126,6 +165,8 @@ Os itens abaixo são históricos e **não utilizáveis**:
 - pipeline experimental da PR #190;
 - frontend Next em `cluster_mode`;
 - gate que exige socket diretamente no PID PM2 sem considerar launcher/descendência;
+- observador ou executor de ativação temporário em `/tmp`, inclusive polling de
+  socket com amostra única logo após `pm2 start`;
 - Deploy V2, controles single-use e preparações de incidente como rota normal.
 
 ## Release produtiva observada em 21/10/2026
