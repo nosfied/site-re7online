@@ -26,6 +26,7 @@ assert ISOLATED_SPEC and ISOLATED_SPEC.loader
 ISOLATED = importlib.util.module_from_spec(ISOLATED_SPEC)
 ISOLATED_SPEC.loader.exec_module(ISOLATED)
 SURFACE_FIXTURE = ROOT / "scripts/ci/fixtures/pm2-production-env-surface.sanitized.json"
+API_RUNTIME_SURFACE_FIXTURE = ROOT / "scripts/ci/fixtures/pm2-api-runtime-env-surface.sanitized.json"
 
 
 def request(role="candidate", component="frontend"):
@@ -143,6 +144,119 @@ class PrivatePair:
 
 
 class DefinitionControlTests(unittest.TestCase):
+    def test_api_runtime_surface_is_statically_proven_and_role_minimal(self):
+        fixture = json.loads(API_RUNTIME_SURFACE_FIXTURE.read_text())
+        entries = fixture["entries"]
+        self.assertEqual(fixture["schemaVersion"], 1)
+        self.assertEqual(fixture["component"], "api")
+        self.assertEqual(len(entries), 66)
+        self.assertEqual([entry["key"] for entry in entries], sorted(entry["key"] for entry in entries))
+        self.assertEqual(len({entry["key"] for entry in entries}), 66)
+        api_allowlist = CONTROL.load_repository_allowlist()["api"]
+        for entry in entries:
+            self.assertEqual(
+                set(entry),
+                {"key", "consumer", "purpose", "applicability", "requirement", "lifecycle", "decision"},
+            )
+            self.assertEqual(entry["applicability"], "production")
+            self.assertEqual(entry["decision"], "common")
+            self.assertIn(entry["key"], api_allowlist["common"])
+            self.assertNotIn(entry["key"], api_allowlist["candidate"])
+            self.assertNotIn(entry["key"], api_allowlist["rollbackCompatibility"])
+            consumer = ROOT / entry["consumer"]
+            self.assertTrue(consumer.is_file(), entry["key"])
+            self.assertIn(entry["key"], consumer.read_text(), entry["key"])
+
+    def test_api_runtime_surface_candidate_and_exact_rollback_are_representable(self):
+        fixture = json.loads(API_RUNTIME_SURFACE_FIXTURE.read_text())
+        keys = sorted(entry["key"] for entry in fixture["entries"])
+
+        def api_request(role):
+            return {
+                "schemaVersion": 2,
+                "scope": "production",
+                "role": role,
+                "component": "api",
+                "sourceKind": CONTROL.SOURCE_KINDS[role],
+                "environmentKeys": keys,
+            }
+
+        def api_source(role):
+            release = {
+                "releaseId": f"immutable-{role}-api-fixture",
+                "releaseManifestSha256": hashlib.sha256(f"{role}-api-manifest".encode()).hexdigest(),
+                "componentTreeSha256": hashlib.sha256(f"{role}-api-tree".encode()).hexdigest(),
+                "apiEntrySha256": hashlib.sha256(f"{role}-api-entry".encode()).hexdigest(),
+            }
+            source_value = {
+                "schemaVersion": 1,
+                "role": role,
+                "component": "api",
+                "sourceKind": CONTROL.SOURCE_KINDS[role],
+                "provenance": {
+                    "authority": CONTROL.SOURCE_AUTHORITIES[role],
+                    "evidenceSha256": hashlib.sha256(f"{role}-api-evidence".encode()).hexdigest(),
+                },
+                "releaseIdentity": release,
+                "definition": definition("stable-current", component="api"),
+            }
+            source_value["definition"]["apps"][0]["env"] = {
+                key: f"synthetic-{role}-{index}" for index, key in enumerate(keys)
+            }
+            return source_value
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = {}
+            for role in ("candidate", "rollback"):
+                paths[f"{role}_request"] = root / f"{role}-request.json"
+                paths[f"{role}_source"] = root / f"{role}-source.json"
+                paths[f"{role}_definition"] = root / f"{role}-definition.json"
+                source_value = api_source(role)
+                write_private(paths[f"{role}_request"], api_request(role))
+                write_private(paths[f"{role}_source"], source_value)
+                result = CONTROL.command_build(argparse.Namespace(
+                    request=paths[f"{role}_request"],
+                    source_artifact=paths[f"{role}_source"],
+                    source_sha256=sha(paths[f"{role}_source"]),
+                    output=paths[f"{role}_definition"],
+                ))
+                self.assertEqual(result["result"], "PM2_DEFINITION_BUILT")
+                self.assertEqual(
+                    paths[f"{role}_definition"].read_bytes(),
+                    CONTROL.canonical(source_value["definition"]),
+                )
+                validated = CONTROL.command_validate(argparse.Namespace(
+                    request=paths[f"{role}_request"],
+                    source_artifact=paths[f"{role}_source"],
+                    source_sha256=sha(paths[f"{role}_source"]),
+                    definition=paths[f"{role}_definition"],
+                ))
+                self.assertEqual(validated["result"], "PM2_DEFINITION_VALID")
+            pair = CONTROL.command_validate_pair(argparse.Namespace(
+                candidate_request=paths["candidate_request"],
+                candidate_source_artifact=paths["candidate_source"],
+                candidate_source_sha256=sha(paths["candidate_source"]),
+                candidate_definition=paths["candidate_definition"],
+                rollback_request=paths["rollback_request"],
+                rollback_source_artifact=paths["rollback_source"],
+                rollback_source_sha256=sha(paths["rollback_source"]),
+                rollback_definition=paths["rollback_definition"],
+            ))
+            self.assertEqual(pair["result"], "PM2_DEFINITION_PAIR_VALID")
+            self.assertTrue(pair["sourceArtifactsCryptographicallyDistinct"])
+            self.assertTrue(pair["releaseIdentitiesDistinct"])
+
+    def test_production_test_hooks_unknown_and_pm2_fields_remain_denied(self):
+        fixture = json.loads(API_RUNTIME_SURFACE_FIXTURE.read_text())
+        for entry in fixture["deniedExamples"]:
+            selected = request("candidate", "api")
+            selected["scope"] = "production"
+            selected["environmentKeys"] = [entry["key"]]
+            with self.subTest(key=entry["key"], classification=entry["classification"]):
+                with self.assertRaises(CONTROL.Denied):
+                    CONTROL.validate_request(selected)
+
     def test_independent_pair_passes(self):
         with tempfile.TemporaryDirectory() as directory:
             pair = PrivatePair(Path(directory))

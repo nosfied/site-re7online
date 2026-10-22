@@ -171,3 +171,20 @@ negados para todos os papéis.
 Antes de qualquer alteração futura na allowlist, o inventário sanitizado de nomes
 das fontes candidatas e de retorno é gate obrigatório. Divergência de nome ou papel
 interrompe a preparação antes do PM2.
+
+### Reconciliação da superfície funcional da API
+
+O bootstrap privado posterior encontrou 66 nomes adicionais presentes na definição
+produtiva e consumidos pelo código da API. A análise estática individual está em
+[`pm2-api-runtime-env-surface.sanitized.json`](../../scripts/ci/fixtures/pm2-api-runtime-env-surface.sanitized.json).
+Ela registra consumidor, finalidade, aplicabilidade, obrigatoriedade condicional,
+ciclo de vida e papel sem incluir valores ou seus digests.
+
+Todos os 66 nomes possuem consumidor de produção comprovado. Eles foram admitidos
+em `api.common`, inclusive controles fail-closed, compatibilidade de dados históricos
+e flags de transição ainda lidas pela release. Nenhum nome desse conjunto é hook de
+teste, campo estrutural PM2 ou variável desconhecida. Essa decisão não permite copiar
+o ambiente completo: a request continua selecionando um subconjunto fechado, a fonte
+privada continua byte-autenticada e nomes não listados continuam negados. Controles
+exclusivos do frontend histórico permanecem em `rollbackCompatibility` e continuam
+proibidos no candidato.
