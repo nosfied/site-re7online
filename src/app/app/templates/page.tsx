@@ -4,10 +4,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import ScreenProcessingOverlay, { useScreenProcessingOperations } from "@/components/app/ScreenProcessingOverlay";
-import TemplateMediaPreview from "@/components/app/TemplateMediaPreview";
+import TemplateMediaInspectionPanel from "@/components/app/TemplateMediaInspectionPanel";
+import TemplateMessageComposition from "@/components/app/TemplateMessageComposition";
 import TemplateMediaRequirements from "@/components/app/TemplateMediaRequirements";
 import TemplateMediaFileInput from "@/components/app/TemplateMediaFileInput";
-import { inspectTemplateMediaFile, TemplateMediaMetadata } from "@/lib/templateMediaUx";
+import { inspectTemplateMediaBlob, inspectTemplateMediaFile, TemplateMediaInspectionCoordinator, TemplateMediaMetadata } from "@/lib/templateMediaUx";
 import {
   AppApiError,
   AppCannedReplyItem,
@@ -280,7 +281,6 @@ function TemplateWhatsappPreview({
   templateName,
   headerType = "NONE",
   mediaPreviewUrl = null,
-  mediaMetadata = null,
   mediaLoading = false,
   mediaError = null,
   emptyText = "Informe uma mensagem para visualizar a prévia.",
@@ -294,7 +294,6 @@ function TemplateWhatsappPreview({
   emptyText?: string;
   headerType?: "NONE" | "IMAGE" | "VIDEO";
   mediaPreviewUrl?: string | null;
-  mediaMetadata?: TemplateMediaMetadata | null;
   mediaLoading?: boolean;
   mediaError?: string | null;
 }) {
@@ -313,15 +312,8 @@ function TemplateWhatsappPreview({
         </div>
       </div>
       <div className="mt-3 rounded-xl border border-emerald-200/10 bg-[#0b2b24] p-4">
-        <div className="ml-auto max-w-[88%] rounded-2xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-sm leading-relaxed text-slate-950 shadow">
-          {headerType !== "NONE" ? (
-            <TemplateMediaPreview kind={headerType} url={mediaPreviewUrl} metadata={mediaMetadata} loading={mediaLoading} error={mediaError} className="mb-2" />
-          ) : null}
-          {previewBody ? (
-            <p className="whitespace-pre-wrap">{previewBody}</p>
-          ) : (
-            <p className="text-slate-600">{emptyText}</p>
-          )}
+        <div className="ml-auto max-w-[88%]">
+          <TemplateMessageComposition body={previewBody} headerType={headerType} mediaUrl={mediaPreviewUrl} mediaLoading={mediaLoading} mediaError={mediaError} emptyText={emptyText} />
         </div>
       </div>
       <p className="mt-2 text-xs text-white/50">
@@ -519,7 +511,8 @@ export default function AppTemplatesPage() {
   const [mediaMetadata, setMediaMetadata] = useState<TemplateMediaMetadata | null>(null);
   const [storedMediaLoading, setStoredMediaLoading] = useState(false);
   const [storedMediaError, setStoredMediaError] = useState<string | null>(null);
-  const mediaInspectionGenerationRef = useRef(0);
+  const [storedMediaMetadata, setStoredMediaMetadata] = useState<TemplateMediaMetadata | null>(null);
+  const mediaInspectionCoordinatorRef = useRef(new TemplateMediaInspectionCoordinator());
   const processing = useScreenProcessingOperations([
     { key: "template-media-upload", active: mediaUploading, title: "Enviando mídia", message: "Validando e armazenando o arquivo…" },
     { key: "template-media-inspection", active: mediaInspecting, title: "Inspecionando mídia", message: "Lendo tipo, tamanho e metadados visuais…" },
@@ -539,7 +532,7 @@ export default function AppTemplatesPage() {
   }, [mediaPreviewUrl]);
   const detectedFormVariables = useMemo(() => extractNumberedVariables(form.content), [form.content]);
   const handleTemplateMediaFile = useCallback(async (file: File | null) => {
-    const generation = ++mediaInspectionGenerationRef.current;
+    const operation = mediaInspectionCoordinatorRef.current.begin();
     if (!file || form.headerType === "NONE") {
       setForm((current) => ({ ...current, mediaFile: null }));
       setMediaMetadata(null);
@@ -548,19 +541,23 @@ export default function AppTemplatesPage() {
     setMediaInspecting(true);
     setFormError(null);
     try {
-      const metadata = await inspectTemplateMediaFile(file, form.headerType);
-      if (generation !== mediaInspectionGenerationRef.current) return;
+      const metadata = await inspectTemplateMediaFile(file, form.headerType, { signal: operation.signal });
+      if (!mediaInspectionCoordinatorRef.current.isCurrent(operation.generation)) return;
       setForm((current) => ({ ...current, mediaFile: file }));
       setMediaMetadata(metadata);
     } catch (error) {
-      if (generation !== mediaInspectionGenerationRef.current) return;
+      if (!mediaInspectionCoordinatorRef.current.isCurrent(operation.generation)) return;
       setForm((current) => ({ ...current, mediaFile: null }));
       setMediaMetadata(null);
       setFormError(error instanceof Error ? error.message : "Não foi possível inspecionar a mídia.");
     } finally {
-      if (generation === mediaInspectionGenerationRef.current) setMediaInspecting(false);
+      if (mediaInspectionCoordinatorRef.current.isCurrent(operation.generation)) {
+        setMediaInspecting(false);
+        mediaInspectionCoordinatorRef.current.finish(operation.generation);
+      }
     }
   }, [form.headerType]);
+  useEffect(() => () => mediaInspectionCoordinatorRef.current.cancel(), []);
   const formWarnings = useMemo(() => {
     const warnings: string[] = [];
     if (form.category === "MARKETING") {
@@ -682,13 +679,21 @@ export default function AppTemplatesPage() {
     let objectUrl: string | null = null;
     setSelectedStoredMediaUrl(null);
     setStoredMediaError(null);
+    setStoredMediaMetadata(null);
     setStoredMediaLoading(false);
-    if (!session || !mediaId || selectedItem?.headerType === "NONE") return () => controller.abort();
+    const storedHeaderType = selectedItem?.headerType;
+    if (!session || !mediaId || !storedHeaderType || storedHeaderType === "NONE") return () => controller.abort();
     setStoredMediaLoading(true);
     fetchAppTemplateMedia(session, mediaId, { signal: controller.signal })
-      .then(({ blob }) => {
+      .then(async ({ blob, contentType, fileName }) => {
+        if (controller.signal.aborted) return;
+        const metadata = await inspectTemplateMediaBlob(blob, storedHeaderType, {
+          signal: controller.signal,
+          fileName,
+        });
         if (controller.signal.aborted) return;
         objectUrl = URL.createObjectURL(blob);
+        setStoredMediaMetadata({ ...metadata, mimeType: contentType || metadata.mimeType, sizeBytes: blob.size });
         setSelectedStoredMediaUrl(objectUrl);
       })
       .catch(() => {
@@ -1875,6 +1880,15 @@ export default function AppTemplatesPage() {
                       </div>
                     ) : null}
                   </div>
+                  {selectedItem.headerType !== "NONE" ? (
+                    <TemplateMediaInspectionPanel
+                      kind={selectedItem.headerType}
+                      url={selectedStoredMediaUrl}
+                      metadata={storedMediaMetadata}
+                      loading={storedMediaLoading}
+                      error={storedMediaError}
+                    />
+                  ) : null}
                   <TemplateWhatsappPreview
                     body={selectedItem.content}
                     variableExamples={selectedVariableDetails}
@@ -1971,7 +1985,7 @@ export default function AppTemplatesPage() {
                         <select
                           value={form.headerType}
                           onChange={(event) => {
-                            mediaInspectionGenerationRef.current += 1;
+                            mediaInspectionCoordinatorRef.current.cancel();
                             setMediaInspecting(false);
                             setMediaMetadata(null);
                             setForm((current) => ({
@@ -2001,6 +2015,16 @@ export default function AppTemplatesPage() {
                       ) : null}
                     </div>
                     {form.headerType !== "NONE" ? <div className="mt-3"><TemplateMediaRequirements kind={form.headerType} /></div> : null}
+                    {form.headerType !== "NONE" && (mediaPreviewUrl || mediaInspecting || formError) ? (
+                      <TemplateMediaInspectionPanel
+                        kind={form.headerType}
+                        url={mediaPreviewUrl}
+                        metadata={mediaMetadata}
+                        loading={mediaInspecting}
+                        error={!mediaInspecting && !form.mediaFile ? formError : null}
+                        className="mt-3"
+                      />
+                    ) : null}
                   </section>
                   <section className="rounded-lg border border-white/10 bg-white/5 p-4">
                     <p className="text-xs font-semibold uppercase text-re7-sky">3. Mensagem</p>
@@ -2078,7 +2102,6 @@ export default function AppTemplatesPage() {
                         templateName={form.name || "Nova solicitação"}
                         headerType={form.headerType}
                         mediaPreviewUrl={mediaPreviewUrl}
-                        mediaMetadata={mediaMetadata}
                         emptyText="A prévia aparecerá conforme você preencher a mensagem e os exemplos das variáveis."
                       />
                     </div>

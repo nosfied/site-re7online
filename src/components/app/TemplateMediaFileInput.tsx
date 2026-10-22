@@ -1,6 +1,6 @@
 "use client";
 
-import { TemplateMediaKind } from "@/lib/templateMediaUx";
+import { takeTemplateMediaFileAndReset, TemplateMediaKind } from "@/lib/templateMediaUx";
 
 export default function TemplateMediaFileInput({ kind, fileName, disabled = false, onSelect }: {
   kind: TemplateMediaKind;
@@ -13,7 +13,7 @@ export default function TemplateMediaFileInput({ kind, fileName, disabled = fals
       <input
         type="file"
         accept={kind === "IMAGE" ? "image/jpeg,image/png" : "video/mp4,video/3gpp"}
-        onChange={(event) => onSelect(event.target.files?.[0] ?? null)}
+        onChange={(event) => onSelect(takeTemplateMediaFileAndReset(event.currentTarget))}
         disabled={disabled}
         className="sr-only"
       />

@@ -2,7 +2,7 @@
 
 import { TemplateMediaKind, TemplateMediaMetadata, formatTemplateMediaBytes } from "@/lib/templateMediaUx";
 
-export default function TemplateMediaPreview({ kind, url, metadata, loading = false, error = null, className = "" }: {
+export default function TemplateMediaInspectionPanel({ kind, url, metadata, loading = false, error = null, className = "" }: {
   kind: TemplateMediaKind;
   url: string | null;
   metadata?: TemplateMediaMetadata | null;
@@ -28,19 +28,15 @@ export default function TemplateMediaPreview({ kind, url, metadata, loading = fa
       </div>
       {metadata ? (
         <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-white/65 sm:grid-cols-3">
-          <div><dt className="font-semibold text-white/80">Arquivo</dt><dd className="break-all">{metadata.fileName}</dd></div>
-          <div><dt className="font-semibold text-white/80">Tipo</dt><dd>{metadata.mimeType}</dd></div>
-          <div><dt className="font-semibold text-white/80">Tamanho</dt><dd>{formatTemplateMediaBytes(metadata.sizeBytes)}</dd></div>
+          {metadata.fileName ? <div><dt className="font-semibold text-white/80">Arquivo</dt><dd className="break-all">{metadata.fileName}</dd></div> : null}
+          {metadata.mimeType ? <div><dt className="font-semibold text-white/80">Tipo</dt><dd>{metadata.mimeType}</dd></div> : null}
+          {metadata.sizeBytes !== null ? <div><dt className="font-semibold text-white/80">Tamanho</dt><dd>{formatTemplateMediaBytes(metadata.sizeBytes)}</dd></div> : null}
           <div><dt className="font-semibold text-white/80">Dimensões</dt><dd>{metadata.width} × {metadata.height} px</dd></div>
           <div><dt className="font-semibold text-white/80">Proporção</dt><dd>{metadata.ratio ? `${metadata.ratio.toFixed(2)}:1` : "Indisponível"}</dd></div>
           {metadata.durationSeconds !== null ? <div><dt className="font-semibold text-white/80">Duração</dt><dd>{metadata.durationSeconds.toFixed(1)} s</dd></div> : null}
         </dl>
       ) : null}
       {metadata?.ratioWarning ? <p className="text-xs text-amber-200">A proporção está distante da recomendação de 1,91:1. O arquivo é aceito, mas pode sofrer maior adaptação visual.</p> : null}
-      <details className="text-xs text-white/60">
-        <summary className="cursor-pointer font-semibold text-white/75">Simulação visual no WhatsApp</summary>
-        <p className="mt-1">A simulação é ilustrativa. O WhatsApp pode adaptar ou recortar a mídia conforme o dispositivo; confira acima o arquivo completo.</p>
-      </details>
     </div>
   );
 }

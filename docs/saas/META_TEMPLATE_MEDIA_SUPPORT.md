@@ -87,9 +87,10 @@ A referência primária usada foi a coleção oficial da Meta para
 [upload dos bytes](https://www.postman.com/meta/whatsapp-business-platform/request/13382743-871ea332-a6a4-4ad0-800a-0be9796b1933) e
 [envio de template com mídia](https://www.postman.com/meta/whatsapp-business-platform/request/2qbotrb/send-message-template-media).
 
-Como a documentação publicada usa MB e não comprova unidade binária, frontend e
-backend adotam os valores decimais acima. O limite exato é aceito; um byte acima é
-negado. A interface separa requisitos obrigatórios de recomendação visual e usa
+Frontend e backend adotam uma interpretação decimal conservadora dos limites
+publicados de 5 MB e 16 MB. A fonte não explicita a quantidade de bytes. O limite
+decimal exato é aceito; um byte acima é negado. A interface separa requisitos
+obrigatórios de recomendação visual e usa
 1,91:1 (1200 × 628 px apenas como exemplo), sem transformar largura, altura ou
 proporção em bloqueio.
 

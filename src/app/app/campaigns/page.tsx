@@ -6,10 +6,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import ScreenProcessingOverlay, { useScreenProcessingOperations } from "@/components/app/ScreenProcessingOverlay";
-import TemplateMediaPreview from "@/components/app/TemplateMediaPreview";
+import TemplateMediaInspectionPanel from "@/components/app/TemplateMediaInspectionPanel";
+import TemplateMessageComposition from "@/components/app/TemplateMessageComposition";
 import TemplateMediaRequirements from "@/components/app/TemplateMediaRequirements";
 import TemplateMediaFileInput from "@/components/app/TemplateMediaFileInput";
-import { inspectTemplateMediaFile, TemplateMediaMetadata } from "@/lib/templateMediaUx";
+import { inspectTemplateMediaBlob, inspectTemplateMediaFile, TemplateMediaInspectionCoordinator, TemplateMediaMetadata } from "@/lib/templateMediaUx";
 import CampaignBatchPanel from "@/components/app/CampaignBatchPanel";
 import {
   buildCampaignReuseState,
@@ -419,13 +420,20 @@ function buildTemplatePreview(content: string, values: string[]) {
   );
 }
 
-function CampaignMessagePreview({ content, detail }: { content: string | null; detail: string }) {
+function CampaignMessagePreview({ content, detail, headerType, mediaUrl, mediaLoading, mediaError }: {
+  content: string | null;
+  detail: string;
+  headerType: "NONE" | "IMAGE" | "VIDEO";
+  mediaUrl: string | null;
+  mediaLoading: boolean;
+  mediaError: string | null;
+}) {
   return (
     <div className="rounded-md border border-white/10 bg-re7-navy/50 p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Como a mensagem chegará</p>
       {content ? (
-        <div className="mt-2 max-w-2xl rounded-md border border-emerald-300/15 bg-emerald-950/25 px-3 py-2.5 text-sm text-white/85 shadow-sm">
-          <p className="whitespace-pre-wrap">{content}</p>
+        <div className="mt-2 max-w-2xl">
+          <TemplateMessageComposition body={content} headerType={headerType} mediaUrl={mediaUrl} mediaLoading={mediaLoading} mediaError={mediaError} emptyText="Selecione um modelo aprovado para visualizar a mensagem." />
         </div>
       ) : (
         <p className="mt-2 text-sm text-white/55">Selecione um modelo aprovado para visualizar a mensagem.</p>
@@ -851,6 +859,7 @@ export default function AppCampaignsPage() {
   const [templateMediaPreviewError, setTemplateMediaPreviewError] = useState<string | null>(null);
   const [templateMediaPreviewUrl, setTemplateMediaPreviewUrl] = useState<string | null>(null);
   const templateMediaUploadGenerationRef = useRef(0);
+  const templateMediaInspectionCoordinatorRef = useRef(new TemplateMediaInspectionCoordinator());
   const [cancelling, setCancelling] = useState(false);
   const [discardingDraft, setDiscardingDraft] = useState(false);
   const [schedulingDraft, setSchedulingDraft] = useState(false);
@@ -1110,15 +1119,22 @@ export default function AppCampaignsPage() {
     let objectUrl: string | null = null;
     setTemplateMediaPreviewUrl(null);
     setTemplateMediaPreviewError(null);
+    setTemplateMediaMetadata(null);
     setLoadingTemplateMediaPreview(false);
     if (!session || !form.templateMediaAssetId || selectedTemplateHeaderType === "NONE") {
       return () => controller.abort();
     }
     setLoadingTemplateMediaPreview(true);
     fetchAppTemplateMedia(session, form.templateMediaAssetId, { signal: controller.signal })
-      .then(({ blob }) => {
+      .then(async ({ blob, contentType, fileName }) => {
+        if (controller.signal.aborted) return;
+        const metadata = await inspectTemplateMediaBlob(blob, selectedTemplateHeaderType, {
+          signal: controller.signal,
+          fileName: fileName || form.templateMediaFileName || null,
+        });
         if (controller.signal.aborted) return;
         objectUrl = URL.createObjectURL(blob);
+        setTemplateMediaMetadata({ ...metadata, mimeType: contentType || metadata.mimeType, sizeBytes: blob.size });
         setTemplateMediaPreviewUrl(objectUrl);
       })
       .catch(() => {
@@ -1132,10 +1148,13 @@ export default function AppCampaignsPage() {
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [form.templateMediaAssetId, selectedTemplateHeaderType, session]);
+  }, [form.templateMediaAssetId, form.templateMediaFileName, selectedTemplateHeaderType, session]);
+
+  useEffect(() => () => templateMediaInspectionCoordinatorRef.current.cancel(), []);
 
   const handleCampaignMediaFile = async (file: File | null) => {
     const generation = ++templateMediaUploadGenerationRef.current;
+    const inspection = templateMediaInspectionCoordinatorRef.current.begin();
     const previousAssetId = form.templateMediaAssetId;
     if (!session || !file || selectedTemplateHeaderType === "NONE") {
       setForm((current) => ({ ...current, templateMediaAssetId: "", templateMediaFileName: "" }));
@@ -1145,10 +1164,11 @@ export default function AppCampaignsPage() {
     setFormError(null);
     try {
       setInspectingTemplateMedia(true);
-      const metadata = await inspectTemplateMediaFile(file, selectedTemplateHeaderType);
-      if (generation !== templateMediaUploadGenerationRef.current) return;
+      const metadata = await inspectTemplateMediaFile(file, selectedTemplateHeaderType, { signal: inspection.signal });
+      if (generation !== templateMediaUploadGenerationRef.current || !templateMediaInspectionCoordinatorRef.current.isCurrent(inspection.generation)) return;
       setTemplateMediaMetadata(metadata);
       setInspectingTemplateMedia(false);
+      templateMediaInspectionCoordinatorRef.current.finish(inspection.generation);
       setUploadingTemplateMedia(true);
       const uploaded = await uploadAppTemplateMedia(session, {
         file,
@@ -1176,6 +1196,7 @@ export default function AppCampaignsPage() {
       if (generation === templateMediaUploadGenerationRef.current) {
         setInspectingTemplateMedia(false);
         setUploadingTemplateMedia(false);
+        templateMediaInspectionCoordinatorRef.current.finish(inspection.generation);
       }
     }
   };
@@ -1412,6 +1433,7 @@ export default function AppCampaignsPage() {
             value={form.templateId}
             onChange={(event) => {
               templateMediaUploadGenerationRef.current += 1;
+              templateMediaInspectionCoordinatorRef.current.cancel();
               setInspectingTemplateMedia(false);
               setUploadingTemplateMedia(false);
               void discardUnpersistedTemplateMedia(form.templateMediaAssetId);
@@ -1460,7 +1482,7 @@ export default function AppCampaignsPage() {
                 : "A mídia compatível é obrigatória e fica vinculada ao snapshot da campanha."}
           </p>
           {(templateMediaPreviewUrl || loadingTemplateMediaPreview || templateMediaPreviewError) ? (
-            <TemplateMediaPreview
+            <TemplateMediaInspectionPanel
               kind={selectedTemplateHeaderType}
               url={templateMediaPreviewUrl}
               metadata={templateMediaMetadata}
@@ -1474,6 +1496,7 @@ export default function AppCampaignsPage() {
               type="button"
               onClick={() => {
                 templateMediaUploadGenerationRef.current += 1;
+                templateMediaInspectionCoordinatorRef.current.cancel();
                 setInspectingTemplateMedia(false);
                 setUploadingTemplateMedia(false);
                 const assetId = form.templateMediaAssetId;
@@ -3551,6 +3574,10 @@ export default function AppCampaignsPage() {
           <CampaignMessagePreview
             content={templatePreview}
             detail="Prévia ilustrativa. Os valores finais serão calculados para cada contato selecionado no CRM."
+            headerType={selectedTemplateHeaderType}
+            mediaUrl={templateMediaPreviewUrl}
+            mediaLoading={loadingTemplateMediaPreview}
+            mediaError={templateMediaPreviewError}
           />
           </div>
           <div className="mt-3 grid gap-3 rounded-md border border-white/15 bg-white/[0.045] p-3">
@@ -4024,6 +4051,10 @@ export default function AppCampaignsPage() {
                     ? "Exemplo preenchido com os dados da primeira linha válida da pré-visualização."
                     : "As variáveis serão preenchidas pelas colunas mapeadas após a pré-visualização do arquivo."
                 }
+                headerType={selectedTemplateHeaderType}
+                mediaUrl={templateMediaPreviewUrl}
+                mediaLoading={loadingTemplateMediaPreview}
+                mediaError={templateMediaPreviewError}
               />
             </div>
             {csvPreviewError ? (
@@ -4326,6 +4357,10 @@ export default function AppCampaignsPage() {
                   <CampaignMessagePreview
                     content={manualTemplatePreview}
                     detail="Prévia com os valores informados para o envio imediato manual."
+                    headerType={selectedTemplateHeaderType}
+                    mediaUrl={templateMediaPreviewUrl}
+                    mediaLoading={loadingTemplateMediaPreview}
+                    mediaError={templateMediaPreviewError}
                   />
                 </div>
                 <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">

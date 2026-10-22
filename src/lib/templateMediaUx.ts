@@ -5,9 +5,9 @@ export const TEMPLATE_MEDIA_RECOMMENDED_RATIO = 1.91;
 export type TemplateMediaKind = "IMAGE" | "VIDEO";
 
 export type TemplateMediaMetadata = {
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
+  fileName: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
   width: number;
   height: number;
   durationSeconds: number | null;
@@ -53,12 +53,12 @@ export function validateTemplateMediaFile(file: Pick<File, "name" | "type" | "si
   return matchingExtension ? null : "O tipo informado pelo navegador não corresponde à extensão do arquivo.";
 }
 
-export function buildTemplateMediaMetadata(file: File, width: number, height: number, durationSeconds: number | null): TemplateMediaMetadata {
+export function buildTemplateMediaMetadata(file: Pick<Blob, "type" | "size"> & { name?: string | null }, width: number, height: number, durationSeconds: number | null): TemplateMediaMetadata {
   const ratio = width > 0 && height > 0 ? width / height : 0;
   return {
-    fileName: sanitizeTemplateMediaFileName(file.name),
-    mimeType: file.type,
-    sizeBytes: file.size,
+    fileName: file.name ? sanitizeTemplateMediaFileName(file.name) : null,
+    mimeType: file.type || null,
+    sizeBytes: Number.isFinite(file.size) ? file.size : null,
     width,
     height,
     durationSeconds,
@@ -67,23 +67,133 @@ export function buildTemplateMediaMetadata(file: File, width: number, height: nu
   };
 }
 
-export function inspectTemplateMediaFile(file: File, kind: TemplateMediaKind): Promise<TemplateMediaMetadata> {
+type InspectionElement = {
+  src: string;
+  onload?: ((this: GlobalEventHandlers, event: Event) => unknown) | null;
+  onerror: ((this: GlobalEventHandlers, event: Event) => unknown) | null;
+  onloadedmetadata?: ((this: GlobalEventHandlers, event: Event) => unknown) | null;
+  naturalWidth?: number;
+  naturalHeight?: number;
+  videoWidth?: number;
+  videoHeight?: number;
+  duration?: number;
+  preload?: string;
+  pause?: () => void;
+  removeAttribute?: (name: string) => void;
+  load?: () => void;
+};
+
+export type TemplateMediaInspectionSurface = {
+  createObjectURL: (blob: Blob) => string;
+  revokeObjectURL: (url: string) => void;
+  createImage: () => InspectionElement;
+  createVideo: () => InspectionElement;
+  setTimeout: typeof globalThis.setTimeout;
+  clearTimeout: typeof globalThis.clearTimeout;
+};
+
+const browserInspectionSurface = (): TemplateMediaInspectionSurface => ({
+  createObjectURL: (blob) => URL.createObjectURL(blob),
+  revokeObjectURL: (url) => URL.revokeObjectURL(url),
+  createImage: () => new Image(),
+  createVideo: () => document.createElement("video"),
+  setTimeout: globalThis.setTimeout.bind(globalThis),
+  clearTimeout: globalThis.clearTimeout.bind(globalThis),
+});
+
+export class TemplateMediaInspectionCoordinator {
+  private controller: AbortController | null = null;
+  private generation = 0;
+
+  begin() {
+    this.cancel();
+    this.controller = new AbortController();
+    const generation = ++this.generation;
+    return { signal: this.controller.signal, generation };
+  }
+
+  isCurrent(generation: number) {
+    return generation === this.generation && !this.controller?.signal.aborted;
+  }
+
+  finish(generation: number) {
+    if (generation === this.generation) this.controller = null;
+  }
+
+  cancel() {
+    this.controller?.abort();
+    this.controller = null;
+    this.generation += 1;
+  }
+}
+
+export function takeTemplateMediaFileAndReset(input: Pick<HTMLInputElement, "files" | "value">) {
+  const selected = input.files?.[0] ?? null;
+  input.value = "";
+  return selected;
+}
+
+export function inspectTemplateMediaBlob(
+  blob: Blob,
+  kind: TemplateMediaKind,
+  options: {
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    fileName?: string | null;
+    surface?: TemplateMediaInspectionSurface;
+  } = {}
+): Promise<TemplateMediaMetadata> {
+  const surface = options.surface ?? browserInspectionSurface();
+  const timeoutMs = options.timeoutMs ?? 10_000;
+  if (options.signal?.aborted) return Promise.reject(new DOMException("Inspeção cancelada.", "AbortError"));
+  const objectUrl = surface.createObjectURL(blob);
+  const source = { type: blob.type, size: blob.size, name: options.fileName ?? null };
+  return new Promise((resolve, reject) => {
+    const element = kind === "IMAGE" ? surface.createImage() : surface.createVideo();
+    let settled = false;
+    const cleanup = () => {
+      element.onload = null;
+      element.onerror = null;
+      element.onloadedmetadata = null;
+      element.pause?.();
+      element.removeAttribute?.("src");
+      element.src = "";
+      element.load?.();
+      options.signal?.removeEventListener("abort", onAbort);
+      surface.clearTimeout(timeout);
+      surface.revokeObjectURL(objectUrl);
+    };
+    const settle = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    };
+    const onAbort = () => settle(() => reject(new DOMException("Inspeção cancelada.", "AbortError")));
+    const timeout = surface.setTimeout(
+      () => settle(() => reject(new Error("A inspeção da mídia excedeu o tempo limite."))),
+      timeoutMs
+    );
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    element.onerror = () => settle(() => reject(new Error(kind === "IMAGE" ? "Não foi possível ler os metadados da imagem." : "Não foi possível ler os metadados do vídeo.")));
+    if (kind === "IMAGE") {
+      element.onload = () => {
+        const metadata = buildTemplateMediaMetadata(source, element.naturalWidth ?? 0, element.naturalHeight ?? 0, null);
+        settle(() => resolve(metadata));
+      };
+    } else {
+      element.preload = "metadata";
+      element.onloadedmetadata = () => {
+        const metadata = buildTemplateMediaMetadata(source, element.videoWidth ?? 0, element.videoHeight ?? 0, Number.isFinite(element.duration) ? element.duration ?? null : null);
+        settle(() => resolve(metadata));
+      };
+    }
+    element.src = objectUrl;
+  });
+}
+
+export function inspectTemplateMediaFile(file: File, kind: TemplateMediaKind, options: { signal?: AbortSignal; timeoutMs?: number; surface?: TemplateMediaInspectionSurface } = {}): Promise<TemplateMediaMetadata> {
   const error = validateTemplateMediaFile(file, kind);
   if (error) return Promise.reject(new Error(error));
-  const objectUrl = URL.createObjectURL(file);
-  return new Promise((resolve, reject) => {
-    const cleanup = () => URL.revokeObjectURL(objectUrl);
-    if (kind === "IMAGE") {
-      const image = new Image();
-      image.onload = () => { const result = buildTemplateMediaMetadata(file, image.naturalWidth, image.naturalHeight, null); cleanup(); resolve(result); };
-      image.onerror = () => { cleanup(); reject(new Error("Não foi possível ler os metadados da imagem.")); };
-      image.src = objectUrl;
-      return;
-    }
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    video.onloadedmetadata = () => { const result = buildTemplateMediaMetadata(file, video.videoWidth, video.videoHeight, Number.isFinite(video.duration) ? video.duration : null); cleanup(); resolve(result); };
-    video.onerror = () => { cleanup(); reject(new Error("Não foi possível ler os metadados do vídeo.")); };
-    video.src = objectUrl;
-  });
+  return inspectTemplateMediaBlob(file, kind, { ...options, fileName: file.name });
 }

@@ -225,6 +225,16 @@ test("campaign media is preserved across every composer path without automatic s
   assert.ok(!pageSource.includes('fetch("/agent-api/app/campaigns/import"'));
 });
 
+test("CRM CSV and manual previews compose the selected media header with the filled body", () => {
+  assert.equal(pageSource.match(/<CampaignMessagePreview/g)?.length ?? 0, 3);
+  for (const prop of ["headerType={selectedTemplateHeaderType}", "mediaUrl={templateMediaPreviewUrl}", "mediaLoading={loadingTemplateMediaPreview}", "mediaError={templateMediaPreviewError}"]) {
+    assert.equal(pageSource.split(prop).length - 1, 3, `missing integrated preview prop ${prop}`);
+  }
+  assert.ok(pageSource.includes("content={templatePreview}"));
+  assert.ok(pageSource.includes("content={csvTemplatePreview}"));
+  assert.ok(pageSource.includes("content={manualTemplatePreview}"));
+});
+
 test("campaign selects use theme-aware colors in light and dark modes", () => {
   assert.ok(pageSource.includes('const DARK_SELECT_CLASS =\n  "theme-select'));
   assert.ok(pageSource.includes('const DARK_RESULT_SELECT_CLASS =\n  "theme-select'));
