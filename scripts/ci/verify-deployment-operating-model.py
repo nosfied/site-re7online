@@ -26,6 +26,8 @@ for marker in (
     "scripts/deploy-normal-release.sh",
     "pipeline experimental da PR #190",
     "cluster_mode",
+    "Metadados de introspecção do PM2 nunca são uma definição executável",
+    "pm2-definition-control.py",
 ):
     require(marker in model, f"operating model marker {marker}")
 require("não utilizáveis" in model, "obsolete mechanisms")

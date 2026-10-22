@@ -625,6 +625,23 @@ npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --m
 
 Nao executar carga na sprint de bootstrap. Primeiro validar status, features e quota.
 
+## Definições PM2 antes da janela
+
+- Usar o contrato versionado `scripts/pm2-definition-control.py`.
+- Definir estrutura PM2 explicitamente; nunca reutilizar `pm2_env`, `pm2_env.env`,
+  dump, `jlist` ou `/proc/<pid>/environ` como descritor executável.
+- Carregar ambiente somente da fonte privada canônica e por allowlist de nomes.
+  Conferir que nenhuma chave estrutural, `pm_*`, `PM2_HOME` ou
+  `NODE_APP_INSTANCE` entrou em `env`.
+- Construir candidato e retorno em arquivos separados, regulares e `0600`. O retorno
+  deve vir da última definição autenticada e comprovada, não do candidato.
+- Antes de tocar no PM2 produtivo, iniciar candidato e retorno com `PM2_HOME`
+  temporário e portas alternativas. Comparar definição pretendida, `jlist`, processo,
+  socket, health, BUILD_ID e estado após serialização/releitura.
+- Para frontend, exigir `fork_mode`, uma instância e `args` estrutural
+  `start -p <porta>`. Presença de `env.args` é negativa nominal.
+- Recusar a janela se o ensaio isolado não restaurar o retorno e seu socket/health.
+
 ## Pos-Deploy
 
 Verificar:

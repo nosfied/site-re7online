@@ -54,6 +54,32 @@ O registro sanitizado da promoção CRM/CSV é conferido por
 `scripts/ci/verify-deployment-record.py`. O validador não acessa produção e não
 executa PM2, rede, banco ou importação.
 
+## `pm2-definition-control.py`
+
+Constrói e valida descritores PM2 a partir de um request privado versionado `0600`.
+Campos estruturais ficam fora de `env`; o ambiente contém somente nomes allowlisted.
+O comando nunca imprime valores de ambiente e nega colisões normalizadas com campos
+PM2, inclusive `args`, `script`, `cwd`, `pm_*`, `PM2_HOME` e `NODE_APP_INSTANCE`.
+
+```bash
+python3 scripts/pm2-definition-control.py build \
+  --request /custodia/privada/frontend-candidate.request.private.json \
+  --output /custodia/privada/frontend-candidate.pm2.private.json
+python3 scripts/pm2-definition-control.py validate \
+  --request /custodia/privada/frontend-candidate.request.private.json \
+  --definition /custodia/privada/frontend-candidate.pm2.private.json
+```
+
+O retorno usa outro request e `source.kind=authenticated-proven-definition`. Não se
+gera retorno a partir do candidato. Antes de uma futura janela, executar a prova com
+PM2 pinado em `PM2_HOME` temporário:
+
+```bash
+python3 scripts/ci/verify-pm2-definition-isolated.py --pm2 /caminho/pinado/pm2
+```
+
+Essa prova local não autoriza promoção e não substitui os gates produtivos.
+
 ## `operational-retention-report.py`
 
 Rotina LOCAL PARA REVISÃO vinculada ao [runbook canônico](../docs/RUNBOOK_WHATSAPP_AGENT.md#retenção-operacional-permanente). Não instalada na VPS/cron. Não tem apply, subprocess, SQL, provider, PM2 ou exclusão. Inventaria metadados de raízes locais explícitas, sem ler conteúdo nem seguir symlinks; conta blocos únicos por device/inode, registra hardlinks externos e limites. Tamanho igual sugere revisão, não igualdade de hash ou autorização de retirada. Reflinks e snapshots exigem medição própria.

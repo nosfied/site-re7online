@@ -13,6 +13,11 @@ em `converta.re7online.com`, são servidos pela VPS via Nginx e PM2.
 - worker: release própria e fora do deploy quando não impactado;
 - build: externo, Linux x86_64, Node v20.20.0/npm 10.8.2;
 - ordem: API, frontend, smoke GET-only, aceite aplicável, um `pm2 save`.
+- definições PM2: estrutura explícita e ambiente privado allowlisted pelo contrato
+  versionado; introspecção (`jlist`, dump, `pm2_env` ou `/proc/.../environ`) nunca é
+  definição executável;
+- candidato e retorno: definições independentes, provadas antes da janela em daemon
+  PM2 isolado, portas alternativas e comparação de arquivo, carga e processo real.
 
 A instrução completa e única está em
 [DEPLOYMENT_OPERATING_MODEL.md](saas/DEPLOYMENT_OPERATING_MODEL.md). O estado vivo

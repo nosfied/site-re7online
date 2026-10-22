@@ -42,6 +42,35 @@ não autorizam repetição.
    aplicável. Conferir dump regular, modo real `0600` e SHA-256.
 9. Criar o marker `DEPLOYED` apenas depois da validação do dump.
 
+## Definições PM2
+
+**Metadados de introspecção do PM2 nunca são uma definição executável.** Saídas de
+`jlist`, dumps, `pm2_env`, `pm2_env.env` e `/proc/<pid>/environ` servem somente para
+observar o estado. Elas não podem ser espalhadas em um descritor de aplicação.
+
+Toda definição nova usa o contrato versionado de
+[`scripts/pm2-definition-control.py`](../../scripts/pm2-definition-control.py):
+
+- `name`, `script`, `args`, `cwd`, `interpreter`, `exec_mode`, `instances`,
+  `namespace`, políticas de restart/ready, `node_args` e logs são estrutura
+  explícita;
+- o ambiente vem da configuração privada canônica e contém somente nomes
+  allowlisted; seus valores nunca entram em relatório ou stdout;
+- chaves estruturais, internas `pm_*`, `PM2_HOME` e `NODE_APP_INSTANCE` são negadas
+  no namespace de ambiente após normalização segura de nome;
+- candidato e retorno são construídos e validados separadamente. O retorno parte da
+  última definição autenticada e comprovada, nunca do candidato nem de introspecção;
+- antes da janela, ambos precisam iniciar em `PM2_HOME` isolado e portas alternativas.
+  A prova compara o arquivo pretendido, o descritor carregado, o processo real,
+  socket/health, BUILD_ID, serialização e restauração do retorno;
+- somente definições privadas regulares `0600`, criadas em destinos novos, podem ser
+  consumidas.
+
+Para o frontend, `fork_mode`, uma instância, launcher explícito e argumentos
+estruturais `start -p <porta>` são obrigatórios. `env.args` é sempre uma colisão e
+nega a preparação antes de qualquer processo. O scope `production` fixa a porta
+`3000`; o scope `isolated-test` nega as portas produtivas `3000` e `3001`.
+
 O socket é válido quando pertence ao PID PM2 ou a um descendente comprovado por
 uma cadeia contínua de PPIDs. Um socket pertencente ao daemon PM2 não comprova a
 identidade do frontend. Igualdade direta entre PID PM2 e socket também não pode ser

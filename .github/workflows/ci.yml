@@ -44,6 +44,17 @@ jobs:
         run: python3 scripts/ci/verify-normal-release.py
       - name: Validate deploy impact classifier
         run: bash scripts/test-deploy-impact-matrix.sh
+      - name: Validate PM2 definition namespace boundary
+        run: python3 -m unittest -v scripts/ci/test-pm2-definition-control.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.0
+      - name: Install pinned PM2 for isolated definition proof
+        run: npm install --prefix "$RUNNER_TEMP/re7-pm2-definition-tools" --no-save --ignore-scripts pm2@6.0.14
+      - name: Prove candidate and rollback in isolated PM2
+        run: >-
+          python3 scripts/ci/verify-pm2-definition-isolated.py
+          --pm2 "$RUNNER_TEMP/re7-pm2-definition-tools/node_modules/.bin/pm2"
 
   frontend:
     name: Frontend build and lint
