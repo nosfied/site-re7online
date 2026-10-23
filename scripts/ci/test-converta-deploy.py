@@ -34,6 +34,21 @@ def put(path: Path, value: Any, mode: int = 0o600) -> None:
     path.chmod(mode)
 
 
+def release_index(root: Path) -> dict[str, Any]:
+    entries: list[dict[str, Any]] = []
+    for runtime in deploy.RUNTIME_DIR.values():
+        base = root / runtime
+        for path in [base, *sorted(base.rglob("*"))]:
+            info = path.lstat()
+            item: dict[str, Any] = {"path": path.relative_to(root).as_posix(),
+                                    "mode": stat.S_IMODE(info.st_mode)}
+            if path.is_symlink(): item.update(type="symlink", target=os.readlink(path))
+            elif path.is_dir(): item["type"] = "directory"
+            else: item.update(type="file", size=info.st_size, sha256=sha(path))
+            entries.append(item)
+    return {"schemaVersion": 1, "scope": list(deploy.RUNTIME_DIR.values()), "entries": entries}
+
+
 class FakeHost(deploy.Host):
     def __init__(self, control_plane: str):
         self.control_plane = control_plane
@@ -46,6 +61,7 @@ class FakeHost(deploy.Host):
         self.pid = 100
         self.dump: Path | None = None
         self.external_calls = 0
+        self.save_calls = 0
 
     def run(self, command: list[str], *, timeout: float = 40) -> subprocess.CompletedProcess[str]:
         if command[:4] == ["git", "-C", str(ROOT), "rev-parse"]:
@@ -75,11 +91,14 @@ class FakeHost(deploy.Host):
             self.rows[definition["name"]] = {
                 "name": definition["name"], "pid": self.pid,
                 "pm2_env": {"status": "online", "pm_cwd": definition["cwd"],
-                            "pm_exec_path": definition["script"], "restart_time": 0},
+                            "pm_exec_path": definition["script"], "restart_time": 0,
+                            **definition},
             }
         elif args == ["save"]:
             assert self.dump is not None
-            self.dump.write_text("saved-once\n"); self.dump.chmod(0o600)
+            self.save_calls += 1
+            self.dump.write_text(json.dumps(list(self.rows.values()), sort_keys=True) + "\n")
+            self.dump.chmod(0o600)
             self.events.append("dump:saved")
 
     def control(self, root: Path, args: list[str]) -> dict[str, Any]:
@@ -103,8 +122,15 @@ class FakeHost(deploy.Host):
 
 
 class FixtureDriver(deploy.Driver):
+    failpoints: set[str]
+
     def _ticks(self, pid: int) -> int:
         return pid * 100
+
+    def _failpoint(self, name: str) -> None:
+        if name in self.failpoints:
+            self.failpoints.remove(name)
+            raise deploy.Denied(f"injected:{name}")
 
 
 class DeployFixture(unittest.TestCase):
@@ -124,7 +150,7 @@ class DeployFixture(unittest.TestCase):
         self.pm2 = self.base / "pm2"
         self.pm2.write_text("fixture\n"); self.pm2.chmod(0o700)
         self.dump = self.base / "dump.pm2"
-        self.dump.write_text("original\n"); self.dump.chmod(0o600)
+        self.dump.write_text("[]\n"); self.dump.chmod(0o600)
         self.lock = self.base / "deploy.lock"
         self.stable = {"api": self.current / "api", "frontend": self.current / "frontend"}
         self.host = FakeHost(self.control_plane); self.host.dump = self.dump
@@ -137,16 +163,19 @@ class DeployFixture(unittest.TestCase):
         for path in self.config.iterdir():
             if path.name != "manifest.private.json": files[path.name] = sha(path)
         put(self.config / "manifest.private.json", {"schemaVersion": 1, "files": files})
+        self.config_manifest_sha = sha(self.config / "manifest.private.json")
         self.host.rows = {
             "api": self._row("api", 11), "frontend": self._row("frontend", 12),
             "re7-whatsapp-web-worker": self._row("re7-whatsapp-web-worker", 13),
         }
         self.inputs = deploy.Inputs(self.candidate, self.target, self.control_plane,
-                                    deploy.COMPONENTS, self.config, self.transaction)
+                                    deploy.COMPONENTS, self.config, self.transaction,
+                                    self.config_manifest_sha)
         self.driver = FixtureDriver(self.inputs, host=self.host, repo=ROOT,
                                     releases=self.releases, stable=self.stable,
                                     lock=self.lock, dump=self.dump, pm2=self.pm2,
                                     clock=lambda: 1234567890.0)
+        self.driver.failpoints = set()
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -164,8 +193,9 @@ class DeployFixture(unittest.TestCase):
             (runtime / ".next/BUILD_ID").write_text(build_id + "\n")
             (runtime / ".next/static/chunks").mkdir(parents=True, exist_ok=True)
             (runtime / ".next/static/chunks/app.js").write_text("asset\n")
-        put(root / "manifest.json", {"targetCommit": target, "components": ["api", "frontend"]}, 0o444)
-        (root / "index.sha256").write_text("index\n"); (root / "index.sha256").chmod(0o444)
+        put(root / "index.sha256", release_index(root), 0o444)
+        put(root / "manifest.json", {"targetCommit": target, "components": ["api", "frontend"],
+                                     "indexSha256": sha(root / "index.sha256")}, 0o444)
         return sha(root / "manifest.json")
 
     def _definition(self, component: str) -> dict[str, Any]:
@@ -211,9 +241,10 @@ class DeployFixture(unittest.TestCase):
             cwd, script = definition["cwd"], definition["script"]
         else:
             cwd, script = str(self.base / "worker"), str(self.base / "worker/index.js")
-        return {"name": name, "pid": pid,
-                "pm2_env": {"status": "online", "pm_cwd": cwd,
-                            "pm_exec_path": script, "restart_time": 0}}
+        env: dict[str, Any] = {"status": "online", "pm_cwd": cwd,
+                               "pm_exec_path": script, "restart_time": 0}
+        if name in self.stable: env.update(self._definition(name)["apps"][0])
+        return {"name": name, "pid": pid, "pm2_env": env}
 
     def acceptance(self) -> None:
         self.driver.acceptance.write_text("ACEITE TÉCNICO PASS\n")
@@ -278,7 +309,7 @@ class DriverTests(DeployFixture):
         self.driver.preflight(); self.driver.activate(); self.acceptance(); self.driver.finalize()
         with self.assertRaises(deploy.Denied): self.driver.finalize()
         other = deploy.Inputs("other-release", self.target, self.control_plane, deploy.COMPONENTS,
-                              self.config, self.transaction)
+                              self.config, self.transaction, self.config_manifest_sha)
         with self.assertRaises(deploy.Denied): FixtureDriver(other, host=self.host, repo=ROOT,
             releases=self.releases, stable=self.stable, lock=self.lock, dump=self.dump, pm2=self.pm2).status()
         self.assertEqual(self.host.events.count("pm2:save"), 1)
@@ -326,6 +357,113 @@ class DriverTests(DeployFixture):
         self.assertNotIn("cookie", text.lower()); self.assertEqual(self.host.external_calls, 0)
         self.assertFalse(any(event.startswith("listen:") for event in self.host.events))
         self.assertEqual(stat.S_IMODE(self.driver.journal.stat().st_mode), 0o600)
+
+    def test_external_manifest_digest_authenticates_config_and_binding(self) -> None:
+        self.driver.preflight()
+        source = self.config / "api-candidate.source.private.json"
+        source.write_text(source.read_text() + " ")
+        manifest = read_json_fixture(self.config / "manifest.private.json")
+        manifest["files"][source.name] = sha(source)
+        put(self.config / "manifest.private.json", manifest)
+        with self.assertRaisesRegex(deploy.Denied, "config_manifest_sha256_mismatch"):
+            self.driver.activate()
+        drift = deploy.Inputs(self.candidate, self.target, self.control_plane, deploy.COMPONENTS,
+                              self.config, self.transaction, "f" * 64)
+        with self.assertRaisesRegex(deploy.Denied, "transaction_binding"):
+            FixtureDriver(drift, host=self.host, repo=ROOT, releases=self.releases,
+                          stable=self.stable, lock=self.lock, dump=self.dump, pm2=self.pm2).status()
+
+    def test_release_index_denies_mutation_and_extra_entry(self) -> None:
+        target = self.driver.release_root / "api-runtime/dist/index.js"
+        target.write_text("changed\n")
+        with self.assertRaisesRegex(deploy.Denied, "release_index_mismatch"):
+            self.driver.preflight()
+
+    def test_release_index_denies_unindexed_entry(self) -> None:
+        (self.driver.release_root / "frontend-runtime/unexpected.txt").write_text("x")
+        with self.assertRaisesRegex(deploy.Denied, "release_index_inventory"):
+            self.driver.preflight()
+
+    def test_release_index_denies_mode_drift_and_symlink_escape(self) -> None:
+        target = self.driver.release_root / "api-runtime/dist/index.js"
+        target.chmod(0o755)
+        with self.assertRaisesRegex(deploy.Denied, "release_index_mismatch"):
+            self.driver.preflight()
+        target.unlink(); os.symlink(self.base / "outside", target)
+        (self.base / "outside").write_text("outside")
+        with self.assertRaisesRegex(deploy.Denied, "release_symlink_escape"):
+            self.driver.preflight()
+
+    def _finalize_fault(self, point: str) -> None:
+        self.driver.preflight(); self.driver.activate(); self.acceptance()
+        self.driver.failpoints.add(point)
+        with self.assertRaisesRegex(deploy.Denied, f"injected:{point}"):
+            self.driver.finalize()
+        failed = self.driver._journal_read()
+        self.assertEqual(failed["state"], "FAILED")
+        self.assertNotEqual(failed["state"], "DEPLOYED")
+        self.driver.finalize()
+        final = self.driver._journal_read()
+        self.assertEqual(final["state"], "DEPLOYED")
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertFalse(self.lock.exists())
+        self.assertTrue((self.driver.release_root / "DEPLOYED").is_file())
+        self.assertEqual(final["finalDumpSha256"], sha(self.dump))
+
+    def test_finalize_resumes_before_save(self) -> None: self._finalize_fault("before_save")
+    def test_finalize_resumes_immediately_after_save(self) -> None: self._finalize_fault("after_save")
+    def test_finalize_resumes_during_dump_validation(self) -> None: self._finalize_fault("dump_validation")
+    def test_finalize_resumes_during_marker_rename(self) -> None: self._finalize_fault("marker_rename")
+    def test_finalize_resumes_during_lock_release(self) -> None: self._finalize_fault("lock_release")
+    def test_finalize_resumes_during_final_journal(self) -> None: self._finalize_fault("final_journal")
+
+    def _rollback_fault(self, component: str) -> None:
+        original = {key: path.resolve() for key, path in self.stable.items()}
+        self.driver.preflight(); self.driver.activate()
+        self.driver.failpoints.add(f"rollback_after_{component}")
+        with self.assertRaisesRegex(deploy.Denied, f"injected:rollback_after_{component}"):
+            self.driver.rollback()
+        failed = self.driver._journal_read()
+        self.assertEqual(failed["state"], "FAILED")
+        self.assertEqual(failed["recoveryAction"], "rollback")
+        self.assertTrue(self.lock.exists())
+        self.driver.rollback()
+        self.assertEqual(self.driver._journal_read()["state"], "ROLLED_BACK")
+        self.assertEqual({key: path.resolve() for key, path in self.stable.items()}, original)
+        self.assertEqual(self.host.save_calls, 0)
+        self.assertFalse(self.lock.exists())
+
+    def test_rollback_resumes_after_frontend(self) -> None: self._rollback_fault("frontend")
+    def test_rollback_resumes_after_api(self) -> None: self._rollback_fault("api")
+
+    def test_common_rollback_denied_after_candidate_dump_persisted(self) -> None:
+        self.driver.preflight(); self.driver.activate(); self.acceptance()
+        self.driver.failpoints.add("after_save")
+        with self.assertRaises(deploy.Denied): self.driver.finalize()
+        with self.assertRaisesRegex(deploy.Denied, "rollback_failed_state_owner"):
+            self.driver.rollback()
+        self.assertEqual(self.host.save_calls, 1)
+
+    def test_rollback_detects_candidate_dump_even_without_save_checkpoint(self) -> None:
+        self.driver.preflight(); self.driver.activate()
+        self.host.pm2_mutate(self.pm2, ["save"])
+        with self.assertRaisesRegex(deploy.Denied, "rollback_after_candidate_dump"):
+            self.driver.rollback()
+        self.assertTrue(self.lock.exists())
+
+    def test_preexisting_marker_is_denied_before_save(self) -> None:
+        self.driver.preflight(); self.driver.activate(); self.acceptance()
+        (self.driver.release_root / "DEPLOYED").write_text("preexisting\n")
+        with self.assertRaisesRegex(deploy.Denied, "deployed_marker_exists"):
+            self.driver.finalize()
+        self.assertEqual(self.host.save_calls, 0)
+        self.assertEqual(self.driver._journal_read()["state"], "FAILED")
+
+
+def read_json_fixture(path: Path) -> dict[str, Any]:
+    value = json.loads(path.read_text())
+    assert isinstance(value, dict)
+    return value
 
 
 if __name__ == "__main__":

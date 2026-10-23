@@ -20,7 +20,8 @@ O driver aceita somente `api,frontend`, usa `/opt/re7online/current/api` e
 `pm2-definition-control.py`. Ele não constrói artefatos, não altera allowlist e não
 implanta worker ou migration.
 
-Defina os mesmos seis argumentos em todos os comandos:
+Calcule o SHA-256 externo do manifesto privado antes da janela e defina os mesmos
+sete argumentos em todos os comandos. O digest não é inferido pelo driver:
 
 ```bash
 COMMON=(
@@ -29,6 +30,7 @@ COMMON=(
   --control-plane <sha-completo-do-control-plane>
   --components api,frontend
   --config-root /opt/re7online/config/pm2-canonical/v1
+  --config-manifest-sha256 <sha256-autenticado-do-manifest.private.json>
   --transaction-root /opt/re7online/backups/converta-persistent/deploy-transactions/<id>
 )
 ```
@@ -70,7 +72,10 @@ python3 scripts/converta-deploy.py rollback "${COMMON[@]}"
 ```
 
 Resultado nominal: `ROLLED_BACK`. O comando restaura symlinks e definições
-autenticadas, revalida API/frontend/worker, não salva o dump e não cria marker.
+autenticadas, revalida API/frontend/worker, não salva o dump e não cria marker. Se
+uma restauração for interrompida, o journal fica em `FAILED`, conserva o lock e o
+mesmo comando `rollback` retoma pelos checkpoints já persistidos, desde que
+`saveCount` continue zero.
 
 ## Estado
 
@@ -81,6 +86,9 @@ python3 scripts/converta-deploy.py status "${COMMON[@]}"
 `status` é somente leitura e mostra apenas estado, release, target, control plane,
 contagem de saves e presença lógica do marker. Nunca mostra ambiente ou segredo.
 
-Qualquer `DEPLOY_DENY:<predicado>` encerra a etapa. Não editar o journal, não adaptar
-artefatos durante a janela e não repetir `finalize`. Estados `FINALIZING` ou `FAILED`
-exigem auditoria do journal privado; nunca autorizam um segundo `pm2 save`.
+Qualquer `DEPLOY_DENY:<predicado>` encerra a etapa. Não editar o journal nem adaptar
+artefatos durante a janela. Se `finalize` for interrompido, invoque o mesmo comando:
+o journal e a identidade do dump determinam se o único `pm2 save` ainda precisa ser
+executado ou já ocorreu. Estados `FINALIZING`/`FAILED` não autorizam um segundo save;
+o driver conclui dump, marker, lock e journal de forma retomável. O rollback comum é
+negado depois que o dump candidato foi persistido.
