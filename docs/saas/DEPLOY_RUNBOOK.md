@@ -20,8 +20,9 @@ O driver aceita somente `api,frontend`, usa `/opt/re7online/current/api` e
 `pm2-definition-control.py`. Ele não constrói artefatos, não altera allowlist e não
 implanta worker ou migration.
 
-Calcule o SHA-256 externo do manifesto privado antes da janela e defina os mesmos
-sete argumentos em todos os comandos. O digest não é inferido pelo driver:
+Informe explicitamente o manifesto privado canônico, calcule seu SHA-256 externo
+antes da janela e defina os mesmos oito argumentos em todos os comandos. O caminho
+e o digest não são inferidos pelo driver:
 
 ```bash
 COMMON=(
@@ -30,10 +31,20 @@ COMMON=(
   --control-plane <sha-completo-do-control-plane>
   --components api,frontend
   --config-root /opt/re7online/config/pm2-canonical/v1
-  --config-manifest-sha256 <sha256-autenticado-do-manifest.private.json>
+  --config-manifest /opt/re7online/config/pm2-canonical/v1/final-hash-manifest.private.json
+  --config-manifest-sha256 <sha256-autenticado-do-manifesto-informado>
   --transaction-root /opt/re7online/backups/converta-persistent/deploy-transactions/<id>
 )
 ```
+
+O manifesto autenticado usa `schemaVersion: 2`, raiz fechada e 18 entradas `files`
+com os campos exatos `mode`, `name`, `sha256` e `size`. O driver confere esses
+metadados com cada arquivo real e nega campo ausente, adicional ou divergente.
+Ele é a única fonte dos caminhos relativos. Seus grupos
+ordenados `definition`, `request`, `source` vinculam componente e papel pelo
+conteúdo autenticado, independentemente do nome do arquivo. Caminho absoluto,
+travessia, symlink, arquivo fora da raiz, modo/owner/tamanho/hash divergente ou alteração
+durante a leitura encerram o comando. Não há procura por nome, glob ou fallback.
 
 ## Caminho feliz
 
