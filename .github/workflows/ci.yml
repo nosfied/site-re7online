@@ -48,6 +48,8 @@ jobs:
         run: python3 -m unittest -v scripts/ci/test-pm2-definition-control.py
       - name: Validate minimal deploy driver transaction
         run: python3 scripts/ci/test-converta-deploy.py
+      - name: Validate deterministic external release producer
+        run: python3 scripts/ci/test-converta-release.py
       - uses: actions/setup-node@v4
         with:
           node-version: 20.20.0

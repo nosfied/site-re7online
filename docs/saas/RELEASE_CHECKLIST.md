@@ -39,6 +39,13 @@ Antes de executar, classificar a mudanca conforme `docs/saas/CHANGE_POLICY.md`:
 
 - Confirmar branch/commit correto.
 - Conferir `git status --short`.
+- Produzir API/frontend com `scripts/converta-release.py build` em saída externa
+  exclusiva, Node `v20.20.0` e epoch do commit; exigir `RELEASE BUILT`.
+- Registrar o BUILD_ID produzido sem substituí-lo; designar um único pacote canônico.
+- Executar `scripts/converta-release.py verify` sobre o pacote extraído de forma
+  independente; exigir `RELEASE VERIFIED` e comparar SHA-256 do pacote.
+- Em retry, reutilizar o mesmo pacote autenticado. Rebuild constitui nova release,
+  mesmo quando o target Git não mudou.
 - Confirmar que nao existem secrets, dumps, `.data`, tokens ou temporarios no diff.
 - Rodar `git diff --check`.
 - Conferir se a mudanca exige update documental.

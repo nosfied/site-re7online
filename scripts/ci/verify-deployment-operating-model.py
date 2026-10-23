@@ -40,6 +40,7 @@ for marker in (
     "três amostras consecutivas",
     "DEPLOY_RUNBOOK.md",
     "scripts/converta-deploy.py",
+    "scripts/converta-release.py",
 ):
     require(marker in model, f"operating model marker {marker}")
 require("não utilizáveis" in model, "obsolete mechanisms")
@@ -47,6 +48,7 @@ require("executor de ativação temporário em `/tmp`" in model,
         "temporary activation executor retired")
 runbook = (ROOT / "docs/saas/DEPLOY_RUNBOOK.md").read_text()
 driver = (ROOT / "scripts/converta-deploy.py").read_text()
+producer = (ROOT / "scripts/converta-release.py").read_text()
 require(len(runbook.splitlines()) <= 150, "minimal deploy runbook size")
 for marker in ("preflight", "activate", "finalize", "rollback", "status",
                "PREFLIGHT PASS", "AWAITING_ACCEPTANCE", "DEPLOYED", "ROLLED_BACK"):
@@ -55,6 +57,9 @@ for marker in ('choices=("preflight", "activate", "finalize", "rollback", "statu
                "pm2-definition-control.py", '"wait-readiness"', '"validate-pair"',
                '"ACEITE TÉCNICO PASS"'):
     require(marker in driver, f"minimal deploy driver marker {marker}")
+for marker in ('add_parser("build")', 'add_parser("verify")', 'SOURCE_DATE_EPOCH',
+               '"schemaVersion": 1', 'RELEASE VERIFIED'):
+    require(marker in producer, f"external release producer marker {marker}")
 control = (ROOT / "scripts/pm2-definition-control.py").read_text()
 for marker in (
     'READINESS_DEADLINES = {"api": 30.0, "frontend": 30.0}',

@@ -11,6 +11,8 @@
 - [Estado legível](CURRENT_STATE.md)
 - [Estado verificável](CURRENT_STATE.json)
 - [Runbook canônico de deploy](DEPLOY_RUNBOOK.md) — única instrução executável vigente
+- [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
+  o produtor externo `scripts/converta-release.py` e a fronteira com a ativação
 - [Reativação do hardening de mídia com readiness versionado](releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json)
 - [Topologia de domínios e runtimes](../DEPLOY_TOPOLOGY_RE7.md)
 - [Checklist de release](RELEASE_CHECKLIST.md)

@@ -6,7 +6,8 @@ Arquitetura, identidades e razões dos gates ficam no
 
 ## Pré-requisitos
 
-- release imutável de API e frontend já construída e autenticada fora da VPS;
+- release imutável de API e frontend construída e autenticada fora da VPS por
+  `scripts/converta-release.py`;
 - checkout do control plane limpo no SHA aprovado;
 - PM2 `6.0.14` no caminho já autenticado;
 - configuração privada canônica em raiz `0700`, com manifesto e arquivos `0600`;
@@ -19,6 +20,34 @@ O driver aceita somente `api,frontend`, usa `/opt/re7online/current/api` e
 `/opt/re7online/current/frontend`, smoke GET-only e o readiness existente de
 `pm2-definition-control.py`. Ele não constrói artefatos, não altera allowlist e não
 implanta worker ou migration.
+
+## Produção externa da release
+
+Em worktree Linux `x86_64` limpo no target exato e com Node `v20.20.0`, use uma
+saída local ainda inexistente. O epoch deve ser derivado do commit aprovado. Execute
+um único build e promova exatamente o pacote autenticado que ele produzir:
+
+```bash
+TARGET=<sha-completo-da-aplicacao>
+RELEASE=immutable-<sha-curto>-<timestamp-utc>
+EPOCH=$(git show -s --format=%ct "$TARGET")
+python3 scripts/converta-release.py build \
+  --repo "$PWD" --target "$TARGET" --release-id "$RELEASE" \
+  --components api,frontend --output /caminho/local/exclusivo \
+  --source-date-epoch "$EPOCH"
+python3 scripts/converta-release.py verify \
+  --package "/caminho/local/exclusivo/$RELEASE.tar.xz" \
+  --target "$TARGET" --release-id "$RELEASE" --components api,frontend
+```
+
+`RELEASE BUILT` e `RELEASE VERIFIED` são obrigatórios antes da transferência. O
+pacote contém somente os runtimes, manifesto fechado e índice schema v1. Build,
+Prisma generate e empacotamento nunca são executados na VPS.
+
+Builds Next independentes podem produzir BUILD_ID diferente e não são comparados
+byte a byte. Um rebuild, ainda que use o mesmo commit, cria nova release, BUILD_ID e
+hashes. Retry de transferência ou ativação reutiliza o mesmo `.tar.xz`; seu SHA-256
+é a identidade de transporte. O runtime nunca é reconstruído entre ambientes.
 
 Informe explicitamente o manifesto privado canônico, calcule seu SHA-256 externo
 antes da janela e defina os mesmos oito argumentos em todos os comandos. O caminho
