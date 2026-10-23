@@ -2,9 +2,9 @@
 
 **Status: CANÔNICO / COMPROVADO EM PRODUÇÃO EM 20/10/2026 / RECONFIRMADO EM 22/10/2026**
 
-Esta é a única fonte de instrução operacional vigente para deploy do Converta.
-Runbooks, preparações e executores anteriores permanecem como evidência histórica e
-não autorizam repetição.
+Este documento define a arquitetura e os princípios vigentes. Os comandos executáveis
+estão somente no [runbook canônico](DEPLOY_RUNBOOK.md). Preparações e executores
+anteriores permanecem como evidência histórica e não autorizam repetição.
 
 ## Topologia canônica
 
@@ -62,24 +62,9 @@ pelas definições autenticadas, sem `pm2 save`, marker `DEPLOYED` ou segunda te
 Os tempos monotônicos, total de amostras e resets de estabilidade são persistidos
 sem ambiente ou segredos. API e frontend usam prazo de 30 segundos.
 
-Forma canônica, com caminhos privados concretos definidos pela janela:
-
-```bash
-python3 scripts/pm2-definition-control.py wait-readiness \
-  --request <request-privada-0600> \
-  --source-artifact <fonte-privada-0600> \
-  --source-sha256 <sha-autenticado-da-fonte> \
-  --definition <definicao-privada-0600> \
-  --pm2 <binario-pm2-validado> \
-  --stable-path /opt/re7online/current/<componente> \
-  --release-root /opt/re7online/releases/<release>/<runtime> \
-  --port <porta> --local-health <url-local> --public-health <url-publica> \
-  --deadline-seconds 30 --poll-seconds 0.5 \
-  --report <relatorio-privado-novo-0600>
-```
-
-O comando autentica novamente request, fonte e definição antes de observar o
-runtime. O relatório é exclusivo e não pode ser sobrescrito ou reutilizado.
+O driver `scripts/converta-deploy.py`, descrito no runbook, chama esse comando sem
+duplicar sua lógica. Ele autentica novamente request, fonte e definição antes de
+observar o runtime e persiste o resultado no journal privado da transação.
 
 ## Definições PM2
 
