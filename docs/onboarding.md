@@ -227,12 +227,21 @@ Fluxo:
 6) Confirmar que o campo `Code` foi capturado.
 7) Clicar em `Processar conexao`.
 
+Ao concluir, confirme que o App ID aparece como configurado para esse tenant. O valor
+não é exibido novamente. A regularização manual exige superadmin, confirmação de
+proveniência `embedded_signup` e nunca substitui um App ID divergente.
+
 O backend:
 - troca o `code` com a Meta;
 - salva credenciais em `TenantMetaConfig`;
 - tenta resolver `phoneNumberId`, `WABA ID`, `Business ID` e `Business Portfolio ID`;
 - atualiza `tenants.json -> metaPhoneNumberId`;
 - cria/atualiza o mapeamento `WaPhoneNumber -> Client`.
+- preserva o `rawPayload` anterior e registra o App ID do aplicativo do fluxo.
+
+Não copie App ID entre tenants com proveniência diferente. Em topologia multi-tenant,
+o fallback global permanece desabilitado salvo declaração operacional explícita de
+aplicativo único ou compartilhado.
 
 Importante:
 - Esse caminho é o correto para número do cliente.

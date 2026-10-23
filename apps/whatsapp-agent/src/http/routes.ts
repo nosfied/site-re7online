@@ -205,10 +205,17 @@ import { httpError } from "../utils/httpError.js";
 import {
   enrichMetaOnboardingResult,
   exchangeEmbeddedSignupCode,
+  getMetaEmbeddedSignupAppId,
   MetaOnboardingExchangeError,
   registerMetaPhoneNumber,
   subscribeMetaWabaToApp,
 } from "../meta/onboarding.service.js";
+import {
+  configureTenantMetaAppId,
+  mergeEmbeddedSignupAppId,
+  resolveTenantMetaAppId,
+  TenantMetaAppIdError,
+} from "../meta/tenantMetaAppId.js";
 import {
   buildInstagramBusinessLoginAuthUrl,
   completeInstagramBusinessLogin,
@@ -224,6 +231,7 @@ import {
   MetaTemplateValidationError,
   resolveMetaTemplateCredentialsForClient,
   syncTemplateStatus,
+  validateMetaTemplateSubmissionConfig,
   validateTemplateForMeta,
 } from "../meta/template.service.js";
 import {
@@ -1284,6 +1292,7 @@ async function handleInternalWebSessionHandoffRealtime(
 }
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
+  installRejectedRequestBodyLifecycle(req, res);
   const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
   if (!isCampaignMutation(req.method, pathname)) return handleRequestWithCampaignAdmission(req, res);
   try { return await campaignTask("http-prevalidation", () => handleRequestWithCampaignAdmission(req, res)); }
@@ -1291,6 +1300,42 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     if (!(error instanceof CampaignOperationsClosed)) throw error;
     if (!res.headersSent) json(res, 503, { error: "campaign_operations_closed" });
   }
+}
+
+const REJECTED_BODY_DISCARD_LIMIT_BYTES = 64 * 1024;
+
+function installRejectedRequestBodyLifecycle(req: IncomingMessage, res: ServerResponse) {
+  const originalWriteHead = res.writeHead;
+  res.writeHead = function guardedWriteHead(
+    this: ServerResponse,
+    statusCode: number,
+    ...args: unknown[]
+  ) {
+    if (statusCode >= 400 && !req.complete && !req.readableEnded && requestMayHaveBody(req)) {
+      const declaredLength = parseContentLength(req.headers["content-length"]);
+      const boundedBody = declaredLength !== null && declaredLength <= REJECTED_BODY_DISCARD_LIMIT_BYTES;
+      if (!boundedBody) {
+        this.shouldKeepAlive = false;
+        this.setHeader("Connection", "close");
+      }
+      req.once("error", () => undefined);
+      req.resume();
+    }
+    return Reflect.apply(originalWriteHead, this, [statusCode, ...args]) as ServerResponse;
+  } as ServerResponse["writeHead"];
+}
+
+function requestMayHaveBody(req: IncomingMessage) {
+  const transferEncoding = req.headers["transfer-encoding"];
+  if (typeof transferEncoding === "string" && transferEncoding.trim()) return true;
+  const declaredLength = parseContentLength(req.headers["content-length"]);
+  return declaredLength !== null && declaredLength > 0;
+}
+
+function parseContentLength(value: string | undefined) {
+  if (value === undefined || !/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -17346,6 +17391,59 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       return;
     }
 
+    if (
+      (req.method === "GET" || req.method === "PUT") &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/meta-app-id")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      const client = await prisma.client.findUnique({ where: { clientKey: tenantId }, select: { id: true } });
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      const current = await prisma.tenantMetaConfig.findUnique({
+        where: { clientId: client.id },
+        select: { rawPayload: true },
+      });
+      if (req.method === "GET") {
+        try {
+          const resolved = resolveTenantMetaAppId({ rawPayload: current?.rawPayload });
+          json(res, 200, { ok: true, configured: Boolean(resolved.appId), source: resolved.source });
+        } catch (error) {
+          if (error instanceof TenantMetaAppIdError) {
+            json(res, error.status, httpError(error.code, error.code));
+            return;
+          }
+          throw error;
+        }
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      try {
+        const result = await configureTenantMetaAppId({
+          prisma,
+          clientId: client.id,
+          appId: body.appId,
+          provenance: body.provenance,
+          confirmTenantScoped: body.confirmTenantScoped,
+          actor: adminAuth.role,
+          requestId: `meta-tenant-app-id:${requestId}`,
+        });
+        json(res, 200, { ok: true, ...result });
+      } catch (error) {
+        if (error instanceof TenantMetaAppIdError) {
+          json(res, error.status, httpError(error.code, error.code));
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+
     if (pathname === "/admin/training" && req.method === "GET") {
       if (requireSuperadmin()) return;
       try {
@@ -23524,8 +23622,13 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             businessPortfolioId: true,
             wabaId: true,
             phoneNumberId: true,
+            rawPayload: true,
           },
         });
+        const preservedRawPayload = mergeEmbeddedSignupAppId(
+          previousMetaConfig?.rawPayload,
+          getMetaEmbeddedSignupAppId()
+        );
         const exchange = await exchangeEmbeddedSignupCode({ code, redirectUri });
         const manualBusinessId = normalizeOptionalString(embeddedSignupInput?.businessId);
         const manualBusinessPortfolioId = normalizeOptionalString(
@@ -23567,6 +23670,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           enriched?.phoneNumberId ??
           (!exchange.businessToken ? normalizeOptionalString(embeddedSignupInput?.phoneNumberId) : null);
         const rawPayload = {
+          ...preservedRawPayload,
           source: "embedded_signup",
           exchange: sanitizeMetaOnboardingStoredPayload(exchange.rawPayload),
           enrich: sanitizeMetaOnboardingStoredPayload(enriched?.rawPayload ?? null),
@@ -23734,6 +23838,11 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
               errorBody: error.errorBody ?? null,
             })
           );
+          return;
+        }
+
+        if (error instanceof TenantMetaAppIdError) {
+          json(res, error.status, httpError(error.code, error.code));
           return;
         }
 
@@ -27265,6 +27374,8 @@ async function submitTemplateRequestToMeta(params: {
   if (!tenantMetaConfig) {
     throw new MetaTemplateServiceError("meta_config_missing", "meta_config_missing", 400);
   }
+  const requestedHeaderType = normalizeTemplateHeaderType(templateRequest.headerType);
+  validateMetaTemplateSubmissionConfig({ tenantConfig: tenantMetaConfig, headerType: requestedHeaderType });
 
   validateTemplateForMeta({
     name: templateRequest.name,
@@ -27272,7 +27383,7 @@ async function submitTemplateRequestToMeta(params: {
     category: templateRequest.category,
     language,
     variables: variableDetails.map((item) => item.key),
-    headerType: normalizeTemplateHeaderType(templateRequest.headerType),
+    headerType: requestedHeaderType,
     exampleMediaId: templateRequest.exampleMediaId,
   });
   const exampleMedia = await resolveTemplateExampleMedia(params.prisma, {
@@ -27360,18 +27471,19 @@ async function submitTemplateRequestToMeta(params: {
   } catch (error) {
     if (error instanceof MetaTemplateServiceError && (
       error.code === "meta_template_media_upload_uncertain" ||
-      error.code === "meta_template_media_upload_failed"
+      error.code === "meta_template_media_upload_failed" ||
+      error.code === "meta_template_submit_uncertain"
     )) {
-      const uncertain = error.code === "meta_template_media_upload_uncertain";
+      const uncertain = error.code !== "meta_template_media_upload_failed";
       const status = uncertain ? "submission_unknown" : "failed";
       await params.prisma.$transaction([
         params.prisma.template.update({
           where: { id: template.id },
-          data: { status, rejectionReason: uncertain ? "meta_template_media_upload_uncertain" : "meta_template_media_upload_failed" },
+          data: { status, rejectionReason: error.code },
         }),
         params.prisma.templateRequest.update({
           where: { id: templateRequest.id },
-          data: { status, notes: uncertain ? "Resultado do upload de mídia incerto; sincronize antes de qualquer nova submissão." : "Falha no upload da mídia de exemplo." },
+          data: { status, notes: error.code },
         }),
       ]);
       await persistEvent({

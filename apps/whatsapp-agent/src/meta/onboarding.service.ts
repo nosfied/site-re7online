@@ -4,6 +4,10 @@ import { normalizeHybridWhatsappNumber } from "../web-session/hybridIdentity.js"
 const META_EMBEDDED_SIGNUP_APP_ID =
   process.env.META_EMBEDDED_SIGNUP_APP_ID?.trim() || "2074361376674006";
 
+export function getMetaEmbeddedSignupAppId() {
+  return META_EMBEDDED_SIGNUP_APP_ID;
+}
+
 type ExchangeCodeParams = {
   code: string;
   redirectUri?: string | null;
