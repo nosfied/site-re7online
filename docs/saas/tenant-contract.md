@@ -2,6 +2,17 @@
 
 Este documento define o contrato atual de tenant para frontend e operação SaaS do `whatsapp-agent`.
 
+## Identidade do aplicativo Meta
+
+Cada tenant mantém sua identidade Meta em `TenantMetaConfig`. O App ID canônico é
+`rawPayload.appId`; `rawPayload.applicationId` é somente compatibilidade legada.
+Token, WABA, número e App ID são resolvidos no mesmo escopo e não autorizam outro
+tenant.
+
+A escrita exige proveniência `embedded_signup`, comparação otimista e preservação do
+payload. Repetir o mesmo valor é idempotente; substituir por valor divergente é
+conflito. A auditoria registra ator, proveniência e resultado sem o App ID completo.
+
 ## Campos de tenant (tenants.json)
 
 ```json

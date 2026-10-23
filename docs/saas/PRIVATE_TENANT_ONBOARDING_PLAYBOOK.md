@@ -1,5 +1,19 @@
 # Private Tenant Onboarding Playbook
 
+## Regularização do App ID Meta
+
+O caminho canônico é o Embedded Signup: uma conclusão bem-sucedida grava
+`TenantMetaConfig.rawPayload.appId` e preserva token, WABA, número, `source` e as
+demais propriedades. Para tenant existente, use somente a operação administrativa
+tenant-scoped da tela de onboarding. Confirme a proveniência `embedded_signup`; não
+use SQL manual, edição direta de JSON ou cópia entre tenants.
+
+Na homologação, confirme antes da submissão que o tenant autorizado aparece como
+“App ID configurado”, que tenants de outras proveniências permanecem inalterados e
+que `META_APP_ID_FALLBACK_MODE` está `disabled`. A regularização não chama a Meta,
+não sincroniza templates e não altera solicitações. Submissão, upload e envio exigem
+autorização posterior própria.
+
 Status: operational playbook. This document does not change runtime behavior.
 
 ## Objective

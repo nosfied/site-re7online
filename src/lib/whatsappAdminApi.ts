@@ -2791,6 +2791,24 @@ export async function onboardingExchangeCode(
   );
 }
 
+export async function getTenantMetaAppIdStatus(connection: AdminConnection, tenantId: string) {
+  return requestJson<{ ok: true; configured: boolean; source: string }>(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/meta-app-id`
+  );
+}
+
+export async function configureTenantMetaAppId(connection: AdminConnection, tenantId: string, appId: string) {
+  return requestJson<{ ok: true; configured: true; changed: boolean; source: string }>(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/meta-app-id`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ appId, provenance: "embedded_signup", confirmTenantScoped: true }),
+    }
+  );
+}
+
 export async function recordMetaEmbeddedSignupEvent(
   connection: AdminConnection,
   tenantId: string,

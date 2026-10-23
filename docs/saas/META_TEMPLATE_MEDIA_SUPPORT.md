@@ -227,3 +227,22 @@ evidência CRA nem autorização comercial. O aceite CRA permanece
 pendente de template/cópia/categoria oficiais, validação da Meta e autorização
 do owner. O registro `DEPLOYED` refere-se somente à implantação técnica; não registrar
 `META APPROVED`, liberação comercial ou envio real a partir deste trabalho.
+
+## App ID por tenant
+
+O upload de exemplos resolve o App ID na configuração Meta do próprio tenant:
+`rawPayload.appId` é canônico e `rawPayload.applicationId` é compatibilidade legada.
+O fallback `META_APP_ID` só é aceito com
+`META_APP_ID_FALLBACK_MODE=single_app` ou `shared_app`; o padrão é `disabled` e a
+topologia multi-tenant atual não deve habilitá-lo.
+O fallback global é proibido quando existirem tenants com proveniências Meta
+distintas.
+
+O Embedded Signup persiste o App ID real do fluxo e preserva as demais propriedades
+do `rawPayload`. A regularização administrativa é tenant-scoped, exige superadmin,
+proveniência `embedded_signup`, escrita CAS e nega substituição divergente. Respostas
+e eventos expõem apenas o estado configurado.
+
+Token, WABA e App ID são validados antes de gravar `submitting`. Uma negativa local
+mantém a solicitação em `internal_approved`; efeito externo possivelmente iniciado
+gera reconciliação `submission_unknown`, sem retry cego.

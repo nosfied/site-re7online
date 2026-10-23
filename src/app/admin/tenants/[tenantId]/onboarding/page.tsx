@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
+import ScreenProcessingOverlay, { useScreenProcessingOperations } from "@/components/app/ScreenProcessingOverlay";
 import {
+  configureTenantMetaAppId,
   createUser,
   fetchTenantById,
+  getTenantMetaAppIdStatus,
   onboardingExchangeCode,
   onboardingManualBindNumber,
   onboardingRegisterPhoneNumber,
@@ -185,6 +188,12 @@ export default function TenantOnboardingPage() {
   const [creatingUser, setCreatingUser] = useState(false);
   const [userError, setUserError] = useState<string | null>(null);
   const [userSuccess, setUserSuccess] = useState<string | null>(null);
+  const [metaAppIdConfigured, setMetaAppIdConfigured] = useState<boolean | null>(null);
+  const [metaAppIdInput, setMetaAppIdInput] = useState("");
+  const [savingMetaAppId, setSavingMetaAppId] = useState(false);
+  const processingOverlay = useScreenProcessingOperations([
+    { key: "meta-app-id", active: savingMetaAppId, title: "Configuração Meta", message: "Salvando App ID somente neste tenant…" },
+  ]);
 
   const appendEntry = useCallback((entry: EmbeddedSignupCaptureEntry) => {
     setEntries((prev) => [entry, ...prev].slice(0, 30));
@@ -287,10 +296,11 @@ export default function TenantOnboardingPage() {
     setLoadingTenant(true);
     setErrorMessage(null);
 
-    fetchTenantById(connection, tenantId)
-      .then((response) => {
+    Promise.all([fetchTenantById(connection, tenantId), getTenantMetaAppIdStatus(connection, tenantId)])
+      .then(([response, appIdStatus]) => {
         if (cancelled) return;
         setTenantSnapshot(response);
+        setMetaAppIdConfigured(appIdStatus.configured);
         setPhoneNumberId((current) => current || response.tenant.metaPhoneNumberId || "");
         setDisplayPhoneNumber((current) => current || response.tenant.displayPhoneNumber || "");
       })
@@ -310,6 +320,27 @@ export default function TenantOnboardingPage() {
       cancelled = true;
     };
   }, [connection, tenantId]);
+
+  const handleConfigureMetaAppId = async () => {
+    const value = metaAppIdInput.trim();
+    if (!/^\d{5,32}$/.test(value)) {
+      setErrorMessage("Informe um App ID numérico válido.");
+      return;
+    }
+    setSavingMetaAppId(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const result = await configureTenantMetaAppId(connection, tenantId, value);
+      setMetaAppIdConfigured(true);
+      setMetaAppIdInput("");
+      setSuccessMessage(result.changed ? "App ID registrado somente neste tenant." : "O App ID deste tenant já estava configurado.");
+    } catch (error) {
+      setErrorMessage((error as { message?: string }).message || "Falha ao registrar o App ID do tenant.");
+    } finally {
+      setSavingMetaAppId(false);
+    }
+  };
 
   useEffect(() => {
     refreshLocationState("query");
@@ -904,6 +935,11 @@ export default function TenantOnboardingPage() {
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
+      <ScreenProcessingOverlay
+        active={Boolean(processingOverlay)}
+        title={processingOverlay?.title ?? "Configuração Meta"}
+        message={processingOverlay?.message ?? "Processando…"}
+      />
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -1226,6 +1262,34 @@ export default function TenantOnboardingPage() {
                 <p className="text-xs uppercase tracking-wide text-white/60">Messages</p>
                 <p className="mt-2 text-sm font-semibold">{messagesReceived}</p>
               </div>
+            </div>
+          </article>
+
+          <article className="grid gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-white/80">App ID do tenant</h2>
+              <p className="mt-2 text-sm text-white/65">
+                Estado: {metaAppIdConfigured === null ? "não verificado" : metaAppIdConfigured ? "configurado" : "não configurado"}. O valor não é exibido depois de salvo.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <input
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={metaAppIdInput}
+                  onChange={(event) => setMetaAppIdInput(event.target.value.replace(/\D/g, ""))}
+                  placeholder="App ID do fluxo Embedded Signup"
+                  className="min-w-[260px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                />
+                <button
+                  type="button"
+                  disabled={savingMetaAppId || !metaAppIdInput.trim()}
+                  onClick={() => void handleConfigureMetaAppId()}
+                  className="rounded-md bg-re7-sky px-4 py-2 text-sm font-semibold text-[#06132a] disabled:opacity-50"
+                >
+                  {metaAppIdConfigured ? "Regularizar App ID" : "Registrar App ID"}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-white/50">Confirmação restrita ao tenant desta página e à proveniência Embedded Signup.</p>
             </div>
           </article>
 

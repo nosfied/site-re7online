@@ -7,6 +7,7 @@ import {
 } from "../config/tenantOperationalConfig.js";
 import { logger } from "../logger/logger.js";
 import { uploadMetaTemplateExample } from "./metaTemplateMedia.js";
+import { resolveTenantMetaAppId } from "./tenantMetaAppId.js";
 import {
   mergeProviderTemplateComponents,
   normalizeTemplateHeaderType,
@@ -95,6 +96,7 @@ export class MetaTemplateServiceError extends Error {
     public readonly code:
       | "meta_config_missing"
       | "meta_template_submit_failed"
+      | "meta_template_submit_uncertain"
       | "meta_template_submit_invalid_json"
       | "meta_template_sync_not_found"
       | "meta_template_sync_invalid_json"
@@ -109,6 +111,19 @@ export class MetaTemplateServiceError extends Error {
     super(message);
     this.name = "MetaTemplateServiceError";
   }
+}
+
+export function validateMetaTemplateSubmissionConfig(params: {
+  tenantConfig: TenantMetaTemplateConfig;
+  headerType: TemplateHeaderType;
+}) {
+  const businessToken = normalizeOptionalString(params.tenantConfig.businessToken);
+  const wabaId = normalizeOptionalString(params.tenantConfig.wabaId);
+  const appId = normalizeOptionalString(params.tenantConfig.appId);
+  if (!businessToken || !wabaId || (params.headerType !== "NONE" && !appId)) {
+    throw new MetaTemplateServiceError("meta_config_missing", "meta_config_missing", 400);
+  }
+  return { businessToken, wabaId, appId: appId || null };
 }
 
 const TEMPLATE_NAME_PATTERN = /^[a-z0-9_]+$/;
@@ -144,7 +159,12 @@ export async function resolveMetaTemplateCredentialsForClient(params: {
   const rawPayload = tenantMetaConfig?.rawPayload && typeof tenantMetaConfig.rawPayload === "object" && !Array.isArray(tenantMetaConfig.rawPayload)
     ? (tenantMetaConfig.rawPayload as Record<string, unknown>)
     : null;
-  const tenantAppId = normalizeOptionalString(rawPayload?.appId ?? rawPayload?.applicationId);
+  const currentEnv = getEnv();
+  const tenantApp = resolveTenantMetaAppId({
+    rawPayload,
+    globalAppId: currentEnv.META_APP_ID,
+    fallbackMode: currentEnv.META_APP_ID_FALLBACK_MODE,
+  });
   if (
     !isWhatsappTransportEnabledForRouting(
       routingSettings.settings,
@@ -158,12 +178,11 @@ export async function resolveMetaTemplateCredentialsForClient(params: {
     return {
       businessToken: tenantBusinessToken,
       wabaId: tenantWabaId,
-      appId: tenantAppId || normalizeOptionalString(getEnv().META_APP_ID) || null,
+      appId: tenantApp.appId,
       source: "tenant_meta",
     };
   }
 
-  const currentEnv = getEnv();
   const envBusinessToken = normalizeOptionalString(currentEnv.WHATSAPP_ACCESS_TOKEN);
   const envWabaId = normalizeOptionalString(currentEnv.WHATSAPP_BUSINESS_ACCOUNT_ID);
   const envPhoneNumberId = normalizeOptionalString(currentEnv.WHATSAPP_PHONE_NUMBER_ID);
@@ -185,7 +204,7 @@ export async function resolveMetaTemplateCredentialsForClient(params: {
   return {
     businessToken: envBusinessToken,
     wabaId: envWabaId,
-    appId: normalizeOptionalString(currentEnv.META_APP_ID) || null,
+    appId: tenantApp.appId,
     source: "env_matched_phone",
   };
 }
@@ -406,25 +425,20 @@ export async function submitTemplateToMeta(params: {
   template: TemplateForMeta;
   exampleMedia?: { content: Buffer; mimeType: string; fileName: string; kind: "IMAGE" | "VIDEO" } | null;
 }): Promise<MetaTemplateSubmitResult> {
-  const businessToken = normalizeOptionalString(params.tenantConfig.businessToken);
-  const wabaId = normalizeOptionalString(params.tenantConfig.wabaId);
-
-  if (!businessToken || !wabaId) {
-    throw new MetaTemplateServiceError("meta_config_missing", "meta_config_missing", 400);
-  }
-
   validateTemplateForMeta(params.template);
   const headerType = normalizeTemplateHeaderType(params.template.headerType);
+  const { businessToken, wabaId, appId } = validateMetaTemplateSubmissionConfig({
+    tenantConfig: params.tenantConfig,
+    headerType,
+  });
   let headerHandle: string | null = null;
   if (headerType !== "NONE") {
     if (!params.exampleMedia || params.exampleMedia.kind !== headerType) {
       throw new MetaTemplateServiceError("meta_template_media_required", "meta_template_media_required", 400);
     }
-    const appId = normalizeOptionalString(params.tenantConfig.appId ?? getEnv().META_APP_ID);
-    if (!appId) throw new MetaTemplateServiceError("meta_config_missing", "meta_config_missing", 400);
     const uploaded = await uploadMetaTemplateExample({
       apiVersion: getEnv().WHATSAPP_API_VERSION,
-      appId,
+      appId: appId!,
       accessToken: businessToken,
       content: params.exampleMedia.content,
       mimeType: params.exampleMedia.mimeType,
@@ -446,14 +460,23 @@ export async function submitTemplateToMeta(params: {
   const payload = buildMetaTemplatePayload(params.template, headerHandle);
   const url = `https://graph.facebook.com/${getEnv().WHATSAPP_API_VERSION}/${wabaId}/message_templates`;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${businessToken}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${businessToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new MetaTemplateServiceError(
+      "meta_template_submit_uncertain",
+      "meta_template_submit_uncertain",
+      502
+    );
+  }
 
   const rawText = await response.text();
   let rawResponse: Record<string, unknown> | null = null;

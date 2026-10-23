@@ -6922,6 +6922,88 @@ test("admin onboarding code exchange sends canonical manual oauth redirect uri f
   }
 });
 
+test("superadmin configures App ID only for the target embedded-signup tenant", async () => {
+  const client = await prisma.client.findUniqueOrThrow({
+    where: { id: businessClientId },
+    select: { clientKey: true },
+  });
+  const other = await prisma.client.create({
+    data: { clientKey: `${prefix}-meta-app-other`, name: "Other Meta App Tenant", profile: "business", features: {} },
+    select: { id: true },
+  });
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    create: { clientId: businessClientId, rawPayload: { source: "embedded_signup", retained: true } },
+    update: { rawPayload: { source: "embedded_signup", retained: true } },
+  });
+  await prisma.tenantMetaConfig.create({
+    data: { clientId: other.id, rawPayload: { source: "other_provider", retained: true } },
+  });
+
+  const denied = await requestAdmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(client.clientKey)}/meta-app-id`,
+    { appId: "100001", provenance: "embedded_signup", confirmTenantScoped: true }
+  );
+  assert.equal(denied.status, 403);
+  const crossTenantDenied = await requestAdmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(`${prefix}-meta-app-other`)}/meta-app-id`,
+    { appId: "100001", provenance: "embedded_signup", confirmTenantScoped: true }
+  );
+  assert.equal(crossTenantDenied.status, 403);
+
+  const invalid = await requestSuperadmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(client.clientKey)}/meta-app-id`,
+    { appId: "invalid", provenance: "embedded_signup", confirmTenantScoped: true }
+  );
+  assert.equal(invalid.status, 400);
+  assert.equal(getErrorCode(invalid.body), "meta_app_id_invalid");
+
+  const incompatible = await requestSuperadmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(`${prefix}-meta-app-other`)}/meta-app-id`,
+    { appId: "100001", provenance: "embedded_signup", confirmTenantScoped: true }
+  );
+  assert.equal(incompatible.status, 409);
+  assert.equal(getErrorCode(incompatible.body), "meta_app_id_provenance_incompatible");
+
+  const configured = await requestSuperadmin<{ ok: boolean; configured: boolean; changed: boolean }>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(client.clientKey)}/meta-app-id`,
+    { appId: "100001", provenance: "embedded_signup", confirmTenantScoped: true }
+  );
+  assert.equal(configured.status, 200);
+  assert.equal(configured.body.changed, true);
+
+  const repeated = await requestSuperadmin<{ changed: boolean }>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(client.clientKey)}/meta-app-id`,
+    { appId: "100001", provenance: "embedded_signup", confirmTenantScoped: true }
+  );
+  assert.equal(repeated.status, 200);
+  assert.equal(repeated.body.changed, false);
+
+  const divergent = await requestSuperadmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(client.clientKey)}/meta-app-id`,
+    { appId: "200002", provenance: "embedded_signup", confirmTenantScoped: true }
+  );
+  assert.equal(divergent.status, 409);
+  assert.equal(getErrorCode(divergent.body), "meta_app_id_conflict");
+
+  const [targetConfig, otherConfig, events] = await Promise.all([
+    prisma.tenantMetaConfig.findUniqueOrThrow({ where: { clientId: businessClientId }, select: { rawPayload: true } }),
+    prisma.tenantMetaConfig.findUniqueOrThrow({ where: { clientId: other.id }, select: { rawPayload: true } }),
+    prisma.event.findMany({ where: { clientId: businessClientId, eventName: "meta.tenant_app_id.configured" }, select: { payloadJson: true } }),
+  ]);
+  assert.equal((targetConfig.rawPayload as Record<string, unknown>).appId, "100001");
+  assert.equal((targetConfig.rawPayload as Record<string, unknown>).retained, true);
+  assert.deepEqual(otherConfig.rawPayload, { source: "other_provider", retained: true });
+  assert.equal(JSON.stringify(events).includes("100001"), false);
+});
+
 test("admin onboarding code exchange resolves WABA by displayed phone when OAuth omits ids", async () => {
   const dbOnlyClientKey = `${prefix}-db-only-code-display-resolution`;
   const client = await prisma.client.create({
@@ -7071,6 +7153,7 @@ test("admin onboarding code exchange resolves WABA by displayed phone when OAuth
     const publicWhatsappIdentity = rawPayload.publicWhatsappIdentity as Record<string, unknown>;
     const serializedRawPayload = JSON.stringify(rawPayload);
     assert.equal(rawPayload.source, "embedded_signup");
+    assert.match(String(rawPayload.appId), /^\d{5,32}$/);
     assert.equal(publicWhatsappIdentity.evidence, "provider_confirmed_display_phone_number");
     assert.equal(publicWhatsappIdentity.rawDisplayPhoneNumber, "+55 84 9459-6848");
     assert.equal(publicWhatsappIdentity.canonicalNumber, "558494596848");
@@ -12999,6 +13082,59 @@ test("admin submit requires tenant Meta config and does not expose tokens", asyn
   assert.equal(getErrorCode(response.body), "meta_config_missing");
   assert.equal(JSON.stringify(response.body).includes("businessToken"), false);
   assert.equal(JSON.stringify(response.body).includes("token"), false);
+});
+
+test("media submit without tenant App ID stays internal approved and performs no provider call", async (t) => {
+  const upload = await requestMultipart<{ asset: { id: string } }>(
+    "/app/templates/media",
+    businessAdmin,
+    mediaForm()
+  );
+  assert.equal(upload.status, 201);
+  const created = await prisma.templateRequest.create({
+    data: {
+      clientId: businessClientId,
+      name: `media_missing_app_id_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      content: "Aviso institucional com imagem.",
+      variables: { language: "pt_BR", variableDetails: [], variables: [] },
+      status: "internal_approved",
+      headerType: "IMAGE",
+      exampleMediaId: upload.body.asset.id,
+    },
+  });
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      businessToken: "test-business-token",
+      wabaId: "test-waba-id",
+      rawPayload: { source: "embedded_signup" },
+    },
+    update: {
+      businessToken: "test-business-token",
+      wabaId: "test-waba-id",
+      rawPayload: { source: "embedded_signup" },
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).startsWith("https://graph.facebook.com/")) providerCalls += 1;
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const response = await requestAdmin<ErrorPayload>("POST", `/admin/templates/requests/${created.id}/submit`);
+  assert.equal(response.status, 400);
+  assert.equal(getErrorCode(response.body), "meta_config_missing");
+  assert.equal(providerCalls, 0);
+  const [storedRequest, template] = await Promise.all([
+    prisma.templateRequest.findUniqueOrThrow({ where: { id: created.id }, select: { status: true } }),
+    prisma.template.findUnique({ where: { clientId_name: { clientId: businessClientId, name: created.name } } }),
+  ]);
+  assert.equal(storedRequest.status, "internal_approved");
+  assert.equal(template, null);
 });
 
 test("admin submit uses saved variable examples in Meta payload", async (t) => {
