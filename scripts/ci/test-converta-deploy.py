@@ -159,17 +159,24 @@ class DeployFixture(unittest.TestCase):
         for component in deploy.COMPONENTS:
             os.symlink(self.releases / self.rollback / deploy.RUNTIME_DIR[component], self.stable[component])
             self._bindings(component, candidate_manifest_sha)
-        files = {}
-        for path in self.config.iterdir():
-            if path.name != "manifest.private.json": files[path.name] = sha(path)
-        put(self.config / "manifest.private.json", {"schemaVersion": 1, "files": files})
-        self.config_manifest_sha = sha(self.config / "manifest.private.json")
+        for name in (
+            "api-stable-env.private.json",
+            "blocking-gates-revalidation.private.json",
+            "frontend-stable-env.private.json",
+            "future-command-plan.private.json",
+            "private-hash-manifest.json",
+            "sanitized-report.private.json",
+        ):
+            put(self.config / name, {"fixture": name})
+        self.config_manifest = self.config / "final-hash-manifest.private.json"
+        self._write_config_manifest()
+        self.config_manifest_sha = sha(self.config_manifest)
         self.host.rows = {
             "api": self._row("api", 11), "frontend": self._row("frontend", 12),
             "re7-whatsapp-web-worker": self._row("re7-whatsapp-web-worker", 13),
         }
         self.inputs = deploy.Inputs(self.candidate, self.target, self.control_plane,
-                                    deploy.COMPONENTS, self.config, self.transaction,
+                                    deploy.COMPONENTS, self.config, self.config_manifest, self.transaction,
                                     self.config_manifest_sha)
         self.driver = FixtureDriver(self.inputs, host=self.host, repo=ROOT,
                                     releases=self.releases, stable=self.stable,
@@ -179,6 +186,34 @@ class DeployFixture(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temp.cleanup()
+
+    def _write_config_manifest(self) -> None:
+        files = []
+        ordered_names = [item["name"] for item in read_json_fixture(
+            ROOT / "scripts/ci/fixtures/pm2-canonical-private-root.v1.sanitized.json"
+        )["manifestShape"]["files"]]
+        for name in ordered_names:
+            path = self.config / name
+            info = path.stat()
+            files.append({"mode": format(stat.S_IMODE(info.st_mode), "04o"),
+                          "name": path.name, "sha256": sha(path), "size": info.st_size})
+        put(self.config_manifest, {
+            "schemaVersion": 2,
+            "controlPlaneSha": self.control_plane,
+            "files": files,
+            "privateHashManifestSha256": "9" * 64,
+        })
+
+    def _new_driver(self) -> FixtureDriver:
+        self.config_manifest_sha = sha(self.config_manifest)
+        self.inputs = deploy.Inputs(self.candidate, self.target, self.control_plane,
+                                    deploy.COMPONENTS, self.config, self.config_manifest,
+                                    self.transaction, self.config_manifest_sha)
+        driver = FixtureDriver(self.inputs, host=self.host, repo=ROOT,
+                               releases=self.releases, stable=self.stable, lock=self.lock,
+                               dump=self.dump, pm2=self.pm2, clock=lambda: 1234567890.0)
+        driver.failpoints = set()
+        return driver
 
     def _release(self, release: str, build_id: str, target: str) -> str:
         root = self.releases / release
@@ -233,7 +268,7 @@ class DeployFixture(unittest.TestCase):
                       "releaseIdentity": identity, "definition": definition}
             put(self.config / f"{component}-{role}.request.private.json", request)
             put(self.config / f"{component}-{role}.source.private.json", source)
-            put(self.config / f"{component}-{role}.pm2.private.json", definition)
+            put(self.config / f"{component}-{role}.definition.private.json", definition)
 
     def _row(self, name: str, pid: int) -> dict[str, Any]:
         if name in self.stable:
@@ -252,6 +287,185 @@ class DeployFixture(unittest.TestCase):
 
 
 class DriverTests(DeployFixture):
+    def test_real_canonical_manifest_shape_and_definition_names_pass(self) -> None:
+        config = self.driver._authenticated_config()
+        self.assertEqual(self.config_manifest.name, "final-hash-manifest.private.json")
+        for component in deploy.COMPONENTS:
+            for role in ("candidate", "rollback"):
+                self.assertTrue(config[component][role]["paths"]["definition"].name.endswith(
+                    ".definition.private.json"))
+
+    def test_sanitized_fixture_matches_real_structural_contract(self) -> None:
+        fixture = read_json_fixture(ROOT / "scripts/ci/fixtures/pm2-canonical-private-root.v1.sanitized.json")
+        self.assertEqual(fixture["manifestName"], self.config_manifest.name)
+        self.assertEqual(fixture["manifestStructuralFingerprintSha256"],
+                         "6b68a5dc4be2c3a1a0ce1fbdf95c4246c8b38b169744adf90f20070980a04467")
+        shape = fixture["manifestShape"]
+        self.assertEqual(fixture["schemaVersion"], 2)
+        self.assertEqual(set(shape), {"schemaVersion", "controlPlaneSha", "files",
+                                     "privateHashManifestSha256"})
+        self.assertEqual(shape["schemaVersion"], 2)
+        self.assertIsInstance(shape["controlPlaneSha"], str)
+        self.assertRegex(shape["controlPlaneSha"], r"^[0-9a-f]{40}$")
+        self.assertIsInstance(shape["privateHashManifestSha256"], str)
+        self.assertRegex(shape["privateHashManifestSha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(len(shape["files"]), 18)
+        for item in shape["files"]:
+            self.assertEqual(set(item), {"mode", "name", "sha256", "size"})
+            self.assertRegex(item["mode"], r"^0[0-7]{3}$")
+            self.assertIsInstance(item["name"], str)
+            self.assertRegex(item["sha256"], r"^[0-9a-f]{64}$")
+            self.assertIsInstance(item["size"], int)
+            self.assertGreaterEqual(item["size"], 0)
+        observed = [item["name"] for item in read_json_fixture(self.config_manifest)["files"]]
+        expected = [item["name"] for item in shape["files"]]
+        self.assertEqual(observed, expected)
+        self.assertEqual(fixture["artifactGroupOrder"], ["definition", "request", "source"])
+
+    def test_manifest_schema_v2_rejects_root_field_removal_addition_and_types(self) -> None:
+        baseline = read_json_fixture(self.config_manifest)
+        for field in tuple(baseline):
+            with self.subTest(case="missing", field=field):
+                manifest = json.loads(json.dumps(baseline)); manifest.pop(field)
+                put(self.config_manifest, manifest)
+                with self.assertRaises(deploy.Denied):
+                    self._new_driver()._authenticated_config()
+        manifest = json.loads(json.dumps(baseline)); manifest["unknown"] = True
+        put(self.config_manifest, manifest)
+        with self.assertRaisesRegex(deploy.Denied, "config_manifest_schema"):
+            self._new_driver()._authenticated_config()
+        invalid_types = {
+            "schemaVersion": "2", "controlPlaneSha": 2, "files": {},
+            "privateHashManifestSha256": 2,
+        }
+        for field, value in invalid_types.items():
+            with self.subTest(case="type", field=field):
+                manifest = json.loads(json.dumps(baseline)); manifest[field] = value
+                put(self.config_manifest, manifest)
+                with self.assertRaises(deploy.Denied):
+                    self._new_driver()._authenticated_config()
+        manifest = json.loads(json.dumps(baseline)); manifest["schemaVersion"] = 1
+        put(self.config_manifest, manifest)
+        with self.assertRaisesRegex(deploy.Denied, "config_manifest_schema_version"):
+            self._new_driver()._authenticated_config()
+
+    def test_manifest_schema_v2_rejects_entry_field_removal_addition_and_types(self) -> None:
+        baseline = read_json_fixture(self.config_manifest)
+        for field in tuple(baseline["files"][0]):
+            with self.subTest(case="missing", field=field):
+                manifest = json.loads(json.dumps(baseline)); manifest["files"][0].pop(field)
+                put(self.config_manifest, manifest)
+                with self.assertRaisesRegex(deploy.Denied, "config_manifest_entry"):
+                    self._new_driver()._authenticated_config()
+        manifest = json.loads(json.dumps(baseline)); manifest["files"][0]["unknown"] = True
+        put(self.config_manifest, manifest)
+        with self.assertRaisesRegex(deploy.Denied, "config_manifest_entry"):
+            self._new_driver()._authenticated_config()
+        invalid_types = {"mode": 0o600, "name": 1, "sha256": 1, "size": "1"}
+        for field, value in invalid_types.items():
+            with self.subTest(case="type", field=field):
+                manifest = json.loads(json.dumps(baseline)); manifest["files"][0][field] = value
+                put(self.config_manifest, manifest)
+                with self.assertRaises(deploy.Denied):
+                    self._new_driver()._authenticated_config()
+
+    def test_manifest_schema_v2_rejects_duplicate_size_and_mode_drift(self) -> None:
+        baseline = read_json_fixture(self.config_manifest)
+        manifest = json.loads(json.dumps(baseline))
+        manifest["files"][1]["name"] = manifest["files"][0]["name"]
+        put(self.config_manifest, manifest)
+        with self.assertRaisesRegex(deploy.Denied, "config_manifest_duplicate_path"):
+            self._new_driver()._authenticated_config()
+        manifest = json.loads(json.dumps(baseline)); manifest["files"][0]["size"] += 1
+        put(self.config_manifest, manifest)
+        with self.assertRaisesRegex(deploy.Denied, "config_size_mismatch"):
+            self._new_driver()._authenticated_config()
+        for mode in ("600", "0999", 600):
+            with self.subTest(mode=mode):
+                manifest = json.loads(json.dumps(baseline)); manifest["files"][0]["mode"] = mode
+                put(self.config_manifest, manifest)
+                with self.assertRaisesRegex(deploy.Denied, "config_manifest_mode"):
+                    self._new_driver()._authenticated_config()
+        manifest = json.loads(json.dumps(baseline)); manifest["files"][0]["mode"] = "0640"
+        put(self.config_manifest, manifest)
+        with self.assertRaisesRegex(deploy.Denied, "config_mode_mismatch"):
+            self._new_driver()._authenticated_config()
+
+    def test_undeclared_legacy_fixed_name_does_not_replace_declared_artifact(self) -> None:
+        declared = self.config / "api-candidate.definition.private.json"
+        legacy = self.config / "api-candidate.pm2.private.json"
+        legacy.write_bytes(declared.read_bytes()); legacy.chmod(0o600); declared.unlink()
+        with self.assertRaisesRegex(deploy.Denied, "missing_private_file"):
+            self.driver._authenticated_config()
+
+    def test_declared_renames_pass_without_filename_inference(self) -> None:
+        manifest = read_json_fixture(self.config_manifest)
+        for offset, kind in enumerate(("definition", "request", "source")):
+            old = self.config / f"api-candidate.{kind}.private.json"
+            new = self.config / f"declared-a-{offset}.private.json"
+            old.rename(new)
+            item = next(value for value in manifest["files"] if value["name"] == old.name)
+            item["name"] = new.name; item["sha256"] = sha(new); item["size"] = new.stat().st_size
+        put(self.config_manifest, manifest)
+        config = self._new_driver()._authenticated_config()
+        self.assertEqual(config["api"]["candidate"]["paths"]["definition"].name,
+                         "declared-a-0.private.json")
+
+    def test_manifest_rejects_path_traversal_and_absolute_path(self) -> None:
+        for invalid in ("../outside.private.json", "/tmp/outside.private.json"):
+            with self.subTest(invalid=invalid):
+                manifest = read_json_fixture(self.config_manifest)
+                manifest["files"][0]["name"] = invalid
+                put(self.config_manifest, manifest)
+                with self.assertRaisesRegex(deploy.Denied, "config_manifest_relative_path"):
+                    self._new_driver()._authenticated_config()
+                self._write_config_manifest()
+
+    def test_declared_symlink_and_wrong_hash_are_denied(self) -> None:
+        definition = self.config / "api-candidate.definition.private.json"
+        target = self.config / "api-candidate.definition.target.private.json"
+        definition.rename(target); os.symlink(target.name, definition)
+        with self.assertRaisesRegex(deploy.Denied, "stable_file_open"):
+            self.driver._authenticated_config()
+        definition.unlink(); target.rename(definition)
+        manifest = read_json_fixture(self.config_manifest)
+        manifest["files"][0]["sha256"] = "0" * 64
+        put(self.config_manifest, manifest)
+        with self.assertRaisesRegex(deploy.Denied, "config_hash_mismatch"):
+            self._new_driver()._authenticated_config()
+
+    def test_role_or_component_drift_is_denied(self) -> None:
+        source = self.config / "api-candidate.source.private.json"
+        value = read_json_fixture(source); value["role"] = "rollback"; put(source, value)
+        manifest = read_json_fixture(self.config_manifest)
+        item = next(item for item in manifest["files"] if item["name"] == source.name)
+        item["sha256"] = sha(source); item["size"] = source.stat().st_size
+        put(self.config_manifest, manifest)
+        with self.assertRaisesRegex(deploy.Denied, "config_artifact_identity|config_artifact_group"):
+            self._new_driver()._authenticated_config()
+
+    def test_file_change_during_authenticated_read_is_denied(self) -> None:
+        driver = self.driver
+        source = self.config / "api-candidate.source.private.json"
+        original = driver._failpoint
+        def mutate(point: str) -> None:
+            if point == "config_files_read": source.write_text(source.read_text() + " ")
+            else: original(point)
+        driver._failpoint = mutate  # type: ignore[method-assign]
+        with self.assertRaisesRegex(deploy.Denied, "config_file_changed"):
+            driver._authenticated_config()
+
+    def test_manifest_change_during_authenticated_read_is_denied(self) -> None:
+        driver = self.driver
+        original = driver._failpoint
+        def mutate(point: str) -> None:
+            if point == "config_manifest_read":
+                self.config_manifest.write_text(self.config_manifest.read_text() + " ")
+            else: original(point)
+        driver._failpoint = mutate  # type: ignore[method-assign]
+        with self.assertRaisesRegex(deploy.Denied, "config_manifest_changed"):
+            driver._authenticated_config()
+
     def test_happy_path_delayed_ipv6_direct_save_once_and_marker_after_dump(self) -> None:
         self.host.wait_delay = 4.1; self.host.wait_family = "IPv6"; self.host.wait_relation = "DIRECT"
         self.driver.preflight(); self.assertEqual(self.driver._journal_read()["state"], "PREFLIGHT_PASS")
@@ -309,7 +523,8 @@ class DriverTests(DeployFixture):
         self.driver.preflight(); self.driver.activate(); self.acceptance(); self.driver.finalize()
         with self.assertRaises(deploy.Denied): self.driver.finalize()
         other = deploy.Inputs("other-release", self.target, self.control_plane, deploy.COMPONENTS,
-                              self.config, self.transaction, self.config_manifest_sha)
+                              self.config, self.config_manifest, self.transaction,
+                              self.config_manifest_sha)
         with self.assertRaises(deploy.Denied): FixtureDriver(other, host=self.host, repo=ROOT,
             releases=self.releases, stable=self.stable, lock=self.lock, dump=self.dump, pm2=self.pm2).status()
         self.assertEqual(self.host.events.count("pm2:save"), 1)
@@ -362,13 +577,14 @@ class DriverTests(DeployFixture):
         self.driver.preflight()
         source = self.config / "api-candidate.source.private.json"
         source.write_text(source.read_text() + " ")
-        manifest = read_json_fixture(self.config / "manifest.private.json")
-        manifest["files"][source.name] = sha(source)
-        put(self.config / "manifest.private.json", manifest)
+        manifest = read_json_fixture(self.config_manifest)
+        item = next(item for item in manifest["files"] if item["name"] == source.name)
+        item["sha256"] = sha(source); item["size"] = source.stat().st_size
+        put(self.config_manifest, manifest)
         with self.assertRaisesRegex(deploy.Denied, "config_manifest_sha256_mismatch"):
             self.driver.activate()
         drift = deploy.Inputs(self.candidate, self.target, self.control_plane, deploy.COMPONENTS,
-                              self.config, self.transaction, "f" * 64)
+                              self.config, self.config_manifest, self.transaction, "f" * 64)
         with self.assertRaisesRegex(deploy.Denied, "transaction_binding"):
             FixtureDriver(drift, host=self.host, repo=ROOT, releases=self.releases,
                           stable=self.stable, lock=self.lock, dump=self.dump, pm2=self.pm2).status()

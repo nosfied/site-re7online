@@ -22,6 +22,7 @@ from typing import Any, Callable
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+PRIVATE_MODE = re.compile(r"^0[0-7]{3}$")
 STATES = {
     "PREFLIGHT_PASS", "ACTIVATING", "AWAITING_ACCEPTANCE", "FINALIZING",
     "DEPLOYED", "ROLLING_BACK", "ROLLED_BACK", "FAILED",
@@ -222,6 +223,7 @@ class Inputs:
     control_plane: str
     components: tuple[str, ...]
     config_root: Path
+    config_manifest: Path
     transaction_root: Path
     config_manifest_sha256: str
 
@@ -230,6 +232,7 @@ class Inputs:
             "release": self.release, "target": self.target,
             "controlPlane": self.control_plane, "components": list(self.components),
             "configRoot": str(self.config_root.resolve()),
+            "configManifest": str(self.config_manifest.resolve()),
             "transactionRoot": str(self.transaction_root.resolve()),
             "configManifestSha256": self.config_manifest_sha256,
         }
@@ -295,43 +298,159 @@ class Driver:
         self.journal = inputs.transaction_root / "transaction.v1.private.json"
         self.acceptance = inputs.transaction_root / "acceptance.private.txt"
         self.release_root = releases / inputs.release
+        self._config_paths: dict[str, dict[str, Any]] | None = None
 
     def _definition_paths(self, component: str, role: str) -> dict[str, Path]:
-        prefix = f"{component}-{role}"
-        return {
-            "request": self.inputs.config_root / f"{prefix}.request.private.json",
-            "source": self.inputs.config_root / f"{prefix}.source.private.json",
-            "definition": self.inputs.config_root / f"{prefix}.pm2.private.json",
-        }
+        if self._config_paths is None:
+            deny("config_not_authenticated")
+        return self._config_paths[component][role]["paths"]
 
-    def _manifest(self) -> dict[str, Any]:
-        path = self.inputs.config_root / "manifest.private.json"
+    @staticmethod
+    def _stable_identity(info: os.stat_result) -> tuple[int, ...]:
+        return (info.st_dev, info.st_ino, info.st_uid, info.st_gid, info.st_mode,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+    def _manifest(self) -> tuple[dict[str, Any], os.stat_result]:
+        path = self.inputs.config_manifest
         if not SHA256.fullmatch(self.inputs.config_manifest_sha256):
             deny("config_manifest_sha256_format")
-        raw, _ = stable_regular_bytes(path, required_mode=0o600)
+        if not path.is_absolute() or path.parent != self.inputs.config_root:
+            deny("config_manifest_path")
+        root_info = self.inputs.config_root.lstat()
+        raw, info = stable_regular_bytes(path, required_mode=0o600)
+        if (info.st_uid, info.st_gid) != (root_info.st_uid, root_info.st_gid):
+            deny("config_manifest_owner")
         if hashlib.sha256(raw).hexdigest() != self.inputs.config_manifest_sha256:
             deny("config_manifest_sha256_mismatch")
-        return json_object(raw, path.name)
+        return json_object(raw, path.name), info
+
+    def _declared_config(self, manifest: dict[str, Any], manifest_info: os.stat_result) -> tuple[
+            list[dict[str, Any]], dict[Path, tuple[bytes, os.stat_result, dict[str, Any]]]]:
+        if set(manifest) != {"schemaVersion", "controlPlaneSha", "files",
+                            "privateHashManifestSha256"}:
+            deny("config_manifest_schema")
+        if manifest.get("schemaVersion") != 2:
+            deny("config_manifest_schema_version")
+        if not isinstance(manifest.get("controlPlaneSha"), str) or not SHA40.fullmatch(
+                manifest["controlPlaneSha"]):
+            deny("config_manifest_control_plane")
+        if (not isinstance(manifest.get("privateHashManifestSha256"), str) or
+                not SHA256.fullmatch(manifest["privateHashManifestSha256"])):
+            deny("config_manifest_private_hash")
+        files = manifest.get("files")
+        if not isinstance(files, list):
+            deny("config_manifest_files")
+        root_info = self.inputs.config_root.lstat()
+        declared: list[dict[str, Any]] = []
+        loaded: dict[Path, tuple[bytes, os.stat_result, dict[str, Any]]] = {}
+        seen: set[str] = set()
+        for item in files:
+            if not isinstance(item, dict) or set(item) != {"mode", "name", "sha256", "size"}:
+                deny("config_manifest_entry")
+            name, expected, declared_mode, declared_size = (
+                item.get("name"), item.get("sha256"), item.get("mode"), item.get("size"))
+            if not isinstance(name, str) or not isinstance(expected, str) or not SHA256.fullmatch(expected):
+                deny("config_manifest_entry")
+            if not isinstance(declared_mode, str) or not PRIVATE_MODE.fullmatch(declared_mode):
+                deny("config_manifest_mode")
+            if (not isinstance(declared_size, int) or isinstance(declared_size, bool) or
+                    declared_size < 0):
+                deny("config_manifest_size")
+            relative = PurePosixPath(name)
+            if (relative.is_absolute() or not relative.parts or
+                    any(part in {"", ".", ".."} for part in relative.parts) or
+                    relative.as_posix() != name):
+                deny("config_manifest_relative_path")
+            if name in seen:
+                deny("config_manifest_duplicate_path")
+            seen.add(name)
+            path = self.inputs.config_root.joinpath(*relative.parts)
+            try:
+                resolved = path.resolve(strict=True)
+            except OSError:
+                deny(f"missing_private_file:{path.name}")
+            root_resolved = self.inputs.config_root.resolve(strict=True)
+            if root_resolved not in (resolved, *resolved.parents):
+                deny("config_path_escape")
+            raw, info = stable_regular_bytes(path, required_mode=0o600)
+            if (info.st_uid, info.st_gid) != (root_info.st_uid, root_info.st_gid):
+                deny(f"private_file_owner:{path.name}")
+            if stat.S_IMODE(info.st_mode) != int(declared_mode, 8):
+                deny(f"config_mode_mismatch:{path.name}")
+            if info.st_size != declared_size:
+                deny(f"config_size_mismatch:{path.name}")
+            if hashlib.sha256(raw).hexdigest() != expected:
+                deny(f"config_hash_mismatch:{path.name}")
+            value = json_object(raw, path.name)
+            declared.append({"path": path, "name": name, "sha256": expected, "value": value})
+            loaded[path] = (raw, info, value)
+        self._failpoint("config_files_read")
+        try:
+            current_manifest = self.inputs.config_manifest.stat()
+        except OSError:
+            deny("config_manifest_changed")
+        if self._stable_identity(current_manifest) != self._stable_identity(manifest_info):
+            deny("config_manifest_changed")
+        for path, (_, info, _) in loaded.items():
+            try:
+                current = path.stat()
+            except OSError:
+                deny(f"config_file_changed:{path.name}")
+            if self._stable_identity(current) != self._stable_identity(info):
+                deny(f"config_file_changed:{path.name}")
+        return declared, loaded
+
+    def _resolve_config_paths(self, declared: list[dict[str, Any]]) -> dict[str, Any]:
+        requests: dict[tuple[str, str], list[int]] = {}
+        sources: dict[tuple[str, str], list[int]] = {}
+        for index, item in enumerate(declared):
+            value = item["value"]
+            component, role = value.get("component"), value.get("role")
+            if component not in COMPONENTS or role not in {"candidate", "rollback"}:
+                continue
+            key = (component, role)
+            if (value.get("schemaVersion") == 2 and isinstance(value.get("environmentKeys"), list)
+                    and isinstance(value.get("scope"), str)):
+                requests.setdefault(key, []).append(index)
+            if (value.get("schemaVersion") == 1 and isinstance(value.get("definition"), dict)
+                    and isinstance(value.get("provenance"), dict)
+                    and isinstance(value.get("releaseIdentity"), dict)):
+                sources.setdefault(key, []).append(index)
+
+        result: dict[str, Any] = {component: {} for component in COMPONENTS}
+        used: set[int] = set()
+        for component in COMPONENTS:
+            for role in ("candidate", "rollback"):
+                key = (component, role)
+                if len(requests.get(key, [])) != 1 or len(sources.get(key, [])) != 1:
+                    deny(f"config_artifact_identity:{component}:{role}")
+                request_index, source_index = requests[key][0], sources[key][0]
+                source = declared[source_index]["value"]
+                definition_index = request_index - 1
+                if (source_index != request_index + 1 or definition_index < 0 or
+                        declared[definition_index]["value"] != source["definition"] or
+                        not isinstance(declared[definition_index]["value"].get("apps"), list)):
+                    deny(f"config_artifact_group:{component}:{role}")
+                group = {request_index, source_index, definition_index}
+                if used & group:
+                    deny("config_artifact_reused")
+                used |= group
+                paths = {"request": declared[request_index]["path"],
+                         "source": declared[source_index]["path"],
+                         "definition": declared[definition_index]["path"]}
+                hashes = {kind: declared[index]["sha256"] for kind, index in (
+                    ("request", request_index), ("source", source_index),
+                    ("definition", definition_index))}
+                result[component][role] = {"paths": paths, "hashes": hashes}
+        return result
 
     def _authenticated_config(self) -> dict[str, Any]:
         private_directory(self.inputs.config_root)
-        manifest = self._manifest()
-        result: dict[str, Any] = {}
-        for component in COMPONENTS:
-            result[component] = {}
-            for role in ("candidate", "rollback"):
-                paths = self._definition_paths(component, role)
-                hashes: dict[str, str] = {}
-                for kind, path in paths.items():
-                    regular_private(path)
-                    expected = find_digest(manifest, path.name)
-                    if expected is None:
-                        deny(f"config_manifest_missing:{path.name}")
-                    observed = digest(path)
-                    if observed != expected:
-                        deny(f"config_hash_mismatch:{path.name}")
-                    hashes[kind] = observed
-                result[component][role] = {"paths": paths, "hashes": hashes}
+        manifest, manifest_info = self._manifest()
+        self._failpoint("config_manifest_read")
+        declared, _ = self._declared_config(manifest, manifest_info)
+        result = self._resolve_config_paths(declared)
+        self._config_paths = result
         return result
 
     def _resolve_pm2(self) -> Path:
@@ -909,12 +1028,14 @@ def parse() -> tuple[str, Inputs]:
     parser.add_argument("--control-plane", required=True)
     parser.add_argument("--components", required=True)
     parser.add_argument("--config-root", type=Path, required=True)
+    parser.add_argument("--config-manifest", type=Path, required=True)
     parser.add_argument("--config-manifest-sha256", required=True)
     parser.add_argument("--transaction-root", type=Path, required=True)
     args = parser.parse_args()
     components = tuple(args.components.split(","))
     return args.command, Inputs(args.release, args.target, args.control_plane,
-                                components, args.config_root, args.transaction_root,
+                                components, args.config_root, args.config_manifest,
+                                args.transaction_root,
                                 args.config_manifest_sha256)
 
 

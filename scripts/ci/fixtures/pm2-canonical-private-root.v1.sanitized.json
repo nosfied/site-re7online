@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 2,
+  "manifestName": "final-hash-manifest.private.json",
+  "manifestStructuralFingerprintSha256": "6b68a5dc4be2c3a1a0ce1fbdf95c4246c8b38b169744adf90f20070980a04467",
+  "manifestShape": {
+    "schemaVersion": 2,
+    "controlPlaneSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "files": [
+      {
+        "name": "api-candidate.definition.private.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+        "mode": "0600",
+        "size": 101
+      },
+      {
+        "name": "api-candidate.request.private.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+        "mode": "0600",
+        "size": 102
+      },
+      {
+        "name": "api-candidate.source.private.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000003",
+        "mode": "0600",
+        "size": 103
+      },
+      {
+        "name": "api-rollback.definition.private.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000004",
+        "mode": "0600",
+        "size": 104
+      },
+      {
+        "name": "api-rollback.request.private.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000005",
+        "mode": "0600",
+        "size": 105
+      },
+      {
+        "name": "api-rollback.source.private.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000006",
+        "mode": "0600",
+        "size": 106
+      },
+      {
+        "name": "api-stable-env.private.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000007",
+        "mode": "0600",
+        "size": 107
+      },
+      {
+        "name": "blocking-gates-revalidation.private.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000008",
+        "mode": "0600",
+        "size": 108
+      },
+      {
+        "name": "frontend-candidate.definition.private.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000009",
+        "mode": "0600",
+        "size": 109
+      },
+      {
+        "name": "frontend-candidate.request.private.json",
+        "sha256": "000000000000000000000000000000000000000000000000000000000000000a",
+        "mode": "0600",
+        "size": 110
+      },
+      {
+        "name": "frontend-candidate.source.private.json",
+        "sha256": "000000000000000000000000000000000000000000000000000000000000000b",
+        "mode": "0600",
+        "size": 111
+      },
+      {
+        "name": "frontend-rollback.definition.private.json",
+        "sha256": "000000000000000000000000000000000000000000000000000000000000000c",
+        "mode": "0600",
+        "size": 112
+      },
+      {
+        "name": "frontend-rollback.request.private.json",
+        "sha256": "000000000000000000000000000000000000000000000000000000000000000d",
+        "mode": "0600",
+        "size": 113
+      },
+      {
+        "name": "frontend-rollback.source.private.json",
+        "sha256": "000000000000000000000000000000000000000000000000000000000000000e",
+        "mode": "0600",
+        "size": 114
+      },
+      {
+        "name": "frontend-stable-env.private.json",
+        "sha256": "000000000000000000000000000000000000000000000000000000000000000f",
+        "mode": "0600",
+        "size": 115
+      },
+      {
+        "name": "future-command-plan.private.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000010",
+        "mode": "0600",
+        "size": 116
+      },
+      {
+        "name": "private-hash-manifest.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000011",
+        "mode": "0600",
+        "size": 117
+      },
+      {
+        "name": "sanitized-report.private.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000012",
+        "mode": "0600",
+        "size": 118
+      }
+    ],
+    "privateHashManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "artifactGroupOrder": [
+    "definition",
+    "request",
+    "source"
+  ],
+  "rootMode": "0700",
+  "fileMode": "0600",
+  "containsPrivateValues": false
+}
