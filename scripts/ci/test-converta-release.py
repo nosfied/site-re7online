@@ -1,0 +1,274 @@
+#!/usr/bin/env python3
+"""Contract and tamper tests for the external immutable release producer."""
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+import tempfile
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+PRODUCER = ROOT / "scripts/converta-release.py"
+COMPONENTS = "api,frontend"
+EPOCH = "1792713600"
+SPEC = importlib.util.spec_from_file_location("converta_release", PRODUCER)
+assert SPEC and SPEC.loader
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+
+
+def invoke(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([sys.executable, str(PRODUCER), *args], text=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+
+
+def write(path: Path, value: str, mode: int = 0o644) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(value)
+    path.chmod(mode)
+
+
+def fixture_repo(root: Path) -> tuple[Path, str, dict[str, str]]:
+    repo = root / "source"
+    repo.mkdir()
+    write(repo / "package.json", '{"scripts":{"build":"fixture"}}\n')
+    write(repo / "package-lock.json", '{"lockfileVersion":3}\n')
+    write(repo / ".gitignore", "node_modules/\n.next/\napps/*/dist/\n")
+    write(repo / "next.config.ts", "export default {};\n")
+    write(repo / "public/logo.txt", "public\n")
+    api = repo / "apps/whatsapp-agent"
+    write(api / "package.json", '{"scripts":{"build":"fixture","db:generate":"fixture"}}\n')
+    write(api / "package-lock.json", '{"lockfileVersion":3}\n')
+    write(api / "src/index.ts", "fixture\n")
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Fixture"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    environment = os.environ.copy()
+    environment.update(GIT_AUTHOR_DATE="2026-10-23T00:00:00Z", GIT_COMMITTER_DATE="2026-10-23T00:00:00Z")
+    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True, env=environment)
+    target = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+
+    shims = root / "shims"
+    shims.mkdir()
+    write(shims / "node", "#!/bin/sh\n[ \"$1\" = --version ] && { echo v20.20.0; exit 0; }\nexit 64\n", 0o755)
+    npm = r'''#!/bin/sh
+set -eu
+if [ "${1:-}" = --version ]; then echo 10.8.2; exit 0; fi
+case "$PWD:$*" in
+  */apps/whatsapp-agent:*db:generate*)
+    mkdir -p node_modules/.prisma/client
+    printf 'generated\n' > node_modules/.prisma/client/index.js
+    ;;
+  */apps/whatsapp-agent:*build*)
+    mkdir -p dist
+    printf 'console.log("api fixture");\n' > dist/index.js
+    ;;
+  */apps/whatsapp-agent:*ci*)
+    mkdir -p node_modules/.bin node_modules/runtime-package
+    printf 'runtime\n' > node_modules/runtime-package/index.js
+    ln -sf ../runtime-package/index.js node_modules/.bin/runtime-tool
+    ;;
+  *:*ci*)
+    mkdir -p node_modules/.bin node_modules/next/dist/bin
+    printf '#!/usr/bin/env node\n' > node_modules/next/dist/bin/next
+    chmod 755 node_modules/next/dist/bin/next
+    ln -sf ../next/dist/bin/next node_modules/.bin/next
+    ;;
+  *:*build*)
+    mkdir -p .next/static/chunks .next/server
+    printf 'fixture-build-id\n' > .next/BUILD_ID
+    printf 'asset\n' > .next/static/chunks/app.js
+    printf 'server\n' > .next/server/app.js
+    ;;
+  *) exit 65 ;;
+esac
+'''
+    write(shims / "npm", npm, 0o755)
+    environment["PATH"] = f"{shims}:{environment['PATH']}"
+    return repo, target, environment
+
+
+class ReleaseProducerTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.temp = tempfile.TemporaryDirectory(prefix="converta-release-test-")
+        cls.base = Path(cls.temp.name)
+        cls.repo, cls.target, cls.env = fixture_repo(cls.base)
+        cls.release_id = "immutable-fixture-20261023T000000Z"
+        cls.output_a = cls.base / "output-a"
+        command = [sys.executable, str(PRODUCER), "build", "--repo", str(cls.repo),
+                   "--target", cls.target, "--release-id", cls.release_id,
+                   "--components", COMPONENTS, "--output", str(cls.output_a),
+                   "--source-date-epoch", EPOCH]
+        result = subprocess.run(["sh", "-c", "umask 077; exec \"$@\"", "fixture", *command],
+                                env=cls.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode:
+            raise AssertionError((result.stdout, result.stderr))
+        cls.release = cls.output_a / cls.release_id
+        cls.package = cls.output_a / f"{cls.release_id}.tar.xz"
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.temp.cleanup()
+
+    def copy_release(self, name: str) -> Path:
+        destination = self.base / name / self.release_id
+        destination.parent.mkdir()
+        shutil.copytree(self.release, destination, symlinks=True)
+        return destination
+
+    def verify(self, root: Path) -> subprocess.CompletedProcess[str]:
+        return invoke("verify", "--release-root", str(root), "--target", self.target,
+                      "--release-id", self.release_id, "--components", COMPONENTS)
+
+    def assert_denied(self, result: subprocess.CompletedProcess[str], predicate: str) -> None:
+        self.assertEqual(result.returncode, 2, (result.stdout, result.stderr))
+        self.assertIn(f"RELEASE_DENY:{predicate}", result.stderr)
+
+    def test_build_once_verify_and_same_payload_packaging_is_reproducible(self) -> None:
+        result = self.verify(self.release)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["result"], "RELEASE VERIFIED")
+        package_result = invoke("verify", "--package", str(self.package), "--target", self.target,
+                                "--release-id", self.release_id, "--components", COMPONENTS)
+        self.assertEqual(package_result.returncode, 0, package_result.stderr)
+        packaging = self.base / "same-payload-packaging"
+        packaging.mkdir()
+        tar_a, tar_b = packaging / "a.tar", packaging / "b.tar"
+        self.assertEqual(MODULE.write_tar(self.release, tar_a, int(EPOCH)),
+                         MODULE.write_tar(self.release, tar_b, int(EPOCH)))
+        self.assertEqual(tar_a.read_bytes(), tar_b.read_bytes())
+        package_a, package_b = packaging / "a.tar.xz", packaging / "b.tar.xz"
+        self.assertEqual(MODULE.compress_tar(tar_a, package_a),
+                         MODULE.compress_tar(tar_b, package_b))
+        self.assertEqual(package_a.read_bytes(), package_b.read_bytes())
+        self.assertEqual(package_a.read_bytes(), self.package.read_bytes())
+        manifest_before = (self.release / "manifest.json").read_bytes()
+        index_before = (self.release / "index.sha256").read_bytes()
+        self.assertEqual(manifest_before, (self.release / "manifest.json").read_bytes())
+        self.assertEqual(index_before, (self.release / "index.sha256").read_bytes())
+
+    def test_runtime_addition_denied(self) -> None:
+        root = self.copy_release("extra")
+        write(root / "api-runtime/extra.js", "extra\n")
+        self.assert_denied(self.verify(root), "release_index_inventory")
+
+    def test_runtime_removal_denied(self) -> None:
+        root = self.copy_release("missing")
+        (root / "api-runtime/dist/index.js").unlink()
+        self.assert_denied(self.verify(root), "release_index_inventory")
+
+    def test_runtime_modification_denied(self) -> None:
+        root = self.copy_release("modified")
+        write(root / "api-runtime/dist/index.js", "changed\n")
+        self.assert_denied(self.verify(root), "release_index_mismatch:api-runtime/dist/index.js")
+
+    def test_directory_mode_denied(self) -> None:
+        root = self.copy_release("mode")
+        (root / "frontend-runtime/.next").chmod(0o700)
+        self.assert_denied(self.verify(root), "release_index_mismatch:frontend-runtime/.next")
+
+    def test_broken_symlink_denied(self) -> None:
+        root = self.copy_release("broken-link")
+        link = root / "frontend-runtime/node_modules/.bin/next"
+        link.unlink()
+        link.symlink_to("../missing/next")
+        self.assert_denied(self.verify(root), "release_symlink_broken:frontend-runtime/node_modules/.bin/next")
+
+    def test_escaping_symlink_denied(self) -> None:
+        root = self.copy_release("escape-link")
+        link = root / "frontend-runtime/node_modules/.bin/next"
+        link.unlink()
+        link.symlink_to("/etc/passwd")
+        self.assert_denied(self.verify(root), "release_symlink_escape:frontend-runtime/node_modules/.bin/next")
+
+    def test_stale_manifest_metadata_denied(self) -> None:
+        root = self.copy_release("stale")
+        manifest = json.loads((root / "manifest.json").read_text())
+        manifest["runtimes"]["frontend"]["buildId"] = "stale"
+        (root / "manifest.json").write_text(json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n")
+        self.assert_denied(self.verify(root), "release_frontend_build_id")
+
+    def test_missing_build_id_denied(self) -> None:
+        root = self.copy_release("missing-build-id")
+        (root / "frontend-runtime/.next/BUILD_ID").unlink()
+        self.assert_denied(self.verify(root), "release_index_inventory")
+
+    def test_invalid_build_id_denied(self) -> None:
+        root = self.copy_release("invalid-build-id")
+        write(root / "frontend-runtime/.next/BUILD_ID", "bad\ninternal\n")
+        self.assert_denied(self.verify(root), "release_index_mismatch:frontend-runtime/.next/BUILD_ID")
+
+    def test_build_id_reader_rejects_empty_internal_newline_and_non_ascii(self) -> None:
+        root = self.base / "build-id-format-cases"
+        root.mkdir()
+        for index, raw in enumerate((b"", b"bad\ninternal", b"bad value", b"\xff")):
+            path = root / str(index)
+            path.write_bytes(raw)
+            with self.assertRaises(MODULE.Denied):
+                MODULE.read_build_id(path)
+        valid = root / "valid"
+        valid.write_bytes(b"valid_BUILD-ID_1\n")
+        self.assertEqual(MODULE.read_build_id(valid), "valid_BUILD-ID_1")
+
+    def test_different_runtime_identity_denied(self) -> None:
+        root = self.copy_release("different-runtime")
+        write(root / "frontend-runtime/.next/BUILD_ID", "different\n")
+        self.assert_denied(self.verify(root), "release_index_mismatch:frontend-runtime/.next/BUILD_ID")
+
+    def test_truncated_package_denied(self) -> None:
+        package = self.base / "truncated.tar.xz"
+        package.write_bytes(self.package.read_bytes()[:1024])
+        result = invoke("verify", "--package", str(package), "--target", self.target,
+                        "--release-id", self.release_id, "--components", COMPONENTS)
+        self.assert_denied(result, "package_integrity")
+
+    def test_incomplete_or_reused_output_denied(self) -> None:
+        existing = self.base / "existing-output"
+        existing.mkdir()
+        result = invoke("build", "--repo", str(self.repo), "--target", self.target,
+                        "--release-id", "immutable-incomplete", "--components", COMPONENTS,
+                        "--output", str(existing), "--source-date-epoch", EPOCH, env=self.env)
+        self.assert_denied(result, "output_exists")
+
+    def test_package_inventory_excludes_source_worker_and_sensitive_files(self) -> None:
+        with tarfile.open(self.package, "r:xz") as archive:
+            names = [member.name for member in archive.getmembers()]
+        self.assertFalse(any("worker" in name.casefold() for name in names))
+        self.assertFalse(any("/.git/" in name or "/.env" in name or name.endswith(".log") for name in names))
+        self.assertEqual({Path(name).parts[1] for name in names if len(Path(name).parts) > 1},
+                         {"api-runtime", "frontend-runtime", "manifest.json", "index.sha256"})
+
+    def test_cache_secret_and_worker_entries_are_denied(self) -> None:
+        for label, relative in (("cache-entry", "api-runtime/cache/value"),
+                                ("secret-entry", "api-runtime/.env.production"),
+                                ("worker-entry", "api-runtime/worker/value")):
+            root = self.copy_release(label)
+            write(root / relative, "forbidden\n")
+            result = self.verify(root)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("RELEASE_DENY:forbidden_release_entry:", result.stderr)
+
+    def test_manifest_and_index_are_closed_contracts(self) -> None:
+        manifest = json.loads((self.release / "manifest.json").read_text())
+        self.assertEqual(manifest["schemaVersion"], 1)
+        self.assertEqual(manifest["components"], ["api", "frontend"])
+        self.assertEqual(manifest["toolchain"], {"node": "v20.20.0", "npm": "10.8.2"})
+        index = json.loads((self.release / "index.sha256").read_text())
+        self.assertEqual(set(index), {"schemaVersion", "scope", "entries"})
+        self.assertEqual(index["scope"], ["api-runtime", "frontend-runtime"])
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

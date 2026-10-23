@@ -9,7 +9,8 @@ anteriores permanecem como evidência histórica e não autorizam repetição.
 ## Topologia canônica
 
 - O build ocorre fora da VPS em Linux `x86_64`, com Node `v20.20.0` e npm
-  `10.8.2`.
+  compatível com o lockfile. O produtor canônico é
+  `scripts/converta-release.py`; o driver de ativação não constrói artefatos.
 - API e frontend são artefatos completos, versionados e validados por índice,
   manifesto, extração independente e SHA-256.
 - Releases são imutáveis e residem em `/opt/re7online/releases/<release-id>`.
@@ -25,7 +26,8 @@ anteriores permanecem como evidência histórica e não autorizam repetição.
 
 ## Sequência de promoção
 
-1. Validar o pacote fora da VPS e transferir somente o artefato imutável e hashes.
+1. Produzir e validar o pacote fora da VPS com `converta-release.py build|verify`;
+   transferir somente o artefato imutável e hashes.
 2. Extrair em raiz nova e comprovar igualdade integral antes da seleção.
 3. Adquirir o lock global e capturar dump PM2 e definições completas de retorno em
    arquivos privados `0600`.
@@ -41,6 +43,27 @@ anteriores permanecem como evidência histórica e não autorizam repetição.
 8. Executar `pm2 save` exatamente uma vez, somente depois dos gates e do aceite
    aplicável. Conferir dump regular, modo real `0600` e SHA-256.
 9. Criar o marker `DEPLOYED` apenas depois da validação do dump.
+
+### Fronteira entre produção e ativação
+
+`converta-release.py` possui apenas `build` e `verify`. Ele exige worktree limpo no
+target, Node `v20.20.0`, saída exclusiva e `SOURCE_DATE_EPOCH`; executa Prisma antes
+do build da API, executa o frontend uma vez e sela API/frontend completos. Seu
+`index.sha256` usa exatamente o schema v1 conferido por `converta-deploy.py`, e o pacote só é publicado após
+fechamento, teste xz/tar, extração independente e comparação integral.
+
+O manifesto registra target, release, componentes, toolchain, BUILD_ID, hash do
+entrypoint da API, hash do índice e campos determinísticos. Caches, `.env`, Git,
+logs, evidências, uploads, worker e symlinks externos são negados. O produtor não
+possui rede produtiva, PM2, banco, Meta, configuração privada ou seleção de runtime;
+essas responsabilidades permanecem exclusivamente no driver após autorização.
+
+O modelo é **build once / promote the same artifact**. Builds Next independentes
+podem produzir BUILD_ID diferente sem invalidar o produtor; apenas um build é
+designado canônico. O empacotamento do mesmo payload congelado é byte a byte
+reprodutível, e o SHA-256 do `.tar.xz` identifica o transporte. Transferência,
+extração, retry e ativação reutilizam esse mesmo pacote. Reconstruir, mesmo no mesmo
+commit, produz outra release com novo BUILD_ID, manifesto, índice e hashes.
 
 ### Readiness depois da seleção PM2
 

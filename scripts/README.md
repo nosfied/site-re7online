@@ -1,5 +1,20 @@
 # Operational Scripts
 
+## `converta-release.py` — produtor externo build-once
+
+Constrói e verifica, fora da VPS, uma release imutável de API e frontend. Expõe
+somente `build` e `verify`, exige worktree limpo no target exato, Node `v20.20.0`,
+`SOURCE_DATE_EPOCH` explícito, saída nova e os componentes `api,frontend`.
+
+O produtor executa `npm ci`, Prisma generate e cada build exatamente uma vez;
+captura sem alterar o BUILD_ID efetivamente produzido; materializa apenas
+`api-runtime`, `frontend-runtime`, `manifest.json` e `index.sha256`; normaliza modos
+e timestamps; cria `.tar.xz` reprodutível para o mesmo payload congelado por arquivo
+temporário; e exige extração independente idêntica antes de publicar o pacote. Builds
+independentes podem gerar outro BUILD_ID e constituem outra release. O índice usa
+exatamente o schema v1 consumido por `converta-deploy.py`. O produtor não acessa VPS,
+PM2, banco, Meta ou configuração privada.
+
 ## `converta-deploy.py` — caminho canônico
 
 Coordena exclusivamente releases imutáveis já construídas de API e frontend. Reusa
