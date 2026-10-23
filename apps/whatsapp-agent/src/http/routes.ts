@@ -1292,6 +1292,7 @@ async function handleInternalWebSessionHandoffRealtime(
 }
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
+  installRejectedRequestBodyLifecycle(req, res);
   const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
   if (!isCampaignMutation(req.method, pathname)) return handleRequestWithCampaignAdmission(req, res);
   try { return await campaignTask("http-prevalidation", () => handleRequestWithCampaignAdmission(req, res)); }
@@ -1299,6 +1300,42 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     if (!(error instanceof CampaignOperationsClosed)) throw error;
     if (!res.headersSent) json(res, 503, { error: "campaign_operations_closed" });
   }
+}
+
+const REJECTED_BODY_DISCARD_LIMIT_BYTES = 64 * 1024;
+
+function installRejectedRequestBodyLifecycle(req: IncomingMessage, res: ServerResponse) {
+  const originalWriteHead = res.writeHead;
+  res.writeHead = function guardedWriteHead(
+    this: ServerResponse,
+    statusCode: number,
+    ...args: unknown[]
+  ) {
+    if (statusCode >= 400 && !req.complete && !req.readableEnded && requestMayHaveBody(req)) {
+      const declaredLength = parseContentLength(req.headers["content-length"]);
+      const boundedBody = declaredLength !== null && declaredLength <= REJECTED_BODY_DISCARD_LIMIT_BYTES;
+      if (!boundedBody) {
+        this.shouldKeepAlive = false;
+        this.setHeader("Connection", "close");
+      }
+      req.once("error", () => undefined);
+      req.resume();
+    }
+    return Reflect.apply(originalWriteHead, this, [statusCode, ...args]) as ServerResponse;
+  } as ServerResponse["writeHead"];
+}
+
+function requestMayHaveBody(req: IncomingMessage) {
+  const transferEncoding = req.headers["transfer-encoding"];
+  if (typeof transferEncoding === "string" && transferEncoding.trim()) return true;
+  const declaredLength = parseContentLength(req.headers["content-length"]);
+  return declaredLength !== null && declaredLength > 0;
+}
+
+function parseContentLength(value: string | undefined) {
+  if (value === undefined || !/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -27439,10 +27476,16 @@ async function submitTemplateRequestToMeta(params: {
     )) {
       const uncertain = error.code !== "meta_template_media_upload_failed";
       const status = uncertain ? "submission_unknown" : "failed";
-      await params.prisma.template.update({
-        where: { id: template.id },
-        data: { status, rejectionReason: error.code },
-      });
+      await params.prisma.$transaction([
+        params.prisma.template.update({
+          where: { id: template.id },
+          data: { status, rejectionReason: error.code },
+        }),
+        params.prisma.templateRequest.update({
+          where: { id: templateRequest.id },
+          data: { status, notes: error.code },
+        }),
+      ]);
       await persistEvent({
         clientId: templateRequest.clientId,
         requestId: `template-request-media-upload:${templateRequest.id}:${Date.now()}`,

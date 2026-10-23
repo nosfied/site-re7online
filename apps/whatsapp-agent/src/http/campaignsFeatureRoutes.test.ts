@@ -71,6 +71,7 @@ let filterOptedOutCampaignRecipients: typeof import("../campaigns/optOutRegistry
 let recordContactOptOut: typeof import("../campaigns/optOutRegistry.js").recordContactOptOut;
 let revokeContactOptOut: typeof import("../campaigns/optOutRegistry.js").revokeContactOptOut;
 let runtimeStorage: typeof import("../storage/runtimeStorage.js").runtimeStorage;
+let metaAppIdRouteRequestCount = 0;
 
 let businessClientId = "";
 let governmentClientId = "";
@@ -835,6 +836,9 @@ test.before(async () => {
     await import("../templates/templateReviewNotification.js")
   ).setTemplateReviewNotificationSenderForTests;
   server = createServer((req, res) => {
+    if (new URL(req.url ?? "/", "http://localhost").pathname.endsWith("/meta-app-id")) {
+      metaAppIdRouteRequestCount += 1;
+    }
     void handleRequest(req, res);
   });
   await new Promise<void>((resolve) => {
@@ -6922,7 +6926,20 @@ test("admin onboarding code exchange sends canonical manual oauth redirect uri f
   }
 });
 
-test("superadmin configures App ID only for the target embedded-signup tenant", async () => {
+test("superadmin configures App ID only for the target embedded-signup tenant", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let externalNetworkAttempts = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input : input.url);
+    if (url.hostname !== "127.0.0.1" || url.origin !== new URL(baseUrl).origin) {
+      externalNetworkAttempts += 1;
+      throw new Error("external_network_denied");
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
   const client = await prisma.client.findUniqueOrThrow({
     where: { id: businessClientId },
     select: { clientKey: true },
@@ -6940,6 +6957,7 @@ test("superadmin configures App ID only for the target embedded-signup tenant", 
     data: { clientId: other.id, rawPayload: { source: "other_provider", retained: true } },
   });
 
+  const requestCountBeforeDenials = metaAppIdRouteRequestCount;
   const denied = await requestAdmin<ErrorPayload>(
     "PUT",
     `/admin/tenants/${encodeURIComponent(client.clientKey)}/meta-app-id`,
@@ -6952,6 +6970,13 @@ test("superadmin configures App ID only for the target embedded-signup tenant", 
     { appId: "100001", provenance: "embedded_signup", confirmTenantScoped: true }
   );
   assert.equal(crossTenantDenied.status, 403);
+  assert.equal(metaAppIdRouteRequestCount - requestCountBeforeDenials, 2);
+  const configsAfterDenials = await prisma.tenantMetaConfig.findMany({
+    where: { clientId: { in: [businessClientId, other.id] } },
+    orderBy: { clientId: "asc" },
+    select: { clientId: true, rawPayload: true },
+  });
+  assert.equal(JSON.stringify(configsAfterDenials).includes("100001"), false);
 
   const invalid = await requestSuperadmin<ErrorPayload>(
     "PUT",
@@ -7002,6 +7027,7 @@ test("superadmin configures App ID only for the target embedded-signup tenant", 
   assert.equal((targetConfig.rawPayload as Record<string, unknown>).retained, true);
   assert.deepEqual(otherConfig.rawPayload, { source: "other_provider", retained: true });
   assert.equal(JSON.stringify(events).includes("100001"), false);
+  assert.equal(externalNetworkAttempts, 0);
 });
 
 test("admin onboarding code exchange resolves WABA by displayed phone when OAuth omits ids", async () => {
@@ -13135,6 +13161,93 @@ test("media submit without tenant App ID stays internal approved and performs no
   ]);
   assert.equal(storedRequest.status, "internal_approved");
   assert.equal(template, null);
+});
+
+test("media submit without tenant App ID and provider uncertainty preserve result truth", async (t) => {
+  const upload = await requestMultipart<{ asset: { id: string } }>(
+    "/app/templates/media",
+    businessAdmin,
+    mediaForm()
+  );
+  assert.equal(upload.status, 201);
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      businessToken: "result-truth-token",
+      wabaId: "result-truth-waba",
+      rawPayload: { source: "embedded_signup", appId: "100001" },
+    },
+    update: {
+      businessToken: "result-truth-token",
+      wabaId: "result-truth-waba",
+      rawPayload: { source: "embedded_signup", appId: "100001" },
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  let providerMode: "upload_failed" | "upload_uncertain" | "submit_uncertain" = "upload_failed";
+  let providerCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input : input.url);
+    if (url.hostname !== "graph.facebook.com") return originalFetch(input, init);
+    providerCalls += 1;
+    if (providerMode === "upload_failed") {
+      return new Response(JSON.stringify({ error: { code: 100, message: "invalid media" } }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new TypeError(`controlled_${providerMode}`);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const cases = [
+    { mode: "upload_failed" as const, headerType: "IMAGE", expectedStatus: "failed", expectedHttpStatus: 400 },
+    { mode: "upload_uncertain" as const, headerType: "IMAGE", expectedStatus: "submission_unknown", expectedHttpStatus: 502 },
+    { mode: "submit_uncertain" as const, headerType: "NONE", expectedStatus: "submission_unknown", expectedHttpStatus: 502 },
+  ];
+  for (const [index, item] of cases.entries()) {
+    providerMode = item.mode;
+    const created = await prisma.templateRequest.create({
+      data: {
+        clientId: businessClientId,
+        name: `result_truth_${item.mode}_${safeTemplatePrefix}`,
+        category: "UTILITY",
+        content: `Aviso de resultado ${index + 1}.`,
+        variables: { language: "pt_BR", variableDetails: [], variables: [] },
+        status: "internal_approved",
+        headerType: item.headerType,
+        exampleMediaId: item.headerType === "IMAGE" ? upload.body.asset.id : null,
+      },
+    });
+    const callsBefore = providerCalls;
+    const response = await requestAdmin<ErrorPayload>(
+      "POST",
+      `/admin/templates/requests/${created.id}/submit`
+    );
+    assert.equal(response.status, item.expectedHttpStatus);
+    assert.equal(providerCalls - callsBefore, 1);
+    const [storedRequest, storedTemplate] = await Promise.all([
+      prisma.templateRequest.findUniqueOrThrow({ where: { id: created.id }, select: { status: true } }),
+      prisma.template.findUniqueOrThrow({
+        where: { clientId_name: { clientId: businessClientId, name: created.name } },
+        select: { status: true },
+      }),
+    ]);
+    assert.equal(storedRequest.status, item.expectedStatus);
+    assert.equal(storedTemplate.status, item.expectedStatus);
+
+    const callsBeforeBlockedRetry = providerCalls;
+    const retry = await requestAdmin<ErrorPayload>(
+      "POST",
+      `/admin/templates/requests/${created.id}/submit`
+    );
+    assert.equal(retry.status, 409);
+    assert.equal(providerCalls, callsBeforeBlockedRetry);
+  }
 });
 
 test("admin submit uses saved variable examples in Meta payload", async (t) => {
