@@ -12695,6 +12695,181 @@ test("bulk template sync can use env WABA only when env phone belongs to tenant"
   assert.equal(authHeaders.every((value) => value === "Bearer test-env-business-token"), true);
 });
 
+test("template submission reconciliation confirms exact remote identity without retrying creation", async (t) => {
+  await configureBusinessTemplateMetaTransport({ suffix: `reconcile-${safeTemplatePrefix}` });
+  const suffix = crypto.randomUUID().replace(/-/g, "");
+  const names = {
+    pending: `reconcile_pending_${suffix}`,
+    approved: `reconcile_approved_${suffix}`,
+    rejected: `reconcile_rejected_${suffix}`,
+    missing: `reconcile_missing_${suffix}`,
+    ambiguous: `reconcile_ambiguous_${suffix}`,
+    unknown: `reconcile_unknown_${suffix}`,
+    concurrent: `reconcile_concurrent_${suffix}`,
+  };
+  const ids = new Map<string, { templateId: string; requestId: string; assetId: string | null }>();
+  const createCase = async (name: string, withStoredMedia = false) => {
+    const asset = withStoredMedia
+      ? await prisma.templateMediaAsset.create({
+          data: {
+            clientId: businessClientId,
+            purpose: "TEMPLATE_EXAMPLE",
+            kind: "IMAGE",
+            storageKey: `${businessClientId}/template/${crypto.randomUUID()}.jpg`,
+            mimeType: "image/jpeg",
+            sizeBytes: 4,
+            sha256: "d".repeat(64),
+            state: "stored",
+          },
+        })
+      : null;
+    const template = await prisma.template.create({
+      data: {
+        clientId: businessClientId,
+        name,
+        category: "MARKETING",
+        language: "pt_BR",
+        content: "Conteudo de homologacao",
+        status: "submission_unknown",
+        headerType: asset ? "IMAGE" : "NONE",
+        exampleMediaId: asset?.id,
+      },
+    });
+    const request = await prisma.templateRequest.create({
+      data: {
+        clientId: businessClientId,
+        name,
+        category: "MARKETING",
+        content: template.content,
+        variables: { language: "pt_BR", variableDetails: [] },
+        status: "submission_unknown",
+        headerType: asset ? "IMAGE" : "NONE",
+        exampleMediaId: asset?.id,
+      },
+    });
+    ids.set(name, { templateId: template.id, requestId: request.id, assetId: asset?.id ?? null });
+  };
+  await Promise.all([
+    createCase(names.pending, true),
+    createCase(names.approved),
+    createCase(names.rejected),
+    createCase(names.missing),
+    createCase(names.ambiguous),
+    createCase(names.unknown),
+    createCase(names.concurrent),
+  ]);
+  const isolated = await prisma.template.create({
+    data: {
+      clientId: governmentClientId,
+      name: names.pending,
+      category: "MARKETING",
+      language: "pt_BR",
+      content: "Outro tenant",
+      status: "submission_unknown",
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  let creationPosts = 0;
+  let concurrentCalls = 0;
+  let releaseDelayedPending!: () => void;
+  const delayedPending = new Promise<void>((resolve) => { releaseDelayedPending = resolve; });
+  let delayedPendingStarted!: () => void;
+  const pendingStarted = new Promise<void>((resolve) => { delayedPendingStarted = resolve; });
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (!url.startsWith("https://graph.facebook.com/")) return originalFetch(input, init);
+    providerCalls += 1;
+    if ((init?.method ?? "GET") !== "GET") creationPosts += 1;
+    assert.equal(new URL(url).pathname.includes("/template-meta-waba-reconcile-"), true);
+    const name = new URL(url).searchParams.get("name") ?? "";
+    let data: Array<Record<string, unknown>> = [];
+    if (name === names.pending) data = [{ id: `meta-${name}`, name, language: "pt_BR", status: "PENDING" }];
+    if (name === names.approved) data = [{ id: `meta-${name}`, name, language: "pt_BR", status: "APPROVED" }];
+    if (name === names.rejected) data = [{ id: `meta-${name}`, name, language: "pt_BR", status: "REJECTED", rejection_reason: "policy" }];
+    if (name === names.ambiguous) data = [
+      { id: `meta-${name}-1`, name, language: "pt_BR", status: "PENDING" },
+      { id: `meta-${name}-2`, name, language: "pt_BR", status: "PENDING" },
+    ];
+    if (name === names.unknown) data = [{ id: `meta-${name}`, name, language: "pt_BR", status: "PAUSED" }];
+    if (name === names.concurrent) {
+      concurrentCalls += 1;
+      if (concurrentCalls === 1) {
+        delayedPendingStarted();
+        await delayedPending;
+        data = [{ id: `meta-${name}`, name, language: "pt_BR", status: "PENDING" }];
+      } else {
+        data = [{ id: `meta-${name}`, name, language: "pt_BR", status: "APPROVED" }];
+      }
+    }
+    return new Response(JSON.stringify({ data }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const sync = (name: string) => requestAdmin<{
+    ok?: boolean;
+    error?: string;
+    details?: string;
+    request?: { status: string };
+    sync?: { status: string };
+  }>("POST", `/admin/templates/requests/${ids.get(name)!.requestId}/sync`);
+
+  for (const [name, expectedTemplateStatus, expectedRequestStatus] of [
+    [names.pending, "pending", "submitted_to_meta"],
+    [names.approved, "approved", "approved_meta"],
+    [names.rejected, "rejected", "rejected_meta"],
+  ] as const) {
+    const response = await sync(name);
+    assert.equal(response.status, 200);
+    assert.equal(response.body.request?.status, expectedRequestStatus);
+    assert.equal(response.body.sync?.status, expectedTemplateStatus);
+    const stored = await prisma.template.findUniqueOrThrow({ where: { id: ids.get(name)!.templateId } });
+    assert.equal(stored.status, expectedTemplateStatus);
+    assert.equal(stored.metaTemplateId, `meta-${name}`);
+  }
+  const media = await prisma.templateMediaAsset.findUniqueOrThrow({ where: { id: ids.get(names.pending)!.assetId! } });
+  assert.equal(media.state, "stored");
+  assert.equal(media.metaHandle, null);
+
+  for (const [name, reason] of [
+    [names.missing, "not_found"],
+    [names.ambiguous, "ambiguous"],
+    [names.unknown, "unknown_status"],
+  ] as const) {
+    const response = await sync(name);
+    assert.equal(response.status, 409);
+    assert.equal(getErrorCode(response.body as ErrorPayload), "template_sync_not_confirmed");
+    assert.equal(response.body.details, reason);
+    const [storedTemplate, storedRequest] = await Promise.all([
+      prisma.template.findUniqueOrThrow({ where: { id: ids.get(name)!.templateId } }),
+      prisma.templateRequest.findUniqueOrThrow({ where: { id: ids.get(name)!.requestId } }),
+    ]);
+    assert.equal(storedTemplate.status, "submission_unknown");
+    assert.equal(storedTemplate.metaTemplateId, null);
+    assert.equal(storedRequest.status, "submission_unknown");
+  }
+
+  const first = sync(names.concurrent);
+  await pendingStarted;
+  const second = await sync(names.concurrent);
+  assert.equal(second.status, 200);
+  releaseDelayedPending();
+  const firstResult = await first;
+  assert.equal(firstResult.status, 409);
+  const [concurrentTemplate, concurrentRequest, isolatedAfter] = await Promise.all([
+    prisma.template.findUniqueOrThrow({ where: { id: ids.get(names.concurrent)!.templateId } }),
+    prisma.templateRequest.findUniqueOrThrow({ where: { id: ids.get(names.concurrent)!.requestId } }),
+    prisma.template.findUniqueOrThrow({ where: { id: isolated.id } }),
+  ]);
+  assert.equal(concurrentTemplate.status, "approved");
+  assert.equal(concurrentRequest.status, "approved_meta");
+  assert.equal(isolatedAfter.status, "submission_unknown");
+  assert.equal(isolatedAfter.metaTemplateId, null);
+  assert.equal(providerCalls, 8);
+  assert.equal(creationPosts, 0);
+});
+
 test("tenant template request stays in internal review and ignores auto submit", async (t) => {
   const originalNotifyEmail = process.env.TEMPLATE_REVIEW_NOTIFY_EMAIL;
   const originalFallbackEmail = process.env.TEMPLATE_REVIEW_FALLBACK_EMAIL;

@@ -171,6 +171,17 @@ function uploadSessionUrl(apiVersion: string, sessionId: string) {
   return `${META_GRAPH_ORIGIN}/${apiVersion}/${sessionPath}${signatureQuery === null ? "" : `?${signatureQuery}`}`;
 }
 
+export function boundedMetaProviderTimeoutMs(params: {
+  stageTimeoutMs: number;
+  deadlineAtMs?: number;
+  nowMs?: number;
+}) {
+  const remainingMs = params.deadlineAtMs == null
+    ? params.stageTimeoutMs
+    : params.deadlineAtMs - (params.nowMs ?? Date.now());
+  return Math.max(1, Math.min(params.stageTimeoutMs, remainingMs));
+}
+
 export async function uploadMetaTemplateExample(params: {
   apiVersion: string;
   appId: string;
@@ -180,11 +191,16 @@ export async function uploadMetaTemplateExample(params: {
   fileName: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  deadlineAtMs?: number;
 }): Promise<MetaResumableUploadResult> {
   const fetchImpl = params.fetchImpl ?? fetch;
   const timeoutMs = params.timeoutMs ?? 20_000;
+  const stageTimeoutMs = () => boundedMetaProviderTimeoutMs({
+    stageTimeoutMs: timeoutMs,
+    deadlineAtMs: params.deadlineAtMs,
+  });
   const sessionController = new AbortController();
-  const sessionTimer = setTimeout(() => sessionController.abort(), timeoutMs);
+  const sessionTimer = setTimeout(() => sessionController.abort(), stageTimeoutMs());
   let sessionResponse: Response;
   try {
     const query = new URLSearchParams({
@@ -262,7 +278,7 @@ export async function uploadMetaTemplateExample(params: {
   }
 
   const uploadController = new AbortController();
-  const uploadTimer = setTimeout(() => uploadController.abort(), timeoutMs);
+  const uploadTimer = setTimeout(() => uploadController.abort(), stageTimeoutMs());
   let uploadResponse: Response;
   try {
     uploadResponse = await fetchImpl(sessionUrl, {

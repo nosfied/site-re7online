@@ -338,11 +338,35 @@ preserva inclusive assinaturas que contenham caracteres reservados. A referênci
 oficial usada na revisão é a coleção
 [WhatsApp Business Platform — Resumable Upload](https://www.postman.com/meta/whatsapp-business-platform/request/vkmioqf/resumable-upload-create-an-upload-session).
 
-Cada etapa de mídia tem limite de 20 segundos e o POST final do template, 10
-segundos. O cliente administrativo aguarda 58 segundos. A configuração Nginx ativa
+Criação da sessão, envio binário e submissão final compartilham agora um prazo
+absoluto de 45 segundos; nenhuma etapa pode consumir mais de 20 segundos. O prazo
+restante é recalculado antes de cada transporte e cobre também a leitura da
+resposta. O cliente administrativo aguarda 58 segundos. A configuração Nginx ativa
 não redefine `proxy_read_timeout`/`proxy_send_timeout` para `/agent-api`; permanece
-o padrão de 60 segundos. Timeout do navegador não comprova cancelamento e nunca
-autoriza repetição automática.
+o padrão de 60 segundos. Assim, o backend deixa pelo menos 13 segundos no cliente e
+15 segundos no proxy para validações e persistência. Timeout do navegador não
+comprova cancelamento e nunca autoriza repetição automática.
+
+## Reconciliação de submissão incerta
+
+O sync consulta por `GET` o endpoint de templates da WABA resolvida para o tenant;
+ele não repete upload nem criação. Uma confirmação exige uma única linha com nome e
+idioma exatos na WABA tenant-scoped. Quando já existe identificador Meta local, ele
+também deve coincidir. Resultado ausente, ambíguo, malformado ou com status
+desconhecido preserva `submission_unknown`.
+
+`PENDING` comprova que a submissão existe, mas mantém a aprovação pendente. Nesse
+caso o identificador Meta é persistido, o `Template` passa a `pending` e a
+solicitação passa a `submitted_to_meta`. `APPROVED` e `REJECTED` atualizam os estados
+correspondentes já existentes. Escritas usam comparação otimista para impedir que
+uma resposta antiga regrida um estado concorrente. A reconciliação não altera o
+asset local: não marca mídia como `ready`, não fabrica handle e não depende de um
+handle local para reconhecer o template remoto.
+
+O caso observado `imagem_previdenciario` motivou este contrato: o estado local
+permaneceu `submission_unknown`, enquanto a interface do provedor indicava análise.
+Essa observação não é gravada como confirmação; somente um sync futuro, explícito e
+autorizado poderá reconciliá-la pelo GET tenant-scoped acima.
 
 Esta correção melhora observabilidade e não reabre solicitações encerradas. A causa
 externa específica de falhas históricas continua dependendo de uma tentativa

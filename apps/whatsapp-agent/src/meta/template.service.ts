@@ -7,6 +7,7 @@ import {
 } from "../config/tenantOperationalConfig.js";
 import { logger } from "../logger/logger.js";
 import {
+  boundedMetaProviderTimeoutMs,
   sanitizeMetaDiagnosticMessage,
   uploadMetaTemplateExample,
   type MetaTemplateUploadDiagnostic,
@@ -89,6 +90,9 @@ type MetaTemplateSubmitFailure = {
 export type MetaTemplateSubmitResult =
   | MetaTemplateSubmitSuccess
   | MetaTemplateSubmitFailure;
+
+export const META_TEMPLATE_PROVIDER_OPERATION_TIMEOUT_MS = 45_000;
+export const META_TEMPLATE_PROVIDER_STAGE_TIMEOUT_MS = 20_000;
 
 export class MetaTemplateValidationError extends Error {
   constructor(message: string) {
@@ -427,6 +431,7 @@ export async function submitTemplateToMeta(params: {
   template: TemplateForMeta;
   exampleMedia?: { content: Buffer; mimeType: string; fileName: string; kind: "IMAGE" | "VIDEO" } | null;
 }): Promise<MetaTemplateSubmitResult> {
+  const providerDeadlineAtMs = Date.now() + META_TEMPLATE_PROVIDER_OPERATION_TIMEOUT_MS;
   validateTemplateForMeta(params.template);
   const headerType = normalizeTemplateHeaderType(params.template.headerType);
   const { businessToken, wabaId, appId } = validateMetaTemplateSubmissionConfig({
@@ -445,6 +450,8 @@ export async function submitTemplateToMeta(params: {
       content: params.exampleMedia.content,
       mimeType: params.exampleMedia.mimeType,
       fileName: params.exampleMedia.fileName,
+      timeoutMs: META_TEMPLATE_PROVIDER_STAGE_TIMEOUT_MS,
+      deadlineAtMs: providerDeadlineAtMs,
     });
     if (!uploaded.ok) {
       throw new MetaTemplateServiceError(
@@ -464,7 +471,11 @@ export async function submitTemplateToMeta(params: {
   const url = `https://graph.facebook.com/${getEnv().WHATSAPP_API_VERSION}/${wabaId}/message_templates`;
 
   const submitController = new AbortController();
-  const submitTimer = setTimeout(() => submitController.abort(), 10_000);
+  const submitTimeoutMs = boundedMetaProviderTimeoutMs({
+    stageTimeoutMs: META_TEMPLATE_PROVIDER_STAGE_TIMEOUT_MS,
+    deadlineAtMs: providerDeadlineAtMs,
+  });
+  const submitTimer = setTimeout(() => submitController.abort(), submitTimeoutMs);
   let response: Response;
   try {
     response = await fetch(url, {
@@ -605,12 +616,61 @@ export async function submitTemplateToMeta(params: {
   };
 }
 
-function normalizeMetaTemplateSyncStatus(input: unknown): "approved" | "rejected" | null {
+export function normalizeMetaTemplateSyncStatus(input: unknown): "pending" | "approved" | "rejected" | null {
   if (typeof input !== "string") return null;
   const normalized = input.trim().toUpperCase();
+  if (normalized === "PENDING") return "pending";
   if (normalized === "APPROVED") return "approved";
   if (normalized === "REJECTED") return "rejected";
   return null;
+}
+
+type MetaTemplateSyncMatch = {
+  id: string;
+  name: string;
+  language: string;
+  status: "pending" | "approved" | "rejected";
+  raw: Record<string, unknown>;
+};
+
+export function selectMetaTemplateSyncMatch(params: {
+  items: unknown;
+  expectedName: string;
+  expectedLanguage: string;
+  expectedMetaTemplateId?: string | null;
+}):
+  | { ok: true; match: MetaTemplateSyncMatch }
+  | { ok: false; reason: "invalid_response" | "not_found" | "ambiguous" | "identity_mismatch" | "unknown_status" } {
+  if (!Array.isArray(params.items)) return { ok: false, reason: "invalid_response" };
+  const named = params.items.filter((item): item is Record<string, unknown> => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    return item.name === params.expectedName && item.language === params.expectedLanguage;
+  });
+  const candidates = params.expectedMetaTemplateId
+    ? named.filter((item) => item.id === params.expectedMetaTemplateId)
+    : named;
+  if (candidates.length === 0) {
+    if (params.expectedMetaTemplateId && named.length > 0) {
+      return { ok: false, reason: "identity_mismatch" };
+    }
+    return { ok: false, reason: "not_found" };
+  }
+  if (candidates.length !== 1) return { ok: false, reason: "ambiguous" };
+  const raw = candidates[0];
+  const id = typeof raw.id === "string" ? raw.id.trim() : "";
+  const status = normalizeMetaTemplateSyncStatus(raw.status);
+  if (!id) return { ok: false, reason: "invalid_response" };
+  if (!status) return { ok: false, reason: "unknown_status" };
+  return {
+    ok: true,
+    match: {
+      id,
+      name: params.expectedName,
+      language: params.expectedLanguage,
+      status,
+      raw,
+    },
+  };
 }
 
 function normalizeMetaTemplateCategory(input: unknown) {
@@ -655,6 +715,7 @@ export async function syncTemplateStatus(templateId: string) {
       components: true,
       headerType: true,
       exampleMediaId: true,
+      updatedAt: true,
       client: {
         select: {
           clientKey: true,
@@ -706,28 +767,22 @@ export async function syncTemplateStatus(templateId: string) {
     );
   }
 
-  const items = Array.isArray(rawResponse?.data) ? rawResponse.data : [];
-  const matched =
-    items.find((item) => {
-      if (!item || typeof item !== "object") return false;
-      const typed = item as Record<string, unknown>;
-      if (template.metaTemplateId && typeof typed.id === "string" && typed.id === template.metaTemplateId) {
-        return true;
-      }
-      return (
-        typed.name === template.name &&
-        (typeof typed.language === "string" ? typed.language === template.language : true)
-      );
-    }) ?? null;
+  const selected = selectMetaTemplateSyncMatch({
+    items: rawResponse?.data,
+    expectedName: template.name,
+    expectedLanguage: template.language,
+    expectedMetaTemplateId: template.metaTemplateId,
+  });
 
-  if (!matched || typeof matched !== "object") {
+  if (!selected.ok) {
     logger.info({
-      event: "template.status.not_found",
+      event: "template.status.not_confirmed",
       templateId: template.id,
       clientKey: template.client.clientKey,
       templateName: template.name,
       wabaId: credentials.wabaId,
       credentialSource: credentials.source,
+      reason: selected.reason,
     });
     return {
       ok: false as const,
@@ -735,11 +790,16 @@ export async function syncTemplateStatus(templateId: string) {
       status: template.status,
       rejectionReason: null,
       updated: false,
+      reason: selected.reason,
     };
   }
 
-  const typedMatch = matched as Record<string, unknown>;
-  const nextStatus = normalizeMetaTemplateSyncStatus(typedMatch.status);
+  const typedMatch = selected.match.raw;
+  const currentStatus = normalizeMetaTemplateSyncStatus(template.status);
+  const nextStatus =
+    selected.match.status === "pending" && (currentStatus === "approved" || currentStatus === "rejected")
+      ? currentStatus
+      : selected.match.status;
   const metaCategory = normalizeMetaTemplateCategory(typedMatch.category);
   const rejectionReason = extractMetaRejectionReason(typedMatch);
   const providerComponents = Array.isArray(typedMatch.components) ? typedMatch.components : null;
@@ -764,7 +824,13 @@ export async function syncTemplateStatus(templateId: string) {
     submittedCategory && metaCategory && metaCategory !== submittedCategory
   );
 
-  if (!nextStatus && !providerComponents && nextCategory === template.category && nextWasRecategorized === template.wasRecategorized) {
+  if (
+    template.metaTemplateId === selected.match.id &&
+    normalizeMetaTemplateSyncStatus(template.status) === nextStatus &&
+    !providerComponents &&
+    nextCategory === template.category &&
+    nextWasRecategorized === template.wasRecategorized
+  ) {
     return {
       ok: true as const,
       templateId: template.id,
@@ -774,6 +840,48 @@ export async function syncTemplateStatus(templateId: string) {
       status: template.status,
       rejectionReason,
       updated: false,
+    };
+  }
+
+  const claimed = await prisma.template.updateMany({
+    where: { id: template.id, updatedAt: template.updatedAt },
+    data: {
+      metaTemplateId: selected.match.id,
+      category: nextCategory,
+      submittedCategory: submittedCategory ?? undefined,
+      wasRecategorized: nextWasRecategorized,
+      components: nextComponents as unknown as import("@prisma/client").Prisma.InputJsonValue,
+      headerType: nextComponents.header.type,
+      status: nextStatus,
+      rejectionReason: nextStatus === "rejected" ? rejectionReason ?? undefined : null,
+    },
+  });
+  const updated = await prisma.template.findUniqueOrThrow({
+    where: { id: template.id },
+    select: {
+      id: true,
+      metaTemplateId: true,
+      category: true,
+      submittedCategory: true,
+      wasRecategorized: true,
+      status: true,
+      rejectionReason: true,
+    },
+  });
+  if (claimed.count !== 1) {
+    const alreadyReconciled =
+      updated.metaTemplateId === selected.match.id &&
+      normalizeMetaTemplateSyncStatus(updated.status) === nextStatus;
+    return {
+      ok: alreadyReconciled,
+      templateId: updated.id,
+      category: updated.category,
+      submittedCategory: updated.submittedCategory,
+      wasRecategorized: updated.wasRecategorized,
+      status: updated.status,
+      rejectionReason: updated.rejectionReason,
+      updated: false,
+      ...(!alreadyReconciled ? { reason: "concurrent_change" as const } : {}),
     };
   }
 
@@ -803,27 +911,6 @@ export async function syncTemplateStatus(templateId: string) {
       },
     });
   }
-
-  const updated = await prisma.template.update({
-    where: { id: template.id },
-    data: {
-      category: nextCategory,
-      submittedCategory: submittedCategory ?? undefined,
-      wasRecategorized: nextWasRecategorized,
-      components: nextComponents as unknown as import("@prisma/client").Prisma.InputJsonValue,
-      headerType: nextComponents.header.type,
-      status: nextStatus ?? template.status,
-      rejectionReason: nextStatus === "rejected" ? rejectionReason ?? undefined : null,
-    },
-    select: {
-      id: true,
-      category: true,
-      submittedCategory: true,
-      wasRecategorized: true,
-      status: true,
-      rejectionReason: true,
-    },
-  });
 
   logger.info({
     event: "template.status.synced",
