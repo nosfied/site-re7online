@@ -44,6 +44,12 @@ python3 scripts/converta-release.py verify \
 pacote contém somente os runtimes, manifesto fechado e índice schema v1. Build,
 Prisma generate e empacotamento nunca são executados na VPS.
 
+Se Node, npm, Prisma ou um build falhar, o produtor encerra com a etapa, CWD, código
+de saída e caminho da evidência. A saída combinada da etapa fica somente em
+`failure-evidence.private`, diretório `0700` com arquivos `0600`; seu conteúdo não
+é impresso nem versionado. Diagnostique essa evidência antes de autorizar outro
+build.
+
 Builds Next independentes podem produzir BUILD_ID diferente e não são comparados
 byte a byte. Um rebuild, ainda que use o mesmo commit, cria nova release, BUILD_ID e
 hashes. Retry de transferência ou ativação reutiliza o mesmo `.tar.xz`; seu SHA-256

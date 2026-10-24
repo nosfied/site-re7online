@@ -159,6 +159,40 @@ class ReleaseProducerTest(unittest.TestCase):
         self.assertEqual(manifest_before, (self.release / "manifest.json").read_bytes())
         self.assertEqual(index_before, (self.release / "index.sha256").read_bytes())
 
+    def test_failed_command_preserves_private_output_without_printing_it(self) -> None:
+        root = self.base / "failed-command-evidence"
+        root.mkdir()
+        secret_output = "private diagnostic value must not reach stderr\n"
+        with self.assertRaises(MODULE.Denied) as caught:
+            MODULE.run(
+                ["sh", "-c", f"printf '{secret_output}'; exit 37"],
+                self.repo,
+                os.environ.copy(),
+                failure_root=root,
+                stage="root_npm_ci",
+            )
+        message = str(caught.exception)
+        evidence = root / "failure-evidence.private"
+        metadata_path = evidence / "root_npm_ci.private.json"
+        output_path = evidence / "root_npm_ci.output.private.log"
+        self.assertIn("command_failed:root_npm_ci", message)
+        self.assertIn(f"cwd={self.repo}", message)
+        self.assertIn("exit=37", message)
+        self.assertIn(f"evidence={metadata_path}", message)
+        self.assertNotIn(secret_output.strip(), message)
+        self.assertEqual(stat.S_IMODE(evidence.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(metadata_path.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(output_path.stat().st_mode), 0o600)
+        self.assertEqual(output_path.read_text(), secret_output)
+        metadata = json.loads(metadata_path.read_text())
+        self.assertEqual(metadata["schemaVersion"], 1)
+        self.assertEqual(metadata["stage"], "root_npm_ci")
+        self.assertEqual(metadata["cwd"], str(self.repo))
+        self.assertEqual(metadata["exitCode"], 37)
+        self.assertEqual(metadata["outputFile"], output_path.name)
+        self.assertEqual(metadata["outputSize"], len(secret_output.encode()))
+        self.assertEqual(metadata["outputSha256"], hashlib.sha256(secret_output.encode()).hexdigest())
+
     def test_runtime_addition_denied(self) -> None:
         root = self.copy_release("extra")
         write(root / "api-runtime/extra.js", "extra\n")
