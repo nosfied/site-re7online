@@ -77,6 +77,18 @@ require(media["metaCallsExecuted"] is False and
         media["templatesCreatedOrSubmitted"] is False and
         media["campaignsExecuted"] is False and media["messagesSent"] is False,
         "media external effects")
+tenant_app = state["tenantScopedMetaAppId"]
+require(tenant_app["configurationState"] == "CONFIGURED_VERIFIED_FOR_CONVERTA_DEMO" and
+        tenant_app["configuredTenantKey"] == "demo-converta" and
+        tenant_app["currentTokenAppBinding"] == "CONFIRMED_BY_META_DEBUG_TOKEN" and
+        tenant_app["historicalOnboardingRecovered"] is False,
+        "tenant-scoped Meta App ID state")
+require(tenant_app["globalFallbackUsed"] is False and
+        tenant_app["metaDiagnosticGetCount"] == 1 and
+        tenant_app["metaMutatingCallsExecuted"] is False,
+        "tenant-scoped Meta effects")
+require((ROOT / tenant_app["configurationRecord"]).is_file(),
+        "tenant-scoped Meta configuration record")
 required_obsolete = {"BUILD_IN_ACTIVE_RUNTIME", "LIVE_CHECKOUT_AS_RUNTIME",
                      "scripts/deploy-normal-release.sh",
                      "PR_190_EXPERIMENTAL_PIPELINE",

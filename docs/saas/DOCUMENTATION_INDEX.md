@@ -14,7 +14,10 @@
 - [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
   o produtor `scripts/converta-release.py`, o build na VPS e a fronteira com a ativação
 - [Deploy tenant-scoped de Meta App ID](releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json)
-  — release ativa; configuração do tenant e chamadas Meta continuam pendentes.
+  — release ativa; registro histórico da janela de deploy.
+- [Configuração do Meta App ID do Converta Demo](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json)
+  — vínculo atual token/aplicativo confirmado e configuração tenant-scoped concluída;
+  homologação funcional Meta permanece pendente.
 - [Topologia de domínios e runtimes](../DEPLOY_TOPOLOGY_RE7.md)
 - [Checklist de release](RELEASE_CHECKLIST.md)
 - [Controle de definições PM2 e incidente de contaminação](PM2_DEFINITION_CONTAMINATION_INCIDENT_2026-10-22.md)

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "recordType": "TENANT_SCOPED_META_APP_ID_CONFIGURATION",
+  "recordedAtUtc": "2026-10-24T14:52:51Z",
+  "status": "CONFIGURED_VERIFIED",
+  "tenantKey": "demo-converta",
+  "operation": {
+    "endpoint": "/admin/tenants/{tenantKey}/meta-app-id",
+    "putCount": 1,
+    "putHttpStatus": 200,
+    "provenance": "embedded_signup",
+    "confirmTenantScoped": true,
+    "verificationGetHttpStatus": 200,
+    "configured": true,
+    "source": "tenant_app_id"
+  },
+  "bindingEvidence": {
+    "method": "META_DEBUG_TOKEN_GET",
+    "callCount": 1,
+    "tokenValid": true,
+    "applicationMatched": true,
+    "requiredPermissionsCompatible": true,
+    "scope": "CURRENT_TOKEN_APP_BINDING_CONFIRMED",
+    "historicalOnboardingRecovered": false
+  },
+  "preservation": {
+    "token": true,
+    "waba": true,
+    "phoneNumber": true,
+    "businessIdentifiers": true,
+    "otherTenantProperties": true,
+    "otherTenants": true,
+    "globalFallbackUsed": false
+  },
+  "audit": {
+    "matchingEventCount": 1,
+    "appIdPresentInEvent": false
+  },
+  "externalEffects": {
+    "metaDiagnosticGets": 1,
+    "metaMutatingCalls": 0,
+    "uploads": 0,
+    "templateSubmissions": 0,
+    "templateSyncs": 0,
+    "campaigns": 0,
+    "imports": 0,
+    "messagesSent": 0,
+    "sqlStatements": 0,
+    "migrations": 0,
+    "builds": 0,
+    "restarts": 0,
+    "deploys": 0
+  },
+  "metaFunctionalAcceptance": "PENDING",
+  "commercialOperationalRelease": "PENDING"
+}

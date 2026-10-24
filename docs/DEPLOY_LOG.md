@@ -93,3 +93,18 @@ As entradas abaixo mantêm sua redação histórica.
 - pendência: configurar o App ID somente no tenant autorizado em janela separada;
   nenhum fallback global foi aplicado
 - registro: `docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json`
+
+## 2026-10-24 — Configuração tenant-scoped do Meta App ID / Converta Demo
+
+- tenant: `demo-converta`
+- diagnóstico: uma consulta `GET /debug_token` confirmou o vínculo atual do token
+  armazenado com o aplicativo e as permissões necessárias; não recupera o histórico
+  original do onboarding
+- configuração: um PUT administrativo tenant-scoped, com proveniência
+  `embedded_signup` e confirmação explícita de escopo
+- verificação: `configured=true`, `source=tenant_app_id`; token, WABA, número,
+  demais propriedades e outros tenants preservados
+- auditoria: um evento sanitizado, sem App ID
+- Meta mutante/upload/sincronização/submissão/campanha/importação/envio: zero
+- resultado: `CONFIGURED_VERIFIED / FUNCTIONAL_META_ACCEPTANCE_PENDING`
+- registro: `docs/saas/releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json`

@@ -9,8 +9,11 @@ Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
 Última atualização: 2026-10-24. Esta é a fonte canônica para cabeçalhos `IMAGE` e
 `VIDEO` em templates e campanhas. O estado produtivo geral continua em
 [`CURRENT_STATE.md`](CURRENT_STATE.md). O mecanismo tenant-scoped de Meta App ID foi
-implantado em 24/10/2026, mas nenhum App ID foi configurado e nenhuma chamada Meta
-foi executada nessa janela; homologação funcional permanece pendente.
+implantado em 24/10/2026. Em operação separada, o tenant Converta Demo teve o App ID
+tenant-scoped configurado depois que uma única consulta `GET /debug_token` confirmou
+o vínculo atual do token com o aplicativo e as permissões necessárias. Essa prova não
+recupera o histórico original do onboarding. Não houve chamada Meta mutante, upload,
+sincronização, submissão ou envio; homologação funcional permanece pendente.
 
 ## Implantação técnica
 
@@ -33,6 +36,15 @@ da release imutável. O backup PostgreSQL prévio foi validado e permanece prese
 O smoke técnico foi GET-only: API, Login, Inbox, CRM, Templates e Campanhas
 responderam HTTP 200. Não houve chamada Meta, upload real, criação/submissão de
 template, campanha, importação ou envio.
+
+## Configuração tenant-scoped posterior
+
+A operação administrativa existente configurou exclusivamente `demo-converta`, com
+`provenance=embedded_signup` e `confirmTenantScoped=true`. O GET de verificação
+retornou `configured=true` e `source=tenant_app_id`. Token, WABA, número, demais
+propriedades e outros tenants permaneceram inalterados; o evento de auditoria não
+contém o App ID. O resultado sanitizado está no
+[registro de configuração](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json).
 
 ## Resultado da auditoria
 
