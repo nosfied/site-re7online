@@ -43,6 +43,27 @@ O registro estruturado é
 [`CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json`](releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json).
 O resultado não comprova aprovação Meta nem libera uso comercial.
 
+### Diagnóstico offline da URL de upload
+
+A evidência privada preservada confirma a negativa em `binary_upload`, mas não
+contém o identificador bruto retornado na criação da sessão, sua query `sig`, a URL
+efetivamente enviada nem fingerprints separados de versão, aplicativo e token. Os
+logs existentes também não registraram esses valores. Portanto, não é possível
+afirmar que a negativa histórica foi causada pela construção da URL.
+
+Na reconstrução pelo código exato da release, criação e upload usam a mesma chamada,
+o mesmo `apiVersion` e o mesmo token tenant-scoped; o App ID participa da criação da
+sessão, conforme o protocolo. Isso comprova coerência do caminho de código, mas não
+substitui fingerprints de transporte que não foram preservados na tentativa.
+
+O código executado tinha, porém, um defeito independente e reproduzível: aplicava
+`encodeURIComponent` ao identificador inteiro, o que transformaria `?sig=` em parte
+do caminho. O [protocolo oficial da Meta](https://www.postman.com/meta/whatsapp-business-platform/request/13382743-871ea332-a6a4-4ad0-800a-0be9796b1933)
+mantém o prefixo `upload:` no caminho e a assinatura na query. O helper agora aceita
+somente identificadores compatíveis, fixa a origem
+`graph.facebook.com` e preserva byte a byte a query assinada e seus escapes. A
+correção não autoriza retry da solicitação existente.
+
 A migration `20261021150000_add_template_campaign_media` foi aplicada exatamente
 uma vez. O primeiro cliente Prisma recebeu `SIGABRT` depois que a migration já estava
 persistida; a verificação restrita posterior terminou com código zero, confirmou

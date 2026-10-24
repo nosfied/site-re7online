@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import test from "node:test";
 import { uploadMetaTemplateExample } from "./metaTemplateMedia.js";
 
@@ -39,12 +40,81 @@ test("resumable upload follows the documented session and binary protocol", asyn
   assert.equal((calls[0].init?.headers as Record<string, string>).Authorization, "Bearer private-token");
 
   const uploadUrl = new URL(calls[1].url);
-  const uploadPath = uploadUrl.pathname.split("/");
-  assert.equal(decodeURIComponent(uploadPath[uploadPath.length - 1] ?? ""), sessionId);
-  assert.equal(uploadUrl.search, "");
+  assert.equal(uploadUrl.origin, "https://graph.facebook.com");
+  assert.equal(uploadUrl.pathname, "/v23.0/upload:fixture-session");
+  assert.equal(uploadUrl.search, "?sig=fixture-signature");
   assert.equal((calls[1].init?.headers as Record<string, string>).Authorization, "OAuth private-token");
   assert.equal((calls[1].init?.headers as Record<string, string>).file_offset, "0");
   assert.equal(calls[1].init?.body instanceof Uint8Array, true);
+});
+
+test("signed upload session reaches an HTTP server with its path and escaped signature intact", async () => {
+  const received: Array<{ url: string; offset: string | undefined }> = [];
+  const server = createServer((request, response) => {
+    received.push({ url: request.url ?? "", offset: request.headers.file_offset as string | undefined });
+    request.resume();
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ h: "private-media-handle" }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  if (!address || typeof address === "string") throw new Error("local_server_address_unavailable");
+
+  let call = 0;
+  try {
+    const result = await uploadMetaTemplateExample({
+      ...base,
+      fetchImpl: (async (input: string | URL | Request, init?: RequestInit) => {
+        call += 1;
+        if (call === 1) {
+          return jsonResponse({ id: "upload:fixture%2Fsession?sig=part%2Fone%2Btwo%3D" });
+        }
+        const graphUrl = new URL(String(input));
+        assert.equal(graphUrl.origin, "https://graph.facebook.com");
+        return fetch(`http://127.0.0.1:${address.port}${graphUrl.pathname}${graphUrl.search}`, init);
+      }) as typeof fetch,
+    });
+    assert.deepEqual(result, { ok: true, handle: "private-media-handle" });
+    assert.deepEqual(received, [{
+      url: "/v23.0/upload:fixture%2Fsession?sig=part%2Fone%2Btwo%3D",
+      offset: "0",
+    }]);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("incompatible upload session identifiers are denied before binary transport", async () => {
+  const invalidSessionIds = [
+    "https://attacker.invalid/upload:session?sig=value",
+    "//attacker.invalid/upload:session?sig=value",
+    "upload:../session?sig=value",
+    "other:session?sig=value",
+    "upload:session#fragment?sig=value",
+    "upload:session?token=value",
+    "upload:session?sig=value&extra=value",
+    "upload:session?sig=bad%escape",
+    " upload:session?sig=value",
+  ];
+  for (const sessionId of invalidSessionIds) {
+    let call = 0;
+    const result = await uploadMetaTemplateExample({
+      ...base,
+      fetchImpl: (async () => {
+        call += 1;
+        if (call > 1) throw new Error("binary_transport_must_not_run");
+        return jsonResponse({ id: sessionId });
+      }) as typeof fetch,
+    });
+    assert.equal(call, 1);
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.code, "meta_upload_invalid_response");
+      assert.equal(result.diagnostic.stage, "session_response_validation");
+    }
+  }
 });
 
 test("session creation refusal preserves only the structured safe diagnosis", async () => {

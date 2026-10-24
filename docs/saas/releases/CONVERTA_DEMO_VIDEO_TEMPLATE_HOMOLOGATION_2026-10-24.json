@@ -52,6 +52,17 @@
     "templateApprovalClaimed": false,
     "functionalAcceptance": "PENDING"
   },
+  "offlineUrlDiagnosis": {
+    "observedEvidence": "RAW_SESSION_IDENTIFIER_NOT_PRESERVED",
+    "signedQueryObserved": null,
+    "effectiveUploadUrlObserved": false,
+    "versionAppTokenFingerprintsObservedPerStage": false,
+    "codePathCredentialConsistency": "SAME_INVOCATION_PARAMETERS",
+    "codeDefect": "WHOLE_SESSION_IDENTIFIER_PERCENT_ENCODED",
+    "protocolDivergenceReproduced": true,
+    "historicalCausality": "NOT_PROVEN",
+    "retryAuthorized": false
+  },
   "excludedEffects": {
     "campaigns": 0,
     "messagesSent": 0,
