@@ -1,5 +1,15 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+> [!IMPORTANT]
+> Continuidade atual: [CURRENT_STATE.md](saas/CURRENT_STATE.md).
+> Deploy vigente: [DEPLOY_RUNBOOK.md](saas/DEPLOY_RUNBOOK.md).
+> Em 24/10/2026, o target `a62da468ba1e703139181cecfa88d34f2066ccd1` foi
+> implantado com build isolado na VPS e restart dirigido dos registros PM2 existentes.
+> Os checkpoints datados de CRM/CSV abaixo preservam estados históricos, incluindo
+> pendências já superadas; não são estado produtivo atual nem autorização de replay.
+> As rotinas de outros assuntos mantêm seu escopo e suas restrições.
+
+
 ## CRM — diagnóstico de lista após CSV
 
 O delta de 19/10/2026 está `LOCAL VALIDATED / NOT DEPLOYED`. O GET de contatos
