@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildAdminTrainingContentUrl,
   describeAdminTemplateSubmissionError,
+  describeAdminTemplateSubmissionResult,
   formatAdminTemplateDiagnosticStage,
   readAdminTemplateSubmissionDiagnostic,
   resolveAdminApiBaseUrl,
@@ -69,6 +70,82 @@ test("unknown administrative responses keep the generic fallback", () => {
   });
   assert.equal(formatAdminTemplateDiagnosticStage("binary_upload"), "Envio dos bytes da mídia");
   assert.equal(formatAdminTemplateDiagnosticStage("unknown"), "Etapa não identificada");
+});
+
+test("HTTP 200 only reports submission success for an explicit positive result", async () => {
+  setWindowLocation("https://admin.example.test/admin/templates/manage");
+  const originalFetch = globalThis.fetch;
+  const responses = [
+    {
+      ok: false,
+      request: { status: "failed" },
+      template: { status: "failed" },
+      submission: {
+        submitted: false,
+        status: "failed",
+        templateId: "template-id",
+        errorMessage: "Recusa segura da Meta.",
+        providerError: {
+          stage: "template_submission",
+          httpStatus: 400,
+          code: "100",
+          subcode: null,
+          type: "OAuthException",
+          traceId: "safe-final-trace",
+          message: "Recusa segura da Meta.",
+        },
+      },
+    },
+    {
+      ok: true,
+      request: { status: "submitted_to_meta" },
+      template: { status: "PENDING" },
+      submission: {
+        submitted: true,
+        status: "PENDING",
+        templateId: "template-id",
+        errorMessage: null,
+      },
+    },
+  ];
+  Object.assign(globalThis, {
+    fetch: async () => new Response(JSON.stringify(responses.shift()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  });
+
+  try {
+    const refused = await submitAdminTemplateRequestToMeta(
+      { baseUrl: "/agent-api", adminToken: "admin", rememberToken: false },
+      "request-id"
+    );
+    assert.deepEqual(describeAdminTemplateSubmissionResult(refused), {
+      submitted: false,
+      message: "Recusa segura da Meta.",
+      diagnostic: {
+        stage: "template_submission",
+        httpStatus: 400,
+        code: "100",
+        subcode: null,
+        type: "OAuthException",
+        traceId: "safe-final-trace",
+        message: "Recusa segura da Meta.",
+      },
+    });
+
+    const accepted = await submitAdminTemplateRequestToMeta(
+      { baseUrl: "/agent-api", adminToken: "admin", rememberToken: false },
+      "request-id"
+    );
+    assert.deepEqual(describeAdminTemplateSubmissionResult(accepted), {
+      submitted: true,
+      message: null,
+      diagnostic: null,
+    });
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
 });
 
 function setWindowLocation(href: string) {

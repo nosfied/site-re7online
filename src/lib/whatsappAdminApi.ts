@@ -2815,7 +2815,13 @@ export async function updateAdminTemplateRequest(
 export async function submitAdminTemplateRequestToMeta(
   connection: AdminConnection,
   requestId: string
-): Promise<{
+): Promise<AdminTemplateSubmissionResult> {
+  return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}/submit`, {
+    method: "POST",
+  }, { timeoutMs: 58_000 });
+}
+
+export type AdminTemplateSubmissionResult = {
   ok: boolean;
   request: AdminTemplateRequestItem;
   template: AdminTemplateCatalogItem;
@@ -2824,11 +2830,20 @@ export async function submitAdminTemplateRequestToMeta(
     status: string;
     templateId: string;
     errorMessage: string | null;
+    providerError?: unknown;
   };
-}> {
-  return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}/submit`, {
-    method: "POST",
-  }, { timeoutMs: 58_000 });
+};
+
+export function describeAdminTemplateSubmissionResult(result: AdminTemplateSubmissionResult) {
+  if (result.ok === true && result.submission.submitted === true) {
+    return { submitted: true as const, message: null, diagnostic: null };
+  }
+  const diagnostic = readAdminTemplateSubmissionDiagnostic(result.submission.providerError);
+  return {
+    submitted: false as const,
+    message: result.submission.errorMessage || diagnostic?.message || "Nao foi possivel enviar o template para a Meta.",
+    diagnostic,
+  };
 }
 
 export async function syncAdminTemplateRequest(

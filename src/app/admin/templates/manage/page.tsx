@@ -12,6 +12,7 @@ import {
   approveAdminTemplateRequest,
   cancelAdminTemplateRequest,
   describeAdminTemplateSubmissionError,
+  describeAdminTemplateSubmissionResult,
   disableAdminTemplate,
   enableAdminTemplate,
   fetchAdminTemplateRequests,
@@ -317,9 +318,15 @@ export default function ManageTemplatesAdminPage() {
     setErrorDiagnostic(null);
     setFeedback(null);
     try {
-      await submitAdminTemplateRequestToMeta(connection, requestId);
+      const result = await submitAdminTemplateRequestToMeta(connection, requestId);
       await loadData(connection);
-      setFeedback("Template submetido para aprovacao da Meta.");
+      const described = describeAdminTemplateSubmissionResult(result);
+      if (described.submitted) {
+        setFeedback("Template submetido para aprovacao da Meta.");
+      } else {
+        setError(described.message);
+        setErrorDiagnostic(described.diagnostic);
+      }
     } catch (err) {
       const described = describeAdminTemplateSubmissionError(err);
       setError(described.message);

@@ -561,20 +561,33 @@ export async function submitTemplateToMeta(params: {
     typeof rawResponse?.error === "object" &&
     rawResponse.error !== null &&
     typeof (rawResponse.error as Record<string, unknown>).message === "string"
-      ? String((rawResponse.error as Record<string, unknown>).message)
+      ? sanitizeMetaDiagnosticMessage((rawResponse.error as Record<string, unknown>).message)
       : null;
 
   if (!response.ok) {
-    const providerError = extractMetaTemplateProviderError(rawResponse);
+    const extractedProviderError = extractMetaTemplateProviderError(rawResponse);
+    const safeMessage =
+      extractedProviderError?.userMessage ||
+      extractedProviderError?.details ||
+      errorMessage ||
+      "A Meta recusou a submissao do template.";
+    const providerError: MetaTemplateProviderError = {
+      stage: "template_submission",
+      httpStatus: response.status,
+      code: extractedProviderError?.code ?? null,
+      subcode: extractedProviderError?.subcode ?? null,
+      type: extractedProviderError?.type ?? null,
+      userTitle: extractedProviderError?.userTitle ?? null,
+      userMessage: extractedProviderError?.userMessage ?? null,
+      details: extractedProviderError?.details ?? null,
+      traceId: extractedProviderError?.traceId ?? null,
+      message: safeMessage,
+    };
     return {
       ok: false,
       metaTemplateId: null,
       status,
-      errorMessage:
-        providerError?.userMessage ||
-        providerError?.details ||
-        errorMessage ||
-        "meta_template_submit_failed",
+      errorMessage: safeMessage,
       rawResponse,
       providerError,
       headerHandle: null,
