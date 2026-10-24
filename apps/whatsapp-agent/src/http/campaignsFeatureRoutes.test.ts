@@ -12706,6 +12706,7 @@ test("template submission reconciliation confirms exact remote identity without 
     ambiguous: `reconcile_ambiguous_${suffix}`,
     unknown: `reconcile_unknown_${suffix}`,
     concurrent: `reconcile_concurrent_${suffix}`,
+    appManual: `reconcile_app_manual_${suffix}`,
   };
   const ids = new Map<string, { templateId: string; requestId: string; assetId: string | null }>();
   const createCase = async (name: string, withStoredMedia = false) => {
@@ -12757,6 +12758,7 @@ test("template submission reconciliation confirms exact remote identity without 
     createCase(names.ambiguous),
     createCase(names.unknown),
     createCase(names.concurrent),
+    createCase(names.appManual),
   ]);
   const isolated = await prisma.template.create({
     data: {
@@ -12793,6 +12795,9 @@ test("template submission reconciliation confirms exact remote identity without 
       { id: `meta-${name}-2`, name, language: "pt_BR", status: "PENDING" },
     ];
     if (name === names.unknown) data = [{ id: `meta-${name}`, name, language: "pt_BR", status: "PAUSED" }];
+    if (name === names.appManual) {
+      data = [{ id: `meta-${name}`, name, language: "pt_BR", status: "PENDING" }];
+    }
     if (name === names.concurrent) {
       concurrentCalls += 1;
       if (concurrentCalls === 1) {
@@ -12867,6 +12872,19 @@ test("template submission reconciliation confirms exact remote identity without 
   assert.equal(isolatedAfter.status, "submission_unknown");
   assert.equal(isolatedAfter.metaTemplateId, null);
   assert.equal(providerCalls, 8);
+
+  const appManualResponse = await request<{ ok?: boolean; template?: { status: string } }>(
+    "POST",
+    `/app/templates/${ids.get(names.appManual)!.templateId}/sync`,
+    businessAdmin
+  );
+  assert.equal(appManualResponse.status, 200);
+  assert.equal(appManualResponse.body.template?.status, "pending");
+  assert.equal(
+    (await prisma.templateRequest.findUniqueOrThrow({ where: { id: ids.get(names.appManual)!.requestId } })).status,
+    "submitted_to_meta"
+  );
+
   assert.equal(creationPosts, 0);
 });
 
@@ -20204,4 +20222,69 @@ test("reactive transport policy routes Web-origin claim protocol and Inbox reply
     assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId } }),1);
   }
   assert.equal(calls,4);
+});
+
+test("template submission reconciliation in bulk confirms the exact submission_unknown request without creating a template", async (t) => {
+  const suffix = crypto.randomUUID().replace(/-/g, "");
+  const name = `reconcile_app_bulk_${suffix}`;
+  await configureBusinessTemplateMetaTransport({ suffix: `reconcile-bulk-${suffix}` });
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name,
+      category: "MARKETING",
+      language: "pt_BR",
+      content: "Conteudo de homologacao em lote",
+      status: "submission_unknown",
+      updatedAt: new Date(Date.now() + 60_000),
+    },
+  });
+  const templateRequest = await prisma.templateRequest.create({
+    data: {
+      clientId: businessClientId,
+      name,
+      category: "MARKETING",
+      content: template.content,
+      variables: { language: "pt_BR", variableDetails: [] },
+      status: "submission_unknown",
+      headerType: "NONE",
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  let providerGets = 0;
+  let creationPosts = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (!url.startsWith("https://graph.facebook.com/")) return originalFetch(input, init);
+    if ((init?.method ?? "GET") !== "GET") creationPosts += 1;
+    providerGets += 1;
+    const requestedName = new URL(url).searchParams.get("name") ?? "";
+    const data = requestedName === name
+      ? [{ id: `meta-${name}`, name, language: "pt_BR", status: "PENDING" }]
+      : [];
+    return new Response(JSON.stringify({ data }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const response = await request<{ ok?: boolean; summary?: { checked: number } }>(
+    "POST",
+    "/app/templates/sync",
+    businessAdmin
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal((response.body.summary?.checked ?? 0) > 0, true);
+  const [storedTemplate, storedRequest] = await Promise.all([
+    prisma.template.findUniqueOrThrow({ where: { id: template.id } }),
+    prisma.templateRequest.findUniqueOrThrow({ where: { id: templateRequest.id } }),
+  ]);
+  assert.equal(storedTemplate.status, "pending");
+  assert.equal(storedTemplate.metaTemplateId, `meta-${name}`);
+  assert.equal(storedRequest.status, "submitted_to_meta");
+  assert.equal(providerGets > 0, true);
+  assert.equal(creationPosts, 0);
 });

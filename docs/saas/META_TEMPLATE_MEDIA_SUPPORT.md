@@ -367,6 +367,17 @@ uma resposta antiga regrida um estado concorrente. A reconciliação não altera
 asset local: não marca mídia como `ready`, não fabrica handle e não depende de um
 handle local para reconhecer o template remoto.
 
+Os caminhos individual e em lote de `/app`, assim como a sincronização administrativa
+de `/admin`, aplicam a mesma reconciliação ao `Template` e à solicitação correspondente.
+A associação exige tenant, nome e idioma exatos; o identificador remoto confirmado
+permanece vinculado ao `Template`. Sem uma única solicitação compatível, nenhuma é
+escolhida arbitrariamente. `submission_unknown` habilita somente sincronização por
+GET e continua impedindo nova submissão.
+
+No catálogo de `/app`, modelos e itens compostos são ordenados por `createdAt` do
+mais recente para o mais antigo, com desempate pelo ID. `updatedAt` não participa da
+ordenação; sincronizar ou atualizar o estado de um modelo não muda sua posição.
+
 O caso observado `imagem_previdenciario` motivou este contrato: o estado local
 permaneceu `submission_unknown`, enquanto a interface do provedor indicava análise.
 Essa observação não é gravada como confirmação; somente um sync futuro, explícito e
