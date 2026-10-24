@@ -1,65 +1,75 @@
 # Estado canônico do Converta
 
-**DEPLOYED / PRODUCTION HEALTHY / META FUNCTIONAL ACCEPTANCE PENDING**
+**DEPLOYED / PRODUCTION HEALTHY / TENANT META APP ID CONFIGURATION PENDING**
 
 Esta é a entrada vigente de continuidade. A topologia operacional está definida
-exclusivamente no [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a
-evidência sanitizada está no
-[registro estruturado](releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json).
+no [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a evidência
+sanitizada está no
+[registro estruturado](releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json).
 
-## Produção viva — observação de 22/10/2026
+## Produção viva — observação de 24/10/2026
 
-- Target da aplicação: `5c339b2eeda52e21249844fc8b71a351d4311f03`.
-- Release: `immutable-5c339b2e-20261022T125717Z`.
-- Control plane versionado: `90f04d8f2e47e0cd87c43bb8c26ff1cf33a1098d`.
+- Target da aplicação: `a62da468ba1e703139181cecfa88d34f2066ccd1`.
+- Release: `immutable-a62da468-vps-20261024T124726Z`.
+- Control plane: `5ea7fa45a3693a14bdbf1d9d0a464dd61423b4ad`.
 - API: `/opt/re7online/current/api`, entry SHA-256
   `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`.
 - Frontend: `/opt/re7online/current/frontend`, BUILD_ID
-  `9nXekPSOrJsLjOlofmaPI`, Next direto em `fork_mode`, uma instância.
-- Worker preservado no runtime anterior, sem seleção ou restart.
-- Dump PM2: `41830f80657ace643b42818865de810cb2c0bae3e77027b752004c1db06cfeb5`,
+  `UToBpS3nIu9rzbWpDfnDw`, Next direto em `fork_mode`, uma instância.
+- Worker preservado no runtime `immutable-e2e7f17a-20261022T005110Z`, sem seleção
+  ou restart.
+- Dump PM2: `fec9b3417d4ea1e34b13840f5e3fea2b70a499220c0af124f039a87d8ce312cc`,
   `deploy:deploy`, arquivo regular, modo `0600`, salvo exatamente uma vez.
 - Retorno anterior preservado pelo dump
-  `398df404299f80658e45a593d910249e24adbe51f4d48942595b4e58544c2de6`
-  e pelas definições autenticadas e symlinks capturados.
+  `41830f80657ace643b42818865de810cb2c0bae3e77027b752004c1db06cfeb5`
+  e pelos symlinks e registros PM2 capturados.
 - Marker `DEPLOYED`:
-  `1a930d012bc8db9d6144192b6c8d7fd6820d7a6e5bf2cc1f7a3d8f2c9c6fe231`.
-- Finalização: 22/10/2026, 17:30:39 America/Fortaleza.
+  `85cb006e15f68e3afe701c5c92b6f55864c5359c2d3bcde864b8c0900547416b`.
 
-PIDs são observações datadas, não identidades duráveis: API `2160744` (start ticks
-`2248483396`), frontend `2160988` (`2248491338`) e worker `2005263`
-(`2241726284`). Revalidá-los antes de qualquer futura mutação.
+PIDs são observações datadas: API `29766` (start ticks `519561`), frontend
+`29844` (`520267`) e worker `2233` (`17758`). Release, hashes, BUILD_ID e dump
+são as identidades duráveis; revalidar os PIDs antes de outra mutação.
 
-## Readiness e limites da janela
+## Build, ativação e limites
 
-API e frontend foram admitidos pelo comando versionado
-`scripts/pm2-definition-control.py wait-readiness`, com prazo monotônico de 30
-segundos, polling máximo de 500 ms e três amostras consecutivas. PID, start ticks,
-symlink, identidade da release e socket `DIRECT` permaneceram estáveis; health local
-e público foi consultado somente depois da estabilidade do listener.
+Após o upgrade de RAM, o owner autorizou um build único na VPS em worktree isolado,
+fora do runtime ativo, com Node v20.20.0/npm 10.8.2. Os serviços produtivos não
+foram parados para o build. O payload compilado foi congelado e verificado como
+release imutável; nenhum build ocorreu durante a ativação.
 
-API local/pública, Login, Inbox, CRM, Modelos, Campanhas e asset responderam HTTP
-200. O smoke foi exclusivamente GET/read-only e recebeu aceite técnico explícito.
-Não houve migration, SQL, chamada à Meta, criação ou submissão de template,
-campanha, importação ou envio. A classificação de schema desta implantação é
-`NOT_APPLICABLE_NO_SCHEMA_CHANGE`.
+A primeira embalagem omitiu um módulo válido porque o produtor confundiu o segmento
+`uploads` interno de `node_modules/openai` com dados operacionais. A correção limita
+essa denylist aos caminhos da aplicação, mantém uploads reais proibidos e possui
+regressão. O payload compilado existente foi reutilizado, sem novo `npm`, Prisma ou
+build. Pacote, manifesto e índice corrigidos foram autenticados; a preparação
+incompleta e as duas tentativas encerradas pelo driver permanecem como histórico.
 
-O suporte a mídia continua tecnicamente implantado. A homologação funcional com a
-Meta e a liberação comercial/operacional para clientes continuam **PENDENTES** e
-exigem autorização separada. A migration aditiva da implantação anterior permanece
-registrada; ela não foi executada novamente nesta janela.
+A ativação comprovada usou o fluxo simples dirigido sobre a topologia fixed-current:
+troca atômica dos symlinks, restart dos registros PM2 existentes sem `--update-env`,
+API antes do frontend, três amostras estáveis e smoke GET-only. O ambiente privado
+completo já armazenado pelo PM2 foi preservado. API local/pública retornou HTTP 200,
+`ok=true` e `db="ok"`; Login, Inbox, CRM, Modelos, Campanhas e asset retornaram
+HTTP 200. O aceite técnico antecedeu o único `pm2 save` e o marker.
 
-A dívida `PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE` permanece no
-[backlog independente](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md) e não
-invalida esta implantação técnica.
+Não houve migration, SQL, mudança de tenant/RBAC, chamada à Meta, template,
+campanha, importação ou envio. O mecanismo tenant-scoped de Meta App ID está
+tecnicamente implantado, mas a configuração do tenant Converta Demo continua
+**PENDENTE** e exige janela separada. Não usar fallback global.
 
 ## Rota operacional
 
-Build externo Linux x86_64 com Node v20.20.0/npm 10.8.2, release imutável em
-`/opt/re7online/releases`, seleção pelos caminhos estáveis na ordem
-API→frontend→worker quando impactado, readiness versionado e um único `pm2 save`
-depois dos gates e do aceite técnico.
+O modelo vigente é build once / promote the same artifact em worktree isolado e
+com capacidade comprovada. O builder externo continua preferencial; build na VPS
+exige decisão explícita do owner, capacidade aferida e isolamento do runtime vivo.
+Releases permanecem imutáveis em `/opt/re7online/releases`; seleção usa os caminhos
+estáveis API→frontend, worker apenas quando impactado, readiness em três amostras,
+smoke GET-only, aceite e um único `pm2 save`.
 
-`deploy-normal-release.sh`, build na VPS, checkout produtivo como runtime, Deploy V2,
-PR #190, frontend Next em `cluster_mode` e executor temporário em `/tmp` são
-históricos/obsoletos e não são gates de uma próxima release.
+Build no checkout/runtime ativo, `deploy-normal-release.sh`, Deploy V2, PR #190,
+Next em `cluster_mode` e executores temporários em `/tmp` são históricos/obsoletos.
+As tentativas anteriores com `converta-deploy.py` são evidência desta janela e não
+instruções para sua repetição.
+
+A dívida `PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE` permanece no
+[backlog independente](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md) e não
+invalida esta implantação.

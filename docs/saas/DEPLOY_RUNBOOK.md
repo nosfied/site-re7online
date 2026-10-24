@@ -1,145 +1,96 @@
 # Runbook canônico de deploy
 
 Esta é a única instrução executável vigente para releases normais do Converta.
-Arquitetura, identidades e razões dos gates ficam no
+Arquitetura e razões dos gates ficam no
 [modelo operacional](DEPLOYMENT_OPERATING_MODEL.md).
+
+As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
+`rollback` e `status`; seus resultados nominais são `PREFLIGHT PASS`,
+`AWAITING_ACCEPTANCE`, `DEPLOYED` e `ROLLED_BACK`.
 
 ## Pré-requisitos
 
-- release imutável de API e frontend construída e autenticada fora da VPS por
-  `scripts/converta-release.py`;
-- checkout do control plane limpo no SHA aprovado;
-- PM2 `6.0.14` no caminho já autenticado;
-- configuração privada canônica em raiz `0700`, com manifesto e arquivos `0600`;
-- fontes/requests/definições `api|frontend-candidate|rollback` válidas;
-- raiz de transação nova, privada e exclusiva;
-- worker fora do impacto; migration e SQL não aplicáveis;
-- autorização explícita para a janela.
+- target e control plane aprovados em CI;
+- release imutável de API/frontend selada por `scripts/converta-release.py`;
+- build único em worktree Linux x86_64 isolado, Node v20.20.0; builder externo é
+  preferencial e uso da VPS exige autorização explícita e capacidade comprovada;
+- pacote, manifesto, índice, BUILD_ID e entrypoint integralmente verificados;
+- release extraída em destino novo sob `/opt/re7online/releases`;
+- configuração privada e retorno autenticados, dump anterior e symlinks capturados;
+- PM2 6.0.14, worker fora do impacto, lock global livre e autorização da janela;
+- migration/SQL classificados antes da janela.
 
-O driver aceita somente `api,frontend`, usa `/opt/re7online/current/api` e
-`/opt/re7online/current/frontend`, smoke GET-only e o readiness existente de
-`pm2-definition-control.py`. Ele não constrói artefatos, não altera allowlist e não
-implanta worker ou migration.
+Nunca construir no runtime ativo, reconstruir durante ativação, importar ambiente do
+shell, derivar definição executável de introspecção, usar `--update-env`, executar
+`pm2 flush` ou repetir automaticamente uma tentativa negada.
 
-O health público canônico da API é
-`https://converta.re7online.com/agent-api/health`: o Nginx remove `/agent-api/` e
-encaminha ao `/health` da porta 3001. O gate exige HTTP 200, JSON, `ok=true` e
-`db="ok"`; o caminho `/health` no domínio do frontend não representa a API.
+O health público da API é
+`https://converta.re7online.com/agent-api/health`: exigir HTTP 200, JSON, `ok=true`
+e `db="ok"`. `/health` no domínio do frontend não comprova a API.
 
-## Produção externa da release
-
-Em worktree Linux `x86_64` limpo no target exato e com Node `v20.20.0`, use uma
-saída local ainda inexistente. O epoch deve ser derivado do commit aprovado. Execute
-um único build e promova exatamente o pacote autenticado que ele produzir:
+## Build once
 
 ```bash
-TARGET=<sha-completo-da-aplicacao>
+TARGET=<sha-completo>
 RELEASE=immutable-<sha-curto>-<timestamp-utc>
 EPOCH=$(git show -s --format=%ct "$TARGET")
 python3 scripts/converta-release.py build \
   --repo "$PWD" --target "$TARGET" --release-id "$RELEASE" \
-  --components api,frontend --output /caminho/local/exclusivo \
+  --components api,frontend --output <saida-exclusiva> \
   --source-date-epoch "$EPOCH"
 python3 scripts/converta-release.py verify \
-  --package "/caminho/local/exclusivo/$RELEASE.tar.xz" \
+  --package <saida-exclusiva>/$RELEASE.tar.xz \
   --target "$TARGET" --release-id "$RELEASE" --components api,frontend
 ```
 
-`RELEASE BUILT` e `RELEASE VERIFIED` são obrigatórios antes da transferência. O
-pacote contém somente os runtimes, manifesto fechado e índice schema v1. Build,
-Prisma generate e empacotamento nunca são executados na VPS.
+`RELEASE BUILT` e `RELEASE VERIFIED` são obrigatórios. Diagnosticar primeiro
+`failure-evidence.private`; seu conteúdo não vai para stdout ou Git. Rebuild cria
+nova release. Retry reutiliza o mesmo pacote autenticado.
 
-Se Node, npm, Prisma ou um build falhar, o produtor encerra com a etapa, CWD, código
-de saída e caminho da evidência. A saída combinada da etapa fica somente em
-`failure-evidence.private`, diretório `0700` com arquivos `0600`; seu conteúdo não
-é impresso nem versionado. Diagnostique essa evidência antes de autorizar outro
-build.
+O produtor exclui uploads/dados operacionais da aplicação, mas preserva dependências
+sob `node_modules`, inclusive diretórios internos chamados `uploads`. O índice fechado
+e a extração independente comprovam que não há cache, segredo, worker ou arquivo
+adicional.
 
-Builds Next independentes podem produzir BUILD_ID diferente e não são comparados
-byte a byte. Um rebuild, ainda que use o mesmo commit, cria nova release, BUILD_ID e
-hashes. Retry de transferência ou ativação reutiliza o mesmo `.tar.xz`; seu SHA-256
-é a identidade de transporte. O runtime nunca é reconstruído entre ambientes.
+## Preflight (`preflight`)
 
-Informe explicitamente o manifesto privado canônico, calcule seu SHA-256 externo
-antes da janela e defina os mesmos oito argumentos em todos os comandos. O caminho
-e o digest não são inferidos pelo driver:
+1. Adquirir o lock e confirmar ausência de outra janela.
+2. Revalidar hashes do pacote/release, target, BUILD_ID e entrypoint.
+3. Confirmar symlinks e releases viva/candidata, dump `0600`, retorno autenticado,
+   PM2 e configuração privada completa já armazenada.
+4. Capturar PID, start ticks, CWD, script, argumentos, sockets e restart count de
+   API/frontend/worker.
+5. Confirmar health, espaço/inodes, zero trabalho impeditivo e impacto de migration.
+6. Preparar evidência privada e destinos exclusivos; não executar `pm2 save`.
 
-```bash
-COMMON=(
-  --release immutable-<id>
-  --target <sha-completo-da-aplicacao>
-  --control-plane <sha-completo-do-control-plane>
-  --components api,frontend
-  --config-root /opt/re7online/config/pm2-canonical/v1
-  --config-manifest /opt/re7online/config/pm2-canonical/v1/final-hash-manifest.private.json
-  --config-manifest-sha256 <sha256-autenticado-do-manifesto-informado>
-  --transaction-root /opt/re7online/backups/converta-persistent/deploy-transactions/<id>
-)
-```
+## Ativação fixed-current
 
-O manifesto autenticado usa `schemaVersion: 2`, raiz fechada e 18 entradas `files`
-com os campos exatos `mode`, `name`, `sha256` e `size`. O driver confere esses
-metadados com cada arquivo real e nega campo ausente, adicional ou divergente.
-Ele é a única fonte dos caminhos relativos. Seus grupos
-ordenados `definition`, `request`, `source` vinculam componente e papel pelo
-conteúdo autenticado, independentemente do nome do arquivo. Caminho absoluto,
-travessia, symlink, arquivo fora da raiz, modo/owner/tamanho/hash divergente ou alteração
-durante a leitura encerram o comando. Não há procura por nome, glob ou fallback.
+1. Promover atomicamente `/opt/re7online/current/api` ao runtime candidato.
+2. Reiniciar `re7-whatsapp-agent` pelo registro PM2 existente, sem `--update-env`.
+3. Exigir três amostras consecutivas com PID/start ticks estáveis, symlink correto,
+   um listener 3001 DIRECT ou DESCENDANT, sem restart novo; então health local/público.
+4. Só após API PASS, promover `/opt/re7online/current/frontend` atomicamente.
+5. Reiniciar `re7-admin-front` pelo registro existente, sem `--update-env`.
+6. Exigir três amostras estáveis, listener 3000, BUILD_ID, Login, Inbox, CRM,
+   Modelos, Campanhas e asset por GET-only.
+7. Provar o worker byte-operacionalmente preservado e parar em aceite técnico.
 
-## Caminho feliz
+A ausência transitória do listener permite polling limitado; listener estrangeiro,
+PID instável, restart, identidade/hash/BUILD_ID divergente ou health inválido nega a
+janela. Preserve o primeiro erro de startup. Não ampliar timeout antes de diagnosticá-lo.
 
-```bash
-python3 scripts/converta-deploy.py preflight "${COMMON[@]}"
-python3 scripts/converta-deploy.py activate "${COMMON[@]}"
-```
+## Aceite, persistência e retorno
 
-Resultados nominais: `PREFLIGHT PASS` e `AWAITING_ACCEPTANCE`. `activate` seleciona
-API e frontend nessa ordem, chama o `wait-readiness` versionado e preserva o worker.
-Ele não executa `pm2 save` e não cria `DEPLOYED`.
+Após `ACEITE TÉCNICO PASS`, revalidar o trio sem restart, executar `pm2 save`
+exatamente uma vez, conferir dump regular `0600` e hash, criar `DEPLOYED` somente
+depois do dump e liberar o lock.
 
-O owner valida tecnicamente o candidato sem POST, Meta ou envio. Depois do aceite,
-crie na raiz da transação um arquivo regular `0600` chamado
-`acceptance.private.txt`, contendo exatamente:
+Antes do save, qualquer negativa restaura atomicamente frontend e API aos symlinks
+anteriores, reinicia os registros existentes sem atualização de ambiente e comprova
+identidades, sockets, health e worker. Só então declarar `ROLLED_BACK`; zero save e
+zero retry. Depois do save, usar a evidência transacional para completar dump, marker,
+lock e journal sem segundo save.
 
-```text
-ACEITE TÉCNICO PASS
-```
-
-Finalize uma única vez:
-
-```bash
-python3 scripts/converta-deploy.py finalize "${COMMON[@]}"
-```
-
-Resultado nominal: `DEPLOYED`. O comando revalida identidades, sockets, symlinks,
-health e worker; executa um único `pm2 save`, valida o dump e só então cria o marker.
-
-## Rollback
-
-Antes do save, diante de rejeição ou negativa recuperável:
-
-```bash
-python3 scripts/converta-deploy.py rollback "${COMMON[@]}"
-```
-
-Resultado nominal: `ROLLED_BACK`. O comando restaura symlinks e definições
-autenticadas, revalida API/frontend/worker, não salva o dump e não cria marker. Se
-uma restauração for interrompida, o journal fica em `FAILED`, conserva o lock e o
-mesmo comando `rollback` retoma pelos checkpoints já persistidos, desde que
-`saveCount` continue zero.
-
-## Estado
-
-```bash
-python3 scripts/converta-deploy.py status "${COMMON[@]}"
-```
-
-`status` é somente leitura e mostra apenas estado, release, target, control plane,
-contagem de saves e presença lógica do marker. Nunca mostra ambiente ou segredo.
-
-Qualquer `DEPLOY_DENY:<predicado>` encerra a etapa. Não editar o journal nem adaptar
-artefatos durante a janela. Se `finalize` for interrompido, invoque o mesmo comando:
-o journal e a identidade do dump determinam se o único `pm2 save` ainda precisa ser
-executado ou já ocorreu. Estados `FINALIZING`/`FAILED` não autorizam um segundo save;
-o driver conclui dump, marker, lock e journal de forma retomável. O rollback comum é
-negado depois que o dump candidato foi persistido.
+As tentativas de 24/10 com `scripts/converta-deploy.py` ficam preservadas como
+histórico e não devem ser repetidas. Preparações anteriores, Deploy V2,
+`deploy-normal-release.sh` e executores em `/tmp` não são rotas vigentes.

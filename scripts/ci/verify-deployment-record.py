@@ -83,10 +83,20 @@ def verify_immutable_release(record_path: Path, record: dict) -> None:
                               record.get("releaseId", ""))), "releaseId")
     require(record.get("components") == ["api", "frontend"], "components")
     build = record.get("build", {})
-    require(build == {
-        "location": "OFF_HOST", "platform": "linux", "architecture": "x86_64",
+    common_build = {
+        "platform": "linux", "architecture": "x86_64",
         "nodeVersion": "v20.20.0", "npmVersion": "10.8.2",
-    }, "build identity")
+    }
+    if build.get("location") == "OFF_HOST":
+        require(build == {"location": "OFF_HOST", **common_build},
+                "off-host build identity")
+    else:
+        require(build == {
+            "location": "PRODUCTION_HOST_ISOLATED_WORKTREE", **common_build,
+            "ownerAuthorization": "EXPLICIT_AFTER_RAM_UPGRADE",
+            "activeRuntimeStoppedForBuild": False,
+            "singleBuild": True,
+        }, "authorized isolated production-host build identity")
     artifacts = record.get("artifacts", {})
     for field in ("packageSha256", "manifestSha256", "indexSha256"):
         require(bool(SHA256.fullmatch(artifacts.get(field, ""))), field)
@@ -129,21 +139,38 @@ def verify_immutable_release(record_path: Path, record: dict) -> None:
                 control_plane.get("ciJobs") == 4 and
                 control_plane.get("ciResult") == "PASS", "control plane identity")
         readiness = record.get("readiness", {})
-        require(readiness.get("command") ==
-                "scripts/pm2-definition-control.py wait-readiness" and
-                readiness.get("controlPlaneCommit") == control_plane.get("commit") and
-                readiness.get("deadlineSeconds") == 30 and
-                readiness.get("maximumPollingMilliseconds") == 500 and
-                readiness.get("requiredStableSamples") == 3 and
-                readiness.get("healthEvaluatedAfterSocketStability") is True,
-                "versioned readiness contract")
-        for component in ("api", "frontend"):
-            result = readiness.get(component, {})
-            require(result.get("totalSamples") == 3 and
-                    result.get("stabilityResets") == 0 and
-                    isinstance(result.get("elapsedSeconds"), (int, float)) and
-                    result.get("elapsedSeconds") > 0,
-                    f"{component} readiness result")
+        if readiness.get("command") == "scripts/pm2-definition-control.py wait-readiness":
+            require(readiness.get("controlPlaneCommit") == control_plane.get("commit") and
+                    readiness.get("deadlineSeconds") == 30 and
+                    readiness.get("maximumPollingMilliseconds") == 500 and
+                    readiness.get("requiredStableSamples") == 3 and
+                    readiness.get("healthEvaluatedAfterSocketStability") is True,
+                    "versioned readiness contract")
+            for component in ("api", "frontend"):
+                result = readiness.get(component, {})
+                require(result.get("totalSamples") == 3 and
+                        result.get("stabilityResets") == 0 and
+                        isinstance(result.get("elapsedSeconds"), (int, float)) and
+                        result.get("elapsedSeconds") > 0,
+                        f"{component} readiness result")
+        else:
+            require(record.get("activation") == {
+                "method": "DIRECTED_EXISTING_PM2_FIXED_CURRENT",
+                "selection": "ATOMIC_FIXED_CURRENT_SYMLINK",
+                "pm2Operation": "RESTART_EXISTING_RECORD_BY_NAME_WITHOUT_UPDATE_ENV",
+                "fullStoredPrivateEnvironmentPreserved": True,
+                "driverAttemptsRetainedAsHistoricalEvidence": True,
+            }, "directed fixed-current activation")
+            require(readiness.get("method") ==
+                    "THREE_CONSECUTIVE_STABLE_SAMPLES" and
+                    readiness.get("requiredStableSamples") == 3 and
+                    readiness.get("healthEvaluatedAfterSocketStability") is True,
+                    "directed readiness contract")
+            for component in ("api", "frontend"):
+                result = readiness.get(component, {})
+                require(result == {"totalSamples": 3, "identityStable": True,
+                                   "listenerCount": 1},
+                        f"{component} directed readiness result")
         migration = record.get("migration", {})
         require(migration == {
             "classification": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",

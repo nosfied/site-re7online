@@ -5,10 +5,10 @@
 A fonte canônica é [CURRENT_STATE.md](CURRENT_STATE.md), e a única rota de deploy
 vigente é [DEPLOYMENT_OPERATING_MODEL.md](DEPLOYMENT_OPERATING_MODEL.md). A release
 de mídia em templates/campanhas está **TECHNICALLY DEPLOYED / PRODUCTION HEALTHY**
-e o hardening de UX foi reativado em 22/10/2026; homologação Meta e liberação aos
-clientes continuam pendentes.
+e a release tenant-scoped foi ativada em 24/10/2026; a configuração do App ID no
+tenant, homologação Meta e liberação aos clientes continuam pendentes.
 
-Build na VPS, checkout produtivo como runtime, `deploy-normal-release.sh`, PR #190,
+Build no checkout/runtime ativo, `deploy-normal-release.sh`, PR #190,
 Deploy V2 e Next em `cluster_mode` são históricos/obsoletos. Exemplos antigos neste
 arquivo não os reautorizam.
 
@@ -39,8 +39,10 @@ Antes de executar, classificar a mudanca conforme `docs/saas/CHANGE_POLICY.md`:
 
 - Confirmar branch/commit correto.
 - Conferir `git status --short`.
-- Produzir API/frontend com `scripts/converta-release.py build` em saída externa
-  exclusiva, Node `v20.20.0` e epoch do commit; exigir `RELEASE BUILT`.
+- Produzir API/frontend com `scripts/converta-release.py build` em saída exclusiva,
+  worktree isolado, Node `v20.20.0` e epoch do commit; exigir `RELEASE BUILT`.
+  Builder externo é preferencial. VPS exige decisão explícita, capacidade medida e
+  separação integral do runtime ativo.
 - Registrar o BUILD_ID produzido sem substituí-lo; designar um único pacote canônico.
 - Executar `scripts/converta-release.py verify` sobre o pacote extraído de forma
   independente; exigir `RELEASE VERIFIED` e comparar SHA-256 do pacote.
@@ -100,8 +102,9 @@ npm run db:generate
 npm run build
 ```
 
-Não executar build backend ou frontend na VPS. O artefato integral deve ser selado,
-extraído e comparado fora da produção antes da transferência.
+Não executar build no checkout/runtime ativo. O artefato integral deve ser selado,
+extraído e comparado antes da seleção; build na VPS só ocorre em worktree e saída
+isolados, após autorização explícita e sem interromper produção para obter memória.
 
 Lint:
 

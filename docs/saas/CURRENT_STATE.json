@@ -1,35 +1,35 @@
 {
   "schemaVersion": 6,
-  "updatedAtUtc": "2026-10-22T20:30:39Z",
+  "updatedAtUtc": "2026-10-24T14:10:00Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json",
-  "activeOperationalRecord": "docs/saas/releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json",
+  "activeDeploymentRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json",
+  "activeOperationalRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "production": {
     "status": "DEPLOYED_VERIFIED",
     "certifiedByThisFile": false,
-    "releaseId": "immutable-5c339b2e-20261022T125717Z",
-    "releasePath": "/opt/re7online/releases/immutable-5c339b2e-20261022T125717Z",
-    "targetCommit": "5c339b2eeda52e21249844fc8b71a351d4311f03",
+    "releaseId": "immutable-a62da468-vps-20261024T124726Z",
+    "releasePath": "/opt/re7online/releases/immutable-a62da468-vps-20261024T124726Z",
+    "targetCommit": "a62da468ba1e703139181cecfa88d34f2066ccd1",
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
-      "lastReportedPid": 2160744,
-      "lastReportedStartTicks": 2248483396
+      "lastReportedPid": 29766,
+      "lastReportedStartTicks": 519561
     },
     "frontend": {
       "stablePath": "/opt/re7online/current/frontend",
-      "buildId": "9nXekPSOrJsLjOlofmaPI",
+      "buildId": "UToBpS3nIu9rzbWpDfnDw",
       "execMode": "fork_mode",
       "instances": 1,
-      "lastReportedPid": 2160988,
-      "lastReportedStartTicks": 2248491338
+      "lastReportedPid": 29844,
+      "lastReportedStartTicks": 520267
     },
     "worker": {
       "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z/worker-runtime",
       "entrySha256": "7d19a9b80da847de0d9234b7738dd919d86ffb3f3a495b6415b2de585a665afd",
-      "lastReportedPid": 2005263,
-      "lastReportedStartTicks": 2241726284,
+      "lastReportedPid": 2233,
+      "lastReportedStartTicks": 17758,
       "preserved": true,
       "changed": false
     },
@@ -48,21 +48,20 @@
       "directoryMode": "0700"
     },
     "pm2": {
-      "dumpSha256": "41830f80657ace643b42818865de810cb2c0bae3e77027b752004c1db06cfeb5",
-      "rollbackSha256": "398df404299f80658e45a593d910249e24adbe51f4d48942595b4e58544c2de6",
+      "dumpSha256": "fec9b3417d4ea1e34b13840f5e3fea2b70a499220c0af124f039a87d8ce312cc",
+      "rollbackSha256": "41830f80657ace643b42818865de810cb2c0bae3e77027b752004c1db06cfeb5",
       "mode": "0600",
       "owner": "deploy",
       "group": "deploy",
       "savedExactlyOnce": true
     },
-    "markerSha256": "1a930d012bc8db9d6144192b6c8d7fd6820d7a6e5bf2cc1f7a3d8f2c9c6fe231",
-    "controlPlaneCommit": "90f04d8f2e47e0cd87c43bb8c26ff1cf33a1098d",
+    "markerSha256": "85cb006e15f68e3afe701c5c92b6f55864c5359c2d3bcde864b8c0900547416b",
+    "controlPlaneCommit": "5ea7fa45a3693a14bdbf1d9d0a464dd61423b4ad",
     "readiness": {
-      "command": "scripts/pm2-definition-control.py wait-readiness",
-      "deadlineSeconds": 30,
-      "maximumPollingMilliseconds": 500,
+      "method": "THREE_CONSECUTIVE_STABLE_SAMPLES",
       "requiredStableSamples": 3,
-      "healthAfterSocketStability": true
+      "healthAfterSocketStability": true,
+      "activationMethod": "DIRECTED_EXISTING_PM2_FIXED_CURRENT"
     }
   },
   "contactsListRecovery": {
@@ -87,7 +86,7 @@
     "historical993": "LEGACY_UNCORRELATED_NOT_CLAIMED"
   },
   "canonicalTopology": {
-    "build": "EXTERNAL_LINUX_X86_64_NODE_20_20_0_NPM_10_8_2",
+    "build": "BUILD_ONCE_ISOLATED_NODE_20_20_0_NPM_10_8_2",
     "releaseModel": "IMMUTABLE_VERSIONED_RELEASE",
     "promotionOrder": [
       "api",
@@ -99,7 +98,7 @@
     "rollback": "RESTORE_SYMLINKS_AND_FULL_PM2_DEFINITIONS"
   },
   "obsoleteMechanisms": [
-    "BUILD_ON_VPS",
+    "BUILD_IN_ACTIVE_RUNTIME",
     "LIVE_CHECKOUT_AS_RUNTIME",
     "scripts/deploy-normal-release.sh",
     "PR_190_EXPERIMENTAL_PIPELINE",
@@ -129,7 +128,7 @@
   },
   "templateCampaignMedia": {
     "state": "TECHNICALLY_DEPLOYED",
-    "deploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json",
+    "deploymentRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json",
     "components": [
       "api",
       "frontend",
@@ -146,5 +145,12 @@
     "messagesSent": false,
     "knownNonBlockingBacklog": "PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE",
     "currentDeploymentMigration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+  },
+  "tenantScopedMetaAppId": {
+    "codeState": "TECHNICALLY_DEPLOYED",
+    "configurationState": "PENDING_SEPARATE_AUTHORIZED_WINDOW",
+    "globalFallbackUsed": false,
+    "metaCallsExecuted": false,
+    "deploymentRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json"
   }
 }

@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 4,
+  "recordType": "IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_VERIFIED",
+  "result": "DEPLOYED_FIXED_CURRENT_RUNTIME_ESTABLISHED_PRODUCTION_HEALTHY",
+  "displayStatus": "DEPLOYED / PRODUCTION HEALTHY / META CONFIGURATION PENDING",
+  "releaseId": "immutable-a62da468-vps-20261024T124726Z",
+  "canonicalBranch": "review/campaign-recovery-20260926",
+  "baseCommit": "ce29c1c35b44e4b0c65641c55f46b74608dfbf8b",
+  "targetCommit": "a62da468ba1e703139181cecfa88d34f2066ccd1",
+  "controlPlane": {
+    "commit": "5ea7fa45a3693a14bdbf1d9d0a464dd61423b4ad",
+    "workflowDispatchRun": 40091234596,
+    "ciJobs": 4,
+    "ciResult": "PASS"
+  },
+  "components": [
+    "api",
+    "frontend"
+  ],
+  "build": {
+    "location": "PRODUCTION_HOST_ISOLATED_WORKTREE",
+    "platform": "linux",
+    "architecture": "x86_64",
+    "nodeVersion": "v20.20.0",
+    "npmVersion": "10.8.2",
+    "ownerAuthorization": "EXPLICIT_AFTER_RAM_UPGRADE",
+    "activeRuntimeStoppedForBuild": false,
+    "singleBuild": true
+  },
+  "artifacts": {
+    "releasePath": "/opt/re7online/releases/immutable-a62da468-vps-20261024T124726Z",
+    "packageSha256": "fdac4ef8ddcd787f0e6ef0709d19fa2dc86ae6964eaf4b7b1c6941cd3a0366e4",
+    "manifestSha256": "cf10582fab0bd6200ce8a107a7252917f18f1259288f34fcc7aa65bd128fdea2",
+    "indexSha256": "da33e8796eff59659dbe897b8e96d3d71c4cce5152e956349c82dc200f73a30e",
+    "indexEntries": 34348,
+    "api": {
+      "stablePath": "/opt/re7online/current/api",
+      "entrypoint": "dist/index.js",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontend": {
+      "stablePath": "/opt/re7online/current/frontend",
+      "buildId": "UToBpS3nIu9rzbWpDfnDw",
+      "execMode": "fork_mode",
+      "instances": 1,
+      "entrypoint": "node_modules/next/dist/bin/next",
+      "args": [
+        "start",
+        "-p",
+        "3000"
+      ]
+    },
+    "worker": {
+      "preserved": true
+    }
+  },
+  "producerCorrection": {
+    "cause": "APPLICATION_UPLOAD_DENYLIST_MATCHED_PACKAGE_INTERNAL_NODE_MODULES_PATH",
+    "scope": "DEPENDENCY_PATH_CLASSIFICATION_ONLY",
+    "patchedProducerSha256": "72b6356c750449cbeda648169b9c356ada5988c478d1ab149fbff2d859f81d69",
+    "missingDependencyRestoredSha256": "e4cd8a8faf352c643a9ee136613c13864333debc607d3aad5c706a5af8c3be96",
+    "rebuildExecuted": false,
+    "existingCompiledPayloadReused": true,
+    "badRuntimePreserved": true
+  },
+  "deploymentOrder": [
+    "api",
+    "frontend"
+  ],
+  "activation": {
+    "method": "DIRECTED_EXISTING_PM2_FIXED_CURRENT",
+    "selection": "ATOMIC_FIXED_CURRENT_SYMLINK",
+    "pm2Operation": "RESTART_EXISTING_RECORD_BY_NAME_WITHOUT_UPDATE_ENV",
+    "fullStoredPrivateEnvironmentPreserved": true,
+    "driverAttemptsRetainedAsHistoricalEvidence": true
+  },
+  "readiness": {
+    "method": "THREE_CONSECUTIVE_STABLE_SAMPLES",
+    "requiredStableSamples": 3,
+    "healthEvaluatedAfterSocketStability": true,
+    "api": {
+      "totalSamples": 3,
+      "identityStable": true,
+      "listenerCount": 1
+    },
+    "frontend": {
+      "totalSamples": 3,
+      "identityStable": true,
+      "listenerCount": 1
+    }
+  },
+  "verification": {
+    "observedAtUtc": "2026-10-24T14:10:00Z",
+    "pidSemantics": "dated observations; release, hashes, BUILD_ID and dump are durable identities",
+    "api": {
+      "pid": 29766,
+      "startTicks": 519561,
+      "socketPort": 3001,
+      "socketOwnerPid": 29766,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        29766
+      ],
+      "samples": 3,
+      "localHealthHttp": 200,
+      "publicHealthHttp": 200,
+      "healthJsonOk": true,
+      "databaseHealth": "ok"
+    },
+    "frontend": {
+      "pid": 29844,
+      "startTicks": 520267,
+      "socketPort": 3000,
+      "socketOwnerPid": 29844,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        29844
+      ],
+      "samples": 3,
+      "loginLocalHttp": 200,
+      "loginPublicHttp": 200,
+      "inboxHttp": 200,
+      "crmHttp": 200,
+      "templatesHttp": 200,
+      "campaignsHttp": 200,
+      "assetHttp": 200
+    },
+    "worker": {
+      "pid": 2233,
+      "startTicks": 17758,
+      "restartCount": 0,
+      "releaseId": "immutable-e2e7f17a-20261022T005110Z",
+      "preserved": true
+    },
+    "smoke": "GET_ONLY",
+    "technicalAcceptance": "PASS"
+  },
+  "migration": {
+    "classification": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+    "sqlExecuted": false,
+    "migrationExecuted": false
+  },
+  "pm2": {
+    "savedExactlyOnce": true,
+    "saveCount": 1,
+    "saveExitCode": 0,
+    "dumpSha256": "fec9b3417d4ea1e34b13840f5e3fea2b70a499220c0af124f039a87d8ce312cc",
+    "dumpMode": "0600",
+    "dumpOwner": "deploy",
+    "dumpGroup": "deploy",
+    "rollbackSha256": "41830f80657ace643b42818865de810cb2c0bae3e77027b752004c1db06cfeb5"
+  },
+  "rollback": {
+    "previousReleaseId": "immutable-5c339b2e-20261022T125717Z",
+    "previousReleasePreserved": true,
+    "authenticatedDefinitionsPreserved": true,
+    "symlinkStateCaptured": true,
+    "strategy": "RESTORE_PREVIOUS_SYMLINKS_AND_EXISTING_PM2_RECORDS",
+    "automaticRetryForbidden": true
+  },
+  "marker": {
+    "name": "DEPLOYED",
+    "createdAfterDumpValidation": true,
+    "sha256": "85cb006e15f68e3afe701c5c92b6f55864c5359c2d3bcde864b8c0900547416b"
+  },
+  "window": {
+    "date": "2026-10-24",
+    "timezone": "America/Fortaleza",
+    "startedAtEvidenceUtc": "2026-10-24T14:06:05Z",
+    "finishedAtUpperBoundUtc": "2026-10-24T14:10:00Z"
+  },
+  "releaseReadiness": {
+    "technicalDeployment": "DEPLOYED",
+    "productionHealth": "HEALTHY",
+    "tenantMetaAppIdCode": "DEPLOYED",
+    "tenantMetaAppIdConfiguration": "PENDING_SEPARATE_WINDOW",
+    "metaCalls": "NOT_EXECUTED"
+  },
+  "windowMutations": {
+    "functionalPostRequests": 0,
+    "metaCalls": 0,
+    "templateCreatesOrSubmissions": 0,
+    "campaigns": 0,
+    "imports": 0,
+    "messagesSent": 0,
+    "sqlStatements": 0,
+    "migrations": 0,
+    "workerChanges": 0
+  },
+  "privateEvidence": {
+    "versioned": false,
+    "containsSecrets": false,
+    "locationPublished": false
+  },
+  "persistentStorage": {
+    "templateMediaRoot": "/opt/re7online/content/template-campaign-media",
+    "owner": "deploy",
+    "group": "deploy",
+    "directoryMode": "0700",
+    "outsideImmutableRelease": true
+  }
+}

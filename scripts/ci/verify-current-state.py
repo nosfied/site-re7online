@@ -77,7 +77,7 @@ require(media["metaCallsExecuted"] is False and
         media["templatesCreatedOrSubmitted"] is False and
         media["campaignsExecuted"] is False and media["messagesSent"] is False,
         "media external effects")
-required_obsolete = {"BUILD_ON_VPS", "LIVE_CHECKOUT_AS_RUNTIME",
+required_obsolete = {"BUILD_IN_ACTIVE_RUNTIME", "LIVE_CHECKOUT_AS_RUNTIME",
                      "scripts/deploy-normal-release.sh",
                      "PR_190_EXPERIMENTAL_PIPELINE",
                      "NEXT_CLUSTER_MODE",

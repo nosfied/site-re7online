@@ -8,7 +8,9 @@ Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
 
 Última atualização: 2026-10-22. Esta é a fonte canônica para cabeçalhos `IMAGE` e
 `VIDEO` em templates e campanhas. O estado produtivo geral continua em
-[`CURRENT_STATE.md`](CURRENT_STATE.md).
+[`CURRENT_STATE.md`](CURRENT_STATE.md). O mecanismo tenant-scoped de Meta App ID foi
+implantado em 24/10/2026, mas nenhum App ID foi configurado e nenhuma chamada Meta
+foi executada nessa janela; homologação funcional permanece pendente.
 
 ## Implantação técnica
 

@@ -13,7 +13,8 @@
 - [Runbook canônico de deploy](DEPLOY_RUNBOOK.md) — única instrução executável vigente
 - [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
   o produtor externo `scripts/converta-release.py` e a fronteira com a ativação
-- [Reativação do hardening de mídia com readiness versionado](releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json)
+- [Deploy tenant-scoped de Meta App ID](releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json)
+  — release ativa; configuração do tenant e chamadas Meta continuam pendentes.
 - [Topologia de domínios e runtimes](../DEPLOY_TOPOLOGY_RE7.md)
 - [Checklist de release](RELEASE_CHECKLIST.md)
 - [Controle de definições PM2 e incidente de contaminação](PM2_DEFINITION_CONTAMINATION_INCIDENT_2026-10-22.md)
@@ -37,6 +38,8 @@
 
 ## Arquivo histórico
 
+- [Reativação anterior do hardening de mídia](releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json)
+  — release substituída, preservada como retorno e evidência.
 - [Deploy técnico inicial de mídia em templates e campanhas](releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json)
   — release substituída, preservada como evidência da migration e do storage persistente.
 - [Deploy CRM Contacts Cursor/Read Model](releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json)
@@ -56,6 +59,7 @@
 - Preparações, rehearsals, controles e verificadores single-use de 19–20/10 são
   preservados como evidência e não podem ser executados novamente.
 
-O checkout produtivo, build na VPS, `deploy-normal-release.sh`, PR #190 e Next em
-`cluster_mode` estão obsoletos. Nenhum documento histórico prevalece sobre o
-modelo operacional canônico.
+O checkout/runtime ativo como destino de build, `deploy-normal-release.sh`, PR #190
+e Next em `cluster_mode` estão obsoletos. Build isolado na VPS requer decisão
+explícita e capacidade comprovada; o builder externo continua preferencial. Nenhum
+documento histórico prevalece sobre o modelo operacional canônico.

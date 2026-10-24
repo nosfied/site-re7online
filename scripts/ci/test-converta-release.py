@@ -284,6 +284,12 @@ class ReleaseProducerTest(unittest.TestCase):
         self.assertEqual({Path(name).parts[1] for name in names if len(Path(name).parts) > 1},
                          {"api-runtime", "frontend-runtime", "manifest.json", "index.sha256"})
 
+    def test_dependency_uploads_directory_is_runtime_content(self) -> None:
+        self.assertFalse(MODULE.forbidden(
+            MODULE.PurePosixPath("node_modules/openai/resources/uploads/uploads.mjs")
+        ))
+        self.assertTrue(MODULE.forbidden(MODULE.PurePosixPath("uploads/customer-media.bin")))
+
     def test_cache_secret_and_worker_entries_are_denied(self) -> None:
         for label, relative in (("cache-entry", "api-runtime/cache/value"),
                                 ("secret-entry", "api-runtime/.env.production"),

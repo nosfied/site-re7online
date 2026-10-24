@@ -12,7 +12,7 @@ As reservas e princípios de capacidade/retencão abaixo continuam integralmente
 
 Status: baseline operacional permanente do Converta.
 
-Ultima atualizacao: 2026-06-27, Sprint 78O - Capacity & Swap Hardening concluida.
+Ultima atualizacao: 2026-10-24, capacidade pós-upgrade e build isolado registrados.
 
 Este documento registra a fotografia oficial de producao para comparar futuras mudancas de capacidade, VPS, HA, banco, build, backup e laboratorio de carga. Ele nao altera runtime, banco, infraestrutura ou comportamento funcional.
 
@@ -194,8 +194,12 @@ backend build
 frontend build
 ```
 
-Com cerca de 2 GiB de RAM, a VPS não é builder. API e frontend são construídos
-externamente com Node v20.20.0 e promovidos como release imutável integral.
+O baseline histórico de cerca de 2 GiB não comportava o build da API. Após o upgrade
+de RAM de 24/10/2026, o owner autorizou um build único em worktree e saída isolados,
+com Node v20.20.0/npm 10.8.2, sem parar os serviços vivos. O build concluiu e originou
+`immutable-a62da468-vps-20261024T124726Z`. Isso não autoriza build no runtime ativo
+nem transforma a VPS em builder automático: externo permanece preferencial e cada
+uso do host produtivo exige capacidade fresca e autorização explícita.
 
 ## Swap
 
@@ -310,8 +314,8 @@ Nao executar carga nesta sprint.
 
 1. Abrir `78O.1 - Inbox Read Query Path Investigation` para investigar p95 `2.085,30 ms` em `20 VUs`.
 2. Manter `OPERATIONAL_BASELINE.md` atualizado em toda mudanca de VPS, swap, PM2, PostgreSQL, build, HA ou laboratorio de carga.
-3. Manter build externo enquanto a VPS permanecer nessa classe de memória; não
-   executar build normal no host produtivo.
+3. Preferir build externo. Build no host produtivo exige autorização explícita,
+   capacidade fresca e worktree/saída separados do runtime ativo.
 
 ## Capacidade e retenção operacional
 
