@@ -21,6 +21,11 @@ O driver aceita somente `api,frontend`, usa `/opt/re7online/current/api` e
 `pm2-definition-control.py`. Ele não constrói artefatos, não altera allowlist e não
 implanta worker ou migration.
 
+O health público canônico da API é
+`https://converta.re7online.com/agent-api/health`: o Nginx remove `/agent-api/` e
+encaminha ao `/health` da porta 3001. O gate exige HTTP 200, JSON, `ok=true` e
+`db="ok"`; o caminho `/health` no domínio do frontend não representa a API.
+
 ## Produção externa da release
 
 Em worktree Linux `x86_64` limpo no target exato e com Node `v20.20.0`, use uma

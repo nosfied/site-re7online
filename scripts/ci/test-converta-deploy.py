@@ -62,6 +62,9 @@ class FakeHost(deploy.Host):
         self.dump: Path | None = None
         self.external_calls = 0
         self.save_calls = 0
+        self.api_health_payload: dict[str, Any] = {"ok": True, "db": "ok"}
+        self.api_health_content_type = "application/json"
+        self.api_health_status = 200
 
     def run(self, command: list[str], *, timeout: float = 40) -> subprocess.CompletedProcess[str]:
         if command[:4] == ["git", "-C", str(ROOT), "rev-parse"]:
@@ -77,6 +80,12 @@ class FakeHost(deploy.Host):
         if not (url.startswith("http://127.0.0.1:") or url.startswith("https://converta.re7online.com/")):
             self.external_calls += 1
         return 200
+
+    def api_health(self, url: str, timeout: float = 10) -> tuple[int, str, dict[str, Any]]:
+        self.events.append("api-health:" + url)
+        if not (url.startswith("http://127.0.0.1:") or url.startswith("https://converta.re7online.com/")):
+            self.external_calls += 1
+        return self.api_health_status, self.api_health_content_type, self.api_health_payload
 
     def pm2_rows(self, pm2: Path) -> list[dict[str, Any]]:
         return list(self.rows.values())
@@ -549,6 +558,21 @@ class DriverTests(DeployFixture):
     def test_preflight_does_not_request_candidate_asset(self) -> None:
         self.driver.preflight()
         self.assertFalse(any("/_next/static/" in event for event in self.host.events))
+
+    def test_public_api_health_uses_active_proxy_route_and_validates_json_contract(self) -> None:
+        self.assertEqual(deploy.PUBLIC_HEALTH["api"],
+                         "https://converta.re7online.com/agent-api/health")
+        self.driver._health()
+        self.assertIn("api-health:http://127.0.0.1:3001/health", self.host.events)
+        self.assertIn("api-health:https://converta.re7online.com/agent-api/health", self.host.events)
+        for invalid in ({"ok": True, "db": "down"}, {"ok": False, "db": "ok"}, {}):
+            self.host.api_health_payload = invalid
+            with self.assertRaisesRegex(deploy.Denied, "api_health_contract"):
+                self.driver._health()
+        self.host.api_health_payload = {"ok": True, "db": "ok"}
+        self.host.api_health_content_type = "text/html"
+        with self.assertRaisesRegex(deploy.Denied, "api_health_contract"):
+            self.driver._health()
 
     def test_manual_rollback_restores_and_never_saves(self) -> None:
         original = {key: path.resolve() for key, path in self.stable.items()}

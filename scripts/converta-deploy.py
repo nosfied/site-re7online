@@ -39,7 +39,7 @@ LOCAL_HEALTH = {
     "frontend": "http://127.0.0.1:3000/app/login",
 }
 PUBLIC_HEALTH = {
-    "api": "https://converta.re7online.com/health",
+    "api": "https://converta.re7online.com/agent-api/health",
     "frontend": "https://converta.re7online.com/app/login",
 }
 FRONTEND_GET_PATHS = ("/app/login", "/app/inbox", "/app/crm", "/app/templates", "/app/campaigns")
@@ -248,6 +248,22 @@ class Host:
         request = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return int(response.status)
+
+    def api_health(self, url: str, timeout: float = 10) -> tuple[int, str, dict[str, Any]]:
+        request = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read(64 * 1024 + 1)
+            status = int(response.status)
+            content_type = response.headers.get_content_type()
+        if len(raw) > 64 * 1024:
+            deny("api_health_response_too_large")
+        try:
+            payload = json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            deny("api_health_response_invalid")
+        if not isinstance(payload, dict):
+            deny("api_health_response_invalid")
+        return status, content_type, payload
 
     def pm2_rows(self, pm2: Path) -> list[dict[str, Any]]:
         result = self.run([str(pm2), "jlist"])
@@ -649,7 +665,16 @@ class Driver:
         return apps[0]["name"]
 
     def _health(self, *, candidate_asset: bool = False) -> None:
-        urls = [LOCAL_HEALTH["api"], PUBLIC_HEALTH["api"]]
+        for url in (LOCAL_HEALTH["api"], PUBLIC_HEALTH["api"]):
+            try:
+                status, content_type, payload = self.host.api_health(url)
+            except Exception:
+                deny("health_request_failed")
+            if status != 200:
+                deny(f"health_status:{status}")
+            if content_type != "application/json" or payload.get("ok") is not True or payload.get("db") != "ok":
+                deny("api_health_contract")
+        urls: list[str] = []
         for path in FRONTEND_GET_PATHS:
             urls.extend((f"http://127.0.0.1:3000{path}", f"https://converta.re7online.com{path}"))
         if candidate_asset:
