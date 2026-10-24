@@ -5810,6 +5810,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       for (const template of templatesToSync) {
         try {
           const result = await syncTemplateStatus(template.id);
+          if (!result.ok) {
+            failed += 1;
+            continue;
+          }
           if (result.updated) updated += 1;
           const status = normalizeTemplateStatus(result.status);
           if (status === "approved") approved += 1;
@@ -5932,7 +5936,15 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         templateName: existingTemplate.name,
       });
 
-      await syncTemplateStatus(existingTemplate.id);
+      const syncResult = await syncTemplateStatus(existingTemplate.id);
+      if (!syncResult.ok) {
+        json(res, 409, {
+          error: "template_sync_not_confirmed",
+          details: syncResult.reason,
+          message: "A Meta nao confirmou inequivocamente este template.",
+        });
+        return;
+      }
 
       const updatedTemplate = await prisma.template.findUnique({
         where: { id: existingTemplate.id },
@@ -26172,18 +26184,36 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           json(res, 404, { error: "template_request_not_found" });
           return;
         }
-        const template = await prisma.template.findFirst({
+        const matchingTemplates = await prisma.template.findMany({
           where: {
             clientId: templateRequest.clientId,
-            name: { equals: templateRequest.name, mode: "insensitive" },
+            name: templateRequest.name,
           },
-          select: { id: true },
+          select: { id: true, language: true },
         });
-        if (!template) {
+        const requestLanguage = extractTemplateRequestLanguage(templateRequest.variables);
+        const matchingLanguage = matchingTemplates.filter((item) => item.language === requestLanguage);
+        if (matchingLanguage.length === 0) {
           json(res, 404, { error: "template_not_found" });
           return;
         }
+        if (matchingLanguage.length !== 1) {
+          json(res, 409, {
+            error: "template_sync_ambiguous",
+            message: "A correspondencia local do template nao e inequivoca.",
+          });
+          return;
+        }
+        const template = matchingLanguage[0];
         const synced = await syncTemplateStatus(template.id);
+        if (!synced.ok) {
+          json(res, 409, {
+            error: "template_sync_not_confirmed",
+            details: synced.reason,
+            message: "A Meta nao confirmou inequivocamente esta submissao.",
+          });
+          return;
+        }
         const syncedStatus = normalizeTemplateStatus(synced.status);
         const requestStatus =
           syncedStatus === "approved"
@@ -26191,9 +26221,14 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             : syncedStatus === "rejected"
               ? "rejected_meta"
               : "submitted_to_meta";
-        const updated = await prisma.templateRequest.update({
+        const requestClaim = templateRequest.status === requestStatus
+          ? { count: 0 }
+          : await prisma.templateRequest.updateMany({
+              where: { id: templateRequest.id, status: templateRequest.status },
+              data: { status: requestStatus },
+            });
+        const updated = await prisma.templateRequest.findUniqueOrThrow({
           where: { id: templateRequest.id },
-          data: { status: requestStatus },
           select: {
             id: true,
             clientId: true,
@@ -26210,17 +26245,26 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             components: true,
           },
         });
-        await persistEvent({
-          clientId: updated.clientId,
-          requestId: `template-request-sync:${updated.id}:${Date.now()}`,
-          eventName: "template.request.meta_sync_updated",
-          payloadJson: {
-            templateRequestId: updated.id,
-            templateId: template.id,
-            status: synced.status,
-            changedBy: resolveAssignedTo(adminAuth),
-          },
-        });
+        if (requestClaim.count !== 1 && updated.status !== requestStatus) {
+          json(res, 409, {
+            error: "template_sync_concurrent_change",
+            message: "A solicitacao mudou durante a sincronizacao; o estado mais recente foi preservado.",
+          });
+          return;
+        }
+        if (requestClaim.count === 1) {
+          await persistEvent({
+            clientId: updated.clientId,
+            requestId: `template-request-sync:${updated.id}:${Date.now()}`,
+            eventName: "template.request.meta_sync_updated",
+            payloadJson: {
+              templateRequestId: updated.id,
+              templateId: template.id,
+              status: synced.status,
+              changedBy: resolveAssignedTo(adminAuth),
+            },
+          });
+        }
         json(res, 200, {
           ok: true,
           request: serializeTemplateRequest(updated),
@@ -27474,9 +27518,13 @@ async function submitTemplateRequestToMeta(params: {
     if (error instanceof MetaTemplateServiceError && (
       error.code === "meta_template_media_upload_uncertain" ||
       error.code === "meta_template_media_upload_failed" ||
-      error.code === "meta_template_submit_uncertain"
+      error.code === "meta_template_submit_uncertain" ||
+      error.code === "meta_template_media_upload_budget_exhausted" ||
+      error.code === "meta_template_submit_budget_exhausted"
     )) {
-      const uncertain = error.code !== "meta_template_media_upload_failed";
+      const uncertain =
+        error.code === "meta_template_media_upload_uncertain" ||
+        error.code === "meta_template_submit_uncertain";
       const status = uncertain ? "submission_unknown" : "failed";
       const providerDiagnostic = error.diagnostic ?? null;
       await params.prisma.$transaction([
@@ -27504,7 +27552,11 @@ async function submitTemplateRequestToMeta(params: {
       await persistEvent({
         clientId: templateRequest.clientId,
         requestId: `template-request-media-upload:${templateRequest.id}:${Date.now()}`,
-        eventName: uncertain ? "template.request.submission_unknown" : "template.request.media_upload_failed",
+        eventName: uncertain
+          ? "template.request.submission_unknown"
+          : error.code === "meta_template_submit_budget_exhausted"
+            ? "template.request.submission_failed"
+            : "template.request.media_upload_failed",
         payloadJson: {
           templateRequestId: templateRequest.id,
           templateId: template.id,
