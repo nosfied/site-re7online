@@ -1,6 +1,6 @@
 # Estado canônico do Converta
 
-**DEPLOYED / PRODUCTION HEALTHY / META MEDIA HOMOLOGATION PENDING**
+**DEPLOYED / PRODUCTION HEALTHY / VIDEO SUBMISSION ACCEPTED / META APPROVAL PENDING**
 
 Esta é a entrada vigente de continuidade. A topologia operacional está definida
 no [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a evidência
@@ -8,14 +8,24 @@ sanitizada está no
 [registro estruturado](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json).
 A configuração tenant-scoped posterior está no
 [registro operacional](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json).
+A observação manual mais recente da homologação está no
+[registro de submissão aceita](releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_ACCEPTED_2026-10-24.json).
 
 ## Produção viva — observação de 24/10/2026
 
 - Target da aplicação: `ec2a9fde99b6421a85256f14604bd469879f4f2a`.
 - Release: `immutable-ec2a9fde-vps-20261024T162005Z`.
+- A API recebeu posteriormente a correção isolada do target
+  `ef7db11179a1be14160e0f7ceec9f01a8aaf0ece`, na release
+  `immutable-ef7db111-vps-20261024T174000Z`; frontend e worker permaneceram nas
+  identidades acima registradas. O registro estruturado ativo continua sendo a
+  referência do último deploy conjunto, enquanto esta seleção isolada da API é a
+  identidade técnica observada durante a homologação.
 - Control plane: `5ea7fa45a3693a14bdbf1d9d0a464dd61423b4ad`.
-- API: `/opt/re7online/current/api`, entry SHA-256
-  `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`.
+- API: `/opt/re7online/current/api`. O entry SHA-256
+  `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`
+  pertence ao último registro estruturado conjunto; esta reconciliação não atribui
+  esse hash à seleção isolada posterior.
 - Frontend: `/opt/re7online/current/frontend`, BUILD_ID
   `7yArOSyfllnPiQy_vAS9H`, Next direto em `fork_mode`, uma instância.
 - Worker preservado no runtime `immutable-e2e7f17a-20261022T005110Z`, sem seleção
@@ -76,6 +86,17 @@ solicitação foi persistida como `failed`; não houve retry, sincronização ad
 campanha ou mensagem. O resultado sanitizado está no
 [registro de homologação](releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json).
 Submissão recusada não equivale a template criado ou aprovado pela Meta.
+
+Em observação manual posterior e somente de leitura, a solicitação
+`video_previdencia_teste_20261024_v2`, no tenant `demo-converta`, estava em
+`submitted_to_meta` sob a API `ef7db11179a1be14160e0f7ceec9f01a8aaf0ece`.
+O upload estava concluído, a mídia estava `ready` e o handle estava confirmado,
+sem ser publicado. Havia exatamente uma solicitação, um evento
+`template.request.submitted_to_meta`, um template e um identificador Meta, sem
+duplicidade. A submissão foi aceita; o estado observado do template era `PENDING`,
+portanto a aprovação pela Meta ainda não foi confirmada. Nenhum sync ou nova chamada
+à Meta foi feito para esta reconciliação. As falhas anteriores permanecem preservadas
+e sua causalidade histórica é `NOT_PROVEN`.
 
 ## Rota operacional
 

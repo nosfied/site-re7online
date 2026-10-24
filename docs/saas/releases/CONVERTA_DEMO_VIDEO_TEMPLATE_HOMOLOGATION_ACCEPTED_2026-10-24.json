@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "recordType": "META_TEMPLATE_MEDIA_HOMOLOGATION_OBSERVATION",
+  "recordedAtUtc": "2026-10-24T18:31:42Z",
+  "status": "SUBMISSION_ACCEPTED_APPROVAL_PENDING",
+  "tenantKey": "demo-converta",
+  "apiTargetCommit": "ef7db11179a1be14160e0f7ceec9f01a8aaf0ece",
+  "request": {
+    "name": "video_previdencia_teste_20261024_v2",
+    "category": "MARKETING",
+    "language": "pt_BR",
+    "headerType": "VIDEO",
+    "persistedStatus": "submitted_to_meta"
+  },
+  "upload": {
+    "completed": true,
+    "mediaState": "ready",
+    "handleConfirmed": true,
+    "handlePublished": false,
+    "providerErrorPresent": false
+  },
+  "submission": {
+    "accepted": true,
+    "submissionCount": 1,
+    "eventName": "template.request.submitted_to_meta",
+    "eventCount": 1,
+    "eventMetaSubmitted": true,
+    "templateCount": 1,
+    "metaTemplateIdentifierPresent": true,
+    "duplicateDetected": false
+  },
+  "approval": {
+    "observedStatus": "PENDING",
+    "confirmedByMeta": false,
+    "syncExecutedByThisObservation": false
+  },
+  "historicalContext": {
+    "failedRequestsPreserved": true,
+    "historicalFailureCausality": "NOT_PROVEN",
+    "historicalRecord": "docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json"
+  },
+  "evidence": {
+    "scope": "LOCAL_READ_ONLY",
+    "adminGetExecuted": true,
+    "databaseTransaction": "READ_ONLY",
+    "providerCalls": 0,
+    "templateSyncs": 0,
+    "newSubmissions": 0,
+    "messagesSent": 0,
+    "secretsPublished": false
+  }
+}

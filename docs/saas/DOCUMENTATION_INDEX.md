@@ -19,7 +19,10 @@
   — vínculo atual token/aplicativo confirmado e configuração tenant-scoped concluída;
   homologação funcional Meta permanece pendente.
 - [Tentativa de homologação do vídeo no Converta Demo](releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json)
-  — uma submissão, negativa determinística em `binary_upload`, sem retry ou envio.
+  — histórico `failed` preservado; causalidade histórica `NOT_PROVEN`.
+- [Homologação manual do vídeo: submissão aceita](releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_ACCEPTED_2026-10-24.json)
+  — upload concluído e submissão única aceita; estado observado `PENDING`, sem
+  confirmação de aprovação pela Meta.
 - [Topologia de domínios e runtimes](../DEPLOY_TOPOLOGY_RE7.md)
 - [Checklist de release](RELEASE_CHECKLIST.md)
 - [Controle de definições PM2 e incidente de contaminação](PM2_DEFINITION_CONTAMINATION_INCIDENT_2026-10-22.md)

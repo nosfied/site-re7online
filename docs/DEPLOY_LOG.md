@@ -125,3 +125,20 @@ As entradas abaixo mantêm sua redação histórica.
 - registros:
   `docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json` e
   `docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json`
+
+## 2026-10-24 — Homologação manual de vídeo / submissão aceita
+
+- tenant: `demo-converta`
+- solicitação: `video_previdencia_teste_20261024_v2`
+- API observada: target `ef7db11179a1be14160e0f7ceec9f01a8aaf0ece`, release
+  `immutable-ef7db111-vps-20261024T174000Z`
+- upload: concluído; mídia `ready`; handle confirmado e não publicado
+- persistência: uma solicitação, um evento `template.request.submitted_to_meta`,
+  um template e um identificador Meta; duplicidade ausente
+- submissão Meta: aceita
+- aprovação Meta: não confirmada; estado observado `PENDING`
+- falhas históricas: preservadas; causalidade `NOT_PROVEN`
+- esta reconciliação: somente evidências locais; zero chamada Meta, sync, upload,
+  submissão, envio ou alteração de dados
+- registro:
+  `docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_ACCEPTED_2026-10-24.json`

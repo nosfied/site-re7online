@@ -1,6 +1,6 @@
 {
   "schemaVersion": 6,
-  "updatedAtUtc": "2026-10-24T17:08:53Z",
+  "updatedAtUtc": "2026-10-24T18:31:42Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json",
   "activeOperationalRecord": "docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json",
@@ -14,6 +14,9 @@
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+      "entrySha256Scope": "LAST_FULL_STACK_DEPLOYMENT_RECORD",
+      "selectedTargetCommit": "ef7db11179a1be14160e0f7ceec9f01a8aaf0ece",
+      "selectedReleaseId": "immutable-ef7db111-vps-20261024T174000Z",
       "lastReportedPid": 56158,
       "lastReportedStartTicks": 1532871
     },
@@ -146,7 +149,23 @@
     "knownNonBlockingBacklog": "PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE",
     "currentDeploymentMigration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
     "lastHomologationAttempt": "FAILED_DETERMINISTIC_PROVIDER_REJECTION",
-    "lastHomologationRecord": "docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json"
+    "lastHomologationRecord": "docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json",
+    "currentHomologation": {
+      "tenantKey": "demo-converta",
+      "requestName": "video_previdencia_teste_20261024_v2",
+      "state": "SUBMISSION_ACCEPTED_APPROVAL_PENDING",
+      "uploadCompleted": true,
+      "mediaState": "ready",
+      "handleConfirmed": true,
+      "submissionCount": 1,
+      "eventCount": 1,
+      "templateCount": 1,
+      "duplicateDetected": false,
+      "observedMetaStatus": "PENDING",
+      "approvalConfirmed": false,
+      "historicalFailureCausality": "NOT_PROVEN",
+      "record": "docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_ACCEPTED_2026-10-24.json"
+    }
   },
   "tenantScopedMetaAppId": {
     "codeState": "TECHNICALLY_DEPLOYED",
