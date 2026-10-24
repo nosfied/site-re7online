@@ -31,6 +31,10 @@ require(state["templateCampaignMedia"]["deploymentRecord"] == record_value,
 require(state["templateCampaignMedia"]["metaFunctionalAcceptance"] == "PENDING" and
         state["templateCampaignMedia"]["commercialOperationalRelease"] == "PENDING",
         "media pending functional and commercial acceptance")
+require(state["templateCampaignMedia"]["lastHomologationAttempt"] ==
+        "FAILED_DETERMINISTIC_PROVIDER_REJECTION" and
+        (ROOT / state["templateCampaignMedia"]["lastHomologationRecord"]).is_file(),
+        "media homologation attempt")
 tenant_app = state["tenantScopedMetaAppId"]
 require(tenant_app["configurationState"] == "CONFIGURED_VERIFIED_FOR_CONVERTA_DEMO" and
         tenant_app["currentTokenAppBinding"] == "CONFIRMED_BY_META_DEBUG_TOKEN" and

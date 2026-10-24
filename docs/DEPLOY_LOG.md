@@ -108,3 +108,20 @@ As entradas abaixo mantêm sua redação histórica.
 - Meta mutante/upload/sincronização/submissão/campanha/importação/envio: zero
 - resultado: `CONFIGURED_VERIFIED / FUNCTIONAL_META_ACCEPTANCE_PENDING`
 - registro: `docs/saas/releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json`
+
+## 2026-10-24 — Diagnóstico de upload implantado e homologação de vídeo
+
+- target: `ec2a9fde99b6421a85256f14604bd469879f4f2a`
+- release: `immutable-ec2a9fde-vps-20261024T162005Z`
+- BUILD_ID: `7yArOSyfllnPiQy_vAS9H`
+- componentes: API e frontend; worker preservado
+- resultado do deploy: `DEPLOYED / PRODUCTION HEALTHY`
+- `pm2 save`: uma execução; dump
+  `afd1c1c20483708ac2f51f0ffde09c2affb8d62e4a1426cb233288fda0753e59`
+- homologação: `video_previdencia_teste_20261024`, uma submissão Meta
+- resultado Meta: negativa determinística em `binary_upload`, HTTP 400, código 100,
+  subcódigo 33; solicitação persistida como `failed`
+- retry/sync adicional/campanha/importação/envio: zero
+- registros:
+  `docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json` e
+  `docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json`

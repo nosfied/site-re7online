@@ -1,29 +1,29 @@
 {
   "schemaVersion": 6,
-  "updatedAtUtc": "2026-10-24T14:52:51Z",
+  "updatedAtUtc": "2026-10-24T17:08:53Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json",
-  "activeOperationalRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json",
+  "activeDeploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json",
+  "activeOperationalRecord": "docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "production": {
     "status": "DEPLOYED_VERIFIED",
     "certifiedByThisFile": false,
-    "releaseId": "immutable-a62da468-vps-20261024T124726Z",
-    "releasePath": "/opt/re7online/releases/immutable-a62da468-vps-20261024T124726Z",
-    "targetCommit": "a62da468ba1e703139181cecfa88d34f2066ccd1",
+    "releaseId": "immutable-ec2a9fde-vps-20261024T162005Z",
+    "releasePath": "/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z",
+    "targetCommit": "ec2a9fde99b6421a85256f14604bd469879f4f2a",
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
-      "lastReportedPid": 29766,
-      "lastReportedStartTicks": 519561
+      "lastReportedPid": 56158,
+      "lastReportedStartTicks": 1532871
     },
     "frontend": {
       "stablePath": "/opt/re7online/current/frontend",
-      "buildId": "UToBpS3nIu9rzbWpDfnDw",
+      "buildId": "7yArOSyfllnPiQy_vAS9H",
       "execMode": "fork_mode",
       "instances": 1,
-      "lastReportedPid": 29844,
-      "lastReportedStartTicks": 520267
+      "lastReportedPid": 56230,
+      "lastReportedStartTicks": 1533470
     },
     "worker": {
       "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z/worker-runtime",
@@ -48,14 +48,14 @@
       "directoryMode": "0700"
     },
     "pm2": {
-      "dumpSha256": "fec9b3417d4ea1e34b13840f5e3fea2b70a499220c0af124f039a87d8ce312cc",
-      "rollbackSha256": "41830f80657ace643b42818865de810cb2c0bae3e77027b752004c1db06cfeb5",
+      "dumpSha256": "afd1c1c20483708ac2f51f0ffde09c2affb8d62e4a1426cb233288fda0753e59",
+      "rollbackSha256": "fec9b3417d4ea1e34b13840f5e3fea2b70a499220c0af124f039a87d8ce312cc",
       "mode": "0600",
       "owner": "deploy",
       "group": "deploy",
       "savedExactlyOnce": true
     },
-    "markerSha256": "85cb006e15f68e3afe701c5c92b6f55864c5359c2d3bcde864b8c0900547416b",
+    "markerSha256": "0894eb7cfb9561682feeca4917063c52fa5d3cf5be00e378eac10d9c00a7c0a2",
     "controlPlaneCommit": "5ea7fa45a3693a14bdbf1d9d0a464dd61423b4ad",
     "readiness": {
       "method": "THREE_CONSECUTIVE_STABLE_SAMPLES",
@@ -128,7 +128,7 @@
   },
   "templateCampaignMedia": {
     "state": "TECHNICALLY_DEPLOYED",
-    "deploymentRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json",
+    "deploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json",
     "components": [
       "api",
       "frontend",
@@ -139,12 +139,14 @@
     "metaFunctionalAcceptance": "PENDING",
     "commercialOperationalRelease": "PENDING",
     "craPrRelease": "PENDING",
-    "metaCallsExecuted": false,
-    "templatesCreatedOrSubmitted": false,
+    "metaCallsExecuted": true,
+    "templatesCreatedOrSubmitted": true,
     "campaignsExecuted": false,
     "messagesSent": false,
     "knownNonBlockingBacklog": "PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE",
-    "currentDeploymentMigration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+    "currentDeploymentMigration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+    "lastHomologationAttempt": "FAILED_DETERMINISTIC_PROVIDER_REJECTION",
+    "lastHomologationRecord": "docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json"
   },
   "tenantScopedMetaAppId": {
     "codeState": "TECHNICALLY_DEPLOYED",
@@ -154,8 +156,9 @@
     "historicalOnboardingRecovered": false,
     "globalFallbackUsed": false,
     "metaDiagnosticGetCount": 1,
-    "metaMutatingCallsExecuted": false,
+    "metaMutatingCallsExecuted": true,
     "deploymentRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json",
-    "configurationRecord": "docs/saas/releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json"
+    "configurationRecord": "docs/saas/releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json",
+    "lastMetaMutationScope": "SINGLE_TEMPLATE_MEDIA_SUBMISSION_ATTEMPT"
   }
 }
