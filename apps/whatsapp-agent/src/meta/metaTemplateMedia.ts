@@ -141,8 +141,34 @@ function timeoutDiagnostic(stage: "session_creation" | "binary_upload"): MetaTem
   };
 }
 
+const META_GRAPH_ORIGIN = "https://graph.facebook.com";
+const META_API_VERSION_PATTERN = /^v[0-9]+\.[0-9]+$/;
+const UPLOAD_SESSION_PATH_PATTERN = /^upload:[A-Za-z0-9._~!$'()*+,;=:@%-]+$/;
+const UPLOAD_SESSION_SIGNATURE_PATTERN = /^sig=[A-Za-z0-9._~!$'()*+,;=:@\/%+-]+$/;
+
+function hasInvalidPercentEscape(value: string) {
+  return /%(?![0-9A-Fa-f]{2})/.test(value);
+}
+
 function uploadSessionUrl(apiVersion: string, sessionId: string) {
-  return `https://graph.facebook.com/${apiVersion}/${encodeURIComponent(sessionId)}`;
+  if (!META_API_VERSION_PATTERN.test(apiVersion)) return null;
+  if (sessionId !== sessionId.trim() || /[\\#\u0000-\u001f\u007f]/.test(sessionId)) return null;
+
+  const querySeparator = sessionId.indexOf("?");
+  const sessionPath = querySeparator === -1 ? sessionId : sessionId.slice(0, querySeparator);
+  const signatureQuery = querySeparator === -1 ? null : sessionId.slice(querySeparator + 1);
+  if (
+    !UPLOAD_SESSION_PATH_PATTERN.test(sessionPath)
+    || hasInvalidPercentEscape(sessionPath)
+    || (signatureQuery !== null && (
+      !UPLOAD_SESSION_SIGNATURE_PATTERN.test(signatureQuery)
+      || hasInvalidPercentEscape(signatureQuery)
+    ))
+  ) {
+    return null;
+  }
+
+  return `${META_GRAPH_ORIGIN}/${apiVersion}/${sessionPath}${signatureQuery === null ? "" : `?${signatureQuery}`}`;
 }
 
 export async function uploadMetaTemplateExample(params: {
@@ -206,8 +232,8 @@ export async function uploadMetaTemplateExample(params: {
       }),
     };
   }
-  const sessionId = typeof sessionBody.value.id === "string" ? sessionBody.value.id.trim() : "";
-  if (!sessionId) {
+  const sessionId = typeof sessionBody.value.id === "string" ? sessionBody.value.id : "";
+  if (!sessionId.trim()) {
     return {
       ok: false,
       code: "meta_upload_invalid_response",
@@ -220,12 +246,26 @@ export async function uploadMetaTemplateExample(params: {
       }),
     };
   }
+  const sessionUrl = uploadSessionUrl(params.apiVersion, sessionId);
+  if (!sessionUrl) {
+    return {
+      ok: false,
+      code: "meta_upload_invalid_response",
+      status: sessionResponse.status,
+      diagnostic: diagnosticFromPayload({
+        stage: "session_response_validation",
+        status: sessionResponse.status,
+        payload: null,
+        fallbackMessage: "A resposta da Meta informou uma sessao de upload incompatível.",
+      }),
+    };
+  }
 
   const uploadController = new AbortController();
   const uploadTimer = setTimeout(() => uploadController.abort(), timeoutMs);
   let uploadResponse: Response;
   try {
-    uploadResponse = await fetchImpl(uploadSessionUrl(params.apiVersion, sessionId), {
+    uploadResponse = await fetchImpl(sessionUrl, {
       method: "POST",
       headers: {
         Authorization: `OAuth ${params.accessToken}`,
