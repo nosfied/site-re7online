@@ -15,7 +15,7 @@ def require(value, reason):
 
 
 for marker in (
-    "build ocorre fora da VPS",
+    "build ocorre uma única vez",
     "/opt/re7online/current/api",
     "/opt/re7online/current/frontend",
     "fork_mode",
@@ -26,8 +26,9 @@ for marker in (
     require(marker in model, f"model marker {marker}")
 require("não utilizáveis" in model, "obsolete classification")
 require("checkout produtivo não é runtime" in topology, "checkout retirement")
-require("Não executar build backend ou frontend na VPS" in checklist,
-        "off-host build")
+require("Não executar build no checkout/runtime ativo" in checklist and
+        "Build na VPS é o padrão autorizado pelo owner" in checklist,
+        "isolated build boundary")
 require("wait-readiness" in checklist and "READINESS_TIMEOUT:<component>:<port>" in checklist,
         "versioned readiness gate")
 print("DEPLOY_ROUTE_OK: immutable fixed-path topology is canonical; normal-release is obsolete")

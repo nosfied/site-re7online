@@ -74,3 +74,22 @@ As entradas abaixo mantêm sua redação histórica.
 - executado por: Codex/deploy
 - resultado: ok
 - observacoes: documentacao da auditoria das superficies do `/app`, dependencias de dados e efeitos da retencao LGPD; `/app/reports` passou a avisar ADMIN quando a retencao esta menor que 30 dias; tenant `justa-advocacia` teve `RetentionConfig.retentionDays` ajustado para `90` dias diretamente na VPS para evitar nova limpeza agressiva durante validacao
+
+## 2026-10-24 — Tenant-scoped Meta App ID / release imutável
+
+- target: `a62da468ba1e703139181cecfa88d34f2066ccd1`
+- control plane: `5ea7fa45a3693a14bdbf1d9d0a464dd61423b4ad`
+- release: `immutable-a62da468-vps-20261024T124726Z`
+- componentes: API e frontend; worker preservado
+- build: único, Node v20.20.0/npm 10.8.2, worktree isolado na VPS após upgrade de
+  RAM e autorização explícita; runtime vivo não foi usado como destino
+- ativação: symlinks fixed-current atômicos e restart dos registros PM2 existentes
+  sem `--update-env`; API antes do frontend; três amostras e smoke GET-only
+- resultado: `DEPLOYED / PRODUCTION HEALTHY`
+- BUILD_ID: `UToBpS3nIu9rzbWpDfnDw`
+- dump PM2: `fec9b3417d4ea1e34b13840f5e3fea2b70a499220c0af124f039a87d8ce312cc`,
+  modo `0600`, um único save depois do aceite
+- migration/SQL/Meta/templates/campanhas/importações/envios: zero
+- pendência: configurar o App ID somente no tenant autorizado em janela separada;
+  nenhum fallback global foi aplicado
+- registro: `docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json`

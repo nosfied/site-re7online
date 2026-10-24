@@ -183,9 +183,14 @@ def toolchain(repo: Path, env: dict[str, str], failure_root: Path | None = None)
 def forbidden(relative: PurePosixPath) -> bool:
     lowered = [part.casefold() for part in relative.parts]
     name = lowered[-1] if lowered else ""
+    # Runtime dependencies are copied from a clean npm install. Package-internal
+    # directories such as openai/resources/uploads are executable dependency
+    # content, not application uploads. Apply the operational-data denylist only
+    # outside node_modules; the top-level runtime inventory remains allowlisted.
+    application_parts = lowered if "node_modules" not in lowered else lowered[:lowered.index("node_modules")]
     if any(part in {".git", ".cache", "cache", "coverage", "logs", "log", "evidence",
                     "evidences", "uploads", "upload", "worker", "worker-runtime",
-                    "whatsapp-web-worker"} for part in lowered):
+                    "whatsapp-web-worker"} for part in application_parts):
         return True
     if name == ".env" or name.startswith(".env.") or name.endswith(".log"):
         return True

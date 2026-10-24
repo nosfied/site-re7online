@@ -12,9 +12,25 @@ As reservas e princípios de capacidade/retencão abaixo continuam integralmente
 
 Status: baseline operacional permanente do Converta.
 
-Ultima atualizacao: 2026-06-27, Sprint 78O - Capacity & Swap Hardening concluida.
+Ultima atualizacao: 2026-10-24, capacidade pós-upgrade e build isolado registrados.
 
 Este documento registra a fotografia oficial de producao para comparar futuras mudancas de capacidade, VPS, HA, banco, build, backup e laboratorio de carga. Ele nao altera runtime, banco, infraestrutura ou comportamento funcional.
+
+## Capacidade observada após o upgrade — 24/10/2026
+
+Valores reportados pelo executor na retomada operacional, antes do build; não são
+medição atual nem margem garantida para toda execução futura.
+
+| Recurso | Antes do upgrade | Após o upgrade |
+| --- | --- | --- |
+| RAM | 1,9 GiB | 3,8 GiB |
+| Swap | 2,0 GiB | 2,0 GiB |
+| Disco raiz | 58 GiB | 77 GiB |
+| Espaço disponível | 7,1 GiB | 27 GiB |
+| CPU | não registrada | 2 vCPU |
+
+PostgreSQL e volume original foram preservados. O build sequencial na VPS concluiu.
+As seções de junho e os checkpoints de outubro abaixo mantêm suas datas históricas.
 
 ## Decisao De Fase
 
@@ -194,8 +210,14 @@ backend build
 frontend build
 ```
 
-Com cerca de 2 GiB de RAM, a VPS não é builder. API e frontend são construídos
-externamente com Node v20.20.0 e promovidos como release imutável integral.
+O baseline histórico de cerca de 2 GiB antecede esta decisão. Após o upgrade
+de RAM de 24/10/2026, o owner autorizou um build único em worktree e saída isolados,
+com Node v20.20.0/npm 10.8.2, sem parar os serviços vivos. O build concluiu e originou
+`immutable-a62da468-vps-20261024T124726Z`. Isso não autoriza build no runtime ativo
+nem autoriza um agendador automático. A decisão vigente do owner é usar a VPS como
+builder padrão, com capacidade fresca e sem nova confirmação do local de build.
+Builder externo é alternativa mediante decisão específica; a ativação produtiva
+continua sujeita à autorização de sua janela.
 
 ## Swap
 
@@ -310,8 +332,9 @@ Nao executar carga nesta sprint.
 
 1. Abrir `78O.1 - Inbox Read Query Path Investigation` para investigar p95 `2.085,30 ms` em `20 VUs`.
 2. Manter `OPERATIONAL_BASELINE.md` atualizado em toda mudanca de VPS, swap, PM2, PostgreSQL, build, HA ou laboratorio de carga.
-3. Manter build externo enquanto a VPS permanecer nessa classe de memória; não
-   executar build normal no host produtivo.
+3. Manter build na VPS como padrão autorizado, com capacidade fresca e
+   worktree/saída separados do runtime ativo; preservar a autorização por janela
+   para a ativação.
 
 ## Capacidade e retenção operacional
 

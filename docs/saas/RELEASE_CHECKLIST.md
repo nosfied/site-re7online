@@ -5,10 +5,10 @@
 A fonte canônica é [CURRENT_STATE.md](CURRENT_STATE.md), e a única rota de deploy
 vigente é [DEPLOYMENT_OPERATING_MODEL.md](DEPLOYMENT_OPERATING_MODEL.md). A release
 de mídia em templates/campanhas está **TECHNICALLY DEPLOYED / PRODUCTION HEALTHY**
-e o hardening de UX foi reativado em 22/10/2026; homologação Meta e liberação aos
-clientes continuam pendentes.
+e a release tenant-scoped foi ativada em 24/10/2026; a configuração do App ID no
+tenant, homologação Meta e liberação aos clientes continuam pendentes.
 
-Build na VPS, checkout produtivo como runtime, `deploy-normal-release.sh`, PR #190,
+Build no checkout/runtime ativo, `deploy-normal-release.sh`, PR #190,
 Deploy V2 e Next em `cluster_mode` são históricos/obsoletos. Exemplos antigos neste
 arquivo não os reautorizam.
 
@@ -39,8 +39,11 @@ Antes de executar, classificar a mudanca conforme `docs/saas/CHANGE_POLICY.md`:
 
 - Confirmar branch/commit correto.
 - Conferir `git status --short`.
-- Produzir API/frontend com `scripts/converta-release.py build` em saída externa
-  exclusiva, Node `v20.20.0` e epoch do commit; exigir `RELEASE BUILT`.
+- Produzir API/frontend com `scripts/converta-release.py build` em saída exclusiva,
+  worktree isolado, Node `v20.20.0` e epoch do commit; exigir `RELEASE BUILT`.
+  Build na VPS é o padrão autorizado pelo owner; conferir capacidade medida e
+  separação integral do runtime ativo. Builder externo é alternativa mediante
+  decisão específica. A ativação continua exigindo autorização por janela.
 - Registrar o BUILD_ID produzido sem substituí-lo; designar um único pacote canônico.
 - Executar `scripts/converta-release.py verify` sobre o pacote extraído de forma
   independente; exigir `RELEASE VERIFIED` e comparar SHA-256 do pacote.
@@ -93,15 +96,16 @@ Diretorio:
 cd apps/whatsapp-agent
 ```
 
-Validações no builder externo Linux x86_64 com Node v20.20.0/npm 10.8.2:
+Validações no worktree isolado da VPS Linux x86_64 com Node v20.20.0/npm 10.8.2:
 
 ```bash
 npm run db:generate
 npm run build
 ```
 
-Não executar build backend ou frontend na VPS. O artefato integral deve ser selado,
-extraído e comparado fora da produção antes da transferência.
+Não executar build no checkout/runtime ativo. O artefato integral deve ser selado,
+extraído e comparado antes da seleção; build na VPS só ocorre em worktree e saída
+isolados, conforme decisão vigente do owner e sem interromper produção para obter memória.
 
 Lint:
 
@@ -407,7 +411,7 @@ Pacote operacional SIMAE:
   - modelo de comunicacao de incidente.
 - Nao incluir telefones pessoais, credenciais, tokens, dumps ou dados privados no dossie do contrato.
 
-## Frontend — builder externo
+## Frontend — worktree isolado na VPS
 
 Diretório raiz do worktree isolado:
 
@@ -438,8 +442,9 @@ Observacao:
 7. confirmar worker preservado e smoke GET-only;
 8. executar `pm2 save` exatamente uma vez.
 
-Não usar `git pull`, build na VPS, cópia para runtime ativo, `reload --update-env`
-ou checkout produtivo como mecanismo de promoção.
+Não usar `git pull`, build no runtime ativo, cópia para runtime ativo,
+`reload --update-env` ou checkout produtivo como mecanismo de promoção.
+O build isolado na VPS precede a ativação; não é repetido durante a promoção.
 
 Health:
 
@@ -483,8 +488,9 @@ Resultado esperado:
 - Se a release tocar alerting futuro, validar primeiro com `alerting=false` e sem envio externo.
 - Alertas reais devem permanecer atras de flag explicita e rollback por flag.
 - Se a release tocar HA/escala/infra, registrar explicitamente: SPOFs afetados, backup antes da mudanca, plano de rollback, health pos-reload e impacto em PM2/Postgres/Nginx/DNS/storage.
-- A VPS não executa builds normais; capacidade insuficiente foi comprovada por OOM
-  e o build canônico é externo.
+- A VPS pós-upgrade executa o build normal em worktree/saída isolados, com
+  capacidade conferida e builds sequenciais. Fotografias antigas de OOM não
+  substituem a medição atual.
 - Se a release tocar swap, confirmar `free -m`, `swapon --show`, rollback por `swapoff` e atualizar `OPERATIONAL_BASELINE.md`. Criacao de swap exige acesso administrativo; nao simular por caminho paralelo.
 - Se a release tocar backup/restore, confirmar: ultimo backup valido, tamanho nao-zero, destino local/offsite, checksum quando existir, plano de restore e que nenhum secret/dump sera enviado por chat ou versionado no Git.
 - Restore validation deve usar banco temporario isolado e deve confirmar `TEMP_DB_REMAINING=0` ao final.
@@ -637,6 +643,11 @@ Nao executar carga na sprint de bootstrap. Primeiro validar status, features e q
 
 ## Definições PM2 antes da janela
 
+No fluxo dirigido vigente, preservar os registros PM2 existentes e sua configuração
+privada comprovada, sem `--update-env`. Os requisitos de criação e ensaio de novas
+definições abaixo se aplicam quando a definição/configuração for efetivamente
+alterada; não obrigam rematerializar candidate/rollback em cada atualização de código.
+
 - Usar o contrato versionado `scripts/pm2-definition-control.py`.
 - Definir estrutura PM2 explicitamente; nunca reutilizar `pm2_env`, `pm2_env.env`,
   dump, `jlist` ou `/proc/<pid>/environ` como descritor executável.
@@ -667,8 +678,9 @@ Nao executar carga na sprint de bootstrap. Primeiro validar status, features e q
   igualdade literal; `false` admite somente a transformação determinística
   do sufixo `.log` ou `-<número>.log` para `-<pm_id>.log` no PM2 `6.0.14`.
 - Recusar a janela se o ensaio isolado não restaurar o retorno e seu socket/health.
-- Depois de cada `pm2 start`, executar `pm2-definition-control.py wait-readiness`;
-  não usar observador temporário em `/tmp`.
+- No restart dirigido, comprovar três amostras estáveis pelo procedimento do
+  runbook. `pm2-definition-control.py wait-readiness` é observador versionado
+  disponível; não reautoriza o driver histórico nem observador temporário em `/tmp`.
 - API e frontend usam prazo monotônico de 30 segundos, polling máximo de 500 ms e
   três amostras consecutivas de PID/start ticks, symlink e socket estáveis.
 - Aceitar listener IPv4 ou IPv6 e propriedade `DIRECT` ou `DESCENDANT`; negar

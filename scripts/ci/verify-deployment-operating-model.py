@@ -15,7 +15,7 @@ def require(value, reason):
 model = (ROOT / "docs/saas/DEPLOYMENT_OPERATING_MODEL.md").read_text()
 for marker in (
     "define a arquitetura e os princípios vigentes",
-    "build ocorre fora da VPS",
+    "build ocorre uma única vez",
     "/opt/re7online/releases",
     "/opt/re7online/current/api",
     "/opt/re7online/current/frontend",
@@ -76,7 +76,7 @@ require(fixture["observedDelaySeconds"] >= 4 and not fixture["containsEnvironmen
         "sanitized readiness evidence")
 state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
 require(state["canonicalTopology"] == {
-    "build": "EXTERNAL_LINUX_X86_64_NODE_20_20_0_NPM_10_8_2",
+    "build": "BUILD_ONCE_ISOLATED_NODE_20_20_0_NPM_10_8_2",
     "releaseModel": "IMMUTABLE_VERSIONED_RELEASE",
     "promotionOrder": ["api", "frontend", "worker_when_impacted"],
     "frontendMode": "FORK_MODE_SINGLE_INSTANCE_DIRECT_NEXT",
