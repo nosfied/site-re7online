@@ -16,13 +16,22 @@ recupera o histórico original do onboarding.
 
 ## Implantação técnica
 
-O target `ec2a9fde99b6421a85256f14604bd469879f4f2a` está ativo na release
-`immutable-ec2a9fde-vps-20261024T162005Z`, conforme o
+O deploy conjunto do target `ec2a9fde99b6421a85256f14604bd469879f4f2a`, release
+`immutable-ec2a9fde-vps-20261024T162005Z`, permanece como baseline do frontend,
+conforme o
 [registro estruturado](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json).
 API e frontend foram selecionados por troca atômica dos caminhos estáveis e restart
 dos registros PM2 existentes, sem `--update-env`. O worker foi preservado.
 O BUILD_ID ativo é `7yArOSyfllnPiQy_vAS9H`. A release
 `immutable-a62da468-vps-20261024T124726Z` permanece como retorno e evidência histórica.
+
+A API foi atualizada isoladamente para o target
+`ef7db11179a1be14160e0f7ceec9f01a8aaf0ece`, release
+`immutable-ef7db111-vps-20261024T174000Z`. Frontend e worker foram preservados. A
+finalização executou um único `pm2 save`, validou o dump
+`fd1513febc2c91d4ff0efbf303a44e44991b26265da2759b414b31121d769e88`, criou o
+marker autenticado, concluiu o journal como `DEPLOYED` e liberou o lock. O registro é
+[`TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json`](releases/TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json).
 
 ## Homologação controlada de vídeo em 24/10/2026
 

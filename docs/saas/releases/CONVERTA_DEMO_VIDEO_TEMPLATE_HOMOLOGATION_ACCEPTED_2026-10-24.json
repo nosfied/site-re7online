@@ -5,6 +5,7 @@
   "status": "SUBMISSION_ACCEPTED_APPROVAL_PENDING",
   "tenantKey": "demo-converta",
   "apiTargetCommit": "ef7db11179a1be14160e0f7ceec9f01a8aaf0ece",
+  "apiDeploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json",
   "request": {
     "name": "video_previdencia_teste_20261024_v2",
     "category": "MARKETING",

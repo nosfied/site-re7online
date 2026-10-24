@@ -8,19 +8,23 @@ sanitizada está no
 [registro estruturado](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json).
 A configuração tenant-scoped posterior está no
 [registro operacional](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json).
-A observação manual mais recente da homologação está no
+A atualização isolada posterior da API está no
+[registro de componente](releases/TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json),
+e a observação manual mais recente da homologação está no
 [registro de submissão aceita](releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_ACCEPTED_2026-10-24.json).
 
 ## Produção viva — observação de 24/10/2026
 
-- Target da aplicação: `ec2a9fde99b6421a85256f14604bd469879f4f2a`.
-- Release: `immutable-ec2a9fde-vps-20261024T162005Z`.
-- A API recebeu posteriormente a correção isolada do target
-  `ef7db11179a1be14160e0f7ceec9f01a8aaf0ece`, na release
-  `immutable-ef7db111-vps-20261024T174000Z`; frontend e worker permaneceram nas
-  identidades acima registradas. O registro estruturado ativo continua sendo a
-  referência do último deploy conjunto, enquanto esta seleção isolada da API é a
-  identidade técnica observada durante a homologação.
+- Último deploy conjunto de API/frontend: target
+  `ec2a9fde99b6421a85256f14604bd469879f4f2a`, release
+  `immutable-ec2a9fde-vps-20261024T162005Z`.
+- API ativa após atualização isolada: target
+  `ef7db11179a1be14160e0f7ceec9f01a8aaf0ece`, release
+  `immutable-ef7db111-vps-20261024T174000Z`, PID observado `74684`, start ticks
+  `2011482`.
+- Frontend e worker foram preservados. O registro do deploy conjunto continua como
+  baseline do frontend; o registro isolado da API identifica a seleção atual desse
+  componente.
 - Control plane: `5ea7fa45a3693a14bdbf1d9d0a464dd61423b4ad`.
 - API: `/opt/re7online/current/api`. O entry SHA-256
   `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`
@@ -30,15 +34,19 @@ A observação manual mais recente da homologação está no
   `7yArOSyfllnPiQy_vAS9H`, Next direto em `fork_mode`, uma instância.
 - Worker preservado no runtime `immutable-e2e7f17a-20261022T005110Z`, sem seleção
   ou restart.
-- Dump PM2: `afd1c1c20483708ac2f51f0ffde09c2affb8d62e4a1426cb233288fda0753e59`,
-  `deploy:deploy`, arquivo regular, modo `0600`, salvo exatamente uma vez.
+- Dump PM2 final: `fd1513febc2c91d4ff0efbf303a44e44991b26265da2759b414b31121d769e88`,
+  persistido por exatamente um `pm2 save` na atualização isolada da API.
+- O dump `afd1c1c20483708ac2f51f0ffde09c2affb8d62e4a1426cb233288fda0753e59`
+  permanece como baseline do último registro conjunto de API/frontend; não representa
+  o dump final posterior à seleção isolada da API.
 - Retorno anterior preservado pelo dump
   `fec9b3417d4ea1e34b13840f5e3fea2b70a499220c0af124f039a87d8ce312cc`
   e pelos symlinks e registros PM2 capturados.
 - Marker `DEPLOYED`:
-  `0894eb7cfb9561682feeca4917063c52fa5d3cf5be00e378eac10d9c00a7c0a2`.
+  `c7e629dea342b98c3b5d25cb651ab3997749ca45fbd98074a9d7eb7bcf375e58`.
+- Journal final: `DEPLOYED`; lock canônico liberado.
 
-PIDs são observações datadas: API `56158` (start ticks `1532871`), frontend
+PIDs são observações datadas: API `74684` (start ticks `2011482`), frontend
 `56230` (`1533470`) e worker `2233` (`17758`). Release, hashes, BUILD_ID e dump
 são as identidades duráveis; revalidar os PIDs antes de outra mutação.
 

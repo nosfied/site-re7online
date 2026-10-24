@@ -14,7 +14,11 @@
 - [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
   o produtor `scripts/converta-release.py`, o build na VPS e a fronteira com a ativação
 - [Deploy do diagnóstico de upload de mídia](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json)
-  — release ativa; API e frontend no target `ec2a9fde`, worker preservado.
+  — baseline do último deploy conjunto; frontend no target `ec2a9fde` e worker
+  preservado.
+- [Atualização isolada da API de upload assinado](releases/TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json)
+  — API ativa no target `ef7db111`; frontend e worker preservados; journal
+  `DEPLOYED` e lock liberado.
 - [Configuração do Meta App ID do Converta Demo](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json)
   — vínculo atual token/aplicativo confirmado e configuração tenant-scoped concluída;
   homologação funcional Meta permanece pendente.
