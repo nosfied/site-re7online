@@ -43,6 +43,8 @@ type TestResponse<T = unknown> = {
 type ErrorPayload = {
   error?: string | { code?: string; message?: string };
   message?: string;
+  details?: string;
+  diagnostic?: Record<string, unknown>;
   feature?: string;
 };
 
@@ -13193,7 +13195,13 @@ test("media submit without tenant App ID and provider uncertainty preserve resul
     if (url.hostname !== "graph.facebook.com") return originalFetch(input, init);
     providerCalls += 1;
     if (providerMode === "upload_failed") {
-      return new Response(JSON.stringify({ error: { code: 100, message: "invalid media" } }), {
+      return new Response(JSON.stringify({ error: {
+        code: 100,
+        error_subcode: 2388001,
+        type: "OAuthException",
+        fbtrace_id: "safe-upload-trace",
+        message: "invalid media access_token=result-truth-token https://private.invalid upload:private-session",
+      } }), {
         status: 400,
         headers: { "content-type": "application/json" },
       });
@@ -13230,15 +13238,46 @@ test("media submit without tenant App ID and provider uncertainty preserve resul
     );
     assert.equal(response.status, item.expectedHttpStatus);
     assert.equal(providerCalls - callsBefore, 1);
+    if (item.mode === "upload_failed") {
+      assert.deepEqual(response.body.diagnostic, {
+        stage: "session_creation",
+        httpStatus: 400,
+        code: "100",
+        subcode: "2388001",
+        type: "OAuthException",
+        traceId: "safe-upload-trace",
+        message: "invalid media access_token=[removido] [URL removida] [sessao removida]",
+      });
+      assert.equal(JSON.stringify(response.body).includes("result-truth-token"), false);
+      assert.equal(JSON.stringify(response.body).includes("private-session"), false);
+    }
     const [storedRequest, storedTemplate] = await Promise.all([
-      prisma.templateRequest.findUniqueOrThrow({ where: { id: created.id }, select: { status: true } }),
+      prisma.templateRequest.findUniqueOrThrow({ where: { id: created.id }, select: { status: true, variables: true } }),
       prisma.template.findUniqueOrThrow({
         where: { clientId_name: { clientId: businessClientId, name: created.name } },
-        select: { status: true },
+        select: { status: true, variables: true },
       }),
     ]);
     assert.equal(storedRequest.status, item.expectedStatus);
     assert.equal(storedTemplate.status, item.expectedStatus);
+    if (item.mode === "upload_failed") {
+      const persisted = JSON.stringify({ request: storedRequest.variables, template: storedTemplate.variables });
+      assert.equal(persisted.includes("safe-upload-trace"), true);
+      assert.equal(persisted.includes("result-truth-token"), false);
+      assert.equal(persisted.includes("private-session"), false);
+      const event = await prisma.event.findFirstOrThrow({
+        where: {
+          clientId: businessClientId,
+          eventName: "template.request.media_upload_failed",
+          payloadJson: { path: ["templateRequestId"], equals: created.id },
+        },
+        select: { clientId: true, payloadJson: true },
+      });
+      assert.equal(event.clientId, businessClientId);
+      const eventPayload = JSON.stringify(event.payloadJson);
+      assert.equal(eventPayload.includes("safe-upload-trace"), true);
+      assert.equal(eventPayload.includes("result-truth-token"), false);
+    }
 
     const callsBeforeBlockedRetry = providerCalls;
     const retry = await requestAdmin<ErrorPayload>(

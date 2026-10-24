@@ -234,6 +234,7 @@ import {
   validateMetaTemplateSubmissionConfig,
   validateTemplateForMeta,
 } from "../meta/template.service.js";
+import { sanitizeMetaDiagnosticMessage } from "../meta/metaTemplateMedia.js";
 import {
   isWhatsappTemplateCategoryAllowedForTenant,
   WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
@@ -26281,6 +26282,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
                 ? "Configuracao Meta ausente para o tenant da solicitacao."
                 : "Nao foi possivel enviar o template para a Meta.",
             details: summarizeMetaErrorMessage(error.errorBody || error.message),
+            ...(error.diagnostic ? { diagnostic: error.diagnostic } : {}),
           });
           return;
         }
@@ -27476,14 +27478,27 @@ async function submitTemplateRequestToMeta(params: {
     )) {
       const uncertain = error.code !== "meta_template_media_upload_failed";
       const status = uncertain ? "submission_unknown" : "failed";
+      const providerDiagnostic = error.diagnostic ?? null;
       await params.prisma.$transaction([
         params.prisma.template.update({
           where: { id: template.id },
-          data: { status, rejectionReason: error.code },
+          data: {
+            status,
+            rejectionReason: error.code,
+            variables: providerDiagnostic
+              ? { ...variablesPayload, providerError: providerDiagnostic }
+              : variablesPayload,
+          },
         }),
         params.prisma.templateRequest.update({
           where: { id: templateRequest.id },
-          data: { status, notes: error.code },
+          data: {
+            status,
+            notes: error.code,
+            variables: providerDiagnostic
+              ? { ...variablesPayload, providerError: providerDiagnostic }
+              : variablesPayload,
+          },
         }),
       ]);
       await persistEvent({
@@ -27495,6 +27510,7 @@ async function submitTemplateRequestToMeta(params: {
           templateId: template.id,
           result: status,
           providerCode: error.code,
+          providerDiagnostic,
         },
       });
     }
@@ -30320,6 +30336,7 @@ function normalizeJsonPayload(status: number, payload: unknown) {
 
   if (typeof typed.error === "string") {
     const code = typed.error;
+    const diagnostic = normalizeTemplateSubmissionDiagnostic(typed.diagnostic);
     const message =
       typeof typed.message === "string" && typed.message.trim()
         ? typed.message
@@ -30329,6 +30346,7 @@ function normalizeJsonPayload(status: number, payload: unknown) {
       ...(typeof typed.details === "string" && typed.details.trim()
         ? { details: typed.details }
         : {}),
+      ...(diagnostic ? { diagnostic } : {}),
     };
   }
 
@@ -30345,6 +30363,32 @@ function normalizeJsonPayload(status: number, payload: unknown) {
   }
 
   return payload;
+}
+
+function normalizeTemplateSubmissionDiagnostic(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const scalar = (key: string) => {
+    const entry = raw[key];
+    if (entry === null || entry === undefined) return null;
+    if (typeof entry !== "string" && typeof entry !== "number") return null;
+    const normalized = String(entry).trim();
+    return /^[A-Za-z0-9_.-]{1,120}$/.test(normalized) ? normalized : null;
+  };
+  const stage = scalar("stage");
+  const message = sanitizeMetaDiagnosticMessage(raw.message);
+  if (!stage || !message) return null;
+  return {
+    stage,
+    httpStatus: typeof raw.httpStatus === "number" && Number.isInteger(raw.httpStatus)
+      ? raw.httpStatus
+      : null,
+    code: scalar("code"),
+    subcode: scalar("subcode"),
+    type: scalar("type"),
+    traceId: scalar("traceId"),
+    message,
+  };
 }
 
 function logNoisyWarn(key: string, data: Record<string, unknown>, windowMs = 60_000) {
