@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import ScreenProcessingOverlay, { useScreenProcessingOperations } from "@/components/app/ScreenProcessingOverlay";
+import { getAdminTemplateRequestActionState } from "@/lib/templateRequestActions";
 import {
   AdminTemplateCatalogItem,
   AdminTemplateRequestItem,
@@ -69,6 +70,8 @@ function getStatusLabel(status: string) {
       return "Cancelada";
     case "failed":
       return "Falha";
+    case "submission_unknown":
+      return "Resultado de submissão incerto";
     default:
       return status;
   }
@@ -82,16 +85,6 @@ function canAdminCancelTemplateRequest(status: string) {
 
 function isAdminTemplateRequestEditable(status: string) {
   return ["pending", "requested", "review_started", "adjustment_requested", "internal_approved"].includes(
-    status.toLowerCase()
-  );
-}
-
-function isAdminTemplateRequestSubmittable(status: string) {
-  return status.toLowerCase() === "internal_approved";
-}
-
-function isAdminTemplateRequestSyncable(status: string) {
-  return ["submitted_to_meta", "meta_pending", "approved_meta", "meta_approved", "rejected_meta", "meta_rejected"].includes(
     status.toLowerCase()
   );
 }
@@ -707,7 +700,7 @@ export default function ManageTemplatesAdminPage() {
                           <button
                             type="button"
                             onClick={() => handleSubmitToMeta(item.id)}
-                            disabled={actingId === item.id || !isAdminTemplateRequestSubmittable(item.status)}
+                            disabled={getAdminTemplateRequestActionState(item.status, actingId === item.id).submitDisabled}
                             className="rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-1 text-xs text-sky-100 disabled:opacity-60"
                           >
                             Enviar Meta
@@ -715,7 +708,7 @@ export default function ManageTemplatesAdminPage() {
                           <button
                             type="button"
                             onClick={() => handleSyncRequest(item.id)}
-                            disabled={actingId === item.id || !isAdminTemplateRequestSyncable(item.status)}
+                            disabled={getAdminTemplateRequestActionState(item.status, actingId === item.id).syncDisabled}
                             className="rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white disabled:opacity-60"
                           >
                             Sincronizar
@@ -835,7 +828,10 @@ export default function ManageTemplatesAdminPage() {
                     <button
                       type="button"
                       onClick={() => handleSubmitToMeta(selectedRequest.id)}
-                      disabled={actingId === selectedRequest.id || !isAdminTemplateRequestSubmittable(selectedRequest.status)}
+                      disabled={getAdminTemplateRequestActionState(
+                        selectedRequest.status,
+                        actingId === selectedRequest.id
+                      ).submitDisabled}
                       className="rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-1.5 text-xs text-sky-100 disabled:opacity-60"
                     >
                       Submeter à Meta
@@ -843,7 +839,10 @@ export default function ManageTemplatesAdminPage() {
                     <button
                       type="button"
                       onClick={() => handleSyncRequest(selectedRequest.id)}
-                      disabled={actingId === selectedRequest.id || !isAdminTemplateRequestSyncable(selectedRequest.status)}
+                      disabled={getAdminTemplateRequestActionState(
+                        selectedRequest.status,
+                        actingId === selectedRequest.id
+                      ).syncDisabled}
                       className="rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white disabled:opacity-60"
                     >
                       Sincronizar status

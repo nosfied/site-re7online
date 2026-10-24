@@ -5585,7 +5585,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         where: {
           clientId: client.id,
         },
-        orderBy: { updatedAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         select: {
           id: true,
           name: true,
@@ -5809,8 +5809,12 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
       let failed = 0;
       for (const template of templatesToSync) {
         try {
-          const result = await syncTemplateStatus(template.id);
-          if (!result.ok) {
+          const { sync: result, request: requestReconciliation } = await syncTemplateStatusWithRequest(prisma, {
+            templateId: template.id,
+            source: "app.templates.bulk",
+            requestId,
+          });
+          if (!result.ok || !requestReconciliation.ok) {
             failed += 1;
             continue;
           }
@@ -5936,12 +5940,24 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         templateName: existingTemplate.name,
       });
 
-      const syncResult = await syncTemplateStatus(existingTemplate.id);
+      const { sync: syncResult, request: requestReconciliation } = await syncTemplateStatusWithRequest(prisma, {
+        templateId: existingTemplate.id,
+        source: "app.templates.manual",
+        requestId,
+      });
       if (!syncResult.ok) {
         json(res, 409, {
           error: "template_sync_not_confirmed",
           details: syncResult.reason,
           message: "A Meta nao confirmou inequivocamente este template.",
+        });
+        return;
+      }
+      if (!requestReconciliation.ok) {
+        json(res, 409, {
+          error: "template_request_reconciliation_not_confirmed",
+          details: requestReconciliation.reason,
+          message: "O modelo foi localizado, mas a solicitação correspondente não pôde ser reconciliada com segurança.",
         });
         return;
       }
@@ -26205,7 +26221,12 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           return;
         }
         const template = matchingLanguage[0];
-        const synced = await syncTemplateStatus(template.id);
+        const { sync: synced, request: reconciledRequest } = await syncTemplateStatusWithRequest(prisma, {
+          templateId: template.id,
+          templateRequestId: templateRequest.id,
+          source: "admin.templates.request",
+          requestId,
+        });
         if (!synced.ok) {
           json(res, 409, {
             error: "template_sync_not_confirmed",
@@ -26214,19 +26235,18 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           });
           return;
         }
-        const syncedStatus = normalizeTemplateStatus(synced.status);
-        const requestStatus =
-          syncedStatus === "approved"
-            ? "approved_meta"
-            : syncedStatus === "rejected"
-              ? "rejected_meta"
-              : "submitted_to_meta";
-        const requestClaim = templateRequest.status === requestStatus
-          ? { count: 0 }
-          : await prisma.templateRequest.updateMany({
-              where: { id: templateRequest.id, status: templateRequest.status },
-              data: { status: requestStatus },
-            });
+        if (!reconciledRequest.ok) {
+          json(res, 409, {
+            error: reconciledRequest.reason === "concurrent_change"
+              ? "template_sync_concurrent_change"
+              : "template_sync_not_confirmed",
+            details: reconciledRequest.reason,
+            message: reconciledRequest.reason === "concurrent_change"
+              ? "A solicitacao mudou durante a sincronizacao; o estado mais recente foi preservado."
+              : "A correspondencia entre o template e a solicitacao nao e inequivoca.",
+          });
+          return;
+        }
         const updated = await prisma.templateRequest.findUniqueOrThrow({
           where: { id: templateRequest.id },
           select: {
@@ -26245,26 +26265,6 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             components: true,
           },
         });
-        if (requestClaim.count !== 1 && updated.status !== requestStatus) {
-          json(res, 409, {
-            error: "template_sync_concurrent_change",
-            message: "A solicitacao mudou durante a sincronizacao; o estado mais recente foi preservado.",
-          });
-          return;
-        }
-        if (requestClaim.count === 1) {
-          await persistEvent({
-            clientId: updated.clientId,
-            requestId: `template-request-sync:${updated.id}:${Date.now()}`,
-            eventName: "template.request.meta_sync_updated",
-            payloadJson: {
-              templateRequestId: updated.id,
-              templateId: template.id,
-              status: synced.status,
-              changedBy: resolveAssignedTo(adminAuth),
-            },
-          });
-        }
         json(res, 200, {
           ok: true,
           request: serializeTemplateRequest(updated),
@@ -27008,6 +27008,11 @@ const TEMPLATE_REQUEST_SYNCABLE_STATUSES = [
   "meta_rejected",
   "submission_unknown",
 ];
+const TEMPLATE_REQUEST_AUTO_RECONCILABLE_STATUSES = [
+  "submission_unknown",
+  "submitted_to_meta",
+  "meta_pending",
+];
 const TEMPLATE_REQUEST_LOCKED_STATUSES = [
   "submitted_to_meta",
   "meta_pending",
@@ -27686,6 +27691,141 @@ async function findTemplatesNeedingSync(
   return items.map((item) => item.id);
 }
 
+type TemplateRequestSyncResult =
+  | { ok: true; requestId: string | null; updated: boolean }
+  | {
+      ok: false;
+      reason: "ambiguous_request" | "concurrent_change" | "identity_mismatch" | "request_not_found";
+    };
+
+function requestStatusForConfirmedTemplate(status: string) {
+  const normalized = normalizeTemplateStatus(status);
+  if (normalized === "approved") return "approved_meta";
+  if (normalized === "rejected") return "rejected_meta";
+  if (normalized === "pending") return "submitted_to_meta";
+  return null;
+}
+
+export async function reconcileTemplateRequestAfterConfirmedSync(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    templateId: string;
+    templateRequestId?: string;
+    source: string;
+    requestId: string;
+  }
+): Promise<TemplateRequestSyncResult> {
+  return prisma.$transaction(async (transaction): Promise<TemplateRequestSyncResult> => {
+    await transaction.$queryRaw(
+      Prisma.sql`SELECT id FROM "Template" WHERE id = ${params.templateId} FOR UPDATE`
+    );
+    const template = await transaction.template.findUnique({
+      where: { id: params.templateId },
+      select: {
+        id: true,
+        clientId: true,
+        name: true,
+        language: true,
+        status: true,
+        metaTemplateId: true,
+      },
+    });
+    const nextStatus = template ? requestStatusForConfirmedTemplate(template.status) : null;
+    if (!template || !template.metaTemplateId || !nextStatus) {
+      return { ok: false, reason: "identity_mismatch" };
+    }
+
+    const candidates = params.templateRequestId
+      ? await transaction.templateRequest.findMany({
+          where: { id: params.templateRequestId },
+          select: { id: true, clientId: true, name: true, variables: true, status: true },
+        })
+      : await transaction.templateRequest.findMany({
+          where: {
+            clientId: template.clientId,
+            name: template.name,
+            status: { in: TEMPLATE_REQUEST_AUTO_RECONCILABLE_STATUSES },
+          },
+          select: { id: true, clientId: true, name: true, variables: true, status: true },
+        });
+    if (params.templateRequestId && candidates.length === 0) {
+      return { ok: false, reason: "request_not_found" };
+    }
+    const matching = candidates.filter(
+      (request) =>
+        request.clientId === template.clientId &&
+        request.name === template.name &&
+        extractTemplateRequestLanguage(request.variables) === template.language &&
+        isTemplateRequestSyncable(request.status)
+    );
+    if (matching.length === 0) {
+      return params.templateRequestId
+        ? { ok: false, reason: "identity_mismatch" }
+        : { ok: true, requestId: null, updated: false };
+    }
+    if (matching.length !== 1) {
+      logger.warn({
+        event: "template.request.sync.ambiguous",
+        templateId: template.id,
+        clientId: template.clientId,
+        source: params.source,
+        requestId: params.requestId,
+        candidateCount: matching.length,
+      });
+      return { ok: false, reason: "ambiguous_request" };
+    }
+
+    const request = matching[0];
+    if (request.status === nextStatus) {
+      return { ok: true, requestId: request.id, updated: false };
+    }
+    const claimed = await transaction.templateRequest.updateMany({
+      where: { id: request.id, status: request.status },
+      data: { status: nextStatus },
+    });
+    if (claimed.count !== 1) {
+      const current = await transaction.templateRequest.findUnique({
+        where: { id: request.id },
+        select: { status: true },
+      });
+      if (current?.status !== nextStatus) {
+        return { ok: false, reason: "concurrent_change" };
+      }
+      return { ok: true, requestId: request.id, updated: false };
+    }
+    await persistEvent({
+      clientId: template.clientId,
+      requestId: `template-request-sync:${request.id}:${Date.now()}`,
+      eventName: "template.request.meta_sync_updated",
+      payloadJson: {
+        templateRequestId: request.id,
+        templateId: template.id,
+        metaTemplateId: template.metaTemplateId,
+        status: template.status,
+        source: params.source,
+      },
+    }, transaction);
+    return { ok: true, requestId: request.id, updated: true };
+  });
+}
+
+async function syncTemplateStatusWithRequest(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    templateId: string;
+    templateRequestId?: string;
+    source: string;
+    requestId: string;
+  }
+) {
+  const sync = await syncTemplateStatus(params.templateId);
+  if (!sync.ok) {
+    return { sync, request: { ok: true, requestId: null, updated: false } as TemplateRequestSyncResult };
+  }
+  const request = await reconcileTemplateRequestAfterConfirmedSync(prisma, params);
+  return { sync, request };
+}
+
 function triggerTemplateStatusSync(params: {
   templateIds: string[];
   source: string;
@@ -27693,7 +27833,18 @@ function triggerTemplateStatusSync(params: {
 }) {
   if (params.templateIds.length === 0) return;
 
-  void Promise.allSettled(params.templateIds.map((templateId) => syncTemplateStatus(templateId))).then(
+  const prisma = getPrisma();
+  void Promise.allSettled(params.templateIds.map(async (templateId) => {
+    const result = await syncTemplateStatusWithRequest(prisma, {
+      templateId,
+      source: params.source,
+      requestId: params.requestId,
+    });
+    if (result.sync.ok && !result.request.ok) {
+      throw new Error(`template_request_reconciliation:${result.request.reason}`);
+    }
+    return result;
+  })).then(
     (results) => {
       for (let index = 0; index < results.length; index += 1) {
         const result = results[index];

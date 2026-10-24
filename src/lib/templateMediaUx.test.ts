@@ -17,6 +17,12 @@ import {
   takeTemplateMediaFileAndReset,
   validateTemplateMediaFile,
 } from "./templateMediaUx";
+import { sortCatalogItems, sortTemplates } from "./templateCatalogOrdering";
+import {
+  getAdminTemplateRequestActionState,
+  isAdminTemplateRequestSubmittable,
+  isAdminTemplateRequestSyncable,
+} from "./templateRequestActions";
 
 const file = (name: string, type: string, size: number) => ({ name, type, size });
 
@@ -179,4 +185,46 @@ test("metadata warning is advisory and visible media UX is Brazilian Portuguese"
   assert.equal(sanitizeTemplateMediaFileName("../../mídia final?.png"), "mídia final_.png");
   const requirements = fs.readFileSync(path.join(process.cwd(), "src/components/app/TemplateMediaRequirements.tsx"), "utf8");
   assert(!requirements.match(/\b(header|preview|loading|requirements)\b/i));
+});
+
+test("submission_unknown permite sincronizar sem permitir uma nova submissão", () => {
+  assert.equal(isAdminTemplateRequestSyncable("submission_unknown"), true);
+  assert.equal(isAdminTemplateRequestSubmittable("submission_unknown"), false);
+  assert.deepEqual(getAdminTemplateRequestActionState("submission_unknown", false), {
+    submitDisabled: true,
+    syncDisabled: false,
+  });
+});
+
+test("uma operação administrativa em andamento bloqueia submissão e sincronização", () => {
+  assert.deepEqual(getAdminTemplateRequestActionState("internal_approved", true), {
+    submitDisabled: true,
+    syncDisabled: true,
+  });
+  assert.deepEqual(getAdminTemplateRequestActionState("submitted_to_meta", true), {
+    submitDisabled: true,
+    syncDisabled: true,
+  });
+});
+
+test("templates usam createdAt DESC e ID como desempate, ignorando updatedAt", () => {
+  const items = [
+    { id: "template-b", createdAt: "2026-10-20T10:00:00.000Z", updatedAt: "2026-10-24T20:00:00.000Z" },
+    { id: "template-c", createdAt: "2026-10-22T10:00:00.000Z", updatedAt: "2026-10-22T10:00:00.000Z" },
+    { id: "template-a", createdAt: "2026-10-20T10:00:00.000Z", updatedAt: "2026-10-25T20:00:00.000Z" },
+  ];
+  assert.deepEqual(sortTemplates(items).map((item) => item.id), ["template-c", "template-a", "template-b"]);
+});
+
+test("catálogo mantém a posição quando uma sincronização altera apenas updatedAt", () => {
+  const items = [
+    { id: "template-b", createdAt: "2026-10-20T10:00:00.000Z", updatedAt: "2026-10-24T20:00:00.000Z" },
+    { id: "template-c", createdAt: "2026-10-22T10:00:00.000Z", updatedAt: "2026-10-22T10:00:00.000Z" },
+    { id: "template-a", createdAt: "2026-10-20T10:00:00.000Z", updatedAt: "2026-10-25T20:00:00.000Z" },
+  ];
+  const before = sortCatalogItems(items).map((item) => item.id);
+  const synchronized = items.map((item) =>
+    item.id === "template-b" ? { ...item, updatedAt: "2027-01-01T00:00:00.000Z" } : item
+  );
+  assert.deepEqual(sortCatalogItems(synchronized).map((item) => item.id), before);
 });

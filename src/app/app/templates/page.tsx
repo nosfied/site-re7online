@@ -35,6 +35,7 @@ import {
   updateAppCannedReply,
   uploadAppTemplateMedia,
 } from "@/lib/appClientApi";
+import { sortCatalogItems, sortTemplates } from "@/lib/templateCatalogOrdering";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import { getMetaTemplateCategoryUxLabel, getMetaTemplateStatusUxLabel } from "@/lib/appUxLabels";
@@ -339,22 +340,8 @@ function isRetryableLocalTemplateFailure(item: Pick<AppTemplateItem, "status" | 
   );
 }
 
-function sortTemplates(items: AppTemplateItem[]) {
-  return [...items].sort((left, right) => {
-    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-  });
-}
-
 function sortRequests(items: AppTemplateRequestItem[]) {
-  return [...items].sort((left, right) => {
-    return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
-  });
-}
-
-function sortCatalogItems(items: CatalogItem[]) {
-  return [...items].sort((left, right) => {
-    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-  });
+  return sortCatalogItems(items);
 }
 
 function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRequestItem[]) {
