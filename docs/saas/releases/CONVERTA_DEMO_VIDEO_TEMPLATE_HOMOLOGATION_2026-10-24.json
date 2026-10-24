@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "recordType": "META_TEMPLATE_MEDIA_HOMOLOGATION_ATTEMPT",
+  "recordedAtUtc": "2026-10-24T17:08:53Z",
+  "status": "FAILED_DETERMINISTIC_PROVIDER_REJECTION",
+  "tenantKey": "demo-converta",
+  "historicalRequest": {
+    "name": "video_previdencia",
+    "status": "failed",
+    "preserved": true
+  },
+  "request": {
+    "name": "video_previdencia_teste_20261024",
+    "category": "MARKETING",
+    "language": "pt_BR",
+    "headerType": "VIDEO",
+    "contentSha256": "2eed9f1c84a856187d2f5fb2c0966076c5fbab05043eb3d54e212fc8460cc420",
+    "mediaSha256": "cfdc7f8caa5d87dfbde49948924685d37e40f95910ae2267cd7aa5ccc3a3b787",
+    "mediaSizeBytes": 2141258,
+    "mediaMimeType": "video/mp4",
+    "finalStatus": "failed"
+  },
+  "preconditions": {
+    "nameUnused": true,
+    "relatedConcurrentOperation": false,
+    "relatedSubmissionUnknown": false,
+    "tenantScopedMediaBinding": true,
+    "mediaIntegrity": "PASS"
+  },
+  "operations": {
+    "requestCreateCount": 1,
+    "internalApprovalCount": 1,
+    "metaSubmissionCount": 1,
+    "manualSyncCount": 0,
+    "automaticAdditionalSyncCount": 0,
+    "retryCount": 0
+  },
+  "providerResult": {
+    "accepted": false,
+    "approved": false,
+    "stage": "binary_upload",
+    "httpStatus": 400,
+    "code": 100,
+    "subcode": 33,
+    "type": "GraphMethodException",
+    "traceId": "AEVhsG7sHtf3jxLhVGcLa59",
+    "message": "Unsupported post request: upload session unavailable, missing permission, or operation unsupported; provider URL and session identifier removed."
+  },
+  "resultTruth": {
+    "submissionUnknown": false,
+    "retryAllowedByThisRecord": false,
+    "templateApprovalClaimed": false,
+    "functionalAcceptance": "PENDING"
+  },
+  "excludedEffects": {
+    "campaigns": 0,
+    "messagesSent": 0,
+    "imports": 0,
+    "credentialChanges": 0,
+    "builds": 0,
+    "restarts": 0,
+    "deploys": 0,
+    "sqlStatements": 0,
+    "migrations": 0
+  },
+  "privateEvidence": {
+    "versioned": false,
+    "containsRawProviderResponse": true,
+    "containsSecrets": false,
+    "locationPublished": false
+  }
+}

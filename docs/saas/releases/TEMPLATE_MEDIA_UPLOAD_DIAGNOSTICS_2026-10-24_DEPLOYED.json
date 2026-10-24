@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 4,
+  "recordType": "IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_VERIFIED",
+  "result": "DEPLOYED_FIXED_CURRENT_RUNTIME_ESTABLISHED_PRODUCTION_HEALTHY",
+  "displayStatus": "DEPLOYED / PRODUCTION HEALTHY / META FUNCTIONAL ACCEPTANCE PENDING",
+  "releaseId": "immutable-ec2a9fde-vps-20261024T162005Z",
+  "canonicalBranch": "review/campaign-recovery-20260926",
+  "baseCommit": "705091363a050ac6ff27129023c2df9c802455fb",
+  "targetCommit": "ec2a9fde99b6421a85256f14604bd469879f4f2a",
+  "controlPlane": {
+    "commit": "5ea7fa45a3693a14bdbf1d9d0a464dd61423b4ad",
+    "workflowDispatchRun": 40110624360,
+    "ciJobs": 4,
+    "ciResult": "PASS"
+  },
+  "components": [
+    "api",
+    "frontend"
+  ],
+  "build": {
+    "location": "PRODUCTION_HOST_ISOLATED_WORKTREE",
+    "platform": "linux",
+    "architecture": "x86_64",
+    "nodeVersion": "v20.20.0",
+    "npmVersion": "10.8.2",
+    "ownerAuthorization": "EXPLICIT_AFTER_RAM_UPGRADE",
+    "activeRuntimeStoppedForBuild": false,
+    "singleBuild": true
+  },
+  "artifacts": {
+    "releasePath": "/opt/re7online/releases/immutable-ec2a9fde-vps-20261024T162005Z",
+    "packageSha256": "a8715c8dcb2a3e654f486cd6d8ed53fb5ef33caf44a6ad90f6e41fd33d73b4ad",
+    "manifestSha256": "b9aa1c5301c68dd3184978a8bc2b3dfa817e365302f69abe0a3b0725a93cf5e6",
+    "indexSha256": "22b790da2c65793180cfded42825b654f24f07b2e7f4fd63ce618802566b4241",
+    "indexEntries": 34348,
+    "api": {
+      "stablePath": "/opt/re7online/current/api",
+      "entrypoint": "dist/index.js",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontend": {
+      "stablePath": "/opt/re7online/current/frontend",
+      "buildId": "7yArOSyfllnPiQy_vAS9H",
+      "execMode": "fork_mode",
+      "instances": 1,
+      "entrypoint": "node_modules/next/dist/bin/next",
+      "args": [
+        "start",
+        "-p",
+        "3000"
+      ]
+    },
+    "worker": {
+      "preserved": true
+    }
+  },
+  "deploymentOrder": [
+    "api",
+    "frontend"
+  ],
+  "activation": {
+    "method": "DIRECTED_EXISTING_PM2_FIXED_CURRENT",
+    "selection": "ATOMIC_FIXED_CURRENT_SYMLINK",
+    "pm2Operation": "RESTART_EXISTING_RECORD_BY_NAME_WITHOUT_UPDATE_ENV",
+    "fullStoredPrivateEnvironmentPreserved": true,
+    "driverAttemptsRetainedAsHistoricalEvidence": true
+  },
+  "readiness": {
+    "method": "THREE_CONSECUTIVE_STABLE_SAMPLES",
+    "requiredStableSamples": 3,
+    "healthEvaluatedAfterSocketStability": true,
+    "api": {
+      "totalSamples": 3,
+      "identityStable": true,
+      "listenerCount": 1
+    },
+    "frontend": {
+      "totalSamples": 3,
+      "identityStable": true,
+      "listenerCount": 1
+    }
+  },
+  "verification": {
+    "observedAtUtc": "2026-10-24T16:58:19Z",
+    "pidSemantics": "dated observations; release, hashes, BUILD_ID and dump are durable identities",
+    "api": {
+      "pid": 56158,
+      "startTicks": 1532871,
+      "socketPort": 3001,
+      "socketOwnerPid": 56158,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        56158
+      ],
+      "samples": 3,
+      "localHealthHttp": 200,
+      "publicHealthHttp": 200,
+      "healthJsonOk": true,
+      "databaseHealth": "ok"
+    },
+    "frontend": {
+      "pid": 56230,
+      "startTicks": 1533470,
+      "socketPort": 3000,
+      "socketOwnerPid": 56230,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        56230
+      ],
+      "samples": 3,
+      "loginLocalHttp": 200,
+      "loginPublicHttp": 200,
+      "inboxHttp": 200,
+      "crmHttp": 200,
+      "templatesHttp": 200,
+      "campaignsHttp": 200,
+      "assetHttp": 200
+    },
+    "worker": {
+      "pid": 2233,
+      "startTicks": 17758,
+      "restartCount": 0,
+      "releaseId": "immutable-e2e7f17a-20261022T005110Z",
+      "preserved": true
+    },
+    "smoke": "GET_ONLY",
+    "technicalAcceptance": "PASS"
+  },
+  "migration": {
+    "classification": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+    "sqlExecuted": false,
+    "migrationExecuted": false
+  },
+  "pm2": {
+    "savedExactlyOnce": true,
+    "saveCount": 1,
+    "saveExitCode": 0,
+    "dumpSha256": "afd1c1c20483708ac2f51f0ffde09c2affb8d62e4a1426cb233288fda0753e59",
+    "dumpMode": "0600",
+    "dumpOwner": "deploy",
+    "dumpGroup": "deploy",
+    "rollbackSha256": "fec9b3417d4ea1e34b13840f5e3fea2b70a499220c0af124f039a87d8ce312cc"
+  },
+  "rollback": {
+    "previousReleaseId": "immutable-a62da468-vps-20261024T124726Z",
+    "previousReleasePreserved": true,
+    "authenticatedDefinitionsPreserved": true,
+    "symlinkStateCaptured": true,
+    "strategy": "RESTORE_PREVIOUS_SYMLINKS_AND_EXISTING_PM2_RECORDS",
+    "automaticRetryForbidden": true
+  },
+  "marker": {
+    "name": "DEPLOYED",
+    "createdAfterDumpValidation": true,
+    "sha256": "0894eb7cfb9561682feeca4917063c52fa5d3cf5be00e378eac10d9c00a7c0a2"
+  },
+  "window": {
+    "date": "2026-10-24",
+    "timezone": "America/Fortaleza",
+    "startedAtEvidenceUtc": "2026-10-24T16:55:00Z",
+    "finishedAtUpperBoundUtc": "2026-10-24T16:58:19Z"
+  },
+  "releaseReadiness": {
+    "technicalDeployment": "DEPLOYED",
+    "productionHealth": "HEALTHY",
+    "tenantMetaAppIdCode": "DEPLOYED",
+    "tenantMetaAppIdConfiguration": "CONFIGURED_VERIFIED",
+    "metaCalls": "NOT_EXECUTED_DURING_DEPLOYMENT"
+  },
+  "windowMutations": {
+    "functionalPostRequests": 0,
+    "metaCalls": 0,
+    "templateCreatesOrSubmissions": 0,
+    "campaigns": 0,
+    "imports": 0,
+    "messagesSent": 0,
+    "sqlStatements": 0,
+    "migrations": 0,
+    "workerChanges": 0
+  },
+  "privateEvidence": {
+    "versioned": false,
+    "containsSecrets": false,
+    "locationPublished": false
+  },
+  "persistentStorage": {
+    "templateMediaRoot": "/opt/re7online/content/template-campaign-media",
+    "owner": "deploy",
+    "group": "deploy",
+    "directoryMode": "0700",
+    "outsideImmutableRelease": true
+  },
+  "diagnosticCorrection": {
+    "scope": "TEMPLATE_MEDIA_UPLOAD_DIAGNOSTIC_PROPAGATION_AND_CONSOLE_RESULT_TRUTH",
+    "providerCallDuringDeployment": false,
+    "schemaChanged": false,
+    "workerChanged": false
+  },
+  "finalizationRecovery": {
+    "initialPredicate": "FINAL_DUMP_IDENTITY",
+    "saveHadSucceeded": true,
+    "secondSaveExecuted": false,
+    "dumpLiveEnvironmentExactMatch": true,
+    "dumpLiveStructuralIdentityMatch": true,
+    "journalFinalState": "DEPLOYED"
+  }
+}

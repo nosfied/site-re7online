@@ -2,7 +2,7 @@
 
 Status produtivo: **TECHNICALLY DEPLOYED / PRODUCTION HEALTHY**.
 
-Homologação funcional Meta: **PENDING**.
+Homologação funcional Meta: **PENDING — ÚNICA TENTATIVA DE VÍDEO NEGADA NO UPLOAD BINÁRIO**.
 
 Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
 
@@ -12,18 +12,36 @@ Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
 implantado em 24/10/2026. Em operação separada, o tenant Converta Demo teve o App ID
 tenant-scoped configurado depois que uma única consulta `GET /debug_token` confirmou
 o vínculo atual do token com o aplicativo e as permissões necessárias. Essa prova não
-recupera o histórico original do onboarding. Não houve chamada Meta mutante, upload,
-sincronização, submissão ou envio; homologação funcional permanece pendente.
+recupera o histórico original do onboarding.
 
 ## Implantação técnica
 
-O target `a62da468ba1e703139181cecfa88d34f2066ccd1` está ativo na release
-`immutable-a62da468-vps-20261024T124726Z`, conforme o
-[registro estruturado](releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json).
+O target `ec2a9fde99b6421a85256f14604bd469879f4f2a` está ativo na release
+`immutable-ec2a9fde-vps-20261024T162005Z`, conforme o
+[registro estruturado](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json).
 API e frontend foram selecionados por troca atômica dos caminhos estáveis e restart
 dos registros PM2 existentes, sem `--update-env`. O worker foi preservado.
-O BUILD_ID ativo é `UToBpS3nIu9rzbWpDfnDw`. A release
-`immutable-5c339b2e-20261022T125717Z` permanece como retorno e evidência histórica.
+O BUILD_ID ativo é `7yArOSyfllnPiQy_vAS9H`. A release
+`immutable-a62da468-vps-20261024T124726Z` permanece como retorno e evidência histórica.
+
+## Homologação controlada de vídeo em 24/10/2026
+
+A solicitação histórica `video_previdencia` permaneceu `failed`. O fluxo tenant-scoped
+criou `video_previdencia_teste_20261024`, categoria `MARKETING`, idioma `pt_BR`, com o
+mesmo texto, exemplos e vídeo íntegro da solicitação anterior. Antes da operação, o
+nome estava livre, não havia operação concorrente nem resultado incerto relacionado,
+e o vídeo MP4 de 2.141.258 bytes correspondia ao SHA-256
+`cfdc7f8caa5d87dfbde49948924685d37e40f95910ae2267cd7aa5ccc3a3b787`.
+
+A criação tenant-scoped e a aprovação interna passaram. A submissão administrativa
+chamou a Meta exatamente uma vez pelo backend implantado. A criação da sessão foi
+seguida de negativa no envio dos bytes (`binary_upload`): HTTP 400, código 100,
+subcódigo 33, tipo `GraphMethodException`. A mensagem sanitizada informa que o objeto
+de sessão não estava disponível, não tinha permissão ou não suportava a operação.
+A solicitação terminou `failed`; não houve retry, sync adicional, campanha ou envio.
+O registro estruturado é
+[`CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json`](releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json).
+O resultado não comprova aprovação Meta nem libera uso comercial.
 
 A migration `20261021150000_add_template_campaign_media` foi aplicada exatamente
 uma vez. O primeiro cliente Prisma recebeu `SIGABRT` depois que a migration já estava
@@ -220,12 +238,12 @@ FK cross-tenant, cache por conta, 1.001 destinatários com um upload,
 concorrência, expiração, resultado incerto, limpeza dry-run, backpressure,
 batch >1.000, pausa/cancelamento/Result Truth e builds.
 
-Nenhuma chamada real à Meta, submissão, envio, campanha ou importação foi executada.
-A implantação técnica e a configuração persistente de `TEMPLATE_MEDIA_ROOT` estão
-concluídas. Antes de liberação ainda são necessários: ambiente de homologação
-autorizado, App ID tenant-scoped confirmado, exemplos não sensíveis, submissão
-controlada à Meta, aprovação e envio homologado explicitamente pelo owner. Botões de
-template não entram neste delta.
+A implantação técnica, a configuração persistente de `TEMPLATE_MEDIA_ROOT` e o App ID
+tenant-scoped estão concluídos. A tentativa controlada de vídeo foi negada pela Meta
+durante o upload binário e permaneceu sem retry. Antes de liberação ainda são
+necessárias uma nova autorização específica após análise da negativa, aceitação da
+submissão pela Meta, aprovação do template e envio homologado explicitamente pelo
+owner.
 
 A dívida `PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE` permanece no
 [backlog set based](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md). Ela é

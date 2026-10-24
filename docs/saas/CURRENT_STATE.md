@@ -1,35 +1,35 @@
 # Estado canônico do Converta
 
-**DEPLOYED / PRODUCTION HEALTHY / CONVERTA DEMO META APP ID CONFIGURED**
+**DEPLOYED / PRODUCTION HEALTHY / META MEDIA HOMOLOGATION PENDING**
 
 Esta é a entrada vigente de continuidade. A topologia operacional está definida
 no [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a evidência
 sanitizada está no
-[registro estruturado](releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json).
+[registro estruturado](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json).
 A configuração tenant-scoped posterior está no
 [registro operacional](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json).
 
 ## Produção viva — observação de 24/10/2026
 
-- Target da aplicação: `a62da468ba1e703139181cecfa88d34f2066ccd1`.
-- Release: `immutable-a62da468-vps-20261024T124726Z`.
+- Target da aplicação: `ec2a9fde99b6421a85256f14604bd469879f4f2a`.
+- Release: `immutable-ec2a9fde-vps-20261024T162005Z`.
 - Control plane: `5ea7fa45a3693a14bdbf1d9d0a464dd61423b4ad`.
 - API: `/opt/re7online/current/api`, entry SHA-256
   `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`.
 - Frontend: `/opt/re7online/current/frontend`, BUILD_ID
-  `UToBpS3nIu9rzbWpDfnDw`, Next direto em `fork_mode`, uma instância.
+  `7yArOSyfllnPiQy_vAS9H`, Next direto em `fork_mode`, uma instância.
 - Worker preservado no runtime `immutable-e2e7f17a-20261022T005110Z`, sem seleção
   ou restart.
-- Dump PM2: `fec9b3417d4ea1e34b13840f5e3fea2b70a499220c0af124f039a87d8ce312cc`,
+- Dump PM2: `afd1c1c20483708ac2f51f0ffde09c2affb8d62e4a1426cb233288fda0753e59`,
   `deploy:deploy`, arquivo regular, modo `0600`, salvo exatamente uma vez.
 - Retorno anterior preservado pelo dump
-  `41830f80657ace643b42818865de810cb2c0bae3e77027b752004c1db06cfeb5`
+  `fec9b3417d4ea1e34b13840f5e3fea2b70a499220c0af124f039a87d8ce312cc`
   e pelos symlinks e registros PM2 capturados.
 - Marker `DEPLOYED`:
-  `85cb006e15f68e3afe701c5c92b6f55864c5359c2d3bcde864b8c0900547416b`.
+  `0894eb7cfb9561682feeca4917063c52fa5d3cf5be00e378eac10d9c00a7c0a2`.
 
-PIDs são observações datadas: API `29766` (start ticks `519561`), frontend
-`29844` (`520267`) e worker `2233` (`17758`). Release, hashes, BUILD_ID e dump
+PIDs são observações datadas: API `56158` (start ticks `1532871`), frontend
+`56230` (`1533470`) e worker `2233` (`17758`). Release, hashes, BUILD_ID e dump
 são as identidades duráveis; revalidar os PIDs antes de outra mutação.
 
 ## Build, ativação e limites
@@ -65,6 +65,17 @@ retornou `configured=true` e `source=tenant_app_id`. Token, WABA, número, demai
 propriedades e todos os outros tenants permaneceram inalterados. Não houve fallback
 global, upload, sincronização, submissão ou envio. A homologação funcional Meta e a
 liberação comercial continuam **PENDENTES**.
+
+Em 24/10/2026, a correção de diagnóstico de upload foi implantada no target
+`ec2a9fde99b6421a85256f14604bd469879f4f2a`. Uma tentativa de homologação
+explicitamente autorizada criou e aprovou internamente
+`video_previdencia_teste_20261024`, preservando `video_previdencia` como histórico
+`failed`, e submeteu à Meta exatamente uma vez. A Meta negou o envio dos bytes em
+`binary_upload`: HTTP 400, código 100, subcódigo 33, `GraphMethodException`. A nova
+solicitação foi persistida como `failed`; não houve retry, sincronização adicional,
+campanha ou mensagem. O resultado sanitizado está no
+[registro de homologação](releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json).
+Submissão recusada não equivale a template criado ou aprovado pela Meta.
 
 ## Rota operacional
 

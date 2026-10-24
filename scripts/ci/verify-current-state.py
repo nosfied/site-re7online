@@ -73,10 +73,21 @@ require(media["components"] in (["api", "frontend", "worker"],
 require(media["metaFunctionalAcceptance"] == "PENDING" and
         media["commercialOperationalRelease"] == "PENDING" and
         media["craPrRelease"] == "PENDING", "media pending acceptance")
-require(media["metaCallsExecuted"] is False and
-        media["templatesCreatedOrSubmitted"] is False and
+require(media["metaCallsExecuted"] is True and
+        media["templatesCreatedOrSubmitted"] is True and
         media["campaignsExecuted"] is False and media["messagesSent"] is False,
         "media external effects")
+require(media["lastHomologationAttempt"] ==
+        "FAILED_DETERMINISTIC_PROVIDER_REJECTION", "media homologation result")
+homologation_path = ROOT / media["lastHomologationRecord"]
+require(homologation_path.is_file(), "media homologation record")
+homologation = json.loads(homologation_path.read_text())
+require(homologation["status"] == "FAILED_DETERMINISTIC_PROVIDER_REJECTION" and
+        homologation["operations"]["metaSubmissionCount"] == 1 and
+        homologation["operations"]["retryCount"] == 0 and
+        homologation["providerResult"]["stage"] == "binary_upload" and
+        homologation["request"]["finalStatus"] == "failed",
+        "media homologation result truth")
 tenant_app = state["tenantScopedMetaAppId"]
 require(tenant_app["configurationState"] == "CONFIGURED_VERIFIED_FOR_CONVERTA_DEMO" and
         tenant_app["configuredTenantKey"] == "demo-converta" and
@@ -85,7 +96,9 @@ require(tenant_app["configurationState"] == "CONFIGURED_VERIFIED_FOR_CONVERTA_DE
         "tenant-scoped Meta App ID state")
 require(tenant_app["globalFallbackUsed"] is False and
         tenant_app["metaDiagnosticGetCount"] == 1 and
-        tenant_app["metaMutatingCallsExecuted"] is False,
+        tenant_app["metaMutatingCallsExecuted"] is True and
+        tenant_app["lastMetaMutationScope"] ==
+        "SINGLE_TEMPLATE_MEDIA_SUBMISSION_ATTEMPT",
         "tenant-scoped Meta effects")
 require((ROOT / tenant_app["configurationRecord"]).is_file(),
         "tenant-scoped Meta configuration record")

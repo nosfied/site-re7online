@@ -192,9 +192,9 @@ Os itens abaixo são históricos e **não utilizáveis**:
 ## Release produtiva observada em 24/10/2026
 
 O registro estruturado vigente é
-[`TENANT_META_APP_ID_2026-10-24_DEPLOYED.json`](releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json).
-O target `a62da468ba1e703139181cecfa88d34f2066ccd1` roda na release
-`immutable-a62da468-vps-20261024T124726Z`; API e frontend usam `/current`, e o
+[`TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json`](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json).
+O target `ec2a9fde99b6421a85256f14604bd469879f4f2a` roda na release
+`immutable-ec2a9fde-vps-20261024T162005Z`; API e frontend usam `/current`, e o
 worker anterior foi preservado. O build único ocorreu na VPS em worktree isolado por
 decisão explícita posterior ao upgrade de RAM. A ativação usou troca atômica dos
 symlinks e restart dos registros existentes sem atualização de ambiente.
