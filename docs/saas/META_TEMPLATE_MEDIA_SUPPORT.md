@@ -6,7 +6,7 @@ Homologação funcional Meta: **PENDING**.
 
 Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
 
-Última atualização: 2026-10-22. Esta é a fonte canônica para cabeçalhos `IMAGE` e
+Última atualização: 2026-10-24. Esta é a fonte canônica para cabeçalhos `IMAGE` e
 `VIDEO` em templates e campanhas. O estado produtivo geral continua em
 [`CURRENT_STATE.md`](CURRENT_STATE.md). O mecanismo tenant-scoped de Meta App ID foi
 implantado em 24/10/2026, mas nenhum App ID foi configurado e nenhuma chamada Meta
@@ -14,12 +14,13 @@ foi executada nessa janela; homologação funcional permanece pendente.
 
 ## Implantação técnica
 
-O target `5c339b2eeda52e21249844fc8b71a351d4311f03` está ativo na release
-`immutable-5c339b2e-20261022T125717Z`, conforme o
-[registro estruturado](releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json).
-API e frontend foram selecionados com readiness versionado; o worker foi preservado
-no runtime anterior, sem seleção ou restart. O BUILD_ID ativo é
-`9nXekPSOrJsLjOlofmaPI`.
+O target `a62da468ba1e703139181cecfa88d34f2066ccd1` está ativo na release
+`immutable-a62da468-vps-20261024T124726Z`, conforme o
+[registro estruturado](releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json).
+API e frontend foram selecionados por troca atômica dos caminhos estáveis e restart
+dos registros PM2 existentes, sem `--update-env`. O worker foi preservado.
+O BUILD_ID ativo é `UToBpS3nIu9rzbWpDfnDw`. A release
+`immutable-5c339b2e-20261022T125717Z` permanece como retorno e evidência histórica.
 
 A migration `20261021150000_add_template_campaign_media` foi aplicada exatamente
 uma vez. O primeiro cliente Prisma recebeu `SIGABRT` depois que a migration já estava

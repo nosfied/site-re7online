@@ -1,30 +1,36 @@
 # Operational Scripts
 
-## `converta-release.py` — produtor externo build-once
+> [!IMPORTANT]
+> O procedimento vigente está em [DEPLOY_RUNBOOK.md](../docs/saas/DEPLOY_RUNBOOK.md)
+> e o estado ativo em [CURRENT_STATE.md](../docs/saas/CURRENT_STATE.md).
+> O padrão autorizado é build na VPS, em worktree e saída isolados, seguido de
+> seleção pelos caminhos estáveis e restart dirigido dos registros PM2 existentes.
 
-Constrói e verifica, fora da VPS, uma release imutável de API e frontend. Expõe
-somente `build` e `verify`, exige worktree limpo no target exato, Node `v20.20.0`,
+## `converta-release.py` — produtor build-once
+
+Constrói e verifica uma release imutável de API e frontend no worktree isolado da
+VPS. Builder externo é alternativa mediante decisão específica. Expõe somente
+`build` e `verify`, exige worktree limpo no target exato, Node `v20.20.0`,
 `SOURCE_DATE_EPOCH` explícito, saída nova e os componentes `api,frontend`.
 
 O produtor executa `npm ci`, Prisma generate e cada build exatamente uma vez;
-captura sem alterar o BUILD_ID efetivamente produzido; materializa apenas
-`api-runtime`, `frontend-runtime`, `manifest.json` e `index.sha256`; normaliza modos
-e timestamps; cria `.tar.xz` reprodutível para o mesmo payload congelado por arquivo
-temporário; e exige extração independente idêntica antes de publicar o pacote. Builds
-independentes podem gerar outro BUILD_ID e constituem outra release. O índice usa
-exatamente o schema v1 consumido por `converta-deploy.py`. O produtor não acessa VPS,
-PM2, banco, Meta ou configuração privada.
+preserva o BUILD_ID produzido e materializa `api-runtime`, `frontend-runtime`,
+`manifest.json` e `index.sha256`. Exige extração independente idêntica antes de
+publicar o pacote. Builds independentes podem gerar outro BUILD_ID e constituem
+outra release. O empacotamento do mesmo payload congelado é reprodutível.
 
-## `converta-deploy.py` — caminho canônico
+A denylist de dados operacionais não remove diretórios internos de dependências
+sob `node_modules`, como `openai/resources/uploads`. Falhas de subprocesso geram
+evidência privada, sem publicar conteúdo em stdout ou Git. O produtor não faz
+seleção de runtime, PM2, migration, SQL operacional, chamadas Meta ou envios.
 
-Coordena exclusivamente releases imutáveis já construídas de API e frontend. Reusa
-`pm2-definition-control.py` para `validate`, `validate-pair` e `wait-readiness`,
-preserva o worker e exige aceite antes do único `pm2 save`.
+## `converta-deploy.py` — histórico, sem requalificação
 
-Os comandos `preflight`, `activate`, `finalize`, `rollback` e `status`, seus seis
-argumentos e resultados nominais estão no
-[`DEPLOY_RUNBOOK.md`](../docs/saas/DEPLOY_RUNBOOK.md). Este script não faz build,
-migration, SQL, Meta, campanha ou envio.
+As tentativas encerradas em 24/10/2026 ficam preservadas como evidência.
+Este driver não é a rota vigente de ativação e seus comandos não devem ser
+executados como continuação de uma janela nova. A ativação comprovada usa troca
+atômica dos symlinks e restart dos registros PM2 existentes sem `--update-env`,
+seguindo exclusivamente o [runbook](../docs/saas/DEPLOY_RUNBOOK.md).
 
 ## `deploy-impact-matrix.sh`
 
@@ -54,7 +60,8 @@ de prosseguir.
 
 ## `apps/whatsapp-agent/scripts/deploy-vps.sh` — histórico/obsoleto
 
-Este fluxo de checkout/build na VPS não é utilizável para deploy normal. Os comandos
+Este script antigo de checkout/build no runtime ativo não é utilizável para deploy
+normal. Isso não proíbe o build isolado na VPS definido no runbook vigente. Os comandos
 abaixo permanecem apenas como registro histórico:
 
 ```bash
@@ -67,9 +74,9 @@ Para revisar sem alterar o checkout nem executar build/reload:
 apps/whatsapp-agent/scripts/deploy-vps.sh --dry-run origin/flow-executor-quote-hardening
 ```
 
-O deploy integrado faz `git pull --ff-only`, calcula o range publicado, para em
-`REVIEW_REQUIRED=YES` ou `UNKNOWN_RUNTIME_IMPACT=YES`, builda todos os runtimes
-afetados e somente depois recarrega os processos PM2 correspondentes.
+O fluxo histórico descrito fazia `git pull --ff-only`, calculava o range e parava em
+`REVIEW_REQUIRED=YES` ou `UNKNOWN_RUNTIME_IMPACT=YES`, buildava os runtimes afetados e depois recarregava os processos PM2.
+Esses exemplos não são comandos da rota vigente.
 
 ## Release por artefato — histórico
 
