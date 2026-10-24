@@ -9,9 +9,12 @@ anteriores permanecem como evidência histórica e não autorizam repetição.
 ## Topologia canônica
 
 - O build ocorre uma única vez em worktree Linux `x86_64` isolado, com Node
-  `v20.20.0` e npm compatível com o lockfile. Builder externo é preferencial. A
-  VPS só pode ser builder por decisão explícita do owner, capacidade comprovada,
-  saída fora do runtime ativo e sem parar serviços para liberar recursos. O produtor
+  `v20.20.0` e npm compatível com o lockfile. O padrão vigente é build na VPS,
+  autorizado pelo owner após o upgrade de 24/10/2026, com capacidade conferida,
+  saída fora do runtime ativo e sem parar serviços para liberar recursos. Builder
+  externo é alternativa mediante decisão específica. A autorização de cada janela
+  de ativação permanece separada; não se pede novamente autorização para o local
+  de build já decidido. O produtor
   canônico é `scripts/converta-release.py`; ativação nunca constrói artefatos.
 - API e frontend são artefatos completos, versionados e validados por índice,
   manifesto, extração independente e SHA-256.
@@ -61,7 +64,7 @@ O manifesto registra target, release, componentes, toolchain, BUILD_ID, hash do
 entrypoint da API, hash do índice e campos determinísticos. Caches, `.env`, Git,
 logs, evidências, uploads, worker e symlinks externos são negados. O produtor não
 possui rede produtiva, PM2, banco, Meta, configuração privada ou seleção de runtime;
-essas responsabilidades permanecem exclusivamente no driver após autorização.
+essas responsabilidades pertencem à operação de ativação após autorização.
 
 O modelo é **build once / promote the same artifact**. Builds Next independentes
 podem produzir BUILD_ID diferente sem invalidar o produtor; apenas um build é
@@ -73,9 +76,11 @@ commit, produz outra release com novo BUILD_ID, manifesto, índice e hashes.
 ### Readiness depois da seleção PM2
 
 `online` no PM2 comprova que o processo foi iniciado; não comprova que a aplicação
-já abriu seu socket. Depois de cada `pm2 start`, o caminho canônico executa
-`scripts/pm2-definition-control.py wait-readiness` com prazo monotônico de 30
-segundos, polling de no máximo 500 ms e três amostras consecutivas estáveis.
+já abriu seu socket. O fluxo dirigido exige três amostras consecutivas estáveis
+após o restart do registro existente. O observador versionado
+`scripts/pm2-definition-control.py wait-readiness`, quando utilizado, fixa prazo monotônico de 30
+segundos e polling de no máximo 500 ms; seu uso não reautoriza o
+driver histórico de seleção.
 
 Cada amostra vincula PID, start ticks, identidade imutável da release, symlink
 `/opt/re7online/current/<componente>`, listener IPv4 ou IPv6 e cadeia de propriedade

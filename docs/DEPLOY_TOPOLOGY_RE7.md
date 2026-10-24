@@ -11,8 +11,9 @@ em `converta.re7online.com`, são servidos pela VPS via Nginx e PM2.
 - API: Node v20.20.0, porta 3001;
 - frontend: Next direto, `fork_mode`, uma instância, porta 3000;
 - worker: release própria e fora do deploy quando não impactado;
-- build: único e isolado, Linux x86_64, Node v20.20.0/npm 10.8.2; externo por
-  padrão, ou na VPS somente por autorização explícita e capacidade comprovada;
+- build: único na VPS em worktree/saída isolados, Linux x86_64,
+  Node v20.20.0/npm 10.8.2, com capacidade conferida antes da execução;
+- builder externo: alternativa mediante decisão específica do owner;
 - ordem: API, frontend, smoke GET-only, aceite aplicável, um `pm2 save`.
 - definições PM2: estrutura explícita e ambiente privado allowlisted pelo contrato
   versionado; introspecção (`jlist`, dump, `pm2_env` ou `/proc/.../environ`) nunca é

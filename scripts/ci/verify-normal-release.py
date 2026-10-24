@@ -27,7 +27,7 @@ for marker in (
 require("não utilizáveis" in model, "obsolete classification")
 require("checkout produtivo não é runtime" in topology, "checkout retirement")
 require("Não executar build no checkout/runtime ativo" in checklist and
-        "Builder externo é preferencial" in checklist,
+        "Build na VPS é o padrão autorizado pelo owner" in checklist,
         "isolated build boundary")
 require("wait-readiness" in checklist and "READINESS_TIMEOUT:<component>:<port>" in checklist,
         "versioned readiness gate")

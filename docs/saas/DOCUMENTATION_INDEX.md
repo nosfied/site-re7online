@@ -12,7 +12,7 @@
 - [Estado verificável](CURRENT_STATE.json)
 - [Runbook canônico de deploy](DEPLOY_RUNBOOK.md) — única instrução executável vigente
 - [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
-  o produtor externo `scripts/converta-release.py` e a fronteira com a ativação
+  o produtor `scripts/converta-release.py`, o build na VPS e a fronteira com a ativação
 - [Deploy tenant-scoped de Meta App ID](releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json)
   — release ativa; configuração do tenant e chamadas Meta continuam pendentes.
 - [Topologia de domínios e runtimes](../DEPLOY_TOPOLOGY_RE7.md)
@@ -60,6 +60,7 @@
   preservados como evidência e não podem ser executados novamente.
 
 O checkout/runtime ativo como destino de build, `deploy-normal-release.sh`, PR #190
-e Next em `cluster_mode` estão obsoletos. Build isolado na VPS requer decisão
-explícita e capacidade comprovada; o builder externo continua preferencial. Nenhum
+e Next em `cluster_mode` estão obsoletos. O padrão autorizado é build isolado na
+VPS, com capacidade conferida; builder externo é alternativa mediante decisão
+específica. Nenhum
 documento histórico prevalece sobre o modelo operacional canônico.

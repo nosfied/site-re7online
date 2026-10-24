@@ -59,8 +59,10 @@ tecnicamente implantado, mas a configuração do tenant Converta Demo continua
 ## Rota operacional
 
 O modelo vigente é build once / promote the same artifact em worktree isolado e
-com capacidade comprovada. O builder externo continua preferencial; build na VPS
-exige decisão explícita do owner, capacidade aferida e isolamento do runtime vivo.
+com capacidade comprovada. Por decisão vigente do owner após o upgrade, o padrão
+é build na VPS, com capacidade aferida e isolamento do runtime vivo. Builder externo
+é alternativa mediante decisão específica. Essa decisão de build já está autorizada;
+cada janela de ativação continua exigindo autorização própria.
 Releases permanecem imutáveis em `/opt/re7online/releases`; seleção usa os caminhos
 estáveis API→frontend, worker apenas quando impactado, readiness em três amostras,
 smoke GET-only, aceite e um único `pm2 save`.
