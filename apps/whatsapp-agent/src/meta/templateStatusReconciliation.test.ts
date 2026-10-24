@@ -4,8 +4,10 @@ import { boundedMetaProviderTimeoutMs } from "./metaTemplateMedia.js";
 import {
   META_TEMPLATE_PROVIDER_OPERATION_TIMEOUT_MS,
   META_TEMPLATE_PROVIDER_STAGE_TIMEOUT_MS,
+  MetaTemplateServiceError,
   normalizeMetaTemplateSyncStatus,
   selectMetaTemplateSyncMatch,
+  submitTemplateToMeta,
 } from "./template.service.js";
 
 const expected = {
@@ -72,7 +74,75 @@ test("one provider deadline bounds all stages and leaves client/proxy persistenc
   assert.equal(META_TEMPLATE_PROVIDER_STAGE_TIMEOUT_MS, 20_000);
   assert.equal(boundedMetaProviderTimeoutMs({ stageTimeoutMs: 20_000, deadlineAtMs: 145_000, nowMs: 100_000 }), 20_000);
   assert.equal(boundedMetaProviderTimeoutMs({ stageTimeoutMs: 20_000, deadlineAtMs: 145_000, nowMs: 137_500 }), 7_500);
-  assert.equal(boundedMetaProviderTimeoutMs({ stageTimeoutMs: 20_000, deadlineAtMs: 145_000, nowMs: 146_000 }), 1);
+  assert.equal(boundedMetaProviderTimeoutMs({ stageTimeoutMs: 20_000, deadlineAtMs: 145_000, nowMs: 145_000 }), null);
+  assert.equal(boundedMetaProviderTimeoutMs({ stageTimeoutMs: 20_000, deadlineAtMs: 145_000, nowMs: 146_000 }), null);
   assert.ok(58_000 - META_TEMPLATE_PROVIDER_OPERATION_TIMEOUT_MS >= 13_000);
   assert.ok(60_000 - META_TEMPLATE_PROVIDER_OPERATION_TIMEOUT_MS >= 15_000);
+});
+
+const textTemplate = {
+  name: "budget_test",
+  category: "UTILITY",
+  language: "pt_BR",
+  content: "Mensagem de teste de orçamento.",
+  headerType: "NONE" as const,
+};
+
+test("expired budget before template submission performs zero creation POST", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    throw new Error("transport_must_not_start");
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const clock = [1_000, 46_000];
+  await assert.rejects(
+    submitTemplateToMeta({
+      tenantConfig: { businessToken: "token", wabaId: "waba" },
+      template: textTemplate,
+      nowMs: () => clock.shift() ?? 46_000,
+    }),
+    (error: unknown) => {
+      assert.equal(error instanceof MetaTemplateServiceError, true);
+      if (!(error instanceof MetaTemplateServiceError)) return false;
+      assert.equal(error.code, "meta_template_submit_budget_exhausted");
+      assert.equal(error.status, 504);
+      assert.equal(error.diagnostic?.stage, "template_submission_not_started");
+      return true;
+    }
+  );
+  assert.equal(calls, 0);
+});
+
+test("timeout after creation POST starts remains uncertain and is not retried", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = ((_: RequestInfo | URL, init?: RequestInit) => {
+    calls += 1;
+    return new Promise<Response>((_, reject) => {
+      init?.signal?.addEventListener(
+        "abort",
+        () => reject(new DOMException("Aborted", "AbortError")),
+        { once: true }
+      );
+    });
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const clock = [1_000, 45_995];
+  await assert.rejects(
+    submitTemplateToMeta({
+      tenantConfig: { businessToken: "token", wabaId: "waba" },
+      template: textTemplate,
+      nowMs: () => clock.shift() ?? 45_995,
+    }),
+    (error: unknown) => {
+      assert.equal(error instanceof MetaTemplateServiceError, true);
+      if (!(error instanceof MetaTemplateServiceError)) return false;
+      assert.equal(error.code, "meta_template_submit_uncertain");
+      assert.equal(error.diagnostic?.stage, "template_submission");
+      return true;
+    }
+  );
+  assert.equal(calls, 1);
 });

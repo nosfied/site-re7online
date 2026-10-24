@@ -27518,9 +27518,13 @@ async function submitTemplateRequestToMeta(params: {
     if (error instanceof MetaTemplateServiceError && (
       error.code === "meta_template_media_upload_uncertain" ||
       error.code === "meta_template_media_upload_failed" ||
-      error.code === "meta_template_submit_uncertain"
+      error.code === "meta_template_submit_uncertain" ||
+      error.code === "meta_template_media_upload_budget_exhausted" ||
+      error.code === "meta_template_submit_budget_exhausted"
     )) {
-      const uncertain = error.code !== "meta_template_media_upload_failed";
+      const uncertain =
+        error.code === "meta_template_media_upload_uncertain" ||
+        error.code === "meta_template_submit_uncertain";
       const status = uncertain ? "submission_unknown" : "failed";
       const providerDiagnostic = error.diagnostic ?? null;
       await params.prisma.$transaction([
@@ -27548,7 +27552,11 @@ async function submitTemplateRequestToMeta(params: {
       await persistEvent({
         clientId: templateRequest.clientId,
         requestId: `template-request-media-upload:${templateRequest.id}:${Date.now()}`,
-        eventName: uncertain ? "template.request.submission_unknown" : "template.request.media_upload_failed",
+        eventName: uncertain
+          ? "template.request.submission_unknown"
+          : error.code === "meta_template_submit_budget_exhausted"
+            ? "template.request.submission_failed"
+            : "template.request.media_upload_failed",
         payloadJson: {
           templateRequestId: templateRequest.id,
           templateId: template.id,

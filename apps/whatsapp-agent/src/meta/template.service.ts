@@ -55,7 +55,7 @@ type MetaTemplatePayload = {
 };
 
 export type MetaTemplateProviderError = {
-  stage?: MetaTemplateUploadDiagnostic["stage"] | "template_submission" | null;
+  stage?: MetaTemplateUploadDiagnostic["stage"] | "template_submission" | "template_submission_not_started" | null;
   httpStatus?: number | null;
   code: string | null;
   subcode: string | null;
@@ -115,7 +115,9 @@ export class MetaTemplateServiceError extends Error {
       | "meta_template_media_required"
       | "meta_template_media_invalid"
       | "meta_template_media_upload_failed"
-      | "meta_template_media_upload_uncertain",
+      | "meta_template_media_upload_uncertain"
+      | "meta_template_media_upload_budget_exhausted"
+      | "meta_template_submit_budget_exhausted",
     public readonly status?: number,
     public readonly errorBody?: string,
     public readonly diagnostic?: MetaTemplateProviderError
@@ -430,8 +432,10 @@ export async function submitTemplateToMeta(params: {
   tenantConfig: TenantMetaTemplateConfig;
   template: TemplateForMeta;
   exampleMedia?: { content: Buffer; mimeType: string; fileName: string; kind: "IMAGE" | "VIDEO" } | null;
+  nowMs?: () => number;
 }): Promise<MetaTemplateSubmitResult> {
-  const providerDeadlineAtMs = Date.now() + META_TEMPLATE_PROVIDER_OPERATION_TIMEOUT_MS;
+  const nowMs = params.nowMs ?? Date.now;
+  const providerDeadlineAtMs = nowMs() + META_TEMPLATE_PROVIDER_OPERATION_TIMEOUT_MS;
   validateTemplateForMeta(params.template);
   const headerType = normalizeTemplateHeaderType(params.template.headerType);
   const { businessToken, wabaId, appId } = validateMetaTemplateSubmissionConfig({
@@ -452,14 +456,18 @@ export async function submitTemplateToMeta(params: {
       fileName: params.exampleMedia.fileName,
       timeoutMs: META_TEMPLATE_PROVIDER_STAGE_TIMEOUT_MS,
       deadlineAtMs: providerDeadlineAtMs,
+      nowMs,
     });
     if (!uploaded.ok) {
+      const budgetExhausted = uploaded.code === "meta_upload_budget_exhausted";
       throw new MetaTemplateServiceError(
-        uploaded.code,
-        uploaded.code === "meta_upload_result_uncertain"
+        budgetExhausted ? "meta_template_media_upload_budget_exhausted" : uploaded.code,
+        budgetExhausted
+          ? "meta_template_media_upload_budget_exhausted"
+          : uploaded.code === "meta_upload_result_uncertain"
           ? "meta_template_media_upload_uncertain"
           : "meta_template_media_upload_failed",
-        uploaded.status ?? 502,
+        budgetExhausted ? 504 : uploaded.status ?? 502,
         uploaded.diagnostic.message,
         uploaded.diagnostic
       );
@@ -474,7 +482,25 @@ export async function submitTemplateToMeta(params: {
   const submitTimeoutMs = boundedMetaProviderTimeoutMs({
     stageTimeoutMs: META_TEMPLATE_PROVIDER_STAGE_TIMEOUT_MS,
     deadlineAtMs: providerDeadlineAtMs,
+    nowMs: nowMs(),
   });
+  if (submitTimeoutMs === null) {
+    throw new MetaTemplateServiceError(
+      "meta_template_submit_budget_exhausted",
+      "meta_template_submit_budget_exhausted",
+      504,
+      undefined,
+      {
+        stage: "template_submission_not_started",
+        httpStatus: null,
+        code: null,
+        subcode: null,
+        type: null,
+        traceId: null,
+        message: "A submissao nao foi iniciada porque o prazo da operacao se esgotou.",
+      }
+    );
+  }
   const submitTimer = setTimeout(() => submitController.abort(), submitTimeoutMs);
   let response: Response;
   try {

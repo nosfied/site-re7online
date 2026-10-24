@@ -1,8 +1,10 @@
 export type MetaTemplateUploadStage =
   | "session_creation"
+  | "session_creation_not_started"
   | "session_response_read"
   | "session_response_validation"
   | "binary_upload"
+  | "binary_upload_not_started"
   | "binary_response_read"
   | "binary_response_validation";
 
@@ -20,7 +22,7 @@ export type MetaResumableUploadResult =
   | { ok: true; handle: string }
   | {
       ok: false;
-      code: "meta_upload_failed" | "meta_upload_invalid_response" | "meta_upload_result_uncertain";
+      code: "meta_upload_failed" | "meta_upload_invalid_response" | "meta_upload_result_uncertain" | "meta_upload_budget_exhausted";
       status: number | null;
       diagnostic: MetaTemplateUploadDiagnostic;
     };
@@ -179,7 +181,22 @@ export function boundedMetaProviderTimeoutMs(params: {
   const remainingMs = params.deadlineAtMs == null
     ? params.stageTimeoutMs
     : params.deadlineAtMs - (params.nowMs ?? Date.now());
-  return Math.max(1, Math.min(params.stageTimeoutMs, remainingMs));
+  if (remainingMs <= 0) return null;
+  return Math.min(params.stageTimeoutMs, remainingMs);
+}
+
+function budgetExhaustedDiagnostic(
+  stage: "session_creation_not_started" | "binary_upload_not_started"
+): MetaTemplateUploadDiagnostic {
+  return {
+    stage,
+    httpStatus: null,
+    code: null,
+    subcode: null,
+    type: null,
+    traceId: null,
+    message: "A etapa nao foi iniciada porque o prazo da operacao se esgotou.",
+  };
 }
 
 export async function uploadMetaTemplateExample(params: {
@@ -192,15 +209,26 @@ export async function uploadMetaTemplateExample(params: {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   deadlineAtMs?: number;
+  nowMs?: () => number;
 }): Promise<MetaResumableUploadResult> {
   const fetchImpl = params.fetchImpl ?? fetch;
   const timeoutMs = params.timeoutMs ?? 20_000;
   const stageTimeoutMs = () => boundedMetaProviderTimeoutMs({
     stageTimeoutMs: timeoutMs,
     deadlineAtMs: params.deadlineAtMs,
+    nowMs: params.nowMs?.(),
   });
+  const sessionTimeoutMs = stageTimeoutMs();
+  if (sessionTimeoutMs === null) {
+    return {
+      ok: false,
+      code: "meta_upload_budget_exhausted",
+      status: null,
+      diagnostic: budgetExhaustedDiagnostic("session_creation_not_started"),
+    };
+  }
   const sessionController = new AbortController();
-  const sessionTimer = setTimeout(() => sessionController.abort(), stageTimeoutMs());
+  const sessionTimer = setTimeout(() => sessionController.abort(), sessionTimeoutMs);
   let sessionResponse: Response;
   try {
     const query = new URLSearchParams({
@@ -277,8 +305,17 @@ export async function uploadMetaTemplateExample(params: {
     };
   }
 
+  const uploadTimeoutMs = stageTimeoutMs();
+  if (uploadTimeoutMs === null) {
+    return {
+      ok: false,
+      code: "meta_upload_budget_exhausted",
+      status: null,
+      diagnostic: budgetExhaustedDiagnostic("binary_upload_not_started"),
+    };
+  }
   const uploadController = new AbortController();
-  const uploadTimer = setTimeout(() => uploadController.abort(), stageTimeoutMs());
+  const uploadTimer = setTimeout(() => uploadController.abort(), uploadTimeoutMs);
   let uploadResponse: Response;
   try {
     uploadResponse = await fetchImpl(sessionUrl, {

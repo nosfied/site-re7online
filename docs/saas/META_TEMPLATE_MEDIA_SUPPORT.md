@@ -341,11 +341,15 @@ oficial usada na revisão é a coleção
 Criação da sessão, envio binário e submissão final compartilham agora um prazo
 absoluto de 45 segundos; nenhuma etapa pode consumir mais de 20 segundos. O prazo
 restante é recalculado antes de cada transporte e cobre também a leitura da
-resposta. O cliente administrativo aguarda 58 segundos. A configuração Nginx ativa
+resposta. Quando o saldo já se esgotou, a próxima chamada não é iniciada e a falha
+é distinguida de uma chamada iniciada que terminou sem resposta conclusiva. O
+cliente administrativo aguarda 58 segundos. A configuração Nginx ativa
 não redefine `proxy_read_timeout`/`proxy_send_timeout` para `/agent-api`; permanece
-o padrão de 60 segundos. Assim, o backend deixa pelo menos 13 segundos no cliente e
-15 segundos no proxy para validações e persistência. Timeout do navegador não
-comprova cancelamento e nunca autoriza repetição automática.
+o padrão de 60 segundos. As diferenças de 13 segundos para o cliente e 15 segundos
+para o proxy são folgas nominais entre limites, não garantias de tempo disponível
+para persistência, porque validações e outros trabalhos também ocorrem fora do
+trecho cronometrado. Timeout do navegador não comprova cancelamento e nunca autoriza
+repetição automática.
 
 ## Reconciliação de submissão incerta
 

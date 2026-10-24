@@ -280,3 +280,48 @@ test("transport timeout is uncertain and diagnostics remain isolated", async () 
     assert.equal(tenantB.diagnostic.code, "20");
   }
 });
+
+test("expired shared budget prevents binary upload from starting", async () => {
+  const clock = [1_000, 46_001];
+  let calls = 0;
+  const result = await uploadMetaTemplateExample({
+    ...base,
+    deadlineAtMs: 46_000,
+    nowMs: () => clock.shift() ?? 46_001,
+    fetchImpl: (async () => {
+      calls += 1;
+      return jsonResponse({ id: "upload:session" });
+    }) as typeof fetch,
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.code, "meta_upload_budget_exhausted");
+    assert.equal(result.diagnostic.stage, "binary_upload_not_started");
+    assert.equal(result.diagnostic.message.includes("nao foi iniciada"), true);
+  }
+});
+
+test("positive remaining budget bounds an initiated transport to its balance", async () => {
+  let calls = 0;
+  const startedAt = Date.now();
+  const result = await uploadMetaTemplateExample({
+    ...base,
+    deadlineAtMs: 1_007,
+    nowMs: () => 1_000,
+    fetchImpl: ((_: RequestInfo | URL, init?: RequestInit) => {
+      calls += 1;
+      return new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true }
+        );
+      });
+    }) as typeof fetch,
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.code, "meta_upload_result_uncertain");
+  assert.ok(Date.now() - startedAt < 500, "transport must use the seven millisecond balance, not the stage ceiling");
+});
