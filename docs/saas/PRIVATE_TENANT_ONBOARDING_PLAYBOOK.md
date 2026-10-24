@@ -8,6 +8,13 @@ demais propriedades. Para tenant existente, use somente a operação administrat
 tenant-scoped da tela de onboarding. Confirme a proveniência `embedded_signup`; não
 use SQL manual, edição direta de JSON ou cópia entre tenants.
 
+Em 24/10/2026, a regularização de `demo-converta` foi concluída pela operação
+administrativa tenant-scoped. Uma consulta diagnóstica anterior a `GET /debug_token`
+confirmou o vínculo atual entre o token armazenado e o aplicativo; a fonte já era
+`embedded_signup`. Essa confirmação prova o vínculo atual e não deve ser descrita
+como recuperação do histórico original do onboarding. O fallback global permaneceu
+desativado e os demais tenants não foram alterados.
+
 Na homologação, confirme antes da submissão que o tenant autorizado aparece como
 “App ID configurado”, que tenants de outras proveniências permanecem inalterados e
 que `META_APP_ID_FALLBACK_MODE` está `disabled`. A regularização não chama a Meta,

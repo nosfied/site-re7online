@@ -1,6 +1,6 @@
 {
   "schemaVersion": 6,
-  "updatedAtUtc": "2026-10-24T14:10:00Z",
+  "updatedAtUtc": "2026-10-24T14:52:51Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json",
   "activeOperationalRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json",
@@ -148,9 +148,14 @@
   },
   "tenantScopedMetaAppId": {
     "codeState": "TECHNICALLY_DEPLOYED",
-    "configurationState": "PENDING_SEPARATE_AUTHORIZED_WINDOW",
+    "configurationState": "CONFIGURED_VERIFIED_FOR_CONVERTA_DEMO",
+    "configuredTenantKey": "demo-converta",
+    "currentTokenAppBinding": "CONFIRMED_BY_META_DEBUG_TOKEN",
+    "historicalOnboardingRecovered": false,
     "globalFallbackUsed": false,
-    "metaCallsExecuted": false,
-    "deploymentRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json"
+    "metaDiagnosticGetCount": 1,
+    "metaMutatingCallsExecuted": false,
+    "deploymentRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json",
+    "configurationRecord": "docs/saas/releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json"
   }
 }

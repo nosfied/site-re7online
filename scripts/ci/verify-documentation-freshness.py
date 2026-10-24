@@ -31,6 +31,13 @@ require(state["templateCampaignMedia"]["deploymentRecord"] == record_value,
 require(state["templateCampaignMedia"]["metaFunctionalAcceptance"] == "PENDING" and
         state["templateCampaignMedia"]["commercialOperationalRelease"] == "PENDING",
         "media pending functional and commercial acceptance")
+tenant_app = state["tenantScopedMetaAppId"]
+require(tenant_app["configurationState"] == "CONFIGURED_VERIFIED_FOR_CONVERTA_DEMO" and
+        tenant_app["currentTokenAppBinding"] == "CONFIRMED_BY_META_DEBUG_TOKEN" and
+        tenant_app["historicalOnboardingRecovered"] is False,
+        "tenant-scoped Meta configuration")
+require((ROOT / tenant_app["configurationRecord"]).is_file(),
+        "tenant-scoped Meta configuration record")
 
 active_paths = (
     "docs/saas/CURRENT_STATE.md",
@@ -52,6 +59,7 @@ markers = (
     production["frontend"]["execMode"],
     production["pm2"]["dumpSha256"],
     state["templateCampaignMedia"]["knownNonBlockingBacklog"],
+    Path(tenant_app["configurationRecord"]).name,
 )
 for marker in markers:
     require(marker in active, f"active marker {marker}")

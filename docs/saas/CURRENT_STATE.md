@@ -1,11 +1,13 @@
 # Estado canônico do Converta
 
-**DEPLOYED / PRODUCTION HEALTHY / TENANT META APP ID CONFIGURATION PENDING**
+**DEPLOYED / PRODUCTION HEALTHY / CONVERTA DEMO META APP ID CONFIGURED**
 
 Esta é a entrada vigente de continuidade. A topologia operacional está definida
 no [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a evidência
 sanitizada está no
 [registro estruturado](releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json).
+A configuração tenant-scoped posterior está no
+[registro operacional](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json).
 
 ## Produção viva — observação de 24/10/2026
 
@@ -51,10 +53,18 @@ completo já armazenado pelo PM2 foi preservado. API local/pública retornou HTT
 `ok=true` e `db="ok"`; Login, Inbox, CRM, Modelos, Campanhas e asset retornaram
 HTTP 200. O aceite técnico antecedeu o único `pm2 save` e o marker.
 
-Não houve migration, SQL, mudança de tenant/RBAC, chamada à Meta, template,
-campanha, importação ou envio. O mecanismo tenant-scoped de Meta App ID está
-tecnicamente implantado, mas a configuração do tenant Converta Demo continua
-**PENDENTE** e exige janela separada. Não usar fallback global.
+Não houve migration, SQL, mudança de tenant/RBAC, template, campanha, importação
+ou envio durante o deploy. Em janela posterior e separada, o token já armazenado
+no tenant Converta Demo foi inspecionado uma vez por `GET /debug_token`; a Meta
+confirmou o vínculo atual token/aplicativo e as permissões necessárias. Isso não
+recupera nem reconstrói o histórico original do onboarding.
+
+O App ID confirmado foi gravado uma vez pela operação administrativa tenant-scoped,
+com proveniência `embedded_signup` e confirmação explícita de escopo. O GET posterior
+retornou `configured=true` e `source=tenant_app_id`. Token, WABA, número, demais
+propriedades e todos os outros tenants permaneceram inalterados. Não houve fallback
+global, upload, sincronização, submissão ou envio. A homologação funcional Meta e a
+liberação comercial continuam **PENDENTES**.
 
 ## Rota operacional
 
