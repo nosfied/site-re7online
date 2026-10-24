@@ -89,10 +89,63 @@ def json_object(raw: bytes, label: str) -> dict[str, Any]:
     return value
 
 
-def run(command: list[str], cwd: Path, env: dict[str, str]) -> str:
+def write_private_failure_evidence(root: Path, stage: str, cwd: Path,
+                                   exit_code: int, output: str) -> Path:
+    if not re.fullmatch(r"[a-z0-9_]+", stage):
+        deny("failure_stage")
+    evidence = root / "failure-evidence.private"
+    try:
+        evidence.mkdir(mode=0o700)
+    except FileExistsError:
+        info = evidence.lstat()
+        if not stat.S_ISDIR(info.st_mode) or evidence.is_symlink() or stat.S_IMODE(info.st_mode) != 0o700:
+            deny("failure_evidence_directory")
+    output_path = evidence / f"{stage}.output.private.log"
+    metadata_path = evidence / f"{stage}.private.json"
+
+    def exclusive_write(path: Path, raw: bytes) -> None:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        fd = os.open(path, flags, 0o600)
+        try:
+            with os.fdopen(fd, "wb", closefd=False) as stream:
+                stream.write(raw)
+                stream.flush()
+                os.fsync(stream.fileno())
+        finally:
+            os.close(fd)
+
+    raw = output.encode("utf-8", errors="backslashreplace")
+    exclusive_write(output_path, raw)
+    metadata = canonical_json({
+        "schemaVersion": 1,
+        "stage": stage,
+        "cwd": str(cwd),
+        "exitCode": exit_code,
+        "outputFile": output_path.name,
+        "outputSize": len(raw),
+        "outputSha256": sha256_bytes(raw),
+    })
+    exclusive_write(metadata_path, metadata)
+    directory_fd = os.open(evidence, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+    return metadata_path
+
+
+def run(command: list[str], cwd: Path, env: dict[str, str], *,
+        failure_root: Path | None = None, stage: str | None = None) -> str:
     result = subprocess.run(command, cwd=cwd, env=env, text=True,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if result.returncode:
+        if failure_root is not None and stage is not None:
+            evidence = write_private_failure_evidence(
+                failure_root, stage, cwd, result.returncode, result.stdout
+            )
+            deny(f"command_failed:{stage}:cwd={cwd}:exit={result.returncode}:evidence={evidence}")
         deny(f"command_failed:{command[0]}:{result.returncode}")
     return result.stdout.strip()
 
@@ -117,9 +170,9 @@ def ensure_clean_repo(repo: Path, target: str) -> None:
         deny("worktree_not_clean")
 
 
-def toolchain(repo: Path, env: dict[str, str]) -> dict[str, str]:
-    node = run(["node", "--version"], repo, env)
-    npm = run(["npm", "--version"], repo, env)
+def toolchain(repo: Path, env: dict[str, str], failure_root: Path | None = None) -> dict[str, str]:
+    node = run(["node", "--version"], repo, env, failure_root=failure_root, stage="node_version")
+    npm = run(["npm", "--version"], repo, env, failure_root=failure_root, stage="npm_version")
     if node != "v20.20.0":
         deny(f"node_version:{node}")
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", npm):
@@ -435,13 +488,17 @@ def build(args: argparse.Namespace) -> None:
     env = build_environment()
     env.update(SOURCE_DATE_EPOCH=str(args.source_date_epoch), TZ="UTC", LANG="C.UTF-8",
                LC_ALL="C.UTF-8", CI="1", NEXT_TELEMETRY_DISABLED="1")
-    tools = toolchain(repo, env)
-    run(["npm", "ci"], repo, env)
+    tools = toolchain(repo, env, args.output)
+    run(["npm", "ci"], repo, env, failure_root=args.output, stage="root_npm_ci")
     api_source = repo / "apps/whatsapp-agent"
-    run(["npm", "ci", "--include=dev"], api_source, env)
-    run(["npm", "run", "db:generate"], api_source, env)
-    run(["npm", "run", "build"], api_source, env)
-    run(["npm", "run", "build"], repo, env)
+    run(["npm", "ci", "--include=dev"], api_source, env,
+        failure_root=args.output, stage="api_npm_ci")
+    run(["npm", "run", "db:generate"], api_source, env,
+        failure_root=args.output, stage="prisma_generate")
+    run(["npm", "run", "build"], api_source, env,
+        failure_root=args.output, stage="api_build")
+    run(["npm", "run", "build"], repo, env,
+        failure_root=args.output, stage="frontend_build")
 
     release_root = args.output / args.release_id
     release_root.mkdir(mode=0o755)
