@@ -68,6 +68,7 @@ let tempRoot = "";
 let server: Server;
 let baseUrl = "";
 let handleRequest: typeof import("./routes.js").handleRequest;
+let reconcileTemplateRequestAfterConfirmedSync: typeof import("./routes.js").reconcileTemplateRequestAfterConfirmedSync;
 let setTemplateReviewNotificationSenderForTests: typeof import("../templates/templateReviewNotification.js").setTemplateReviewNotificationSenderForTests;
 let filterOptedOutCampaignRecipients: typeof import("../campaigns/optOutRegistry.js").filterOptedOutCampaignRecipients;
 let recordContactOptOut: typeof import("../campaigns/optOutRegistry.js").recordContactOptOut;
@@ -833,7 +834,9 @@ test.before(async () => {
     suffix: "support-admin",
   });
 
-  handleRequest = (await import("./routes.js")).handleRequest;
+  const routesModule = await import("./routes.js");
+  handleRequest = routesModule.handleRequest;
+  reconcileTemplateRequestAfterConfirmedSync = routesModule.reconcileTemplateRequestAfterConfirmedSync;
   setTemplateReviewNotificationSenderForTests = (
     await import("../templates/templateReviewNotification.js")
   ).setTemplateReviewNotificationSenderForTests;
@@ -12886,6 +12889,94 @@ test("template submission reconciliation confirms exact remote identity without 
   );
 
   assert.equal(creationPosts, 0);
+});
+
+test("template submission reconciliation re-reads locked template state before updating the request", async () => {
+  for (const finalState of [
+    { template: "approved", request: "approved_meta" },
+    { template: "rejected", request: "rejected_meta" },
+  ] as const) {
+    const suffix = crypto.randomUUID().replace(/-/g, "");
+    const name = `reconcile_stale_${finalState.template}_${suffix}`;
+    const template = await prisma.template.create({
+      data: {
+        clientId: businessClientId,
+        name,
+        category: "MARKETING",
+        language: "pt_BR",
+        content: "Conteudo de concorrencia controlada",
+        status: "pending",
+        metaTemplateId: `meta-${name}`,
+      },
+    });
+    const templateRequest = await prisma.templateRequest.create({
+      data: {
+        clientId: businessClientId,
+        name,
+        category: "MARKETING",
+        content: template.content,
+        variables: { language: "pt_BR", variableDetails: [] },
+        status: "submission_unknown",
+        headerType: "NONE",
+      },
+    });
+
+    let continueStaleExecution!: () => void;
+    const staleHold = new Promise<void>((resolve) => { continueStaleExecution = resolve; });
+    let confirmObserved!: (status: string) => void;
+    const observed = new Promise<string>((resolve) => { confirmObserved = resolve; });
+    const staleExecution = (async () => {
+      const staleTemplate = await prisma.template.findUniqueOrThrow({
+        where: { id: template.id },
+        select: { status: true },
+      });
+      confirmObserved(staleTemplate.status);
+      await staleHold;
+      return reconcileTemplateRequestAfterConfirmedSync(prisma, {
+        templateId: template.id,
+        templateRequestId: templateRequest.id,
+        source: "test.stale_observation",
+        requestId: `stale-${suffix}`,
+      });
+    })();
+    assert.equal(await observed, "pending");
+
+    await prisma.template.update({
+      where: { id: template.id },
+      data: { status: finalState.template },
+    });
+    const currentReconciliation = await reconcileTemplateRequestAfterConfirmedSync(prisma, {
+      templateId: template.id,
+      templateRequestId: templateRequest.id,
+      source: "test.current_confirmation",
+      requestId: `current-${suffix}`,
+    });
+    assert.equal(currentReconciliation.ok, true);
+    continueStaleExecution();
+    const staleResult = await staleExecution;
+    assert.equal(staleResult.ok, true);
+
+    const [storedTemplate, storedRequest, reconciliationEvents] = await Promise.all([
+      prisma.template.findUniqueOrThrow({ where: { id: template.id } }),
+      prisma.templateRequest.findUniqueOrThrow({ where: { id: templateRequest.id } }),
+      prisma.event.findMany({
+        where: {
+          clientId: businessClientId,
+          eventName: "template.request.meta_sync_updated",
+          payloadJson: { path: ["templateId"], equals: template.id },
+        },
+        select: { payloadJson: true },
+      }),
+    ]);
+    assert.equal(storedTemplate.status, finalState.template);
+    assert.equal(storedRequest.status, finalState.request);
+    assert.equal(reconciliationEvents.length, 1);
+    for (const event of reconciliationEvents) {
+      const payload = event.payloadJson as Record<string, unknown>;
+      assert.equal(payload.status, finalState.template);
+      assert.notEqual(payload.status, "pending");
+    }
+  }
 });
 
 test("tenant template request stays in internal review and ignores auto submit", async (t) => {

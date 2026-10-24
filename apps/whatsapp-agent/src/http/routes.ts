@@ -27706,7 +27706,7 @@ function requestStatusForConfirmedTemplate(status: string) {
   return null;
 }
 
-async function reconcileTemplateRequestAfterConfirmedSync(
+export async function reconcileTemplateRequestAfterConfirmedSync(
   prisma: ReturnType<typeof getPrisma>,
   params: {
     templateId: string;
@@ -27715,93 +27715,98 @@ async function reconcileTemplateRequestAfterConfirmedSync(
     requestId: string;
   }
 ): Promise<TemplateRequestSyncResult> {
-  const template = await prisma.template.findUnique({
-    where: { id: params.templateId },
-    select: {
-      id: true,
-      clientId: true,
-      name: true,
-      language: true,
-      status: true,
-      metaTemplateId: true,
-    },
-  });
-  const nextStatus = template ? requestStatusForConfirmedTemplate(template.status) : null;
-  if (!template || !template.metaTemplateId || !nextStatus) {
-    return { ok: false, reason: "identity_mismatch" };
-  }
-
-  const candidates = params.templateRequestId
-    ? await prisma.templateRequest.findMany({
-        where: { id: params.templateRequestId },
-        select: { id: true, clientId: true, name: true, variables: true, status: true },
-      })
-    : await prisma.templateRequest.findMany({
-        where: {
-          clientId: template.clientId,
-          name: template.name,
-          status: { in: TEMPLATE_REQUEST_AUTO_RECONCILABLE_STATUSES },
-        },
-        select: { id: true, clientId: true, name: true, variables: true, status: true },
-      });
-  if (params.templateRequestId && candidates.length === 0) {
-    return { ok: false, reason: "request_not_found" };
-  }
-  const matching = candidates.filter(
-    (request) =>
-      request.clientId === template.clientId &&
-      request.name === template.name &&
-      extractTemplateRequestLanguage(request.variables) === template.language &&
-      isTemplateRequestSyncable(request.status)
-  );
-  if (matching.length === 0) {
-    return params.templateRequestId
-      ? { ok: false, reason: "identity_mismatch" }
-      : { ok: true, requestId: null, updated: false };
-  }
-  if (matching.length !== 1) {
-    logger.warn({
-      event: "template.request.sync.ambiguous",
-      templateId: template.id,
-      clientId: template.clientId,
-      source: params.source,
-      requestId: params.requestId,
-      candidateCount: matching.length,
+  return prisma.$transaction(async (transaction): Promise<TemplateRequestSyncResult> => {
+    await transaction.$queryRaw(
+      Prisma.sql`SELECT id FROM "Template" WHERE id = ${params.templateId} FOR UPDATE`
+    );
+    const template = await transaction.template.findUnique({
+      where: { id: params.templateId },
+      select: {
+        id: true,
+        clientId: true,
+        name: true,
+        language: true,
+        status: true,
+        metaTemplateId: true,
+      },
     });
-    return { ok: false, reason: "ambiguous_request" };
-  }
-
-  const request = matching[0];
-  if (request.status === nextStatus) {
-    return { ok: true, requestId: request.id, updated: false };
-  }
-  const claimed = await prisma.templateRequest.updateMany({
-    where: { id: request.id, status: request.status },
-    data: { status: nextStatus },
-  });
-  if (claimed.count !== 1) {
-    const current = await prisma.templateRequest.findUnique({
-      where: { id: request.id },
-      select: { status: true },
-    });
-    if (current?.status !== nextStatus) {
-      return { ok: false, reason: "concurrent_change" };
+    const nextStatus = template ? requestStatusForConfirmedTemplate(template.status) : null;
+    if (!template || !template.metaTemplateId || !nextStatus) {
+      return { ok: false, reason: "identity_mismatch" };
     }
-    return { ok: true, requestId: request.id, updated: false };
-  }
-  await persistEvent({
-    clientId: template.clientId,
-    requestId: `template-request-sync:${request.id}:${Date.now()}`,
-    eventName: "template.request.meta_sync_updated",
-    payloadJson: {
-      templateRequestId: request.id,
-      templateId: template.id,
-      metaTemplateId: template.metaTemplateId,
-      status: template.status,
-      source: params.source,
-    },
+
+    const candidates = params.templateRequestId
+      ? await transaction.templateRequest.findMany({
+          where: { id: params.templateRequestId },
+          select: { id: true, clientId: true, name: true, variables: true, status: true },
+        })
+      : await transaction.templateRequest.findMany({
+          where: {
+            clientId: template.clientId,
+            name: template.name,
+            status: { in: TEMPLATE_REQUEST_AUTO_RECONCILABLE_STATUSES },
+          },
+          select: { id: true, clientId: true, name: true, variables: true, status: true },
+        });
+    if (params.templateRequestId && candidates.length === 0) {
+      return { ok: false, reason: "request_not_found" };
+    }
+    const matching = candidates.filter(
+      (request) =>
+        request.clientId === template.clientId &&
+        request.name === template.name &&
+        extractTemplateRequestLanguage(request.variables) === template.language &&
+        isTemplateRequestSyncable(request.status)
+    );
+    if (matching.length === 0) {
+      return params.templateRequestId
+        ? { ok: false, reason: "identity_mismatch" }
+        : { ok: true, requestId: null, updated: false };
+    }
+    if (matching.length !== 1) {
+      logger.warn({
+        event: "template.request.sync.ambiguous",
+        templateId: template.id,
+        clientId: template.clientId,
+        source: params.source,
+        requestId: params.requestId,
+        candidateCount: matching.length,
+      });
+      return { ok: false, reason: "ambiguous_request" };
+    }
+
+    const request = matching[0];
+    if (request.status === nextStatus) {
+      return { ok: true, requestId: request.id, updated: false };
+    }
+    const claimed = await transaction.templateRequest.updateMany({
+      where: { id: request.id, status: request.status },
+      data: { status: nextStatus },
+    });
+    if (claimed.count !== 1) {
+      const current = await transaction.templateRequest.findUnique({
+        where: { id: request.id },
+        select: { status: true },
+      });
+      if (current?.status !== nextStatus) {
+        return { ok: false, reason: "concurrent_change" };
+      }
+      return { ok: true, requestId: request.id, updated: false };
+    }
+    await persistEvent({
+      clientId: template.clientId,
+      requestId: `template-request-sync:${request.id}:${Date.now()}`,
+      eventName: "template.request.meta_sync_updated",
+      payloadJson: {
+        templateRequestId: request.id,
+        templateId: template.id,
+        metaTemplateId: template.metaTemplateId,
+        status: template.status,
+        source: params.source,
+      },
+    }, transaction);
+    return { ok: true, requestId: request.id, updated: true };
   });
-  return { ok: true, requestId: request.id, updated: true };
 }
 
 async function syncTemplateStatusWithRequest(
