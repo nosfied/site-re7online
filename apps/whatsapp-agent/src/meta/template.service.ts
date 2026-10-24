@@ -6,7 +6,11 @@ import {
   resolveWhatsappTransportRoutingSettings,
 } from "../config/tenantOperationalConfig.js";
 import { logger } from "../logger/logger.js";
-import { uploadMetaTemplateExample } from "./metaTemplateMedia.js";
+import {
+  sanitizeMetaDiagnosticMessage,
+  uploadMetaTemplateExample,
+  type MetaTemplateUploadDiagnostic,
+} from "./metaTemplateMedia.js";
 import { resolveTenantMetaAppId } from "./tenantMetaAppId.js";
 import {
   mergeProviderTemplateComponents,
@@ -50,13 +54,16 @@ type MetaTemplatePayload = {
 };
 
 export type MetaTemplateProviderError = {
+  stage?: MetaTemplateUploadDiagnostic["stage"] | "template_submission" | null;
+  httpStatus?: number | null;
   code: string | null;
   subcode: string | null;
   type: string | null;
-  userTitle: string | null;
-  userMessage: string | null;
-  details: string | null;
+  userTitle?: string | null;
+  userMessage?: string | null;
+  details?: string | null;
   traceId: string | null;
+  message?: string | null;
 };
 
 type MetaTemplateSubmitSuccess = {
@@ -106,7 +113,8 @@ export class MetaTemplateServiceError extends Error {
       | "meta_template_media_upload_failed"
       | "meta_template_media_upload_uncertain",
     public readonly status?: number,
-    public readonly errorBody?: string
+    public readonly errorBody?: string,
+    public readonly diagnostic?: MetaTemplateProviderError
   ) {
     super(message);
     this.name = "MetaTemplateServiceError";
@@ -314,12 +322,6 @@ function buildMetaTemplatePayload(template: TemplateForMeta, headerHandle?: stri
   };
 }
 
-function readSafeString(value: unknown) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, 1000) : null;
-}
-
 function readSafeScalar(value: unknown) {
   if (typeof value === "string" || typeof value === "number") {
     const normalized = String(value).trim();
@@ -339,11 +341,11 @@ export function extractMetaTemplateProviderError(payload: unknown): MetaTemplate
   const providerError = {
     code: readSafeScalar(raw.code),
     subcode: readSafeScalar(raw.error_subcode),
-    type: readSafeString(raw.type),
-    userTitle: readSafeString(raw.error_user_title),
-    userMessage: readSafeString(raw.error_user_msg),
-    details: readSafeString(errorData?.details),
-    traceId: readSafeString(raw.fbtrace_id),
+    type: readSafeScalar(raw.type),
+    userTitle: sanitizeMetaDiagnosticMessage(raw.error_user_title),
+    userMessage: sanitizeMetaDiagnosticMessage(raw.error_user_msg),
+    details: sanitizeMetaDiagnosticMessage(errorData?.details),
+    traceId: readSafeScalar(raw.fbtrace_id),
   };
   return Object.values(providerError).some(Boolean) ? providerError : null;
 }
@@ -451,7 +453,8 @@ export async function submitTemplateToMeta(params: {
           ? "meta_template_media_upload_uncertain"
           : "meta_template_media_upload_failed",
         uploaded.status ?? 502,
-        uploaded.details ?? undefined
+        uploaded.diagnostic.message,
+        uploaded.diagnostic
       );
     }
     headerHandle = uploaded.handle;
@@ -460,6 +463,8 @@ export async function submitTemplateToMeta(params: {
   const payload = buildMetaTemplatePayload(params.template, headerHandle);
   const url = `https://graph.facebook.com/${getEnv().WHATSAPP_API_VERSION}/${wabaId}/message_templates`;
 
+  const submitController = new AbortController();
+  const submitTimer = setTimeout(() => submitController.abort(), 10_000);
   let response: Response;
   try {
     response = await fetch(url, {
@@ -469,16 +474,51 @@ export async function submitTemplateToMeta(params: {
         Authorization: `Bearer ${businessToken}`,
       },
       body: JSON.stringify(payload),
+      signal: submitController.signal,
     });
   } catch {
+    clearTimeout(submitTimer);
     throw new MetaTemplateServiceError(
       "meta_template_submit_uncertain",
       "meta_template_submit_uncertain",
-      502
+      502,
+      undefined,
+      {
+        stage: "template_submission",
+        httpStatus: null,
+        code: null,
+        subcode: null,
+        type: null,
+        userTitle: null,
+        userMessage: null,
+        details: null,
+        traceId: null,
+        message: "A submissao do template terminou sem resposta conclusiva da Meta.",
+      }
     );
   }
-
-  const rawText = await response.text();
+  let rawText: string;
+  try {
+    rawText = await response.text();
+  } catch {
+    clearTimeout(submitTimer);
+    throw new MetaTemplateServiceError(
+      "meta_template_submit_uncertain",
+      "meta_template_submit_uncertain",
+      502,
+      undefined,
+      {
+        stage: "template_submission",
+        httpStatus: response.status,
+        code: null,
+        subcode: null,
+        type: null,
+        traceId: null,
+        message: "A leitura da resposta da submissao foi interrompida.",
+      }
+    );
+  }
+  clearTimeout(submitTimer);
   let rawResponse: Record<string, unknown> | null = null;
 
   if (rawText) {
@@ -490,7 +530,16 @@ export async function submitTemplateToMeta(params: {
           "meta_template_submit_invalid_json",
           "meta_template_submit_invalid_json",
           response.status,
-          rawText.slice(0, 2000)
+          "A Meta retornou uma resposta em formato invalido.",
+          {
+            stage: "template_submission",
+            httpStatus: response.status,
+            code: null,
+            subcode: null,
+            type: null,
+            traceId: null,
+            message: "A Meta retornou uma resposta em formato invalido.",
+          }
         );
       }
     }
@@ -512,21 +561,33 @@ export async function submitTemplateToMeta(params: {
     typeof rawResponse?.error === "object" &&
     rawResponse.error !== null &&
     typeof (rawResponse.error as Record<string, unknown>).message === "string"
-      ? String((rawResponse.error as Record<string, unknown>).message)
+      ? sanitizeMetaDiagnosticMessage((rawResponse.error as Record<string, unknown>).message)
       : null;
 
   if (!response.ok) {
-    const providerError = extractMetaTemplateProviderError(rawResponse);
+    const extractedProviderError = extractMetaTemplateProviderError(rawResponse);
+    const safeMessage =
+      extractedProviderError?.userMessage ||
+      extractedProviderError?.details ||
+      errorMessage ||
+      "A Meta recusou a submissao do template.";
+    const providerError: MetaTemplateProviderError = {
+      stage: "template_submission",
+      httpStatus: response.status,
+      code: extractedProviderError?.code ?? null,
+      subcode: extractedProviderError?.subcode ?? null,
+      type: extractedProviderError?.type ?? null,
+      userTitle: extractedProviderError?.userTitle ?? null,
+      userMessage: extractedProviderError?.userMessage ?? null,
+      details: extractedProviderError?.details ?? null,
+      traceId: extractedProviderError?.traceId ?? null,
+      message: safeMessage,
+    };
     return {
       ok: false,
       metaTemplateId: null,
       status,
-      errorMessage:
-        providerError?.userMessage ||
-        providerError?.details ||
-        errorMessage ||
-        rawText.slice(0, 2000) ||
-        "meta_template_submit_failed",
+      errorMessage: safeMessage,
       rawResponse,
       providerError,
       headerHandle: null,

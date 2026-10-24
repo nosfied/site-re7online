@@ -261,3 +261,29 @@ e eventos expõem apenas o estado configurado.
 Token, WABA e App ID são validados antes de gravar `submitting`. Uma negativa local
 mantém a solicitação em `internal_approved`; efeito externo possivelmente iniciado
 gera reconciliação `submission_unknown`, sem retry cego.
+
+## Diagnóstico da submissão de mídia
+
+O upload resumível registra de forma tenant-scoped a etapa exata: criação da
+sessão, leitura/validação da resposta da sessão, envio dos bytes ou
+leitura/validação da resposta binária. O diagnóstico contém somente status HTTP,
+código/subcódigo, tipo, trace e mensagem sanitizada da Meta. Token, Authorization,
+App Secret, URL, sessão, handle e corpo bruto nunca entram no evento, resposta ou
+console. O console preserva esse diagnóstico inclusive em respostas HTTP 5xx.
+
+O fluxo segue a coleção oficial da Meta: `POST /{app-id}/uploads` com comprimento,
+MIME e nome, seguido de `POST /{upload-session-id}` com bytes e `file_offset: 0` no
+header. O identificador retornado é codificado como um único segmento de URL; isso
+preserva inclusive assinaturas que contenham caracteres reservados. A referência
+oficial usada na revisão é a coleção
+[WhatsApp Business Platform — Resumable Upload](https://www.postman.com/meta/whatsapp-business-platform/request/vkmioqf/resumable-upload-create-an-upload-session).
+
+Cada etapa de mídia tem limite de 20 segundos e o POST final do template, 10
+segundos. O cliente administrativo aguarda 58 segundos. A configuração Nginx ativa
+não redefine `proxy_read_timeout`/`proxy_send_timeout` para `/agent-api`; permanece
+o padrão de 60 segundos. Timeout do navegador não comprova cancelamento e nunca
+autoriza repetição automática.
+
+Esta correção melhora observabilidade e não reabre solicitações encerradas. A causa
+externa específica de falhas históricas continua dependendo de uma tentativa
+controlada futura, porque essas respostas antigas não preservaram o detalhe seguro.

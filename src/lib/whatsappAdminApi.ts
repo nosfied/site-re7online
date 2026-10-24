@@ -1036,7 +1036,22 @@ export type AdminConnection = {
   rememberToken: boolean;
 };
 
-export type AdminApiError = Error & { status?: number };
+export type AdminTemplateSubmissionDiagnostic = {
+  stage: string;
+  httpStatus: number | null;
+  code: string | null;
+  subcode: string | null;
+  type: string | null;
+  traceId: string | null;
+  message: string;
+};
+
+export type AdminApiError = Error & {
+  status?: number;
+  code?: string;
+  details?: string;
+  diagnostic?: AdminTemplateSubmissionDiagnostic;
+};
 
 export type AdminTrainingContentType = "VIDEO" | "PDF";
 export type AdminTrainingContentStatus = "DRAFT" | "PUBLISHED";
@@ -1179,7 +1194,8 @@ export function clearAdminConnection() {
 async function requestJson<T>(
   connection: AdminConnection,
   path: string,
-  init?: RequestInit
+  init?: RequestInit,
+  options?: { timeoutMs?: number }
 ): Promise<T> {
   const baseUrl = resolveAdminApiBaseUrl(connection.baseUrl);
   if (!baseUrl) {
@@ -1194,7 +1210,7 @@ async function requestJson<T>(
     throw error;
   }
   const controller = new AbortController();
-  const timeout = globalThis.setTimeout(() => controller.abort(), 10000);
+  const timeout = globalThis.setTimeout(() => controller.abort(), options?.timeoutMs ?? 10000);
   let res: Response;
   try {
     res = await fetch(`${baseUrl}${path}`, {
@@ -1212,7 +1228,9 @@ async function requestJson<T>(
     const error = new Error("Sem resposta do servidor.") as AdminApiError;
     error.status = 0;
     if ((fetchError as Error).name === "AbortError") {
-      error.message = "Timeout de conexao com o servidor.";
+      error.message = options?.timeoutMs
+        ? "A espera terminou sem resultado conclusivo. Consulte o estado antes de repetir."
+        : "Timeout de conexao com o servidor.";
     }
     throw error;
   }
@@ -1220,11 +1238,21 @@ async function requestJson<T>(
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
+    let code: string | undefined;
+    let details: string | undefined;
+    let diagnostic: AdminTemplateSubmissionDiagnostic | undefined;
+    let structured = false;
     try {
       const body = (await res.json()) as {
         error?: string | { code?: string; message?: string };
         message?: string;
+        details?: string;
+        diagnostic?: unknown;
       };
+      code = typeof body.error === "string" ? body.error : body.error?.code;
+      details = typeof body.details === "string" && body.details.trim() ? body.details.trim() : undefined;
+      diagnostic = readAdminTemplateSubmissionDiagnostic(body.diagnostic) ?? undefined;
+      structured = Boolean(code || body.message || details || diagnostic);
       message =
         (typeof body.error === "object" && body.error && typeof body.error.message === "string"
           ? body.error.message
@@ -1237,13 +1265,75 @@ async function requestJson<T>(
     }
     const error = new Error(message) as AdminApiError;
     error.status = res.status;
+    error.code = code;
+    error.details = details;
+    error.diagnostic = diagnostic;
     if (res.status === 401) error.message = "Token inválido (401).";
     if (res.status === 403) error.message = "Sem permissão (403).";
-    if (res.status >= 500) error.message = "Erro no servidor (5xx).";
+    if (res.status >= 500 && !structured) error.message = "Erro no servidor (5xx).";
     throw error;
   }
 
   return (await res.json()) as T;
+}
+
+export function readAdminTemplateSubmissionDiagnostic(value: unknown): AdminTemplateSubmissionDiagnostic | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const scalar = (key: string) => {
+    const entry = raw[key];
+    if (entry === null) return null;
+    if (typeof entry !== "string" && typeof entry !== "number") return null;
+    const normalized = String(entry).trim();
+    return normalized || null;
+  };
+  const stage = scalar("stage");
+  const message = scalar("message");
+  const httpStatus = raw.httpStatus === null
+    ? null
+    : typeof raw.httpStatus === "number" && Number.isInteger(raw.httpStatus)
+      ? raw.httpStatus
+      : null;
+  if (!stage || !message) return null;
+  return {
+    stage,
+    httpStatus,
+    code: scalar("code"),
+    subcode: scalar("subcode"),
+    type: scalar("type"),
+    traceId: scalar("traceId"),
+    message,
+  };
+}
+
+export function describeAdminTemplateSubmissionError(value: unknown) {
+  const error = value && typeof value === "object" ? value as AdminApiError : null;
+  return {
+    message: error?.message || "Erro ao submeter template para a Meta.",
+    diagnostic: error?.diagnostic ?? (error?.details ? {
+      stage: "resposta_administrativa",
+      httpStatus: error.status ?? null,
+      code: error.code ?? null,
+      subcode: null,
+      type: null,
+      traceId: null,
+      message: error.details,
+    } : null),
+  } satisfies { message: string; diagnostic: AdminTemplateSubmissionDiagnostic | null };
+}
+
+export function formatAdminTemplateDiagnosticStage(stage: string) {
+  const labels: Record<string, string> = {
+    session_creation: "Criação da sessão de upload",
+    session_response_read: "Leitura da resposta da sessão",
+    session_response_validation: "Validação da resposta da sessão",
+    binary_upload: "Envio dos bytes da mídia",
+    binary_response_read: "Leitura da resposta do envio",
+    binary_response_validation: "Validação da resposta do envio",
+    template_submission: "Submissão do template",
+    resposta_administrativa: "Resposta administrativa",
+  };
+  return labels[stage] ?? "Etapa não identificada";
 }
 
 async function requestText(
@@ -2725,7 +2815,13 @@ export async function updateAdminTemplateRequest(
 export async function submitAdminTemplateRequestToMeta(
   connection: AdminConnection,
   requestId: string
-): Promise<{
+): Promise<AdminTemplateSubmissionResult> {
+  return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}/submit`, {
+    method: "POST",
+  }, { timeoutMs: 58_000 });
+}
+
+export type AdminTemplateSubmissionResult = {
   ok: boolean;
   request: AdminTemplateRequestItem;
   template: AdminTemplateCatalogItem;
@@ -2734,11 +2830,20 @@ export async function submitAdminTemplateRequestToMeta(
     status: string;
     templateId: string;
     errorMessage: string | null;
+    providerError?: unknown;
   };
-}> {
-  return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}/submit`, {
-    method: "POST",
-  });
+};
+
+export function describeAdminTemplateSubmissionResult(result: AdminTemplateSubmissionResult) {
+  if (result.ok === true && result.submission.submitted === true) {
+    return { submitted: true as const, message: null, diagnostic: null };
+  }
+  const diagnostic = readAdminTemplateSubmissionDiagnostic(result.submission.providerError);
+  return {
+    submitted: false as const,
+    message: result.submission.errorMessage || diagnostic?.message || "Nao foi possivel enviar o template para a Meta.",
+    diagnostic,
+  };
 }
 
 export async function syncAdminTemplateRequest(

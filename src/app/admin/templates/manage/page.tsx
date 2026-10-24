@@ -8,13 +8,17 @@ import ScreenProcessingOverlay, { useScreenProcessingOperations } from "@/compon
 import {
   AdminTemplateCatalogItem,
   AdminTemplateRequestItem,
+  type AdminTemplateSubmissionDiagnostic,
   approveAdminTemplateRequest,
   cancelAdminTemplateRequest,
+  describeAdminTemplateSubmissionError,
+  describeAdminTemplateSubmissionResult,
   disableAdminTemplate,
   enableAdminTemplate,
   fetchAdminTemplateRequests,
   fetchAdminTemplateRequestMedia,
   fetchTemplatesObservability,
+  formatAdminTemplateDiagnosticStage,
   formatDateTime,
   syncAdminTemplateRequest,
   submitAdminTemplateRequestToMeta,
@@ -103,6 +107,8 @@ function readProviderError(item: AdminTemplateRequestItem | null) {
     return normalized || null;
   };
   const details = {
+    stage: read("stage"),
+    httpStatus: read("httpStatus"),
     code: read("code"),
     subcode: read("subcode"),
     type: read("type"),
@@ -110,6 +116,7 @@ function readProviderError(item: AdminTemplateRequestItem | null) {
     userMessage: read("userMessage"),
     details: read("details"),
     traceId: read("traceId"),
+    message: read("message"),
   };
   return Object.values(details).some(Boolean) ? details : null;
 }
@@ -186,6 +193,7 @@ export default function ManageTemplatesAdminPage() {
     { key: "admin-template-action", active: Boolean(actingId), title: "Atualizando modelo", message: "Processando submissão ou sincronização…" },
   ]);
   const [error, setError] = useState<string | null>(null);
+  const [errorDiagnostic, setErrorDiagnostic] = useState<AdminTemplateSubmissionDiagnostic | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [requests, setRequests] = useState<AdminTemplateRequestItem[]>([]);
   const [catalog, setCatalog] = useState<AdminTemplateCatalogItem[]>([]);
@@ -217,6 +225,7 @@ export default function ManageTemplatesAdminPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setErrorDiagnostic(null);
 
     loadData(connection)
       .catch((err: { message?: string }) => {
@@ -238,6 +247,7 @@ export default function ManageTemplatesAdminPage() {
     }
     setActingId(requestId);
     setError(null);
+    setErrorDiagnostic(null);
     setFeedback(null);
     try {
       await approveAdminTemplateRequest(connection, requestId);
@@ -256,6 +266,7 @@ export default function ManageTemplatesAdminPage() {
     if (!draft) return;
     setActingId(item.id);
     setError(null);
+    setErrorDiagnostic(null);
     setFeedback(null);
     try {
       await updateAdminTemplateRequest(connection, item.id, {
@@ -284,6 +295,7 @@ export default function ManageTemplatesAdminPage() {
     }
     setActingId(item.id);
     setError(null);
+    setErrorDiagnostic(null);
     setFeedback(null);
     try {
       await cancelAdminTemplateRequest(connection, item.id);
@@ -303,14 +315,22 @@ export default function ManageTemplatesAdminPage() {
     }
     setActingId(requestId);
     setError(null);
+    setErrorDiagnostic(null);
     setFeedback(null);
     try {
-      await submitAdminTemplateRequestToMeta(connection, requestId);
+      const result = await submitAdminTemplateRequestToMeta(connection, requestId);
       await loadData(connection);
-      setFeedback("Template submetido para aprovacao da Meta.");
+      const described = describeAdminTemplateSubmissionResult(result);
+      if (described.submitted) {
+        setFeedback("Template submetido para aprovacao da Meta.");
+      } else {
+        setError(described.message);
+        setErrorDiagnostic(described.diagnostic);
+      }
     } catch (err) {
-      const typed = err as { message?: string };
-      setError(typed.message || "Erro ao submeter template para a Meta.");
+      const described = describeAdminTemplateSubmissionError(err);
+      setError(described.message);
+      setErrorDiagnostic(described.diagnostic);
     } finally {
       setActingId(null);
     }
@@ -319,6 +339,7 @@ export default function ManageTemplatesAdminPage() {
   const handleSyncRequest = async (requestId: string) => {
     setActingId(requestId);
     setError(null);
+    setErrorDiagnostic(null);
     setFeedback(null);
     try {
       await syncAdminTemplateRequest(connection, requestId);
@@ -341,6 +362,7 @@ export default function ManageTemplatesAdminPage() {
     }
     setActingId(item.id);
     setError(null);
+    setErrorDiagnostic(null);
     setFeedback(null);
     try {
       if (disabled) {
@@ -442,9 +464,21 @@ export default function ManageTemplatesAdminPage() {
 
         {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
         {error ? (
-          <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
-            {error}
-          </p>
+          <div className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100" role="alert">
+            <p>{error}</p>
+            {errorDiagnostic ? (
+              <div className="mt-2 grid gap-1 text-xs text-red-50/85">
+                <p><span className="font-semibold">Etapa:</span> {formatAdminTemplateDiagnosticStage(errorDiagnostic.stage)}</p>
+                {errorDiagnostic.httpStatus ? <p><span className="font-semibold">HTTP:</span> {errorDiagnostic.httpStatus}</p> : null}
+                {errorDiagnostic.code ? <p><span className="font-semibold">Código Meta:</span> {errorDiagnostic.code}</p> : null}
+                {errorDiagnostic.subcode ? <p><span className="font-semibold">Subcódigo Meta:</span> {errorDiagnostic.subcode}</p> : null}
+                {errorDiagnostic.type ? <p><span className="font-semibold">Tipo:</span> {errorDiagnostic.type}</p> : null}
+                {errorDiagnostic.traceId ? <p><span className="font-semibold">Trace:</span> {errorDiagnostic.traceId}</p> : null}
+                <p><span className="font-semibold">Detalhes:</span> {errorDiagnostic.message}</p>
+                <p className="text-red-100/65">Timeout no navegador não confirma cancelamento e não autoriza nova tentativa.</p>
+              </div>
+            ) : null}
+          </div>
         ) : null}
         {feedback ? (
           <p className="rounded-md border border-emerald-400/30 bg-emerald-900/20 p-3 text-sm text-emerald-100">
@@ -759,8 +793,10 @@ export default function ManageTemplatesAdminPage() {
                   <div className="rounded-lg border border-red-300/25 bg-red-950/20 p-3 text-sm text-red-100">
                     <p className="text-xs font-semibold uppercase text-red-200/80">Diagnóstico Meta</p>
                     <div className="mt-2 grid gap-2 text-xs text-red-50/80 sm:grid-cols-2">
-                      {selectedProviderError.code ? <p><span className="block text-red-200/55">Code</span>{selectedProviderError.code}</p> : null}
-                      {selectedProviderError.subcode ? <p><span className="block text-red-200/55">Subcode</span>{selectedProviderError.subcode}</p> : null}
+                      {selectedProviderError.stage ? <p><span className="block text-red-200/55">Etapa</span>{formatAdminTemplateDiagnosticStage(selectedProviderError.stage)}</p> : null}
+                      {selectedProviderError.httpStatus ? <p><span className="block text-red-200/55">HTTP</span>{selectedProviderError.httpStatus}</p> : null}
+                      {selectedProviderError.code ? <p><span className="block text-red-200/55">Código Meta</span>{selectedProviderError.code}</p> : null}
+                      {selectedProviderError.subcode ? <p><span className="block text-red-200/55">Subcódigo Meta</span>{selectedProviderError.subcode}</p> : null}
                       {selectedProviderError.type ? <p><span className="block text-red-200/55">Tipo</span>{selectedProviderError.type}</p> : null}
                       {selectedProviderError.traceId ? <p><span className="block text-red-200/55">Trace</span>{selectedProviderError.traceId}</p> : null}
                     </div>
@@ -771,6 +807,9 @@ export default function ManageTemplatesAdminPage() {
                       <p className="mt-1 whitespace-pre-wrap text-xs text-red-50/80">
                         {selectedProviderError.userMessage || selectedProviderError.details}
                       </p>
+                    ) : null}
+                    {selectedProviderError.message ? (
+                      <p className="mt-1 whitespace-pre-wrap text-xs text-red-50/80">{selectedProviderError.message}</p>
                     ) : null}
                   </div>
                 ) : null}

@@ -1,38 +1,148 @@
+export type MetaTemplateUploadStage =
+  | "session_creation"
+  | "session_response_read"
+  | "session_response_validation"
+  | "binary_upload"
+  | "binary_response_read"
+  | "binary_response_validation";
+
+export type MetaTemplateUploadDiagnostic = {
+  stage: MetaTemplateUploadStage;
+  httpStatus: number | null;
+  code: string | null;
+  subcode: string | null;
+  type: string | null;
+  traceId: string | null;
+  message: string;
+};
+
 export type MetaResumableUploadResult =
-  | { ok: true; handle: string; sessionId: string }
+  | { ok: true; handle: string }
   | {
       ok: false;
       code: "meta_upload_failed" | "meta_upload_invalid_response" | "meta_upload_result_uncertain";
       status: number | null;
-      details: string | null;
-      sessionId: string | null;
+      diagnostic: MetaTemplateUploadDiagnostic;
     };
 
-function safeProviderDetails(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const error = (value as Record<string, unknown>).error;
-  if (!error || typeof error !== "object" || Array.isArray(error)) return null;
-  const raw = error as Record<string, unknown>;
-  const code = typeof raw.code === "number" || typeof raw.code === "string" ? String(raw.code) : null;
-  const subcode = typeof raw.error_subcode === "number" || typeof raw.error_subcode === "string"
-    ? String(raw.error_subcode)
-    : null;
-  const message = typeof raw.error_user_msg === "string"
-    ? raw.error_user_msg
-    : typeof raw.message === "string"
-      ? raw.message
-      : null;
-  return [code && `code=${code}`, subcode && `subcode=${subcode}`, message?.slice(0, 500)].filter(Boolean).join("; ") || null;
+const MAX_DIAGNOSTIC_MESSAGE_LENGTH = 500;
+
+function safeScalar(value: unknown) {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  const normalized = String(value).trim();
+  return /^[A-Za-z0-9_.-]{1,120}$/.test(normalized) ? normalized : null;
 }
 
-async function readJson(response: Response) {
-  const text = await response.text();
-  if (!text) return null;
+export function sanitizeMetaDiagnosticMessage(value: unknown) {
+  if (typeof value !== "string") return null;
+  const normalized = value
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/https?:\/\/\S+/gi, "[URL removida]")
+    .replace(/\b(Bearer|OAuth)\s+\S+/gi, "$1 [credencial removida]")
+    .replace(/\b(access[_ -]?token|app[_ -]?secret|authorization|session[_ -]?id|media[_ -]?handle)\b\s*[:=]\s*\S+/gi, "$1=[removido]")
+    .replace(/\bupload:[^\s,;]+/gi, "[sessao removida]")
+    .replace(/\b[A-Za-z0-9_=-]{32,}\b/g, "[identificador removido]")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return null;
+  return normalized.slice(0, MAX_DIAGNOSTIC_MESSAGE_LENGTH);
+}
+
+function diagnosticFromPayload(params: {
+  stage: MetaTemplateUploadStage;
+  status: number | null;
+  payload: unknown;
+  fallbackMessage: string;
+}): MetaTemplateUploadDiagnostic {
+  const root = params.payload && typeof params.payload === "object" && !Array.isArray(params.payload)
+    ? params.payload as Record<string, unknown>
+    : null;
+  const error = root?.error && typeof root.error === "object" && !Array.isArray(root.error)
+    ? root.error as Record<string, unknown>
+    : null;
+  const errorData = error?.error_data && typeof error.error_data === "object" && !Array.isArray(error.error_data)
+    ? error.error_data as Record<string, unknown>
+    : null;
+  const message = sanitizeMetaDiagnosticMessage(
+    error?.error_user_msg ?? errorData?.details ?? error?.message ?? root?.message
+  ) ?? params.fallbackMessage;
+  return {
+    stage: params.stage,
+    httpStatus: params.status,
+    code: safeScalar(error?.code),
+    subcode: safeScalar(error?.error_subcode),
+    type: safeScalar(error?.type),
+    traceId: safeScalar(error?.fbtrace_id),
+    message,
+  };
+}
+
+async function readProviderResponse(
+  response: Response,
+  operation: "session" | "binary"
+): Promise<
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false; kind: "read" | "empty" | "invalid"; diagnostic: MetaTemplateUploadDiagnostic }
+> {
+  let text: string;
   try {
-    return JSON.parse(text) as Record<string, unknown>;
+    text = await response.text();
   } catch {
-    return null;
+    return {
+      ok: false,
+      kind: "read",
+      diagnostic: diagnosticFromPayload({
+        stage: operation === "session" ? "session_response_read" : "binary_response_read",
+        status: response.status,
+        payload: null,
+        fallbackMessage: "A leitura da resposta da Meta foi interrompida.",
+      }),
+    };
   }
+  if (!text.trim()) {
+    return {
+      ok: false,
+      kind: "empty",
+      diagnostic: diagnosticFromPayload({
+        stage: operation === "session" ? "session_response_validation" : "binary_response_validation",
+        status: response.status,
+        payload: null,
+        fallbackMessage: "A Meta retornou uma resposta vazia.",
+      }),
+    };
+  }
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid_payload");
+    return { ok: true, value: parsed as Record<string, unknown> };
+  } catch {
+    return {
+      ok: false,
+      kind: "invalid",
+      diagnostic: diagnosticFromPayload({
+        stage: operation === "session" ? "session_response_validation" : "binary_response_validation",
+        status: response.status,
+        payload: null,
+        fallbackMessage: "A Meta retornou uma resposta em formato invalido.",
+      }),
+    };
+  }
+}
+
+function timeoutDiagnostic(stage: "session_creation" | "binary_upload"): MetaTemplateUploadDiagnostic {
+  return {
+    stage,
+    httpStatus: null,
+    code: null,
+    subcode: null,
+    type: null,
+    traceId: null,
+    message: "A operacao com a Meta terminou sem resposta conclusiva.",
+  };
+}
+
+function uploadSessionUrl(apiVersion: string, sessionId: string) {
+  return `https://graph.facebook.com/${apiVersion}/${encodeURIComponent(sessionId)}`;
 }
 
 export async function uploadMetaTemplateExample(params: {
@@ -66,59 +176,110 @@ export async function uploadMetaTemplateExample(params: {
     );
   } catch {
     clearTimeout(sessionTimer);
-    return { ok: false, code: "meta_upload_result_uncertain", status: null, details: null, sessionId: null };
+    return {
+      ok: false,
+      code: "meta_upload_result_uncertain",
+      status: null,
+      diagnostic: timeoutDiagnostic("session_creation"),
+    };
   }
+  const sessionBody = await readProviderResponse(sessionResponse, "session");
   clearTimeout(sessionTimer);
-  const sessionJson = await readJson(sessionResponse);
-  const sessionId = typeof sessionJson?.id === "string" ? sessionJson.id.trim() : "";
+  if (!sessionBody.ok) {
+    return {
+      ok: false,
+      code: sessionBody.kind === "read" ? "meta_upload_result_uncertain" : sessionResponse.ok ? "meta_upload_invalid_response" : "meta_upload_failed",
+      status: sessionResponse.status,
+      diagnostic: sessionBody.diagnostic,
+    };
+  }
   if (!sessionResponse.ok) {
     return {
       ok: false,
       code: "meta_upload_failed",
       status: sessionResponse.status,
-      details: safeProviderDetails(sessionJson),
-      sessionId: null,
+      diagnostic: diagnosticFromPayload({
+        stage: "session_creation",
+        status: sessionResponse.status,
+        payload: sessionBody.value,
+        fallbackMessage: "A Meta recusou a criacao da sessao de upload.",
+      }),
     };
   }
+  const sessionId = typeof sessionBody.value.id === "string" ? sessionBody.value.id.trim() : "";
   if (!sessionId) {
-    return { ok: false, code: "meta_upload_invalid_response", status: sessionResponse.status, details: null, sessionId: null };
+    return {
+      ok: false,
+      code: "meta_upload_invalid_response",
+      status: sessionResponse.status,
+      diagnostic: diagnosticFromPayload({
+        stage: "session_response_validation",
+        status: sessionResponse.status,
+        payload: sessionBody.value,
+        fallbackMessage: "A resposta da Meta nao informou uma sessao de upload valida.",
+      }),
+    };
   }
 
   const uploadController = new AbortController();
   const uploadTimer = setTimeout(() => uploadController.abort(), timeoutMs);
   let uploadResponse: Response;
   try {
-    uploadResponse = await fetchImpl(
-      `https://graph.facebook.com/${params.apiVersion}/${encodeURIComponent(sessionId)}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `OAuth ${params.accessToken}`,
-          "Content-Type": params.mimeType,
-          file_offset: "0",
-        },
-        body: new Uint8Array(params.content),
-        signal: uploadController.signal,
-      }
-    );
+    uploadResponse = await fetchImpl(uploadSessionUrl(params.apiVersion, sessionId), {
+      method: "POST",
+      headers: {
+        Authorization: `OAuth ${params.accessToken}`,
+        "Content-Type": params.mimeType,
+        file_offset: "0",
+      },
+      body: new Uint8Array(params.content),
+      signal: uploadController.signal,
+    });
   } catch {
     clearTimeout(uploadTimer);
-    return { ok: false, code: "meta_upload_result_uncertain", status: null, details: null, sessionId };
+    return {
+      ok: false,
+      code: "meta_upload_result_uncertain",
+      status: null,
+      diagnostic: timeoutDiagnostic("binary_upload"),
+    };
   }
+  const uploadBody = await readProviderResponse(uploadResponse, "binary");
   clearTimeout(uploadTimer);
-  const uploadJson = await readJson(uploadResponse);
-  const handle = typeof uploadJson?.h === "string" ? uploadJson.h.trim() : "";
+  if (!uploadBody.ok) {
+    return {
+      ok: false,
+      code: uploadBody.kind === "read" ? "meta_upload_result_uncertain" : uploadResponse.ok ? "meta_upload_invalid_response" : "meta_upload_failed",
+      status: uploadResponse.status,
+      diagnostic: uploadBody.diagnostic,
+    };
+  }
   if (!uploadResponse.ok) {
     return {
       ok: false,
       code: "meta_upload_failed",
       status: uploadResponse.status,
-      details: safeProviderDetails(uploadJson),
-      sessionId,
+      diagnostic: diagnosticFromPayload({
+        stage: "binary_upload",
+        status: uploadResponse.status,
+        payload: uploadBody.value,
+        fallbackMessage: "A Meta recusou o envio dos bytes da midia.",
+      }),
     };
   }
+  const handle = typeof uploadBody.value.h === "string" ? uploadBody.value.h.trim() : "";
   if (!handle) {
-    return { ok: false, code: "meta_upload_invalid_response", status: uploadResponse.status, details: null, sessionId };
+    return {
+      ok: false,
+      code: "meta_upload_invalid_response",
+      status: uploadResponse.status,
+      diagnostic: diagnosticFromPayload({
+        stage: "binary_response_validation",
+        status: uploadResponse.status,
+        payload: uploadBody.value,
+        fallbackMessage: "A resposta da Meta nao informou um identificador de midia valido.",
+      }),
+    };
   }
-  return { ok: true, handle, sessionId };
+  return { ok: true, handle };
 }
