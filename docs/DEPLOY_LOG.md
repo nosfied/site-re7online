@@ -125,3 +125,35 @@ As entradas abaixo mantêm sua redação histórica.
 - registros:
   `docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json` e
   `docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json`
+
+## 2026-10-24 — Atualização isolada da API de upload assinado
+
+- target: `ef7db11179a1be14160e0f7ceec9f01a8aaf0ece`
+- release: `immutable-ef7db111-vps-20261024T174000Z`
+- componente selecionado: API; frontend e worker preservados
+- identidade observada da API: PID `74684`, start ticks `2011482`
+- finalização: exatamente um `pm2 save`; dump
+  `fd1513febc2c91d4ff0efbf303a44e44991b26265da2759b414b31121d769e88`
+- marker `DEPLOYED`:
+  `c7e629dea342b98c3b5d25cb651ab3997749ca45fbd98074a9d7eb7bcf375e58`
+- journal: `DEPLOYED`; lock canônico liberado
+- horário: não acrescentado; esta reconciliação não possui nova observação temporal
+- registro:
+  `docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json`
+
+## 2026-10-24 — Homologação manual de vídeo / submissão aceita
+
+- tenant: `demo-converta`
+- solicitação: `video_previdencia_teste_20261024_v2`
+- API observada: target `ef7db11179a1be14160e0f7ceec9f01a8aaf0ece`, release
+  `immutable-ef7db111-vps-20261024T174000Z`
+- upload: concluído; mídia `ready`; handle confirmado e não publicado
+- persistência: uma solicitação, um evento `template.request.submitted_to_meta`,
+  um template e um identificador Meta; duplicidade ausente
+- submissão Meta: aceita
+- aprovação Meta: não confirmada; estado observado `PENDING`
+- falhas históricas: preservadas; causalidade `NOT_PROVEN`
+- esta reconciliação: somente evidências locais; zero chamada Meta, sync, upload,
+  submissão, envio ou alteração de dados
+- registro:
+  `docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_ACCEPTED_2026-10-24.json`

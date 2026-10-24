@@ -1,9 +1,10 @@
 {
   "schemaVersion": 6,
-  "updatedAtUtc": "2026-10-24T17:08:53Z",
+  "updatedAtUtc": "2026-10-24T18:31:42Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json",
   "activeOperationalRecord": "docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json",
+  "activeApiDeploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "production": {
     "status": "DEPLOYED_VERIFIED",
@@ -14,8 +15,11 @@
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
-      "lastReportedPid": 56158,
-      "lastReportedStartTicks": 1532871
+      "entrySha256Scope": "LAST_FULL_STACK_DEPLOYMENT_RECORD",
+      "selectedTargetCommit": "ef7db11179a1be14160e0f7ceec9f01a8aaf0ece",
+      "selectedReleaseId": "immutable-ef7db111-vps-20261024T174000Z",
+      "lastReportedPid": 74684,
+      "lastReportedStartTicks": 2011482
     },
     "frontend": {
       "stablePath": "/opt/re7online/current/frontend",
@@ -49,6 +53,8 @@
     },
     "pm2": {
       "dumpSha256": "afd1c1c20483708ac2f51f0ffde09c2affb8d62e4a1426cb233288fda0753e59",
+      "dumpSha256Scope": "LAST_FULL_STACK_DEPLOYMENT_RECORD",
+      "currentDumpSha256": "fd1513febc2c91d4ff0efbf303a44e44991b26265da2759b414b31121d769e88",
       "rollbackSha256": "fec9b3417d4ea1e34b13840f5e3fea2b70a499220c0af124f039a87d8ce312cc",
       "mode": "0600",
       "owner": "deploy",
@@ -56,6 +62,14 @@
       "savedExactlyOnce": true
     },
     "markerSha256": "0894eb7cfb9561682feeca4917063c52fa5d3cf5be00e378eac10d9c00a7c0a2",
+    "markerSha256Scope": "LAST_FULL_STACK_DEPLOYMENT_RECORD",
+    "currentMarkerSha256": "c7e629dea342b98c3b5d25cb651ab3997749ca45fbd98074a9d7eb7bcf375e58",
+    "lastFinalization": {
+      "component": "api",
+      "journalState": "DEPLOYED",
+      "lockReleased": true,
+      "pm2SaveCount": 1
+    },
     "controlPlaneCommit": "5ea7fa45a3693a14bdbf1d9d0a464dd61423b4ad",
     "readiness": {
       "method": "THREE_CONSECUTIVE_STABLE_SAMPLES",
@@ -129,6 +143,7 @@
   "templateCampaignMedia": {
     "state": "TECHNICALLY_DEPLOYED",
     "deploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json",
+    "apiDeploymentRecord": "docs/saas/releases/TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json",
     "components": [
       "api",
       "frontend",
@@ -146,7 +161,26 @@
     "knownNonBlockingBacklog": "PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE",
     "currentDeploymentMigration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
     "lastHomologationAttempt": "FAILED_DETERMINISTIC_PROVIDER_REJECTION",
-    "lastHomologationRecord": "docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json"
+    "lastHomologationRecord": "docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json",
+    "lastHomologationAttemptFieldScope": "LAST_FAILED_HISTORICAL_ATTEMPT",
+    "latestHomologationStatus": "SUBMISSION_ACCEPTED_APPROVAL_PENDING",
+    "latestHomologationRecord": "docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_ACCEPTED_2026-10-24.json",
+    "currentHomologation": {
+      "tenantKey": "demo-converta",
+      "requestName": "video_previdencia_teste_20261024_v2",
+      "state": "SUBMISSION_ACCEPTED_APPROVAL_PENDING",
+      "uploadCompleted": true,
+      "mediaState": "ready",
+      "handleConfirmed": true,
+      "submissionCount": 1,
+      "eventCount": 1,
+      "templateCount": 1,
+      "duplicateDetected": false,
+      "observedMetaStatus": "PENDING",
+      "approvalConfirmed": false,
+      "historicalFailureCausality": "NOT_PROVEN",
+      "record": "docs/saas/releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_ACCEPTED_2026-10-24.json"
+    }
   },
   "tenantScopedMetaAppId": {
     "codeState": "TECHNICALLY_DEPLOYED",

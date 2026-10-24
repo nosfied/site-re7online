@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "recordType": "IMMUTABLE_API_COMPONENT_DEPLOYMENT",
+  "status": "DEPLOYED_VERIFIED",
+  "result": "API_RELEASE_SELECTED_PRODUCTION_HEALTHY",
+  "targetCommit": "ef7db11179a1be14160e0f7ceec9f01a8aaf0ece",
+  "releaseId": "immutable-ef7db111-vps-20261024T174000Z",
+  "releasePath": "/opt/re7online/releases/immutable-ef7db111-vps-20261024T174000Z",
+  "components": [
+    "api"
+  ],
+  "api": {
+    "stablePath": "/opt/re7online/current/api",
+    "pid": 74684,
+    "startTicks": 2011482,
+    "technicalAcceptance": "PASS"
+  },
+  "preservedComponents": {
+    "frontend": true,
+    "worker": true
+  },
+  "pm2": {
+    "savedExactlyOnce": true,
+    "saveCount": 1,
+    "dumpSha256": "fd1513febc2c91d4ff0efbf303a44e44991b26265da2759b414b31121d769e88"
+  },
+  "marker": {
+    "name": "DEPLOYED",
+    "sha256": "c7e629dea342b98c3b5d25cb651ab3997749ca45fbd98074a9d7eb7bcf375e58"
+  },
+  "transaction": {
+    "journalState": "DEPLOYED",
+    "lockReleased": true,
+    "rollbackReleaseId": "immutable-ec2a9fde-vps-20261024T162005Z",
+    "rollbackPreserved": true
+  },
+  "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+  "externalEffects": {
+    "metaCalls": 0,
+    "templateSubmissions": 0,
+    "templateSyncs": 0,
+    "campaigns": 0,
+    "imports": 0,
+    "messagesSent": 0,
+    "sqlStatements": 0,
+    "migrations": 0
+  },
+  "privateEvidence": {
+    "versioned": false,
+    "containsSecrets": false,
+    "locationPublished": false
+  }
+}

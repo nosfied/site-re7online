@@ -2,7 +2,7 @@
 
 Status produtivo: **TECHNICALLY DEPLOYED / PRODUCTION HEALTHY**.
 
-Homologação funcional Meta: **PENDING — ÚNICA TENTATIVA DE VÍDEO NEGADA NO UPLOAD BINÁRIO**.
+Homologação funcional Meta: **SUBMISSÃO DE VÍDEO ACEITA / APROVAÇÃO META PENDENTE**.
 
 Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
 
@@ -16,13 +16,22 @@ recupera o histórico original do onboarding.
 
 ## Implantação técnica
 
-O target `ec2a9fde99b6421a85256f14604bd469879f4f2a` está ativo na release
-`immutable-ec2a9fde-vps-20261024T162005Z`, conforme o
+O deploy conjunto do target `ec2a9fde99b6421a85256f14604bd469879f4f2a`, release
+`immutable-ec2a9fde-vps-20261024T162005Z`, permanece como baseline do frontend,
+conforme o
 [registro estruturado](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json).
 API e frontend foram selecionados por troca atômica dos caminhos estáveis e restart
 dos registros PM2 existentes, sem `--update-env`. O worker foi preservado.
 O BUILD_ID ativo é `7yArOSyfllnPiQy_vAS9H`. A release
 `immutable-a62da468-vps-20261024T124726Z` permanece como retorno e evidência histórica.
+
+A API foi atualizada isoladamente para o target
+`ef7db11179a1be14160e0f7ceec9f01a8aaf0ece`, release
+`immutable-ef7db111-vps-20261024T174000Z`. Frontend e worker foram preservados. A
+finalização executou um único `pm2 save`, validou o dump
+`fd1513febc2c91d4ff0efbf303a44e44991b26265da2759b414b31121d769e88`, criou o
+marker autenticado, concluiu o journal como `DEPLOYED` e liberou o lock. O registro é
+[`TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json`](releases/TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json).
 
 ## Homologação controlada de vídeo em 24/10/2026
 
@@ -41,7 +50,17 @@ de sessão não estava disponível, não tinha permissão ou não suportava a op
 A solicitação terminou `failed`; não houve retry, sync adicional, campanha ou envio.
 O registro estruturado é
 [`CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json`](releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_2026-10-24.json).
-O resultado não comprova aprovação Meta nem libera uso comercial.
+O resultado não comprova aprovação Meta nem libera uso comercial. Esse registro
+permanece histórico, e a causalidade da negativa é `NOT_PROVEN`.
+
+Em homologação manual posterior, a API no target
+`ef7db11179a1be14160e0f7ceec9f01a8aaf0ece` processou a solicitação
+`video_previdencia_teste_20261024_v2`. O upload concluiu, a mídia ficou `ready` e o
+handle foi confirmado sem publicação. A leitura persistida encontrou exatamente uma
+solicitação, um evento `template.request.submitted_to_meta`, um template e um
+identificador Meta, sem duplicidade. A submissão foi aceita e o estado observado foi
+`PENDING`; a aprovação pela Meta ainda não foi confirmada. O registro sanitizado é
+[`CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_ACCEPTED_2026-10-24.json`](releases/CONVERTA_DEMO_VIDEO_TEMPLATE_HOMOLOGATION_ACCEPTED_2026-10-24.json).
 
 ### Diagnóstico offline da URL de upload
 
@@ -260,11 +279,13 @@ concorrência, expiração, resultado incerto, limpeza dry-run, backpressure,
 batch >1.000, pausa/cancelamento/Result Truth e builds.
 
 A implantação técnica, a configuração persistente de `TEMPLATE_MEDIA_ROOT` e o App ID
-tenant-scoped estão concluídos. A tentativa controlada de vídeo foi negada pela Meta
-durante o upload binário e permaneceu sem retry. Antes de liberação ainda são
-necessárias uma nova autorização específica após análise da negativa, aceitação da
-submissão pela Meta, aprovação do template e envio homologado explicitamente pelo
-owner.
+tenant-scoped estão concluídos. A primeira tentativa controlada de vídeo foi negada
+durante o upload binário e permanece preservada como histórico, sem retry e com
+causalidade `NOT_PROVEN`. A solicitação posterior
+`video_previdencia_teste_20261024_v2` concluiu o upload e teve uma submissão aceita,
+sem duplicidade. A aprovação ainda não foi confirmada: o estado observado é
+`PENDING`. Antes da liberação ainda são necessários a aprovação pela Meta e o envio
+homologado explicitamente pelo owner.
 
 A dívida `PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE` permanece no
 [backlog set based](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md). Ela é
