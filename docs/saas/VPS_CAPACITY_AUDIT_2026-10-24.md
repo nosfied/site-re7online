@@ -1,6 +1,10 @@
 # Auditoria de capacidade da VPS — 24/10/2026
 
-**READ ONLY / NENHUMA LIMPEZA AUTORIZADA / PRODUÇÃO INALTERADA**
+**AUDITORIA INICIAL SOMENTE LEITURA / LOTE PEQUENO EXECUTADO E VERIFICADO CONFORME RELATO DO OPERADOR**
+
+A fotografia inicial e a preparação abaixo são históricas. Após autorização explícita
+do usuário, o operador informou a conclusão do lote; o resultado está registrado
+na seção de encerramento. Não há autorização para novas exclusões.
 
 Fotografia coletada em `2026-10-24T20:49:05-03:00`. As medições usam leituras
 limitadas. Dois totais amplos excederam o limite de 25 segundos; os subdiretórios
@@ -55,7 +59,7 @@ A busca sanitizada encontrou referências privadas para todas as releases acima.
 Contagem de referência não prova necessidade sozinha; confirma que nenhuma delas
 pode entrar em limpeza sem reconstruir o grafo de retorno.
 
-## Inventário resumido e candidatos
+## Inventário inicial resumido e candidatos
 
 | Disposição | Caminho/escopo | Alocado | Função e referências verificadas | Motivo | Recuperável estimado | Risco |
 | --- | --- | ---: | --- | --- | ---: | --- |
@@ -78,9 +82,9 @@ Tamanho igual, idade ou nome parecido não foram usados como prova de inutilidad
 `docker system df` mostrou a imagem como “reclaimable”, mas ela é a imagem do
 container PostgreSQL ativo e foi classificada como **preservar**.
 
-## Lote pequeno proposto para revisão
+## Preparação histórica do lote pequeno
 
-Nenhuma ação foi executada. Um lote futuro e separado pode conter somente:
+Na preparação, nenhuma ação havia sido executada. O lote então proposto continha somente:
 
 1. cache npm `/home/deploy/.npm/_cacache` — 406.303.215 bytes lógicos;
 2. worktree interrompido
@@ -118,9 +122,11 @@ Leitura de `2026-10-25T00:09:47Z`:
   documento preserva explicitamente caminho, commit, estado Git e inventário dos
   ignorados antes que uma remoção seja autorizada.
 
-### Comandos propostos — ainda não executar
+### Comandos históricos do lote — não repetir
 
-Os comandos são literais, sem curingas, `--force` ou prune global:
+Os três comandos abaixo foram posteriormente executados conforme o relato de
+encerramento. São preservados como evidência, não como instrução para repetição.
+Não contêm curingas, `--force` ou prune global:
 
 ```bash
 rm -r -- /home/deploy/.npm/_cacache
@@ -153,6 +159,55 @@ Depois: exigir ausência literal dos três caminhos, ausência do worktree no re
 Git, aumento compatível de espaço/inodes, identidades/restart counts idênticos,
 hashes idênticos e os mesmos GETs. Não consultar Modelos ou Campanhas nesta
 verificação para evitar qualquer superfície que possa iniciar sincronização.
+
+
+## Encerramento do lote autorizado
+
+**EXECUTADO / VERIFICAÇÕES POSTERIORES PASS, conforme relato do operador.**
+
+Fonte: relatório de execução fornecido pelo usuário nesta continuidade, após
+autorização explícita limitada aos três caminhos. O horário exato da execução não
+foi informado. Este registro documental não representa nova execução nem
+verificação independente da VPS pelo autor desta atualização.
+
+| Comando histórico | Resultado informado |
+| --- | --- |
+| `rm -r -- /home/deploy/.npm/_cacache` | exit code 0 |
+| `git -C /opt/re7online/site-re7online worktree remove /opt/re7online/build-worktrees/immutable-ec2a9fde-vps-20261024T161807Z-source` | exit code 0 |
+| `rmdir -- /opt/re7online/build-output/immutable-ec2a9fde-vps-20261024T161807Z` | exit code 0 |
+
+Execução sequencial, sem falhas ou remoção parcial. Os três caminhos ficaram
+ausentes e o worktree deixou de constar em `git worktree list`.
+
+| Medida | Antes da execução | Depois da execução |
+| --- | ---: | ---: |
+| Espaço usado (bytes) | 72.311.345.152 | 70.869.721.088 |
+| Espaço disponível (bytes) | 9.758.588.928 | 11.200.212.992 |
+| Inodes usados | 1.661.781 | 1.620.681 |
+| Uso do filesystem | 89% | 87% |
+
+Ganho real informado: **1.441.624.064 bytes (aproximadamente 1,34 GiB)** e
+**41.100 inodes**. A baseline imediatamente anterior à execução é distinta da
+fotografia da preparação; as medições originais permanecem preservadas acima.
+
+| Processo | PID preservado | Start ticks preservados | Restart count preservado |
+| --- | ---: | ---: | ---: |
+| Worker | 2233 | 17758 | 0 |
+| Frontend | 118502 | 3663031 | 3 |
+| API | 118102 | 3652796 | 5 |
+
+Todos permaneceram online. Hashes informados como inalterados:
+
+- Dump PM2: `5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13`.
+- Marker `DEPLOYED`: `1d2be9be3fd5e257700257988bb4cd946dac0f7cb47b6b3a4f861facedd7c543`.
+
+Health da API local e pública: `ok=true`, `db=ok`. Login local e público,
+Inbox e CRM: HTTP 200. Modelos e Campanhas ficaram fora dos smokes previstos.
+
+O operador informou zero restart, `pm2 save`, alteração de serviço, cron, backup,
+dado ou chamada Meta. Backups e outputs adicionais continuam preservados; esta
+conclusão não autoriza outro lote. A cópia off-host em `/tmp` observada na auditoria
+não comprova custódia durável para justificar futuras exclusões.
 
 ## Continuação da classificação: backups e outputs
 
