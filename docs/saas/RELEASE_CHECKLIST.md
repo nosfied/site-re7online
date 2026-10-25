@@ -72,6 +72,9 @@ pull/build/reload deste checklist; estes não autorizam janela nem reutilizaçã
 
 - Antes de copiar/buildar/compactar: hashes, runtime/dependências, artefatos/provas
   reutilizáveis, justificativa de cópia volumosa e revisão de qualquer novo link.
+  Medir a capacidade atual e classificar os resíduos anteriores antes de outra
+  geração volumosa; incluir o crescimento das próprias preparações/evidências.
+  Aplicar o [método de encerramento](DEPLOY_ARTIFACT_LIFECYCLE.md#método-de-capacidade-e-encerramento-por-geração).
 - Registrar geração em sidecar privado: finalidade, owner/responsável, estado,
   hashes, raízes/referências transitivas, bytes únicos, custódia/restore e retorno.
 - Antes/depois de staging: capacidade por executor/filesystem, WAL/crescimento,
@@ -88,7 +91,12 @@ pull/build/reload deste checklist; estes não autorizam janela nem reutilizaçã
 - Material arquivável exige custódia acessível ao owner e restauração isolada
   verificável. Não modificar manifest histórico para refletir retirada.
 - Eventual retirada: allowlist literal revisada, driver/input selados próprios,
-  observações completas frescas, intent/recibo e inspeção inclusive em falha.
+  observações completas frescas e vinculadas às provas autenticadas, intent/recibo
+  e inspeção inclusive em falha. Registrar ATTEMPT durável antes de cada comando,
+  exit code e estado remanescente depois; parar na primeira falha ou inspeção incompleta.
+- Ensaiar o executor real, incluindo UID efetivo, traps, remoção parcial e falhas
+  de fsync nos caminhos de sucesso e erro. Uma recusa exige diagnóstico dirigido,
+  sem repetir toda a coleta por falta de contexto. Provas ainda válidas são reutilizadas.
 - Registrar revisão semanal e pós-janela, pendências, responsável e próxima data;
   relatório local não é certificado produtivo nem autorização de exclusão.
 - Logs/snapshots/dados de tenant obedecem seus contratos próprios; não aplicar
