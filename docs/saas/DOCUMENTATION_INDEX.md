@@ -17,7 +17,10 @@
   — registro ativo de API/frontend no target `d7de6453`; worker preservado,
   journal `DEPLOYED` e lock liberado.
 - [Auditoria de capacidade da VPS](VPS_CAPACITY_AUDIT_2026-10-24.md)
-  — fotografia somente leitura e lote pequeno proposto; não autoriza limpeza.
+  — fotografia inicial, lote histórico executado e custódia ainda pendente.
+- [Ciclo de vida dos artefatos de implantação](DEPLOY_ARTIFACT_LIFECYCLE.md)
+  — contrato de capacidade/classificação, inventário consolidado e novo lote pequeno
+  proposto; não autoriza limpeza.
 - [Configuração do Meta App ID do Converta Demo](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json)
   — vínculo atual token/aplicativo confirmado e configuração tenant-scoped concluída;
   homologação funcional Meta permanece pendente.

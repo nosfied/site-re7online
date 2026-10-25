@@ -21,6 +21,9 @@ As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 - configuração privada e retorno autenticados, dump anterior e symlinks capturados;
 - PM2 6.0.14, worker fora do impacto, lock global livre e autorização da janela;
 - migration/SQL classificados antes da janela.
+- contrato privado de capacidade revisado conforme
+  [ciclo de vida dos artefatos](DEPLOY_ARTIFACT_LIFECYCLE.md), incluindo pico
+  temporário e reserva operacional.
 
 Nunca construir no runtime ativo, reconstruir durante ativação, importar ambiente do
 shell, derivar definição executável de introspecção, usar `--update-env`, executar
@@ -39,7 +42,8 @@ EPOCH=$(git show -s --format=%ct "$TARGET")
 python3 scripts/converta-release.py build \
   --repo "$PWD" --target "$TARGET" --release-id "$RELEASE" \
   --components api,frontend --output <saida-exclusiva> \
-  --source-date-epoch "$EPOCH"
+  --source-date-epoch "$EPOCH" \
+  --capacity-contract <capacity-contract.private.json>
 python3 scripts/converta-release.py verify \
   --package <saida-exclusiva>/$RELEASE.tar.xz \
   --target "$TARGET" --release-id "$RELEASE" --components api,frontend
@@ -48,6 +52,11 @@ python3 scripts/converta-release.py verify \
 `RELEASE BUILT` e `RELEASE VERIFIED` são obrigatórios. Diagnosticar primeiro
 `failure-evidence.private`; seu conteúdo não vai para stdout ou Git. Rebuild cria
 nova release. Retry reutiliza o mesmo pacote autenticado.
+
+O produtor nega antes do primeiro `npm` quando a soma do crescimento do worktree,
+payload, temporários de pacote, extração de verificação, evidência e reserva excede
+bytes ou inodes disponíveis. Ao fim, revisar `generation-lifecycle.private.json` e
+classificar imediatamente a geração; `PENDING` não autoriza outra cópia nem retirada.
 
 O produtor exclui uploads/dados operacionais da aplicação, mas preserva dependências
 sob `node_modules`, inclusive diretórios internos chamados `uploads`. O índice fechado

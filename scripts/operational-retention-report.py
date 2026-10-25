@@ -1,11 +1,16 @@
 """Local metadata inventory for manual review. No production certificate or apply mode."""
 import argparse
 import datetime
+import hashlib
 import json
 import os
 from pathlib import Path
 import stat
 import time
+
+
+CATALOG_STATES = {'ACTIVE', 'RETURN', 'COMPLETE', 'FAILED', 'SUPERSEDED'}
+CATALOG_CUSTODY = {'HOST_REQUIRED', 'NOT_PROVEN', 'VERIFIED_OFF_HOST'}
 
 
 def inventory(roots, max_entries=100000, seconds=30):
@@ -87,6 +92,178 @@ def inventory(roots, max_entries=100000, seconds=30):
     }
 
 
+def stable_hash(path, deadline, hash_budget):
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode) or path.is_symlink():
+        raise ValueError('hash_not_regular')
+    if before.st_size > hash_budget[0]:
+        raise ValueError('hash_budget_exceeded')
+    digest = hashlib.sha256()
+    with path.open('rb') as source:
+        while True:
+            if time.monotonic() >= deadline:
+                raise TimeoutError('hash_deadline_exceeded')
+            chunk = source.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    after = path.lstat()
+    identity = lambda value: (value.st_dev, value.st_ino, value.st_mode, value.st_size,
+                              value.st_mtime_ns, value.st_ctime_ns)
+    if identity(before) != identity(after):
+        raise ValueError('hash_identity_drift')
+    hash_budget[0] -= before.st_size
+    return digest.hexdigest()
+
+
+def canonical_tree(root, deadline, hash_budget):
+    root = Path(os.path.abspath(root))
+    if root.resolve() != root or not root.is_dir() or root.is_symlink():
+        raise ValueError('comparison_root_not_literal_directory')
+    entries = []
+    stack = [root]
+    while stack:
+        if time.monotonic() >= deadline:
+            raise TimeoutError('comparison_deadline_exceeded')
+        path = stack.pop()
+        info = path.lstat()
+        if path != root:
+            item = {'path': path.relative_to(root).as_posix(),
+                    'mode': stat.S_IMODE(info.st_mode)}
+            if stat.S_ISREG(info.st_mode):
+                item.update(type='file', size=info.st_size,
+                            sha256=stable_hash(path, deadline, hash_budget))
+            elif stat.S_ISDIR(info.st_mode):
+                item['type'] = 'directory'
+            elif stat.S_ISLNK(info.st_mode):
+                item.update(type='symlink', target=os.readlink(path))
+            else:
+                raise ValueError('comparison_entry_type')
+            entries.append(item)
+        if stat.S_ISDIR(info.st_mode):
+            fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                children = sorted((path / child.name for child in os.scandir(fd)),
+                                  key=lambda child: child.name, reverse=True)
+                stack.extend(children)
+            finally:
+                os.close(fd)
+    entries.sort(key=lambda item: item['path'])
+    raw = json.dumps(entries, sort_keys=True, separators=(',', ':')).encode()
+    return entries, hashlib.sha256(raw).hexdigest()
+
+
+def compare_trees(source, destination, seconds=60, max_hash_bytes=8 * 1024**3):
+    deadline = time.monotonic() + seconds
+    budget = [max_hash_bytes]
+    source_entries, source_digest = canonical_tree(source, deadline, budget)
+    destination_entries, destination_digest = canonical_tree(destination, deadline, budget)
+    source_by_path = {item['path']: item for item in source_entries}
+    destination_by_path = {item['path']: item for item in destination_entries}
+    source_only = sorted(set(source_by_path) - set(destination_by_path))
+    destination_only = sorted(set(destination_by_path) - set(source_by_path))
+    common = set(source_by_path) & set(destination_by_path)
+    changed = sorted(path for path in common if source_by_path[path] != destination_by_path[path])
+    attributes = ('type', 'mode', 'size', 'sha256', 'target')
+    difference_counts = {
+        attribute: sum(source_by_path[path].get(attribute) != destination_by_path[path].get(attribute)
+                       for path in common)
+        for attribute in attributes
+    }
+    return {
+        'source': str(Path(source).resolve()),
+        'destination': str(Path(destination).resolve()),
+        'sourceEntries': len(source_entries),
+        'destinationEntries': len(destination_entries),
+        'sourceDigest': source_digest,
+        'destinationDigest': destination_digest,
+        'sourceOnlyCount': len(source_only),
+        'destinationOnlyCount': len(destination_only),
+        'changedCount': len(changed),
+        'differenceCountsByAttribute': difference_counts,
+        'firstDifferences': {
+            'sourceOnly': source_only[:20],
+            'destinationOnly': destination_only[:20],
+            'changed': changed[:20],
+        },
+        'contentAndMetadataEquivalent': not source_only and not destination_only and not changed,
+        'sourceContentContainedInDestination': not source_only and not any(
+            difference_counts[attribute] for attribute in ('type', 'size', 'sha256', 'target')
+        ),
+        'withdrawalEligible': False,
+        'remainingHashBudgetBytes': budget[0],
+    }
+
+
+def read_private_json(path):
+    path = Path(os.path.abspath(path))
+    before = path.lstat()
+    if (path.is_symlink() or not stat.S_ISREG(before.st_mode) or
+            stat.S_IMODE(before.st_mode) != 0o600 or before.st_uid != os.geteuid()):
+        raise ValueError('catalog_not_private_regular')
+    raw = path.read_bytes()
+    after = path.lstat()
+    identity = lambda value: (value.st_dev, value.st_ino, value.st_mode, value.st_size,
+                              value.st_mtime_ns, value.st_ctime_ns)
+    if identity(before) != identity(after):
+        raise ValueError('catalog_identity_drift')
+    try:
+        return json.loads(raw), hashlib.sha256(raw).hexdigest()
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError('catalog_json') from error
+
+
+def generation_summary(report, catalog):
+    if not isinstance(catalog, dict) or set(catalog) != {'schemaVersion', 'generations'}:
+        raise ValueError('catalog_schema')
+    generations = catalog['generations']
+    if catalog['schemaVersion'] != 1 or not isinstance(generations, list):
+        raise ValueError('catalog_schema')
+    objects = report['objects']
+    result, identifiers = [], set()
+    fields = {'generationId', 'state', 'roots', 'operationalReferences', 'custodyState'}
+    for generation in generations:
+        if not isinstance(generation, dict) or set(generation) != fields:
+            raise ValueError('catalog_generation_fields')
+        identifier = generation['generationId']
+        if (not isinstance(identifier, str) or not identifier or identifier in identifiers or
+                generation['state'] not in CATALOG_STATES or
+                generation['custodyState'] not in CATALOG_CUSTODY or
+                not isinstance(generation['roots'], list) or not generation['roots'] or
+                not isinstance(generation['operationalReferences'], list) or
+                any(not isinstance(item, str) or not item for item in generation['operationalReferences'])):
+            raise ValueError('catalog_generation')
+        identifiers.add(identifier)
+        if any(not isinstance(root, str) or not Path(root).is_absolute()
+               for root in generation['roots']):
+            raise ValueError('catalog_root')
+        roots = [Path(root) for root in generation['roots']]
+        if any(root.resolve() != root or not root.is_dir() or root.is_symlink()
+               for root in roots):
+            raise ValueError('catalog_root')
+        matched = []
+        for item in objects:
+            if any(any(Path(path) == root or Path(path).is_relative_to(root)
+                       for root in roots) for path in item['paths']):
+                matched.append(item)
+        if any(not any(any(Path(path) == root or Path(path).is_relative_to(root)
+                           for path in item['paths']) for item in objects)
+               for root in roots):
+            raise ValueError('catalog_root_not_in_inventory')
+        result.append({
+            **generation,
+            'allocatedBytes': sum(item['allocatedBytes'] for item in matched),
+            'objectCount': len(matched),
+            'dispositionPending': generation['state'] in {'COMPLETE', 'FAILED', 'SUPERSEDED'} and
+                                  generation['custodyState'] == 'NOT_PROVEN',
+        })
+    return {
+        'items': result,
+        'pendingAllocatedBytes': sum(item['allocatedBytes'] for item in result
+                                     if item['dispositionPending']),
+    }
+
+
 def private_output_directory(path, expected_uid=None):
     """Hold the validated directory FD; never chmod/repair a divergent destination."""
     path = Path(os.path.abspath(path))
@@ -121,9 +298,14 @@ def main():
     parser.add_argument('--output', required=True, help='new private local JSON report')
     parser.add_argument('--max-entries', type=int, default=100000)
     parser.add_argument('--seconds', type=float, default=30)
+    parser.add_argument('--compare-tree', action='append', default=[],
+                        metavar='SOURCE::DESTINATION')
+    parser.add_argument('--max-hash-bytes', type=int, default=8 * 1024**3)
+    parser.add_argument('--generation-catalog', help='private 0600 generation catalog')
     parser.add_argument('--dry-run', action='store_true', required=True)
     args = parser.parse_args()
-    if not 1 <= args.max_entries <= 1000000 or not 0 < args.seconds <= 60:
+    if (not 1 <= args.max_entries <= 1000000 or not 0 < args.seconds <= 300 or
+            not 0 < args.max_hash_bytes <= 128 * 1024**3):
         parser.error('budget outside reviewed limits')
     output = Path(os.path.abspath(args.output))
     if output.parent.resolve() != output.parent:
@@ -137,6 +319,21 @@ def main():
     try:
         ensure_new_output(directory, output.name)
         report = inventory(roots, args.max_entries, args.seconds)
+        comparisons = []
+        for pair in args.compare_tree:
+            if pair.count('::') != 1:
+                parser.error('comparison must be SOURCE::DESTINATION')
+            source, destination = pair.split('::')
+            comparisons.append(compare_trees(source, destination, args.seconds,
+                                              args.max_hash_bytes))
+        report['treeComparisons'] = comparisons
+        if args.generation_catalog:
+            catalog, catalog_sha = read_private_json(args.generation_catalog)
+            report['generationCatalogSha256'] = catalog_sha
+            report['generationSummary'] = generation_summary(report, catalog)
+        else:
+            report['generationCatalogSha256'] = None
+            report['generationSummary'] = None
         # Recheck path binding and permissions after capture; use the held FD to write.
         check = private_output_directory(output.parent)
         try:

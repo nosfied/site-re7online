@@ -31,6 +31,17 @@ MANIFEST_FIELDS = {
     "sourceDateEpoch", "builtAt", "toolchain", "runtimes", "indexSha256",
     "reproducibility",
 }
+CAPACITY_FIELDS = {
+    "schemaVersion", "contractId", "capturedAtUtc", "targetCommit", "releaseId",
+    "filesystemPath", "buildWorkspaceGrowthBytes", "runtimePayloadBytes",
+    "packageTemporaryBytes", "independentVerificationBytes", "failureEvidenceBytes",
+    "operationalReserveBytes", "peakInodes", "operationalReserveInodes",
+}
+CAPACITY_BYTE_FIELDS = {
+    "buildWorkspaceGrowthBytes", "runtimePayloadBytes", "packageTemporaryBytes",
+    "independentVerificationBytes", "failureEvidenceBytes", "operationalReserveBytes",
+}
+CAPACITY_INODE_FIELDS = {"peakInodes", "operationalReserveInodes"}
 
 
 class Denied(RuntimeError):
@@ -64,6 +75,93 @@ def stable_bytes(path: Path) -> tuple[bytes, os.stat_result]:
     if identity(before) != identity(after) or len(value) != after.st_size:
         deny(f"changed_during_read:{path.name}")
     return value, after
+
+
+def read_capacity_contract(path: Path, repo: Path, output_parent: Path,
+                           target: str, release_id: str) -> dict[str, Any]:
+    if not path.is_absolute():
+        deny("capacity_contract_absolute")
+    raw, info = stable_bytes(path)
+    if stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.geteuid():
+        deny("capacity_contract_private")
+    contract = json_object(raw, "capacity-contract")
+    if set(contract) != CAPACITY_FIELDS or contract.get("schemaVersion") != 1:
+        deny("capacity_contract_schema")
+    if (contract.get("targetCommit") != target or
+            contract.get("releaseId") != release_id):
+        deny("capacity_contract_identity")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", str(contract.get("contractId", ""))):
+        deny("capacity_contract_id")
+    try:
+        captured = dt.datetime.fromisoformat(str(contract.get("capturedAtUtc", "")).replace("Z", "+00:00"))
+    except ValueError:
+        deny("capacity_contract_time")
+    if captured.tzinfo is None or captured.utcoffset() != dt.timedelta(0):
+        deny("capacity_contract_time")
+    for field in CAPACITY_BYTE_FIELDS | CAPACITY_INODE_FIELDS:
+        value = contract.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            deny(f"capacity_contract_value:{field}")
+    filesystem = Path(str(contract.get("filesystemPath", "")))
+    if not filesystem.is_absolute() or filesystem.is_symlink():
+        deny("capacity_contract_filesystem")
+    try:
+        filesystem = filesystem.resolve(strict=True)
+        repo_info = repo.stat()
+        output_info = output_parent.resolve(strict=True).stat()
+        filesystem_info = filesystem.stat()
+    except OSError:
+        deny("capacity_contract_filesystem")
+    if (not filesystem.is_dir() or repo_info.st_dev != filesystem_info.st_dev or
+            output_info.st_dev != filesystem_info.st_dev):
+        deny("capacity_contract_filesystem")
+    usage = os.statvfs(filesystem)
+    free_bytes = usage.f_bavail * usage.f_frsize
+    free_inodes = usage.f_favail
+    required_bytes = sum(contract[field] for field in CAPACITY_BYTE_FIELDS)
+    required_inodes = sum(contract[field] for field in CAPACITY_INODE_FIELDS)
+    if free_bytes < required_bytes:
+        deny(f"capacity_bytes:available={free_bytes}:required={required_bytes}")
+    if free_inodes < required_inodes:
+        deny(f"capacity_inodes:available={free_inodes}:required={required_inodes}")
+    return {
+        "contractId": contract["contractId"],
+        "contractSha256": sha256_bytes(raw),
+        "filesystemPath": str(filesystem),
+        "availableBytes": free_bytes,
+        "availableInodes": free_inodes,
+        "requiredBytes": required_bytes,
+        "requiredInodes": required_inodes,
+        "operationalReserveBytes": contract["operationalReserveBytes"],
+        "operationalReserveInodes": contract["operationalReserveInodes"],
+    }
+
+
+def allocated_bytes(path: Path) -> int:
+    total = 0
+    for item in [path, *path.rglob("*")]:
+        total += item.lstat().st_blocks * 512
+    return total
+
+
+def write_lifecycle(path: Path, value: dict[str, Any]) -> None:
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    if temporary.exists() or temporary.is_symlink():
+        deny("lifecycle_temporary_exists")
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(fd, "wb", closefd=False) as stream:
+            stream.write(canonical_json(value))
+            stream.flush()
+            os.fsync(stream.fileno())
+    finally:
+        os.close(fd)
+    os.replace(temporary, path)
+    directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def read_build_id(path: Path) -> str:
@@ -489,63 +587,97 @@ def build(args: argparse.Namespace) -> None:
         deny("components")
     if args.output.exists():
         deny("output_exists")
-    args.output.mkdir(mode=0o755, parents=False)
+    capacity = read_capacity_contract(
+        args.capacity_contract, repo, args.output.parent, args.target, args.release_id
+    )
+    args.output.mkdir(mode=0o700, parents=False)
+    lifecycle_path = args.output / "generation-lifecycle.private.json"
+    lifecycle: dict[str, Any] = {
+        "schemaVersion": 1,
+        "generationId": args.release_id,
+        "targetCommit": args.target,
+        "state": "BUILDING",
+        "capacity": capacity,
+        "releaseRoot": str(args.output / args.release_id),
+        "package": str(args.output / f"{args.release_id}.tar.xz"),
+        "classification": "PENDING",
+        "replacement": None,
+    }
+    write_lifecycle(lifecycle_path, lifecycle)
     env = build_environment()
     env.update(SOURCE_DATE_EPOCH=str(args.source_date_epoch), TZ="UTC", LANG="C.UTF-8",
                LC_ALL="C.UTF-8", CI="1", NEXT_TELEMETRY_DISABLED="1")
-    tools = toolchain(repo, env, args.output)
-    run(["npm", "ci"], repo, env, failure_root=args.output, stage="root_npm_ci")
-    api_source = repo / "apps/whatsapp-agent"
-    run(["npm", "ci", "--include=dev"], api_source, env,
-        failure_root=args.output, stage="api_npm_ci")
-    run(["npm", "run", "db:generate"], api_source, env,
-        failure_root=args.output, stage="prisma_generate")
-    run(["npm", "run", "build"], api_source, env,
-        failure_root=args.output, stage="api_build")
-    run(["npm", "run", "build"], repo, env,
-        failure_root=args.output, stage="frontend_build")
+    try:
+        tools = toolchain(repo, env, args.output)
+        run(["npm", "ci"], repo, env, failure_root=args.output, stage="root_npm_ci")
+        api_source = repo / "apps/whatsapp-agent"
+        run(["npm", "ci", "--include=dev"], api_source, env,
+            failure_root=args.output, stage="api_npm_ci")
+        run(["npm", "run", "db:generate"], api_source, env,
+            failure_root=args.output, stage="prisma_generate")
+        run(["npm", "run", "build"], api_source, env,
+            failure_root=args.output, stage="api_build")
+        run(["npm", "run", "build"], repo, env,
+            failure_root=args.output, stage="frontend_build")
 
-    release_root = args.output / args.release_id
-    release_root.mkdir(mode=0o755)
-    copy_allowlist(api_source, release_root / "api-runtime",
-                   ("dist", "node_modules", "package.json", "package-lock.json"))
-    copy_allowlist(repo, release_root / "frontend-runtime",
-                   (".next", "node_modules", "public", "package.json", "package-lock.json",
-                    "next.config.js", "next.config.mjs", "next.config.ts"))
-    ensure_clean_repo(repo, args.target)
-    normalize_tree(release_root, args.source_date_epoch)
-    entries = scan_runtime(release_root)
-    index_raw = canonical_json({"schemaVersion": 1, "scope": list(RUNTIMES), "entries": entries})
-    (release_root / "index.sha256").write_bytes(index_raw)
-    entry_raw, _ = stable_bytes(release_root / "api-runtime/dist/index.js")
-    build_id = read_build_id(release_root / "frontend-runtime/.next/BUILD_ID")
-    timestamp = dt.datetime.fromtimestamp(args.source_date_epoch, dt.timezone.utc).isoformat().replace("+00:00", "Z")
-    manifest = {
-        "schemaVersion": 1,
-        "producer": {"name": "converta-release.py", "formatVersion": 1},
-        "releaseId": args.release_id,
-        "targetCommit": args.target,
-        "components": list(COMPONENTS),
-        "sourceDateEpoch": args.source_date_epoch,
-        "builtAt": timestamp,
-        "toolchain": tools,
-        "runtimes": {
-            "api": {"entrypoint": "api-runtime/dist/index.js", "entrySha256": sha256_bytes(entry_raw)},
-            "frontend": {"buildId": build_id},
-        },
-        "indexSha256": sha256_bytes(index_raw),
-        "reproducibility": {"deterministic": True, "nonReproducibleFields": []},
-    }
-    (release_root / "manifest.json").write_bytes(canonical_json(manifest))
-    normalize_tree(release_root, args.source_date_epoch)
-    verified = verify_root(release_root, args.target, args.release_id)
-    package = args.output / f"{args.release_id}.tar.xz"
-    package_identity = write_package(release_root, package, args.source_date_epoch)
-    with tempfile.TemporaryDirectory(prefix="converta-release-extract-", dir=args.output.parent) as temporary:
-        extracted = safe_extract(package, Path(temporary), args.release_id)
-        extracted_verified = verify_root(extracted, args.target, args.release_id)
-        if extracted_verified != verified or canonical_json(scan_runtime(extracted)) != canonical_json(scan_runtime(release_root)):
-            deny("independent_extraction_mismatch")
+        release_root = args.output / args.release_id
+        release_root.mkdir(mode=0o755)
+        copy_allowlist(api_source, release_root / "api-runtime",
+                       ("dist", "node_modules", "package.json", "package-lock.json"))
+        copy_allowlist(repo, release_root / "frontend-runtime",
+                       (".next", "node_modules", "public", "package.json", "package-lock.json",
+                        "next.config.js", "next.config.mjs", "next.config.ts"))
+        ensure_clean_repo(repo, args.target)
+        normalize_tree(release_root, args.source_date_epoch)
+        entries = scan_runtime(release_root)
+        index_raw = canonical_json({"schemaVersion": 1, "scope": list(RUNTIMES), "entries": entries})
+        (release_root / "index.sha256").write_bytes(index_raw)
+        entry_raw, _ = stable_bytes(release_root / "api-runtime/dist/index.js")
+        build_id = read_build_id(release_root / "frontend-runtime/.next/BUILD_ID")
+        timestamp = dt.datetime.fromtimestamp(args.source_date_epoch, dt.timezone.utc).isoformat().replace("+00:00", "Z")
+        manifest = {
+            "schemaVersion": 1,
+            "producer": {"name": "converta-release.py", "formatVersion": 1},
+            "releaseId": args.release_id,
+            "targetCommit": args.target,
+            "components": list(COMPONENTS),
+            "sourceDateEpoch": args.source_date_epoch,
+            "builtAt": timestamp,
+            "toolchain": tools,
+            "runtimes": {
+                "api": {
+                    "entrypoint": "api-runtime/dist/index.js",
+                    "entrySha256": sha256_bytes(entry_raw),
+                },
+                "frontend": {"buildId": build_id},
+            },
+            "indexSha256": sha256_bytes(index_raw),
+            "reproducibility": {"deterministic": True, "nonReproducibleFields": []},
+        }
+        (release_root / "manifest.json").write_bytes(canonical_json(manifest))
+        normalize_tree(release_root, args.source_date_epoch)
+        verified = verify_root(release_root, args.target, args.release_id)
+        package = args.output / f"{args.release_id}.tar.xz"
+        package_identity = write_package(release_root, package, args.source_date_epoch)
+        with tempfile.TemporaryDirectory(prefix="converta-release-extract-", dir=args.output.parent) as temporary:
+            extracted = safe_extract(package, Path(temporary), args.release_id)
+            extracted_verified = verify_root(extracted, args.target, args.release_id)
+            if extracted_verified != verified or canonical_json(scan_runtime(extracted)) != canonical_json(scan_runtime(release_root)):
+                deny("independent_extraction_mismatch")
+    except BaseException as error:
+        lifecycle.update(state="FAILED", classification="PENDING",
+                         failureClass=type(error).__name__)
+        write_lifecycle(lifecycle_path, lifecycle)
+        raise
+    lifecycle.update(
+        state="COMPLETE",
+        classification="PENDING",
+        packageSha256=package_identity["packageSha256"],
+        manifestSha256=verified["manifestSha256"],
+        indexSha256=verified["indexSha256"],
+        allocatedBytes=allocated_bytes(args.output),
+    )
+    write_lifecycle(lifecycle_path, lifecycle)
     print(canonical_json({"result": "RELEASE BUILT", "releaseId": args.release_id,
                           "targetCommit": args.target, "package": str(package),
                           **package_identity, **verified}).decode().strip())
@@ -576,6 +708,7 @@ def parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--components", required=True)
     build_parser.add_argument("--output", type=Path, required=True)
     build_parser.add_argument("--source-date-epoch", type=int, required=True)
+    build_parser.add_argument("--capacity-contract", type=Path, required=True)
     build_parser.set_defaults(handler=build)
     verify_parser = commands.add_parser("verify")
     source = verify_parser.add_mutually_exclusive_group(required=True)

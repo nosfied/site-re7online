@@ -41,6 +41,8 @@ Antes de executar, classificar a mudanca conforme `docs/saas/CHANGE_POLICY.md`:
 - Conferir `git status --short`.
 - Produzir API/frontend com `scripts/converta-release.py build` em saída exclusiva,
   worktree isolado, Node `v20.20.0` e epoch do commit; exigir `RELEASE BUILT`.
+  Passar contrato privado `0600` de capacidade com todos os picos temporários e a
+  reserva operacional; a negativa ocorre antes do primeiro `npm`.
   Build na VPS é o padrão autorizado pelo owner; conferir capacidade medida e
   separação integral do runtime ativo. Builder externo é alternativa mediante
   decisão específica. A ativação continua exigindo autorização por janela.
@@ -77,6 +79,10 @@ pull/build/reload deste checklist; estes não autorizam janela nem reutilizaçã
 - Após complete, DENY, substituição ou encerramento: classificar imediatamente
   host obrigatório versus arquivável; gates falsos e estado consumido não dispensam
   launcher/controles dependentes. Preservar originais e diagnósticos da recusa.
+- Exigir o sidecar `generation-lifecycle.private.json`; estado `COMPLETE` ou `FAILED`
+  com classificação `PENDING` bloqueia nova cópia dispensável até revisão. Gerar o
+  relatório por geração e a comparação integral pelo mecanismo descrito em
+  [DEPLOY_ARTIFACT_LIFECYCLE.md](DEPLOY_ARTIFACT_LIFECYCLE.md).
 - Conferir retorno compatível, segredos vigentes, PM2 live/saved/fallback,
   boot/cron/Nginx/helpers/políticas e dependências compartilhadas.
 - Material arquivável exige custódia acessível ao owner e restauração isolada
