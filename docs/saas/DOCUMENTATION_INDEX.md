@@ -18,7 +18,7 @@
   journal `DEPLOYED` e lock liberado.
 - [Auditoria de capacidade da VPS](VPS_CAPACITY_AUDIT_2026-10-24.md)
   — fotografia inicial, lote histórico executado e custódia ainda pendente.
-- [Ciclo de vida dos artefatos de implantação](DEPLOY_ARTIFACT_LIFECYCLE.md)
+- [Ciclo de vida dos artefatos de implantação](DEPLOY_ARTIFACT_LIFECYCLE.md): capacidade, encerramento por geração, diagnóstico dirigido e retiradas históricas relatadas.
   — contrato de capacidade/classificação, inventário consolidado e novo lote pequeno
   proposto; não autoriza limpeza.
 - [Configuração do Meta App ID do Converta Demo](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json)
