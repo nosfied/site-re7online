@@ -56,6 +56,48 @@ hashes e capacidade, sem ambiente ou segredo. `FAILED`, `COMPLETE` ou uma geraç
 substituída exigem classificação imediata como host obrigatório, custódia off-host
 verificada ou pendência. Substituição nunca equivale a autorização para retirar.
 
+## Preservação de evidências de execução
+
+A coleta usa `scripts/retention-evidence-collector.py`; `--validate-only` verifica
+o contrato antes da janela. Ela exige raiz de origem literal e específica, destino novo diretamente sob custódia privada `0700` e helper
+regular `0600`, pertencente ao UID/GID executor, legível por esse UID e autenticado
+por SHA-256 externo. Caminho vazio, `/tmp`, raiz ampla, sobreposição, symlink, hash,
+owner, modo ou legibilidade divergente negam antes da cópia.
+
+`--source-writer-lock` é obrigatório e aponta para arquivo regular privado `0600`,
+irmão da raiz de origem. A origem deve estar encerrada; todo produtor capaz de
+escrevê-la precisa participar desse lock cooperativo. O coletor mantém `flock`
+exclusivo e não bloqueante desde a primeira observação até a publicação do recibo.
+Lock ocupado nega antes da cópia. A árvore é observada e revalidada com o mesmo
+contrato do comparador: identidade e composição da raiz e de cada diretório,
+identidade dos arquivos, tipos, modos, tamanhos, hashes e symlinks. Uma varredura
+comum ainda não é snapshot atômico; o lock e a exclusão comprovada de todos os
+escritores são condições da coleta, e a revalidação detecta drift observado.
+
+O coletor nunca remove a origem nem uma cópia parcial. Falha mantém os temporários
+para diagnóstico; encerramento posterior requer intenção nova. O diretório de origem
+não pode ser reduzido a uma variável implícita: origem, custódia e destino absolutos
+devem ser passados separadamente. A validação do helper antecede qualquer janela que
+dependa dele; não se altera owner ou modo e não se executa a coleta inteira como root
+para contornar acesso do UID executor. A coleta efetiva exige que o próprio processo
+tenha o UID/GID executor. Antes de publicar `PRESERVED`, arquivos copiados e
+diretórios da árvore são sincronizados, seguidos do diretório de custódia; o recibo
+preparado também é sincronizado e só então recebe o nome final por rename sem
+substituição. Os nomes reservado e preparado do recibo não podem existir na origem;
+arquivo regular ou symlink com qualquer deles nega antes da cópia. Depois da
+publicação, o diretório que contém o recibo é sincronizado novamente antes de
+retornar `PRESERVED`. Falha desse último `fsync` resulta em
+`PRESERVATION_INDETERMINATE`, registra que o recibo foi publicado sem durabilidade
+confirmada e proíbe retry automático; o recibo e todos os artefatos permanecem.
+Falha de cópia ou revalidação também nega a conclusão e preserva origem e cópia
+parcial.
+
+O coletor auxiliar exato usado na tentativa local negada de 25/10/2026 permanece
+somente como evidência do incidente e **não pode ser reutilizado**. Publicar este
+código versionado não comprova que uma futura janela deixou de usar o fluxo antigo:
+a intenção deve autenticar o helper versionado, seus argumentos e seu SHA-256, e a
+execução deve registrar essa identidade antes de abrir a janela.
+
 ## Relatório pós-janela
 
 `scripts/operational-retention-report.py` continua sem modo de aplicação. Além do
@@ -80,13 +122,96 @@ isolamento de escritores. O relatório calcula espaço pendente por geração, m
 `withdrawalEligible=false`: decisão, allowlist literal, revalidação e autorização
 continuam externas.
 
-## Inventário consolidado de 25/10/2026
+## Método de capacidade e encerramento por geração
+
+Este método aplica os princípios existentes de retenção e a regra antiespiral da
+[política de mudanças](CHANGE_POLICY.md#regra-de-encerramento-e-antiespiral).
+Uma negativa preserva a produção; ela não autoriza outra cadeia de cópias, novo
+framework ou repetição automática. Reutilizar bytes e provas cuja validade ainda
+possa ser demonstrada.
+
+| Momento | Registro e decisão obrigatórios |
+| --- | --- |
+| Antes de nova cópia, build ou compactação | Medição atual de bytes/inodes por filesystem e executor; artefatos compatíveis reutilizáveis; resíduos anteriores classificados; justificativa de cada nova cópia; pico de coexistência e reserva operacional preservada |
+| Depois do build, com sucesso ou falha | Inventário dos resíduos por geração: dependências, compilados, runtime copiado, pacote, extrações, staging e diagnósticos; finalidade, responsável e decisão para cada categoria |
+| Antes de iniciar outra geração volumosa | Revisar a pendência anterior; não criar outra cópia dispensável com classificação pendente. Necessidade operacional concreta de coexistência deve estar justificada e caber no orçamento medido |
+| Antes de retirada autorizada | Vincular os inventários atuais às provas autenticadas anteriores; verificar as referências operacionais, o retorno compatível e os componentes protegidos sob o lock vigente |
+| Depois de cada comando | Registrar tentativa durável, exit code, estado remanescente e registro Git quando aplicável; resultado parcial impede o comando seguinte |
+| Encerramento | Ausências e identidades operacionais conferidas, capacidade/inodes antes e depois, recibo com durabilidade confirmada e evidências sob custódia verificável |
+
+A reserva não é um percentual escolhido para obter PASS nem o saldo de uma medição
+antiga. Ela deve cobrir a operação, retornos, banco/WAL, crescimento no horizonte da
+janela e evidências segundo os contratos vigentes. Contar blocos únicos; não somar
+duas vezes subdiretórios, hardlinks ou cópias compartilhadas. Renomear no mesmo
+filesystem não recupera espaço.
+
+Separar executáveis operacionais e retorno compatível de dependências regeneráveis
+e payloads redundantes. Manifestos, pacotes e diagnósticos não precisam acompanhar
+automaticamente todas as cópias de runtime na VPS. Conteúdo único depende de decisão
+de preservação e custódia; nenhum dado de tenant, mídia, banco ou backup entra na
+retenção de executáveis por extensão desta regra. Nenhuma remoção é autorizada por
+idade, nome ou tamanho.
+
+### Diagnóstico dirigido, teste do executor e evidência proporcional
+
+Antes de pedir autenticação ao operador, revisar o procedimento inteiro e ensaiar o
+executor real, substituindo somente as operações externas necessárias. Validar os
+destinos novos, ancestrais, UID/GID efetivos, legibilidade dos auxiliares, hashes,
+argumentos, lock, limites medidos, traps e publicação do recibo. Um teste com
+identidade simulada não comprova acesso sob o UID real.
+
+Uma recusa deve registrar fase, predicado e identidade suficiente para diagnóstico
+dirigido. Erro de permissão, alvo ausente, processo encerrado e identidade incerta
+são estados distintos; não remover negativas para fabricar cobertura completa.
+Confirmar o término de processos e a identidade dos objetos com mecanismos adequados
+à superfície observada. Caminho no host não substitui resolução no namespace do
+processo. Detalhes sensíveis permanecem somente na evidência privada.
+
+Separar os orçamentos de indexação, observação e revalidação, com verificação de
+prazo também ao fim de cada fase. Pré-indexar relações reutilizadas, em vez de
+repercorrer todo o inventário a cada consulta. Após uma recusa, preservar a tentativa
+e investigar o ponto exato; não repetir toda a coleta apenas para obter diagnóstico
+que deveria ter sido registrado.
+
+Testar também falha parcial de remoção, falha da amostra e falha de durabilidade
+tanto no sucesso como no caminho de erro. Em Bash, funções chamadas em condicionais
+não devem depender apenas de `set -e`: operações críticas precisam verificar seus
+retornos explicitamente. Nenhuma falha de `fsync` pode ser convertida em sucesso,
+republicação automática ou repetição da retirada.
+
+Manter preparação de código, testes e análises volumosas fora da VPS quando
+possível. Levar ao host produtivo somente auxiliares e evidências necessários, com
+orçamento explícito; não copiar payloads de aplicação para diagnosticar um auxiliar.
+Medir o crescimento das próprias preparações e evidências do saneamento. Reutilizar
+artefatos autenticados quando aplicável, sem excluir automaticamente originais ou
+cópias parciais. Custódia deve ser durável e acessível ao responsável; armazenamento
+temporário não a comprova.
+
+### Controles implementados e limites de implantação
+
+| Controle | Situação comprovada pelo código versionado |
+| --- | --- |
+| Contrato privado de capacidade, pico e reserva | Exigido por `converta-release.py build`, antes da saída e do primeiro npm |
+| Registro de geração | Sidecar com BUILDING/COMPLETE/FAILED; classificação permanece PENDING até revisão |
+| Impedir automaticamente nova geração por retenção pendente anterior | Não implementado pelo produtor atual; a revisão e o bloqueio de cópias dispensáveis dependem do procedimento operacional |
+| Impedir automaticamente ultrapassagem do orçamento ao longo de todas as fases | Não comprovado pelo preflight inicial; medir nas fronteiras de cópia e registrar desvios continua necessário |
+| Retirada e retenção por idade | Não há exclusão automática introduzida por este método |
+| Instalação dos controles na VPS | Precisa de atestação do executável efetivamente usado e seu hash; merge ou documentação não comprovam ativação |
+
+A extensão futura dos controles deve reutilizar o produtor e os registros existentes,
+com teste de negativa antes da alocação volumosa. Não introduzir outro launcher,
+cron ou framework de limpeza para substituir a correção desse fluxo.
+
+## Inventário histórico anterior aos lotes de 25/10/2026
+
+Esta fotografia e suas classificações precedem as retiradas relatadas abaixo; não
+representam a ocupação nem a lista de caminhos presentes após o encerramento final.
 
 Leitura limitada, sem exclusão ou mutação. O filesystem tinha 82.086.711.296 bytes,
 70.972.801.024 usados e 11.097.133.056 disponíveis; 1.620.730 inodes usados. A
 fotografia detalhada privada foi preservada fora do Git.
 
-| Raiz | Gerações observadas | Alocado | Classificação atual |
+| Raiz | Gerações observadas | Alocado | Classificação na auditoria |
 | --- | --- | ---: | --- |
 | `/opt/re7online/releases` | 52 entradas de primeira ordem, incluindo releases/runtimes, incoming, staging e `failed-preparations` | 28.691.599.360 B na medição ampla anterior | ativa, retornos, históricos e pendências misturados; nenhuma retirada ampla |
 | `/opt/re7online/build-output` | `a62da468` principal/repack, `ec2a9fde`, `ef7db111`, `3630e16`, `d7de6453` e três logs privados | 5.830.348.800 B | payloads redundantes e pacotes/evidências a separar |
@@ -389,7 +514,7 @@ duplicatas. A listagem demonstra legibilidade e membros, sem substituir prova
 byte a byte após extração independente. A recusa anterior e o estado `NOT_PROVEN`
 da captura interrompida permanecem históricos. A release ativa não integra limpeza.
 
-### Auditoria a62da468 e preparações falhas — sem execução
+### Preparação histórica a62da468 e preparações falhas — anterior à execução
 
 Duas amostras integrais e estáveis, segundo o operador, comprovaram igualdade entre
 o payload original e a preparação preservada por falta de uploads. Frente ao
@@ -444,3 +569,46 @@ específica. Worktrees somente por `git worktree remove`, sem força; runtimes s
 por seus caminhos literais, sem remover os diretórios documentais pais. Parar na
 primeira falha e inspecionar sem replay. Nenhuma nova exclusão está autorizada por
 este documento.
+
+## Encerramento relatado do lote a62da468 — 25/10/2026
+
+Fonte: relatório final fornecido pelo usuário nesta continuidade. O autor desta
+atualização não acessou a VPS nem os recibos privados. Este registro documenta uma
+execução passada; não autoriza repetição dos comandos históricos.
+
+Lote `retention-a62da468-failed-preparations-ready-v7-20261025`, informado como
+COMPLETED: sete comandos tentados, concluídos e verificados, sete caminhos removidos,
+zero falhas, sem retry automático, força, prune ou expansão. O operador informou o
+lock mantido até a inspeção final e o fsync do recibo, depois livre, sem remover seu
+arquivo nem liberar lock alheio. Nenhuma alteração de serviço foi relatada. O resumo
+final não reapresentou PIDs/start ticks ou saídas de health; não se atribui a esta
+atualização uma nova verificação dessas superfícies.
+
+| Medida | Antes | Depois |
+| --- | ---: | ---: |
+| Bytes usados | 65.170.415.616 | 61.442.281.472 |
+| Bytes disponíveis | 16.899.518.464 | 20.627.652.608 |
+| Inodes usados | 1.407.977 | 1.278.864 |
+
+Ganho observado neste lote: **3.728.134.144 bytes** e **129.113 inodes**. O potencial
+anterior era 3.726.594.048 bytes; a diferença de 1.540.096 bytes fica registrada sem
+atribuição causal independente. Variação líquida de filesystem inclui outras
+atividades e não equivale necessariamente aos blocos dos candidatos.
+
+Somados aos quatro lotes anteriores relatados: **11.145.793.536 bytes** e
+**383.296 inodes** recuperados. A soma não representa crescimento ou limpeza somente
+de um dia. O saldo de 20.627.652.608 bytes é a medição pós-lote informada, não
+capacidade atual certificada para uma operação futura.
+
+Recibo, log de comandos e duas amostras foram informados com hashes finais. A
+custódia durável das evidências finais deste lote ainda não foi confirmada nesta
+conversa. Confirmar pelo procedimento de preservação já versionado, reutilizando
+origens encerradas e destino novo, sem copiar novamente payloads e sem remover
+originais ou parciais. Esta pendência não altera o relato de execução dos sete
+comandos e não autoriza repeti-los.
+
+As tentativas anteriores negadas permanecem encerradas e preservadas. O incidente
+local e as limitações de recuperação de conteúdo não versionado continuam sob
+tratamento próprio; o sucesso desta limpeza não comprova sua recuperação. Outputs
+e releases fora dos sete caminhos, inclusive os runtimes d7de6453 pendentes, seguem
+sem autorização adicional de retirada.
