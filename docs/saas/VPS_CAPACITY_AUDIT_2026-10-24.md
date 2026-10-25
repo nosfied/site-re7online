@@ -101,7 +101,8 @@ Leitura de `2026-10-25T00:09:47Z`:
 
 - nenhum processo `npm` estava ativo;
 - nenhum processo Node tinha CWD no cache, worktree ou sidecar;
-- nenhum CWD de processo apontava para os três caminhos;
+- nenhum CWD, descritor aberto ou mapa de memória de processo apontava para os
+  três caminhos;
 - os symlinks `/opt/re7online/current/api` e
   `/opt/re7online/current/frontend` apontavam para a release ativa `d7de6453`;
 - a busca dirigida em `/current`, dump PM2, configurações privadas e transações
