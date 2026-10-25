@@ -1,6 +1,10 @@
 # Auditoria de capacidade da VPS — 24/10/2026
 
-**READ ONLY / NENHUMA LIMPEZA AUTORIZADA / PRODUÇÃO INALTERADA**
+**AUDITORIA INICIAL SOMENTE LEITURA / LOTE PEQUENO EXECUTADO E VERIFICADO CONFORME RELATO DO OPERADOR**
+
+A fotografia inicial e a preparação abaixo são históricas. Após autorização explícita
+do usuário, o operador informou a conclusão do lote; o resultado está registrado
+na seção de encerramento. Não há autorização para novas exclusões.
 
 Fotografia coletada em `2026-10-24T20:49:05-03:00`. As medições usam leituras
 limitadas. Dois totais amplos excederam o limite de 25 segundos; os subdiretórios
@@ -55,7 +59,7 @@ A busca sanitizada encontrou referências privadas para todas as releases acima.
 Contagem de referência não prova necessidade sozinha; confirma que nenhuma delas
 pode entrar em limpeza sem reconstruir o grafo de retorno.
 
-## Inventário resumido e candidatos
+## Inventário inicial resumido e candidatos
 
 | Disposição | Caminho/escopo | Alocado | Função e referências verificadas | Motivo | Recuperável estimado | Risco |
 | --- | --- | ---: | --- | --- | ---: | --- |
@@ -78,22 +82,162 @@ Tamanho igual, idade ou nome parecido não foram usados como prova de inutilidad
 `docker system df` mostrou a imagem como “reclaimable”, mas ela é a imagem do
 container PostgreSQL ativo e foi classificada como **preservar**.
 
-## Lote pequeno proposto para revisão
+## Preparação histórica do lote pequeno
 
-Nenhuma ação foi executada. Um lote futuro e separado pode conter somente:
+Na preparação, nenhuma ação havia sido executada. O lote então proposto continha somente:
 
-1. cache npm `~/.npm/_cacache` — até 398 MiB;
-2. worktree limpo `immutable-ec2a9fde-vps-20261024T161807Z-source` — até 976 MiB,
-   removido apenas por `git worktree remove`, depois de confirmar novamente que
-   não há processo, CWD, symlink, dump, journal, pacote ou configuração apontando
-   para ele;
-3. sidecar vazio da saída `immutable-ec2a9fde-vps-20261024T161807Z` — 4 KiB,
-   somente junto da evidência correspondente.
+1. cache npm `/home/deploy/.npm/_cacache` — 406.303.215 bytes lógicos;
+2. worktree interrompido
+   `/opt/re7online/build-worktrees/immutable-ec2a9fde-vps-20261024T161807Z-source`
+   — 1.023.291.392 bytes alocados;
+3. sidecar vazio
+   `/opt/re7online/build-output/immutable-ec2a9fde-vps-20261024T161807Z` — um
+   bloco de diretório de 4 KiB e zero bytes de conteúdo.
 
 Estimativa máxima: aproximadamente 1,34 GiB. Antes de executar, exigir nova leitura,
 lista literal, hashes/índice do que será preservado, autorização própria e verificação
 posterior. O lote não inclui release, pacote autenticado, backup, log corrente,
 mídia, PostgreSQL, Docker, configuração privada ou evidência de retorno.
+
+### Revalidação específica do lote
+
+Leitura de `2026-10-25T00:09:47Z`:
+
+- nenhum processo `npm` estava ativo;
+- nenhum processo Node tinha CWD no cache, worktree ou sidecar;
+- nenhum CWD, descritor aberto ou mapa de memória de processo apontava para os
+  três caminhos;
+- os symlinks `/opt/re7online/current/api` e
+  `/opt/re7online/current/frontend` apontavam para a release ativa `d7de6453`;
+- a busca dirigida em `/current`, dump PM2, configurações privadas e transações
+  não encontrou referência ao worktree nem ao sidecar;
+- o worktree é detached no commit
+  `ec2a9fde99b6421a85256f14604bd469879f4f2a`, sem alteração tracked ou untracked;
+- o worktree contém **30.917 arquivos ignorados**, distribuídos em `.next`,
+  `node_modules`, `apps/whatsapp-agent/node_modules`,
+  `apps/whatsapp-agent/dist` e `next-env.d.ts`. São dependências e produtos do
+  build interrompido, não fonte única;
+- não foi encontrado log npm no intervalo da tentativa nem evidência nomeada
+  `20261024T161807Z` fora do sidecar vazio. Por isso, o registro sanitizado deste
+  documento preserva explicitamente caminho, commit, estado Git e inventário dos
+  ignorados antes que uma remoção seja autorizada.
+
+### Comandos históricos do lote — não repetir
+
+Os três comandos abaixo foram posteriormente executados conforme o relato de
+encerramento. São preservados como evidência, não como instrução para repetição.
+Não contêm curingas, `--force` ou prune global:
+
+```bash
+rm -r -- /home/deploy/.npm/_cacache
+git -C /opt/re7online/site-re7online worktree remove /opt/re7online/build-worktrees/immutable-ec2a9fde-vps-20261024T161807Z-source
+rmdir -- /opt/re7online/build-output/immutable-ec2a9fde-vps-20261024T161807Z
+```
+
+`git worktree remove` é obrigatório para manter o registro Git coerente. Se ele
+negar a remoção sem `--force`, o lote deve parar; não substituir por `rm`, não usar
+`--force` e não executar `git worktree prune`.
+
+### Baseline e verificações antes/depois
+
+Baseline somente leitura coletada antes da proposta:
+
+| Item | Valor esperado antes e depois |
+| --- | --- |
+| API | PID `118102`, start ticks `3652796`, restart count `5`, online |
+| Frontend | PID `118502`, start ticks `3663031`, restart count `3`, online |
+| Worker | PID `2233`, start ticks `17758`, restart count `0`, online |
+| Dump PM2 | `5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13`, modo `0600` |
+| Marker `DEPLOYED` | `1d2be9be3fd5e257700257988bb4cd946dac0f7cb47b6b3a4f861facedd7c543`, modo `0600` |
+| API local/pública | HTTP 200, `ok=true`, `db=ok` |
+| Frontend | Login local/público, Inbox e CRM públicos HTTP 200 |
+| Disco/inodes | 9.759.088.640 bytes disponíveis; 8.692.907 inodes disponíveis |
+
+Antes de qualquer remoção futura: repetir espaço/inodes, ausência de build/npm,
+estado Git e ignorados, referências operacionais, processos, hashes e os GETs acima.
+Depois: exigir ausência literal dos três caminhos, ausência do worktree no registro
+Git, aumento compatível de espaço/inodes, identidades/restart counts idênticos,
+hashes idênticos e os mesmos GETs. Não consultar Modelos ou Campanhas nesta
+verificação para evitar qualquer superfície que possa iniciar sincronização.
+
+
+## Encerramento do lote autorizado
+
+**EXECUTADO / VERIFICAÇÕES POSTERIORES PASS, conforme relato do operador.**
+
+Fonte: relatório de execução fornecido pelo usuário nesta continuidade, após
+autorização explícita limitada aos três caminhos. O horário exato da execução não
+foi informado. Este registro documental não representa nova execução nem
+verificação independente da VPS pelo autor desta atualização.
+
+| Comando histórico | Resultado informado |
+| --- | --- |
+| `rm -r -- /home/deploy/.npm/_cacache` | exit code 0 |
+| `git -C /opt/re7online/site-re7online worktree remove /opt/re7online/build-worktrees/immutable-ec2a9fde-vps-20261024T161807Z-source` | exit code 0 |
+| `rmdir -- /opt/re7online/build-output/immutable-ec2a9fde-vps-20261024T161807Z` | exit code 0 |
+
+Execução sequencial, sem falhas ou remoção parcial. Os três caminhos ficaram
+ausentes e o worktree deixou de constar em `git worktree list`.
+
+| Medida | Antes da execução | Depois da execução |
+| --- | ---: | ---: |
+| Espaço usado (bytes) | 72.311.345.152 | 70.869.721.088 |
+| Espaço disponível (bytes) | 9.758.588.928 | 11.200.212.992 |
+| Inodes usados | 1.661.781 | 1.620.681 |
+| Uso do filesystem | 89% | 87% |
+
+Ganho real informado: **1.441.624.064 bytes (aproximadamente 1,34 GiB)** e
+**41.100 inodes**. A baseline imediatamente anterior à execução é distinta da
+fotografia da preparação; as medições originais permanecem preservadas acima.
+
+| Processo | PID preservado | Start ticks preservados | Restart count preservado |
+| --- | ---: | ---: | ---: |
+| Worker | 2233 | 17758 | 0 |
+| Frontend | 118502 | 3663031 | 3 |
+| API | 118102 | 3652796 | 5 |
+
+Todos permaneceram online. Hashes informados como inalterados:
+
+- Dump PM2: `5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13`.
+- Marker `DEPLOYED`: `1d2be9be3fd5e257700257988bb4cd946dac0f7cb47b6b3a4f861facedd7c543`.
+
+Health da API local e pública: `ok=true`, `db=ok`. Login local e público,
+Inbox e CRM: HTTP 200. Modelos e Campanhas ficaram fora dos smokes previstos.
+
+O operador informou zero restart, `pm2 save`, alteração de serviço, cron, backup,
+dado ou chamada Meta. Backups e outputs adicionais continuam preservados; esta
+conclusão não autoriza outro lote. A cópia off-host em `/tmp` observada na auditoria
+não comprova custódia durável para justificar futuras exclusões.
+
+## Continuação da classificação: backups e outputs
+
+O total de backups permanece em 15.671.709.696 bytes. A leitura por hashes provou
+duplicidade de conteúdo, sem autorizar exclusão:
+
+| Grupo byte-idêntico | Cópias | Redundância física comprovada | Decisão |
+| --- | ---: | ---: | --- |
+| `automation-20260929T220203Z` / `runtime-fix-20260930T020103Z`, `content.private.tar.gz` | 2 | 461.711.466 bytes | preservar; janelas e manifests distintos |
+| frontend `fa60f0f6` original / observado | 2 | 174.112.557 bytes | preservar; dependência histórica não encerrada |
+| `worker-minimal-b9-v3.tar.gz` em três preparações | 3 | 224.070.718 bytes | preservar; três incidentes referenciam o payload |
+| `audited-metadata.private.json` das duas janelas de retenção | 2 | 44.402.289 bytes | preservar; evidência de duas execuções |
+
+São 904.297.030 bytes redundantes comprovados (aprox. 862 MiB). Tamanho igual sem
+hash não foi classificado como duplicata. Um arquivo privado de remoções não pôde
+ser lido pelo usuário `deploy`; ele permanece preservado e não foi contornado com
+sudo.
+
+A cópia off-host de manutenção continua presente em
+`/tmp/converta-vps-maintenance-20261024T122126Z`. O dump PostgreSQL e o arquivo de
+dados persistentes somam 573.459.123 bytes e seus hashes locais coincidem com os
+sidecars autenticados na VPS. Essa custódia cobre apenas o snapshot de manutenção;
+não cobre as demais preparações, snapshots ou outputs.
+
+Nos outputs substituídos, manifesto e índice de `d7de6453`, `ef7db111`, `3630e16`
+e `ec2a9fde` coincidem byte a byte com as respectivas releases. Eles permanecem
+dependências da release ativa ou da cadeia de retorno, e não há cópia off-host
+comprovada de seus pacotes. O output `a62da468` não coincide com a release instalada
+porque houve repack posterior; ele não é duplicata comprovada. Assim, nenhum backup
+ou output adicional entrou no lote pequeno.
 
 ## Cron, retenção e scripts
 
