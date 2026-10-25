@@ -108,6 +108,72 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(result['changedCount'], 1)
         self.assertFalse(result['sourceContentContainedInDestination'])
 
+    def test_tree_comparison_includes_root_metadata(self):
+        left = self.root / 'root-left'; right = self.root / 'root-right'
+        left.mkdir(mode=0o700); right.mkdir(mode=0o755)
+        left.chmod(0o700); right.chmod(0o755)
+        result = m.compare_trees(left, right)
+        self.assertFalse(result['contentAndMetadataEquivalent'])
+        self.assertEqual(result['sourceEntries'], 1)
+        self.assertEqual(result['destinationEntries'], 1)
+        self.assertEqual(result['changedCount'], 1)
+        self.assertEqual(result['firstDifferences']['changed'], ['.'])
+        self.assertEqual(result['differenceCountsByAttribute']['mode'], 1)
+
+    def test_addition_after_enumeration_during_another_hash_denies_proof(self):
+        left = self.root / 'late-left'; right = self.root / 'late-right'
+        left.mkdir(); right.mkdir()
+        for root in (left, right):
+            (root / 'a').write_text('a')
+            (root / 'b').write_text('b')
+        original = m.stable_hash
+        changed = False
+
+        def mutate(path, deadline, budget):
+            nonlocal changed
+            digest = original(path, deadline, budget)
+            if path == left / 'a' and not changed:
+                changed = True
+                (left / 'late').write_text('late')
+            return digest
+
+        with patch.object(m, 'stable_hash', side_effect=mutate):
+            with self.assertRaisesRegex(ValueError, 'comparison_tree_drift:source'):
+                m.compare_trees(left, right)
+
+    def test_source_mutations_while_destination_is_examined_deny_proof(self):
+        actions = ('add', 'remove', 'replace', 'rename')
+        for action in actions:
+            with self.subTest(action=action):
+                left = self.root / f'{action}-left'; right = self.root / f'{action}-right'
+                left.mkdir(); right.mkdir()
+                for root in (left, right):
+                    (root / 'a').write_text('a')
+                    (root / 'b').write_text('b')
+                original = m.stable_hash
+                changed = False
+
+                def mutate(path, deadline, budget):
+                    nonlocal changed
+                    digest = original(path, deadline, budget)
+                    if path == right / 'a' and not changed:
+                        changed = True
+                        if action == 'add':
+                            (left / 'c').write_text('c')
+                        elif action == 'remove':
+                            (left / 'b').unlink()
+                        elif action == 'replace':
+                            replacement = self.base / f'{action}-replacement'
+                            replacement.write_text('b')
+                            os.replace(replacement, left / 'b')
+                        else:
+                            (left / 'b').rename(left / 'c')
+                    return digest
+
+                with patch.object(m, 'stable_hash', side_effect=mutate):
+                    with self.assertRaisesRegex(ValueError, 'comparison_tree_drift:source'):
+                        m.compare_trees(left, right)
+
     def test_generation_catalog_reports_pending_space(self):
         generation = self.root / 'generation'; generation.mkdir()
         (generation / 'payload').write_bytes(b'x' * 4096)

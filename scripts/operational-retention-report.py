@@ -92,6 +92,12 @@ def inventory(roots, max_entries=100000, seconds=30):
     }
 
 
+def stat_identity(value):
+    return (value.st_dev, value.st_ino, value.st_mode, value.st_nlink,
+            value.st_uid, value.st_gid, value.st_size, value.st_mtime_ns,
+            value.st_ctime_ns)
+
+
 def stable_hash(path, deadline, hash_budget):
     before = path.lstat()
     if not stat.S_ISREG(before.st_mode) or path.is_symlink():
@@ -99,7 +105,12 @@ def stable_hash(path, deadline, hash_budget):
     if before.st_size > hash_budget[0]:
         raise ValueError('hash_budget_exceeded')
     digest = hashlib.sha256()
-    with path.open('rb') as source:
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    opened = os.fstat(fd)
+    if stat_identity(before) != stat_identity(opened):
+        os.close(fd)
+        raise ValueError('hash_identity_drift')
+    with os.fdopen(fd, 'rb') as source:
         while True:
             if time.monotonic() >= deadline:
                 raise TimeoutError('hash_deadline_exceeded')
@@ -108,9 +119,7 @@ def stable_hash(path, deadline, hash_budget):
                 break
             digest.update(chunk)
     after = path.lstat()
-    identity = lambda value: (value.st_dev, value.st_ino, value.st_mode, value.st_size,
-                              value.st_mtime_ns, value.st_ctime_ns)
-    if identity(before) != identity(after):
+    if stat_identity(before) != stat_identity(after):
         raise ValueError('hash_identity_drift')
     hash_budget[0] -= before.st_size
     return digest.hexdigest()
@@ -120,44 +129,104 @@ def canonical_tree(root, deadline, hash_budget):
     root = Path(os.path.abspath(root))
     if root.resolve() != root or not root.is_dir() or root.is_symlink():
         raise ValueError('comparison_root_not_literal_directory')
-    entries = []
+    entries, observations = [], {}
     stack = [root]
     while stack:
         if time.monotonic() >= deadline:
             raise TimeoutError('comparison_deadline_exceeded')
         path = stack.pop()
         info = path.lstat()
-        if path != root:
-            item = {'path': path.relative_to(root).as_posix(),
-                    'mode': stat.S_IMODE(info.st_mode)}
-            if stat.S_ISREG(info.st_mode):
-                item.update(type='file', size=info.st_size,
-                            sha256=stable_hash(path, deadline, hash_budget))
-            elif stat.S_ISDIR(info.st_mode):
-                item['type'] = 'directory'
-            elif stat.S_ISLNK(info.st_mode):
-                item.update(type='symlink', target=os.readlink(path))
-            else:
-                raise ValueError('comparison_entry_type')
-            entries.append(item)
+        relative = '.' if path == root else path.relative_to(root).as_posix()
+        item = {'path': relative, 'mode': stat.S_IMODE(info.st_mode)}
+        observation = {'identity': stat_identity(info)}
+        if stat.S_ISREG(info.st_mode):
+            item.update(type='file', size=info.st_size,
+                        sha256=stable_hash(path, deadline, hash_budget))
+        elif stat.S_ISDIR(info.st_mode):
+            item['type'] = 'directory'
+        elif stat.S_ISLNK(info.st_mode):
+            target = os.readlink(path)
+            item.update(type='symlink', target=target)
+            observation['target'] = target
+        else:
+            raise ValueError('comparison_entry_type')
+        entries.append(item)
         if stat.S_ISDIR(info.st_mode):
             fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             try:
-                children = sorted((path / child.name for child in os.scandir(fd)),
-                                  key=lambda child: child.name, reverse=True)
-                stack.extend(children)
+                if stat_identity(info) != stat_identity(os.fstat(fd)):
+                    raise ValueError('comparison_tree_drift')
+                names = sorted(child.name for child in os.scandir(fd))
+                observation['children'] = tuple(names)
+                stack.extend(path / name for name in reversed(names))
             finally:
                 os.close(fd)
+        after = path.lstat()
+        if stat_identity(info) != stat_identity(after):
+            raise ValueError('comparison_tree_drift')
+        observations[relative] = observation
     entries.sort(key=lambda item: item['path'])
     raw = json.dumps(entries, sort_keys=True, separators=(',', ':')).encode()
-    return entries, hashlib.sha256(raw).hexdigest()
+    return entries, hashlib.sha256(raw).hexdigest(), observations
+
+
+def revalidate_tree(root, observations, deadline, label):
+    root = Path(os.path.abspath(root))
+    seen, stack = set(), [root]
+    try:
+        while stack:
+            if time.monotonic() >= deadline:
+                raise TimeoutError('comparison_deadline_exceeded')
+            path = stack.pop()
+            relative = '.' if path == root else path.relative_to(root).as_posix()
+            expected = observations.get(relative)
+            if expected is None:
+                raise ValueError(f'comparison_tree_drift:{label}')
+            info = path.lstat()
+            if stat_identity(info) != expected['identity']:
+                raise ValueError(f'comparison_tree_drift:{label}')
+            seen.add(relative)
+            if stat.S_ISLNK(info.st_mode):
+                if os.readlink(path) != expected.get('target'):
+                    raise ValueError(f'comparison_tree_drift:{label}')
+            elif stat.S_ISDIR(info.st_mode):
+                fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                try:
+                    if stat_identity(info) != stat_identity(os.fstat(fd)):
+                        raise ValueError(f'comparison_tree_drift:{label}')
+                    names = tuple(sorted(child.name for child in os.scandir(fd)))
+                finally:
+                    os.close(fd)
+                if names != expected.get('children'):
+                    raise ValueError(f'comparison_tree_drift:{label}')
+                stack.extend(path / name for name in reversed(names))
+        if seen != set(observations):
+            raise ValueError(f'comparison_tree_drift:{label}')
+        # Directory identities close the observation interval after descendants
+        # have been checked, detecting a late add/remove/rename in their scope.
+        for relative, expected in observations.items():
+            if 'children' not in expected:
+                continue
+            path = root if relative == '.' else root / relative
+            if stat_identity(path.lstat()) != expected['identity']:
+                raise ValueError(f'comparison_tree_drift:{label}')
+    except (FileNotFoundError, NotADirectoryError, OSError) as error:
+        raise ValueError(f'comparison_tree_drift:{label}') from error
 
 
 def compare_trees(source, destination, seconds=60, max_hash_bytes=8 * 1024**3):
     deadline = time.monotonic() + seconds
     budget = [max_hash_bytes]
-    source_entries, source_digest = canonical_tree(source, deadline, budget)
-    destination_entries, destination_digest = canonical_tree(destination, deadline, budget)
+    source_entries, source_digest, source_observations = canonical_tree(
+        source, deadline, budget
+    )
+    destination_entries, destination_digest, destination_observations = canonical_tree(
+        destination, deadline, budget
+    )
+    # Recheck both complete namespaces only after both content reads. This catches,
+    # among other changes, a source mutation while destination content was hashed.
+    revalidate_tree(source, source_observations, deadline, 'source')
+    revalidate_tree(destination, destination_observations, deadline, 'destination')
     source_by_path = {item['path']: item for item in source_entries}
     destination_by_path = {item['path']: item for item in destination_entries}
     source_only = sorted(set(source_by_path) - set(destination_by_path))

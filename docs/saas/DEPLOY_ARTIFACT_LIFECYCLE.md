@@ -67,9 +67,18 @@ inventário por inode, ele aceita:
 - orçamento explícito de bytes para hashing.
 
 A comparação inclui caminho relativo, tipo, modo, tamanho, SHA-256 de arquivo e
-destino textual de symlink. Diferenças são separadas por atributo. O relatório
-calcula espaço pendente por geração, mas mantém `withdrawalEligible=false`: decisão,
-allowlist literal, revalidação e autorização continuam externas.
+destino textual de symlink, incluindo tipo e modo da própria raiz. Origem e destino
+são revalidados integralmente depois das duas leituras; adição, remoção, substituição,
+renomeação, leitura incompleta ou drift de identidade negam a prova. Diferenças
+estáveis são separadas por atributo.
+
+A execução exige exclusão de escritores para ambas as árvores durante todo o
+intervalo: nenhum build, extração, promoção, cache runtime, processo com escrita ou
+limpeza pode alcançar as raízes comparadas. A varredura comum não é snapshot atômico;
+a revalidação detecta drift observado, mas não substitui filesystem snapshot nem
+isolamento de escritores. O relatório calcula espaço pendente por geração, mas mantém
+`withdrawalEligible=false`: decisão, allowlist literal, revalidação e autorização
+continuam externas.
 
 ## Inventário consolidado de 25/10/2026
 
@@ -208,15 +217,18 @@ retirada de uma cópia redundante.
 
 ## Primeiro lote preparado — não executado
 
-Os quatro caminhos abaixo contêm somente runtimes duplicados de `ec2a9fde`; os
-wrappers, pacote, manifesto, índice e demais evidências ficam preservados:
+Os quatro caminhos abaixo contêm runtimes cujo conteúdo de origem está integralmente
+contido na release instalada de `ec2a9fde`. Isso não significa igualdade irrestrita:
+os stagings diferem nos modos, e o frontend instalado contém seis entradas adicionais
+de cache runtime. Os wrappers, pacote, manifesto, índice e demais evidências ficam
+preservados:
 
 | Caminho literal | Alocado | Referências | Prova | Decisão proposta |
 | --- | ---: | --- | --- | --- |
 | `/opt/re7online/build-output/immutable-ec2a9fde-vps-20261024T162005Z/immutable-ec2a9fde-vps-20261024T162005Z/api-runtime` | 337.059.840 B | nenhuma referência live/saved/boot/Nginx/cron/helper | 8.197 entradas; conteúdo e metadados iguais à release instalada | remover após autorização |
 | `/opt/re7online/build-output/immutable-ec2a9fde-vps-20261024T162005Z/immutable-ec2a9fde-vps-20261024T162005Z/frontend-runtime` | 645.025.792 B | nenhuma referência operacional | 26.149 entradas; todas contidas na release instalada; seis entradas adicionais nela são cache de imagem criado em runtime | remover após autorização |
-| `/opt/re7online/releases/.staging-immutable-ec2a9fde-vps-20261024T162005Z-20261024T164600Z/immutable-ec2a9fde-vps-20261024T162005Z/api-runtime` | 337.059.840 B | staging já promovido; nenhuma referência operacional | 8.197 entradas; zero divergência de tipo/tamanho/SHA/symlink e 8.187 diferenças somente de modo | remover após autorização |
-| `/opt/re7online/releases/.staging-immutable-ec2a9fde-vps-20261024T162005Z-20261024T164600Z/immutable-ec2a9fde-vps-20261024T162005Z/frontend-runtime` | 645.025.792 B | staging já promovido; nenhuma referência operacional | 26.149 entradas; zero divergência de tipo/tamanho/SHA/symlink, 26.118 diferenças somente de modo e seis caches apenas no destino vivo | remover após autorização |
+| `/opt/re7online/releases/.staging-immutable-ec2a9fde-vps-20261024T162005Z-20261024T164600Z/immutable-ec2a9fde-vps-20261024T162005Z/api-runtime` | 337.059.840 B | staging já promovido; nenhuma referência operacional | conteúdo das 8.197 entradas integralmente contido; zero divergência de tipo/tamanho/SHA/symlink e 8.187 diferenças de modo explicitadas | remover após autorização |
+| `/opt/re7online/releases/.staging-immutable-ec2a9fde-vps-20261024T162005Z-20261024T164600Z/immutable-ec2a9fde-vps-20261024T162005Z/frontend-runtime` | 645.025.792 B | staging já promovido; nenhuma referência operacional | conteúdo das 26.149 entradas integralmente contido; zero divergência de tipo/tamanho/SHA/symlink, 26.118 diferenças de modo e seis caches adicionais no destino vivo | remover após autorização |
 
 Potencial literal: **1.964.171.264 bytes alocados**. A release instalada de retorno,
 o pacote de transporte, seus hashes e os quatro arquivos de metadados soltos ficam
