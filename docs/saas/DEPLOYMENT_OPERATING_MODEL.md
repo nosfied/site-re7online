@@ -192,12 +192,14 @@ Os itens abaixo são históricos e **não utilizáveis**:
 ## Release produtiva observada em 24/10/2026
 
 O registro estruturado vigente é
-[`TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json`](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json).
-O target `ec2a9fde99b6421a85256f14604bd469879f4f2a` roda na release
-`immutable-ec2a9fde-vps-20261024T162005Z`; API e frontend usam `/current`, e o
-worker anterior foi preservado. O build único ocorreu na VPS em worktree isolado por
-decisão explícita posterior ao upgrade de RAM. A ativação usou troca atômica dos
-symlinks e restart dos registros existentes sem atualização de ambiente.
+[`TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json`](releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json).
+O target `d7de6453aeab6d117e8d79a1dc3a0722875f39cc` roda na release
+`immutable-d7de6453-vps-20261024T221500Z`; API e frontend usam `/current`, e o
+worker anterior foi preservado. O BUILD_ID é `PkRjG2UDVfxCmwp-DKMQz`. O build único
+ocorreu na VPS em worktree isolado por decisão explícita posterior ao upgrade de RAM.
+A ativação usou troca atômica dos symlinks e restart dos registros existentes sem
+atualização de ambiente. O dump final é
+`5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13`.
 
 A API e todas as telas previstas passaram em smoke GET-only; houve um único
 `pm2 save` depois do aceite. Nenhuma migration, SQL, chamada Meta ou envio ocorreu.

@@ -13,12 +13,11 @@
 - [Runbook canônico de deploy](DEPLOY_RUNBOOK.md) — única instrução executável vigente
 - [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
   o produtor `scripts/converta-release.py`, o build na VPS e a fronteira com a ativação
-- [Deploy do diagnóstico de upload de mídia](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json)
-  — baseline do último deploy conjunto; frontend no target `ec2a9fde` e worker
-  preservado.
-- [Atualização isolada da API de upload assinado](releases/TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json)
-  — API ativa no target `ef7db111`; frontend e worker preservados; journal
-  `DEPLOYED` e lock liberado.
+- [Deploy da coerência de sincronização e ordenação de templates](releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json)
+  — registro ativo de API/frontend no target `d7de6453`; worker preservado,
+  journal `DEPLOYED` e lock liberado.
+- [Auditoria de capacidade da VPS](VPS_CAPACITY_AUDIT_2026-10-24.md)
+  — fotografia somente leitura e lote pequeno proposto; não autoriza limpeza.
 - [Configuração do Meta App ID do Converta Demo](releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json)
   — vínculo atual token/aplicativo confirmado e configuração tenant-scoped concluída;
   homologação funcional Meta permanece pendente.
@@ -50,6 +49,10 @@
 
 ## Arquivo histórico
 
+- [Deploy do diagnóstico de upload de mídia](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json)
+  — baseline conjunto substituído pelo target `d7de6453`, preservado como retorno.
+- [Atualização isolada da API de upload assinado](releases/TEMPLATE_MEDIA_UPLOAD_SESSION_SIGNATURE_API_2026-10-24_DEPLOYED.json)
+  — seleção de API substituída, preservada na cadeia de retorno.
 - [Reativação anterior do hardening de mídia](releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json)
   — release substituída, preservada como retorno e evidência.
 - [Deploy técnico inicial de mídia em templates e campanhas](releases/TEMPLATE_CAMPAIGN_MEDIA_2026-10-21_DEPLOYED.json)

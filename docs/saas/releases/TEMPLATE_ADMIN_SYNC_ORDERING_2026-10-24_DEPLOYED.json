@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 4,
+  "recordType": "IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_VERIFIED",
+  "result": "DEPLOYED_FIXED_CURRENT_RUNTIME_ESTABLISHED_PRODUCTION_HEALTHY",
+  "displayStatus": "DEPLOYED / PRODUCTION HEALTHY / TEMPLATE SYNC COHERENCE DEPLOYED",
+  "releaseId": "immutable-d7de6453-vps-20261024T221500Z",
+  "canonicalBranch": "review/campaign-recovery-20260926",
+  "baseCommit": "3630e16dfc946ab8ef97fb73780075a736f38a63",
+  "targetCommit": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
+  "controlPlane": {
+    "commit": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
+    "workflowDispatchRun": 40136919695,
+    "ciJobs": 4,
+    "ciResult": "PASS"
+  },
+  "components": [
+    "api",
+    "frontend"
+  ],
+  "build": {
+    "location": "PRODUCTION_HOST_ISOLATED_WORKTREE",
+    "platform": "linux",
+    "architecture": "x86_64",
+    "nodeVersion": "v20.20.0",
+    "npmVersion": "10.8.2",
+    "ownerAuthorization": "EXPLICIT_AFTER_RAM_UPGRADE",
+    "activeRuntimeStoppedForBuild": false,
+    "singleBuild": true
+  },
+  "artifacts": {
+    "releasePath": "/opt/re7online/releases/immutable-d7de6453-vps-20261024T221500Z",
+    "packageSha256": "b75500e62c1333ba917ff7aa22720387b01597910cf24e84f7af6a9ae1e1a519",
+    "manifestSha256": "dcc3c1a42f2b639f82fd1a24ef9e9991ae65e31b5023ba2ff92ac71142c285d6",
+    "indexSha256": "fcd7a0befd0977a4140deec9ef25621c421e2c70d4a95bc3075d4457d716b6f4",
+    "indexEntries": 34349,
+    "api": {
+      "stablePath": "/opt/re7online/current/api",
+      "entrypoint": "dist/index.js",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontend": {
+      "stablePath": "/opt/re7online/current/frontend",
+      "buildId": "PkRjG2UDVfxCmwp-DKMQz",
+      "execMode": "fork_mode",
+      "instances": 1,
+      "entrypoint": "node_modules/next/dist/bin/next",
+      "args": [
+        "start",
+        "-p",
+        "3000"
+      ]
+    },
+    "worker": {
+      "preserved": true
+    }
+  },
+  "deploymentOrder": [
+    "api",
+    "frontend"
+  ],
+  "activation": {
+    "method": "DIRECTED_EXISTING_PM2_FIXED_CURRENT",
+    "selection": "ATOMIC_FIXED_CURRENT_SYMLINK",
+    "pm2Operation": "RESTART_EXISTING_RECORD_BY_NAME_WITHOUT_UPDATE_ENV",
+    "fullStoredPrivateEnvironmentPreserved": true,
+    "driverAttemptsRetainedAsHistoricalEvidence": true
+  },
+  "readiness": {
+    "method": "THREE_CONSECUTIVE_STABLE_SAMPLES",
+    "requiredStableSamples": 3,
+    "healthEvaluatedAfterSocketStability": true,
+    "api": {
+      "totalSamples": 3,
+      "identityStable": true,
+      "listenerCount": 1
+    },
+    "frontend": {
+      "totalSamples": 3,
+      "identityStable": true,
+      "listenerCount": 1
+    }
+  },
+  "verification": {
+    "observedAtUtc": "2026-10-24T23:04:40Z",
+    "pidSemantics": "dated observations; release, hashes, BUILD_ID and dump are durable identities",
+    "api": {
+      "pid": 118102,
+      "startTicks": 3652796,
+      "socketPort": 3001,
+      "socketOwnerPid": 118102,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        118102
+      ],
+      "samples": 3,
+      "localHealthHttp": 200,
+      "publicHealthHttp": 200,
+      "healthJsonOk": true,
+      "databaseHealth": "ok"
+    },
+    "frontend": {
+      "pid": 118502,
+      "startTicks": 3663031,
+      "socketPort": 3000,
+      "socketOwnerPid": 118502,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        118502
+      ],
+      "samples": 3,
+      "loginLocalHttp": 200,
+      "loginPublicHttp": 200,
+      "inboxHttp": 200,
+      "crmHttp": 200,
+      "templatesHttp": 200,
+      "campaignsHttp": 200,
+      "assetHttp": 200
+    },
+    "worker": {
+      "pid": 2233,
+      "startTicks": 17758,
+      "restartCount": 0,
+      "releaseId": "immutable-e2e7f17a-20261022T005110Z",
+      "preserved": true
+    },
+    "smoke": "GET_ONLY",
+    "technicalAcceptance": "PASS"
+  },
+  "migration": {
+    "classification": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+    "sqlExecuted": false,
+    "migrationExecuted": false
+  },
+  "pm2": {
+    "savedExactlyOnce": true,
+    "saveCount": 1,
+    "saveExitCode": 0,
+    "dumpSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13",
+    "dumpMode": "0600",
+    "dumpOwner": "deploy",
+    "dumpGroup": "deploy",
+    "rollbackSha256": "8168216ccd7421a3dd2df19459f12f11a7d490d497a376bdf97cf8e24c509f15"
+  },
+  "rollback": {
+    "previousReleaseId": "COMPONENT_SCOPED_RETURNS",
+    "previousReleasePreserved": true,
+    "authenticatedDefinitionsPreserved": true,
+    "symlinkStateCaptured": true,
+    "strategy": "RESTORE_PREVIOUS_SYMLINKS_AND_EXISTING_PM2_RECORDS",
+    "automaticRetryForbidden": true,
+    "previousApiReleaseId": "immutable-3630e16-vps-20261024T195842Z",
+    "previousFrontendReleaseId": "immutable-ec2a9fde-vps-20261024T162005Z"
+  },
+  "marker": {
+    "name": "DEPLOYED",
+    "createdAfterDumpValidation": true,
+    "sha256": "1d2be9be3fd5e257700257988bb4cd946dac0f7cb47b6b3a4f861facedd7c543"
+  },
+  "window": {
+    "date": "2026-10-24",
+    "timezone": "America/Fortaleza",
+    "startedAtEvidenceUtc": "2026-10-24T22:48:20Z",
+    "acceptedAt": "2026-10-24T20:01:04-03:00",
+    "finishedAtUpperBoundUtc": "2026-10-24T23:04:40Z"
+  },
+  "releaseReadiness": {
+    "technicalDeployment": "DEPLOYED",
+    "productionHealth": "HEALTHY",
+    "tenantMetaAppIdCode": "DEPLOYED",
+    "tenantMetaAppIdConfiguration": "CONFIGURED_VERIFIED",
+    "metaCalls": "NOT_EXECUTED_DURING_DEPLOYMENT"
+  },
+  "windowMutations": {
+    "functionalPostRequests": 0,
+    "metaCalls": 0,
+    "templateCreatesOrSubmissions": 0,
+    "campaigns": 0,
+    "imports": 0,
+    "messagesSent": 0,
+    "sqlStatements": 0,
+    "migrations": 0,
+    "workerChanges": 0
+  },
+  "privateEvidence": {
+    "versioned": false,
+    "containsSecrets": false,
+    "locationPublished": false
+  },
+  "persistentStorage": {
+    "templateMediaRoot": "/opt/re7online/content/template-campaign-media",
+    "owner": "deploy",
+    "group": "deploy",
+    "directoryMode": "0700",
+    "outsideImmutableRelease": true
+  },
+  "diagnosticCorrection": {
+    "scope": "TEMPLATE_ADMIN_SUBMISSION_UNKNOWN_SYNC_AND_CREATED_AT_ORDERING",
+    "providerCallDuringDeployment": false,
+    "schemaChanged": false,
+    "workerChanged": false
+  },
+  "finalizationRecovery": {
+    "initialPredicate": "PM2_DUMP_DEFAULT_INSTANCES_REPRESENTATION",
+    "saveHadSucceeded": true,
+    "secondSaveExecuted": false,
+    "dumpLiveEnvironmentExactMatch": true,
+    "dumpLiveStructuralIdentityMatch": true,
+    "instancesNormalization": "MISSING_IN_DUMP_EQUALS_PM2_DEFAULT_ONE",
+    "journalFinalState": "DEPLOYED"
+  },
+  "utilityTemplateLocalVerification": {
+    "method": "POSTGRESQL_READ_ONLY_LOCAL",
+    "observedAt": "2026-10-24",
+    "tenantKey": "demo-converta",
+    "metaCalls": 0,
+    "items": [
+      {
+        "name": "justa_confirmacao_agendamento_imagem_v1",
+        "status": "pending",
+        "category": "UTILITY",
+        "language": "pt_BR",
+        "headerType": "IMAGE",
+        "metaIdentityPresent": true,
+        "mediaState": "ready",
+        "mediaHandlePresent": true,
+        "templateCount": 1,
+        "requestCount": 1,
+        "submittedEventCount": 1,
+        "requestStatus": "submitted_to_meta"
+      },
+      {
+        "name": "justa_preparo_atendimento_video_v1",
+        "status": "pending",
+        "category": "UTILITY",
+        "language": "pt_BR",
+        "headerType": "VIDEO",
+        "metaIdentityPresent": true,
+        "mediaState": "ready",
+        "mediaHandlePresent": true,
+        "templateCount": 1,
+        "requestCount": 1,
+        "submittedEventCount": 1,
+        "requestStatus": "submitted_to_meta"
+      }
+    ]
+  }
+}
