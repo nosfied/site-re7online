@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -74,6 +75,154 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(len(report['reviewCandidates']), 1)
         self.assertFalse(report['reviewCandidates'][0]['withdrawalEligible'])
         self.assertIsNone(report['capacityPass'])
+
+    def test_tree_comparison_proves_content_types_modes_and_symlinks(self):
+        left = self.root / 'left'; right = self.root / 'right'
+        left.mkdir(); right.mkdir()
+        for root in (left, right):
+            (root / 'dir').mkdir(mode=0o755)
+            (root / 'dir/file').write_bytes(b'payload')
+            (root / 'dir/file').chmod(0o640)
+            (root / 'link').symlink_to('dir/file')
+        result = m.compare_trees(left, right)
+        self.assertTrue(result['contentAndMetadataEquivalent'])
+        self.assertEqual(result['sourceDigest'], result['destinationDigest'])
+        self.assertFalse(result['withdrawalEligible'])
+        (right / 'dir/file').chmod(0o600)
+        changed = m.compare_trees(left, right)
+        self.assertFalse(changed['contentAndMetadataEquivalent'])
+        self.assertEqual(changed['changedCount'], 1)
+        self.assertTrue(changed['sourceContentContainedInDestination'])
+        self.assertEqual(changed['differenceCountsByAttribute']['mode'], 1)
+
+    def test_tree_comparison_detects_unique_and_changed_content(self):
+        left = self.root / 'source'; right = self.root / 'destination'
+        left.mkdir(); right.mkdir()
+        (left / 'same-name').write_text('left')
+        (right / 'same-name').write_text('right')
+        (left / 'source-only').touch()
+        (right / 'destination-only').touch()
+        result = m.compare_trees(left, right)
+        self.assertEqual(result['sourceOnlyCount'], 1)
+        self.assertEqual(result['destinationOnlyCount'], 1)
+        self.assertEqual(result['changedCount'], 1)
+        self.assertFalse(result['sourceContentContainedInDestination'])
+
+    def test_tree_comparison_includes_root_metadata(self):
+        left = self.root / 'root-left'; right = self.root / 'root-right'
+        left.mkdir(mode=0o700); right.mkdir(mode=0o755)
+        left.chmod(0o700); right.chmod(0o755)
+        result = m.compare_trees(left, right)
+        self.assertFalse(result['contentAndMetadataEquivalent'])
+        self.assertEqual(result['sourceEntries'], 1)
+        self.assertEqual(result['destinationEntries'], 1)
+        self.assertEqual(result['changedCount'], 1)
+        self.assertEqual(result['firstDifferences']['changed'], ['.'])
+        self.assertEqual(result['differenceCountsByAttribute']['mode'], 1)
+
+    def test_addition_after_enumeration_during_another_hash_denies_proof(self):
+        left = self.root / 'late-left'; right = self.root / 'late-right'
+        left.mkdir(); right.mkdir()
+        for root in (left, right):
+            (root / 'a').write_text('a')
+            (root / 'b').write_text('b')
+        original = m.stable_hash
+        changed = False
+
+        def mutate(path, deadline, budget):
+            nonlocal changed
+            digest = original(path, deadline, budget)
+            if path == left / 'a' and not changed:
+                changed = True
+                (left / 'late').write_text('late')
+            return digest
+
+        with patch.object(m, 'stable_hash', side_effect=mutate):
+            with self.assertRaisesRegex(ValueError, 'comparison_tree_drift:source'):
+                m.compare_trees(left, right)
+
+    def test_source_mutations_while_destination_is_examined_deny_proof(self):
+        actions = ('add', 'remove', 'replace', 'rename')
+        for action in actions:
+            with self.subTest(action=action):
+                left = self.root / f'{action}-left'; right = self.root / f'{action}-right'
+                left.mkdir(); right.mkdir()
+                for root in (left, right):
+                    (root / 'a').write_text('a')
+                    (root / 'b').write_text('b')
+                original = m.stable_hash
+                changed = False
+
+                def mutate(path, deadline, budget):
+                    nonlocal changed
+                    digest = original(path, deadline, budget)
+                    if path == right / 'a' and not changed:
+                        changed = True
+                        if action == 'add':
+                            (left / 'c').write_text('c')
+                        elif action == 'remove':
+                            (left / 'b').unlink()
+                        elif action == 'replace':
+                            replacement = self.base / f'{action}-replacement'
+                            replacement.write_text('b')
+                            os.replace(replacement, left / 'b')
+                        else:
+                            (left / 'b').rename(left / 'c')
+                    return digest
+
+                with patch.object(m, 'stable_hash', side_effect=mutate):
+                    with self.assertRaisesRegex(ValueError, 'comparison_tree_drift:source'):
+                        m.compare_trees(left, right)
+
+    def test_generation_catalog_reports_pending_space(self):
+        generation = self.root / 'generation'; generation.mkdir()
+        (generation / 'payload').write_bytes(b'x' * 4096)
+        report = m.inventory([self.root])
+        catalog = {
+            'schemaVersion': 1,
+            'generations': [{
+                'generationId': 'generation-one',
+                'state': 'SUPERSEDED',
+                'roots': [str(generation)],
+                'operationalReferences': [],
+                'custodyState': 'NOT_PROVEN',
+            }],
+        }
+        summary = m.generation_summary(report, catalog)
+        self.assertTrue(summary['items'][0]['dispositionPending'])
+        self.assertGreater(summary['pendingAllocatedBytes'], 0)
+
+    def test_generation_catalog_is_closed(self):
+        report = m.inventory([self.root])
+        bad = {'schemaVersion': 1, 'generations': [{
+            'generationId': 'bad', 'state': 'FAILED', 'roots': [str(self.root)],
+            'operationalReferences': [], 'custodyState': 'NOT_PROVEN', 'extra': True,
+        }]}
+        with self.assertRaises(ValueError):
+            m.generation_summary(report, bad)
+
+    def test_generation_catalog_rejects_relative_or_uninventoried_root(self):
+        report = m.inventory([self.root])
+        base = {
+            'schemaVersion': 1,
+            'generations': [{
+                'generationId': 'bad-root', 'state': 'FAILED', 'roots': ['relative'],
+                'operationalReferences': [], 'custodyState': 'NOT_PROVEN',
+            }],
+        }
+        with self.assertRaises(ValueError):
+            m.generation_summary(report, base)
+        outside = self.base / 'outside'; outside.mkdir()
+        base['generations'][0]['roots'] = [str(outside)]
+        with self.assertRaises(ValueError):
+            m.generation_summary(report, base)
+
+    def test_private_catalog_requires_mode_0600(self):
+        path = self.base / 'catalog.json'
+        path.write_text(json.dumps({'schemaVersion': 1, 'generations': []}))
+        path.chmod(0o644)
+        with self.assertRaises(ValueError):
+            m.read_private_json(path)
 
     def test_bad_output_mode_denied_before_capture(self):
         outdir = self.base / 'public'; outdir.mkdir(mode=0o755)

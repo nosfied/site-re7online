@@ -15,6 +15,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +37,28 @@ def write(path: Path, value: str, mode: int = 0o644) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(value)
     path.chmod(mode)
+
+
+def capacity_contract(path: Path, filesystem: Path, target: str, release_id: str,
+                      *, reserve_bytes: int = 4096) -> Path:
+    value = {
+        "schemaVersion": 1,
+        "contractId": f"capacity-{release_id}",
+        "capturedAtUtc": "2026-10-25T00:00:00Z",
+        "targetCommit": target,
+        "releaseId": release_id,
+        "filesystemPath": str(filesystem.resolve()),
+        "buildWorkspaceGrowthBytes": 4096,
+        "runtimePayloadBytes": 4096,
+        "packageTemporaryBytes": 4096,
+        "independentVerificationBytes": 4096,
+        "failureEvidenceBytes": 4096,
+        "operationalReserveBytes": reserve_bytes,
+        "peakInodes": 10,
+        "operationalReserveInodes": 10,
+    }
+    write(path, json.dumps(value, sort_keys=True) + "\n", 0o600)
+    return path
 
 
 def fixture_repo(root: Path) -> tuple[Path, str, dict[str, str]]:
@@ -107,10 +130,14 @@ class ReleaseProducerTest(unittest.TestCase):
         cls.repo, cls.target, cls.env = fixture_repo(cls.base)
         cls.release_id = "immutable-fixture-20261023T000000Z"
         cls.output_a = cls.base / "output-a"
+        cls.capacity = capacity_contract(
+            cls.base / "capacity.private.json", cls.base, cls.target, cls.release_id
+        )
         command = [sys.executable, str(PRODUCER), "build", "--repo", str(cls.repo),
                    "--target", cls.target, "--release-id", cls.release_id,
                    "--components", COMPONENTS, "--output", str(cls.output_a),
-                   "--source-date-epoch", EPOCH]
+                   "--source-date-epoch", EPOCH,
+                   "--capacity-contract", str(cls.capacity)]
         result = subprocess.run(["sh", "-c", "umask 077; exec \"$@\"", "fixture", *command],
                                 env=cls.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if result.returncode:
@@ -158,6 +185,11 @@ class ReleaseProducerTest(unittest.TestCase):
         index_before = (self.release / "index.sha256").read_bytes()
         self.assertEqual(manifest_before, (self.release / "manifest.json").read_bytes())
         self.assertEqual(index_before, (self.release / "index.sha256").read_bytes())
+        lifecycle = json.loads((self.output_a / "generation-lifecycle.private.json").read_text())
+        self.assertEqual(lifecycle["state"], "COMPLETE")
+        self.assertEqual(lifecycle["classification"], "PENDING")
+        self.assertEqual(lifecycle["packageSha256"], hashlib.sha256(self.package.read_bytes()).hexdigest())
+        self.assertEqual(stat.S_IMODE((self.output_a / "generation-lifecycle.private.json").stat().st_mode), 0o600)
 
     def test_failed_command_preserves_private_output_without_printing_it(self) -> None:
         root = self.base / "failed-command-evidence"
@@ -271,10 +303,68 @@ class ReleaseProducerTest(unittest.TestCase):
     def test_incomplete_or_reused_output_denied(self) -> None:
         existing = self.base / "existing-output"
         existing.mkdir()
+        release_id = "immutable-incomplete"
+        capacity = capacity_contract(
+            self.base / "incomplete-capacity.private.json",
+            self.base, self.target, release_id,
+        )
         result = invoke("build", "--repo", str(self.repo), "--target", self.target,
-                        "--release-id", "immutable-incomplete", "--components", COMPONENTS,
-                        "--output", str(existing), "--source-date-epoch", EPOCH, env=self.env)
+                        "--release-id", release_id, "--components", COMPONENTS,
+                        "--output", str(existing), "--source-date-epoch", EPOCH,
+                        "--capacity-contract", str(capacity), env=self.env)
         self.assert_denied(result, "output_exists")
+
+    def test_capacity_denied_before_output_or_npm(self) -> None:
+        release_id = "immutable-capacity-denied"
+        output = self.base / "capacity-denied-output"
+        usage = os.statvfs(self.base)
+        capacity = capacity_contract(
+            self.base / "capacity-denied.private.json", self.base, self.target, release_id,
+            reserve_bytes=usage.f_bavail * usage.f_frsize + 1,
+        )
+        result = invoke(
+            "build", "--repo", str(self.repo), "--target", self.target,
+            "--release-id", release_id, "--components", COMPONENTS,
+            "--output", str(output), "--source-date-epoch", EPOCH,
+            "--capacity-contract", str(capacity), env=self.env,
+        )
+        self.assert_denied(result, "capacity_bytes:")
+        self.assertFalse(output.exists())
+
+    def test_capacity_contract_rejects_zero_budget(self) -> None:
+        release_id = "immutable-zero-budget"
+        capacity = capacity_contract(
+            self.base / "zero-budget.private.json", self.base, self.target, release_id
+        )
+        value = json.loads(capacity.read_text())
+        value["operationalReserveBytes"] = 0
+        write(capacity, json.dumps(value, sort_keys=True) + "\n", 0o600)
+        with self.assertRaises(MODULE.Denied) as caught:
+            MODULE.read_capacity_contract(
+                capacity, self.repo, self.base, self.target, release_id
+            )
+        self.assertIn("capacity_contract_value:operationalReserveBytes", str(caught.exception))
+
+    def test_failed_generation_is_closed_as_failed(self) -> None:
+        release_id = "immutable-failed-generation"
+        output = self.base / "failed-generation-output"
+        capacity = capacity_contract(
+            self.base / "failed-generation-capacity.private.json",
+            self.base, self.target, release_id,
+        )
+        args = MODULE.parser().parse_args([
+            "build", "--repo", str(self.repo), "--target", self.target,
+            "--release-id", release_id, "--components", COMPONENTS,
+            "--output", str(output), "--source-date-epoch", EPOCH,
+            "--capacity-contract", str(capacity),
+        ])
+        with patch.object(MODULE, "toolchain", side_effect=MODULE.Denied("fixture_failure")):
+            with self.assertRaises(MODULE.Denied):
+                MODULE.build(args)
+        lifecycle = json.loads((output / "generation-lifecycle.private.json").read_text())
+        self.assertEqual(lifecycle["state"], "FAILED")
+        self.assertEqual(lifecycle["failureClass"], "Denied")
+        self.assertEqual(lifecycle["classification"], "PENDING")
 
     def test_package_inventory_excludes_source_worker_and_sensitive_files(self) -> None:
         with tarfile.open(self.package, "r:xz") as archive:
