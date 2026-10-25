@@ -1,4 +1,11 @@
-# Superficies do /app, dados carregados e retencao LGPD
+# Superfícies do /app, dados carregados e retenção LGPD — histórico
+
+> **HISTÓRICO / NÃO EXECUTÁVEL.** Este documento preserva observações e ações de
+> abril e outubro de 2026. Ele não define a operação vigente e não autoriza alterar
+> política de tenant, executar retenção, instalar/reativar cron ou apagar dados. A
+> continuidade vigente está em `docs/saas/CURRENT_STATE.md`; qualquer operação de
+> retenção exige inventário atual, impacto tenant-scoped, backup/retorno, comandos
+> literais e autorização separada.
 
 **Auditoria operacional15/10/2026 — continuidade:** [alcance por identidade, lifecycle e proposta mínima](../reviews/automation-freeform-window-release-af26/security-containment-20261012/cipher-controls-prisma-20261015/REPORT.md). Fonte efetiva33d36d97: políticas90d/365d preservadas; seleção por idade/atividade não exige closedAt. Semente original BOT e segunda que ultrapassou o cutoff HUMAN/WAITING/handoffACTIVE, sem atribuição: não confundir fila com atendimento atribuído. Identidade compartilhada não autoriza ação de titular; proposta de proteção lifecycle/escopo por conversa aguarda decisão, não implantada. No modo postgres do consumidor, cleanup transitivo pode remover RuntimeState e Assignment por cascade; não se limita a soft delete no serviço principal. --dry-run chama upsert e não é leitor puro. .env não reconciliado/retention não executada. Horário legado03:30UTC=00:30Fortaleza. Cifragem usa perfis selados independentes e não exige reabilitar esse cron; nenhuma política de tenant mudou.
 
@@ -45,7 +52,7 @@ Durante a auditoria foi encontrado `RetentionConfig.retentionDays = 1`.
 Isso e arriscado para validacao, porque qualquer execucao de retencao remove
 da operacao praticamente todo historico com mais de 1 dia.
 
-Acao aplicada em producao:
+Ação histórica aplicada em produção em 30/04/2026:
 
 - `RetentionConfig.retentionDays` do tenant `justa-advocacia` ajustado para
   `90` dias.
@@ -84,7 +91,7 @@ Limite conhecido:
 
 ## Retencao LGPD
 
-Politica atual:
+Modelo registrado naquela auditoria, não revalidado como política operacional atual:
 
 - soft delete em `Conversation.deletedAt`;
 - anonimizacao sem apagar auditoria;
@@ -98,7 +105,7 @@ Politica atual:
   operacional do CRM: `operationallyExcludedAt` continua ocultavel no CRM normal,
   mas nao impede previa/anonymizacao por titular.
 
-Recomendacao de operacao:
+Orientação histórica, sem força de autorização atual:
 
 - manter tenants de validacao em `90` dias, salvo teste controlado;
 - se testar retencao curta, documentar antes e saber que relatorios/inbox podem
@@ -106,7 +113,7 @@ Recomendacao de operacao:
 - apos teste de retencao curta, voltar para `90` dias antes de continuar a
   validacao funcional.
 
-Automacao atual na VPS:
+Automação observada historicamente na VPS:
 
 - host: `converta.re7online.com`;
 - usuario do crontab: `deploy`;
@@ -115,23 +122,24 @@ Automacao atual na VPS:
 - horario: diariamente as 03:30;
 - log: `/opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/retention-global.log`.
 
-Entrada instalada:
+Entrada registrada na época:
 
 ```cron
 30 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run retention:run >> /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/retention-global.log 2>&1
 ```
 
-Verificar:
+Comandos históricos de leitura (revalidar o script e o estado antes de qualquer uso):
 
 ```bash
 crontab -l | grep retention
 tail -n 50 /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/retention-global.log
 ```
 
-Reativar somente se o crontab for removido, se a VPS/usuario `deploy` forem
-recriados, ou se a pasta de producao mudar. Para novos tenants, nao e necessario
-adicionar uma linha propria: a execucao global ja inclui todos os tenants,
-criando `RetentionConfig` default de 90 dias quando ela ainda nao existir.
+O texto anterior instruía reativação após perda do crontab, recriação do usuário ou
+mudança de caminho. Essa instrução está **revogada como orientação vigente**. Não
+reinstalar nem alterar a entrada com base neste documento. A afirmação histórica de
+que a execução global alcançaria novos tenants também precisa ser revalidada contra
+o código e a configuração atuais antes de qualquer janela.
 
 ## Aviso em relatorios
 
@@ -147,7 +155,12 @@ O aviso e apenas UX:
 - nao bloqueia exportacao;
 - nao aparece para usuarios sem acesso ADMIN.
 
-## Comandos uteis de auditoria na VPS
+## Exemplo histórico de auditoria — não executar como runbook
+
+O trecho abaixo abre um cliente Prisma contra a base configurada e não é prova de
+operação somente leitura. Ele é mantido apenas para preservar a auditoria original;
+qualquer diagnóstico atual deve usar transação explicitamente `READ ONLY`, projeção
+sanitizada e autorização própria.
 
 ```bash
 cd /opt/re7online/site-re7online/apps/whatsapp-agent
