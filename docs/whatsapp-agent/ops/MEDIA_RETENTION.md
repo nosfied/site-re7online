@@ -1,4 +1,10 @@
-# Retencao de midia local
+# Retenção de mídia local — registro histórico
+
+> **HISTÓRICO / NÃO EXECUTÁVEL.** Este documento registra o mecanismo e a
+> configuração observados em abril de 2026. Ele não autoriza executar cleanup,
+> instalar ou reativar cron, mudar dias de retenção ou remover mídia. O estado atual
+> deve ser lido em `docs/saas/CURRENT_STATE.md`; qualquer alteração exige inventário
+> tenant-scoped, lote literal, backup/retorno e autorização própria.
 
 O inbox salva uma copia local de midias outbound enviadas pela aplicacao em:
 
@@ -24,7 +30,7 @@ Defaults:
 
 Se `MEDIA_LOCAL_RETENTION_DAYS` estiver ausente ou invalido, o script usa `7` dias e registra warning.
 
-## Execucao manual
+## Execução manual histórica
 
 ```bash
 cd /opt/re7online/site-re7online/apps/whatsapp-agent
@@ -45,7 +51,7 @@ Exemplo de log:
 {"level":"info","event":"media.cleanup.completed","retentionDays":7,"baseDir":"/opt/re7online/site-re7online/apps/whatsapp-agent/.data/media/outbound","totalScanned":120,"totalDeleted":35,"bytesDeleted":12345678,"emptyDirsDeleted":2,"skipped":0,"errors":0}
 ```
 
-## Cron recomendado na VPS
+## Cron registrado historicamente na VPS
 
 Estado atual da VPS `converta.re7online.com`:
 
@@ -67,7 +73,8 @@ Entrada instalada:
 0 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && MEDIA_LOCAL_RETENTION_DAYS=7 npm run media:cleanup >> /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/media-cleanup.log 2>&1
 ```
 
-Se precisar instalar ou reativar manualmente:
+O trecho abaixo é preservado apenas como evidência histórica. **Não o execute nem o
+reinstale com base neste documento:**
 
 ```bash
 crontab -e
@@ -75,7 +82,8 @@ crontab -e
 
 E adicionar a mesma entrada acima.
 
-Reativar somente quando:
+Na época, a reativação era considerada nas situações abaixo; hoje essa lista não é
+autorização operacional:
 
 - a VPS for substituida;
 - o usuario `deploy` for recriado;
@@ -83,15 +91,17 @@ Reativar somente quando:
 - o projeto mudar de pasta em producao;
 - a politica de retencao precisar mudar.
 
-Para alterar a retencao, edite apenas o valor:
+O parâmetro histórico era:
 
 ```cron
 MEDIA_LOCAL_RETENTION_DAYS=7
 ```
 
-## Auditoria rapida
+## Leituras históricas de diagnóstico
 
-Comandos uteis:
+Os comandos abaixo pertencem ao contexto histórico. Antes de qualquer uso atual,
+inspecione o script e confirme que a operação é estritamente somente leitura; o nome
+`cleanup` ou `status` não prova ausência de escrita.
 
 ```bash
 du -sh /opt/re7online/site-re7online/apps/whatsapp-agent/.data/media/outbound

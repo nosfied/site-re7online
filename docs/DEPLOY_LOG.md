@@ -4,13 +4,30 @@ Este arquivo parou em abril de 2026 e é preservado como histórico incompleto. 
 não é a fonte vigente de topologia nem um runbook executável.
 
 O deploy ativo está no registro estruturado
-[`TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json`](saas/releases/TEMPLATE_MEDIA_UX_HARDENING_2026-10-22_DEPLOYED.json).
+[`TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json`](saas/releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json).
 A única instrução operacional vigente é
 [`DEPLOYMENT_OPERATING_MODEL.md`](saas/DEPLOYMENT_OPERATING_MODEL.md).
 
 As entradas abaixo mantêm sua redação histórica.
 
-## Registro estruturado vigente — 2026-10-22 17:30:39 BRT
+## Registro estruturado vigente — 2026-10-24
+
+- target: `d7de6453aeab6d117e8d79a1dc3a0722875f39cc`
+- release: `immutable-d7de6453-vps-20261024T221500Z`
+- componentes selecionados: API e frontend; worker preservado no runtime
+  `immutable-e2e7f17a-20261022T005110Z`
+- BUILD_ID: `PkRjG2UDVfxCmwp-DKMQz`
+- readiness: três amostras estáveis por componente; health avaliado depois da
+  estabilidade dos listeners
+- resultado: `DEPLOYED / PRODUCTION HEALTHY`
+- persistência: um único `pm2 save`; dump
+  `5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13`
+- migration/SQL/Meta/templates/campanhas/importações/envios durante o deploy: zero
+- horário: somente os limites registrados na evidência estruturada; nenhum horário
+  novo foi inferido nesta reconciliação
+- evidência: [registro sanitizado](saas/releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json)
+
+## Registro histórico substituído — 2026-10-22 17:30:39 BRT
 
 - target: `5c339b2eeda52e21249844fc8b71a351d4311f03`
 - release: `immutable-5c339b2e-20261022T125717Z`

@@ -297,7 +297,10 @@ npm run backup:postgres
   - dump menor que `POSTGRES_BACKUP_MIN_BYTES`;
   - dump invalido em `pg_restore --list`;
   - dump com menos objetos que `POSTGRES_BACKUP_MIN_OBJECTS`.
-- O cron recomendado, apos pre-release, deve usar o wrapper com alerta para preservar o exit code do backup e notificar falhas. Em producao, apontar explicitamente para o diretorio persistente canonico:
+- O bloco de cron abaixo é um exemplo histórico de configuração, não autorização
+  para instalar, reativar ou alterar cron. Qualquer mudança produtiva exige janela
+  própria, leitura do estado vigente, revisão do script e retorno comprovado. O
+  wrapper preserva o exit code quando seu uso for autorizado:
 
 ```bash
 20 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && POSTGRES_BACKUP_DIR=/opt/re7online/backups/converta-persistent/postgres POSTGRES_BACKUP_MANIFEST=/opt/re7online/backups/converta-persistent/postgres/manifest.jsonl npm run backup:postgres:alerted >> /opt/re7online/backups/converta-persistent/postgres/postgres-backup-cron.log 2>&1
