@@ -64,13 +64,32 @@ regular `0600`, pertencente ao UID/GID executor, legível por esse UID e autenti
 por SHA-256 externo. Caminho vazio, `/tmp`, raiz ampla, sobreposição, symlink, hash,
 owner, modo ou legibilidade divergente negam antes da cópia.
 
+`--source-writer-lock` é obrigatório e aponta para arquivo regular privado `0600`,
+irmão da raiz de origem. A origem deve estar encerrada; todo produtor capaz de
+escrevê-la precisa participar desse lock cooperativo. O coletor mantém `flock`
+exclusivo e não bloqueante desde a primeira observação até a publicação do recibo.
+Lock ocupado nega antes da cópia. A árvore é observada e revalidada com o mesmo
+contrato do comparador: identidade e composição da raiz e de cada diretório,
+identidade dos arquivos, tipos, modos, tamanhos, hashes e symlinks. Uma varredura
+comum ainda não é snapshot atômico; o lock e a exclusão comprovada de todos os
+escritores são condições da coleta, e a revalidação detecta drift observado.
+
 O coletor nunca remove a origem nem uma cópia parcial. Falha mantém os temporários
 para diagnóstico; encerramento posterior requer intenção nova. O diretório de origem
 não pode ser reduzido a uma variável implícita: origem, custódia e destino absolutos
 devem ser passados separadamente. A validação do helper antecede qualquer janela que
 dependa dele; não se altera owner ou modo e não se executa a coleta inteira como root
 para contornar acesso do UID executor. A coleta efetiva exige que o próprio processo
-tenha o UID/GID executor.
+tenha o UID/GID executor. Antes de publicar `PRESERVED`, arquivos copiados e
+diretórios da árvore são sincronizados, seguidos do diretório de custódia; o recibo
+preparado também é sincronizado e só então recebe o nome final. Falha de cópia,
+revalidação ou `fsync` nega a conclusão e preserva origem e cópia parcial.
+
+O coletor auxiliar exato usado na tentativa local negada de 25/10/2026 permanece
+somente como evidência do incidente e **não pode ser reutilizado**. Publicar este
+código versionado não comprova que uma futura janela deixou de usar o fluxo antigo:
+a intenção deve autenticar o helper versionado, seus argumentos e seu SHA-256, e a
+execução deve registrar essa identidade antes de abrir a janela.
 
 ## Relatório pós-janela
 

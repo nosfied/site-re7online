@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """Preserve one completed retention evidence tree. Sources are never removed."""
 import argparse
+import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import shutil
 import stat
+import time
 
 SHA256 = __import__('re').compile(r'^[0-9a-f]{64}$')
 BROAD_PATHS = {Path('/'), Path('/tmp'), Path('/var/tmp'), Path('/home'), Path('/opt')}
+REPORT = Path(__file__).with_name('operational-retention-report.py')
+REPORT_SPEC = importlib.util.spec_from_file_location('operational_retention_report', REPORT)
+retention_report = importlib.util.module_from_spec(REPORT_SPEC)
+REPORT_SPEC.loader.exec_module(retention_report)
 
 
 def literal_path(raw, label):
@@ -34,12 +41,12 @@ def private_directory(path, uid, label):
     return before
 
 
-def stable_file(path):
+def stable_file(path, label='helper'):
     before = path.lstat()
     if path.is_symlink() or not stat.S_ISREG(before.st_mode):
-        raise ValueError('helper_not_regular')
+        raise ValueError(f'{label}_not_regular')
     if path.resolve(strict=True) != path:
-        raise ValueError('helper_symlink_ancestor')
+        raise ValueError(f'{label}_symlink_ancestor')
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     digest = hashlib.sha256()
     try:
@@ -48,7 +55,7 @@ def stable_file(path):
                 before.st_mtime_ns, before.st_ctime_ns) != (
                 opened.st_dev, opened.st_ino, opened.st_mode, opened.st_size,
                 opened.st_mtime_ns, opened.st_ctime_ns):
-            raise ValueError('helper_identity_drift')
+            raise ValueError(f'{label}_identity_drift')
         while True:
             chunk = os.read(fd, 1024 * 1024)
             if not chunk:
@@ -61,7 +68,7 @@ def stable_file(path):
             before.st_mtime_ns, before.st_ctime_ns) != (
             after.st_dev, after.st_ino, after.st_mode, after.st_size,
             after.st_mtime_ns, after.st_ctime_ns):
-        raise ValueError('helper_identity_drift')
+        raise ValueError(f'{label}_identity_drift')
     return before, digest.hexdigest()
 
 
@@ -110,31 +117,95 @@ def validate_helper(path, expected_sha, uid, gid):
     return actual
 
 
-def entry_index(root):
-    result = []
-    for path in [root, *sorted(root.rglob('*'))]:
-        rel = '.' if path == root else path.relative_to(root).as_posix()
+def private_regular(path, uid, gid, label):
+    info, _ = stable_file(path, label)
+    if info.st_uid != uid or info.st_gid != gid or stat.S_IMODE(info.st_mode) != 0o600:
+        raise ValueError(f'{label}_owner_or_mode')
+    return info
+
+
+class SourceWriterExclusion:
+    """Hold the cooperative writer lock for the complete observation interval."""
+    def __init__(self, path, uid, gid):
+        self.path, self.uid, self.gid, self.fd = path, uid, gid, None
+
+    def __enter__(self):
+        before = private_regular(self.path, self.uid, self.gid, 'source_writer_lock')
+        self.fd = os.open(self.path, os.O_RDWR | os.O_NOFOLLOW)
+        opened = os.fstat(self.fd)
+        if retention_report.stat_identity(before) != retention_report.stat_identity(opened):
+            os.close(self.fd); self.fd = None
+            raise ValueError('source_writer_lock_identity_drift')
+        try:
+            fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            os.close(self.fd); self.fd = None
+            raise ValueError('source_writer_lock_busy') from error
+        after = self.path.lstat()
+        if retention_report.stat_identity(before) != retention_report.stat_identity(after):
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+            os.close(self.fd); self.fd = None
+            raise ValueError('source_writer_lock_identity_drift')
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self.fd is not None:
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+            os.close(self.fd)
+            self.fd = None
+
+
+def entry_index(root, deadline, hash_budget, label):
+    entries, digest, observations = retention_report.canonical_tree(
+        root, deadline, hash_budget
+    )
+    retention_report.revalidate_tree(root, observations, deadline, label)
+    return entries, digest, observations
+
+
+def fsync_regular(path):
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError('fsync_not_regular')
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def fsync_directory(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def fsync_copied_tree(destination, custody):
+    files, directories = [], []
+    for path in [destination, *destination.rglob('*')]:
         info = path.lstat()
-        item = {'path': rel, 'mode': stat.S_IMODE(info.st_mode)}
         if stat.S_ISREG(info.st_mode):
-            _, digest = stable_file(path)
-            item.update(type='file', size=info.st_size, sha256=digest)
+            files.append(path)
         elif stat.S_ISDIR(info.st_mode):
-            item['type'] = 'directory'
-        elif stat.S_ISLNK(info.st_mode):
-            item.update(type='symlink', target=os.readlink(path))
-        else:
-            raise ValueError('source_entry_type')
-        result.append(item)
-    return result
+            directories.append(path)
+        elif not stat.S_ISLNK(info.st_mode):
+            raise ValueError('fsync_entry_type')
+    for path in sorted(files, key=lambda item: item.as_posix()):
+        fsync_regular(path)
+    for path in sorted(directories, key=lambda item: (-len(item.parts), item.as_posix())):
+        fsync_directory(path)
+    fsync_directory(custody)
 
 
 def validate_contract(source_raw, custody_raw, destination_raw, helper_raw,
-                      helper_sha, executor_uid, executor_gid, require_source=True):
+                      helper_sha, source_writer_lock_raw, executor_uid, executor_gid,
+                      require_source=True):
     source = literal_path(source_raw, 'source')
     custody = literal_path(custody_raw, 'custody')
     destination = literal_path(destination_raw, 'destination')
     helper = literal_path(helper_raw, 'helper')
+    source_writer_lock = literal_path(source_writer_lock_raw, 'source_writer_lock')
     private_directory(custody, os.geteuid(), 'custody')
     if destination.parent != custody or destination == custody:
         raise ValueError('destination_outside_custody')
@@ -142,47 +213,74 @@ def validate_contract(source_raw, custody_raw, destination_raw, helper_raw,
         raise ValueError('destination_exists')
     if source == destination or source in destination.parents or destination in source.parents:
         raise ValueError('source_destination_overlap')
+    if source_writer_lock.parent != source.parent or source_writer_lock == source:
+        raise ValueError('source_writer_lock_scope')
     if require_source:
         private_directory(source, executor_uid, 'source')
     validate_helper(helper, helper_sha, executor_uid, executor_gid)
-    return source, custody, destination, helper
+    private_regular(source_writer_lock, executor_uid, executor_gid, 'source_writer_lock')
+    return source, custody, destination, helper, source_writer_lock
 
 
 def collect(args):
     if os.geteuid() != args.executor_uid or os.getegid() != args.executor_gid:
         raise ValueError('collector_executor_identity')
-    source, custody, destination, helper = validate_contract(
+    source, custody, destination, helper, source_writer_lock = validate_contract(
         args.source_root, args.custody_root, args.destination_root, args.helper,
-        args.helper_sha256, args.executor_uid, args.executor_gid)
-    before = entry_index(source)
-    try:
+        args.helper_sha256, args.source_writer_lock, args.executor_uid,
+        args.executor_gid)
+    deadline = time.monotonic() + args.observation_seconds
+    hash_budget = [args.max_hash_bytes]
+    with SourceWriterExclusion(source_writer_lock, args.executor_uid, args.executor_gid):
+        before, before_digest, before_observations = entry_index(
+            source, deadline, hash_budget, 'source_before'
+        )
         shutil.copytree(source, destination, symlinks=True, copy_function=shutil.copy2)
         destination.chmod(0o700)
-        after_source = entry_index(source)
-        copied = entry_index(destination)
-        if before != after_source:
+        copied, copied_digest, copied_observations = entry_index(
+            destination, deadline, hash_budget, 'destination'
+        )
+        after_source, after_digest, after_observations = entry_index(
+            source, deadline, hash_budget, 'source_after'
+        )
+        retention_report.revalidate_tree(
+            source, before_observations, deadline, 'source_full_interval'
+        )
+        retention_report.revalidate_tree(
+            source, after_observations, deadline, 'source_after_final'
+        )
+        retention_report.revalidate_tree(
+            destination, copied_observations, deadline, 'destination_final'
+        )
+        if before != after_source or before_digest != after_digest:
             raise ValueError('source_drift_during_collection')
-        if before != copied:
+        if before != copied or before_digest != copied_digest:
             raise ValueError('copied_tree_mismatch')
+        fsync_copied_tree(destination, custody)
+        retention_report.revalidate_tree(
+            source, before_observations, deadline, 'source_before_success'
+        )
+        retention_report.revalidate_tree(
+            destination, copied_observations, deadline, 'destination_before_success'
+        )
         receipt = {
             'schemaVersion': 1, 'result': 'PRESERVED', 'sourcePreserved': True,
             'entryCount': len(before), 'helperSha256': args.helper_sha256,
             'executorUid': args.executor_uid, 'executorGid': args.executor_gid,
-            'treeSha256': hashlib.sha256(json.dumps(before, sort_keys=True,
-                separators=(',', ':')).encode()).hexdigest(),
+            'treeSha256': before_digest,
         }
         raw = (json.dumps(receipt, sort_keys=True) + '\n').encode()
-        fd = os.open(destination / 'collection-receipt.private.json',
+        prepared_receipt = destination / '.collection-receipt.private.json.prepared'
+        final_receipt = destination / 'collection-receipt.private.json'
+        fd = os.open(prepared_receipt,
                      os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'wb') as out:
-            out.write(raw); out.flush(); os.fsync(out.fileno())
-        dirfd = os.open(destination, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-        try: os.fsync(dirfd)
-        finally: os.close(dirfd)
+            out.write(raw); out.flush()
+        fsync_regular(prepared_receipt)
+        fsync_directory(destination)
+        fsync_directory(custody)
+        os.rename(prepared_receipt, final_receipt)
         return receipt
-    except BaseException:
-        # Deliberately keep both the source and any partial destination for diagnosis.
-        raise
 
 
 def main():
@@ -192,16 +290,24 @@ def main():
     parser.add_argument('--destination-root', required=True)
     parser.add_argument('--helper', required=True)
     parser.add_argument('--helper-sha256', required=True)
+    parser.add_argument('--source-writer-lock', required=True)
     parser.add_argument('--executor-uid', required=True, type=int)
     parser.add_argument('--executor-gid', required=True, type=int)
+    parser.add_argument('--observation-seconds', type=int, default=300)
+    parser.add_argument('--max-hash-bytes', type=int, default=128 * 1024**3)
     parser.add_argument('--validate-only', action='store_true')
     args = parser.parse_args()
-    if args.executor_uid < 0 or args.executor_gid < 0:
-        parser.error('executor identity must be non-negative')
+    if (args.executor_uid < 0 or args.executor_gid < 0 or
+            args.observation_seconds <= 0 or args.max_hash_bytes <= 0):
+        parser.error('executor identity and observation budgets must be valid')
     if args.validate_only:
-        validate_contract(args.source_root, args.custody_root, args.destination_root,
-                          args.helper, args.helper_sha256, args.executor_uid,
-                          args.executor_gid)
+        *_, source_writer_lock = validate_contract(
+            args.source_root, args.custody_root, args.destination_root,
+            args.helper, args.helper_sha256, args.source_writer_lock,
+            args.executor_uid, args.executor_gid)
+        with SourceWriterExclusion(source_writer_lock, args.executor_uid,
+                                   args.executor_gid):
+            pass
         print(json.dumps({'result': 'VALIDATED', 'sourcePreserved': True}))
         return
     result = collect(args)
