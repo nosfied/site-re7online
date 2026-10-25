@@ -215,7 +215,10 @@ instalado equivalente permanece autenticado; qualquer byte único detectado volt
 “Arquivar” ou “Preservar”. Manifestos históricos nunca são alterados para refletir a
 retirada de uma cópia redundante.
 
-## Primeiro lote preparado — não executado
+## Primeiro lote — preparação histórica e execução relatada
+
+A preparação abaixo é histórica; o resultado posterior está no encerramento desta
+seção. Os comandos não devem ser repetidos.
 
 Os quatro caminhos abaixo contêm runtimes cujo conteúdo de origem está integralmente
 contido na release instalada de `ec2a9fde`. Isso não significa igualdade irrestrita:
@@ -235,7 +238,7 @@ o pacote de transporte, seus hashes e os quatro arquivos de metadados soltos fic
 intactos. Os worktrees não entram: `tracked-clean` não cobre `.next`, `node_modules`
 e `dist` ignorados, cuja classificação ainda está pendente.
 
-Comandos preparados, sem curingas e **não executados**:
+Comandos históricos do lote, sem curingas — **não repetir**:
 
 ```bash
 rm -r -- /opt/re7online/build-output/immutable-ec2a9fde-vps-20261024T162005Z/immutable-ec2a9fde-vps-20261024T162005Z/api-runtime
@@ -250,6 +253,66 @@ ticks/restart counts, dump/marker e GETs seguros. Depois: exigir ausência liter
 dos quatro caminhos, preservação dos wrappers e metadados, ganho compatível,
 identidades e hashes inalterados e os mesmos GETs. Parar na primeira divergência ou
 falha; nenhuma alternativa, força ou prune.
+
+
+### Encerramento relatado pelo operador
+
+**EXECUTADO INTEGRALMENTE / VERIFICAÇÕES PASS, conforme relatório do usuário.**
+
+Lote: `retention-ec2a9fde-redundant-runtimes-20261025`. O usuário informou execução
+sequencial dos quatro comandos com exit code 0, ausência dos quatro caminhos,
+zero repetição automática, nenhuma expansão de escopo e nenhuma execução parcial.
+O horário exato não foi informado. Esta atualização documental não equivale a
+leitura independente do recibo privado ou da VPS.
+
+| Medida | Resultado informado |
+| --- | ---: |
+| Recuperação prevista | 1.964.171.264 bytes |
+| Recuperação efetivamente medida | 1.964.130.304 bytes |
+| Diferença entre previsão e medição | 40.960 bytes |
+| Inodes recuperados | 68.696 |
+| Recuperação somada ao lote anterior de cache/worktree | 3.405.754.368 bytes |
+
+A diferença de 40.960 bytes fica registrada sem atribuição causal não demonstrada.
+O total acumulado é a soma dos ganhos relatados nos dois lotes, não uma medição
+atual de espaço disponível.
+
+API (PID 118102, start ticks 3652796), frontend (PID 118502, ticks 3663031) e worker
+(PID 2233, ticks 17758) foram informados como preservados; health local/público e
+smokes GET-only passaram. Dump PM2, marker ativo, release instalada de retorno,
+pacote, manifesto e índice permaneceram preservados, conforme relato. Os restart
+counts posteriores não foram reapresentados no relatório.
+
+O operador informou nenhuma alteração de restart, `pm2 save`, deploy, serviço,
+cron, backup, dado ou chamada Meta. A existência de recibo privado e manifesto de
+execução foi relatada, mas seus conteúdos não foram acessados nesta atualização.
+
+**Pendências de encerramento:** confirmar liberação do lock canônico e custódia
+durável privada do recibo, manifesto e diagnósticos. Os caminhos de evidência
+informados pelo operador eram temporários; sua existência não prova custódia durável.
+Não liberar lock pertencente a outra operação e não repetir os comandos consumidos.
+
+### Próxima revisão autorizada — outputs ef7db111 e 3630e16
+
+Escopo somente de comparação e preparação; nenhuma nova exclusão foi autorizada.
+
+| Origem a conferir | Destino preservado a conferir |
+| --- | --- |
+| `/opt/re7online/build-output/immutable-ef7db111-vps-20261024T174000Z-producer/immutable-ef7db111-vps-20261024T174000Z` | `/opt/re7online/releases/immutable-ef7db111-vps-20261024T174000Z` |
+| `/opt/re7online/build-output/immutable-3630e16-vps-20261024T195842Z-producer/immutable-3630e16-vps-20261024T195842Z` | `/opt/re7online/releases/immutable-3630e16-vps-20261024T195842Z` |
+
+Os caminhos compostos acima são alvos de descoberta baseados no layout do produtor;
+sua existência, identidade e ausência de symlinks precisam ser verificadas no host.
+Comparar separadamente `api-runtime` e `frontend-runtime`, sem incluir pacote,
+metadados, logs ou wrappers como candidatos de remoção. A coincidência já relatada
+de manifesto/índice não substitui comparação integral atual.
+
+Aplicar o comparador corrigido, exclusão de escritores nas duas árvores, orçamento
+de leitura e revalidação de estabilidade. Provar referências e dependências em duas
+amostras frescas, contar blocos únicos e explicitar diferenças de modo/cache.
+Preservar a release de retorno imediato da API `3630e16` e a cadeia transitiva
+`ef7db111`. Produzir lista literal e ganho comprovado para revisão separada.
+Qualquer lacuna, mudança ou ambiguidade mantém a classificação pendente.
 
 ## Auditoria das duas entradas de `backup-data.sh`
 
