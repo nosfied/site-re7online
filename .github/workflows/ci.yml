@@ -50,6 +50,8 @@ jobs:
         run: python3 scripts/ci/test-converta-deploy.py
       - name: Validate deterministic external release producer
         run: python3 scripts/ci/test-converta-release.py
+      - name: Validate retention evidence collection
+        run: python3 -m unittest -v scripts/test_operational_retention_report.py scripts/test_retention_evidence_collector.py
       - uses: actions/setup-node@v4
         with:
           node-version: 20.20.0

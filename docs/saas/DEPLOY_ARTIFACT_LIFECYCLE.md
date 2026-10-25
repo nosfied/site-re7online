@@ -56,6 +56,22 @@ hashes e capacidade, sem ambiente ou segredo. `FAILED`, `COMPLETE` ou uma geraç
 substituída exigem classificação imediata como host obrigatório, custódia off-host
 verificada ou pendência. Substituição nunca equivale a autorização para retirar.
 
+## Preservação de evidências de execução
+
+A coleta usa `scripts/retention-evidence-collector.py`; `--validate-only` verifica
+o contrato antes da janela. Ela exige raiz de origem literal e específica, destino novo diretamente sob custódia privada `0700` e helper
+regular `0600`, pertencente ao UID/GID executor, legível por esse UID e autenticado
+por SHA-256 externo. Caminho vazio, `/tmp`, raiz ampla, sobreposição, symlink, hash,
+owner, modo ou legibilidade divergente negam antes da cópia.
+
+O coletor nunca remove a origem nem uma cópia parcial. Falha mantém os temporários
+para diagnóstico; encerramento posterior requer intenção nova. O diretório de origem
+não pode ser reduzido a uma variável implícita: origem, custódia e destino absolutos
+devem ser passados separadamente. A validação do helper antecede qualquer janela que
+dependa dele; não se altera owner ou modo e não se executa a coleta inteira como root
+para contornar acesso do UID executor. A coleta efetiva exige que o próprio processo
+tenha o UID/GID executor.
+
 ## Relatório pós-janela
 
 `scripts/operational-retention-report.py` continua sem modo de aplicação. Além do
