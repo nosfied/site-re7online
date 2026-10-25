@@ -287,14 +287,16 @@ O operador informou nenhuma alteração de restart, `pm2 save`, deploy, serviço
 cron, backup, dado ou chamada Meta. A existência de recibo privado e manifesto de
 execução foi relatada, mas seus conteúdos não foram acessados nesta atualização.
 
-**Pendências de encerramento:** confirmar liberação do lock canônico e custódia
+**Pendências históricas deste primeiro registro (respondidas posteriormente pelo
+operador; ver consolidação abaixo):** confirmar liberação do lock canônico e custódia
 durável privada do recibo, manifesto e diagnósticos. Os caminhos de evidência
 informados pelo operador eram temporários; sua existência não prova custódia durável.
 Não liberar lock pertencente a outra operação e não repetir os comandos consumidos.
 
-### Próxima revisão autorizada — outputs ef7db111 e 3630e16
+### Preparação histórica — outputs ef7db111 e 3630e16
 
-Escopo somente de comparação e preparação; nenhuma nova exclusão foi autorizada.
+O escopo abaixo preserva a preparação original, sem autorizar repetição. A execução
+posterior foi relatada pelo operador e consta na consolidação abaixo.
 
 | Origem a conferir | Destino preservado a conferir |
 | --- | --- |
@@ -327,3 +329,118 @@ remover exatamente uma das duas linhas idênticas, validar que reste uma ocorrê
 observar o próximo ciclo. Não alterar o script nem executar backup para testar. A
 retenção destrutiva de 14 dias existente no script é um contrato separado e não pode
 ser acionada por esta auditoria. Nenhuma alteração de cron foi feita nesta etapa.
+
+
+## Consolidação autorizada — continuidade de 25/10/2026
+
+Fonte: relatórios fornecidos pelo usuário e publicação documental expressamente
+autorizada nesta continuidade. Não houve acesso independente à VPS ou aos conteúdos
+dos recibos privados pelo autor desta atualização. Nenhum conteúdo privado desses
+recibos, ambiente ou dado de tenant é reproduzido aqui.
+
+### Lotes concluídos, conforme relatos
+
+| Lote | Ganho observado por df (bytes) | Inodes liberados |
+| --- | ---: | ---: |
+| Cache npm, worktree interrompido e sidecar | 1.441.624.064 | 41.100 |
+| Runtimes duplicados output/staging ec2a9fde | 1.964.130.304 | 68.696 |
+| Outputs ef7db111 e 3630e16, intenção v2 | 1.964.113.920 | 68.683 |
+| Worktrees 3630e16 e d7de6453 | 2.047.791.104 | 75.704 |
+| **Acumulado observado** | **7.417.659.392** | **254.183** |
+
+As variações de `df` incluem atividade concorrente do filesystem; não equivalem à
+soma exata dos blocos dos candidatos nem constituem medição atual de espaço livre.
+No lote dos worktrees, os candidatos alocavam 2.046.787.584 bytes. A diferença para
+o ganho observado fica explícita, sem atribuição causal independente.
+
+O lote ef7db111/3630e16 foi relatado em 25/10, 10:55:46–10:58:21 America/Fortaleza.
+As remoções dos worktrees foram iniciadas em 25/10, 14:40:03 e 14:40:39 UTC,
+respectivamente. O operador confirmou ausência dos caminhos e registros Git,
+execução sequencial sem força, retry ou expansão, preservação das identidades de
+API/frontend/worker, dump e marker, e health local/público aprovado. Nenhum restart,
+deploy, `pm2 save`, alteração de cron ou chamada Meta foi relatado.
+
+A custódia durável privada do lote ec2a9fde foi confirmada pelo operador com 19
+arquivos e hashes iguais aos originais. Para ef7db111/3630e16 foram confirmados 69/69
+arquivos. Para os worktrees foram informados recibo final e prova de encerramento
+do lock na custódia durável. Diretórios `0700` e arquivos `0600`; conteúdo privado
+não publicado. Essa confirmação é atribuída ao operador, não a uma nova leitura
+local do autor.
+
+### Bloqueio vigente reconciliado
+
+A última janela dirigida d7de6453 sustenta o uso de
+`/opt/re7online/backups/converta-persistent/.deployment-window.lock`, com `flock`
+exclusivo e não bloqueante por descritor mantido desde as amostras frescas até a
+inspeção final e o `fsync` do recibo. O arquivo permanece preservado; a posse se
+encerra pelo fechamento do próprio descritor, sem liberar lock alheio.
+
+`deploy.lock` pertence ao driver/helper histórico e não comprova exclusão mútua com
+o procedimento dirigido vigente. O operador confirmou o lock vigente livre e
+preservado após os últimos lotes. É uma observação datada, que não dispensa nova
+aquisição e verificação em operações futuras.
+
+### Pendência separada: output d7de6453
+
+Os dois runtimes do output d7de6453 permaneceram intactos e pendentes. A listagem
+somente leitura do pacote preservado retornou exit 0, stderr vazio e 34.352 membros,
+correspondendo às 34.349 entradas indexadas mais raiz, manifesto e índice, sem
+duplicatas. A listagem demonstra legibilidade e membros, sem substituir prova
+byte a byte após extração independente. A recusa anterior e o estado `NOT_PROVEN`
+da captura interrompida permanecem históricos. A release ativa não integra limpeza.
+
+### Auditoria a62da468 e preparações falhas — sem execução
+
+Duas amostras integrais e estáveis, segundo o operador, comprovaram igualdade entre
+o payload original e a preparação preservada por falta de uploads. Frente ao
+payload corrigido autenticado, o original apresentou zero entradas removidas ou
+alteradas: o corrigido acrescenta 66 entradas (59 arquivos e sete diretórios),
+503.154 bytes aparentes. Assim, o payload original não apresentou conteúdo de
+arquivo exclusivo na comparação informada. Isso não autoriza apagar pacote,
+metadados ou diagnósticos.
+
+Os acréscimos incluem módulos de uploads e outras dependências; a classificação foi
+baseada em conteúdo, não no nome da falha. O pacote corrigido passou, conforme
+relato, em SHA-256, `xz -t` e `tar -tJf`, com 34.351 membros correspondentes às
+34.348 entradas do índice mais raiz e dois metadados. A release VPS inclui nove
+caminhos gerados em runtime sob dados/cache e foi preservada integralmente.
+
+| Candidato identificado | Blocos recuperáveis informados |
+| --- | ---: |
+| API do output original a62da468 | 336.887.808 bytes |
+| Frontend do output original a62da468 | 644.460.544 bytes |
+| API da preparação missing-openai-uploads | 336.887.808 bytes |
+| Frontend da preparação missing-openai-uploads | 644.460.544 bytes |
+| Worktree a62da468 | 1.023.070.208 bytes |
+| Worktree source da falha missing-prisma-generate | 351.805.440 bytes |
+| Worktree source da falha node-heap-oom | 389.021.696 bytes |
+| **Potencial informado, ainda não executado** | **3.726.594.048 bytes** |
+
+O operador não encontrou hardlinks cruzados entre esses sete candidatos. O
+subdiretório `releases/failed-preparations` não foi contado novamente no total de
+`releases`.
+
+Worktree a62da468: tracked/untracked limpos, 30.917 ignorados, 41 symlinks internos
+válidos, sem configuração privada, dados, backups, logs ou evidências únicas
+identificados. API compilada equivalente; frontend com bytes/tamanhos
+correspondentes, 1.119 diferenças somente de modo e quatro entradas de cache
+exclusivas. As falhas antigas tiveram dependências/compilados separados de seus
+inventários diagnósticos externos; não foram identificados arquivos regulares em
+`residue` nem cores, dados ou configuração privada dentro dos worktrees.
+
+Duas amostras privilegiadas relatadas cobriram 147 processos, 11 namespaces de
+montagem e dois de rede, sem erros ou referências aos caminhos auditados. A leitura
+estática de 317 arquivos encontrou apenas os três registros administrativos Git de
+worktree. Essas observações não substituem as verificações frescas da futura janela.
+
+Permanecem protegidos: releases externa e VPS, pacotes original/corrigido/externo,
+manifests, índices, logs, inventários, configurações v1/v2, transações históricas,
+retornos e evidências. Os sete caminhos são candidatos, não um lote autorizado.
+
+Antes de retirada: confirmar custódia durável dos diagnósticos e evidências que
+foram informados como temporários, fechar intenção e comandos literais, preservando
+o comparador e o controle vigente de concorrência, duas amostras frescas e autorização
+específica. Worktrees somente por `git worktree remove`, sem força; runtimes somente
+por seus caminhos literais, sem remover os diretórios documentais pais. Parar na
+primeira falha e inspecionar sem replay. Nenhuma nova exclusão está autorizada por
+este documento.
