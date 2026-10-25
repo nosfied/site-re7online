@@ -1,6 +1,8 @@
+import contextlib
 import hashlib
 import importlib.util
 import fcntl
+import io
 import os
 from pathlib import Path
 import shutil
@@ -104,6 +106,29 @@ class CollectorTests(unittest.TestCase):
         finally:
             fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
 
+    def test_source_success_receipt_regular_file_is_denied_before_copy(self):
+        reserved = self.source / m.FINAL_RECEIPT_NAME
+        reserved.write_text('original evidence')
+        with patch.object(m.shutil, 'copytree') as copy:
+            with self.assertRaisesRegex(ValueError, 'source_reserved_receipt_entry'):
+                m.collect(self.args())
+            copy.assert_not_called()
+        self.assertEqual(reserved.read_text(), 'original evidence')
+        self.assertFalse(self.destination.exists())
+
+    def test_source_success_receipt_symlink_is_denied_before_copy(self):
+        target = self.root / 'reserved-target'
+        target.write_text('original evidence')
+        reserved = self.source / m.FINAL_RECEIPT_NAME
+        reserved.symlink_to(target)
+        with patch.object(m.shutil, 'copytree') as copy:
+            with self.assertRaisesRegex(ValueError, 'source_reserved_receipt_entry'):
+                m.collect(self.args())
+            copy.assert_not_called()
+        self.assertTrue(reserved.is_symlink())
+        self.assertEqual(target.read_text(), 'original evidence')
+        self.assertFalse(self.destination.exists())
+
     def test_late_file_during_second_source_index_denies_success_receipt(self):
         (self.source / 'a').write_text('a')
         (self.source / 'b').write_text('b')
@@ -177,7 +202,9 @@ class CollectorTests(unittest.TestCase):
         (self.source / 'nested').mkdir()
         (self.source / 'nested' / 'evidence').write_text('preserved')
         events = []
-        real_file, real_directory, real_rename = m.fsync_regular, m.fsync_directory, m.os.rename
+        real_file = m.fsync_regular
+        real_directory = m.fsync_directory
+        real_rename = m.rename_noreplace
 
         def record_file(path):
             events.append(('file', Path(path)))
@@ -193,11 +220,11 @@ class CollectorTests(unittest.TestCase):
 
         with patch.object(m, 'fsync_regular', side_effect=record_file), \
                 patch.object(m, 'fsync_directory', side_effect=record_directory), \
-                patch.object(m.os, 'rename', side_effect=record_rename):
+                patch.object(m, 'rename_noreplace', side_effect=record_rename):
             m.collect(self.args())
 
         rename_position = next(i for i, event in enumerate(events) if event[0] == 'rename')
-        self.assertEqual(rename_position, len(events) - 1)
+        self.assertEqual(rename_position, len(events) - 2)
         required = [
             ('file', self.destination / 'nested' / 'evidence'),
             ('directory', self.destination / 'nested'),
@@ -209,14 +236,84 @@ class CollectorTests(unittest.TestCase):
             self.assertIn(event, events[:rename_position])
         self.assertLess(events.index(required[0]), events.index(required[1]))
         self.assertLess(events.index(required[1]), events.index(required[2]))
-        self.assertEqual(events[-4:], [
+        self.assertEqual(events[-5:], [
             ('file', self.destination / '.collection-receipt.private.json.prepared'),
             ('directory', self.destination),
             ('directory', self.custody),
             ('rename', self.destination / '.collection-receipt.private.json.prepared',
              self.destination / 'collection-receipt.private.json'),
+            ('directory', self.destination),
         ])
         self.assertTrue((self.destination / 'collection-receipt.private.json').exists())
+
+    def test_publication_never_replaces_existing_regular_file_or_symlink(self):
+        self.destination.mkdir(mode=0o700)
+        prepared = self.destination / m.PREPARED_RECEIPT_NAME
+        final = self.destination / m.FINAL_RECEIPT_NAME
+        prepared.write_text('new receipt')
+        final.write_text('existing receipt')
+        with self.assertRaises(FileExistsError):
+            m.rename_noreplace(prepared, final)
+        self.assertEqual(prepared.read_text(), 'new receipt')
+        self.assertEqual(final.read_text(), 'existing receipt')
+
+        final.rename(self.destination / 'existing-regular')
+        target = self.destination / 'target'
+        target.write_text('symlink evidence')
+        final.symlink_to(target)
+        with self.assertRaises(FileExistsError):
+            m.rename_noreplace(prepared, final)
+        self.assertTrue(final.is_symlink())
+        self.assertEqual(target.read_text(), 'symlink evidence')
+        self.assertEqual(prepared.read_text(), 'new receipt')
+
+    def test_post_publication_directory_fsync_failure_is_indeterminate(self):
+        (self.source / 'evidence').write_text('preserved')
+        real_directory = m.fsync_directory
+        real_rename = m.rename_noreplace
+        published = False
+
+        def record_rename(source, destination):
+            nonlocal published
+            real_rename(source, destination)
+            published = True
+
+        def fail_after_publication(path):
+            if published and path == self.destination:
+                raise OSError('injected_post_publish_fsync_failure')
+            return real_directory(path)
+
+        with patch.object(m, 'rename_noreplace', side_effect=record_rename), \
+                patch.object(m, 'fsync_directory', side_effect=fail_after_publication):
+            with self.assertRaises(m.ReceiptDurabilityIndeterminate) as raised:
+                m.collect(self.args())
+        self.assertEqual(raised.exception.record['result'], 'PRESERVATION_INDETERMINATE')
+        self.assertTrue(raised.exception.record['receiptPublished'])
+        self.assertFalse(raised.exception.record['durabilityConfirmed'])
+        self.assertFalse(raised.exception.record['retryAllowed'])
+        self.assertTrue((self.destination / m.FINAL_RECEIPT_NAME).is_file())
+        self.assertEqual((self.source / 'evidence').read_text(), 'preserved')
+        self.assertEqual((self.destination / 'evidence').read_text(), 'preserved')
+
+    def test_cli_records_indeterminate_publication_without_success_output(self):
+        arguments = [
+            str(SCRIPT), '--source-root', str(self.source),
+            '--custody-root', str(self.custody),
+            '--destination-root', str(self.destination), '--helper', str(self.helper),
+            '--helper-sha256', self.sha, '--source-writer-lock', str(self.writer_lock),
+            '--executor-uid', str(self.uid), '--executor-gid', str(self.gid),
+        ]
+        failure = m.ReceiptDurabilityIndeterminate()
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with patch.object(m.sys, 'argv', arguments), \
+                patch.object(m, 'collect', side_effect=failure), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            self.assertEqual(m.main(), 1)
+        self.assertEqual(stdout.getvalue(), '')
+        record = __import__('json').loads(stderr.getvalue())
+        self.assertEqual(record['result'], 'PRESERVATION_INDETERMINATE')
+        self.assertFalse(record['durabilityConfirmed'])
+        self.assertNotIn('PRESERVED', stderr.getvalue())
 
     def test_module_has_no_destructive_cleanup_calls(self):
         source = SCRIPT.read_text()

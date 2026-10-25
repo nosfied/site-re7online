@@ -82,8 +82,15 @@ dependa dele; não se altera owner ou modo e não se executa a coleta inteira co
 para contornar acesso do UID executor. A coleta efetiva exige que o próprio processo
 tenha o UID/GID executor. Antes de publicar `PRESERVED`, arquivos copiados e
 diretórios da árvore são sincronizados, seguidos do diretório de custódia; o recibo
-preparado também é sincronizado e só então recebe o nome final. Falha de cópia,
-revalidação ou `fsync` nega a conclusão e preserva origem e cópia parcial.
+preparado também é sincronizado e só então recebe o nome final por rename sem
+substituição. Os nomes reservado e preparado do recibo não podem existir na origem;
+arquivo regular ou symlink com qualquer deles nega antes da cópia. Depois da
+publicação, o diretório que contém o recibo é sincronizado novamente antes de
+retornar `PRESERVED`. Falha desse último `fsync` resulta em
+`PRESERVATION_INDETERMINATE`, registra que o recibo foi publicado sem durabilidade
+confirmada e proíbe retry automático; o recibo e todos os artefatos permanecem.
+Falha de cópia ou revalidação também nega a conclusão e preserva origem e cópia
+parcial.
 
 O coletor auxiliar exato usado na tentativa local negada de 25/10/2026 permanece
 somente como evidência do incidente e **não pode ser reutilizado**. Publicar este

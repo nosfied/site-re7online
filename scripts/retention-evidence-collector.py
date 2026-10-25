@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Preserve one completed retention evidence tree. Sources are never removed."""
 import argparse
+import ctypes
+import errno
 import fcntl
 import hashlib
 import importlib.util
@@ -9,6 +11,7 @@ import os
 from pathlib import Path
 import shutil
 import stat
+import sys
 import time
 
 SHA256 = __import__('re').compile(r'^[0-9a-f]{64}$')
@@ -17,6 +20,22 @@ REPORT = Path(__file__).with_name('operational-retention-report.py')
 REPORT_SPEC = importlib.util.spec_from_file_location('operational_retention_report', REPORT)
 retention_report = importlib.util.module_from_spec(REPORT_SPEC)
 REPORT_SPEC.loader.exec_module(retention_report)
+PREPARED_RECEIPT_NAME = '.collection-receipt.private.json.prepared'
+FINAL_RECEIPT_NAME = 'collection-receipt.private.json'
+RESERVED_RECEIPT_NAMES = (PREPARED_RECEIPT_NAME, FINAL_RECEIPT_NAME)
+
+
+class ReceiptDurabilityIndeterminate(RuntimeError):
+    def __init__(self):
+        super().__init__('receipt_published_durability_indeterminate')
+        self.record = {
+            'result': 'PRESERVATION_INDETERMINATE',
+            'predicate': 'receipt_published_durability_indeterminate',
+            'receiptPublished': True,
+            'durabilityConfirmed': False,
+            'sourcePreserved': True,
+            'retryAllowed': False,
+        }
 
 
 def literal_path(raw, label):
@@ -198,6 +217,28 @@ def fsync_copied_tree(destination, custody):
     fsync_directory(custody)
 
 
+def deny_reserved_receipt_entries(source):
+    for name in RESERVED_RECEIPT_NAMES:
+        path = source / name
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            continue
+        raise ValueError(f'source_reserved_receipt_entry:{name}')
+
+
+def rename_noreplace(source, destination):
+    renameat2 = getattr(ctypes.CDLL(None, use_errno=True), 'renameat2', None)
+    if renameat2 is None:
+        raise OSError(errno.ENOSYS, 'renameat2_unavailable')
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int,
+                          ctypes.c_char_p, ctypes.c_uint]
+    renameat2.restype = ctypes.c_int
+    if renameat2(-100, os.fsencode(source), -100, os.fsencode(destination), 1) != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code), destination)
+
+
 def validate_contract(source_raw, custody_raw, destination_raw, helper_raw,
                       helper_sha, source_writer_lock_raw, executor_uid, executor_gid,
                       require_source=True):
@@ -232,6 +273,7 @@ def collect(args):
     deadline = time.monotonic() + args.observation_seconds
     hash_budget = [args.max_hash_bytes]
     with SourceWriterExclusion(source_writer_lock, args.executor_uid, args.executor_gid):
+        deny_reserved_receipt_entries(source)
         before, before_digest, before_observations = entry_index(
             source, deadline, hash_budget, 'source_before'
         )
@@ -270,8 +312,8 @@ def collect(args):
             'treeSha256': before_digest,
         }
         raw = (json.dumps(receipt, sort_keys=True) + '\n').encode()
-        prepared_receipt = destination / '.collection-receipt.private.json.prepared'
-        final_receipt = destination / 'collection-receipt.private.json'
+        prepared_receipt = destination / PREPARED_RECEIPT_NAME
+        final_receipt = destination / FINAL_RECEIPT_NAME
         fd = os.open(prepared_receipt,
                      os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'wb') as out:
@@ -279,7 +321,11 @@ def collect(args):
         fsync_regular(prepared_receipt)
         fsync_directory(destination)
         fsync_directory(custody)
-        os.rename(prepared_receipt, final_receipt)
+        rename_noreplace(prepared_receipt, final_receipt)
+        try:
+            fsync_directory(destination)
+        except BaseException as error:
+            raise ReceiptDurabilityIndeterminate() from error
         return receipt
 
 
@@ -310,7 +356,11 @@ def main():
             pass
         print(json.dumps({'result': 'VALIDATED', 'sourcePreserved': True}))
         return
-    result = collect(args)
+    try:
+        result = collect(args)
+    except ReceiptDurabilityIndeterminate as error:
+        print(json.dumps(error.record, sort_keys=True), file=sys.stderr)
+        return 1
     print(json.dumps({'result': result['result'], 'entryCount': result['entryCount'],
                       'sourcePreserved': result['sourcePreserved']}))
 
