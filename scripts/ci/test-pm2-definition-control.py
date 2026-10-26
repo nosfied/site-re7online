@@ -791,7 +791,7 @@ class DefinitionControlTests(unittest.TestCase):
             stable = root / "current/frontend"
             script = stable / "node_modules/next/dist/bin/next"
             report = root / "report.json"
-            release.mkdir()
+            release.mkdir(parents=True)
             args = argparse.Namespace(
                 component="frontend", process_name="re7-admin-front",
                 expected_cwd=stable, expected_script=script,
