@@ -26,15 +26,24 @@ require((ROOT / state["contactsListRecovery"]["deploymentRecord"]).is_file(),
         "historical contacts deployment record")
 require(state["templateCampaignMedia"]["state"] == "TECHNICALLY_DEPLOYED",
         "media technically deployed")
-require(state["templateCampaignMedia"]["deploymentRecord"] == record_value,
-        "media deployment record")
-require(state["templateCampaignMedia"]["metaFunctionalAcceptance"] == "PENDING" and
-        state["templateCampaignMedia"]["commercialOperationalRelease"] == "PENDING",
-        "media pending functional and commercial acceptance")
-require(state["templateCampaignMedia"]["lastHomologationAttempt"] ==
+media = state["templateCampaignMedia"]
+require(media["deploymentRecord"] == state["activeApiDeploymentRecord"],
+        "media API deployment record")
+require(media["frontendPresentationDeploymentRecord"] == record_value,
+        "media frontend presentation deployment record")
+require(media["metaFunctionalAcceptance"] == "PASS_IMAGE_VIDEO_CONTROLLED" and
+        media["commercialOperationalRelease"] == "GENERAL_OPERATIONS_OPEN",
+        "media functional acceptance and general operations")
+require(media["frontendPresentationState"] == "DEPLOYED_VISUAL_ACCEPTANCE_PASS",
+        "media frontend presentation acceptance")
+require(media["latestCampaignHomologationState"] ==
+        "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS_GENERAL_OPERATIONS_OPEN" and
+        (ROOT / media["latestCampaignHomologationRecord"]).is_file(),
+        "current media campaign acceptance")
+require(media["lastHomologationAttempt"] ==
         "FAILED_DETERMINISTIC_PROVIDER_REJECTION" and
-        (ROOT / state["templateCampaignMedia"]["lastHomologationRecord"]).is_file(),
-        "media homologation attempt")
+        (ROOT / media["lastHomologationRecord"]).is_file(),
+        "historical media homologation attempt")
 tenant_app = state["tenantScopedMetaAppId"]
 require(tenant_app["configurationState"] == "CONFIGURED_VERIFIED_FOR_CONVERTA_DEMO" and
         tenant_app["currentTokenAppBinding"] == "CONFIRMED_BY_META_DEBUG_TOKEN" and

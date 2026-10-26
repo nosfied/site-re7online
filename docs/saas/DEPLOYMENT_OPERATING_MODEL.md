@@ -1,6 +1,6 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / DEPLOY A959 RELATADO EM 26/10/2026 / OPERAÇÕES DE CAMPANHA ABERTAS NA GERAÇÃO 41**
+**Status: CANÔNICO / TOPOLOGIA API A959 + FRONTEND F160 RELATADA EM 26/10/2026 / OPERAÇÕES DE CAMPANHA ABERTAS NA GERAÇÃO 41**
 
 Este documento define a arquitetura e os princípios vigentes. Os comandos executáveis
 estão somente no [runbook canônico](DEPLOY_RUNBOOK.md). Preparações e executores
@@ -201,16 +201,36 @@ Os itens abaixo são históricos e **não utilizáveis**:
 
 ## Release produtiva relatada em 26/10/2026
 
-O registro ativo é
+A produção usa uma topologia deliberadamente dividida por componente:
+
+- API: target `a959129e39a07c52881fb7f5cbf21a7f6f1a80ff`, release
+  `immutable-a959129e-vps-20261026T023100Z`;
+- frontend: target `f16027874e91c86e5f818d0888e6d735b07a6eda`, release
+  `immutable-f1602787-vps-20261026T174702Z`, BUILD_ID
+  `HYTuoIlZopPMaTrcg6uiv`;
+- worker: processo anterior preservado, sem restart.
+
+O registro operacional ativo do frontend é
+[`CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json`](releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json).
+O registro que continua autenticando a API e a implantação técnica de mídia é
 [`CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json`](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json).
-Target `a959129e39a07c52881fb7f5cbf21a7f6f1a80ff`, release
-`immutable-a959129e-vps-20261026T023100Z`, BUILD_ID `CbNbnlr0VJVv5mME_hvxm`.
-API/frontend em `/current`, worker e guarda fechada preservados, um save, dump
-`e54db82c63cea7200c4215ac16a923b0ec3d05a5e2bc0398c1bcb06ee3e68325`,
-marker/recibo finais e lock livre. Fonte: relatório do Codex local encaminhado
-pelo owner; não é inspeção viva feita pelo editor documental. Retorno API/frontend:
-release d7 abaixo. Homologação funcional e reabertura seguem
-[roteiro separado](CAMPAIGN_OPERATIONS_READINESS.md); deploy não libera campanhas.
+Não se deve forçar um único release ID sobre componentes que foram promovidos em
+janelas diferentes.
+
+O frontend f160 foi promovido pelo executor frontend-only release-bound, com readiness
+de três amostras estáveis, um único restart e um único `pm2 save` após o aceite. O
+dump final é
+`5aa289dd3b610382af34df64555ac9b9effb7793e07573b73e0057824e3b1095`;
+marker, journal e recibo finais foram publicados, e o lock foi liberado pelo protocolo
+privado. A omissão de `instances` no dump tem duas regras distintas: API/frontend
+vivos com `instances=1` equivalem à omissão somente no PM2 6.0.14 autenticado,
+`fork_mode` singleton e com os demais campos idênticos; worker ausente/nulo nos
+dois lados é comparado sem normalização.
+
+A guarda de campanhas permanece aberta na geração 41, sem tarefas ou fault. IMAGE e
+VIDEO passaram em campanhas controladas; agendamento, multilote e aceites específicos
+permanecem frentes separadas. Fonte: relatório do Codex local encaminhado pelo owner;
+não é inspeção viva feita pelo editor documental.
 
 ## Histórico e retorno — observação de 24/10/2026
 

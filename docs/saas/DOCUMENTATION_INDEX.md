@@ -15,6 +15,7 @@
 - [Runbook canônico de deploy](DEPLOY_RUNBOOK.md) — única instrução executável vigente
 - [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
   o produtor `scripts/converta-release.py`, o build na VPS e a fronteira com a ativação
+- [Layout de mídia em campanhas: deploy frontend f160](releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json)
 - [Disponibilidade e admissão de mídia de campanhas: deploy a959](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json)
   — API/frontend ativos relatados em 26/10; guarda fechada, um save, worker preservado e lock livre.
 - [Deploy da coerência de sincronização e ordenação de templates](releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json)

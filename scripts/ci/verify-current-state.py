@@ -15,67 +15,117 @@ def require(value, reason):
 
 
 state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
-require(state["schemaVersion"] == 6, "schema")
+require(state["schemaVersion"] in (6, 7), "schema")
 require(state["production"]["status"] == "DEPLOYED_VERIFIED", "production status")
 record_path = ROOT / state["activeDeploymentRecord"]
 require(record_path.is_file(), "active record")
 record = json.loads(record_path.read_text())
-require(record["schemaVersion"] in (4, 5) and record["status"] == "DEPLOYED_VERIFIED",
-        "record status")
+require(record["status"] == "DEPLOYED_VERIFIED", "record status")
 require(state["activeOperationalRecord"] == state["activeDeploymentRecord"],
         "single active record")
 production = state["production"]
-require(production["targetCommit"] == record["targetCommit"], "target")
-require(production["releaseId"] == record["releaseId"], "release")
-require(production["api"]["entrySha256"] ==
-        record["artifacts"]["api"]["entrySha256"], "API identity")
-require(production["frontend"]["buildId"] ==
-        record["artifacts"]["frontend"]["buildId"], "frontend identity")
-require(production["frontend"]["execMode"] == "fork_mode" and
-        production["frontend"]["instances"] == 1, "frontend mode")
-if record["artifacts"]["worker"].get("preserved") is True:
-    require(production["worker"]["changed"] is False and
+
+if record.get("recordType") == "FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT":
+    require(record["schemaVersion"] == 1, "frontend record schema")
+    require(production["targetCommit"] == record["release"]["target"], "target")
+    require(production["releaseId"] == record["release"]["id"], "release")
+    require(production["frontend"]["buildId"] ==
+            record["release"]["buildId"], "frontend identity")
+    require(production["frontend"]["selectedReleaseId"] ==
+            record["release"]["id"], "frontend selected release")
+    api_record_path = ROOT / state["activeApiDeploymentRecord"]
+    require(api_record_path.is_file(), "active API record")
+    api_record = json.loads(api_record_path.read_text())
+    require(production["api"]["entrySha256"] ==
+            api_record["artifacts"]["api"]["entrySha256"], "API identity")
+    require(production["api"]["selectedReleaseId"] ==
+            api_record["releaseId"], "API selected release")
+    require(record["impact"]["apiPreserved"] is True and
+            record["impact"]["workerPreserved"] is True and
+            production["worker"]["changed"] is False and
             production["worker"]["preserved"] is True,
-            "worker preservation")
+            "frontend-only preservation")
     require(production["database"]["lastDeploymentMigration"] ==
             "NOT_APPLICABLE_NO_SCHEMA_CHANGE" and
-            record["migration"]["classification"] ==
+            record["release"]["migration"] ==
             "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
             "no-schema-change deployment")
+    require(production["persistentStorage"]["templateMediaRoot"] ==
+            api_record["persistentStorage"]["templateMediaRoot"] and
+            production["persistentStorage"]["directoryMode"] == "0700",
+            "persistent media storage")
+    require(production["pm2"]["dumpSha256"] ==
+            record["pm2"]["dumpSha256"], "PM2 identity")
 else:
-    require(production["worker"]["changed"] is True and
-            production["worker"]["preserved"] is False and
-            production["worker"]["entrySha256"] ==
-            record["artifacts"]["worker"]["entrySha256"], "worker target identity")
-    require(production["database"]["migration"] == record["migration"]["name"] and
-            production["database"]["appliedExactlyOnce"] is True and
-            production["database"]["pendingMigrationCount"] == 0,
-            "database migration state")
-require(production["persistentStorage"]["templateMediaRoot"] ==
-        record["persistentStorage"]["templateMediaRoot"] and
-        production["persistentStorage"]["directoryMode"] == "0700",
-        "persistent media storage")
+    require(record["schemaVersion"] in (4, 5), "record schema")
+    require(production["targetCommit"] == record["targetCommit"], "target")
+    require(production["releaseId"] == record["releaseId"], "release")
+    require(production["api"]["entrySha256"] ==
+            record["artifacts"]["api"]["entrySha256"], "API identity")
+    require(production["frontend"]["buildId"] ==
+            record["artifacts"]["frontend"]["buildId"], "frontend identity")
+    if record["artifacts"]["worker"].get("preserved") is True:
+        require(production["worker"]["changed"] is False and
+                production["worker"]["preserved"] is True,
+                "worker preservation")
+        require(production["database"]["lastDeploymentMigration"] ==
+                "NOT_APPLICABLE_NO_SCHEMA_CHANGE" and
+                record["migration"]["classification"] ==
+                "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+                "no-schema-change deployment")
+    else:
+        require(production["worker"]["changed"] is True and
+                production["worker"]["preserved"] is False and
+                production["worker"]["entrySha256"] ==
+                record["artifacts"]["worker"]["entrySha256"], "worker target identity")
+        require(production["database"]["migration"] == record["migration"]["name"] and
+                production["database"]["appliedExactlyOnce"] is True and
+                production["database"]["pendingMigrationCount"] == 0,
+                "database migration state")
+    require(production["persistentStorage"]["templateMediaRoot"] ==
+            record["persistentStorage"]["templateMediaRoot"] and
+            production["persistentStorage"]["directoryMode"] == "0700",
+            "persistent media storage")
+    require(production["pm2"]["dumpSha256"] == record["pm2"]["dumpSha256"],
+            "PM2 identity")
+
+require(production["frontend"]["execMode"] == "fork_mode" and
+        production["frontend"]["instances"] == 1, "frontend mode")
 require(bool(SHA.fullmatch(production["pm2"]["dumpSha256"])), "PM2 dump")
-require(production["pm2"]["dumpSha256"] == record["pm2"]["dumpSha256"],
-        "PM2 identity")
 require(production["pm2"]["savedExactlyOnce"] is True, "PM2 save")
 contacts = state["contactsListRecovery"]
 require(contacts["state"] == "DEPLOYED_VERIFIED", "contacts state")
 require((ROOT / contacts["deploymentRecord"]).is_file(), "historical contacts record")
 media = state["templateCampaignMedia"]
-require(media["state"] == "TECHNICALLY_DEPLOYED" and
-        media["deploymentRecord"] == state["activeDeploymentRecord"],
-        "media active record")
+require(media["state"] == "TECHNICALLY_DEPLOYED", "media state")
+if record.get("recordType") == "FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT":
+    require(media["deploymentRecord"] == state["activeApiDeploymentRecord"] and
+            media["frontendPresentationDeploymentRecord"] ==
+            state["activeDeploymentRecord"],
+            "media split deployment records")
+else:
+    require(media["deploymentRecord"] == state["activeDeploymentRecord"],
+            "media active record")
 require(media["components"] in (["api", "frontend", "worker"],
                                 ["api", "frontend", "worker_preserved"]) and
         media["migrationApplied"] is True and
         media["persistentStorageReady"] is True, "media deployment boundary")
-require(media["metaFunctionalAcceptance"] == "PENDING" and
-        media["commercialOperationalRelease"] == "PENDING" and
-        media["craPrRelease"] == "PENDING", "media pending acceptance")
+if media["metaFunctionalAcceptance"] == "PENDING":
+    require(media["commercialOperationalRelease"] == "PENDING" and
+            media["campaignsExecuted"] is False and
+            media["messagesSent"] is False,
+            "media pending acceptance")
+else:
+    require(media["metaFunctionalAcceptance"] == "PASS_IMAGE_VIDEO_CONTROLLED" and
+            media["commercialOperationalRelease"] == "GENERAL_OPERATIONS_OPEN" and
+            media["campaignsExecuted"] is True and
+            media["messagesSent"] is True and
+            media["latestCampaignHomologationState"] ==
+            "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS_GENERAL_OPERATIONS_OPEN",
+            "media accepted state")
+require(media["craPrRelease"] == "PENDING", "CRA-PR acceptance boundary")
 require(media["metaCallsExecuted"] is True and
-        media["templatesCreatedOrSubmitted"] is True and
-        media["campaignsExecuted"] is False and media["messagesSent"] is False,
+        media["templatesCreatedOrSubmitted"] is True,
         "media external effects")
 require(media["lastHomologationAttempt"] ==
         "FAILED_DETERMINISTIC_PROVIDER_REJECTION", "media homologation result")

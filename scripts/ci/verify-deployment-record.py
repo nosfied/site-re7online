@@ -222,6 +222,147 @@ def verify_immutable_release(record_path: Path, record: dict) -> None:
     print("DEPLOYMENT_RECORD_OK: immutable artifacts, fixed paths and live verification agree")
 
 
+
+def verify_current_frontend_layout(record_path: Path, record: dict) -> None:
+    require(record.get("recordType") ==
+            "FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT",
+            "frontend current record type")
+    require(record.get("status") == "DEPLOYED_VERIFIED",
+            "frontend current deployment status")
+    require(record.get("result") ==
+            "CAMPAIGN_MEDIA_LAYOUT_ACCEPTED_PRODUCTION_HEALTHY",
+            "frontend current deployment result")
+    require(not (walk_keys(record) & FORBIDDEN_KEYS),
+            "sensitive identifier key in sanitized frontend record")
+
+    functional = record.get("functionalTarget", {})
+    control = record.get("controlPlane", {})
+    for value, reason in (
+        (functional.get("commit"), "functional commit"),
+        (functional.get("testedHead"), "functional tested head"),
+        (functional.get("treeSha"), "functional tree"),
+        (control.get("mergeCommit"), "control merge"),
+        (control.get("testedHead"), "control tested head"),
+        (control.get("treeSha"), "control tree"),
+    ):
+        require(bool(re.fullmatch(r"[0-9a-f]{40}", value or "")), reason)
+    require(functional.get("treeDifferenceCount") == 0 and
+            functional.get("ciResult") == "PASS_4_OF_4" and
+            positive_int(functional.get("ciRun")),
+            "functional CI identity")
+    require(control.get("ciResult") == "PASS_4_OF_4" and
+            positive_int(control.get("ciRun")),
+            "control CI identity")
+    for field in ("executorSha256", "producerSha256", "readinessControlSha256"):
+        require(bool(SHA256.fullmatch(control.get(field, ""))),
+                f"control {field}")
+
+    release = record.get("release", {})
+    release_id = release.get("id", "")
+    release_path = Path(release.get("path", ""))
+    require(bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", release_id)),
+            "frontend current releaseId")
+    require(release_path.is_absolute() and
+            release_path.parent == Path("/opt/re7online/releases") and
+            release_path.name == release_id, "frontend current release path")
+    require(release.get("target") == functional.get("commit"),
+            "frontend current target")
+    for field in ("packageSha256", "manifestSha256", "indexSha256",
+                  "tarSha256", "apiEntrypointSha256",
+                  "frontendEntrypointSha256"):
+        require(bool(SHA256.fullmatch(release.get(field, ""))),
+                f"release {field}")
+    require(bool(release.get("buildId")) and
+            release.get("indexEntries") == 34351 and
+            release.get("buildCount") == 1 and
+            release.get("packageVerified") is True and
+            release.get("extractedTreeVerified") is True and
+            release.get("migration") == "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+            "frontend current release contract")
+
+    impact = record.get("impact", {})
+    require(impact.get("activatedComponents") == ["frontend"] and
+            impact.get("apiPreserved") is True and
+            impact.get("workerPreserved") is True and
+            impact.get("pm2BindingsRequired") is False and
+            impact.get("validatePairExecuted") is False,
+            "frontend current impact")
+
+    runtime = record.get("runtime", {})
+    frontend = runtime.get("frontend", {})
+    require(frontend.get("releaseId") == release_id and
+            frontend.get("buildId") == release.get("buildId") and
+            frontend.get("execMode") == "fork_mode" and
+            frontend.get("instances") == 1 and
+            frontend.get("socketPort") == 3000 and
+            frontend.get("socketOwnerRelation") == "DIRECT" and
+            frontend.get("socketOwnerPid") == frontend.get("pid") and
+            positive_int(frontend.get("pid")) and
+            positive_int(frontend.get("startTicks")),
+            "frontend current runtime")
+    require(runtime.get("api", {}).get("preserved") is True and
+            runtime.get("worker", {}).get("preserved") is True and
+            runtime.get("worker", {}).get("restartCount") == 0,
+            "frontend current preserved processes")
+
+    readiness = record.get("readiness", {})
+    require(readiness.get("result") == "READINESS_PASS" and
+            readiness.get("totalSamples") == 4 and
+            readiness.get("stableSamples") == 3 and
+            readiness.get("initialListenerAbsent") is True and
+            readiness.get("stderrEmpty") is True and
+            bool(SHA256.fullmatch(readiness.get("reportSha256", ""))),
+            "frontend current readiness")
+    require(record.get("acceptance", {}).get("technical") == "PASS" and
+            record.get("acceptance", {}).get("visual") == "PASS",
+            "frontend current acceptance")
+
+    pm2 = record.get("pm2", {})
+    require(pm2.get("version") == "6.0.14" and
+            pm2.get("saveCount") == 1 and
+            pm2.get("saveAttemptCount") == 1 and
+            pm2.get("saveExitCode") == 0 and
+            pm2.get("dumpValidation") == "PASS_THREE_RECORDS" and
+            pm2.get("secondSaveExecuted") is False and
+            bool(SHA256.fullmatch(pm2.get("dumpSha256", ""))) and
+            bool(SHA256.fullmatch(pm2.get("dumpValidationSha256", ""))),
+            "frontend current PM2 state")
+    finalization = record.get("finalization", {})
+    for field in ("journalSha256", "markerSha256", "receiptSha256",
+                  "saveEvidenceSha256"):
+        require(bool(SHA256.fullmatch(finalization.get(field, ""))),
+                f"finalization {field}")
+    require(finalization.get("markerCreatedAfterDumpValidation") is True,
+            "frontend current marker order")
+    require(record.get("campaignGuard") == {
+        "open": True, "generation": 41, "tasks": 0, "fault": None,
+    }, "frontend current campaign guard")
+    require(record.get("lock", {}).get("releasedByAuthenticatedToken") is True and
+            record.get("lock", {}).get("holderExited") is True and
+            record.get("lock", {}).get("filePreserved") is True,
+            "frontend current lock")
+    require(all(value in (0, False)
+                for value in record.get("deploymentEffects", {}).values()),
+            "frontend current deployment effects")
+
+    state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
+    require(state.get("activeDeploymentRecord") ==
+            record_path.relative_to(ROOT).as_posix(),
+            "frontend current active record")
+    production = state.get("production", {})
+    require(production.get("targetCommit") == release.get("target") and
+            production.get("releaseId") == release_id and
+            production.get("releasePath") == str(release_path),
+            "frontend current production release")
+    require(production.get("frontend", {}).get("selectedReleaseId") ==
+            release_id and
+            production.get("frontend", {}).get("buildId") ==
+            release.get("buildId"), "frontend current production identity")
+    require(production.get("pm2", {}).get("dumpSha256") ==
+            pm2.get("dumpSha256"), "frontend current production dump")
+    print("DEPLOYMENT_RECORD_OK: frontend-only f160, split topology and finalization agree")
+
+
 def verify_template_media_release(record_path: Path, record: dict) -> None:
     require(record.get("recordType") == "IMMUTABLE_RELEASE_DEPLOYMENT",
             "media immutable record type")
@@ -520,6 +661,12 @@ def main() -> None:
     require(record_path.is_relative_to(ROOT) and record_path.is_file(),
             "record outside repository or missing")
     record = read_json(record_path)
+
+    if (record.get("schemaVersion") == 1 and
+            record.get("recordType") ==
+            "FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT"):
+        verify_current_frontend_layout(record_path, record)
+        return
 
     if record.get("schemaVersion") == 5:
         verify_template_media_release(record_path, record)

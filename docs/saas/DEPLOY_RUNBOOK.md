@@ -43,7 +43,16 @@ esse control plane; preparar a transação exclusiva; e somente então solicitar
 autorização da janela. A ausência do executor da nova release antes do build não
 é bloqueio, porque seus bindings dependem da identidade final do artefato. Não
 antecipar bindings com valores estimados nem reutilizar um executor vinculado a
-outra geração.
+outra geração. O commit de control plane que materializa os quatro bindings
+(`TARGET`, `RELEASE`, `EXPECTED_PACKAGE` e `RETURN_RELEASE`) é posterior ao
+target funcional por desenho; isso não muda o target do runtime nem autoriza novo
+build.
+
+Quando o merge apenas integra um head já aprovado, a CI pode ser transferida ao
+merge somente com prova Git de igualdade exata das árvores e zero arquivos
+diferentes. Preservar SHA das duas árvores, head testado, merge e run da CI. Qualquer
+diferença de árvore exige CI própria do target resultante; não criar commit vazio
+apenas para fabricar execução.
 
 ```bash
 TARGET=<sha-completo>
@@ -101,7 +110,10 @@ pacote autenticado, após diagnóstico/correção e autorização aplicável; n�
 3. Confirmar symlinks e releases viva/candidata, dump `0600`, retorno autenticado,
    PM2 e configuração privada completa já armazenada.
 4. Capturar PID, start ticks, CWD, script, argumentos, sockets e restart count de
-   API/frontend/worker.
+   API/frontend/worker. Ler `/proc/<pid>/stat` com o parser canônico: separar pela
+   última ocorrência de `) ` e usar o campo 20 da cauda (índice 19). Nomes de
+   processo podem conter espaços; `awk`, `cut` ou tokenização do registro inteiro
+   podem produzir zero ou o campo errado e não servem como evidência.
 5. Confirmar health, espaço/inodes, zero trabalho impeditivo e impacto de migration.
 6. Preparar evidência privada e destinos exclusivos; não executar `pm2 save`.
 7. Autenticar o executor versionado e persistido que fará a ativação. Bloco Bash
@@ -186,14 +198,26 @@ identidades, sockets, health e worker. Só então declarar `ROLLED_BACK`; zero s
 zero retry. Depois do save, usar a evidência transacional para completar dump, marker,
 lock e journal sem segundo save. O registro durável da execução do save prevalece
 sobre journal ainda não reconciliado; preservar o histórico e registrar saveCount=1.
+Uma negativa pré-save por hash, transcrição ou evidência incompatível consome somente
+a tentativa daquela etapa e não prova mutação. Após um save confirmado, corrigir
+exclusivamente o reconciliador/validador comprovadamente defeituoso é continuação da
+mesma finalização, mediante autorização explícita, nunca retry da ativação e nunca
+motivo para novo `pm2 save`.
 
 Validar os três registros do dump por identidade estrutural e ambiente permitido,
-sem publicar valores privados. No PM2 6.0.14 autenticado, apenas a omissão da
-propriedade `instances` de API/frontend em `fork_mode` pode equivaler ao default 1
-comprovado. Não confundir propriedade ausente com processo ausente, não normalizar
-outros campos/versões genericamente e não editar o dump para passar na comparação.
-Essa representação já constava na finalização d7 e foi reconfirmada em a959;
-reutilizar a prova compatível em vez de repetir o save.
+sem publicar valores privados. Preservar os valores brutos antes da comparação. No
+PM2 6.0.14 autenticado:
+
+- `instances` ausente/nulo no processo vivo e ausente/nulo no dump são equivalentes,
+  sem normalização; esse é o caso comprovado do worker;
+- `instances=1` no processo vivo e ausente/nulo no dump pode equivaler ao default 1
+  somente em `fork_mode`, com exatamente um processo vivo e todos os demais campos
+  equivalentes; esse é o caso comprovado de API/frontend.
+
+Não confundir propriedade ausente com processo ausente, não normalizar outros
+campos/versões genericamente e não editar o dump para passar na comparação. Essa
+representação foi reconfirmada nas finalizações a959, d436 e f160; reutilizar a prova
+compatível em vez de repetir o save.
 
 Falha antes de qualquer seleção é `DENIED_BEFORE_MUTATION`, não `ROLLED_BACK`.
 Depois de mutação, só declarar retorno após verificá-lo. Falha de retorno ou de
