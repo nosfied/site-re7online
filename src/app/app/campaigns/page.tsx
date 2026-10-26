@@ -15,6 +15,7 @@ import CampaignBatchPanel from "@/components/app/CampaignBatchPanel";
 import {
   buildCampaignReuseState,
   getCampaignUserFacingError,
+  isCampaignOperationsClosedError,
   getFriendlyCampaignError,
 } from "@/lib/campaignDrafts";
 import {
@@ -43,6 +44,7 @@ import {
   deleteAppTemplateMedia,
   discardAppCampaignDraft,
   fetchAppCampaignAudiencePreview,
+  fetchAppCampaignAvailability,
   fetchAppCrmContactDetail,
   fetchAppCampaignReturnDestinations,
   fetchAppCrmStatuses,
@@ -881,6 +883,10 @@ export default function AppCampaignsPage() {
   const [detailScheduleInput, setDetailScheduleInput] = useState("");
   const detailScheduleBoundary = useRef<string | null>(null);
   const [testRecipientInput, setTestRecipientInput] = useState("");
+  const campaignAvailabilityCheckRef = useRef(false);
+  const [campaignOperationsOpen, setCampaignOperationsOpen] = useState(false);
+  const [checkingCampaignOperations, setCheckingCampaignOperations] = useState(true);
+  const [campaignAvailabilityError, setCampaignAvailabilityError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -897,6 +903,56 @@ export default function AppCampaignsPage() {
     clearAppSession();
     router.replace("/app/login");
   }, [router]);
+
+  const checkCampaignAvailability = useCallback(async (activeSession: AppSession) => {
+    const response = await fetchAppCampaignAvailability(activeSession);
+    return response.operations.open === true;
+  }, []);
+
+  useEffect(() => {
+    if (!session || campaignAccess !== "allowed") return;
+    let current = true;
+    checkCampaignAvailability(session).then(open => {
+      if (current) { setCampaignOperationsOpen(open); setCampaignAvailabilityError(null); }
+    }).catch(error => {
+      if (!current) return;
+      setCampaignOperationsOpen(false);
+      if ((error as { status?: number }).status === 401) handleUnauthorized();
+      setCampaignAvailabilityError("Não foi possível verificar a disponibilidade das campanhas. Tente atualizar a verificação.");
+    }).finally(() => { if (current) setCheckingCampaignOperations(false); });
+    return () => { current = false; };
+  }, [session, campaignAccess, checkCampaignAvailability, handleUnauthorized]);
+
+  const ensureCampaignOperationsAvailable = async () => {
+    if (!session || campaignAvailabilityCheckRef.current) return false;
+    campaignAvailabilityCheckRef.current = true;
+    setCheckingCampaignOperations(true);
+    try {
+      const open = await checkCampaignAvailability(session);
+      if (campaignSessionRef.current !== session) return false;
+      setCampaignOperationsOpen(open);
+      setCampaignAvailabilityError(null);
+      if (open) return true;
+      handleClosedCampaignAttempt({ errorCode: "campaign_operations_closed" });
+      setFormError(getCampaignUserFacingError({ errorCode: "campaign_operations_closed" }, ""));
+    } catch (error) {
+      setCampaignOperationsOpen(false);
+      if ((error as { status?: number }).status === 401) handleUnauthorized();
+      setCampaignAvailabilityError("Não foi possível verificar a disponibilidade das campanhas. Tente atualizar a verificação.");
+    } finally {
+      campaignAvailabilityCheckRef.current = false;
+      setCheckingCampaignOperations(false);
+    }
+    return false;
+  };
+
+  const handleClosedCampaignAttempt = (error: unknown) => {
+    if (!isCampaignOperationsClosedError(error as { errorCode?: string; payload?: unknown })) return;
+    setCampaignOperationsOpen(false);
+    // A definitive denial covers this request, not another admitted request
+    // which might still reference the same asset. Preserve previously stored
+    // media until its references can be reviewed safely.
+  };
 
   useEffect(() => {
     const stored = loadAppSession();
@@ -1153,6 +1209,7 @@ export default function AppCampaignsPage() {
   useEffect(() => () => templateMediaInspectionCoordinatorRef.current.cancel(), []);
 
   const handleCampaignMediaFile = async (file: File | null) => {
+    if (file && !(await ensureCampaignOperationsAvailable())) return;
     const generation = ++templateMediaUploadGenerationRef.current;
     const inspection = templateMediaInspectionCoordinatorRef.current.begin();
     const previousAssetId = form.templateMediaAssetId;
@@ -1470,10 +1527,15 @@ export default function AppCampaignsPage() {
               kind={selectedTemplateHeaderType}
               fileName={templateMediaMetadata?.fileName ?? form.templateMediaFileName}
               onSelect={(file) => void handleCampaignMediaFile(file)}
-              disabled={uploadingTemplateMedia || inspectingTemplateMedia}
+              disabled={!campaignOperationsOpen || checkingCampaignOperations || uploadingTemplateMedia || inspectingTemplateMedia}
             />
           </div>
           <div className="mt-3"><TemplateMediaRequirements kind={selectedTemplateHeaderType} /></div>
+          <p className="mt-2 text-xs text-white/70">
+            Use mídia coerente com o texto e a categoria do modelo. Uma promoção exige modelo de marketing;
+            a aprovação da mídia de exemplo não autoriza conteúdo promocional em um modelo de utilidade.
+            Mídia já carregada permanece preservada se a criação for suspensa.
+          </p>
           <p className="mt-2 text-xs text-white/55">
             {uploadingTemplateMedia
               ? "Enviando mídia com segurança..."
@@ -2036,6 +2098,7 @@ export default function AppCampaignsPage() {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!(await ensureCampaignOperationsAvailable())) return;
     if (!session) return;
     const name = form.name.trim();
     const templateId = form.templateId.trim();
@@ -2112,6 +2175,7 @@ export default function AppCampaignsPage() {
         "Confira a situação na campanha e na caixa de entrada, quando houver conversa associada."
       );
     } catch (err) {
+      handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
@@ -2629,6 +2693,7 @@ export default function AppCampaignsPage() {
   };
 
   const handleCreateDraftFromAudience = async () => {
+    if (!(await ensureCampaignOperationsAvailable())) return;
     if (!session || !audiencePreview) return;
     if (campaignReusePreviewState === "loading") {
       const message = "Aguarde a atualização da prévia antes de criar o rascunho.";
@@ -2692,6 +2757,7 @@ export default function AppCampaignsPage() {
         `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
       );
     } catch (err) {
+      handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
@@ -2784,6 +2850,7 @@ export default function AppCampaignsPage() {
   };
 
   const handleConfirmAudienceSplit = async () => {
+    if (!(await ensureCampaignOperationsAvailable())) return;
     if (!session || !audienceSplitPlan || !audienceSplitRequestId) return;
     const payload = buildAudienceSplitPayload();
     if (!payload.ok) {
@@ -2812,6 +2879,7 @@ export default function AppCampaignsPage() {
         `${response.campaigns.length} rascunho(s) criados sem envio automático.`
       );
     } catch (err) {
+      handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string; details?: { plan?: AppCampaignAudienceSplitPlan } };
       if (typed.status === 401) {
         handleUnauthorized();
@@ -2830,6 +2898,7 @@ export default function AppCampaignsPage() {
   };
 
   const handleCreateDynamicScheduledCampaign = async () => {
+    if (!(await ensureCampaignOperationsAvailable())) return;
     if (!session) return;
     const name = form.name.trim() || defaultDraftName;
     const templateId = form.templateId.trim();
@@ -2900,6 +2969,7 @@ export default function AppCampaignsPage() {
         "Os destinatários finais serão definidos no momento do envio."
       );
     } catch (err) {
+      handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
@@ -3080,6 +3150,7 @@ export default function AppCampaignsPage() {
   };
 
   const handleCreateDraftFromCsv = async () => {
+    if (!(await ensureCampaignOperationsAvailable())) return;
     if (!session) return;
     const name = form.name.trim() || defaultDraftName;
     const templateId = form.templateId.trim();
@@ -3157,6 +3228,7 @@ export default function AppCampaignsPage() {
         `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.readyToImport} destinatários elegíveis.`
       );
     } catch (err) {
+      handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
@@ -3171,6 +3243,7 @@ export default function AppCampaignsPage() {
   };
 
   const handleSendDraftCampaign = async () => {
+    if (!(await ensureCampaignOperationsAvailable())) return;
     if (!session || !selectedCampaign || selectedCampaign.status !== "draft") return;
     const confirmed = window.confirm(
       selectedCampaign.executionBatch
@@ -3211,6 +3284,7 @@ export default function AppCampaignsPage() {
   };
 
   const handleScheduleDraftCampaign = async () => {
+    if (!(await ensureCampaignOperationsAvailable())) return;
     if (!session || !selectedCampaign || selectedCampaign.status !== "draft") return;
     const scheduledAt = detailScheduleInput ? new Date(detailScheduleInput) : null;
     if (!scheduledAt || !Number.isFinite(scheduledAt.getTime())) {
@@ -3279,6 +3353,7 @@ export default function AppCampaignsPage() {
   };
 
   const handleResumeCampaign = async () => {
+    if (!(await ensureCampaignOperationsAvailable())) return;
     if (!session || !selectedCampaign || selectedCampaign.status !== "paused") return;
     setResumingCampaign(true);
     setDetailError(null);
@@ -3303,6 +3378,7 @@ export default function AppCampaignsPage() {
   };
 
   const handleCampaignBatchAction = async (action: "pause" | "resume" | "cancel") => {
+    if (action === "resume" && !(await ensureCampaignOperationsAvailable())) return;
     if (!session || !selectedCampaign?.executionBatch) return;
     if (action === "cancel" && !window.confirm("Tem certeza que deseja cancelar este conjunto de campanhas?")) return;
     setBatchAction(action);
@@ -3345,6 +3421,7 @@ export default function AppCampaignsPage() {
   };
 
   const handleTestSendCampaign = async () => {
+    if (!(await ensureCampaignOperationsAvailable())) return;
     if (!session || !selectedCampaign || (selectedCampaign.status !== "draft" && selectedCampaign.status !== "scheduled")) return;
     const waId = normalizeWaIdList(testRecipientInput)[0] ?? "";
     if (!waId) {
@@ -3467,6 +3544,16 @@ export default function AppCampaignsPage() {
           </div>
         </div>
       </section>
+
+      {checkingCampaignOperations || !campaignOperationsOpen ? (
+        <div role="status" className="rounded-lg border border-amber-300/40 bg-amber-900/20 p-4 text-sm text-amber-100">
+          <p>{checkingCampaignOperations ? "Verificando disponibilidade das campanhas…" : campaignAvailabilityError ||
+            "As operações de campanhas estão temporariamente suspensas. Upload, criação e envio aguardam liberação operacional. Você pode consultar o histórico e cancelar ou pausar operações existentes."}</p>
+          {!checkingCampaignOperations ? <button type="button" className="mt-2 underline" onClick={() => void ensureCampaignOperationsAvailable()}>
+            Atualizar verificação
+          </button> : null}
+        </div>
+      ) : null}
 
       <nav
         aria-label="Visualização de campanhas"
@@ -3762,7 +3849,7 @@ export default function AppCampaignsPage() {
                   <button
                     type="button"
                     disabled={
-                      creatingDraft ||
+                      !campaignOperationsOpen || checkingCampaignOperations || creatingDraft ||
                       campaignReusePreviewState === "loading" ||
                       (audienceRecipientMode === "STATIC_RECIPIENTS" && audienceEligibleItems.length === 0) ||
                       (audienceRecipientMode === "DYNAMIC_CRM_FILTER" && (!audienceFilters.status || !composerScheduleInput)) ||
@@ -3820,7 +3907,7 @@ export default function AppCampaignsPage() {
 	                      <button
 	                        type="button"
 	                        onClick={handleConfirmAudienceSplit}
-	                        disabled={creatingAudienceSplitDrafts || loadingAudienceSplitPlan || !audienceSplitRequestId}
+	                        disabled={!campaignOperationsOpen || checkingCampaignOperations || creatingAudienceSplitDrafts || loadingAudienceSplitPlan || !audienceSplitRequestId}
 	                        className="mt-3 rounded-md bg-re7-orange px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
 	                      >
 	                        {creatingAudienceSplitDrafts ? "Criando..." : `Criar ${audienceSplitPlan.draftCount} rascunho(s)`}
@@ -4250,7 +4337,7 @@ export default function AppCampaignsPage() {
               </button>
               <button
                 type="button"
-                disabled={creatingCsvDraft || !csvText || !form.templateId || csvVariableMappingIncomplete || (csvPreview ? csvPreview.summary.readyToImport === 0 : false)}
+                disabled={!campaignOperationsOpen || checkingCampaignOperations || creatingCsvDraft || !csvText || !form.templateId || csvVariableMappingIncomplete || (csvPreview ? csvPreview.summary.readyToImport === 0 : false)}
                 onClick={() => void handleCreateDraftFromCsv()}
                 className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -4383,7 +4470,7 @@ export default function AppCampaignsPage() {
                 <div className="flex justify-end lg:col-span-2">
                   <button
                     type="submit"
-                    disabled={creating}
+                    disabled={!campaignOperationsOpen || checkingCampaignOperations || creating}
                     className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {creating ? "Iniciando envio..." : "Enviar agora"}
@@ -4852,7 +4939,7 @@ export default function AppCampaignsPage() {
                           </label>
                           <button
                             type="button"
-                            disabled={schedulingDraft || sendingDraft || discardingDraft || !detailScheduleInput}
+                            disabled={!campaignOperationsOpen || checkingCampaignOperations || schedulingDraft || sendingDraft || discardingDraft || !detailScheduleInput}
                             onClick={handleScheduleDraftCampaign}
                             className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                           >
@@ -4868,7 +4955,7 @@ export default function AppCampaignsPage() {
                           </button>
                           <button
                             type="button"
-                            disabled={sendingDraft || discardingDraft}
+                            disabled={!campaignOperationsOpen || checkingCampaignOperations || sendingDraft || discardingDraft}
                             onClick={handleSendDraftCampaign}
                             className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                           >
@@ -4944,7 +5031,7 @@ export default function AppCampaignsPage() {
                             />
                             <button
                               type="button"
-                              disabled={testingCampaign || !testRecipientInput.trim()}
+                              disabled={!campaignOperationsOpen || checkingCampaignOperations || testingCampaign || !testRecipientInput.trim()}
                               onClick={handleTestSendCampaign}
                               className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                             >
@@ -4993,7 +5080,7 @@ export default function AppCampaignsPage() {
                         {selectedCampaign.status === "paused" ? (
                           <button
                             type="button"
-                            disabled={resumingCampaign}
+                            disabled={!campaignOperationsOpen || checkingCampaignOperations || resumingCampaign}
                             onClick={handleResumeCampaign}
                             className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                           >
@@ -5128,3 +5215,4 @@ export default function AppCampaignsPage() {
     </AppShell>
   );
 }
+

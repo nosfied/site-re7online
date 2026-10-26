@@ -366,7 +366,9 @@ test("campaign test send uses only recipient number and lets backend resolve var
   assert.ok(pageSource.includes("selectedCampaignTestVariableLabels"));
   assert.ok(pageSource.includes("O teste usa dados de um destinatário da campanha e envia somente ao número informado."));
   assert.ok(pageSource.includes("sendAppCampaignTest(session, selectedCampaign.id, waId)"));
-  assert.ok(pageSource.includes("disabled={testingCampaign || !testRecipientInput.trim()}"));
+  assert.match(pageSource, /disabled=\{[^}]*testingCampaign \|\| !testRecipientInput\.trim\(\)\}/);
+  const testHandler = pageSource.slice(pageSource.indexOf("const handleTestSendCampaign = async"), pageSource.indexOf("const handleReuseCampaign"));
+  assert.ok(testHandler.indexOf("await ensureCampaignOperationsAvailable()") < testHandler.indexOf("sendAppCampaignTest(session"));
   assert.ok(!pageSource.includes("testVariableValues"));
   assert.ok(!pageSource.includes("campaignTestVariablesIncomplete"));
   assert.ok(!pageSource.includes("Valor usado apenas no teste"));
@@ -407,4 +409,16 @@ test("app shell keeps mobile title and content below the variable-height navigat
   assert.ok(appShellSource.includes("relative z-50 mx-auto w-full"));
   assert.ok(appShellSource.includes("sm:fixed sm:left-4"));
   assert.ok(appShellSource.includes('"hidden sm:block sm:h-[244px]'));
+});
+
+
+
+test("campaign admission denial preserves media already stored by another admitted operation", () => {
+  const start = pageSource.indexOf("const handleClosedCampaignAttempt =");
+  const end = pageSource.indexOf("const stored = loadAppSession()", start);
+  const handler = pageSource.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.ok(handler.includes("setCampaignOperationsOpen(false)"));
+  assert.ok(!handler.includes("deleteAppTemplateMedia"));
+  assert.ok(!handler.includes("discardUnpersistedTemplateMedia"));
 });

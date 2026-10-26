@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildCampaignReuseState,
   getCampaignUserFacingError,
+  isCampaignOperationsClosedError,
   getFriendlyCampaignError,
 } from "./campaignDrafts";
 import type { CampaignItem } from "./whatsappAdminApi";
@@ -132,4 +133,19 @@ test("campaign user-facing errors prefer code mappings and PT-BR blocked reasons
     "Preencha todas as variáveis obrigatórias do modelo antes de enviar."
   );
   assert.equal(getFriendlyCampaignError("blocked_identity")?.summary, "Número/identidade inválida para envio");
+});
+
+
+
+test("campaign suspension is translated for flat, nested and client error envelopes", () => {
+  for (const error of [
+    { errorCode: "campaign_operations_closed", message: "Internal server error." },
+    { payload: { error: "campaign_operations_closed" }, message: "Internal server error." },
+    { payload: { error: { code: "campaign_operations_closed" } } },
+  ]) {
+    assert.equal(isCampaignOperationsClosedError(error), true);
+    assert.match(getCampaignUserFacingError(error, "fallback"), /temporariamente suspensas/);
+  }
+  assert.equal(isCampaignOperationsClosedError({ status: 503, message: "timeout" }), false);
+  assert.equal(isCampaignOperationsClosedError({ payload: { error: "server_error" } }), false);
 });

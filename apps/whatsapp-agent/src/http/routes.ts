@@ -1,3 +1,4 @@
+import { withCampaignMediaAdmission } from "../templates/campaignMediaAdmission.js";
 import { executeCrmImportOperation, readCrmImportOperation, CrmImportOperationError } from "../crm/crmCsvImportOperation.js";
 import type { CampaignMetaStatus, CampaignMetaSummary } from "../campaigns/campaignRecipientResultTruth.js";
 import { projectCampaignJobExecution, aggregateCampaignExecution, type CampaignExecutionPresentation } from "../campaigns/campaignExecutionPresentation.js";
@@ -8,7 +9,7 @@ import { isAutomationConversation, resolveAutomationReadPermission } from "../in
 import { resolveAllowAutomationConversationsInInbox, saveAllowAutomationConversationsInInbox } from "../config/tenantOperationalConfig.js";
 import { loadOwnClosedConversationIds } from "../inbox/ownClosedAccess.js";
 import { resolveAllowAgentOwnClosedConversations, saveAllowAgentOwnClosedConversations } from "../config/tenantOperationalConfig.js";
-import { campaignTask, campaignProviderAttempt, CampaignOperationsClosed, isCampaignMutation, campaignOperationsStatus, setCampaignOperations } from "../campaigns/campaignOperations.js";
+import { campaignTask, campaignProviderAttempt, CampaignOperationsClosed, isCampaignMutation, campaignOperationsStatus, campaignOperationsAreOpen, setCampaignOperations } from "../campaigns/campaignOperations.js";
 import { lockCampaignExecutionBatch } from "../campaigns/campaignExecutionQueue.js";
 import { applyCampaignExecutionBatchAction } from "../campaigns/campaignBatchControl.js";
 import { createCsvCampaignBatch, CampaignBatchIdempotencyConflict } from "../campaigns/campaignCsvBatch.js";
@@ -4911,6 +4912,29 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
     return;
   }
 
+  if (req.method === "GET" && pathname === "/app/campaigns/availability") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminOrSupervisorRole(clientAuth.role)) {
+      json(res, 403, httpError("forbidden", "Sem permissão para gerenciar campanhas."));
+      return;
+    }
+    const client = await getScopedClientById(prisma, clientAuth.clientId);
+    if (!client || client.status !== "ACTIVE") {
+      json(res, client ? 403 : 404, httpError(client ? "client_inactive" : "client_not_found", "Tenant indisponível."));
+      return;
+    }
+    if (!(await enforceAppFeature(prisma, res, {
+      client, userId: clientAuth.userId, feature: "campaigns", endpoint: pathname, requestId,
+    }))) return;
+    // Deliberately expose no global tasks, tenant references, actors or audit.
+    const open = campaignOperationsAreOpen();
+    res.setHeader("Cache-Control", "private, no-store");
+    json(res, 200, { ok: true, operations: { open, code: open ? null : "campaign_operations_closed" } });
+    return;
+  }
+
   if (req.method === "POST" && pathname === "/app/templates/media") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -4938,51 +4962,61 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         json(res, 429, httpError("template_media_upload_busy", "Já existe um upload de mídia em processamento."));
         return;
       }
-      const upload = await readTemplateMediaMultipartBody(req, res).finally(releaseUploadAdmission);
-      if (!upload) return;
-      if (upload.purpose === "CAMPAIGN" && !(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
-      const stored = await storeTemplateMedia({
-        clientId: client.id,
-        purpose: upload.purpose,
-        upload: { ...upload.file, kind: upload.kind },
-      });
       try {
-        const asset = await prisma.templateMediaAsset.create({
-          data: {
+        const upload = await readTemplateMediaMultipartBody(req, res);
+        if (!upload) return;
+        if (upload.purpose === "CAMPAIGN" && !(await enforceAppFeature(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          feature: "campaigns",
+          endpoint: pathname,
+          requestId,
+        }))) return;
+        await withCampaignMediaAdmission(upload.purpose, async () => {
+          const stored = await storeTemplateMedia({
             clientId: client.id,
             purpose: upload.purpose,
-            kind: stored.kind,
-            storageKey: stored.storageKey,
-            mimeType: stored.mimeType,
-            sizeBytes: stored.sizeBytes,
-            sha256: stored.sha256,
-            originalFilename: stored.originalFilename,
-            createdBy: clientAuth.userId,
-          },
-          select: {
-            id: true,
-            purpose: true,
-            kind: true,
-            mimeType: true,
-            sizeBytes: true,
-            sha256: true,
-            originalFilename: true,
-            state: true,
-            createdAt: true,
-          },
+            upload: { ...upload.file, kind: upload.kind },
+          });
+          try {
+            const asset = await prisma.templateMediaAsset.create({
+              data: {
+                clientId: client.id,
+                purpose: upload.purpose,
+                kind: stored.kind,
+                storageKey: stored.storageKey,
+                mimeType: stored.mimeType,
+                sizeBytes: stored.sizeBytes,
+                sha256: stored.sha256,
+                originalFilename: stored.originalFilename,
+                createdBy: clientAuth.userId,
+              },
+              select: {
+                id: true,
+                purpose: true,
+                kind: true,
+                mimeType: true,
+                sizeBytes: true,
+                sha256: true,
+                originalFilename: true,
+                state: true,
+                createdAt: true,
+              },
+            });
+            json(res, 201, { ok: true, asset: serializeTemplateMediaAsset(asset) });
+          } catch (error) {
+            await removeUnreferencedTemplateMedia(stored.storageKey).catch(() => undefined);
+            throw error;
+          }
         });
-        json(res, 201, { ok: true, asset: serializeTemplateMediaAsset(asset) });
-      } catch (error) {
-        await removeUnreferencedTemplateMedia(stored.storageKey).catch(() => undefined);
-        throw error;
+      } finally {
+        releaseUploadAdmission();
       }
     } catch (error) {
+      if (error instanceof CampaignOperationsClosed) {
+        json(res, 503, httpError("campaign_operations_closed", "As operações de campanhas estão temporariamente suspensas. Nenhuma mídia foi armazenada por esta tentativa."));
+        return;
+      }
       if (error instanceof TemplateMediaError) {
         json(res, error.status, httpError(error.code, error.message));
         return;
@@ -41439,3 +41473,4 @@ async function adminSendMediaMessage(params: {
     },
   };
 }
+

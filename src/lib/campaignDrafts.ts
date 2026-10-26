@@ -122,6 +122,13 @@ export function getCampaignStatusResultLabel(status: string | null | undefined) 
   return labels[normalized] ?? status ?? "-";
 }
 
+export function isCampaignOperationsClosedError(error: CampaignApiErrorLike) {
+  const payload = error.payload && typeof error.payload === "object"
+    ? error.payload as { error?: string | { code?: string } } : null;
+  const payloadCode = typeof payload?.error === "string" ? payload.error : payload?.error?.code;
+  return String(error.errorCode || payloadCode || "").trim().toLowerCase() === "campaign_operations_closed";
+}
+
 export function getCampaignUserFacingError(error: CampaignApiErrorLike, fallback: string) {
   const code = String(error.errorCode ?? "").trim().toLowerCase();
   const payload =
@@ -133,7 +140,8 @@ export function getCampaignUserFacingError(error: CampaignApiErrorLike, fallback
       ? (payload.error as Record<string, unknown>)
       : null;
   const nestedCode = String(nestedError?.code ?? "").trim().toLowerCase();
-  const normalizedCode = code || nestedCode;
+  const payloadCode = typeof payload?.error === "string" ? payload.error.trim().toLowerCase() : "";
+  const normalizedCode = code || nestedCode || payloadCode;
   const details = nestedError?.details && typeof nestedError.details === "object" && !Array.isArray(nestedError.details)
     ? (nestedError.details as Record<string, unknown>)
     : null;
@@ -144,6 +152,7 @@ export function getCampaignUserFacingError(error: CampaignApiErrorLike, fallback
     ? summary.blockedByReason as Array<{ reason?: unknown; label?: unknown; count?: unknown }>
     : [];
   const messages: Record<string, string> = {
+    campaign_operations_closed: "As operações de campanhas estão temporariamente suspensas. Aguarde a liberação operacional para carregar mídia, criar ou enviar campanhas.",
     no_eligible_recipients: "Nenhum destinatário está elegível para esta campanha.",
     template_variables_required: "Preencha todas as variáveis obrigatórias do modelo antes de enviar.",
     invalid_template_variable_mapping: "Revise o mapeamento das variáveis do modelo.",
@@ -290,3 +299,4 @@ export function buildCampaignReuseState(
 export function buildReplayFormFromCampaign(campaign: CampaignItem) {
   return buildCampaignReuseState(campaign).form;
 }
+
