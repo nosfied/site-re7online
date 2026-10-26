@@ -2768,9 +2768,14 @@ export default function AppCampaignsPage() {
       setActiveTab("drafts");
       setCurrentPage(1);
 
-      const detail = await refreshCampaignDetail(session, createdCampaignId);
-      const stillSelected =
-        campaignSessionRef.current === session && selectedIdRef.current === createdCampaignId;
+      // The selectedCampaignId effect owns the authenticated detail read and
+      // rejects any ID or tenant mismatch. Do not start a competing detail
+      // generation here.
+      showToast(
+        "success",
+        "Rascunho criado",
+        `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
+      );
 
       // List reconciliation is intentionally posterior and independent. A
       // timeout here must never restore or present the previously selected ID.
@@ -2787,21 +2792,6 @@ export default function AppCampaignsPage() {
           )
         );
       });
-
-      if (!stillSelected) return;
-      if (detail) {
-        showToast(
-          "success",
-          "Rascunho criado",
-          `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
-        );
-      } else {
-        showToast(
-          "warning",
-          "Rascunho criado",
-          "O novo rascunho foi salvo e selecionado, mas o detalhe ainda não pôde ser carregado. Tente atualizar o detalhe."
-        );
-      }
     } catch (err) {
       handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string };
