@@ -11,6 +11,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "scripts/pm2-binding-materialize.py"
+REAL_CONTROL = ROOT / "scripts/pm2-definition-control.py"
 SPEC = importlib.util.spec_from_file_location("pm2_binding_materialize", SOURCE)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -56,7 +57,13 @@ class Fixture:
             "indexSha256": hashlib.sha256(index_raw).hexdigest(),
         }
         (self.release / "manifest.json").write_bytes(MODULE.canonical(manifest))
-        self.producer = self.root / "producer.py"; self.producer.write_text("producer\n")
+        self.producer = self.root / "producer.py"
+        self.producer.write_text(
+            "import json,sys\n"
+            "release=sys.argv[sys.argv.index('--release-id')+1]\n"
+            "target=sys.argv[sys.argv.index('--target')+1]\n"
+            "print(json.dumps({'result':'RELEASE VERIFIED','releaseId':release,'targetCommit':target}))\n"
+        )
         self.control = self.root / "control.py"; self.control.write_text("control\n")
         self.request = self.root / "request.json"
         private_json(self.request, {
@@ -79,7 +86,10 @@ class Fixture:
         private_json(self.source, {
             "schemaVersion": 1, "role": role, "component": "frontend",
             "sourceKind": "canonical-private-config" if role == "candidate" else "authenticated-proven-definition",
-            "provenance": {"authority": "old", "evidenceSha256": "b" * 64},
+            "provenance": {
+                "authority": "new-release-config" if role == "candidate" else "proven-production-definition",
+                "evidenceSha256": "b" * 64,
+            },
             "releaseIdentity": {
                 "releaseId": "immutable-historical", "releaseManifestSha256": "c" * 64,
                 "componentTreeSha256": "d" * 64, "frontendBuildId": "historical",
@@ -191,6 +201,18 @@ class MaterializeTests(unittest.TestCase):
             self.assertNotEqual(a["sourceSha256"], b["sourceSha256"])
         finally:
             first.close(); second.close()
+
+    @unittest.skipUnless(REAL_CONTROL.exists(), "repository control plane unavailable")
+    def test_generated_binding_is_accepted_by_real_control_plane(self):
+        fixture = Fixture()
+        try:
+            fixture.control = REAL_CONTROL
+            result = MODULE.materialize(fixture.args())
+            self.assertEqual("PM2_DEFINITION_BUILT", result["controlResult"])
+            self.assertEqual(MODULE.canonical(fixture.definition),
+                             (fixture.output / "definition.private.json").read_bytes())
+        finally:
+            fixture.close()
 
 
 if __name__ == "__main__":
