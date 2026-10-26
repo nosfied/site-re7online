@@ -101,8 +101,9 @@ Bindings ausentes não são procurados nem reconstruídos por introspecção do 
 `scripts/pm2-binding-materialize.py` com request/source históricos autenticados, o
 SHA-256 externo de cada um, `converta-release.py` e `pm2-definition-control.py`
 autenticados, e a raiz integralmente verificada da release correspondente. O comando
-reutiliza a definição exata, recalcula identidade da release pelo índice autenticado,
-grava request/source/definition/evidência em destino novo `0700`/`0600` e declara
+reutiliza a definição exata, recalcula identidade da release pelo índice autenticado;
+para rollback já implantado, `DEPLOYED` só é aceito como arquivo regular privado com
+SHA-256 externo explícito. Grava os resultados em destino novo e declara
 `pm2IntrospectionUsed=false`. Executá-lo uma vez para candidate e uma para rollback;
 depois exigir `validate-pair`. Identidade histórica, overwrite, symlink, drift ou
 proveniência igual entre os papéis nega a preparação antes da autorização.
