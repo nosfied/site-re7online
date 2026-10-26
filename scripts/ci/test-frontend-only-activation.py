@@ -116,7 +116,7 @@ else: raise SystemExit(2)
             "TARGET=d436239e13764b65642b37a4310082acd3a6a485": "TARGET=" + "a"*40,
             "RELEASE=immutable-d436239e-vps-20261026T131821Z": f"RELEASE={self.release.name}",
             "EXPECTED_PACKAGE=ed02ba8057cb5ef14f98cd715b81e2daf18e21a2826d7d4f8888f25a00e3d36b": f"EXPECTED_PACKAGE={digest(self.package)}",
-            "EXPECTED_PRODUCER=d6b67fb0a1888f2e8e8f3ad828bd8e17725e89c47c2de3d4f4d4386def243cab": f"EXPECTED_PRODUCER={digest(producer)}",
+            "EXPECTED_PRODUCER=d248b9128688b429beec37902e78cacb4b45af4a074e287eed253bdf05c8b065": f"EXPECTED_PRODUCER={digest(producer)}",
             "EXPECTED_CONTROL=abf89d491b4dd9150dac4b092dff3a5249a43e083c42d393442128eb39fbb552": f"EXPECTED_CONTROL={digest(control)}",
             "RETURN_RELEASE=immutable-a959129e-vps-20261026T023100Z": f"RETURN_RELEASE={self.rollback.name}",
             "/usr/bin/timeout --signal=TERM --kill-after=5s 45s": "/usr/bin/timeout --signal=TERM --kill-after=.1s .3s",
