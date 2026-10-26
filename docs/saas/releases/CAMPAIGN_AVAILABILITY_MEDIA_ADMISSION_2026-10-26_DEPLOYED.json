@@ -2,7 +2,7 @@
   "schemaVersion": 4,
   "recordType": "IMMUTABLE_RELEASE_DEPLOYMENT",
   "status": "DEPLOYED_VERIFIED",
-  "result": "DEPLOYED_GUARD_CLOSED",
+  "result": "DEPLOYED_FIXED_CURRENT_RUNTIME_ESTABLISHED_PRODUCTION_HEALTHY",
   "targetCommit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
   "releaseId": "immutable-a959129e-vps-20261026T023100Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
@@ -13,11 +13,6 @@
     "independentVpsInspectionByDocumentationEditor": false,
     "exactFinalizationTimestamp": "NOT_PROVIDED",
     "scope": "Reported deployment completion; not a fresh reopening inventory"
-  },
-  "controlPlane": {
-    "commit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
-    "ciRun": 40257916957,
-    "ciResult": "PASS"
   },
   "artifacts": {
     "releasePath": "/opt/re7online/releases/immutable-a959129e-vps-20261026T023100Z",
@@ -33,18 +28,27 @@
       "stablePath": "/opt/re7online/current/frontend",
       "buildId": "CbNbnlr0VJVv5mME_hvxm",
       "execMode": "fork_mode",
-      "instances": 1
+      "instances": 1,
+      "entrypoint": "node_modules/next/dist/bin/next",
+      "args": [
+        "start",
+        "-p",
+        "3000"
+      ]
     },
     "worker": {
-      "preserved": true,
-      "releaseId": "immutable-e2e7f17a-20261022T005110Z"
+      "preserved": true
     }
   },
   "build": {
     "singleBuild": true,
     "nodeVersion": "v20.20.0",
     "npmVersion": "10.8.2",
-    "location": "PRODUCTION_HOST_ISOLATED_WORKTREE"
+    "location": "PRODUCTION_HOST_ISOLATED_WORKTREE",
+    "platform": "linux",
+    "architecture": "x86_64",
+    "ownerAuthorization": "EXPLICIT_AFTER_RAM_UPGRADE",
+    "activeRuntimeStoppedForBuild": false
   },
   "verification": {
     "technicalAcceptance": "PASS",
@@ -54,16 +58,31 @@
       "localHealthHttp": 200,
       "publicHealthHttp": 200,
       "ok": true,
-      "db": "ok"
+      "db": "ok",
+      "samples": 3,
+      "socketPort": 3001,
+      "socketOwnerPid": 441355,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        441355
+      ]
     },
     "frontend": {
       "pid": 441646,
-      "startTicks": 16604558
+      "startTicks": 16604558,
+      "samples": 3,
+      "socketPort": 3000,
+      "socketOwnerPid": 441646,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        441646
+      ]
     },
     "worker": {
       "pid": 2233,
       "startTicks": 17758,
-      "restartCount": 0
+      "restartCount": 0,
+      "preserved": true
     },
     "availability": {
       "status": 200,
@@ -76,7 +95,9 @@
       "tasks": 0,
       "sha256": "9e1a979932e4a22f8051046a4ce96e1ac5656723ba5ba4a57e1ef14f8e73a9e9"
     },
-    "campaignFunctionalAcceptance": "PENDING"
+    "campaignFunctionalAcceptance": "PENDING",
+    "smoke": "GET_ONLY",
+    "readinessProvenance": "Reported successful authenticated v7 execution requires three stable samples and one listener owned directly by PM2 PID; not a new live observation; total polling count not provided."
   },
   "migration": {
     "classification": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
@@ -89,7 +110,11 @@
     "dumpSha256": "e54db82c63cea7200c4215ac16a923b0ec3d05a5e2bc0398c1bcb06ee3e68325",
     "previousDumpSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13",
     "dumpValidation": "PASS_THREE_RECORDS",
-    "instancesNormalization": "ONLY_API_FRONTEND_FORK_MODE_MISSING_PROPERTY_EQUALS_AUTHENTICATED_PM2_6_0_14_DEFAULT_ONE"
+    "instancesNormalization": "ONLY_API_FRONTEND_FORK_MODE_MISSING_PROPERTY_EQUALS_AUTHENTICATED_PM2_6_0_14_DEFAULT_ONE",
+    "dumpMode": "0600",
+    "dumpOwner": "deploy",
+    "dumpGroup": "deploy",
+    "rollbackSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13"
   },
   "marker": {
     "name": "DEPLOYED",
@@ -127,5 +152,20 @@
     "businessMutationByAvailabilityCheck": false
   },
   "nextPermittedAct": "FRESH_GLOBAL_READ_ONLY_REOPENING_INVENTORY_AND_GUARD_CLOSED_ACCEPTANCE_PLAN",
-  "authorizationBoundary": "No reopening, external template sync or send inferred from deployment or documentation"
+  "authorizationBoundary": "No reopening, external template sync or send inferred from deployment or documentation",
+  "campaignState": "DEPLOYED_GUARD_CLOSED",
+  "baseCommit": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
+  "components": [
+    "api",
+    "frontend"
+  ],
+  "deploymentOrder": [
+    "api",
+    "frontend"
+  ],
+  "ciEvidence": {
+    "commit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
+    "ciRun": 40257916957,
+    "ciResult": "PASS"
+  }
 }

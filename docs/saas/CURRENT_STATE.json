@@ -92,9 +92,23 @@
       "reportedOpen": false,
       "reportedTasks": 0,
       "reportedGuardSha256": "9e1a979932e4a22f8051046a4ce96e1ac5656723ba5ba4a57e1ef14f8e73a9e9",
-      "reopeningInventory": "PENDING_FRESH_LOCAL_CODEX_AUDIT",
+      "reopeningInventory": "SNAPSHOT_REPORTED_ZERO_AUTOMATICALLY_ELIGIBLE_20261026T111404Z",
       "closedGuardUiAcceptance": "PENDING",
-      "controlledSend": "NOT_AUTHORIZED"
+      "controlledSend": "NOT_AUTHORIZED",
+      "inventory": {
+        "source": "OWNER_RELAYED_LOCAL_CODEX_READ_ONLY_AUDIT",
+        "snapshotAtUtc": "2026-10-26T11:14:04Z",
+        "guardGenerationObserved": 38,
+        "claimableJobs": 0,
+        "overdueScheduledCampaigns": 0,
+        "recoverableDynamicControllers": 0,
+        "pendingResultsDetected": 0,
+        "ownerConfirmsNoOtherCampaignOperatorsDuringHomologation": true,
+        "openingAuthorized": false,
+        "evidenceManifestSha256": "566833683719ddb8e4bcc2df0f7beaf319c4bccde74c435902596b98121f3c35",
+        "databaseInventorySha256": "f9ad89081060ee69d9be443762b5775411bbf08b06bda49b34ec5cb079c0005d",
+        "requiresFreshCheckBeforeCas": true
+      }
     }
   },
   "contactsListRecovery": {

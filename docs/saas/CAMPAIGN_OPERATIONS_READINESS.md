@@ -191,5 +191,53 @@ implica a do outro. A homologação de envio não libera automaticamente os clie
 
 Encerrar cada etapa com PASS/FAIL/PENDING, evidência vinculada e próximo ato.
 Neste registro: deploy PASS; disponibilidade fechada PASS relatado; UI integrada,
-inventário global fresco, abertura e envio PENDING. Não há nova autorização de
+abertura e envio PENDING. O inventário posterior consta abaixo. Não há nova autorização de
 abertura ou chamada Meta concedida por esta atualização documental.
+
+## Inventário relatado de 26/10/2026 e decisão de continuidade
+
+Fonte: auditoria do Codex local encaminhada pelo owner, snapshot PostgreSQL
+`2026-10-26T11:14:04Z` (08:14:04 America/Fortaleza), RepeatableRead/ReadOnly.
+O editor documental não repetiu a coleta. Guarda fechada, geração observada 38,
+tarefas 0, sem lock do ledger ou marcador uncertain; topologia single-host válida,
+scheduler habilitado e recovery-only desabilitado.
+
+| Superfície | Resultado observado |
+| --- | --- |
+| Campanhas | 126; somente 2 rascunhos não terminais, em outro tenant |
+| Campanhas vencidas / jobs reclamáveis / controladores recuperáveis | 0 / 0 / 0 |
+| Jobs queued, running ou needs_review | 0 |
+| Resultados pendentes / intenções sem terminal / aceitações sem terminal | 0 / 0 / 0 |
+| Demo: aceitações explicadas | 82: 81 sent e 1 failed |
+| Demo: lotes históricos | 3 completed, 1 cancelled, 1 failed, 1 blocked |
+| Job bloqueado | batch_chunk, no_eligible_recipients, lease expirado; inerte |
+| Lease desvinculado | expirado, sem job; não concede execução |
+| Assets históricos de campanha órfãos | 2 VIDEO/stored, preservados |
+
+Templates locais aprovados relatados: `imagem_previdenciario` (IMAGE) e
+`video_previdencia_teste_20261024_v2` (VIDEO), ambos MARKETING/pt_BR no Demo.
+Essa é observação local do inventário, sem consulta Meta nesta auditoria.
+Evidência do inventário: SHA-256
+`f9ad89081060ee69d9be443762b5775411bbf08b06bda49b34ec5cb079c0005d`;
+índice privado: `566833683719ddb8e4bcc2df0f7beaf319c4bccde74c435902596b98121f3c35`.
+
+O owner confirmou ausência de utilização de campanhas pelos demais tenants durante
+a homologação de hoje. Essa confirmação é a exclusão operacional de outros usuários,
+não uma barreira técnica tenant-scoped; deve continuar valendo durante a janela.
+Revalidar somente o inventário necessário e a geração imediatamente antes do CAS,
+sem repetir recuperação histórica ou abrir nova frente de diagnóstico sem negativa.
+
+O [encerramento de out.15 em 12/10](../reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/out15-closure-20261012/RESULT_2026-10-12.md)
+concluiu a disposição dos resultados e o cancelamento das cinco posições não enviadas,
+com guarda 38 ainda fechada. Não exige fechamento permanente; também não certifica
+correção genérica da identidade internacional. Não apresentar incidente encerrado
+como ainda pendente, nem repetir seus ack/cancelamentos.
+
+Próximo ato proposto: janela global supervisionada para um upload sintético e um
+rascunho Demo via API, sem acessar listagem produtiva que dispare sync, sem enviar,
+agendar, retomar ou excluir; preservar os dados de teste e fechar na mesma janela.
+Abertura ainda não executada nem autorizada por este registro. O roteiro concreto
+relatado usa `selectionMode=STATIC_RECIPIENTS`, contato de equipe autorizado,
+MP4 válido sem PII abaixo de 16.000.000 bytes e deltas esperados +1 asset/+1 draft,
+zero batch/job/agendamento/intenção/provider/outbound. Validar o contrato do payload
+na API a959 antes da execução. Não exigir outro build/deploy/save.
