@@ -6,7 +6,7 @@ Homologação funcional Meta: **SUBMISSÃO DE VÍDEO ACEITA / APROVAÇÃO META P
 
 Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
 
-Última atualização: 2026-10-24. Esta é a fonte canônica para cabeçalhos `IMAGE` e
+Última atualização: 2026-10-26. Esta é a fonte canônica para cabeçalhos `IMAGE` e
 `VIDEO` em templates e campanhas. O estado produtivo geral continua em
 [`CURRENT_STATE.md`](CURRENT_STATE.md). O mecanismo tenant-scoped de Meta App ID foi
 implantado em 24/10/2026. Em operação separada, o tenant Converta Demo teve o App ID
@@ -14,15 +14,25 @@ tenant-scoped configurado depois que uma única consulta `GET /debug_token` conf
 o vínculo atual do token com o aplicativo e as permissões necessárias. Essa prova não
 recupera o histórico original do onboarding.
 
-## Implantação técnica
+## Implantação vigente
+
+API/frontend relatados em `immutable-a959129e-vps-20261026T023100Z`, target
+`a959129e39a07c52881fb7f5cbf21a7f6f1a80ff`, BUILD_ID `CbNbnlr0VJVv5mME_hvxm`.
+[Registro ativo](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json).
+Guarda de campanhas fechada; correção de disponibilidade e admissão de upload
+implantada. Próximo ato e limites estão no
+[roteiro de homologação](CAMPAIGN_OPERATIONS_READINESS.md).
+Aprovação observada em 24/10 é histórica; não é consulta atual à Meta.
+
+## Histórico técnico de 24/10 — não identifica o runtime atual
 
 O deploy conjunto do target `ec2a9fde99b6421a85256f14604bd469879f4f2a`, release
-`immutable-ec2a9fde-vps-20261024T162005Z`, permanece como baseline do frontend,
+`immutable-ec2a9fde-vps-20261024T162005Z`, foi baseline do frontend na ocasião,
 conforme o
 [registro estruturado](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json).
 API e frontend foram selecionados por troca atômica dos caminhos estáveis e restart
 dos registros PM2 existentes, sem `--update-env`. O worker foi preservado.
-O BUILD_ID ativo é `7yArOSyfllnPiQy_vAS9H`. A release
+O BUILD_ID dessa baseline era `7yArOSyfllnPiQy_vAS9H`. A release
 `immutable-a62da468-vps-20261024T124726Z` permanece como retorno e evidência histórica.
 
 A API foi atualizada isoladamente para o target

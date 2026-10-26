@@ -1,59 +1,53 @@
 # Estado canônico do Converta
 
-**DEPLOYED / PRODUCTION HEALTHY / META APPROVALS PENDING**
+**DEPLOYED_GUARD_CLOSED / PRODUCTION HEALTHY / CAMPAIGN FUNCTIONAL ACCEPTANCE PENDING**
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a implantação ativa está
-no [registro estruturado](releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json).
+no [registro estruturado](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json).
 Registros anteriores continuam no [índice documental](DOCUMENTATION_INDEX.md) como
 histórico e retorno; eles não substituem este estado.
 
-## Produção viva — observação de 24/10/2026
+## Implantação relatada em 26/10/2026
 
-- Target ativo de API e frontend:
-  `d7de6453aeab6d117e8d79a1dc3a0722875f39cc`.
-- Release ativa: `immutable-d7de6453-vps-20261024T221500Z`.
-- API: `/opt/re7online/current/api`, PID observado `118102`, start ticks
-  `3652796`, entry SHA-256
-  `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`.
-- Frontend: `/opt/re7online/current/frontend`, PID observado `118502`, start
-  ticks `3663031`, BUILD_ID `PkRjG2UDVfxCmwp-DKMQz`, Next direto em
-  `fork_mode`, uma instância.
-- Worker preservado no runtime `immutable-e2e7f17a-20261022T005110Z`, PID
-  observado `2233`, start ticks `17758`, restart count `0`.
-- Dump PM2 final:
-  `5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13`,
-  modo `0600`, persistido por exatamente um `pm2 save`.
-- Dump de retorno preservado:
-  `8168216ccd7421a3dd2df19459f12f11a7d490d497a376bdf97cf8e24c509f15`.
-- Marker `DEPLOYED`:
-  `1d2be9be3fd5e257700257988bb4cd946dac0f7cb47b6b3a4f861facedd7c543`.
-- Aceite técnico: `2026-10-24T20:01:04-03:00`.
-- Finalização: `2026-10-24T20:04:40-03:00`, America/Fortaleza.
-- Journal final: `DEPLOYED`; lock canônico liberado.
-- API local e pública: HTTP 200, `ok=true`, `db="ok"`.
-- Login, Inbox, CRM, Modelos, Campanhas e asset: HTTP 200 por GET-only.
+Fonte: relatório do Codex local encaminhado pelo owner, com hashes dos recibos
+privados. O editor documental não realizou nova inspeção da VPS. O horário exato
+de finalização não foi fornecido; não é inventado neste registro.
 
-PIDs são observações datadas. Release, hashes, BUILD_ID, dump e marker são as
-identidades duráveis; qualquer janela futura precisa revalidar os processos.
+- Target API/frontend: `a959129e39a07c52881fb7f5cbf21a7f6f1a80ff`.
+- Release: `immutable-a959129e-vps-20261026T023100Z`.
+- API: `/opt/re7online/current/api`, PID 441355, ticks 16603839,
+  entry SHA-256 `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`.
+- Frontend: `/opt/re7online/current/frontend`, PID 441646, ticks 16604558,
+  BUILD_ID `CbNbnlr0VJVv5mME_hvxm`, `fork_mode`, uma instância.
+- Worker: `immutable-e2e7f17a-20261022T005110Z`, PID 2233,
+  ticks 17758, restart count 0; preservado.
+- Dump final: `e54db82c63cea7200c4215ac16a923b0ec3d05a5e2bc0398c1bcb06ee3e68325`; exatamente um `pm2 save`.
+- Marker: `9da2428b15f8eb8b307603556fffb0ef75536829109e4be282ce03caa19cdb80`.
+- Recibo: `3567a10a165af03377ce912ed44f7628646a33cdfb33c70ffc597f926f353dc8`.
+- Journal: `991d549a1bc7f93b88cd1b51e1fdafaef13162555e20eac2b2471566e0804240`.
+- Health local/público: HTTP 200, `ok=true`, `db=ok`.
+- Disponibilidade autenticada: HTTP 200, `ok=true`, `open=false`,
+  `campaign_operations_closed`.
+- Guarda fechada, zero tarefas; lock canônico livre e arquivo preservado.
 
-## Escopo e retorno
+PIDs e contagens são observações datadas, não prova de estado vivo futuro.
 
-O build único ocorreu na VPS em worktree e saída isolados, com Node v20.20.0 e
-npm 10.8.2, sem interromper os serviços vivos. A ativação promoveu API e frontend
-por troca atômica dos caminhos `/current` e restart dos registros PM2 existentes
-sem `--update-env`. O worker e a configuração tenant-scoped foram preservados.
+## Escopo, retorno e próximo ato
 
-O retorno imediato é componente por componente:
+API/frontend foram ativados com o mesmo pacote canônico, sem rebuild, migration,
+chamada Meta ou envio. A consulta autenticada pode atualizar metadados da sessão;
+não deve ser descrita como ausência absoluta de escritas no banco.
 
-- API: `immutable-3630e16-vps-20261024T195842Z`;
-- frontend: `immutable-ec2a9fde-vps-20261024T162005Z`;
-- worker: permanece em `immutable-e2e7f17a-20261022T005110Z`.
+O retorno de ambos os componentes é
+`immutable-d7de6453-vps-20261024T221500Z`, com dump anterior
+`5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13`.
+Retornos transitivos e evidências anteriores permanecem preservados.
 
-Não houve migration, SQL mutante, chamada Meta, upload, submissão, sincronização,
-campanha, importação ou envio durante a janela. A migration vigente de mídia
-continua histórica e aplicada; para este deploy a classificação foi
-`NOT_APPLICABLE_NO_SCHEMA_CHANGE`.
+Estado: **DEPLOYED_GUARD_CLOSED**. Próximo ato: inventário global fresco somente
+leitura pelo Codex local e roteiro de aceite com guarda fechada, conforme
+[homologação de campanhas](CAMPAIGN_OPERATIONS_READINESS.md#sequência-vigente-após-o-deploy-de-26102026).
+Não há autorização implícita para abrir guarda, retomar trabalho ou enviar.
 
 ## Templates de Utilidade — leitura local
 

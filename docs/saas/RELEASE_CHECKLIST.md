@@ -3,10 +3,12 @@
 ### Estado vigente — consultar antes dos exemplos históricos
 
 A fonte canônica é [CURRENT_STATE.md](CURRENT_STATE.md), e a única rota de deploy
-vigente é [DEPLOYMENT_OPERATING_MODEL.md](DEPLOYMENT_OPERATING_MODEL.md). A release
+executável vigente é [DEPLOY_RUNBOOK.md](DEPLOY_RUNBOOK.md); o modelo está em
+[DEPLOYMENT_OPERATING_MODEL.md](DEPLOYMENT_OPERATING_MODEL.md). A release
 de mídia em templates/campanhas está **TECHNICALLY DEPLOYED / PRODUCTION HEALTHY**
-e a release tenant-scoped foi ativada em 24/10/2026; a configuração do App ID no
-tenant, homologação Meta e liberação aos clientes continuam pendentes.
+e a correção de disponibilidade/admissão foi implantada em 26/10/2026 com guarda
+fechada. App ID Demo já configurado; homologação funcional e liberação aos clientes
+continuam pendentes, conforme [roteiro](CAMPAIGN_OPERATIONS_READINESS.md).
 
 Build no checkout/runtime ativo, `deploy-normal-release.sh`, PR #190,
 Deploy V2 e Next em `cluster_mode` são históricos/obsoletos. Exemplos antigos neste
@@ -51,6 +53,9 @@ Antes de executar, classificar a mudanca conforme `docs/saas/CHANGE_POLICY.md`:
   independente; exigir `RELEASE VERIFIED` e comparar SHA-256 do pacote.
 - Em retry, reutilizar o mesmo pacote autenticado. Rebuild constitui nova release,
   mesmo quando o target Git não mudou.
+- Na extração externa, manter modos autenticados com `--same-permissions` e verificar
+  integralmente antes da seleção; testar o bloco de instalação sob a umask operacional.
+- Smoke sem Meta exclui Modelos/Campanhas quando sua carga pode disparar sync.
 - Confirmar que nao existem secrets, dumps, `.data`, tokens ou temporarios no diff.
 - Rodar `git diff --check`.
 - Conferir se a mudanca exige update documental.

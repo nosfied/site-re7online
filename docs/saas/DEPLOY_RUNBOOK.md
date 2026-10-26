@@ -6,7 +6,7 @@ Arquitetura e razões dos gates ficam no
 
 As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 `rollback` e `status`; seus resultados nominais são `PREFLIGHT PASS`,
-`AWAITING_ACCEPTANCE`, `DEPLOYED` e `ROLLED_BACK`.
+`AWAITING_ACCEPTANCE`, `DEPLOYED`, `DENIED_BEFORE_MUTATION` e `ROLLED_BACK`.
 
 ## Pré-requisitos
 
@@ -63,6 +63,27 @@ sob `node_modules`, inclusive diretórios internos chamados `uploads`. O índice
 e a extração independente comprovam que não há cache, segredo, worker ou arquivo
 adicional.
 
+
+### Extração e verificação sob a máscara operacional
+
+O produtor é arquivo regular, legível, não symlink e autenticado por SHA-256;
+invocá-lo explicitamente por `python3`. Bit executável não é requisito.
+Manter `umask 077` nas evidências privadas. Ao extrair o pacote já autenticado
+para staging exclusivo, usar `tar --same-permissions -xJf "$PACKAGE" -C "$stage"`.
+A opção preserva os modos do pacote; não autentica os bytes. Executar a verificação
+canônica integral do release-root antes da instalação inerte e da seleção.
+Não corrigir divergência com `chmod -R`, ignorar modos ou reconstruir o pacote.
+
+Em 26/10, a extração comum sob UID deploy/umask 077 produziu raízes 0700 em vez de
+0755. O verificador negou antes da seleção. O produtor já isolava sua própria umask;
+isso não protegia o tar externo. O ensaio deve executar o bloco completo de
+verificação do pacote → extração → verificação integral → instalação inerte,
+na máscara operacional e, quando disponível, no UID executor. Simulação de política
+de permissões sob root não deve ser apresentada como ensaio sob UID deploy.
+
+Uma recusa preserva staging e transação. Nova tentativa usa destino novo e mesmo
+pacote autenticado, após diagnóstico/correção e autorização aplicável; não faz limpeza.
+
 ## Preflight (`preflight`)
 
 1. Adquirir o lock e confirmar ausência de outra janela.
@@ -82,8 +103,9 @@ adicional.
    um listener 3001 DIRECT ou DESCENDANT, sem restart novo; então health local/público.
 4. Só após API PASS, promover `/opt/re7online/current/frontend` atomicamente.
 5. Reiniciar `re7-admin-front` pelo registro existente, sem `--update-env`.
-6. Exigir três amostras estáveis, listener 3000, BUILD_ID, Login, Inbox, CRM,
-   Modelos, Campanhas e asset por GET-only.
+6. Exigir três amostras estáveis, listener 3000, BUILD_ID, Login, Inbox, CRM
+   e asset. Não acessar Modelos/Campanhas no smoke sem autorização Meta:
+   suas leituras podem disparar sincronização de templates.
 7. Provar o worker byte-operacionalmente preservado e parar em aceite técnico.
 
 A ausência transitória do listener permite polling limitado; listener estrangeiro,
@@ -100,7 +122,28 @@ Antes do save, qualquer negativa restaura atomicamente frontend e API aos symlin
 anteriores, reinicia os registros existentes sem atualização de ambiente e comprova
 identidades, sockets, health e worker. Só então declarar `ROLLED_BACK`; zero save e
 zero retry. Depois do save, usar a evidência transacional para completar dump, marker,
-lock e journal sem segundo save.
+lock e journal sem segundo save. O registro durável da execução do save prevalece
+sobre journal ainda não reconciliado; preservar o histórico e registrar saveCount=1.
+
+Validar os três registros do dump por identidade estrutural e ambiente permitido,
+sem publicar valores privados. No PM2 6.0.14 autenticado, apenas a omissão da
+propriedade `instances` de API/frontend em `fork_mode` pode equivaler ao default 1
+comprovado. Não confundir propriedade ausente com processo ausente, não normalizar
+outros campos/versões genericamente e não editar o dump para passar na comparação.
+Essa representação já constava na finalização d7 e foi reconfirmada em a959;
+reutilizar a prova compatível em vez de repetir o save.
+
+Falha antes de qualquer seleção é `DENIED_BEFORE_MUTATION`, não `ROLLED_BACK`.
+Depois de mutação, só declarar retorno após verificá-lo. Falha de retorno ou de
+publicação durável do recibo mantém o lock com controlador/detentor autenticável;
+não declarar sucesso nem liberar exclusão por ausência de recibo. O handoff não
+expira por prazo nem encerra por token inválido/EOF. Liberar somente pelo protocolo
+privado após comprovar PID, start ticks e FD; nunca remover o arquivo do lock.
+
+Um GET não é garantia de ausência de efeito: o aceite autenticado de
+`/app/campaigns/availability` ocorre somente após readiness/health da API candidata.
+Ele não chama Meta, mas a autenticação pode atualizar metadados de sessão. A API d7
+não continha essa rota. Modelos/Campanhas ficam no roteiro funcional separado.
 
 As tentativas de 24/10 com `scripts/converta-deploy.py` ficam preservadas como
 histórico e não devem ser repetidas. Preparações anteriores, Deploy V2,
