@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "recordType": "FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_VERIFIED",
+  "result": "CAMPAIGN_MEDIA_LAYOUT_ACCEPTED_PRODUCTION_HEALTHY",
+  "evidenceProvenance": {
+    "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT",
+    "reportedDate": "2026-10-26",
+    "timezone": "America/Fortaleza",
+    "independentVpsInspectionByDocumentationEditor": false,
+    "exactFinalizationTimestamp": "NOT_PROVIDED"
+  },
+  "functionalTarget": {
+    "commit": "f16027874e91c86e5f818d0888e6d735b07a6eda",
+    "testedHead": "ed9ea43ab49ddb9349695405e436b103d3cf195d",
+    "treeSha": "10a5ecf4a8842ed0d6700943f02629e8a204b57b",
+    "treeDifferenceCount": 0,
+    "ciRun": 40367319299,
+    "ciResult": "PASS_4_OF_4"
+  },
+  "controlPlane": {
+    "mergeCommit": "c48cb30395bb3a897c43856abb225d9c5b748ce9",
+    "testedHead": "ed23f099580cab467a3811421bf2aa8ff36629f1",
+    "treeSha": "4277e7b476df6da34b7e9ad52a038445101ed008",
+    "ciRun": 40377310809,
+    "ciResult": "PASS_4_OF_4",
+    "executorSha256": "2ba5e3a7ed7c872fa1b8efe1c8193e118a483e325c627cbd2dbeea88dd9cdc5a",
+    "producerSha256": "d248b9128688b429beec37902e78cacb4b45af4a074e287eed253bdf05c8b065",
+    "readinessControlSha256": "a8f71a51ea09e3746db75dd952f581650ac2f43a02ceecdff1a6c4ae5c4b40e6",
+    "releaseBoundBindings": [
+      "TARGET",
+      "RELEASE",
+      "EXPECTED_PACKAGE",
+      "RETURN_RELEASE"
+    ]
+  },
+  "release": {
+    "id": "immutable-f1602787-vps-20261026T174702Z",
+    "target": "f16027874e91c86e5f818d0888e6d735b07a6eda",
+    "path": "/opt/re7online/releases/immutable-f1602787-vps-20261026T174702Z",
+    "buildId": "HYTuoIlZopPMaTrcg6uiv",
+    "packageSha256": "68eca577dee432888e3b3b0e659492efba668d4ce9bf3295225c22eb3ad11701",
+    "manifestSha256": "ac86f819c80e8fbd086252a40b36315ec8675196850159eafb96e9767459525e",
+    "indexSha256": "4ae32d0e9ae3edcd2f0df0c5d9f387e54a3446d69927d832e63907837b251b43",
+    "tarSha256": "c7ebc6b553c014e4da4f58f53c3ab0072d1bf590787d24d4603e7337c765d6fe",
+    "indexEntries": 34351,
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "frontendEntrypointSha256": "c230a7297ba9dd98b5f57855846c186521346ce06a3a33d86faff15386c916fc",
+    "buildCount": 1,
+    "packageVerified": true,
+    "extractedTreeVerified": true,
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+  },
+  "impact": {
+    "functionalComponents": [
+      "frontend",
+      "documentation"
+    ],
+    "activatedComponents": [
+      "frontend"
+    ],
+    "apiPreserved": true,
+    "workerPreserved": true,
+    "pm2BindingsRequired": false,
+    "validatePairExecuted": false
+  },
+  "runtime": {
+    "api": {
+      "releaseId": "immutable-a959129e-vps-20261026T023100Z",
+      "pid": 441355,
+      "startTicks": 16603839,
+      "restartCount": 6,
+      "preserved": true
+    },
+    "frontend": {
+      "releaseId": "immutable-f1602787-vps-20261026T174702Z",
+      "pid": 526037,
+      "startTicks": 19459289,
+      "restartCount": 8,
+      "restartDelta": 1,
+      "socketPort": 3000,
+      "socketOwnerPid": 526037,
+      "socketOwnerRelation": "DIRECT",
+      "execMode": "fork_mode",
+      "instances": 1,
+      "buildId": "HYTuoIlZopPMaTrcg6uiv"
+    },
+    "worker": {
+      "pid": 2233,
+      "startTicks": 17758,
+      "restartCount": 0,
+      "preserved": true
+    }
+  },
+  "readiness": {
+    "result": "READINESS_PASS",
+    "totalSamples": 4,
+    "stableSamples": 3,
+    "initialListenerAbsent": true,
+    "stderrEmpty": true,
+    "reportSha256": "d0873bbb8417041de8b036604659c747e3be5241c303e6f25e076d734f961083"
+  },
+  "acceptance": {
+    "technical": "PASS",
+    "visual": "PASS",
+    "scope": [
+      "DRAFT_NAME_AND_APPROVED_TEMPLATE_VERTICAL_ALIGNMENT",
+      "MEDIA_PREVIEW_REPLACES_PRIMARY_GUIDANCE",
+      "GUIDANCE_COLLAPSED_EXPANDABLE_AFTER_SELECTION",
+      "RESPONSIVE_TWO_COLUMN_LAYOUT"
+    ],
+    "acceptanceSha256": "2f479c7d4556ba553429bd34a26210ea31b1b8e78943149c85316a73cbc00d4d"
+  },
+  "pm2": {
+    "version": "6.0.14",
+    "saveCount": 1,
+    "saveAttemptCount": 1,
+    "saveExitCode": 0,
+    "dumpSha256": "5aa289dd3b610382af34df64555ac9b9effb7793e07573b73e0057824e3b1095",
+    "dumpValidation": "PASS_THREE_RECORDS",
+    "dumpValidationSha256": "e6d9d30eccb518c1de59f3f7a2dacdcdd44ca10c073d8aca64e3c232f20984d5",
+    "representationRules": {
+      "apiFrontend": "LIVE_ONE_EQUALS_DUMP_OMITTED_ONLY_FOR_AUTHENTICATED_FORK_MODE_SINGLETON",
+      "worker": "LIVE_NULL_OR_ABSENT_EQUALS_DUMP_NULL_OR_ABSENT_WITHOUT_NORMALIZATION"
+    },
+    "secondSaveExecuted": false
+  },
+  "finalization": {
+    "journalSha256": "e10e558bac031bd02bc044d996c404e75dcced8e31d055df4d55a2c36ee3f602",
+    "markerSha256": "6e7a790fbdb7fbef0d4da3e199822cb5ba125cbb18092f1ab3773bc36c350e9e",
+    "receiptSha256": "d807e4b3aee456f3928b5495642e78f8de123b2ab134f3c09750e76474c4ebad",
+    "saveEvidenceSha256": "4bae81793e7fb57ac114bad831c076abc2d560fd6c3689c39ef69bfc239bf76d",
+    "markerCreatedAfterDumpValidation": true
+  },
+  "health": {
+    "apiLocal": {
+      "http": 200,
+      "ok": true,
+      "db": "ok"
+    },
+    "apiPublic": {
+      "http": 200,
+      "ok": true,
+      "db": "ok"
+    },
+    "frontendLocalHttp": 200,
+    "frontendPublicHttp": 200
+  },
+  "campaignGuard": {
+    "open": true,
+    "generation": 41,
+    "tasks": 0,
+    "fault": null
+  },
+  "rollback": {
+    "frontendReleaseId": "immutable-d436239e-vps-20261026T131821Z",
+    "authenticated": true,
+    "automaticRetryForbidden": true
+  },
+  "lock": {
+    "path": "/opt/re7online/backups/converta-persistent/.deployment-window.lock",
+    "releasedByAuthenticatedToken": true,
+    "holderExited": true,
+    "filePreserved": true,
+    "owner": "deploy",
+    "group": "deploy",
+    "mode": "0600"
+  },
+  "deploymentEffects": {
+    "additionalRestartsDuringFinalization": 0,
+    "metaCalls": 0,
+    "messagesSent": 0,
+    "extraBuilds": 0,
+    "extractionsDuringActivation": 0,
+    "deletions": 0,
+    "guardChanged": false
+  },
+  "nextPermittedAct": "CONTINUE_DOCUMENTED_ACCEPTANCE_SEQUENCE_WITHOUT_REPEATING_MEDIA_LAYOUT_DEPLOYMENT"
+}
