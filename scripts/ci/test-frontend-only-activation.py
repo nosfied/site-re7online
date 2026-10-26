@@ -132,7 +132,7 @@ else: raise SystemExit(2)
         self.generation_contract.chmod(0o600)
         self.retirement_intent = self.root / "generation-retirement-intent.private.json"
         self.retirement_intent.write_text(json.dumps({
-            "schemaVersion": 1, "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION",
+            "schemaVersion": 2, "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION",
             "authorizationGranted": False, "targetCommit": "a" * 40,
             "releaseId": self.release.name,
             "contractSha256": digest(self.generation_contract), "commands": [],

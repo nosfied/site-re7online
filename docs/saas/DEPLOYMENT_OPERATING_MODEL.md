@@ -34,7 +34,8 @@ anteriores permanecem como evidência histórica e não autorizam repetição.
 Cada build é uma geração com contrato de artefatos versionado. A promoção não
 termina em `DEPLOYED`: depois do health final e da persistência validada, a mesma
 janela encerra os derivados já autorizados da geração. O estado operacional final
-é `DEPLOYED_SANITIZED`; se a retirada falhar, o serviço continua implantado, mas
+é `DEPLOYED_SANITIZED`; o `finalize` canônico API + frontend executa esse
+encerramento antes de liberar a janela. Se a retirada falhar, o serviço continua implantado, mas
 o estado passa a `DEPLOYED_RETENTION_INCOMPLETE` e o produtor nega a próxima
 geração.
 

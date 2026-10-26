@@ -22,6 +22,7 @@ PRESERVE_CLASSES = {"PACKAGE_PRESERVE", "EVIDENCE_PRESERVE", "PRIVATE_DATA_NEVER
 DERIVED_CLASSES = {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_STAGING"}
 ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDING_ACTIVATION",
                    "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE"}
+ROOT_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
 
 
 class Denied(RuntimeError):
@@ -176,13 +177,34 @@ def validate_contract(value: dict[str, Any]) -> None:
             deny("artifact_contract_structural_digest")
 
 
+def _strict_child(path: Path, root: Path, predicate: str) -> None:
+    if (not path.is_absolute() or ".." in path.parts or
+            Path(os.path.normpath(str(path))) != path or
+            any(ord(character) < 32 for character in str(path)) or
+            path == root or root not in path.parents):
+        deny(predicate)
+
+
+def _protected_directory(path: Path, predicate: str) -> Path:
+    if not path.is_absolute():
+        deny(predicate)
+    try:
+        info = path.lstat()
+        resolved = path.resolve(strict=True)
+    except OSError:
+        deny(predicate)
+    if path.is_symlink() or not stat.S_ISDIR(info.st_mode) or resolved != path:
+        deny(predicate)
+    return resolved
+
+
 def validate_operational(value: dict[str, Any], contract: dict[str, Any]) -> None:
     required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "gitRepository",
                 "currentPaths", "pm2LivePaths", "pm2DumpPaths", "activeReleases",
                 "rollbackReleases", "transitiveReturnReleases", "candidateReleases",
                 "installedVerifiedReleases", "supersededCandidates", "controlPlaneArtifacts",
-                "dependencies", "deploymentState"}
-    if set(value) != required or value.get("schemaVersion") != 1:
+                "dependencies", "deploymentState", "canonicalRoots", "observations"}
+    if set(value) != required or value.get("schemaVersion") != 2:
         deny("operational_state_schema")
     for key in ("generationId", "releaseId", "targetCommit"):
         if value.get(key) != contract[key]:
@@ -194,6 +216,33 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any]) -> Non
             deny(f"operational_state_list:{key}")
     if not Path(str(value.get("gitRepository", ""))).is_absolute():
         deny("operational_git_repository")
+    roots = value.get("canonicalRoots")
+    if not isinstance(roots, dict) or set(roots) != ROOT_KEYS:
+        deny("canonical_roots_schema")
+    if (not isinstance(roots["evidence"], list) or not roots["evidence"] or
+            any(not isinstance(item, str) for item in roots["evidence"])):
+        deny("canonical_root:evidence")
+    resolved_roots = {key: _protected_directory(Path(str(raw)), f"canonical_root:{key}")
+                      for key, raw in roots.items() if key != "evidence"}
+    evidence_roots = [_protected_directory(Path(raw), "canonical_root:evidence")
+                      for raw in roots["evidence"]]
+    if len(set(evidence_roots)) != len(evidence_roots):
+        deny("canonical_root:evidence_duplicate")
+    if resolved_roots["repository"] != Path(value["gitRepository"]):
+        deny("canonical_repository_identity")
+    compared_roots = {**resolved_roots, **{f"evidence[{index}]": path
+                      for index, path in enumerate(evidence_roots)}}
+    for first, first_path in compared_roots.items():
+        for second, second_path in compared_roots.items():
+            if first >= second:
+                continue
+            if first_path in second_path.parents or second_path in first_path.parents:
+                if ((first == "outputs" and second.startswith("evidence[") or
+                     second == "outputs" and first.startswith("evidence[")) and
+                        resolved_roots["outputs"] in
+                        (second_path if second.startswith("evidence[") else first_path).parents):
+                    continue
+                deny(f"canonical_roots_overlap:{first}:{second}")
     controls = value.get("controlPlaneArtifacts")
     if not isinstance(controls, list) or not controls:
         deny("operational_control_plane")
@@ -212,6 +261,134 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any]) -> Non
     deployment = value.get("deploymentState")
     if not isinstance(deployment, dict) or set(deployment) != {"state"} or not isinstance(deployment["state"], str):
         deny("operational_deployment_state")
+    observations = value.get("observations")
+    if not isinstance(observations, dict) or set(observations) != {"currentLinks", "pm2", "dump", "releaseGraph"}:
+        deny("operational_observations")
+    links = observations.get("currentLinks")
+    if not isinstance(links, list) or any(not isinstance(item, dict) or set(item) != {"path", "target"}
+                                          or not Path(str(item["path"])).is_absolute()
+                                          or not Path(str(item["target"])).is_absolute() for item in links):
+        deny("operational_current_links")
+    pm2 = observations.get("pm2")
+    if (not isinstance(pm2, dict) or set(pm2) != {"path", "sha256", "fingerprintSha256"} or
+            not Path(str(pm2.get("path", ""))).is_absolute() or
+            not SHA256.fullmatch(str(pm2.get("sha256", ""))) or
+            not SHA256.fullmatch(str(pm2.get("fingerprintSha256", "")))):
+        deny("operational_pm2_observation")
+    for label in ("dump", "releaseGraph"):
+        item = observations.get(label)
+        if (not isinstance(item, dict) or set(item) != {"path", "sha256"} or
+                not Path(str(item.get("path", ""))).is_absolute() or
+                not SHA256.fullmatch(str(item.get("sha256", "")))):
+            deny(f"operational_{label}_observation")
+
+
+def _path_has_symlink(path: Path, root: Path) -> bool:
+    current = path
+    while current != root:
+        try:
+            if current.is_symlink():
+                return True
+        except OSError:
+            return True
+        current = current.parent
+    return root.is_symlink()
+
+
+def validate_artifact_roots(contract: dict[str, Any], operational: dict[str, Any]) -> None:
+    roots = {key: Path(value) for key, value in operational["canonicalRoots"].items()
+             if key != "evidence"}
+    class_root = {
+        "DERIVED_WORKTREE": roots["worktrees"],
+        "DERIVED_OUTPUT_RUNTIME": roots["outputs"],
+        "DERIVED_STAGING": roots["staging"],
+        "RELEASE_RUNTIME": roots["releases"],
+    }
+    for artifact in contract["artifacts"]:
+        kind = artifact["class"]
+        if kind not in class_root:
+            continue
+        path = Path(artifact["path"])
+        root = class_root[kind]
+        _strict_child(path, root, f"artifact_outside_canonical_root:{kind}")
+        if _path_has_symlink(path, root):
+            deny(f"artifact_unsafe_ancestor:{kind}")
+        if kind == "DERIVED_WORKTREE" and path == roots["repository"]:
+            deny("canonical_checkout_not_retirable")
+
+
+def _pm2_fingerprint(rows: Any) -> str:
+    if not isinstance(rows, list):
+        deny("fresh_pm2_shape")
+    projected = []
+    for row in rows:
+        if not isinstance(row, dict):
+            deny("fresh_pm2_row")
+        env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
+        projected.append({key: row.get(key, env.get(key)) for key in
+                          ("name", "pid", "status", "restart_time", "pm_cwd", "pm_exec_path",
+                           "exec_mode", "instances", "args", "node_args", "namespace",
+                           "out_file", "error_file")})
+    return digest_bytes(canonical(sorted(projected, key=lambda item: str(item.get("name")))))
+
+
+def capture_fresh_operational(operational: dict[str, Any]) -> dict[str, Any]:
+    observations = operational["observations"]
+    links = []
+    for item in observations["currentLinks"]:
+        path = Path(item["path"])
+        try:
+            observed_target = path.resolve(strict=True)
+            if not path.is_symlink() or observed_target != Path(item["target"]).resolve(strict=True):
+                deny(f"fresh_current_changed:{path.name}")
+        except OSError:
+            deny(f"fresh_current_changed:{path.name}")
+        links.append({"path": str(path), "target": str(observed_target)})
+    pm2 = observations["pm2"]
+    pm2_path = Path(pm2["path"])
+    try:
+        fd = os.open(pm2_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        info = os.fstat(fd)
+        chunks = []
+        while True:
+            block = os.read(fd, 1024 * 1024)
+            if not block:
+                break
+            chunks.append(block)
+        raw = b"".join(chunks)
+    except OSError:
+        deny("fresh_pm2_binary")
+    try:
+        if not stat.S_ISREG(info.st_mode) or digest_bytes(raw) != pm2["sha256"]:
+            deny("fresh_pm2_binary")
+        # Invoke the already-authenticated inode, not the mutable pathname.
+        result = subprocess.run([f"/proc/self/fd/{fd}", "jlist"], text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                timeout=30, pass_fds=(fd,))
+    finally:
+        os.close(fd)
+    if result.returncode:
+        deny("fresh_pm2_jlist")
+    try:
+        rows = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        deny("fresh_pm2_jlist")
+    fingerprint = _pm2_fingerprint(rows)
+    if fingerprint != pm2["fingerprintSha256"]:
+        deny("fresh_pm2_changed")
+    captured = {"currentLinks": links, "pm2FingerprintSha256": fingerprint}
+    for label in ("dump", "releaseGraph"):
+        item = observations[label]
+        raw, _ = stable_private(Path(item["path"]), item["sha256"])
+        captured[f"{label}Sha256"] = digest_bytes(raw)
+        if label == "releaseGraph":
+            graph = object_json(raw, "release-graph")
+            expected = {key: operational[key] for key in ("activeReleases", "rollbackReleases",
+                        "transitiveReturnReleases", "candidateReleases", "installedVerifiedReleases",
+                        "supersededCandidates")}
+            if graph != expected:
+                deny("fresh_release_graph_changed")
+    return captured
 
 
 def known_references(operational: dict[str, Any]) -> set[str]:
@@ -299,6 +476,19 @@ def outside_artifacts(destination: Path, artifacts: list[dict[str, Any]]) -> Non
         deny(f"evidence_destination_inside_artifact:{destination.name}")
 
 
+def evidence_destination(destination: Path, operational: dict[str, Any]) -> None:
+    for raw in operational["canonicalRoots"]["evidence"]:
+        root = Path(raw)
+        try:
+            _strict_child(destination, root, f"evidence_destination_root:{destination.name}")
+        except Denied:
+            continue
+        if _path_has_symlink(destination.parent, root):
+            deny(f"evidence_destination_unsafe:{destination.name}")
+        return
+    deny(f"evidence_destination_root:{destination.name}")
+
+
 def classify(artifact: dict[str, Any], contract: dict[str, Any], operational: dict[str, Any]) -> str:
     kind = artifact["class"]
     release = contract["releaseId"]
@@ -361,13 +551,33 @@ def prepare(args: argparse.Namespace) -> None:
     lifecycle = object_json(lifecycle_raw, "generation-lifecycle")
     operational = object_json(operational_raw, "operational-state")
     validate_contract(contract); validate_operational(operational, contract)
+    validate_artifact_roots(contract, operational)
+    legacy_migration = None
+    if args.review_output.exists() or args.review_output.is_symlink():
+        existing_raw, _ = stable_private(args.review_output)
+        existing = object_json(existing_raw, "generation-review")
+        if existing.get("schemaVersion") == 1 and existing.get("decision") == "PRESERVE":
+            if not args.legacy_review_sha256 or digest_bytes(existing_raw) != args.legacy_review_sha256:
+                deny("legacy_migration_binding_required")
+            expected = {"schemaVersion", "generationId", "lifecycleSha256", "reviewer",
+                        "reason", "evidenceSha256", "decision"}
+            if (set(existing) != expected or existing.get("generationId") != contract["generationId"] or
+                    existing.get("lifecycleSha256") != args.lifecycle_sha256):
+                deny("legacy_migration_identity")
+            legacy_migration = {"fromSchemaVersion": 1, "fromDecision": "PRESERVE",
+                                "reviewSha256": args.legacy_review_sha256,
+                                "scope": "CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN"}
+    elif args.legacy_review_sha256:
+        deny("legacy_migration_review_missing")
     for destination in (args.intent_output, args.commands_output, args.review_output):
         outside_artifacts(destination, contract["artifacts"])
+        evidence_destination(destination, operational)
     if (lifecycle.get("generationId") != contract["generationId"] or
             lifecycle.get("state") not in {"COMPLETE", "FAILED"}):
         deny("lifecycle_not_terminal")
     writer_fd = acquire_existing_lock(Path(contract["writerLockPath"]))
     try:
+        fresh = capture_fresh_operational(operational)
         classified = []
         commands = []
         for artifact in contract["artifacts"]:
@@ -379,18 +589,27 @@ def prepare(args: argparse.Namespace) -> None:
                 deny("protected_release_missing")
             item = {**artifact, "retentionState": state}
             classified.append(item)
-            if state == "RETIREMENT_READY" and artifact["class"] in DERIVED_CLASSES:
+            # The authorization scope is the complete set of derived artifacts.
+            # Eligibility is re-evaluated under both locks at execution time, so
+            # output/staging paths that become eligible only after DEPLOYED do not
+            # require an unauthenticated second intent.
+            if artifact["class"] in DERIVED_CLASSES:
                 command, text = command_for(artifact, operational)
                 commands.append({"ordinal": len(commands) + 1, "path": artifact["path"],
                                  "class": artifact["class"], "argv": command, "literal": text,
-                                 "allocatedBytes": artifact["allocatedBytes"]})
+                                 "allocatedBytes": artifact["allocatedBytes"],
+                                 "eligibilityAtPrepare": state})
         state = review_state([item["retentionState"] for item in classified])
         intent = {
-            "schemaVersion": 1, "generationId": contract["generationId"],
+            "schemaVersion": 2, "generationId": contract["generationId"],
             "releaseId": contract["releaseId"], "targetCommit": contract["targetCommit"],
             "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION", "authorizationGranted": False,
             "contractSha256": args.contract_sha256, "lifecycleSha256": args.lifecycle_sha256,
             "operationalStateSha256": args.operational_state_sha256,
+            "canonicalRoots": operational["canonicalRoots"],
+            "controlPlaneArtifacts": operational["controlPlaneArtifacts"],
+            "freshObservation": fresh,
+            "legacyMigration": legacy_migration,
             "artifacts": classified, "commands": commands,
             "executionContract": {"canonicalLock": str(args.deployment_lock),
                                   "writerLock": contract["writerLockPath"],
@@ -434,11 +653,16 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any]) -> list
     required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "state",
                 "authorizationGranted", "contractSha256", "lifecycleSha256",
                 "operationalStateSha256", "artifacts", "commands", "commandsSha256",
-                "executionContract"}
-    if (set(intent) != required or intent.get("schemaVersion") != 1 or
+                "executionContract", "canonicalRoots", "controlPlaneArtifacts", "freshObservation"}
+    required.add("legacyMigration")
+    if (set(intent) != required or intent.get("schemaVersion") != 2 or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
             intent.get("authorizationGranted") is not False):
         deny("intent_schema")
+    if intent.get("canonicalRoots") != operational.get("canonicalRoots"):
+        deny("intent_canonical_roots")
+    if intent.get("controlPlaneArtifacts") != operational.get("controlPlaneArtifacts"):
+        deny("intent_control_plane")
     execution = intent.get("executionContract")
     expected_execution = {"canonicalLock", "writerLock", "attemptBeforeCommand",
                           "stopOnFirstFailure", "automaticRetry", "force", "prune",
@@ -459,13 +683,14 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any]) -> list
         deny("intent_artifacts")
     literals = []
     for ordinal, item in enumerate(commands, 1):
-        if not isinstance(item, dict) or set(item) != {"ordinal", "path", "class", "argv", "literal", "allocatedBytes"}:
+        if not isinstance(item, dict) or set(item) != {"ordinal", "path", "class", "argv", "literal", "allocatedBytes", "eligibilityAtPrepare"}:
             deny("intent_command")
         artifact = by_path.get(item["path"])
         if (item["ordinal"] != ordinal or not artifact or
-                artifact.get("retentionState") != "RETIREMENT_READY" or
                 artifact.get("class") not in DERIVED_CLASSES or item["class"] != artifact["class"]):
             deny("intent_command_scope")
+        if item.get("eligibilityAtPrepare") != artifact.get("retentionState"):
+            deny("intent_command_eligibility")
         expected, literal = command_for(artifact, operational)
         if item["argv"] != expected or item["literal"] != literal:
             deny("intent_command_literal")
@@ -489,8 +714,6 @@ def execute(args: argparse.Namespace) -> None:
         "targetCommit": intent.get("targetCommit"),
     }
     validate_operational(operational, contract_identity)
-    if intent.get("operationalStateSha256") != args.operational_state_sha256:
-        deny("intent_state")
     required_auth = {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"}
     if (set(authorization) != required_auth or authorization.get("schemaVersion") != 1 or
             authorization.get("decision") != "AUTHORIZE_ONCE" or
@@ -506,12 +729,34 @@ def execute(args: argparse.Namespace) -> None:
     removed: list[str] = []
     receipt_state = "DEPLOYED_SANITIZED" if operational["deploymentState"]["state"] == "DEPLOYED" else "SANITIZED"
     try:
+        # These observations happen only after both locks and before the first
+        # ATTEMPT. A stale prepare snapshot cannot authorize a deletion.
+        validate_artifact_roots({"artifacts": intent["artifacts"]}, operational)
+        fresh = capture_fresh_operational(operational)
+        if operational["deploymentState"]["state"] == "DEPLOYED":
+            release = intent["releaseId"]
+            if (release not in operational["activeReleases"] or
+                    release not in operational["installedVerifiedReleases"] or
+                    not any(release in Path(item["target"]).parts
+                            for item in operational["observations"]["currentLinks"])):
+                deny("fresh_deployed_release_graph")
         for artifact in intent["artifacts"]:
             authenticate_artifact(artifact)
+        evidence_destination(args.receipt_root, operational)
         args.receipt_root.mkdir(mode=0o700, parents=False)
         journal = args.receipt_root / "command-results.private.jsonl"
         try:
+            fresh_before_attempt = capture_fresh_operational(operational)
+            if fresh_before_attempt != fresh:
+                deny("fresh_operational_changed_before_attempt")
+            by_path = {item["path"]: item for item in intent["artifacts"]}
+            execution_contract = {**contract_identity, "artifacts": intent["artifacts"]}
+            executable = []
             for item in commands:
+                state = classify(by_path[item["path"]], execution_contract, operational)
+                if state == "RETIREMENT_READY":
+                    executable.append(item)
+            for item in executable:
                 attempted += 1
                 append_event(journal, {"event": "ATTEMPT", "ordinal": item["ordinal"],
                                        "path": item["path"], "argv": item["argv"]})
@@ -530,12 +775,16 @@ def execute(args: argparse.Namespace) -> None:
             for artifact in intent["artifacts"]:
                 if artifact["path"] not in removed_set:
                     authenticate_artifact(artifact)
+            fresh_final = capture_fresh_operational(operational)
+            if fresh_final != fresh_before_attempt:
+                deny("fresh_operational_changed_during_retirement")
         except BaseException as error:
             receipt_state = "DEPLOYED_RETENTION_INCOMPLETE" if operational["deploymentState"]["state"] == "DEPLOYED" else "QUARANTINED"
             receipt = {"schemaVersion": 1, "state": receipt_state,
                        "failurePredicate": str(error), "attemptedCommands": attempted,
                        "completedCommands": completed, "removedPaths": removed,
-                       "intentSha256": args.intent_sha256, "automaticRetry": False}
+                       "intentSha256": args.intent_sha256, "automaticRetry": False,
+                       "freshObservation": fresh}
             write_exclusive(args.receipt_root / "execution-receipt.private.json", canonical(receipt))
             review = {"schemaVersion": 2, "generationId": intent["generationId"],
                       "lifecycleSha256": intent["lifecycleSha256"], "state": "QUARANTINED",
@@ -543,23 +792,37 @@ def execute(args: argparse.Namespace) -> None:
                       "evidenceSha256": digest_bytes(canonical(receipt))}
             replace_private(args.review_output, canonical(review))
             raise
-        journal_sha = digest_bytes(journal.read_bytes())
+        # Recompute the complete generation contract. A successful subset is
+        # retention-incomplete, never SANITIZED.
+        remaining = []
+        for artifact in intent["artifacts"]:
+            if artifact["class"] in DERIVED_CLASSES:
+                path = Path(artifact["path"])
+                if path.exists() or path.is_symlink():
+                    remaining.append(artifact["path"])
+        receipt_state = ("DEPLOYED_SANITIZED" if operational["deploymentState"]["state"] == "DEPLOYED"
+                         else "SANITIZED") if not remaining else (
+                         "DEPLOYED_RETENTION_INCOMPLETE" if operational["deploymentState"]["state"] == "DEPLOYED"
+                         else "RETENTION_INCOMPLETE")
+        journal_sha = digest_bytes(journal.read_bytes()) if journal.exists() else digest_bytes(b"")
         receipt = {"schemaVersion": 1, "state": receipt_state, "failurePredicate": None,
                    "attemptedCommands": attempted, "completedCommands": completed,
                    "removedPaths": removed, "intentSha256": args.intent_sha256,
                    "commandLogSha256": journal_sha, "automaticRetry": False,
+                   "remainingDerivedPaths": remaining, "freshObservation": fresh,
                    "lock": {"canonicalHeldThroughReceiptFsync": True,
                             "writerHeldThroughReceiptFsync": True}}
         receipt_raw = canonical(receipt)
         write_exclusive(args.receipt_root / "execution-receipt.private.json", receipt_raw)
+        review_terminal = "SANITIZED" if not remaining else "QUARANTINED"
         review = {"schemaVersion": 2, "generationId": intent["generationId"],
-                  "lifecycleSha256": intent["lifecycleSha256"], "state": "SANITIZED",
+                  "lifecycleSha256": intent["lifecycleSha256"], "state": review_terminal,
                   "reviewer": authorization["owner"], "reason": "derived artifacts retired",
                   "evidenceSha256": digest_bytes(receipt_raw)}
         replace_private(args.review_output, canonical(review))
         fsync_dir(args.receipt_root)
         print(canonical({"result": receipt_state, "receiptSha256": digest_bytes(receipt_raw),
-                         "removedPaths": len(removed)}).decode().strip())
+                         "removedPaths": len(removed), "remainingDerivedPaths": len(remaining)}).decode().strip())
     finally:
         os.close(writer_fd); os.close(canonical_fd)
 
@@ -577,6 +840,7 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--review-output", type=Path, required=True)
     prepare_parser.add_argument("--reviewer", required=True)
     prepare_parser.add_argument("--reason", required=True)
+    prepare_parser.add_argument("--legacy-review-sha256")
     prepare_parser.set_defaults(handler=prepare)
     execute_parser = commands.add_parser("execute")
     for name in ("intent", "authorization", "operational-state"):

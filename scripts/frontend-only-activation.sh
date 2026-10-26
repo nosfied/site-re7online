@@ -539,7 +539,7 @@ test "$(/usr/bin/sha256sum "$RETIREMENT_INTENT" | /usr/bin/awk '{print $1}')" = 
   '.schemaVersion==1 and .targetCommit==$target and .releaseId==$release and (.artifacts|type)=="array"' \
   "$GENERATION_CONTRACT" >/dev/null
 /usr/bin/jq -e --arg target "$TARGET" --arg release "$RELEASE" --arg contract "$GENERATION_CONTRACT_SHA256" \
-  '.schemaVersion==1 and .state=="SEALED_FOR_EXPLICIT_AUTHORIZATION" and .authorizationGranted==false and
+  '.schemaVersion==2 and .state=="SEALED_FOR_EXPLICIT_AUTHORIZATION" and .authorizationGranted==false and
    .targetCommit==$target and .releaseId==$release and .contractSha256==$contract and
    (.commands|type)=="array" and (.executionContract.stopOnFirstFailure==true) and
    (.executionContract.automaticRetry==false)' "$RETIREMENT_INTENT" >/dev/null

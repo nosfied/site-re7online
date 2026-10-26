@@ -29,13 +29,38 @@ terminal.
 - `prepare` lê o contrato da própria geração, lifecycle terminal e fotografia
   operacional autenticada; verifica composição/identidade, referências
   current/PM2 live/dump, grafo de releases, control plane copiado e writer lock;
-  produz intenção e comandos literais sem glob, force ou prune;
+  produz intenção condicional com todos os caminhos derivados, inclusive outputs
+  ainda pendentes que só podem ficar elegíveis após `DEPLOYED`, e comandos
+  literais sem glob, force ou prune;
 - `execute` exige intenção e autorização externas autenticadas, mantém lock
-  canônico e writer lock, grava `ATTEMPT` antes de cada comando, para na primeira
-  falha, verifica ausência após cada retirada e publica recibo/review com fsync;
+  canônico e writer lock, recaptura `current`, PM2 live, dump e grafo sob esses
+  locks antes do primeiro `ATTEMPT`, para na primeira falha, verifica ausência
+  após cada retirada e publica recibo/review com fsync;
 - conclusão posterior a deploy é `DEPLOYED_SANITIZED`; parcial é
   `DEPLOYED_RETENTION_INCOMPLETE`, não desfaz o deploy aprovado e bloqueia o
   próximo build. Não há retry automático.
+
+`SANITIZED` só é publicado após recomputar o contrato inteiro e confirmar que
+todos os derivados estão ausentes. Retirar somente o worktree enquanto outputs
+continuam pendentes termina em `RETENTION_INCOMPLETE` e review `QUARANTINED`.
+A mesma autorização pré-deploy cobre a lista literal completa; a execução
+pós-aceite recalcula a elegibilidade, sem ampliar o escopo autorizado.
+
+O estado operacional v2 declara raízes canônicas explícitas para checkout,
+`build-worktrees`, `build-output`, releases, staging e uma lista fechada de raízes
+de evidências. Cada classe
+destrutiva deve ser descendente estrita da raiz correspondente. Raiz em si,
+checkout canônico, caminho externo, sobreposição não declarada, symlink e ancestral
+por symlink são `DENY`. A única composição admitida é uma raiz de evidências como
+descendente de `build-output`, pois lifecycle/review são preservados ao lado da
+geração e nunca integram um comando destrutivo. Mudança de `current`, fingerprint sanitizado do PM2, dump ou
+grafo entre preparação e execução também nega antes do primeiro `ATTEMPT`.
+
+Uma review v1 `PRESERVE` conhecida, incluindo a candidata legada `123ba`, só pode
+ser migrada sem inventário global quando `prepare` recebe
+`--legacy-review-sha256` igual aos bytes preservados e generation/lifecycle
+coincidem. O original é preservado e apenas os caminhos do contrato autenticado
+são observados.
 
 Worktree só fica pronto depois de pacote verificado, control plane copiado e
 ausência de escritor. Output runtime só fica pronto depois da instalação

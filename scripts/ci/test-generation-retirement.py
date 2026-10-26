@@ -36,11 +36,17 @@ def invoke(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 class Fixture:
-    def __init__(self, *, active=False, rollback=False, candidate=False, installed=True, deployed=True):
+    def __init__(self, *, active=False, rollback=False, candidate=False, installed=True, deployed=True,
+                 release_id="immutable-fixture"):
         self.temp = tempfile.TemporaryDirectory(prefix="generation-retirement-")
         self.root = Path(self.temp.name)
-        self.output = self.root / "output"; self.output.mkdir()
-        self.release_id = "immutable-fixture"
+        self.output_root = self.root / "build-output"; self.output_root.mkdir()
+        self.output = self.output_root / "generation"; self.output.mkdir()
+        self.worktrees_root = self.root / "build-worktrees"; self.worktrees_root.mkdir()
+        self.releases_root = self.root / "releases"; self.releases_root.mkdir()
+        self.staging_root = self.root / "staging-root"; self.staging_root.mkdir()
+        self.evidence_root = self.root / "evidence"; self.evidence_root.mkdir()
+        self.release_id = release_id
         self.target = "a" * 40
         self.writer_lock = self.root / ".generation-build.lock"; self.writer_lock.write_text(""); self.writer_lock.chmod(0o600)
         self.deploy_lock = self.root / ".deployment-window.lock"; self.deploy_lock.write_text(""); self.deploy_lock.chmod(0o600)
@@ -51,21 +57,32 @@ class Fixture:
         (self.repo / "tracked").write_text("x\n")
         subprocess.run(["git", "add", "."], cwd=self.repo, check=True)
         subprocess.run(["git", "commit", "-qm", "fixture"], cwd=self.repo, check=True)
-        self.worktree = self.root / "build-worktree"
+        self.worktree = self.worktrees_root / "build-worktree"
         subprocess.run(["git", "-C", str(self.repo), "worktree", "add", "--detach", str(self.worktree)],
                        check=True, stdout=subprocess.DEVNULL)
-        self.api = self.output / "immutable-fixture/api-runtime"; self.api.mkdir(parents=True); (self.api / "app").write_text("api")
-        self.frontend = self.output / "immutable-fixture/frontend-runtime"; self.frontend.mkdir(); (self.frontend / "app").write_text("front")
-        self.staging = self.root / "staging"; self.staging.mkdir(); (self.staging / "item").write_text("stage")
-        self.installed_release = self.root / "releases" / self.release_id
+        self.api = self.output / self.release_id / "api-runtime"; self.api.mkdir(parents=True); (self.api / "app").write_text("api")
+        self.frontend = self.output / self.release_id / "frontend-runtime"; self.frontend.mkdir(); (self.frontend / "app").write_text("front")
+        self.staging = self.staging_root / "staging"; self.staging.mkdir(); (self.staging / "item").write_text("stage")
+        self.installed_release = self.releases_root / self.release_id
         self.installed_release.mkdir(parents=True); (self.installed_release / "installed").write_text("verified")
-        self.package = self.output / "immutable-fixture.tar.xz"; self.package.write_bytes(b"package")
-        self.manifest = self.output / "immutable-fixture/manifest.json"; self.manifest.write_text("{}\n")
-        self.index = self.output / "immutable-fixture/index.sha256"; self.index.write_text("{}\n")
+        self.package = self.output / f"{self.release_id}.tar.xz"; self.package.write_bytes(b"package")
+        self.manifest = self.output / self.release_id / "manifest.json"; self.manifest.write_text("{}\n")
+        self.index = self.output / self.release_id / "index.sha256"; self.index.write_text("{}\n")
         self.lifecycle = self.output / "generation-lifecycle.private.json"
         private_json(self.lifecycle, {"schemaVersion": 1, "generationId": self.release_id,
                                       "targetCommit": self.target, "state": "COMPLETE"})
         self.control = self.root / "control.py"; self.control.write_text("# control\n"); self.control.chmod(0o600)
+        self.pm2_rows = [{"name": "api", "pid": 101, "pm2_env": {"pm_cwd": "/runtime/api",
+                          "pm_exec_path": "/runtime/api/index.js", "exec_mode": "fork_mode",
+                          "instances": 1, "args": [], "namespace": "default"}}]
+        self.pm2_state = self.root / "pm2-state.json"
+        self.pm2_state.write_text(json.dumps(self.pm2_rows))
+        self.pm2 = self.root / "pm2"
+        self.pm2.write_text("#!/usr/bin/env python3\nfrom pathlib import Path\nprint(Path(" + repr(str(self.pm2_state)) + ").read_text())\n")
+        self.pm2.chmod(0o700)
+        self.dump = self.root / "dump.pm2"; private_json(self.dump, {"fixture": "dump"})
+        self.current = self.root / "current-frontend"
+        os.symlink(self.installed_release, self.current)
 
         def artifact(path: Path, cls: str, state: str = "ACTIVE_DEPENDENCY") -> dict:
             info = path.lstat()
@@ -93,28 +110,74 @@ class Fixture:
                      "writerLockPath": str(self.writer_lock),
                      "classes": sorted(MODULE.PRESERVE_CLASSES | MODULE.DERIVED_CLASSES | {"RELEASE_RUNTIME", "PRIVATE_DATA_NEVER_RETIRE"}),
                      "artifacts": artifacts, "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE"})
+        self.graph = self.root / "release-graph.private.json"
+        effective_active = active or deployed
+        graph = {"activeReleases": [self.release_id] if effective_active else [],
+                 "rollbackReleases": [self.release_id] if rollback else [],
+                 "transitiveReturnReleases": [], "candidateReleases": [self.release_id] if candidate else [],
+                 "installedVerifiedReleases": [self.release_id] if installed else [],
+                 "supersededCandidates": []}
+        private_json(self.graph, graph)
         self.operational = self.root / "operational.private.json"
-        private_json(self.operational, {"schemaVersion": 1, "generationId": self.release_id,
+        private_json(self.operational, {"schemaVersion": 2, "generationId": self.release_id,
                      "releaseId": self.release_id, "targetCommit": self.target,
-                     "gitRepository": str(self.repo), "currentPaths": [], "pm2LivePaths": [],
-                     "pm2DumpPaths": [], "activeReleases": [self.release_id] if active else [],
+                     "gitRepository": str(self.repo), "currentPaths": [str(self.installed_release)], "pm2LivePaths": [],
+                     "pm2DumpPaths": [], "activeReleases": [self.release_id] if effective_active else [],
                      "rollbackReleases": [self.release_id] if rollback else [], "transitiveReturnReleases": [],
                      "candidateReleases": [self.release_id] if candidate else [],
                      "installedVerifiedReleases": [self.release_id] if installed else [],
                      "supersededCandidates": [], "dependencies": [],
                      "controlPlaneArtifacts": [{"path": str(self.control), "sha256": sha(self.control), "copied": True}],
-                     "deploymentState": {"state": "DEPLOYED" if deployed else "PENDING"}})
-        self.intent = self.root / "intent.private.json"
-        self.commands = self.root / "commands.private.txt"
-        self.review = self.output / "generation-review.private.json"
+                     "deploymentState": {"state": "DEPLOYED" if deployed else "PENDING"},
+                     "canonicalRoots": {"repository": str(self.repo), "worktrees": str(self.worktrees_root),
+                         "outputs": str(self.output_root), "releases": str(self.releases_root),
+                         "staging": str(self.staging_root), "evidence": [str(self.evidence_root)]},
+                     "observations": {"currentLinks": [{"path": str(self.current), "target": str(self.installed_release)}],
+                         "pm2": {"path": str(self.pm2), "sha256": sha(self.pm2),
+                                 "fingerprintSha256": MODULE._pm2_fingerprint(self.pm2_rows)},
+                         "dump": {"path": str(self.dump), "sha256": sha(self.dump)},
+                         "releaseGraph": {"path": str(self.graph), "sha256": sha(self.graph)}}})
+        self.intent = self.evidence_root / "intent.private.json"
+        self.commands = self.evidence_root / "commands.private.txt"
+        self.review = self.evidence_root / "generation-review.private.json"
 
-    def prepare(self):
+    def prepare(self, *extra: str):
         return invoke("prepare", "--contract", str(self.contract), "--contract-sha256", sha(self.contract),
                       "--lifecycle", str(self.lifecycle), "--lifecycle-sha256", sha(self.lifecycle),
                       "--operational-state", str(self.operational), "--operational-state-sha256", sha(self.operational),
                       "--deployment-lock", str(self.deploy_lock), "--intent-output", str(self.intent),
                       "--commands-output", str(self.commands), "--review-output", str(self.review),
-                      "--reviewer", "fixture-owner", "--reason", "fixture close")
+                      "--reviewer", "fixture-owner", "--reason", "fixture close", *extra)
+
+    def authorize(self, name="fixture-once"):
+        intent = json.loads(self.intent.read_text())
+        authorization = self.evidence_root / f"{name}.private.json"
+        private_json(authorization, {"schemaVersion": 1, "authorizationId": name,
+                     "decision": "AUTHORIZE_ONCE", "intentSha256": sha(self.intent),
+                     "approvedPaths": [item["path"] for item in intent["commands"]], "owner": "fixture-owner"})
+        return authorization
+
+    def execute(self, authorization: Path, receipt_name="receipt"):
+        receipt = self.evidence_root / receipt_name
+        result = invoke("execute", "--intent", str(self.intent), "--intent-sha256", sha(self.intent),
+                        "--authorization", str(authorization), "--authorization-sha256", sha(authorization),
+                        "--operational-state", str(self.operational), "--operational-state-sha256", sha(self.operational),
+                        "--deployment-lock", str(self.deploy_lock), "--receipt-root", str(receipt),
+                        "--review-output", str(self.review))
+        return result, receipt
+
+    def mark_deployed(self):
+        operational = json.loads(self.operational.read_text())
+        operational["deploymentState"] = {"state": "DEPLOYED"}
+        operational["installedVerifiedReleases"] = [self.release_id]
+        operational["candidateReleases"] = []
+        operational["activeReleases"] = [self.release_id]
+        graph = {key: operational[key] for key in ("activeReleases", "rollbackReleases",
+                 "transitiveReturnReleases", "candidateReleases", "installedVerifiedReleases",
+                 "supersededCandidates")}
+        private_json(self.graph, graph)
+        operational["observations"]["releaseGraph"]["sha256"] = sha(self.graph)
+        private_json(self.operational, operational)
 
     def close(self):
         self.temp.cleanup()
@@ -169,7 +232,7 @@ class GenerationRetirementTest(unittest.TestCase):
         finally:
             fixture.close()
 
-        fixture = Fixture(rollback=True)
+        fixture = Fixture(rollback=True, deployed=False)
         try:
             self.assertEqual(fixture.prepare().returncode, 0)
             intent = json.loads(fixture.intent.read_text())
@@ -188,8 +251,10 @@ class GenerationRetirementTest(unittest.TestCase):
             outputs = [item for item in intent["artifacts"] if item["class"] == "DERIVED_OUTPUT_RUNTIME"]
             self.assertTrue(all(item["retentionState"] == "CANDIDATE_PENDING_ACTIVATION" for item in outputs))
             self.assertEqual(json.loads(fixture.review.read_text())["state"], "RETIREMENT_READY")
-            # The worktree is independently ready; output runtimes are not.
-            self.assertNotIn(str(fixture.api), fixture.commands.read_text())
+            # The sealed conditional scope already contains post-DEPLOYED
+            # outputs, but their preparation-time eligibility remains pending.
+            api_command = next(item for item in intent["commands"] if item["path"] == str(fixture.api))
+            self.assertEqual(api_command["eligibilityAtPrepare"], "CANDIDATE_PENDING_ACTIVATION")
         finally:
             fixture.close()
 
@@ -203,7 +268,8 @@ class GenerationRetirementTest(unittest.TestCase):
             intent = json.loads(fixture.intent.read_text())
             api = next(item for item in intent["artifacts"] if item["path"] == str(fixture.api))
             self.assertEqual(api["retentionState"], "ACTIVE_DEPENDENCY")
-            self.assertNotIn(str(fixture.api), [item["path"] for item in intent["commands"]])
+            command = next(item for item in intent["commands"] if item["path"] == str(fixture.api))
+            self.assertEqual(command["eligibilityAtPrepare"], "ACTIVE_DEPENDENCY")
         finally:
             fixture.close()
 
@@ -216,7 +282,7 @@ class GenerationRetirementTest(unittest.TestCase):
             private_json(authorization, {"schemaVersion": 1, "authorizationId": "fixture-once",
                          "decision": "AUTHORIZE_ONCE", "intentSha256": sha(fixture.intent),
                          "approvedPaths": [item["path"] for item in intent["commands"]], "owner": "fixture-owner"})
-            receipt = fixture.root / "receipt"
+            receipt = fixture.evidence_root / "receipt"
             result = invoke("execute", "--intent", str(fixture.intent), "--intent-sha256", sha(fixture.intent),
                             "--authorization", str(authorization), "--authorization-sha256", sha(authorization),
                             "--operational-state", str(fixture.operational), "--operational-state-sha256", sha(fixture.operational),
@@ -231,6 +297,103 @@ class GenerationRetirementTest(unittest.TestCase):
         finally:
             fixture.close()
 
+    def test_worktree_only_removal_is_not_sanitized(self):
+        fixture = Fixture(candidate=True, installed=False, deployed=False)
+        try:
+            self.assertEqual(fixture.prepare().returncode, 0)
+            result, receipt = fixture.execute(fixture.authorize(), "worktree-only")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["result"], "RETENTION_INCOMPLETE")
+            saved = json.loads((receipt / "execution-receipt.private.json").read_text())
+            self.assertGreaterEqual(len(saved["remainingDerivedPaths"]), 2)
+            self.assertEqual(json.loads(fixture.review.read_text())["state"], "QUARANTINED")
+        finally:
+            fixture.close()
+
+    def test_same_predeploy_intent_covers_outputs_after_deployed(self):
+        fixture = Fixture(candidate=True, installed=False, deployed=False)
+        try:
+            self.assertEqual(fixture.prepare().returncode, 0)
+            authorization = fixture.authorize()
+            fixture.mark_deployed()
+            result, _ = fixture.execute(authorization, "post-deployed")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["result"], "DEPLOYED_SANITIZED")
+            self.assertFalse(fixture.worktree.exists())
+            self.assertFalse(fixture.api.exists())
+            self.assertFalse(fixture.frontend.exists())
+        finally:
+            fixture.close()
+
+    def test_current_or_pm2_change_after_prepare_denies_before_attempt(self):
+        for drift in ("current", "pm2"):
+            fixture = Fixture()
+            try:
+                self.assertEqual(fixture.prepare().returncode, 0)
+                authorization = fixture.authorize(drift)
+                if drift == "current":
+                    fixture.current.unlink(); os.symlink(fixture.repo, fixture.current)
+                else:
+                    changed = [{**fixture.pm2_rows[0], "pid": 999}]
+                    fixture.pm2_state.write_text(json.dumps(changed))
+                result, receipt = fixture.execute(authorization, f"drift-{drift}")
+                self.assertEqual(result.returncode, 2)
+                self.assertFalse(receipt.exists())
+                self.assertTrue(fixture.worktree.exists())
+            finally:
+                fixture.close()
+
+    def test_paths_outside_canonical_roots_and_canonical_checkout_are_denied(self):
+        fixture = Fixture()
+        try:
+            contract = json.loads(fixture.contract.read_text())
+            worktree = next(item for item in contract["artifacts"] if item["class"] == "DERIVED_WORKTREE")
+            worktree["path"] = str(fixture.repo)
+            worktree.update(MODULE.structural_metrics(fixture.repo))
+            info = fixture.repo.lstat()
+            worktree["initialIdentity"] = worktree["observedIdentity"] = {"device": info.st_dev, "inode": info.st_ino}
+            private_json(fixture.contract, contract)
+            result = fixture.prepare()
+            self.assertEqual(result.returncode, 2)
+            self.assertRegex(result.stderr, "artifact_outside_canonical_root|canonical_checkout_not_retirable")
+        finally:
+            fixture.close()
+
+    def test_symlinked_canonical_root_is_denied(self):
+        fixture = Fixture()
+        try:
+            alias = fixture.root / "worktrees-alias"
+            os.symlink(fixture.worktrees_root, alias)
+            operational = json.loads(fixture.operational.read_text())
+            operational["canonicalRoots"]["worktrees"] = str(alias)
+            private_json(fixture.operational, operational)
+            result = fixture.prepare()
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("canonical_root:worktrees", result.stderr)
+        finally:
+            fixture.close()
+
+    def test_known_v1_preserve_migrates_deterministically_without_global_scan(self):
+        fixture = Fixture(release_id="immutable-123ba7bd-vps-20261026T200100Z")
+        try:
+            legacy = {"schemaVersion": 1, "generationId": fixture.release_id,
+                      "lifecycleSha256": sha(fixture.lifecycle), "reviewer": "historical-owner",
+                      "reason": "legacy candidate", "evidenceSha256": "f" * 64,
+                      "decision": "PRESERVE"}
+            private_json(fixture.review, legacy)
+            decoy = fixture.root / "not-in-contract"; decoy.mkdir(); (decoy / "unique").write_text("untouched")
+            legacy_sha = sha(fixture.review)
+            denied = fixture.prepare()
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("legacy_migration_binding_required", denied.stderr)
+            passed = fixture.prepare("--legacy-review-sha256", legacy_sha)
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+            self.assertEqual(json.loads(fixture.intent.read_text())["legacyMigration"]["reviewSha256"], legacy_sha)
+            self.assertEqual((decoy / "unique").read_text(), "untouched")
+            self.assertTrue(any(fixture.evidence_root.glob(f"generation-review.private.json.previous.{legacy_sha}")))
+        finally:
+            fixture.close()
+
     def test_partial_failure_is_durable_and_blocks_following_build(self):
         fixture = Fixture()
         try:
@@ -240,7 +403,7 @@ class GenerationRetirementTest(unittest.TestCase):
             private_json(authorization, {"schemaVersion": 1, "authorizationId": "fixture-partial",
                          "decision": "AUTHORIZE_ONCE", "intentSha256": sha(fixture.intent),
                          "approvedPaths": [item["path"] for item in intent["commands"]], "owner": "fixture-owner"})
-            receipt = fixture.root / "partial-receipt"
+            receipt = fixture.evidence_root / "partial-receipt"
             args = SimpleNamespace(intent=fixture.intent, intent_sha256=sha(fixture.intent),
                                    authorization=authorization, authorization_sha256=sha(authorization),
                                    operational_state=fixture.operational,
@@ -251,7 +414,8 @@ class GenerationRetirementTest(unittest.TestCase):
             calls = 0
             def fail_second(command, **kwargs):
                 nonlocal calls
-                calls += 1
+                if command[0] in {"/usr/bin/git", "/usr/bin/rm"}:
+                    calls += 1
                 if calls == 2:
                     return subprocess.CompletedProcess(command, 7, b"", b"synthetic failure")
                 return real_run(command, **kwargs)

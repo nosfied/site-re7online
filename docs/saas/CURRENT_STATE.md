@@ -112,6 +112,11 @@ livres, ausência de dívida e no máximo uma candidata ainda não instalada. O 
 histórico de dez caminhos terminou 10/10, recuperou 6.942.289.920 bytes e deixou
 13.416.599.552 bytes livres; produção permaneceu inalterada e o lock ficou livre.
 Esses números são o recibo daquela execução, não uma medição fresca de capacidade.
+O finalize API + frontend exige a intenção condicional completa e encerra em
+`DEPLOYED_SANITIZED` ou `DEPLOYED_RETENTION_INCOMPLETE`. `SANITIZED` nunca decorre
+de retirada parcial. A candidata legada `123ba` possui transição v1 determinística,
+vinculada ao hash da review preservada e limitada ao próprio contrato, sem nova
+auditoria global.
 
 A fotografia somente leitura de capacidade está em
 [VPS_CAPACITY_AUDIT_2026-10-24.md](VPS_CAPACITY_AUDIT_2026-10-24.md). Ela classifica

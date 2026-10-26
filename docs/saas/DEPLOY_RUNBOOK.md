@@ -51,12 +51,14 @@ hash integram a autorização de ativação; o executor frontend-only autentica 
 antes de selecionar o symlink. A preparação contém somente metadados, comandos e
 hashes, nunca cópia de runtime.
 
-Após aceite, `pm2 save`, dump validado, marker `DEPLOYED` e health final, execute
-uma única vez `generation-retirement.py execute` sob o lock canônico. Sucesso
-encerra em `DEPLOYED_SANITIZED`. Falha de retirada não reverte o deploy aprovado:
-encerra em `DEPLOYED_RETENTION_INCOMPLETE`, preserva parciais e bloqueia qualquer
-novo build até reconciliação. Não usar retry, force, prune, glob ou caminhos
-alternativos.
+No fluxo API + frontend, o `preflight` de `scripts/converta-deploy.py` exige os
+bindings `--generation-retirement-*`. Após aceite, `pm2 save`, dump validado,
+marker `DEPLOYED` e health final, o próprio `finalize` executa uma única vez
+`generation-retirement.py execute`. Sucesso encerra em `DEPLOYED_SANITIZED`.
+Falha de retirada não reverte o deploy aprovado: encerra em
+`DEPLOYED_RETENTION_INCOMPLETE`, preserva parciais e bloqueia qualquer novo build
+até reconciliação. Os cinco comandos públicos do driver permanecem inalterados.
+Não usar retry, force, prune, glob ou caminhos alternativos.
 
 Para uma ativação frontend-only, a ordem canônica é obrigatória: produzir uma
 única vez o artefato funcional; obter os hashes finais do pacote e o BUILD_ID;

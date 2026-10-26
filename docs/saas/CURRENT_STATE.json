@@ -504,6 +504,10 @@
     "maximumPendingCandidates": 1,
     "terminalSuccess": "DEPLOYED_SANITIZED",
     "terminalIncomplete": "DEPLOYED_RETENTION_INCOMPLETE",
+    "partialRetirementCanBeSanitized": false,
+    "apiFrontendFinalizeIntegrated": true,
+    "operationalObservationSchemaVersion": 2,
+    "legacy123baMigration": "HASH_BOUND_CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN",
     "lastCompletedBatch": {
       "id": "retention-recent-generations-qualification-20261026T213341Z-v3",
       "state": "COMPLETED",
