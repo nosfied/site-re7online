@@ -56,8 +56,8 @@ def stable_regular(path: Path, *, private: bool) -> bytes:
         before = os.fstat(fd)
         if not stat.S_ISREG(before.st_mode):
             deny(f"not_regular:{path.name}")
-        if private and stat.S_IMODE(before.st_mode) != 0o600:
-            deny(f"private_mode:{path.name}")
+        if private and (stat.S_IMODE(before.st_mode) != 0o600 or before.st_uid != os.geteuid()):
+            deny(f"private_identity:{path.name}")
         chunks = []
         while True:
             chunk = os.read(fd, 1024 * 1024)
@@ -170,6 +170,16 @@ def write_exclusive(path: Path, raw: bytes) -> None:
 def materialize(args: argparse.Namespace) -> dict[str, Any]:
     if args.role not in ROLES or not SHA40.fullmatch(args.target):
         deny("argument_identity")
+    for label, path in (("release_root", args.release_root), ("producer", args.producer),
+                        ("control", args.control), ("template_request", args.template_request),
+                        ("template_source", args.template_source), ("output", args.output)):
+        if not path.is_absolute():
+            deny(f"{label}_not_absolute")
+    output_parent = args.output.parent
+    parent_info = output_parent.lstat()
+    if (not stat.S_ISDIR(parent_info.st_mode) or output_parent.is_symlink() or
+            parent_info.st_uid != os.geteuid() or stat.S_IMODE(parent_info.st_mode) & 0o022):
+        deny("output_parent_identity")
     producer_raw = stable_regular(args.producer, private=False)
     control_raw = stable_regular(args.control, private=False)
     if digest(producer_raw) != expected_digest(args.producer_sha256, "producer_sha256"):
@@ -245,6 +255,13 @@ def materialize(args: argparse.Namespace) -> dict[str, Any]:
     }
 
     args.output.mkdir(mode=0o700)
+    if stat.S_IMODE(args.output.stat().st_mode) != 0o700:
+        deny("output_directory_mode")
+    parent_fd = os.open(output_parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(parent_fd)
+    finally:
+        os.close(parent_fd)
     write_exclusive(args.output / "request.private.json", request_raw)
     write_exclusive(args.output / "binding-evidence.private.json", evidence_raw)
     source_path = args.output / "source.private.json"
