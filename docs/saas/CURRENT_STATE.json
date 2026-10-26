@@ -1,17 +1,17 @@
 {
-  "schemaVersion": 6,
-  "updatedAtUtc": "2026-10-26T11:48:09Z",
+  "schemaVersion": 7,
+  "updatedAtUtc": "2026-10-26T19:12:44.973Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json",
-  "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json",
+  "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json",
+  "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json",
   "activeApiDeploymentRecord": "docs/saas/releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "production": {
     "status": "DEPLOYED_VERIFIED",
     "certifiedByThisFile": false,
-    "releaseId": "immutable-a959129e-vps-20261026T023100Z",
-    "releasePath": "/opt/re7online/releases/immutable-a959129e-vps-20261026T023100Z",
-    "targetCommit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
+    "releaseId": "immutable-f1602787-vps-20261026T174702Z",
+    "releasePath": "/opt/re7online/releases/immutable-f1602787-vps-20261026T174702Z",
+    "targetCommit": "f16027874e91c86e5f818d0888e6d735b07a6eda",
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
@@ -19,15 +19,19 @@
       "selectedTargetCommit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
       "selectedReleaseId": "immutable-a959129e-vps-20261026T023100Z",
       "lastReportedPid": 441355,
-      "lastReportedStartTicks": 16603839
+      "lastReportedStartTicks": 16603839,
+      "restartCount": 6
     },
     "frontend": {
       "stablePath": "/opt/re7online/current/frontend",
-      "buildId": "CbNbnlr0VJVv5mME_hvxm",
+      "buildId": "HYTuoIlZopPMaTrcg6uiv",
       "execMode": "fork_mode",
       "instances": 1,
-      "lastReportedPid": 441646,
-      "lastReportedStartTicks": 16604558
+      "lastReportedPid": 526037,
+      "lastReportedStartTicks": 19459289,
+      "selectedTargetCommit": "f16027874e91c86e5f818d0888e6d735b07a6eda",
+      "selectedReleaseId": "immutable-f1602787-vps-20261026T174702Z",
+      "restartCount": 8
     },
     "worker": {
       "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z/worker-runtime",
@@ -35,7 +39,8 @@
       "lastReportedPid": 2233,
       "lastReportedStartTicks": 17758,
       "preserved": true,
-      "changed": false
+      "changed": false,
+      "restartCount": 0
     },
     "database": {
       "migration": "20261021150000_add_template_campaign_media",
@@ -52,32 +57,43 @@
       "directoryMode": "0700"
     },
     "pm2": {
-      "dumpSha256": "e54db82c63cea7200c4215ac16a923b0ec3d05a5e2bc0398c1bcb06ee3e68325",
-      "dumpSha256Scope": "CURRENT_FULL_STACK_DEPLOYMENT",
-      "currentDumpSha256": "e54db82c63cea7200c4215ac16a923b0ec3d05a5e2bc0398c1bcb06ee3e68325",
+      "dumpSha256": "5aa289dd3b610382af34df64555ac9b9effb7793e07573b73e0057824e3b1095",
+      "dumpSha256Scope": "CURRENT_MIXED_COMPONENT_TOPOLOGY",
+      "currentDumpSha256": "5aa289dd3b610382af34df64555ac9b9effb7793e07573b73e0057824e3b1095",
       "rollbackSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13",
       "mode": "0600",
       "owner": "deploy",
       "group": "deploy",
-      "savedExactlyOnce": true
+      "savedExactlyOnce": true,
+      "previousDumpSha256": "6de5f17eda9057ab73e4a68554a788abd4b82156fffbf129f4dc7ac762b95e82",
+      "saveCount": 1,
+      "instancesRepresentation": {
+        "apiFrontend": "LIVE_ONE_EQUALS_DUMP_OMITTED_ONLY_FOR_AUTHENTICATED_PM2_6_0_14_FORK_MODE_SINGLETON",
+        "worker": "LIVE_NULL_OR_ABSENT_EQUALS_DUMP_NULL_OR_ABSENT_WITHOUT_NORMALIZATION"
+      }
     },
-    "markerSha256": "9da2428b15f8eb8b307603556fffb0ef75536829109e4be282ce03caa19cdb80",
-    "markerSha256Scope": "CURRENT_FULL_STACK_DEPLOYMENT",
-    "currentMarkerSha256": "9da2428b15f8eb8b307603556fffb0ef75536829109e4be282ce03caa19cdb80",
+    "markerSha256": "6e7a790fbdb7fbef0d4da3e199822cb5ba125cbb18092f1ab3773bc36c350e9e",
+    "markerSha256Scope": "CURRENT_FRONTEND_RELEASE",
+    "currentMarkerSha256": "6e7a790fbdb7fbef0d4da3e199822cb5ba125cbb18092f1ab3773bc36c350e9e",
     "lastFinalization": {
-      "component": "api_frontend",
+      "component": "frontend",
       "journalState": "DEPLOYED",
       "lockReleased": true,
       "pm2SaveCount": 1,
-      "receiptSha256": "3567a10a165af03377ce912ed44f7628646a33cdfb33c70ffc597f926f353dc8",
-      "journalSha256": "991d549a1bc7f93b88cd1b51e1fdafaef13162555e20eac2b2471566e0804240"
+      "receiptSha256": "d807e4b3aee456f3928b5495642e78f8de123b2ab134f3c09750e76474c4ebad",
+      "journalSha256": "e10e558bac031bd02bc044d996c404e75dcced8e31d055df4d55a2c36ee3f602",
+      "dumpValidationSha256": "e6d9d30eccb518c1de59f3f7a2dacdcdd44ca10c073d8aca64e3c232f20984d5",
+      "acceptanceSha256": "2f479c7d4556ba553429bd34a26210ea31b1b8e78943149c85316a73cbc00d4d"
     },
-    "controlPlaneCommit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
+    "controlPlaneCommit": "c48cb30395bb3a897c43856abb225d9c5b748ce9",
     "readiness": {
       "method": "THREE_CONSECUTIVE_STABLE_SAMPLES",
       "requiredStableSamples": 3,
+      "observedTotalSamples": 4,
+      "initialListenerAbsent": true,
       "healthAfterSocketStability": true,
-      "activationMethod": "DIRECTED_EXISTING_PM2_FIXED_CURRENT"
+      "activationMethod": "FRONTEND_ONLY_EXISTING_PM2_REGISTRATION",
+      "reportSha256": "d0873bbb8417041de8b036604659c747e3be5241c303e6f25e076d734f961083"
     },
     "observation": {
       "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT",
@@ -85,7 +101,7 @@
       "timezone": "America/Fortaleza",
       "independentVpsInspectionByDocumentationEditor": false,
       "exactFinalizationTimestamp": "NOT_PROVIDED",
-      "scope": "Reported deployment completion; not a fresh reopening inventory"
+      "scope": "Reported frontend-only deployment and visual acceptance; not a fresh live observation"
     },
     "campaignOperations": {
       "state": "GENERAL_OPERATIONS_OPEN",
@@ -288,6 +304,25 @@
         "buildDeployRestartOrSaveExecuted": false
       },
       "nextAcceptance": "PREPARE_SCHEDULING_MULTIBATCH_OR_CLIENT_SPECIFIC_SCOPE_WITHOUT_REPEATING_MEDIA_TESTS"
+    },
+    "topology": "MIXED_COMPONENT_RELEASES_FRONTEND_ONLY_PROMOTION",
+    "frontendRollback": {
+      "releaseId": "immutable-d436239e-vps-20261026T131821Z",
+      "authenticated": true
+    },
+    "functionalTargetQualification": {
+      "target": "f16027874e91c86e5f818d0888e6d735b07a6eda",
+      "testedHead": "ed9ea43ab49ddb9349695405e436b103d3cf195d",
+      "identicalTreeSha": "10a5ecf4a8842ed0d6700943f02629e8a204b57b",
+      "differingFiles": 0,
+      "ciRun": 40367319299
+    },
+    "controlPlaneQualification": {
+      "merge": "c48cb30395bb3a897c43856abb225d9c5b748ce9",
+      "testedHead": "ed23f099580cab467a3811421bf2aa8ff36629f1",
+      "identicalTreeSha": "4277e7b476df6da34b7e9ad52a038445101ed008",
+      "ciRun": 40377310809,
+      "executorSha256": "2ba5e3a7ed7c872fa1b8efe1c8193e118a483e325c627cbd2dbeea88dd9cdc5a"
     }
   },
   "contactsListRecovery": {
@@ -421,7 +456,9 @@
     "historicalCampaignEffectsScope": "PREVIOUS_MEDIA_TEMPLATE_HOMOLOGATION_RECORDS_NOT_CURRENT_MANUAL_CAMPAIGN",
     "latestCampaignHomologationState": "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS_GENERAL_OPERATIONS_OPEN",
     "latestCampaignHomologationRecord": "docs/saas/CAMPAIGN_OPERATIONS_READINESS.md",
-    "latestImageHomologationState": "PASS_TWO_CONTROLLED_RECIPIENTS_META_CRM_WEBHOOK"
+    "latestImageHomologationState": "PASS_TWO_CONTROLLED_RECIPIENTS_META_CRM_WEBHOOK",
+    "frontendPresentationDeploymentRecord": "docs/saas/releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json",
+    "frontendPresentationState": "DEPLOYED_VISUAL_ACCEPTANCE_PASS"
   },
   "tenantScopedMetaAppId": {
     "codeState": "TECHNICALLY_DEPLOYED",
@@ -437,5 +474,5 @@
     "lastMetaMutationScope": "SINGLE_TEMPLATE_MEDIA_SUBMISSION_ATTEMPT"
   },
   "updatedAtDate": "2026-10-26",
-  "updatedAtUtcScope": "DOCUMENTATION_UPDATE_NOT_DEPLOYMENT_TIMESTAMP"
+  "updatedAtUtcScope": "DOCUMENTATION_UPDATE_FROM_OWNER_RELAYED_DEPLOYMENT_REPORT"
 }
