@@ -809,7 +809,7 @@ def command_wait_existing_readiness(args: argparse.Namespace) -> dict[str, Any]:
         args.expected_script.relative_to(args.expected_cwd)
     except ValueError:
         deny("existing_readiness_script_escape")
-    if args.release_root.name != args.release_id:
+    if args.release_root.parent.name != args.release_id:
         deny("existing_readiness_release_id_contract")
     if not re.fullmatch(r"[0-9a-f]{64}", args.entry_sha256):
         deny("existing_readiness_entry_sha256")
