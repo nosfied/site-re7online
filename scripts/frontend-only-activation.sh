@@ -3,12 +3,12 @@ set -Eeuo pipefail
 umask 077
 
 BASELINE_V7_SHA256=931900e7fb7229ffd5983b5bbbf8223191108d3b09110655452a43e42f71e2d4
-CONTROL_PLANE=cd8e7eb1d57eec0881bbca809ac704f2c9f657fd
+CONTROL_PLANE=b1689394feb27bb92487896dbee21f34e70b53d5
 TARGET=d436239e13764b65642b37a4310082acd3a6a485
 RELEASE=immutable-d436239e-vps-20261026T131821Z
 EXPECTED_PACKAGE=ed02ba8057cb5ef14f98cd715b81e2daf18e21a2826d7d4f8888f25a00e3d36b
 EXPECTED_PRODUCER=d6b67fb0a1888f2e8e8f3ad828bd8e17725e89c47c2de3d4f4d4386def243cab
-EXPECTED_CONTROL=4ca15fccb36f4288a20c58baa59d1af13c79477f757ef4267cb5dd327faacf4f
+EXPECTED_CONTROL=abf89d491b4dd9150dac4b092dff3a5249a43e083c42d393442128eb39fbb552
 RETURN_RELEASE=immutable-a959129e-vps-20261026T023100Z
 PACKAGE=${RE7_PACKAGE:-/opt/re7online/build-output/${RELEASE}-producer/${RELEASE}.tar.xz}
 FINAL=${RE7_RELEASE_ROOT:-/opt/re7online/releases/$RELEASE}
@@ -237,14 +237,16 @@ copy_authenticated_tool() {
 }
 
 run_readiness() {
-  local label=$1 role=$2 release_root=$3 build_id entry_sha
+  local label=$1 role=$2 release_root=$3 build_id entry_sha release_id
   local report stdout_file stderr_file rc result reason
   if [ "$role" = candidate ]; then
     build_id=$EXPECTED_BUILD_ID
     entry_sha=$EXPECTED_FRONTEND_ENTRY
+    release_id=$RELEASE
   else
     build_id=$RETURN_BUILD_ID
     entry_sha=$RETURN_FRONTEND_ENTRY
+    release_id=$RETURN_RELEASE
   fi
   report="$TX/$label.report.private.json"
   stdout_file="$TX/$label.stdout.private.txt"
@@ -260,7 +262,7 @@ run_readiness() {
       --expected-cwd "$FRONTEND_LEXICAL_CWD" \
       --expected-script "$FRONTEND_LEXICAL_SCRIPT" \
       --expected-interpreter /usr/bin/node \
-      --release-id "$(/usr/bin/basename "$release_root")" \
+      --release-id "$release_id" \
       --entry-sha256 "$entry_sha" --build-id "$build_id" \
       --pm2 "$PM2" --stable-path "$CURRENT/frontend" \
       --release-root "$release_root" --port 3000 \
@@ -291,7 +293,7 @@ run_readiness() {
   result=$(/usr/bin/jq -r '.result' "$report") || {
     READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:result_unreadable:exit_${rc}"; return 1; }
   if [ "$rc" -eq 0 ]; then
-    if [ "$result" != READINESS_PASS ] || ! /usr/bin/jq -e --arg release "$(/usr/bin/basename "$release_root")" \
+    if [ "$result" != READINESS_PASS ] || ! /usr/bin/jq -e --arg release "$release_id" \
       '.component=="frontend" and .port==3000 and .releaseId==$release and .observationMode=="existing_pm2_registration" and .stableSamples>=3' "$report" >/dev/null; then
       READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_mismatch"; return 1
     fi
