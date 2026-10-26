@@ -148,6 +148,7 @@ test("new draft identity wins before detail and delayed list reconciliation", ()
 
   const persisted = block.indexOf("const created = await createAppCampaignDraft(session");
   const identity = block.indexOf("const createdCampaignId = created.campaign.id;");
+  const owner = block.indexOf("createdDraftDetailOwnerRef.current = createdCampaignId;");
   const selected = block.indexOf("setSelectedCampaignId(createdCampaignId);");
   const modal = block.indexOf("setDetailModalOpen(true);");
   const detail = block.indexOf("await refreshCampaignDetail(session, createdCampaignId);");
@@ -155,13 +156,16 @@ test("new draft identity wins before detail and delayed list reconciliation", ()
 
   assert.ok(persisted >= 0);
   assert.ok(persisted < identity);
-  assert.ok(identity < selected);
+  assert.ok(identity < owner);
+  assert.ok(owner < selected);
   assert.ok(selected < modal);
   assert.ok(modal < detail);
   assert.ok(detail < list);
   assert.ok(block.includes("selectedIdRef.current === createdCampaignId"));
   assert.ok(block.includes("campaignSessionRef.current === session"));
   assert.ok(block.includes('"O novo rascunho foi salvo e selecionado, mas o detalhe ainda não pôde ser carregado.'));
+  assert.ok(pageSource.includes("if (createdDraftDetailOwnerRef.current === selectedCampaignId)"));
+  assert.ok(pageSource.includes("detail.campaign.id !== campaignId || detail.campaign.clientId !== activeSession.user.clientId"));
   assert.ok(!block.includes("await refreshCampaigns(session, created.campaign.id)"));
   assert.ok(!block.includes("setSelectedCampaign(detail.campaign)"));
 });
