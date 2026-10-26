@@ -122,6 +122,15 @@ else: raise SystemExit(2)
         for old, new in replacements.items():
             if old not in script: raise AssertionError(old)
             script = script.replace(old, new)
+        if behavior == "post-select-failure":
+            needle = 'atomic_select "$FINAL/frontend-runtime"\ntest "$(/usr/bin/readlink -f "$CURRENT/frontend")" = "$FINAL/frontend-runtime"'
+            replacement = 'atomic_select "$FINAL/frontend-runtime"\nfalse\ntest "$(/usr/bin/readlink -f "$CURRENT/frontend")" = "$FINAL/frontend-runtime"'
+            if needle not in script: raise AssertionError(needle)
+            script = script.replace(needle, replacement, 1)
+        if behavior == "readiness-fsync-failure":
+            needle = '/usr/bin/sync -f "$stdout_file" || {'
+            if needle not in script: raise AssertionError(needle)
+            script = script.replace(needle, 'false || {', 1)
         self.script = self.root / "executor.sh"; self.script.write_text(script); self.script.chmod(0o700)
         self.tx = self.root / "transaction"
         self.env = os.environ.copy(); self.env.update({
@@ -174,7 +183,7 @@ class FrontendExecutorTest(unittest.TestCase):
             finally:f.close()
 
     def test_pre_sample_predicate_mismatch_missing_and_timeout_all_rollback(self):
-        expected={"deny":"readiness_pm2_lexical_identity","mismatch":"READINESS_OBSERVABILITY_DEFECT","missing":"READINESS_OBSERVABILITY_DEFECT","timeout":"READINESS_OBSERVABILITY_DEFECT","guard-drift":"final_preservation"}
+        expected={"deny":"readiness_pm2_lexical_identity","mismatch":"READINESS_OBSERVABILITY_DEFECT","missing":"READINESS_OBSERVABILITY_DEFECT","timeout":"READINESS_OBSERVABILITY_DEFECT","readiness-fsync-failure":"READINESS_OBSERVABILITY_DEFECT:candidate-readiness:stdout_fsync_failed","guard-drift":"final_preservation"}
         for behavior,predicate in expected.items():
             f,r=self.run_case(behavior)
             try:
@@ -185,6 +194,17 @@ class FrontendExecutorTest(unittest.TestCase):
                     self.assertIn("partial stdout",(f.tx/"candidate-readiness.stdout.private.txt").read_text())
                     self.assertIn("partial stderr",(f.tx/"candidate-readiness.stderr.private.txt").read_text())
             finally:f.close()
+
+    def test_failure_after_atomic_replace_uses_observed_state_and_rolls_back(self):
+        f,r=self.run_case("post-select-failure")
+        try:
+            self.assertNotEqual(r.returncode,0)
+            state=json.loads((f.tx/"window-state.private.json").read_text())
+            self.assertEqual(state["state"],"ROLLED_BACK")
+            self.assertNotEqual(state["state"],"DENIED_BEFORE_MUTATION")
+            self.assertEqual((f.current/"frontend").resolve(),f.rollback/"frontend-runtime")
+            self.assertEqual(int(f.counter.read_text()),8)
+        finally:f.close()
 
     def test_guard_api_page_and_stable_path_denials_publish_receipts(self):
         cases=[{"guard_open":False},{"fail_path":"/health"},{"fail_path":"/app/inbox"}]
