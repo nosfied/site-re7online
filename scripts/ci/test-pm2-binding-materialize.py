@@ -102,7 +102,8 @@ class Fixture:
     def args(self):
         return MODULE.argparse.Namespace(
             role=self.role, target=self.target, release_id=self.release_id,
-            release_root=self.release, producer=self.producer, producer_sha256=sha(self.producer),
+            release_root=self.release, deployed_marker_sha256=None,
+            producer=self.producer, producer_sha256=sha(self.producer),
             control=self.control, control_sha256=sha(self.control),
             template_request=self.request, template_request_sha256=sha(self.request),
             template_source=self.source, template_source_sha256=sha(self.source), output=self.output,
@@ -201,6 +202,26 @@ class MaterializeTests(unittest.TestCase):
             self.assertNotEqual(a["sourceSha256"], b["sourceSha256"])
         finally:
             first.close(); second.close()
+
+    def test_rollback_accepts_only_an_explicit_authenticated_deployed_marker(self):
+        fixture = Fixture("rollback")
+        try:
+            marker = fixture.release / "DEPLOYED"; marker.write_text('{"state":"DEPLOYED"}\n'); marker.chmod(0o600)
+            with self.assertRaisesRegex(MODULE.Denied, "deployed_marker_sha256_required"):
+                MODULE.materialize(fixture.args())
+            args = fixture.args(); args.deployed_marker_sha256 = sha(marker)
+            with mock.patch.object(MODULE, "run_json", side_effect=fake_run_json):
+                result = MODULE.materialize(args)
+            self.assertEqual("PM2_BINDING_MATERIALIZED", result["result"])
+            candidate = Fixture("candidate")
+            try:
+                candidate_args = candidate.args(); candidate_args.deployed_marker_sha256 = "a" * 64
+                with self.assertRaisesRegex(MODULE.Denied, "candidate_operational_marker_forbidden"):
+                    MODULE.materialize(candidate_args)
+            finally:
+                candidate.close()
+        finally:
+            fixture.close()
 
     @unittest.skipUnless(REAL_CONTROL.exists(), "repository control plane unavailable")
     def test_generated_binding_is_accepted_by_real_control_plane(self):
