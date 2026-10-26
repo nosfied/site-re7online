@@ -94,6 +94,36 @@ pacote autenticado, após diagnóstico/correção e autorização aplicável; n�
    API/frontend/worker.
 5. Confirmar health, espaço/inodes, zero trabalho impeditivo e impacto de migration.
 6. Preparar evidência privada e destinos exclusivos; não executar `pm2 save`.
+7. Autenticar o executor versionado e persistido que fará a ativação. Bloco Bash
+   inline, comando colado ou executor efêmero não é procedimento de janela.
+
+O executor deve chamar o observador versionado com `--report`, redirecionar stdout e
+stderr para arquivos privados exclusivos e sincronizar esses três artefatos antes de
+qualquer decisão de retorno. Em falha, deve conservar literalmente `reason`,
+`sampleCount` e `samples`. Relatório ausente, inválido ou não durável é
+`READINESS_OBSERVABILITY_DEFECT`; nunca pode ser convertido em causa operacional
+genérica.
+
+## Escopo de ativação conforme a matriz de impacto
+
+A matriz de impacto aprovada é vinculante para a janela. O pacote canônico pode conter
+API e frontend completos, mas isso não autoriza selecionar ou reiniciar componente sem
+impacto. Quando o impacto comprovado for somente frontend:
+
+1. preservar o symlink e o processo da API, sem restart;
+2. capturar antes e depois PID, start ticks, restart count, CWD/script físicos,
+   entrypoint e health da API;
+3. promover e reiniciar somente o frontend, aplicando integralmente os gates de
+   readiness, BUILD_ID e smoke previstos abaixo;
+4. preservar o worker byte-operacionalmente;
+5. em negativa posterior à seleção, retornar somente o frontend ao destino autenticado.
+
+Qualquer divergência na API ou no worker nega a janela. O escopo reduzido não dispensa
+lock, verificação integral do pacote/release, capacidade, evidência durável, aceite ou
+a regra de um único `pm2 save`. O deploy não altera a guarda de campanhas: seu estado
+e geração são lidos dinamicamente e preservados, salvo autorização operacional separada.
+
+Para impacto API+frontend, seguir a sequência completa a seguir.
 
 ## Ativação fixed-current
 
@@ -111,6 +141,14 @@ pacote autenticado, após diagnóstico/correção e autorização aplicável; n�
 A ausência transitória do listener permite polling limitado; listener estrangeiro,
 PID instável, restart, identidade/hash/BUILD_ID divergente ou health inválido nega a
 janela. Preserve o primeiro erro de startup. Não ampliar timeout antes de diagnosticá-lo.
+
+Toda negativa deve persistir o predicado nominal interno produzido pelo observador e
+seu relatório sanitizado, além do rótulo da etapa externa. `sampleCount=0` não prova
+timeout nem falha do processo: pode significar negativa anterior à leitura do socket,
+como identidade lexical/física, symlink, interpreter, entrypoint ou BUILD_ID. Um rótulo
+genérico como `readiness_failed_before_first_stable_sample` não basta para corrigir ou
+autorizar nova tentativa. Primeiro identificar o predicado interno exato nas evidências
+já preservadas, sem repetir a ativação.
 
 ## Aceite, persistência e retorno
 

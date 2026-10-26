@@ -1,6 +1,6 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / DEPLOY A959 RELATADO EM 26/10/2026 / GUARDA FECHADA**
+**Status: CANÔNICO / DEPLOY A959 RELATADO EM 26/10/2026 / OPERAÇÕES DE CAMPANHA ABERTAS NA GERAÇÃO 41**
 
 Este documento define a arquitetura e os princípios vigentes. Os comandos executáveis
 estão somente no [runbook canônico](DEPLOY_RUNBOOK.md). Preparações e executores
@@ -94,6 +94,16 @@ O prazo expirado produz `READINESS_TIMEOUT:<component>:<port>` e obriga o retorn
 pelas definições autenticadas, sem `pm2 save`, marker `DEPLOYED` ou segunda tentativa.
 Os tempos monotônicos, total de amostras e resets de estabilidade são persistidos
 sem ambiente ou segredos. API e frontend usam prazo de 30 segundos.
+
+Uma negativa com zero amostras deve conservar a causa interna exata anterior ao socket;
+o coordenador não pode substituí-la apenas por uma classificação genérica. Diagnóstico
+posterior lê a evidência da tentativa encerrada e não reexecuta seleção/restart.
+
+A integração do observador pertence a executor versionado, persistido e autenticado.
+Bash inline não pode controlar janela: ele perde identidade revisável, linhas, comando
+falho e, como comprovado na tentativa d436 de 26/10, pode descartar o relatório nominal.
+O contrato mínimo é relatório `--report` mais stdout/stderr privados e duráveis; a
+ausência de qualquer um em falha resulta em `READINESS_OBSERVABILITY_DEFECT`.
 
 O observador versionado pode ser usado sem duplicar sua lógica. O driver
 `scripts/converta-deploy.py` e suas duas tentativas encerradas em 24/10 permanecem

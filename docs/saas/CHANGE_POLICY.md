@@ -167,6 +167,11 @@ Validacao manual:
 | --- | --- | --- | --- |
 | A - visual/docs | nao, salvo impacto indireto | leve | sim |
 | B - feature nova | condicional/obrigatorio se toca runtime | sim | sim |
+
+Para tipo A com impacto comprovado somente no frontend, a ativação também é
+frontend-only: API e worker são observados e preservados, não selecionados nem
+reiniciados. A homologação leve não reduz os gates de artefato, readiness, retorno,
+durabilidade ou aceite.
 | C - estrutural | sim quando toca atendimento/canais | sim | sim, ampliada |
 | D - migration | sim se toca runtime/dados | sim, staging/copia | sim, com backup |
 
