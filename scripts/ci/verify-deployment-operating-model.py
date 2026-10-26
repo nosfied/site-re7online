@@ -69,10 +69,10 @@ for marker in (
     'READINESS_TIMEOUT:{component}:{port}',
 ):
     require(marker in control, f"versioned readiness marker {marker}")
-frontend_executor = (ROOT / "scripts/frontend-only-activation.py").read_text()
+frontend_executor = (ROOT / "scripts/frontend-only-activation.sh").read_text()
 for marker in (
-    '"wait-readiness"', '"--report"', "READINESS_OBSERVABILITY_DEFECT",
-    '"AWAITING_ACCEPTANCE"', '"ROLLED_BACK"', "handoff_lock_to_private_holder",
+    "wait-readiness", "--report", "READINESS_OBSERVABILITY_DEFECT",
+    "AWAITING_ACCEPTANCE", "ROLLED_BACK", "handoff_lock",
 ):
     require(marker in frontend_executor, f"frontend-only executor marker {marker}")
 fixture = json.loads((ROOT / "scripts/ci/fixtures/pm2-readiness-race.sanitized.json").read_text())
