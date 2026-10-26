@@ -20379,3 +20379,27 @@ test("template submission reconciliation in bulk confirms the exact submission_u
   assert.equal(providerGets > 0, true);
   assert.equal(creationPosts, 0);
 });
+
+
+
+test("campaign availability protects access and closed uploads persist no assets", async () => {
+  const { campaignOperationsStatus, setCampaignOperations } = await import("../campaigns/campaignOperations.js");
+  const generation = campaignOperationsStatus().generation!;
+  setCampaignOperations(false, generation, "synthetic-test", "closed upload HTTP proof");
+  const before = await prisma.templateMediaAsset.count({ where: { clientId: businessClientId, purpose: "CAMPAIGN" } });
+  try {
+    const state = await request<{ operations: { open: boolean; code: string } }>("GET", "/app/campaigns/availability", businessAdmin);
+    assert.equal(state.status, 200);
+    assert.deepEqual(state.body, { ok: true, operations: { open: false, code: "campaign_operations_closed" } });
+    assert.equal((await request("GET", "/app/campaigns/availability", businessAgent)).status, 403);
+    const denied = await requestMultipart<ErrorPayload>("/app/templates/media", businessAdmin, mediaForm("CAMPAIGN"));
+    assert.equal(denied.status, 503, JSON.stringify(denied.body));
+    assert.equal(typeof denied.body.error === "object" ? denied.body.error.code : denied.body.error, "campaign_operations_closed");
+    assert.equal(await prisma.templateMediaAsset.count({ where: { clientId: businessClientId, purpose: "CAMPAIGN" } }), before);
+    const example = await requestMultipart<{ asset: { id: string } }>("/app/templates/media", businessAdmin, mediaForm());
+    assert.equal(example.status, 201, JSON.stringify(example.body));
+    assert.equal((await request("DELETE", `/app/templates/media/${example.body.asset.id}`, businessAdmin)).status, 200);
+  } finally {
+    setCampaignOperations(true, campaignOperationsStatus().generation!, "synthetic-test", "restore isolated fixture");
+  }
+});

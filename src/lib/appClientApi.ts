@@ -5717,3 +5717,12 @@ export function fetchAutomationConversationsSettings(session: AppSession): Promi
 export function updateAutomationConversationsSettings(session: AppSession, enabled: boolean): Promise<AutomationConversationsSettings> {
   return requestAppJson(session, "/app/settings/inbox/automation-conversations", { method: "PUT", body: JSON.stringify({ allowAutomationConversationsInInbox: enabled }) });
 }
+
+
+// A fresh read is advisory. Every mutation is independently admitted by the API.
+export async function fetchAppCampaignAvailability(session: AppSession): Promise<{
+  ok: true;
+  operations: { open: boolean; code: "campaign_operations_closed" | null };
+}> {
+  return requestAppJson(session, "/app/campaigns/availability", { method: "GET" });
+}
