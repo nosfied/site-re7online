@@ -2,9 +2,14 @@
 
 Status produtivo: **TECHNICALLY DEPLOYED / PRODUCTION HEALTHY**.
 
-Homologação funcional Meta: **SUBMISSÃO DE VÍDEO ACEITA / APROVAÇÃO META PENDENTE**.
+Homologação funcional: **CAMPANHA VIDEO MANUAL PASS — META, CRM E WEBHOOK READ CONFIRMADOS**.
+A aprovação pendente registrada em 24/10 é histórica; em 26/10 foi relatado template
+VIDEO aprovado e usado no envio controlado. IMAGE e demais cenários permanecem
+com aceite próprio.
 
-Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
+Admissão geral de campanhas: **REABERTURA AUTORIZADA PELO OWNER / EXECUÇÃO PENDENTE**.
+Liberação comercial/aceite específico de CRA-PR e de cenários ainda não homologados:
+**PENDING**; não confundir com reabertura da guarda global.
 
 Última atualização: 2026-10-26. Esta é a fonte canônica para cabeçalhos `IMAGE` e
 `VIDEO` em templates e campanhas. O estado produtivo geral continua em
@@ -19,8 +24,9 @@ recupera o histórico original do onboarding.
 API/frontend relatados em `immutable-a959129e-vps-20261026T023100Z`, target
 `a959129e39a07c52881fb7f5cbf21a7f6f1a80ff`, BUILD_ID `CbNbnlr0VJVv5mME_hvxm`.
 [Registro ativo](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json).
-Guarda de campanhas fechada; correção de disponibilidade e admissão de upload
-implantada. Próximo ato e limites estão no
+Última observação: guarda fechada na geração 40 após homologação VIDEO bem-sucedida;
+correção de disponibilidade/admissão implantada. Owner autorizou reabertura geral,
+a executar pelo Codex local pelo mecanismo canônico após revalidação fresca. Próximo ato e limites estão no
 [roteiro de homologação](CAMPAIGN_OPERATIONS_READINESS.md).
 Aprovação observada em 24/10 é histórica; não é consulta atual à Meta.
 

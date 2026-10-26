@@ -1,6 +1,6 @@
 {
   "schemaVersion": 6,
-  "updatedAtUtc": "2026-10-26T11:05:53Z",
+  "updatedAtUtc": "2026-10-26T11:48:09Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json",
   "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json",
@@ -180,6 +180,34 @@
         "evidenceManifestSha256": "d0e8cb9eee4977bdb2225413db5b738232788ffa450300c0f52e803bc2c3466f",
         "artifactsPreserved": true,
         "commercialOrGeneralOpeningAuthorized": false
+      },
+      "generalRelease": {
+        "decision": "OWNER_AUTHORIZED_GENERAL_REOPENING_PENDING_EXECUTION",
+        "authorizationDate": "2026-10-26",
+        "scope": "RESTORE_GLOBAL_CAMPAIGN_ADMISSION_UNDER_EXISTING_RBAC_TENANT_FEATURE_CONSENT_AND_PROVIDER_GUARDS",
+        "basis": [
+          "CI_A959_PASS",
+          "DOCUMENTATION_PR227_CI_40317358406_PASS",
+          "OUT15_INCIDENT_CLOSED_20261012",
+          "GLOBAL_INVENTORY_ZERO_AUTOMATICALLY_ELIGIBLE",
+          "SINGLE_MANUAL_VIDEO_META_CRM_WEBHOOK_PASS",
+          "GUARD40_CLOSED_DRAINED_NO_PENDING_RESULTS"
+        ],
+        "executor": "LOCAL_CODEX_WITH_EXISTING_VPS_ACCESS",
+        "mechanism": "CANONICAL_ADMIN_OPERATIONS_CAS_FRESH_GENERATION",
+        "openingExecuted": false,
+        "observedOpenRemains": false,
+        "confirmationRequiredFromLocalExecutor": true,
+        "noNewBuildDeployRestartOrSave": true,
+        "noScriptedSendOrHistoricalReplay": true,
+        "closeAfterEachRemainingHomologation": false,
+        "automaticUncertaintyProtectionPreserved": true,
+        "remainingAcceptance": [
+          "IMAGE_END_TO_END",
+          "SCHEDULING_AND_MULTIBATCH_WHEN_PLANNED",
+          "OTHER_CLIENT_SPECIFIC_ACCEPTANCE"
+        ],
+        "remainingAcceptanceDoesNotReclassifyVideoResult": true
       }
     }
   },

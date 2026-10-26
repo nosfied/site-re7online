@@ -1,6 +1,6 @@
 # Campanhas: disponibilidade, mídia e homologação
 
-Atualizado em 26/10/2026: **SEND_ACCEPTED_GUARD_CLOSED — UM ENVIO DE VÍDEO HOMOLOGADO**. O deploy a959 foi concluído
+Atualizado em 26/10/2026: **VÍDEO HOMOLOGADO / REABERTURA GERAL AUTORIZADA, EXECUÇÃO PENDENTE**. O deploy a959 foi concluído
 conforme relatório do Codex local encaminhado pelo owner; não houve abertura da
 guarda nem envio nessa janela. O editor documental não fez nova inspeção da VPS. Os históricos continuam válidos
 no seu escopo e não são instruções para repetir recuperação ou envio.
@@ -277,3 +277,63 @@ visual com fixtures que não tenham sido executados e relatados separadamente.
 A guarda continua fechada por encerramento da janela, não por falha do teste.
 Próximo ato: revisar o aceite e decidir as homologações restantes/liberação geral;
 sem novo build/deploy/save ou reenvio para produzir prova repetida.
+
+## Decisão posterior do owner — reabertura geral autorizada em 26/10
+
+O owner autorizou a liberação geral após conferir atendimento ao ajuste documentado.
+O ajuste de disponibilidade/admissão está implantado; CI do target a959 passou e o
+PR documental #227 no head `c7007bed` passou em 4/4 jobs (run 40317358406).
+O envio manual comprovou a integração VIDEO/Meta/CRM/webhook sem pendências, e o
+inventário não encontrou trabalho antigo automaticamente elegível. O incidente
+out.15 está encerrado desde 12/10; não é bloqueio remanescente a repetir.
+
+**Estado da autorização: GENERAL_REOPENING_AUTHORIZED_PENDING_EXECUTION.**
+Último estado efetivamente relatado: guarda fechada, geração 40, drained=true.
+Este documento não declara a guarda aberta sem retorno do Codex local.
+
+### Ato autorizado ao Codex local
+
+1. Revalidar somente estado necessário imediatamente antes da abertura: release e
+   health, ledger/generation/topologia, ausência de uncertain e tarefas pendentes;
+   inventário de jobs reclamáveis, campanhas vencidas, controladores recuperáveis
+   e resultados incertos, com disposição dos históricos preservada. Reutilizar
+   leitores compatíveis; não repetir builds, homologação de vídeo ou recuperação.
+2. Se o estado continuar compatível com a auditoria/encerramento, abrir uma vez por
+   `POST /admin/ops/campaign-execution`, com autenticação canônica, geração então
+   observada e motivo de liberação geral pelo owner. Não fixar 40 nem repetir CAS
+   em conflito ou resposta incerta. Se houver trabalho inesperado, apresentar o
+   efeito concreto antes de abrir; não cancelar ou reclassificar para passar.
+3. Conferir resposta e ledger, geração posterior, availability autenticada aberta,
+   health e ausência de pendência no encerramento do ato. Preservar recibo/auditoria
+   e devolver evidência sanitizada ao owner; não chamar provider para fabricar teste.
+4. Depois de confirmada a abertura, manter a admissão geral disponível. A regra de
+   fechar ao fim de cada teste dizia respeito à janela manual anterior e não se
+   aplica à liberação geral agora autorizada. Proteções canônicas de incerteza,
+   idempotência, RBAC/tenant/feature, consentimento, categoria e limites continuam
+   obrigatórias. Não alterar parâmetros de segurança, PM2, cron ou scheduler.
+
+Abertura libera operações normais dos tenants e o scheduler já existente; não é
+um novo envio, agendamento ou retomada por script. A exclusão de uso por outros
+operadores durante o teste anterior não deve ser descrita como permanente após
+esta liberação. A navegação normal pode sincronizar templates; a restrição zero
+Meta era da preparação técnica, não um bloqueio novo à utilização autorizada.
+Não excluir mídia/campanhas ou reenviar resultados aceitos. Não fazer novo save.
+
+### Continuidade das homologações
+
+- VIDEO manual de um destinatário: PASS; não repetir para obter a mesma prova.
+- IMAGE: próxima homologação de mídia, com template aprovado, arquivo coerente e
+  destinatário controlado definidos antes da operação. Confirmar mídia, campanha,
+  CRM e webhook; não inferir esse aceite a partir do vídeo.
+- Agendamento/multilote e cenários específicos de clientes continuam com seus
+  roteiros e aceite próprios, sem impedir por si só a reabertura autorizada da
+  admissão existente. Não declarar essas provas executadas.
+- Negativas de guarda, tradução, RBAC/tenant e proteção de storage têm provas de
+  código/CI; os cenários de interface que não receberam relato continuam separados.
+- Testes adicionais com envio precisam de escopo/destinatário confirmados. A
+  liberação geral permite uso normal, mas não autoriza o Codex a disparar testes
+  adicionais indiscriminados nem retomar lotes históricos por conta própria.
+
+Liberação comercial de funcionalidades/contratos específicos (incluindo CRA-PR)
+não é automaticamente declarada por abrir a guarda. Registrar o resultado efetivo
+da reabertura antes de marcar GENERAL_OPERATIONS_OPEN.

@@ -60,9 +60,11 @@ este estado posterior; o novo hash do ledger não foi fornecido.
 Índice privado da janela:
 `d0e8cb9eee4977bdb2225413db5b738232788ffa450300c0f52e803bc2c3466f`.
 Estado: **SEND_ACCEPTED_GUARD_CLOSED**. O aceite cobre esse envio de vídeo, não
-IMAGE, agendamento, multilote ou uso amplo. Próximo ato: revisão do resultado e
-decisão do owner sobre demais homologações/liberação operacional, conforme
-[roteiro](CAMPAIGN_OPERATIONS_READINESS.md). Não repetir o envio de teste.
+IMAGE, agendamento, multilote ou uso amplo. Próximo ato: **reabertura geral autorizada pelo owner, pendente de execução pelo
+Codex local**, conforme [roteiro](CAMPAIGN_OPERATIONS_READINESS.md). Revalidar o
+estado antes do CAS e registrar o resultado; não repetir vídeo, build/deploy/save.
+A guarda permanece documentada como fechada até confirmação da abertura.
+Homologação IMAGE e demais cenários mantêm seu escopo próprio.
 
 ## Templates de Utilidade — leitura local
 
