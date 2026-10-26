@@ -101,9 +101,12 @@ def run_json(command: list[str], label: str) -> dict[str, Any]:
 
 
 def component_identity(release_root: Path, release_id: str, target: str,
-                       producer: Path, component: str) -> tuple[dict[str, Any], dict[str, Any]]:
+                       producer: Path, component: str,
+                       deployed_marker_sha256: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     command = [sys.executable, str(producer), "verify", "--release-root", str(release_root),
                "--target", target, "--release-id", release_id, "--components", "api,frontend"]
+    if deployed_marker_sha256 is not None:
+        command.extend(("--deployed-marker-sha256", deployed_marker_sha256))
     first = run_json(command, "release_verify_before")
     if first.get("result") != "RELEASE VERIFIED":
         deny("release_verify_result")
@@ -170,6 +173,13 @@ def write_exclusive(path: Path, raw: bytes) -> None:
 def materialize(args: argparse.Namespace) -> dict[str, Any]:
     if args.role not in ROLES or not SHA40.fullmatch(args.target):
         deny("argument_identity")
+    marker = args.release_root / "DEPLOYED"
+    if args.deployed_marker_sha256 is not None:
+        expected_digest(args.deployed_marker_sha256, "deployed_marker_sha256")
+        if args.role != "rollback":
+            deny("candidate_operational_marker_forbidden")
+    if (marker.exists() or marker.is_symlink()) and args.deployed_marker_sha256 is None:
+        deny("deployed_marker_sha256_required")
     for label, path in (("release_root", args.release_root), ("producer", args.producer),
                         ("control", args.control), ("template_request", args.template_request),
                         ("template_source", args.template_source), ("output", args.output)):
@@ -207,7 +217,7 @@ def materialize(args: argparse.Namespace) -> dict[str, Any]:
 
     release_evidence, release = component_identity(
         args.release_root.resolve(strict=True), args.release_id, args.target,
-        args.producer, "frontend")
+        args.producer, "frontend", args.deployed_marker_sha256)
     definition = source.get("definition")
     if not isinstance(definition, dict) or not isinstance(definition.get("apps"), list) or len(definition["apps"]) != 1:
         deny("template_definition")
@@ -295,6 +305,7 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--target", required=True)
     value.add_argument("--release-id", required=True)
     value.add_argument("--release-root", type=Path, required=True)
+    value.add_argument("--deployed-marker-sha256")
     value.add_argument("--producer", type=Path, required=True)
     value.add_argument("--producer-sha256", required=True)
     value.add_argument("--control", type=Path, required=True)

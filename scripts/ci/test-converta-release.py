@@ -164,9 +164,12 @@ class ReleaseProducerTest(unittest.TestCase):
         shutil.copytree(self.release, destination, symlinks=True)
         return destination
 
-    def verify(self, root: Path) -> subprocess.CompletedProcess[str]:
-        return invoke("verify", "--release-root", str(root), "--target", self.target,
-                      "--release-id", self.release_id, "--components", COMPONENTS)
+    def verify(self, root: Path, marker_sha256: str | None = None) -> subprocess.CompletedProcess[str]:
+        arguments = ["verify", "--release-root", str(root), "--target", self.target,
+                     "--release-id", self.release_id, "--components", COMPONENTS]
+        if marker_sha256 is not None:
+            arguments.extend(("--deployed-marker-sha256", marker_sha256))
+        return invoke(*arguments)
 
     def assert_denied(self, result: subprocess.CompletedProcess[str], predicate: str) -> None:
         self.assertEqual(result.returncode, 2, (result.stdout, result.stderr))
@@ -233,6 +236,32 @@ class ReleaseProducerTest(unittest.TestCase):
         self.assertEqual(metadata["outputFile"], output_path.name)
         self.assertEqual(metadata["outputSize"], len(secret_output.encode()))
         self.assertEqual(metadata["outputSha256"], hashlib.sha256(secret_output.encode()).hexdigest())
+
+    def test_authenticated_deployed_marker_is_the_only_allowed_operational_addition(self) -> None:
+        root = self.copy_release("deployed-marker")
+        marker = root / "DEPLOYED"
+        write(marker, '{"state":"DEPLOYED"}\n', 0o600)
+        marker_sha256 = hashlib.sha256(marker.read_bytes()).hexdigest()
+        self.assert_denied(self.verify(root), "release_root_inventory")
+        accepted = self.verify(root, marker_sha256)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertEqual(json.loads(accepted.stdout)["operationalMarkerSha256"], marker_sha256)
+        self.assert_denied(self.verify(root, "0" * 64), "deployed_marker_mismatch")
+        marker.chmod(0o644)
+        self.assert_denied(self.verify(root, marker_sha256), "deployed_marker_identity")
+
+    def test_deployed_marker_symlink_and_package_override_are_denied(self) -> None:
+        root = self.copy_release("deployed-marker-symlink")
+        marker = root / "DEPLOYED"
+        marker.symlink_to(root / "manifest.json")
+        self.assert_denied(self.verify(root, hashlib.sha256((root / "manifest.json").read_bytes()).hexdigest()),
+                           "not_regular:DEPLOYED")
+        package_result = invoke(
+            "verify", "--package", str(self.package), "--target", self.target,
+            "--release-id", self.release_id, "--components", COMPONENTS,
+            "--deployed-marker-sha256", "a" * 64,
+        )
+        self.assert_denied(package_result, "deployed_marker_package")
 
     def test_runtime_addition_denied(self) -> None:
         root = self.copy_release("extra")
