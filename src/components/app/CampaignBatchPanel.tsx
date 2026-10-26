@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CampaignItem } from "@/lib/whatsappAdminApi";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
-import { getCampaignExecutionLabel } from "@/lib/campaignPresentation";
+import { getCampaignOperationalWarning, getCampaignPresentationLabel } from "@/lib/campaignPresentation";
 import { getCampaignUserFacingError } from "@/lib/campaignDrafts";
 
 type Props = {
@@ -108,7 +108,7 @@ export default function CampaignBatchPanel(props: Props) {
       <details open={aggregateOpen} onToggle={event => setAggregateOpen(event.currentTarget.open)} id={`batch-summary-${batch.id}`}>
         <summary className="cursor-pointer rounded px-1 py-2 font-semibold text-cyan-100 focus:outline-none focus:ring-2 focus:ring-re7-sky/70">Conjunto de campanhas — {batch.name}</summary>
         <div className="grid min-w-0 gap-3 pt-2">
-          <p className="text-xs text-cyan-100/75">{props.sourceLabel(batch.sourceMode)} · {batch.chunkCount} lote(s) · {getCampaignExecutionLabel(batch.executionState?.state) ?? props.statusLabel(batch.status)}</p>
+          <p className="text-xs text-cyan-100/75">{props.sourceLabel(batch.sourceMode)} · {batch.chunkCount} lote(s) · {getCampaignPresentationLabel({ status: batch.status, executionState: batch.executionState })}</p>
           {isChild ? <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4" aria-label="Totais do conjunto">
             <div><dt>Destinatários</dt><dd>{total}</dd></div><div><dt>Processados</dt><dd>{batch.progress.sentCount}</dd></div>
             <div><dt>Bloqueados</dt><dd>{batch.progress.blockedCount}</dd></div><div><dt>{batch.executionState?.state === "cancelled" ? "Não enviados" : "Pendentes"}</dt><dd>{batch.executionState?.state === "cancelled" ? (batch.progress.notSubmittedCount ?? 0) : batch.progress.pendingCount}</dd></div>
@@ -120,12 +120,18 @@ export default function CampaignBatchPanel(props: Props) {
           <div className="overflow-x-auto rounded border border-white/10">
             <table className="w-full min-w-[620px] text-sm">
               <thead className="bg-white/10 text-left text-xs uppercase text-white/65"><tr><th className="p-2">Lote</th><th className="p-2">Estado / fila</th><th className="p-2">Resultados</th><th className="p-2">Acesso</th></tr></thead>
-              <tbody>{batch.chunks.map(chunk => <Fragment key={chunk.campaignId}>
+              <tbody>{batch.chunks.map(chunk => {
+                const operationalWarning = getCampaignOperationalWarning(chunk);
+                return <Fragment key={chunk.campaignId}>
                 <tr className="border-t border-white/10">
                   <td className="p-2"><button type="button" className="rounded text-left text-sky-200 focus:outline-none focus:ring-2 focus:ring-re7-sky/70" aria-expanded={expanded === chunk.campaignId} aria-controls={`lot-${chunk.campaignId}`} onClick={() => setExpanded(id => id === chunk.campaignId ? null : chunk.campaignId)}>
                     {expanded === chunk.campaignId ? "▾" : "▸"} {chunk.chunkIndex}/{batch.chunkCount} — {chunk.name}
                   </button></td>
-                  <td className="p-2">{getCampaignExecutionLabel(chunk.executionState?.state) ?? props.statusLabel(chunk.status)}{getCampaignExecutionLabel(chunk.executionState?.state) ? null : <><br /><span className="text-xs text-white/65">{props.queueLabel(chunk.queueStatus, chunk.queuePosition)}</span></>}</td>
+                  <td className="p-2">
+                    {getCampaignPresentationLabel(chunk)}
+                    <br /><span className="text-xs text-white/65">{props.queueLabel(chunk.queueStatus, chunk.queuePosition)}</span>
+                    {operationalWarning ? <span className="mt-1 block text-xs text-amber-100">{operationalWarning.label}</span> : null}
+                  </td>
                   <td className="p-2">{chunk.totalRecipients > 0 ? `${chunk.totalRecipients} materializado(s)` : `${chunk.recipientCount} previsto(s)`}
                     {chunk.totalRecipients !== chunk.recipientCount ? <> · {chunk.totalRecipients > 0 ? `${chunk.recipientCount} previsto(s)` : "0 materializado(s)"}</> : null}
                     {chunk.totalRecipients === 0 && (chunk.status === "draft" || chunk.status === "scheduled") ? <span className="block text-xs text-white/65">Aguardando materialização</span> : null}
@@ -144,7 +150,7 @@ export default function CampaignBatchPanel(props: Props) {
                     <p className="text-xs text-white/65">Ações individuais disponíveis em “Abrir lote por ID”. As ações do conjunto permanecem no resumo.</p>
                   </div>
                 </td></tr> : null}
-              </Fragment>)}</tbody>
+              </Fragment>})}</tbody>
             </table>
           </div>
         </div>

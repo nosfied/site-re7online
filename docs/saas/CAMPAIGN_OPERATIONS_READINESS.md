@@ -441,3 +441,21 @@ código precisa ser revisada, implantada e aceita antes da homologação de agen
 Ela não autoriza envio, descarte do rascunho, nova chamada Meta ou repetição das
 homologações IMAGE/VIDEO.
 
+## Precedência entre lifecycle e observação operacional
+
+O estado terminal persistido da campanha é a situação canônica apresentada na lista,
+detalhe, fila e lotes. Um `executionState` transitório ou residual nunca substitui
+`completed`, `failed`, `blocked` ou `cancelled` no badge. Para `cancelled`, o evento
+persistido distingue `campaign.draft.discarded` (rascunho descartado antes de envio)
+de `campaign.cancelled` (campanha iniciada com envios restantes encerrados).
+
+Uma aceitação do provedor sem outbound local correspondente permanece observável,
+mas em alerta operacional separado, com o predicado
+`provider_acceptance_persistence_pending` e sua evidência. O alerta não altera nem
+apaga o lifecycle terminal e não autoriza retry. Lista e detalhe usam a mesma função
+de classificação; painéis de fila/lote preservam a mesma precedência.
+
+A candidata `immutable-123ba7bd-vps-20261026T200100Z` e o PR #240 ficaram
+superados pela correção desta precedência, mas permanecem preservados. Não instalar,
+mesclar, apagar ou reaproveitar seus bindings implicitamente.
+

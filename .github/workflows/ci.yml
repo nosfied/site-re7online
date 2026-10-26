@@ -187,4 +187,6 @@ jobs:
           apps/whatsapp-agent/node_modules/.bin/tsx --test
           src/app/app/campaigns/campaignsPageContract.test.ts
           src/lib/campaignComposerLifecycle.test.ts
+          src/lib/campaignPresentation.test.ts
+          apps/whatsapp-agent/src/campaigns/campaignLifecyclePresentation.test.ts
 

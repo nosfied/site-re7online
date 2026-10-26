@@ -111,6 +111,13 @@ A fotografia somente leitura de capacidade está em
 candidatos para revisão, mas não autoriza remoção, arquivamento, retenção, alteração
 de cron ou execução de scripts. Nenhum arquivo ou serviço foi alterado na auditoria.
 
+A fotografia global de 26/10/2026 está em
+[VPS_CAPACITY_AUDIT_2026-10-26.md](VPS_CAPACITY_AUDIT_2026-10-26.md). Ela registra
+6,45 GB em outputs, 4,09 GB em worktrees, 29,94 GB em releases e 13,48 GB em
+preparações, sem inferir que tudo seja removível. O ganho seguro imediato é zero; a
+intenção condicionada permanece `NOT_AUTHORIZED`. PR #240 e a candidata `123ba7bd`
+foram superados pela correção de apresentação terminal, mas continuam preservados.
+
 ## Rota operacional
 
 A única instrução executável vigente é o [runbook canônico](DEPLOY_RUNBOOK.md).
