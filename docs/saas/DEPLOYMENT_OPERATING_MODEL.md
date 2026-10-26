@@ -99,6 +99,12 @@ Uma negativa com zero amostras deve conservar a causa interna exata anterior ao 
 o coordenador não pode substituí-la apenas por uma classificação genérica. Diagnóstico
 posterior lê a evidência da tentativa encerrada e não reexecuta seleção/restart.
 
+A integração do observador pertence a executor versionado, persistido e autenticado.
+Bash inline não pode controlar janela: ele perde identidade revisável, linhas, comando
+falho e, como comprovado na tentativa d436 de 26/10, pode descartar o relatório nominal.
+O contrato mínimo é relatório `--report` mais stdout/stderr privados e duráveis; a
+ausência de qualquer um em falha resulta em `READINESS_OBSERVABILITY_DEFECT`.
+
 O observador versionado pode ser usado sem duplicar sua lógica. O driver
 `scripts/converta-deploy.py` e suas duas tentativas encerradas em 24/10 permanecem
 como evidência histórica; não são a instrução vigente de seleção até requalificação.

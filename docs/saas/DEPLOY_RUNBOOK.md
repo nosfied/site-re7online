@@ -94,6 +94,15 @@ pacote autenticado, após diagnóstico/correção e autorização aplicável; n�
    API/frontend/worker.
 5. Confirmar health, espaço/inodes, zero trabalho impeditivo e impacto de migration.
 6. Preparar evidência privada e destinos exclusivos; não executar `pm2 save`.
+7. Autenticar o executor versionado e persistido que fará a ativação. Bloco Bash
+   inline, comando colado ou executor efêmero não é procedimento de janela.
+
+O executor deve chamar o observador versionado com `--report`, redirecionar stdout e
+stderr para arquivos privados exclusivos e sincronizar esses três artefatos antes de
+qualquer decisão de retorno. Em falha, deve conservar literalmente `reason`,
+`sampleCount` e `samples`. Relatório ausente, inválido ou não durável é
+`READINESS_OBSERVABILITY_DEFECT`; nunca pode ser convertido em causa operacional
+genérica.
 
 ## Escopo de ativação conforme a matriz de impacto
 
