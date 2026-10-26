@@ -411,3 +411,14 @@ test("app shell keeps mobile title and content below the variable-height navigat
   assert.ok(appShellSource.includes('"hidden sm:block sm:h-[244px]'));
 });
 
+
+
+test("campaign admission denial preserves media already stored by another admitted operation", () => {
+  const start = pageSource.indexOf("const handleClosedCampaignAttempt =");
+  const end = pageSource.indexOf("const stored = loadAppSession()", start);
+  const handler = pageSource.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.ok(handler.includes("setCampaignOperationsOpen(false)"));
+  assert.ok(!handler.includes("deleteAppTemplateMedia"));
+  assert.ok(!handler.includes("discardUnpersistedTemplateMedia"));
+});

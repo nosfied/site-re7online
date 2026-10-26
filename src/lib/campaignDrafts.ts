@@ -129,17 +129,6 @@ export function isCampaignOperationsClosedError(error: CampaignApiErrorLike) {
   return String(error.errorCode || payloadCode || "").trim().toLowerCase() === "campaign_operations_closed";
 }
 
-// Only a definitive gate denial proves that campaign creation never started.
-// The delete endpoint independently rejects linked or foreign assets.
-export async function discardCampaignMediaAfterAdmissionDenial(
-  error: CampaignApiErrorLike,
-  assetId: string,
-  discard: (id: string) => Promise<unknown>,
-): Promise<boolean> {
-  if (!assetId || !isCampaignOperationsClosedError(error)) return false;
-  try { await discard(assetId); return true; } catch { return false; }
-}
-
 export function getCampaignUserFacingError(error: CampaignApiErrorLike, fallback: string) {
   const code = String(error.errorCode ?? "").trim().toLowerCase();
   const payload =

@@ -16,7 +16,6 @@ import {
   buildCampaignReuseState,
   getCampaignUserFacingError,
   isCampaignOperationsClosedError,
-  discardCampaignMediaAfterAdmissionDenial,
   getFriendlyCampaignError,
 } from "@/lib/campaignDrafts";
 import {
@@ -934,7 +933,7 @@ export default function AppCampaignsPage() {
       setCampaignOperationsOpen(open);
       setCampaignAvailabilityError(null);
       if (open) return true;
-      await handleClosedCampaignAttempt({ errorCode: "campaign_operations_closed" });
+      handleClosedCampaignAttempt({ errorCode: "campaign_operations_closed" });
       setFormError(getCampaignUserFacingError({ errorCode: "campaign_operations_closed" }, ""));
     } catch (error) {
       setCampaignOperationsOpen(false);
@@ -947,22 +946,12 @@ export default function AppCampaignsPage() {
     return false;
   };
 
-  const handleClosedCampaignAttempt = async (error: unknown) => {
+  const handleClosedCampaignAttempt = (error: unknown) => {
     if (!isCampaignOperationsClosedError(error as { errorCode?: string; payload?: unknown })) return;
     setCampaignOperationsOpen(false);
-    // Only a definitive admission denial proves this request never created a
-    // campaign. Never delete after a timeout, transport failure or generic 5xx.
-    const assetId = form.templateMediaAssetId;
-    if (!session || !assetId) return;
-    const removed = await discardCampaignMediaAfterAdmissionDenial(
-      error as { errorCode?: string; payload?: unknown }, assetId,
-      id => deleteAppTemplateMedia(session, id),
-    );
-    if (removed) {
-      setForm(current => current.templateMediaAssetId === assetId
-        ? { ...current, templateMediaAssetId: "", templateMediaFileName: "" } : current);
-      setTemplateMediaMetadata(null);
-    }
+    // A definitive denial covers this request, not another admitted request
+    // which might still reference the same asset. Preserve previously stored
+    // media until its references can be reviewed safely.
   };
 
   useEffect(() => {
@@ -1545,6 +1534,7 @@ export default function AppCampaignsPage() {
           <p className="mt-2 text-xs text-white/70">
             Use mídia coerente com o texto e a categoria do modelo. Uma promoção exige modelo de marketing;
             a aprovação da mídia de exemplo não autoriza conteúdo promocional em um modelo de utilidade.
+            Mídia já carregada permanece preservada se a criação for suspensa.
           </p>
           <p className="mt-2 text-xs text-white/55">
             {uploadingTemplateMedia
@@ -2185,7 +2175,7 @@ export default function AppCampaignsPage() {
         "Confira a situação na campanha e na caixa de entrada, quando houver conversa associada."
       );
     } catch (err) {
-      await handleClosedCampaignAttempt(err);
+      handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
@@ -2767,7 +2757,7 @@ export default function AppCampaignsPage() {
         `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
       );
     } catch (err) {
-      await handleClosedCampaignAttempt(err);
+      handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
@@ -2889,7 +2879,7 @@ export default function AppCampaignsPage() {
         `${response.campaigns.length} rascunho(s) criados sem envio automático.`
       );
     } catch (err) {
-      await handleClosedCampaignAttempt(err);
+      handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string; details?: { plan?: AppCampaignAudienceSplitPlan } };
       if (typed.status === 401) {
         handleUnauthorized();
@@ -2979,7 +2969,7 @@ export default function AppCampaignsPage() {
         "Os destinatários finais serão definidos no momento do envio."
       );
     } catch (err) {
-      await handleClosedCampaignAttempt(err);
+      handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
@@ -3238,7 +3228,7 @@ export default function AppCampaignsPage() {
         `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.readyToImport} destinatários elegíveis.`
       );
     } catch (err) {
-      await handleClosedCampaignAttempt(err);
+      handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();

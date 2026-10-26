@@ -33,9 +33,14 @@ O cliente também não traduzia esse código, exibindo erro genérico.
 - O código de suspensão recebe mensagem em português, inclusive nos envelopes
   de erro plano e estruturado. Falha de storage não é convertida em negativa de
   admissão: o resultado pode exigir investigação, não descarte automático.
-- Descarte pelo compositor ocorre somente após negativa nominal e definitiva
-  de admissão. O endpoint existente ainda exige tenant/autor e ausência de
-  referências. Timeout, erro de transporte e 5xx genérico preservam a mídia.
+- Mídia já carregada é preservada quando a criação é negada, inclusive por uma
+  negativa definitiva. Essa negativa cobre a requisição atual; não exclui outro
+  trabalho já admitido que possa estar vinculando o mesmo asset. O endpoint de
+  descarte existente faz leitura de referências seguida de soft-delete e remoção
+  física, sem provar exclusão concorrente de todos os escritores de referência.
+  Portanto, não foi introduzido descarte automático de mídia por falha de criação.
+  Uma retirada futura exige revisão de referências e exclusão desses escritores.
+  Timeout, erro de transporte e 5xx genérico também preservam a mídia.
 - Os dois assets órfãos históricos não são removidos por esta preparação.
   Reuso de hash entre campanhas não foi introduzido: requer contrato de posse,
   referência e descarte próprio, para não apagar mídia compartilhada.
@@ -61,7 +66,7 @@ de cada mídia de envio pela Meta.
 1. Homologar em isolamento: guarda fechada/indisponível nega upload antes de
    storage; fechamento entre prévia e upload também nega; tarefa admitida impede
    drain até terminar; exemplos continuam disponíveis; RBAC/tenant/feature,
-   tradução e descarte conservador passam nos testes.
+   tradução e preservação de mídia em negativa passam nos testes.
 2. Revisar CI, impacto API/frontend e artefato único. Medir capacidade e pico,
    preservar retorno API/frontend e worker físico, aplicar o modelo canônico de
    implantação. Produzir uma única geração e classificar seus resíduos ao final.
