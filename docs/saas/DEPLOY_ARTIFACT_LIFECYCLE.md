@@ -122,13 +122,96 @@ isolamento de escritores. O relatório calcula espaço pendente por geração, m
 `withdrawalEligible=false`: decisão, allowlist literal, revalidação e autorização
 continuam externas.
 
-## Inventário consolidado de 25/10/2026
+## Método de capacidade e encerramento por geração
+
+Este método aplica os princípios existentes de retenção e a regra antiespiral da
+[política de mudanças](CHANGE_POLICY.md#regra-de-encerramento-e-antiespiral).
+Uma negativa preserva a produção; ela não autoriza outra cadeia de cópias, novo
+framework ou repetição automática. Reutilizar bytes e provas cuja validade ainda
+possa ser demonstrada.
+
+| Momento | Registro e decisão obrigatórios |
+| --- | --- |
+| Antes de nova cópia, build ou compactação | Medição atual de bytes/inodes por filesystem e executor; artefatos compatíveis reutilizáveis; resíduos anteriores classificados; justificativa de cada nova cópia; pico de coexistência e reserva operacional preservada |
+| Depois do build, com sucesso ou falha | Inventário dos resíduos por geração: dependências, compilados, runtime copiado, pacote, extrações, staging e diagnósticos; finalidade, responsável e decisão para cada categoria |
+| Antes de iniciar outra geração volumosa | Revisar a pendência anterior; não criar outra cópia dispensável com classificação pendente. Necessidade operacional concreta de coexistência deve estar justificada e caber no orçamento medido |
+| Antes de retirada autorizada | Vincular os inventários atuais às provas autenticadas anteriores; verificar as referências operacionais, o retorno compatível e os componentes protegidos sob o lock vigente |
+| Depois de cada comando | Registrar tentativa durável, exit code, estado remanescente e registro Git quando aplicável; resultado parcial impede o comando seguinte |
+| Encerramento | Ausências e identidades operacionais conferidas, capacidade/inodes antes e depois, recibo com durabilidade confirmada e evidências sob custódia verificável |
+
+A reserva não é um percentual escolhido para obter PASS nem o saldo de uma medição
+antiga. Ela deve cobrir a operação, retornos, banco/WAL, crescimento no horizonte da
+janela e evidências segundo os contratos vigentes. Contar blocos únicos; não somar
+duas vezes subdiretórios, hardlinks ou cópias compartilhadas. Renomear no mesmo
+filesystem não recupera espaço.
+
+Separar executáveis operacionais e retorno compatível de dependências regeneráveis
+e payloads redundantes. Manifestos, pacotes e diagnósticos não precisam acompanhar
+automaticamente todas as cópias de runtime na VPS. Conteúdo único depende de decisão
+de preservação e custódia; nenhum dado de tenant, mídia, banco ou backup entra na
+retenção de executáveis por extensão desta regra. Nenhuma remoção é autorizada por
+idade, nome ou tamanho.
+
+### Diagnóstico dirigido, teste do executor e evidência proporcional
+
+Antes de pedir autenticação ao operador, revisar o procedimento inteiro e ensaiar o
+executor real, substituindo somente as operações externas necessárias. Validar os
+destinos novos, ancestrais, UID/GID efetivos, legibilidade dos auxiliares, hashes,
+argumentos, lock, limites medidos, traps e publicação do recibo. Um teste com
+identidade simulada não comprova acesso sob o UID real.
+
+Uma recusa deve registrar fase, predicado e identidade suficiente para diagnóstico
+dirigido. Erro de permissão, alvo ausente, processo encerrado e identidade incerta
+são estados distintos; não remover negativas para fabricar cobertura completa.
+Confirmar o término de processos e a identidade dos objetos com mecanismos adequados
+à superfície observada. Caminho no host não substitui resolução no namespace do
+processo. Detalhes sensíveis permanecem somente na evidência privada.
+
+Separar os orçamentos de indexação, observação e revalidação, com verificação de
+prazo também ao fim de cada fase. Pré-indexar relações reutilizadas, em vez de
+repercorrer todo o inventário a cada consulta. Após uma recusa, preservar a tentativa
+e investigar o ponto exato; não repetir toda a coleta apenas para obter diagnóstico
+que deveria ter sido registrado.
+
+Testar também falha parcial de remoção, falha da amostra e falha de durabilidade
+tanto no sucesso como no caminho de erro. Em Bash, funções chamadas em condicionais
+não devem depender apenas de `set -e`: operações críticas precisam verificar seus
+retornos explicitamente. Nenhuma falha de `fsync` pode ser convertida em sucesso,
+republicação automática ou repetição da retirada.
+
+Manter preparação de código, testes e análises volumosas fora da VPS quando
+possível. Levar ao host produtivo somente auxiliares e evidências necessários, com
+orçamento explícito; não copiar payloads de aplicação para diagnosticar um auxiliar.
+Medir o crescimento das próprias preparações e evidências do saneamento. Reutilizar
+artefatos autenticados quando aplicável, sem excluir automaticamente originais ou
+cópias parciais. Custódia deve ser durável e acessível ao responsável; armazenamento
+temporário não a comprova.
+
+### Controles implementados e limites de implantação
+
+| Controle | Situação comprovada pelo código versionado |
+| --- | --- |
+| Contrato privado de capacidade, pico e reserva | Exigido por `converta-release.py build`, antes da saída e do primeiro npm |
+| Registro de geração | Sidecar com BUILDING/COMPLETE/FAILED; classificação permanece PENDING até revisão |
+| Impedir automaticamente nova geração por retenção pendente anterior | Não implementado pelo produtor atual; a revisão e o bloqueio de cópias dispensáveis dependem do procedimento operacional |
+| Impedir automaticamente ultrapassagem do orçamento ao longo de todas as fases | Não comprovado pelo preflight inicial; medir nas fronteiras de cópia e registrar desvios continua necessário |
+| Retirada e retenção por idade | Não há exclusão automática introduzida por este método |
+| Instalação dos controles na VPS | Precisa de atestação do executável efetivamente usado e seu hash; merge ou documentação não comprovam ativação |
+
+A extensão futura dos controles deve reutilizar o produtor e os registros existentes,
+com teste de negativa antes da alocação volumosa. Não introduzir outro launcher,
+cron ou framework de limpeza para substituir a correção desse fluxo.
+
+## Inventário histórico anterior aos lotes de 25/10/2026
+
+Esta fotografia e suas classificações precedem as retiradas relatadas abaixo; não
+representam a ocupação nem a lista de caminhos presentes após o encerramento final.
 
 Leitura limitada, sem exclusão ou mutação. O filesystem tinha 82.086.711.296 bytes,
 70.972.801.024 usados e 11.097.133.056 disponíveis; 1.620.730 inodes usados. A
 fotografia detalhada privada foi preservada fora do Git.
 
-| Raiz | Gerações observadas | Alocado | Classificação atual |
+| Raiz | Gerações observadas | Alocado | Classificação na auditoria |
 | --- | --- | ---: | --- |
 | `/opt/re7online/releases` | 52 entradas de primeira ordem, incluindo releases/runtimes, incoming, staging e `failed-preparations` | 28.691.599.360 B na medição ampla anterior | ativa, retornos, históricos e pendências misturados; nenhuma retirada ampla |
 | `/opt/re7online/build-output` | `a62da468` principal/repack, `ec2a9fde`, `ef7db111`, `3630e16`, `d7de6453` e três logs privados | 5.830.348.800 B | payloads redundantes e pacotes/evidências a separar |
@@ -257,7 +340,10 @@ instalado equivalente permanece autenticado; qualquer byte único detectado volt
 “Arquivar” ou “Preservar”. Manifestos históricos nunca são alterados para refletir a
 retirada de uma cópia redundante.
 
-## Primeiro lote preparado — não executado
+## Primeiro lote — preparação histórica e execução relatada
+
+A preparação abaixo é histórica; o resultado posterior está no encerramento desta
+seção. Os comandos não devem ser repetidos.
 
 Os quatro caminhos abaixo contêm runtimes cujo conteúdo de origem está integralmente
 contido na release instalada de `ec2a9fde`. Isso não significa igualdade irrestrita:
@@ -277,7 +363,7 @@ o pacote de transporte, seus hashes e os quatro arquivos de metadados soltos fic
 intactos. Os worktrees não entram: `tracked-clean` não cobre `.next`, `node_modules`
 e `dist` ignorados, cuja classificação ainda está pendente.
 
-Comandos preparados, sem curingas e **não executados**:
+Comandos históricos do lote, sem curingas — **não repetir**:
 
 ```bash
 rm -r -- /opt/re7online/build-output/immutable-ec2a9fde-vps-20261024T162005Z/immutable-ec2a9fde-vps-20261024T162005Z/api-runtime
@@ -293,6 +379,68 @@ dos quatro caminhos, preservação dos wrappers e metadados, ganho compatível,
 identidades e hashes inalterados e os mesmos GETs. Parar na primeira divergência ou
 falha; nenhuma alternativa, força ou prune.
 
+
+### Encerramento relatado pelo operador
+
+**EXECUTADO INTEGRALMENTE / VERIFICAÇÕES PASS, conforme relatório do usuário.**
+
+Lote: `retention-ec2a9fde-redundant-runtimes-20261025`. O usuário informou execução
+sequencial dos quatro comandos com exit code 0, ausência dos quatro caminhos,
+zero repetição automática, nenhuma expansão de escopo e nenhuma execução parcial.
+O horário exato não foi informado. Esta atualização documental não equivale a
+leitura independente do recibo privado ou da VPS.
+
+| Medida | Resultado informado |
+| --- | ---: |
+| Recuperação prevista | 1.964.171.264 bytes |
+| Recuperação efetivamente medida | 1.964.130.304 bytes |
+| Diferença entre previsão e medição | 40.960 bytes |
+| Inodes recuperados | 68.696 |
+| Recuperação somada ao lote anterior de cache/worktree | 3.405.754.368 bytes |
+
+A diferença de 40.960 bytes fica registrada sem atribuição causal não demonstrada.
+O total acumulado é a soma dos ganhos relatados nos dois lotes, não uma medição
+atual de espaço disponível.
+
+API (PID 118102, start ticks 3652796), frontend (PID 118502, ticks 3663031) e worker
+(PID 2233, ticks 17758) foram informados como preservados; health local/público e
+smokes GET-only passaram. Dump PM2, marker ativo, release instalada de retorno,
+pacote, manifesto e índice permaneceram preservados, conforme relato. Os restart
+counts posteriores não foram reapresentados no relatório.
+
+O operador informou nenhuma alteração de restart, `pm2 save`, deploy, serviço,
+cron, backup, dado ou chamada Meta. A existência de recibo privado e manifesto de
+execução foi relatada, mas seus conteúdos não foram acessados nesta atualização.
+
+**Pendências históricas deste primeiro registro (respondidas posteriormente pelo
+operador; ver consolidação abaixo):** confirmar liberação do lock canônico e custódia
+durável privada do recibo, manifesto e diagnósticos. Os caminhos de evidência
+informados pelo operador eram temporários; sua existência não prova custódia durável.
+Não liberar lock pertencente a outra operação e não repetir os comandos consumidos.
+
+### Preparação histórica — outputs ef7db111 e 3630e16
+
+O escopo abaixo preserva a preparação original, sem autorizar repetição. A execução
+posterior foi relatada pelo operador e consta na consolidação abaixo.
+
+| Origem a conferir | Destino preservado a conferir |
+| --- | --- |
+| `/opt/re7online/build-output/immutable-ef7db111-vps-20261024T174000Z-producer/immutable-ef7db111-vps-20261024T174000Z` | `/opt/re7online/releases/immutable-ef7db111-vps-20261024T174000Z` |
+| `/opt/re7online/build-output/immutable-3630e16-vps-20261024T195842Z-producer/immutable-3630e16-vps-20261024T195842Z` | `/opt/re7online/releases/immutable-3630e16-vps-20261024T195842Z` |
+
+Os caminhos compostos acima são alvos de descoberta baseados no layout do produtor;
+sua existência, identidade e ausência de symlinks precisam ser verificadas no host.
+Comparar separadamente `api-runtime` e `frontend-runtime`, sem incluir pacote,
+metadados, logs ou wrappers como candidatos de remoção. A coincidência já relatada
+de manifesto/índice não substitui comparação integral atual.
+
+Aplicar o comparador corrigido, exclusão de escritores nas duas árvores, orçamento
+de leitura e revalidação de estabilidade. Provar referências e dependências em duas
+amostras frescas, contar blocos únicos e explicitar diferenças de modo/cache.
+Preservar a release de retorno imediato da API `3630e16` e a cadeia transitiva
+`ef7db111`. Produzir lista literal e ganho comprovado para revisão separada.
+Qualquer lacuna, mudança ou ambiguidade mantém a classificação pendente.
+
 ## Auditoria das duas entradas de `backup-data.sh`
 
 O crontab do usuário `deploy` contém duas linhas byte-equivalentes para 03:15. Ambas
@@ -306,3 +454,161 @@ remover exatamente uma das duas linhas idênticas, validar que reste uma ocorrê
 observar o próximo ciclo. Não alterar o script nem executar backup para testar. A
 retenção destrutiva de 14 dias existente no script é um contrato separado e não pode
 ser acionada por esta auditoria. Nenhuma alteração de cron foi feita nesta etapa.
+
+
+## Consolidação autorizada — continuidade de 25/10/2026
+
+Fonte: relatórios fornecidos pelo usuário e publicação documental expressamente
+autorizada nesta continuidade. Não houve acesso independente à VPS ou aos conteúdos
+dos recibos privados pelo autor desta atualização. Nenhum conteúdo privado desses
+recibos, ambiente ou dado de tenant é reproduzido aqui.
+
+### Lotes concluídos, conforme relatos
+
+| Lote | Ganho observado por df (bytes) | Inodes liberados |
+| --- | ---: | ---: |
+| Cache npm, worktree interrompido e sidecar | 1.441.624.064 | 41.100 |
+| Runtimes duplicados output/staging ec2a9fde | 1.964.130.304 | 68.696 |
+| Outputs ef7db111 e 3630e16, intenção v2 | 1.964.113.920 | 68.683 |
+| Worktrees 3630e16 e d7de6453 | 2.047.791.104 | 75.704 |
+| **Acumulado observado** | **7.417.659.392** | **254.183** |
+
+As variações de `df` incluem atividade concorrente do filesystem; não equivalem à
+soma exata dos blocos dos candidatos nem constituem medição atual de espaço livre.
+No lote dos worktrees, os candidatos alocavam 2.046.787.584 bytes. A diferença para
+o ganho observado fica explícita, sem atribuição causal independente.
+
+O lote ef7db111/3630e16 foi relatado em 25/10, 10:55:46–10:58:21 America/Fortaleza.
+As remoções dos worktrees foram iniciadas em 25/10, 14:40:03 e 14:40:39 UTC,
+respectivamente. O operador confirmou ausência dos caminhos e registros Git,
+execução sequencial sem força, retry ou expansão, preservação das identidades de
+API/frontend/worker, dump e marker, e health local/público aprovado. Nenhum restart,
+deploy, `pm2 save`, alteração de cron ou chamada Meta foi relatado.
+
+A custódia durável privada do lote ec2a9fde foi confirmada pelo operador com 19
+arquivos e hashes iguais aos originais. Para ef7db111/3630e16 foram confirmados 69/69
+arquivos. Para os worktrees foram informados recibo final e prova de encerramento
+do lock na custódia durável. Diretórios `0700` e arquivos `0600`; conteúdo privado
+não publicado. Essa confirmação é atribuída ao operador, não a uma nova leitura
+local do autor.
+
+### Bloqueio vigente reconciliado
+
+A última janela dirigida d7de6453 sustenta o uso de
+`/opt/re7online/backups/converta-persistent/.deployment-window.lock`, com `flock`
+exclusivo e não bloqueante por descritor mantido desde as amostras frescas até a
+inspeção final e o `fsync` do recibo. O arquivo permanece preservado; a posse se
+encerra pelo fechamento do próprio descritor, sem liberar lock alheio.
+
+`deploy.lock` pertence ao driver/helper histórico e não comprova exclusão mútua com
+o procedimento dirigido vigente. O operador confirmou o lock vigente livre e
+preservado após os últimos lotes. É uma observação datada, que não dispensa nova
+aquisição e verificação em operações futuras.
+
+### Pendência separada: output d7de6453
+
+Os dois runtimes do output d7de6453 permaneceram intactos e pendentes. A listagem
+somente leitura do pacote preservado retornou exit 0, stderr vazio e 34.352 membros,
+correspondendo às 34.349 entradas indexadas mais raiz, manifesto e índice, sem
+duplicatas. A listagem demonstra legibilidade e membros, sem substituir prova
+byte a byte após extração independente. A recusa anterior e o estado `NOT_PROVEN`
+da captura interrompida permanecem históricos. A release ativa não integra limpeza.
+
+### Preparação histórica a62da468 e preparações falhas — anterior à execução
+
+Duas amostras integrais e estáveis, segundo o operador, comprovaram igualdade entre
+o payload original e a preparação preservada por falta de uploads. Frente ao
+payload corrigido autenticado, o original apresentou zero entradas removidas ou
+alteradas: o corrigido acrescenta 66 entradas (59 arquivos e sete diretórios),
+503.154 bytes aparentes. Assim, o payload original não apresentou conteúdo de
+arquivo exclusivo na comparação informada. Isso não autoriza apagar pacote,
+metadados ou diagnósticos.
+
+Os acréscimos incluem módulos de uploads e outras dependências; a classificação foi
+baseada em conteúdo, não no nome da falha. O pacote corrigido passou, conforme
+relato, em SHA-256, `xz -t` e `tar -tJf`, com 34.351 membros correspondentes às
+34.348 entradas do índice mais raiz e dois metadados. A release VPS inclui nove
+caminhos gerados em runtime sob dados/cache e foi preservada integralmente.
+
+| Candidato identificado | Blocos recuperáveis informados |
+| --- | ---: |
+| API do output original a62da468 | 336.887.808 bytes |
+| Frontend do output original a62da468 | 644.460.544 bytes |
+| API da preparação missing-openai-uploads | 336.887.808 bytes |
+| Frontend da preparação missing-openai-uploads | 644.460.544 bytes |
+| Worktree a62da468 | 1.023.070.208 bytes |
+| Worktree source da falha missing-prisma-generate | 351.805.440 bytes |
+| Worktree source da falha node-heap-oom | 389.021.696 bytes |
+| **Potencial informado, ainda não executado** | **3.726.594.048 bytes** |
+
+O operador não encontrou hardlinks cruzados entre esses sete candidatos. O
+subdiretório `releases/failed-preparations` não foi contado novamente no total de
+`releases`.
+
+Worktree a62da468: tracked/untracked limpos, 30.917 ignorados, 41 symlinks internos
+válidos, sem configuração privada, dados, backups, logs ou evidências únicas
+identificados. API compilada equivalente; frontend com bytes/tamanhos
+correspondentes, 1.119 diferenças somente de modo e quatro entradas de cache
+exclusivas. As falhas antigas tiveram dependências/compilados separados de seus
+inventários diagnósticos externos; não foram identificados arquivos regulares em
+`residue` nem cores, dados ou configuração privada dentro dos worktrees.
+
+Duas amostras privilegiadas relatadas cobriram 147 processos, 11 namespaces de
+montagem e dois de rede, sem erros ou referências aos caminhos auditados. A leitura
+estática de 317 arquivos encontrou apenas os três registros administrativos Git de
+worktree. Essas observações não substituem as verificações frescas da futura janela.
+
+Permanecem protegidos: releases externa e VPS, pacotes original/corrigido/externo,
+manifests, índices, logs, inventários, configurações v1/v2, transações históricas,
+retornos e evidências. Os sete caminhos são candidatos, não um lote autorizado.
+
+Antes de retirada: confirmar custódia durável dos diagnósticos e evidências que
+foram informados como temporários, fechar intenção e comandos literais, preservando
+o comparador e o controle vigente de concorrência, duas amostras frescas e autorização
+específica. Worktrees somente por `git worktree remove`, sem força; runtimes somente
+por seus caminhos literais, sem remover os diretórios documentais pais. Parar na
+primeira falha e inspecionar sem replay. Nenhuma nova exclusão está autorizada por
+este documento.
+
+## Encerramento relatado do lote a62da468 — 25/10/2026
+
+Fonte: relatório final fornecido pelo usuário nesta continuidade. O autor desta
+atualização não acessou a VPS nem os recibos privados. Este registro documenta uma
+execução passada; não autoriza repetição dos comandos históricos.
+
+Lote `retention-a62da468-failed-preparations-ready-v7-20261025`, informado como
+COMPLETED: sete comandos tentados, concluídos e verificados, sete caminhos removidos,
+zero falhas, sem retry automático, força, prune ou expansão. O operador informou o
+lock mantido até a inspeção final e o fsync do recibo, depois livre, sem remover seu
+arquivo nem liberar lock alheio. Nenhuma alteração de serviço foi relatada. O resumo
+final não reapresentou PIDs/start ticks ou saídas de health; não se atribui a esta
+atualização uma nova verificação dessas superfícies.
+
+| Medida | Antes | Depois |
+| --- | ---: | ---: |
+| Bytes usados | 65.170.415.616 | 61.442.281.472 |
+| Bytes disponíveis | 16.899.518.464 | 20.627.652.608 |
+| Inodes usados | 1.407.977 | 1.278.864 |
+
+Ganho observado neste lote: **3.728.134.144 bytes** e **129.113 inodes**. O potencial
+anterior era 3.726.594.048 bytes; a diferença de 1.540.096 bytes fica registrada sem
+atribuição causal independente. Variação líquida de filesystem inclui outras
+atividades e não equivale necessariamente aos blocos dos candidatos.
+
+Somados aos quatro lotes anteriores relatados: **11.145.793.536 bytes** e
+**383.296 inodes** recuperados. A soma não representa crescimento ou limpeza somente
+de um dia. O saldo de 20.627.652.608 bytes é a medição pós-lote informada, não
+capacidade atual certificada para uma operação futura.
+
+Recibo, log de comandos e duas amostras foram informados com hashes finais. A
+custódia durável das evidências finais deste lote ainda não foi confirmada nesta
+conversa. Confirmar pelo procedimento de preservação já versionado, reutilizando
+origens encerradas e destino novo, sem copiar novamente payloads e sem remover
+originais ou parciais. Esta pendência não altera o relato de execução dos sete
+comandos e não autoriza repeti-los.
+
+As tentativas anteriores negadas permanecem encerradas e preservadas. O incidente
+local e as limitações de recuperação de conteúdo não versionado continuam sob
+tratamento próprio; o sucesso desta limpeza não comprova sua recuperação. Outputs
+e releases fora dos sete caminhos, inclusive os runtimes d7de6453 pendentes, seguem
+sem autorização adicional de retirada.
