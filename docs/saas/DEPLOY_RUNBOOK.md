@@ -97,16 +97,19 @@ pacote autenticado, após diagnóstico/correção e autorização aplicável; n�
 7. Autenticar o executor versionado e persistido que fará a ativação. Bloco Bash
    inline, comando colado ou executor efêmero não é procedimento de janela.
 
-Bindings ausentes não são procurados nem reconstruídos por introspecção do PM2. Usar
-`scripts/pm2-binding-materialize.py` com request/source históricos autenticados, o
-SHA-256 externo de cada um, `converta-release.py` e `pm2-definition-control.py`
-autenticados, e a raiz integralmente verificada da release correspondente. O comando
-reutiliza a definição exata, recalcula identidade da release pelo índice autenticado;
-para rollback já implantado, `DEPLOYED` só é aceito como arquivo regular privado com
-SHA-256 externo explícito. Grava os resultados em destino novo e declara
-`pm2IntrospectionUsed=false`. Executá-lo uma vez para candidate e uma para rollback;
-depois exigir `validate-pair`. Identidade histórica, overwrite, symlink, drift ou
-proveniência igual entre os papéis nega a preparação antes da autorização.
+Bindings privados são obrigatórios somente quando a janela cria, substitui ou
+executa uma definição PM2, ou altera ambiente/argumentos. Eles não são pré-requisito
+para ativação frontend-only que reinicia o registro PM2 existente sem
+`--update-env`. Nesse fluxo, o executor autentica pacote, release e control plane;
+captura CWD/script lexicais e hash do ambiente permitido antes da troca; exige os
+mesmos valores depois do restart; e chama `wait-existing-readiness` com release,
+entrypoint e BUILD_ID autenticados. A introspecção serve apenas para provar
+preservação e nunca para gerar configuração executável.
+
+`scripts/pm2-binding-materialize.py` e `validate-pair` ficam restritos ao primeiro
+caso. Não materializar bindings para satisfazer uma janela que apenas reutiliza o
+registro existente. Um marker operacional `DEPLOYED` na release de retorno também
+não participa da observação frontend-only.
 
 O executor deve chamar o observador versionado com `--report`, redirecionar stdout e
 stderr para arquivos privados exclusivos e sincronizar esses três artefatos antes de
