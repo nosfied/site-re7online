@@ -6,9 +6,9 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import ScreenProcessingOverlay, { useScreenProcessingOperations } from "@/components/app/ScreenProcessingOverlay";
+import CampaignMediaGuidance from "@/components/app/CampaignMediaGuidance";
 import TemplateMediaInspectionPanel from "@/components/app/TemplateMediaInspectionPanel";
 import TemplateMessageComposition from "@/components/app/TemplateMessageComposition";
-import TemplateMediaRequirements from "@/components/app/TemplateMediaRequirements";
 import TemplateMediaFileInput from "@/components/app/TemplateMediaFileInput";
 import { inspectTemplateMediaBlob, inspectTemplateMediaFile, TemplateMediaInspectionCoordinator, TemplateMediaMetadata } from "@/lib/templateMediaUx";
 import CampaignBatchPanel from "@/components/app/CampaignBatchPanel";
@@ -860,6 +860,7 @@ export default function AppCampaignsPage() {
   const [templateMediaMetadata, setTemplateMediaMetadata] = useState<TemplateMediaMetadata | null>(null);
   const [templateMediaPreviewError, setTemplateMediaPreviewError] = useState<string | null>(null);
   const [templateMediaPreviewUrl, setTemplateMediaPreviewUrl] = useState<string | null>(null);
+  const [templateMediaGuidanceExpanded, setTemplateMediaGuidanceExpanded] = useState(false);
   const templateMediaUploadGenerationRef = useRef(0);
   const templateMediaInspectionCoordinatorRef = useRef(new TemplateMediaInspectionCoordinator());
   const [cancelling, setCancelling] = useState(false);
@@ -1209,6 +1210,7 @@ export default function AppCampaignsPage() {
   useEffect(() => () => templateMediaInspectionCoordinatorRef.current.cancel(), []);
 
   const handleCampaignMediaFile = async (file: File | null) => {
+    setTemplateMediaGuidanceExpanded(false);
     if (file && !(await ensureCampaignOperationsAvailable())) return;
     const generation = ++templateMediaUploadGenerationRef.current;
     const inspection = templateMediaInspectionCoordinatorRef.current.begin();
@@ -1477,15 +1479,13 @@ export default function AppCampaignsPage() {
                 onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
                 placeholder={defaultDraftName}
               />
+              <span className="flex min-h-5 items-center text-xs text-white/55">
+                Identificação interna para localizar este rascunho.
+              </span>
             </label>
             <label className="grid min-w-0 content-start gap-1 text-sm">
               <span className="flex min-h-5 items-center justify-between gap-2 text-white/70">
                 <span>Modelo aprovado</span>
-                {selectedTemplate ? (
-                  <span className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70">
-                    {getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)}
-                  </span>
-                ) : null}
               </span>
               <select
                 className={campaignComposerControlClasses}
@@ -1497,6 +1497,7 @@ export default function AppCampaignsPage() {
                   setUploadingTemplateMedia(false);
                   void discardUnpersistedTemplateMedia(form.templateMediaAssetId);
                   setTemplateMediaMetadata(null);
+                  setTemplateMediaGuidanceExpanded(false);
                   const template = templates.find((item) => item.id === event.target.value) ?? null;
                   const labels = getTemplateVariablePositions(template);
                   setForm((prev) => ({
@@ -1519,6 +1520,15 @@ export default function AppCampaignsPage() {
                   </option>
                 ))}
               </select>
+              <span className="flex min-h-5 items-center text-xs text-white/55">
+                {selectedTemplate
+                  ? (
+                    <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70">
+                      Categoria: {getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)}
+                    </span>
+                  )
+                  : "Selecione o modelo aprovado usado nesta campanha."}
+              </span>
             </label>
           </div>
           {templates.length === 0 ? (
@@ -1553,12 +1563,6 @@ export default function AppCampaignsPage() {
                 disabled={!campaignOperationsOpen || checkingCampaignOperations || uploadingTemplateMedia || inspectingTemplateMedia}
               />
             </div>
-            <div className="mt-3"><TemplateMediaRequirements kind={selectedTemplateHeaderType} /></div>
-            <p className="mt-2 text-xs text-white/70">
-              Use mídia coerente com o texto e a categoria do modelo. Uma promoção exige modelo de marketing;
-              a aprovação da mídia de exemplo não autoriza conteúdo promocional em um modelo de utilidade.
-              Mídia já carregada permanece preservada se a criação for suspensa.
-            </p>
             <p className="mt-2 text-xs text-white/55">
               {uploadingTemplateMedia
                 ? "Enviando mídia com segurança..."
@@ -1576,6 +1580,12 @@ export default function AppCampaignsPage() {
                 className="mt-3"
               />
             ) : null}
+            <CampaignMediaGuidance
+              kind={selectedTemplateHeaderType}
+              compact={Boolean(form.templateMediaAssetId || uploadingTemplateMedia || inspectingTemplateMedia)}
+              expanded={templateMediaGuidanceExpanded}
+              onToggle={() => setTemplateMediaGuidanceExpanded((current) => !current)}
+            />
             {form.templateMediaAssetId ? (
               <button
                 type="button"
@@ -1588,6 +1598,7 @@ export default function AppCampaignsPage() {
                   setRemovingTemplateMedia(true);
                   void discardUnpersistedTemplateMedia(assetId).finally(() => setRemovingTemplateMedia(false));
                   setTemplateMediaMetadata(null);
+                  setTemplateMediaGuidanceExpanded(false);
                   setForm((current) => ({ ...current, templateMediaAssetId: "", templateMediaFileName: "" }));
                 }}
                 disabled={removingTemplateMedia}

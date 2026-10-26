@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import CampaignMediaGuidance from "../components/app/CampaignMediaGuidance";
 import TemplateMediaInspectionPanel from "../components/app/TemplateMediaInspectionPanel";
 import TemplateMessageComposition from "../components/app/TemplateMessageComposition";
 import {
@@ -102,6 +103,44 @@ test("file inspection and WhatsApp composition are separate behavioral surfaces"
     assert.doesNotMatch(composition, /Arquivo completo|campanha\.jpg|Dimensões|Proporção|<details/);
     assert.match(composition, kind === "IMAGE" ? /<img/ : /<video/);
     assert.match(composition, /apresentação pode variar/);
+  }
+});
+
+test("campaign media guidance replaces its primary instructions with a collapsed disclosure after selection", () => {
+  const beforeSelection = renderToStaticMarkup(React.createElement(CampaignMediaGuidance, {
+    kind: "IMAGE", compact: false, expanded: false, onToggle() {},
+  }));
+  assert.match(beforeSelection, /data-campaign-media-guidance="primary"/);
+  assert.match(beforeSelection, /Requisitos obrigatórios/);
+  assert.match(beforeSelection, /5\.00 MB/);
+  assert.doesNotMatch(beforeSelection, /aria-expanded/);
+
+  for (const kind of ["IMAGE", "VIDEO"] as const) {
+    const selected = renderToStaticMarkup(React.createElement(CampaignMediaGuidance, {
+      kind, compact: true, expanded: false, onToggle() {},
+    }));
+    assert.match(selected, /data-campaign-media-guidance="compact"/);
+    assert.match(selected, /aria-expanded="false"/);
+    assert.match(selected, /Formatos, tamanho e recomendações/);
+    assert.doesNotMatch(selected, /Requisitos obrigatórios/);
+  }
+});
+
+test("campaign media guidance can be expanded and hidden again for image and video", () => {
+  for (const [kind, expected] of [["IMAGE", "5.00 MB"], ["VIDEO", "16.00 MB"]] as const) {
+    const expanded = renderToStaticMarkup(React.createElement(CampaignMediaGuidance, {
+      kind, compact: true, expanded: true, onToggle() {},
+    }));
+    assert.match(expanded, /aria-expanded="true"/);
+    assert.match(expanded, /Requisitos obrigatórios/);
+    assert.match(expanded, new RegExp(expected));
+    assert.match(expanded, /Ocultar/);
+
+    const hiddenAgain = renderToStaticMarkup(React.createElement(CampaignMediaGuidance, {
+      kind, compact: true, expanded: false, onToggle() {},
+    }));
+    assert.doesNotMatch(hiddenAgain, /Requisitos obrigatórios/);
+    assert.match(hiddenAgain, /Ver/);
   }
 });
 
