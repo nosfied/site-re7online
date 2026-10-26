@@ -3,16 +3,20 @@
 > [!IMPORTANT]
 > Continuidade atual: [CURRENT_STATE.md](saas/CURRENT_STATE.md).
 > Deploy vigente: [DEPLOY_RUNBOOK.md](saas/DEPLOY_RUNBOOK.md).
-> Em 24/10/2026, o target `a62da468ba1e703139181cecfa88d34f2066ccd1` foi
-> implantado com build isolado na VPS e restart dirigido dos registros PM2 existentes.
+> Sequência revisada em 26/10: [mapa vigente](saas/PRODUCT_MAP_CURRENT_2026-10-19.md).
+> API/frontend a959 implantados; IMAGE/VIDEO homologados e campanhas abertas na
+> geração 41 conforme os relatos registrados. Não repetir build/deploy/save/abertura.
 > Os checkpoints datados de CRM/CSV abaixo preservam estados históricos, incluindo
 > pendências já superadas; não são estado produtivo atual nem autorização de replay.
 > As rotinas de outros assuntos mantêm seu escopo e suas restrições.
 
 
-## CRM — diagnóstico de lista após CSV
+## Histórico CRM — diagnóstico de lista após CSV, superado pelo deploy
 
-O delta de 19/10/2026 está `LOCAL VALIDATED / NOT DEPLOYED`. O GET de contatos
+Estado na criação em 19/10/2026: `LOCAL VALIDATED / NOT DEPLOYED`.
+A implantação de 20/10 e o read model/cursor de 21/10 superam essa classificação;
+ver [registro](saas/releases/CRM_CONTACTS_CURSOR_READ_MODEL_2026-10-21_DEPLOYED.json).
+Não refazer importação ou deploy por esta descrição histórica. O GET de contatos
 possui timeout explícito de 20s e deve carregar a lista independentemente do GET de
 statuses. `contacts=null` após o término da leitura é erro recuperável, nunca página
 vazia. A rota preserva o total permitido e só constrói o escopo excluído quando uma

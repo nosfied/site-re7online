@@ -1,5 +1,18 @@
 # Campaign Composer Lifecycle
 
+## Prevalência documental — 26/10/2026
+
+Os checkpoints LOCAL/NO DEPLOY abaixo registram a etapa de criação, não a release
+ativa. A entrega dinâmica integrada e seu encerramento constam no
+[registro de 12/10](../reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/out15-closure-20261012/RESULT_2026-10-12.md).
+API/frontend a959 e IMAGE/VIDEO têm os aceites posteriores em
+[CURRENT_STATE.md](CURRENT_STATE.md). Preservar o contrato do compositor;
+não inferir aceite de toda navegação/descarte/agendamento da existência de um envio.
+Para o próximo teste, seguir o [mapa vigente](PRODUCT_MAP_CURRENT_2026-10-19.md),
+sem repetir deploy por rótulo local histórico.
+
+## Checkpoints históricos
+
 ## Audience preview boundary — local correction 12/10/2026
 
 The user changing CRM query/status/channel/conversation filter or recipient mode invalidates the existing preview request generation, estimate/error/page and loading state. Late responses from the previous generation cannot repopulate it. This reuses the existing request-generation mechanism; no polling layer or persisted state is added. Programmatic reuse and reset retain their explicit boundaries and restored selections. Zero estimate remains valid for dynamic scheduling after a matching preview.

@@ -2,11 +2,16 @@
 
 Status produtivo: **TECHNICALLY DEPLOYED / PRODUCTION HEALTHY**.
 
-Homologação funcional Meta: **SUBMISSÃO DE VÍDEO ACEITA / APROVAÇÃO META PENDENTE**.
+Homologação funcional: **CAMPANHAS IMAGE E VIDEO MANUAIS PASS — META, CRM E WEBHOOKS CONFIRMADOS**.
+A aprovação pendente registrada em 24/10 é histórica; em 26/10 foi relatado template
+VIDEO aprovado e usado no envio controlado. IMAGE foi homologado em campanha posterior para dois destinatários, com read/delivered
+e CRM confirmado. Agendamento/multilote e aceites específicos continuam separados.
 
-Liberação comercial/operacional para CRA-PR e demais clientes: **PENDING**.
+Admissão geral de campanhas: **ABERTA PARA USO NORMAL / GERAÇÃO 41**.
+Liberação comercial/aceite específico de CRA-PR e de cenários ainda não homologados:
+**PENDING**; não confundir com reabertura da guarda global.
 
-Última atualização: 2026-10-24. Esta é a fonte canônica para cabeçalhos `IMAGE` e
+Última atualização: 2026-10-26. Esta é a fonte canônica para cabeçalhos `IMAGE` e
 `VIDEO` em templates e campanhas. O estado produtivo geral continua em
 [`CURRENT_STATE.md`](CURRENT_STATE.md). O mecanismo tenant-scoped de Meta App ID foi
 implantado em 24/10/2026. Em operação separada, o tenant Converta Demo teve o App ID
@@ -14,15 +19,27 @@ tenant-scoped configurado depois que uma única consulta `GET /debug_token` conf
 o vínculo atual do token com o aplicativo e as permissões necessárias. Essa prova não
 recupera o histórico original do onboarding.
 
-## Implantação técnica
+## Implantação vigente
+
+API/frontend relatados em `immutable-a959129e-vps-20261026T023100Z`, target
+`a959129e39a07c52881fb7f5cbf21a7f6f1a80ff`, BUILD_ID `CbNbnlr0VJVv5mME_hvxm`.
+[Registro ativo](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json).
+Após homologação VIDEO bem-sucedida e fechamento da janela na geração 40, o Codex
+local executou a reabertura geral autorizada: guarda aberta na geração 41, sem trabalho
+histórico elegível, resultado incerto ou falha de health. IMAGE posteriormente homologado para dois destinatários, sem duplicidade ou pendência.
+Não há pendência de novo deploy, save ou abertura. Próximo ato e limites estão no
+[roteiro de homologação](CAMPAIGN_OPERATIONS_READINESS.md).
+Aprovação observada em 24/10 é histórica; não é consulta atual à Meta.
+
+## Histórico técnico de 24/10 — não identifica o runtime atual
 
 O deploy conjunto do target `ec2a9fde99b6421a85256f14604bd469879f4f2a`, release
-`immutable-ec2a9fde-vps-20261024T162005Z`, permanece como baseline do frontend,
+`immutable-ec2a9fde-vps-20261024T162005Z`, foi baseline do frontend na ocasião,
 conforme o
 [registro estruturado](releases/TEMPLATE_MEDIA_UPLOAD_DIAGNOSTICS_2026-10-24_DEPLOYED.json).
 API e frontend foram selecionados por troca atômica dos caminhos estáveis e restart
 dos registros PM2 existentes, sem `--update-env`. O worker foi preservado.
-O BUILD_ID ativo é `7yArOSyfllnPiQy_vAS9H`. A release
+O BUILD_ID dessa baseline era `7yArOSyfllnPiQy_vAS9H`. A release
 `immutable-a62da468-vps-20261024T124726Z` permanece como retorno e evidência histórica.
 
 A API foi atualizada isoladamente para o target
@@ -386,3 +403,16 @@ autorizado poderá reconciliá-la pelo GET tenant-scoped acima.
 Esta correção melhora observabilidade e não reabre solicitações encerradas. A causa
 externa específica de falhas históricas continua dependendo de uma tentativa
 controlada futura, porque essas respostas antigas não preservaram o detalhe seguro.
+
+## Aceites de mídia concluídos em 26/10/2026
+
+VIDEO: uma campanha/um destinatário/uma aceitação Meta, CRM e webhook read.
+IMAGE: uma campanha/dois destinatários/duas aceitações Meta, uma por destinatário,
+CRM confirmado para ambos, webhooks read e delivered. Uma imagem stored/vinculada,
+upload confirmed em uma tentativa e um job concluído. Não há retry ou duplicidade
+relatada. O escopo IMAGE real é dois destinatários, não o único inicialmente proposto.
+
+Guarda permanece aberta na geração 41 para uso normal. O
+[roteiro de campanhas](CAMPAIGN_OPERATIONS_READINESS.md#homologação-image-concluída--dois-destinatários)
+contém o resultado e hash privado, sem publicar telefones. Testes de agendamento,
+multilote e aceites contratuais não são automaticamente declarados concluídos.

@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 4,
+  "recordType": "IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_VERIFIED",
+  "result": "DEPLOYED_FIXED_CURRENT_RUNTIME_ESTABLISHED_PRODUCTION_HEALTHY",
+  "targetCommit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
+  "releaseId": "immutable-a959129e-vps-20261026T023100Z",
+  "canonicalBranch": "review/campaign-recovery-20260926",
+  "evidenceProvenance": {
+    "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT",
+    "reportedDate": "2026-10-26",
+    "timezone": "America/Fortaleza",
+    "independentVpsInspectionByDocumentationEditor": false,
+    "exactFinalizationTimestamp": "NOT_PROVIDED",
+    "scope": "Reported deployment completion; not a fresh reopening inventory"
+  },
+  "artifacts": {
+    "releasePath": "/opt/re7online/releases/immutable-a959129e-vps-20261026T023100Z",
+    "packageSha256": "dd3057637d90df996663d8a602067e971d2038b6d285d2fed203e59471c273b0",
+    "manifestSha256": "6b93078b51e6e1067e62b872885c65ff48ef74732f6a4bd4f28ca8500875820b",
+    "indexSha256": "6ccb64900cf13a954b7885d57c450443022e3f59db404eb262513bc4f9a46570",
+    "indexEntries": 34351,
+    "api": {
+      "stablePath": "/opt/re7online/current/api",
+      "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1"
+    },
+    "frontend": {
+      "stablePath": "/opt/re7online/current/frontend",
+      "buildId": "CbNbnlr0VJVv5mME_hvxm",
+      "execMode": "fork_mode",
+      "instances": 1,
+      "entrypoint": "node_modules/next/dist/bin/next",
+      "args": [
+        "start",
+        "-p",
+        "3000"
+      ]
+    },
+    "worker": {
+      "preserved": true
+    }
+  },
+  "build": {
+    "singleBuild": true,
+    "nodeVersion": "v20.20.0",
+    "npmVersion": "10.8.2",
+    "location": "PRODUCTION_HOST_ISOLATED_WORKTREE",
+    "platform": "linux",
+    "architecture": "x86_64",
+    "ownerAuthorization": "EXPLICIT_AFTER_RAM_UPGRADE",
+    "activeRuntimeStoppedForBuild": false
+  },
+  "verification": {
+    "technicalAcceptance": "PASS",
+    "api": {
+      "pid": 441355,
+      "startTicks": 16603839,
+      "localHealthHttp": 200,
+      "publicHealthHttp": 200,
+      "ok": true,
+      "db": "ok",
+      "samples": 3,
+      "socketPort": 3001,
+      "socketOwnerPid": 441355,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        441355
+      ]
+    },
+    "frontend": {
+      "pid": 441646,
+      "startTicks": 16604558,
+      "samples": 3,
+      "socketPort": 3000,
+      "socketOwnerPid": 441646,
+      "socketOwnerRelation": "DIRECT",
+      "socketOwnerChain": [
+        441646
+      ]
+    },
+    "worker": {
+      "pid": 2233,
+      "startTicks": 17758,
+      "restartCount": 0,
+      "preserved": true
+    },
+    "availability": {
+      "status": 200,
+      "ok": true,
+      "open": false,
+      "code": "campaign_operations_closed"
+    },
+    "guard": {
+      "open": false,
+      "tasks": 0,
+      "sha256": "9e1a979932e4a22f8051046a4ce96e1ac5656723ba5ba4a57e1ef14f8e73a9e9"
+    },
+    "campaignFunctionalAcceptance": "PENDING",
+    "smoke": "GET_ONLY",
+    "readinessProvenance": "Reported successful authenticated v7 execution requires three stable samples and one listener owned directly by PM2 PID; not a new live observation; total polling count not provided."
+  },
+  "migration": {
+    "classification": "NOT_APPLICABLE_NO_SCHEMA_CHANGE",
+    "migrationExecuted": false
+  },
+  "pm2": {
+    "saveCount": 1,
+    "savedExactlyOnce": true,
+    "saveExitCode": 0,
+    "dumpSha256": "e54db82c63cea7200c4215ac16a923b0ec3d05a5e2bc0398c1bcb06ee3e68325",
+    "previousDumpSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13",
+    "dumpValidation": "PASS_THREE_RECORDS",
+    "instancesNormalization": "ONLY_API_FRONTEND_FORK_MODE_MISSING_PROPERTY_EQUALS_AUTHENTICATED_PM2_6_0_14_DEFAULT_ONE",
+    "dumpMode": "0600",
+    "dumpOwner": "deploy",
+    "dumpGroup": "deploy",
+    "rollbackSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13"
+  },
+  "marker": {
+    "name": "DEPLOYED",
+    "sha256": "9da2428b15f8eb8b307603556fffb0ef75536829109e4be282ce03caa19cdb80",
+    "createdAfterDumpValidation": true
+  },
+  "receiptSha256": "3567a10a165af03377ce912ed44f7628646a33cdfb33c70ffc597f926f353dc8",
+  "journalSha256": "991d549a1bc7f93b88cd1b51e1fdafaef13162555e20eac2b2471566e0804240",
+  "dumpValidationSha256": "5e793c5b45b08550166624770541c15c988384afedea7926bf65419707d115fa",
+  "lock": {
+    "path": "/opt/re7online/backups/converta-persistent/.deployment-window.lock",
+    "released": true,
+    "filePreserved": true,
+    "previousHolderExited": true
+  },
+  "rollback": {
+    "previousApiReleaseId": "immutable-d7de6453-vps-20261024T221500Z",
+    "previousFrontendReleaseId": "immutable-d7de6453-vps-20261024T221500Z",
+    "automaticRetryForbidden": true
+  },
+  "persistentStorage": {
+    "templateMediaRoot": "/opt/re7online/content/template-campaign-media",
+    "directoryMode": "0700"
+  },
+  "deploymentEffects": {
+    "metaCalls": 0,
+    "messagesSent": 0,
+    "campaignResumptions": 0,
+    "guardReopened": false,
+    "additionalRestartsDuringFinalization": 0,
+    "secondSaveExecuted": false
+  },
+  "authenticationObservation": {
+    "sessionMetadataWritesPossible": true,
+    "businessMutationByAvailabilityCheck": false
+  },
+  "nextPermittedAct": "FRESH_GLOBAL_READ_ONLY_REOPENING_INVENTORY_AND_GUARD_CLOSED_ACCEPTANCE_PLAN",
+  "authorizationBoundary": "No reopening, external template sync or send inferred from deployment or documentation",
+  "campaignState": "DEPLOYED_GUARD_CLOSED",
+  "baseCommit": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
+  "components": [
+    "api",
+    "frontend"
+  ],
+  "deploymentOrder": [
+    "api",
+    "frontend"
+  ],
+  "ciEvidence": {
+    "commit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
+    "ciRun": 40257916957,
+    "ciResult": "PASS"
+  }
+}

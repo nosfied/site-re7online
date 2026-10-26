@@ -1,6 +1,6 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / COMPROVADO EM PRODUÇÃO EM 20/10/2026 / RECONFIRMADO EM 24/10/2026**
+**Status: CANÔNICO / DEPLOY A959 RELATADO EM 26/10/2026 / GUARDA FECHADA**
 
 Este documento define a arquitetura e os princípios vigentes. Os comandos executáveis
 estão somente no [runbook canônico](DEPLOY_RUNBOOK.md). Preparações e executores
@@ -189,7 +189,20 @@ Os itens abaixo são históricos e **não utilizáveis**:
   socket com amostra única logo após `pm2 start`;
 - Deploy V2, controles single-use e preparações de incidente como rota normal.
 
-## Release produtiva observada em 24/10/2026
+## Release produtiva relatada em 26/10/2026
+
+O registro ativo é
+[`CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json`](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json).
+Target `a959129e39a07c52881fb7f5cbf21a7f6f1a80ff`, release
+`immutable-a959129e-vps-20261026T023100Z`, BUILD_ID `CbNbnlr0VJVv5mME_hvxm`.
+API/frontend em `/current`, worker e guarda fechada preservados, um save, dump
+`e54db82c63cea7200c4215ac16a923b0ec3d05a5e2bc0398c1bcb06ee3e68325`,
+marker/recibo finais e lock livre. Fonte: relatório do Codex local encaminhado
+pelo owner; não é inspeção viva feita pelo editor documental. Retorno API/frontend:
+release d7 abaixo. Homologação funcional e reabertura seguem
+[roteiro separado](CAMPAIGN_OPERATIONS_READINESS.md); deploy não libera campanhas.
+
+## Histórico e retorno — observação de 24/10/2026
 
 O registro estruturado vigente é
 [`TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json`](releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json).

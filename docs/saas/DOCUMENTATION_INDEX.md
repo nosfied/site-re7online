@@ -10,12 +10,15 @@
 
 - [Estado legível](CURRENT_STATE.md)
 - [Estado verificável](CURRENT_STATE.json)
+- [Sequência consolidada e revisão documental de 26/10](PRODUCT_MAP_CURRENT_2026-10-19.md)
+  — mapa existente atualizado: concluído, próximas homologações, correções e manutenção.
 - [Runbook canônico de deploy](DEPLOY_RUNBOOK.md) — única instrução executável vigente
 - [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
   o produtor `scripts/converta-release.py`, o build na VPS e a fronteira com a ativação
+- [Disponibilidade e admissão de mídia de campanhas: deploy a959](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json)
+  — API/frontend ativos relatados em 26/10; guarda fechada, um save, worker preservado e lock livre.
 - [Deploy da coerência de sincronização e ordenação de templates](releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json)
-  — registro ativo de API/frontend no target `d7de6453`; worker preservado,
-  journal `DEPLOYED` e lock liberado.
+  — registro histórico no target `d7de6453`, preservado como retorno de API/frontend.
 - [Auditoria de capacidade da VPS](VPS_CAPACITY_AUDIT_2026-10-24.md)
   — fotografia inicial, lote histórico executado e custódia ainda pendente.
 - [Ciclo de vida dos artefatos de implantação](DEPLOY_ARTIFACT_LIFECYCLE.md): capacidade, encerramento por geração, diagnóstico dirigido e retiradas históricas relatadas.
@@ -46,7 +49,8 @@
 ## Backlog ativo separado
 
 - [Disponibilidade, mídia e homologação de campanhas](CAMPAIGN_OPERATIONS_READINESS.md)
-  — correção preparada; deploy com guarda fechada, inventário de reabertura e envio controlado são etapas separadas.
+  — IMAGE e VIDEO manuais PASS; inventário global concluído e reabertura geral autorizada pelo owner,
+  executada pelo Codex local na geração 41. Agendamento/multilote e aceites específicos seguem separados.
 - [Adequar encerramento e CSAT à janela de 24h](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
 - [Elegibilidade set based de campanhas](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md)
   — `PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE`; não bloqueia o deploy técnico.

@@ -1,33 +1,33 @@
 {
   "schemaVersion": 6,
-  "updatedAtUtc": "2026-10-24T23:04:40Z",
+  "updatedAtUtc": "2026-10-26T11:48:09Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
-  "activeDeploymentRecord": "docs/saas/releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json",
-  "activeOperationalRecord": "docs/saas/releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json",
-  "activeApiDeploymentRecord": "docs/saas/releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json",
+  "activeDeploymentRecord": "docs/saas/releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json",
+  "activeOperationalRecord": "docs/saas/releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json",
+  "activeApiDeploymentRecord": "docs/saas/releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json",
   "deploymentOperatingModel": "docs/saas/DEPLOYMENT_OPERATING_MODEL.md",
   "production": {
     "status": "DEPLOYED_VERIFIED",
     "certifiedByThisFile": false,
-    "releaseId": "immutable-d7de6453-vps-20261024T221500Z",
-    "releasePath": "/opt/re7online/releases/immutable-d7de6453-vps-20261024T221500Z",
-    "targetCommit": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
+    "releaseId": "immutable-a959129e-vps-20261026T023100Z",
+    "releasePath": "/opt/re7online/releases/immutable-a959129e-vps-20261026T023100Z",
+    "targetCommit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
     "api": {
       "stablePath": "/opt/re7online/current/api",
       "entrySha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
       "entrySha256Scope": "CURRENT_FULL_STACK_DEPLOYMENT",
-      "selectedTargetCommit": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
-      "selectedReleaseId": "immutable-d7de6453-vps-20261024T221500Z",
-      "lastReportedPid": 118102,
-      "lastReportedStartTicks": 3652796
+      "selectedTargetCommit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
+      "selectedReleaseId": "immutable-a959129e-vps-20261026T023100Z",
+      "lastReportedPid": 441355,
+      "lastReportedStartTicks": 16603839
     },
     "frontend": {
       "stablePath": "/opt/re7online/current/frontend",
-      "buildId": "PkRjG2UDVfxCmwp-DKMQz",
+      "buildId": "CbNbnlr0VJVv5mME_hvxm",
       "execMode": "fork_mode",
       "instances": 1,
-      "lastReportedPid": 118502,
-      "lastReportedStartTicks": 3663031
+      "lastReportedPid": 441646,
+      "lastReportedStartTicks": 16604558
     },
     "worker": {
       "releasePath": "/opt/re7online/releases/immutable-e2e7f17a-20261022T005110Z/worker-runtime",
@@ -52,30 +52,242 @@
       "directoryMode": "0700"
     },
     "pm2": {
-      "dumpSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13",
+      "dumpSha256": "e54db82c63cea7200c4215ac16a923b0ec3d05a5e2bc0398c1bcb06ee3e68325",
       "dumpSha256Scope": "CURRENT_FULL_STACK_DEPLOYMENT",
-      "currentDumpSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13",
-      "rollbackSha256": "8168216ccd7421a3dd2df19459f12f11a7d490d497a376bdf97cf8e24c509f15",
+      "currentDumpSha256": "e54db82c63cea7200c4215ac16a923b0ec3d05a5e2bc0398c1bcb06ee3e68325",
+      "rollbackSha256": "5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13",
       "mode": "0600",
       "owner": "deploy",
       "group": "deploy",
       "savedExactlyOnce": true
     },
-    "markerSha256": "1d2be9be3fd5e257700257988bb4cd946dac0f7cb47b6b3a4f861facedd7c543",
+    "markerSha256": "9da2428b15f8eb8b307603556fffb0ef75536829109e4be282ce03caa19cdb80",
     "markerSha256Scope": "CURRENT_FULL_STACK_DEPLOYMENT",
-    "currentMarkerSha256": "1d2be9be3fd5e257700257988bb4cd946dac0f7cb47b6b3a4f861facedd7c543",
+    "currentMarkerSha256": "9da2428b15f8eb8b307603556fffb0ef75536829109e4be282ce03caa19cdb80",
     "lastFinalization": {
       "component": "api_frontend",
       "journalState": "DEPLOYED",
       "lockReleased": true,
-      "pm2SaveCount": 1
+      "pm2SaveCount": 1,
+      "receiptSha256": "3567a10a165af03377ce912ed44f7628646a33cdfb33c70ffc597f926f353dc8",
+      "journalSha256": "991d549a1bc7f93b88cd1b51e1fdafaef13162555e20eac2b2471566e0804240"
     },
-    "controlPlaneCommit": "d7de6453aeab6d117e8d79a1dc3a0722875f39cc",
+    "controlPlaneCommit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
     "readiness": {
       "method": "THREE_CONSECUTIVE_STABLE_SAMPLES",
       "requiredStableSamples": 3,
       "healthAfterSocketStability": true,
       "activationMethod": "DIRECTED_EXISTING_PM2_FIXED_CURRENT"
+    },
+    "observation": {
+      "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT",
+      "reportedDate": "2026-10-26",
+      "timezone": "America/Fortaleza",
+      "independentVpsInspectionByDocumentationEditor": false,
+      "exactFinalizationTimestamp": "NOT_PROVIDED",
+      "scope": "Reported deployment completion; not a fresh reopening inventory"
+    },
+    "campaignOperations": {
+      "state": "GENERAL_OPERATIONS_OPEN",
+      "reportedOpen": true,
+      "reportedTasks": 0,
+      "reopeningInventory": "SNAPSHOT_REPORTED_ZERO_AUTOMATICALLY_ELIGIBLE_20261026T111404Z",
+      "closedGuardUiAcceptance": "NOT_SEPARATELY_REPORTED",
+      "controlledSend": "PASS_SINGLE_MANUAL_VIDEO_CAMPAIGN",
+      "inventory": {
+        "source": "OWNER_RELAYED_LOCAL_CODEX_READ_ONLY_AUDIT",
+        "snapshotAtUtc": "2026-10-26T11:14:04Z",
+        "guardGenerationObserved": 38,
+        "claimableJobs": 0,
+        "overdueScheduledCampaigns": 0,
+        "recoverableDynamicControllers": 0,
+        "pendingResultsDetected": 0,
+        "ownerConfirmsNoOtherCampaignOperatorsDuringHomologation": true,
+        "openingAuthorized": false,
+        "evidenceManifestSha256": "566833683719ddb8e4bcc2df0f7beaf319c4bccde74c435902596b98121f3c35",
+        "databaseInventorySha256": "f9ad89081060ee69d9be443762b5775411bbf08b06bda49b34ec5cb079c0005d",
+        "requiresFreshCheckBeforeCas": true,
+        "authorizationFieldScope": "AT_INVENTORY_BEFORE_LATER_OWNER_AUTHORIZATION"
+      },
+      "previousGuardSha256Scope": "PRE_HOMOLOGATION_ONLY",
+      "reportedGeneration": 41,
+      "reportedLedgerFault": null,
+      "manualHomologation": {
+        "source": "OWNER_RELAYED_LOCAL_CODEX_REPORT",
+        "reportedDate": "2026-10-26",
+        "independentVpsInspectionByDocumentationEditor": false,
+        "state": "SEND_ACCEPTED",
+        "scope": "DEMO_SINGLE_VIDEO_SINGLE_CONTROLLED_RECIPIENT_ONLY",
+        "templateName": "video_previdencia_teste_20261024_v2",
+        "recipientCount": 1,
+        "recipientPublished": false,
+        "uploads": 1,
+        "campaigns": 1,
+        "jobs": 1,
+        "providerSubmissions": 1,
+        "providerAcceptances": 1,
+        "sentEvents": 1,
+        "failures": 0,
+        "uncertainResults": 0,
+        "automaticRetry": false,
+        "media": {
+          "kind": "VIDEO",
+          "sizeBytes": 211534,
+          "state": "stored",
+          "linkedToCampaign": true,
+          "accountUploadState": "confirmed",
+          "attemptCount": 1,
+          "mediaIdConfirmed": true
+        },
+        "campaign": {
+          "status": "completed",
+          "totalRecipients": 1,
+          "sent": 1,
+          "blocked": 0,
+          "jobStatus": "completed",
+          "jobAttempt": 1
+        },
+        "crm": {
+          "conversationResolvedAndLinked": true,
+          "persistencePending": false,
+          "reconciliationNeeded": false
+        },
+        "webhook": {
+          "sentObserved": true,
+          "readObserved": true
+        },
+        "closure": {
+          "generation": 40,
+          "open": false,
+          "tasks": 0,
+          "drained": true,
+          "ledgerFault": null,
+          "activeJobs": 0,
+          "overdueClaimableJobs": 0,
+          "pendingResults": 0
+        },
+        "health": {
+          "local": {
+            "ok": true,
+            "db": "ok"
+          },
+          "public": {
+            "ok": true,
+            "db": "ok"
+          }
+        },
+        "evidenceManifestSha256": "d0e8cb9eee4977bdb2225413db5b738232788ffa450300c0f52e803bc2c3466f",
+        "artifactsPreserved": true,
+        "commercialOrGeneralOpeningAuthorized": false
+      },
+      "generalRelease": {
+        "decision": "OWNER_AUTHORIZED_GENERAL_REOPENING_EXECUTED",
+        "authorizationDate": "2026-10-26",
+        "scope": "RESTORE_GLOBAL_CAMPAIGN_ADMISSION_UNDER_EXISTING_RBAC_TENANT_FEATURE_CONSENT_AND_PROVIDER_GUARDS",
+        "basis": [
+          "CI_A959_PASS",
+          "DOCUMENTATION_PR227_CI_40317358406_PASS",
+          "OUT15_INCIDENT_CLOSED_20261012",
+          "GLOBAL_INVENTORY_ZERO_AUTOMATICALLY_ELIGIBLE",
+          "SINGLE_MANUAL_VIDEO_META_CRM_WEBHOOK_PASS",
+          "GUARD40_CLOSED_DRAINED_NO_PENDING_RESULTS"
+        ],
+        "executor": "LOCAL_CODEX_WITH_EXISTING_VPS_ACCESS",
+        "mechanism": "CANONICAL_ADMIN_OPERATIONS_CAS_FRESH_GENERATION",
+        "openingExecuted": true,
+        "observedOpenRemains": true,
+        "confirmationRequiredFromLocalExecutor": false,
+        "noNewBuildDeployRestartOrSave": true,
+        "noScriptedSendOrHistoricalReplay": true,
+        "closeAfterEachRemainingHomologation": false,
+        "automaticUncertaintyProtectionPreserved": true,
+        "remainingAcceptance": [
+          "SCHEDULING_AND_MULTIBATCH_WHEN_PLANNED",
+          "OTHER_CLIENT_SPECIFIC_ACCEPTANCE"
+        ],
+        "remainingAcceptanceDoesNotReclassifyVideoResult": true,
+        "executionSource": "OWNER_RELAYED_LOCAL_CODEX_REPORT",
+        "executionReportedDate": "2026-10-26",
+        "generationBefore": 40,
+        "generationAfter": 41,
+        "casAttempts": 1,
+        "tasks": 0,
+        "ledgerFault": null,
+        "claimableJobs": 0,
+        "overdueScheduledCampaigns": 0,
+        "recoverableControllers": 0,
+        "queuedRunningNeedsReviewJobs": 0,
+        "pendingSubmissions": 0,
+        "pendingAcceptances": 0,
+        "uncertaintyMarkers": 0,
+        "historicalWorkExecuted": false,
+        "receiptSha256": "a89c999d631df355fdbd3d5be13bd62283d404ff574296309006e09671b9bff3",
+        "authenticatedAvailabilitySha256": "a89c999d631df355fdbd3d5be13bd62283d404ff574296309006e09671b9bff3",
+        "evidenceManifestSha256": "12f127ffad54a27a3f27ac1e1d43ca95335182472d3cc551717d6dab3bbad501",
+        "independentVpsInspectionByDocumentationEditor": false
+      },
+      "previousClosedObservation": {
+        "generation": 40,
+        "drained": true
+      },
+      "imageHomologation": {
+        "source": "OWNER_RELAYED_LOCAL_CODEX_REPORT",
+        "reportedDate": "2026-10-26",
+        "independentVpsInspectionByDocumentationEditor": false,
+        "status": "PASS",
+        "campaignName": "Campanha teste out.27",
+        "templateName": "imagem_previdenciario",
+        "campaignStatus": "completed",
+        "recipientCount": 2,
+        "recipientIdentifiersPublished": false,
+        "scopeNote": "Actual owner-reported execution used two recipients; previous proposed script described one. Record actual scope without inferring a second campaign or retry.",
+        "mediaCount": 1,
+        "storedAndLinked": true,
+        "accountUploadState": "confirmed",
+        "uploadAttempts": 1,
+        "jobCount": 1,
+        "jobCompleted": true,
+        "providerAcceptances": 2,
+        "providerAcceptancesPerRecipient": 1,
+        "recipientResults": [
+          {
+            "ordinal": 1,
+            "webhookStatus": "read",
+            "crmPersistenceConfirmed": true
+          },
+          {
+            "ordinal": 2,
+            "webhookStatus": "delivered",
+            "crmPersistenceConfirmed": true
+          }
+        ],
+        "webhooksCorrelated": true,
+        "failures": 0,
+        "uncertainties": 0,
+        "duplicates": 0,
+        "globalPendingResults": 0,
+        "guard": {
+          "open": true,
+          "generation": 41,
+          "tasks": 0,
+          "ledgerHealthy": true
+        },
+        "health": {
+          "local": {
+            "ok": true,
+            "db": "ok"
+          },
+          "public": {
+            "ok": true,
+            "db": "ok"
+          }
+        },
+        "evidenceManifestSha256": "0b98ed13f0c4ca1c71a424c4ed8c3de02f2c02c20e59248aab506d280d21a0ae",
+        "artifactsPreserved": true,
+        "retry": false,
+        "buildDeployRestartOrSaveExecuted": false
+      },
+      "nextAcceptance": "PREPARE_SCHEDULING_MULTIBATCH_OR_CLIENT_SPECIFIC_SCOPE_WITHOUT_REPEATING_MEDIA_TESTS"
     }
   },
   "contactsListRecovery": {
@@ -142,8 +354,8 @@
   },
   "templateCampaignMedia": {
     "state": "TECHNICALLY_DEPLOYED",
-    "deploymentRecord": "docs/saas/releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json",
-    "apiDeploymentRecord": "docs/saas/releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json",
+    "deploymentRecord": "docs/saas/releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json",
+    "apiDeploymentRecord": "docs/saas/releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json",
     "components": [
       "api",
       "frontend",
@@ -205,7 +417,11 @@
           "submittedEventCount": 1
         }
       ]
-    }
+    },
+    "historicalCampaignEffectsScope": "PREVIOUS_MEDIA_TEMPLATE_HOMOLOGATION_RECORDS_NOT_CURRENT_MANUAL_CAMPAIGN",
+    "latestCampaignHomologationState": "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS_GENERAL_OPERATIONS_OPEN",
+    "latestCampaignHomologationRecord": "docs/saas/CAMPAIGN_OPERATIONS_READINESS.md",
+    "latestImageHomologationState": "PASS_TWO_CONTROLLED_RECIPIENTS_META_CRM_WEBHOOK"
   },
   "tenantScopedMetaAppId": {
     "codeState": "TECHNICALLY_DEPLOYED",
@@ -219,5 +435,7 @@
     "deploymentRecord": "docs/saas/releases/TENANT_META_APP_ID_2026-10-24_DEPLOYED.json",
     "configurationRecord": "docs/saas/releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json",
     "lastMetaMutationScope": "SINGLE_TEMPLATE_MEDIA_SUBMISSION_ATTEMPT"
-  }
+  },
+  "updatedAtDate": "2026-10-26",
+  "updatedAtUtcScope": "DOCUMENTATION_UPDATE_NOT_DEPLOYMENT_TIMESTAMP"
 }

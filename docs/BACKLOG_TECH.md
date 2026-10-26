@@ -1,13 +1,19 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
 > [!IMPORTANT]
+> Sequência operacional revisada em 26/10: [mapa vigente](saas/PRODUCT_MAP_CURRENT_2026-10-19.md).
+> IMAGE/VIDEO homologados; campanhas abertas na geração 41 conforme relato.
 > **Estado operacional vigente:** CRM/CSV `DEPLOYED / VERIFIED` em 17/10/2026
 > (Fortaleza). A fonte canônica é [saas/CURRENT_STATE.md](saas/CURRENT_STATE.md) e
 > [saas/CURRENT_STATE.json](saas/CURRENT_STATE.json). As entradas CSV datadas abaixo
 > são histórico auditável, não roteiro atual; `CSV SUSPENSO`, `NOT DEPLOYED` e
 > `NOT WINDOW READY` foram superados pela promoção registrada em `4ca6f32c`.
 
-## CRM — listagem após importação CSV (`LOCAL VALIDATED / NOT DEPLOYED`)
+## Histórico CRM — listagem após importação CSV (implantada em 20–21/10)
+
+A classificação local-only abaixo é histórica, superada pelo
+[deploy/read model de 21/10](saas/CRM_CONTACTS_READ_MODEL_REDESIGN_2026-10-20.md).
+Não repetir recuperação ou importação por este trecho.
 
 Em 19/10/2026 foi corrigida localmente a cadeia que podia deixar a lista sem
 resultado após a importação: timeout frontend menor que a transação, acoplamento de
@@ -15,8 +21,8 @@ statuses/contacts e três projeções completas no caminho admin. A correção s
 leituras, protege contra resposta obsoleta, usa timeout explícito de 20s e evita a
 projeção excluída quando a sondagem tenant-scoped não encontra exclusões. Totais,
 filtros, RBAC e zero POST permanecem. Evidência e limites:
-[relatório técnico](saas/CRM_CONTACTS_LIST_RECOVERY_2026-10-19.md). Próximo passo:
-revisão do commit e CI limpa; implantação exige autorização própria.
+[relatório técnico](saas/CRM_CONTACTS_LIST_RECOVERY_2026-10-19.md). O próximo passo
+que constava nessa preparação já foi superado; estado atual no mapa acima.
 
 ## CSV — contrato/perfis/caminhos/quatro modos efetivamente compostos
 

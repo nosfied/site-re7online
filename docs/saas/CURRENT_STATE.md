@@ -1,59 +1,68 @@
 # Estado canônico do Converta
 
-**DEPLOYED / PRODUCTION HEALTHY / META APPROVALS PENDING**
+**DEPLOYED / GENERAL CAMPAIGN OPERATIONS OPEN / IMAGE AND VIDEO ACCEPTANCE PASS / PRODUCTION HEALTHY**
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a implantação ativa está
-no [registro estruturado](releases/TEMPLATE_ADMIN_SYNC_ORDERING_2026-10-24_DEPLOYED.json).
+no [registro estruturado](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json).
 Registros anteriores continuam no [índice documental](DOCUMENTATION_INDEX.md) como
 histórico e retorno; eles não substituem este estado.
 
-## Produção viva — observação de 24/10/2026
+## Implantação relatada em 26/10/2026
 
-- Target ativo de API e frontend:
-  `d7de6453aeab6d117e8d79a1dc3a0722875f39cc`.
-- Release ativa: `immutable-d7de6453-vps-20261024T221500Z`.
-- API: `/opt/re7online/current/api`, PID observado `118102`, start ticks
-  `3652796`, entry SHA-256
-  `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`.
-- Frontend: `/opt/re7online/current/frontend`, PID observado `118502`, start
-  ticks `3663031`, BUILD_ID `PkRjG2UDVfxCmwp-DKMQz`, Next direto em
-  `fork_mode`, uma instância.
-- Worker preservado no runtime `immutable-e2e7f17a-20261022T005110Z`, PID
-  observado `2233`, start ticks `17758`, restart count `0`.
-- Dump PM2 final:
-  `5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13`,
-  modo `0600`, persistido por exatamente um `pm2 save`.
-- Dump de retorno preservado:
-  `8168216ccd7421a3dd2df19459f12f11a7d490d497a376bdf97cf8e24c509f15`.
-- Marker `DEPLOYED`:
-  `1d2be9be3fd5e257700257988bb4cd946dac0f7cb47b6b3a4f861facedd7c543`.
-- Aceite técnico: `2026-10-24T20:01:04-03:00`.
-- Finalização: `2026-10-24T20:04:40-03:00`, America/Fortaleza.
-- Journal final: `DEPLOYED`; lock canônico liberado.
-- API local e pública: HTTP 200, `ok=true`, `db="ok"`.
-- Login, Inbox, CRM, Modelos, Campanhas e asset: HTTP 200 por GET-only.
+Fonte: relatório do Codex local encaminhado pelo owner, com hashes dos recibos
+privados. O editor documental não realizou nova inspeção da VPS. O horário exato
+de finalização não foi fornecido; não é inventado neste registro.
 
-PIDs são observações datadas. Release, hashes, BUILD_ID, dump e marker são as
-identidades duráveis; qualquer janela futura precisa revalidar os processos.
+- Target API/frontend: `a959129e39a07c52881fb7f5cbf21a7f6f1a80ff`.
+- Release: `immutable-a959129e-vps-20261026T023100Z`.
+- API: `/opt/re7online/current/api`, PID 441355, ticks 16603839,
+  entry SHA-256 `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`.
+- Frontend: `/opt/re7online/current/frontend`, PID 441646, ticks 16604558,
+  BUILD_ID `CbNbnlr0VJVv5mME_hvxm`, `fork_mode`, uma instância.
+- Worker: `immutable-e2e7f17a-20261022T005110Z`, PID 2233,
+  ticks 17758, restart count 0; preservado.
+- Dump final: `e54db82c63cea7200c4215ac16a923b0ec3d05a5e2bc0398c1bcb06ee3e68325`; exatamente um `pm2 save`.
+- Marker: `9da2428b15f8eb8b307603556fffb0ef75536829109e4be282ce03caa19cdb80`.
+- Recibo: `3567a10a165af03377ce912ed44f7628646a33cdfb33c70ffc597f926f353dc8`.
+- Journal: `991d549a1bc7f93b88cd1b51e1fdafaef13162555e20eac2b2471566e0804240`.
+- Health local/público: HTTP 200, `ok=true`, `db=ok`.
+- Disponibilidade autenticada: HTTP 200, `ok=true`, `open=false`,
+  `campaign_operations_closed`.
+- Guarda fechada, zero tarefas; lock canônico livre e arquivo preservado.
 
-## Escopo e retorno
+PIDs e contagens são observações datadas, não prova de estado vivo futuro.
 
-O build único ocorreu na VPS em worktree e saída isolados, com Node v20.20.0 e
-npm 10.8.2, sem interromper os serviços vivos. A ativação promoveu API e frontend
-por troca atômica dos caminhos `/current` e restart dos registros PM2 existentes
-sem `--update-env`. O worker e a configuração tenant-scoped foram preservados.
+## Escopo, retorno e próximo ato
 
-O retorno imediato é componente por componente:
+API/frontend foram ativados com o mesmo pacote canônico, sem rebuild, migration,
+chamada Meta ou envio. A consulta autenticada pode atualizar metadados da sessão;
+não deve ser descrita como ausência absoluta de escritas no banco.
 
-- API: `immutable-3630e16-vps-20261024T195842Z`;
-- frontend: `immutable-ec2a9fde-vps-20261024T162005Z`;
-- worker: permanece em `immutable-e2e7f17a-20261022T005110Z`.
+O retorno de ambos os componentes é
+`immutable-d7de6453-vps-20261024T221500Z`, com dump anterior
+`5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13`.
+Retornos transitivos e evidências anteriores permanecem preservados.
 
-Não houve migration, SQL mutante, chamada Meta, upload, submissão, sincronização,
-campanha, importação ou envio durante a janela. A migration vigente de mídia
-continua histórica e aplicada; para este deploy a classificação foi
-`NOT_APPLICABLE_NO_SCHEMA_CHANGE`.
+## Homologação manual posterior — 26/10/2026
+
+Fonte: relatório do Codex local encaminhado pelo owner, sem nova inspeção da VPS
+pelo editor. Uma campanha de vídeo no Demo para um destinatário controlado: um
+upload, um job, uma submissão e uma aceitação Meta; campanha/job completed,
+tentativa 1. CRM vinculado, webhook sent seguido de read, sem falha, pendência,
+reconciliação ou retry. Telefone e IDs privados não são publicados.
+
+Ao final: guarda fechada na geração 40, tarefas zero, drained=true, sem ledger fault,
+zero jobs ativos/vencidos reclamáveis e resultados pendentes. Health local/público
+ok=true/db=ok. Mídia e campanha preservadas. O hash anterior do ledger não identifica
+este estado posterior; o novo hash do ledger não foi fornecido.
+
+Índice privado da janela:
+`d0e8cb9eee4977bdb2225413db5b738232788ffa450300c0f52e803bc2c3466f`.
+Estado: **SEND_ACCEPTED_GUARD_CLOSED**. O aceite cobre esse envio de vídeo, não
+IMAGE, agendamento, multilote ou uso amplo. Próximo ato: **homologação IMAGE, após reabertura geral executada pelo Codex local**, conforme [roteiro](CAMPAIGN_OPERATIONS_READINESS.md). Guarda aberta na geração 41 para uso normal; não repetir CAS de abertura, vídeo,
+build/deploy/save. A abertura e sua evidência estão registradas abaixo.
+Homologação IMAGE e demais cenários mantêm seu escopo próprio.
 
 ## Templates de Utilidade — leitura local
 
@@ -92,3 +101,38 @@ Build no checkout/runtime ativo, `deploy-normal-release.sh`, Deploy V2, PR #190,
 Next em `cluster_mode` e executores temporários em `/tmp` são históricos e
 obsoletos. Instruções históricas de cron ou retenção descrevem o estado de sua época;
 não autorizam instalação, reativação, alteração ou limpeza atual.
+
+## Reabertura geral confirmada — 26/10/2026
+
+Relatório do Codex local encaminhado pelo owner: CAS único da geração lida 40 para
+41, open=true, tarefas 0, sem ledger fault. Disponibilidade administrativa autenticada
+confirmada; zero jobs reclamáveis, campanhas vencidas, controladores recuperáveis,
+jobs queued/running/needs_review, submissões/aceitações pendentes e incertezas antes
+e depois. O scheduler não executou trabalho histórico. Health local/público ok=true,
+db=ok. Não houve build, deploy, restart, save ou envio de teste nessa abertura.
+
+Recibo/disponibilidade SHA-256:
+`a89c999d631df355fdbd3d5be13bd62283d404ff574296309006e09671b9bff3`.
+Índice privado: `12f127ffad54a27a3f27ac1e1d43ca95335182472d3cc551717d6dab3bbad501`.
+Fonte documental: relatório operacional, sem nova inspeção independente pelo editor.
+Estado **GENERAL_OPERATIONS_OPEN**; manter aberta para uso normal, sem repetir
+abertura ou fechar por fim de homologação. Proteções canônicas permanecem ativas.
+Próximo teste de mídia: IMAGE, com escopo e destinatário definidos antes do envio.
+
+## Homologação IMAGE concluída — 26/10/2026
+
+Relato do Codex local encaminhado pelo owner: campanha `Campanha teste out.27`,
+template `imagem_previdenciario`, completed, uma imagem armazenada/vinculada,
+upload Meta confirmed em uma tentativa e um job concluído. O escopo efetivamente
+executado incluiu **dois destinatários**, diferente do roteiro inicialmente proposto
+de um: duas aceitações Meta, uma por destinatário, sem retry ou duplicidade.
+CRM confirmado para ambos; webhooks correlacionados read para um e delivered para
+outro. Telefones e IDs privados não publicados. Sem falhas, incertezas ou pendências
+globais. Guarda aberta na geração 41, íntegra, sem tarefas; health local/público
+ok=true/db=ok. Mídia, campanha e evidências preservadas, sem build/deploy/restart/save.
+
+Índice final privado:
+`0b98ed13f0c4ca1c71a424c4ed8c3de02f2c02c20e59248aab506d280d21a0ae`.
+Aceite IMAGE e VIDEO controlados: PASS. Não repetir os testes nem reabrir a guarda.
+Agendamento/multilote e aceites específicos não são inferidos desses resultados;
+preparar o próximo escopo conforme [roteiro](CAMPAIGN_OPERATIONS_READINESS.md).
