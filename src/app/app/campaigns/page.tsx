@@ -1364,7 +1364,7 @@ export default function AppCampaignsPage() {
   }, [form.returnDepartmentId, form.returnDestinationType, form.returnFlowId, selectedReturnDepartment]);
 
   const returnDestinationEditor = (
-    <div className="grid gap-3 rounded-md border border-white/10 bg-re7-navy/45 p-3 lg:col-span-3">
+    <div className="grid min-w-0 gap-3 rounded-md border border-white/10 bg-re7-navy/45 p-3">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Destino das respostas</p>
         <p className="mt-1 text-xs text-white/60">
@@ -1451,7 +1451,7 @@ export default function AppCampaignsPage() {
   );
 
   const draftSetupEditor = (
-    <div className="grid gap-3 rounded-md border border-sky-300/20 bg-sky-950/20 p-3">
+    <div className="grid min-w-0 gap-3 rounded-md border border-sky-300/20 bg-sky-950/20 p-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Configuração comum</p>
@@ -1464,137 +1464,141 @@ export default function AppCampaignsPage() {
           Compartilhada
         </span>
       </div>
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(240px,360px)]">
-        <label className="grid gap-1 text-sm">
-          <span className="flex min-h-5 items-center justify-between gap-2 text-white/70">
-            <span>Nome do rascunho</span>
-          </span>
-          <input
-            className={campaignComposerControlClasses}
-            value={form.name}
-            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-            placeholder={defaultDraftName}
-          />
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span className="flex min-h-5 items-center justify-between gap-2 text-white/70">
-            <span>Modelo aprovado</span>
-            {selectedTemplate ? (
-              <span className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70">
-                {getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)}
+      <div className={`grid min-w-0 items-start gap-4 ${selectedTemplateHeaderType !== "NONE" ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]" : ""}`}>
+        <div className="grid min-w-0 content-start gap-3">
+          <div className={`grid min-w-0 items-start gap-3 ${selectedTemplateHeaderType !== "NONE" ? "2xl:grid-cols-2" : "lg:grid-cols-[minmax(0,1fr)_minmax(240px,360px)]"}`}>
+            <label className="grid min-w-0 content-start gap-1 text-sm">
+              <span className="flex min-h-5 items-center justify-between gap-2 text-white/70">
+                <span>Nome do rascunho</span>
               </span>
-            ) : null}
-          </span>
-          <select
-            className={campaignComposerControlClasses}
-            value={form.templateId}
-            onChange={(event) => {
-              templateMediaUploadGenerationRef.current += 1;
-              templateMediaInspectionCoordinatorRef.current.cancel();
-              setInspectingTemplateMedia(false);
-              setUploadingTemplateMedia(false);
-              void discardUnpersistedTemplateMedia(form.templateMediaAssetId);
-              setTemplateMediaMetadata(null);
-              const template = templates.find((item) => item.id === event.target.value) ?? null;
-              const labels = getTemplateVariablePositions(template);
-              setForm((prev) => ({
-                ...prev,
-                templateId: event.target.value,
-                templateName: template?.name ?? "",
-                templateVariables: syncTemplateVariables(prev.templateVariables, labels.length),
-                templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, labels),
-                templateMediaAssetId: "",
-                templateMediaFileName: "",
-              }));
-              setCsvPreview(null);
-              setCsvImportReport(null);
-            }}
-          >
-            <option value="">Selecione</option>
-            {templates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      {selectedTemplateHeaderType !== "NONE" ? (
-        <div className="rounded-lg border border-sky-300/20 bg-sky-900/10 p-3">
-          <div className="grid gap-1 text-sm text-white/75">
-            {selectedTemplateHeaderType === "IMAGE" ? "Imagem da campanha" : "Vídeo da campanha"}
-            <TemplateMediaFileInput
-              kind={selectedTemplateHeaderType}
-              fileName={templateMediaMetadata?.fileName ?? form.templateMediaFileName}
-              onSelect={(file) => void handleCampaignMediaFile(file)}
-              disabled={!campaignOperationsOpen || checkingCampaignOperations || uploadingTemplateMedia || inspectingTemplateMedia}
-            />
+              <input
+                className={campaignComposerControlClasses}
+                value={form.name}
+                onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                placeholder={defaultDraftName}
+              />
+            </label>
+            <label className="grid min-w-0 content-start gap-1 text-sm">
+              <span className="flex min-h-5 items-center justify-between gap-2 text-white/70">
+                <span>Modelo aprovado</span>
+                {selectedTemplate ? (
+                  <span className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70">
+                    {getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)}
+                  </span>
+                ) : null}
+              </span>
+              <select
+                className={campaignComposerControlClasses}
+                value={form.templateId}
+                onChange={(event) => {
+                  templateMediaUploadGenerationRef.current += 1;
+                  templateMediaInspectionCoordinatorRef.current.cancel();
+                  setInspectingTemplateMedia(false);
+                  setUploadingTemplateMedia(false);
+                  void discardUnpersistedTemplateMedia(form.templateMediaAssetId);
+                  setTemplateMediaMetadata(null);
+                  const template = templates.find((item) => item.id === event.target.value) ?? null;
+                  const labels = getTemplateVariablePositions(template);
+                  setForm((prev) => ({
+                    ...prev,
+                    templateId: event.target.value,
+                    templateName: template?.name ?? "",
+                    templateVariables: syncTemplateVariables(prev.templateVariables, labels.length),
+                    templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, labels),
+                    templateMediaAssetId: "",
+                    templateMediaFileName: "",
+                  }));
+                  setCsvPreview(null);
+                  setCsvImportReport(null);
+                }}
+              >
+                <option value="">Selecione</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-          <div className="mt-3"><TemplateMediaRequirements kind={selectedTemplateHeaderType} /></div>
-          <p className="mt-2 text-xs text-white/70">
-            Use mídia coerente com o texto e a categoria do modelo. Uma promoção exige modelo de marketing;
-            a aprovação da mídia de exemplo não autoriza conteúdo promocional em um modelo de utilidade.
-            Mídia já carregada permanece preservada se a criação for suspensa.
-          </p>
-          <p className="mt-2 text-xs text-white/55">
-            {uploadingTemplateMedia
-              ? "Enviando mídia com segurança..."
-              : form.templateMediaAssetId
-                ? `Mídia pronta: ${form.templateMediaFileName || "arquivo validado"}`
-                : "A mídia compatível é obrigatória e fica vinculada ao snapshot da campanha."}
-          </p>
-          {(templateMediaPreviewUrl || loadingTemplateMediaPreview || templateMediaPreviewError) ? (
-            <TemplateMediaInspectionPanel
-              kind={selectedTemplateHeaderType}
-              url={templateMediaPreviewUrl}
-              metadata={templateMediaMetadata}
-              loading={loadingTemplateMediaPreview}
-              error={templateMediaPreviewError}
-              className="mt-3"
-            />
+          {templates.length === 0 ? (
+            <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+              <p className="font-semibold">Não há modelos ativos disponíveis para campanha.</p>
+              <p className="mt-1 text-amber-100/80">
+                Verifique os modelos aprovados ou reative um modelo em Modelos Meta.
+              </p>
+              <a
+                href="/app/templates?tab=meta-templates"
+                className="mt-2 inline-flex rounded-md border border-amber-200/40 px-3 py-1.5 font-semibold hover:bg-amber-200/10"
+              >
+                Ir para Modelos Meta
+              </a>
+            </div>
           ) : null}
-          {form.templateMediaAssetId ? (
-            <button
-              type="button"
-              onClick={() => {
-                templateMediaUploadGenerationRef.current += 1;
-                templateMediaInspectionCoordinatorRef.current.cancel();
-                setInspectingTemplateMedia(false);
-                setUploadingTemplateMedia(false);
-                const assetId = form.templateMediaAssetId;
-                setRemovingTemplateMedia(true);
-                void discardUnpersistedTemplateMedia(assetId).finally(() => setRemovingTemplateMedia(false));
-                setTemplateMediaMetadata(null);
-                setForm((current) => ({ ...current, templateMediaAssetId: "", templateMediaFileName: "" }));
-              }}
-              disabled={removingTemplateMedia}
-              className="mt-3 rounded-md border border-white/15 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
-            >
-              Remover mídia desta composição
-            </button>
+          {selectedTemplateEffectiveCategory === "MARKETING" ? (
+            <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+              Este modelo está classificado como Marketing pela Meta. Revise política e consentimento antes de enviar.
+            </div>
           ) : null}
+          {returnDestinationEditor}
         </div>
-      ) : null}
-      {templates.length === 0 ? (
-        <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
-          <p className="font-semibold">Não há modelos ativos disponíveis para campanha.</p>
-          <p className="mt-1 text-amber-100/80">
-            Verifique os modelos aprovados ou reative um modelo em Modelos Meta.
-          </p>
-          <a
-            href="/app/templates?tab=meta-templates"
-            className="mt-2 inline-flex rounded-md border border-amber-200/40 px-3 py-1.5 font-semibold hover:bg-amber-200/10"
-          >
-            Ir para Modelos Meta
-          </a>
-        </div>
-      ) : null}
-      {selectedTemplateEffectiveCategory === "MARKETING" ? (
-        <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
-          Este modelo está classificado como Marketing pela Meta. Revise política e consentimento antes de enviar.
-        </div>
-      ) : null}
-      {returnDestinationEditor}
+        {selectedTemplateHeaderType !== "NONE" ? (
+          <aside aria-label="Mídia da campanha" className="min-w-0 self-start break-words rounded-lg border border-sky-300/20 bg-sky-900/10 p-3">
+            <div className="grid gap-1 text-sm text-white/75">
+              {selectedTemplateHeaderType === "IMAGE" ? "Imagem da campanha" : "Vídeo da campanha"}
+              <TemplateMediaFileInput
+                kind={selectedTemplateHeaderType}
+                fileName={templateMediaMetadata?.fileName ?? form.templateMediaFileName}
+                onSelect={(file) => void handleCampaignMediaFile(file)}
+                disabled={!campaignOperationsOpen || checkingCampaignOperations || uploadingTemplateMedia || inspectingTemplateMedia}
+              />
+            </div>
+            <div className="mt-3"><TemplateMediaRequirements kind={selectedTemplateHeaderType} /></div>
+            <p className="mt-2 text-xs text-white/70">
+              Use mídia coerente com o texto e a categoria do modelo. Uma promoção exige modelo de marketing;
+              a aprovação da mídia de exemplo não autoriza conteúdo promocional em um modelo de utilidade.
+              Mídia já carregada permanece preservada se a criação for suspensa.
+            </p>
+            <p className="mt-2 text-xs text-white/55">
+              {uploadingTemplateMedia
+                ? "Enviando mídia com segurança..."
+                : form.templateMediaAssetId
+                  ? `Mídia pronta: ${form.templateMediaFileName || "arquivo validado"}`
+                  : "A mídia compatível é obrigatória e fica vinculada ao snapshot da campanha."}
+            </p>
+            {(templateMediaPreviewUrl || loadingTemplateMediaPreview || templateMediaPreviewError) ? (
+              <TemplateMediaInspectionPanel
+                kind={selectedTemplateHeaderType}
+                url={templateMediaPreviewUrl}
+                metadata={templateMediaMetadata}
+                loading={loadingTemplateMediaPreview}
+                error={templateMediaPreviewError}
+                className="mt-3"
+              />
+            ) : null}
+            {form.templateMediaAssetId ? (
+              <button
+                type="button"
+                onClick={() => {
+                  templateMediaUploadGenerationRef.current += 1;
+                  templateMediaInspectionCoordinatorRef.current.cancel();
+                  setInspectingTemplateMedia(false);
+                  setUploadingTemplateMedia(false);
+                  const assetId = form.templateMediaAssetId;
+                  setRemovingTemplateMedia(true);
+                  void discardUnpersistedTemplateMedia(assetId).finally(() => setRemovingTemplateMedia(false));
+                  setTemplateMediaMetadata(null);
+                  setForm((current) => ({ ...current, templateMediaAssetId: "", templateMediaFileName: "" }));
+                }}
+                disabled={removingTemplateMedia}
+                className="mt-3 rounded-md border border-white/15 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
+              >
+                Remover mídia desta composição
+              </button>
+            ) : null}
+          </aside>
+        ) : null}
+      </div>
     </div>
   );
 
