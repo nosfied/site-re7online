@@ -58,18 +58,17 @@ class ExecutorFixture:
         control = self.control / "scripts/pm2-definition-control.py"
         control.write_text("""#!/usr/bin/env python3
 import argparse,json,os,pathlib,sys,time
-if sys.argv[1]=='validate-pair': print('{"result":"PM2_DEFINITION_PAIR_VALID"}');raise SystemExit(0)
 p=argparse.ArgumentParser();p.add_argument('command')
-for key in ('request','source-artifact','source-sha256','definition','pm2','stable-path','release-root','port','local-health','public-health','deadline-seconds','poll-seconds','report'): p.add_argument('--'+key,required=True)
-a=p.parse_args();role=json.loads(pathlib.Path(a.source_artifact).read_text())['role'];mode=os.environ.get('FAKE_READINESS','pass') if role=='candidate' else 'pass'
+for key in ('component','process-name','expected-cwd','expected-script','expected-interpreter','release-id','entry-sha256','build-id','pm2','stable-path','release-root','port','local-health','public-health','deadline-seconds','poll-seconds','report'): p.add_argument('--'+key,required=True)
+a=p.parse_args();role='candidate' if 'candidate' in pathlib.Path(a.release_root).name else 'rollback';mode=os.environ.get('FAKE_READINESS','pass') if role=='candidate' else 'pass'
 if mode=='delayed': time.sleep(.2);mode='pass'
 if mode=='guard-drift':
  g=pathlib.Path(os.environ['FAKE_GUARD']);value=json.loads(g.read_text());value['generation']+=1;g.write_text(json.dumps(value)+'\\n');mode='pass'
 if mode=='timeout': print('partial stdout',flush=True);print('partial stderr',file=sys.stderr,flush=True);time.sleep(5)
 if mode=='missing': print('no report');raise SystemExit(2)
 if mode=='deny': value={'result':'READINESS_DENY','component':'frontend','port':3000,'reason':'readiness_pm2_lexical_identity','sampleCount':0,'samples':[]};code=2
-elif mode=='mismatch': value={'result':'READINESS_PASS','component':'api','port':3001,'releaseId':'wrong','stableSamples':3,'sampleCount':3,'samples':[]};code=0
-else: value={'result':'READINESS_PASS','component':'frontend','port':3000,'releaseId':pathlib.Path(a.release_root).name,'stableSamples':3,'sampleCount':3,'samples':[1,2,3],'pid':123,'startTicks':456};code=0
+elif mode=='mismatch': value={'result':'READINESS_PASS','component':'api','port':3001,'releaseId':'wrong','observationMode':'existing_pm2_registration','stableSamples':3,'sampleCount':3,'samples':[]};code=0
+else: value={'result':'READINESS_PASS','component':'frontend','port':3000,'releaseId':pathlib.Path(a.release_root).name,'observationMode':'existing_pm2_registration','stableSamples':3,'sampleCount':3,'samples':[1,2,3],'pid':123,'startTicks':456};code=0
 pathlib.Path(a.report).write_text(json.dumps(value)+'\\n');print(json.dumps(value));raise SystemExit(code)
 """)
         subprocess.run(["git", "init", "-q"], cwd=self.control, check=True)
@@ -84,6 +83,9 @@ pathlib.Path(a.report).write_text(json.dumps(value)+'\\n');print(json.dumps(valu
         for item, build in ((self.release, "candidate-build"), (self.rollback, "rollback-build")):
             (item / "frontend-runtime/.next").mkdir(parents=True)
             (item / "frontend-runtime/.next/BUILD_ID").write_text(build + "\n")
+            entry = item / "frontend-runtime/node_modules/next/dist/bin"
+            entry.mkdir(parents=True)
+            (entry / "next").write_text("fixture next entry\n")
         self.current = self.root / "current"; self.current.mkdir(); (self.current / "frontend").symlink_to(self.rollback / "frontend-runtime")
         self.package = self.root / "package.tar.xz"; self.package.write_bytes(b"authenticated fixture package")
         self.guard = self.root / "guard.json"; self.guard.write_text(json.dumps({"version":1,"open":guard_open,"generation":41,"tasks":{},"audit":[]})+"\n")
@@ -100,7 +102,7 @@ elif sys.argv[1]=='jlist':
  r=int(c.read_text());print(json.dumps([
  {{'name':'re7-whatsapp-agent','pid':{pid},'pm2_env':{{'status':'online','restart_time':2,'pm_cwd':'/api','pm_exec_path':'/api/index.js'}}}},
  {{'name':'re7-whatsapp-web-worker','pid':{pid},'pm2_env':{{'status':'online','restart_time':0,'pm_cwd':'/worker','pm_exec_path':'/worker/index.js'}}}},
- {{'name':'re7-admin-front','pid':{pid},'pm2_env':{{'status':'online','restart_time':r,'pm_cwd':'/current/frontend','pm_exec_path':'/current/frontend/server.js'}}}}]))
+ {{'name':'re7-admin-front','pid':{pid},'pm2_env':{{'status':'online','restart_time':r,'pm_cwd':{str(self.current / "frontend")!r},'pm_exec_path':{str(self.current / "frontend/node_modules/next/dist/bin/next")!r}}}}}]))
 elif sys.argv[1]=='restart': c.write_text(str(int(c.read_text())+1));print('restarted')
 else: raise SystemExit(2)
 """); self.pm2.chmod(0o700)
@@ -110,12 +112,12 @@ else: raise SystemExit(2)
         self.rollback_source = self.root / "rollback-source.json"; self.rollback_source.write_text('{"role":"rollback"}\n')
         script = SOURCE.read_text()
         replacements = {
-            "CONTROL_PLANE=f8a6f948a1daeef5d38e9c97445fcf9e9e647a1c": f"CONTROL_PLANE={self.control_sha}",
+            "CONTROL_PLANE=cd8e7eb1d57eec0881bbca809ac704f2c9f657fd": f"CONTROL_PLANE={self.control_sha}",
             "TARGET=d436239e13764b65642b37a4310082acd3a6a485": "TARGET=" + "a"*40,
             "RELEASE=immutable-d436239e-vps-20261026T131821Z": f"RELEASE={self.release.name}",
             "EXPECTED_PACKAGE=ed02ba8057cb5ef14f98cd715b81e2daf18e21a2826d7d4f8888f25a00e3d36b": f"EXPECTED_PACKAGE={digest(self.package)}",
             "EXPECTED_PRODUCER=d6b67fb0a1888f2e8e8f3ad828bd8e17725e89c47c2de3d4f4d4386def243cab": f"EXPECTED_PRODUCER={digest(producer)}",
-            "EXPECTED_CONTROL=bdf8ac3731dd3b37d3c48b3a629ee7e166796f9fa2e27ee9148c67d674814564": f"EXPECTED_CONTROL={digest(control)}",
+            "EXPECTED_CONTROL=4ca15fccb36f4288a20c58baa59d1af13c79477f757ef4267cb5dd327faacf4f": f"EXPECTED_CONTROL={digest(control)}",
             "RETURN_RELEASE=immutable-a959129e-vps-20261026T023100Z": f"RETURN_RELEASE={self.rollback.name}",
             "/usr/bin/timeout --signal=TERM --kill-after=5s 45s": "/usr/bin/timeout --signal=TERM --kill-after=.1s .3s",
         }
@@ -139,8 +141,6 @@ else: raise SystemExit(2)
             "RE7_PM2":str(self.pm2), "RE7_CURRENT_ROOT":str(self.current), "RE7_CAMPAIGN_GUARD":str(self.guard), "RE7_PM2_DUMP":str(self.dump),
             "RE7_API_LOCAL_HEALTH":self.base+"/health", "RE7_API_PUBLIC_HEALTH":self.base+"/health",
             "RE7_FRONTEND_LOCAL_BASE":self.base, "RE7_FRONTEND_PUBLIC_BASE":self.base,
-            "RE7_CANDIDATE_REQUEST":str(self.request), "RE7_CANDIDATE_SOURCE_ARTIFACT":str(self.candidate_source), "RE7_CANDIDATE_SOURCE_SHA256":digest(self.candidate_source), "RE7_CANDIDATE_DEFINITION":str(self.definition),
-            "RE7_ROLLBACK_REQUEST":str(self.request), "RE7_ROLLBACK_SOURCE_ARTIFACT":str(self.rollback_source), "RE7_ROLLBACK_SOURCE_SHA256":digest(self.rollback_source), "RE7_ROLLBACK_DEFINITION":str(self.definition),
             "FAKE_READINESS":behavior,
             "FAKE_GUARD":str(self.guard),
         })
@@ -171,6 +171,13 @@ class FrontendExecutorTest(unittest.TestCase):
     def test_baseline_v7_is_explicitly_bound(self):
         self.assertEqual((ROOT/"scripts/ci/fixtures/a959-activation-v7.sha256").read_text().split()[0], BASELINE_SHA)
         self.assertIn(f"BASELINE_V7_SHA256={BASELINE_SHA}", SOURCE.read_text())
+
+    def test_executor_has_no_private_binding_dependency(self):
+        source = SOURCE.read_text()
+        self.assertNotIn("RE7_CANDIDATE_REQUEST", source)
+        self.assertNotIn("RE7_ROLLBACK_REQUEST", source)
+        self.assertNotIn("validate-pair", source)
+        self.assertIn("wait-existing-readiness", source)
 
     def test_pass_and_delayed_listener_preserve_frontend_only_contract(self):
         for behavior in ("pass", "delayed"):
