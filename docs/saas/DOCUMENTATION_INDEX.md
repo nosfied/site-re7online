@@ -45,6 +45,8 @@
 
 ## Backlog ativo separado
 
+- [Disponibilidade, mídia e homologação de campanhas](CAMPAIGN_OPERATIONS_READINESS.md)
+  — correção preparada; deploy com guarda fechada, inventário de reabertura e envio controlado são etapas separadas.
 - [Adequar encerramento e CSAT à janela de 24h](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
 - [Elegibilidade set based de campanhas](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md)
   — `PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE`; não bloqueia o deploy técnico.
