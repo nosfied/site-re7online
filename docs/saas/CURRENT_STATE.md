@@ -51,6 +51,15 @@ guarda ocorreu durante ativação/finalização.
 
 PIDs e contagens são observações datadas, não prova de estado vivo futuro.
 
+### Candidata frontend preparada, ainda não implantada
+
+A correção de reconciliação visual `.34`/`.35` está no target
+`123ba7bd78b2568ee982bf8590840de029a80072` e na release candidata
+`immutable-123ba7bd-vps-20261026T200100Z`, BUILD_ID
+`HqCb2SLZ9r8H7D8fnGryu`. O pacote foi produzido uma única vez e verificado, mas
+não foi instalado nem ativado. A produção continua em `f160`; agendamento continua
+bloqueado até ativação frontend-only e aceite técnico explícitos em etapa separada.
+
 ## Continuidade canônica de frontend-only
 
 O target funcional `f160` reutilizou a CI do head `ed9ea43` somente após prova de

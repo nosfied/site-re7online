@@ -437,7 +437,11 @@ Contrato da correção:
 
 A regressão fixa o cenário `.34` selecionada → criar `.35` → detalhe/listagem
 atrasados ou indisponíveis → modal continua obrigatório para `.35`. A correção de
-código precisa ser revisada, implantada e aceita antes da homologação de agendamento.
+código foi incorporada ao target `123ba7bd78b2568ee982bf8590840de029a80072` e à
+release candidata frontend-only
+`immutable-123ba7bd-vps-20261026T200100Z`, ainda não instalada nem aceita. A
+homologação de agendamento permanece bloqueada até a futura ativação e o aceite
+técnico explícito dessa candidata.
 Ela não autoriza envio, descarte do rascunho, nova chamada Meta ou repetição das
 homologações IMAGE/VIDEO.
 
