@@ -202,12 +202,24 @@ test("campaign reuse toast and shared composer controls keep owner-visible polis
   assert.ok(pageSource.includes('warning ? "warning" : "reuse"'));
   assert.ok(pageSource.includes("const campaignComposerControlClasses ="));
   assert.ok(pageSource.includes("theme-select h-10 w-full min-w-0 rounded-md"));
-  assert.ok(pageSource.includes('className="flex min-h-5 items-center justify-between gap-2 text-white/70"'));
-  assert.ok(pageSource.includes('className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70"'));
+  assert.equal(pageSource.match(/className="flex min-h-5 items-center justify-between gap-2 text-white\/70"/g)?.length ?? 0, 2);
+  assert.ok(pageSource.includes("Identificação interna para localizar este rascunho."));
+  assert.ok(pageSource.includes("Selecione o modelo aprovado usado nesta campanha."));
   assert.ok(pageSource.includes("getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)"));
   assert.ok(!pageSource.includes("Categoria na Meta:"));
   assert.equal(pageSource.match(/className=\{campaignComposerControlClasses\}/g)?.length ?? 0, 2);
   assert.ok(pageSource.includes("TemplateMediaFileInput"));
+});
+
+test("campaign media guidance is responsive, replaces instructions and resets on selection changes", () => {
+  assert.ok(pageSource.includes("CampaignMediaGuidance"));
+  assert.ok(pageSource.includes("compact={Boolean(form.templateMediaAssetId || uploadingTemplateMedia || inspectingTemplateMedia)}"));
+  assert.ok(pageSource.includes("expanded={templateMediaGuidanceExpanded}"));
+  assert.ok(pageSource.includes("onToggle={() => setTemplateMediaGuidanceExpanded((current) => !current)}"));
+  assert.ok((pageSource.match(/setTemplateMediaGuidanceExpanded\(false\)/g) ?? []).length >= 3);
+  assert.ok(pageSource.includes('lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]'));
+  assert.ok(pageSource.includes('className="min-w-0 self-start break-words'));
+  assert.ok(pageSource.indexOf("<TemplateMediaInspectionPanel") < pageSource.indexOf("<CampaignMediaGuidance"));
 });
 
 test("campaign media is preserved across every composer path without automatic sends", () => {

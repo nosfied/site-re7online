@@ -243,6 +243,14 @@ e envio.
 O composer exige mídia compatível quando o template tem header, mostra preview
 autenticado e preserva a referência em:
 
+- antes da seleção, o seletor apresenta normalmente os requisitos e as orientações;
+- depois da seleção, a inspeção de imagem ou vídeo ocupa a área principal da coluna
+  e as orientações passam para uma linha acessível, inicialmente recolhida e
+  expansível, sem alongar desnecessariamente o formulário;
+- nome do rascunho e modelo aprovado compartilham a mesma estrutura de label,
+  controle e mensagem auxiliar; em telas largas as colunas começam alinhadas e,
+  em telas estreitas, empilham sem altura fixa ou overflow horizontal;
+
 - envio manual;
 - CRM estático e CRM dinâmico;
 - CSV;
