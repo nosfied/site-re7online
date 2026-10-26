@@ -144,6 +144,15 @@ class ReleaseProducerTest(unittest.TestCase):
             raise AssertionError((result.stdout, result.stderr))
         cls.release = cls.output_a / cls.release_id
         cls.package = cls.output_a / f"{cls.release_id}.tar.xz"
+        # Preserve the original PENDING lifecycle; a separate operator review
+        # records why this authenticated fixture is retained for verification.
+        raw = (cls.output_a / "generation-lifecycle.private.json").read_bytes()
+        write(cls.output_a / "generation-review.private.json", json.dumps({
+            "schemaVersion": 1, "generationId": cls.release_id,
+            "lifecycleSha256": hashlib.sha256(raw).hexdigest(),
+            "decision": "PRESERVE", "reviewer": "synthetic-test",
+            "reason": "retained fixture", "evidenceSha256": "a" * 64,
+        }) + "\n", 0o600)
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -366,6 +375,104 @@ class ReleaseProducerTest(unittest.TestCase):
         self.assertEqual(lifecycle["failureClass"], "Denied")
         self.assertEqual(lifecycle["classification"], "PENDING")
 
+    def test_pending_generation_blocks_before_output_or_command(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="generation-pending-") as temp:
+            parent = Path(temp)
+            previous = parent / "previous"
+            previous.mkdir()
+            write(previous / "generation-lifecycle.private.json", json.dumps({
+                "schemaVersion": 1, "generationId": "previous",
+                "state": "COMPLETE", "classification": "PENDING",
+            }), 0o600)
+            capacity = capacity_contract(parent / "capacity.json", parent, self.target, "next")
+            output = parent / "next"
+            args = MODULE.parser().parse_args([
+                "build", "--repo", str(self.repo), "--target", self.target,
+                "--release-id", "next", "--components", COMPONENTS,
+                "--output", str(output), "--source-date-epoch", EPOCH,
+                "--capacity-contract", str(capacity),
+            ])
+            with patch.object(MODULE, "toolchain") as tool:
+                with self.assertRaisesRegex(MODULE.Denied, "generation_review_pending:previous"):
+                    MODULE.build(args)
+                tool.assert_not_called()
+            self.assertFalse(output.exists())
+
+    def test_generation_review_is_bound_to_terminal_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="generation-review-") as temp:
+            parent = Path(temp)
+            old = parent / "old"
+            old.mkdir()
+            lifecycle = old / "generation-lifecycle.private.json"
+            write(lifecycle, json.dumps({"schemaVersion": 1, "generationId": "old", "state": "FAILED"}), 0o600)
+            review = {"schemaVersion": 1, "generationId": "old",
+                      "lifecycleSha256": hashlib.sha256(lifecycle.read_bytes()).hexdigest(),
+                      "decision": "PRESERVE", "reviewer": "synthetic-test",
+                      "reason": "diagnosis retained", "evidenceSha256": "a" * 64}
+            write(old / "generation-review.private.json", json.dumps(review), 0o600)
+            MODULE.require_generation_reviews(parent)
+            review["lifecycleSha256"] = "b" * 64
+            write(old / "generation-review.private.json", json.dumps(review), 0o600)
+            with self.assertRaisesRegex(MODULE.Denied, "generation_review_invalid"):
+                MODULE.require_generation_reviews(parent)
+            write(lifecycle, json.dumps({"schemaVersion": 1, "generationId": "old", "state": "BUILDING"}), 0o600)
+            with self.assertRaisesRegex(MODULE.Denied, "generation_not_terminal"):
+                MODULE.require_generation_reviews(parent)
+
+    def test_build_window_contention_never_unlinks_lock(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="generation-lock-") as temp:
+            parent = Path(temp)
+            with MODULE.generation_build_window(parent):
+                with self.assertRaisesRegex(MODULE.Denied, "generation_build_busy"):
+                    with MODULE.generation_build_window(parent):
+                        self.fail("second producer entered")
+            self.assertTrue((parent / ".generation-build.lock").is_file())
+            with MODULE.generation_build_window(parent):
+                pass
+
+    def test_capacity_loss_stops_before_next_command_and_records_failed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="capacity-phase-") as temp:
+            parent = Path(temp)
+            capacity = capacity_contract(parent / "capacity.json", parent, self.target, "phase-test")
+            output = parent / "next"
+            args = MODULE.parser().parse_args([
+                "build", "--repo", str(self.repo), "--target", self.target,
+                "--release-id", "phase-test", "--components", COMPONENTS,
+                "--output", str(output), "--source-date-epoch", EPOCH,
+                "--capacity-contract", str(capacity),
+            ])
+            commands = []
+            original_run = MODULE.run
+            def run(*args, **kwargs):
+                if "stage" not in kwargs:
+                    return original_run(*args, **kwargs)
+                commands.append(kwargs["stage"])
+                return ""
+            def checkpoint(_capacity, phase, _remaining=()):
+                if phase == "after_root_npm_ci":
+                    raise MODULE.Denied("capacity_checkpoint:after_root_npm_ci")
+                return {"phase": phase}
+            with patch.object(MODULE, "toolchain", return_value={}), \
+                 patch.object(MODULE, "run", side_effect=run), \
+                 patch.object(MODULE, "capacity_checkpoint", side_effect=checkpoint):
+                with self.assertRaisesRegex(MODULE.Denied, "capacity_checkpoint"):
+                    MODULE.build(args)
+            self.assertEqual(commands, ["root_npm_ci"])
+            self.assertEqual(json.loads((output / "generation-lifecycle.private.json").read_text())["state"], "FAILED")
+
+    def test_capacity_checkpoint_reserves_future_copy_and_inodes(self) -> None:
+        from types import SimpleNamespace
+        capacity = {"filesystemPath": str(self.base), "device": self.base.stat().st_dev,
+                    "budgets": {"operationalReserveBytes": 100, "failureEvidenceBytes": 50,
+                                "operationalReserveInodes": 10, "runtimePayloadBytes": 500}}
+        with patch.object(MODULE.os, "statvfs", return_value=SimpleNamespace(f_bavail=200, f_frsize=1, f_favail=20)):
+            MODULE.capacity_checkpoint(capacity, "between_commands")
+            with self.assertRaisesRegex(MODULE.Denied, "capacity_checkpoint:before_copy"):
+                MODULE.capacity_checkpoint(capacity, "before_copy", ("runtimePayloadBytes",))
+        with patch.object(MODULE.os, "statvfs", return_value=SimpleNamespace(f_bavail=1000, f_frsize=1, f_favail=9)):
+            with self.assertRaisesRegex(MODULE.Denied, "capacity_checkpoint:inodes"):
+                MODULE.capacity_checkpoint(capacity, "inodes")
+
     def test_package_inventory_excludes_source_worker_and_sensitive_files(self) -> None:
         with tarfile.open(self.package, "r:xz") as archive:
             names = [member.name for member in archive.getmembers()]
@@ -402,3 +509,4 @@ class ReleaseProducerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
