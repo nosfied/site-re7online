@@ -113,12 +113,12 @@ else: raise SystemExit(2)
         script = SOURCE.read_text()
         replacements = {
             "CONTROL_PLANE=b1689394feb27bb92487896dbee21f34e70b53d5": f"CONTROL_PLANE={self.control_sha}",
-            "TARGET=d436239e13764b65642b37a4310082acd3a6a485": "TARGET=" + "a"*40,
-            "RELEASE=immutable-d436239e-vps-20261026T131821Z": f"RELEASE={self.release.name}",
-            "EXPECTED_PACKAGE=ed02ba8057cb5ef14f98cd715b81e2daf18e21a2826d7d4f8888f25a00e3d36b": f"EXPECTED_PACKAGE={digest(self.package)}",
+            "TARGET=f16027874e91c86e5f818d0888e6d735b07a6eda": "TARGET=" + "a"*40,
+            "RELEASE=immutable-f1602787-vps-20261026T174702Z": f"RELEASE={self.release.name}",
+            "EXPECTED_PACKAGE=68eca577dee432888e3b3b0e659492efba668d4ce9bf3295225c22eb3ad11701": f"EXPECTED_PACKAGE={digest(self.package)}",
             "EXPECTED_PRODUCER=d248b9128688b429beec37902e78cacb4b45af4a074e287eed253bdf05c8b065": f"EXPECTED_PRODUCER={digest(producer)}",
             "EXPECTED_CONTROL=a8f71a51ea09e3746db75dd952f581650ac2f43a02ceecdff1a6c4ae5c4b40e6": f"EXPECTED_CONTROL={digest(control)}",
-            "RETURN_RELEASE=immutable-a959129e-vps-20261026T023100Z": f"RETURN_RELEASE={self.rollback.name}",
+            "RETURN_RELEASE=immutable-d436239e-vps-20261026T131821Z": f"RETURN_RELEASE={self.rollback.name}",
             "/usr/bin/timeout --signal=TERM --kill-after=5s 45s": "/usr/bin/timeout --signal=TERM --kill-after=.1s .3s",
         }
         for old, new in replacements.items():
@@ -171,6 +171,32 @@ class FrontendExecutorTest(unittest.TestCase):
     def test_baseline_v7_is_explicitly_bound(self):
         self.assertEqual((ROOT/"scripts/ci/fixtures/a959-activation-v7.sha256").read_text().split()[0], BASELINE_SHA)
         self.assertIn(f"BASELINE_V7_SHA256={BASELINE_SHA}", SOURCE.read_text())
+
+    def test_release_bindings_reject_the_previous_generation(self):
+        source = SOURCE.read_text()
+        assignments = dict(
+            line.split("=", 1)
+            for line in source.splitlines()
+            if line.split("=", 1)[0] in {
+                "TARGET", "RELEASE", "EXPECTED_PACKAGE", "RETURN_RELEASE"
+            }
+        )
+        current = {
+            "TARGET": "f16027874e91c86e5f818d0888e6d735b07a6eda",
+            "RELEASE": "immutable-f1602787-vps-20261026T174702Z",
+            "EXPECTED_PACKAGE": "68eca577dee432888e3b3b0e659492efba668d4ce9bf3295225c22eb3ad11701",
+            "RETURN_RELEASE": "immutable-d436239e-vps-20261026T131821Z",
+        }
+        previous = {
+            "TARGET": "d436239e13764b65642b37a4310082acd3a6a485",
+            "RELEASE": "immutable-d436239e-vps-20261026T131821Z",
+            "EXPECTED_PACKAGE": "ed02ba8057cb5ef14f98cd715b81e2daf18e21a2826d7d4f8888f25a00e3d36b",
+            "RETURN_RELEASE": "immutable-a959129e-vps-20261026T023100Z",
+        }
+        for name, value in current.items():
+            self.assertEqual(assignments[name], value)
+        for name, value in previous.items():
+            self.assertNotEqual(assignments[name], value)
 
     def test_executor_has_no_private_binding_dependency(self):
         source = SOURCE.read_text()
