@@ -384,3 +384,32 @@ Não repetir imagem/vídeo para produzir provas equivalentes. A admissão geral 
 aberta; não há nova abertura ou fechamento a executar. Próximo ato: preparar o
 escopo restante de agendamento/multilote ou aceite específico de cliente, conforme
 prioridade do owner e seus roteiros, sem envio ou agendamento adicional implícito.
+
+## Apresentação de mídia encerrada e sequência restante
+
+O ajuste visual do composer foi aceito e implantado no frontend
+`immutable-f1602787-vps-20261026T174702Z`, target
+`f16027874e91c86e5f818d0888e6d735b07a6eda`, BUILD_ID
+`HYTuoIlZopPMaTrcg6uiv`. Nome do rascunho e modelo aprovado estão alinhados; após a
+seleção, a prévia substitui a área principal das instruções e as orientações ficam em
+linha recolhível. O registro é
+[`CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json`](releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json).
+
+Essa frente está encerrada. Não repetir build, ativação, `pm2 save`, IMAGE ou VIDEO
+para obter a mesma prova. A sequência canônica restante é:
+
+1. **Agendamento controlado:** primeiro preparar o escopo, template, destinatário,
+   horário e critérios de aceite; somente depois pedir autorização explícita para a
+   mutação. Provar uma única materialização/execução, ausência de duplicidade,
+   resultado Meta, CRM/webhook e estado global final.
+2. **Multilote:** começar por prova não produtiva/set-based e capacidade. Qualquer
+   envio produtivo em volume exige universo de destinatários e autorização próprios;
+   a homologação IMAGE com dois destinatários não certifica multilote.
+3. **Aceites específicos de cliente, inclusive CRA-PR:** executar somente com
+   conteúdo, categoria, template, tenant, destinatários e autorização daquele
+   contrato. A guarda global aberta não substitui esse aceite.
+
+Antes de cada ato mutante, fazer fotografia fresca somente dos gates pertinentes.
+Não fechar/reabrir a guarda por rotina, não retomar históricos, não repetir provider
+calls aceitas e não acoplar nova homologação a rebuild ou deploy sem mudança de código.
+
