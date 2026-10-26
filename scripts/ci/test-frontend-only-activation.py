@@ -194,7 +194,7 @@ class FrontendExecutorTest(unittest.TestCase):
         for behavior,predicate in expected.items():
             f,r=self.run_case(behavior)
             try:
-                self.assertNotEqual(r.returncode,0);state=json.loads((f.tx/"window-state.private.json").read_text())
+                self.assertNotEqual(r.returncode,0,(behavior,r.stdout,r.stderr));state=json.loads((f.tx/"window-state.private.json").read_text())
                 incomplete = behavior in {"guard-drift", "readiness-fsync-failure"}
                 self.assertEqual(state["state"],"ROLLBACK_INCOMPLETE" if incomplete else "ROLLED_BACK");self.assertIn(predicate,state["failurePredicate"])
                 self.assertEqual((f.current/"frontend").resolve(),f.rollback/"frontend-runtime")
