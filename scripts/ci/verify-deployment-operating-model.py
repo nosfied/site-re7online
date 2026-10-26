@@ -49,16 +49,18 @@ require("executor de ativação temporário em `/tmp`" in model,
 runbook = (ROOT / "docs/saas/DEPLOY_RUNBOOK.md").read_text()
 driver = (ROOT / "scripts/converta-deploy.py").read_text()
 producer = (ROOT / "scripts/converta-release.py").read_text()
-require(len(runbook.splitlines()) <= 200, "minimal deploy runbook size")
+require(len(runbook.splitlines()) <= 280, "bounded deploy runbook size")
 for marker in ("preflight", "activate", "finalize", "rollback", "status",
-               "PREFLIGHT PASS", "AWAITING_ACCEPTANCE", "DEPLOYED", "ROLLED_BACK"):
+               "PREFLIGHT PASS", "AWAITING_ACCEPTANCE", "DEPLOYED", "ROLLED_BACK",
+               "generation-retirement.py", "DEPLOYED_SANITIZED", "12 GiB"):
     require(marker in runbook, f"deploy runbook marker {marker}")
 for marker in ('choices=("preflight", "activate", "finalize", "rollback", "status")',
                "pm2-definition-control.py", '"wait-readiness"', '"validate-pair"',
                '"ACEITE TÉCNICO PASS"'):
     require(marker in driver, f"minimal deploy driver marker {marker}")
 for marker in ('add_parser("build")', 'add_parser("verify")', 'SOURCE_DATE_EPOCH',
-               '"schemaVersion": 1', 'RELEASE VERIFIED'):
+               '"schemaVersion": 1', 'RELEASE VERIFIED',
+               'generation-artifacts.private.json', 'MINIMUM_BUILD_FREE_BYTES'):
     require(marker in producer, f"external release producer marker {marker}")
 control = (ROOT / "scripts/pm2-definition-control.py").read_text()
 for marker in (
@@ -71,7 +73,7 @@ for marker in (
     require(marker in control, f"versioned readiness marker {marker}")
 frontend_executor = (ROOT / "scripts/frontend-only-activation.sh").read_text()
 for marker in (
-    "wait-readiness", "--report", "READINESS_OBSERVABILITY_DEFECT",
+    "wait-existing-readiness", "--report", "READINESS_OBSERVABILITY_DEFECT",
     "AWAITING_ACCEPTANCE", "ROLLED_BACK", "handoff_lock",
 ):
     require(marker in frontend_executor, f"frontend-only executor marker {marker}")
