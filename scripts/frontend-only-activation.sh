@@ -3,12 +3,12 @@ set -Eeuo pipefail
 umask 077
 
 BASELINE_V7_SHA256=931900e7fb7229ffd5983b5bbbf8223191108d3b09110655452a43e42f71e2d4
-CONTROL_PLANE=f8a6f948a1daeef5d38e9c97445fcf9e9e647a1c
+CONTROL_PLANE=b1689394feb27bb92487896dbee21f34e70b53d5
 TARGET=d436239e13764b65642b37a4310082acd3a6a485
 RELEASE=immutable-d436239e-vps-20261026T131821Z
 EXPECTED_PACKAGE=ed02ba8057cb5ef14f98cd715b81e2daf18e21a2826d7d4f8888f25a00e3d36b
 EXPECTED_PRODUCER=d6b67fb0a1888f2e8e8f3ad828bd8e17725e89c47c2de3d4f4d4386def243cab
-EXPECTED_CONTROL=bdf8ac3731dd3b37d3c48b3a629ee7e166796f9fa2e27ee9148c67d674814564
+EXPECTED_CONTROL=abf89d491b4dd9150dac4b092dff3a5249a43e083c42d393442128eb39fbb552
 RETURN_RELEASE=immutable-a959129e-vps-20261026T023100Z
 PACKAGE=${RE7_PACKAGE:-/opt/re7online/build-output/${RELEASE}-producer/${RELEASE}.tar.xz}
 FINAL=${RE7_RELEASE_ROOT:-/opt/re7online/releases/$RELEASE}
@@ -27,14 +27,6 @@ API_PUBLIC_HEALTH=${RE7_API_PUBLIC_HEALTH:-https://converta.re7online.com/agent-
 FRONTEND_LOCAL_BASE=${RE7_FRONTEND_LOCAL_BASE:-http://127.0.0.1:3000}
 FRONTEND_PUBLIC_BASE=${RE7_FRONTEND_PUBLIC_BASE:-https://admin.re7online.com}
 
-: "${RE7_CANDIDATE_REQUEST:?required}"
-: "${RE7_CANDIDATE_SOURCE_ARTIFACT:?required}"
-: "${RE7_CANDIDATE_SOURCE_SHA256:?required}"
-: "${RE7_CANDIDATE_DEFINITION:?required}"
-: "${RE7_ROLLBACK_REQUEST:?required}"
-: "${RE7_ROLLBACK_SOURCE_ARTIFACT:?required}"
-: "${RE7_ROLLBACK_SOURCE_SHA256:?required}"
-: "${RE7_ROLLBACK_DEFINITION:?required}"
 
 PRODUCER_AUTH=$TX/converta-release.authenticated.py
 CONTROL_AUTH=$TX/pm2-definition-control.authenticated.py
@@ -94,6 +86,8 @@ FRONTEND_LEXICAL_CWD=""
 FRONTEND_LEXICAL_SCRIPT=""
 RETURN_BUILD_ID=""
 EXPECTED_BUILD_ID=""
+RETURN_FRONTEND_ENTRY=""
+EXPECTED_FRONTEND_ENTRY=""
 READINESS_REASON=""
 FRONTEND_LINK_DEVICE=""
 FRONTEND_LINK_INODE=""
@@ -243,18 +237,16 @@ copy_authenticated_tool() {
 }
 
 run_readiness() {
-  local label=$1 role=$2 release_root=$3 request source source_sha definition
+  local label=$1 role=$2 release_root=$3 build_id entry_sha release_id
   local report stdout_file stderr_file rc result reason
   if [ "$role" = candidate ]; then
-    request=$RE7_CANDIDATE_REQUEST
-    source=$RE7_CANDIDATE_SOURCE_ARTIFACT
-    source_sha=$RE7_CANDIDATE_SOURCE_SHA256
-    definition=$RE7_CANDIDATE_DEFINITION
+    build_id=$EXPECTED_BUILD_ID
+    entry_sha=$EXPECTED_FRONTEND_ENTRY
+    release_id=$RELEASE
   else
-    request=$RE7_ROLLBACK_REQUEST
-    source=$RE7_ROLLBACK_SOURCE_ARTIFACT
-    source_sha=$RE7_ROLLBACK_SOURCE_SHA256
-    definition=$RE7_ROLLBACK_DEFINITION
+    build_id=$RETURN_BUILD_ID
+    entry_sha=$RETURN_FRONTEND_ENTRY
+    release_id=$RETURN_RELEASE
   fi
   report="$TX/$label.report.private.json"
   stdout_file="$TX/$label.stdout.private.txt"
@@ -265,9 +257,14 @@ run_readiness() {
   fi
   set +e
   /usr/bin/timeout --signal=TERM --kill-after=5s 45s \
-    /usr/bin/python3 "$CONTROL_AUTH" wait-readiness \
-      --request "$request" --source-artifact "$source" --source-sha256 "$source_sha" \
-      --definition "$definition" --pm2 "$PM2" --stable-path "$CURRENT/frontend" \
+    /usr/bin/python3 "$CONTROL_AUTH" wait-existing-readiness \
+      --component frontend --process-name re7-admin-front \
+      --expected-cwd "$FRONTEND_LEXICAL_CWD" \
+      --expected-script "$FRONTEND_LEXICAL_SCRIPT" \
+      --expected-interpreter /usr/bin/node \
+      --release-id "$release_id" \
+      --entry-sha256 "$entry_sha" --build-id "$build_id" \
+      --pm2 "$PM2" --stable-path "$CURRENT/frontend" \
       --release-root "$release_root" --port 3000 \
       --local-health "$FRONTEND_LOCAL_BASE/app/login" \
       --public-health "$FRONTEND_PUBLIC_BASE/app/login" \
@@ -276,62 +273,40 @@ run_readiness() {
   rc=$?
   set -e
   /usr/bin/chmod 600 "$stdout_file" "$stderr_file" || {
-    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:artifact_chmod_failed:exit_${rc}"
-    return 1
-  }
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:artifact_chmod_failed:exit_${rc}"; return 1; }
   /usr/bin/sync -f "$stdout_file" || {
-    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:stdout_fsync_failed:exit_${rc}"
-    return 1
-  }
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:stdout_fsync_failed:exit_${rc}"; return 1; }
   /usr/bin/sync -f "$stderr_file" || {
-    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:stderr_fsync_failed:exit_${rc}"
-    return 1
-  }
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:stderr_fsync_failed:exit_${rc}"; return 1; }
   if [ ! -f "$report" ] || [ -L "$report" ]; then
-    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_missing:exit_${rc}"
-    return 1
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_missing:exit_${rc}"; return 1
   fi
   /usr/bin/chmod 600 "$report" || {
-    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_chmod_failed:exit_${rc}"
-    return 1
-  }
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_chmod_failed:exit_${rc}"; return 1; }
   /usr/bin/sync -f "$report" || {
-    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_fsync_failed:exit_${rc}"
-    return 1
-  }
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_fsync_failed:exit_${rc}"; return 1; }
   /usr/bin/sync -f "$TX" || {
-    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:evidence_directory_fsync_failed:exit_${rc}"
-    return 1
-  }
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:evidence_directory_fsync_failed:exit_${rc}"; return 1; }
   if ! /usr/bin/jq -e 'type=="object" and (.sampleCount|type)=="number" and (.samples|type)=="array"' "$report" >/dev/null; then
-    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_invalid:exit_${rc}"
-    return 1
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_invalid:exit_${rc}"; return 1
   fi
   result=$(/usr/bin/jq -r '.result' "$report") || {
-    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:result_unreadable:exit_${rc}"
-    return 1
-  }
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:result_unreadable:exit_${rc}"; return 1; }
   if [ "$rc" -eq 0 ]; then
-    if [ "$result" != READINESS_PASS ] || \
-       ! /usr/bin/jq -e --arg release "$(/usr/bin/basename "$release_root")" \
-         '.component=="frontend" and .port==3000 and .releaseId==$release and .stableSamples>=3' "$report" >/dev/null; then
-      READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_mismatch"
-      return 1
+    if [ "$result" != READINESS_PASS ] || ! /usr/bin/jq -e --arg release "$release_id" \
+      '.component=="frontend" and .port==3000 and .releaseId==$release and .observationMode=="existing_pm2_registration" and .stableSamples>=3' "$report" >/dev/null; then
+      READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_mismatch"; return 1
     fi
     return 0
   fi
   if [ "$result" != READINESS_DENY ]; then
-    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:result_mismatch:exit_${rc}"
-    return 1
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:result_mismatch:exit_${rc}"; return 1
   fi
   reason=$(/usr/bin/jq -er '.reason|select(type=="string" and length>0)' "$report") || {
-    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:reason_missing:exit_${rc}"
-    return 1
-  }
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:reason_missing:exit_${rc}"; return 1; }
   READINESS_REASON=$reason
   return 1
 }
-
 wait_component() {
   local component=$1 name=$2 port=$3 expected_root=$4 identity=$5 before_restarts=$6
   local expected_cwd=$7 expected_script=$8
@@ -561,23 +536,9 @@ EXPECTED_BUILD_ID=$(/usr/bin/tr -d '\n' <"$FINAL/frontend-runtime/.next/BUILD_ID
 RETURN_BUILD_ID=$(/usr/bin/tr -d '\n' <"$RETURN/frontend-runtime/.next/BUILD_ID")
 test -n "$EXPECTED_BUILD_ID"
 test -n "$RETURN_BUILD_ID"
+EXPECTED_FRONTEND_ENTRY=$(/usr/bin/sha256sum "$FINAL/frontend-runtime/node_modules/next/dist/bin/next" | /usr/bin/awk '{print $1}')
+RETURN_FRONTEND_ENTRY=$(/usr/bin/sha256sum "$RETURN/frontend-runtime/node_modules/next/dist/bin/next" | /usr/bin/awk '{print $1}')
 test ! -e "$FINAL/DEPLOYED"
-
-CURRENT_STEP=preflight_definition_pair
-/usr/bin/python3 "$CONTROL_AUTH" validate-pair \
-  --candidate-request "$RE7_CANDIDATE_REQUEST" \
-  --candidate-source-artifact "$RE7_CANDIDATE_SOURCE_ARTIFACT" \
-  --candidate-source-sha256 "$RE7_CANDIDATE_SOURCE_SHA256" \
-  --candidate-definition "$RE7_CANDIDATE_DEFINITION" \
-  --rollback-request "$RE7_ROLLBACK_REQUEST" \
-  --rollback-source-artifact "$RE7_ROLLBACK_SOURCE_ARTIFACT" \
-  --rollback-source-sha256 "$RE7_ROLLBACK_SOURCE_SHA256" \
-  --rollback-definition "$RE7_ROLLBACK_DEFINITION" \
-  >"$TX/validate-pair.stdout.private.txt" 2>"$TX/validate-pair.stderr.private.txt"
-for evidence in "$TX/validate-pair.stdout.private.txt" "$TX/validate-pair.stderr.private.txt"; do
-  /usr/bin/chmod 600 "$evidence"
-  /usr/bin/sync -f "$evidence"
-done
 
 CURRENT_STEP=preflight_runtime
 test -x "$PM2"
@@ -597,6 +558,8 @@ api_script=$(/usr/bin/jq -er '.script' <<<"$api_baseline_row")
 frontend_baseline_row=$(pm2_row re7-admin-front)
 FRONTEND_LEXICAL_CWD=$(/usr/bin/jq -er '.cwd' <<<"$frontend_baseline_row")
 FRONTEND_LEXICAL_SCRIPT=$(/usr/bin/jq -er '.script' <<<"$frontend_baseline_row")
+test "$FRONTEND_LEXICAL_CWD" = "$CURRENT/frontend"
+test "$FRONTEND_LEXICAL_SCRIPT" = "$CURRENT/frontend/node_modules/next/dist/bin/next"
 frontend_before=$(restart_for re7-admin-front)
 frontend_old_pid=$(pid_for re7-admin-front)
 frontend_env_before=$(selected_env_hash "$frontend_old_pid" frontend)

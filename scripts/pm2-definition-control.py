@@ -796,6 +796,67 @@ def command_wait_readiness(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
+
+def command_wait_existing_readiness(args: argparse.Namespace) -> dict[str, Any]:
+    """Observe an already-registered PM2 process without building executable configuration."""
+    if args.component != "frontend" or args.port != 3000:
+        deny("existing_readiness_component_contract")
+    if args.expected_cwd != args.stable_path:
+        deny("existing_readiness_stable_path_contract")
+    if not args.expected_cwd.is_absolute() or not args.expected_script.is_absolute():
+        deny("existing_readiness_absolute_path_contract")
+    try:
+        args.expected_script.relative_to(args.expected_cwd)
+    except ValueError:
+        deny("existing_readiness_script_escape")
+    if args.release_root.parent.name != args.release_id:
+        deny("existing_readiness_release_id_contract")
+    if not re.fullmatch(r"[0-9a-f]{64}", args.entry_sha256):
+        deny("existing_readiness_entry_sha256")
+    if not args.build_id or "\n" in args.build_id or "\r" in args.build_id:
+        deny("existing_readiness_build_id")
+    app = {
+        "name": args.process_name,
+        "cwd": str(args.expected_cwd),
+        "script": str(args.expected_script),
+        "interpreter": str(args.expected_interpreter),
+    }
+    release_identity = {
+        "releaseId": args.release_id,
+        "frontendEntrySha256": args.entry_sha256,
+        "frontendBuildId": args.build_id,
+    }
+    events: list[dict[str, Any]] = []
+    try:
+        result = wait_for_readiness(
+            component="frontend", port=args.port, app=app,
+            release_identity=release_identity, pm2=args.pm2,
+            stable_path=args.stable_path, release_root=args.release_root,
+            local_health=args.local_health, public_health=args.public_health,
+            deadline_seconds=args.deadline_seconds, poll_seconds=args.poll_seconds,
+            event_log=events,
+        )
+    except Denied as error:
+        if args.report is not None:
+            failure = {
+                "result": "READINESS_DENY", "component": "frontend", "port": args.port,
+                "reason": str(error), "sampleCount": len(events),
+                "startedMonotonic": events[0]["atMonotonic"] if events else None,
+                "finishedMonotonic": events[-1]["atMonotonic"] if events else None,
+                "samples": events,
+            }
+            write_private_exclusive(args.report, canonical(failure))
+        raise
+    result.update({
+        "releaseId": args.release_id,
+        "observationMode": "existing_pm2_registration",
+        "sampleCount": len(events),
+        "samples": events,
+    })
+    if args.report is not None:
+        write_private_exclusive(args.report, canonical(result))
+    return result
+
 def add_binding_arguments(command: argparse.ArgumentParser, prefix: str = "") -> None:
     option = f"{prefix}-" if prefix else ""
     attribute = f"{prefix.replace('-', '_')}_" if prefix else ""
@@ -834,6 +895,25 @@ def parser() -> argparse.ArgumentParser:
     readiness.add_argument("--poll-seconds", type=float, required=True)
     readiness.add_argument("--report", type=Path)
     readiness.set_defaults(function=command_wait_readiness)
+    existing = commands.add_parser("wait-existing-readiness")
+    existing.add_argument("--component", choices=("frontend",), required=True)
+    existing.add_argument("--process-name", required=True)
+    existing.add_argument("--expected-cwd", type=Path, required=True)
+    existing.add_argument("--expected-script", type=Path, required=True)
+    existing.add_argument("--expected-interpreter", type=Path, required=True)
+    existing.add_argument("--release-id", required=True)
+    existing.add_argument("--entry-sha256", required=True)
+    existing.add_argument("--build-id", required=True)
+    existing.add_argument("--pm2", type=Path, required=True)
+    existing.add_argument("--stable-path", type=Path, required=True)
+    existing.add_argument("--release-root", type=Path, required=True)
+    existing.add_argument("--port", type=int, required=True)
+    existing.add_argument("--local-health", required=True)
+    existing.add_argument("--public-health", required=True)
+    existing.add_argument("--deadline-seconds", type=float, required=True)
+    existing.add_argument("--poll-seconds", type=float, required=True)
+    existing.add_argument("--report", type=Path)
+    existing.set_defaults(function=command_wait_existing_readiness)
     return value
 
 
