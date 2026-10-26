@@ -799,6 +799,7 @@ export default function AppCampaignsPage() {
   const selectedCampaignIsBatchController = Boolean(selectedCampaign?.executionBatch && !selectedCampaign.executionBatch.chunks.some(chunk => chunk.campaignId === selectedCampaign.id));
   const campaignReads = useRef(createCampaignReadGeneration());
   const selectedIdRef = useRef<string | null>(null);
+  const createdDraftDetailOwnerRef = useRef<string | null>(null);
   const campaignSessionRef = useRef<AppSession | null>(null);
   const campaignRelations = useRef<ReturnType<typeof createCampaignRelationReads> | null>(null);
   const setSelectedCampaignId = useCallback((id: string | null) => {
@@ -1941,6 +1942,11 @@ export default function AppCampaignsPage() {
       return;
     }
 
+    if (createdDraftDetailOwnerRef.current === selectedCampaignId) {
+      createdDraftDetailOwnerRef.current = null;
+      return;
+    }
+
     let cancelled = false;
     setLoadingDetail(true);
     setDetailError(null);
@@ -2757,19 +2763,50 @@ export default function AppCampaignsPage() {
           ? { templateVariableMappings: buildTemplateVariableMappingsPayload(form.templateVariableMappings) }
           : {}),
       });
-      await refreshCampaigns(session, created.campaign.id);
-      const detail = await getAppCampaign(session, created.campaign.id);
-      setSelectedCampaign(detail.campaign);
-      setSelectedCampaignId(created.campaign.id);
+      const createdCampaignId = created.campaign.id;
+      // Bind the UI to the persisted campaign before any follow-up read. This
+      // clears the previous snapshot and keeps the new draft selected even if
+      // detail or list reconciliation is slow or fails.
+      createdDraftDetailOwnerRef.current = createdCampaignId;
+      setSelectedCampaignId(createdCampaignId);
       setDetailModalOpen(true);
       resetCampaignComposer();
       setStatusFilter("draft");
       setActiveTab("drafts");
       setCurrentPage(1);
+
+      // This path owns the first authenticated detail read. The selection
+      // effect skips only this same ID, preventing competing read generations.
+      const detail = await refreshCampaignDetail(session, createdCampaignId);
+      if (createdDraftDetailOwnerRef.current === createdCampaignId) {
+        createdDraftDetailOwnerRef.current = null;
+      }
+      const stillSelected =
+        campaignSessionRef.current === session && selectedIdRef.current === createdCampaignId;
+
+      // List reconciliation is intentionally posterior and independent. A
+      // timeout here must never restore or present the previously selected ID.
+      void refreshCampaigns(session, createdCampaignId).catch((listError) => {
+        const typed = listError as { status?: number; message?: string };
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setError(
+          getCampaignUserFacingError(
+            typed,
+            "O rascunho foi criado, mas a lista ainda não pôde ser atualizada."
+          )
+        );
+      });
+
+      if (!stillSelected) return;
       showToast(
-        "success",
+        detail ? "success" : "warning",
         "Rascunho criado",
-        `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
+        detail
+          ? `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
+          : "O novo rascunho foi salvo e selecionado, mas o detalhe ainda não pôde ser carregado. Tente atualizar o detalhe."
       );
     } catch (err) {
       handleClosedCampaignAttempt(err);

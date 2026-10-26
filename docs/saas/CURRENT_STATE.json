@@ -459,6 +459,17 @@
     "latestImageHomologationState": "PASS_TWO_CONTROLLED_RECIPIENTS_META_CRM_WEBHOOK",
     "frontendPresentationDeploymentRecord": "docs/saas/releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json",
     "frontendPresentationState": "DEPLOYED_VISUAL_ACCEPTANCE_PASS",
+    "draftSelectionReconciliation": {
+      "state": "CODE_CANDIDATE_PENDING_REVIEW_DEPLOY_AND_ACCEPTANCE",
+      "classification": "FRONTEND_POST_CREATE_RECONCILIATION_DEFECT",
+      "backendCreatedDistinctDraft": true,
+      "affectedDraftPersistedSafe": true,
+      "jobsStarted": 0,
+      "outboundMessages": 0,
+      "metaCalls": 0,
+      "requiredBefore": "SCHEDULING_HOMOLOGATION",
+      "contract": "SELECT_POST_ID_IMMEDIATELY_CLEAR_OLD_SNAPSHOT_VALIDATE_DETAIL_ID_AND_TENANT_REFRESH_LIST_INDEPENDENTLY"
+    },
     "acceptanceBoundary": "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS; SCHEDULING_MULTIBATCH_AND_CLIENT_SPECIFIC_ACCEPTANCE_REMAIN_SEPARATE"
   },
   "tenantScopedMetaAppId": {

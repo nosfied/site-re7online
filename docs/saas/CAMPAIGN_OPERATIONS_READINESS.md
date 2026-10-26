@@ -413,3 +413,31 @@ Antes de cada ato mutante, fazer fotografia fresca somente dos gates pertinentes
 Não fechar/reabrir a guarda por rotina, não retomar históricos, não repetir provider
 calls aceitas e não acoplar nova homologação a rebuild ou deploy sem mudança de código.
 
+## Reconciliação do rascunho recém-criado — bloqueio antes de agendamento
+
+Auditoria relatada pelo owner confirmou que as campanhas `.34` e `.35` possuem
+UUIDs, modelos e estados independentes. A `.34` está concluída; a `.35` foi
+persistida como `draft`, possui seu próprio `campaign.seed.saved`, dois contatos
+elegíveis, zero jobs e zero mensagens de saída. Nenhuma chamada Meta ou execução foi
+iniciada para a `.35`.
+
+Classificação: **FRONTEND_POST_CREATE_RECONCILIATION_DEFECT**. O backend criou o
+rascunho correto. A interface aguardava a listagem completa antes de selecionar o ID
+retornado pelo POST; uma falha ou demora nessa leitura podia conservar visualmente a
+campanha anterior.
+
+Contrato da correção:
+
+1. selecionar imediatamente o ID retornado pelo POST e limpar o snapshot anterior;
+2. abrir o modal já vinculado ao novo ID;
+3. carregar o detalhe pelo leitor autenticado, exigindo ID e tenant esperados;
+4. atualizar a lista somente depois e de forma independente;
+5. falha de detalhe ou lista não pode restaurar nem apresentar outro ID;
+6. distinguir “rascunho criado; detalhe pendente” de “rascunho não criado”.
+
+A regressão fixa o cenário `.34` selecionada → criar `.35` → detalhe/listagem
+atrasados ou indisponíveis → modal continua obrigatório para `.35`. A correção de
+código precisa ser revisada, implantada e aceita antes da homologação de agendamento.
+Ela não autoriza envio, descarte do rascunho, nova chamada Meta ou repetição das
+homologações IMAGE/VIDEO.
+

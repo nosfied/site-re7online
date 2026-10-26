@@ -140,6 +140,36 @@ test("explicit draft persistence and running campaign controls remain separate f
   assert.ok(pageSource.includes("setDetailModalOpen(false)"));
 });
 
+test("new draft identity wins before detail and delayed list reconciliation", () => {
+  const start = pageSource.indexOf("const handleCreateDraftFromAudience = async () => {");
+  const end = pageSource.indexOf("const buildAudienceSplitFiltersPayload", start);
+  assert.ok(start >= 0 && end > start);
+  const block = pageSource.slice(start, end);
+
+  const persisted = block.indexOf("const created = await createAppCampaignDraft(session");
+  const identity = block.indexOf("const createdCampaignId = created.campaign.id;");
+  const owner = block.indexOf("createdDraftDetailOwnerRef.current = createdCampaignId;");
+  const selected = block.indexOf("setSelectedCampaignId(createdCampaignId);");
+  const modal = block.indexOf("setDetailModalOpen(true);");
+  const detail = block.indexOf("await refreshCampaignDetail(session, createdCampaignId);");
+  const list = block.indexOf("void refreshCampaigns(session, createdCampaignId).catch");
+
+  assert.ok(persisted >= 0);
+  assert.ok(persisted < identity);
+  assert.ok(identity < owner);
+  assert.ok(owner < selected);
+  assert.ok(selected < modal);
+  assert.ok(modal < detail);
+  assert.ok(detail < list);
+  assert.ok(block.includes("selectedIdRef.current === createdCampaignId"));
+  assert.ok(block.includes("campaignSessionRef.current === session"));
+  assert.ok(block.includes('"O novo rascunho foi salvo e selecionado, mas o detalhe ainda não pôde ser carregado.'));
+  assert.ok(pageSource.includes("if (createdDraftDetailOwnerRef.current === selectedCampaignId)"));
+  assert.ok(pageSource.includes("detail.campaign.id !== campaignId || detail.campaign.clientId !== activeSession.user.clientId"));
+  assert.ok(!block.includes("await refreshCampaigns(session, created.campaign.id)"));
+  assert.ok(!block.includes("setSelectedCampaign(detail.campaign)"));
+});
+
 test("campaign result detail exposes status, CRM situation and text filters", () => {
   assert.ok(pageSource.includes("const [resultStatusFilter, setResultStatusFilter]"));
   assert.ok(pageSource.includes("const [resultCrmStatusFilter, setResultCrmStatusFilter]"));
