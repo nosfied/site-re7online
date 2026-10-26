@@ -1,5 +1,10 @@
 # SECULT-PE Backlog
 
+Continuidade revisada em 26/10: [mapa vigente](PRODUCT_MAP_CURRENT_2026-10-19.md).
+A consulta CLOSED foi aceita pelo cliente no relato abaixo; não é nova pendência
+de ativação. CSAT/24h e auditoria de presença são frentes distintas, não cobertas
+por esse aceite. Campanhas Demo IMAGE/VIDEO posteriores não equivalem a aceite CRA.
+
 ## Fechamento SECULT — confirmação do owner em 29/09/2026
 
 **DEPLOYED / CLIENT ACCEPTED.** Deifson informou: “SECULT aprovou. Já está
@@ -14,7 +19,7 @@ Campanhas/CRA aguardam validação funcional do owner; inatividade no Guia pausa
 DB-only encerrada/aceita; 6683 CLOSED. Telegram e DELIVERED/READ separados.
 
 
-## Estado vigente — janela SECULT de 29/09/2026
+## Histórico — janela SECULT anterior ao aceite do owner em 29/09/2026
 
 **Código implantado; ativação SECULT e aceite funcional pendentes.** API/frontend
 `a3d16d4b`, worker mínimo `bf5f1d76` + cinco fontes `f06d49cb` (pacote `042e386a`).

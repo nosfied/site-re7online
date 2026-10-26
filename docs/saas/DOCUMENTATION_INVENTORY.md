@@ -2,6 +2,17 @@
 
 Status: inventario documental da Sprint 79A para Bid Readiness. Este documento nao altera produto, banco, infraestrutura ou runtime.
 
+## Prevalência atual — revisão de 26/10/2026
+
+O inventário abaixo é a fotografia da Fase IV. O estado operacional está em
+[CURRENT_STATE.md](CURRENT_STATE.md), a instrução de deploy em
+[DEPLOY_RUNBOOK.md](DEPLOY_RUNBOOK.md) e a sequência consolidada em
+[mapa atualizado](PRODUCT_MAP_CURRENT_2026-10-19.md). O extenso PRODUCT_MAP_CURRENT.md
+é histórico, não o plano atual. Auditorias anteriores à implementação de Webchat,
+Telegram/API ou ao deploy CRM não devem ser usadas para reabrir essas entregas.
+O guia [CONVERTA_OPERATOR_GUIDE.md](CONVERTA_OPERATOR_GUIDE.md) já existe: a pendência
+é revisão/adaptação para treinamento/PoC, não produzir outro manual do zero.
+
 ## Objetivo
 
 Organizar a documentacao existente do Converta para uso em licitacoes, propostas tecnicas, diligencias, impugnacoes e Provas de Conceito.
@@ -51,7 +62,7 @@ Regra de uso:
 | Area | Redundancia | Decisao |
 | --- | --- | --- |
 | Go-live/release | `go-live-checklist.md` e `RELEASE_CHECKLIST.md` | manter ambos; `RELEASE_CHECKLIST.md` e release de plataforma, `go-live-checklist.md` e ativacao de tenant |
-| Runbooks VPS | `RUNBOOK_WHATSAPP_AGENT.md`, `DEPLOY_TOPOLOGY_RE7.md`, `docs/whatsapp-agent/ops/*` | usar `RUNBOOK_WHATSAPP_AGENT.md` e `OPERATIONAL_BASELINE.md` como fonte primaria |
+| Runbooks VPS | `RUNBOOK_WHATSAPP_AGENT.md`, `DEPLOY_TOPOLOGY_RE7.md`, `docs/whatsapp-agent/ops/*` | usar `DEPLOY_RUNBOOK.md` para deploy; `CURRENT_STATE.md` para estado e `OPERATIONAL_BASELINE.md` para infraestrutura; runbook extenso preserva históricos |
 | Bid readiness | `BID_READINESS_MATRIX.md`, `GOVERNMENT_READY_REVIEW.md`, `B2G_READINESS_AUDIT.md` | manter como historico/evidencia; `BID_COMPLIANCE_MATRIX.md` vira matriz mestre |
 | Observabilidade | varios designs e fundamentos 78A-78H | manter granularidade; usar `OBSERVABILITY_OPERATIONS_AUDIT.md` como sintese |
 | Load test | design, fixtures, tenant e results | manter todos; usar `LOAD_TEST_RESULTS.md` como resultado oficial |
@@ -62,7 +73,7 @@ Regra de uso:
 | Lacuna | Categoria | Prioridade |
 | --- | --- | --- |
 | Manual do Administrador | Documentacao | Obrigatorio para pacote licitavel |
-| Manual do Operador | Documentacao | Obrigatorio para treinamento/POC |
+| Guia do Operador existente: revisão/adaptação | Documentacao | Atualizar material de treinamento/POC sem duplicação |
 | Guia de Implantacao B2G | Implantacao | Obrigatorio |
 | Plano de Treinamento | Comercial/operacao | Obrigatorio quando edital exigir treinamento |
 | Modelo de Proposta Tecnica | Comercial | Obrigatorio |

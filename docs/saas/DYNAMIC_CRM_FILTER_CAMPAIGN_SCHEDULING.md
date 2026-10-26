@@ -1,5 +1,18 @@
 # Dynamic CRM-filter Campaign Scheduling
 
+## Continuidade revisada em 26/10/2026
+
+A entrega integrada foi implantada em 12/10 e out.15 encerrada canonicamente depois,
+conforme [registro](../reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/out15-closure-20261012/RESULT_2026-10-12.md).
+A guarda 38/suspensão e rótulos NOT DEPLOYED abaixo são históricos. Último estado
+relatado: API/frontend a959, guarda aberta na geração 41, IMAGE/VIDEO manuais PASS.
+Isso não comprova aceite atual de agendamento dinâmico ou de todo conjunto/multilote.
+A sequência é [agendamento estático → audiência dinâmica/conjunto controlado](PRODUCT_MAP_CURRENT_2026-10-19.md).
+Não executar preparações antigas ou refazer cancelamento de out.15; limites exatos
+devem ser lidos no runtime atual, não escolhidos entre os snapshots 1000/5000 abaixo.
+
+## Histórico da preparação e contrato
+
 **Complemento local12/10 — audiência/suspensão, para revisão, NOT DEPLOYED.** [Entrega integrada](../reviews/automation-freeform-window-release-af26/dynamic-integrated-prepared-20261012/README.md). Prévia e materialização reutilizam elegibilidade lifecycle operacional; PROVISIONAL não é consentimento ACTIVE. Mudança de filtro/modalidade invalida a geração da prévia sem cap artificial. Expansão dinâmica depende do filtro efetivamente salvo, não da intenção histórica não registrada. A suspensão é projetada por job/lease tenant-scoped e não altera scheduler/status. Cancelar envios restantes usa ação canônica e classifica ausência comprovada como não enviada, sem fabricar falha Meta. Produção out.15 permanece suspensa/guarda38 fechada; implantação e cancelamento produtivo exigem decisões próprias.
 
 

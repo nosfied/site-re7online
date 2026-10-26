@@ -10,6 +10,8 @@
 
 - [Estado legível](CURRENT_STATE.md)
 - [Estado verificável](CURRENT_STATE.json)
+- [Sequência consolidada e revisão documental de 26/10](PRODUCT_MAP_CURRENT_2026-10-19.md)
+  — mapa existente atualizado: concluído, próximas homologações, correções e manutenção.
 - [Runbook canônico de deploy](DEPLOY_RUNBOOK.md) — única instrução executável vigente
 - [Modelo de implantação por release imutável](DEPLOYMENT_OPERATING_MODEL.md) — inclui
   o produtor `scripts/converta-release.py`, o build na VPS e a fronteira com a ativação
