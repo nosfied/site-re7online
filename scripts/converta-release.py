@@ -646,15 +646,31 @@ def safe_extract(package: Path, destination: Path, expected_release: str) -> Pat
     return root
 
 
-def verify_root(root: Path, target: str, release_id: str) -> dict[str, Any]:
+def verify_root(root: Path, target: str, release_id: str,
+                deployed_marker_sha256: str | None = None) -> dict[str, Any]:
     if not root.is_absolute() or not root.is_dir() or root.is_symlink():
         deny("release_root")
     if root.name != release_id:
         deny("release_directory_identity")
     allowed = {"manifest.json", "index.sha256", *RUNTIMES}
+    if deployed_marker_sha256 is not None:
+        if not SHA256.fullmatch(deployed_marker_sha256):
+            deny("deployed_marker_sha256")
+        allowed.add("DEPLOYED")
     if {entry.name for entry in root.iterdir()} != allowed:
         deny("release_root_inventory")
-    return validate_manifest(root, target, release_id)
+    marker_sha256 = None
+    if deployed_marker_sha256 is not None:
+        marker_raw, marker_info = stable_bytes(root / "DEPLOYED")
+        if marker_info.st_uid != os.geteuid() or stat.S_IMODE(marker_info.st_mode) != 0o600:
+            deny("deployed_marker_identity")
+        marker_sha256 = sha256_bytes(marker_raw)
+        if marker_sha256 != deployed_marker_sha256:
+            deny("deployed_marker_mismatch")
+    result = validate_manifest(root, target, release_id)
+    if marker_sha256 is not None:
+        result["operationalMarkerSha256"] = marker_sha256
+    return result
 
 
 def build(args: argparse.Namespace) -> None:
@@ -792,8 +808,13 @@ def verify(args: argparse.Namespace) -> None:
         deny("components")
     if bool(args.release_root) == bool(args.package):
         deny("verify_source")
+    if args.package and args.deployed_marker_sha256 is not None:
+        deny("deployed_marker_package")
     if args.release_root:
-        result = verify_root(args.release_root.resolve(strict=True), args.target, args.release_id)
+        result = verify_root(
+            args.release_root.resolve(strict=True), args.target, args.release_id,
+            args.deployed_marker_sha256,
+        )
     else:
         with tempfile.TemporaryDirectory(prefix="converta-release-verify-") as temporary:
             root = safe_extract(args.package.resolve(strict=True), Path(temporary), args.release_id)
@@ -821,6 +842,7 @@ def parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--target", required=True)
     verify_parser.add_argument("--release-id", required=True)
     verify_parser.add_argument("--components", required=True)
+    verify_parser.add_argument("--deployed-marker-sha256")
     verify_parser.set_defaults(handler=verify)
     return root
 
