@@ -2757,20 +2757,51 @@ export default function AppCampaignsPage() {
           ? { templateVariableMappings: buildTemplateVariableMappingsPayload(form.templateVariableMappings) }
           : {}),
       });
-      await refreshCampaigns(session, created.campaign.id);
-      const detail = await getAppCampaign(session, created.campaign.id);
-      setSelectedCampaign(detail.campaign);
-      setSelectedCampaignId(created.campaign.id);
+      const createdCampaignId = created.campaign.id;
+      // Bind the UI to the persisted campaign before any follow-up read. This
+      // clears the previous snapshot and keeps the new draft selected even if
+      // detail or list reconciliation is slow or fails.
+      setSelectedCampaignId(createdCampaignId);
       setDetailModalOpen(true);
       resetCampaignComposer();
       setStatusFilter("draft");
       setActiveTab("drafts");
       setCurrentPage(1);
-      showToast(
-        "success",
-        "Rascunho criado",
-        `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
-      );
+
+      const detail = await refreshCampaignDetail(session, createdCampaignId);
+      const stillSelected =
+        campaignSessionRef.current === session && selectedIdRef.current === createdCampaignId;
+
+      // List reconciliation is intentionally posterior and independent. A
+      // timeout here must never restore or present the previously selected ID.
+      void refreshCampaigns(session, createdCampaignId).catch((listError) => {
+        const typed = listError as { status?: number; message?: string };
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setError(
+          getCampaignUserFacingError(
+            typed,
+            "O rascunho foi criado, mas a lista ainda não pôde ser atualizada."
+          )
+        );
+      });
+
+      if (!stillSelected) return;
+      if (detail) {
+        showToast(
+          "success",
+          "Rascunho criado",
+          `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
+        );
+      } else {
+        showToast(
+          "warning",
+          "Rascunho criado",
+          "O novo rascunho foi salvo e selecionado, mas o detalhe ainda não pôde ser carregado. Tente atualizar o detalhe."
+        );
+      }
     } catch (err) {
       handleClosedCampaignAttempt(err);
       const typed = err as { status?: number; message?: string };
