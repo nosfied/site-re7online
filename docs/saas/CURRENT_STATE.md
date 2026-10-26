@@ -1,6 +1,6 @@
 # Estado canônico do Converta
 
-**DEPLOYED / SINGLE VIDEO CAMPAIGN ACCEPTANCE PASS / GUARD CLOSED / PRODUCTION HEALTHY**
+**DEPLOYED / GENERAL CAMPAIGN OPERATIONS OPEN / VIDEO ACCEPTANCE PASS / PRODUCTION HEALTHY**
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a implantação ativa está
@@ -60,10 +60,8 @@ este estado posterior; o novo hash do ledger não foi fornecido.
 Índice privado da janela:
 `d0e8cb9eee4977bdb2225413db5b738232788ffa450300c0f52e803bc2c3466f`.
 Estado: **SEND_ACCEPTED_GUARD_CLOSED**. O aceite cobre esse envio de vídeo, não
-IMAGE, agendamento, multilote ou uso amplo. Próximo ato: **reabertura geral autorizada pelo owner, pendente de execução pelo
-Codex local**, conforme [roteiro](CAMPAIGN_OPERATIONS_READINESS.md). Revalidar o
-estado antes do CAS e registrar o resultado; não repetir vídeo, build/deploy/save.
-A guarda permanece documentada como fechada até confirmação da abertura.
+IMAGE, agendamento, multilote ou uso amplo. Próximo ato: **homologação IMAGE, após reabertura geral executada pelo Codex local**, conforme [roteiro](CAMPAIGN_OPERATIONS_READINESS.md). Guarda aberta na geração 41 para uso normal; não repetir CAS de abertura, vídeo,
+build/deploy/save. A abertura e sua evidência estão registradas abaixo.
 Homologação IMAGE e demais cenários mantêm seu escopo próprio.
 
 ## Templates de Utilidade — leitura local
@@ -103,3 +101,20 @@ Build no checkout/runtime ativo, `deploy-normal-release.sh`, Deploy V2, PR #190,
 Next em `cluster_mode` e executores temporários em `/tmp` são históricos e
 obsoletos. Instruções históricas de cron ou retenção descrevem o estado de sua época;
 não autorizam instalação, reativação, alteração ou limpeza atual.
+
+## Reabertura geral confirmada — 26/10/2026
+
+Relatório do Codex local encaminhado pelo owner: CAS único da geração lida 40 para
+41, open=true, tarefas 0, sem ledger fault. Disponibilidade administrativa autenticada
+confirmada; zero jobs reclamáveis, campanhas vencidas, controladores recuperáveis,
+jobs queued/running/needs_review, submissões/aceitações pendentes e incertezas antes
+e depois. O scheduler não executou trabalho histórico. Health local/público ok=true,
+db=ok. Não houve build, deploy, restart, save ou envio de teste nessa abertura.
+
+Recibo/disponibilidade SHA-256:
+`a89c999d631df355fdbd3d5be13bd62283d404ff574296309006e09671b9bff3`.
+Índice privado: `12f127ffad54a27a3f27ac1e1d43ca95335182472d3cc551717d6dab3bbad501`.
+Fonte documental: relatório operacional, sem nova inspeção independente pelo editor.
+Estado **GENERAL_OPERATIONS_OPEN**; manter aberta para uso normal, sem repetir
+abertura ou fechar por fim de homologação. Proteções canônicas permanecem ativas.
+Próximo teste de mídia: IMAGE, com escopo e destinatário definidos antes do envio.

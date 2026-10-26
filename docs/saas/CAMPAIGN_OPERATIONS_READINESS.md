@@ -1,6 +1,6 @@
 # Campanhas: disponibilidade, mídia e homologação
 
-Atualizado em 26/10/2026: **VÍDEO HOMOLOGADO / REABERTURA GERAL AUTORIZADA, EXECUÇÃO PENDENTE**. O deploy a959 foi concluído
+Atualizado em 26/10/2026: **GENERAL_OPERATIONS_OPEN / VÍDEO HOMOLOGADO / IMAGE NA SEQUÊNCIA**. O deploy a959 foi concluído
 conforme relatório do Codex local encaminhado pelo owner; não houve abertura da
 guarda nem envio nessa janela. O editor documental não fez nova inspeção da VPS. Os históricos continuam válidos
 no seu escopo e não são instruções para repetir recuperação ou envio.
@@ -337,3 +337,25 @@ Não excluir mídia/campanhas ou reenviar resultados aceitos. Não fazer novo sa
 Liberação comercial de funcionalidades/contratos específicos (incluindo CRA-PR)
 não é automaticamente declarada por abrir a guarda. Registrar o resultado efetivo
 da reabertura antes de marcar GENERAL_OPERATIONS_OPEN.
+
+## Reabertura geral executada — geração 41
+
+O Codex local relatou execução única autorizada: geração fresca 40, CAS único,
+posterior 41/open=true/tarefas0/ledger fault ausente. Disponibilidade administrativa
+autenticada confirmada. Gates pré/pós: zero jobs reclamáveis, campanhas vencidas,
+controladores recuperáveis, jobs queued/running/needs_review, submissões iniciadas
+pendentes, aceitações pendentes e marcadores de incerteza. Scheduler sem trabalho
+histórico a executar. Health local/público ok=true/db=ok.
+
+Recibo e disponibilidade autenticada:
+`a89c999d631df355fdbd3d5be13bd62283d404ff574296309006e09671b9bff3`;
+índice: `12f127ffad54a27a3f27ac1e1d43ca95335182472d3cc551717d6dab3bbad501`.
+Hashes fornecidos pelo owner a partir da custódia privada; não é nova observação
+viva do editor. Nenhum build/deploy/restart/save/envio de teste ou retomada histórica.
+
+A pendência de execução da seção anterior está encerrada. Estado vigente:
+**GENERAL_OPERATIONS_OPEN**. Não repetir CAS; não fechar ao fim de um teste normal.
+Mantêm-se as proteções automáticas diante de resultado incerto e a ausência de
+permissão para replay de aceitação. Próxima homologação: IMAGE em escopo controlado,
+com template aprovado, arquivo coerente, destinatário e quantidade definidos.
+Não repetir VIDEO; agendamento/multilote e aceites específicos seguem separados.

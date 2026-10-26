@@ -48,7 +48,7 @@
 
 - [Disponibilidade, mídia e homologação de campanhas](CAMPAIGN_OPERATIONS_READINESS.md)
   — VIDEO manual PASS; inventário global concluído e reabertura geral autorizada pelo owner,
-  pendente de execução/confirmação pelo Codex local. IMAGE e demais cenários seguem separados.
+  executada pelo Codex local na geração 41. IMAGE e demais cenários seguem separados.
 - [Adequar encerramento e CSAT à janela de 24h](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
 - [Elegibilidade set based de campanhas](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md)
   — `PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE`; não bloqueia o deploy técnico.

@@ -88,8 +88,8 @@
       "scope": "Reported deployment completion; not a fresh reopening inventory"
     },
     "campaignOperations": {
-      "state": "SEND_ACCEPTED_GUARD_CLOSED",
-      "reportedOpen": false,
+      "state": "GENERAL_OPERATIONS_OPEN",
+      "reportedOpen": true,
       "reportedTasks": 0,
       "reopeningInventory": "SNAPSHOT_REPORTED_ZERO_AUTOMATICALLY_ELIGIBLE_20261026T111404Z",
       "closedGuardUiAcceptance": "NOT_SEPARATELY_REPORTED",
@@ -110,8 +110,7 @@
         "authorizationFieldScope": "AT_INVENTORY_BEFORE_LATER_OWNER_AUTHORIZATION"
       },
       "previousGuardSha256Scope": "PRE_HOMOLOGATION_ONLY",
-      "reportedGeneration": 40,
-      "reportedDrained": true,
+      "reportedGeneration": 41,
       "reportedLedgerFault": null,
       "manualHomologation": {
         "source": "OWNER_RELAYED_LOCAL_CODEX_REPORT",
@@ -182,7 +181,7 @@
         "commercialOrGeneralOpeningAuthorized": false
       },
       "generalRelease": {
-        "decision": "OWNER_AUTHORIZED_GENERAL_REOPENING_PENDING_EXECUTION",
+        "decision": "OWNER_AUTHORIZED_GENERAL_REOPENING_EXECUTED",
         "authorizationDate": "2026-10-26",
         "scope": "RESTORE_GLOBAL_CAMPAIGN_ADMISSION_UNDER_EXISTING_RBAC_TENANT_FEATURE_CONSENT_AND_PROVIDER_GUARDS",
         "basis": [
@@ -195,9 +194,9 @@
         ],
         "executor": "LOCAL_CODEX_WITH_EXISTING_VPS_ACCESS",
         "mechanism": "CANONICAL_ADMIN_OPERATIONS_CAS_FRESH_GENERATION",
-        "openingExecuted": false,
-        "observedOpenRemains": false,
-        "confirmationRequiredFromLocalExecutor": true,
+        "openingExecuted": true,
+        "observedOpenRemains": true,
+        "confirmationRequiredFromLocalExecutor": false,
         "noNewBuildDeployRestartOrSave": true,
         "noScriptedSendOrHistoricalReplay": true,
         "closeAfterEachRemainingHomologation": false,
@@ -207,7 +206,30 @@
           "SCHEDULING_AND_MULTIBATCH_WHEN_PLANNED",
           "OTHER_CLIENT_SPECIFIC_ACCEPTANCE"
         ],
-        "remainingAcceptanceDoesNotReclassifyVideoResult": true
+        "remainingAcceptanceDoesNotReclassifyVideoResult": true,
+        "executionSource": "OWNER_RELAYED_LOCAL_CODEX_REPORT",
+        "executionReportedDate": "2026-10-26",
+        "generationBefore": 40,
+        "generationAfter": 41,
+        "casAttempts": 1,
+        "tasks": 0,
+        "ledgerFault": null,
+        "claimableJobs": 0,
+        "overdueScheduledCampaigns": 0,
+        "recoverableControllers": 0,
+        "queuedRunningNeedsReviewJobs": 0,
+        "pendingSubmissions": 0,
+        "pendingAcceptances": 0,
+        "uncertaintyMarkers": 0,
+        "historicalWorkExecuted": false,
+        "receiptSha256": "a89c999d631df355fdbd3d5be13bd62283d404ff574296309006e09671b9bff3",
+        "authenticatedAvailabilitySha256": "a89c999d631df355fdbd3d5be13bd62283d404ff574296309006e09671b9bff3",
+        "evidenceManifestSha256": "12f127ffad54a27a3f27ac1e1d43ca95335182472d3cc551717d6dab3bbad501",
+        "independentVpsInspectionByDocumentationEditor": false
+      },
+      "previousClosedObservation": {
+        "generation": 40,
+        "drained": true
       }
     }
   },

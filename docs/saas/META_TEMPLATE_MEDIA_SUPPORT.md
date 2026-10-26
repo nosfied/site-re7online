@@ -7,7 +7,7 @@ A aprovação pendente registrada em 24/10 é histórica; em 26/10 foi relatado 
 VIDEO aprovado e usado no envio controlado. IMAGE e demais cenários permanecem
 com aceite próprio.
 
-Admissão geral de campanhas: **REABERTURA AUTORIZADA PELO OWNER / EXECUÇÃO PENDENTE**.
+Admissão geral de campanhas: **ABERTA PARA USO NORMAL / GERAÇÃO 41**.
 Liberação comercial/aceite específico de CRA-PR e de cenários ainda não homologados:
 **PENDING**; não confundir com reabertura da guarda global.
 
@@ -24,9 +24,10 @@ recupera o histórico original do onboarding.
 API/frontend relatados em `immutable-a959129e-vps-20261026T023100Z`, target
 `a959129e39a07c52881fb7f5cbf21a7f6f1a80ff`, BUILD_ID `CbNbnlr0VJVv5mME_hvxm`.
 [Registro ativo](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json).
-Última observação: guarda fechada na geração 40 após homologação VIDEO bem-sucedida;
-correção de disponibilidade/admissão implantada. Owner autorizou reabertura geral,
-a executar pelo Codex local pelo mecanismo canônico após revalidação fresca. Próximo ato e limites estão no
+Após homologação VIDEO bem-sucedida e fechamento da janela na geração 40, o Codex
+local executou a reabertura geral autorizada: guarda aberta na geração 41, sem trabalho
+histórico elegível, resultado incerto ou falha de health. Próxima homologação: IMAGE.
+Não há pendência de novo deploy, save ou abertura. Próximo ato e limites estão no
 [roteiro de homologação](CAMPAIGN_OPERATIONS_READINESS.md).
 Aprovação observada em 24/10 é histórica; não é consulta atual à Meta.
 
