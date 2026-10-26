@@ -35,6 +35,16 @@ e `db="ok"`. `/health` no domínio do frontend não comprova a API.
 
 ## Build once
 
+Para uma ativação frontend-only, a ordem canônica é obrigatória: produzir uma
+única vez o artefato funcional; obter os hashes finais do pacote e o BUILD_ID;
+materializar, em uma alteração separada de control plane, o executor
+release-bound a partir do executor versionado homologado; revisar e integrar
+esse control plane; preparar a transação exclusiva; e somente então solicitar a
+autorização da janela. A ausência do executor da nova release antes do build não
+é bloqueio, porque seus bindings dependem da identidade final do artefato. Não
+antecipar bindings com valores estimados nem reutilizar um executor vinculado a
+outra geração.
+
 ```bash
 TARGET=<sha-completo>
 RELEASE=immutable-<sha-curto>-<timestamp-utc>
