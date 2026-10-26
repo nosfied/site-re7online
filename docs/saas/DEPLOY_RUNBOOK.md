@@ -97,6 +97,16 @@ pacote autenticado, após diagnóstico/correção e autorização aplicável; n�
 7. Autenticar o executor versionado e persistido que fará a ativação. Bloco Bash
    inline, comando colado ou executor efêmero não é procedimento de janela.
 
+Bindings ausentes não são procurados nem reconstruídos por introspecção do PM2. Usar
+`scripts/pm2-binding-materialize.py` com request/source históricos autenticados, o
+SHA-256 externo de cada um, `converta-release.py` e `pm2-definition-control.py`
+autenticados, e a raiz integralmente verificada da release correspondente. O comando
+reutiliza a definição exata, recalcula identidade da release pelo índice autenticado,
+grava request/source/definition/evidência em destino novo `0700`/`0600` e declara
+`pm2IntrospectionUsed=false`. Executá-lo uma vez para candidate e uma para rollback;
+depois exigir `validate-pair`. Identidade histórica, overwrite, symlink, drift ou
+proveniência igual entre os papéis nega a preparação antes da autorização.
+
 O executor deve chamar o observador versionado com `--report`, redirecionar stdout e
 stderr para arquivos privados exclusivos e sincronizar esses três artefatos antes de
 qualquer decisão de retorno. Em falha, deve conservar literalmente `reason`,
