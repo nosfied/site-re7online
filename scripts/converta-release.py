@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import io
 import json
@@ -125,6 +127,8 @@ def read_capacity_contract(path: Path, repo: Path, output_parent: Path,
     if free_inodes < required_inodes:
         deny(f"capacity_inodes:available={free_inodes}:required={required_inodes}")
     return {
+        "budgets": {field: contract[field] for field in CAPACITY_BYTE_FIELDS | CAPACITY_INODE_FIELDS},
+        "device": filesystem_info.st_dev,
         "contractId": contract["contractId"],
         "contractSha256": sha256_bytes(raw),
         "filesystemPath": str(filesystem),
@@ -135,6 +139,81 @@ def read_capacity_contract(path: Path, repo: Path, output_parent: Path,
         "operationalReserveBytes": contract["operationalReserveBytes"],
         "operationalReserveInodes": contract["operationalReserveInodes"],
     }
+
+
+@contextmanager
+def generation_build_window(parent: Path):
+    # Separate from the production deployment window. Serialize cooperating
+    # producers sharing this output root; never unlink or expire the lock.
+    lock = parent / ".generation-build.lock"
+    fd = os.open(lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or
+                stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1):
+            deny("generation_lock_identity")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            deny("generation_build_busy")
+        yield
+    finally:
+        os.close(fd)
+
+
+def require_generation_reviews(parent: Path) -> list[dict[str, str]]:
+    accepted = []
+    for directory in sorted(parent.iterdir()):
+        if directory.is_symlink():
+            deny("generation_directory_symlink")
+        if not directory.is_dir():
+            continue
+        lifecycle_file = directory / "generation-lifecycle.private.json"
+        if not lifecycle_file.exists() and not lifecycle_file.is_symlink():
+            continue  # Legacy roots require the separate operational inventory.
+        raw, info = stable_bytes(lifecycle_file)
+        if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600:
+            deny("generation_lifecycle_private")
+        lifecycle = json_object(raw, "generation-lifecycle")
+        generation = lifecycle.get("generationId")
+        if (lifecycle.get("schemaVersion") != 1 or not isinstance(generation, str) or
+                not RELEASE_ID.fullmatch(generation) or lifecycle.get("state") not in {"COMPLETE", "FAILED"}):
+            deny("generation_not_terminal")
+        review_path = directory / "generation-review.private.json"
+        if not review_path.exists() and not review_path.is_symlink():
+            deny(f"generation_review_pending:{generation}")
+        review_raw, review_info = stable_bytes(review_path)
+        if review_info.st_uid != os.geteuid() or stat.S_IMODE(review_info.st_mode) != 0o600:
+            deny("generation_review_private")
+        review = json_object(review_raw, "generation-review")
+        if (set(review) != {"schemaVersion", "generationId", "lifecycleSha256", "decision", "reviewer", "reason", "evidenceSha256"} or
+                review.get("schemaVersion") != 1 or review.get("generationId") != generation or
+                review.get("lifecycleSha256") != sha256_bytes(raw) or
+                review.get("decision") not in {"PRESERVE", "SANITIZED"} or
+                not isinstance(review.get("reviewer"), str) or not review["reviewer"].strip() or
+                not isinstance(review.get("reason"), str) or not review["reason"].strip() or
+                not isinstance(review.get("evidenceSha256"), str) or not SHA256.fullmatch(review["evidenceSha256"])):
+            deny(f"generation_review_invalid:{generation}")
+        accepted.append({"generationId": generation, "directory": str(directory),
+                         "lifecycleSha256": sha256_bytes(raw),
+                         "reviewSha256": sha256_bytes(review_raw), "decision": review["decision"]})
+    return accepted
+
+
+def capacity_checkpoint(capacity: dict[str, Any], phase: str,
+                        remaining: Iterable[str] = ()) -> dict[str, Any]:
+    filesystem = Path(capacity["filesystemPath"])
+    if filesystem.stat().st_dev != capacity["device"]:
+        deny(f"capacity_filesystem_changed:{phase}")
+    usage = os.statvfs(filesystem)
+    free_bytes, free_inodes = usage.f_bavail * usage.f_frsize, usage.f_favail
+    budget = capacity["budgets"]
+    required_bytes = budget["operationalReserveBytes"] + budget["failureEvidenceBytes"]
+    required_bytes += sum(budget[field] for field in remaining)
+    if free_bytes < required_bytes or free_inodes < budget["operationalReserveInodes"]:
+        deny(f"capacity_checkpoint:{phase}:bytes={free_bytes}:required={required_bytes}:inodes={free_inodes}")
+    return {"phase": phase, "availableBytes": free_bytes, "availableInodes": free_inodes,
+            "requiredBytes": required_bytes}
 
 
 def allocated_bytes(path: Path) -> int:
@@ -581,6 +660,13 @@ def verify_root(root: Path, target: str, release_id: str) -> dict[str, Any]:
 def build(args: argparse.Namespace) -> None:
     if not args.output.is_absolute():
         deny("output_absolute")
+    with generation_build_window(args.output.parent):
+        build_in_generation_window(args)
+
+
+def build_in_generation_window(args: argparse.Namespace) -> None:
+    if not args.output.is_absolute():
+        deny("output_absolute")
     repo = args.repo.resolve(strict=True)
     ensure_clean_repo(repo, args.target)
     if args.components != ",".join(COMPONENTS):
@@ -590,6 +676,7 @@ def build(args: argparse.Namespace) -> None:
     capacity = read_capacity_contract(
         args.capacity_contract, repo, args.output.parent, args.target, args.release_id
     )
+    previous_reviews = require_generation_reviews(args.output.parent)
     args.output.mkdir(mode=0o700, parents=False)
     lifecycle_path = args.output / "generation-lifecycle.private.json"
     lifecycle: dict[str, Any] = {
@@ -598,6 +685,8 @@ def build(args: argparse.Namespace) -> None:
         "targetCommit": args.target,
         "state": "BUILDING",
         "capacity": capacity,
+        "capacityCheckpoints": [],
+        "previousGenerationReviews": previous_reviews,
         "releaseRoot": str(args.output / args.release_id),
         "package": str(args.output / f"{args.release_id}.tar.xz"),
         "classification": "PENDING",
@@ -607,19 +696,30 @@ def build(args: argparse.Namespace) -> None:
     env = build_environment()
     env.update(SOURCE_DATE_EPOCH=str(args.source_date_epoch), TZ="UTC", LANG="C.UTF-8",
                LC_ALL="C.UTF-8", CI="1", NEXT_TELEMETRY_DISABLED="1")
+    def checkpoint(phase: str, remaining: Iterable[str] = ()) -> None:
+        lifecycle["capacityCheckpoints"].append(capacity_checkpoint(capacity, phase, remaining))
+        write_lifecycle(lifecycle_path, lifecycle)
+
     try:
+        checkpoint("before_toolchain")
         tools = toolchain(repo, env, args.output)
         run(["npm", "ci"], repo, env, failure_root=args.output, stage="root_npm_ci")
+        checkpoint("after_root_npm_ci")
         api_source = repo / "apps/whatsapp-agent"
         run(["npm", "ci", "--include=dev"], api_source, env,
             failure_root=args.output, stage="api_npm_ci")
+        checkpoint("after_api_npm_ci")
         run(["npm", "run", "db:generate"], api_source, env,
             failure_root=args.output, stage="prisma_generate")
+        checkpoint("after_prisma_generate")
         run(["npm", "run", "build"], api_source, env,
             failure_root=args.output, stage="api_build")
+        checkpoint("after_api_build")
         run(["npm", "run", "build"], repo, env,
             failure_root=args.output, stage="frontend_build")
+        checkpoint("after_frontend_build")
 
+        checkpoint("before_runtime_copy", ("runtimePayloadBytes", "packageTemporaryBytes", "independentVerificationBytes"))
         release_root = args.output / args.release_id
         release_root.mkdir(mode=0o755)
         copy_allowlist(api_source, release_root / "api-runtime",
@@ -627,6 +727,7 @@ def build(args: argparse.Namespace) -> None:
         copy_allowlist(repo, release_root / "frontend-runtime",
                        (".next", "node_modules", "public", "package.json", "package-lock.json",
                         "next.config.js", "next.config.mjs", "next.config.ts"))
+        checkpoint("after_runtime_copy", ("packageTemporaryBytes", "independentVerificationBytes"))
         ensure_clean_repo(repo, args.target)
         normalize_tree(release_root, args.source_date_epoch)
         entries = scan_runtime(release_root)
@@ -658,12 +759,15 @@ def build(args: argparse.Namespace) -> None:
         normalize_tree(release_root, args.source_date_epoch)
         verified = verify_root(release_root, args.target, args.release_id)
         package = args.output / f"{args.release_id}.tar.xz"
+        checkpoint("before_package", ("packageTemporaryBytes", "independentVerificationBytes"))
         package_identity = write_package(release_root, package, args.source_date_epoch)
+        checkpoint("before_independent_extraction", ("independentVerificationBytes",))
         with tempfile.TemporaryDirectory(prefix="converta-release-extract-", dir=args.output.parent) as temporary:
             extracted = safe_extract(package, Path(temporary), args.release_id)
             extracted_verified = verify_root(extracted, args.target, args.release_id)
             if extracted_verified != verified or canonical_json(scan_runtime(extracted)) != canonical_json(scan_runtime(release_root)):
                 deny("independent_extraction_mismatch")
+        checkpoint("after_independent_extraction")
     except BaseException as error:
         lifecycle.update(state="FAILED", classification="PENDING",
                          failureClass=type(error).__name__)
@@ -745,3 +849,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
