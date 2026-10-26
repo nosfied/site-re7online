@@ -88,13 +88,12 @@
       "scope": "Reported deployment completion; not a fresh reopening inventory"
     },
     "campaignOperations": {
-      "state": "DEPLOYED_GUARD_CLOSED",
+      "state": "SEND_ACCEPTED_GUARD_CLOSED",
       "reportedOpen": false,
       "reportedTasks": 0,
-      "reportedGuardSha256": "9e1a979932e4a22f8051046a4ce96e1ac5656723ba5ba4a57e1ef14f8e73a9e9",
       "reopeningInventory": "SNAPSHOT_REPORTED_ZERO_AUTOMATICALLY_ELIGIBLE_20261026T111404Z",
-      "closedGuardUiAcceptance": "PENDING",
-      "controlledSend": "NOT_AUTHORIZED",
+      "closedGuardUiAcceptance": "NOT_SEPARATELY_REPORTED",
+      "controlledSend": "PASS_SINGLE_MANUAL_VIDEO_CAMPAIGN",
       "inventory": {
         "source": "OWNER_RELAYED_LOCAL_CODEX_READ_ONLY_AUDIT",
         "snapshotAtUtc": "2026-10-26T11:14:04Z",
@@ -107,7 +106,80 @@
         "openingAuthorized": false,
         "evidenceManifestSha256": "566833683719ddb8e4bcc2df0f7beaf319c4bccde74c435902596b98121f3c35",
         "databaseInventorySha256": "f9ad89081060ee69d9be443762b5775411bbf08b06bda49b34ec5cb079c0005d",
-        "requiresFreshCheckBeforeCas": true
+        "requiresFreshCheckBeforeCas": true,
+        "authorizationFieldScope": "AT_INVENTORY_BEFORE_LATER_OWNER_AUTHORIZATION"
+      },
+      "previousGuardSha256Scope": "PRE_HOMOLOGATION_ONLY",
+      "reportedGeneration": 40,
+      "reportedDrained": true,
+      "reportedLedgerFault": null,
+      "manualHomologation": {
+        "source": "OWNER_RELAYED_LOCAL_CODEX_REPORT",
+        "reportedDate": "2026-10-26",
+        "independentVpsInspectionByDocumentationEditor": false,
+        "state": "SEND_ACCEPTED",
+        "scope": "DEMO_SINGLE_VIDEO_SINGLE_CONTROLLED_RECIPIENT_ONLY",
+        "templateName": "video_previdencia_teste_20261024_v2",
+        "recipientCount": 1,
+        "recipientPublished": false,
+        "uploads": 1,
+        "campaigns": 1,
+        "jobs": 1,
+        "providerSubmissions": 1,
+        "providerAcceptances": 1,
+        "sentEvents": 1,
+        "failures": 0,
+        "uncertainResults": 0,
+        "automaticRetry": false,
+        "media": {
+          "kind": "VIDEO",
+          "sizeBytes": 211534,
+          "state": "stored",
+          "linkedToCampaign": true,
+          "accountUploadState": "confirmed",
+          "attemptCount": 1,
+          "mediaIdConfirmed": true
+        },
+        "campaign": {
+          "status": "completed",
+          "totalRecipients": 1,
+          "sent": 1,
+          "blocked": 0,
+          "jobStatus": "completed",
+          "jobAttempt": 1
+        },
+        "crm": {
+          "conversationResolvedAndLinked": true,
+          "persistencePending": false,
+          "reconciliationNeeded": false
+        },
+        "webhook": {
+          "sentObserved": true,
+          "readObserved": true
+        },
+        "closure": {
+          "generation": 40,
+          "open": false,
+          "tasks": 0,
+          "drained": true,
+          "ledgerFault": null,
+          "activeJobs": 0,
+          "overdueClaimableJobs": 0,
+          "pendingResults": 0
+        },
+        "health": {
+          "local": {
+            "ok": true,
+            "db": "ok"
+          },
+          "public": {
+            "ok": true,
+            "db": "ok"
+          }
+        },
+        "evidenceManifestSha256": "d0e8cb9eee4977bdb2225413db5b738232788ffa450300c0f52e803bc2c3466f",
+        "artifactsPreserved": true,
+        "commercialOrGeneralOpeningAuthorized": false
       }
     }
   },
@@ -238,7 +310,10 @@
           "submittedEventCount": 1
         }
       ]
-    }
+    },
+    "historicalCampaignEffectsScope": "PREVIOUS_MEDIA_TEMPLATE_HOMOLOGATION_RECORDS_NOT_CURRENT_MANUAL_CAMPAIGN",
+    "latestCampaignHomologationState": "SINGLE_VIDEO_SEND_ACCEPTED_CRM_AND_READ_WEBHOOK_CONFIRMED",
+    "latestCampaignHomologationRecord": "docs/saas/CAMPAIGN_OPERATIONS_READINESS.md"
   },
   "tenantScopedMetaAppId": {
     "codeState": "TECHNICALLY_DEPLOYED",

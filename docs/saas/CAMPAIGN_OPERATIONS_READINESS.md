@@ -1,6 +1,6 @@
 # Campanhas: disponibilidade, mídia e homologação
 
-Atualizado em 26/10/2026: **DEPLOYED_GUARD_CLOSED**. O deploy a959 foi concluído
+Atualizado em 26/10/2026: **SEND_ACCEPTED_GUARD_CLOSED — UM ENVIO DE VÍDEO HOMOLOGADO**. O deploy a959 foi concluído
 conforme relatório do Codex local encaminhado pelo owner; não houve abertura da
 guarda nem envio nessa janela. O editor documental não fez nova inspeção da VPS. Os históricos continuam válidos
 no seu escopo e não são instruções para repetir recuperação ou envio.
@@ -190,8 +190,8 @@ Sincronização de templates e envio são efeitos distintos: autorização de um
 implica a do outro. A homologação de envio não libera automaticamente os clientes.
 
 Encerrar cada etapa com PASS/FAIL/PENDING, evidência vinculada e próximo ato.
-Neste registro: deploy PASS; disponibilidade fechada PASS relatado; UI integrada,
-abertura e envio PENDING. O inventário posterior consta abaixo. Não há nova autorização de
+Neste registro: deploy PASS; disponibilidade fechada PASS relatado; as etapas ainda não realizadas permanecem PENDING. O inventário e o resultado
+posterior de um envio manual autorizado constam abaixo. Não há nova autorização de
 abertura ou chamada Meta concedida por esta atualização documental.
 
 ## Inventário relatado de 26/10/2026 e decisão de continuidade
@@ -241,3 +241,39 @@ relatado usa `selectionMode=STATIC_RECIPIENTS`, contato de equipe autorizado,
 MP4 válido sem PII abaixo de 16.000.000 bytes e deltas esperados +1 asset/+1 draft,
 zero batch/job/agendamento/intenção/provider/outbound. Validar o contrato do payload
 na API a959 antes da execução. Não exigir outro build/deploy/save.
+
+## Homologação manual concluída — um vídeo, um destinatário
+
+Resultado relatado pelo Codex local e encaminhado pelo owner em 26/10/2026:
+**MANUAL CAMPAIGN HOMOLOGATION PASS / SEND_ACCEPTED_GUARD_CLOSED**.
+O editor documental não executou a janela nem fez nova inspeção viva. A proposta
+anterior foi sucedida pela autorização expressa do owner para envio real no Demo;
+não há autorização de uso geral ou de repetição desse teste.
+
+- Tenant Demo; destinatário único selecionado pelo owner, telefone não publicado.
+- Template `video_previdencia_teste_20261024_v2`.
+- Um upload VIDEO de 211.534 bytes, stored, vinculado à campanha; upload por conta
+  confirmed, um attemptId e mediaId confirmado, mantidos privadamente.
+- Uma campanha completed: total 1, enviados 1, bloqueados 0.
+- Um job completed, tentativa 1; uma submissão provider, uma aceitação Meta,
+  um evento de envio, zero falhas ou resultados incertos, sem repetição.
+- Sequência: submit_started → provider_accepted → contact_bootstrap_ready → sent
+  (HTTP provider 200) → webhook sent → webhook read.
+- Conversa CRM resolvida/vinculada; sem crm_pending, persistência pendente ou
+  reconciliação. O webhook read é status reportado, sem inferir confirmação humana
+  adicional do destinatário.
+- Guarda fechada canonicamente na geração 40: open=false, tarefas 0, drained=true,
+  sem ledger fault. Zero jobs ativos, vencidos reclamáveis ou resultados pendentes.
+- Health local/público ok=true/db=ok; mídia, campanha e evidências preservadas.
+
+Índice privado final SHA-256:
+`d0e8cb9eee4977bdb2225413db5b738232788ffa450300c0f52e803bc2c3466f`.
+O hash prévio do ledger não deve ser reutilizado como hash da geração 40.
+
+O aceite confirma a integração upload → campanha → Meta → CRM → webhook para
+este único vídeo. Não certifica IMAGE, outros tenants, agendamento/multilote,
+correção genérica internacional, regressões negativas da guarda ou isolamento
+visual com fixtures que não tenham sido executados e relatados separadamente.
+A guarda continua fechada por encerramento da janela, não por falha do teste.
+Próximo ato: revisar o aceite e decidir as homologações restantes/liberação geral;
+sem novo build/deploy/save ou reenvio para produzir prova repetida.

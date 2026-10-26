@@ -1,6 +1,6 @@
 # Estado canônico do Converta
 
-**DEPLOYED_GUARD_CLOSED / PRODUCTION HEALTHY / CAMPAIGN FUNCTIONAL ACCEPTANCE PENDING**
+**DEPLOYED / SINGLE VIDEO CAMPAIGN ACCEPTANCE PASS / GUARD CLOSED / PRODUCTION HEALTHY**
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a implantação ativa está
@@ -44,10 +44,25 @@ O retorno de ambos os componentes é
 `5d9ae04d6df29856318992638a66deccd29a68719c129be47453d4fd4b757e13`.
 Retornos transitivos e evidências anteriores permanecem preservados.
 
-Estado: **DEPLOYED_GUARD_CLOSED**. Próximo ato: inventário global fresco somente
-leitura pelo Codex local e roteiro de aceite com guarda fechada, conforme
-[homologação de campanhas](CAMPAIGN_OPERATIONS_READINESS.md#sequência-vigente-após-o-deploy-de-26102026).
-Não há autorização implícita para abrir guarda, retomar trabalho ou enviar.
+## Homologação manual posterior — 26/10/2026
+
+Fonte: relatório do Codex local encaminhado pelo owner, sem nova inspeção da VPS
+pelo editor. Uma campanha de vídeo no Demo para um destinatário controlado: um
+upload, um job, uma submissão e uma aceitação Meta; campanha/job completed,
+tentativa 1. CRM vinculado, webhook sent seguido de read, sem falha, pendência,
+reconciliação ou retry. Telefone e IDs privados não são publicados.
+
+Ao final: guarda fechada na geração 40, tarefas zero, drained=true, sem ledger fault,
+zero jobs ativos/vencidos reclamáveis e resultados pendentes. Health local/público
+ok=true/db=ok. Mídia e campanha preservadas. O hash anterior do ledger não identifica
+este estado posterior; o novo hash do ledger não foi fornecido.
+
+Índice privado da janela:
+`d0e8cb9eee4977bdb2225413db5b738232788ffa450300c0f52e803bc2c3466f`.
+Estado: **SEND_ACCEPTED_GUARD_CLOSED**. O aceite cobre esse envio de vídeo, não
+IMAGE, agendamento, multilote ou uso amplo. Próximo ato: revisão do resultado e
+decisão do owner sobre demais homologações/liberação operacional, conforme
+[roteiro](CAMPAIGN_OPERATIONS_READINESS.md). Não repetir o envio de teste.
 
 ## Templates de Utilidade — leitura local
 
