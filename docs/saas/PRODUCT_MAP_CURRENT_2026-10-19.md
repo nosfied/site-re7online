@@ -42,6 +42,10 @@ a retomar; PR #57 em main é frente distinta, sem revisão de mérito nesta leit
 
 ## Sequência recomendada de homologações — funcionalidades existentes
 
+O owner priorizou o ajuste estritamente estético de Campanhas/Rascunho antes de
+agendamento. PR #228 altera somente layout; não reabre mídia como homologação de
+provider, não modifica guarda e não autoriza janela automaticamente.
+
 Esta ordem é recomendação de continuidade, não autorização nova de envio.
 Antes de cada operação real definir tenant, ação, destinatários e quantidade.
 Não precisa reabrir guarda, repetir build/deploy/save ou reenviar imagem/vídeo.
@@ -49,11 +53,12 @@ Não precisa reabrir guarda, repetir build/deploy/save ou reenviar imagem/vídeo
 | Ordem | Frente | O que falta provar | Próximo ato e conclusão |
 | --- | --- | --- | --- |
 | 0 | Consolidação documental | PR #227 ainda aberto; entradas históricas pareciam pendências vivas | Concluir revisão/CI/integração documental. Não misturar com main/Vercel ou runtime. |
-| 1 | Agendamento estático de campanha | Homologação recente comprovou envio manual, não disparo futuro | Preparar um agendamento de escopo mínimo, timezone explícito e destinatário controlado. Aceite: agenda persistida após reload, nenhum envio antes da hora, um job/uma execução na hora, CRM/webhook e ausência de duplicidade. |
-| 2 | Audiência dinâmica CRM e conjunto/lotes | Funcionalidade implantada; aceite amplo/natural não decorre dos testes manuais | Primeiro prévia/filtro e snapshot pequenos controlados. Depois critério de conjunto/lotes e status agregados. Não usar audiência comercial ou milhares de envios para provar chunking; reutilizar testes isolados de [1.000+1/3.001](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md). Snapshot imutável, exclusões/opt-out e zero reenvio são invariantes. |
-| 3 | Resposta e destino de retorno da campanha | CRM/outbound/webhook confirmados não provam toda entrada de resposta/departamento/fluxo | Conferir evidências existentes por transporte e só testar o caminho que faltar: resposta nova autorizada, uma entrada canônica, destino/fluxo/ownership corretos. Não misturar com suporte internacional não homologado. |
-| 4 | Aceite do cliente CRA-PR | Aceite Demo não equivale a configuração/aprovação/treinamento/uso Utility no tenant CRA | Inventariar templates, categoria, mídia, retorno e configuração do tenant real; preparar aceite com cliente e custo/consentimento próprios. Não copiar campanha ou destinatário do Demo. |
-| 5 | Automação na Inbox e transportes não exercitados | Filtro BOT/Automação com opt-in e RBAC; META_CLOUD puro e híbrido API→WEB continuam sem aceite global nos registros | Reutilizar código e evidências; conferir configuração atual sem ativar outro tenant. Planejar matriz SUPERVISOR/ADMIN do próprio tenant, AGENT/outro tenant negativos, revogação, TODAS sem BOT, resposta/claim nos contratos existentes. Nenhuma promessa de cancelamento instantâneo de resposta já admitida. |
+| 1 | Ajuste estritamente estético de Campanhas/Rascunho | Separar os campos de configuração do painel de mídia, sem alterar operações | [PR #228](https://github.com/nosfied/site-re7online/pull/228): grade explícita, mídia independente à direita/empilhada no mobile; sem lógica/API/upload/envio novos. Revisar CI e visual antes de implantação autorizada. Ainda não implantado. |
+| 2 | Agendamento estático de campanha | Homologação recente comprovou envio manual, não disparo futuro | Preparar um agendamento de escopo mínimo, timezone explícito e destinatário controlado. Aceite: agenda persistida após reload, nenhum envio antes da hora, um job/uma execução na hora, CRM/webhook e ausência de duplicidade. |
+| 3 | Audiência dinâmica CRM e conjunto/lotes | Funcionalidade implantada; aceite amplo/natural não decorre dos testes manuais | Primeiro prévia/filtro e snapshot pequenos controlados. Depois critério de conjunto/lotes e status agregados. Não usar audiência comercial ou milhares de envios para provar chunking; reutilizar testes isolados de [1.000+1/3.001](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md). Snapshot imutável, exclusões/opt-out e zero reenvio são invariantes. |
+| 4 | Resposta e destino de retorno da campanha | CRM/outbound/webhook confirmados não provam toda entrada de resposta/departamento/fluxo | Conferir evidências existentes por transporte e só testar o caminho que faltar: resposta nova autorizada, uma entrada canônica, destino/fluxo/ownership corretos. Não misturar com suporte internacional não homologado. |
+| 5 | Aceite do cliente CRA-PR | Aceite Demo não equivale a configuração/aprovação/treinamento/uso Utility no tenant CRA | Inventariar templates, categoria, mídia, retorno e configuração do tenant real; preparar aceite com cliente e custo/consentimento próprios. Não copiar campanha ou destinatário do Demo. |
+| 6 | Automação na Inbox e transportes não exercitados | Filtro BOT/Automação com opt-in e RBAC; META_CLOUD puro e híbrido API→WEB continuam sem aceite global nos registros | Reutilizar código e evidências; conferir configuração atual sem ativar outro tenant. Planejar matriz SUPERVISOR/ADMIN do próprio tenant, AGENT/outro tenant negativos, revogação, TODAS sem BOT, resposta/claim nos contratos existentes. Nenhuma promessa de cancelamento instantâneo de resposta já admitida. |
 
 Fontes: [campanhas](CAMPAIGN_OPERATIONS_READINESS.md),
 [dinâmico](DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md),
