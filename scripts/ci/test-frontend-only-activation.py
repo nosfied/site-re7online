@@ -188,7 +188,8 @@ class FrontendExecutorTest(unittest.TestCase):
             f,r=self.run_case(behavior)
             try:
                 self.assertNotEqual(r.returncode,0);state=json.loads((f.tx/"window-state.private.json").read_text())
-                self.assertEqual(state["state"],"ROLLBACK_INCOMPLETE" if behavior=="guard-drift" else "ROLLED_BACK");self.assertIn(predicate,state["failurePredicate"])
+                incomplete = behavior in {"guard-drift", "readiness-fsync-failure"}
+                self.assertEqual(state["state"],"ROLLBACK_INCOMPLETE" if incomplete else "ROLLED_BACK");self.assertIn(predicate,state["failurePredicate"])
                 self.assertEqual((f.current/"frontend").resolve(),f.rollback/"frontend-runtime")
                 if behavior=="timeout":
                     self.assertIn("partial stdout",(f.tx/"candidate-readiness.stdout.private.txt").read_text())
@@ -225,7 +226,10 @@ class FrontendExecutorTest(unittest.TestCase):
             finally:f.close()
         f=ExecutorFixture();(f.current/"frontend").unlink();(f.current/"frontend").write_text("not a symlink")
         try:
-            r=f.run();self.assertNotEqual(r.returncode,0);self.assertEqual(json.loads((f.tx/"window-state.private.json").read_text())["state"],"DENIED_BEFORE_MUTATION")
+            r=f.run();self.assertNotEqual(r.returncode,0)
+            state=json.loads((f.tx/"window-state.private.json").read_text())
+            self.assertEqual(state["state"],"ROLLBACK_INCOMPLETE")
+            self.assertTrue((f.tx/"lock-holder.private.json").is_file())
         finally:f.close()
 
     def test_absent_or_symlink_lock_denies_before_any_transaction(self):
