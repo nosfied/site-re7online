@@ -56,6 +56,13 @@ hashes e capacidade, sem ambiente ou segredo. `FAILED`, `COMPLETE` ou uma geraç
 substituída exigem classificação imediata como host obrigatório, custódia off-host
 verificada ou pendência. Substituição nunca equivale a autorização para retirar.
 
+`PENDING_RETENTION_REVIEW` é parte do encerramento do deploy, não backlog eventual.
+Enquanto uma geração anterior estiver nesse estado, não iniciar novo build que crie
+cópias dispensáveis sem justificativa operacional registrada e novo orçamento de
+coexistência/pico. Depois do aceite, preservar release ativa, retorno imediato,
+pacote, manifesto, índice e evidências; worktree e payload redundante só podem sair
+em lote separado, autenticado, comparado e explicitamente autorizado.
+
 ## Preservação de evidências de execução
 
 A coleta usa `scripts/retention-evidence-collector.py`; `--validate-only` verifica

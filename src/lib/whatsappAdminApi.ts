@@ -510,8 +510,20 @@ export type LeadNoteItem = {
 
 export type CampaignExecutionPresentation = { state: "processing" | "queued" | "user_pause_requested" | "user_paused" | "operational_suspension" | "uncertain" | "cancelled" | "terminal" | "unconfirmed" | "not_started" };
 
+export type CampaignTerminationPresentation = {
+  kind: "draft_discarded" | "campaign_cancelled";
+  evidence: "campaign.draft.discarded" | "campaign.cancelled" | "campaign.status.cancelled";
+};
+
+export type CampaignOperationalAlert = {
+  predicate: "provider_acceptance_persistence_pending";
+  evidence: "campaign.message.provider_accepted_without_matching_outbound";
+};
+
 export type CampaignItem = {
   executionState?: CampaignExecutionPresentation;
+  termination?: CampaignTerminationPresentation | null;
+  operationalAlert?: CampaignOperationalAlert | null;
   id: string;
   clientId: string;
   templateId?: string | null;
@@ -586,6 +598,8 @@ export type CampaignItem = {
     };
     chunks: Array<{
       executionState?: CampaignExecutionPresentation;
+      termination?: CampaignTerminationPresentation | null;
+      operationalAlert?: CampaignOperationalAlert | null;
       campaignId: string;
       name: string;
       status: string;

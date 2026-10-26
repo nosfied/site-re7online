@@ -470,6 +470,17 @@
       "requiredBefore": "SCHEDULING_HOMOLOGATION",
       "contract": "SELECT_POST_ID_IMMEDIATELY_CLEAR_OLD_SNAPSHOT_VALIDATE_DETAIL_ID_AND_TENANT_REFRESH_LIST_INDEPENDENTLY"
     },
+    "campaignTerminalPresentationCorrection": {
+      "state": "FUNCTIONAL_PR_PENDING_REVIEW",
+      "baseTarget": "123ba7bd78b2568ee982bf8590840de029a80072",
+      "persistedLifecyclePrecedesOperationalState": true,
+      "uncertaintyPresentation": "SEPARATE_PREDICATE_AND_EVIDENCE_ALERT",
+      "supersededArtifactsPreserved": [
+        "PR_240",
+        "immutable-123ba7bd-vps-20261026T200100Z"
+      ],
+      "retentionState": "NOT_AUTHORIZED"
+    },
     "acceptanceBoundary": "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS; SCHEDULING_MULTIBATCH_AND_CLIENT_SPECIFIC_ACCEPTANCE_REMAIN_SEPARATE"
   },
   "tenantScopedMetaAppId": {

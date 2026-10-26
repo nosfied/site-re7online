@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCampaignReadGeneration, getCampaignListStatus, getCampaignPresentationLabel, isImmediateCampaignQueued, shouldRefreshCampaign } from "./campaignPresentation";
+import { createCampaignReadGeneration, getCampaignListStatus, getCampaignOperationalWarning, getCampaignPresentationLabel, getCampaignTerminalDetailLabel, isImmediateCampaignQueued, shouldRefreshCampaign } from "./campaignPresentation";
 
 for (const source of ["manual_campaign_send", "crm_audience_preview", "recipient_import:csv"]) {
   test(`immediate ${source} is queued in sending tab without inventing a schedule`, () => {
@@ -95,6 +95,53 @@ test("list groups only explicit same-tenant children, preserving incomplete rela
 test("pause request keeps the existing polling alive until the current call settles",()=>{
  assert.equal(shouldRefreshCampaign({status:"paused",executionState:{state:"user_pause_requested"}}),true);
  assert.equal(shouldRefreshCampaign({status:"paused",executionState:{state:"user_paused"}}),false);
- assert.equal(shouldRefreshCampaign({status:"cancelled",executionState:{state:"uncertain"}}),true);
+ assert.equal(shouldRefreshCampaign({status:"cancelled",executionState:{state:"uncertain"}}),false);
  assert.equal(shouldRefreshCampaign({status:"cancelled",executionState:{state:"cancelled"}}),false);
+});
+
+test("discarded draft keeps its persisted terminal presentation despite residual uncertainty", () => {
+  const campaign = {
+    status: "cancelled",
+    executionState: { state: "uncertain" as const },
+    termination: { kind: "draft_discarded" as const, evidence: "campaign.draft.discarded" as const },
+  };
+  assert.equal(getCampaignPresentationLabel(campaign), "Descartada");
+  assert.equal(getCampaignTerminalDetailLabel(campaign), "Rascunho descartado — nenhum envio iniciado");
+  assert.equal(getCampaignOperationalWarning(campaign), null);
+});
+
+test("campaign cancelled after partial execution retains cancellation contract", () => {
+  const campaign = {
+    status: "cancelled",
+    executionState: { state: "uncertain" as const },
+    termination: { kind: "campaign_cancelled" as const, evidence: "campaign.cancelled" as const },
+  };
+  assert.equal(getCampaignPresentationLabel(campaign), "Cancelada");
+  assert.equal(getCampaignTerminalDetailLabel(campaign), "Cancelada — envios restantes encerrados");
+});
+
+test("real provider persistence uncertainty is a separate warning and never replaces terminal badge", () => {
+  const campaign = {
+    status: "cancelled",
+    executionState: { state: "uncertain" as const },
+    termination: { kind: "campaign_cancelled" as const, evidence: "campaign.cancelled" as const },
+    operationalAlert: {
+      predicate: "provider_acceptance_persistence_pending" as const,
+      evidence: "campaign.message.provider_accepted_without_matching_outbound" as const,
+    },
+  };
+  assert.equal(getCampaignPresentationLabel(campaign), "Cancelada");
+  assert.deepEqual(getCampaignOperationalWarning(campaign), {
+    predicate: "provider_acceptance_persistence_pending",
+    evidence: "campaign.message.provider_accepted_without_matching_outbound",
+    label: "Aceitação do provedor sem persistência local correspondente — revisão necessária",
+  });
+  assert.equal(shouldRefreshCampaign(campaign), true);
+});
+
+test("completed, failed and blocked ignore residual execution presentation", () => {
+  assert.equal(getCampaignPresentationLabel({ status: "completed", executionState: { state: "uncertain" } }), "Concluída");
+  assert.equal(getCampaignPresentationLabel({ status: "failed", executionState: { state: "processing" } }), "Falha");
+  assert.equal(getCampaignPresentationLabel({ status: "blocked", executionState: { state: "uncertain" } }), "Bloqueada por limite");
+  assert.equal(getCampaignPresentationLabel({ status: "draft", executionState: { state: "unconfirmed" } }), "Rascunho em revisão");
 });

@@ -2,6 +2,7 @@ import { withCampaignMediaAdmission } from "../templates/campaignMediaAdmission.
 import { executeCrmImportOperation, readCrmImportOperation, CrmImportOperationError } from "../crm/crmCsvImportOperation.js";
 import type { CampaignMetaStatus, CampaignMetaSummary } from "../campaigns/campaignRecipientResultTruth.js";
 import { projectCampaignJobExecution, aggregateCampaignExecution, type CampaignExecutionPresentation } from "../campaigns/campaignExecutionPresentation.js";
+import { projectCampaignLifecyclePresentation } from "../campaigns/campaignLifecyclePresentation.js";
 import { extractMetaStatus, normalizeCampaignMessageStatus, stringifyCampaignError, isUtilityPricingCategory, isDeliveredForCampaignBilling, resolveCampaignBillingStatus, buildCampaignMetaStatusItem, buildCampaignSeedFallbackStatusItems, summarizeCampaignMetaStatuses, campaignRecipientIdentityCandidates, campaignRecipientIdentitiesMatch, campaignMetaStatusRank, campaignMetaStatusTime, pickCampaignRecipientStatus, buildCampaignRecipientResultStatuses } from "../campaigns/campaignRecipientResultTruth.js";
 import { campaignRecipientEligibility, normalizeCampaignRecipientIdentity } from "../campaigns/campaignEligibility.js";
 import { reactiveRoutingDecision, type ReactiveRoutingDecision, revalidateReactiveSubmission } from "../whatsapp/reactiveOutboundPolicy.js";
@@ -37248,6 +37249,7 @@ async function loadCampaignReadSources(prisma: ReturnType<typeof getPrisma>, cli
       const page: Array<CampaignReadSources["events"][number] & { id: string }> = await prisma.event.findMany({
         where: { clientId, eventName: { in: [
           "campaign.seed.saved", CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT, "campaign.recipient.import_blocked", "campaign.message.provider_accepted",
+          "campaign.draft.discarded", "campaign.cancelled",
         ] }, OR: [{ messageId: { in: group } }, ...group.map(id => ({ eventName: "campaign.message.provider_accepted", payloadJson: { path: ["campaignId"], equals: id } }))] },
         orderBy: { id: "asc" }, take: 1000,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -37344,6 +37346,8 @@ export async function buildCampaignListPayload(
       audienceBlockedCount: batch ? batch.blockedCount : null,
       executionState: batch ? aggregateCampaignExecution(children.map(link => models.get(link.campaignId)?.observedExecutionState ?? queueMap.get(link.campaignId)?.executionState ?? { state: "unconfirmed" }), batch.status)
         : model.observedExecutionState ?? queueMap.get(campaign.id)?.executionState ?? aggregateCampaignExecution([], campaign.status),
+      termination: model.termination,
+      operationalAlert: model.operationalAlert,
       executionQueue: queueMap.get(campaign.id) ?? null,
       selectionMode: model.draftSeed.selectionMode, dynamicFilter: model.draftSeed.dynamicFilter ?? null,
       metaSummary };
@@ -37488,6 +37492,8 @@ export async function buildCampaignExecutionBatchSummary(
       failedCount: recipientModels.get(item.campaignId)?.metaSummary.totalFailed ?? 0,
       totalRecipients: item.campaign.totalRecipients,
       executionState: recipientModels.get(item.campaignId)?.observedExecutionState ?? queue?.executionState ?? aggregateCampaignExecution([], item.campaign.status),
+      termination: recipientModels.get(item.campaignId)?.termination ?? null,
+      operationalAlert: recipientModels.get(item.campaignId)?.operationalAlert ?? null,
       queueStatus: queue?.status ?? null,
       queuePosition: queue?.position ?? null,
       startedAt: queue?.startedAt ?? null,
@@ -37546,6 +37552,12 @@ async function buildCampaignRecipientReadModel(
     if (event.eventName !== "campaign.message.provider_accepted") return false;
     const payload = event.payloadJson as Record<string, unknown> | null;
     return payload?.campaignId === campaign.id && !loaded.outboundMessages.some(out => out.messageId === event.messageId && (typeof payload.metaMessageId !== "string" || out.metaMessageId === payload.metaMessageId));
+  });
+  const { termination, operationalAlert } = projectCampaignLifecyclePresentation({
+    campaignId: campaign.id,
+    status: campaign.status,
+    events: loaded.events,
+    providerAcceptancePersistencePending: pendingAcceptance,
   });
   // A cancelled executor is not evidence that an accepted submission never happened.
   const observedExecutionState = pendingAcceptance ? { state: "uncertain" as const } : executionState;
@@ -37632,7 +37644,7 @@ async function buildCampaignRecipientReadModel(
           seed: draftSeed,
           resultItems,
         });
-  if (sources) return { observedExecutionState, draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus: visibleMessagesMetaStatus,
+  if (sources) return { observedExecutionState, termination, operationalAlert, draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus: visibleMessagesMetaStatus,
     metaSummary: summarizeCampaignMetaStatuses(visibleMessagesMetaStatus) };
   const client = await prisma.client.findUnique({
     where: { id: clientId },
@@ -37649,7 +37661,7 @@ async function buildCampaignRecipientReadModel(
     statuses: visibleMessagesMetaStatus,
     crmStatuses: resolvedStatuses.statuses,
   });
-  return { observedExecutionState, draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus,
+  return { observedExecutionState, termination, operationalAlert, draftSeed, draftReview, responseDraftSeed, enrichedMessagesMetaStatus,
     metaSummary: summarizeCampaignMetaStatuses(enrichedMessagesMetaStatus) };
 }
 
@@ -37685,6 +37697,8 @@ export async function buildCampaignDetailPayload(
       ...serializeCampaign(campaign),
       executionQueue: queueMap.get(campaign.id) ?? null,
       executionState: isController ? executionBatch.executionState : readModel.observedExecutionState ?? queueMap.get(campaign.id)?.executionState ?? aggregateCampaignExecution([], campaign.status),
+      termination: readModel.termination,
+      operationalAlert: readModel.operationalAlert,
       executionBatch,
       ...projection,
       audienceBlockedCount: isController ? executionBatch.blockedCount : null,

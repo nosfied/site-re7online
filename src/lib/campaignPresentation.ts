@@ -1,7 +1,15 @@
-import type { CampaignExecutionPresentation } from "./whatsappAdminApi";
+import type { CampaignExecutionPresentation, CampaignOperationalAlert, CampaignTerminationPresentation } from "./whatsappAdminApi";
 import { getCampaignStatusUxLabel } from "./appUxLabels";
 
-type CampaignLifecycle = { status: string; scheduledAt?: string | null; executionState?: CampaignExecutionPresentation };
+type CampaignLifecycle = {
+  status: string;
+  scheduledAt?: string | null;
+  executionState?: CampaignExecutionPresentation;
+  termination?: CampaignTerminationPresentation | null;
+  operationalAlert?: CampaignOperationalAlert | null;
+};
+
+const TERMINAL_CAMPAIGN_STATUSES = new Set(["completed", "failed", "blocked", "cancelled"]);
 
 // This is a presentation of the persisted contract, not a new execution state.
 export function isImmediateCampaignQueued(campaign: CampaignLifecycle) {
@@ -26,13 +34,34 @@ export function getCampaignExecutionLabel(state?: CampaignExecutionPresentation[
 }
 
 export function getCampaignPresentationLabel(campaign: CampaignLifecycle) {
+  if (campaign.status === "cancelled") {
+    return campaign.termination?.kind === "draft_discarded" ? "Descartada" : "Cancelada";
+  }
+  if (TERMINAL_CAMPAIGN_STATUSES.has(campaign.status)) return getCampaignStatusUxLabel(campaign.status);
   const operational = getCampaignExecutionLabel(campaign.executionState?.state);
   if (operational && (campaign.executionState?.state !== "unconfirmed" || campaign.status === "sending")) return operational;
   return isImmediateCampaignQueued(campaign) ? "Na fila de envio" : getCampaignStatusUxLabel(campaign.status);
 }
 
+export function getCampaignTerminalDetailLabel(campaign: CampaignLifecycle) {
+  if (campaign.status !== "cancelled") return null;
+  return campaign.termination?.kind === "draft_discarded"
+    ? "Rascunho descartado — nenhum envio iniciado"
+    : "Cancelada — envios restantes encerrados";
+}
+
+export function getCampaignOperationalWarning(campaign: CampaignLifecycle) {
+  if (campaign.operationalAlert?.predicate !== "provider_acceptance_persistence_pending") return null;
+  return {
+    predicate: campaign.operationalAlert.predicate,
+    evidence: campaign.operationalAlert.evidence,
+    label: "Aceitação do provedor sem persistência local correspondente — revisão necessária",
+  };
+}
+
 export function shouldRefreshCampaign(campaign: CampaignLifecycle) {
   // Future schedules must also be observed when the scheduler starts them.
+  if (TERMINAL_CAMPAIGN_STATUSES.has(campaign.status)) return Boolean(getCampaignOperationalWarning(campaign));
   return campaign.status === "scheduled" || campaign.status === "sending" || ["user_pause_requested", "uncertain", "processing"].includes(campaign.executionState?.state ?? "");
 }
 

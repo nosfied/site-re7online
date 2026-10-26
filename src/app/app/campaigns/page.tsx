@@ -80,6 +80,8 @@ import {
   getCampaignListStatus,
   getCampaignPresentationLabel,
   getCampaignExecutionLabel,
+  getCampaignOperationalWarning,
+  getCampaignTerminalDetailLabel,
   isImmediateCampaignQueued,
   shouldRefreshCampaign,
 } from "@/lib/campaignPresentation";
@@ -587,7 +589,11 @@ function getMetaStatusLabel(status: string) {
 }
 
 function getCampaignConfidence(campaign: CampaignItem) {
-  const executionLabel = getCampaignExecutionLabel(campaign.executionState?.state);
+  const terminalLabel = getCampaignTerminalDetailLabel(campaign);
+  if (terminalLabel) return { label: terminalLabel, icon: "INFO", classes: "campaign-panel-neutral" };
+  const executionLabel = ["completed", "failed", "blocked", "cancelled"].includes(campaign.status)
+    ? null
+    : getCampaignExecutionLabel(campaign.executionState?.state);
   if (executionLabel) return { label: executionLabel, icon: "INFO", classes: campaign.executionState?.state === "uncertain" ? "campaign-panel-danger" : "campaign-panel-warning" };
   if (campaign.executionQueue?.status === "queued") {
     return {
@@ -610,13 +616,6 @@ function getCampaignConfidence(campaign: CampaignItem) {
       label: "Rascunho — envio ainda não iniciado",
       icon: "INFO",
       classes: "campaign-panel-info",
-    };
-  }
-  if (campaign.status === "cancelled") {
-    return {
-      label: "Rascunho descartado",
-      icon: "INFO",
-      classes: "campaign-panel-neutral",
     };
   }
   if (campaign.status === "sending") {
@@ -655,7 +654,9 @@ function getCampaignConfidence(campaign: CampaignItem) {
 }
 
 function getCampaignQueueLabel(campaign: CampaignItem) {
-  const operational = getCampaignExecutionLabel(campaign.executionState?.state);
+  const operational = ["completed", "failed", "blocked", "cancelled"].includes(campaign.status)
+    ? null
+    : getCampaignExecutionLabel(campaign.executionState?.state);
   if (operational) return operational;
   const queue = campaign.executionQueue;
   if (!queue) return null;
@@ -797,6 +798,8 @@ export default function AppCampaignsPage() {
   const [selectedCampaignSnapshot, setSelectedCampaign] = useState<CampaignItem | null>(null);
   const selectedCampaign = selectedCampaignSnapshot?.id === selectedCampaignId ? selectedCampaignSnapshot : null;
   const selectedCampaignIsBatchController = Boolean(selectedCampaign?.executionBatch && !selectedCampaign.executionBatch.chunks.some(chunk => chunk.campaignId === selectedCampaign.id));
+  const selectedCampaignOperationalWarning = selectedCampaign ? getCampaignOperationalWarning(selectedCampaign) : null;
+  const selectedCampaignConfidence = selectedCampaign ? getCampaignConfidence(selectedCampaign) : null;
   const campaignReads = useRef(createCampaignReadGeneration());
   const selectedIdRef = useRef<string | null>(null);
   const createdDraftDetailOwnerRef = useRef<string | null>(null);
@@ -4612,6 +4615,7 @@ export default function AppCampaignsPage() {
                   const isSelected = campaign.id === selectedCampaignId;
                   const isSending = getCampaignListStatus(campaign) === "sending";
                   const queueLabel = getCampaignQueueLabel(campaign);
+                  const operationalWarning = getCampaignOperationalWarning(campaign);
                   const isDynamicCampaign =
                     campaign.selectionMode === "DYNAMIC_CRM_FILTER" ||
                     campaign.draftSeed?.selectionMode === "DYNAMIC_CRM_FILTER";
@@ -4660,6 +4664,11 @@ export default function AppCampaignsPage() {
                           {campaign.executionQueue?.status === "needs_review" && campaign.executionQueue.failureReason ? (
                             <p className="mt-1 text-xs text-amber-100">
                               Bloqueio: {campaign.executionQueue.failureReason}
+                            </p>
+                          ) : null}
+                          {operationalWarning ? (
+                            <p className="mt-1 text-xs text-amber-100">
+                              Alerta operacional: {operationalWarning.label}
                             </p>
                           ) : null}
                           <p className="mt-1 text-xs text-white/55">{formatDateTime(campaign.updatedAt)}</p>
@@ -4820,9 +4829,19 @@ export default function AppCampaignsPage() {
                     </div>
                   </div>
 
-                  <div className={`rounded-md border p-3 text-sm ${getCampaignConfidence(selectedCampaign).classes}`}>
-                    <p className="font-semibold">{getCampaignConfidence(selectedCampaign).icon} {getCampaignConfidence(selectedCampaign).label}</p>
+                  <div className={`rounded-md border p-3 text-sm ${selectedCampaignConfidence!.classes}`}>
+                    <p className="font-semibold">{selectedCampaignConfidence!.icon} {selectedCampaignConfidence!.label}</p>
                   </div>
+
+                  {selectedCampaignOperationalWarning ? (
+                    <div className="campaign-panel-warning rounded-md border p-3 text-sm" role="status">
+                      <p className="font-semibold">Alerta operacional separado</p>
+                      <p>{selectedCampaignOperationalWarning.label}</p>
+                      <p className="mt-1 text-xs opacity-80">
+                        Predicado: {selectedCampaignOperationalWarning.predicate} · Evidência: {selectedCampaignOperationalWarning.evidence}
+                      </p>
+                    </div>
+                  ) : null}
 
 	                  {selectedCampaign.executionQueue ? (
 	                    <div className="grid gap-3 rounded-md border border-sky-300/25 bg-sky-950/20 p-3">

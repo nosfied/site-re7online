@@ -9,6 +9,7 @@ const appShellSource = fs.readFileSync(path.join(process.cwd(), "src/components/
 const campaignDraftsSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignDrafts.ts"), "utf8");
 const campaignReusePreviewSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignReusePreview.ts"), "utf8");
 const campaignResultEvidenceSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignResultEvidence.ts"), "utf8");
+const campaignBatchPanelSource = fs.readFileSync(path.join(process.cwd(), "src/components/app/CampaignBatchPanel.tsx"), "utf8");
 
 test("campaign center exposes persisted lifecycle tabs", () => {
   assert.ok(pageSource.includes('{ id: "sending", label: "Enviando" }'));
@@ -16,6 +17,16 @@ test("campaign center exposes persisted lifecycle tabs", () => {
   assert.ok(pageSource.includes('{ id: "completed", label: "Concluídas" }'));
   assert.ok(pageSource.includes('case "sending":'));
   assert.ok(pageSource.includes('case "scheduled":'));
+});
+
+test("campaign list, detail and batch preserve terminal lifecycle before operational warnings", () => {
+  assert.ok((pageSource.match(/getCampaignPresentationLabel\(/g) ?? []).length >= 2);
+  assert.ok(pageSource.includes("getCampaignTerminalDetailLabel(campaign)"));
+  assert.ok(pageSource.includes("getCampaignOperationalWarning(campaign)"));
+  assert.ok(pageSource.includes("Alerta operacional separado"));
+  assert.ok(campaignBatchPanelSource.includes("getCampaignPresentationLabel(chunk)"));
+  assert.ok(campaignBatchPanelSource.includes("getCampaignOperationalWarning(chunk)"));
+  assert.ok(!campaignBatchPanelSource.includes("getCampaignExecutionLabel(chunk.executionState?.state) ??"));
 });
 
 test("campaigns require supervisor or admin in app navigation and direct page access", () => {
