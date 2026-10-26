@@ -259,7 +259,10 @@ run_readiness() {
   report="$TX/$label.report.private.json"
   stdout_file="$TX/$label.stdout.private.txt"
   stderr_file="$TX/$label.stderr.private.txt"
-  test ! -e "$report" && test ! -L "$report" || return 1
+  if [ -e "$report" ] || [ -L "$report" ]; then
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_destination_exists"
+    return 1
+  fi
   set +e
   /usr/bin/timeout --signal=TERM --kill-after=5s 45s \
     /usr/bin/python3 "$CONTROL_AUTH" wait-readiness \
@@ -272,21 +275,42 @@ run_readiness() {
       >"$stdout_file" 2>"$stderr_file"
   rc=$?
   set -e
-  /usr/bin/chmod 600 "$stdout_file" "$stderr_file" || return 1
-  /usr/bin/sync -f "$stdout_file" || return 1
-  /usr/bin/sync -f "$stderr_file" || return 1
+  /usr/bin/chmod 600 "$stdout_file" "$stderr_file" || {
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:artifact_chmod_failed:exit_${rc}"
+    return 1
+  }
+  /usr/bin/sync -f "$stdout_file" || {
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:stdout_fsync_failed:exit_${rc}"
+    return 1
+  }
+  /usr/bin/sync -f "$stderr_file" || {
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:stderr_fsync_failed:exit_${rc}"
+    return 1
+  }
   if [ ! -f "$report" ] || [ -L "$report" ]; then
     READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_missing:exit_${rc}"
     return 1
   fi
-  /usr/bin/chmod 600 "$report" || return 1
-  /usr/bin/sync -f "$report" || return 1
-  /usr/bin/sync -f "$TX" || return 1
+  /usr/bin/chmod 600 "$report" || {
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_chmod_failed:exit_${rc}"
+    return 1
+  }
+  /usr/bin/sync -f "$report" || {
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_fsync_failed:exit_${rc}"
+    return 1
+  }
+  /usr/bin/sync -f "$TX" || {
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:evidence_directory_fsync_failed:exit_${rc}"
+    return 1
+  }
   if ! /usr/bin/jq -e 'type=="object" and (.sampleCount|type)=="number" and (.samples|type)=="array"' "$report" >/dev/null; then
     READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:report_invalid:exit_${rc}"
     return 1
   fi
-  result=$(/usr/bin/jq -r '.result' "$report") || return 1
+  result=$(/usr/bin/jq -r '.result' "$report") || {
+    READINESS_REASON="READINESS_OBSERVABILITY_DEFECT:${label}:result_unreadable:exit_${rc}"
+    return 1
+  }
   if [ "$rc" -eq 0 ]; then
     if [ "$result" != READINESS_PASS ] || \
        ! /usr/bin/jq -e --arg release "$(/usr/bin/basename "$release_root")" \
@@ -407,7 +431,9 @@ rollback() {
   set +e
   frontend_observed=$(/usr/bin/readlink -f "$CURRENT/frontend" 2>/dev/null || true)
 
-  if [ "$MUTATED_FRONTEND" -eq 0 ]; then
+  # The observed stable path is authoritative. A failure after os.replace()
+  # but before MUTATED_FRONTEND=1 must still restore the return release.
+  if [ "$MUTATED_FRONTEND" -eq 0 ] && [ "$frontend_observed" = "$RETURN/frontend-runtime" ]; then
     local unchanged=true
     test "$frontend_observed" = "$RETURN/frontend-runtime" || unchanged=false
     if [ -n "$api_pid" ]; then
