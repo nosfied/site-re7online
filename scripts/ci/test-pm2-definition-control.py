@@ -787,7 +787,7 @@ class DefinitionControlTests(unittest.TestCase):
     def test_existing_readiness_uses_observation_contract_without_binding(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            release = root / "immutable-candidate"
+            release = root / "immutable-candidate/frontend-runtime"
             stable = root / "current/frontend"
             script = stable / "node_modules/next/dist/bin/next"
             report = root / "report.json"
@@ -796,7 +796,7 @@ class DefinitionControlTests(unittest.TestCase):
                 component="frontend", process_name="re7-admin-front",
                 expected_cwd=stable, expected_script=script,
                 expected_interpreter=Path("/usr/bin/node"),
-                release_id=release.name, entry_sha256="a" * 64,
+                release_id=release.parent.name, entry_sha256="a" * 64,
                 build_id="candidate-build", pm2=root / "pm2",
                 stable_path=stable, release_root=release, port=3000,
                 local_health="http://127.0.0.1:3000/app/login",
@@ -829,7 +829,7 @@ class DefinitionControlTests(unittest.TestCase):
                 release_id="immutable-candidate", entry_sha256="a" * 64,
                 build_id="candidate-build", pm2=root / "pm2",
                 stable_path=root / "current/frontend",
-                release_root=root / "immutable-candidate", port=3000,
+                release_root=root / "immutable-candidate/frontend-runtime", port=3000,
                 local_health="http://127.0.0.1:3000/app/login",
                 public_health="https://admin.example/app/login",
                 deadline_seconds=30.0, poll_seconds=0.5, report=None,
