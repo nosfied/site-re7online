@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -781,6 +782,61 @@ class DefinitionControlTests(unittest.TestCase):
             completed = subprocess.run(command, text=True, capture_output=True, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(json.loads(completed.stdout)["result"], "PM2_DEFINITION_PAIR_VALID")
+
+
+    def test_existing_readiness_uses_observation_contract_without_binding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            release = root / "immutable-candidate"
+            stable = root / "current/frontend"
+            script = stable / "node_modules/next/dist/bin/next"
+            report = root / "report.json"
+            release.mkdir()
+            args = argparse.Namespace(
+                component="frontend", process_name="re7-admin-front",
+                expected_cwd=stable, expected_script=script,
+                expected_interpreter=Path("/usr/bin/node"),
+                release_id=release.name, entry_sha256="a" * 64,
+                build_id="candidate-build", pm2=root / "pm2",
+                stable_path=stable, release_root=release, port=3000,
+                local_health="http://127.0.0.1:3000/app/login",
+                public_health="https://admin.example/app/login",
+                deadline_seconds=30.0, poll_seconds=0.5, report=report,
+            )
+            observed = {}
+
+            def fake_wait(**kwargs):
+                observed.update(kwargs)
+                kwargs["event_log"].extend([{"atMonotonic": 1}, {"atMonotonic": 2}, {"atMonotonic": 3}])
+                return {"result": "READINESS_PASS", "component": "frontend", "port": 3000, "stableSamples": 3}
+
+            with mock.patch.object(CONTROL, "wait_for_readiness", side_effect=fake_wait):
+                result = CONTROL.command_wait_existing_readiness(args)
+            self.assertEqual(result["observationMode"], "existing_pm2_registration")
+            self.assertEqual(observed["app"]["name"], "re7-admin-front")
+            self.assertEqual(observed["app"]["cwd"], str(stable))
+            self.assertEqual(observed["release_identity"]["frontendBuildId"], "candidate-build")
+            self.assertEqual(json.loads(report.read_text())["sampleCount"], 3)
+
+    def test_existing_readiness_rejects_script_outside_stable_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            args = argparse.Namespace(
+                component="frontend", process_name="re7-admin-front",
+                expected_cwd=root / "current/frontend",
+                expected_script=root / "outside/next",
+                expected_interpreter=Path("/usr/bin/node"),
+                release_id="immutable-candidate", entry_sha256="a" * 64,
+                build_id="candidate-build", pm2=root / "pm2",
+                stable_path=root / "current/frontend",
+                release_root=root / "immutable-candidate", port=3000,
+                local_health="http://127.0.0.1:3000/app/login",
+                public_health="https://admin.example/app/login",
+                deadline_seconds=30.0, poll_seconds=0.5, report=None,
+            )
+            with self.assertRaisesRegex(CONTROL.Denied, "existing_readiness_script_escape"):
+                CONTROL.command_wait_existing_readiness(args)
+
 
     def test_sanitized_incident_fixture_contains_no_values(self):
         fixture = json.loads((ROOT / "scripts/ci/fixtures/pm2-definition-contamination.sanitized.json").read_text())
