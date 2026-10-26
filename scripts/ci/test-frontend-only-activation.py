@@ -60,7 +60,7 @@ class ExecutorFixture:
 import argparse,json,os,pathlib,sys,time
 p=argparse.ArgumentParser();p.add_argument('command')
 for key in ('component','process-name','expected-cwd','expected-script','expected-interpreter','release-id','entry-sha256','build-id','pm2','stable-path','release-root','port','local-health','public-health','deadline-seconds','poll-seconds','report'): p.add_argument('--'+key,required=True)
-a=p.parse_args();role='candidate' if 'candidate' in pathlib.Path(a.release_root).name else 'rollback';mode=os.environ.get('FAKE_READINESS','pass') if role=='candidate' else 'pass'
+a=p.parse_args();role='candidate' if 'candidate' in a.release_id else 'rollback';mode=os.environ.get('FAKE_READINESS','pass') if role=='candidate' else 'pass'
 if mode=='delayed': time.sleep(.2);mode='pass'
 if mode=='guard-drift':
  g=pathlib.Path(os.environ['FAKE_GUARD']);value=json.loads(g.read_text());value['generation']+=1;g.write_text(json.dumps(value)+'\\n');mode='pass'
@@ -68,7 +68,7 @@ if mode=='timeout': print('partial stdout',flush=True);print('partial stderr',fi
 if mode=='missing': print('no report');raise SystemExit(2)
 if mode=='deny': value={'result':'READINESS_DENY','component':'frontend','port':3000,'reason':'readiness_pm2_lexical_identity','sampleCount':0,'samples':[]};code=2
 elif mode=='mismatch': value={'result':'READINESS_PASS','component':'api','port':3001,'releaseId':'wrong','observationMode':'existing_pm2_registration','stableSamples':3,'sampleCount':3,'samples':[]};code=0
-else: value={'result':'READINESS_PASS','component':'frontend','port':3000,'releaseId':pathlib.Path(a.release_root).name,'observationMode':'existing_pm2_registration','stableSamples':3,'sampleCount':3,'samples':[1,2,3],'pid':123,'startTicks':456};code=0
+else: value={'result':'READINESS_PASS','component':'frontend','port':3000,'releaseId':a.release_id,'observationMode':'existing_pm2_registration','stableSamples':3,'sampleCount':3,'samples':[1,2,3],'pid':123,'startTicks':456};code=0
 pathlib.Path(a.report).write_text(json.dumps(value)+'\\n');print(json.dumps(value));raise SystemExit(code)
 """)
         subprocess.run(["git", "init", "-q"], cwd=self.control, check=True)
@@ -112,12 +112,12 @@ else: raise SystemExit(2)
         self.rollback_source = self.root / "rollback-source.json"; self.rollback_source.write_text('{"role":"rollback"}\n')
         script = SOURCE.read_text()
         replacements = {
-            "CONTROL_PLANE=cd8e7eb1d57eec0881bbca809ac704f2c9f657fd": f"CONTROL_PLANE={self.control_sha}",
+            "CONTROL_PLANE=b1689394feb27bb92487896dbee21f34e70b53d5": f"CONTROL_PLANE={self.control_sha}",
             "TARGET=d436239e13764b65642b37a4310082acd3a6a485": "TARGET=" + "a"*40,
             "RELEASE=immutable-d436239e-vps-20261026T131821Z": f"RELEASE={self.release.name}",
             "EXPECTED_PACKAGE=ed02ba8057cb5ef14f98cd715b81e2daf18e21a2826d7d4f8888f25a00e3d36b": f"EXPECTED_PACKAGE={digest(self.package)}",
             "EXPECTED_PRODUCER=d6b67fb0a1888f2e8e8f3ad828bd8e17725e89c47c2de3d4f4d4386def243cab": f"EXPECTED_PRODUCER={digest(producer)}",
-            "EXPECTED_CONTROL=4ca15fccb36f4288a20c58baa59d1af13c79477f757ef4267cb5dd327faacf4f": f"EXPECTED_CONTROL={digest(control)}",
+            "EXPECTED_CONTROL=abf89d491b4dd9150dac4b092dff3a5249a43e083c42d393442128eb39fbb552": f"EXPECTED_CONTROL={digest(control)}",
             "RETURN_RELEASE=immutable-a959129e-vps-20261026T023100Z": f"RETURN_RELEASE={self.rollback.name}",
             "/usr/bin/timeout --signal=TERM --kill-after=5s 45s": "/usr/bin/timeout --signal=TERM --kill-after=.1s .3s",
         }
