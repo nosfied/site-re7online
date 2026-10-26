@@ -44,6 +44,16 @@ CAPACITY_BYTE_FIELDS = {
     "independentVerificationBytes", "failureEvidenceBytes", "operationalReserveBytes",
 }
 CAPACITY_INODE_FIELDS = {"peakInodes", "operationalReserveInodes"}
+MINIMUM_BUILD_FREE_BYTES = 12 * 1024 * 1024 * 1024
+ARTIFACT_CLASSES = {
+    "PACKAGE_PRESERVE", "EVIDENCE_PRESERVE", "RELEASE_RUNTIME",
+    "DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_STAGING",
+    "PRIVATE_DATA_NEVER_RETIRE",
+}
+REVIEW_STATES = {
+    "ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDING_ACTIVATION",
+    "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE",
+}
 
 
 class Denied(RuntimeError):
@@ -124,6 +134,8 @@ def read_capacity_contract(path: Path, repo: Path, output_parent: Path,
     required_inodes = sum(contract[field] for field in CAPACITY_INODE_FIELDS)
     if free_bytes < required_bytes:
         deny(f"capacity_bytes:available={free_bytes}:required={required_bytes}")
+    if free_bytes < MINIMUM_BUILD_FREE_BYTES:
+        deny(f"minimum_build_free_bytes:available={free_bytes}:required={MINIMUM_BUILD_FREE_BYTES}")
     if free_inodes < required_inodes:
         deny(f"capacity_inodes:available={free_inodes}:required={required_inodes}")
     return {
@@ -161,8 +173,20 @@ def generation_build_window(parent: Path):
         os.close(fd)
 
 
-def require_generation_reviews(parent: Path) -> list[dict[str, str]]:
+def parse_utc(value: object, predicate: str) -> dt.datetime:
+    try:
+        parsed = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        deny(predicate)
+    if parsed.tzinfo is None or parsed.utcoffset() != dt.timedelta(0):
+        deny(predicate)
+    return parsed
+
+
+def require_generation_reviews(parent: Path, now: dt.datetime | None = None) -> list[dict[str, str]]:
+    now = now or dt.datetime.now(dt.timezone.utc)
     accepted = []
+    pending_candidates = 0
     for directory in sorted(parent.iterdir()):
         if directory.is_symlink():
             deny("generation_directory_symlink")
@@ -186,18 +210,167 @@ def require_generation_reviews(parent: Path) -> list[dict[str, str]]:
         if review_info.st_uid != os.geteuid() or stat.S_IMODE(review_info.st_mode) != 0o600:
             deny("generation_review_private")
         review = json_object(review_raw, "generation-review")
-        if (set(review) != {"schemaVersion", "generationId", "lifecycleSha256", "decision", "reviewer", "reason", "evidenceSha256"} or
-                review.get("schemaVersion") != 1 or review.get("generationId") != generation or
+        common = {"schemaVersion", "generationId", "lifecycleSha256", "reviewer", "reason", "evidenceSha256"}
+        version = review.get("schemaVersion")
+        debt_reason = None
+        if (review.get("generationId") != generation or
                 review.get("lifecycleSha256") != sha256_bytes(raw) or
-                review.get("decision") not in {"PRESERVE", "SANITIZED"} or
                 not isinstance(review.get("reviewer"), str) or not review["reviewer"].strip() or
                 not isinstance(review.get("reason"), str) or not review["reason"].strip() or
                 not isinstance(review.get("evidenceSha256"), str) or not SHA256.fullmatch(review["evidenceSha256"])):
             deny(f"generation_review_invalid:{generation}")
+        if version == 1:
+            if set(review) != common | {"decision"} or review.get("decision") not in {"PRESERVE", "SANITIZED"}:
+                deny(f"generation_review_invalid:{generation}")
+            state = "SANITIZED" if review["decision"] == "SANITIZED" else "RETENTION_DEBT"
+            debt_reason = "v1_preserve" if review["decision"] == "PRESERVE" else None
+        elif version == 2:
+            state = review.get("state")
+            expected = common | {"state"}
+            if state == "PRESERVE_OVERRIDE":
+                expected |= {"retainedBytes", "responsible", "expiresAtUtc"}
+            if set(review) != expected or state not in REVIEW_STATES:
+                deny(f"generation_review_invalid:{generation}")
+            if state == "PRESERVE_OVERRIDE":
+                if (not isinstance(review.get("retainedBytes"), int) or isinstance(review["retainedBytes"], bool) or
+                        review["retainedBytes"] < 0 or not isinstance(review.get("responsible"), str) or
+                        not review["responsible"].strip()):
+                    deny(f"generation_override_invalid:{generation}")
+                if parse_utc(review.get("expiresAtUtc"), f"generation_override_invalid:{generation}") <= now:
+                    deny(f"generation_override_expired:{generation}")
+        else:
+            deny(f"generation_review_invalid:{generation}")
+        if state in {"RETENTION_DEBT", "RETIREMENT_READY", "QUARANTINED"}:
+            deny(f"retention_debt:{generation}:{debt_reason or state.lower()}")
+        if state == "CANDIDATE_PENDING_ACTIVATION":
+            pending_candidates += 1
+            if pending_candidates:
+                # This build would create the second not-yet-installed candidate.
+                deny(f"second_candidate_pending:{generation}")
         accepted.append({"generationId": generation, "directory": str(directory),
                          "lifecycleSha256": sha256_bytes(raw),
-                         "reviewSha256": sha256_bytes(review_raw), "decision": review["decision"]})
+                         "reviewSha256": sha256_bytes(review_raw), "state": state})
     return accepted
+
+
+def path_metrics(path: Path) -> dict[str, Any]:
+    if not path.exists() and not path.is_symlink():
+        return {"identity": None, "sizeBytes": 0, "allocatedBytes": 0, "inodes": 0,
+                "structuralSha256": None}
+    root = path.lstat()
+    seen: set[tuple[int, int]] = set()
+    size = allocated = inodes = 0
+    items = [path]
+    if stat.S_ISDIR(root.st_mode) and not path.is_symlink():
+        items.extend(path.rglob("*"))
+    structure = hashlib.sha256()
+    for item in sorted(items, key=lambda candidate: os.fsencode(str(candidate.relative_to(path.parent)))):
+        info = item.lstat()
+        identity = (info.st_dev, info.st_ino)
+        relative = "." if item == path else item.relative_to(path).as_posix()
+        kind = "symlink" if stat.S_ISLNK(info.st_mode) else "directory" if stat.S_ISDIR(info.st_mode) else "regular" if stat.S_ISREG(info.st_mode) else "other"
+        link = os.readlink(item) if kind == "symlink" else None
+        structure.update(canonical_json({"path": relative, "type": kind,
+                                         "mode": stat.S_IMODE(info.st_mode),
+                                         "size": info.st_size, "mtimeNs": info.st_mtime_ns,
+                                         "link": link}))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        size += info.st_size
+        allocated += info.st_blocks * 512
+        inodes += 1
+    return {
+        "identity": {"device": root.st_dev, "inode": root.st_ino},
+        "sizeBytes": size,
+        "allocatedBytes": allocated,
+        "inodes": inodes,
+        "structuralSha256": structure.hexdigest(),
+    }
+
+
+def artifact_entry(path: Path, release_id: str, target: str, expected_type: str,
+                   artifact_class: str, retirable_on: str,
+                   dependencies: list[str], digest: dict[str, str] | None = None,
+                   state: str = "ACTIVE_DEPENDENCY") -> dict[str, Any]:
+    if artifact_class not in ARTIFACT_CLASSES or not path.is_absolute():
+        deny("artifact_contract_entry")
+    return {
+        "path": str(path), "releaseId": release_id, "targetCommit": target,
+        "expectedType": expected_type, **path_metrics(path), "digest": digest,
+        "class": artifact_class, "state": state, "retirableOn": retirable_on,
+        "dependencies": dependencies,
+    }
+
+
+def build_artifact_contract(args: argparse.Namespace, lifecycle_path: Path,
+                            state: str, verified: dict[str, Any] | None = None,
+                            package_sha: str | None = None,
+                            staging: dict[str, Any] | None = None) -> dict[str, Any]:
+    release_root = args.output / args.release_id
+    installed_release_root = args.installed_releases_root / args.release_id
+    package = args.output / f"{args.release_id}.tar.xz"
+    package_verified = verified is not None and package_sha is not None
+    entries = [
+        artifact_entry(package, args.release_id, args.target, "regular_file", "PACKAGE_PRESERVE",
+                       "NEVER_AUTOMATIC", ["transport_identity"],
+                       {"sha256": package_sha} if package_sha else None, "ACTIVE_DEPENDENCY"),
+        artifact_entry(release_root / "manifest.json", args.release_id, args.target, "regular_file",
+                       "PACKAGE_PRESERVE", "NEVER_AUTOMATIC", ["release_identity"],
+                       {"sha256": verified["manifestSha256"]} if verified else None),
+        artifact_entry(release_root / "index.sha256", args.release_id, args.target, "regular_file",
+                       "PACKAGE_PRESERVE", "NEVER_AUTOMATIC", ["integral_inventory"],
+                       {"sha256": verified["indexSha256"]} if verified else None),
+        artifact_entry(lifecycle_path, args.release_id, args.target, "regular_file", "EVIDENCE_PRESERVE",
+                       "NEVER_AUTOMATIC", ["generation_audit"],
+                       {"sha256": sha256_bytes(stable_bytes(lifecycle_path)[0])}),
+        artifact_entry(args.capacity_contract.resolve(strict=True), args.release_id, args.target,
+                       "regular_file", "EVIDENCE_PRESERVE", "NEVER_AUTOMATIC",
+                       ["capacity_authorization"],
+                       {"sha256": sha256_bytes(stable_bytes(args.capacity_contract)[0])}),
+        artifact_entry(args.output / "failure-evidence.private", args.release_id, args.target, "directory",
+                       "EVIDENCE_PRESERVE", "NEVER_AUTOMATIC", ["failure_diagnostics"]),
+        artifact_entry(installed_release_root, args.release_id, args.target, "directory", "RELEASE_RUNTIME",
+                       "OUTSIDE_ACTIVE_ROLLBACK_TRANSITIVE_GRAPH", ["active_rollback_graph"],
+                       {"indexSha256": verified["indexSha256"]} if verified else None,
+                       "CANDIDATE_PENDING_ACTIVATION" if package_verified else "ACTIVE_DEPENDENCY"),
+        artifact_entry(args.repo.resolve(strict=True), args.release_id, args.target, "directory",
+                       "DERIVED_WORKTREE", "PACKAGE_VERIFIED_CONTROL_PLANE_COPIED_NO_WRITER",
+                       ["package_verified", "control_plane_authenticated", "writer_lock_free"],
+                       {"gitCommit": args.target}, "ACTIVE_DEPENDENCY"),
+        artifact_entry(release_root / "api-runtime", args.release_id, args.target, "directory",
+                       "DERIVED_OUTPUT_RUNTIME", "RELEASE_INSTALLED_VERIFIED_OR_CANDIDATE_SUPERSEDED",
+                       ["candidate_activation_or_supersession"],
+                       {"indexSha256": verified["indexSha256"]} if verified else None,
+                       "CANDIDATE_PENDING_ACTIVATION" if package_verified else "ACTIVE_DEPENDENCY"),
+        artifact_entry(release_root / "frontend-runtime", args.release_id, args.target, "directory",
+                       "DERIVED_OUTPUT_RUNTIME", "RELEASE_INSTALLED_VERIFIED_OR_CANDIDATE_SUPERSEDED",
+                       ["candidate_activation_or_supersession"],
+                       {"indexSha256": verified["indexSha256"]} if verified else None,
+                       "CANDIDATE_PENDING_ACTIVATION" if package_verified else "ACTIVE_DEPENDENCY"),
+    ]
+    if staging is not None:
+        entries.append(staging)
+    previous_initial: dict[str, Any] = {}
+    contract_path = args.output / "generation-artifacts.private.json"
+    if contract_path.exists() and not contract_path.is_symlink():
+        prior = json_object(stable_bytes(contract_path)[0], "generation-artifacts")
+        previous_initial = {
+            item["path"]: item.get("initialIdentity", item.get("identity"))
+            for item in prior.get("artifacts", []) if isinstance(item, dict) and isinstance(item.get("path"), str)
+        }
+    for entry in entries:
+        observed = entry.pop("identity")
+        initial = previous_initial.get(entry["path"])
+        entry["initialIdentity"] = initial if initial is not None else observed
+        entry["observedIdentity"] = observed
+    return {
+        "schemaVersion": 1, "generationId": args.release_id,
+        "releaseId": args.release_id, "targetCommit": args.target, "state": state,
+        "writerLockPath": str(args.output.parent / ".generation-build.lock"),
+        "classes": sorted(ARTIFACT_CLASSES), "artifacts": entries,
+        "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE",
+    }
 
 
 def capacity_checkpoint(capacity: dict[str, Any], phase: str,
@@ -695,6 +868,7 @@ def build_in_generation_window(args: argparse.Namespace) -> None:
     previous_reviews = require_generation_reviews(args.output.parent)
     args.output.mkdir(mode=0o700, parents=False)
     lifecycle_path = args.output / "generation-lifecycle.private.json"
+    artifact_contract_path = args.output / "generation-artifacts.private.json"
     lifecycle: dict[str, Any] = {
         "schemaVersion": 1,
         "generationId": args.release_id,
@@ -707,8 +881,13 @@ def build_in_generation_window(args: argparse.Namespace) -> None:
         "package": str(args.output / f"{args.release_id}.tar.xz"),
         "classification": "PENDING",
         "replacement": None,
+        "artifactContract": str(artifact_contract_path),
     }
     write_lifecycle(lifecycle_path, lifecycle)
+    write_lifecycle(
+        artifact_contract_path,
+        build_artifact_contract(args, lifecycle_path, "BUILDING"),
+    )
     env = build_environment()
     env.update(SOURCE_DATE_EPOCH=str(args.source_date_epoch), TZ="UTC", LANG="C.UTF-8",
                LC_ALL="C.UTF-8", CI="1", NEXT_TELEMETRY_DISABLED="1")
@@ -716,6 +895,7 @@ def build_in_generation_window(args: argparse.Namespace) -> None:
         lifecycle["capacityCheckpoints"].append(capacity_checkpoint(capacity, phase, remaining))
         write_lifecycle(lifecycle_path, lifecycle)
 
+    staging_artifact = None
     try:
         checkpoint("before_toolchain")
         tools = toolchain(repo, env, args.output)
@@ -778,16 +958,30 @@ def build_in_generation_window(args: argparse.Namespace) -> None:
         checkpoint("before_package", ("packageTemporaryBytes", "independentVerificationBytes"))
         package_identity = write_package(release_root, package, args.source_date_epoch)
         checkpoint("before_independent_extraction", ("independentVerificationBytes",))
-        with tempfile.TemporaryDirectory(prefix="converta-release-extract-", dir=args.output.parent) as temporary:
-            extracted = safe_extract(package, Path(temporary), args.release_id)
+        temporary = Path(tempfile.mkdtemp(prefix=f".{args.release_id}.verify-", dir=args.output.parent))
+        try:
+            extracted = safe_extract(package, temporary, args.release_id)
             extracted_verified = verify_root(extracted, args.target, args.release_id)
             if extracted_verified != verified or canonical_json(scan_runtime(extracted)) != canonical_json(scan_runtime(release_root)):
                 deny("independent_extraction_mismatch")
+            staging_artifact = artifact_entry(
+                temporary, args.release_id, args.target, "directory", "DERIVED_STAGING",
+                "INDEPENDENT_VERIFICATION_COMPLETE", ["verification_in_progress"],
+                {"packageSha256": package_identity["packageSha256"]}, "RETIREMENT_READY",
+            )
+        finally:
+            shutil.rmtree(temporary)
+        staging_artifact["state"] = "SANITIZED"
+        staging_artifact["removedAtProducerCompletion"] = True
         checkpoint("after_independent_extraction")
     except BaseException as error:
         lifecycle.update(state="FAILED", classification="PENDING",
                          failureClass=type(error).__name__)
         write_lifecycle(lifecycle_path, lifecycle)
+        write_lifecycle(
+            artifact_contract_path,
+            build_artifact_contract(args, lifecycle_path, "FAILED", staging=staging_artifact),
+        )
         raise
     lifecycle.update(
         state="COMPLETE",
@@ -798,6 +992,13 @@ def build_in_generation_window(args: argparse.Namespace) -> None:
         allocatedBytes=allocated_bytes(args.output),
     )
     write_lifecycle(lifecycle_path, lifecycle)
+    write_lifecycle(
+        artifact_contract_path,
+        build_artifact_contract(
+            args, lifecycle_path, "COMPLETE", verified,
+            package_identity["packageSha256"], staging_artifact,
+        ),
+    )
     print(canonical_json({"result": "RELEASE BUILT", "releaseId": args.release_id,
                           "targetCommit": args.target, "package": str(package),
                           **package_identity, **verified}).decode().strip())
@@ -832,6 +1033,8 @@ def parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--release-id", required=True)
     build_parser.add_argument("--components", required=True)
     build_parser.add_argument("--output", type=Path, required=True)
+    build_parser.add_argument("--installed-releases-root", type=Path,
+                              default=Path("/opt/re7online/releases"))
     build_parser.add_argument("--source-date-epoch", type=int, required=True)
     build_parser.add_argument("--capacity-contract", type=Path, required=True)
     build_parser.set_defaults(handler=build)

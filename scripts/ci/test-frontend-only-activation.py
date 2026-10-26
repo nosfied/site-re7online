@@ -124,6 +124,21 @@ else: raise SystemExit(2)
         for old, new in replacements.items():
             if old not in script: raise AssertionError(old)
             script = script.replace(old, new)
+        self.generation_contract = self.root / "generation-artifacts.private.json"
+        self.generation_contract.write_text(json.dumps({
+            "schemaVersion": 1, "targetCommit": "a" * 40,
+            "releaseId": self.release.name, "artifacts": [],
+        }, sort_keys=True) + "\n")
+        self.generation_contract.chmod(0o600)
+        self.retirement_intent = self.root / "generation-retirement-intent.private.json"
+        self.retirement_intent.write_text(json.dumps({
+            "schemaVersion": 1, "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION",
+            "authorizationGranted": False, "targetCommit": "a" * 40,
+            "releaseId": self.release.name,
+            "contractSha256": digest(self.generation_contract), "commands": [],
+            "executionContract": {"stopOnFirstFailure": True, "automaticRetry": False},
+        }, sort_keys=True) + "\n")
+        self.retirement_intent.chmod(0o600)
         if behavior == "post-select-failure":
             needle = 'atomic_select "$FINAL/frontend-runtime"\ntest "$(/usr/bin/readlink -f "$CURRENT/frontend")" = "$FINAL/frontend-runtime"'
             replacement = 'atomic_select "$FINAL/frontend-runtime"\nfalse\ntest "$(/usr/bin/readlink -f "$CURRENT/frontend")" = "$FINAL/frontend-runtime"'
@@ -141,6 +156,10 @@ else: raise SystemExit(2)
             "RE7_PM2":str(self.pm2), "RE7_CURRENT_ROOT":str(self.current), "RE7_CAMPAIGN_GUARD":str(self.guard), "RE7_PM2_DUMP":str(self.dump),
             "RE7_API_LOCAL_HEALTH":self.base+"/health", "RE7_API_PUBLIC_HEALTH":self.base+"/health",
             "RE7_FRONTEND_LOCAL_BASE":self.base, "RE7_FRONTEND_PUBLIC_BASE":self.base,
+            "RE7_GENERATION_CONTRACT":str(self.generation_contract),
+            "RE7_GENERATION_CONTRACT_SHA256":digest(self.generation_contract),
+            "RE7_RETIREMENT_INTENT":str(self.retirement_intent),
+            "RE7_RETIREMENT_INTENT_SHA256":digest(self.retirement_intent),
             "FAKE_READINESS":behavior,
             "FAKE_GUARD":str(self.guard),
         })
@@ -276,6 +295,14 @@ class FrontendExecutorTest(unittest.TestCase):
     def test_control_or_verifier_tamper_denies_before_selection(self):
         for name in ("pm2-definition-control.py","converta-release.py"):
             f=ExecutorFixture();(f.control/"scripts"/name).write_text("tampered\n")
+            try:
+                r=f.run();self.assertNotEqual(r.returncode,0);self.assertEqual((f.current/"frontend").resolve(),f.rollback/"frontend-runtime")
+                self.assertEqual(json.loads((f.tx/"window-state.private.json").read_text())["state"],"DENIED_BEFORE_MUTATION")
+            finally:f.close()
+
+    def test_generation_contract_or_retirement_intent_drift_denies_before_selection(self):
+        for name in ("generation_contract", "retirement_intent"):
+            f=ExecutorFixture();Path(getattr(f,name)).write_text('{"tampered":true}\n')
             try:
                 r=f.run();self.assertNotEqual(r.returncode,0);self.assertEqual((f.current/"frontend").resolve(),f.rollback/"frontend-runtime")
                 self.assertEqual(json.loads((f.tx/"window-state.private.json").read_text())["state"],"DENIED_BEFORE_MUTATION")

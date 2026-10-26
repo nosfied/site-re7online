@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import datetime as dt
 import importlib.util
 import json
 import os
@@ -150,8 +151,8 @@ class ReleaseProducerTest(unittest.TestCase):
         write(cls.output_a / "generation-review.private.json", json.dumps({
             "schemaVersion": 1, "generationId": cls.release_id,
             "lifecycleSha256": hashlib.sha256(raw).hexdigest(),
-            "decision": "PRESERVE", "reviewer": "synthetic-test",
-            "reason": "retained fixture", "evidenceSha256": "a" * 64,
+            "decision": "SANITIZED", "reviewer": "synthetic-test",
+            "reason": "derived fixture artifacts sanitized", "evidenceSha256": "a" * 64,
         }) + "\n", 0o600)
 
     @classmethod
@@ -202,6 +203,15 @@ class ReleaseProducerTest(unittest.TestCase):
         self.assertEqual(lifecycle["classification"], "PENDING")
         self.assertEqual(lifecycle["packageSha256"], hashlib.sha256(self.package.read_bytes()).hexdigest())
         self.assertEqual(stat.S_IMODE((self.output_a / "generation-lifecycle.private.json").stat().st_mode), 0o600)
+        artifact_contract = json.loads((self.output_a / "generation-artifacts.private.json").read_text())
+        self.assertEqual(artifact_contract["schemaVersion"], 1)
+        self.assertEqual(artifact_contract["state"], "COMPLETE")
+        self.assertEqual({item["class"] for item in artifact_contract["artifacts"]}, {
+            "PACKAGE_PRESERVE", "EVIDENCE_PRESERVE", "RELEASE_RUNTIME",
+            "DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_STAGING",
+        })
+        self.assertTrue(all("initialIdentity" in item and "observedIdentity" in item
+                            for item in artifact_contract["artifacts"]))
 
     def test_failed_command_preserves_private_output_without_printing_it(self) -> None:
         root = self.base / "failed-command-evidence"
@@ -358,7 +368,7 @@ class ReleaseProducerTest(unittest.TestCase):
         usage = os.statvfs(self.base)
         capacity = capacity_contract(
             self.base / "capacity-denied.private.json", self.base, self.target, release_id,
-            reserve_bytes=usage.f_bavail * usage.f_frsize + 1,
+            reserve_bytes=usage.f_blocks * usage.f_frsize + 1,
         )
         result = invoke(
             "build", "--repo", str(self.repo), "--target", self.target,
@@ -382,6 +392,20 @@ class ReleaseProducerTest(unittest.TestCase):
                 capacity, self.repo, self.base, self.target, release_id
             )
         self.assertIn("capacity_contract_value:operationalReserveBytes", str(caught.exception))
+
+    def test_capacity_contract_requires_twelve_gib_free(self) -> None:
+        release_id = "immutable-capacity-floor"
+        capacity = capacity_contract(
+            self.base / "capacity-floor.private.json", self.base, self.target, release_id
+        )
+        from types import SimpleNamespace
+        usage = SimpleNamespace(f_bavail=MODULE.MINIMUM_BUILD_FREE_BYTES - 1,
+                                f_frsize=1, f_favail=1_000_000)
+        with patch.object(MODULE.os, "statvfs", return_value=usage):
+            with self.assertRaisesRegex(MODULE.Denied, "minimum_build_free_bytes"):
+                MODULE.read_capacity_contract(
+                    capacity, self.repo, self.base, self.target, release_id
+                )
 
     def test_failed_generation_is_closed_as_failed(self) -> None:
         release_id = "immutable-failed-generation"
@@ -436,7 +460,7 @@ class ReleaseProducerTest(unittest.TestCase):
             write(lifecycle, json.dumps({"schemaVersion": 1, "generationId": "old", "state": "FAILED"}), 0o600)
             review = {"schemaVersion": 1, "generationId": "old",
                       "lifecycleSha256": hashlib.sha256(lifecycle.read_bytes()).hexdigest(),
-                      "decision": "PRESERVE", "reviewer": "synthetic-test",
+                      "decision": "SANITIZED", "reviewer": "synthetic-test",
                       "reason": "diagnosis retained", "evidenceSha256": "a" * 64}
             write(old / "generation-review.private.json", json.dumps(review), 0o600)
             MODULE.require_generation_reviews(parent)
@@ -444,6 +468,51 @@ class ReleaseProducerTest(unittest.TestCase):
             write(old / "generation-review.private.json", json.dumps(review), 0o600)
             with self.assertRaisesRegex(MODULE.Denied, "generation_review_invalid"):
                 MODULE.require_generation_reviews(parent)
+
+    def test_v1_preserve_is_retention_debt_and_sanitized_allows(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="generation-v1-review-") as temp:
+            parent = Path(temp); old = parent / "old"; old.mkdir()
+            lifecycle = old / "generation-lifecycle.private.json"
+            write(lifecycle, json.dumps({"schemaVersion": 1, "generationId": "old", "state": "COMPLETE"}), 0o600)
+            review = {"schemaVersion": 1, "generationId": "old",
+                      "lifecycleSha256": hashlib.sha256(lifecycle.read_bytes()).hexdigest(),
+                      "decision": "PRESERVE", "reviewer": "owner", "reason": "legacy",
+                      "evidenceSha256": "a" * 64}
+            write(old / "generation-review.private.json", json.dumps(review), 0o600)
+            with self.assertRaisesRegex(MODULE.Denied, "retention_debt:old:v1_preserve"):
+                MODULE.require_generation_reviews(parent)
+            review["decision"] = "SANITIZED"
+            write(old / "generation-review.private.json", json.dumps(review), 0o600)
+            self.assertEqual(MODULE.require_generation_reviews(parent)[0]["state"], "SANITIZED")
+
+    def test_pending_candidate_and_expired_override_deny_next_build(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="generation-v2-review-") as temp:
+            parent = Path(temp); old = parent / "old"; old.mkdir()
+            lifecycle = old / "generation-lifecycle.private.json"
+            write(lifecycle, json.dumps({"schemaVersion": 1, "generationId": "old", "state": "COMPLETE"}), 0o600)
+            base = {"schemaVersion": 2, "generationId": "old",
+                    "lifecycleSha256": hashlib.sha256(lifecycle.read_bytes()).hexdigest(),
+                    "reviewer": "owner", "reason": "candidate", "evidenceSha256": "a" * 64}
+            write(old / "generation-review.private.json",
+                  json.dumps({**base, "state": "CANDIDATE_PENDING_ACTIVATION"}), 0o600)
+            with self.assertRaisesRegex(MODULE.Denied, "second_candidate_pending:old"):
+                MODULE.require_generation_reviews(parent)
+            write(old / "generation-review.private.json", json.dumps({
+                **base, "state": "PRESERVE_OVERRIDE", "retainedBytes": 1,
+                "responsible": "owner", "expiresAtUtc": "2026-01-01T00:00:00Z",
+            }), 0o600)
+            with self.assertRaisesRegex(MODULE.Denied, "generation_override_expired:old"):
+                MODULE.require_generation_reviews(
+                    parent, dt.datetime(2026, 10, 26, tzinfo=dt.timezone.utc)
+                )
+            write(old / "generation-review.private.json", json.dumps({
+                **base, "state": "PRESERVE_OVERRIDE", "retainedBytes": 4096,
+                "responsible": "owner", "expiresAtUtc": "2026-11-01T00:00:00Z",
+            }), 0o600)
+            accepted = MODULE.require_generation_reviews(
+                parent, dt.datetime(2026, 10, 26, tzinfo=dt.timezone.utc)
+            )
+            self.assertEqual(accepted[0]["state"], "PRESERVE_OVERRIDE")
             write(lifecycle, json.dumps({"schemaVersion": 1, "generationId": "old", "state": "BUILDING"}), 0o600)
             with self.assertRaisesRegex(MODULE.Denied, "generation_not_terminal"):
                 MODULE.require_generation_reviews(parent)

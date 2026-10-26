@@ -35,6 +35,29 @@ e `db="ok"`. `/health` no domínio do frontend não comprova a API.
 
 ## Build once
 
+### Gate de dívida e encerramento da geração
+
+Antes de criar a saída, o produtor exige pelo menos 12 GiB livres, todos os
+lifecycles anteriores terminais e seus reviews sem `RETENTION_DEBT`,
+`RETIREMENT_READY` ou `QUARANTINED`. Uma candidata pendente já existente impede
+outro build. Reviews v1 `PRESERVE` são dívida; somente v1 `SANITIZED` permanece
+compatível. Override v2 precisa declarar razão, bytes, responsável e expiração
+UTC futura.
+
+O build publica `generation-artifacts.private.json`. Depois da verificação do
+pacote, execute `scripts/generation-retirement.py prepare` com o contrato,
+lifecycle e fotografia operacional autenticados. A intenção resultante e seu
+hash integram a autorização de ativação; o executor frontend-only autentica ambos
+antes de selecionar o symlink. A preparação contém somente metadados, comandos e
+hashes, nunca cópia de runtime.
+
+Após aceite, `pm2 save`, dump validado, marker `DEPLOYED` e health final, execute
+uma única vez `generation-retirement.py execute` sob o lock canônico. Sucesso
+encerra em `DEPLOYED_SANITIZED`. Falha de retirada não reverte o deploy aprovado:
+encerra em `DEPLOYED_RETENTION_INCOMPLETE`, preserva parciais e bloqueia qualquer
+novo build até reconciliação. Não usar retry, force, prune, glob ou caminhos
+alternativos.
+
 Para uma ativação frontend-only, a ordem canônica é obrigatória: produzir uma
 única vez o artefato funcional; obter os hashes finais do pacote e o BUILD_ID;
 materializar, em uma alteração separada de control plane, o executor

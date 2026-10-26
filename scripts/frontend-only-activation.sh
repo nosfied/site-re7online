@@ -20,6 +20,10 @@ CURRENT=${RE7_CURRENT_ROOT:-/opt/re7online/current}
 GUARD=${RE7_CAMPAIGN_GUARD:-/var/lib/re7/campaign-operations/state.json}
 DUMP=${RE7_PM2_DUMP:-/home/deploy/.pm2/dump.pm2}
 CONTROL_ROOT=${RE7_CONTROL_ROOT:?RE7_CONTROL_ROOT is required}
+GENERATION_CONTRACT=${RE7_GENERATION_CONTRACT:?RE7_GENERATION_CONTRACT is required}
+GENERATION_CONTRACT_SHA256=${RE7_GENERATION_CONTRACT_SHA256:?RE7_GENERATION_CONTRACT_SHA256 is required}
+RETIREMENT_INTENT=${RE7_RETIREMENT_INTENT:?RE7_RETIREMENT_INTENT is required}
+RETIREMENT_INTENT_SHA256=${RE7_RETIREMENT_INTENT_SHA256:?RE7_RETIREMENT_INTENT_SHA256 is required}
 PRODUCER_SOURCE=$CONTROL_ROOT/scripts/converta-release.py
 CONTROL_SOURCE=$CONTROL_ROOT/scripts/pm2-definition-control.py
 API_LOCAL_HEALTH=${RE7_API_LOCAL_HEALTH:-http://127.0.0.1:3001/health}
@@ -522,6 +526,28 @@ test -z "$(/usr/bin/git -C "$CONTROL_ROOT" status --porcelain)"
 copy_authenticated_tool "$PRODUCER_SOURCE" "$PRODUCER_AUTH" "$EXPECTED_PRODUCER"
 copy_authenticated_tool "$CONTROL_SOURCE" "$CONTROL_AUTH" "$EXPECTED_CONTROL"
 
+CURRENT_STEP=preflight_generation_retirement
+for binding in "$GENERATION_CONTRACT" "$RETIREMENT_INTENT"; do
+  test -f "$binding"
+  test ! -L "$binding"
+  test "$(/usr/bin/stat -Lc '%a' "$binding")" = 600
+  test "$(/usr/bin/stat -Lc '%u' "$binding")" -eq "$EUID"
+done
+test "$(/usr/bin/sha256sum "$GENERATION_CONTRACT" | /usr/bin/awk '{print $1}')" = "$GENERATION_CONTRACT_SHA256"
+test "$(/usr/bin/sha256sum "$RETIREMENT_INTENT" | /usr/bin/awk '{print $1}')" = "$RETIREMENT_INTENT_SHA256"
+/usr/bin/jq -e --arg target "$TARGET" --arg release "$RELEASE" \
+  '.schemaVersion==1 and .targetCommit==$target and .releaseId==$release and (.artifacts|type)=="array"' \
+  "$GENERATION_CONTRACT" >/dev/null
+/usr/bin/jq -e --arg target "$TARGET" --arg release "$RELEASE" --arg contract "$GENERATION_CONTRACT_SHA256" \
+  '.schemaVersion==1 and .state=="SEALED_FOR_EXPLICIT_AUTHORIZATION" and .authorizationGranted==false and
+   .targetCommit==$target and .releaseId==$release and .contractSha256==$contract and
+   (.commands|type)=="array" and (.executionContract.stopOnFirstFailure==true) and
+   (.executionContract.automaticRetry==false)' "$RETIREMENT_INTENT" >/dev/null
+/usr/bin/install -m 600 "$GENERATION_CONTRACT" "$TX/generation-artifacts.authenticated.private.json"
+/usr/bin/install -m 600 "$RETIREMENT_INTENT" "$TX/generation-retirement-intent.authenticated.private.json"
+/usr/bin/sync -f "$TX/generation-artifacts.authenticated.private.json"
+/usr/bin/sync -f "$TX/generation-retirement-intent.authenticated.private.json"
+
 CURRENT_STEP=preflight_package_and_release
 test "$(/usr/bin/sha256sum "$PACKAGE" | /usr/bin/awk '{print $1}')" = "$EXPECTED_PACKAGE"
 /usr/bin/python3 "$PRODUCER_AUTH" verify --package "$PACKAGE" --target "$TARGET" --release-id "$RELEASE" --components api,frontend >"$TX/package-verify.private.json" 2>"$TX/package-verify.private.err"
@@ -640,7 +666,7 @@ test ! -e "$TX/technical-acceptance.private.json"
 frontend_pid=$(pid_for re7-admin-front)
 frontend_ticks=$(start_ticks "$frontend_pid")
 available=$(/usr/bin/df -B1 --output=avail "$CURRENT" | /usr/bin/tail -1 | /usr/bin/tr -d ' ')
-json_write "$TX/window-state.private.json" --arg state AWAITING_ACCEPTANCE --arg target "$TARGET" --arg release "$RELEASE" --arg buildId "$EXPECTED_BUILD_ID" --argjson apiPid "$api_pid" --arg apiTicks "$api_ticks" --argjson frontendPid "$frontend_pid" --arg frontendTicks "$frontend_ticks" --argjson workerPid "$worker_pid" --arg workerTicks "$worker_ticks" --argjson availableBytes "$available" --argjson guardGeneration "$guard_generation" '{state:$state,target:$target,release:$release,buildId:$buildId,api:{pid:$apiPid,startTicks:$apiTicks,preserved:true},frontend:{pid:$frontendPid,startTicks:$frontendTicks},worker:{pid:$workerPid,startTicks:$workerTicks,preserved:true},availableBytes:$availableBytes,guard:{open:true,generation:$guardGeneration,tasks:0,fault:null,preserved:true},saveCount:0,acceptance:false,deployedMarker:false}'
+json_write "$TX/window-state.private.json" --arg state AWAITING_ACCEPTANCE --arg target "$TARGET" --arg release "$RELEASE" --arg buildId "$EXPECTED_BUILD_ID" --arg contractSha256 "$GENERATION_CONTRACT_SHA256" --arg retirementIntentSha256 "$RETIREMENT_INTENT_SHA256" --argjson apiPid "$api_pid" --arg apiTicks "$api_ticks" --argjson frontendPid "$frontend_pid" --arg frontendTicks "$frontend_ticks" --argjson workerPid "$worker_pid" --arg workerTicks "$worker_ticks" --argjson availableBytes "$available" --argjson guardGeneration "$guard_generation" '{state:$state,target:$target,release:$release,buildId:$buildId,api:{pid:$apiPid,startTicks:$apiTicks,preserved:true},frontend:{pid:$frontendPid,startTicks:$frontendTicks},worker:{pid:$workerPid,startTicks:$workerTicks,preserved:true},availableBytes:$availableBytes,guard:{open:true,generation:$guardGeneration,tasks:0,fault:null,preserved:true},retirement:{contractSha256:$contractSha256,intentSha256:$retirementIntentSha256,executeOnlyAfterDeployed:true},saveCount:0,acceptance:false,deployedMarker:false}'
 
 CURRENT_STEP=lock_handoff
 handoff_lock AWAITING_ACCEPTANCE

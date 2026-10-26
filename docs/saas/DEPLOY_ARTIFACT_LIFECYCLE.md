@@ -1,5 +1,60 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Contrato obrigatório por geração (implementado)
+
+Cada execução de `scripts/converta-release.py build` publica, desde `BUILDING` e
+até `COMPLETE` ou `FAILED`, `generation-artifacts.private.json`. Cada entrada
+contém caminho absoluto literal, release/target, tipo, device/inode inicial e
+observado, bytes aparentes/alocados, inodes, fingerprint estrutural, hash
+pertinente, classe, evento de retirada e dependências.
+
+As classes são fechadas: `PACKAGE_PRESERVE` (tar.xz, manifest e index),
+`EVIDENCE_PRESERVE` (lifecycle, capacidade, logs, recibos e provas),
+`RELEASE_RUNTIME`, `DERIVED_WORKTREE`, `DERIVED_OUTPUT_RUNTIME`,
+`DERIVED_STAGING` e `PRIVATE_DATA_NEVER_RETIRE`. Preparações guardam contratos,
+hashes e recibos; nunca duplicam runtimes completos. Releases são preservadas
+enquanto integrarem os grafos active, rollback ou retorno transitivo.
+
+Os estados de revisão v2 são `ACTIVE_DEPENDENCY`, `ROLLBACK_DEPENDENCY`,
+`CANDIDATE_PENDING_ACTIVATION`, `RETIREMENT_READY`, `SANITIZED`, `QUARANTINED`
+e `PRESERVE_OVERRIDE`. Review v1 `SANITIZED` continua válido; v1 `PRESERVE` é
+`RETENTION_DEBT` e bloqueia o próximo build. `PRESERVE_OVERRIDE` exige razão,
+bytes retidos, responsável e expiração UTC futura; expiração bloqueia. Também
+bloqueiam novo build `RETIREMENT_READY`, `QUARANTINED`, uma candidata pendente
+que faria nascer a segunda candidata, menos de 12 GiB livres ou lifecycle não
+terminal.
+
+`scripts/generation-retirement.py` possui somente `prepare` e `execute`:
+
+- `prepare` lê o contrato da própria geração, lifecycle terminal e fotografia
+  operacional autenticada; verifica composição/identidade, referências
+  current/PM2 live/dump, grafo de releases, control plane copiado e writer lock;
+  produz intenção e comandos literais sem glob, force ou prune;
+- `execute` exige intenção e autorização externas autenticadas, mantém lock
+  canônico e writer lock, grava `ATTEMPT` antes de cada comando, para na primeira
+  falha, verifica ausência após cada retirada e publica recibo/review com fsync;
+- conclusão posterior a deploy é `DEPLOYED_SANITIZED`; parcial é
+  `DEPLOYED_RETENTION_INCOMPLETE`, não desfaz o deploy aprovado e bloqueia o
+  próximo build. Não há retry automático.
+
+Worktree só fica pronto depois de pacote verificado, control plane copiado e
+ausência de escritor. Output runtime só fica pronto depois da instalação
+verificada ou superação formal da candidata. Staging só fica pronto depois de
+promoção/rollback terminal. Package, manifest, index, evidências e dados privados
+nunca entram nos comandos.
+
+### Lote de dez caminhos concluído em 26/10/2026
+
+O lote `retention-recent-generations-qualification-20261026T213341Z-v3` foi
+relatado como `COMPLETED`: 10/10 comandos, 6.942.289.920 bytes recuperados e
+13.416.599.552 bytes livres ao final. Recibo
+`19ba46c4948e3ff1821b8b44e51fed1edf635b9b7ddd3421064dab7ee2250c74`, log
+`e8f593acb2801e88dbbfffb3a679b4775916491c3e2281e24a45ebf3f0e6c985`,
+amostra A `11f70b7c7b6d27f8a55bae36aa17b081ece70e8511f414da14b1f56d83661612`
+e amostra B `94fda2c48e65e43de46d6cedc121d4b32f46339301306f452218bb8a013ea6a8`.
+Produção permaneceu inalterada e o lock foi liberado sem remover seu arquivo.
+Esse registro é histórico e não autoriza repetição.
+
 Esta é a fonte canônica para capacidade, classificação e encerramento de gerações
 de build. Ela não autoriza exclusão. A ativação continua regida pelo
 [runbook de deploy](DEPLOY_RUNBOOK.md), e dados, backups e mídias seguem contratos
