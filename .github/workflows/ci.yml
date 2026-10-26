@@ -46,6 +46,8 @@ jobs:
         run: bash scripts/test-deploy-impact-matrix.sh
       - name: Validate PM2 definition namespace boundary
         run: python3 -m unittest -v scripts/ci/test-pm2-definition-control.py
+      - name: Validate versioned frontend-only activation transaction
+        run: python3 -m unittest -v scripts/ci/test-frontend-only-activation.py
       - name: Validate minimal deploy driver transaction
         run: python3 scripts/ci/test-converta-deploy.py
       - name: Validate deterministic external release producer

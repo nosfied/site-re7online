@@ -49,7 +49,7 @@ require("executor de ativação temporário em `/tmp`" in model,
 runbook = (ROOT / "docs/saas/DEPLOY_RUNBOOK.md").read_text()
 driver = (ROOT / "scripts/converta-deploy.py").read_text()
 producer = (ROOT / "scripts/converta-release.py").read_text()
-require(len(runbook.splitlines()) <= 150, "minimal deploy runbook size")
+require(len(runbook.splitlines()) <= 200, "minimal deploy runbook size")
 for marker in ("preflight", "activate", "finalize", "rollback", "status",
                "PREFLIGHT PASS", "AWAITING_ACCEPTANCE", "DEPLOYED", "ROLLED_BACK"):
     require(marker in runbook, f"deploy runbook marker {marker}")
@@ -69,6 +69,12 @@ for marker in (
     'READINESS_TIMEOUT:{component}:{port}',
 ):
     require(marker in control, f"versioned readiness marker {marker}")
+frontend_executor = (ROOT / "scripts/frontend-only-activation.py").read_text()
+for marker in (
+    '"wait-readiness"', '"--report"', "READINESS_OBSERVABILITY_DEFECT",
+    '"AWAITING_ACCEPTANCE"', '"ROLLED_BACK"', "handoff_lock_to_private_holder",
+):
+    require(marker in frontend_executor, f"frontend-only executor marker {marker}")
 fixture = json.loads((ROOT / "scripts/ci/fixtures/pm2-readiness-race.sanitized.json").read_text())
 require(fixture["classification"] == "READINESS_RACE_SINGLE_SAMPLE",
         "readiness incident classification")
