@@ -3859,7 +3859,7 @@ export default function AppCampaignsPage() {
                   <button
                     type="button"
                     disabled={
-                      creatingDraft ||
+                      !campaignOperationsOpen || checkingCampaignOperations || creatingDraft ||
                       campaignReusePreviewState === "loading" ||
                       (audienceRecipientMode === "STATIC_RECIPIENTS" && audienceEligibleItems.length === 0) ||
                       (audienceRecipientMode === "DYNAMIC_CRM_FILTER" && (!audienceFilters.status || !composerScheduleInput)) ||
