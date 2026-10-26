@@ -1,6 +1,6 @@
 # Estado canônico do Converta
 
-**DEPLOYED / GENERAL CAMPAIGN OPERATIONS OPEN / VIDEO ACCEPTANCE PASS / PRODUCTION HEALTHY**
+**DEPLOYED / GENERAL CAMPAIGN OPERATIONS OPEN / IMAGE AND VIDEO ACCEPTANCE PASS / PRODUCTION HEALTHY**
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a implantação ativa está
@@ -118,3 +118,21 @@ Fonte documental: relatório operacional, sem nova inspeção independente pelo 
 Estado **GENERAL_OPERATIONS_OPEN**; manter aberta para uso normal, sem repetir
 abertura ou fechar por fim de homologação. Proteções canônicas permanecem ativas.
 Próximo teste de mídia: IMAGE, com escopo e destinatário definidos antes do envio.
+
+## Homologação IMAGE concluída — 26/10/2026
+
+Relato do Codex local encaminhado pelo owner: campanha `Campanha teste out.27`,
+template `imagem_previdenciario`, completed, uma imagem armazenada/vinculada,
+upload Meta confirmed em uma tentativa e um job concluído. O escopo efetivamente
+executado incluiu **dois destinatários**, diferente do roteiro inicialmente proposto
+de um: duas aceitações Meta, uma por destinatário, sem retry ou duplicidade.
+CRM confirmado para ambos; webhooks correlacionados read para um e delivered para
+outro. Telefones e IDs privados não publicados. Sem falhas, incertezas ou pendências
+globais. Guarda aberta na geração 41, íntegra, sem tarefas; health local/público
+ok=true/db=ok. Mídia, campanha e evidências preservadas, sem build/deploy/restart/save.
+
+Índice final privado:
+`0b98ed13f0c4ca1c71a424c4ed8c3de02f2c02c20e59248aab506d280d21a0ae`.
+Aceite IMAGE e VIDEO controlados: PASS. Não repetir os testes nem reabrir a guarda.
+Agendamento/multilote e aceites específicos não são inferidos desses resultados;
+preparar o próximo escopo conforme [roteiro](CAMPAIGN_OPERATIONS_READINESS.md).

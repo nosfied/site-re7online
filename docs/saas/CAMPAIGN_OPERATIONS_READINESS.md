@@ -1,6 +1,6 @@
 # Campanhas: disponibilidade, mídia e homologação
 
-Atualizado em 26/10/2026: **GENERAL_OPERATIONS_OPEN / VÍDEO HOMOLOGADO / IMAGE NA SEQUÊNCIA**. O deploy a959 foi concluído
+Atualizado em 26/10/2026: **GENERAL_OPERATIONS_OPEN / IMAGE E VIDEO HOMOLOGADOS EM ESCOPO CONTROLADO**. O deploy a959 foi concluído
 conforme relatório do Codex local encaminhado pelo owner; não houve abertura da
 guarda nem envio nessa janela. O editor documental não fez nova inspeção da VPS. Os históricos continuam válidos
 no seu escopo e não são instruções para repetir recuperação ou envio.
@@ -359,3 +359,28 @@ Mantêm-se as proteções automáticas diante de resultado incerto e a ausência
 permissão para replay de aceitação. Próxima homologação: IMAGE em escopo controlado,
 com template aprovado, arquivo coerente, destinatário e quantidade definidos.
 Não repetir VIDEO; agendamento/multilote e aceites específicos seguem separados.
+
+## Homologação IMAGE concluída — dois destinatários
+
+Relatório do owner/Codex local em 26/10/2026: **MANUAL IMAGE CAMPAIGN PASS**.
+Campanha `Campanha teste out.27`, template `imagem_previdenciario`, completed.
+Uma imagem stored/vinculada, upload Meta confirmed em uma tentativa, um job concluído.
+O roteiro anterior previa um destinatário; o relato efetivo registra dois. Não
+reescrever esse resultado como teste de um destinatário nem inferir autorização
+anterior para o segundo. Trata-se de uma campanha com duas aceitações legítimas
+relatadas, uma por destinatário, não duas campanhas ou evidência de repetição.
+
+CRM persistido para ambos e webhooks correlacionados: um read e outro delivered.
+Zero falhas, incertezas, duplicidade ou pendências globais. Guarda aberta, geração
+41, íntegra e sem tarefas; health local/público ok=true/db=ok. Mídia/campanha e provas
+preservadas; zero retry, build, deploy, restart ou save. Telefones, messageIds,
+mediaIds e credenciais ficam na custódia privada, não neste documento.
+Índice SHA-256:
+`0b98ed13f0c4ca1c71a424c4ed8c3de02f2c02c20e59248aab506d280d21a0ae`.
+Fonte: relato operacional; não é nova inspeção da VPS pelo editor documental.
+
+O aceite cobre IMAGE para esses dois destinatários, além do VIDEO já homologado.
+Não repetir imagem/vídeo para produzir provas equivalentes. A admissão geral segue
+aberta; não há nova abertura ou fechamento a executar. Próximo ato: preparar o
+escopo restante de agendamento/multilote ou aceite específico de cliente, conforme
+prioridade do owner e seus roteiros, sem envio ou agendamento adicional implícito.

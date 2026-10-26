@@ -2,10 +2,10 @@
 
 Status produtivo: **TECHNICALLY DEPLOYED / PRODUCTION HEALTHY**.
 
-Homologação funcional: **CAMPANHA VIDEO MANUAL PASS — META, CRM E WEBHOOK READ CONFIRMADOS**.
+Homologação funcional: **CAMPANHAS IMAGE E VIDEO MANUAIS PASS — META, CRM E WEBHOOKS CONFIRMADOS**.
 A aprovação pendente registrada em 24/10 é histórica; em 26/10 foi relatado template
-VIDEO aprovado e usado no envio controlado. IMAGE e demais cenários permanecem
-com aceite próprio.
+VIDEO aprovado e usado no envio controlado. IMAGE foi homologado em campanha posterior para dois destinatários, com read/delivered
+e CRM confirmado. Agendamento/multilote e aceites específicos continuam separados.
 
 Admissão geral de campanhas: **ABERTA PARA USO NORMAL / GERAÇÃO 41**.
 Liberação comercial/aceite específico de CRA-PR e de cenários ainda não homologados:
@@ -26,7 +26,7 @@ API/frontend relatados em `immutable-a959129e-vps-20261026T023100Z`, target
 [Registro ativo](releases/CAMPAIGN_AVAILABILITY_MEDIA_ADMISSION_2026-10-26_DEPLOYED.json).
 Após homologação VIDEO bem-sucedida e fechamento da janela na geração 40, o Codex
 local executou a reabertura geral autorizada: guarda aberta na geração 41, sem trabalho
-histórico elegível, resultado incerto ou falha de health. Próxima homologação: IMAGE.
+histórico elegível, resultado incerto ou falha de health. IMAGE posteriormente homologado para dois destinatários, sem duplicidade ou pendência.
 Não há pendência de novo deploy, save ou abertura. Próximo ato e limites estão no
 [roteiro de homologação](CAMPAIGN_OPERATIONS_READINESS.md).
 Aprovação observada em 24/10 é histórica; não é consulta atual à Meta.
@@ -403,3 +403,16 @@ autorizado poderá reconciliá-la pelo GET tenant-scoped acima.
 Esta correção melhora observabilidade e não reabre solicitações encerradas. A causa
 externa específica de falhas históricas continua dependendo de uma tentativa
 controlada futura, porque essas respostas antigas não preservaram o detalhe seguro.
+
+## Aceites de mídia concluídos em 26/10/2026
+
+VIDEO: uma campanha/um destinatário/uma aceitação Meta, CRM e webhook read.
+IMAGE: uma campanha/dois destinatários/duas aceitações Meta, uma por destinatário,
+CRM confirmado para ambos, webhooks read e delivered. Uma imagem stored/vinculada,
+upload confirmed em uma tentativa e um job concluído. Não há retry ou duplicidade
+relatada. O escopo IMAGE real é dois destinatários, não o único inicialmente proposto.
+
+Guarda permanece aberta na geração 41 para uso normal. O
+[roteiro de campanhas](CAMPAIGN_OPERATIONS_READINESS.md#homologação-image-concluída--dois-destinatários)
+contém o resultado e hash privado, sem publicar telefones. Testes de agendamento,
+multilote e aceites contratuais não são automaticamente declarados concluídos.

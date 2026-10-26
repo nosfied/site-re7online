@@ -202,7 +202,6 @@
         "closeAfterEachRemainingHomologation": false,
         "automaticUncertaintyProtectionPreserved": true,
         "remainingAcceptance": [
-          "IMAGE_END_TO_END",
           "SCHEDULING_AND_MULTIBATCH_WHEN_PLANNED",
           "OTHER_CLIENT_SPECIFIC_ACCEPTANCE"
         ],
@@ -230,7 +229,65 @@
       "previousClosedObservation": {
         "generation": 40,
         "drained": true
-      }
+      },
+      "imageHomologation": {
+        "source": "OWNER_RELAYED_LOCAL_CODEX_REPORT",
+        "reportedDate": "2026-10-26",
+        "independentVpsInspectionByDocumentationEditor": false,
+        "status": "PASS",
+        "campaignName": "Campanha teste out.27",
+        "templateName": "imagem_previdenciario",
+        "campaignStatus": "completed",
+        "recipientCount": 2,
+        "recipientIdentifiersPublished": false,
+        "scopeNote": "Actual owner-reported execution used two recipients; previous proposed script described one. Record actual scope without inferring a second campaign or retry.",
+        "mediaCount": 1,
+        "storedAndLinked": true,
+        "accountUploadState": "confirmed",
+        "uploadAttempts": 1,
+        "jobCount": 1,
+        "jobCompleted": true,
+        "providerAcceptances": 2,
+        "providerAcceptancesPerRecipient": 1,
+        "recipientResults": [
+          {
+            "ordinal": 1,
+            "webhookStatus": "read",
+            "crmPersistenceConfirmed": true
+          },
+          {
+            "ordinal": 2,
+            "webhookStatus": "delivered",
+            "crmPersistenceConfirmed": true
+          }
+        ],
+        "webhooksCorrelated": true,
+        "failures": 0,
+        "uncertainties": 0,
+        "duplicates": 0,
+        "globalPendingResults": 0,
+        "guard": {
+          "open": true,
+          "generation": 41,
+          "tasks": 0,
+          "ledgerHealthy": true
+        },
+        "health": {
+          "local": {
+            "ok": true,
+            "db": "ok"
+          },
+          "public": {
+            "ok": true,
+            "db": "ok"
+          }
+        },
+        "evidenceManifestSha256": "0b98ed13f0c4ca1c71a424c4ed8c3de02f2c02c20e59248aab506d280d21a0ae",
+        "artifactsPreserved": true,
+        "retry": false,
+        "buildDeployRestartOrSaveExecuted": false
+      },
+      "nextAcceptance": "PREPARE_SCHEDULING_MULTIBATCH_OR_CLIENT_SPECIFIC_SCOPE_WITHOUT_REPEATING_MEDIA_TESTS"
     }
   },
   "contactsListRecovery": {
@@ -362,8 +419,9 @@
       ]
     },
     "historicalCampaignEffectsScope": "PREVIOUS_MEDIA_TEMPLATE_HOMOLOGATION_RECORDS_NOT_CURRENT_MANUAL_CAMPAIGN",
-    "latestCampaignHomologationState": "SINGLE_VIDEO_SEND_ACCEPTED_CRM_AND_READ_WEBHOOK_CONFIRMED",
-    "latestCampaignHomologationRecord": "docs/saas/CAMPAIGN_OPERATIONS_READINESS.md"
+    "latestCampaignHomologationState": "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS_GENERAL_OPERATIONS_OPEN",
+    "latestCampaignHomologationRecord": "docs/saas/CAMPAIGN_OPERATIONS_READINESS.md",
+    "latestImageHomologationState": "PASS_TWO_CONTROLLED_RECIPIENTS_META_CRM_WEBHOOK"
   },
   "tenantScopedMetaAppId": {
     "codeState": "TECHNICALLY_DEPLOYED",
