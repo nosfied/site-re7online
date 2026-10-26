@@ -48,6 +48,8 @@
 - [Adequar encerramento e CSAT à janela de 24h](backlog/WHATSAPP_CSAT_24H_WINDOW_2026-10-19.md)
 - [Elegibilidade set based de campanhas](backlog/CAMPAIGN_SET_BASED_ELIGIBILITY_2026-10-21.md)
   — `PREEXISTING_BATCH_ELIGIBILITY_N_PLUS_ONE`; não bloqueia o deploy técnico.
+- [Gates de capacidade e revisão de gerações](BUILD_CAPACITY_GATES.md)
+  — produtor preparado; checkpoints entre fases e revisão de gerações registradas, sem exclusão automática ou instalação produtiva presumida.
 - OBS-1 — preparação concluída; rotação exige janela própria.
 
 ## Arquivo histórico
