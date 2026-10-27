@@ -541,6 +541,13 @@
       "derivedArtifacts": "SANITIZED_ONLY_AFTER_AUTHENTICATED_PRIOR_RETENTION_AND_ABSENCE",
       "canonicalPrepare": "ZERO_COMMANDS_REVIEW_V2_SANITIZED_NO_EXECUTE",
       "installedRelease": "ACTIVE_DEPENDENCY_NEVER_DESTRUCTIVE_COMMAND",
+      "installedPrivateDataOverlay": {
+        "path": "api-runtime/.data",
+        "classification": "PRIVATE_DATA_NEVER_RETIRE",
+        "state": "ACTIVE_DEPENDENCY",
+        "packagePolicy": "STRICTLY_FORBIDDEN",
+        "scope": "A959_INSTALLED_RELEASE_ONLY"
+      },
       "scope": "A959_ONLY_NOT_GENERALIZABLE"
     },
     "lastCompletedBatch": {

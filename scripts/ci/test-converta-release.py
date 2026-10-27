@@ -193,6 +193,28 @@ class ReleaseProducerTest(unittest.TestCase):
             arguments.extend(("--deployed-marker-sha256", marker_sha256))
         return invoke(*arguments)
 
+    def copy_a959_release(self, name: str) -> tuple[Path, str]:
+        destination = self.base / name / MODULE.A959_LEGACY_RELEASE_ID
+        destination.parent.mkdir()
+        shutil.copytree(self.release, destination, symlinks=True)
+        manifest = json.loads((destination / "manifest.json").read_text())
+        manifest["releaseId"] = MODULE.A959_LEGACY_RELEASE_ID
+        manifest["targetCommit"] = MODULE.A959_LEGACY_TARGET
+        (destination / "manifest.json").write_text(
+            json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n"
+        )
+        marker = destination / "DEPLOYED"
+        write(marker, '{"state":"DEPLOYED"}\n', 0o600)
+        return destination, hashlib.sha256(marker.read_bytes()).hexdigest()
+
+    def verify_a959_overlay(self, root: Path, marker_sha256: str) -> subprocess.CompletedProcess[str]:
+        return invoke(
+            "verify", "--release-root", str(root), "--target", MODULE.A959_LEGACY_TARGET,
+            "--release-id", MODULE.A959_LEGACY_RELEASE_ID, "--components", COMPONENTS,
+            "--deployed-marker-sha256", marker_sha256,
+            "--legacy-a959-private-data-overlay",
+        )
+
     def assert_denied(self, result: subprocess.CompletedProcess[str], predicate: str) -> None:
         self.assertEqual(result.returncode, 2, (result.stdout, result.stderr))
         self.assertIn(f"RELEASE_DENY:{predicate}", result.stderr)
@@ -298,6 +320,58 @@ class ReleaseProducerTest(unittest.TestCase):
         root = self.copy_release("extra")
         write(root / "api-runtime/extra.js", "extra\n")
         self.assert_denied(self.verify(root), "release_index_inventory")
+
+    def test_a959_installed_overlay_is_closed_and_does_not_relax_package_inventory(self) -> None:
+        root, marker_sha = self.copy_a959_release("a959-overlay-valid")
+        write(root / "api-runtime/.data/private/state.json", "fixture-private-state\n", 0o600)
+        accepted = self.verify_a959_overlay(root, marker_sha)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        result = json.loads(accepted.stdout)
+        self.assertEqual(result["indexEntries"], len(json.loads((root / "index.sha256").read_text())["entries"]))
+        self.assertEqual(result["privateDataOverlay"]["path"], "api-runtime/.data")
+        self.assertEqual(result["privateDataOverlay"]["classification"], "PRIVATE_DATA_NEVER_RETIRE")
+        self.assertEqual(result["privateDataOverlay"]["state"], "ACTIVE_DEPENDENCY")
+
+        strict = invoke("verify", "--release-root", str(root), "--target", MODULE.A959_LEGACY_TARGET,
+                        "--release-id", MODULE.A959_LEGACY_RELEASE_ID, "--components", COMPONENTS,
+                        "--deployed-marker-sha256", marker_sha)
+        self.assert_denied(strict, "forbidden_release_entry:api-runtime/.data")
+        package = invoke("verify", "--package", str(self.package), "--target", MODULE.A959_LEGACY_TARGET,
+                         "--release-id", MODULE.A959_LEGACY_RELEASE_ID, "--components", COMPONENTS,
+                         "--legacy-a959-private-data-overlay")
+        self.assert_denied(package, "legacy_a959_private_data_overlay_package")
+
+        contaminated = self.copy_release("package-with-private-data")
+        write(contaminated / "api-runtime/.data/state.json", "must-not-ship\n", 0o600)
+        contaminated_package = contaminated.parent / "contaminated.tar.xz"
+        MODULE.write_package(contaminated, contaminated_package, int(EPOCH))
+        package_result = invoke("verify", "--package", str(contaminated_package),
+                                "--target", self.target, "--release-id", self.release_id,
+                                "--components", COMPONENTS)
+        self.assert_denied(package_result, "forbidden_release_entry:api-runtime/.data")
+
+    def test_a959_overlay_denies_wrong_path_symlink_escape_and_unrelated_addition(self) -> None:
+        wrong, marker_sha = self.copy_a959_release("a959-overlay-wrong-path")
+        write(wrong / "api-runtime/.private-data/state.json", "state\n", 0o600)
+        self.assert_denied(self.verify_a959_overlay(wrong, marker_sha),
+                           "legacy_a959_private_data_overlay_missing")
+
+        linked, marker_sha = self.copy_a959_release("a959-overlay-symlink")
+        target = linked / "api-runtime/private-target"; target.mkdir()
+        (linked / "api-runtime/.data").symlink_to(target)
+        self.assert_denied(self.verify_a959_overlay(linked, marker_sha),
+                           "legacy_a959_private_data_overlay_identity")
+
+        escaped, marker_sha = self.copy_a959_release("a959-overlay-escape")
+        overlay = escaped / "api-runtime/.data"; overlay.mkdir()
+        (overlay / "outside").symlink_to("/etc/passwd")
+        self.assert_denied(self.verify_a959_overlay(escaped, marker_sha),
+                           "legacy_a959_private_data_overlay_symlink")
+
+        extra, marker_sha = self.copy_a959_release("a959-overlay-extra")
+        (extra / "api-runtime/.data").mkdir()
+        write(extra / "api-runtime/unindexed.txt", "extra\n")
+        self.assert_denied(self.verify_a959_overlay(extra, marker_sha), "release_index_inventory")
 
     def test_runtime_removal_denied(self) -> None:
         root = self.copy_release("missing")

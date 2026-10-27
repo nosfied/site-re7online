@@ -59,7 +59,7 @@ LEGACY_123BA_BINDING = {
         "path": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/immutable-123ba7bd-vps-20261026T200100Z/index.sha256",
         "sha256": "a91323272cdcd3a91c207a18a953f11f93e346cf3bde1f976e3229829fa0e69b",
     },
-    "canonicalVerifierSha256": "94cba588e811be47ef3908054070dec134137bf409dccb278bf5ae406cc56f1a",
+    "canonicalVerifierSha256": "78336d605301016a1eb5c07b2d603bf85ca6e3299519469fed8bef2f5fffd896",
     "contractOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-artifacts.private.json",
     "reviewOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-review.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-123ba7bd-vps-20261026T200100Z-legacy-bootstrap/bootstrap-receipt.private.json",
@@ -72,6 +72,11 @@ LEGACY_A959_V1_PRESERVE_BINDING = {
     "outputPath": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer",
     "worktreePath": "/opt/re7online/build-worktrees/immutable-a959129e-vps-20261026T023100Z-source",
     "installedReleasePath": "/opt/re7online/releases/immutable-a959129e-vps-20261026T023100Z",
+    "privateDataOverlay": {
+        "path": "/opt/re7online/releases/immutable-a959129e-vps-20261026T023100Z/api-runtime/.data",
+        "classification": "PRIVATE_DATA_NEVER_RETIRE",
+        "state": "ACTIVE_DEPENDENCY",
+    },
     "lifecycle": {
         "path": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-lifecycle.private.json",
         "sha256": "b585d6cab251b8578cf808a080fe3794c5debef7408929562408fbc9c1c2498a",
@@ -120,7 +125,7 @@ LEGACY_A959_V1_PRESERVE_BINDING = {
             "5": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/frontend-runtime",
         },
     },
-    "canonicalVerifierSha256": "94cba588e811be47ef3908054070dec134137bf409dccb278bf5ae406cc56f1a",
+    "canonicalVerifierSha256": "78336d605301016a1eb5c07b2d603bf85ca6e3299519469fed8bef2f5fffd896",
     "contractOutput": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-artifacts.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-a959129e-vps-20261026T023100Z-legacy-v1-bootstrap/bootstrap-receipt.private.json",
 }
@@ -313,6 +318,7 @@ def validate_contract(value: dict[str, Any]) -> None:
         deny("artifact_contract_artifacts")
     paths = set()
     authenticated_retention_paths: set[str] = set()
+    a959_overlay_paths: set[str] = set()
     a959_retention = LEGACY_A959_V1_PRESERVE_BINDING["priorRetention"]
     a959_expected_by_path = {
         path: int(ordinal) for ordinal, path in a959_retention["a959Ordinals"].items()
@@ -332,6 +338,20 @@ def validate_contract(value: dict[str, Any]) -> None:
         paths.add(str(path))
         if artifact.get("class") not in PRESERVE_CLASSES | DERIVED_CLASSES | {"RELEASE_RUNTIME"}:
             deny("artifact_contract_class")
+        if (value["releaseId"] == LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] and
+                value["targetCommit"] == LEGACY_A959_V1_PRESERVE_BINDING["targetCommit"] and
+                (str(path) == LEGACY_A959_V1_PRESERVE_BINDING["privateDataOverlay"]["path"] or
+                 artifact.get("class") == "PRIVATE_DATA_NEVER_RETIRE")):
+            if (str(path) != LEGACY_A959_V1_PRESERVE_BINDING["privateDataOverlay"]["path"] or
+                    artifact.get("class") != "PRIVATE_DATA_NEVER_RETIRE" or
+                    artifact.get("state") != "ACTIVE_DEPENDENCY" or
+                    artifact.get("retirableOn") != "NEVER_AUTOMATIC" or
+                    artifact.get("expectedType") != "directory" or
+                    artifact.get("initialIdentity") is None or
+                    artifact.get("observedIdentity") is None or
+                    artifact.get("structuralSha256") is not None):
+                deny("artifact_contract_a959_private_data_overlay")
+            a959_overlay_paths.add(str(path))
         if (artifact.get("state") not in ARTIFACT_STATES or
                 not isinstance(artifact.get("retirableOn"), str) or not artifact["retirableOn"] or
                 not isinstance(artifact.get("dependencies"), list) or
@@ -367,6 +387,10 @@ def validate_contract(value: dict[str, Any]) -> None:
     if (authenticated_retention_paths and
             authenticated_retention_paths != set(a959_expected_by_path)):
         deny("artifact_contract_authenticated_retention_scope")
+    if (value["releaseId"] == LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] and
+            value["targetCommit"] == LEGACY_A959_V1_PRESERVE_BINDING["targetCommit"] and
+            a959_overlay_paths != {LEGACY_A959_V1_PRESERVE_BINDING["privateDataOverlay"]["path"]}):
+        deny("artifact_contract_a959_private_data_overlay")
 
 
 def _strict_child(path: Path, root: Path, predicate: str) -> None:
@@ -717,6 +741,14 @@ def authenticate_artifact(artifact: dict[str, Any]) -> None:
             if observed[field] != artifact.get(field):
                 deny(f"artifact_drift:{path}:{field}")
     digest = artifact.get("digest")
+    if artifact["class"] == "PRIVATE_DATA_NEVER_RETIRE":
+        expected_digest = {"policy", "scope", "ownerUid", "groupGid", "mode"}
+        if (not isinstance(digest, dict) or set(digest) != expected_digest or
+                digest.get("policy") != "PRIVATE_DATA_NEVER_RETIRE" or
+                digest.get("scope") != "ROOT_IDENTITY_ONLY" or
+                (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) !=
+                (digest.get("ownerUid"), digest.get("groupGid"), digest.get("mode"))):
+            deny(f"artifact_private_data_identity:{path}")
     if stat.S_ISREG(info.st_mode) and isinstance(digest, dict) and digest.get("sha256"):
         if digest_bytes(path.read_bytes()) != digest["sha256"]:
             deny(f"artifact_hash:{path}")
@@ -1104,7 +1136,8 @@ def _run_legacy_installed_verifier(descriptor: dict[str, Any]) -> dict[str, Any]
     return _run_legacy_verifier(
         descriptor,
         ["--release-root", descriptor["installedReleasePath"],
-         "--deployed-marker-sha256", descriptor["deployedMarker"]["sha256"]],
+         "--deployed-marker-sha256", descriptor["deployedMarker"]["sha256"],
+         "--legacy-a959-private-data-overlay"],
         "legacy_installed_release_verification",
     )
 
@@ -1144,7 +1177,9 @@ def _run_legacy_verifier(descriptor: dict[str, Any], source: list[str], predicat
     finally:
         os.close(fd)
     if result.returncode:
-        deny(predicate)
+        nominal = next((line for line in result.stderr.splitlines()
+                        if line.startswith("RELEASE_DENY:")), None)
+        deny(f"{predicate}:{nominal}" if nominal else predicate)
     try:
         verified = json.loads(result.stdout)
     except json.JSONDecodeError:
@@ -1159,7 +1194,8 @@ def _run_legacy_verifier(descriptor: dict[str, Any], source: list[str], predicat
             "stderrSha256": digest_bytes(result.stderr.encode()),
             "apiEntrySha256": verified.get("apiEntrySha256"),
             "buildId": verified.get("buildId"),
-            "indexEntries": verified.get("indexEntries")}
+            "indexEntries": verified.get("indexEntries"),
+            "privateDataOverlay": verified.get("privateDataOverlay")}
 
 
 def _legacy_reference_absence(descriptor: dict[str, Any], operational: dict[str, Any]) -> None:
@@ -1288,6 +1324,56 @@ def _authenticated_retired_artifact(path: Path, descriptor: dict[str, Any], arti
     }
 
 
+def _a959_private_data_artifact(descriptor: dict[str, Any],
+                                installed_verification: dict[str, Any]) -> dict[str, Any]:
+    binding = descriptor["privateDataOverlay"]
+    path = Path(binding["path"])
+    installed = Path(descriptor["installedReleasePath"])
+    expected_relative = Path("api-runtime/.data")
+    if (path != installed / expected_relative or binding != {
+            "path": str(installed / expected_relative),
+            "classification": "PRIVATE_DATA_NEVER_RETIRE",
+            "state": "ACTIVE_DEPENDENCY",
+    }):
+        deny("legacy_a959_private_data_binding")
+    observed = installed_verification.get("privateDataOverlay")
+    required = {"path", "classification", "state", "rootIdentity", "ownerUid", "groupGid",
+                "mode", "observedEntries"}
+    if (not isinstance(observed, dict) or set(observed) != required or
+            observed.get("path") != expected_relative.as_posix() or
+            observed.get("classification") != "PRIVATE_DATA_NEVER_RETIRE" or
+            observed.get("state") != "ACTIVE_DEPENDENCY"):
+        deny("legacy_a959_private_data_verification")
+    identity = observed.get("rootIdentity")
+    if (not isinstance(identity, dict) or set(identity) != {"device", "inode"} or
+            any(not isinstance(identity.get(key), int) or identity[key] < 0
+                for key in ("device", "inode")) or
+            any(not isinstance(observed.get(key), int) or observed[key] < 0
+                for key in ("ownerUid", "groupGid", "mode", "observedEntries"))):
+        deny("legacy_a959_private_data_verification")
+    try:
+        info = path.lstat()
+        resolved = path.resolve(strict=True)
+    except OSError:
+        deny("legacy_a959_private_data_identity")
+    if (path.is_symlink() or not stat.S_ISDIR(info.st_mode) or resolved != path or
+            (info.st_dev, info.st_ino) != (identity["device"], identity["inode"])):
+        deny("legacy_a959_private_data_identity")
+    return {
+        "path": str(path), "releaseId": descriptor["releaseId"],
+        "targetCommit": descriptor["targetCommit"], "expectedType": "directory",
+        "initialIdentity": identity, "observedIdentity": identity,
+        "sizeBytes": info.st_size, "allocatedBytes": info.st_blocks * 512, "inodes": 1,
+        "structuralSha256": None,
+        "digest": {"policy": "PRIVATE_DATA_NEVER_RETIRE", "scope": "ROOT_IDENTITY_ONLY",
+                   "ownerUid": info.st_uid, "groupGid": info.st_gid,
+                   "mode": stat.S_IMODE(info.st_mode)},
+        "class": "PRIVATE_DATA_NEVER_RETIRE", "state": "ACTIVE_DEPENDENCY",
+        "retirableOn": "NEVER_AUTOMATIC",
+        "dependencies": ["legacy_a959_installed_overlay_verified", "active_release_preserved"],
+    }
+
+
 def _a959_contract_is_fully_sanitized(contract: dict[str, Any],
                                        classified: list[dict[str, Any]]) -> bool:
     binding = LEGACY_A959_V1_PRESERVE_BINDING
@@ -1375,12 +1461,28 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
         if any(package_verification.get(field) != installed_verification.get(field)
                for field in comparable):
             deny("legacy_a959_package_installed_mismatch")
+        private_data_artifact = _a959_private_data_artifact(descriptor, installed_verification)
+        private_data_path = Path(descriptor["privateDataOverlay"]["path"])
         fresh = capture_fresh_operational(operational)
         ignored = {contract_output}
         observation_a = {"output": _tree_observation(output, "a959-output", ignored),
-                         "installed": _tree_observation(installed, "a959-installed"),
+                         "installed": _tree_observation(
+                             installed, "a959-installed", {private_data_path}),
                          "absentDerived": sorted(retired)}
         release_root = output / descriptor["releaseId"]
+        installed_artifact = _legacy_artifact(
+            installed, descriptor, "RELEASE_RUNTIME", "ACTIVE_DEPENDENCY",
+            {"manifestSha256": descriptor["manifest"]["sha256"],
+             "indexSha256": descriptor["index"]["sha256"],
+             "operationalMarkerSha256": descriptor["deployedMarker"]["sha256"]},
+        )
+        installed_info = installed.lstat()
+        installed_artifact.update(
+            sizeBytes=installed_info.st_size,
+            allocatedBytes=installed_info.st_blocks * 512,
+            inodes=1,
+            structuralSha256=None,
+        )
         artifacts = [
             _legacy_artifact(Path(descriptor["package"]["path"]), descriptor, "PACKAGE_PRESERVE",
                              "ACTIVE_DEPENDENCY", {"sha256": descriptor["package"]["sha256"]}),
@@ -1390,10 +1492,8 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
                              "ACTIVE_DEPENDENCY", {"sha256": descriptor["index"]["sha256"]}),
             _legacy_artifact(lifecycle_path, descriptor, "EVIDENCE_PRESERVE", "ACTIVE_DEPENDENCY",
                              {"sha256": descriptor["lifecycle"]["sha256"]}),
-            _legacy_artifact(installed, descriptor, "RELEASE_RUNTIME", "ACTIVE_DEPENDENCY",
-                             {"manifestSha256": descriptor["manifest"]["sha256"],
-                              "indexSha256": descriptor["index"]["sha256"],
-                              "operationalMarkerSha256": descriptor["deployedMarker"]["sha256"]}),
+            installed_artifact,
+            private_data_artifact,
             _authenticated_retired_artifact(worktree, descriptor, "DERIVED_WORKTREE",
                                             retired[str(worktree)],
                                             {"gitCommit": descriptor["targetCommit"]}),
@@ -1418,7 +1518,8 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
                 artifact["dependencies"] = ["package_verified", "installed_release_verified",
                                               "active_release_excluded_from_retirement"]
         observation_b = {"output": _tree_observation(output, "a959-output", ignored),
-                         "installed": _tree_observation(installed, "a959-installed"),
+                         "installed": _tree_observation(
+                             installed, "a959-installed", {private_data_path}),
                          "absentDerived": sorted(retired)}
         if observation_a != observation_b:
             deny("legacy_a959_tree_drift_between_samples")
