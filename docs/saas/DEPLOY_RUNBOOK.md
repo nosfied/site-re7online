@@ -209,18 +209,18 @@ pacote autenticado, após diagnóstico/correção e autorização aplicável; n�
 ## Preflight (`preflight`)
 
 1. Adquirir o lock e confirmar ausência de outra janela.
-2. Revalidar hashes do pacote/release, target, BUILD_ID e entrypoint.
-3. Confirmar symlinks e releases viva/candidata, dump `0600`, retorno autenticado,
-   PM2 e configuração privada completa já armazenada.
-4. Capturar PID, start ticks, CWD, script, argumentos, sockets e restart count de
-   API/frontend/worker. Ler `/proc/<pid>/stat` com o parser canônico: separar pela
-   última ocorrência de `) ` e usar o campo 20 da cauda (índice 19). Nomes de
-   processo podem conter espaços; `awk`, `cut` ou tokenização do registro inteiro
-   podem produzir zero ou o campo errado e não servem como evidência.
-5. Confirmar health, espaço/inodes, zero trabalho impeditivo e impacto de migration.
-6. Preparar evidência privada e destinos exclusivos; não executar `pm2 save`.
-7. Autenticar o executor versionado e persistido que fará a ativação. Bloco Bash
-   inline, comando colado ou executor efêmero não é procedimento de janela.
+2. Revalidar pacote/release, target, BUILD_ID, entrypoint, symlinks e retornos.
+3. Reabrir cada insumo privado e validar tipo, symlink, hash, owner/group e modo
+   exigido pelo driver; modo do checkout não substitui o da cópia privada. Antes da
+   autorização, exigir pai físico do receipt `deploy:deploy 0700` e receipt ausente.
+4. Capturar PID, start ticks, CWD, script, argumentos, sockets e restart count do
+   trio. Em `/proc/<pid>/stat`, separar pela última `) ` e usar o campo 20 da
+   cauda; tokenizar o registro inteiro não serve quando o nome contém espaços.
+5. Confirmar health, espaço/inodes, zero trabalho impeditivo e migration.
+6. Criar evidência/destinos exclusivos e executar o preflight com exatamente os
+   argumentos da ativação; só `PREFLIGHT PASS` autoriza pedir a frase do owner.
+7. Autenticar o executor versionado; bloco inline/efêmero não é procedimento. Não
+   executar `pm2 save` no preflight.
 
 Bindings privados são obrigatórios somente quando a janela cria, substitui ou
 executa uma definição PM2, ou altera ambiente/argumentos. Eles não são pré-requisito
@@ -308,9 +308,9 @@ exclusivamente o reconciliador/validador comprovadamente defeituoso é continua�
 mesma finalização, mediante autorização explícita, nunca retry da ativação e nunca
 motivo para novo `pm2 save`.
 
-Validar os três registros do dump por identidade estrutural e ambiente permitido,
-sem publicar valores privados. Preservar os valores brutos antes da comparação. No
-PM2 6.0.14 autenticado:
+Validar os três registros por identidade e ambiente permitido, preservando os
+valores brutos. No PM2 6.0.14, campos/aliases e variáveis permitidas podem ficar no
+topo do registro ou em `pm2_env`; consultar ambos sem inventar outros defaults:
 
 - `instances` ausente/nulo no processo vivo e ausente/nulo no dump são equivalentes,
   sem normalização; esse é o caso comprovado do worker;
@@ -318,10 +318,9 @@ PM2 6.0.14 autenticado:
   somente em `fork_mode`, com exatamente um processo vivo e todos os demais campos
   equivalentes; esse é o caso comprovado de API/frontend.
 
-Não confundir propriedade ausente com processo ausente, não normalizar outros
-campos/versões genericamente e não editar o dump para passar na comparação. Essa
-representação foi reconfirmada nas finalizações a959, d436 e f160; reutilizar a prova
-compatível em vez de repetir o save.
+Não confundir campo com processo ausente, editar o dump ou repetir o save. Campo
+ausente nas duas representações continua ausente; divergência real continua `DENY`.
+A prova PM2 6.0.14 é reutilizável e coberta por regressão.
 
 Falha antes de qualquer seleção é `DENIED_BEFORE_MUTATION`, não `ROLLED_BACK`.
 Depois de mutação, só declarar retorno após verificá-lo. Falha de retorno ou de
