@@ -104,6 +104,15 @@ byte-exatamente preservada. Depois, o `prepare` canônico deve receber
 bootstrap da `123ba` não serve para a `a959`, nem o da `a959` serve para qualquer
 terceira geração.
 
+Exclusivamente na verificação instalada da `a959`, o bootstrap habilita o contrato
+legado para `api-runtime/.data`. O verificador mantém o índice imutável estrito e
+autentica confinamento, tipo físico, owner/group da release, modo, symlinks e identidade
+da raiz privada, devolvida ao contrato como
+`PRIVATE_DATA_NEVER_RETIRE/ACTIVE_DEPENDENCY`. O modo é negado para pacotes, outro
+target/release ou overlay diferente. Não mover, indexar ou retirar `.data`; novas
+releases devem apontar dados mutáveis para persistência externa à release. O `prepare`
+reautentica a projeção sem `.data`: drift fora dela é `DENY`; mudança interna é permitida.
+
 No fluxo API + frontend, o `preflight` de `scripts/converta-deploy.py` exige os
 bindings `--generation-retirement-*`. Após aceite, `pm2 save`, dump validado,
 marker `DEPLOYED` e health final, o próprio `finalize` executa uma única vez

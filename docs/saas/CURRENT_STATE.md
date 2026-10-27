@@ -134,6 +134,14 @@ reapareceram. O bootstrap publica somente contrato e recibo; o `prepare
 `SANITIZED` e permite o gate global sem `execute`. A release ativa permanece fora
 de toda intenção destrutiva.
 
+A regularização revelou estado mutável legado em `api-runtime/.data` dentro da
+release instalada `a959`. O cache de frontend não referenciado foi retirado na
+janela autorizada, mas o bootstrap parou em `RELEASE_DENY:release_index_inventory`
+antes de publicar contrato. `.data` foi preservado integralmente. O contrato
+versionado passa a reconhecê-lo somente para a identidade fechada da `a959` como
+`PRIVATE_DATA_NEVER_RETIRE/ACTIVE_DEPENDENCY`, sem relaxar pacote, índice ou outras
+releases. Uma nova preparação operacional depende do merge e de autorização própria.
+
 A fotografia somente leitura de capacidade está em
 [VPS_CAPACITY_AUDIT_2026-10-24.md](VPS_CAPACITY_AUDIT_2026-10-24.md). Ela classifica
 candidatos para revisão, mas não autoriza remoção, arquivamento, retenção, alteração

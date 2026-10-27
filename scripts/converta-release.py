@@ -28,6 +28,9 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 RELEASE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 COMPONENTS = ("api", "frontend")
 RUNTIMES = ("api-runtime", "frontend-runtime")
+A959_LEGACY_RELEASE_ID = "immutable-a959129e-vps-20261026T023100Z"
+A959_LEGACY_TARGET = "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff"
+A959_PRIVATE_DATA_OVERLAY = PurePosixPath("api-runtime/.data")
 MANIFEST_FIELDS = {
     "schemaVersion", "producer", "releaseId", "targetCommit", "components",
     "sourceDateEpoch", "builtAt", "toolchain", "runtimes", "indexSha256",
@@ -540,7 +543,7 @@ def forbidden(relative: PurePosixPath) -> bool:
     # content, not application uploads. Apply the operational-data denylist only
     # outside node_modules; the top-level runtime inventory remains allowlisted.
     application_parts = lowered if "node_modules" not in lowered else lowered[:lowered.index("node_modules")]
-    if any(part in {".git", ".cache", "cache", "coverage", "logs", "log", "evidence",
+    if any(part in {".git", ".cache", "cache", ".data", "coverage", "logs", "log", "evidence",
                     "evidences", "uploads", "upload", "worker", "worker-runtime",
                     "whatsapp-web-worker"} for part in application_parts):
         return True
@@ -600,15 +603,67 @@ def inside(child: Path, parent: Path) -> bool:
     return child == parent or parent in child.parents
 
 
-def scan_runtime(release_root: Path) -> list[dict[str, Any]]:
+def validate_a959_private_data_overlay(release_root: Path) -> dict[str, Any]:
+    overlay = release_root / A959_PRIVATE_DATA_OVERLAY
+    try:
+        release_resolved = release_root.resolve(strict=True)
+        release_info = release_root.lstat()
+        before = overlay.lstat()
+        resolved = overlay.resolve(strict=True)
+    except OSError:
+        deny("legacy_a959_private_data_overlay_missing")
+    if (overlay.is_symlink() or not stat.S_ISDIR(before.st_mode) or
+            resolved != overlay or not inside(resolved, release_resolved) or
+            (before.st_uid, before.st_gid) != (release_info.st_uid, release_info.st_gid) or
+            stat.S_IMODE(before.st_mode) & 0o022):
+        deny("legacy_a959_private_data_overlay_identity")
+    entry_count = 1
+    for path in sorted(overlay.rglob("*"), key=lambda item: item.as_posix()):
+        try:
+            info = path.lstat()
+            path_resolved = path.resolve(strict=True)
+        except OSError:
+            deny("legacy_a959_private_data_overlay_read")
+        if (stat.S_ISLNK(info.st_mode) or
+                not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)) or
+                not inside(path_resolved, resolved)):
+            deny("legacy_a959_private_data_overlay_symlink")
+        entry_count += 1
+    try:
+        after = overlay.lstat()
+    except OSError:
+        deny("legacy_a959_private_data_overlay_read")
+    if ((before.st_dev, before.st_ino, before.st_mode) !=
+            (after.st_dev, after.st_ino, after.st_mode)):
+        deny("legacy_a959_private_data_overlay_changed")
+    return {
+        "path": A959_PRIVATE_DATA_OVERLAY.as_posix(),
+        "classification": "PRIVATE_DATA_NEVER_RETIRE",
+        "state": "ACTIVE_DEPENDENCY",
+        "rootIdentity": {"device": after.st_dev, "inode": after.st_ino},
+        "ownerUid": after.st_uid,
+        "groupGid": after.st_gid,
+        "mode": stat.S_IMODE(after.st_mode),
+        "observedEntries": entry_count,
+    }
+
+
+def scan_runtime(release_root: Path, *, allow_a959_private_data_overlay: bool = False
+                 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     resolved_root = release_root.resolve(strict=True)
     entries: list[dict[str, Any]] = []
+    overlay = (validate_a959_private_data_overlay(release_root)
+               if allow_a959_private_data_overlay else None)
     for runtime_name in RUNTIMES:
         root = release_root / runtime_name
         if not root.is_dir() or root.is_symlink():
             deny(f"release_runtime_missing:{runtime_name}")
         for path in [root, *sorted(root.rglob("*"), key=lambda item: item.as_posix())]:
             relative = path.relative_to(release_root)
+            if (allow_a959_private_data_overlay and
+                    (relative == A959_PRIVATE_DATA_OVERLAY or
+                     A959_PRIVATE_DATA_OVERLAY in relative.parents)):
+                continue
             if forbidden(PurePosixPath(relative.as_posix())):
                 deny(f"forbidden_release_entry:{relative.as_posix()}")
             info = path.lstat()
@@ -629,10 +684,18 @@ def scan_runtime(release_root: Path) -> list[dict[str, Any]]:
             else:
                 deny(f"release_entry_type:{relative.as_posix()}")
             entries.append(item)
-    return entries
+    if allow_a959_private_data_overlay:
+        overlay_after = validate_a959_private_data_overlay(release_root)
+        stable_fields = ("path", "classification", "state", "rootIdentity", "ownerUid",
+                         "groupGid", "mode")
+        if any(overlay_after[field] != overlay[field] for field in stable_fields):
+            deny("legacy_a959_private_data_overlay_changed")
+        overlay = overlay_after
+    return entries, overlay
 
 
-def validate_index(release_root: Path, raw: bytes) -> tuple[str, int]:
+def validate_index(release_root: Path, raw: bytes, *, allow_a959_private_data_overlay: bool = False
+                   ) -> tuple[str, int, dict[str, Any] | None]:
     index = json_object(raw, "index.sha256")
     if set(index) != {"schemaVersion", "scope", "entries"}:
         deny("release_index_fields")
@@ -665,7 +728,9 @@ def validate_index(release_root: Path, raw: bytes) -> tuple[str, int]:
             deny("release_index_type")
         if set(entry) != allowed or not isinstance(entry.get("mode"), int):
             deny("release_index_entry_fields")
-    observed = scan_runtime(release_root)
+    observed, overlay = scan_runtime(
+        release_root, allow_a959_private_data_overlay=allow_a959_private_data_overlay
+    )
     if observed != entries:
         expected_by_path = {entry["path"]: entry for entry in entries}
         actual_by_path = {entry["path"]: entry for entry in observed}
@@ -673,10 +738,11 @@ def validate_index(release_root: Path, raw: bytes) -> tuple[str, int]:
             deny("release_index_inventory")
         mismatch = next(path for path in expected_by_path if expected_by_path[path] != actual_by_path[path])
         deny(f"release_index_mismatch:{mismatch}")
-    return sha256_bytes(raw), len(entries)
+    return sha256_bytes(raw), len(entries), overlay
 
 
-def validate_manifest(release_root: Path, expected_target: str, expected_release: str) -> dict[str, Any]:
+def validate_manifest(release_root: Path, expected_target: str, expected_release: str, *,
+                      allow_a959_private_data_overlay: bool = False) -> dict[str, Any]:
     manifest_raw, _ = stable_bytes(release_root / "manifest.json")
     index_raw, _ = stable_bytes(release_root / "index.sha256")
     manifest = json_object(manifest_raw, "manifest.json")
@@ -700,7 +766,10 @@ def validate_manifest(release_root: Path, expected_target: str, expected_release
     reproducibility = manifest.get("reproducibility")
     if reproducibility != {"deterministic": True, "nonReproducibleFields": []}:
         deny("release_manifest_reproducibility")
-    index_sha, entry_count = validate_index(release_root, index_raw)
+    index_sha, entry_count, overlay = validate_index(
+        release_root, index_raw,
+        allow_a959_private_data_overlay=allow_a959_private_data_overlay,
+    )
     if manifest.get("indexSha256") != index_sha:
         deny("release_manifest_index")
     runtimes = manifest.get("runtimes")
@@ -720,9 +789,12 @@ def validate_manifest(release_root: Path, expected_target: str, expected_release
     build_id = read_build_id(release_root / "frontend-runtime/.next/BUILD_ID")
     if not build_id or frontend.get("buildId") != build_id:
         deny("release_frontend_build_id")
-    return {"manifestSha256": sha256_bytes(manifest_raw), "indexSha256": index_sha,
-            "indexEntries": entry_count, "buildId": build_id,
-            "apiEntrySha256": api["entrySha256"]}
+    result = {"manifestSha256": sha256_bytes(manifest_raw), "indexSha256": index_sha,
+              "indexEntries": entry_count, "buildId": build_id,
+              "apiEntrySha256": api["entrySha256"]}
+    if overlay is not None:
+        result["privateDataOverlay"] = overlay
+    return result
 
 
 def tar_filter(epoch: int):
@@ -822,7 +894,8 @@ def safe_extract(package: Path, destination: Path, expected_release: str) -> Pat
 
 
 def verify_root(root: Path, target: str, release_id: str,
-                deployed_marker_sha256: str | None = None) -> dict[str, Any]:
+                deployed_marker_sha256: str | None = None, *,
+                allow_a959_private_data_overlay: bool = False) -> dict[str, Any]:
     if not root.is_absolute() or not root.is_dir() or root.is_symlink():
         deny("release_root")
     if root.name != release_id:
@@ -842,7 +915,10 @@ def verify_root(root: Path, target: str, release_id: str,
         marker_sha256 = sha256_bytes(marker_raw)
         if marker_sha256 != deployed_marker_sha256:
             deny("deployed_marker_mismatch")
-    result = validate_manifest(root, target, release_id)
+    result = validate_manifest(
+        root, target, release_id,
+        allow_a959_private_data_overlay=allow_a959_private_data_overlay,
+    )
     if marker_sha256 is not None:
         result["operationalMarkerSha256"] = marker_sha256
     return result
@@ -1011,7 +1087,7 @@ def build_in_generation_window(args: argparse.Namespace,
         checkpoint("after_runtime_copy", ("packageTemporaryBytes", "independentVerificationBytes"))
         ensure_clean_repo(repo, args.target)
         normalize_tree(release_root, args.source_date_epoch)
-        entries = scan_runtime(release_root)
+        entries, _ = scan_runtime(release_root)
         index_raw = canonical_json({"schemaVersion": 1, "scope": list(RUNTIMES), "entries": entries})
         (release_root / "index.sha256").write_bytes(index_raw)
         entry_raw, _ = stable_bytes(release_root / "api-runtime/dist/index.js")
@@ -1096,10 +1172,17 @@ def verify(args: argparse.Namespace) -> None:
         deny("verify_source")
     if args.package and args.deployed_marker_sha256 is not None:
         deny("deployed_marker_package")
+    if args.legacy_a959_private_data_overlay:
+        if args.package:
+            deny("legacy_a959_private_data_overlay_package")
+        if (args.release_id != A959_LEGACY_RELEASE_ID or args.target != A959_LEGACY_TARGET or
+                args.deployed_marker_sha256 is None):
+            deny("legacy_a959_private_data_overlay_binding")
     if args.release_root:
         result = verify_root(
             args.release_root.resolve(strict=True), args.target, args.release_id,
             args.deployed_marker_sha256,
+            allow_a959_private_data_overlay=args.legacy_a959_private_data_overlay,
         )
     else:
         with tempfile.TemporaryDirectory(prefix="converta-release-verify-") as temporary:
@@ -1133,6 +1216,7 @@ def parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--release-id", required=True)
     verify_parser.add_argument("--components", required=True)
     verify_parser.add_argument("--deployed-marker-sha256")
+    verify_parser.add_argument("--legacy-a959-private-data-overlay", action="store_true")
     verify_parser.set_defaults(handler=verify)
     return root
 

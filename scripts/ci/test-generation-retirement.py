@@ -337,7 +337,26 @@ class LegacyA959V1PreserveFixture(LegacyBootstrapFixture):
         installed_frontend = self.installed / "frontend-runtime"; installed_frontend.mkdir()
         (installed_api / "index.js").write_text("api\n")
         (installed_frontend / "server.js").write_text("frontend\n")
+        self.private_data = installed_api / ".data"; self.private_data.mkdir(mode=0o755)
+        self.private_data.chmod(0o755)
+        private_json(self.private_data / "state.json", {"fixture": "private-state"})
         self.marker = self.installed / "DEPLOYED"; self.marker.write_text("deployed\n"); self.marker.chmod(0o600)
+        private_info = self.private_data.lstat()
+        verification = {"result": "RELEASE VERIFIED", "releaseId": self.release_id,
+                        "targetCommit": self.target, "manifestSha256": sha(self.manifest),
+                        "indexSha256": sha(self.index), "apiEntrySha256": "a" * 64,
+                        "buildId": "fixture-build", "indexEntries": 4}
+        overlay = {"path": "api-runtime/.data", "classification": "PRIVATE_DATA_NEVER_RETIRE",
+                   "state": "ACTIVE_DEPENDENCY",
+                   "rootIdentity": {"device": private_info.st_dev, "inode": private_info.st_ino},
+                   "ownerUid": private_info.st_uid, "groupGid": private_info.st_gid,
+                   "mode": stat.S_IMODE(private_info.st_mode), "observedEntries": 2}
+        self.verifier.write_text(
+            "#!/usr/bin/env python3\nimport json,sys\nvalue=" + repr(verification) +
+            "\nif '--legacy-a959-private-data-overlay' in sys.argv: value['privateDataOverlay']=" +
+            repr(overlay) + "\nprint(json.dumps(value))\n"
+        )
+        self.verifier.chmod(0o600)
         self.v1_review = self.output / "generation-review.private.json"
         private_json(self.v1_review, {"schemaVersion": 1, "generationId": self.release_id,
                      "lifecycleSha256": sha(self.lifecycle), "reviewer": "legacy-owner",
@@ -409,6 +428,9 @@ class LegacyA959V1PreserveFixture(LegacyBootstrapFixture):
             "releaseId": self.release_id, "targetCommit": self.target,
             "outputPath": str(self.output), "worktreePath": str(self.worktree),
             "installedReleasePath": str(self.installed),
+            "privateDataOverlay": {"path": str(self.private_data),
+                                   "classification": "PRIVATE_DATA_NEVER_RETIRE",
+                                   "state": "ACTIVE_DEPENDENCY"},
             "lifecycle": {"path": str(self.lifecycle), "sha256": sha(self.lifecycle)},
             "review": {"path": str(self.v1_review), "sha256": sha(self.v1_review)},
             "package": {"path": str(self.package), "sha256": sha(self.package)},
@@ -535,6 +557,14 @@ class GenerationRetirementTest(unittest.TestCase):
                              if item["path"] == str(fixture.installed))
             self.assertEqual((installed["class"], installed["state"]),
                              ("RELEASE_RUNTIME", "ACTIVE_DEPENDENCY"))
+            self.assertRegex(installed["structuralSha256"], r"^[0-9a-f]{64}$")
+            self.assertGreater(installed["inodes"], 1)
+            private_data = next(item for item in contract["artifacts"]
+                                if item["path"] == str(fixture.private_data))
+            self.assertEqual((private_data["class"], private_data["state"],
+                              private_data["retirableOn"], private_data["structuralSha256"]),
+                             ("PRIVATE_DATA_NEVER_RETIRE", "ACTIVE_DEPENDENCY",
+                              "NEVER_AUTOMATIC", None))
             derived = [item for item in contract["artifacts"] if item["class"] in MODULE.DERIVED_CLASSES]
             self.assertEqual({item["path"] for item in derived},
                              {str(fixture.worktree), str(fixture.api), str(fixture.frontend)})
@@ -559,6 +589,100 @@ class GenerationRetirementTest(unittest.TestCase):
             accepted = RELEASE_MODULE.require_generation_reviews(fixture.outputs)
             self.assertEqual(accepted[0]["generationId"], fixture.release_id)
             self.assertEqual(accepted[0]["state"], "SANITIZED")
+        finally:
+            fixture.close()
+
+    def test_a959_private_data_overlay_cannot_be_reclassified_for_retirement(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.bootstrap_a959()
+            contract = json.loads(fixture.contract.read_text())
+            private_data = next(item for item in contract["artifacts"]
+                                if item["path"] == str(fixture.private_data))
+            private_data.update({"class": "DERIVED_OUTPUT_RUNTIME", "state": "RETIREMENT_READY",
+                                 "retirableOn": "LEGACY_V1_PRESERVE_CONTRACT_MATERIALIZED"})
+            with patch.object(MODULE, "LEGACY_A959_V1_PRESERVE_BINDING",
+                              fixture.descriptor_value):
+                with self.assertRaisesRegex(MODULE.Denied,
+                                            "artifact_contract_a959_private_data_overlay"):
+                    MODULE.validate_contract(contract)
+        finally:
+            fixture.close()
+
+    def test_a959_bootstrap_never_uses_unprojected_installed_release_metrics(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            original = MODULE.structural_metrics
+
+            def guarded_metrics(path):
+                if Path(path) == fixture.installed:
+                    raise AssertionError("unprojected installed release traversal")
+                return original(path)
+
+            with patch.object(MODULE, "structural_metrics", side_effect=guarded_metrics):
+                fixture.bootstrap_a959()
+            contract = json.loads(fixture.contract.read_text())
+            installed = next(item for item in contract["artifacts"]
+                             if item["path"] == str(fixture.installed))
+            self.assertRegex(installed["structuralSha256"], r"^[0-9a-f]{64}$")
+        finally:
+            fixture.close()
+
+    def test_a959_prepare_denies_immutable_file_drift_after_bootstrap(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.bootstrap_a959()
+            (fixture.installed / "api-runtime/index.js").write_text("changed immutable api\n")
+            retirement = fixture.evidence / "immutable-drift"; retirement.mkdir(mode=0o700)
+            with self.assertRaisesRegex(MODULE.Denied, "artifact_drift:"):
+                fixture.prepare_a959(retirement / "intent.private.json",
+                                     retirement / "commands.private.txt", sha(fixture.v1_review))
+        finally:
+            fixture.close()
+
+    def test_a959_prepare_denies_immutable_addition_after_bootstrap(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.bootstrap_a959()
+            (fixture.installed / "api-runtime/unindexed.js").write_text("new immutable entry\n")
+            retirement = fixture.evidence / "immutable-addition"; retirement.mkdir(mode=0o700)
+            with self.assertRaisesRegex(MODULE.Denied, "artifact_drift:"):
+                fixture.prepare_a959(retirement / "intent.private.json",
+                                     retirement / "commands.private.txt", sha(fixture.v1_review))
+        finally:
+            fixture.close()
+
+    def test_a959_prepare_allows_private_data_content_change_with_zero_commands(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            original_review_sha = sha(fixture.v1_review)
+            fixture.bootstrap_a959()
+            private_json(fixture.private_data / "state.json", {"fixture": "updated-private-state"})
+            retirement = fixture.evidence / "private-data-change"; retirement.mkdir(mode=0o700)
+            prepared = fixture.prepare_a959(retirement / "intent.private.json",
+                                             retirement / "commands.private.txt",
+                                             original_review_sha)
+            self.assertIn('"commandCount":0', prepared)
+            self.assertEqual((retirement / "commands.private.txt").read_bytes(), b"")
+        finally:
+            fixture.close()
+
+    def test_a959_installed_verifier_preserves_nominal_release_denial(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.verifier.write_text(
+                "#!/usr/bin/env python3\nimport sys\n"
+                "print('RELEASE_DENY:legacy_a959_private_data_overlay_symlink', file=sys.stderr)\n"
+                "raise SystemExit(2)\n"
+            )
+            fixture.verifier.chmod(0o600)
+            fixture.descriptor_value["canonicalVerifierSha256"] = sha(fixture.verifier)
+            with patch.object(MODULE, "canonical_release_verifier", return_value=fixture.verifier):
+                with self.assertRaisesRegex(
+                        MODULE.Denied,
+                        "legacy_installed_release_verification:RELEASE_DENY:"
+                        "legacy_a959_private_data_overlay_symlink"):
+                    MODULE._run_legacy_installed_verifier(fixture.descriptor_value)
         finally:
             fixture.close()
 
