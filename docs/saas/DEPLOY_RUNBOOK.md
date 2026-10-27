@@ -248,7 +248,10 @@ genérica.
 
 A matriz de impacto aprovada é vinculante para a janela. O pacote canônico pode conter
 API e frontend completos, mas isso não autoriza selecionar ou reiniciar componente sem
-impacto. Quando o impacto comprovado for somente frontend:
+impacto. A política fechada `config/deploy-artifact-roots.json` e os descriptors
+`config/legacy-generation-*.json` são control plane de build/retenção e recebem
+`no_runtime`; nenhum outro caminho em `config/` herda essa exceção e permanece
+fail-closed como impacto desconhecido. Quando o impacto comprovado for somente frontend:
 
 1. preservar o symlink e o processo da API, sem restart;
 2. capturar antes e depois PID, start ticks, restart count, CWD/script físicos,
