@@ -97,6 +97,25 @@ Portanto, `123ba` e `a959` não compartilham bootstrap: a primeira é
 e exige prova adicional da release ativa. Nenhuma geração futura pode usar essas
 exceções.
 
+As duas dívidas v1 remanescentes do mesmo lote `10/10` também têm descriptors
+fechados e não reutilizam os bindings da `a959`. O subcomando
+`bootstrap-legacy-batch-v1-preserve` aceita somente `d436` com ordinais `2/6/7`
+e release `ROLLBACK_DEPENDENCY`, ou `f160` com ordinais `3/8/9` e release
+`ACTIVE_DEPENDENCY`. Em ambos os casos, receipt e journal completos são
+autenticados pelos hashes canônicos, os três derivados precisam continuar
+ausentes e o bootstrap não enumera outras gerações. Cada `prepare` gera zero
+comandos e migra sua review v1 para v2 `SANITIZED`; o gate global roda uma única
+vez, somente depois das duas migrações.
+
+Exclusivamente na release instalada `f160`, o caminho literal
+`frontend-runtime/.next/cache` é `EPHEMERAL_RUNTIME_CACHE/ACTIVE_DEPENDENCY`.
+Ele é proibido no pacote e no índice, excluído somente da projeção estrutural da
+release instalada e autenticado como diretório físico confinado, sem symlink,
+escape ou escrita por grupo/outros. Seu conteúdo pode mudar sem mascarar drift
+nas entradas imutáveis. O cache nunca recebe comando isolado neste fluxo: só é
+removível com a release-pai quando ela deixar de ser ativa e de integrar a cadeia
+de retorno.
+
 A publicação do bootstrap é retomável sem sobrescrita: contrato e review são
 calculados deterministicamente e cada arquivo existente precisa ser regular,
 privado e byte-exatamente igual. O recibo é publicado por último. As duas leituras

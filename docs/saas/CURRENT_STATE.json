@@ -550,6 +550,31 @@
       },
       "scope": "A959_ONLY_NOT_GENERALIZABLE"
     },
+    "legacyD436F160Migration": {
+      "sourceState": "LEGACY_V1_PRESERVE_BATCH_MEMBER_NO_CONTRACT",
+      "bootstrapCommand": "bootstrap-legacy-batch-v1-preserve",
+      "priorRetentionBatch": "retention-recent-generations-qualification-20261026T213341Z-v3",
+      "d436": {
+        "descriptor": "config/legacy-generation-d436239e-v1-preserve.json",
+        "ordinals": [2, 6, 7],
+        "installedReleaseState": "ROLLBACK_DEPENDENCY"
+      },
+      "f160": {
+        "descriptor": "config/legacy-generation-f1602787-v1-preserve.json",
+        "ordinals": [3, 8, 9],
+        "installedReleaseState": "ACTIVE_DEPENDENCY",
+        "runtimeCache": {
+          "path": "frontend-runtime/.next/cache",
+          "classification": "EPHEMERAL_RUNTIME_CACHE",
+          "state": "ACTIVE_DEPENDENCY",
+          "packagePolicy": "STRICTLY_FORBIDDEN",
+          "retirementPolicy": "WITH_PARENT_RELEASE_ONLY"
+        }
+      },
+      "canonicalPrepare": "TWO_ZERO_COMMAND_PREPARES_REVIEWS_V2_SANITIZED",
+      "globalGate": "ONCE_AFTER_BOTH_PREPARES",
+      "executeRequired": false
+    },
     "lastCompletedBatch": {
       "id": "retention-recent-generations-qualification-20261026T213341Z-v3",
       "state": "COMPLETED",

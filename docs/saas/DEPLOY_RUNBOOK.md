@@ -104,13 +104,13 @@ byte-exatamente preservada. Depois, o `prepare` canônico deve receber
 bootstrap da `123ba` não serve para a `a959`, nem o da `a959` serve para qualquer
 terceira geração.
 
-Exclusivamente na verificação instalada da `a959`, o bootstrap habilita o contrato
-legado para `api-runtime/.data`. O verificador mantém o índice imutável estrito e
+Para `d436/f160`, use os descriptors fechados e `bootstrap-legacy-batch-v1-preserve`, conforme `DEPLOY_ARTIFACT_LIFECYCLE.md`: ordinais `2/6/7` (rollback) e `3/8/9` (ativa), dois prepares sem comandos e um único gate final, sem `execute`.
+Em `f160`, somente o cache literal documentado é overlay efêmero; pacote/índice seguem estritos e sua retirada isolada é proibida.
+Exclusivamente na verificação instalada da `a959`, o bootstrap habilita o contrato legado para `api-runtime/.data`. O verificador mantém o índice imutável estrito e
 autentica confinamento, tipo físico, owner/group da release, modo, symlinks e identidade
 da raiz privada, devolvida ao contrato como
 `PRIVATE_DATA_NEVER_RETIRE/ACTIVE_DEPENDENCY`. O modo é negado para pacotes, outro
-target/release ou overlay diferente. Não mover, indexar ou retirar `.data`; novas
-releases devem apontar dados mutáveis para persistência externa à release. O `prepare`
+target/release ou overlay diferente. Não mover, indexar ou retirar `.data`; novas releases devem apontar dados mutáveis para persistência externa à release. O `prepare`
 reautentica a projeção sem `.data`: drift fora dela é `DENY`; mudança interna é permitida.
 
 No fluxo API + frontend, o `preflight` de `scripts/converta-deploy.py` exige os

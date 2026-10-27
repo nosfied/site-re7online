@@ -134,13 +134,23 @@ reapareceram. O bootstrap publica somente contrato e recibo; o `prepare
 `SANITIZED` e permite o gate global sem `execute`. A release ativa permanece fora
 de toda intenção destrutiva.
 
+A regularização operacional da `a959` foi concluída em review v2 `SANITIZED` e
+não deve ser reaberta. As dívidas seguintes são `d436` e `f160`, ambas integrantes
+do lote autenticado `10/10`: `d436` preserva a release como retorno e vincula os
+derivados aos ordinais `2/6/7`; `f160` preserva a release frontend ativa e vincula
+os derivados aos ordinais `3/8/9`. O control plane prepara os dois contratos sem
+inventário global, produz dois intents sem comandos e só então executa um gate
+global.
+
 A regularização revelou estado mutável legado em `api-runtime/.data` dentro da
 release instalada `a959`. O cache de frontend não referenciado foi retirado na
 janela autorizada, mas o bootstrap parou em `RELEASE_DENY:release_index_inventory`
 antes de publicar contrato. `.data` foi preservado integralmente. O contrato
 versionado passa a reconhecê-lo somente para a identidade fechada da `a959` como
 `PRIVATE_DATA_NEVER_RETIRE/ACTIVE_DEPENDENCY`, sem relaxar pacote, índice ou outras
-releases. Uma nova preparação operacional depende do merge e de autorização própria.
+releases. Na `f160`, `frontend-runtime/.next/cache` tem natureza diferente:
+`EPHEMERAL_RUNTIME_CACHE/ACTIVE_DEPENDENCY`, proibido no pacote/índice e removível
+somente junto com a release-pai quando ela deixar as funções ativa e de retorno.
 
 A fotografia somente leitura de capacidade está em
 [VPS_CAPACITY_AUDIT_2026-10-24.md](VPS_CAPACITY_AUDIT_2026-10-24.md). Ela classifica
