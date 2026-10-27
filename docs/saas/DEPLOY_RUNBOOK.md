@@ -92,7 +92,8 @@ Há uma segunda exceção, também fechada e não generalizável:
 pacote, manifest, index, marker e a release instalada ativa. Os três derivados da
 `a959` já foram retirados pelos ordinais `1`, `4` e `5` do lote autenticado
 `10/10`; por isso, o bootstrap exige também o receipt e o journal exatos desse
-lote, valida literalmente `ATTEMPT` → `RESULT(exitCode=0)` → `VERIFIED(absent)`
+lote, valida literalmente `ATTEMPT(PENDING)` →
+`RESULT(COMMAND_EXITED_ZERO, exitCode=0)` → `VERIFIED(result=PASS)`
 para todos os dez ordinais e confirma que os três caminhos não reapareceram. Só
 então publica o contrato com esses derivados em `SANITIZED` e o recibo privado,
 sem inventário global ou recriação de caminho. A review v1 permanece

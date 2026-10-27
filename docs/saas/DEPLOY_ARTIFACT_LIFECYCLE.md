@@ -68,6 +68,11 @@ reobserva globalmente. Ele autentica o receipt e o journal preservados, exige a
 sequência literal de três eventos e o ordinal exato de cada um dos dez comandos,
 e aceita `SANITIZED` para os três derivados da `a959` somente com essa cadeia e
 com ausência atual. Então materializa somente o contrato e o recibo de bootstrap.
+A forma sanitizada autenticada do journal é fechada: `ATTEMPT` contém somente
+`event/kind/ordinal/path/result`; `RESULT` contém esses cinco campos mais
+`exitCode/inspectionPath/inspectionSha256/worktreeRegistration`; `VERIFIED`
+retorna aos cinco campos e exige `result=PASS`. Os três eventos repetem o `kind`,
+ordinal e caminho literais do comando; não existe campo `absent` nesse contrato.
 A review v1 não é substituída, renomeada ou regravada nessa fase. A migração
 ocorre depois pelo `prepare --legacy-review-sha256`, que produz intenção sem
 comandos e review v2 `SANITIZED`; não há etapa `execute`. A release instalada

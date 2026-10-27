@@ -24,6 +24,16 @@ ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDIN
                    "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE"}
 ROOT_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
 POLICY_ENTRY_KEYS = {"path", "ownerUid", "groupGid", "allowedModes"}
+A959_RETENTION_EVENT_SCHEMAS = {
+    "ATTEMPT": frozenset({"event", "kind", "ordinal", "path", "result"}),
+    "RESULT": frozenset({"event", "exitCode", "inspectionPath", "inspectionSha256", "kind",
+                         "ordinal", "path", "result", "worktreeRegistration"}),
+    "VERIFIED": frozenset({"event", "kind", "ordinal", "path", "result"}),
+}
+A959_RETENTION_COMMAND_KINDS = (
+    "git_worktree_remove", "git_worktree_remove", "git_worktree_remove",
+    "rm", "rm", "rm", "rm", "rm", "rm", "rm",
+)
 LEGACY_123BA_BINDING = {
     "schemaVersion": 1,
     "sourceState": "LEGACY_PRE_CONTRACT",
@@ -1223,27 +1233,29 @@ def _authenticate_a959_prior_retention(args: argparse.Namespace, descriptor: dic
     events = _read_journal(journal_raw)
     if len(events) != 30:
         deny("legacy_a959_retention_event_count")
-    grouped: dict[int, list[dict[str, Any]]] = {}
-    for event in events:
-        ordinal = event.get("ordinal")
-        if not isinstance(ordinal, int) or ordinal not in range(1, 11):
-            deny("legacy_a959_retention_event_ordinal")
-        grouped.setdefault(ordinal, []).append(event)
-    if set(grouped) != set(range(1, 11)):
-        deny("legacy_a959_retention_event_ordinal")
     removed_paths = expected["removedPaths"]
     for ordinal in range(1, 11):
-        if len(grouped[ordinal]) != 3:
-            deny(f"legacy_a959_retention_event_sequence:{ordinal}")
-        attempt, result, verified = grouped[ordinal]
-        if (attempt.get("event") != "ATTEMPT" or attempt.get("ordinal") != ordinal or
-                attempt.get("path") != removed_paths[ordinal - 1]):
+        attempt, result, verified = events[(ordinal - 1) * 3:ordinal * 3]
+        expected_path = removed_paths[ordinal - 1]
+        expected_kind = A959_RETENTION_COMMAND_KINDS[ordinal - 1]
+        common = {"ordinal": ordinal, "path": expected_path, "kind": expected_kind}
+        if (set(attempt) != A959_RETENTION_EVENT_SCHEMAS["ATTEMPT"] or
+                attempt.get("event") != "ATTEMPT" or attempt.get("result") != "PENDING" or
+                any(attempt.get(key) != value for key, value in common.items())):
             deny(f"legacy_a959_retention_attempt:{ordinal}")
-        if (result.get("event") != "RESULT" or result.get("ordinal") != ordinal or
-                result.get("exitCode") != 0):
+        expected_registration = "ABSENT" if expected_kind == "git_worktree_remove" else "NOT_APPLICABLE"
+        if (set(result) != A959_RETENTION_EVENT_SCHEMAS["RESULT"] or
+                result.get("event") != "RESULT" or result.get("result") != "COMMAND_EXITED_ZERO" or
+                any(result.get(key) != value for key, value in common.items()) or
+                type(result.get("exitCode")) is not int or result["exitCode"] != 0 or
+                result.get("worktreeRegistration") != expected_registration or
+                not isinstance(result.get("inspectionPath"), str) or not result["inspectionPath"] or
+                not isinstance(result.get("inspectionSha256"), str) or
+                SHA256.fullmatch(result["inspectionSha256"]) is None):
             deny(f"legacy_a959_retention_result:{ordinal}")
-        if (verified.get("event") != "VERIFIED" or verified.get("ordinal") != ordinal or
-                verified.get("absent") is not True):
+        if (set(verified) != A959_RETENTION_EVENT_SCHEMAS["VERIFIED"] or
+                verified.get("event") != "VERIFIED" or verified.get("result") != "PASS" or
+                any(verified.get(key) != value for key, value in common.items())):
             deny(f"legacy_a959_retention_verified:{ordinal}")
     proven = {}
     for raw_ordinal, path in expected["a959Ordinals"].items():

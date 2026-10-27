@@ -375,9 +375,18 @@ class LegacyA959V1PreserveFixture(LegacyBootstrapFixture):
         ]
         events = []
         for ordinal, path in enumerate(removed_paths, 1):
-            events.extend(({"event": "ATTEMPT", "ordinal": ordinal, "path": path},
-                           {"event": "RESULT", "ordinal": ordinal, "exitCode": 0},
-                           {"event": "VERIFIED", "ordinal": ordinal, "absent": True}))
+            kind = "git_worktree_remove" if ordinal <= 3 else "rm"
+            inspection = self.evidence / f"command-{ordinal}-inspection.private.json"
+            events.extend((
+                {"event": "ATTEMPT", "kind": kind, "ordinal": ordinal, "path": path,
+                 "result": "PENDING"},
+                {"event": "RESULT", "exitCode": 0, "inspectionPath": str(inspection),
+                 "inspectionSha256": f"{ordinal:064x}", "kind": kind, "ordinal": ordinal,
+                 "path": path, "result": "COMMAND_EXITED_ZERO",
+                 "worktreeRegistration": "ABSENT" if ordinal <= 3 else "NOT_APPLICABLE"},
+                {"event": "VERIFIED", "kind": kind, "ordinal": ordinal, "path": path,
+                 "result": "PASS"},
+            ))
         self.prior_journal.write_bytes(b"".join(MODULE.canonical(event) for event in events))
         self.prior_journal.chmod(0o600)
         prior = {"state": "COMPLETED", "failurePredicate": None, "attemptedCommands": 10,
@@ -437,6 +446,14 @@ class LegacyA959V1PreserveFixture(LegacyBootstrapFixture):
         self.descriptor_value["priorRetention"]["journalSha256"] = sha(self.prior_journal)
         self.descriptor_value["priorRetention"]["receiptSha256"] = sha(self.prior_receipt)
         private_json(self.descriptor, self.descriptor_value)
+
+    def mutate_prior_event(self, event_name: str, ordinal: int, mutate) -> None:
+        events = MODULE._read_journal(self.prior_journal.read_bytes())
+        event = next(item for item in events
+                     if item.get("event") == event_name and item.get("ordinal") == ordinal)
+        mutate(event)
+        self.prior_journal.write_bytes(b"".join(MODULE.canonical(item) for item in events))
+        self.rebind_prior_retention()
 
     def prepare_a959(self, intent: Path, commands: Path, review_sha256: str) -> str:
         args = SimpleNamespace(
@@ -586,13 +603,69 @@ class GenerationRetirementTest(unittest.TestCase):
 
         fixture = LegacyA959V1PreserveFixture()
         try:
-            events = MODULE._read_journal(fixture.prior_journal.read_bytes())
-            result = next(item for item in events
-                          if item.get("event") == "RESULT" and item.get("ordinal") == 4)
-            result["exitCode"] = 1
-            fixture.prior_journal.write_bytes(b"".join(MODULE.canonical(item) for item in events))
-            fixture.rebind_prior_retention()
+            fixture.mutate_prior_event("RESULT", 4, lambda event: event.update(exitCode=1))
             with self.assertRaisesRegex(MODULE.Denied, "legacy_a959_retention_result:4"):
+                fixture.bootstrap_a959()
+        finally:
+            fixture.close()
+
+    def test_a959_literal_real_journal_schema_passes(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            events = MODULE._read_journal(fixture.prior_journal.read_bytes())
+            self.assertEqual(len(events), 30)
+            self.assertEqual({event["event"] for event in events},
+                             {"ATTEMPT", "RESULT", "VERIFIED"})
+            self.assertNotIn("absent", events[2])
+            fixture.bootstrap_a959()
+        finally:
+            fixture.close()
+
+    def test_a959_verified_requires_pass_and_matching_kind(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.mutate_prior_event("VERIFIED", 4,
+                                       lambda event: event.update(result="FAILED"))
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_a959_retention_verified:4"):
+                fixture.bootstrap_a959()
+        finally:
+            fixture.close()
+
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.mutate_prior_event("VERIFIED", 4,
+                                       lambda event: event.update(kind="git_worktree_remove"))
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_a959_retention_verified:4"):
+                fixture.bootstrap_a959()
+        finally:
+            fixture.close()
+
+    def test_a959_verified_denies_ordinal_or_path_drift(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.mutate_prior_event("VERIFIED", 4,
+                                       lambda event: event.update(path="/not/the/command/path"))
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_a959_retention_verified:4"):
+                fixture.bootstrap_a959()
+        finally:
+            fixture.close()
+
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.mutate_prior_event("VERIFIED", 4, lambda event: event.update(ordinal=5))
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_a959_retention_verified:4"):
+                fixture.bootstrap_a959()
+        finally:
+            fixture.close()
+
+    def test_a959_old_absent_fixture_without_pass_is_denied(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            def old_synthetic(event):
+                event.pop("result")
+                event["absent"] = True
+            fixture.mutate_prior_event("VERIFIED", 4, old_synthetic)
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_a959_retention_verified:4"):
                 fixture.bootstrap_a959()
         finally:
             fixture.close()
