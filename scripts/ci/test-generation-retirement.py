@@ -1581,6 +1581,43 @@ class GenerationRetirementTest(unittest.TestCase):
         finally:
             fixture.close()
 
+        # The producer currently places its already removed independent
+        # verification extraction below build-output. This historical,
+        # non-destructive evidence is accepted without creating staging.
+        fixture = Fixture()
+        try:
+            contract = json.loads(fixture.contract.read_text())
+            staging = next(item for item in contract["artifacts"]
+                           if item["class"] == "DERIVED_STAGING")
+            staging["path"] = str(fixture.output_root / ".release.verify-removed")
+            staging["state"] = "SANITIZED"
+            staging["removedAtProducerCompletion"] = True
+            private_json(fixture.contract, contract)
+            shutil.rmtree(fixture.staging_root)
+            passed = fixture.prepare()
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+            self.assertEqual("", fixture.commands.read_text())
+        finally:
+            fixture.close()
+
+        # Even terminal evidence remains confined to the authenticated staging
+        # or output roots; an arbitrary absent path is not trusted.
+        fixture = Fixture()
+        try:
+            contract = json.loads(fixture.contract.read_text())
+            staging = next(item for item in contract["artifacts"]
+                           if item["class"] == "DERIVED_STAGING")
+            staging["path"] = str(fixture.root / "outside-roots.verify-removed")
+            staging["state"] = "SANITIZED"
+            staging["removedAtProducerCompletion"] = True
+            private_json(fixture.contract, contract)
+            denied = fixture.prepare()
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("artifact_outside_canonical_root:DERIVED_STAGING",
+                          denied.stderr)
+        finally:
+            fixture.close()
+
         # A pending staging artifact is destructive scope. Its absent root is
         # denied before lock acquisition and before commands are published.
         fixture = Fixture()
