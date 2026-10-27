@@ -86,6 +86,30 @@ LEGACY_A959_V1_PRESERVE_BINDING = {
         "path": "/opt/re7online/releases/immutable-a959129e-vps-20261026T023100Z/DEPLOYED",
         "sha256": "9da2428b15f8eb8b307603556fffb0ef75536829109e4be282ce03caa19cdb80",
     },
+    "priorRetention": {
+        "batchId": "retention-recent-generations-qualification-20261026T213341Z-v3",
+        "receiptSha256": "19ba46c4948e3ff1821b8b44e51fed1edf635b9b7ddd3421064dab7ee2250c74",
+        "journalSha256": "e8f593acb2801e88dbbfffb3a679b4775916491c3e2281e24a45ebf3f0e6c985",
+        "sampleASha256": "11f70b7c7b6d27f8a55bae36aa17b081ece70e8511f414da14b1f56d83661612",
+        "sampleBSha256": "94fda2c48e65e43de46d6cedc121d4b32f46339301306f452218bb8a013ea6a8",
+        "removedPaths": [
+            "/opt/re7online/build-worktrees/immutable-a959129e-vps-20261026T023100Z-source",
+            "/opt/re7online/build-worktrees/immutable-d436239e-vps-20261026T131821Z-source",
+            "/opt/re7online/build-worktrees/immutable-f1602787-vps-20261026T174702Z-source",
+            "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/api-runtime",
+            "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/frontend-runtime",
+            "/opt/re7online/build-output/immutable-d436239e-vps-20261026T131821Z-producer/immutable-d436239e-vps-20261026T131821Z/api-runtime",
+            "/opt/re7online/build-output/immutable-d436239e-vps-20261026T131821Z-producer/immutable-d436239e-vps-20261026T131821Z/frontend-runtime",
+            "/opt/re7online/build-output/immutable-f1602787-vps-20261026T174702Z-producer/immutable-f1602787-vps-20261026T174702Z/api-runtime",
+            "/opt/re7online/build-output/immutable-f1602787-vps-20261026T174702Z-producer/immutable-f1602787-vps-20261026T174702Z/frontend-runtime",
+            "/opt/re7online/releases/.immutable-a959129e-vps-20261026T023100Z.extracting.436891",
+        ],
+        "a959Ordinals": {
+            "1": "/opt/re7online/build-worktrees/immutable-a959129e-vps-20261026T023100Z-source",
+            "4": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/api-runtime",
+            "5": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/frontend-runtime",
+        },
+    },
     "canonicalVerifierSha256": "94cba588e811be47ef3908054070dec134137bf409dccb278bf5ae406cc56f1a",
     "contractOutput": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-artifacts.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-a959129e-vps-20261026T023100Z-legacy-v1-bootstrap/bootstrap-receipt.private.json",
@@ -278,12 +302,18 @@ def validate_contract(value: dict[str, Any]) -> None:
     if not isinstance(value.get("artifacts"), list) or not value["artifacts"]:
         deny("artifact_contract_artifacts")
     paths = set()
+    authenticated_retention_paths: set[str] = set()
+    a959_retention = LEGACY_A959_V1_PRESERVE_BINDING["priorRetention"]
+    a959_expected_by_path = {
+        path: int(ordinal) for ordinal, path in a959_retention["a959Ordinals"].items()
+    }
     for artifact in value["artifacts"]:
         required_entry = {"path", "releaseId", "targetCommit", "expectedType", "initialIdentity", "observedIdentity",
                           "sizeBytes", "allocatedBytes", "inodes", "digest", "class", "state",
                           "retirableOn", "dependencies", "structuralSha256"}
-        allowed = required_entry | {"removedAtProducerCompletion"}
-        if not isinstance(artifact, dict) or (set(artifact) != required_entry and set(artifact) != allowed):
+        optional = {"removedAtProducerCompletion", "removedByAuthenticatedRetention"}
+        if (not isinstance(artifact, dict) or not required_entry.issubset(artifact) or
+                not set(artifact).issubset(required_entry | optional)):
             deny("artifact_contract_entry")
         path = Path(str(artifact.get("path", "")))
         if (not path.is_absolute() or str(path) in paths or artifact.get("releaseId") != value["releaseId"] or
@@ -309,6 +339,24 @@ def validate_contract(value: dict[str, Any]) -> None:
         structural = artifact.get("structuralSha256")
         if structural is not None and not SHA256.fullmatch(str(structural)):
             deny("artifact_contract_structural_digest")
+        retention = artifact.get("removedByAuthenticatedRetention")
+        if retention is not None:
+            expected_retention = {"batchId", "receiptSha256", "journalSha256", "ordinal"}
+            expected_ordinal = a959_expected_by_path.get(str(path))
+            expected_class = "DERIVED_WORKTREE" if expected_ordinal == 1 else "DERIVED_OUTPUT_RUNTIME"
+            if (value["releaseId"] != LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] or
+                    value["targetCommit"] != LEGACY_A959_V1_PRESERVE_BINDING["targetCommit"] or
+                    set(retention) != expected_retention or expected_ordinal is None or
+                    retention != {"batchId": a959_retention["batchId"],
+                                  "receiptSha256": a959_retention["receiptSha256"],
+                                  "journalSha256": a959_retention["journalSha256"],
+                                  "ordinal": expected_ordinal} or
+                    artifact["class"] != expected_class or artifact.get("state") != "SANITIZED"):
+                deny("artifact_contract_authenticated_retention")
+            authenticated_retention_paths.add(str(path))
+    if (authenticated_retention_paths and
+            authenticated_retention_paths != set(a959_expected_by_path)):
+        deny("artifact_contract_authenticated_retention_scope")
 
 
 def _strict_child(path: Path, root: Path, predicate: str) -> None:
@@ -639,6 +687,7 @@ def authenticate_artifact(artifact: dict[str, Any]) -> None:
     path = Path(artifact["path"])
     if not path.exists() and not path.is_symlink():
         if (artifact.get("removedAtProducerCompletion") is True or
+                artifact.get("removedByAuthenticatedRetention") is not None or
                 artifact["class"] in {"EVIDENCE_PRESERVE", "RELEASE_RUNTIME"}):
             return
         deny(f"artifact_missing:{path}")
@@ -756,6 +805,11 @@ def classify(artifact: dict[str, Any], contract: dict[str, Any], operational: di
         if release in operational["candidateReleases"]:
             return "CANDIDATE_PENDING_ACTIVATION"
         return "RETIREMENT_READY"
+    if artifact.get("removedByAuthenticatedRetention") is not None:
+        path = Path(path)
+        if path.exists() or path.is_symlink():
+            deny(f"authenticated_retention_path_reappeared:{path}")
+        return "SANITIZED"
     if artifact.get("removedAtProducerCompletion") is True and not Path(path).exists():
         return "SANITIZED"
     if path_referenced(path, operational):
@@ -1136,6 +1190,112 @@ def _legacy_a959_active_reference(descriptor: dict[str, Any], operational: dict[
             deny("legacy_a959_derived_reference")
 
 
+def _authenticate_a959_prior_retention(args: argparse.Namespace, descriptor: dict[str, Any],
+                                        operational: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    expected = descriptor["priorRetention"]
+    if (args.retention_receipt_sha256 != expected["receiptSha256"] or
+            args.retention_journal_sha256 != expected["journalSha256"]):
+        deny("legacy_a959_retention_external_hash")
+    evidence_destination(args.retention_receipt, operational)
+    evidence_destination(args.retention_journal, operational)
+    receipt_raw, _ = stable_private(args.retention_receipt, args.retention_receipt_sha256)
+    journal_raw, _ = stable_private(args.retention_journal, args.retention_journal_sha256)
+    receipt = object_json(receipt_raw, "legacy-a959-retention-receipt")
+    required_receipt = {
+        "state": "COMPLETED", "failurePredicate": None, "attemptedCommands": 10,
+        "completedCommands": 10, "removedPaths": 10, "automaticRetry": False,
+        "pathExpansion": False, "forceUsed": False, "pruneUsed": False,
+        "commandLogSha256": expected["journalSha256"],
+    }
+    if any(receipt.get(key) != value for key, value in required_receipt.items()):
+        deny("legacy_a959_retention_receipt_contract")
+    samples = receipt.get("freshSamples")
+    if (not isinstance(samples, dict) or samples.get("aSha256") != expected["sampleASha256"] or
+            samples.get("bSha256") != expected["sampleBSha256"]):
+        deny("legacy_a959_retention_samples")
+    lock = receipt.get("lock")
+    if (not isinstance(lock, dict) or lock.get("acquired") is not True or
+            lock.get("heldThroughFinalInspection") is not True or
+            lock.get("heldThroughReceiptFsync") is not True or lock.get("unlink") is not False or
+            lock.get("foreignLockReleased") is not False):
+        deny("legacy_a959_retention_lock")
+
+    events = _read_journal(journal_raw)
+    if len(events) != 30:
+        deny("legacy_a959_retention_event_count")
+    grouped: dict[int, list[dict[str, Any]]] = {}
+    for event in events:
+        ordinal = event.get("ordinal")
+        if not isinstance(ordinal, int) or ordinal not in range(1, 11):
+            deny("legacy_a959_retention_event_ordinal")
+        grouped.setdefault(ordinal, []).append(event)
+    if set(grouped) != set(range(1, 11)):
+        deny("legacy_a959_retention_event_ordinal")
+    removed_paths = expected["removedPaths"]
+    for ordinal in range(1, 11):
+        if len(grouped[ordinal]) != 3:
+            deny(f"legacy_a959_retention_event_sequence:{ordinal}")
+        attempt, result, verified = grouped[ordinal]
+        if (attempt.get("event") != "ATTEMPT" or attempt.get("ordinal") != ordinal or
+                attempt.get("path") != removed_paths[ordinal - 1]):
+            deny(f"legacy_a959_retention_attempt:{ordinal}")
+        if (result.get("event") != "RESULT" or result.get("ordinal") != ordinal or
+                result.get("exitCode") != 0):
+            deny(f"legacy_a959_retention_result:{ordinal}")
+        if (verified.get("event") != "VERIFIED" or verified.get("ordinal") != ordinal or
+                verified.get("absent") is not True):
+            deny(f"legacy_a959_retention_verified:{ordinal}")
+    proven = {}
+    for raw_ordinal, path in expected["a959Ordinals"].items():
+        ordinal = int(raw_ordinal)
+        if removed_paths[ordinal - 1] != path:
+            deny("legacy_a959_retention_descriptor_ordinal")
+        candidate = Path(path)
+        if candidate.exists() or candidate.is_symlink():
+            deny(f"legacy_a959_retention_path_reappeared:{ordinal}")
+        proven[path] = {"batchId": expected["batchId"],
+                        "receiptSha256": expected["receiptSha256"],
+                        "journalSha256": expected["journalSha256"], "ordinal": ordinal}
+    return proven
+
+
+def _authenticated_retired_artifact(path: Path, descriptor: dict[str, Any], artifact_class: str,
+                                    evidence: dict[str, Any], digest: dict[str, str]) -> dict[str, Any]:
+    if path.exists() or path.is_symlink():
+        deny(f"legacy_a959_retention_path_reappeared:{evidence['ordinal']}")
+    return {
+        "path": str(path), "releaseId": descriptor["releaseId"],
+        "targetCommit": descriptor["targetCommit"], "expectedType": "directory",
+        "initialIdentity": None, "observedIdentity": None, "sizeBytes": 0,
+        "allocatedBytes": 0, "inodes": 0, "structuralSha256": None, "digest": digest,
+        "class": artifact_class, "state": "SANITIZED",
+        "retirableOn": "AUTHENTICATED_PRIOR_RETENTION_COMPLETED",
+        "dependencies": ["prior_retention_receipt_authenticated",
+                         "prior_retention_journal_authenticated"],
+        "removedByAuthenticatedRetention": evidence,
+    }
+
+
+def _a959_contract_is_fully_sanitized(contract: dict[str, Any],
+                                       classified: list[dict[str, Any]]) -> bool:
+    binding = LEGACY_A959_V1_PRESERVE_BINDING
+    if (contract.get("releaseId") != binding["releaseId"] or
+            contract.get("targetCommit") != binding["targetCommit"]):
+        return False
+    retention = binding["priorRetention"]
+    expected_by_path = {path: int(ordinal)
+                        for ordinal, path in retention["a959Ordinals"].items()}
+    derived = [item for item in classified if item["class"] in DERIVED_CLASSES]
+    return (set(item["path"] for item in derived) == set(expected_by_path) and
+            all(item.get("retentionState") == "SANITIZED" and
+                item.get("removedByAuthenticatedRetention") == {
+                    "batchId": retention["batchId"],
+                    "receiptSha256": retention["receiptSha256"],
+                    "journalSha256": retention["journalSha256"],
+                    "ordinal": expected_by_path[item["path"]],
+                } for item in derived))
+
+
 def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
     descriptor_raw, _ = stable_policy(args.descriptor, args.descriptor_sha256)
     policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
@@ -1156,8 +1316,11 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
     worktree = Path(descriptor["worktreePath"])
     installed = Path(descriptor["installedReleasePath"])
     _legacy_tree_root(output, outputs_root, policy, "outputs")
-    _legacy_tree_root(worktree, worktrees_root, policy, "worktrees")
     _legacy_tree_root(installed, releases_root, policy, "releases")
+    _strict_child(worktree, worktrees_root, "legacy_a959_worktree_outside_root")
+    if (_path_has_symlink(worktree.parent, worktrees_root) or worktree.exists() or
+            worktree.is_symlink()):
+        deny("legacy_a959_worktree_not_retired")
 
     lifecycle_path = Path(descriptor["lifecycle"]["path"])
     review_path = Path(descriptor["review"]["path"])
@@ -1173,6 +1336,7 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
     writer_lock = outputs_root / ".generation-build.lock"
     writer_fd = acquire_existing_lock(writer_lock)
     try:
+        retired = _authenticate_a959_prior_retention(args, descriptor, operational)
         lifecycle_raw, _ = stable_regular_hash(lifecycle_path, descriptor["lifecycle"]["sha256"],
                                                "legacy_a959_lifecycle")
         lifecycle = object_json(lifecycle_raw, "legacy-a959-lifecycle")
@@ -1199,17 +1363,11 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
         if any(package_verification.get(field) != installed_verification.get(field)
                for field in comparable):
             deny("legacy_a959_package_installed_mismatch")
-        head = subprocess.run(["/usr/bin/git", "-C", str(worktree), "rev-parse", "HEAD"],
-                              text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              timeout=30, check=False)
-        if head.returncode or head.stdout.strip() != descriptor["targetCommit"]:
-            deny("legacy_a959_worktree_head")
-
         fresh = capture_fresh_operational(operational)
         ignored = {contract_output}
         observation_a = {"output": _tree_observation(output, "a959-output", ignored),
-                         "worktree": _tree_observation(worktree, "a959-worktree"),
-                         "installed": _tree_observation(installed, "a959-installed")}
+                         "installed": _tree_observation(installed, "a959-installed"),
+                         "absentDerived": sorted(retired)}
         release_root = output / descriptor["releaseId"]
         artifacts = [
             _legacy_artifact(Path(descriptor["package"]["path"]), descriptor, "PACKAGE_PRESERVE",
@@ -1224,12 +1382,17 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
                              {"manifestSha256": descriptor["manifest"]["sha256"],
                               "indexSha256": descriptor["index"]["sha256"],
                               "operationalMarkerSha256": descriptor["deployedMarker"]["sha256"]}),
-            _legacy_artifact(worktree, descriptor, "DERIVED_WORKTREE", "RETIREMENT_READY",
-                             {"gitCommit": descriptor["targetCommit"]}),
-            _legacy_artifact(release_root / "api-runtime", descriptor, "DERIVED_OUTPUT_RUNTIME",
-                             "RETIREMENT_READY", {"indexSha256": descriptor["index"]["sha256"]}),
-            _legacy_artifact(release_root / "frontend-runtime", descriptor, "DERIVED_OUTPUT_RUNTIME",
-                             "RETIREMENT_READY", {"indexSha256": descriptor["index"]["sha256"]}),
+            _authenticated_retired_artifact(worktree, descriptor, "DERIVED_WORKTREE",
+                                            retired[str(worktree)],
+                                            {"gitCommit": descriptor["targetCommit"]}),
+            _authenticated_retired_artifact(
+                release_root / "api-runtime", descriptor, "DERIVED_OUTPUT_RUNTIME",
+                retired[str(release_root / "api-runtime")],
+                {"indexSha256": descriptor["index"]["sha256"]}),
+            _authenticated_retired_artifact(
+                release_root / "frontend-runtime", descriptor, "DERIVED_OUTPUT_RUNTIME",
+                retired[str(release_root / "frontend-runtime")],
+                {"indexSha256": descriptor["index"]["sha256"]}),
         ]
         for artifact in artifacts:
             if artifact["class"] in PRESERVE_CLASSES:
@@ -1238,13 +1401,13 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
             elif artifact["class"] == "RELEASE_RUNTIME":
                 artifact["retirableOn"] = "NEVER_WHILE_OPERATIONALLY_REFERENCED"
                 artifact["dependencies"] = ["installed_release_verified", "active_release_preserved"]
-            else:
+            elif artifact.get("removedByAuthenticatedRetention") is None:
                 artifact["retirableOn"] = "LEGACY_V1_PRESERVE_CONTRACT_MATERIALIZED"
                 artifact["dependencies"] = ["package_verified", "installed_release_verified",
                                               "active_release_excluded_from_retirement"]
         observation_b = {"output": _tree_observation(output, "a959-output", ignored),
-                         "worktree": _tree_observation(worktree, "a959-worktree"),
-                         "installed": _tree_observation(installed, "a959-installed")}
+                         "installed": _tree_observation(installed, "a959-installed"),
+                         "absentDerived": sorted(retired)}
         if observation_a != observation_b:
             deny("legacy_a959_tree_drift_between_samples")
         if capture_fresh_operational(operational) != fresh:
@@ -1269,6 +1432,8 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
                    "operationalStateSha256": args.operational_state_sha256,
                    "contractSha256": digest_bytes(contract_raw),
                    "preservedReviewSha256": descriptor["review"]["sha256"],
+                   "priorRetentionReceiptSha256": descriptor["priorRetention"]["receiptSha256"],
+                   "priorRetentionJournalSha256": descriptor["priorRetention"]["journalSha256"],
                    "packageVerification": package_verification,
                    "installedVerification": installed_verification,
                    "observations": [observation_a, observation_b], "authorizationGranted": False,
@@ -1484,7 +1649,8 @@ def prepare(args: argparse.Namespace) -> None:
                                  "class": artifact["class"], "argv": command, "literal": text,
                                  "allocatedBytes": artifact["allocatedBytes"],
                                  "eligibilityAtPrepare": state})
-        state = review_state([item["retentionState"] for item in classified])
+        state = ("SANITIZED" if _a959_contract_is_fully_sanitized(contract, classified)
+                 else review_state([item["retentionState"] for item in classified]))
         intent = {
             "schemaVersion": 3, "generationId": contract["generationId"],
             "releaseId": contract["releaseId"], "targetCommit": contract["targetCommit"],
@@ -1764,6 +1930,10 @@ def parser() -> argparse.ArgumentParser:
     a959_parser.add_argument("--root-policy-sha256", required=True)
     a959_parser.add_argument("--operational-state", type=Path, required=True)
     a959_parser.add_argument("--operational-state-sha256", required=True)
+    a959_parser.add_argument("--retention-receipt", type=Path, required=True)
+    a959_parser.add_argument("--retention-receipt-sha256", required=True)
+    a959_parser.add_argument("--retention-journal", type=Path, required=True)
+    a959_parser.add_argument("--retention-journal-sha256", required=True)
     a959_parser.set_defaults(handler=bootstrap_legacy_a959_v1_preserve)
     prepare_parser = commands.add_parser("prepare")
     for name in ("contract", "lifecycle", "operational-state"):

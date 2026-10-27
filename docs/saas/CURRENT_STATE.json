@@ -528,6 +528,18 @@
         "bootstrap-receipt.private.json"
       ],
       "reviewV1": "PRESERVED_BYTE_EXACT_UNTIL_PREPARE_WITH_EXTERNAL_SHA256",
+      "priorRetentionEvidence": {
+        "batchId": "retention-recent-generations-qualification-20261026T213341Z-v3",
+        "commandCount": 10,
+        "a959Ordinals": [
+          1,
+          4,
+          5
+        ],
+        "validation": "AUTHENTICATED_RECEIPT_AND_LITERAL_JOURNAL_EVENTS"
+      },
+      "derivedArtifacts": "SANITIZED_ONLY_AFTER_AUTHENTICATED_PRIOR_RETENTION_AND_ABSENCE",
+      "canonicalPrepare": "ZERO_COMMANDS_REVIEW_V2_SANITIZED_NO_EXECUTE",
       "installedRelease": "ACTIVE_DEPENDENCY_NEVER_DESTRUCTIVE_COMMAND",
       "scope": "A959_ONLY_NOT_GENERALIZABLE"
     },

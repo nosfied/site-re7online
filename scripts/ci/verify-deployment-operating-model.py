@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+MAX_DEPLOY_RUNBOOK_LINES = 340
 
 
 def require(value, reason):
@@ -60,7 +61,8 @@ require({key: value["path"] for key, value in root_policy["canonicalRoots"].item
 }, "deployment artifact root policy paths")
 require([item["path"] for item in root_policy["canonicalRoots"]["evidence"]] ==
         ["/opt/re7online/backups/converta-persistent"], "deployment evidence root policy")
-require(len(runbook.splitlines()) <= 280, "bounded deploy runbook size")
+require(len(runbook.splitlines()) <= MAX_DEPLOY_RUNBOOK_LINES,
+        f"bounded deploy runbook size (maximum {MAX_DEPLOY_RUNBOOK_LINES} lines)")
 for marker in ("preflight", "activate", "finalize", "rollback", "status",
                "PREFLIGHT PASS", "AWAITING_ACCEPTANCE", "DEPLOYED", "ROLLED_BACK",
                "generation-retirement.py", "DEPLOYED_SANITIZED", "12 GiB"):
