@@ -4,7 +4,7 @@
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a implantação ativa está
-no [registro estruturado](releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json).
+no [registro estruturado 708f](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json).
 Registros anteriores continuam no [índice documental](DOCUMENTATION_INDEX.md) como
 histórico e retorno; eles não substituem este estado.
 
