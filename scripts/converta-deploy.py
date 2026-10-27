@@ -669,7 +669,7 @@ class Driver:
     def _environment_sha256(self, row: dict[str, Any], component: str) -> str:
         env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
         projected = {
-            key: env[key] if key in env else row.get(key)
+            key: row[key] if key in row and row[key] is not None else env.get(key)
             for key in self._environment_keys(component)
         }
         raw = json.dumps(projected, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
@@ -843,10 +843,10 @@ class Driver:
         projected = []
         for row in rows:
             env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
-            projected.append({key: row.get(key, env.get(key)) for key in
-                              ("name", "pid", "status", "restart_time", "pm_cwd", "pm_exec_path",
-                               "exec_mode", "instances", "args", "node_args", "namespace",
-                               "out_file", "error_file")})
+            projected.append({key: row[key] if key in row and row[key] is not None else env.get(key)
+                              for key in ("name", "pid", "status", "restart_time", "pm_cwd",
+                                          "pm_exec_path", "exec_mode", "instances", "args",
+                                          "node_args", "namespace", "out_file", "error_file")})
         raw = (json.dumps(sorted(projected, key=lambda item: str(item.get("name"))),
                           sort_keys=True, separators=(",", ":")) + "\n").encode()
         return hashlib.sha256(raw).hexdigest()
@@ -872,7 +872,7 @@ class Driver:
         for row in rows:
             env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
             for field in ("pm_cwd", "pm_exec_path"):
-                candidate = row.get(field, env.get(field))
+                candidate = row[field] if field in row and row[field] is not None else env.get(field)
                 if isinstance(candidate, str) and candidate:
                     live_paths.append(candidate)
         dump_raw, _ = stable_regular_bytes(self.dump, required_mode=0o600)
@@ -967,17 +967,17 @@ class Driver:
         try:
             report = json.loads(result.stdout)
         except json.JSONDecodeError:
-            return "DEPLOYED_RETENTION_INCOMPLETE", {"predicate": "retirement_output_invalid"}
+            return "DEPLOYED_RETENTION_INCOMPLETE", {**evidence, "predicate": "retirement_output_invalid"}
         state = report.get("result") if isinstance(report, dict) else None
         if state not in {"DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"}:
-            return "DEPLOYED_RETENTION_INCOMPLETE", {"predicate": "retirement_state_invalid"}
+            return "DEPLOYED_RETENTION_INCOMPLETE", {**evidence, "predicate": "retirement_state_invalid"}
         receipt_sha = report.get("receiptSha256")
         if not isinstance(receipt_sha, str) or not SHA256.fullmatch(receipt_sha):
-            return "DEPLOYED_RETENTION_INCOMPLETE", {"predicate": "retirement_receipt_identity_missing"}
+            return "DEPLOYED_RETENTION_INCOMPLETE", {**evidence, "predicate": "retirement_receipt_identity_missing"}
         receipt_raw, _ = stable_regular_bytes(
             binding.receipt_root / "execution-receipt.private.json", required_mode=0o600)
         if hashlib.sha256(receipt_raw).hexdigest() != receipt_sha:
-            return "DEPLOYED_RETENTION_INCOMPLETE", {"predicate": "retirement_receipt_identity"}
+            return "DEPLOYED_RETENTION_INCOMPLETE", {**evidence, "predicate": "retirement_receipt_identity"}
         report["operationalStateSha256"] = final_operational_sha
         report["operationalStatePath"] = str(final_operational)
         report["executionEvidence"] = evidence
