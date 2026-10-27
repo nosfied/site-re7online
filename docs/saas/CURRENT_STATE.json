@@ -520,6 +520,17 @@
     "canonicalRootAuthority": "config/deploy-artifact-roots.json",
     "operationalObservationSchemaVersion": 2,
     "legacy123baMigration": "BOOTSTRAP_DESCRIPTOR_HASH_BOUND_CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN",
+    "legacyA959Migration": {
+      "sourceState": "LEGACY_V1_PRESERVE_NO_CONTRACT",
+      "bootstrapDescriptor": "config/legacy-generation-a959129e-v1-preserve.json",
+      "bootstrapWrites": [
+        "generation-artifacts.private.json",
+        "bootstrap-receipt.private.json"
+      ],
+      "reviewV1": "PRESERVED_BYTE_EXACT_UNTIL_PREPARE_WITH_EXTERNAL_SHA256",
+      "installedRelease": "ACTIVE_DEPENDENCY_NEVER_DESTRUCTIVE_COMMAND",
+      "scope": "A959_ONLY_NOT_GENERALIZABLE"
+    },
     "lastCompletedBatch": {
       "id": "retention-recent-generations-qualification-20261026T213341Z-v3",
       "state": "COMPLETED",
