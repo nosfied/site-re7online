@@ -459,7 +459,7 @@ class DriverTests(DeployFixture):
                 return
             rows = json.loads(self.dump.read_text())
             for row in rows:
-                env = row.pop("pm2_env")
+                env = row["pm2_env"]
                 for key in (
                     "pm_cwd", "pm_exec_path", "exec_interpreter", "args", "node_args",
                     "exec_mode", "instances", "namespace", "out_file", "error_file",
@@ -467,6 +467,7 @@ class DriverTests(DeployFixture):
                 ):
                     if key in env:
                         row[key] = env[key]
+                        env[key] = None
                 component = next(
                     key for key, process_name in deploy.PROCESS_NAMES.items()
                     if process_name == row["name"]
@@ -474,6 +475,7 @@ class DriverTests(DeployFixture):
                 for key in self.driver._environment_keys(component):
                     if key in env:
                         row[key] = env[key]
+                        env[key] = None
             put(self.dump, rows)
 
         self.host.pm2_mutate = save_with_top_level_configuration  # type: ignore[method-assign]
