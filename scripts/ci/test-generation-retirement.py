@@ -196,7 +196,298 @@ class Fixture:
         self.temp.cleanup()
 
 
+class LegacyBootstrapFixture:
+    def __init__(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="legacy-generation-bootstrap-")
+        self.root = Path(self.temp.name)
+        self.repository = self.root / "repository"; self.repository.mkdir(mode=0o755)
+        self.worktrees = self.root / "build-worktrees"; self.worktrees.mkdir(mode=0o755)
+        self.outputs = self.root / "build-output"; self.outputs.mkdir(mode=0o755)
+        self.releases = self.root / "releases"; self.releases.mkdir(mode=0o755)
+        self.staging = self.root / "optional-staging"
+        self.evidence = self.root / "evidence"; self.evidence.mkdir(mode=0o750)
+        self.release_id = "immutable-legacy-fixture"
+        self.output = self.outputs / "legacy-producer"; self.output.mkdir(mode=0o700)
+        self.worktree = self.worktrees / "legacy-source"; self.worktree.mkdir(mode=0o755)
+        subprocess.run(["git", "init", "-q"], cwd=self.worktree, check=True)
+        subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=self.worktree, check=True)
+        subprocess.run(["git", "config", "user.name", "Fixture"], cwd=self.worktree, check=True)
+        (self.worktree / "tracked").write_text("legacy\n")
+        subprocess.run(["git", "add", "."], cwd=self.worktree, check=True)
+        subprocess.run(["git", "commit", "-qm", "legacy fixture"], cwd=self.worktree, check=True)
+        self.target = subprocess.check_output(["git", "-C", str(self.worktree), "rev-parse", "HEAD"],
+                                              text=True).strip()
+        self.release_root = self.output / self.release_id
+        self.api = self.release_root / "api-runtime"; self.api.mkdir(parents=True)
+        self.frontend = self.release_root / "frontend-runtime"; self.frontend.mkdir()
+        (self.api / "index.js").write_text("api\n")
+        (self.frontend / "server.js").write_text("frontend\n")
+        self.package = self.output / f"{self.release_id}.tar.xz"; self.package.write_bytes(b"fixture-package"); self.package.chmod(0o644)
+        self.manifest = self.release_root / "manifest.json"; self.manifest.write_text("{}\n"); self.manifest.chmod(0o644)
+        self.index = self.release_root / "index.sha256"; self.index.write_text("fixture-index\n"); self.index.chmod(0o644)
+        self.lifecycle = self.output / "generation-lifecycle.private.json"
+        private_json(self.lifecycle, {"schemaVersion": 1, "generationId": self.release_id,
+                                      "targetCommit": self.target, "state": "COMPLETE"})
+        self.writer_lock = self.outputs / ".generation-build.lock"
+        self.writer_lock.write_text(""); self.writer_lock.chmod(0o600)
+        self.installed = self.releases / self.release_id
+        self.contract = self.output / "generation-artifacts.private.json"
+        self.bootstrap_review = self.output / "generation-review.private.json"
+        self.receipt = self.evidence / "legacy-bootstrap" / "bootstrap-receipt.private.json"
+
+        self.verifier = self.root / "fake-converta-release.py"
+        verification = {"result": "RELEASE VERIFIED", "releaseId": self.release_id,
+                        "targetCommit": self.target, "manifestSha256": sha(self.manifest),
+                        "indexSha256": sha(self.index), "apiEntrySha256": "a" * 64,
+                        "buildId": "fixture-build", "indexEntries": 4}
+        self.verifier.write_text("#!/usr/bin/env python3\nimport json\nprint(json.dumps(" + repr(verification) + "))\n")
+        self.verifier.chmod(0o600)
+
+        def policy_entry(path: Path) -> dict:
+            info = path.lstat()
+            return {"path": str(path), "ownerUid": info.st_uid, "groupGid": info.st_gid,
+                    "allowedModes": [f"0{stat.S_IMODE(info.st_mode):03o}"]}
+        self.policy = self.root / "root-policy.private.json"
+        private_json(self.policy, {"schemaVersion": 1, "canonicalRoots": {
+            "repository": policy_entry(self.repository), "worktrees": policy_entry(self.worktrees),
+            "outputs": policy_entry(self.outputs), "releases": policy_entry(self.releases),
+            "staging": {"path": str(self.staging), "ownerUid": os.geteuid(), "groupGid": os.getegid(),
+                        "allowedModes": ["0700"]},
+            "evidence": [{**policy_entry(self.evidence), "allowedModes": ["0700", "0750"]}],
+        }})
+
+        self.other_release = self.releases / "immutable-current-fixture"; self.other_release.mkdir()
+        self.current = self.root / "current"; os.symlink(self.other_release, self.current)
+        self.pm2_rows = [{"name": "current", "pid": 101, "pm2_env": {
+            "pm_cwd": str(self.other_release), "pm_exec_path": str(self.other_release / "server.js"),
+            "exec_mode": "fork_mode", "instances": 1, "args": [], "namespace": "default"}}]
+        self.pm2_state = self.root / "pm2-state.json"; self.pm2_state.write_text(json.dumps(self.pm2_rows))
+        self.pm2 = self.root / "pm2"
+        self.pm2.write_text("#!/usr/bin/env python3\nfrom pathlib import Path\nprint(Path(" +
+                            repr(str(self.pm2_state)) + ").read_text())\n")
+        self.pm2.chmod(0o700)
+        self.dump = self.root / "dump.pm2"; private_json(self.dump, {"fixture": "dump"})
+        self.graph = self.root / "release-graph.private.json"
+        graph = {"activeReleases": [self.other_release.name], "rollbackReleases": [],
+                 "transitiveReturnReleases": [], "candidateReleases": [],
+                 "installedVerifiedReleases": [self.other_release.name],
+                 "supersededCandidates": [self.release_id]}
+        private_json(self.graph, graph)
+        self.control = self.root / "control.py"; self.control.write_text("# fixture\n"); self.control.chmod(0o600)
+        self.operational = self.evidence / "operational.private.json"
+        private_json(self.operational, {"schemaVersion": 2, "generationId": self.release_id,
+                     "releaseId": self.release_id, "targetCommit": self.target,
+                     "gitRepository": str(self.repository), "currentPaths": [str(self.other_release)],
+                     "pm2LivePaths": [str(self.other_release)], "pm2DumpPaths": [str(self.other_release)],
+                     **graph, "dependencies": [],
+                     "controlPlaneArtifacts": [{"path": str(self.control), "sha256": sha(self.control), "copied": True}],
+                     "deploymentState": {"state": "SUPERSEDED"},
+                     "canonicalRoots": {"repository": str(self.repository), "worktrees": str(self.worktrees),
+                         "outputs": str(self.outputs), "releases": str(self.releases),
+                         "staging": str(self.staging), "evidence": [str(self.evidence)]},
+                     "observations": {"currentLinks": [{"path": str(self.current), "target": str(self.other_release)}],
+                         "pm2": {"path": str(self.pm2), "sha256": sha(self.pm2),
+                                 "fingerprintSha256": MODULE._pm2_fingerprint(self.pm2_rows)},
+                         "dump": {"path": str(self.dump), "sha256": sha(self.dump)},
+                         "releaseGraph": {"path": str(self.graph), "sha256": sha(self.graph)}}})
+        self.descriptor_value = {
+            "schemaVersion": 1, "sourceState": "LEGACY_PRE_CONTRACT", "releaseId": self.release_id,
+            "targetCommit": self.target, "supersededPullRequest": 240,
+            "outputPath": str(self.output), "worktreePath": str(self.worktree),
+            "installedReleasePath": str(self.installed),
+            "lifecycle": {"path": str(self.lifecycle), "sha256": sha(self.lifecycle)},
+            "package": {"path": str(self.package), "sha256": sha(self.package)},
+            "manifest": {"path": str(self.manifest), "sha256": sha(self.manifest)},
+            "index": {"path": str(self.index), "sha256": sha(self.index)},
+            "canonicalVerifierSha256": sha(self.verifier), "contractOutput": str(self.contract),
+            "reviewOutput": str(self.bootstrap_review), "receiptOutput": str(self.receipt),
+        }
+        self.descriptor = self.root / "legacy-descriptor.json"; private_json(self.descriptor, self.descriptor_value)
+
+    def arguments(self):
+        return SimpleNamespace(descriptor=self.descriptor, descriptor_sha256=sha(self.descriptor),
+                               root_policy=self.policy, root_policy_sha256=sha(self.policy),
+                               operational_state=self.operational, operational_state_sha256=sha(self.operational),
+                               reviewer="fixture-owner", reason="legacy candidate superseded")
+
+    def bootstrap(self):
+        with patch.object(MODULE, "LEGACY_123BA_BINDING", self.descriptor_value), \
+                patch.object(MODULE, "canonical_release_verifier", return_value=self.verifier):
+            MODULE.bootstrap_legacy(self.arguments())
+
+    def close(self):
+        self.temp.cleanup()
+
+
 class GenerationRetirementTest(unittest.TestCase):
+    def test_versioned_legacy_descriptor_is_closed_and_binds_canonical_verifier(self):
+        descriptor_path = ROOT / "config/legacy-generation-123ba7bd.json"
+        descriptor = json.loads(descriptor_path.read_text())
+        self.assertEqual(descriptor, MODULE.LEGACY_123BA_BINDING)
+        self.assertEqual(descriptor["canonicalVerifierSha256"],
+                         sha(ROOT / "scripts/converta-release.py"))
+
+    def test_legacy_pre_contract_bootstrap_then_canonical_prepare_passes(self):
+        fixture = LegacyBootstrapFixture()
+        try:
+            # The normal path remains fail-closed while the authenticated
+            # pre-contract bootstrap has not materialized the contract.
+            missing = invoke("prepare", "--contract", str(fixture.contract),
+                             "--contract-sha256", "0" * 64,
+                             "--lifecycle", str(fixture.lifecycle), "--lifecycle-sha256", sha(fixture.lifecycle),
+                             "--operational-state", str(fixture.operational),
+                             "--operational-state-sha256", sha(fixture.operational),
+                             "--root-policy", str(fixture.policy), "--root-policy-sha256", sha(fixture.policy),
+                             "--deployment-lock", str(fixture.writer_lock),
+                             "--intent-output", str(fixture.evidence / "missing-intent.json"),
+                             "--commands-output", str(fixture.evidence / "missing-commands.txt"),
+                             "--review-output", str(fixture.evidence / "missing-review.json"),
+                             "--reviewer", "fixture-owner", "--reason", "must not infer legacy contract")
+            self.assertEqual(missing.returncode, 2)
+            self.assertIn("private_read:generation-artifacts.private.json", missing.stderr)
+
+            fixture.bootstrap()
+            self.assertTrue(fixture.contract.is_file())
+            self.assertTrue(fixture.bootstrap_review.is_file())
+            receipt = json.loads(fixture.receipt.read_text())
+            self.assertEqual(receipt["state"], "LEGACY_CONTRACT_MATERIALIZED")
+            self.assertEqual(receipt["scope"], "CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN")
+            self.assertFalse(receipt["authorizationGranted"])
+            self.assertFalse(receipt["executionPermitted"])
+            self.assertEqual(receipt["destructiveCommands"], 0)
+            contract = json.loads(fixture.contract.read_text())
+            self.assertEqual({item["path"] for item in contract["artifacts"]}, {
+                str(fixture.package), str(fixture.manifest), str(fixture.index), str(fixture.lifecycle),
+                str(fixture.worktree), str(fixture.api), str(fixture.frontend),
+            })
+            self.assertEqual({item["path"] for item in contract["artifacts"]
+                              if item["state"] == "RETIREMENT_READY"},
+                             {str(fixture.worktree), str(fixture.api), str(fixture.frontend)})
+
+            retirement = fixture.evidence / "retirement"; retirement.mkdir(mode=0o700)
+            intent = retirement / "intent.private.json"
+            commands = retirement / "commands.private.txt"
+            review = retirement / "generation-review.private.json"
+            result = invoke("prepare", "--contract", str(fixture.contract),
+                            "--contract-sha256", sha(fixture.contract),
+                            "--lifecycle", str(fixture.lifecycle), "--lifecycle-sha256", sha(fixture.lifecycle),
+                            "--operational-state", str(fixture.operational),
+                            "--operational-state-sha256", sha(fixture.operational),
+                            "--root-policy", str(fixture.policy), "--root-policy-sha256", sha(fixture.policy),
+                            "--deployment-lock", str(fixture.writer_lock),
+                            "--intent-output", str(intent), "--commands-output", str(commands),
+                            "--review-output", str(review), "--reviewer", "fixture-owner",
+                            "--reason", "sealed after authenticated legacy bootstrap")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            sealed = json.loads(intent.read_text())
+            self.assertEqual(sealed["state"], "SEALED_FOR_EXPLICIT_AUTHORIZATION")
+            self.assertFalse(sealed["authorizationGranted"])
+            self.assertEqual({item["path"] for item in sealed["commands"]},
+                             {str(fixture.worktree), str(fixture.api), str(fixture.frontend)})
+        finally:
+            fixture.close()
+
+    def test_legacy_bootstrap_denies_descriptor_and_authenticated_file_drift(self):
+        mutations = (
+            ("releaseId", "immutable-wrong"),
+            ("targetCommit", "f" * 40),
+            ("outputPath", "/outside/output"),
+        )
+        for field, value in mutations:
+            fixture = LegacyBootstrapFixture()
+            try:
+                changed = json.loads(fixture.descriptor.read_text()); changed[field] = value
+                private_json(fixture.descriptor, changed)
+                with patch.object(MODULE, "LEGACY_123BA_BINDING", fixture.descriptor_value), \
+                        patch.object(MODULE, "canonical_release_verifier", return_value=fixture.verifier):
+                    with self.assertRaisesRegex(MODULE.Denied, "legacy_descriptor_binding"):
+                        MODULE.bootstrap_legacy(fixture.arguments())
+            finally:
+                fixture.close()
+
+        for name in ("lifecycle", "package", "manifest", "index"):
+            fixture = LegacyBootstrapFixture()
+            try:
+                getattr(fixture, name).write_bytes(getattr(fixture, name).read_bytes() + b"drift")
+                with self.assertRaisesRegex(MODULE.Denied, f"legacy_{name}_hash_or_drift"):
+                    fixture.bootstrap()
+            finally:
+                fixture.close()
+
+    def test_legacy_bootstrap_denies_installed_referenced_symlink_and_existing_outputs(self):
+        fixture = LegacyBootstrapFixture()
+        try:
+            fixture.installed.mkdir()
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_release_installed"):
+                fixture.bootstrap()
+        finally:
+            fixture.close()
+
+        fixture = LegacyBootstrapFixture()
+        try:
+            operational = json.loads(fixture.operational.read_text())
+            operational["activeReleases"].append(fixture.release_id)
+            private_json(fixture.operational, operational)
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_release_referenced"):
+                fixture.bootstrap()
+        finally:
+            fixture.close()
+
+        fixture = LegacyBootstrapFixture()
+        try:
+            actual = fixture.root / "legacy-source-actual"
+            fixture.worktree.rename(actual); os.symlink(actual, fixture.worktree)
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_path_symlink:worktrees"):
+                fixture.bootstrap()
+        finally:
+            fixture.close()
+
+        fixture = LegacyBootstrapFixture()
+        try:
+            fixture.contract.write_text("occupied\n")
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_destination_exists"):
+                fixture.bootstrap()
+        finally:
+            fixture.close()
+
+    def test_legacy_bootstrap_denies_tree_drift_and_never_invokes_destructive_commands(self):
+        fixture = LegacyBootstrapFixture()
+        try:
+            real_observation = MODULE._tree_observation
+            calls = 0
+            def mutate_before_second_output(path, label):
+                nonlocal calls
+                calls += 1
+                if calls == 3:
+                    (fixture.output / "late-file").write_text("late\n")
+                return real_observation(path, label)
+            with patch.object(MODULE, "LEGACY_123BA_BINDING", fixture.descriptor_value), \
+                    patch.object(MODULE, "canonical_release_verifier", return_value=fixture.verifier), \
+                    patch.object(MODULE, "_tree_observation", side_effect=mutate_before_second_output):
+                with self.assertRaisesRegex(MODULE.Denied, "legacy_tree_drift_between_samples"):
+                    MODULE.bootstrap_legacy(fixture.arguments())
+        finally:
+            fixture.close()
+
+        fixture = LegacyBootstrapFixture()
+        try:
+            real_run = subprocess.run
+            observed = []
+            def record(command, **kwargs):
+                observed.append([str(item) for item in command])
+                return real_run(command, **kwargs)
+            with patch.object(MODULE, "LEGACY_123BA_BINDING", fixture.descriptor_value), \
+                    patch.object(MODULE, "canonical_release_verifier", return_value=fixture.verifier), \
+                    patch.object(MODULE.subprocess, "run", side_effect=record):
+                MODULE.bootstrap_legacy(fixture.arguments())
+            flattened = [" ".join(command) for command in observed]
+            self.assertFalse(any("/usr/bin/rm" in command for command in flattened))
+            self.assertFalse(any("worktree remove" in command for command in flattened))
+            receipt = json.loads(fixture.receipt.read_text())
+            self.assertFalse(receipt["globalInventory"])
+        finally:
+            fixture.close()
+
     def test_prepare_classifies_only_derived_paths_and_never_copies_runtime(self):
         fixture = Fixture()
         try:

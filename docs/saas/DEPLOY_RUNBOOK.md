@@ -65,6 +65,16 @@ hash integram a autorização de ativação; o executor frontend-only autentica 
 antes de selecionar o symlink. A preparação contém somente metadados, comandos e
 hashes, nunca cópia de runtime.
 
+Exceção única e fechada: `immutable-123ba7bd-vps-20261026T200100Z` foi produzida
+antes desse contrato e está classificada como `LEGACY_PRE_CONTRACT`; ela nunca
+teve review v1 `PRESERVE`. Autentique por SHA externo o descriptor versionado
+`config/legacy-generation-123ba7bd.json` e execute uma única vez
+`generation-retirement.py bootstrap-legacy`. O comando observa somente output e
+worktree declarados, materializa contrato/review/recibo sem autorização e termina
+em `LEGACY_CONTRACT_MATERIALIZED`. Só uma etapa posterior executa `prepare`.
+Não aplicar o bootstrap a outra geração; builds atuais já publicam contrato desde
+`BUILDING`.
+
 No fluxo API + frontend, o `preflight` de `scripts/converta-deploy.py` exige os
 bindings `--generation-retirement-*`. Após aceite, `pm2 save`, dump validado,
 marker `DEPLOYED` e health final, o próprio `finalize` executa uma única vez

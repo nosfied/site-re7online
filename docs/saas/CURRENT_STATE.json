@@ -479,7 +479,16 @@
         "PR_240",
         "immutable-123ba7bd-vps-20261026T200100Z"
       ],
-      "retentionState": "NOT_AUTHORIZED"
+      "retentionState": "LEGACY_PRE_CONTRACT_BOOTSTRAP_REQUIRED",
+      "legacyContract": {
+        "sourceState": "LEGACY_PRE_CONTRACT",
+        "originalContractPresent": false,
+        "originalReviewV1Present": false,
+        "bootstrapDescriptor": "config/legacy-generation-123ba7bd.json",
+        "scope": "CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN",
+        "authorizationGranted": false,
+        "executionPermitted": false
+      }
     },
     "acceptanceBoundary": "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS; SCHEDULING_MULTIBATCH_AND_CLIENT_SPECIFIC_ACCEPTANCE_REMAIN_SEPARATE"
   },
@@ -510,7 +519,7 @@
     "partialRetirementReconciliation": "AUTHENTICATED_PRIOR_INTENT_RECEIPT_JOURNAL_REMAINING_ONLY",
     "canonicalRootAuthority": "config/deploy-artifact-roots.json",
     "operationalObservationSchemaVersion": 2,
-    "legacy123baMigration": "HASH_BOUND_CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN",
+    "legacy123baMigration": "BOOTSTRAP_DESCRIPTOR_HASH_BOUND_CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN",
     "lastCompletedBatch": {
       "id": "retention-recent-generations-qualification-20261026T213341Z-v3",
       "state": "COMPLETED",
