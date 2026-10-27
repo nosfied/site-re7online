@@ -658,11 +658,20 @@ class Driver:
     def _pm2_field(row: dict[str, Any], name: str) -> Any:
         env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
         aliases = {"cwd": "pm_cwd", "script": "pm_exec_path", "interpreter": "exec_interpreter"}
-        return row.get(name, env.get(name, env.get(aliases.get(name, ""))))
+        alias = aliases.get(name)
+        keys = (name, alias) if alias is not None else (name,)
+        for container in (row, env):
+            for key in keys:
+                if key in container and container[key] is not None:
+                    return container[key]
+        return None
 
     def _environment_sha256(self, row: dict[str, Any], component: str) -> str:
         env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
-        projected = {key: env.get(key) for key in self._environment_keys(component)}
+        projected = {
+            key: env[key] if key in env else row.get(key)
+            for key in self._environment_keys(component)
+        }
         raw = json.dumps(projected, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
         return hashlib.sha256(raw).hexdigest()
 
@@ -818,6 +827,15 @@ class Driver:
             deny("generation_retirement_receipt_exists")
         if not binding.review_output.is_absolute() or not binding.receipt_root.is_absolute():
             deny("generation_retirement_destination")
+        parent = binding.receipt_root.parent
+        try:
+            parent_info = parent.lstat()
+        except FileNotFoundError:
+            deny("generation_retirement_receipt_parent_missing")
+        if (parent.is_symlink() or not stat.S_ISDIR(parent_info.st_mode) or
+                parent_info.st_uid != os.geteuid() or parent_info.st_gid != os.getegid() or
+                stat.S_IMODE(parent_info.st_mode) != 0o700):
+            deny("generation_retirement_receipt_parent_identity")
         return binding
 
     @staticmethod
@@ -927,12 +945,25 @@ class Driver:
                    "--receipt-root", str(binding.receipt_root),
                    "--review-output", str(binding.review_output)]
         result = self.host.run(command, timeout=180)
+        stdout_raw = result.stdout.encode()
+        stderr_raw = result.stderr.encode()
+        stdout_path = self.inputs.transaction_root / "generation-retirement.stdout.private.txt"
+        stderr_path = self.inputs.transaction_root / "generation-retirement.stderr.private.txt"
+        exit_path = self.inputs.transaction_root / "generation-retirement.exit.private.txt"
+        atomic_private_bytes(stdout_path, stdout_raw)
+        atomic_private_bytes(stderr_path, stderr_raw)
+        atomic_private_bytes(exit_path, (str(result.returncode) + "\n").encode())
+        evidence = {
+            "exitCode": result.returncode,
+            "stdoutPath": str(stdout_path), "stdoutSha256": hashlib.sha256(stdout_raw).hexdigest(),
+            "stderrPath": str(stderr_path), "stderrSha256": hashlib.sha256(stderr_raw).hexdigest(),
+            "exitPath": str(exit_path), "exitSha256": digest(exit_path),
+        }
         if result.returncode:
-            return "DEPLOYED_RETENTION_INCOMPLETE", {
-                "exitCode": result.returncode,
-                "stdoutSha256": hashlib.sha256(result.stdout.encode()).hexdigest(),
-                "stderrSha256": hashlib.sha256(result.stderr.encode()).hexdigest(),
-            }
+            reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else None
+            if reason is not None:
+                evidence["failurePredicate"] = reason[:240]
+            return "DEPLOYED_RETENTION_INCOMPLETE", evidence
         try:
             report = json.loads(result.stdout)
         except json.JSONDecodeError:
@@ -949,6 +980,7 @@ class Driver:
             return "DEPLOYED_RETENTION_INCOMPLETE", {"predicate": "retirement_receipt_identity"}
         report["operationalStateSha256"] = final_operational_sha
         report["operationalStatePath"] = str(final_operational)
+        report["executionEvidence"] = evidence
         return state, report
 
     def _dump_environment_sha256(self, row: dict[str, Any], component: str) -> str:
