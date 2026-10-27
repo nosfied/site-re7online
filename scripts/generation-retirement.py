@@ -265,11 +265,13 @@ def validate_root_policy(raw: bytes, expected_sha256: str) -> dict[str, Any]:
     if not isinstance(roots, dict) or set(roots) != ROOT_KEYS:
         deny("root_policy_schema")
     entries: dict[str, Any] = {}
+    definitions: dict[str, Any] = {}
     for key in ROOT_KEYS:
         raw_entries = roots[key] if key == "evidence" else [roots[key]]
         if not isinstance(raw_entries, list) or not raw_entries:
             deny(f"root_policy_entry:{key}")
         parsed = []
+        parsed_definitions = []
         for entry in raw_entries:
             if not isinstance(entry, dict) or set(entry) != POLICY_ENTRY_KEYS:
                 deny(f"root_policy_entry:{key}")
@@ -281,15 +283,30 @@ def validate_root_policy(raw: bytes, expected_sha256: str) -> dict[str, Any]:
                     not isinstance(modes, list) or not modes or
                     any(not isinstance(mode, str) or not re.fullmatch(r"0[0-7]{3}", mode) for mode in modes)):
                 deny(f"root_policy_entry:{key}")
-            resolved = _protected_directory(path, f"root_policy_directory:{key}")
-            info = resolved.lstat()
-            if (info.st_uid != entry["ownerUid"] or info.st_gid != entry["groupGid"] or
-                    f"0{stat.S_IMODE(info.st_mode):03o}" not in modes):
-                deny(f"root_policy_identity:{key}")
-            _validate_ancestors(resolved.parent, entry["ownerUid"], f"root_policy_ancestor:{key}")
-            parsed.append(str(resolved))
+            if Path(os.path.normpath(str(path))) != path:
+                deny(f"root_policy_entry:{key}")
+            parsed.append(str(path))
+            parsed_definitions.append(entry)
         entries[key] = parsed if key == "evidence" else parsed[0]
-    return {"schemaVersion": 1, "canonicalRoots": entries, "sha256": expected_sha256}
+        definitions[key] = parsed_definitions if key == "evidence" else parsed_definitions[0]
+    return {"schemaVersion": 1, "canonicalRoots": entries,
+            "definitions": definitions, "sha256": expected_sha256}
+
+
+def authenticate_policy_root(policy: dict[str, Any], key: str) -> list[Path]:
+    raw_entries = policy["definitions"][key] if key == "evidence" else [policy["definitions"][key]]
+    authenticated = []
+    for entry in raw_entries:
+        path = Path(entry["path"])
+        resolved = _protected_directory(path, f"root_policy_directory:{key}")
+        info = resolved.lstat()
+        mode = stat.S_IMODE(info.st_mode)
+        if (info.st_uid != entry["ownerUid"] or info.st_gid != entry["groupGid"] or
+                f"0{mode:03o}" not in entry["allowedModes"] or mode & 0o022):
+            deny(f"root_policy_identity:{key}")
+        _validate_ancestors(resolved.parent, entry["ownerUid"], f"root_policy_ancestor:{key}")
+        authenticated.append(resolved)
+    return authenticated
 
 
 def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy: dict[str, Any]) -> None:
@@ -318,10 +335,10 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy
     if (not isinstance(roots["evidence"], list) or not roots["evidence"] or
             any(not isinstance(item, str) for item in roots["evidence"])):
         deny("canonical_root:evidence")
-    resolved_roots = {key: _protected_directory(Path(str(raw)), f"canonical_root:{key}")
-                      for key, raw in roots.items() if key != "evidence"}
-    evidence_roots = [_protected_directory(Path(raw), "canonical_root:evidence")
-                      for raw in roots["evidence"]]
+    resolved_roots = {key: authenticate_policy_root(policy, key)[0]
+                      for key in ("repository", "worktrees", "outputs", "releases")}
+    resolved_roots["staging"] = Path(roots["staging"])
+    evidence_roots = authenticate_policy_root(policy, "evidence")
     if len(set(evidence_roots)) != len(evidence_roots):
         deny("canonical_root:evidence_duplicate")
     if resolved_roots["repository"] != Path(value["gitRepository"]):
@@ -391,7 +408,8 @@ def _path_has_symlink(path: Path, root: Path) -> bool:
     return root.is_symlink()
 
 
-def validate_artifact_roots(contract: dict[str, Any], operational: dict[str, Any]) -> None:
+def validate_artifact_roots(contract: dict[str, Any], operational: dict[str, Any],
+                            policy: dict[str, Any]) -> None:
     roots = {key: Path(value) for key, value in operational["canonicalRoots"].items()
              if key != "evidence"}
     class_root = {
@@ -400,6 +418,17 @@ def validate_artifact_roots(contract: dict[str, Any], operational: dict[str, Any
         "DERIVED_STAGING": roots["staging"],
         "RELEASE_RUNTIME": roots["releases"],
     }
+    staging_root_required = any(
+        artifact.get("class") == "DERIVED_STAGING" and not (
+            artifact.get("state") == "SANITIZED" and
+            artifact.get("removedAtProducerCompletion") is True and
+            not Path(str(artifact.get("path", ""))).exists() and
+            not Path(str(artifact.get("path", ""))).is_symlink()
+        )
+        for artifact in contract["artifacts"]
+    )
+    if staging_root_required:
+        authenticate_policy_root(policy, "staging")
     for artifact in contract["artifacts"]:
         kind = artifact["class"]
         if kind not in class_root:
@@ -407,7 +436,11 @@ def validate_artifact_roots(contract: dict[str, Any], operational: dict[str, Any
         path = Path(artifact["path"])
         root = class_root[kind]
         _strict_child(path, root, f"artifact_outside_canonical_root:{kind}")
-        if _path_has_symlink(path, root):
+        staging_already_removed = (kind == "DERIVED_STAGING" and
+                                   artifact.get("state") == "SANITIZED" and
+                                   artifact.get("removedAtProducerCompletion") is True and
+                                   not path.exists() and not path.is_symlink())
+        if not staging_already_removed and _path_has_symlink(path, root):
             deny(f"artifact_unsafe_ancestor:{kind}")
         if kind == "DERIVED_WORKTREE" and path == roots["repository"]:
             deny("canonical_checkout_not_retirable")
@@ -778,7 +811,7 @@ def prepare(args: argparse.Namespace) -> None:
     operational = object_json(operational_raw, "operational-state")
     policy = validate_root_policy(policy_raw, args.root_policy_sha256)
     validate_contract(contract); validate_operational(operational, contract, policy)
-    validate_artifact_roots(contract, operational)
+    validate_artifact_roots(contract, operational, policy)
     reconciliation = authenticate_reconciliation(args, contract, args.root_policy_sha256)
     reconciled_paths = {item["path"] for item in reconciliation["completed"]}
     legacy_migration = None
@@ -823,7 +856,8 @@ def prepare(args: argparse.Namespace) -> None:
             # Eligibility is re-evaluated under both locks at execution time, so
             # output/staging paths that become eligible only after DEPLOYED do not
             # require an unauthenticated second intent.
-            if artifact["class"] in DERIVED_CLASSES and artifact["path"] not in reconciled_paths:
+            if (artifact["class"] in DERIVED_CLASSES and artifact["path"] not in reconciled_paths and
+                    state != "SANITIZED"):
                 command, text = command_for(artifact, operational)
                 original_ordinal = next(index for index, item in enumerate(contract["artifacts"], 1)
                                         if item["path"] == artifact["path"])
@@ -965,6 +999,7 @@ def execute(args: argparse.Namespace) -> None:
     commands = validate_intent(intent, operational, args.root_policy_sha256)
     if not isinstance(commands, list) or authorization.get("approvedPaths") != [item["path"] for item in commands]:
         deny("authorization_scope")
+    validate_artifact_roots({"artifacts": intent["artifacts"]}, operational, policy)
     canonical_fd = acquire_or_authenticate_lock(args.deployment_lock, getattr(args, "deployment_lock_fd", None))
     writer_fd = acquire_existing_lock(Path(intent["executionContract"]["writerLock"]))
     attempted = completed = 0
@@ -973,7 +1008,7 @@ def execute(args: argparse.Namespace) -> None:
     try:
         # These observations happen only after both locks and before the first
         # ATTEMPT. A stale prepare snapshot cannot authorize a deletion.
-        validate_artifact_roots({"artifacts": intent["artifacts"]}, operational)
+        validate_artifact_roots({"artifacts": intent["artifacts"]}, operational, policy)
         fresh = capture_fresh_operational(operational)
         if operational["deploymentState"]["state"] == "DEPLOYED":
             release = intent["releaseId"]
