@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "recordType": "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+  "status": "DEPLOYED_SANITIZED",
+  "evidenceProvenance": {
+    "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT",
+    "reportedDate": "2026-10-27",
+    "independentVpsInspectionByDocumentationEditor": false
+  },
+  "release": {
+    "id": "immutable-708f018c-vps-20261027T152109Z",
+    "target": "708f018cb853a06fd6f0f1d5d920b8b35d8fb06a",
+    "buildId": "LYTSr9y2MqeYwOpsBD6dy",
+    "packageSha256": "f9f0aeeac26be8e0aa690ccaf1b4d6abcfd6fa3e9c226b5605a8192c7133f5ff",
+    "manifestSha256": "17ebde6803951ae2325dae2ef2567f450fb79adaf75d69c6f3ee3308faaf82ec",
+    "indexSha256": "bd0dbb9ca7a1689c6d963074da738209110b5b02eb9f390e28132a57ec506819",
+    "indexEntries": 34353,
+    "apiEntrypointSha256": "304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1",
+    "buildCount": 1,
+    "migration": "NOT_APPLICABLE_NO_SCHEMA_CHANGE"
+  },
+  "runtime": {
+    "api": {
+      "pid": 745424,
+      "startTicks": 28396867,
+      "restartCount": 7,
+      "listener": 3001
+    },
+    "frontend": {
+      "pid": 745530,
+      "startTicks": 28397556,
+      "restartCount": 9,
+      "listener": 3000
+    },
+    "worker": {
+      "releaseId": "immutable-e2e7f17a-20261022T005110Z",
+      "pid": 2233,
+      "startTicks": 17758,
+      "restartCount": 0,
+      "preserved": true
+    }
+  },
+  "finalization": {
+    "pm2SaveCount": 1,
+    "secondSaveExecuted": false,
+    "dumpSha256": "fc86b239cdb40f3337873c60aa5ebc869c9b14421f3e320bbf6e37bd8254bd5e",
+    "dumpValidationSha256": "4bd494a2da86c1d596f16e8cf1378477745f4a9e48baf63a67e2219238fe9256",
+    "markerSha256": "f56d25dfbe1e6e5319e30ef0184cc3f7cc83a6396dad72e82963ec7d3c23038f",
+    "journalSha256": "e3cab222351f1b73f20e8124c81ee93ef7bc5ea890ae67bc48403c5ea7d9069d",
+    "receiptSha256": "afd22a53d0c790d799590fbf676e2a32d5b3b4649afa3f76376c94fc786ba0bf"
+  },
+  "retirement": {
+    "execution": "AUTONOMOUS_V2_EXACTLY_ONCE",
+    "state": "DEPLOYED_SANITIZED",
+    "ordinals": [
+      8,
+      9,
+      10
+    ],
+    "commandsAttempted": 3,
+    "commandsCompleted": 3,
+    "failures": 0,
+    "automaticRetry": false,
+    "removedClasses": [
+      "DERIVED_WORKTREE",
+      "DERIVED_OUTPUT_RUNTIME_API",
+      "DERIVED_OUTPUT_RUNTIME_FRONTEND"
+    ],
+    "installedReleasePreserved": true,
+    "receiptSha256": "e839ee8bd051db5cc92bcd15c65b4b791a023b95bfbf5166d4c91d8a686c96dd",
+    "journalSha256": "68faff9672cbf1102b1dc22e6c6b77fa30ca389292192b72a431f87d5d119f7b",
+    "reviewSha256": "42ecdc22360b701157f36599e84af7e532bfb7a9970d4e6eafe667fac8461d73",
+    "finalFreeBytes": 13813510144,
+    "remainingDerivedArtifacts": 0
+  },
+  "health": {
+    "apiLocal": {
+      "http": 200,
+      "ok": true,
+      "db": "ok"
+    },
+    "apiPublic": {
+      "http": 200,
+      "ok": true,
+      "db": "ok"
+    },
+    "frontendLocalHttp": 200,
+    "frontendPublicHttp": 200
+  },
+  "campaignGuard": {
+    "open": true,
+    "generation": 41,
+    "tasks": 0,
+    "fault": null
+  },
+  "locks": {
+    "deploymentFree": true,
+    "writerFree": true,
+    "filesPreserved": true
+  },
+  "forbiddenEffects": {
+    "extraBuilds": 0,
+    "extraRestarts": 0,
+    "secondPm2Save": 0,
+    "metaCalls": 0,
+    "guardChanges": 0
+  },
+  "nextPermittedAct": "CONTINUE_ACCEPTANCE_SEQUENCE_WITHOUT_REPEATING_708F_BUILD_DEPLOY_SAVE_OR_RETIREMENT"
+}

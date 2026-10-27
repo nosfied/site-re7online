@@ -916,8 +916,41 @@ def evidence_destination(destination: Path, operational: dict[str, Any]) -> None
             continue
         if _path_has_symlink(destination.parent, root):
             deny(f"evidence_destination_unsafe:{destination.name}")
+        try:
+            parent = destination.parent.lstat()
+        except FileNotFoundError:
+            deny(f"evidence_destination_parent_missing:{destination.name}")
+        if (destination.parent.is_symlink() or not stat.S_ISDIR(parent.st_mode) or
+                parent.st_uid != os.geteuid() or parent.st_gid != os.getegid() or
+                stat.S_IMODE(parent.st_mode) not in {0o700, 0o750}):
+            deny(f"evidence_destination_parent_identity:{destination.name}")
+        if destination.exists() or destination.is_symlink():
+            deny(f"evidence_destination_exists:{destination.name}")
         return
     deny(f"evidence_destination_root:{destination.name}")
+
+
+def evidence_input(path: Path, operational: dict[str, Any]) -> None:
+    for raw in operational["canonicalRoots"]["evidence"]:
+        root = Path(raw)
+        try:
+            _strict_child(path, root, f"evidence_input_root:{path.name}")
+        except Denied:
+            continue
+        if _path_has_symlink(path.parent, root) or path.is_symlink():
+            deny(f"evidence_input_unsafe:{path.name}")
+        try:
+            parent = path.parent.lstat()
+        except FileNotFoundError:
+            deny(f"evidence_input_parent_missing:{path.name}")
+        if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != os.geteuid() or
+                parent.st_gid != os.getegid() or
+                stat.S_IMODE(parent.st_mode) not in {0o700, 0o750}):
+            deny(f"evidence_input_parent_identity:{path.name}")
+        if not path.is_file():
+            deny(f"evidence_input_missing:{path.name}")
+        return
+    deny(f"evidence_input_root:{path.name}")
 
 
 def canonical_review_destination(review: Path, contract: Path, lifecycle: Path,
@@ -1429,8 +1462,8 @@ def _authenticate_a959_prior_retention(args: argparse.Namespace, descriptor: dic
     if (args.retention_receipt_sha256 != expected["receiptSha256"] or
             args.retention_journal_sha256 != expected["journalSha256"]):
         deny("legacy_a959_retention_external_hash")
-    evidence_destination(args.retention_receipt, operational)
-    evidence_destination(args.retention_journal, operational)
+    evidence_input(args.retention_receipt, operational)
+    evidence_input(args.retention_journal, operational)
     receipt_raw, _ = stable_private(args.retention_receipt, args.retention_receipt_sha256)
     journal_raw, _ = stable_private(args.retention_journal, args.retention_journal_sha256)
     receipt = object_json(receipt_raw, "legacy-a959-retention-receipt")
@@ -1500,8 +1533,8 @@ def _authenticate_batch_prior_retention(args: argparse.Namespace, descriptor: di
     if (args.retention_receipt_sha256 != expected["receiptSha256"] or
             args.retention_journal_sha256 != expected["journalSha256"]):
         deny("legacy_batch_retention_external_hash")
-    evidence_destination(args.retention_receipt, operational)
-    evidence_destination(args.retention_journal, operational)
+    evidence_input(args.retention_receipt, operational)
+    evidence_input(args.retention_journal, operational)
     receipt_raw, _ = stable_private(args.retention_receipt, args.retention_receipt_sha256)
     journal_raw, _ = stable_private(args.retention_journal, args.retention_journal_sha256)
     receipt = object_json(receipt_raw, "legacy-batch-retention-receipt")

@@ -16,16 +16,43 @@ def require(value, reason):
 
 state = json.loads((ROOT / "docs/saas/CURRENT_STATE.json").read_text())
 require(state["schemaVersion"] in (6, 7), "schema")
-require(state["production"]["status"] == "DEPLOYED_VERIFIED", "production status")
+require(state["production"]["status"] in ("DEPLOYED_VERIFIED", "DEPLOYED_SANITIZED"),
+        "production status")
 record_path = ROOT / state["activeDeploymentRecord"]
 require(record_path.is_file(), "active record")
 record = json.loads(record_path.read_text())
-require(record["status"] == "DEPLOYED_VERIFIED", "record status")
+require(record["status"] in ("DEPLOYED_VERIFIED", "DEPLOYED_SANITIZED"), "record status")
 require(state["activeOperationalRecord"] == state["activeDeploymentRecord"],
         "single active record")
 production = state["production"]
 
-if record.get("recordType") == "FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT":
+if record.get("recordType") == "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
+    require(record["schemaVersion"] == 1, "fixed-current record schema")
+    require(record["status"] == "DEPLOYED_SANITIZED", "fixed-current terminal state")
+    require(production["targetCommit"] == record["release"]["target"], "target")
+    require(production["releaseId"] == record["release"]["id"], "release")
+    require(production["api"]["entrySha256"] ==
+            record["release"]["apiEntrypointSha256"], "API identity")
+    require(production["api"]["selectedReleaseId"] ==
+            record["release"]["id"], "API selected release")
+    require(production["frontend"]["selectedReleaseId"] ==
+            record["release"]["id"] and
+            production["frontend"]["buildId"] ==
+            record["release"]["buildId"], "frontend identity")
+    require(record["runtime"]["worker"]["preserved"] is True and
+            production["worker"]["changed"] is False and
+            production["worker"]["preserved"] is True, "worker preservation")
+    require(production["database"]["lastDeploymentMigration"] ==
+            record["release"]["migration"] ==
+            "NOT_APPLICABLE_NO_SCHEMA_CHANGE", "no-schema-change deployment")
+    require(production["pm2"]["dumpSha256"] ==
+            record["finalization"]["dumpSha256"], "PM2 identity")
+    require(record["retirement"]["state"] == "DEPLOYED_SANITIZED" and
+            record["retirement"]["remainingDerivedArtifacts"] == 0 and
+            record["retirement"]["commandsCompleted"] ==
+            record["retirement"]["commandsAttempted"] == 3,
+            "generation retirement")
+elif record.get("recordType") == "FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT":
     require(record["schemaVersion"] == 1, "frontend record schema")
     require(production["targetCommit"] == record["release"]["target"], "target")
     require(production["releaseId"] == record["release"]["id"], "release")

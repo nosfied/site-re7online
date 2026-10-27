@@ -4,66 +4,45 @@
 
 Esta é a entrada vigente de continuidade. A topologia operacional está no
 [modelo de implantação](DEPLOYMENT_OPERATING_MODEL.md), e a implantação ativa está
-no [registro estruturado](releases/CAMPAIGN_MEDIA_LAYOUT_FRONTEND_2026-10-26_DEPLOYED.json).
+no [registro estruturado 708f](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json).
 Registros anteriores continuam no [índice documental](DOCUMENTATION_INDEX.md) como
 histórico e retorno; eles não substituem este estado.
 
-## Implantação frontend vigente relatada em 26/10/2026
+## Implantação API + frontend vigente — 27/10/2026
 
-Fonte: relatório do Codex local encaminhado pelo owner, com hashes dos recibos
-privados. O editor documental não realizou nova inspeção da VPS. O horário exato
-de finalização não foi fornecido; não é inventado neste registro.
+Fonte: relatório do Codex local encaminhado pelo owner, com hashes das evidências
+privadas; o editor documental não realizou nova inspeção independente da VPS.
 
-A topologia atual é deliberadamente mista por componente: API preservada na release
-`a959`, frontend promovido isoladamente para `f160` e worker preservado. Não
-descrever `f160` como deploy da API.
+API e frontend estão na release
+`immutable-708f018c-vps-20261027T152109Z`, target
+`708f018cb853a06fd6f0f1d5d920b8b35d8fb06a`, BUILD_ID
+`LYTSr9y2MqeYwOpsBD6dy`. API: PID/ticks `745424/28396867`, restart 7;
+frontend: `745530/28397556`, restart 9. Worker preservado:
+`2233/17758`, restart 0, release `immutable-e2e7f17a-20261022T005110Z`.
+Health local/público: HTTP 200, `ok=true`, `db=ok`. Guarda aberta na geração
+41, tarefas zero e sem fault.
 
-- API: `immutable-a959129e-vps-20261026T023100Z`, PID 441355,
-  start ticks 16603839, restart count 6, entry SHA-256
-  `304ef14eb3db321a4380af768534750ac0a6823438bdae6fb3cb265b5d11bff1`.
-- Frontend: `immutable-f1602787-vps-20261026T174702Z`, target
-  `f16027874e91c86e5f818d0888e6d735b07a6eda`, PID 526037,
-  start ticks 19459289, restart count 8, BUILD_ID
-  `HYTuoIlZopPMaTrcg6uiv`, `fork_mode`, uma instância.
-- Worker: PID 2233, start ticks 17758, restart count 0; preservado.
-- Dump final:
-  `5aa289dd3b610382af34df64555ac9b9effb7793e07573b73e0057824e3b1095`;
-  exatamente um `pm2 save`.
-- Validação estrutural:
-  `e6d9d30eccb518c1de59f3f7a2dacdcdd44ca10c073d8aca64e3c232f20984d5`.
-- Marker:
-  `6e7a790fbdb7fbef0d4da3e199822cb5ba125cbb18092f1ab3773bc36c350e9e`.
-- Recibo:
-  `d807e4b3aee456f3928b5495642e78f8de123b2ab134f3c09750e76474c4ebad`.
-- Journal:
-  `e10e558bac031bd02bc044d996c404e75dcced8e31d055df4d55a2c36ee3f602`.
-- Health da API local/pública: HTTP 200, `ok=true`, `db=ok`;
-  frontend local/público: HTTP 200.
-- Guarda aberta, geração 41, zero tarefas, sem fault.
-- Lock canônico liberado pelo protocolo autenticado; arquivo `deploy:deploy 0600`
-  preservado.
+O único `pm2 save` produziu dump
+`fc86b239cdb40f3337873c60aa5ebc869c9b14421f3e320bbf6e37bd8254bd5e`.
+A reconciliação sem segundo save publicou marker
+`f56d25dfbe1e6e5319e30ef0184cc3f7cc83a6396dad72e82963ec7d3c23038f`.
+A retirada autônoma posterior concluiu `DEPLOYED_SANITIZED`: 3/3 comandos,
+sem retry, removendo apenas worktree e runtimes derivados do output. Recibo
+`e839ee8bd051db5cc92bcd15c65b4b791a023b95bfbf5166d4c91d8a686c96dd`,
+journal `68faff9672cbf1102b1dc22e6c6b77fa30ca389292192b72a431f87d5d119f7b`
+e review `42ecdc22360b701157f36599e84af7e532bfb7a9970d4e6eafe667fac8461d73`.
+A release instalada, pacote, marker e dump foram preservados; locks ficaram livres.
+Espaço final observado: 13.813.510.144 bytes.
 
-O frontend `d436` é o retorno imediato autenticado. A promoção `f160` reiniciou
-somente o frontend uma vez; API e worker não reiniciaram. O aceite técnico e visual
-confirmou alinhamento dos campos, prévia de mídia no conteúdo principal e orientações
-recolhíveis. Nenhum build adicional, chamada Meta, envio, exclusão ou alteração da
-guarda ocorreu durante ativação/finalização.
+## Continuidade canônica
 
-PIDs e contagens são observações datadas, não prova de estado vivo futuro.
-
-## Continuidade canônica de frontend-only
-
-O target funcional `f160` reutilizou a CI do head `ed9ea43` somente após prova de
-árvore Git idêntica e zero arquivos diferentes. O pacote foi construído uma vez;
-depois, um commit separado de control plane materializou os quatro bindings finais
-do executor release-bound. Essa ordem é obrigatória e está no
-[runbook](DEPLOY_RUNBOOK.md).
-
-O retorno imediato do frontend é
-`immutable-d436239e-vps-20261026T131821Z`. O retorno e os registros `a959`
-permanecem preservados. Uma atualização frontend-only futura repete a sequência
-documentada com nova release, novos hashes, executor release-bound e transação
-exclusiva; não reutiliza o executor de `f160` nem refaz o deploy atual.
+A rota vigente é API+frontend `fixed-current`: um build autenticado, preflight
+com os argumentos exatos, promoção API→frontend, aceite, um save e retirada da
+mesma geração. O preflight agora exige modos privados corretos, pai do receipt
+físico `0700` e evidência integral; o dump PM2 6.0.14 aceita suas representações
+autenticadas no topo ou em `pm2_env`. Não repetir a ativação, o save nem a retirada
+708f. Releases `a959` e `f160` permanecem referências históricas de retorno, não
+estado ativo.
 
 ## Homologação manual posterior — 26/10/2026
 
@@ -105,6 +84,12 @@ submissão aceita com aprovação `PENDING`. A tentativa anterior
 continua `NOT_PROVEN`.
 
 ## Capacidade e retenção
+
+A geração 708f está encerrada em `DEPLOYED_SANITIZED`, sem dívida atual: os três
+derivados foram retirados imediatamente após o deploy e a medição final registrou
+13.813.510.144 bytes livres. Novo build continua proibido abaixo de 12 GiB, diante
+de review não terminal ou quando criaria uma segunda candidata. Retenção incompleta
+não pode permanecer como tarefa informal: bloqueia a próxima geração até reconciliação.
 
 O encerramento obrigatório por geração está implementado no produtor e na
 ferramenta versionada `scripts/generation-retirement.py`. Novo build exige 12 GiB

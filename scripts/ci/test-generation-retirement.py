@@ -244,6 +244,7 @@ class LegacyBootstrapFixture:
         self.contract = self.output / "generation-artifacts.private.json"
         self.bootstrap_review = self.output / "generation-review.private.json"
         self.receipt = self.evidence / "legacy-bootstrap" / "bootstrap-receipt.private.json"
+        self.receipt.parent.mkdir(mode=0o700)
 
         self.verifier = self.root / "fake-converta-release.py"
         verification = {"result": "RELEASE VERIFIED", "releaseId": self.release_id,
@@ -364,6 +365,7 @@ class LegacyA959V1PreserveFixture(LegacyBootstrapFixture):
                      "decision": "PRESERVE"})
         self.bootstrap_review = self.v1_review
         self.receipt = self.evidence / "legacy-a959-bootstrap" / "bootstrap-receipt.private.json"
+        self.receipt.parent.mkdir(mode=0o700)
         self.prior_journal = self.evidence / "prior-command-results.private.jsonl"
         self.prior_receipt = self.evidence / "prior-execution-receipt.private.json"
 
@@ -599,6 +601,7 @@ class LegacyBatchV1PreserveFixture(LegacyA959V1PreserveFixture):
                           "state": "ACTIVE_DEPENDENCY", "retirableOn": "WITH_PARENT_RELEASE_ONLY"}}
                          if role == "ACTIVE_DEPENDENCY" else {})
         self.receipt = self.evidence / f"legacy-{self.release_id}-bootstrap" / "bootstrap-receipt.private.json"
+        self.receipt.parent.mkdir(mode=0o700)
         self.descriptor_value = {
             "schemaVersion": 1, "sourceState": "LEGACY_V1_PRESERVE_BATCH_MEMBER_NO_CONTRACT",
             "releaseId": self.release_id, "targetCommit": self.target, "operationalRole": role,
@@ -1848,6 +1851,28 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertIn("canonical_roots_policy_mismatch", result.stderr)
         finally:
             fixture.close()
+
+
+    def test_evidence_destination_requires_existing_private_parent(self):
+        with tempfile.TemporaryDirectory(prefix="retirement-evidence-parent-") as raw:
+            root = Path(raw) / "evidence"
+            root.mkdir(mode=0o700)
+            operational = {"canonicalRoots": {"evidence": [str(root)]}}
+            destination = root / "receipts" / "generation"
+
+            with self.assertRaisesRegex(MODULE.Denied, "evidence_destination_parent_missing"):
+                MODULE.evidence_destination(destination, operational)
+
+            destination.parent.mkdir(mode=0o700)
+            MODULE.evidence_destination(destination, operational)
+
+            destination.parent.chmod(0o750)
+            MODULE.evidence_destination(destination, operational)
+
+            destination.parent.chmod(0o770)
+            with self.assertRaisesRegex(MODULE.Denied, "evidence_destination_parent_identity"):
+                MODULE.evidence_destination(destination, operational)
+
 
 
 if __name__ == "__main__":

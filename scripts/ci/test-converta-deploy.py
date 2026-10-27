@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import importlib.util
 import json
@@ -447,6 +448,80 @@ class DriverTests(DeployFixture):
         self.host.pm2_mutate = save_without_instances  # type: ignore[method-assign]
         self.driver.finalize()
         self.assertEqual(self.driver._journal_read()["saveCount"], 1)
+
+    def test_dump_top_level_pm2_6014_representation_matches_live_configuration(self) -> None:
+        self.driver.preflight(); self.driver.activate(); self.acceptance()
+        original = self.host.pm2_mutate
+
+        def save_with_top_level_configuration(pm2: Path, args: list[str]) -> None:
+            original(pm2, args)
+            if args != ["save"]:
+                return
+            rows = json.loads(self.dump.read_text())
+            for row in rows:
+                env = row["pm2_env"]
+                for key in (
+                    "pm_cwd", "pm_exec_path", "exec_interpreter", "args", "node_args",
+                    "exec_mode", "instances", "namespace", "out_file", "error_file",
+                    "merge_logs",
+                ):
+                    if key in env:
+                        row[key] = env[key]
+                        env[key] = None
+                component = next(
+                    key for key, process_name in deploy.PROCESS_NAMES.items()
+                    if process_name == row["name"]
+                )
+                for key in self.driver._environment_keys(component):
+                    if key in env:
+                        row[key] = env[key]
+                        env[key] = None
+            put(self.dump, rows)
+
+        self.host.pm2_mutate = save_with_top_level_configuration  # type: ignore[method-assign]
+        self.driver.finalize()
+        self.assertEqual(self.driver._journal_read()["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(self.host.save_calls, 1)
+
+    def test_preflight_denies_missing_retirement_receipt_parent(self) -> None:
+        binding = dataclasses.replace(
+            self.retirement,
+            receipt_root=self.base / "missing-parent" / "receipt",
+        )
+        inputs = dataclasses.replace(self.inputs, retirement=binding)
+        with self.assertRaisesRegex(deploy.Denied, "generation_retirement_receipt_parent_missing"):
+            FixtureDriver(
+                inputs, host=self.host, repo=ROOT, releases=self.releases,
+                stable=self.stable, lock=self.lock, dump=self.dump, pm2=self.pm2,
+                clock=lambda: 1234567890.0,
+            ).preflight()
+
+    def test_retirement_failure_persists_complete_stdout_stderr_and_exit(self) -> None:
+        self.driver.preflight(); self.driver.activate(); self.acceptance()
+        original = self.host.run
+
+        def fail_retirement(command: list[str], *, timeout: float = 40) -> subprocess.CompletedProcess[str]:
+            if len(command) > 3 and command[2] == "execute" and "--intent" in command:
+                self.host.retirement_calls += 1
+                return subprocess.CompletedProcess(
+                    command, 2, "retirement-out\n",
+                    "GENERATION_RETIREMENT_DENY:fixture_predicate\n",
+                )
+            return original(command, timeout=timeout)
+
+        self.host.run = fail_retirement  # type: ignore[method-assign]
+        self.driver.finalize()
+        journal = self.driver._journal_read()
+        self.assertEqual(journal["state"], "DEPLOYED_RETENTION_INCOMPLETE")
+        evidence = journal["generationRetirement"]
+        self.assertEqual(evidence["failurePredicate"], "GENERATION_RETIREMENT_DENY:fixture_predicate")
+        self.assertEqual(Path(evidence["stdoutPath"]).read_text(), "retirement-out\n")
+        self.assertEqual(
+            Path(evidence["stderrPath"]).read_text(),
+            "GENERATION_RETIREMENT_DENY:fixture_predicate\n",
+        )
+        self.assertEqual(Path(evidence["exitPath"]).read_text(), "2\n")
+        self.assertEqual(self.host.save_calls, 1)
 
     def test_finalize_resume_never_repeats_save_or_retirement(self) -> None:
         self.driver.preflight(); self.driver.activate(); self.acceptance()
