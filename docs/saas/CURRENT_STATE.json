@@ -1,6 +1,6 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-10-27T20:16:24Z",
+  "updatedAtUtc": "2026-10-27T23:09:10Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
@@ -302,7 +302,24 @@
         "retry": false,
         "buildDeployRestartOrSaveExecuted": false
       },
-      "nextAcceptance": "PREPARE_SCHEDULING_FIRST_THEN_MULTIBATCH_THEN_CLIENT_SPECIFIC_SCOPE_WITHOUT_REPEATING_MEDIA_OR_FRONTEND_DEPLOYMENT"
+      "nextAcceptance": "SCHEDULING_CONTROLLED_SCOPE_THEN_MULTIBATCH_THEN_CLIENT_SPECIFIC_WITHOUT_REPEATING_MEDIA_OR_DEPLOYMENT",
+      "uiAcceptance": {
+        "source": "OWNER_MANUAL_PRODUCTION_INTERFACE_REPORT",
+        "reportedDate": "2026-10-27",
+        "releaseId": "immutable-708f018c-vps-20261027T152109Z",
+        "state": "PASS",
+        "layoutAligned": true,
+        "previewReplacesPrimaryGuidance": true,
+        "guidanceCollapsible": true,
+        "responsiveWithoutOverflow": true,
+        "newDraftBoundToReturnedId": true,
+        "previousCampaignSnapshotNotReused": true,
+        "discardedPresentationPass": true,
+        "cancelledPresentationPass": true,
+        "uncertaintyAlertSeparated": true,
+        "sendsExecuted": 0,
+        "schedulesExecuted": 0
+      }
     },
     "topology": "UNIFIED_API_FRONTEND_FIXED_CURRENT_WORKER_PRESERVED",
     "frontendRollback": {
@@ -445,18 +462,21 @@
     "frontendPresentationDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
     "frontendPresentationState": "DEPLOYED_VISUAL_ACCEPTANCE_PASS",
     "draftSelectionReconciliation": {
-      "state": "CODE_CANDIDATE_PENDING_REVIEW_DEPLOY_AND_ACCEPTANCE",
+      "state": "DEPLOYED_ACCEPTED",
       "classification": "FRONTEND_POST_CREATE_RECONCILIATION_DEFECT",
       "backendCreatedDistinctDraft": true,
       "affectedDraftPersistedSafe": true,
       "jobsStarted": 0,
       "outboundMessages": 0,
       "metaCalls": 0,
-      "requiredBefore": "SCHEDULING_HOMOLOGATION",
-      "contract": "SELECT_POST_ID_IMMEDIATELY_CLEAR_OLD_SNAPSHOT_VALIDATE_DETAIL_ID_AND_TENANT_REFRESH_LIST_INDEPENDENTLY"
+      "requiredBefore": "SATISFIED_FOR_SCHEDULING_HOMOLOGATION",
+      "contract": "SELECT_POST_ID_IMMEDIATELY_CLEAR_OLD_SNAPSHOT_VALIDATE_DETAIL_ID_AND_TENANT_REFRESH_LIST_INDEPENDENTLY",
+      "deploymentRelease": "immutable-708f018c-vps-20261027T152109Z",
+      "deploymentTarget": "708f018cb853a06fd6f0f1d5d920b8b35d8fb06a",
+      "manualAcceptanceDate": "2026-10-27"
     },
     "campaignTerminalPresentationCorrection": {
-      "state": "FUNCTIONAL_PR_PENDING_REVIEW",
+      "state": "DEPLOYED_ACCEPTED",
       "baseTarget": "123ba7bd78b2568ee982bf8590840de029a80072",
       "persistedLifecyclePrecedesOperationalState": true,
       "uncertaintyPresentation": "SEPARATE_PREDICATE_AND_EVIDENCE_ALERT",
@@ -464,7 +484,7 @@
         "PR_240",
         "immutable-123ba7bd-vps-20261026T200100Z"
       ],
-      "retentionState": "LEGACY_PRE_CONTRACT_BOOTSTRAP_REQUIRED",
+      "retentionState": "SUPERSEDED_123BA_SANITIZED",
       "legacyContract": {
         "sourceState": "LEGACY_PRE_CONTRACT",
         "originalContractPresent": false,
@@ -473,9 +493,12 @@
         "scope": "CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN",
         "authorizationGranted": false,
         "executionPermitted": false
-      }
+      },
+      "deploymentRelease": "immutable-708f018c-vps-20261027T152109Z",
+      "deploymentTarget": "708f018cb853a06fd6f0f1d5d920b8b35d8fb06a",
+      "manualAcceptanceDate": "2026-10-27"
     },
-    "acceptanceBoundary": "IMAGE_AND_VIDEO_CONTROLLED_SENDS_PASS; SCHEDULING_MULTIBATCH_AND_CLIENT_SPECIFIC_ACCEPTANCE_REMAIN_SEPARATE"
+    "acceptanceBoundary": "IMAGE_VIDEO_DRAFT_RECONCILIATION_AND_TERMINAL_PRESENTATION_PASS; SCHEDULING_MULTIBATCH_AND_CLIENT_SPECIFIC_ACCEPTANCE_REMAIN_SEPARATE"
   },
   "tenantScopedMetaAppId": {
     "codeState": "TECHNICALLY_DEPLOYED",
@@ -631,5 +654,5 @@
     }
   },
   "updatedAtDate": "2026-10-27",
-  "updatedAtUtcScope": "OWNER_RELAYED_708F_DEPLOYED_SANITIZED_AND_PROCESS_CONTRACT_UPDATE"
+  "updatedAtUtcScope": "OWNER_RELAYED_708F_DEPLOYED_SANITIZED_PROCESS_CONTRACT_AND_CAMPAIGN_UI_ACCEPTANCE"
 }
