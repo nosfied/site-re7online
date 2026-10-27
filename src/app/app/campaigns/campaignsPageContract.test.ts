@@ -9,6 +9,7 @@ const appShellSource = fs.readFileSync(path.join(process.cwd(), "src/components/
 const campaignDraftsSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignDrafts.ts"), "utf8");
 const campaignReusePreviewSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignReusePreview.ts"), "utf8");
 const campaignResultEvidenceSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignResultEvidence.ts"), "utf8");
+const appUxLabelsSource = fs.readFileSync(path.join(process.cwd(), "src/lib/appUxLabels.ts"), "utf8");
 const campaignBatchPanelSource = fs.readFileSync(path.join(process.cwd(), "src/components/app/CampaignBatchPanel.tsx"), "utf8");
 
 test("campaign center exposes persisted lifecycle tabs", () => {
@@ -475,3 +476,25 @@ test("campaign admission denial preserves media already stored by another admitt
   assert.ok(!handler.includes("deleteAppTemplateMedia"));
   assert.ok(!handler.includes("discardUnpersistedTemplateMedia"));
 });
+
+test("campaign detail leads with identity and keeps the audience visible across lifecycle states", () => {
+  const detailStart = pageSource.indexOf('{selectedCampaign ? (');
+  const identity = pageSource.indexOf('<span className="text-white/70">Nome:</span>', detailStart);
+  const totals = pageSource.indexOf('>Total</p>', detailStart);
+  assert.ok(detailStart >= 0 && identity > detailStart && totals > identity);
+  assert.ok(pageSource.includes('const campaignAudienceSummaryItems = useMemo'));
+  assert.ok(pageSource.includes('selectedCampaign.status === "draft" || selectedCampaign.status === "scheduled"'));
+  assert.ok(pageSource.includes('"Destinatários agendados"'));
+  assert.ok(pageSource.includes('"Destinatários processados"'));
+  assert.ok(pageSource.includes("selectedCampaign.draftReview?.recipients ?? []"));
+  assert.ok(pageSource.includes("campaignResultItems.flatMap"));
+  assert.ok(!pageSource.includes("Este tenant executa somente uma campanha ou lote por vez."));
+});
+
+test("campaign surfaces never expose the raw completed status", () => {
+  assert.ok(pageSource.includes('if (queue.status === "completed") return "Concluída";'));
+  assert.ok(pageSource.includes("getCampaignQueueStatusLabel(selectedCampaign.executionQueue.status"));
+  assert.ok(!pageSource.includes("getCampaignQueueLabel(selectedCampaign) ?? selectedCampaign.executionQueue.status"));
+  assert.ok(appUxLabelsSource.includes('case "completed":\n      return "Concluída";'));
+});
+
