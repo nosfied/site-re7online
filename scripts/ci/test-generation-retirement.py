@@ -499,7 +499,264 @@ class LegacyA959V1PreserveFixture(LegacyBootstrapFixture):
             raise AssertionError("bootstrap changed the legacy v1 review")
 
 
+class LegacyBatchV1PreserveFixture(LegacyA959V1PreserveFixture):
+    def __init__(self, role: str):
+        super().__init__()
+        old_release_id = self.release_id
+        self.role = role
+        self.release_id = ("immutable-f1602787-vps-20261026T174702Z"
+                           if role == "ACTIVE_DEPENDENCY" else
+                           "immutable-d436239e-vps-20261026T131821Z")
+        self.target = (MODULE.LEGACY_D436_F160_BINDINGS[
+            "immutable-f1602787-vps-20261026T174702Z"]["targetCommit"]
+            if role == "ACTIVE_DEPENDENCY" else
+            MODULE.LEGACY_D436_F160_BINDINGS[
+                "immutable-d436239e-vps-20261026T131821Z"]["targetCommit"])
+        old_installed = self.installed
+        self.installed = self.releases / self.release_id
+        old_installed.rename(self.installed)
+        old_release_root = self.output / old_release_id
+        self.release_root = self.output / self.release_id
+        old_release_root.rename(self.release_root)
+        old_package = self.package
+        self.package = self.output / f"{self.release_id}.tar.xz"
+        old_package.rename(self.package)
+        self.manifest = self.release_root / "manifest.json"
+        self.index = self.release_root / "index.sha256"
+        self.api = self.release_root / "api-runtime"
+        self.frontend = self.release_root / "frontend-runtime"
+        self.private_data = self.installed / "api-runtime/.data"
+        shutil.rmtree(self.private_data)
+        self.cache = self.installed / "frontend-runtime/.next/cache"
+        if role == "ACTIVE_DEPENDENCY":
+            self.cache.mkdir(parents=True, mode=0o755)
+            private_json(self.cache / "state.json", {"fixture": "runtime-cache"})
+        self.marker = self.installed / "DEPLOYED"
+        private_json(self.lifecycle, {"schemaVersion": 1, "generationId": self.release_id,
+                                     "targetCommit": self.target, "state": "COMPLETE"})
+        private_json(self.v1_review, {"schemaVersion": 1, "generationId": self.release_id,
+                     "lifecycleSha256": sha(self.lifecycle), "reviewer": "legacy-owner",
+                     "reason": "preserved before generation contracts", "evidenceSha256": "e" * 64,
+                     "decision": "PRESERVE"})
+        self.current.unlink(); os.symlink(self.installed, self.current)
+        self.pm2_rows = [{"name": "frontend" if role == "ACTIVE_DEPENDENCY" else "api",
+                          "pid": 101, "pm2_env": {
+            "pm_cwd": str(self.installed / "frontend-runtime"),
+            "pm_exec_path": str(self.installed / "frontend-runtime/server.js"),
+            "exec_mode": "fork_mode", "instances": 1, "args": [], "namespace": "default"}}]
+        self.pm2_state.write_text(json.dumps(self.pm2_rows))
+        graph = {"activeReleases": [self.release_id] if role == "ACTIVE_DEPENDENCY" else [],
+                 "rollbackReleases": [self.release_id] if role == "ROLLBACK_DEPENDENCY" else [],
+                 "transitiveReturnReleases": [], "candidateReleases": [],
+                 "installedVerifiedReleases": [self.release_id], "supersededCandidates": []}
+        private_json(self.graph, graph)
+        operational = json.loads(self.operational.read_text())
+        operational.update({"generationId": self.release_id, "releaseId": self.release_id,
+                            "targetCommit": self.target, **graph,
+                            "currentPaths": [str(self.installed)] if role == "ACTIVE_DEPENDENCY" else [],
+                            "pm2LivePaths": [str(self.installed)] if role == "ACTIVE_DEPENDENCY" else [],
+                            "pm2DumpPaths": [str(self.installed)] if role == "ACTIVE_DEPENDENCY" else [],
+                            "deploymentState": {"state": "DEPLOYED"}})
+        operational["observations"]["currentLinks"] = ([{"path": str(self.current),
+                                                            "target": str(self.installed)}]
+                                                          if role == "ACTIVE_DEPENDENCY" else [])
+        operational["observations"]["pm2"]["fingerprintSha256"] = MODULE._pm2_fingerprint(self.pm2_rows)
+        operational["observations"]["releaseGraph"]["sha256"] = sha(self.graph)
+        private_json(self.operational, operational)
+
+        ordinals = (3, 8, 9) if role == "ACTIVE_DEPENDENCY" else (2, 6, 7)
+        removed_paths = [str(self.root / f"other-{ordinal}") for ordinal in range(1, 11)]
+        removed_paths[ordinals[0] - 1] = str(self.worktree)
+        removed_paths[ordinals[1] - 1] = str(self.api)
+        removed_paths[ordinals[2] - 1] = str(self.frontend)
+        events = []
+        for ordinal, path in enumerate(removed_paths, 1):
+            kind = "git_worktree_remove" if ordinal <= 3 else "rm"
+            events.extend((
+                {"event": "ATTEMPT", "kind": kind, "ordinal": ordinal, "path": path,
+                 "result": "PENDING"},
+                {"event": "RESULT", "exitCode": 0,
+                 "inspectionPath": str(self.evidence / f"inspection-{ordinal}.json"),
+                 "inspectionSha256": f"{ordinal:064x}", "kind": kind, "ordinal": ordinal,
+                 "path": path, "result": "COMMAND_EXITED_ZERO",
+                 "worktreeRegistration": "ABSENT" if ordinal <= 3 else "NOT_APPLICABLE"},
+                {"event": "VERIFIED", "kind": kind, "ordinal": ordinal, "path": path,
+                 "result": "PASS"},
+            ))
+        self.prior_journal.write_bytes(b"".join(MODULE.canonical(event) for event in events))
+        prior = json.loads(self.prior_receipt.read_text())
+        prior["commandLogSha256"] = sha(self.prior_journal)
+        private_json(self.prior_receipt, prior)
+        prior_retention = {"batchId": "fixture-retention-10-of-10",
+                           "receiptSha256": sha(self.prior_receipt),
+                           "journalSha256": sha(self.prior_journal),
+                           "sampleASha256": "a" * 64, "sampleBSha256": "b" * 64,
+                           "removedPaths": removed_paths,
+                           "generationOrdinals": {str(ordinal): removed_paths[ordinal - 1]
+                                                  for ordinal in ordinals}}
+        cache_binding = ({"runtimeCacheOverlay": {"path": str(self.cache),
+                          "classification": "EPHEMERAL_RUNTIME_CACHE",
+                          "state": "ACTIVE_DEPENDENCY", "retirableOn": "WITH_PARENT_RELEASE_ONLY"}}
+                         if role == "ACTIVE_DEPENDENCY" else {})
+        self.receipt = self.evidence / f"legacy-{self.release_id}-bootstrap" / "bootstrap-receipt.private.json"
+        self.descriptor_value = {
+            "schemaVersion": 1, "sourceState": "LEGACY_V1_PRESERVE_BATCH_MEMBER_NO_CONTRACT",
+            "releaseId": self.release_id, "targetCommit": self.target, "operationalRole": role,
+            "outputPath": str(self.output), "worktreePath": str(self.worktree),
+            "installedReleasePath": str(self.installed), **cache_binding,
+            "lifecycle": {"path": str(self.lifecycle), "sha256": sha(self.lifecycle)},
+            "review": {"path": str(self.v1_review), "sha256": sha(self.v1_review)},
+            "package": {"path": str(self.package), "sha256": sha(self.package)},
+            "manifest": {"path": str(self.manifest), "sha256": sha(self.manifest)},
+            "index": {"path": str(self.index), "sha256": sha(self.index)},
+            "deployedMarker": {"path": str(self.marker), "sha256": sha(self.marker)},
+            "priorRetention": prior_retention, "canonicalVerifierSha256": sha(self.verifier),
+            "contractOutput": str(self.contract), "receiptOutput": str(self.receipt),
+        }
+        private_json(self.descriptor, self.descriptor_value)
+        verification = {"result": "RELEASE VERIFIED", "releaseId": self.release_id,
+                        "targetCommit": self.target, "manifestSha256": sha(self.manifest),
+                        "indexSha256": sha(self.index), "apiEntrySha256": "a" * 64,
+                        "buildId": "fixture-build", "indexEntries": 4}
+        overlay = None
+        if role == "ACTIVE_DEPENDENCY":
+            info = self.cache.lstat()
+            overlay = {"path": "frontend-runtime/.next/cache",
+                       "classification": "EPHEMERAL_RUNTIME_CACHE", "state": "ACTIVE_DEPENDENCY",
+                       "rootIdentity": {"device": info.st_dev, "inode": info.st_ino},
+                       "ownerUid": info.st_uid, "groupGid": info.st_gid,
+                       "mode": stat.S_IMODE(info.st_mode), "observedEntries": 2}
+        self.verifier.write_text(
+            "#!/usr/bin/env python3\nimport json,sys\nvalue=" + repr(verification) +
+            "\nif '--legacy-f160-runtime-cache-overlay' in sys.argv: value['runtimeCacheOverlay']=" +
+            repr(overlay) + "\nprint(json.dumps(value))\n")
+        self.verifier.chmod(0o600)
+        self.descriptor_value["canonicalVerifierSha256"] = sha(self.verifier)
+        private_json(self.descriptor, self.descriptor_value)
+        self.binding = {"descriptorSha256": sha(self.descriptor), "role": role,
+                        "targetCommit": self.target, "ordinals": ordinals,
+                        "outputPath": str(self.output), "worktreePath": str(self.worktree),
+                        "installedReleasePath": str(self.installed)}
+        if role == "ACTIVE_DEPENDENCY":
+            self.binding["overlayPath"] = str(self.cache)
+        self.batch = {key: prior_retention[key] for key in
+                      ("batchId", "receiptSha256", "journalSha256", "sampleASha256",
+                       "sampleBSha256", "removedPaths")}
+
+    def bootstrap_batch(self):
+        bindings = {**MODULE.LEGACY_D436_F160_BINDINGS, self.release_id: self.binding}
+        with patch.object(MODULE, "LEGACY_D436_F160_BINDINGS", bindings), \
+                patch.object(MODULE, "LEGACY_RETENTION_BATCH", self.batch), \
+                patch.object(MODULE, "canonical_release_verifier", return_value=self.verifier):
+            MODULE.bootstrap_legacy_batch_v1_preserve(self.arguments())
+
+    def prepare_batch(self, intent: Path, commands: Path, review_sha256: str) -> str:
+        bindings = {**MODULE.LEGACY_D436_F160_BINDINGS, self.release_id: self.binding}
+        args = SimpleNamespace(
+            contract=self.contract, contract_sha256=sha(self.contract), lifecycle=self.lifecycle,
+            lifecycle_sha256=sha(self.lifecycle), operational_state=self.operational,
+            operational_state_sha256=sha(self.operational), root_policy=self.policy,
+            root_policy_sha256=sha(self.policy), deployment_lock=self.deploy_lock,
+            intent_output=intent, commands_output=commands, review_output=self.v1_review,
+            legacy_review_sha256=review_sha256, prior_intent=None, prior_intent_sha256=None,
+            prior_receipt=None, prior_receipt_sha256=None, prior_journal=None,
+            prior_journal_sha256=None, reviewer="fixture-owner", reason="batch member reconciled")
+        output = io.StringIO()
+        with patch.object(MODULE, "LEGACY_D436_F160_BINDINGS", bindings), \
+                patch.object(MODULE, "LEGACY_RETENTION_BATCH", self.batch), redirect_stdout(output):
+            MODULE.prepare(args)
+        return output.getvalue()
+
+
 class GenerationRetirementTest(unittest.TestCase):
+    def test_versioned_d436_f160_descriptors_are_closed_and_use_exact_batch_ordinals(self):
+        expected = {
+            "immutable-d436239e-vps-20261026T131821Z": ("2", "6", "7"),
+            "immutable-f1602787-vps-20261026T174702Z": ("3", "8", "9"),
+        }
+        for release_id, ordinals in expected.items():
+            short = "d436239e" if "d436" in release_id else "f1602787"
+            path = ROOT / f"config/legacy-generation-{short}-v1-preserve.json"
+            value = json.loads(path.read_text())
+            self.assertEqual(sha(path), MODULE.LEGACY_D436_F160_BINDINGS[release_id]["descriptorSha256"])
+            self.assertEqual(tuple(value["priorRetention"]["generationOrdinals"]), ordinals)
+            self.assertEqual(value["priorRetention"]["receiptSha256"],
+                             MODULE.LEGACY_RETENTION_BATCH["receiptSha256"])
+            self.assertEqual(value["priorRetention"]["journalSha256"],
+                             MODULE.LEGACY_RETENTION_BATCH["journalSha256"])
+
+    def test_d436_f160_bootstrap_and_prepare_zero_commands_then_single_global_gate(self):
+        fixtures = [LegacyBatchV1PreserveFixture("ROLLBACK_DEPENDENCY"),
+                    LegacyBatchV1PreserveFixture("ACTIVE_DEPENDENCY")]
+        combined = Path(tempfile.mkdtemp(prefix="legacy-batch-global-gate-"))
+        try:
+            for fixture in fixtures:
+                review_sha = sha(fixture.v1_review)
+                fixture.bootstrap_batch()
+                retirement = fixture.evidence / "retirement"; retirement.mkdir(mode=0o700)
+                result = fixture.prepare_batch(retirement / "intent.json",
+                                               retirement / "commands.txt", review_sha)
+                self.assertIn('"commandCount":0', result)
+                self.assertEqual((retirement / "commands.txt").read_bytes(), b"")
+                self.assertEqual(json.loads(fixture.v1_review.read_text())["state"], "SANITIZED")
+                contract = json.loads(fixture.contract.read_text())
+                runtime = next(item for item in contract["artifacts"]
+                               if item["class"] == "RELEASE_RUNTIME")
+                self.assertEqual(runtime["state"], fixture.role)
+                destination = combined / fixture.release_id
+                shutil.copytree(fixture.output, destination)
+            accepted = RELEASE_MODULE.require_generation_reviews(combined)
+            self.assertEqual(len(accepted), 2)
+            self.assertTrue(all(item["state"] == "SANITIZED" for item in accepted))
+        finally:
+            for fixture in fixtures:
+                fixture.close()
+            shutil.rmtree(combined)
+
+    def test_f160_prepare_denies_immutable_drift_but_allows_cache_mutation(self):
+        fixture = LegacyBatchV1PreserveFixture("ACTIVE_DEPENDENCY")
+        try:
+            review_sha = sha(fixture.v1_review)
+            fixture.bootstrap_batch()
+            private_json(fixture.cache / "state.json", {"fixture": "changed-cache"})
+            retirement = fixture.evidence / "cache-change"; retirement.mkdir(mode=0o700)
+            self.assertIn('"commandCount":0', fixture.prepare_batch(
+                retirement / "intent.json", retirement / "commands.txt", review_sha))
+        finally:
+            fixture.close()
+
+        fixture = LegacyBatchV1PreserveFixture("ACTIVE_DEPENDENCY")
+        try:
+            fixture.bootstrap_batch()
+            (fixture.installed / "frontend-runtime/server.js").write_text("immutable drift\n")
+            retirement = fixture.evidence / "immutable-drift"; retirement.mkdir(mode=0o700)
+            with self.assertRaisesRegex(MODULE.Denied, "artifact_drift:"):
+                fixture.prepare_batch(retirement / "intent.json", retirement / "commands.txt",
+                                      sha(fixture.v1_review))
+        finally:
+            fixture.close()
+
+    def test_f160_cache_wrong_path_or_symlink_is_denied(self):
+        fixture = LegacyBatchV1PreserveFixture("ACTIVE_DEPENDENCY")
+        try:
+            fixture.descriptor_value["runtimeCacheOverlay"]["path"] = str(
+                fixture.installed / "frontend-runtime/.next/not-cache")
+            private_json(fixture.descriptor, fixture.descriptor_value)
+            fixture.binding["descriptorSha256"] = sha(fixture.descriptor)
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_batch_descriptor_binding"):
+                fixture.bootstrap_batch()
+        finally:
+            fixture.close()
+
+        fixture = LegacyBatchV1PreserveFixture("ACTIVE_DEPENDENCY")
+        try:
+            shutil.rmtree(fixture.cache)
+            fixture.cache.symlink_to(fixture.installed / "frontend-runtime")
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_f160_runtime_cache"):
+                fixture.bootstrap_batch()
+        finally:
+            fixture.close()
+
     def test_versioned_legacy_descriptor_is_closed_and_binds_canonical_verifier(self):
         descriptor_path = ROOT / "config/legacy-generation-123ba7bd.json"
         descriptor = json.loads(descriptor_path.read_text())

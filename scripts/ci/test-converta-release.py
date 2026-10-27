@@ -215,6 +215,28 @@ class ReleaseProducerTest(unittest.TestCase):
             "--legacy-a959-private-data-overlay",
         )
 
+    def copy_f160_release(self, name: str) -> tuple[Path, str]:
+        destination = self.base / name / MODULE.F160_LEGACY_RELEASE_ID
+        destination.parent.mkdir()
+        shutil.copytree(self.release, destination, symlinks=True)
+        manifest = json.loads((destination / "manifest.json").read_text())
+        manifest["releaseId"] = MODULE.F160_LEGACY_RELEASE_ID
+        manifest["targetCommit"] = MODULE.F160_LEGACY_TARGET
+        (destination / "manifest.json").write_text(
+            json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n"
+        )
+        marker = destination / "DEPLOYED"
+        write(marker, '{"state":"DEPLOYED"}\n', 0o600)
+        return destination, hashlib.sha256(marker.read_bytes()).hexdigest()
+
+    def verify_f160_overlay(self, root: Path, marker_sha256: str) -> subprocess.CompletedProcess[str]:
+        return invoke(
+            "verify", "--release-root", str(root), "--target", MODULE.F160_LEGACY_TARGET,
+            "--release-id", MODULE.F160_LEGACY_RELEASE_ID, "--components", COMPONENTS,
+            "--deployed-marker-sha256", marker_sha256,
+            "--legacy-f160-runtime-cache-overlay",
+        )
+
     def assert_denied(self, result: subprocess.CompletedProcess[str], predicate: str) -> None:
         self.assertEqual(result.returncode, 2, (result.stdout, result.stderr))
         self.assertIn(f"RELEASE_DENY:{predicate}", result.stderr)
@@ -380,6 +402,41 @@ class ReleaseProducerTest(unittest.TestCase):
         (extra / "api-runtime/.data").chmod(0o755)
         write(extra / "api-runtime/unindexed.txt", "extra\n")
         self.assert_denied(self.verify_a959_overlay(extra, marker_sha), "release_index_inventory")
+
+    def test_f160_cache_overlay_is_exact_mutable_and_forbidden_from_packages(self) -> None:
+        root, marker_sha = self.copy_f160_release("f160-cache-valid")
+        cache = root / "frontend-runtime/.next/cache"
+        write(cache / "webpack/state.bin", "mutable-cache\n", 0o600)
+        cache.chmod(0o755)
+        accepted = self.verify_f160_overlay(root, marker_sha)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        observed = json.loads(accepted.stdout)["runtimeCacheOverlay"]
+        self.assertEqual((observed["path"], observed["classification"], observed["state"]),
+                         ("frontend-runtime/.next/cache", "EPHEMERAL_RUNTIME_CACHE",
+                          "ACTIVE_DEPENDENCY"))
+        write(cache / "webpack/state.bin", "changed-cache\n", 0o600)
+        self.assertEqual(self.verify_f160_overlay(root, marker_sha).returncode, 0)
+
+        wrong, wrong_marker = self.copy_f160_release("f160-cache-wrong-path")
+        write(wrong / "frontend-runtime/.next/runtime-cache/state", "wrong\n", 0o600)
+        self.assert_denied(self.verify_f160_overlay(wrong, wrong_marker),
+                           "legacy_f160_runtime_cache_overlay_missing")
+
+        linked, linked_marker = self.copy_f160_release("f160-cache-symlink")
+        target = linked / "frontend-runtime/cache-target"; target.mkdir()
+        (linked / "frontend-runtime/.next/cache").symlink_to(target)
+        self.assert_denied(self.verify_f160_overlay(linked, linked_marker),
+                           "legacy_f160_runtime_cache_overlay_identity")
+
+        contaminated = self.copy_release("package-with-runtime-cache")
+        write(contaminated / "frontend-runtime/.next/cache/state", "must-not-ship\n", 0o600)
+        contaminated_package = contaminated.parent / "contaminated.tar.xz"
+        MODULE.write_package(contaminated, contaminated_package, int(EPOCH))
+        package_result = invoke("verify", "--package", str(contaminated_package),
+                                "--target", self.target, "--release-id", self.release_id,
+                                "--components", COMPONENTS)
+        self.assert_denied(package_result,
+                           "forbidden_release_entry:frontend-runtime/.next/cache")
 
     def test_runtime_removal_denied(self) -> None:
         root = self.copy_release("missing")

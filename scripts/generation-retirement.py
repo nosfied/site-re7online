@@ -19,6 +19,7 @@ from typing import Any
 SHA256 = re.compile(r"[0-9a-f]{64}")
 TERMINAL_DEPLOYMENT = {"DEPLOYED", "ROLLED_BACK", "SUPERSEDED"}
 PRESERVE_CLASSES = {"PACKAGE_PRESERVE", "EVIDENCE_PRESERVE", "PRIVATE_DATA_NEVER_RETIRE"}
+F160_CACHE_CLASS = "EPHEMERAL_RUNTIME_CACHE"
 DERIVED_CLASSES = {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_STAGING"}
 ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDING_ACTIVATION",
                    "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE"}
@@ -59,7 +60,7 @@ LEGACY_123BA_BINDING = {
         "path": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/immutable-123ba7bd-vps-20261026T200100Z/index.sha256",
         "sha256": "a91323272cdcd3a91c207a18a953f11f93e346cf3bde1f976e3229829fa0e69b",
     },
-    "canonicalVerifierSha256": "fe74eb3b866e8ca266787898eb2a6c041f56cc675277a3e525ce6b3972679374",
+    "canonicalVerifierSha256": "3261183af30a7abd9c5a0d52339c952e1934a6e274fdadaf87b1f1729a72d6e2",
     "contractOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-artifacts.private.json",
     "reviewOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-review.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-123ba7bd-vps-20261026T200100Z-legacy-bootstrap/bootstrap-receipt.private.json",
@@ -125,9 +126,28 @@ LEGACY_A959_V1_PRESERVE_BINDING = {
             "5": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/frontend-runtime",
         },
     },
-    "canonicalVerifierSha256": "fe74eb3b866e8ca266787898eb2a6c041f56cc675277a3e525ce6b3972679374",
+    "canonicalVerifierSha256": "3261183af30a7abd9c5a0d52339c952e1934a6e274fdadaf87b1f1729a72d6e2",
     "contractOutput": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-artifacts.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-a959129e-vps-20261026T023100Z-legacy-v1-bootstrap/bootstrap-receipt.private.json",
+}
+LEGACY_RETENTION_BATCH = {
+    "batchId": "retention-recent-generations-qualification-20261026T213341Z-v3",
+    "receiptSha256": "19ba46c4948e3ff1821b8b44e51fed1edf635b9b7ddd3421064dab7ee2250c74",
+    "journalSha256": "e8f593acb2801e88dbbfffb3a679b4775916491c3e2281e24a45ebf3f0e6c985",
+    "sampleASha256": "11f70b7c7b6d27f8a55bae36aa17b081ece70e8511f414da14b1f56d83661612",
+    "sampleBSha256": "94fda2c48e65e43de46d6cedc121d4b32f46339301306f452218bb8a013ea6a8",
+    "removedPaths": LEGACY_A959_V1_PRESERVE_BINDING["priorRetention"]["removedPaths"],
+}
+LEGACY_D436_F160_BINDINGS = {
+    "immutable-d436239e-vps-20261026T131821Z": {
+        "descriptorSha256": "48217e3ddab9d5ea0813eb968c00a08b0cc453075110cd58efb7ea2d5ea98f2e", "role": "ROLLBACK_DEPENDENCY",
+        "targetCommit": "d436239e13764b65642b37a4310082acd3a6a485", "ordinals": (2, 6, 7),
+    },
+    "immutable-f1602787-vps-20261026T174702Z": {
+        "descriptorSha256": "da96d6a1bab8deb34bd1aa2ca718e461072af17fb9560d79f6379c5bbaa27a57", "role": "ACTIVE_DEPENDENCY",
+        "targetCommit": "f16027874e91c86e5f818d0888e6d735b07a6eda", "ordinals": (3, 8, 9),
+        "overlayPath": "/opt/re7online/releases/immutable-f1602787-vps-20261026T174702Z/frontend-runtime/.next/cache",
+    },
 }
 
 
@@ -309,7 +329,12 @@ def validate_contract(value: dict[str, Any]) -> None:
         deny("artifact_contract_schema")
     if value.get("privateDataPolicy") != "PRIVATE_DATA_NEVER_RETIRE":
         deny("artifact_contract_private_data")
+    is_f160 = (value["releaseId"] == "immutable-f1602787-vps-20261026T174702Z" and
+               value["targetCommit"] ==
+               LEGACY_D436_F160_BINDINGS[value["releaseId"]]["targetCommit"])
     expected_classes = PRESERVE_CLASSES | DERIVED_CLASSES | {"RELEASE_RUNTIME"}
+    if is_f160:
+        expected_classes.add(F160_CACHE_CLASS)
     if value.get("classes") != sorted(expected_classes):
         deny("artifact_contract_classes")
     if not Path(str(value.get("writerLockPath", ""))).is_absolute():
@@ -319,10 +344,20 @@ def validate_contract(value: dict[str, Any]) -> None:
     paths = set()
     authenticated_retention_paths: set[str] = set()
     a959_overlay_paths: set[str] = set()
-    a959_retention = LEGACY_A959_V1_PRESERVE_BINDING["priorRetention"]
-    a959_expected_by_path = {
-        path: int(ordinal) for ordinal, path in a959_retention["a959Ordinals"].items()
-    }
+    f160_cache_paths: set[str] = set()
+    retention_binding = None
+    if (value["releaseId"] == LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] and
+            value["targetCommit"] == LEGACY_A959_V1_PRESERVE_BINDING["targetCommit"]):
+        retention_binding = LEGACY_A959_V1_PRESERVE_BINDING["priorRetention"]
+        retention_binding = {**retention_binding,
+                             "ordinals": tuple(int(item) for item in retention_binding["a959Ordinals"])}
+    elif value["releaseId"] in LEGACY_D436_F160_BINDINGS:
+        candidate = LEGACY_D436_F160_BINDINGS[value["releaseId"]]
+        if value["targetCommit"] == candidate["targetCommit"]:
+            retention_binding = {**LEGACY_RETENTION_BATCH, "ordinals": candidate["ordinals"]}
+    retention_expected_by_path = ({retention_binding["removedPaths"][ordinal - 1]: ordinal
+                                   for ordinal in retention_binding["ordinals"]}
+                                  if retention_binding else {})
     for artifact in value["artifacts"]:
         required_entry = {"path", "releaseId", "targetCommit", "expectedType", "initialIdentity", "observedIdentity",
                           "sizeBytes", "allocatedBytes", "inodes", "digest", "class", "state",
@@ -336,7 +371,7 @@ def validate_contract(value: dict[str, Any]) -> None:
                 artifact.get("targetCommit") != value["targetCommit"]):
             deny("artifact_contract_path")
         paths.add(str(path))
-        if artifact.get("class") not in PRESERVE_CLASSES | DERIVED_CLASSES | {"RELEASE_RUNTIME"}:
+        if artifact.get("class") not in expected_classes:
             deny("artifact_contract_class")
         if (value["releaseId"] == LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] and
                 value["targetCommit"] == LEGACY_A959_V1_PRESERVE_BINDING["targetCommit"] and
@@ -352,6 +387,19 @@ def validate_contract(value: dict[str, Any]) -> None:
                     artifact.get("structuralSha256") is not None):
                 deny("artifact_contract_a959_private_data_overlay")
             a959_overlay_paths.add(str(path))
+        f160 = LEGACY_D436_F160_BINDINGS["immutable-f1602787-vps-20261026T174702Z"]
+        if (value["releaseId"] == "immutable-f1602787-vps-20261026T174702Z" and
+                value["targetCommit"] == f160["targetCommit"] and
+                (str(path) == f160["overlayPath"] or artifact.get("class") == "EPHEMERAL_RUNTIME_CACHE")):
+            if (str(path) != f160["overlayPath"] or artifact.get("class") != "EPHEMERAL_RUNTIME_CACHE" or
+                    artifact.get("state") != "ACTIVE_DEPENDENCY" or
+                    artifact.get("retirableOn") != "WITH_PARENT_RELEASE_ONLY" or
+                    artifact.get("expectedType") != "directory" or
+                    artifact.get("initialIdentity") is None or
+                    artifact.get("observedIdentity") is None or
+                    artifact.get("structuralSha256") is not None):
+                deny("artifact_contract_f160_runtime_cache_overlay")
+            f160_cache_paths.add(str(path))
         if (artifact.get("state") not in ARTIFACT_STATES or
                 not isinstance(artifact.get("retirableOn"), str) or not artifact["retirableOn"] or
                 not isinstance(artifact.get("dependencies"), list) or
@@ -372,25 +420,28 @@ def validate_contract(value: dict[str, Any]) -> None:
         retention = artifact.get("removedByAuthenticatedRetention")
         if retention is not None:
             expected_retention = {"batchId", "receiptSha256", "journalSha256", "ordinal"}
-            expected_ordinal = a959_expected_by_path.get(str(path))
-            expected_class = "DERIVED_WORKTREE" if expected_ordinal == 1 else "DERIVED_OUTPUT_RUNTIME"
-            if (value["releaseId"] != LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] or
-                    value["targetCommit"] != LEGACY_A959_V1_PRESERVE_BINDING["targetCommit"] or
+            expected_ordinal = retention_expected_by_path.get(str(path))
+            expected_class = "DERIVED_WORKTREE" if expected_ordinal in {1, 2, 3} else "DERIVED_OUTPUT_RUNTIME"
+            if (retention_binding is None or
                     set(retention) != expected_retention or expected_ordinal is None or
-                    retention != {"batchId": a959_retention["batchId"],
-                                  "receiptSha256": a959_retention["receiptSha256"],
-                                  "journalSha256": a959_retention["journalSha256"],
+                    retention != {"batchId": retention_binding["batchId"],
+                                  "receiptSha256": retention_binding["receiptSha256"],
+                                  "journalSha256": retention_binding["journalSha256"],
                                   "ordinal": expected_ordinal} or
                     artifact["class"] != expected_class or artifact.get("state") != "SANITIZED"):
                 deny("artifact_contract_authenticated_retention")
             authenticated_retention_paths.add(str(path))
     if (authenticated_retention_paths and
-            authenticated_retention_paths != set(a959_expected_by_path)):
+            authenticated_retention_paths != set(retention_expected_by_path)):
         deny("artifact_contract_authenticated_retention_scope")
     if (value["releaseId"] == LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] and
             value["targetCommit"] == LEGACY_A959_V1_PRESERVE_BINDING["targetCommit"] and
             a959_overlay_paths != {LEGACY_A959_V1_PRESERVE_BINDING["privateDataOverlay"]["path"]}):
         deny("artifact_contract_a959_private_data_overlay")
+    if (value["releaseId"] == "immutable-f1602787-vps-20261026T174702Z" and
+            value["targetCommit"] == LEGACY_D436_F160_BINDINGS[value["releaseId"]]["targetCommit"] and
+            f160_cache_paths != {LEGACY_D436_F160_BINDINGS[value["releaseId"]]["overlayPath"]}):
+        deny("artifact_contract_f160_runtime_cache_overlay")
 
 
 def _strict_child(path: Path, root: Path, predicate: str) -> None:
@@ -743,9 +794,19 @@ def authenticate_artifact(artifact: dict[str, Any]) -> None:
             artifact.get("class") == "RELEASE_RUNTIME" and
             path == Path(a959_binding["installedReleasePath"])
         )
+        is_f160_installed_runtime = (
+            artifact.get("releaseId") == "immutable-f1602787-vps-20261026T174702Z" and
+            artifact.get("targetCommit") == LEGACY_D436_F160_BINDINGS[artifact["releaseId"]]["targetCommit"] and
+            artifact.get("class") == "RELEASE_RUNTIME" and
+            path == Path(LEGACY_D436_F160_BINDINGS[artifact["releaseId"]].get(
+                "installedReleasePath",
+                "/opt/re7online/releases/immutable-f1602787-vps-20261026T174702Z"))
+        )
         observed = (_legacy_structural_metrics(
             path, {Path(a959_binding["privateDataOverlay"]["path"])}
-        ) if is_a959_installed_runtime else structural_metrics(path))
+        ) if is_a959_installed_runtime else _legacy_structural_metrics(
+            path, {Path(LEGACY_D436_F160_BINDINGS[artifact["releaseId"]]["overlayPath"])}
+        ) if is_f160_installed_runtime else structural_metrics(path))
         for field in ("sizeBytes", "allocatedBytes", "inodes", "structuralSha256"):
             if observed[field] != artifact.get(field):
                 deny(f"artifact_drift:{path}:{field}")
@@ -777,6 +838,22 @@ def authenticate_artifact(artifact: dict[str, Any]) -> None:
                     not (stat.S_ISDIR(item_info.st_mode) or stat.S_ISREG(item_info.st_mode)) or
                     not (item_resolved == resolved_root or resolved_root in item_resolved.parents)):
                 deny(f"artifact_private_data_symlink:{path}")
+    if artifact["class"] == "EPHEMERAL_RUNTIME_CACHE":
+        expected_digest = {"policy", "scope", "ownerUid", "groupGid", "mode"}
+        if (not isinstance(digest, dict) or set(digest) != expected_digest or
+                digest.get("policy") != "EPHEMERAL_RUNTIME_CACHE" or
+                digest.get("scope") != "ROOT_IDENTITY_ONLY" or
+                (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) !=
+                (digest.get("ownerUid"), digest.get("groupGid"), digest.get("mode")) or
+                stat.S_IMODE(info.st_mode) & 0o022):
+            deny(f"artifact_runtime_cache_identity:{path}")
+        resolved_root = path.resolve(strict=True)
+        for item in path.rglob("*"):
+            item_info = item.lstat(); item_resolved = item.resolve(strict=True)
+            if (stat.S_ISLNK(item_info.st_mode) or
+                    not (stat.S_ISDIR(item_info.st_mode) or stat.S_ISREG(item_info.st_mode)) or
+                    not (item_resolved == resolved_root or resolved_root in item_resolved.parents)):
+                deny(f"artifact_runtime_cache_symlink:{path}")
     if stat.S_ISREG(info.st_mode) and isinstance(digest, dict) and digest.get("sha256"):
         if digest_bytes(path.read_bytes()) != digest["sha256"]:
             deny(f"artifact_hash:{path}")
@@ -866,6 +943,8 @@ def classify(artifact: dict[str, Any], contract: dict[str, Any], operational: di
     release = contract["releaseId"]
     path = artifact["path"]
     if kind in PRESERVE_CLASSES:
+        return "ACTIVE_DEPENDENCY"
+    if kind == F160_CACHE_CLASS:
         return "ACTIVE_DEPENDENCY"
     if kind == "RELEASE_RUNTIME":
         if release in operational["activeReleases"]:
@@ -1071,6 +1150,51 @@ def validate_a959_legacy_descriptor(raw: bytes, expected_sha256: str) -> dict[st
     return descriptor
 
 
+def validate_batch_legacy_descriptor(raw: bytes, expected_sha256: str) -> dict[str, Any]:
+    if digest_bytes(raw) != expected_sha256:
+        deny("legacy_batch_descriptor_hash")
+    descriptor = object_json(raw, "legacy-batch-descriptor")
+    release_id = descriptor.get("releaseId")
+    binding = LEGACY_D436_F160_BINDINGS.get(release_id)
+    if binding is None or expected_sha256 != binding["descriptorSha256"]:
+        deny("legacy_batch_descriptor_binding")
+    expected_paths = LEGACY_RETENTION_BATCH["removedPaths"]
+    expected_ordinals = {str(ordinal): expected_paths[ordinal - 1]
+                         for ordinal in binding["ordinals"]}
+    expected_overlay = ({"path": binding["overlayPath"],
+                         "classification": "EPHEMERAL_RUNTIME_CACHE",
+                         "state": "ACTIVE_DEPENDENCY",
+                         "retirableOn": "WITH_PARENT_RELEASE_ONLY"}
+                        if binding.get("overlayPath") else None)
+    required = {"schemaVersion", "sourceState", "releaseId", "targetCommit",
+                "operationalRole", "outputPath", "worktreePath", "installedReleasePath",
+                "lifecycle", "review", "package", "manifest", "index", "deployedMarker",
+                "priorRetention", "canonicalVerifierSha256", "contractOutput", "receiptOutput"}
+    if expected_overlay is not None:
+        required.add("runtimeCacheOverlay")
+    if (set(descriptor) != required or descriptor.get("schemaVersion") != 1 or
+            descriptor.get("sourceState") != "LEGACY_V1_PRESERVE_BATCH_MEMBER_NO_CONTRACT" or
+            descriptor.get("targetCommit") != binding["targetCommit"] or
+            descriptor.get("operationalRole") != binding["role"] or
+            descriptor.get("runtimeCacheOverlay") != expected_overlay):
+        deny("legacy_batch_descriptor_binding")
+    prior = descriptor.get("priorRetention")
+    if (not isinstance(prior, dict) or
+            prior != {**LEGACY_RETENTION_BATCH, "generationOrdinals": expected_ordinals}):
+        deny("legacy_batch_descriptor_retention_binding")
+    release_path = binding.get("installedReleasePath", f"/opt/re7online/releases/{release_id}")
+    output_path = binding.get("outputPath", f"/opt/re7online/build-output/{release_id}-producer")
+    worktree_path = binding.get("worktreePath", f"/opt/re7online/build-worktrees/{release_id}-source")
+    if (descriptor["installedReleasePath"] != release_path or
+            descriptor["outputPath"] != output_path or
+            descriptor["worktreePath"] != worktree_path or
+            descriptor["contractOutput"] != f"{output_path}/generation-artifacts.private.json" or
+            descriptor["review"]["path"] != f"{output_path}/generation-review.private.json" or
+            descriptor["lifecycle"]["path"] != f"{output_path}/generation-lifecycle.private.json"):
+        deny("legacy_batch_descriptor_path_binding")
+    return descriptor
+
+
 def _legacy_tree_root(path: Path, root: Path, policy: dict[str, Any], key: str) -> None:
     _strict_child(path, root, f"legacy_path_outside_root:{key}")
     if _path_has_symlink(path, root):
@@ -1161,11 +1285,14 @@ def _run_legacy_package_verifier(descriptor: dict[str, Any]) -> dict[str, Any]:
 
 
 def _run_legacy_installed_verifier(descriptor: dict[str, Any]) -> dict[str, Any]:
+    overlay_flag = (["--legacy-a959-private-data-overlay"]
+                    if descriptor["releaseId"] == LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] else
+                    ["--legacy-f160-runtime-cache-overlay"]
+                    if descriptor["releaseId"] == "immutable-f1602787-vps-20261026T174702Z" else [])
     return _run_legacy_verifier(
         descriptor,
         ["--release-root", descriptor["installedReleasePath"],
-         "--deployed-marker-sha256", descriptor["deployedMarker"]["sha256"],
-         "--legacy-a959-private-data-overlay"],
+         "--deployed-marker-sha256", descriptor["deployedMarker"]["sha256"], *overlay_flag],
         "legacy_installed_release_verification",
     )
 
@@ -1223,7 +1350,8 @@ def _run_legacy_verifier(descriptor: dict[str, Any], source: list[str], predicat
             "apiEntrySha256": verified.get("apiEntrySha256"),
             "buildId": verified.get("buildId"),
             "indexEntries": verified.get("indexEntries"),
-            "privateDataOverlay": verified.get("privateDataOverlay")}
+            "privateDataOverlay": verified.get("privateDataOverlay"),
+            "runtimeCacheOverlay": verified.get("runtimeCacheOverlay")}
 
 
 def _legacy_reference_absence(descriptor: dict[str, Any], operational: dict[str, Any]) -> None:
@@ -1262,6 +1390,28 @@ def _legacy_a959_active_reference(descriptor: dict[str, Any], operational: dict[
     for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths", "dependencies"):
         if any(any(path in value for path in derived) for value in operational[key]):
             deny("legacy_a959_derived_reference")
+
+
+def _legacy_batch_operational_reference(descriptor: dict[str, Any], operational: dict[str, Any]) -> None:
+    release = descriptor["releaseId"]
+    installed = descriptor["installedReleasePath"]
+    role = descriptor["operationalRole"]
+    required_graph = "activeReleases" if role == "ACTIVE_DEPENDENCY" else "rollbackReleases"
+    if (release not in operational[required_graph] or
+            release not in operational["installedVerifiedReleases"] or
+            release in operational["supersededCandidates"]):
+        deny("legacy_batch_operational_role")
+    if role == "ACTIVE_DEPENDENCY":
+        for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths"):
+            if not any(installed in value for value in operational[key]):
+                deny(f"legacy_batch_active_reference:{key}")
+        if not any(installed in str(item["target"])
+                   for item in operational["observations"]["currentLinks"]):
+            deny("legacy_batch_active_current_reference")
+    forbidden = (descriptor["outputPath"], descriptor["worktreePath"])
+    for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths", "dependencies"):
+        if any(any(path in value for path in forbidden) for value in operational[key]):
+            deny("legacy_batch_derived_reference")
 
 
 def _authenticate_a959_prior_retention(args: argparse.Namespace, descriptor: dict[str, Any],
@@ -1329,6 +1479,75 @@ def _authenticate_a959_prior_retention(args: argparse.Namespace, descriptor: dic
         candidate = Path(path)
         if candidate.exists() or candidate.is_symlink():
             deny(f"legacy_a959_retention_path_reappeared:{ordinal}")
+        proven[path] = {"batchId": expected["batchId"],
+                        "receiptSha256": expected["receiptSha256"],
+                        "journalSha256": expected["journalSha256"], "ordinal": ordinal}
+    return proven
+
+
+def _authenticate_batch_prior_retention(args: argparse.Namespace, descriptor: dict[str, Any],
+                                        operational: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    expected = descriptor["priorRetention"]
+    if (args.retention_receipt_sha256 != expected["receiptSha256"] or
+            args.retention_journal_sha256 != expected["journalSha256"]):
+        deny("legacy_batch_retention_external_hash")
+    evidence_destination(args.retention_receipt, operational)
+    evidence_destination(args.retention_journal, operational)
+    receipt_raw, _ = stable_private(args.retention_receipt, args.retention_receipt_sha256)
+    journal_raw, _ = stable_private(args.retention_journal, args.retention_journal_sha256)
+    receipt = object_json(receipt_raw, "legacy-batch-retention-receipt")
+    required_receipt = {
+        "state": "COMPLETED", "failurePredicate": None, "attemptedCommands": 10,
+        "completedCommands": 10, "removedPaths": 10, "automaticRetry": False,
+        "pathExpansion": False, "forceUsed": False, "pruneUsed": False,
+        "commandLogSha256": expected["journalSha256"],
+    }
+    if any(receipt.get(key) != value for key, value in required_receipt.items()):
+        deny("legacy_batch_retention_receipt_contract")
+    samples = receipt.get("freshSamples")
+    lock = receipt.get("lock")
+    if (not isinstance(samples, dict) or samples != {
+            "aSha256": expected["sampleASha256"], "bSha256": expected["sampleBSha256"]} or
+            not isinstance(lock, dict) or lock.get("acquired") is not True or
+            lock.get("heldThroughFinalInspection") is not True or
+            lock.get("heldThroughReceiptFsync") is not True or lock.get("unlink") is not False or
+            lock.get("foreignLockReleased") is not False):
+        deny("legacy_batch_retention_receipt_evidence")
+    events = _read_journal(journal_raw)
+    if len(events) != 30:
+        deny("legacy_batch_retention_event_count")
+    removed_paths = expected["removedPaths"]
+    for ordinal in range(1, 11):
+        attempt, result, verified = events[(ordinal - 1) * 3:ordinal * 3]
+        common = {"ordinal": ordinal, "path": removed_paths[ordinal - 1],
+                  "kind": A959_RETENTION_COMMAND_KINDS[ordinal - 1]}
+        if (set(attempt) != A959_RETENTION_EVENT_SCHEMAS["ATTEMPT"] or
+                attempt.get("event") != "ATTEMPT" or attempt.get("result") != "PENDING" or
+                any(attempt.get(key) != value for key, value in common.items())):
+            deny(f"legacy_batch_retention_attempt:{ordinal}")
+        expected_registration = ("ABSENT" if common["kind"] == "git_worktree_remove"
+                                 else "NOT_APPLICABLE")
+        if (set(result) != A959_RETENTION_EVENT_SCHEMAS["RESULT"] or
+                result.get("event") != "RESULT" or result.get("result") != "COMMAND_EXITED_ZERO" or
+                any(result.get(key) != value for key, value in common.items()) or
+                result.get("exitCode") != 0 or
+                result.get("worktreeRegistration") != expected_registration or
+                not isinstance(result.get("inspectionPath"), str) or not result["inspectionPath"] or
+                not isinstance(result.get("inspectionSha256"), str) or
+                SHA256.fullmatch(result["inspectionSha256"]) is None):
+            deny(f"legacy_batch_retention_result:{ordinal}")
+        if (set(verified) != A959_RETENTION_EVENT_SCHEMAS["VERIFIED"] or
+                verified.get("event") != "VERIFIED" or verified.get("result") != "PASS" or
+                any(verified.get(key) != value for key, value in common.items())):
+            deny(f"legacy_batch_retention_verified:{ordinal}")
+    proven = {}
+    for raw_ordinal, path in expected["generationOrdinals"].items():
+        ordinal = int(raw_ordinal)
+        if removed_paths[ordinal - 1] != path:
+            deny("legacy_batch_retention_descriptor_ordinal")
+        candidate = Path(path)
+        if candidate.exists() or candidate.is_symlink():
+            deny(f"legacy_batch_retention_path_reappeared:{ordinal}")
         proven[path] = {"batchId": expected["batchId"],
                         "receiptSha256": expected["receiptSha256"],
                         "journalSha256": expected["journalSha256"], "ordinal": ordinal}
@@ -1405,15 +1624,70 @@ def _a959_private_data_artifact(descriptor: dict[str, Any],
     }
 
 
-def _a959_contract_is_fully_sanitized(contract: dict[str, Any],
-                                       classified: list[dict[str, Any]]) -> bool:
-    binding = LEGACY_A959_V1_PRESERVE_BINDING
-    if (contract.get("releaseId") != binding["releaseId"] or
-            contract.get("targetCommit") != binding["targetCommit"]):
+def _f160_runtime_cache_artifact(descriptor: dict[str, Any],
+                                 installed_verification: dict[str, Any]) -> dict[str, Any]:
+    binding = descriptor["runtimeCacheOverlay"]
+    path = Path(binding["path"])
+    installed = Path(descriptor["installedReleasePath"])
+    expected_relative = Path("frontend-runtime/.next/cache")
+    if (path != installed / expected_relative or binding != {
+            "path": str(installed / expected_relative),
+            "classification": "EPHEMERAL_RUNTIME_CACHE", "state": "ACTIVE_DEPENDENCY",
+            "retirableOn": "WITH_PARENT_RELEASE_ONLY"}):
+        deny("legacy_f160_runtime_cache_binding")
+    observed = installed_verification.get("runtimeCacheOverlay")
+    required = {"path", "classification", "state", "rootIdentity", "ownerUid", "groupGid",
+                "mode", "observedEntries"}
+    if (not isinstance(observed, dict) or set(observed) != required or
+            observed.get("path") != expected_relative.as_posix() or
+            observed.get("classification") != "EPHEMERAL_RUNTIME_CACHE" or
+            observed.get("state") != "ACTIVE_DEPENDENCY"):
+        deny("legacy_f160_runtime_cache_verification")
+    identity = observed.get("rootIdentity")
+    if (not isinstance(identity, dict) or set(identity) != {"device", "inode"} or
+            any(type(identity.get(key)) is not int or identity[key] < 0
+                for key in ("device", "inode"))):
+        deny("legacy_f160_runtime_cache_verification")
+    try:
+        info = path.lstat(); installed_info = installed.lstat(); resolved = path.resolve(strict=True)
+    except OSError:
+        deny("legacy_f160_runtime_cache_identity")
+    if (path.is_symlink() or not stat.S_ISDIR(info.st_mode) or resolved != path or
+            (info.st_dev, info.st_ino) != (identity["device"], identity["inode"]) or
+            (info.st_uid, info.st_gid) != (installed_info.st_uid, installed_info.st_gid) or
+            stat.S_IMODE(info.st_mode) & 0o022):
+        deny("legacy_f160_runtime_cache_identity")
+    return {
+        "path": str(path), "releaseId": descriptor["releaseId"],
+        "targetCommit": descriptor["targetCommit"], "expectedType": "directory",
+        "initialIdentity": identity, "observedIdentity": identity,
+        "sizeBytes": info.st_size, "allocatedBytes": info.st_blocks * 512, "inodes": 1,
+        "structuralSha256": None,
+        "digest": {"policy": "EPHEMERAL_RUNTIME_CACHE", "scope": "ROOT_IDENTITY_ONLY",
+                   "ownerUid": info.st_uid, "groupGid": info.st_gid,
+                   "mode": stat.S_IMODE(info.st_mode)},
+        "class": "EPHEMERAL_RUNTIME_CACHE", "state": "ACTIVE_DEPENDENCY",
+        "retirableOn": "WITH_PARENT_RELEASE_ONLY",
+        "dependencies": ["legacy_f160_installed_overlay_verified", "active_release_preserved"],
+    }
+
+
+def _legacy_contract_is_fully_sanitized(contract: dict[str, Any],
+                                         classified: list[dict[str, Any]]) -> bool:
+    if (contract.get("releaseId") == LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] and
+            contract.get("targetCommit") == LEGACY_A959_V1_PRESERVE_BINDING["targetCommit"]):
+        retention = LEGACY_A959_V1_PRESERVE_BINDING["priorRetention"]
+        expected_by_path = {path: int(ordinal)
+                            for ordinal, path in retention["a959Ordinals"].items()}
+    elif (contract.get("releaseId") in LEGACY_D436_F160_BINDINGS and
+          contract.get("targetCommit") ==
+          LEGACY_D436_F160_BINDINGS[contract["releaseId"]]["targetCommit"]):
+        binding = LEGACY_D436_F160_BINDINGS[contract["releaseId"]]
+        retention = LEGACY_RETENTION_BATCH
+        expected_by_path = {retention["removedPaths"][ordinal - 1]: ordinal
+                            for ordinal in binding["ordinals"]}
+    else:
         return False
-    retention = binding["priorRetention"]
-    expected_by_path = {path: int(ordinal)
-                        for ordinal, path in retention["a959Ordinals"].items()}
     derived = [item for item in classified if item["class"] in DERIVED_CLASSES]
     return (set(item["path"] for item in derived) == set(expected_by_path) and
             all(item.get("retentionState") == "SANITIZED" and
@@ -1588,6 +1862,171 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
         # The v1 review is authenticated input. Bootstrap never rewrites it.
         stable_private(review_path, descriptor["review"]["sha256"])
         write_or_verify_exact(receipt_output, receipt_raw, "legacy_a959_receipt")
+        print(canonical({"result": "LEGACY_CONTRACT_MATERIALIZED",
+                         "contractSha256": receipt["contractSha256"],
+                         "reviewSha256": receipt["preservedReviewSha256"],
+                         "receiptSha256": digest_bytes(receipt_raw), "authorizationGranted": False,
+                         "executionPermitted": False}).decode().strip())
+    finally:
+        os.close(writer_fd)
+
+
+def bootstrap_legacy_batch_v1_preserve(args: argparse.Namespace) -> None:
+    descriptor_raw, _ = stable_policy(args.descriptor, args.descriptor_sha256)
+    policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
+    operational_raw, _ = stable_private(args.operational_state, args.operational_state_sha256)
+    descriptor = validate_batch_legacy_descriptor(descriptor_raw, args.descriptor_sha256)
+    policy = validate_root_policy(policy_raw, args.root_policy_sha256)
+    operational = object_json(operational_raw, "operational-state")
+    identity = {"generationId": descriptor["releaseId"], "releaseId": descriptor["releaseId"],
+                "targetCommit": descriptor["targetCommit"]}
+    validate_operational(operational, identity, policy)
+    _legacy_batch_operational_reference(descriptor, operational)
+
+    outputs_root = authenticate_policy_root(policy, "outputs")[0]
+    worktrees_root = authenticate_policy_root(policy, "worktrees")[0]
+    releases_root = authenticate_policy_root(policy, "releases")[0]
+    authenticate_policy_root(policy, "evidence")
+    output = Path(descriptor["outputPath"])
+    worktree = Path(descriptor["worktreePath"])
+    installed = Path(descriptor["installedReleasePath"])
+    _legacy_tree_root(output, outputs_root, policy, "outputs")
+    _legacy_tree_root(installed, releases_root, policy, "releases")
+    _strict_child(worktree, worktrees_root, "legacy_batch_worktree_outside_root")
+    if (_path_has_symlink(worktree.parent, worktrees_root) or worktree.exists() or
+            worktree.is_symlink()):
+        deny("legacy_batch_worktree_not_retired")
+
+    lifecycle_path = Path(descriptor["lifecycle"]["path"])
+    review_path = Path(descriptor["review"]["path"])
+    contract_output = Path(descriptor["contractOutput"])
+    receipt_output = Path(descriptor["receiptOutput"])
+    if (contract_output != output / "generation-artifacts.private.json" or
+            lifecycle_path != output / "generation-lifecycle.private.json" or
+            review_path != output / "generation-review.private.json"):
+        deny("legacy_batch_destination_binding")
+    canonical_review_destination(review_path, contract_output, lifecycle_path, policy)
+    evidence_destination(receipt_output, operational)
+
+    writer_fd = acquire_existing_lock(outputs_root / ".generation-build.lock")
+    try:
+        retired = _authenticate_batch_prior_retention(args, descriptor, operational)
+        lifecycle_raw, _ = stable_regular_hash(lifecycle_path, descriptor["lifecycle"]["sha256"],
+                                               "legacy_batch_lifecycle")
+        lifecycle = object_json(lifecycle_raw, "legacy-batch-lifecycle")
+        if (lifecycle.get("schemaVersion") != 1 or
+                lifecycle.get("generationId") != descriptor["releaseId"] or
+                lifecycle.get("targetCommit") != descriptor["targetCommit"] or
+                lifecycle.get("state") != "COMPLETE"):
+            deny("legacy_batch_lifecycle_identity")
+        review_raw, review_info = stable_private(review_path, descriptor["review"]["sha256"])
+        review = object_json(review_raw, "legacy-batch-review")
+        if (set(review) != {"schemaVersion", "generationId", "lifecycleSha256", "reviewer",
+                           "reason", "evidenceSha256", "decision"} or
+                review.get("schemaVersion") != 1 or
+                review.get("generationId") != descriptor["releaseId"] or
+                review.get("lifecycleSha256") != descriptor["lifecycle"]["sha256"] or
+                review.get("decision") != "PRESERVE"):
+            deny("legacy_batch_review_identity")
+        for name in ("package", "manifest", "index", "deployedMarker"):
+            stable_regular_hash(Path(descriptor[name]["path"]), descriptor[name]["sha256"],
+                                f"legacy_batch_{name}")
+        package_verification = _run_legacy_package_verifier(descriptor)
+        installed_verification = _run_legacy_installed_verifier(descriptor)
+        if any(package_verification.get(field) != installed_verification.get(field)
+               for field in ("apiEntrySha256", "buildId", "indexEntries")):
+            deny("legacy_batch_package_installed_mismatch")
+        cache_artifact = (_f160_runtime_cache_artifact(descriptor, installed_verification)
+                          if "runtimeCacheOverlay" in descriptor else None)
+        ignored_installed = ({Path(descriptor["runtimeCacheOverlay"]["path"])}
+                             if cache_artifact else set())
+        fresh = capture_fresh_operational(operational)
+        ignored_output = {contract_output}
+        observation_a = {"output": _tree_observation(output, "legacy-batch-output", ignored_output),
+                         "installed": _tree_observation(installed, "legacy-batch-installed",
+                                                        ignored_installed),
+                         "absentDerived": sorted(retired)}
+        installed_info = installed.lstat()
+        installed_artifact = {
+            "path": str(installed), "releaseId": descriptor["releaseId"],
+            "targetCommit": descriptor["targetCommit"], "expectedType": "directory",
+            "initialIdentity": {"device": installed_info.st_dev, "inode": installed_info.st_ino},
+            "observedIdentity": {"device": installed_info.st_dev, "inode": installed_info.st_ino},
+            **_legacy_structural_metrics(installed, ignored_installed),
+            "digest": {"manifestSha256": descriptor["manifest"]["sha256"],
+                       "indexSha256": descriptor["index"]["sha256"],
+                       "operationalMarkerSha256": descriptor["deployedMarker"]["sha256"]},
+            "class": "RELEASE_RUNTIME", "state": descriptor["operationalRole"],
+            "retirableOn": "NEVER_WHILE_OPERATIONALLY_REFERENCED",
+            "dependencies": ["installed_release_verified", "operational_role_preserved"],
+        }
+        release_root = output / descriptor["releaseId"]
+        artifacts = [
+            _legacy_artifact(Path(descriptor["package"]["path"]), descriptor, "PACKAGE_PRESERVE",
+                             "ACTIVE_DEPENDENCY", {"sha256": descriptor["package"]["sha256"]}),
+            _legacy_artifact(Path(descriptor["manifest"]["path"]), descriptor, "PACKAGE_PRESERVE",
+                             "ACTIVE_DEPENDENCY", {"sha256": descriptor["manifest"]["sha256"]}),
+            _legacy_artifact(Path(descriptor["index"]["path"]), descriptor, "PACKAGE_PRESERVE",
+                             "ACTIVE_DEPENDENCY", {"sha256": descriptor["index"]["sha256"]}),
+            _legacy_artifact(lifecycle_path, descriptor, "EVIDENCE_PRESERVE", "ACTIVE_DEPENDENCY",
+                             {"sha256": descriptor["lifecycle"]["sha256"]}),
+            installed_artifact,
+            _authenticated_retired_artifact(worktree, descriptor, "DERIVED_WORKTREE",
+                                            retired[str(worktree)],
+                                            {"gitCommit": descriptor["targetCommit"]}),
+            _authenticated_retired_artifact(
+                release_root / "api-runtime", descriptor, "DERIVED_OUTPUT_RUNTIME",
+                retired[str(release_root / "api-runtime")],
+                {"indexSha256": descriptor["index"]["sha256"]}),
+            _authenticated_retired_artifact(
+                release_root / "frontend-runtime", descriptor, "DERIVED_OUTPUT_RUNTIME",
+                retired[str(release_root / "frontend-runtime")],
+                {"indexSha256": descriptor["index"]["sha256"]}),
+        ]
+        if cache_artifact:
+            artifacts.insert(5, cache_artifact)
+        for artifact in artifacts:
+            if artifact["class"] in {"PACKAGE_PRESERVE", "EVIDENCE_PRESERVE"}:
+                artifact["retirableOn"] = "NEVER_AUTOMATIC"
+                artifact["dependencies"] = ["legacy_batch_bootstrap_authenticated"]
+        observation_b = {"output": _tree_observation(output, "legacy-batch-output", ignored_output),
+                         "installed": _tree_observation(installed, "legacy-batch-installed",
+                                                        ignored_installed),
+                         "absentDerived": sorted(retired)}
+        if observation_a != observation_b:
+            deny("legacy_batch_tree_drift_between_samples")
+        if capture_fresh_operational(operational) != fresh:
+            deny("legacy_batch_operational_drift")
+        review_after, after_info = stable_private(review_path, descriptor["review"]["sha256"])
+        if (review_after != review_raw or
+                (review_info.st_dev, review_info.st_ino) != (after_info.st_dev, after_info.st_ino)):
+            deny("legacy_batch_review_changed")
+        contract = {"schemaVersion": 1, "generationId": descriptor["releaseId"],
+                    "releaseId": descriptor["releaseId"], "targetCommit": descriptor["targetCommit"],
+                    "state": "COMPLETE", "writerLockPath": str(outputs_root / ".generation-build.lock"),
+                    "classes": sorted(PRESERVE_CLASSES | DERIVED_CLASSES | {"RELEASE_RUNTIME"} |
+                                      ({F160_CACHE_CLASS} if cache_artifact else set())),
+                    "artifacts": artifacts, "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE"}
+        validate_contract(contract)
+        contract_raw = canonical(contract)
+        receipt = {"schemaVersion": 1, "state": "LEGACY_CONTRACT_MATERIALIZED",
+                   "sourceState": descriptor["sourceState"],
+                   "scope": "CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN", "releaseId": descriptor["releaseId"],
+                   "targetCommit": descriptor["targetCommit"], "descriptorSha256": args.descriptor_sha256,
+                   "rootPolicySha256": args.root_policy_sha256,
+                   "operationalStateSha256": args.operational_state_sha256,
+                   "contractSha256": digest_bytes(contract_raw),
+                   "preservedReviewSha256": descriptor["review"]["sha256"],
+                   "priorRetentionReceiptSha256": descriptor["priorRetention"]["receiptSha256"],
+                   "priorRetentionJournalSha256": descriptor["priorRetention"]["journalSha256"],
+                   "packageVerification": package_verification,
+                   "installedVerification": installed_verification,
+                   "observations": [observation_a, observation_b], "authorizationGranted": False,
+                   "executionPermitted": False, "destructiveCommands": 0, "globalInventory": False}
+        receipt_raw = canonical(receipt)
+        write_or_verify_exact(contract_output, contract_raw, "legacy_batch_contract")
+        stable_private(review_path, descriptor["review"]["sha256"])
+        write_or_verify_exact(receipt_output, receipt_raw, "legacy_batch_receipt")
         print(canonical({"result": "LEGACY_CONTRACT_MATERIALIZED",
                          "contractSha256": receipt["contractSha256"],
                          "reviewSha256": receipt["preservedReviewSha256"],
@@ -1794,7 +2233,7 @@ def prepare(args: argparse.Namespace) -> None:
                                  "class": artifact["class"], "argv": command, "literal": text,
                                  "allocatedBytes": artifact["allocatedBytes"],
                                  "eligibilityAtPrepare": state})
-        state = ("SANITIZED" if _a959_contract_is_fully_sanitized(contract, classified)
+        state = ("SANITIZED" if _legacy_contract_is_fully_sanitized(contract, classified)
                  else review_state([item["retentionState"] for item in classified]))
         intent = {
             "schemaVersion": 3, "generationId": contract["generationId"],
@@ -2080,6 +2519,18 @@ def parser() -> argparse.ArgumentParser:
     a959_parser.add_argument("--retention-journal", type=Path, required=True)
     a959_parser.add_argument("--retention-journal-sha256", required=True)
     a959_parser.set_defaults(handler=bootstrap_legacy_a959_v1_preserve)
+    batch_parser = commands.add_parser("bootstrap-legacy-batch-v1-preserve")
+    batch_parser.add_argument("--descriptor", type=Path, required=True)
+    batch_parser.add_argument("--descriptor-sha256", required=True)
+    batch_parser.add_argument("--root-policy", type=Path, required=True)
+    batch_parser.add_argument("--root-policy-sha256", required=True)
+    batch_parser.add_argument("--operational-state", type=Path, required=True)
+    batch_parser.add_argument("--operational-state-sha256", required=True)
+    batch_parser.add_argument("--retention-receipt", type=Path, required=True)
+    batch_parser.add_argument("--retention-receipt-sha256", required=True)
+    batch_parser.add_argument("--retention-journal", type=Path, required=True)
+    batch_parser.add_argument("--retention-journal-sha256", required=True)
+    batch_parser.set_defaults(handler=bootstrap_legacy_batch_v1_preserve)
     prepare_parser = commands.add_parser("prepare")
     for name in ("contract", "lifecycle", "operational-state"):
         prepare_parser.add_argument(f"--{name}", type=Path, required=True)
