@@ -50,6 +50,36 @@ build, deploy, save, IMAGE ou VIDEO para reproduzir essa prova. Próximo ato: de
 template, destinatário controlado e horário futuro antes de autorizar um único
 agendamento.
 
+## Homologação de agendamento estático — 27/10/2026
+
+Auditoria somente leitura relatada pelo owner para a campanha
+`Campanha teste out.36` no tenant Demo: agendamento para 20h35 no horário de
+Fortaleza, equivalente a `2026-10-27T23:35:00Z`. A campanha estática terminou
+`completed`; iniciou às 20:35:24.413 e encerrou às 20:35:29.085. Houve um job
+`campaign`, `attempt=1`, dois outbounds e exatamente dois destinatários distintos,
+finais 9614 e 7784. Cada destinatário teve uma submissão e um provider message id;
+os dois resultados terminaram `read`, com CRM, conversa e
+`campaign.recipient.contact_bootstrap_ready` confirmados. Zero retry, duplicidade,
+incerteza, lease, job reclamável ou pendência de persistência. Guarda aberta na
+geração 41, tarefas zero e sem fault; health local/público após redirecionamento:
+ok=true/db=ok.
+
+A API manteve o contrato por fase: em `scheduled`, audiência ainda pendente em
+`draftReview.recipients`; em `completed`, os destinatários processados migram para
+`messagesMetaStatus`. A interface 708f mostrava nominalmente apenas
+`draftReview.recipients` no bloco exclusivo de rascunho, criando uma lacuna visual
+sem perda de dados. A correção candidata mantém audiência estática visível em
+rascunho/agendada e usa resultados reais após materialização; também coloca
+nome/modelo/datas no topo, remove o texto explicativo da fila do tenant e impede
+status cru em inglês. Até novo deploy e aceite, classificar como
+**CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE**.
+
+Evidências privadas: 24 arquivos; índice SHA-256
+`0b0079d064e343ba8727f11113aba600e1398896877d671e07a657446f8a39a8`.
+O coletor terminou com código 134 somente no teardown posterior à serialização, sem
+nova consulta; o snapshot foi produzido em transação READ ONLY / REPEATABLE READ e
+permanece válido no escopo registrado. Não repetir envio para obter a mesma prova.
+
 ## Continuidade canônica
 
 A rota vigente é API+frontend `fixed-current`: um build autenticado, preflight
