@@ -356,7 +356,7 @@
     ],
     "frontendMode": "FORK_MODE_SINGLE_INSTANCE_DIRECT_NEXT",
     "smoke": "GET_ONLY",
-    "rollback": "RESTORE_SYMLINKS_AND_FULL_PM2_DEFINITIONS"
+    "rollback": "RESTORE_SYMLINKS_AND_RESTART_EXISTING_PM2_RECORDS"
   },
   "obsoleteMechanisms": [
     "BUILD_IN_ACTIVE_RUNTIME",
