@@ -97,15 +97,28 @@ Portanto, `123ba` e `a959` não compartilham bootstrap: a primeira é
 e exige prova adicional da release ativa. Nenhuma geração futura pode usar essas
 exceções.
 
-As duas dívidas v1 remanescentes do mesmo lote `10/10` também têm descriptors
-fechados e não reutilizam os bindings da `a959`. O subcomando
+As duas antigas dívidas v1 do mesmo lote `10/10` têm descriptors fechados e não
+reutilizam os bindings da `a959`. O subcomando
 `bootstrap-legacy-batch-v1-preserve` aceita somente `d436` com ordinais `2/6/7`
 e release `ROLLBACK_DEPENDENCY`, ou `f160` com ordinais `3/8/9` e release
 `ACTIVE_DEPENDENCY`. Em ambos os casos, receipt e journal completos são
 autenticados pelos hashes canônicos, os três derivados precisam continuar
 ausentes e o bootstrap não enumera outras gerações. Cada `prepare` gera zero
 comandos e migra sua review v1 para v2 `SANITIZED`; o gate global roda uma única
-vez, somente depois das duas migrações.
+vez, somente depois das duas migrações. Esse procedimento foi concluído uma única
+vez em 27/10/2026: ambos os `prepare` geraram zero comandos, as reviews v2 ficaram
+`SANITIZED` e o gate global aceitou quatro reviews. Portanto, `d436/f160` não são
+mais dívidas operacionais e o bootstrap não deve ser repetido.
+
+Os hashes finais são: contratos `d436/f160`
+`317cf901e06e9f76b211fa046dce537bb8fa9df0643cc1ae34350ac332c6ddbc` /
+`a0f224b7c05b792ec978915351544791e648f7b52c5f14d5f16cb1bf80798bdc`;
+reviews v2 `3e3bf9d15ad97997f92f6689fcd044f969c1b76194183bdb7075fb87355d43e2` /
+`8f2deb17acc9305ebd27b1dc98431068af3d5891bb6df0bac81f40761e2b74a6`;
+gate global `3f3bf713765fa27446bccf8ce3dbbfebada370fb643743591fbaf9f9c7c59bfc`.
+Junto com as regularizações anteriores de `123ba` e `a959`, isso encerra todas as
+dívidas legadas conhecidas. A política continua fail-closed: qualquer nova dívida
+volta a bloquear o build.
 
 Exclusivamente na release instalada `f160`, o caminho literal
 `frontend-runtime/.next/cache` é `EPHEMERAL_RUNTIME_CACHE/ACTIVE_DEPENDENCY`.

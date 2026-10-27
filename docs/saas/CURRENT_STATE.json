@@ -507,9 +507,10 @@
   },
   "artifactGenerationLifecycle": {
     "schemaVersion": 1,
-    "state": "MANDATORY_GENERATION_RETIREMENT_IMPLEMENTED",
+    "state": "MANDATORY_GENERATION_RETIREMENT_IMPLEMENTED_NO_CURRENT_DEBT",
     "minimumFreeBytesBeforeBuild": 12884901888,
     "retentionDebtBlocksBuild": true,
+    "currentRetentionDebtPresent": false,
     "maximumPendingCandidates": 1,
     "terminalSuccess": "DEPLOYED_SANITIZED",
     "terminalIncomplete": "DEPLOYED_RETENTION_INCOMPLETE",
@@ -519,8 +520,9 @@
     "partialRetirementReconciliation": "AUTHENTICATED_PRIOR_INTENT_RECEIPT_JOURNAL_REMAINING_ONLY",
     "canonicalRootAuthority": "config/deploy-artifact-roots.json",
     "operationalObservationSchemaVersion": 2,
-    "legacy123baMigration": "BOOTSTRAP_DESCRIPTOR_HASH_BOUND_CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN",
+    "legacy123baMigration": "SANITIZED_REVIEW_V2_CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN",
     "legacyA959Migration": {
+      "state": "SANITIZED_REVIEW_V2",
       "sourceState": "LEGACY_V1_PRESERVE_NO_CONTRACT",
       "bootstrapDescriptor": "config/legacy-generation-a959129e-v1-preserve.json",
       "bootstrapWrites": [
@@ -551,18 +553,29 @@
       "scope": "A959_ONLY_NOT_GENERALIZABLE"
     },
     "legacyD436F160Migration": {
+      "state": "SANITIZED_REVIEWS_V2_GLOBAL_GATE_PASS",
       "sourceState": "LEGACY_V1_PRESERVE_BATCH_MEMBER_NO_CONTRACT",
       "bootstrapCommand": "bootstrap-legacy-batch-v1-preserve",
       "priorRetentionBatch": "retention-recent-generations-qualification-20261026T213341Z-v3",
       "d436": {
         "descriptor": "config/legacy-generation-d436239e-v1-preserve.json",
         "ordinals": [2, 6, 7],
-        "installedReleaseState": "ROLLBACK_DEPENDENCY"
+        "installedReleaseState": "ROLLBACK_DEPENDENCY",
+        "contractSha256": "317cf901e06e9f76b211fa046dce537bb8fa9df0643cc1ae34350ac332c6ddbc",
+        "bootstrapReceiptSha256": "d7e776b72bf6351b05df6abf4dc3985a1ff995f4d1ed25cebb99f89889e66bc1",
+        "intentSha256": "0cf61ee0f983f33c2c4441aeaee4efcccccf9bf2eee1bf85e99576fcc87e9e0b",
+        "commandsSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "reviewV2Sha256": "3e3bf9d15ad97997f92f6689fcd044f969c1b76194183bdb7075fb87355d43e2"
       },
       "f160": {
         "descriptor": "config/legacy-generation-f1602787-v1-preserve.json",
         "ordinals": [3, 8, 9],
         "installedReleaseState": "ACTIVE_DEPENDENCY",
+        "contractSha256": "a0f224b7c05b792ec978915351544791e648f7b52c5f14d5f16cb1bf80798bdc",
+        "bootstrapReceiptSha256": "561b29c39275f0509fb87de91c693952a295dff3c498727b55a036f7173f6ac8",
+        "intentSha256": "1c510a43d0471fac954c70a10b42e0d26d2693ddbaab5e3675cf2a1e4e2246e7",
+        "commandsSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "reviewV2Sha256": "8f2deb17acc9305ebd27b1dc98431068af3d5891bb6df0bac81f40761e2b74a6",
         "runtimeCache": {
           "path": "frontend-runtime/.next/cache",
           "classification": "EPHEMERAL_RUNTIME_CACHE",
@@ -572,7 +585,14 @@
         }
       },
       "canonicalPrepare": "TWO_ZERO_COMMAND_PREPARES_REVIEWS_V2_SANITIZED",
-      "globalGate": "ONCE_AFTER_BOTH_PREPARES",
+      "globalGate": "PASS_ONCE_AFTER_BOTH_PREPARES",
+      "globalGateSha256": "3f3bf713765fa27446bccf8ce3dbbfebada370fb643743591fbaf9f9c7c59bfc",
+      "globalGateAcceptedReviewCount": 4,
+      "jointReceiptSha256": "212b736c4cb17ea1c6fbe259548f1a475d7c7dcca4f3951f2a2826c5615221d7",
+      "finalFreeBytes": 15083352064,
+      "finalFreeInodes": 8939625,
+      "productionChanged": false,
+      "locksFreeAfterCompletion": true,
       "executeRequired": false
     },
     "lastCompletedBatch": {
@@ -590,6 +610,6 @@
       "lockFreeAfterCompletion": true
     }
   },
-  "updatedAtDate": "2026-10-26",
-  "updatedAtUtcScope": "DOCUMENTATION_UPDATE_FROM_OWNER_RELAYED_DEPLOYMENT_REPORT"
+  "updatedAtDate": "2026-10-27",
+  "updatedAtUtcScope": "DOCUMENTATION_UPDATE_FROM_AUTHENTICATED_JOINT_LEGACY_REGULARIZATION_RECEIPT"
 }
