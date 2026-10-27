@@ -1,6 +1,6 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-10-27T23:59:00Z",
+  "updatedAtUtc": "2026-10-27T20:16:24Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
