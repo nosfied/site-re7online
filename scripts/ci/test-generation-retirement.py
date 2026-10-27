@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -343,6 +345,8 @@ class LegacyA959V1PreserveFixture(LegacyBootstrapFixture):
                      "decision": "PRESERVE"})
         self.bootstrap_review = self.v1_review
         self.receipt = self.evidence / "legacy-a959-bootstrap" / "bootstrap-receipt.private.json"
+        self.prior_journal = self.evidence / "prior-command-results.private.jsonl"
+        self.prior_receipt = self.evidence / "prior-execution-receipt.private.json"
 
         self.current.unlink(); os.symlink(self.installed, self.current)
         self.pm2_rows = [{"name": "api", "pid": 101, "pm2_env": {
@@ -363,6 +367,34 @@ class LegacyA959V1PreserveFixture(LegacyBootstrapFixture):
         operational["observations"]["pm2"]["fingerprintSha256"] = MODULE._pm2_fingerprint(self.pm2_rows)
         operational["observations"]["releaseGraph"]["sha256"] = sha(self.graph)
         private_json(self.operational, operational)
+        removed_paths = [
+            str(self.worktree), str(self.root / "other-worktree-a"), str(self.root / "other-worktree-b"),
+            str(self.api), str(self.frontend), str(self.root / "other-output-a"),
+            str(self.root / "other-output-b"), str(self.root / "other-output-c"),
+            str(self.root / "other-output-d"), str(self.root / "other-staging"),
+        ]
+        events = []
+        for ordinal, path in enumerate(removed_paths, 1):
+            events.extend(({"event": "ATTEMPT", "ordinal": ordinal, "path": path},
+                           {"event": "RESULT", "ordinal": ordinal, "exitCode": 0},
+                           {"event": "VERIFIED", "ordinal": ordinal, "absent": True}))
+        self.prior_journal.write_bytes(b"".join(MODULE.canonical(event) for event in events))
+        self.prior_journal.chmod(0o600)
+        prior = {"state": "COMPLETED", "failurePredicate": None, "attemptedCommands": 10,
+                 "completedCommands": 10, "removedPaths": 10, "automaticRetry": False,
+                 "pathExpansion": False, "forceUsed": False, "pruneUsed": False,
+                 "commandLogSha256": sha(self.prior_journal),
+                 "freshSamples": {"aSha256": "a" * 64, "bSha256": "b" * 64},
+                 "lock": {"acquired": True, "heldThroughFinalInspection": True,
+                          "heldThroughReceiptFsync": True, "unlink": False,
+                          "foreignLockReleased": False}}
+        private_json(self.prior_receipt, prior)
+        prior_retention = {
+            "batchId": "fixture-retention-10-of-10", "receiptSha256": sha(self.prior_receipt),
+            "journalSha256": sha(self.prior_journal), "sampleASha256": "a" * 64,
+            "sampleBSha256": "b" * 64, "removedPaths": removed_paths,
+            "a959Ordinals": {"1": str(self.worktree), "4": str(self.api), "5": str(self.frontend)},
+        }
         self.descriptor_value = {
             "schemaVersion": 1, "sourceState": "LEGACY_V1_PRESERVE_NO_CONTRACT",
             "releaseId": self.release_id, "targetCommit": self.target,
@@ -374,10 +406,22 @@ class LegacyA959V1PreserveFixture(LegacyBootstrapFixture):
             "manifest": {"path": str(self.manifest), "sha256": sha(self.manifest)},
             "index": {"path": str(self.index), "sha256": sha(self.index)},
             "deployedMarker": {"path": str(self.marker), "sha256": sha(self.marker)},
+            "priorRetention": prior_retention,
             "canonicalVerifierSha256": sha(self.verifier), "contractOutput": str(self.contract),
             "receiptOutput": str(self.receipt),
         }
         private_json(self.descriptor, self.descriptor_value)
+        subprocess.run(["git", "-C", str(self.repository), "worktree", "remove", str(self.worktree)],
+                       check=True, stdout=subprocess.DEVNULL)
+        shutil.rmtree(self.api); shutil.rmtree(self.frontend)
+
+    def arguments(self):
+        value = super().arguments()
+        value.retention_receipt = self.prior_receipt
+        value.retention_receipt_sha256 = sha(self.prior_receipt)
+        value.retention_journal = self.prior_journal
+        value.retention_journal_sha256 = sha(self.prior_journal)
+        return value
 
     def bootstrap_a959(self):
         before = (self.v1_review.stat().st_ino, sha(self.v1_review))
@@ -385,6 +429,31 @@ class LegacyA959V1PreserveFixture(LegacyBootstrapFixture):
                 patch.object(MODULE, "canonical_release_verifier", return_value=self.verifier):
             MODULE.bootstrap_legacy_a959_v1_preserve(self.arguments())
         self.assert_review_preserved(before)
+
+    def rebind_prior_retention(self) -> None:
+        prior = json.loads(self.prior_receipt.read_text())
+        prior["commandLogSha256"] = sha(self.prior_journal)
+        private_json(self.prior_receipt, prior)
+        self.descriptor_value["priorRetention"]["journalSha256"] = sha(self.prior_journal)
+        self.descriptor_value["priorRetention"]["receiptSha256"] = sha(self.prior_receipt)
+        private_json(self.descriptor, self.descriptor_value)
+
+    def prepare_a959(self, intent: Path, commands: Path, review_sha256: str) -> str:
+        args = SimpleNamespace(
+            contract=self.contract, contract_sha256=sha(self.contract),
+            lifecycle=self.lifecycle, lifecycle_sha256=sha(self.lifecycle),
+            operational_state=self.operational, operational_state_sha256=sha(self.operational),
+            root_policy=self.policy, root_policy_sha256=sha(self.policy),
+            deployment_lock=self.deploy_lock, intent_output=intent, commands_output=commands,
+            review_output=self.v1_review, legacy_review_sha256=review_sha256,
+            prior_intent=None, prior_intent_sha256=None, prior_receipt=None,
+            prior_receipt_sha256=None, prior_journal=None, prior_journal_sha256=None,
+            reviewer="fixture-owner", reason="retire only derived a959 build artifacts")
+        output = io.StringIO()
+        with patch.object(MODULE, "LEGACY_A959_V1_PRESERVE_BINDING", self.descriptor_value), \
+                redirect_stdout(output):
+            MODULE.prepare(args)
+        return output.getvalue()
 
     def assert_review_preserved(self, before):
         if (self.v1_review.stat().st_ino, sha(self.v1_review)) != before:
@@ -410,7 +479,7 @@ class GenerationRetirementTest(unittest.TestCase):
                          "6c550cdf53d8bffa55886e8a998638646cb869cc29e7615b65e3c4455134e98b")
         self.assertEqual(descriptor["canonicalVerifierSha256"], sha(ROOT / "scripts/converta-release.py"))
 
-    def test_a959_bootstrap_prepare_execute_sanitizes_review_without_retiring_active_release(self):
+    def test_a959_bootstrap_prepare_sanitizes_review_without_execute_or_active_release_retirement(self):
         fixture = LegacyA959V1PreserveFixture()
         try:
             original_review_sha = sha(fixture.v1_review)
@@ -422,6 +491,7 @@ class GenerationRetirementTest(unittest.TestCase):
             receipt = json.loads(fixture.receipt.read_text())
             self.assertEqual(receipt["sourceState"], "LEGACY_V1_PRESERVE_NO_CONTRACT")
             self.assertEqual(receipt["preservedReviewSha256"], original_review_sha)
+            self.assertFalse(receipt["globalInventory"])
             self.assertFalse(receipt["authorizationGranted"])
             self.assertFalse(receipt["executionPermitted"])
             contract = json.loads(fixture.contract.read_text())
@@ -429,44 +499,27 @@ class GenerationRetirementTest(unittest.TestCase):
                              if item["path"] == str(fixture.installed))
             self.assertEqual((installed["class"], installed["state"]),
                              ("RELEASE_RUNTIME", "ACTIVE_DEPENDENCY"))
+            derived = [item for item in contract["artifacts"] if item["class"] in MODULE.DERIVED_CLASSES]
+            self.assertEqual({item["path"] for item in derived},
+                             {str(fixture.worktree), str(fixture.api), str(fixture.frontend)})
+            self.assertTrue(all(item["state"] == "SANITIZED" and
+                                item["removedByAuthenticatedRetention"]["journalSha256"] ==
+                                sha(fixture.prior_journal) for item in derived))
 
             retirement = fixture.evidence / "a959-retirement"; retirement.mkdir(mode=0o700)
             intent = retirement / "intent.private.json"
             commands = retirement / "commands.private.txt"
-            prepared = invoke("prepare", "--contract", str(fixture.contract),
-                              "--contract-sha256", sha(fixture.contract), "--lifecycle", str(fixture.lifecycle),
-                              "--lifecycle-sha256", sha(fixture.lifecycle), "--operational-state",
-                              str(fixture.operational), "--operational-state-sha256", sha(fixture.operational),
-                              "--root-policy", str(fixture.policy), "--root-policy-sha256", sha(fixture.policy),
-                              "--deployment-lock", str(fixture.deploy_lock), "--intent-output", str(intent),
-                              "--commands-output", str(commands), "--review-output", str(fixture.v1_review),
-                              "--legacy-review-sha256", original_review_sha, "--reviewer", "fixture-owner",
-                              "--reason", "retire only derived a959 build artifacts")
-            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            prepared = fixture.prepare_a959(intent, commands, original_review_sha)
+            self.assertIn('"commandCount":0', prepared)
             sealed = json.loads(intent.read_text())
-            destructive_paths = {item["path"] for item in sealed["commands"]}
-            self.assertEqual(destructive_paths,
-                             {str(fixture.worktree), str(fixture.api), str(fixture.frontend)})
-            self.assertNotIn(str(fixture.installed), destructive_paths)
-            self.assertTrue(fixture.installed.is_dir())
-
-            authorization = fixture.evidence / "a959-authorization.private.json"
-            private_json(authorization, {"schemaVersion": 1, "authorizationId": "a959-once",
-                         "decision": "AUTHORIZE_ONCE", "intentSha256": sha(intent),
-                         "approvedPaths": [item["path"] for item in sealed["commands"]],
-                         "owner": "fixture-owner"})
-            execution_receipt = fixture.evidence / "a959-execution"
-            executed = invoke("execute", "--intent", str(intent), "--intent-sha256", sha(intent),
-                               "--authorization", str(authorization), "--authorization-sha256", sha(authorization),
-                               "--operational-state", str(fixture.operational),
-                               "--operational-state-sha256", sha(fixture.operational), "--root-policy",
-                               str(fixture.policy), "--root-policy-sha256", sha(fixture.policy),
-                               "--deployment-lock", str(fixture.deploy_lock), "--receipt-root",
-                               str(execution_receipt), "--review-output", str(fixture.v1_review))
-            self.assertEqual(executed.returncode, 0, executed.stderr)
+            self.assertEqual(sealed["commands"], [])
+            self.assertEqual(commands.read_bytes(), b"")
+            self.assertEqual(sealed["state"], "SEALED_FOR_EXPLICIT_AUTHORIZATION")
+            migrated_review = json.loads(fixture.v1_review.read_text())
+            self.assertEqual((migrated_review["schemaVersion"], migrated_review["state"]),
+                             (2, "SANITIZED"))
             self.assertTrue(fixture.installed.is_dir())
             self.assertTrue(fixture.marker.is_file())
-            self.assertEqual(json.loads(fixture.v1_review.read_text())["state"], "SANITIZED")
             accepted = RELEASE_MODULE.require_generation_reviews(fixture.outputs)
             self.assertEqual(accepted[0]["generationId"], fixture.release_id)
             self.assertEqual(accepted[0]["state"], "SANITIZED")
@@ -499,6 +552,49 @@ class GenerationRetirementTest(unittest.TestCase):
             operational["activeReleases"] = []
             private_json(fixture.operational, operational)
             with self.assertRaisesRegex(MODULE.Denied, "legacy_a959_active_release_graph"):
+                fixture.bootstrap_a959()
+        finally:
+            fixture.close()
+
+    def test_a959_bootstrap_denies_prior_retention_hash_or_literal_event_drift(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.prior_receipt.write_bytes(fixture.prior_receipt.read_bytes() + b"\n")
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_a959_retention_external_hash"):
+                fixture.bootstrap_a959()
+        finally:
+            fixture.close()
+
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            events = MODULE._read_journal(fixture.prior_journal.read_bytes())
+            result = next(item for item in events
+                          if item.get("event") == "RESULT" and item.get("ordinal") == 4)
+            result["exitCode"] = 1
+            fixture.prior_journal.write_bytes(b"".join(MODULE.canonical(item) for item in events))
+            fixture.rebind_prior_retention()
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_a959_retention_result:4"):
+                fixture.bootstrap_a959()
+        finally:
+            fixture.close()
+
+    def test_a959_bootstrap_denies_incomplete_receipt_or_reappeared_derived_path(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            receipt = json.loads(fixture.prior_receipt.read_text())
+            receipt["completedCommands"] = 9
+            private_json(fixture.prior_receipt, receipt)
+            fixture.descriptor_value["priorRetention"]["receiptSha256"] = sha(fixture.prior_receipt)
+            private_json(fixture.descriptor, fixture.descriptor_value)
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_a959_retention_receipt_contract"):
+                fixture.bootstrap_a959()
+        finally:
+            fixture.close()
+
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.api.mkdir(parents=True)
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_a959_retention_path_reappeared:4"):
                 fixture.bootstrap_a959()
         finally:
             fixture.close()

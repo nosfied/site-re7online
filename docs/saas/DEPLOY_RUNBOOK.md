@@ -85,13 +85,19 @@ Há uma segunda exceção, também fechada e não generalizável:
 `LEGACY_V1_PRESERVE_NO_CONTRACT`. Somente o descriptor autenticado
 `config/legacy-generation-a959129e-v1-preserve.json` pode ser usado com
 `bootstrap-legacy-a959-v1-preserve`. Esse bootstrap autentica lifecycle, review,
-pacote, manifest, index, marker e a release instalada ativa; publica apenas o
-contrato e o recibo privado. A review v1 permanece byte-exatamente preservada.
-Depois, o `prepare` canônico deve receber `--legacy-review-sha256`; só ele migra a
-review, e o `execute` pode retirar exclusivamente worktree e runtimes derivados do
-output. A release instalada ativa é `RELEASE_RUNTIME/ACTIVE_DEPENDENCY` e nunca
-integra comando destrutivo. O bootstrap da `123ba` não serve para a `a959`, nem o
-da `a959` serve para qualquer terceira geração.
+pacote, manifest, index, marker e a release instalada ativa. Os três derivados da
+`a959` já foram retirados pelos ordinais `1`, `4` e `5` do lote autenticado
+`10/10`; por isso, o bootstrap exige também o receipt e o journal exatos desse
+lote, valida literalmente `ATTEMPT` → `RESULT(exitCode=0)` → `VERIFIED(absent)`
+para todos os dez ordinais e confirma que os três caminhos não reapareceram. Só
+então publica o contrato com esses derivados em `SANITIZED` e o recibo privado,
+sem inventário global ou recriação de caminho. A review v1 permanece
+byte-exatamente preservada. Depois, o `prepare` canônico deve receber
+`--legacy-review-sha256`: ele gera zero comandos, migra a review para v2
+`SANITIZED` e libera o gate global sem `execute`. A release instalada ativa é
+`RELEASE_RUNTIME/ACTIVE_DEPENDENCY` e nunca integra comando destrutivo. O
+bootstrap da `123ba` não serve para a `a959`, nem o da `a959` serve para qualquer
+terceira geração.
 
 No fluxo API + frontend, o `preflight` de `scripts/converta-deploy.py` exige os
 bindings `--generation-retirement-*`. Após aceite, `pm2 save`, dump validado,

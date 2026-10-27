@@ -62,11 +62,16 @@ existem e são autenticados, a release está instalada e ativa, mas o contrato n
 foi publicado. O subcomando fechado `bootstrap-legacy-a959-v1-preserve` aceita
 somente `config/legacy-generation-a959129e-v1-preserve.json`. Ele autentica os
 hashes da review, lifecycle, pacote, manifest, index e marker, além da igualdade
-entre pacote e release ativa verificados; materializa somente o contrato e o
-recibo de bootstrap. A review v1 não é substituída, renomeada ou regravada nessa
-fase. A migração ocorre depois pelo `prepare --legacy-review-sha256`, e a execução
-retira apenas worktree/runtimes derivados. A release instalada permanece
-`ACTIVE_DEPENDENCY`, fora dos comandos, durante bootstrap, prepare e execute.
+entre pacote e release ativa verificados. Worktree e runtimes derivados já estão
+ausentes por efeito do lote `10/10` concluído; o bootstrap não os recria nem os
+reobserva globalmente. Ele autentica o receipt e o journal preservados, exige a
+sequência literal de três eventos e o ordinal exato de cada um dos dez comandos,
+e aceita `SANITIZED` para os três derivados da `a959` somente com essa cadeia e
+com ausência atual. Então materializa somente o contrato e o recibo de bootstrap.
+A review v1 não é substituída, renomeada ou regravada nessa fase. A migração
+ocorre depois pelo `prepare --legacy-review-sha256`, que produz intenção sem
+comandos e review v2 `SANITIZED`; não há etapa `execute`. A release instalada
+permanece `ACTIVE_DEPENDENCY`, fora de qualquer comando.
 
 Portanto, `123ba` e `a959` não compartilham bootstrap: a primeira é
 `LEGACY_PRE_CONTRACT` sem review; a segunda já tem review v1, não pode fabricá-la
