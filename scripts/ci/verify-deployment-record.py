@@ -649,6 +649,85 @@ def verify_frontend_only(record_path: Path, record: dict) -> None:
     print("DEPLOYMENT_RECORD_OK: frontend-only identities, samples and terminal reentry agree")
 
 
+
+def verify_fixed_current_sanitized(record_path: Path, record: dict) -> None:
+    require(record.get("schemaVersion") == 1, "fixed-current schema")
+    require(record.get("recordType") ==
+            "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT",
+            "fixed-current record type")
+    require(record.get("status") == "DEPLOYED_SANITIZED",
+            "fixed-current terminal state")
+    require(not (walk_keys(record) & FORBIDDEN_KEYS),
+            "sensitive identifier key in sanitized fixed-current record")
+
+    release = record.get("release", {})
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", release.get("target", ""))),
+            "fixed-current target")
+    require(bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*",
+                              release.get("id", ""))), "fixed-current release")
+    for field in ("packageSha256", "manifestSha256", "indexSha256",
+                  "apiEntrypointSha256"):
+        require(bool(SHA256.fullmatch(release.get(field, ""))),
+                f"fixed-current {field}")
+    require(release.get("indexEntries") == 34353 and
+            release.get("buildCount") == 1 and
+            release.get("migration") == "NOT_APPLICABLE_NO_SCHEMA_CHANGE" and
+            bool(release.get("buildId")), "fixed-current release contract")
+
+    runtime = record.get("runtime", {})
+    for component, port in (("api", 3001), ("frontend", 3000)):
+        observed = runtime.get(component, {})
+        require(positive_int(observed.get("pid")) and
+                positive_int(observed.get("startTicks")) and
+                observed.get("listener") == port,
+                f"fixed-current {component} runtime")
+    require(runtime.get("worker", {}).get("preserved") is True and
+            runtime.get("worker", {}).get("restartCount") == 0,
+            "fixed-current worker preservation")
+
+    finalization = record.get("finalization", {})
+    require(finalization.get("pm2SaveCount") == 1 and
+            finalization.get("secondSaveExecuted") is False,
+            "fixed-current save count")
+    for field in ("dumpSha256", "dumpValidationSha256", "markerSha256",
+                  "journalSha256", "receiptSha256"):
+        require(bool(SHA256.fullmatch(finalization.get(field, ""))),
+                f"fixed-current finalization {field}")
+
+    retirement = record.get("retirement", {})
+    require(retirement.get("state") == "DEPLOYED_SANITIZED" and
+            retirement.get("ordinals") == [8, 9, 10] and
+            retirement.get("commandsAttempted") ==
+            retirement.get("commandsCompleted") == 3 and
+            retirement.get("failures") == 0 and
+            retirement.get("automaticRetry") is False and
+            retirement.get("remainingDerivedArtifacts") == 0 and
+            retirement.get("installedReleasePreserved") is True,
+            "fixed-current retirement")
+    for field in ("receiptSha256", "journalSha256", "reviewSha256"):
+        require(bool(SHA256.fullmatch(retirement.get(field, ""))),
+                f"fixed-current retirement {field}")
+
+    state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
+    require(state.get("activeDeploymentRecord") ==
+            record_path.relative_to(ROOT).as_posix(), "active record")
+    production = state.get("production", {})
+    require(production.get("status") == "DEPLOYED_SANITIZED" and
+            production.get("releaseId") == release.get("id") and
+            production.get("targetCommit") == release.get("target"),
+            "active fixed-current release")
+    require(production.get("api", {}).get("selectedReleaseId") ==
+            release.get("id") and
+            production.get("frontend", {}).get("selectedReleaseId") ==
+            release.get("id") and
+            production.get("frontend", {}).get("buildId") ==
+            release.get("buildId"), "active fixed-current components")
+    require(production.get("pm2", {}).get("dumpSha256") ==
+            finalization.get("dumpSha256") and
+            production.get("currentMarkerSha256") ==
+            finalization.get("markerSha256"), "active fixed-current evidence")
+    print("DEPLOYMENT_RECORD_OK: fixed-current release deployed and generation sanitized")
+
 def main() -> None:
     require(len(sys.argv) in (1, 2),
             "usage: verify-deployment-record.py [RECORD]")
@@ -661,6 +740,12 @@ def main() -> None:
     require(record_path.is_relative_to(ROOT) and record_path.is_file(),
             "record outside repository or missing")
     record = read_json(record_path)
+
+    if (record.get("schemaVersion") == 1 and
+            record.get("recordType") ==
+            "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT"):
+        verify_fixed_current_sanitized(record_path, record)
+        return
 
     if (record.get("schemaVersion") == 1 and
             record.get("recordType") ==
