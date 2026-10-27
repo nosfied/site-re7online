@@ -108,7 +108,10 @@ continua `NOT_PROVEN`.
 
 O encerramento obrigatório por geração está implementado no produtor e na
 ferramenta versionada `scripts/generation-retirement.py`. Novo build exige 12 GiB
-livres, ausência de dívida e no máximo uma candidata ainda não instalada. O lote
+livres, ausência de dívida e no máximo uma candidata ainda não instalada. Em
+27/10/2026, o gate global aceitou as quatro reviews regularizadas (`123ba`,
+`a959`, `d436` e `f160`): não há dívida de retenção bloqueando o próximo build.
+Essa conclusão não substitui a medição fresca de capacidade obrigatória. O lote
 histórico de dez caminhos terminou 10/10, recuperou 6.942.289.920 bytes e deixou
 13.416.599.552 bytes livres; produção permaneceu inalterada e o lock ficou livre.
 Esses números são o recibo daquela execução, não uma medição fresca de capacidade.
@@ -120,11 +123,11 @@ anteriores autenticados, com cadeia cumulativa em qualquer número de retomadas;
 autorização cobre apenas os remanescentes. As raízes
 vêm da política versionada `config/deploy-artifact-roots.json`, não do snapshot
 operacional. O produtor valida repo, output e raiz de releases contra essa política
-antes de criar a saída ou executar npm. A candidata `123ba` é a única geração
-`LEGACY_PRE_CONTRACT` conhecida: não possui review v1 nem contrato original. Sua
-regularização exige o descriptor fechado versionado, duas leituras estáveis apenas
-dos caminhos literais e o bootstrap sem autorização; não admite inventário global.
-Separadamente, `a959` é a única geração `LEGACY_V1_PRESERVE_NO_CONTRACT`: sua
+antes de criar a saída ou executar npm. A candidata `123ba` era a única geração
+`LEGACY_PRE_CONTRACT` conhecida: não possuía review v1 nem contrato original. Sua
+regularização concluída usou o descriptor fechado versionado, duas leituras estáveis
+apenas dos caminhos literais e o bootstrap sem inventário global. Separadamente,
+`a959` era a única geração `LEGACY_V1_PRESERVE_NO_CONTRACT`: sua
 review v1 existente não pode ser fabricada nem substituída pelo bootstrap. O fluxo
 fechado autentica também a release instalada ativa e o receipt/journal do lote
 `10/10` que já retirou os três derivados. A ausência só vira `SANITIZED` após a
@@ -135,12 +138,31 @@ reapareceram. O bootstrap publica somente contrato e recibo; o `prepare
 de toda intenção destrutiva.
 
 A regularização operacional da `a959` foi concluída em review v2 `SANITIZED` e
-não deve ser reaberta. As dívidas seguintes são `d436` e `f160`, ambas integrantes
-do lote autenticado `10/10`: `d436` preserva a release como retorno e vincula os
-derivados aos ordinais `2/6/7`; `f160` preserva a release frontend ativa e vincula
-os derivados aos ordinais `3/8/9`. O control plane prepara os dois contratos sem
-inventário global, produz dois intents sem comandos e só então executa um gate
-global.
+não deve ser reaberta. A regularização conjunta de `d436` e `f160` também foi
+concluída em 27/10/2026, sem `execute` e sem exclusões: `d436` permaneceu
+`ROLLBACK_DEPENDENCY`, com ordinais históricos `2/6/7`, e `f160` permaneceu
+`ACTIVE_DEPENDENCY`, com ordinais `3/8/9`. Os dois `prepare` produziram arquivos
+de comandos vazios e reviews v2 `SANITIZED`; somente depois, um único gate global
+retornou `PASS` para quatro reviews. `123ba`, `a959`, `d436` e `f160` estão
+definitivamente regularizadas; não são pendências nem autorização para repetir os
+bootstraps.
+
+Evidências autenticadas da regularização conjunta:
+
+- contratos `d436`/`f160`: `317cf901e06e9f76b211fa046dce537bb8fa9df0643cc1ae34350ac332c6ddbc`
+  e `a0f224b7c05b792ec978915351544791e648f7b52c5f14d5f16cb1bf80798bdc`;
+- recibos de bootstrap: `d7e776b72bf6351b05df6abf4dc3985a1ff995f4d1ed25cebb99f89889e66bc1`
+  e `561b29c39275f0509fb87de91c693952a295dff3c498727b55a036f7173f6ac8`;
+- intents sem comandos: `0cf61ee0f983f33c2c4441aeaee4efcccccf9bf2eee1bf85e99576fcc87e9e0b`
+  e `1c510a43d0471fac954c70a10b42e0d26d2693ddbaab5e3675cf2a1e4e2246e7`;
+- reviews v2: `3e3bf9d15ad97997f92f6689fcd044f969c1b76194183bdb7075fb87355d43e2`
+  e `8f2deb17acc9305ebd27b1dc98431068af3d5891bb6df0bac81f40761e2b74a6`;
+- gate global: `3f3bf713765fa27446bccf8ce3dbbfebada370fb643743591fbaf9f9c7c59bfc`;
+  recibo conjunto: `212b736c4cb17ea1c6fbe259548f1a475d7c7dcca4f3951f2a2826c5615221d7`.
+
+A medição ao final registrou 15.083.352.064 bytes livres e 8.939.625 inodes
+livres. Produção, PM2 e guarda permaneceram inalterados; ambos os locks canônicos
+foram confirmados livres.
 
 A regularização revelou estado mutável legado em `api-runtime/.data` dentro da
 release instalada `a959`. O cache de frontend não referenciado foi retirado na
@@ -162,8 +184,8 @@ A fotografia global de 26/10/2026 está em
 6,45 GB em outputs, 4,09 GB em worktrees, 29,94 GB em releases e 13,48 GB em
 preparações, sem inferir que tudo seja removível. O ganho seguro imediato é zero; a
 intenção condicionada permanece `NOT_AUTHORIZED`. PR #240 e a candidata `123ba7bd`
-foram superados pela correção de apresentação terminal, mas continuam preservados;
-o bootstrap contratual ainda não representa autorização de retirada.
+foram superados pela correção de apresentação terminal e continuam preservados.
+A regularização contratual da geração foi concluída; não existe retirada pendente.
 
 ## Rota operacional
 

@@ -104,7 +104,7 @@ byte-exatamente preservada. Depois, o `prepare` canônico deve receber
 bootstrap da `123ba` não serve para a `a959`, nem o da `a959` serve para qualquer
 terceira geração.
 
-Para `d436/f160`, use os descriptors fechados e `bootstrap-legacy-batch-v1-preserve`, conforme `DEPLOY_ARTIFACT_LIFECYCLE.md`: ordinais `2/6/7` (rollback) e `3/8/9` (ativa), dois prepares sem comandos e um único gate final, sem `execute`.
+O procedimento legado de `d436/f160` com descriptors fechados e ordinais `2/6/7` (rollback) e `3/8/9` (ativa) foi concluído em 27/10/2026: dois prepares sem comandos, reviews v2 `SANITIZED` e um único gate global `PASS`. Não repetir os bootstraps nem tratá-los como etapa vigente do próximo build.
 Em `f160`, somente o cache literal documentado é overlay efêmero; pacote/índice seguem estritos e sua retirada isolada é proibida.
 Exclusivamente na verificação instalada da `a959`, o bootstrap habilita o contrato legado para `api-runtime/.data`. O verificador mantém o índice imutável estrito e
 autentica confinamento, tipo físico, owner/group da release, modo, symlinks e identidade
