@@ -116,9 +116,11 @@ O finalize API + frontend exige a intenção condicional completa e encerra em
 `DEPLOYED_SANITIZED` ou `DEPLOYED_RETENTION_INCOMPLETE`. `SANITIZED` nunca decorre
 de retirada parcial. O frontend-only aplica a mesma finalização e não repete save,
 restart ou retirada ao retomar. Parcial só é reconciliado por intent/receipt/journal
-anteriores autenticados; nova autorização cobre apenas os remanescentes. As raízes
+anteriores autenticados, com cadeia cumulativa em qualquer número de retomadas; nova
+autorização cobre apenas os remanescentes. As raízes
 vêm da política versionada `config/deploy-artifact-roots.json`, não do snapshot
-operacional. A candidata legada `123ba` possui transição v1 determinística,
+operacional. O produtor valida repo, output e raiz de releases contra essa política
+antes de criar a saída ou executar npm. A candidata legada `123ba` possui transição v1 determinística,
 vinculada ao hash da review preservada e limitada ao próprio contrato, sem nova
 auditoria global.
 

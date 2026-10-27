@@ -44,7 +44,10 @@ Uma retirada parcial nunca transforma ausência em sucesso por inferência. Uma 
 preparação exige o intent, receipt e journal anteriores com SHA-256 externos; confere
 intent/generation, ordinais, `ATTEMPT`, `RESULT` zero, `VERIFIED`, path, argv e a
 identidade original. A nova autorização contém somente os caminhos remanescentes.
-O comando já comprovado não é repetido; sem essa cadeia, a ausência é `DENY`.
+Cada intenção reconciliada preserva cumulativamente todos os elos
+intent/receipt/journal e associa cada ordinal e identidade ao elo que comprovou sua
+retirada. Assim, uma segunda ou terceira falha parcial continua sem repetir comandos
+concluídos; cadeia truncada, duplicada ou inconsistente é `DENY`.
 
 `SANITIZED` só é publicado após recomputar o contrato inteiro e confirmar que
 todos os derivados estão ausentes. Retirar somente o worktree enquanto outputs
@@ -65,9 +68,11 @@ descendente de `build-output`, pois lifecycle/review são preservados ao lado da
 geração e nunca integram um comando destrutivo. Mudança de `current`, fingerprint sanitizado do PM2, dump ou
 grafo entre preparação e execução também nega antes do primeiro `ATTEMPT`.
 
-O produtor recebe a mesma política autenticada e aceita `--repo` somente como
-descendente estrito de `build-worktrees`; checkout externo é negado mesmo limpo e no
-target correto.
+O produtor recebe a mesma política autenticada: `--repo` deve ser descendente estrito
+de `build-worktrees`, `--output` descendente estrito de `build-output` e
+`--installed-releases-root` deve ser exatamente a raiz `releases`. Essas três
+fronteiras, seus owners, modos e ancestrais são conferidos antes de criar a saída, o
+lock de geração ou executar npm. Caminho externo, raiz redefinida ou symlink é `DENY`.
 
 Uma review v1 `PRESERVE` conhecida, incluindo a candidata legada `123ba`, só pode
 ser migrada sem inventário global quando `prepare` recebe

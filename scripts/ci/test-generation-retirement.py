@@ -441,7 +441,7 @@ class GenerationRetirementTest(unittest.TestCase):
         finally:
             fixture.close()
 
-    def test_partial_failure_reconciles_without_repeating_completed_command(self):
+    def test_two_partial_failures_reconcile_transitively_without_repeating_commands(self):
         fixture = Fixture()
         try:
             self.assertEqual(fixture.prepare().returncode, 0)
@@ -484,10 +484,46 @@ class GenerationRetirementTest(unittest.TestCase):
             reconciled = json.loads(fixture.intent.read_text())
             self.assertEqual([item["path"] for item in reconciled["reconciliation"]["completed"]], [first_path])
             self.assertNotIn(first_path, [item["path"] for item in reconciled["commands"]])
-            result, final_receipt = fixture.execute(fixture.authorize("partial-resume"), "partial-final")
+            second_intent = fixture.intent
+            second_authorization = fixture.authorize("partial-second")
+            second_receipt = fixture.evidence_root / "partial-second-receipt"
+            second_args = SimpleNamespace(
+                intent=second_intent, intent_sha256=sha(second_intent),
+                authorization=second_authorization, authorization_sha256=sha(second_authorization),
+                operational_state=fixture.operational, operational_state_sha256=sha(fixture.operational),
+                root_policy=fixture.policy, root_policy_sha256=sha(fixture.policy),
+                deployment_lock=fixture.deploy_lock, receipt_root=second_receipt,
+                review_output=fixture.review,
+            )
+            calls = 0
+            with patch.object(MODULE.subprocess, "run", side_effect=fail_second):
+                with self.assertRaisesRegex(MODULE.Denied, "retirement_command"):
+                    MODULE.execute(second_args)
+            second_path = reconciled["commands"][0]["path"]
+            self.assertFalse(Path(second_path).exists())
+
+            fixture.intent = fixture.evidence_root / "intent-reconciled-twice.private.json"
+            fixture.commands = fixture.evidence_root / "commands-reconciled-twice.private.txt"
+            prepared = fixture.prepare(
+                "--prior-intent", str(second_intent), "--prior-intent-sha256", sha(second_intent),
+                "--prior-receipt", str(second_receipt / "execution-receipt.private.json"),
+                "--prior-receipt-sha256", sha(second_receipt / "execution-receipt.private.json"),
+                "--prior-journal", str(second_receipt / "command-results.private.jsonl"),
+                "--prior-journal-sha256", sha(second_receipt / "command-results.private.jsonl"),
+            )
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            reconciled_twice = json.loads(fixture.intent.read_text())
+            self.assertEqual([item["path"] for item in reconciled_twice["reconciliation"]["completed"]],
+                             [first_path, second_path])
+            self.assertEqual(len(reconciled_twice["reconciliation"]["chain"]), 2)
+            self.assertTrue({first_path, second_path}.isdisjoint(
+                item["path"] for item in reconciled_twice["commands"]))
+            result, final_receipt = fixture.execute(fixture.authorize("partial-final"), "partial-final")
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)["result"], "DEPLOYED_SANITIZED")
-            self.assertIn(first_path, json.loads((final_receipt / "execution-receipt.private.json").read_text())["removedPaths"])
+            receipt_value = json.loads((final_receipt / "execution-receipt.private.json").read_text())
+            self.assertEqual(receipt_value["state"], "DEPLOYED_SANITIZED")
+            self.assertEqual(receipt_value["removedPaths"][:2], [first_path, second_path])
         finally:
             fixture.close()
 

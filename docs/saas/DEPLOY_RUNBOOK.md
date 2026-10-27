@@ -44,6 +44,12 @@ outro build. Reviews v1 `PRESERVE` são dívida; somente v1 `SANITIZED` permanec
 compatível. Override v2 precisa declarar razão, bytes, responsável e expiração
 UTC futura.
 
+Antes mesmo do lock de build, a política versionada autenticada deve provar
+`--repo` dentro de `build-worktrees`, `--output` estritamente dentro de
+`build-output` e `--installed-releases-root` idêntico a `releases`. Não ajustar as
+raízes pelo comando operacional; divergência, caminho externo ou symlink nega antes
+de criar output ou iniciar npm.
+
 O build publica `generation-artifacts.private.json`. Depois da verificação do
 pacote, execute `scripts/generation-retirement.py prepare` com o contrato,
 lifecycle e fotografia operacional autenticados. A intenção resultante e seu
@@ -59,6 +65,8 @@ Falha de retirada não reverte o deploy aprovado: encerra em
 `DEPLOYED_RETENTION_INCOMPLETE`, preserva parciais e bloqueia qualquer novo build
 até reconciliação. Os cinco comandos públicos do driver permanecem inalterados.
 Não usar retry, force, prune, glob ou caminhos alternativos.
+Retomadas sucessivas encadeiam cumulativamente os hashes dos intents, receipts e
+journals anteriores; cada nova autorização contém somente caminhos ainda pendentes.
 
 O fluxo frontend-only usa o mesmo executor release-bound nas fases `activate` e
 `finalize`. Depois do aceite, `finalize` revalida o trio, executa um único `pm2 save`,

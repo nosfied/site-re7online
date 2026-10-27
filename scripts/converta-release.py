@@ -54,6 +54,8 @@ REVIEW_STATES = {
     "ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDING_ACTIVATION",
     "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE",
 }
+ROOT_POLICY_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
+ROOT_POLICY_ENTRY_KEYS = {"path", "ownerUid", "groupGid", "allowedModes"}
 
 
 class Denied(RuntimeError):
@@ -847,13 +849,12 @@ def verify_root(root: Path, target: str, release_id: str,
 
 
 def build(args: argparse.Namespace) -> None:
-    if not args.output.is_absolute():
-        deny("output_absolute")
+    roots = validate_build_paths(args)
     with generation_build_window(args.output.parent):
-        build_in_generation_window(args)
+        build_in_generation_window(args, roots)
 
 
-def authenticated_build_worktrees_root(path: Path, expected_sha256: str) -> Path:
+def authenticated_build_roots(path: Path, expected_sha256: str) -> dict[str, Path]:
     raw, info = stable_bytes(path)
     if (info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) not in {0o600, 0o644} or
             sha256_bytes(raw) != expected_sha256):
@@ -861,41 +862,81 @@ def authenticated_build_worktrees_root(path: Path, expected_sha256: str) -> Path
     try:
         policy = json.loads(raw)
         roots = policy["canonicalRoots"]
-        entry = roots["worktrees"]
     except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError):
         deny("root_policy_schema")
-    if (policy.get("schemaVersion") != 1 or not isinstance(entry, dict) or
-            set(entry) != {"path", "ownerUid", "groupGid", "allowedModes"}):
+    if (policy.get("schemaVersion") != 1 or set(policy) != {"schemaVersion", "canonicalRoots"} or
+            not isinstance(roots, dict) or set(roots) != ROOT_POLICY_KEYS):
         deny("root_policy_schema")
-    root = Path(str(entry.get("path", "")))
-    try:
-        root_info = root.lstat()
-        resolved = root.resolve(strict=True)
-    except OSError:
-        deny("root_policy_worktrees")
-    mode = f"0{stat.S_IMODE(root_info.st_mode):03o}"
-    if (not root.is_absolute() or root.is_symlink() or not stat.S_ISDIR(root_info.st_mode) or
-            resolved != root or root_info.st_uid != entry.get("ownerUid") or
-            root_info.st_gid != entry.get("groupGid") or mode not in entry.get("allowedModes", [])):
-        deny("root_policy_worktrees")
-    current = root.parent
-    while True:
-        info = current.lstat(); mode = stat.S_IMODE(info.st_mode)
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode) or (
-                mode & 0o022 and not mode & stat.S_ISVTX):
-            deny("root_policy_worktrees_ancestor")
-        if current == current.parent: break
-        current = current.parent
-    return root
+    authenticated: dict[str, Path] = {}
+    for name in ("worktrees", "outputs", "releases"):
+        entry = roots.get(name)
+        if not isinstance(entry, dict) or set(entry) != ROOT_POLICY_ENTRY_KEYS:
+            deny(f"root_policy_{name}")
+        root = Path(str(entry.get("path", "")))
+        modes = entry.get("allowedModes")
+        try:
+            root_info = root.lstat()
+            resolved = root.resolve(strict=True)
+        except OSError:
+            deny(f"root_policy_{name}")
+        mode = f"0{stat.S_IMODE(root_info.st_mode):03o}"
+        if (not root.is_absolute() or root.is_symlink() or not stat.S_ISDIR(root_info.st_mode) or
+                resolved != root or root_info.st_uid != entry.get("ownerUid") or
+                root_info.st_gid != entry.get("groupGid") or not isinstance(modes, list) or
+                mode not in modes):
+            deny(f"root_policy_{name}")
+        current = root.parent
+        while True:
+            ancestor = current.lstat(); ancestor_mode = stat.S_IMODE(ancestor.st_mode)
+            if stat.S_ISLNK(ancestor.st_mode) or not stat.S_ISDIR(ancestor.st_mode) or (
+                    ancestor_mode & 0o022 and not ancestor_mode & stat.S_ISVTX):
+                deny(f"root_policy_{name}_ancestor")
+            if current == current.parent:
+                break
+            current = current.parent
+        authenticated[name] = root
+    return authenticated
 
 
-def build_in_generation_window(args: argparse.Namespace) -> None:
-    if not args.output.is_absolute():
+def validate_build_paths(args: argparse.Namespace) -> dict[str, Path]:
+    roots = authenticated_build_roots(args.root_policy, args.root_policy_sha256)
+    output = args.output
+    if not output.is_absolute() or ".." in output.parts:
         deny("output_absolute")
+    if output == roots["outputs"] or roots["outputs"] not in output.parents:
+        deny("output_outside_canonical_outputs")
+    if output.exists() or output.is_symlink():
+        deny("output_exists")
+    try:
+        output_parent = output.parent.resolve(strict=True)
+    except OSError:
+        deny("output_parent")
+    if (output_parent != output.parent or
+            not output_parent.is_dir() or
+            (output_parent != roots["outputs"] and roots["outputs"] not in output_parent.parents)):
+        deny("output_unsafe_ancestor")
+    if args.installed_releases_root != roots["releases"]:
+        deny("installed_releases_root_mismatch")
+    if args.installed_releases_root.is_symlink():
+        deny("installed_releases_root_unsafe")
     if args.repo.is_symlink():
         deny("repo_unsafe_ancestor")
     repo = args.repo.resolve(strict=True)
-    worktrees_root = authenticated_build_worktrees_root(args.root_policy, args.root_policy_sha256)
+    if repo == roots["worktrees"] or roots["worktrees"] not in repo.parents:
+        deny("repo_outside_canonical_build_worktrees")
+    current = repo
+    while current != roots["worktrees"]:
+        if current.is_symlink():
+            deny("repo_unsafe_ancestor")
+        current = current.parent
+    return roots
+
+
+def build_in_generation_window(args: argparse.Namespace,
+                               roots: dict[str, Path] | None = None) -> None:
+    roots = roots or validate_build_paths(args)
+    repo = args.repo.resolve(strict=True)
+    worktrees_root = roots["worktrees"]
     if repo == worktrees_root or worktrees_root not in repo.parents:
         deny("repo_outside_canonical_build_worktrees")
     current = repo
@@ -906,8 +947,6 @@ def build_in_generation_window(args: argparse.Namespace) -> None:
     ensure_clean_repo(repo, args.target)
     if args.components != ",".join(COMPONENTS):
         deny("components")
-    if args.output.exists():
-        deny("output_exists")
     capacity = read_capacity_contract(
         args.capacity_contract, repo, args.output.parent, args.target, args.release_id
     )

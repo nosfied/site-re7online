@@ -652,12 +652,59 @@ def _read_journal(raw: bytes) -> list[dict[str, Any]]:
     return events
 
 
+def validate_reconciliation(value: Any, artifacts: Any, *, require_absent: bool) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {"chain", "completed"}:
+        deny("reconciliation_schema")
+    chain = value.get("chain")
+    completed = value.get("completed")
+    if not isinstance(chain, list) or not isinstance(completed, list):
+        deny("reconciliation_schema")
+    links: list[dict[str, str]] = []
+    for link in chain:
+        if (not isinstance(link, dict) or
+                set(link) != {"intentSha256", "receiptSha256", "journalSha256"} or
+                any(not SHA256.fullmatch(str(link.get(key, ""))) for key in link)):
+            deny("reconciliation_chain")
+        if link in links:
+            deny("reconciliation_chain_duplicate")
+        links.append(link)
+    if not isinstance(artifacts, list):
+        deny("reconciliation_artifacts")
+    by_path = {item.get("path"): (ordinal, item) for ordinal, item in enumerate(artifacts, 1)
+               if isinstance(item, dict) and isinstance(item.get("path"), str)}
+    if len(by_path) != len(artifacts):
+        deny("reconciliation_artifacts")
+    seen_paths: set[str] = set()
+    normalized = []
+    expected_keys = {"ordinal", "path", "observedIdentity",
+                     "intentSha256", "receiptSha256", "journalSha256"}
+    for item in completed:
+        if not isinstance(item, dict) or set(item) != expected_keys:
+            deny("reconciliation_completed")
+        path = item.get("path")
+        binding = {key: item.get(key) for key in
+                   ("intentSha256", "receiptSha256", "journalSha256")}
+        artifact_entry = by_path.get(path)
+        if (path in seen_paths or artifact_entry is None or binding not in links or
+                item.get("ordinal") != artifact_entry[0] or
+                artifact_entry[1].get("class") not in DERIVED_CLASSES or
+                item.get("observedIdentity") != artifact_entry[1].get("observedIdentity")):
+            deny("reconciliation_completed_identity")
+        if require_absent and (Path(path).exists() or Path(path).is_symlink()):
+            deny("reconciliation_removed_identity")
+        seen_paths.add(path)
+        normalized.append(item)
+    if completed and not chain:
+        deny("reconciliation_chain_missing")
+    return {"chain": links, "completed": normalized}
+
+
 def authenticate_reconciliation(args: argparse.Namespace, contract: dict[str, Any],
                                 policy_sha256: str) -> dict[str, Any]:
     supplied = [args.prior_intent, args.prior_intent_sha256, args.prior_receipt,
                 args.prior_receipt_sha256, args.prior_journal, args.prior_journal_sha256]
     if not any(supplied):
-        return {"prior": None, "completed": []}
+        return {"chain": [], "completed": []}
     if not all(supplied):
         deny("reconciliation_binding_incomplete")
     prior_intent_raw, _ = stable_private(args.prior_intent, args.prior_intent_sha256)
@@ -673,8 +720,12 @@ def authenticate_reconciliation(args: argparse.Namespace, contract: dict[str, An
         deny("reconciliation_intent_identity")
     if (prior_receipt.get("intentSha256") != args.prior_intent_sha256 or
             prior_receipt.get("commandLogSha256") != args.prior_journal_sha256 or
-            prior_receipt.get("state") not in {"QUARANTINED", "DEPLOYED_RETENTION_INCOMPLETE"}):
+            prior_receipt.get("state") not in {"QUARANTINED", "RETENTION_INCOMPLETE",
+                                               "DEPLOYED_RETENTION_INCOMPLETE"}):
         deny("reconciliation_receipt_identity")
+    inherited = validate_reconciliation(prior_intent.get("reconciliation"),
+                                        prior_intent.get("artifacts", []), require_absent=True)
+    inherited_paths = [item["path"] for item in inherited["completed"]]
     prior_commands = {item.get("ordinal"): item for item in prior_intent.get("commands", [])
                       if isinstance(item, dict) and isinstance(item.get("ordinal"), int)}
     artifacts = {item["path"]: item for item in contract["artifacts"]}
@@ -684,6 +735,9 @@ def authenticate_reconciliation(args: argparse.Namespace, contract: dict[str, An
         if not isinstance(ordinal, int) or ordinal not in prior_commands:
             deny("reconciliation_journal_ordinal")
         progress.setdefault(ordinal, []).append(event)
+    link = {"intentSha256": args.prior_intent_sha256,
+            "receiptSha256": args.prior_receipt_sha256,
+            "journalSha256": args.prior_journal_sha256}
     completed = []
     for ordinal, events in sorted(progress.items()):
         command = prior_commands[ordinal]
@@ -703,15 +757,15 @@ def authenticate_reconciliation(args: argparse.Namespace, contract: dict[str, An
                 artifact.get("observedIdentity") != prior_artifact.get("observedIdentity") or
                 Path(path).exists() or Path(path).is_symlink()):
             deny("reconciliation_removed_identity")
+        if path in inherited_paths:
+            deny("reconciliation_duplicate_completion")
         completed.append({"ordinal": ordinal, "path": path,
-                          "observedIdentity": artifact.get("observedIdentity")})
-    if ([item["path"] for item in completed] != prior_receipt.get("removedPaths") or
-            len(completed) != prior_receipt.get("completedCommands")):
+                          "observedIdentity": artifact.get("observedIdentity"), **link})
+    aggregate = inherited["completed"] + completed
+    if ([item["path"] for item in aggregate] != prior_receipt.get("removedPaths") or
+            len(aggregate) != prior_receipt.get("completedCommands")):
         deny("reconciliation_receipt_progress")
-    return {"prior": {"intentSha256": args.prior_intent_sha256,
-                       "receiptSha256": args.prior_receipt_sha256,
-                       "journalSha256": args.prior_journal_sha256},
-            "completed": completed}
+    return {"chain": inherited["chain"] + [link], "completed": aggregate}
 
 
 def prepare(args: argparse.Namespace) -> None:
@@ -864,6 +918,7 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
     by_path = {item.get("path"): item for item in artifacts if isinstance(item, dict)}
     if len(by_path) != len(artifacts):
         deny("intent_artifacts")
+    validate_reconciliation(intent.get("reconciliation"), artifacts, require_absent=True)
     literals = []
     previous_ordinal = 0
     for item in commands:
@@ -971,9 +1026,10 @@ def execute(args: argparse.Namespace) -> None:
                 deny("fresh_operational_changed_during_retirement")
         except BaseException as error:
             receipt_state = "DEPLOYED_RETENTION_INCOMPLETE" if operational["deploymentState"]["state"] == "DEPLOYED" else "QUARANTINED"
+            all_removed = [item["path"] for item in intent["reconciliation"]["completed"]] + removed
             receipt = {"schemaVersion": 1, "state": receipt_state,
                        "failurePredicate": str(error), "attemptedCommands": attempted,
-                       "completedCommands": completed, "removedPaths": removed,
+                       "completedCommands": len(all_removed), "removedPaths": all_removed,
                        "intentSha256": args.intent_sha256, "automaticRetry": False,
                        "commandLogSha256": digest_bytes(journal.read_bytes()) if journal.exists() else digest_bytes(b""),
                        "freshObservation": fresh}
@@ -999,7 +1055,7 @@ def execute(args: argparse.Namespace) -> None:
         journal_sha = digest_bytes(journal.read_bytes()) if journal.exists() else digest_bytes(b"")
         all_removed = [item["path"] for item in intent["reconciliation"]["completed"]] + removed
         receipt = {"schemaVersion": 1, "state": receipt_state, "failurePredicate": None,
-                   "attemptedCommands": attempted, "completedCommands": completed,
+                   "attemptedCommands": attempted, "completedCommands": len(all_removed),
                    "removedPaths": all_removed, "intentSha256": args.intent_sha256,
                    "commandLogSha256": journal_sha, "automaticRetry": False,
                    "remainingDerivedPaths": remaining, "freshObservation": fresh,
