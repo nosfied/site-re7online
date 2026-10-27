@@ -38,6 +38,8 @@ jobs:
         run: python3 scripts/ci/verify-credential-rotation-record.py docs/saas/releases/OBS2_OAUTH_STATE_SECRET_ROTATION_2026-10-18_DEPLOYED.json
       - name: Reject stale active release documentation
         run: python3 scripts/ci/verify-documentation-freshness.py
+      - name: Validate canonical deployment operating model
+        run: python3 scripts/ci/verify-deployment-operating-model.py
       - name: Keep artifact engineering as break-glass only
         run: python3 scripts/ci/verify-artifact-release-standard.py
       - name: Reject retired normal release route

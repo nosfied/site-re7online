@@ -479,6 +479,25 @@ class GenerationRetirementTest(unittest.TestCase):
                          "6c550cdf53d8bffa55886e8a998638646cb869cc29e7615b65e3c4455134e98b")
         self.assertEqual(descriptor["canonicalVerifierSha256"], sha(ROOT / "scripts/converta-release.py"))
 
+    def test_authenticated_prior_retention_is_denied_for_non_a959_contract(self):
+        fixture = Fixture()
+        try:
+            contract = json.loads(fixture.contract.read_text())
+            artifact = next(item for item in contract["artifacts"]
+                            if item["class"] == "DERIVED_WORKTREE")
+            artifact["state"] = "SANITIZED"
+            artifact["removedByAuthenticatedRetention"] = {
+                "batchId": MODULE.LEGACY_A959_V1_PRESERVE_BINDING["priorRetention"]["batchId"],
+                "receiptSha256": MODULE.LEGACY_A959_V1_PRESERVE_BINDING["priorRetention"]["receiptSha256"],
+                "journalSha256": MODULE.LEGACY_A959_V1_PRESERVE_BINDING["priorRetention"]["journalSha256"],
+                "ordinal": 1,
+            }
+            with self.assertRaisesRegex(MODULE.Denied,
+                                        "artifact_contract_authenticated_retention"):
+                MODULE.validate_contract(contract)
+        finally:
+            fixture.close()
+
     def test_a959_bootstrap_prepare_sanitizes_review_without_execute_or_active_release_retirement(self):
         fixture = LegacyA959V1PreserveFixture()
         try:

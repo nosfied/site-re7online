@@ -302,6 +302,11 @@ def validate_contract(value: dict[str, Any]) -> None:
     if not isinstance(value.get("artifacts"), list) or not value["artifacts"]:
         deny("artifact_contract_artifacts")
     paths = set()
+    authenticated_retention_paths: set[str] = set()
+    a959_retention = LEGACY_A959_V1_PRESERVE_BINDING["priorRetention"]
+    a959_expected_by_path = {
+        path: int(ordinal) for ordinal, path in a959_retention["a959Ordinals"].items()
+    }
     for artifact in value["artifacts"]:
         required_entry = {"path", "releaseId", "targetCommit", "expectedType", "initialIdentity", "observedIdentity",
                           "sizeBytes", "allocatedBytes", "inodes", "digest", "class", "state",
@@ -337,13 +342,21 @@ def validate_contract(value: dict[str, Any]) -> None:
         retention = artifact.get("removedByAuthenticatedRetention")
         if retention is not None:
             expected_retention = {"batchId", "receiptSha256", "journalSha256", "ordinal"}
-            if (artifact["class"] not in DERIVED_CLASSES or set(retention) != expected_retention or
-                    not isinstance(retention.get("batchId"), str) or not retention["batchId"] or
-                    not SHA256.fullmatch(str(retention.get("receiptSha256", ""))) or
-                    not SHA256.fullmatch(str(retention.get("journalSha256", ""))) or
-                    not isinstance(retention.get("ordinal"), int) or retention["ordinal"] <= 0 or
-                    artifact.get("state") != "SANITIZED"):
+            expected_ordinal = a959_expected_by_path.get(str(path))
+            expected_class = "DERIVED_WORKTREE" if expected_ordinal == 1 else "DERIVED_OUTPUT_RUNTIME"
+            if (value["releaseId"] != LEGACY_A959_V1_PRESERVE_BINDING["releaseId"] or
+                    value["targetCommit"] != LEGACY_A959_V1_PRESERVE_BINDING["targetCommit"] or
+                    set(retention) != expected_retention or expected_ordinal is None or
+                    retention != {"batchId": a959_retention["batchId"],
+                                  "receiptSha256": a959_retention["receiptSha256"],
+                                  "journalSha256": a959_retention["journalSha256"],
+                                  "ordinal": expected_ordinal} or
+                    artifact["class"] != expected_class or artifact.get("state") != "SANITIZED"):
                 deny("artifact_contract_authenticated_retention")
+            authenticated_retention_paths.add(str(path))
+    if (authenticated_retention_paths and
+            authenticated_retention_paths != set(a959_expected_by_path)):
+        deny("artifact_contract_authenticated_retention_scope")
 
 
 def _strict_child(path: Path, root: Path, predicate: str) -> None:
