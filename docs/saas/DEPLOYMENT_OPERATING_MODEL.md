@@ -1,10 +1,11 @@
 # Modelo operacional canônico de implantação do Converta
 
-**Status: CANÔNICO / TOPOLOGIA API A959 + FRONTEND F160 RELATADA EM 26/10/2026 / OPERAÇÕES DE CAMPANHA ABERTAS NA GERAÇÃO 41**
+**Status: CANÔNICO / API + FRONTEND 708F DEPLOYED_SANITIZED EM 27/10/2026 / OPERAÇÕES DE CAMPANHA ABERTAS NA GERAÇÃO 41**
 
 Este documento define a arquitetura e os princípios vigentes. Os comandos executáveis
-estão somente no [runbook canônico](DEPLOY_RUNBOOK.md). Preparações e executores
-anteriores permanecem como evidência histórica e não autorizam repetição.
+estão somente no [runbook canônico](DEPLOY_RUNBOOK.md). O estado ativo está no
+[registro 708f implantado e sanitizado](releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json).
+Preparações e executores anteriores são evidência e não autorizam repetição.
 
 ## Topologia canônica
 
