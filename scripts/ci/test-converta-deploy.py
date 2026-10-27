@@ -193,7 +193,7 @@ class DeployFixture(unittest.TestCase):
         self.config_manifest_sha = sha(self.config_manifest)
         retirement_files = {}
         for name in ("generation-retirement.py", "intent.private.json", "authorization.private.json",
-                     "operational.private.json"):
+                     "operational.private.json", "root-policy.private.json"):
             path = self.base / name; path.write_text(name + "\n"); path.chmod(0o600)
             retirement_files[name] = path
         self.retirement = deploy.RetirementBinding(
@@ -201,6 +201,7 @@ class DeployFixture(unittest.TestCase):
             retirement_files["intent.private.json"], sha(retirement_files["intent.private.json"]),
             retirement_files["authorization.private.json"], sha(retirement_files["authorization.private.json"]),
             retirement_files["operational.private.json"], sha(retirement_files["operational.private.json"]),
+            retirement_files["root-policy.private.json"], sha(retirement_files["root-policy.private.json"]),
             self.base / "retirement-receipt", self.base / "generation-review.private.json", self.lock)
         self.host.rows = {
             "api": self._row("api", 11), "frontend": self._row("frontend", 12),
@@ -226,7 +227,9 @@ class DeployFixture(unittest.TestCase):
             retirement_files["generation-retirement.py"], sha(retirement_files["generation-retirement.py"]),
             retirement_files["intent.private.json"], sha(retirement_files["intent.private.json"]),
             retirement_files["authorization.private.json"], sha(retirement_files["authorization.private.json"]),
-            operational, sha(operational), self.base / "retirement-receipt",
+            operational, sha(operational),
+            retirement_files["root-policy.private.json"], sha(retirement_files["root-policy.private.json"]),
+            self.base / "retirement-receipt",
             self.base / "generation-review.private.json", self.lock)
         self.inputs = deploy.Inputs(self.candidate, self.target, self.control_plane,
                                     deploy.COMPONENTS, self.config, self.config_manifest, self.transaction,

@@ -506,6 +506,9 @@
     "terminalIncomplete": "DEPLOYED_RETENTION_INCOMPLETE",
     "partialRetirementCanBeSanitized": false,
     "apiFrontendFinalizeIntegrated": true,
+    "frontendOnlyFinalizeIntegrated": true,
+    "partialRetirementReconciliation": "AUTHENTICATED_PRIOR_INTENT_RECEIPT_JOURNAL_REMAINING_ONLY",
+    "canonicalRootAuthority": "config/deploy-artifact-roots.json",
     "operationalObservationSchemaVersion": 2,
     "legacy123baMigration": "HASH_BOUND_CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN",
     "lastCompletedBatch": {

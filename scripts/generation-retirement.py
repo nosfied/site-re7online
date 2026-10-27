@@ -23,6 +23,7 @@ DERIVED_CLASSES = {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_STAGIN
 ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDING_ACTIVATION",
                    "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE"}
 ROOT_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
+POLICY_ENTRY_KEYS = {"path", "ownerUid", "groupGid", "allowedModes"}
 
 
 class Denied(RuntimeError):
@@ -59,6 +60,22 @@ def stable_private(path: Path, expected_sha: str | None = None) -> tuple[bytes, 
         deny(f"private_changed:{path.name}")
     if expected_sha is not None and digest_bytes(value) != expected_sha:
         deny(f"private_hash:{path.name}")
+    return value, after
+
+
+def stable_policy(path: Path, expected_sha: str) -> tuple[bytes, os.stat_result]:
+    if not path.is_absolute() or not SHA256.fullmatch(expected_sha):
+        deny("root_policy_authenticated_input")
+    try:
+        before = path.lstat(); value = path.read_bytes(); after = path.lstat()
+    except OSError:
+        deny("root_policy_read")
+    identity = lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_size,
+                             item.st_mtime_ns, item.st_ctime_ns)
+    if (path.is_symlink() or not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
+            stat.S_IMODE(before.st_mode) not in {0o600, 0o644} or identity(before) != identity(after) or
+            len(value) != after.st_size or digest_bytes(value) != expected_sha):
+        deny("root_policy_identity")
     return value, after
 
 
@@ -126,6 +143,26 @@ def acquire_existing_lock(path: Path):
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         os.close(fd); deny(f"lock_busy:{path.name}")
+    return fd
+
+
+def acquire_or_authenticate_lock(path: Path, inherited_fd: int | None):
+    if inherited_fd is None:
+        return acquire_existing_lock(path)
+    try:
+        before = path.lstat()
+        fd = os.dup(inherited_fd)
+        opened = os.fstat(fd)
+        target = Path(f"/proc/self/fd/{fd}").resolve(strict=True)
+    except OSError:
+        deny("inherited_lock_identity")
+    if (path.is_symlink() or not stat.S_ISREG(before.st_mode) or target != path or
+            (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino)):
+        os.close(fd); deny("inherited_lock_identity")
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd); deny("inherited_lock_not_held")
     return fd
 
 
@@ -198,7 +235,64 @@ def _protected_directory(path: Path, predicate: str) -> Path:
     return resolved
 
 
-def validate_operational(value: dict[str, Any], contract: dict[str, Any]) -> None:
+def _validate_ancestors(path: Path, owner_uid: int, predicate: str) -> None:
+    current = path
+    while True:
+        try:
+            info = current.lstat()
+        except OSError:
+            deny(predicate)
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            deny(predicate)
+        mode = stat.S_IMODE(info.st_mode)
+        # A root-owned sticky directory (normally /tmp) is the only writable
+        # ancestor accepted by synthetic/offline fixtures.
+        writable = mode & 0o022
+        if writable and not (mode & stat.S_ISVTX):
+            deny(predicate)
+        if current == current.parent:
+            break
+        current = current.parent
+
+
+def validate_root_policy(raw: bytes, expected_sha256: str) -> dict[str, Any]:
+    if digest_bytes(raw) != expected_sha256:
+        deny("root_policy_hash")
+    policy = object_json(raw, "root-policy")
+    if set(policy) != {"schemaVersion", "canonicalRoots"} or policy.get("schemaVersion") != 1:
+        deny("root_policy_schema")
+    roots = policy.get("canonicalRoots")
+    if not isinstance(roots, dict) or set(roots) != ROOT_KEYS:
+        deny("root_policy_schema")
+    entries: dict[str, Any] = {}
+    for key in ROOT_KEYS:
+        raw_entries = roots[key] if key == "evidence" else [roots[key]]
+        if not isinstance(raw_entries, list) or not raw_entries:
+            deny(f"root_policy_entry:{key}")
+        parsed = []
+        for entry in raw_entries:
+            if not isinstance(entry, dict) or set(entry) != POLICY_ENTRY_KEYS:
+                deny(f"root_policy_entry:{key}")
+            path = Path(str(entry.get("path", "")))
+            modes = entry.get("allowedModes")
+            if (not path.is_absolute() or ".." in path.parts or
+                    not isinstance(entry.get("ownerUid"), int) or entry["ownerUid"] < 0 or
+                    not isinstance(entry.get("groupGid"), int) or entry["groupGid"] < 0 or
+                    not isinstance(modes, list) or not modes or
+                    any(not isinstance(mode, str) or not re.fullmatch(r"0[0-7]{3}", mode) for mode in modes)):
+                deny(f"root_policy_entry:{key}")
+            resolved = _protected_directory(path, f"root_policy_directory:{key}")
+            info = resolved.lstat()
+            if (info.st_uid != entry["ownerUid"] or info.st_gid != entry["groupGid"] or
+                    f"0{stat.S_IMODE(info.st_mode):03o}" not in modes):
+                deny(f"root_policy_identity:{key}")
+            _validate_ancestors(resolved.parent, entry["ownerUid"], f"root_policy_ancestor:{key}")
+            parsed.append(str(resolved))
+        entries[key] = parsed if key == "evidence" else parsed[0]
+    return {"schemaVersion": 1, "canonicalRoots": entries, "sha256": expected_sha256}
+
+
+def validate_operational(value: dict[str, Any], contract: dict[str, Any], policy: dict[str, Any]) -> None:
     required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "gitRepository",
                 "currentPaths", "pm2LivePaths", "pm2DumpPaths", "activeReleases",
                 "rollbackReleases", "transitiveReturnReleases", "candidateReleases",
@@ -219,6 +313,8 @@ def validate_operational(value: dict[str, Any], contract: dict[str, Any]) -> Non
     roots = value.get("canonicalRoots")
     if not isinstance(roots, dict) or set(roots) != ROOT_KEYS:
         deny("canonical_roots_schema")
+    if roots != policy["canonicalRoots"]:
+        deny("canonical_roots_policy_mismatch")
     if (not isinstance(roots["evidence"], list) or not roots["evidence"] or
             any(not isinstance(item, str) for item in roots["evidence"])):
         deny("canonical_root:evidence")
@@ -543,15 +639,94 @@ def command_for(artifact: dict[str, Any], operational: dict[str, Any]) -> tuple[
     return command, " ".join(command)
 
 
+def _read_journal(raw: bytes) -> list[dict[str, Any]]:
+    events = []
+    for line in raw.splitlines():
+        try:
+            event = json.loads(line)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            deny("reconciliation_journal_invalid")
+        if not isinstance(event, dict):
+            deny("reconciliation_journal_invalid")
+        events.append(event)
+    return events
+
+
+def authenticate_reconciliation(args: argparse.Namespace, contract: dict[str, Any],
+                                policy_sha256: str) -> dict[str, Any]:
+    supplied = [args.prior_intent, args.prior_intent_sha256, args.prior_receipt,
+                args.prior_receipt_sha256, args.prior_journal, args.prior_journal_sha256]
+    if not any(supplied):
+        return {"prior": None, "completed": []}
+    if not all(supplied):
+        deny("reconciliation_binding_incomplete")
+    prior_intent_raw, _ = stable_private(args.prior_intent, args.prior_intent_sha256)
+    prior_receipt_raw, _ = stable_private(args.prior_receipt, args.prior_receipt_sha256)
+    prior_journal_raw, _ = stable_private(args.prior_journal, args.prior_journal_sha256)
+    prior_intent = object_json(prior_intent_raw, "prior-intent")
+    prior_receipt = object_json(prior_receipt_raw, "prior-receipt")
+    if (prior_intent.get("generationId") != contract["generationId"] or
+            prior_intent.get("releaseId") != contract["releaseId"] or
+            prior_intent.get("targetCommit") != contract["targetCommit"] or
+            prior_intent.get("contractSha256") != args.contract_sha256 or
+            prior_intent.get("rootPolicySha256") != policy_sha256):
+        deny("reconciliation_intent_identity")
+    if (prior_receipt.get("intentSha256") != args.prior_intent_sha256 or
+            prior_receipt.get("commandLogSha256") != args.prior_journal_sha256 or
+            prior_receipt.get("state") not in {"QUARANTINED", "DEPLOYED_RETENTION_INCOMPLETE"}):
+        deny("reconciliation_receipt_identity")
+    prior_commands = {item.get("ordinal"): item for item in prior_intent.get("commands", [])
+                      if isinstance(item, dict) and isinstance(item.get("ordinal"), int)}
+    artifacts = {item["path"]: item for item in contract["artifacts"]}
+    progress: dict[int, list[dict[str, Any]]] = {}
+    for event in _read_journal(prior_journal_raw):
+        ordinal = event.get("ordinal")
+        if not isinstance(ordinal, int) or ordinal not in prior_commands:
+            deny("reconciliation_journal_ordinal")
+        progress.setdefault(ordinal, []).append(event)
+    completed = []
+    for ordinal, events in sorted(progress.items()):
+        command = prior_commands[ordinal]
+        if not events or events[0] != {"event": "ATTEMPT", "ordinal": ordinal,
+                                      "path": command["path"], "argv": command["argv"]}:
+            deny("reconciliation_attempt_identity")
+        results = [item for item in events if item.get("event") == "RESULT"]
+        verified = [item for item in events if item.get("event") == "VERIFIED"]
+        if not results or results[-1].get("exitCode") != 0 or not verified or verified[-1] != {
+                "event": "VERIFIED", "ordinal": ordinal, "absent": True}:
+            continue
+        path = command["path"]
+        artifact = artifacts.get(path)
+        prior_artifact = next((item for item in prior_intent.get("artifacts", [])
+                               if item.get("path") == path), None)
+        if (artifact is None or prior_artifact is None or
+                artifact.get("observedIdentity") != prior_artifact.get("observedIdentity") or
+                Path(path).exists() or Path(path).is_symlink()):
+            deny("reconciliation_removed_identity")
+        completed.append({"ordinal": ordinal, "path": path,
+                          "observedIdentity": artifact.get("observedIdentity")})
+    if ([item["path"] for item in completed] != prior_receipt.get("removedPaths") or
+            len(completed) != prior_receipt.get("completedCommands")):
+        deny("reconciliation_receipt_progress")
+    return {"prior": {"intentSha256": args.prior_intent_sha256,
+                       "receiptSha256": args.prior_receipt_sha256,
+                       "journalSha256": args.prior_journal_sha256},
+            "completed": completed}
+
+
 def prepare(args: argparse.Namespace) -> None:
     contract_raw, _ = stable_private(args.contract, args.contract_sha256)
     lifecycle_raw, _ = stable_private(args.lifecycle, args.lifecycle_sha256)
     operational_raw, _ = stable_private(args.operational_state, args.operational_state_sha256)
+    policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
     contract = object_json(contract_raw, "artifact-contract")
     lifecycle = object_json(lifecycle_raw, "generation-lifecycle")
     operational = object_json(operational_raw, "operational-state")
-    validate_contract(contract); validate_operational(operational, contract)
+    policy = validate_root_policy(policy_raw, args.root_policy_sha256)
+    validate_contract(contract); validate_operational(operational, contract, policy)
     validate_artifact_roots(contract, operational)
+    reconciliation = authenticate_reconciliation(args, contract, args.root_policy_sha256)
+    reconciled_paths = {item["path"] for item in reconciliation["completed"]}
     legacy_migration = None
     if args.review_output.exists() or args.review_output.is_symlink():
         existing_raw, _ = stable_private(args.review_output)
@@ -581,8 +756,9 @@ def prepare(args: argparse.Namespace) -> None:
         classified = []
         commands = []
         for artifact in contract["artifacts"]:
-            authenticate_artifact(artifact)
-            state = classify(artifact, contract, operational)
+            if artifact["path"] not in reconciled_paths:
+                authenticate_artifact(artifact)
+            state = "SANITIZED" if artifact["path"] in reconciled_paths else classify(artifact, contract, operational)
             if (artifact["class"] == "RELEASE_RUNTIME" and
                     state in {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY"} and
                     not Path(artifact["path"]).is_dir()):
@@ -593,23 +769,27 @@ def prepare(args: argparse.Namespace) -> None:
             # Eligibility is re-evaluated under both locks at execution time, so
             # output/staging paths that become eligible only after DEPLOYED do not
             # require an unauthenticated second intent.
-            if artifact["class"] in DERIVED_CLASSES:
+            if artifact["class"] in DERIVED_CLASSES and artifact["path"] not in reconciled_paths:
                 command, text = command_for(artifact, operational)
-                commands.append({"ordinal": len(commands) + 1, "path": artifact["path"],
+                original_ordinal = next(index for index, item in enumerate(contract["artifacts"], 1)
+                                        if item["path"] == artifact["path"])
+                commands.append({"ordinal": original_ordinal, "path": artifact["path"],
                                  "class": artifact["class"], "argv": command, "literal": text,
                                  "allocatedBytes": artifact["allocatedBytes"],
                                  "eligibilityAtPrepare": state})
         state = review_state([item["retentionState"] for item in classified])
         intent = {
-            "schemaVersion": 2, "generationId": contract["generationId"],
+            "schemaVersion": 3, "generationId": contract["generationId"],
             "releaseId": contract["releaseId"], "targetCommit": contract["targetCommit"],
             "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION", "authorizationGranted": False,
             "contractSha256": args.contract_sha256, "lifecycleSha256": args.lifecycle_sha256,
             "operationalStateSha256": args.operational_state_sha256,
+            "rootPolicySha256": args.root_policy_sha256,
             "canonicalRoots": operational["canonicalRoots"],
             "controlPlaneArtifacts": operational["controlPlaneArtifacts"],
             "freshObservation": fresh,
             "legacyMigration": legacy_migration,
+            "reconciliation": reconciliation,
             "artifacts": classified, "commands": commands,
             "executionContract": {"canonicalLock": str(args.deployment_lock),
                                   "writerLock": contract["writerLockPath"],
@@ -649,16 +829,19 @@ def append_event(path: Path, value: dict[str, Any]) -> None:
     fsync_dir(path.parent)
 
 
-def validate_intent(intent: dict[str, Any], operational: dict[str, Any]) -> list[dict[str, Any]]:
+def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_sha256: str) -> list[dict[str, Any]]:
     required = {"schemaVersion", "generationId", "releaseId", "targetCommit", "state",
                 "authorizationGranted", "contractSha256", "lifecycleSha256",
                 "operationalStateSha256", "artifacts", "commands", "commandsSha256",
-                "executionContract", "canonicalRoots", "controlPlaneArtifacts", "freshObservation"}
+                "executionContract", "canonicalRoots", "controlPlaneArtifacts", "freshObservation",
+                "rootPolicySha256", "reconciliation"}
     required.add("legacyMigration")
-    if (set(intent) != required or intent.get("schemaVersion") != 2 or
+    if (set(intent) != required or intent.get("schemaVersion") != 3 or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
             intent.get("authorizationGranted") is not False):
         deny("intent_schema")
+    if intent.get("rootPolicySha256") != policy_sha256:
+        deny("intent_root_policy")
     if intent.get("canonicalRoots") != operational.get("canonicalRoots"):
         deny("intent_canonical_roots")
     if intent.get("controlPlaneArtifacts") != operational.get("controlPlaneArtifacts"):
@@ -682,13 +865,15 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any]) -> list
     if len(by_path) != len(artifacts):
         deny("intent_artifacts")
     literals = []
-    for ordinal, item in enumerate(commands, 1):
+    previous_ordinal = 0
+    for item in commands:
         if not isinstance(item, dict) or set(item) != {"ordinal", "path", "class", "argv", "literal", "allocatedBytes", "eligibilityAtPrepare"}:
             deny("intent_command")
         artifact = by_path.get(item["path"])
-        if (item["ordinal"] != ordinal or not artifact or
+        if (not isinstance(item["ordinal"], int) or item["ordinal"] <= previous_ordinal or not artifact or
                 artifact.get("class") not in DERIVED_CLASSES or item["class"] != artifact["class"]):
             deny("intent_command_scope")
+        previous_ordinal = item["ordinal"]
         if item.get("eligibilityAtPrepare") != artifact.get("retentionState"):
             deny("intent_command_eligibility")
         expected, literal = command_for(artifact, operational)
@@ -705,6 +890,7 @@ def execute(args: argparse.Namespace) -> None:
     intent_raw, _ = stable_private(args.intent, args.intent_sha256)
     authorization_raw, _ = stable_private(args.authorization, args.authorization_sha256)
     operational_raw, _ = stable_private(args.operational_state, args.operational_state_sha256)
+    policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
     intent = object_json(intent_raw, "intent")
     authorization = object_json(authorization_raw, "authorization")
     operational = object_json(operational_raw, "operational-state")
@@ -713,17 +899,18 @@ def execute(args: argparse.Namespace) -> None:
         "releaseId": intent.get("releaseId"),
         "targetCommit": intent.get("targetCommit"),
     }
-    validate_operational(operational, contract_identity)
+    policy = validate_root_policy(policy_raw, args.root_policy_sha256)
+    validate_operational(operational, contract_identity, policy)
     required_auth = {"schemaVersion", "authorizationId", "decision", "intentSha256", "approvedPaths", "owner"}
     if (set(authorization) != required_auth or authorization.get("schemaVersion") != 1 or
             authorization.get("decision") != "AUTHORIZE_ONCE" or
             authorization.get("intentSha256") != args.intent_sha256 or
             not isinstance(authorization.get("owner"), str) or not authorization["owner"].strip()):
         deny("authorization_invalid")
-    commands = validate_intent(intent, operational)
+    commands = validate_intent(intent, operational, args.root_policy_sha256)
     if not isinstance(commands, list) or authorization.get("approvedPaths") != [item["path"] for item in commands]:
         deny("authorization_scope")
-    canonical_fd = acquire_existing_lock(args.deployment_lock)
+    canonical_fd = acquire_or_authenticate_lock(args.deployment_lock, getattr(args, "deployment_lock_fd", None))
     writer_fd = acquire_existing_lock(Path(intent["executionContract"]["writerLock"]))
     attempted = completed = 0
     removed: list[str] = []
@@ -740,8 +927,12 @@ def execute(args: argparse.Namespace) -> None:
                     not any(release in Path(item["target"]).parts
                             for item in operational["observations"]["currentLinks"])):
                 deny("fresh_deployed_release_graph")
+        reconciled_paths = {item["path"] for item in intent["reconciliation"]["completed"]}
         for artifact in intent["artifacts"]:
-            authenticate_artifact(artifact)
+            if artifact["path"] not in reconciled_paths:
+                authenticate_artifact(artifact)
+            elif Path(artifact["path"]).exists() or Path(artifact["path"]).is_symlink():
+                deny("reconciled_path_reappeared")
         evidence_destination(args.receipt_root, operational)
         args.receipt_root.mkdir(mode=0o700, parents=False)
         journal = args.receipt_root / "command-results.private.jsonl"
@@ -771,7 +962,7 @@ def execute(args: argparse.Namespace) -> None:
                     deny(f"retirement_path_remains:{item['ordinal']}")
                 completed += 1; removed.append(item["path"])
                 append_event(journal, {"event": "VERIFIED", "ordinal": item["ordinal"], "absent": True})
-            removed_set = set(removed)
+            removed_set = set(removed) | reconciled_paths
             for artifact in intent["artifacts"]:
                 if artifact["path"] not in removed_set:
                     authenticate_artifact(artifact)
@@ -784,6 +975,7 @@ def execute(args: argparse.Namespace) -> None:
                        "failurePredicate": str(error), "attemptedCommands": attempted,
                        "completedCommands": completed, "removedPaths": removed,
                        "intentSha256": args.intent_sha256, "automaticRetry": False,
+                       "commandLogSha256": digest_bytes(journal.read_bytes()) if journal.exists() else digest_bytes(b""),
                        "freshObservation": fresh}
             write_exclusive(args.receipt_root / "execution-receipt.private.json", canonical(receipt))
             review = {"schemaVersion": 2, "generationId": intent["generationId"],
@@ -805,9 +997,10 @@ def execute(args: argparse.Namespace) -> None:
                          "DEPLOYED_RETENTION_INCOMPLETE" if operational["deploymentState"]["state"] == "DEPLOYED"
                          else "RETENTION_INCOMPLETE")
         journal_sha = digest_bytes(journal.read_bytes()) if journal.exists() else digest_bytes(b"")
+        all_removed = [item["path"] for item in intent["reconciliation"]["completed"]] + removed
         receipt = {"schemaVersion": 1, "state": receipt_state, "failurePredicate": None,
                    "attemptedCommands": attempted, "completedCommands": completed,
-                   "removedPaths": removed, "intentSha256": args.intent_sha256,
+                   "removedPaths": all_removed, "intentSha256": args.intent_sha256,
                    "commandLogSha256": journal_sha, "automaticRetry": False,
                    "remainingDerivedPaths": remaining, "freshObservation": fresh,
                    "lock": {"canonicalHeldThroughReceiptFsync": True,
@@ -834,6 +1027,8 @@ def parser() -> argparse.ArgumentParser:
     for name in ("contract", "lifecycle", "operational-state"):
         prepare_parser.add_argument(f"--{name}", type=Path, required=True)
         prepare_parser.add_argument(f"--{name}-sha256", required=True)
+    prepare_parser.add_argument("--root-policy", type=Path, required=True)
+    prepare_parser.add_argument("--root-policy-sha256", required=True)
     prepare_parser.add_argument("--deployment-lock", type=Path, required=True)
     prepare_parser.add_argument("--intent-output", type=Path, required=True)
     prepare_parser.add_argument("--commands-output", type=Path, required=True)
@@ -841,12 +1036,18 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--reviewer", required=True)
     prepare_parser.add_argument("--reason", required=True)
     prepare_parser.add_argument("--legacy-review-sha256")
+    for name in ("prior-intent", "prior-receipt", "prior-journal"):
+        prepare_parser.add_argument(f"--{name}", type=Path)
+        prepare_parser.add_argument(f"--{name}-sha256")
     prepare_parser.set_defaults(handler=prepare)
     execute_parser = commands.add_parser("execute")
     for name in ("intent", "authorization", "operational-state"):
         execute_parser.add_argument(f"--{name}", type=Path, required=True)
         execute_parser.add_argument(f"--{name}-sha256", required=True)
+    execute_parser.add_argument("--root-policy", type=Path, required=True)
+    execute_parser.add_argument("--root-policy-sha256", required=True)
     execute_parser.add_argument("--deployment-lock", type=Path, required=True)
+    execute_parser.add_argument("--deployment-lock-fd", type=int)
     execute_parser.add_argument("--receipt-root", type=Path, required=True)
     execute_parser.add_argument("--review-output", type=Path, required=True)
     execute_parser.set_defaults(handler=execute)

@@ -83,6 +83,15 @@ class Fixture:
         self.dump = self.root / "dump.pm2"; private_json(self.dump, {"fixture": "dump"})
         self.current = self.root / "current-frontend"
         os.symlink(self.installed_release, self.current)
+        def policy_entry(path: Path) -> dict:
+            info = path.lstat()
+            return {"path": str(path), "ownerUid": info.st_uid, "groupGid": info.st_gid,
+                    "allowedModes": [f"0{stat.S_IMODE(info.st_mode):03o}"]}
+        self.policy = self.root / "root-policy.private.json"
+        private_json(self.policy, {"schemaVersion": 1, "canonicalRoots": {
+            "repository": policy_entry(self.repo), "worktrees": policy_entry(self.worktrees_root),
+            "outputs": policy_entry(self.output_root), "releases": policy_entry(self.releases_root),
+            "staging": policy_entry(self.staging_root), "evidence": [policy_entry(self.evidence_root)]}})
 
         def artifact(path: Path, cls: str, state: str = "ACTIVE_DEPENDENCY") -> dict:
             info = path.lstat()
@@ -145,6 +154,7 @@ class Fixture:
         return invoke("prepare", "--contract", str(self.contract), "--contract-sha256", sha(self.contract),
                       "--lifecycle", str(self.lifecycle), "--lifecycle-sha256", sha(self.lifecycle),
                       "--operational-state", str(self.operational), "--operational-state-sha256", sha(self.operational),
+                      "--root-policy", str(self.policy), "--root-policy-sha256", sha(self.policy),
                       "--deployment-lock", str(self.deploy_lock), "--intent-output", str(self.intent),
                       "--commands-output", str(self.commands), "--review-output", str(self.review),
                       "--reviewer", "fixture-owner", "--reason", "fixture close", *extra)
@@ -162,6 +172,7 @@ class Fixture:
         result = invoke("execute", "--intent", str(self.intent), "--intent-sha256", sha(self.intent),
                         "--authorization", str(authorization), "--authorization-sha256", sha(authorization),
                         "--operational-state", str(self.operational), "--operational-state-sha256", sha(self.operational),
+                        "--root-policy", str(self.policy), "--root-policy-sha256", sha(self.policy),
                         "--deployment-lock", str(self.deploy_lock), "--receipt-root", str(receipt),
                         "--review-output", str(self.review))
         return result, receipt
@@ -286,6 +297,7 @@ class GenerationRetirementTest(unittest.TestCase):
             result = invoke("execute", "--intent", str(fixture.intent), "--intent-sha256", sha(fixture.intent),
                             "--authorization", str(authorization), "--authorization-sha256", sha(authorization),
                             "--operational-state", str(fixture.operational), "--operational-state-sha256", sha(fixture.operational),
+                            "--root-policy", str(fixture.policy), "--root-policy-sha256", sha(fixture.policy),
                             "--deployment-lock", str(fixture.deploy_lock), "--receipt-root", str(receipt),
                             "--review-output", str(fixture.review))
             self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
@@ -369,7 +381,7 @@ class GenerationRetirementTest(unittest.TestCase):
             private_json(fixture.operational, operational)
             result = fixture.prepare()
             self.assertEqual(result.returncode, 2)
-            self.assertIn("canonical_root:worktrees", result.stderr)
+            self.assertRegex(result.stderr, "canonical_roots_policy_mismatch|canonical_root:worktrees")
         finally:
             fixture.close()
 
@@ -408,6 +420,7 @@ class GenerationRetirementTest(unittest.TestCase):
                                    authorization=authorization, authorization_sha256=sha(authorization),
                                    operational_state=fixture.operational,
                                    operational_state_sha256=sha(fixture.operational),
+                                   root_policy=fixture.policy, root_policy_sha256=sha(fixture.policy),
                                    deployment_lock=fixture.deploy_lock, receipt_root=receipt,
                                    review_output=fixture.review)
             real_run = subprocess.run
@@ -420,11 +433,74 @@ class GenerationRetirementTest(unittest.TestCase):
                     return subprocess.CompletedProcess(command, 7, b"", b"synthetic failure")
                 return real_run(command, **kwargs)
             with patch.object(MODULE.subprocess, "run", side_effect=fail_second):
-                with self.assertRaisesRegex(MODULE.Denied, "retirement_command:2:exit_7"):
+                with self.assertRaisesRegex(MODULE.Denied, "retirement_command:.*:exit_7"):
                     MODULE.execute(args)
             saved = json.loads((receipt / "execution-receipt.private.json").read_text())
             self.assertEqual(saved["state"], "DEPLOYED_RETENTION_INCOMPLETE")
             self.assertEqual(json.loads(fixture.review.read_text())["state"], "QUARANTINED")
+        finally:
+            fixture.close()
+
+    def test_partial_failure_reconciles_without_repeating_completed_command(self):
+        fixture = Fixture()
+        try:
+            self.assertEqual(fixture.prepare().returncode, 0)
+            first_intent = fixture.intent
+            authorization = fixture.authorize("partial-first")
+            receipt = fixture.evidence_root / "partial-first-receipt"
+            args = SimpleNamespace(intent=first_intent, intent_sha256=sha(first_intent),
+                                   authorization=authorization, authorization_sha256=sha(authorization),
+                                   operational_state=fixture.operational,
+                                   operational_state_sha256=sha(fixture.operational),
+                                   root_policy=fixture.policy, root_policy_sha256=sha(fixture.policy),
+                                   deployment_lock=fixture.deploy_lock, receipt_root=receipt,
+                                   review_output=fixture.review)
+            real_run = subprocess.run
+            calls = 0
+            def fail_second(command, **kwargs):
+                nonlocal calls
+                if command[0] in {"/usr/bin/git", "/usr/bin/rm"}:
+                    calls += 1
+                    if calls == 2:
+                        return subprocess.CompletedProcess(command, 9, b"", b"stop")
+                return real_run(command, **kwargs)
+            with patch.object(MODULE.subprocess, "run", side_effect=fail_second):
+                with self.assertRaisesRegex(MODULE.Denied, "retirement_command"):
+                    MODULE.execute(args)
+            prior_receipt = receipt / "execution-receipt.private.json"
+            prior_journal = receipt / "command-results.private.jsonl"
+            original = json.loads(first_intent.read_text())
+            first_path = original["commands"][0]["path"]
+            self.assertFalse(Path(first_path).exists())
+
+            fixture.intent = fixture.evidence_root / "intent-reconciled.private.json"
+            fixture.commands = fixture.evidence_root / "commands-reconciled.private.txt"
+            prepared = fixture.prepare(
+                "--prior-intent", str(first_intent), "--prior-intent-sha256", sha(first_intent),
+                "--prior-receipt", str(prior_receipt), "--prior-receipt-sha256", sha(prior_receipt),
+                "--prior-journal", str(prior_journal), "--prior-journal-sha256", sha(prior_journal),
+            )
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            reconciled = json.loads(fixture.intent.read_text())
+            self.assertEqual([item["path"] for item in reconciled["reconciliation"]["completed"]], [first_path])
+            self.assertNotIn(first_path, [item["path"] for item in reconciled["commands"]])
+            result, final_receipt = fixture.execute(fixture.authorize("partial-resume"), "partial-final")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["result"], "DEPLOYED_SANITIZED")
+            self.assertIn(first_path, json.loads((final_receipt / "execution-receipt.private.json").read_text())["removedPaths"])
+        finally:
+            fixture.close()
+
+    def test_operational_roots_must_match_authenticated_policy(self):
+        fixture = Fixture()
+        try:
+            alternative = fixture.root / "alternative-worktrees"; alternative.mkdir()
+            operational = json.loads(fixture.operational.read_text())
+            operational["canonicalRoots"]["worktrees"] = str(alternative)
+            private_json(fixture.operational, operational)
+            result = fixture.prepare()
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("canonical_roots_policy_mismatch", result.stderr)
         finally:
             fixture.close()
 

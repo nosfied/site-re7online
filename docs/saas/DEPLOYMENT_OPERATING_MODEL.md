@@ -39,6 +39,10 @@ encerramento antes de liberar a janela. Se a retirada falhar, o serviço continu
 o estado passa a `DEPLOYED_RETENTION_INCOMPLETE` e o produtor nega a próxima
 geração.
 
+O mesmo limite vale ao frontend-only: o executor versionado possui `activate` e
+`finalize`; após o único save e o marker, ele executa a retenção uma vez e retoma por
+receipt autenticado, sem segundo save, restart ou retirada repetida.
+
 O encerramento é determinístico e limitado ao contrato daquela geração. Ele não
 refaz inventário global nem comparação entre todas as releases. Package,
 manifest, index, evidências, releases no grafo active/rollback/transitive-return e
@@ -72,6 +76,9 @@ target, Node `v20.20.0`, saída exclusiva e `SOURCE_DATE_EPOCH`; executa Prisma 
 do build da API, executa o frontend uma vez e sela API/frontend completos. Seu
 `index.sha256` usa exatamente o schema v1 conferido por `converta-deploy.py`, e o pacote só é publicado após
 fechamento, teste xz/tar, extração independente e comparação integral.
+O repositório de build deve ser descendente estrito da raiz `build-worktrees` da
+política versionada autenticada; uma raiz redefinida no snapshot ou um checkout
+externo são negados antes do primeiro npm.
 
 O manifesto registra target, release, componentes, toolchain, BUILD_ID, hash do
 entrypoint da API, hash do índice e campos determinísticos. Caches, `.env`, Git,

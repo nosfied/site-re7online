@@ -853,10 +853,56 @@ def build(args: argparse.Namespace) -> None:
         build_in_generation_window(args)
 
 
+def authenticated_build_worktrees_root(path: Path, expected_sha256: str) -> Path:
+    raw, info = stable_bytes(path)
+    if (info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) not in {0o600, 0o644} or
+            sha256_bytes(raw) != expected_sha256):
+        deny("root_policy_identity")
+    try:
+        policy = json.loads(raw)
+        roots = policy["canonicalRoots"]
+        entry = roots["worktrees"]
+    except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError):
+        deny("root_policy_schema")
+    if (policy.get("schemaVersion") != 1 or not isinstance(entry, dict) or
+            set(entry) != {"path", "ownerUid", "groupGid", "allowedModes"}):
+        deny("root_policy_schema")
+    root = Path(str(entry.get("path", "")))
+    try:
+        root_info = root.lstat()
+        resolved = root.resolve(strict=True)
+    except OSError:
+        deny("root_policy_worktrees")
+    mode = f"0{stat.S_IMODE(root_info.st_mode):03o}"
+    if (not root.is_absolute() or root.is_symlink() or not stat.S_ISDIR(root_info.st_mode) or
+            resolved != root or root_info.st_uid != entry.get("ownerUid") or
+            root_info.st_gid != entry.get("groupGid") or mode not in entry.get("allowedModes", [])):
+        deny("root_policy_worktrees")
+    current = root.parent
+    while True:
+        info = current.lstat(); mode = stat.S_IMODE(info.st_mode)
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode) or (
+                mode & 0o022 and not mode & stat.S_ISVTX):
+            deny("root_policy_worktrees_ancestor")
+        if current == current.parent: break
+        current = current.parent
+    return root
+
+
 def build_in_generation_window(args: argparse.Namespace) -> None:
     if not args.output.is_absolute():
         deny("output_absolute")
+    if args.repo.is_symlink():
+        deny("repo_unsafe_ancestor")
     repo = args.repo.resolve(strict=True)
+    worktrees_root = authenticated_build_worktrees_root(args.root_policy, args.root_policy_sha256)
+    if repo == worktrees_root or worktrees_root not in repo.parents:
+        deny("repo_outside_canonical_build_worktrees")
+    current = repo
+    while current != worktrees_root:
+        if current.is_symlink():
+            deny("repo_unsafe_ancestor")
+        current = current.parent
     ensure_clean_repo(repo, args.target)
     if args.components != ",".join(COMPONENTS):
         deny("components")
@@ -1037,6 +1083,8 @@ def parser() -> argparse.ArgumentParser:
                               default=Path("/opt/re7online/releases"))
     build_parser.add_argument("--source-date-epoch", type=int, required=True)
     build_parser.add_argument("--capacity-contract", type=Path, required=True)
+    build_parser.add_argument("--root-policy", type=Path, required=True)
+    build_parser.add_argument("--root-policy-sha256", required=True)
     build_parser.set_defaults(handler=build)
     verify_parser = commands.add_parser("verify")
     source = verify_parser.add_mutually_exclusive_group(required=True)

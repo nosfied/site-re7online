@@ -49,6 +49,17 @@ require("executor de ativação temporário em `/tmp`" in model,
 runbook = (ROOT / "docs/saas/DEPLOY_RUNBOOK.md").read_text()
 driver = (ROOT / "scripts/converta-deploy.py").read_text()
 producer = (ROOT / "scripts/converta-release.py").read_text()
+root_policy = json.loads((ROOT / "config/deploy-artifact-roots.json").read_text())
+require(root_policy.get("schemaVersion") == 1, "deployment artifact root policy schema")
+require({key: value["path"] for key, value in root_policy["canonicalRoots"].items() if key != "evidence"} == {
+    "repository": "/opt/re7online/site-re7online",
+    "worktrees": "/opt/re7online/build-worktrees",
+    "outputs": "/opt/re7online/build-output",
+    "releases": "/opt/re7online/releases",
+    "staging": "/opt/re7online/staging",
+}, "deployment artifact root policy paths")
+require([item["path"] for item in root_policy["canonicalRoots"]["evidence"]] ==
+        ["/opt/re7online/backups/converta-persistent"], "deployment evidence root policy")
 require(len(runbook.splitlines()) <= 280, "bounded deploy runbook size")
 for marker in ("preflight", "activate", "finalize", "rollback", "status",
                "PREFLIGHT PASS", "AWAITING_ACCEPTANCE", "DEPLOYED", "ROLLED_BACK",
@@ -60,7 +71,8 @@ for marker in ('choices=("preflight", "activate", "finalize", "rollback", "statu
     require(marker in driver, f"minimal deploy driver marker {marker}")
 for marker in ('add_parser("build")', 'add_parser("verify")', 'SOURCE_DATE_EPOCH',
                '"schemaVersion": 1', 'RELEASE VERIFIED',
-               'generation-artifacts.private.json', 'MINIMUM_BUILD_FREE_BYTES'):
+               'generation-artifacts.private.json', 'MINIMUM_BUILD_FREE_BYTES',
+               'repo_outside_canonical_build_worktrees'):
     require(marker in producer, f"external release producer marker {marker}")
 control = (ROOT / "scripts/pm2-definition-control.py").read_text()
 for marker in (
@@ -74,7 +86,8 @@ for marker in (
 frontend_executor = (ROOT / "scripts/frontend-only-activation.sh").read_text()
 for marker in (
     "wait-existing-readiness", "--report", "READINESS_OBSERVABILITY_DEFECT",
-    "AWAITING_ACCEPTANCE", "ROLLED_BACK", "handoff_lock",
+    "AWAITING_ACCEPTANCE", "ROLLED_BACK", "handoff_lock", "finalize_frontend_only",
+    "DEPLOYED_RETENTION_INCOMPLETE",
 ):
     require(marker in frontend_executor, f"frontend-only executor marker {marker}")
 fixture = json.loads((ROOT / "scripts/ci/fixtures/pm2-readiness-race.sanitized.json").read_text())

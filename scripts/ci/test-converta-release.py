@@ -63,7 +63,9 @@ def capacity_contract(path: Path, filesystem: Path, target: str, release_id: str
 
 
 def fixture_repo(root: Path) -> tuple[Path, str, dict[str, str]]:
-    repo = root / "source"
+    worktrees = root / "build-worktrees"
+    worktrees.mkdir()
+    repo = worktrees / "source"
     repo.mkdir()
     write(repo / "package.json", '{"scripts":{"build":"fixture"}}\n')
     write(repo / "package-lock.json", '{"lockfileVersion":3}\n')
@@ -130,6 +132,14 @@ class ReleaseProducerTest(unittest.TestCase):
         cls.base = Path(cls.temp.name)
         cls.repo, cls.target, cls.env = fixture_repo(cls.base)
         cls.release_id = "immutable-fixture-20261023T000000Z"
+        worktrees = cls.base / "build-worktrees"
+        info = worktrees.lstat()
+        cls.root_policy = cls.base / "root-policy.private.json"
+        write(cls.root_policy, json.dumps({"schemaVersion": 1, "canonicalRoots": {
+            "worktrees": {"path": str(worktrees), "ownerUid": info.st_uid,
+                          "groupGid": info.st_gid,
+                          "allowedModes": [f"0{stat.S_IMODE(info.st_mode):03o}"]}}}, sort_keys=True) + "\n", 0o600)
+        cls.root_policy_sha = hashlib.sha256(cls.root_policy.read_bytes()).hexdigest()
         cls.output_a = cls.base / "output-a"
         cls.capacity = capacity_contract(
             cls.base / "capacity.private.json", cls.base, cls.target, cls.release_id
@@ -138,7 +148,8 @@ class ReleaseProducerTest(unittest.TestCase):
                    "--target", cls.target, "--release-id", cls.release_id,
                    "--components", COMPONENTS, "--output", str(cls.output_a),
                    "--source-date-epoch", EPOCH,
-                   "--capacity-contract", str(cls.capacity)]
+                   "--capacity-contract", str(cls.capacity),
+                   "--root-policy", str(cls.root_policy), "--root-policy-sha256", cls.root_policy_sha]
         result = subprocess.run(["sh", "-c", "umask 077; exec \"$@\"", "fixture", *command],
                                 env=cls.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if result.returncode:
@@ -359,8 +370,26 @@ class ReleaseProducerTest(unittest.TestCase):
         result = invoke("build", "--repo", str(self.repo), "--target", self.target,
                         "--release-id", release_id, "--components", COMPONENTS,
                         "--output", str(existing), "--source-date-epoch", EPOCH,
-                        "--capacity-contract", str(capacity), env=self.env)
+                        "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+                        "--root-policy-sha256", self.root_policy_sha, env=self.env)
         self.assert_denied(result, "output_exists")
+
+    def test_clean_target_repo_outside_canonical_worktrees_is_denied(self) -> None:
+        external = self.base / "external-clean-repo"
+        subprocess.run(["git", "clone", "-q", str(self.repo), str(external)], check=True)
+        release_id = "immutable-external-repo"
+        output = self.base / "external-output"
+        capacity = capacity_contract(self.base / "external-capacity.private.json",
+                                     self.base, self.target, release_id)
+        result = invoke(
+            "build", "--repo", str(external), "--target", self.target,
+            "--release-id", release_id, "--components", COMPONENTS,
+            "--output", str(output), "--source-date-epoch", EPOCH,
+            "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+            "--root-policy-sha256", self.root_policy_sha, env=self.env,
+        )
+        self.assert_denied(result, "repo_outside_canonical_build_worktrees")
+        self.assertFalse(output.exists())
 
     def test_capacity_denied_before_output_or_npm(self) -> None:
         release_id = "immutable-capacity-denied"
@@ -374,7 +403,8 @@ class ReleaseProducerTest(unittest.TestCase):
             "build", "--repo", str(self.repo), "--target", self.target,
             "--release-id", release_id, "--components", COMPONENTS,
             "--output", str(output), "--source-date-epoch", EPOCH,
-            "--capacity-contract", str(capacity), env=self.env,
+            "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+            "--root-policy-sha256", self.root_policy_sha, env=self.env,
         )
         self.assert_denied(result, "capacity_bytes:")
         self.assertFalse(output.exists())
@@ -418,7 +448,8 @@ class ReleaseProducerTest(unittest.TestCase):
             "build", "--repo", str(self.repo), "--target", self.target,
             "--release-id", release_id, "--components", COMPONENTS,
             "--output", str(output), "--source-date-epoch", EPOCH,
-            "--capacity-contract", str(capacity),
+            "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+            "--root-policy-sha256", self.root_policy_sha,
         ])
         with patch.object(MODULE, "toolchain", side_effect=MODULE.Denied("fixture_failure")):
             with self.assertRaises(MODULE.Denied):
@@ -443,7 +474,8 @@ class ReleaseProducerTest(unittest.TestCase):
                 "build", "--repo", str(self.repo), "--target", self.target,
                 "--release-id", "next", "--components", COMPONENTS,
                 "--output", str(output), "--source-date-epoch", EPOCH,
-                "--capacity-contract", str(capacity),
+                "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+                "--root-policy-sha256", self.root_policy_sha,
             ])
             with patch.object(MODULE, "toolchain") as tool:
                 with self.assertRaisesRegex(MODULE.Denied, "generation_review_pending:previous"):
@@ -537,7 +569,8 @@ class ReleaseProducerTest(unittest.TestCase):
                 "build", "--repo", str(self.repo), "--target", self.target,
                 "--release-id", "phase-test", "--components", COMPONENTS,
                 "--output", str(output), "--source-date-epoch", EPOCH,
-                "--capacity-contract", str(capacity),
+                "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+                "--root-policy-sha256", self.root_policy_sha,
             ])
             commands = []
             original_run = MODULE.run

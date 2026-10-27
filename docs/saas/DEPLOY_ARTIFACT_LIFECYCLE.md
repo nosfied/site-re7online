@@ -40,13 +40,22 @@ terminal.
   `DEPLOYED_RETENTION_INCOMPLETE`, não desfaz o deploy aprovado e bloqueia o
   próximo build. Não há retry automático.
 
+Uma retirada parcial nunca transforma ausência em sucesso por inferência. Uma nova
+preparação exige o intent, receipt e journal anteriores com SHA-256 externos; confere
+intent/generation, ordinais, `ATTEMPT`, `RESULT` zero, `VERIFIED`, path, argv e a
+identidade original. A nova autorização contém somente os caminhos remanescentes.
+O comando já comprovado não é repetido; sem essa cadeia, a ausência é `DENY`.
+
 `SANITIZED` só é publicado após recomputar o contrato inteiro e confirmar que
 todos os derivados estão ausentes. Retirar somente o worktree enquanto outputs
 continuam pendentes termina em `RETENTION_INCOMPLETE` e review `QUARANTINED`.
 A mesma autorização pré-deploy cobre a lista literal completa; a execução
 pós-aceite recalcula a elegibilidade, sem ampliar o escopo autorizado.
 
-O estado operacional v2 declara raízes canônicas explícitas para checkout,
+O estado operacional v2 declara raízes observadas, mas a autoridade é a política
+versionada e autenticada `config/deploy-artifact-roots.json`. Caminho, owner, group,
+modo e ancestrais devem coincidir com essa política; redefinição no JSON operacional
+é `DENY`. Ela fixa raízes canônicas para checkout,
 `build-worktrees`, `build-output`, releases, staging e uma lista fechada de raízes
 de evidências. Cada classe
 destrutiva deve ser descendente estrita da raiz correspondente. Raiz em si,
@@ -55,6 +64,10 @@ por symlink são `DENY`. A única composição admitida é uma raiz de evidênci
 descendente de `build-output`, pois lifecycle/review são preservados ao lado da
 geração e nunca integram um comando destrutivo. Mudança de `current`, fingerprint sanitizado do PM2, dump ou
 grafo entre preparação e execução também nega antes do primeiro `ATTEMPT`.
+
+O produtor recebe a mesma política autenticada e aceita `--repo` somente como
+descendente estrito de `build-worktrees`; checkout externo é negado mesmo limpo e no
+target correto.
 
 Uma review v1 `PRESERVE` conhecida, incluindo a candidata legada `123ba`, só pode
 ser migrada sem inventário global quando `prepare` recebe

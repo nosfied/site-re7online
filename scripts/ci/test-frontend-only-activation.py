@@ -89,21 +89,34 @@ pathlib.Path(a.report).write_text(json.dumps(value)+'\\n');print(json.dumps(valu
         self.current = self.root / "current"; self.current.mkdir(); (self.current / "frontend").symlink_to(self.rollback / "frontend-runtime")
         self.package = self.root / "package.tar.xz"; self.package.write_bytes(b"authenticated fixture package")
         self.guard = self.root / "guard.json"; self.guard.write_text(json.dumps({"version":1,"open":guard_open,"generation":41,"tasks":{},"audit":[]})+"\n")
-        self.dump = self.root / "dump.pm2"; self.dump.write_text("saved dump\n"); self.dump.chmod(0o600)
+        self.dump = self.root / "dump.pm2"
         self.lock = self.root / "deployment-window.lock"; self.lock.write_text(""); self.lock.chmod(0o600)
         self.counter = self.root / "restarts"; self.counter.write_text("7")
+        self.save_counter = self.root / "saves"; self.save_counter.write_text("0")
         pid = os.getpid()
+        def pm2_rows(restarts: int):
+            def row(name, cwd, script, restart):
+                return {'name': name, 'pid': pid, 'pm2_env': {'status': 'online', 'restart_time': restart,
+                    'pm_cwd': cwd, 'pm_exec_path': script, 'exec_mode': 'fork_mode', 'instances': 1,
+                    'args': None, 'node_args': None, 'namespace': None, 'out_file': None, 'error_file': None}}
+            return [row('re7-whatsapp-agent','/api','/api/index.js',2),
+                    row('re7-whatsapp-web-worker','/worker','/worker/index.js',0),
+                    row('re7-admin-front',str(self.current/'frontend'),str(self.current/'frontend/node_modules/next/dist/bin/next'),restarts)]
+        self.dump.write_text(json.dumps(pm2_rows(7))+"\n"); self.dump.chmod(0o600)
         self.pm2 = self.root / "pm2"
         self.pm2.write_text(f"""#!/usr/bin/env python3
 import json,pathlib,sys
 c=pathlib.Path({str(self.counter)!r})
+s=pathlib.Path({str(self.save_counter)!r});dump=pathlib.Path({str(self.dump)!r})
+def rows():
+ r=int(c.read_text());return [
+ {{'name':'re7-whatsapp-agent','pid':{pid},'pm2_env':{{'status':'online','restart_time':2,'pm_cwd':'/api','pm_exec_path':'/api/index.js','exec_mode':'fork_mode','instances':1,'args':None,'node_args':None,'namespace':None,'out_file':None,'error_file':None}}}},
+ {{'name':'re7-whatsapp-web-worker','pid':{pid},'pm2_env':{{'status':'online','restart_time':0,'pm_cwd':'/worker','pm_exec_path':'/worker/index.js','exec_mode':'fork_mode','instances':1,'args':None,'node_args':None,'namespace':None,'out_file':None,'error_file':None}}}},
+ {{'name':'re7-admin-front','pid':{pid},'pm2_env':{{'status':'online','restart_time':r,'pm_cwd':{str(self.current / "frontend")!r},'pm_exec_path':{str(self.current / "frontend/node_modules/next/dist/bin/next")!r},'exec_mode':'fork_mode','instances':1,'args':None,'node_args':None,'namespace':None,'out_file':None,'error_file':None}}}}]
 if sys.argv[1]=='--version': print('6.0.14')
-elif sys.argv[1]=='jlist':
- r=int(c.read_text());print(json.dumps([
- {{'name':'re7-whatsapp-agent','pid':{pid},'pm2_env':{{'status':'online','restart_time':2,'pm_cwd':'/api','pm_exec_path':'/api/index.js'}}}},
- {{'name':'re7-whatsapp-web-worker','pid':{pid},'pm2_env':{{'status':'online','restart_time':0,'pm_cwd':'/worker','pm_exec_path':'/worker/index.js'}}}},
- {{'name':'re7-admin-front','pid':{pid},'pm2_env':{{'status':'online','restart_time':r,'pm_cwd':{str(self.current / "frontend")!r},'pm_exec_path':{str(self.current / "frontend/node_modules/next/dist/bin/next")!r}}}}}]))
+elif sys.argv[1]=='jlist': print(json.dumps(rows()))
 elif sys.argv[1]=='restart': c.write_text(str(int(c.read_text())+1));print('restarted')
+elif sys.argv[1]=='save': s.write_text(str(int(s.read_text())+1));dump.write_text(json.dumps(rows())+'\\n');print('saved')
 else: raise SystemExit(2)
 """); self.pm2.chmod(0o700)
         self.request = self.root / "request.json"; self.request.write_text("{}\n")
@@ -132,13 +145,40 @@ else: raise SystemExit(2)
         self.generation_contract.chmod(0o600)
         self.retirement_intent = self.root / "generation-retirement-intent.private.json"
         self.retirement_intent.write_text(json.dumps({
-            "schemaVersion": 2, "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION",
+            "schemaVersion": 3, "state": "SEALED_FOR_EXPLICIT_AUTHORIZATION",
             "authorizationGranted": False, "targetCommit": "a" * 40,
             "releaseId": self.release.name,
             "contractSha256": digest(self.generation_contract), "commands": [],
             "executionContract": {"stopOnFirstFailure": True, "automaticRetry": False},
         }, sort_keys=True) + "\n")
         self.retirement_intent.chmod(0o600)
+        self.root_policy = self.root / "root-policy.private.json"
+        self.root_policy.write_text('{"schemaVersion":1,"canonicalRoots":{}}\n'); self.root_policy.chmod(0o600)
+        intent_value=json.loads(self.retirement_intent.read_text());intent_value["rootPolicySha256"]=digest(self.root_policy)
+        self.retirement_intent.write_text(json.dumps(intent_value,sort_keys=True)+"\n");self.retirement_intent.chmod(0o600)
+        self.retirement_tool = self.root / "generation-retirement.py"
+        self.retirement_counter = self.root / "retirement-count"; self.retirement_counter.write_text("0")
+        self.retirement_receipt = self.root / "retirement-receipt"
+        self.retirement_tool.write_text(f"""#!/usr/bin/env python3
+import hashlib,json,os,pathlib,sys
+c=pathlib.Path({str(self.retirement_counter)!r});c.write_text(str(int(c.read_text())+1))
+args=sys.argv;root=pathlib.Path(args[args.index('--receipt-root')+1]);root.mkdir()
+state='DEPLOYED_RETENTION_INCOMPLETE' if os.environ.get('FAKE_RETIREMENT')=='fail' else 'DEPLOYED_SANITIZED'
+receipt=root/'execution-receipt.private.json';receipt.write_text(json.dumps({{'state':state,'intentSha256':args[args.index('--intent-sha256')+1]}})+'\\n');receipt.chmod(0o600)
+print(json.dumps({{'result':state,'receiptSha256':hashlib.sha256(receipt.read_bytes()).hexdigest()}}))
+raise SystemExit(2 if os.environ.get('FAKE_RETIREMENT')=='fail' else 0)
+"""); self.retirement_tool.chmod(0o600)
+        self.retirement_authorization = self.root / "retirement-authorization.private.json"; self.retirement_authorization.write_text('{}\n'); self.retirement_authorization.chmod(0o600)
+        self.retirement_operational = self.root / "retirement-operational.private.json"
+        self.retirement_operational.write_text(json.dumps({
+            "activeReleases":[self.rollback.name],"rollbackReleases":[],"transitiveReturnReleases":[],
+            "candidateReleases":[self.release.name],"installedVerifiedReleases":[self.release.name],"supersededCandidates":[],
+            "observations":{"currentLinks":[{"path":str(self.current/"frontend"),"target":str(self.rollback/"frontend-runtime")}],
+                            "pm2":{"path":str(self.pm2),"sha256":digest(self.pm2),"fingerprintSha256":"0"*64},
+                            "dump":{"path":str(self.dump),"sha256":digest(self.dump)},
+                            "releaseGraph":{"path":str(self.dump),"sha256":digest(self.dump)}}
+        },sort_keys=True)+"\n"); self.retirement_operational.chmod(0o600)
+        self.retirement_review = self.root / "retirement-review.private.json"
         if behavior == "post-select-failure":
             needle = 'atomic_select "$FINAL/frontend-runtime"\ntest "$(/usr/bin/readlink -f "$CURRENT/frontend")" = "$FINAL/frontend-runtime"'
             replacement = 'atomic_select "$FINAL/frontend-runtime"\nfalse\ntest "$(/usr/bin/readlink -f "$CURRENT/frontend")" = "$FINAL/frontend-runtime"'
@@ -160,12 +200,23 @@ else: raise SystemExit(2)
             "RE7_GENERATION_CONTRACT_SHA256":digest(self.generation_contract),
             "RE7_RETIREMENT_INTENT":str(self.retirement_intent),
             "RE7_RETIREMENT_INTENT_SHA256":digest(self.retirement_intent),
+            "RE7_ROOT_POLICY":str(self.root_policy), "RE7_ROOT_POLICY_SHA256":digest(self.root_policy),
+            "RE7_RETIREMENT_TOOL":str(self.retirement_tool), "RE7_RETIREMENT_TOOL_SHA256":digest(self.retirement_tool),
+            "RE7_RETIREMENT_AUTHORIZATION":str(self.retirement_authorization), "RE7_RETIREMENT_AUTHORIZATION_SHA256":digest(self.retirement_authorization),
+            "RE7_RETIREMENT_OPERATIONAL_STATE":str(self.retirement_operational), "RE7_RETIREMENT_OPERATIONAL_STATE_SHA256":digest(self.retirement_operational),
+            "RE7_RETIREMENT_RECEIPT_ROOT":str(self.retirement_receipt), "RE7_RETIREMENT_REVIEW_OUTPUT":str(self.retirement_review),
             "FAKE_READINESS":behavior,
             "FAKE_GUARD":str(self.guard),
         })
 
     def run(self):
         return subprocess.run([str(self.script)], env=self.env, text=True, capture_output=True, timeout=12)
+
+    def finalize(self, retirement="pass"):
+        acceptance=self.tx/"technical-acceptance.private.json"
+        acceptance.write_text(json.dumps({"accepted":True,"target":"a"*40,"release":self.release.name})+"\n");acceptance.chmod(0o600)
+        environment={**self.env,"FAKE_RETIREMENT":retirement}
+        return subprocess.run([str(self.script),"finalize"],env=environment,text=True,capture_output=True,timeout=12)
 
     def release_holder(self):
         holder_file = self.tx / "lock-holder.private.json"
@@ -307,6 +358,49 @@ class FrontendExecutorTest(unittest.TestCase):
                 r=f.run();self.assertNotEqual(r.returncode,0);self.assertEqual((f.current/"frontend").resolve(),f.rollback/"frontend-runtime")
                 self.assertEqual(json.loads((f.tx/"window-state.private.json").read_text())["state"],"DENIED_BEFORE_MUTATION")
             finally:f.close()
+
+    def test_finalize_success_runs_one_save_and_one_retirement(self):
+        f,r=self.run_case()
+        try:
+            self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+            result=f.finalize()
+            self.assertEqual(result.returncode,0,(result.stdout,result.stderr))
+            self.assertIn("DEPLOYED_SANITIZED",result.stdout)
+            self.assertEqual(f.save_counter.read_text(),"1")
+            self.assertEqual(f.retirement_counter.read_text(),"1")
+            self.assertEqual(json.loads((f.tx/"window-state.private.json").read_text())["state"],"DEPLOYED_SANITIZED")
+            self.assertEqual(int(f.counter.read_text()),8)
+        finally:f.close()
+
+    def test_finalize_retention_failure_is_deployed_incomplete(self):
+        f,r=self.run_case()
+        try:
+            self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+            result=f.finalize("fail")
+            self.assertEqual(result.returncode,0,(result.stdout,result.stderr))
+            self.assertIn("DEPLOYED_RETENTION_INCOMPLETE",result.stdout)
+            self.assertEqual(f.save_counter.read_text(),"1")
+            self.assertEqual(f.retirement_counter.read_text(),"1")
+            self.assertEqual(int(f.counter.read_text()),8)
+        finally:f.close()
+
+    def test_finalize_resume_does_not_repeat_save_restart_or_retirement(self):
+        f,r=self.run_case()
+        try:
+            self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
+            f.env["RE7_TEST_FAIL_AFTER_RETENTION"]="1"
+            first=f.finalize()
+            self.assertNotEqual(first.returncode,0)
+            self.assertEqual(f.save_counter.read_text(),"1")
+            self.assertEqual(f.retirement_counter.read_text(),"1")
+            f.env.pop("RE7_TEST_FAIL_AFTER_RETENTION")
+            second=f.finalize()
+            self.assertEqual(second.returncode,0,(second.stdout,second.stderr))
+            self.assertEqual(f.save_counter.read_text(),"1")
+            self.assertEqual(f.retirement_counter.read_text(),"1")
+            self.assertEqual(int(f.counter.read_text()),8)
+            self.assertEqual(json.loads((f.tx/"window-state.private.json").read_text())["state"],"DEPLOYED_SANITIZED")
+        finally:f.close()
 
 
 if __name__=="__main__": unittest.main()

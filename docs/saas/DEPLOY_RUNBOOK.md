@@ -60,6 +60,12 @@ Falha de retirada não reverte o deploy aprovado: encerra em
 até reconciliação. Os cinco comandos públicos do driver permanecem inalterados.
 Não usar retry, force, prune, glob ou caminhos alternativos.
 
+O fluxo frontend-only usa o mesmo executor release-bound nas fases `activate` e
+`finalize`. Depois do aceite, `finalize` revalida o trio, executa um único `pm2 save`,
+valida o dump, publica `DEPLOYED` e chama a retenção exatamente uma vez. Retomada usa
+as evidências duráveis: não repete save, restart nem comando de retirada. O estado
+terminal também é `DEPLOYED_SANITIZED` ou `DEPLOYED_RETENTION_INCOMPLETE`.
+
 Para uma ativação frontend-only, a ordem canônica é obrigatória: produzir uma
 única vez o artefato funcional; obter os hashes finais do pacote e o BUILD_ID;
 materializar, em uma alteração separada de control plane, o executor
@@ -87,7 +93,9 @@ python3 scripts/converta-release.py build \
   --repo "$PWD" --target "$TARGET" --release-id "$RELEASE" \
   --components api,frontend --output <saida-exclusiva> \
   --source-date-epoch "$EPOCH" \
-  --capacity-contract <capacity-contract.private.json>
+  --capacity-contract <capacity-contract.private.json> \
+  --root-policy config/deploy-artifact-roots.json \
+  --root-policy-sha256 <sha256-autenticado>
 python3 scripts/converta-release.py verify \
   --package <saida-exclusiva>/$RELEASE.tar.xz \
   --target "$TARGET" --release-id "$RELEASE" --components api,frontend

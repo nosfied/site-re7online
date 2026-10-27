@@ -227,6 +227,8 @@ class RetirementBinding:
     authorization_sha256: str
     operational_state: Path
     operational_state_sha256: str
+    root_policy: Path
+    root_policy_sha256: str
     receipt_root: Path
     review_output: Path
     deployment_lock: Path
@@ -237,6 +239,7 @@ class RetirementBinding:
                 "authorization": str(self.authorization), "authorizationSha256": self.authorization_sha256,
                 "operationalState": str(self.operational_state),
                 "operationalStateSha256": self.operational_state_sha256,
+                "rootPolicy": str(self.root_policy), "rootPolicySha256": self.root_policy_sha256,
                 "receiptRoot": str(self.receipt_root), "reviewOutput": str(self.review_output),
                 "deploymentLock": str(self.deployment_lock)}
 
@@ -764,6 +767,10 @@ class Driver:
             raw, _ = stable_regular_bytes(path, required_mode=0o600)
             if hashlib.sha256(raw).hexdigest() != expected:
                 deny(f"generation_retirement_hash:{label}")
+        policy_raw, policy_info = stable_regular_bytes(binding.root_policy)
+        if (stat.S_IMODE(policy_info.st_mode) not in {0o600, 0o644} or
+                hashlib.sha256(policy_raw).hexdigest() != binding.root_policy_sha256):
+            deny("generation_retirement_hash:root_policy")
         if receipt_must_be_absent and (binding.receipt_root.exists() or binding.receipt_root.is_symlink()):
             deny("generation_retirement_receipt_exists")
         if not binding.review_output.is_absolute() or not binding.receipt_root.is_absolute():
@@ -871,6 +878,8 @@ class Driver:
                    "--authorization-sha256", binding.authorization_sha256,
                    "--operational-state", str(final_operational),
                    "--operational-state-sha256", final_operational_sha,
+                   "--root-policy", str(binding.root_policy),
+                   "--root-policy-sha256", binding.root_policy_sha256,
                    "--deployment-lock", str(binding.deployment_lock),
                    "--receipt-root", str(binding.receipt_root),
                    "--review-output", str(binding.review_output)]
@@ -1256,6 +1265,8 @@ def parse() -> tuple[str, Inputs]:
     parser.add_argument("--generation-retirement-authorization-sha256", required=True)
     parser.add_argument("--generation-retirement-operational-state", type=Path, required=True)
     parser.add_argument("--generation-retirement-operational-state-sha256", required=True)
+    parser.add_argument("--generation-retirement-root-policy", type=Path, required=True)
+    parser.add_argument("--generation-retirement-root-policy-sha256", required=True)
     parser.add_argument("--generation-retirement-receipt-root", type=Path, required=True)
     parser.add_argument("--generation-retirement-review-output", type=Path, required=True)
     parser.add_argument("--generation-retirement-deployment-lock", type=Path, required=True)
@@ -1266,6 +1277,7 @@ def parse() -> tuple[str, Inputs]:
         args.generation_retirement_intent, args.generation_retirement_intent_sha256,
         args.generation_retirement_authorization, args.generation_retirement_authorization_sha256,
         args.generation_retirement_operational_state, args.generation_retirement_operational_state_sha256,
+        args.generation_retirement_root_policy, args.generation_retirement_root_policy_sha256,
         args.generation_retirement_receipt_root, args.generation_retirement_review_output,
         args.generation_retirement_deployment_lock)
     return args.command, Inputs(args.release, args.target, args.control_plane,
