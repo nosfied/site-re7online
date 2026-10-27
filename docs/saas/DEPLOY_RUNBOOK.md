@@ -246,9 +246,8 @@ genérica.
 
 ## Escopo de ativação conforme a matriz de impacto
 
-A matriz de impacto aprovada é vinculante para a janela. O pacote canônico pode conter
-API e frontend completos, mas isso não autoriza selecionar ou reiniciar componente sem
-impacto. Quando o impacto comprovado for somente frontend:
+A matriz é vinculante: `config/deploy-artifact-roots.json` e `config/legacy-generation-*.json` são control plane `no_runtime`;
+qualquer outro `config/` permanece desconhecido. Para impacto somente frontend:
 
 1. preservar o symlink e o processo da API, sem restart;
 2. capturar antes e depois PID, start ticks, restart count, CWD/script físicos,

@@ -107,6 +107,9 @@ run_case "worker-only" "apps/whatsapp-web-worker/src/whatsappWebSessionWorker.ts
 run_case "shared-backend-worker" "apps/whatsapp-agent/src/web-session/webSessionInbound.ts" YES YES NO NO
 run_case "frontend-only" "src/app/app/inbox/page.tsx" NO NO YES NO
 run_case "docs-only" "docs/saas/runbook-re7.md" NO NO NO NO
+run_case "deploy-root-policy" "config/deploy-artifact-roots.json" NO NO NO NO
+run_case "legacy-generation-descriptor" "config/legacy-generation-f1602787-v1-preserve.json" NO NO NO NO
+run_case "unknown-config" "config/runtime-overrides.json" YES YES YES NO 2
 run_case "prisma-schema" "apps/whatsapp-agent/prisma/schema.prisma" YES YES NO YES
 run_case "unknown-path" "ops/custom-runtime-hook.sh" YES YES YES NO 2
 run_case "root-lockfile" "package-lock.json" YES YES YES NO 2

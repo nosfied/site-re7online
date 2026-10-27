@@ -43,6 +43,10 @@ for path in "${changed_files[@]}"; do
       mark_frontend "$path" ;;
     package.json|package-lock.json|tsconfig.json|tsconfig.*.json)
       mark_unknown "$path" ;;
+    config/deploy-artifact-roots.json|config/legacy-generation-*.json)
+      # These closed, versioned files govern build/retention control only. They
+      # are never loaded by the API, frontend or worker runtime.
+      reasons+=("no_runtime:$path") ;;
     apps/whatsapp-agent/scripts/*|apps/whatsapp-agent/scripts/**/*|scripts/*|scripts/**/*|.github/*|.github/**/*|docs/*|docs/**/*|README.md|*.md)
       reasons+=("no_runtime:$path") ;;
     .env.example|*.example|*.sample) reasons+=("config_template_review:$path") ;;
