@@ -757,6 +757,17 @@ class GenerationRetirementTest(unittest.TestCase):
         finally:
             fixture.close()
 
+    def test_ephemeral_runtime_cache_class_is_denied_outside_f160(self):
+        fixture = Fixture()
+        try:
+            contract = json.loads(fixture.contract.read_text())
+            contract["classes"].append("EPHEMERAL_RUNTIME_CACHE")
+            contract["classes"].sort()
+            with self.assertRaisesRegex(MODULE.Denied, "artifact_contract_classes"):
+                MODULE.validate_contract(contract)
+        finally:
+            fixture.close()
+
     def test_versioned_legacy_descriptor_is_closed_and_binds_canonical_verifier(self):
         descriptor_path = ROOT / "config/legacy-generation-123ba7bd.json"
         descriptor = json.loads(descriptor_path.read_text())
