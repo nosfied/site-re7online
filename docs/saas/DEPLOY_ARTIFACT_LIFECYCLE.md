@@ -170,7 +170,9 @@ somente se existir `DERIVED_STAGING` ainda não `SANITIZED` que possa originar u
 comando. Nesse caso a checagem ocorre antes do lock/comando e exige diretório real,
 sem symlink, owner/group/modo autorizados e ancestrais seguros. Staging ausente sem
 artefato destrutível, ou staging já `SANITIZED` e removido pelo produtor, é válido;
-não se cria a raiz histórica para passar no gate. A raiz de evidências participa
+não se cria a raiz histórica para passar no gate. A extração independente histórica
+já removida pode estar confinada a `staging` ou `build-output`; artefato ainda
+presente ou destrutível continua restrito exclusivamente a `staging`. A raiz de evidências participa
 sempre e aceita os modos canônicos `0700` e `0750`, ambos sem escrita por
 grupo/outros.
 

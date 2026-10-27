@@ -665,13 +665,22 @@ def validate_artifact_roots(contract: dict[str, Any], operational: dict[str, Any
             continue
         path = Path(artifact["path"])
         root = class_root[kind]
-        _strict_child(path, root, f"artifact_outside_canonical_root:{kind}")
         staging_already_removed = (kind == "DERIVED_STAGING" and
                                    artifact.get("state") == "SANITIZED" and
                                    artifact.get("removedAtProducerCompletion") is True and
                                    not path.exists() and not path.is_symlink())
-        if not staging_already_removed and _path_has_symlink(path, root):
-            deny(f"artifact_unsafe_ancestor:{kind}")
+        if staging_already_removed:
+            # The producer's independent verification extraction historically
+            # lived directly below build-output and was removed before contract
+            # publication. It is evidence only: no command may target it.
+            allowed_roots = (roots["staging"], roots["outputs"])
+            if not any(path != candidate and candidate in path.parents
+                       for candidate in allowed_roots):
+                deny(f"artifact_outside_canonical_root:{kind}")
+        else:
+            _strict_child(path, root, f"artifact_outside_canonical_root:{kind}")
+            if _path_has_symlink(path, root):
+                deny(f"artifact_unsafe_ancestor:{kind}")
         if kind == "DERIVED_WORKTREE" and path == roots["repository"]:
             deny("canonical_checkout_not_retirable")
 

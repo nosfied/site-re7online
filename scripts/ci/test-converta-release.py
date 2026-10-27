@@ -153,6 +153,10 @@ class ReleaseProducerTest(unittest.TestCase):
         cls.capacity = capacity_contract(
             cls.base / "capacity.private.json", cls.base, cls.target, cls.release_id
         )
+        # Synthetic tests must not depend on transient hosted-runner capacity.
+        # The production value is restored and proved explicitly below.
+        cls.production_minimum_build_free_bytes = MODULE.MINIMUM_BUILD_FREE_BYTES
+        MODULE.MINIMUM_BUILD_FREE_BYTES = 1
         command = [sys.executable, str(PRODUCER), "build", "--repo", str(cls.repo),
                    "--target", cls.target, "--release-id", cls.release_id,
                    "--components", COMPONENTS, "--output", str(cls.output_a),
@@ -160,10 +164,12 @@ class ReleaseProducerTest(unittest.TestCase):
                    "--source-date-epoch", EPOCH,
                    "--capacity-contract", str(cls.capacity),
                    "--root-policy", str(cls.root_policy), "--root-policy-sha256", cls.root_policy_sha]
-        result = subprocess.run(["sh", "-c", "umask 077; exec \"$@\"", "fixture", *command],
-                                env=cls.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if result.returncode:
-            raise AssertionError((result.stdout, result.stderr))
+        # The production 12 GiB floor is proved independently below with a
+        # controlled statvfs result. Building this tiny synthetic fixture must
+        # not depend on the transient free space of a shared CI runner.
+        args = MODULE.parser().parse_args(command[2:])
+        with patch.dict(os.environ, cls.env, clear=True):
+            args.handler(args)
         cls.release = cls.output_a / cls.release_id
         cls.package = cls.output_a / f"{cls.release_id}.tar.xz"
         # Preserve the original PENDING lifecycle; a separate operator review
@@ -178,6 +184,7 @@ class ReleaseProducerTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
+        MODULE.MINIMUM_BUILD_FREE_BYTES = cls.production_minimum_build_free_bytes
         cls.temp.cleanup()
 
     def copy_release(self, name: str) -> Path:
@@ -611,9 +618,11 @@ class ReleaseProducerTest(unittest.TestCase):
             self.base / "capacity-floor.private.json", self.base, self.target, release_id
         )
         from types import SimpleNamespace
-        usage = SimpleNamespace(f_bavail=MODULE.MINIMUM_BUILD_FREE_BYTES - 1,
-                                f_frsize=1, f_favail=1_000_000)
-        with patch.object(MODULE.os, "statvfs", return_value=usage):
+        floor = self.production_minimum_build_free_bytes
+        self.assertEqual(12 * 1024 * 1024 * 1024, floor)
+        usage = SimpleNamespace(f_bavail=floor - 1, f_frsize=1, f_favail=1_000_000)
+        with patch.object(MODULE, "MINIMUM_BUILD_FREE_BYTES", floor), \
+                patch.object(MODULE.os, "statvfs", return_value=usage):
             with self.assertRaisesRegex(MODULE.Denied, "minimum_build_free_bytes"):
                 MODULE.read_capacity_contract(
                     capacity, self.repo, self.base, self.target, release_id
