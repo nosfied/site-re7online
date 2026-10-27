@@ -922,7 +922,7 @@ def evidence_destination(destination: Path, operational: dict[str, Any]) -> None
             deny(f"evidence_destination_parent_missing:{destination.name}")
         if (destination.parent.is_symlink() or not stat.S_ISDIR(parent.st_mode) or
                 parent.st_uid != os.geteuid() or parent.st_gid != os.getegid() or
-                stat.S_IMODE(parent.st_mode) != 0o700):
+                stat.S_IMODE(parent.st_mode) not in {0o700, 0o750}):
             deny(f"evidence_destination_parent_identity:{destination.name}")
         if destination.exists() or destination.is_symlink():
             deny(f"evidence_destination_exists:{destination.name}")
