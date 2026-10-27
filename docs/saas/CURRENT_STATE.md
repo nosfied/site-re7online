@@ -120,9 +120,10 @@ anteriores autenticados, com cadeia cumulativa em qualquer número de retomadas;
 autorização cobre apenas os remanescentes. As raízes
 vêm da política versionada `config/deploy-artifact-roots.json`, não do snapshot
 operacional. O produtor valida repo, output e raiz de releases contra essa política
-antes de criar a saída ou executar npm. A candidata legada `123ba` possui transição v1 determinística,
-vinculada ao hash da review preservada e limitada ao próprio contrato, sem nova
-auditoria global.
+antes de criar a saída ou executar npm. A candidata `123ba` é a única geração
+`LEGACY_PRE_CONTRACT` conhecida: não possui review v1 nem contrato original. Sua
+regularização exige o descriptor fechado versionado, duas leituras estáveis apenas
+dos caminhos literais e o bootstrap sem autorização; não admite inventário global.
 
 A fotografia somente leitura de capacidade está em
 [VPS_CAPACITY_AUDIT_2026-10-24.md](VPS_CAPACITY_AUDIT_2026-10-24.md). Ela classifica
@@ -134,7 +135,8 @@ A fotografia global de 26/10/2026 está em
 6,45 GB em outputs, 4,09 GB em worktrees, 29,94 GB em releases e 13,48 GB em
 preparações, sem inferir que tudo seja removível. O ganho seguro imediato é zero; a
 intenção condicionada permanece `NOT_AUTHORIZED`. PR #240 e a candidata `123ba7bd`
-foram superados pela correção de apresentação terminal, mas continuam preservados.
+foram superados pela correção de apresentação terminal, mas continuam preservados;
+o bootstrap contratual ainda não representa autorização de retirada.
 
 ## Rota operacional
 
