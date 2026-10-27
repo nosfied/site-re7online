@@ -1501,15 +1501,20 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
                              installed, "a959-installed", {private_data_path}),
                          "absentDerived": sorted(retired)}
         release_root = output / descriptor["releaseId"]
-        installed_artifact = _legacy_artifact(
-            installed, descriptor, "RELEASE_RUNTIME", "ACTIVE_DEPENDENCY",
-            {"manifestSha256": descriptor["manifest"]["sha256"],
-             "indexSha256": descriptor["index"]["sha256"],
-             "operationalMarkerSha256": descriptor["deployedMarker"]["sha256"]},
-        )
-        installed_artifact.update(**_legacy_structural_metrics(
-            installed, {private_data_path}
-        ))
+        installed_info = installed.lstat()
+        installed_artifact = {
+            "path": str(installed), "releaseId": descriptor["releaseId"],
+            "targetCommit": descriptor["targetCommit"], "expectedType": "directory",
+            "initialIdentity": {"device": installed_info.st_dev, "inode": installed_info.st_ino},
+            "observedIdentity": {"device": installed_info.st_dev, "inode": installed_info.st_ino},
+            **_legacy_structural_metrics(installed, {private_data_path}),
+            "digest": {"manifestSha256": descriptor["manifest"]["sha256"],
+                       "indexSha256": descriptor["index"]["sha256"],
+                       "operationalMarkerSha256": descriptor["deployedMarker"]["sha256"]},
+            "class": "RELEASE_RUNTIME", "state": "ACTIVE_DEPENDENCY",
+            "retirableOn": "LEGACY_PRE_CONTRACT_SUPERSEDED",
+            "dependencies": ["package_verified", "superseded_not_installed"],
+        }
         artifacts = [
             _legacy_artifact(Path(descriptor["package"]["path"]), descriptor, "PACKAGE_PRESERVE",
                              "ACTIVE_DEPENDENCY", {"sha256": descriptor["package"]["sha256"]}),

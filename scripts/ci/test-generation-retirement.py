@@ -609,6 +609,25 @@ class GenerationRetirementTest(unittest.TestCase):
         finally:
             fixture.close()
 
+    def test_a959_bootstrap_never_uses_unprojected_installed_release_metrics(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            original = MODULE.structural_metrics
+
+            def guarded_metrics(path):
+                if Path(path) == fixture.installed:
+                    raise AssertionError("unprojected installed release traversal")
+                return original(path)
+
+            with patch.object(MODULE, "structural_metrics", side_effect=guarded_metrics):
+                fixture.bootstrap_a959()
+            contract = json.loads(fixture.contract.read_text())
+            installed = next(item for item in contract["artifacts"]
+                             if item["path"] == str(fixture.installed))
+            self.assertRegex(installed["structuralSha256"], r"^[0-9a-f]{64}$")
+        finally:
+            fixture.close()
+
     def test_a959_prepare_denies_immutable_file_drift_after_bootstrap(self):
         fixture = LegacyA959V1PreserveFixture()
         try:
