@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import datetime as dt
 import importlib.util
 import json
 import os
@@ -62,7 +63,9 @@ def capacity_contract(path: Path, filesystem: Path, target: str, release_id: str
 
 
 def fixture_repo(root: Path) -> tuple[Path, str, dict[str, str]]:
-    repo = root / "source"
+    worktrees = root / "build-worktrees"
+    worktrees.mkdir()
+    repo = worktrees / "source"
     repo.mkdir()
     write(repo / "package.json", '{"scripts":{"build":"fixture"}}\n')
     write(repo / "package-lock.json", '{"lockfileVersion":3}\n')
@@ -129,15 +132,34 @@ class ReleaseProducerTest(unittest.TestCase):
         cls.base = Path(cls.temp.name)
         cls.repo, cls.target, cls.env = fixture_repo(cls.base)
         cls.release_id = "immutable-fixture-20261023T000000Z"
-        cls.output_a = cls.base / "output-a"
+        worktrees = cls.base / "build-worktrees"
+        cls.outputs = cls.base / "build-output"; cls.outputs.mkdir()
+        cls.releases = cls.base / "releases"; cls.releases.mkdir()
+        repository = cls.base / "repository"; repository.mkdir()
+        staging = cls.base / "staging"; staging.mkdir()
+        evidence = cls.base / "evidence"; evidence.mkdir()
+        def policy_entry(path: Path) -> dict:
+            info = path.lstat()
+            return {"path": str(path), "ownerUid": info.st_uid, "groupGid": info.st_gid,
+                    "allowedModes": [f"0{stat.S_IMODE(info.st_mode):03o}"]}
+        cls.root_policy = cls.base / "root-policy.private.json"
+        write(cls.root_policy, json.dumps({"schemaVersion": 1, "canonicalRoots": {
+            "repository": policy_entry(repository), "worktrees": policy_entry(worktrees),
+            "outputs": policy_entry(cls.outputs), "releases": policy_entry(cls.releases),
+            "staging": policy_entry(staging), "evidence": [policy_entry(evidence)],
+        }}, sort_keys=True) + "\n", 0o600)
+        cls.root_policy_sha = hashlib.sha256(cls.root_policy.read_bytes()).hexdigest()
+        cls.output_a = cls.outputs / "output-a"
         cls.capacity = capacity_contract(
             cls.base / "capacity.private.json", cls.base, cls.target, cls.release_id
         )
         command = [sys.executable, str(PRODUCER), "build", "--repo", str(cls.repo),
                    "--target", cls.target, "--release-id", cls.release_id,
                    "--components", COMPONENTS, "--output", str(cls.output_a),
+                   "--installed-releases-root", str(cls.releases),
                    "--source-date-epoch", EPOCH,
-                   "--capacity-contract", str(cls.capacity)]
+                   "--capacity-contract", str(cls.capacity),
+                   "--root-policy", str(cls.root_policy), "--root-policy-sha256", cls.root_policy_sha]
         result = subprocess.run(["sh", "-c", "umask 077; exec \"$@\"", "fixture", *command],
                                 env=cls.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if result.returncode:
@@ -150,8 +172,8 @@ class ReleaseProducerTest(unittest.TestCase):
         write(cls.output_a / "generation-review.private.json", json.dumps({
             "schemaVersion": 1, "generationId": cls.release_id,
             "lifecycleSha256": hashlib.sha256(raw).hexdigest(),
-            "decision": "PRESERVE", "reviewer": "synthetic-test",
-            "reason": "retained fixture", "evidenceSha256": "a" * 64,
+            "decision": "SANITIZED", "reviewer": "synthetic-test",
+            "reason": "derived fixture artifacts sanitized", "evidenceSha256": "a" * 64,
         }) + "\n", 0o600)
 
     @classmethod
@@ -202,6 +224,15 @@ class ReleaseProducerTest(unittest.TestCase):
         self.assertEqual(lifecycle["classification"], "PENDING")
         self.assertEqual(lifecycle["packageSha256"], hashlib.sha256(self.package.read_bytes()).hexdigest())
         self.assertEqual(stat.S_IMODE((self.output_a / "generation-lifecycle.private.json").stat().st_mode), 0o600)
+        artifact_contract = json.loads((self.output_a / "generation-artifacts.private.json").read_text())
+        self.assertEqual(artifact_contract["schemaVersion"], 1)
+        self.assertEqual(artifact_contract["state"], "COMPLETE")
+        self.assertEqual({item["class"] for item in artifact_contract["artifacts"]}, {
+            "PACKAGE_PRESERVE", "EVIDENCE_PRESERVE", "RELEASE_RUNTIME",
+            "DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_STAGING",
+        })
+        self.assertTrue(all("initialIdentity" in item and "observedIdentity" in item
+                            for item in artifact_contract["artifacts"]))
 
     def test_failed_command_preserves_private_output_without_printing_it(self) -> None:
         root = self.base / "failed-command-evidence"
@@ -339,7 +370,7 @@ class ReleaseProducerTest(unittest.TestCase):
         self.assert_denied(result, "package_integrity")
 
     def test_incomplete_or_reused_output_denied(self) -> None:
-        existing = self.base / "existing-output"
+        existing = self.outputs / "existing-output"
         existing.mkdir()
         release_id = "immutable-incomplete"
         capacity = capacity_contract(
@@ -349,22 +380,74 @@ class ReleaseProducerTest(unittest.TestCase):
         result = invoke("build", "--repo", str(self.repo), "--target", self.target,
                         "--release-id", release_id, "--components", COMPONENTS,
                         "--output", str(existing), "--source-date-epoch", EPOCH,
-                        "--capacity-contract", str(capacity), env=self.env)
+                        "--installed-releases-root", str(self.releases),
+                        "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+                        "--root-policy-sha256", self.root_policy_sha, env=self.env)
         self.assert_denied(result, "output_exists")
+
+    def test_clean_target_repo_outside_canonical_worktrees_is_denied(self) -> None:
+        external = self.base / "external-clean-repo"
+        subprocess.run(["git", "clone", "-q", str(self.repo), str(external)], check=True)
+        release_id = "immutable-external-repo"
+        output = self.outputs / "external-output"
+        capacity = capacity_contract(self.base / "external-capacity.private.json",
+                                     self.base, self.target, release_id)
+        result = invoke(
+            "build", "--repo", str(external), "--target", self.target,
+            "--release-id", release_id, "--components", COMPONENTS,
+            "--output", str(output), "--source-date-epoch", EPOCH,
+            "--installed-releases-root", str(self.releases),
+            "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+            "--root-policy-sha256", self.root_policy_sha, env=self.env,
+        )
+        self.assert_denied(result, "repo_outside_canonical_build_worktrees")
+        self.assertFalse(output.exists())
+
+    def test_external_output_and_release_root_are_denied_before_build(self) -> None:
+        external_parent = self.base / "external-output-parent"
+        external_parent.mkdir()
+        external_releases = self.base / "external-releases"
+        external_releases.mkdir()
+        for release_id, output, releases, predicate in (
+            ("immutable-external-output", external_parent / "generation", self.releases,
+             "output_outside_canonical_outputs"),
+            ("immutable-external-releases", self.outputs / "external-releases-generation",
+             external_releases, "installed_releases_root_mismatch"),
+        ):
+            capacity = capacity_contract(
+                self.base / f"{release_id}.capacity.private.json",
+                self.base, self.target, release_id,
+            )
+            args = MODULE.parser().parse_args([
+                "build", "--repo", str(self.repo), "--target", self.target,
+                "--release-id", release_id, "--components", COMPONENTS,
+                "--output", str(output), "--installed-releases-root", str(releases),
+                "--source-date-epoch", EPOCH, "--capacity-contract", str(capacity),
+                "--root-policy", str(self.root_policy),
+                "--root-policy-sha256", self.root_policy_sha,
+            ])
+            with patch.object(MODULE, "toolchain") as tool:
+                with self.assertRaisesRegex(MODULE.Denied, predicate):
+                    MODULE.build(args)
+                tool.assert_not_called()
+            self.assertFalse(output.exists())
+        self.assertFalse((external_parent / ".generation-build.lock").exists())
 
     def test_capacity_denied_before_output_or_npm(self) -> None:
         release_id = "immutable-capacity-denied"
-        output = self.base / "capacity-denied-output"
+        output = self.outputs / "capacity-denied-output"
         usage = os.statvfs(self.base)
         capacity = capacity_contract(
             self.base / "capacity-denied.private.json", self.base, self.target, release_id,
-            reserve_bytes=usage.f_bavail * usage.f_frsize + 1,
+            reserve_bytes=usage.f_blocks * usage.f_frsize + 1,
         )
         result = invoke(
             "build", "--repo", str(self.repo), "--target", self.target,
             "--release-id", release_id, "--components", COMPONENTS,
             "--output", str(output), "--source-date-epoch", EPOCH,
-            "--capacity-contract", str(capacity), env=self.env,
+            "--installed-releases-root", str(self.releases),
+            "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+            "--root-policy-sha256", self.root_policy_sha, env=self.env,
         )
         self.assert_denied(result, "capacity_bytes:")
         self.assertFalse(output.exists())
@@ -383,9 +466,23 @@ class ReleaseProducerTest(unittest.TestCase):
             )
         self.assertIn("capacity_contract_value:operationalReserveBytes", str(caught.exception))
 
+    def test_capacity_contract_requires_twelve_gib_free(self) -> None:
+        release_id = "immutable-capacity-floor"
+        capacity = capacity_contract(
+            self.base / "capacity-floor.private.json", self.base, self.target, release_id
+        )
+        from types import SimpleNamespace
+        usage = SimpleNamespace(f_bavail=MODULE.MINIMUM_BUILD_FREE_BYTES - 1,
+                                f_frsize=1, f_favail=1_000_000)
+        with patch.object(MODULE.os, "statvfs", return_value=usage):
+            with self.assertRaisesRegex(MODULE.Denied, "minimum_build_free_bytes"):
+                MODULE.read_capacity_contract(
+                    capacity, self.repo, self.base, self.target, release_id
+                )
+
     def test_failed_generation_is_closed_as_failed(self) -> None:
         release_id = "immutable-failed-generation"
-        output = self.base / "failed-generation-output"
+        output = self.outputs / "failed-generation-output"
         capacity = capacity_contract(
             self.base / "failed-generation-capacity.private.json",
             self.base, self.target, release_id,
@@ -394,7 +491,9 @@ class ReleaseProducerTest(unittest.TestCase):
             "build", "--repo", str(self.repo), "--target", self.target,
             "--release-id", release_id, "--components", COMPONENTS,
             "--output", str(output), "--source-date-epoch", EPOCH,
-            "--capacity-contract", str(capacity),
+            "--installed-releases-root", str(self.releases),
+            "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+            "--root-policy-sha256", self.root_policy_sha,
         ])
         with patch.object(MODULE, "toolchain", side_effect=MODULE.Denied("fixture_failure")):
             with self.assertRaises(MODULE.Denied):
@@ -405,8 +504,9 @@ class ReleaseProducerTest(unittest.TestCase):
         self.assertEqual(lifecycle["classification"], "PENDING")
 
     def test_pending_generation_blocks_before_output_or_command(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="generation-pending-") as temp:
-            parent = Path(temp)
+        parent = self.outputs / "generation-pending"
+        parent.mkdir()
+        try:
             previous = parent / "previous"
             previous.mkdir()
             write(previous / "generation-lifecycle.private.json", json.dumps({
@@ -419,13 +519,17 @@ class ReleaseProducerTest(unittest.TestCase):
                 "build", "--repo", str(self.repo), "--target", self.target,
                 "--release-id", "next", "--components", COMPONENTS,
                 "--output", str(output), "--source-date-epoch", EPOCH,
-                "--capacity-contract", str(capacity),
+                "--installed-releases-root", str(self.releases),
+                "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+                "--root-policy-sha256", self.root_policy_sha,
             ])
             with patch.object(MODULE, "toolchain") as tool:
                 with self.assertRaisesRegex(MODULE.Denied, "generation_review_pending:previous"):
                     MODULE.build(args)
                 tool.assert_not_called()
             self.assertFalse(output.exists())
+        finally:
+            shutil.rmtree(parent)
 
     def test_generation_review_is_bound_to_terminal_lifecycle(self) -> None:
         with tempfile.TemporaryDirectory(prefix="generation-review-") as temp:
@@ -436,7 +540,7 @@ class ReleaseProducerTest(unittest.TestCase):
             write(lifecycle, json.dumps({"schemaVersion": 1, "generationId": "old", "state": "FAILED"}), 0o600)
             review = {"schemaVersion": 1, "generationId": "old",
                       "lifecycleSha256": hashlib.sha256(lifecycle.read_bytes()).hexdigest(),
-                      "decision": "PRESERVE", "reviewer": "synthetic-test",
+                      "decision": "SANITIZED", "reviewer": "synthetic-test",
                       "reason": "diagnosis retained", "evidenceSha256": "a" * 64}
             write(old / "generation-review.private.json", json.dumps(review), 0o600)
             MODULE.require_generation_reviews(parent)
@@ -444,6 +548,51 @@ class ReleaseProducerTest(unittest.TestCase):
             write(old / "generation-review.private.json", json.dumps(review), 0o600)
             with self.assertRaisesRegex(MODULE.Denied, "generation_review_invalid"):
                 MODULE.require_generation_reviews(parent)
+
+    def test_v1_preserve_is_retention_debt_and_sanitized_allows(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="generation-v1-review-") as temp:
+            parent = Path(temp); old = parent / "old"; old.mkdir()
+            lifecycle = old / "generation-lifecycle.private.json"
+            write(lifecycle, json.dumps({"schemaVersion": 1, "generationId": "old", "state": "COMPLETE"}), 0o600)
+            review = {"schemaVersion": 1, "generationId": "old",
+                      "lifecycleSha256": hashlib.sha256(lifecycle.read_bytes()).hexdigest(),
+                      "decision": "PRESERVE", "reviewer": "owner", "reason": "legacy",
+                      "evidenceSha256": "a" * 64}
+            write(old / "generation-review.private.json", json.dumps(review), 0o600)
+            with self.assertRaisesRegex(MODULE.Denied, "retention_debt:old:v1_preserve"):
+                MODULE.require_generation_reviews(parent)
+            review["decision"] = "SANITIZED"
+            write(old / "generation-review.private.json", json.dumps(review), 0o600)
+            self.assertEqual(MODULE.require_generation_reviews(parent)[0]["state"], "SANITIZED")
+
+    def test_pending_candidate_and_expired_override_deny_next_build(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="generation-v2-review-") as temp:
+            parent = Path(temp); old = parent / "old"; old.mkdir()
+            lifecycle = old / "generation-lifecycle.private.json"
+            write(lifecycle, json.dumps({"schemaVersion": 1, "generationId": "old", "state": "COMPLETE"}), 0o600)
+            base = {"schemaVersion": 2, "generationId": "old",
+                    "lifecycleSha256": hashlib.sha256(lifecycle.read_bytes()).hexdigest(),
+                    "reviewer": "owner", "reason": "candidate", "evidenceSha256": "a" * 64}
+            write(old / "generation-review.private.json",
+                  json.dumps({**base, "state": "CANDIDATE_PENDING_ACTIVATION"}), 0o600)
+            with self.assertRaisesRegex(MODULE.Denied, "second_candidate_pending:old"):
+                MODULE.require_generation_reviews(parent)
+            write(old / "generation-review.private.json", json.dumps({
+                **base, "state": "PRESERVE_OVERRIDE", "retainedBytes": 1,
+                "responsible": "owner", "expiresAtUtc": "2026-01-01T00:00:00Z",
+            }), 0o600)
+            with self.assertRaisesRegex(MODULE.Denied, "generation_override_expired:old"):
+                MODULE.require_generation_reviews(
+                    parent, dt.datetime(2026, 10, 26, tzinfo=dt.timezone.utc)
+                )
+            write(old / "generation-review.private.json", json.dumps({
+                **base, "state": "PRESERVE_OVERRIDE", "retainedBytes": 4096,
+                "responsible": "owner", "expiresAtUtc": "2026-11-01T00:00:00Z",
+            }), 0o600)
+            accepted = MODULE.require_generation_reviews(
+                parent, dt.datetime(2026, 10, 26, tzinfo=dt.timezone.utc)
+            )
+            self.assertEqual(accepted[0]["state"], "PRESERVE_OVERRIDE")
             write(lifecycle, json.dumps({"schemaVersion": 1, "generationId": "old", "state": "BUILDING"}), 0o600)
             with self.assertRaisesRegex(MODULE.Denied, "generation_not_terminal"):
                 MODULE.require_generation_reviews(parent)
@@ -460,15 +609,18 @@ class ReleaseProducerTest(unittest.TestCase):
                 pass
 
     def test_capacity_loss_stops_before_next_command_and_records_failed(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="capacity-phase-") as temp:
-            parent = Path(temp)
+        parent = self.outputs / "capacity-phase"
+        parent.mkdir()
+        try:
             capacity = capacity_contract(parent / "capacity.json", parent, self.target, "phase-test")
             output = parent / "next"
             args = MODULE.parser().parse_args([
                 "build", "--repo", str(self.repo), "--target", self.target,
                 "--release-id", "phase-test", "--components", COMPONENTS,
                 "--output", str(output), "--source-date-epoch", EPOCH,
-                "--capacity-contract", str(capacity),
+                "--installed-releases-root", str(self.releases),
+                "--capacity-contract", str(capacity), "--root-policy", str(self.root_policy),
+                "--root-policy-sha256", self.root_policy_sha,
             ])
             commands = []
             original_run = MODULE.run
@@ -488,6 +640,8 @@ class ReleaseProducerTest(unittest.TestCase):
                     MODULE.build(args)
             self.assertEqual(commands, ["root_npm_ci"])
             self.assertEqual(json.loads((output / "generation-lifecycle.private.json").read_text())["state"], "FAILED")
+        finally:
+            shutil.rmtree(parent)
 
     def test_capacity_checkpoint_reserves_future_copy_and_inodes(self) -> None:
         from types import SimpleNamespace

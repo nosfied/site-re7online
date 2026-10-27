@@ -1,5 +1,103 @@
 # Ciclo de vida dos artefatos de implantação
 
+## Contrato obrigatório por geração (implementado)
+
+Cada execução de `scripts/converta-release.py build` publica, desde `BUILDING` e
+até `COMPLETE` ou `FAILED`, `generation-artifacts.private.json`. Cada entrada
+contém caminho absoluto literal, release/target, tipo, device/inode inicial e
+observado, bytes aparentes/alocados, inodes, fingerprint estrutural, hash
+pertinente, classe, evento de retirada e dependências.
+
+As classes são fechadas: `PACKAGE_PRESERVE` (tar.xz, manifest e index),
+`EVIDENCE_PRESERVE` (lifecycle, capacidade, logs, recibos e provas),
+`RELEASE_RUNTIME`, `DERIVED_WORKTREE`, `DERIVED_OUTPUT_RUNTIME`,
+`DERIVED_STAGING` e `PRIVATE_DATA_NEVER_RETIRE`. Preparações guardam contratos,
+hashes e recibos; nunca duplicam runtimes completos. Releases são preservadas
+enquanto integrarem os grafos active, rollback ou retorno transitivo.
+
+Os estados de revisão v2 são `ACTIVE_DEPENDENCY`, `ROLLBACK_DEPENDENCY`,
+`CANDIDATE_PENDING_ACTIVATION`, `RETIREMENT_READY`, `SANITIZED`, `QUARANTINED`
+e `PRESERVE_OVERRIDE`. Review v1 `SANITIZED` continua válido; v1 `PRESERVE` é
+`RETENTION_DEBT` e bloqueia o próximo build. `PRESERVE_OVERRIDE` exige razão,
+bytes retidos, responsável e expiração UTC futura; expiração bloqueia. Também
+bloqueiam novo build `RETIREMENT_READY`, `QUARANTINED`, uma candidata pendente
+que faria nascer a segunda candidata, menos de 12 GiB livres ou lifecycle não
+terminal.
+
+`scripts/generation-retirement.py` possui somente `prepare` e `execute`:
+
+- `prepare` lê o contrato da própria geração, lifecycle terminal e fotografia
+  operacional autenticada; verifica composição/identidade, referências
+  current/PM2 live/dump, grafo de releases, control plane copiado e writer lock;
+  produz intenção condicional com todos os caminhos derivados, inclusive outputs
+  ainda pendentes que só podem ficar elegíveis após `DEPLOYED`, e comandos
+  literais sem glob, force ou prune;
+- `execute` exige intenção e autorização externas autenticadas, mantém lock
+  canônico e writer lock, recaptura `current`, PM2 live, dump e grafo sob esses
+  locks antes do primeiro `ATTEMPT`, para na primeira falha, verifica ausência
+  após cada retirada e publica recibo/review com fsync;
+- conclusão posterior a deploy é `DEPLOYED_SANITIZED`; parcial é
+  `DEPLOYED_RETENTION_INCOMPLETE`, não desfaz o deploy aprovado e bloqueia o
+  próximo build. Não há retry automático.
+
+Uma retirada parcial nunca transforma ausência em sucesso por inferência. Uma nova
+preparação exige o intent, receipt e journal anteriores com SHA-256 externos; confere
+intent/generation, ordinais, `ATTEMPT`, `RESULT` zero, `VERIFIED`, path, argv e a
+identidade original. A nova autorização contém somente os caminhos remanescentes.
+Cada intenção reconciliada preserva cumulativamente todos os elos
+intent/receipt/journal e associa cada ordinal e identidade ao elo que comprovou sua
+retirada. Assim, uma segunda ou terceira falha parcial continua sem repetir comandos
+concluídos; cadeia truncada, duplicada ou inconsistente é `DENY`.
+
+`SANITIZED` só é publicado após recomputar o contrato inteiro e confirmar que
+todos os derivados estão ausentes. Retirar somente o worktree enquanto outputs
+continuam pendentes termina em `RETENTION_INCOMPLETE` e review `QUARANTINED`.
+A mesma autorização pré-deploy cobre a lista literal completa; a execução
+pós-aceite recalcula a elegibilidade, sem ampliar o escopo autorizado.
+
+O estado operacional v2 declara raízes observadas, mas a autoridade é a política
+versionada e autenticada `config/deploy-artifact-roots.json`. Caminho, owner, group,
+modo e ancestrais devem coincidir com essa política; redefinição no JSON operacional
+é `DENY`. Ela fixa raízes canônicas para checkout,
+`build-worktrees`, `build-output`, releases, staging e uma lista fechada de raízes
+de evidências. Cada classe
+destrutiva deve ser descendente estrita da raiz correspondente. Raiz em si,
+checkout canônico, caminho externo, sobreposição não declarada, symlink e ancestral
+por symlink são `DENY`. A única composição admitida é uma raiz de evidências como
+descendente de `build-output`, pois lifecycle/review são preservados ao lado da
+geração e nunca integram um comando destrutivo. Mudança de `current`, fingerprint sanitizado do PM2, dump ou
+grafo entre preparação e execução também nega antes do primeiro `ATTEMPT`.
+
+O produtor recebe a mesma política autenticada: `--repo` deve ser descendente estrito
+de `build-worktrees`, `--output` descendente estrito de `build-output` e
+`--installed-releases-root` deve ser exatamente a raiz `releases`. Essas três
+fronteiras, seus owners, modos e ancestrais são conferidos antes de criar a saída, o
+lock de geração ou executar npm. Caminho externo, raiz redefinida ou symlink é `DENY`.
+
+Uma review v1 `PRESERVE` conhecida, incluindo a candidata legada `123ba`, só pode
+ser migrada sem inventário global quando `prepare` recebe
+`--legacy-review-sha256` igual aos bytes preservados e generation/lifecycle
+coincidem. O original é preservado e apenas os caminhos do contrato autenticado
+são observados.
+
+Worktree só fica pronto depois de pacote verificado, control plane copiado e
+ausência de escritor. Output runtime só fica pronto depois da instalação
+verificada ou superação formal da candidata. Staging só fica pronto depois de
+promoção/rollback terminal. Package, manifest, index, evidências e dados privados
+nunca entram nos comandos.
+
+### Lote de dez caminhos concluído em 26/10/2026
+
+O lote `retention-recent-generations-qualification-20261026T213341Z-v3` foi
+relatado como `COMPLETED`: 10/10 comandos, 6.942.289.920 bytes recuperados e
+13.416.599.552 bytes livres ao final. Recibo
+`19ba46c4948e3ff1821b8b44e51fed1edf635b9b7ddd3421064dab7ee2250c74`, log
+`e8f593acb2801e88dbbfffb3a679b4775916491c3e2281e24a45ebf3f0e6c985`,
+amostra A `11f70b7c7b6d27f8a55bae36aa17b081ece70e8511f414da14b1f56d83661612`
+e amostra B `94fda2c48e65e43de46d6cedc121d4b32f46339301306f452218bb8a013ea6a8`.
+Produção permaneceu inalterada e o lock foi liberado sem remover seu arquivo.
+Esse registro é histórico e não autoriza repetição.
+
 Esta é a fonte canônica para capacidade, classificação e encerramento de gerações
 de build. Ela não autoriza exclusão. A ativação continua regida pelo
 [runbook de deploy](DEPLOY_RUNBOOK.md), e dados, backups e mídias seguem contratos

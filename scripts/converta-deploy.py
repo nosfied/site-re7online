@@ -25,7 +25,8 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 PRIVATE_MODE = re.compile(r"^0[0-7]{3}$")
 STATES = {
     "PREFLIGHT_PASS", "ACTIVATING", "AWAITING_ACCEPTANCE", "FINALIZING",
-    "DEPLOYED", "ROLLING_BACK", "ROLLED_BACK", "FAILED",
+    "DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE",
+    "ROLLING_BACK", "ROLLED_BACK", "FAILED",
 }
 COMPONENTS = ("api", "frontend")
 STABLE = {
@@ -217,6 +218,33 @@ def find_digest(value: Any, filename: str) -> str | None:
 
 
 @dataclass(frozen=True)
+class RetirementBinding:
+    tool: Path
+    tool_sha256: str
+    intent: Path
+    intent_sha256: str
+    authorization: Path
+    authorization_sha256: str
+    operational_state: Path
+    operational_state_sha256: str
+    root_policy: Path
+    root_policy_sha256: str
+    receipt_root: Path
+    review_output: Path
+    deployment_lock: Path
+
+    def binding(self) -> dict[str, Any]:
+        return {"tool": str(self.tool), "toolSha256": self.tool_sha256,
+                "intent": str(self.intent), "intentSha256": self.intent_sha256,
+                "authorization": str(self.authorization), "authorizationSha256": self.authorization_sha256,
+                "operationalState": str(self.operational_state),
+                "operationalStateSha256": self.operational_state_sha256,
+                "rootPolicy": str(self.root_policy), "rootPolicySha256": self.root_policy_sha256,
+                "receiptRoot": str(self.receipt_root), "reviewOutput": str(self.review_output),
+                "deploymentLock": str(self.deployment_lock)}
+
+
+@dataclass(frozen=True)
 class Inputs:
     release: str
     target: str
@@ -226,9 +254,10 @@ class Inputs:
     config_manifest: Path
     transaction_root: Path
     config_manifest_sha256: str
+    retirement: RetirementBinding | None = None
 
     def binding(self) -> dict[str, Any]:
-        return {
+        value = {
             "release": self.release, "target": self.target,
             "controlPlane": self.control_plane, "components": list(self.components),
             "configRoot": str(self.config_root.resolve()),
@@ -236,6 +265,9 @@ class Inputs:
             "transactionRoot": str(self.transaction_root.resolve()),
             "configManifestSha256": self.config_manifest_sha256,
         }
+        if self.retirement is not None:
+            value["generationRetirement"] = self.retirement.binding()
+        return value
 
 
 class Host:
@@ -722,6 +754,160 @@ class Driver:
         journal["recoveryAction"] = recovery
         self._journal_write(journal, "FAILED")
 
+    def _authenticate_retirement(self, *, receipt_must_be_absent: bool = True) -> RetirementBinding:
+        binding = self.inputs.retirement
+        if binding is None:
+            deny("generation_retirement_binding_required")
+        for path, expected, label in (
+            (binding.tool, binding.tool_sha256, "tool"),
+            (binding.intent, binding.intent_sha256, "intent"),
+            (binding.authorization, binding.authorization_sha256, "authorization"),
+            (binding.operational_state, binding.operational_state_sha256, "operational_state"),
+        ):
+            raw, _ = stable_regular_bytes(path, required_mode=0o600)
+            if hashlib.sha256(raw).hexdigest() != expected:
+                deny(f"generation_retirement_hash:{label}")
+        policy_raw, policy_info = stable_regular_bytes(binding.root_policy)
+        if (stat.S_IMODE(policy_info.st_mode) not in {0o600, 0o644} or
+                hashlib.sha256(policy_raw).hexdigest() != binding.root_policy_sha256):
+            deny("generation_retirement_hash:root_policy")
+        if receipt_must_be_absent and (binding.receipt_root.exists() or binding.receipt_root.is_symlink()):
+            deny("generation_retirement_receipt_exists")
+        if not binding.review_output.is_absolute() or not binding.receipt_root.is_absolute():
+            deny("generation_retirement_destination")
+        return binding
+
+    @staticmethod
+    def _retirement_pm2_fingerprint(rows: list[dict[str, Any]]) -> str:
+        projected = []
+        for row in rows:
+            env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
+            projected.append({key: row.get(key, env.get(key)) for key in
+                              ("name", "pid", "status", "restart_time", "pm_cwd", "pm_exec_path",
+                               "exec_mode", "instances", "args", "node_args", "namespace",
+                               "out_file", "error_file")})
+        raw = (json.dumps(sorted(projected, key=lambda item: str(item.get("name"))),
+                          sort_keys=True, separators=(",", ":")) + "\n").encode()
+        return hashlib.sha256(raw).hexdigest()
+
+    def _retirement_final_operational(self, binding: RetirementBinding,
+                                      journal: dict[str, Any]) -> tuple[Path, str]:
+        raw, _ = stable_regular_bytes(binding.operational_state, required_mode=0o600)
+        value = json_object(raw, binding.operational_state.name)
+        observations = value.get("observations")
+        if not isinstance(observations, dict) or not isinstance(observations.get("currentLinks"), list):
+            deny("generation_retirement_operational_schema")
+        current_links = []
+        current_paths = []
+        for item in observations["currentLinks"]:
+            path = Path(str(item.get("path", ""))) if isinstance(item, dict) else Path("")
+            if not path.is_absolute() or not path.is_symlink():
+                deny("generation_retirement_current_link")
+            target = path.resolve(strict=True)
+            current_links.append({"path": str(path), "target": str(target)})
+            current_paths.append(str(target))
+        rows = self.host.pm2_rows(self._resolve_pm2())
+        live_paths: list[str] = []
+        for row in rows:
+            env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
+            for field in ("pm_cwd", "pm_exec_path"):
+                candidate = row.get(field, env.get(field))
+                if isinstance(candidate, str) and candidate:
+                    live_paths.append(candidate)
+        dump_raw, _ = stable_regular_bytes(self.dump, required_mode=0o600)
+        try:
+            dump_rows = json.loads(dump_raw)
+        except json.JSONDecodeError:
+            deny("generation_retirement_dump_json")
+        dump_paths: list[str] = []
+        if not isinstance(dump_rows, list):
+            deny("generation_retirement_dump_shape")
+        for row in dump_rows:
+            if not isinstance(row, dict):
+                deny("generation_retirement_dump_shape")
+            env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
+            for field in ("pm_cwd", "pm_exec_path"):
+                candidate = row.get(field, env.get(field))
+                if isinstance(candidate, str) and candidate:
+                    dump_paths.append(candidate)
+        previous_releases = set()
+        for target in journal.get("previous", {}).get("symlinks", {}).values():
+            if isinstance(target, str):
+                try:
+                    previous_releases.add(Path(target).resolve(strict=True).parent.name)
+                except OSError:
+                    deny("generation_retirement_previous_release")
+        active = set(value.get("activeReleases", [])) - previous_releases
+        active.add(self.inputs.release)
+        rollback = set(value.get("rollbackReleases", [])) | previous_releases
+        candidates = set(value.get("candidateReleases", [])); candidates.discard(self.inputs.release)
+        installed = set(value.get("installedVerifiedReleases", [])); installed.add(self.inputs.release)
+        value.update(currentPaths=sorted(set(current_paths)), pm2LivePaths=sorted(set(live_paths)),
+                     pm2DumpPaths=sorted(set(dump_paths)), activeReleases=sorted(active),
+                     rollbackReleases=sorted(rollback), candidateReleases=sorted(candidates),
+                     installedVerifiedReleases=sorted(installed), deploymentState={"state": "DEPLOYED"})
+        graph = {key: value[key] for key in ("activeReleases", "rollbackReleases",
+                 "transitiveReturnReleases", "candidateReleases", "installedVerifiedReleases",
+                 "supersededCandidates")}
+        graph_path = self.inputs.transaction_root / "generation-release-graph.final.private.json"
+        atomic_private(graph_path, graph, exclusive=True)
+        observations["currentLinks"] = current_links
+        observations["pm2"]["fingerprintSha256"] = self._retirement_pm2_fingerprint(rows)
+        observations["dump"] = {"path": str(self.dump), "sha256": hashlib.sha256(dump_raw).hexdigest()}
+        observations["releaseGraph"] = {"path": str(graph_path), "sha256": digest(graph_path)}
+        final_path = self.inputs.transaction_root / "generation-operational.final.private.json"
+        atomic_private(final_path, value, exclusive=True)
+        return final_path, digest(final_path)
+
+    def _retire_generation(self, journal: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        binding = self._authenticate_retirement(receipt_must_be_absent=False)
+        existing = binding.receipt_root / "execution-receipt.private.json"
+        if existing.exists() or existing.is_symlink():
+            raw, _ = stable_regular_bytes(existing, required_mode=0o600)
+            receipt = json_object(raw, existing.name)
+            state = receipt.get("state")
+            if (state not in {"DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"} or
+                    receipt.get("intentSha256") != binding.intent_sha256):
+                deny("generation_retirement_existing_receipt")
+            return state, {"result": state, "receiptSha256": hashlib.sha256(raw).hexdigest(),
+                           "resumedFromDurableReceipt": True}
+        final_operational, final_operational_sha = self._retirement_final_operational(binding, journal)
+        command = [sys.executable, str(binding.tool), "execute",
+                   "--intent", str(binding.intent), "--intent-sha256", binding.intent_sha256,
+                   "--authorization", str(binding.authorization),
+                   "--authorization-sha256", binding.authorization_sha256,
+                   "--operational-state", str(final_operational),
+                   "--operational-state-sha256", final_operational_sha,
+                   "--root-policy", str(binding.root_policy),
+                   "--root-policy-sha256", binding.root_policy_sha256,
+                   "--deployment-lock", str(binding.deployment_lock),
+                   "--receipt-root", str(binding.receipt_root),
+                   "--review-output", str(binding.review_output)]
+        result = self.host.run(command, timeout=180)
+        if result.returncode:
+            return "DEPLOYED_RETENTION_INCOMPLETE", {
+                "exitCode": result.returncode,
+                "stdoutSha256": hashlib.sha256(result.stdout.encode()).hexdigest(),
+                "stderrSha256": hashlib.sha256(result.stderr.encode()).hexdigest(),
+            }
+        try:
+            report = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return "DEPLOYED_RETENTION_INCOMPLETE", {"predicate": "retirement_output_invalid"}
+        state = report.get("result") if isinstance(report, dict) else None
+        if state not in {"DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"}:
+            return "DEPLOYED_RETENTION_INCOMPLETE", {"predicate": "retirement_state_invalid"}
+        receipt_sha = report.get("receiptSha256")
+        if not isinstance(receipt_sha, str) or not SHA256.fullmatch(receipt_sha):
+            return "DEPLOYED_RETENTION_INCOMPLETE", {"predicate": "retirement_receipt_identity_missing"}
+        receipt_raw, _ = stable_regular_bytes(
+            binding.receipt_root / "execution-receipt.private.json", required_mode=0o600)
+        if hashlib.sha256(receipt_raw).hexdigest() != receipt_sha:
+            return "DEPLOYED_RETENTION_INCOMPLETE", {"predicate": "retirement_receipt_identity"}
+        report["operationalStateSha256"] = final_operational_sha
+        report["operationalStatePath"] = str(final_operational)
+        return state, report
+
     def _definition_app(self, component: str, role: str) -> dict[str, Any]:
         value = read_json(self._definition_paths(component, role)["definition"])
         apps = value.get("apps")
@@ -766,6 +952,11 @@ class Driver:
     def preflight(self) -> None:
         if self.inputs.components != COMPONENTS:
             deny("components_must_be_api_frontend")
+        if self.inputs.retirement is None:
+            deny("generation_retirement_binding_required")
+        if self.inputs.retirement.deployment_lock != self.lock:
+            deny("generation_retirement_lock_mismatch")
+        self._authenticate_retirement()
         if self.journal.exists():
             deny("transaction_exists")
         if self.inputs.transaction_root.exists():
@@ -1023,12 +1214,22 @@ class Driver:
                 atomic_marker(marker, payload)
             journal["deployedMarkerCreated"] = True
             journal["deployedMarkerSha256"] = digest(marker)
+            retention_state = journal.get("generationRetirementState")
+            if retention_state not in {"DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE"}:
+                try:
+                    retention_state, retention = self._retire_generation(journal)
+                except Exception as error:
+                    retention_state = "DEPLOYED_RETENTION_INCOMPLETE"
+                    retention = {"predicate": self._failure_predicate(error), "automaticRetry": False}
+                journal["generationRetirement"] = retention
+                journal["generationRetirementState"] = retention_state
+                self._journal_write(journal, retention_state)
             finalize["lockReleaseStarted"] = True
-            self._journal_write(journal, "FINALIZING")
+            self._journal_write(journal, retention_state)
             self._release_lock(journal, allow_absent=True)
             self._failpoint("lock_release")
             self._failpoint("final_journal")
-            self._journal_write(journal, "DEPLOYED")
+            self._journal_write(journal, retention_state)
         except Exception as error:
             self._record_failure(journal, error, "finalize")
             raise
@@ -1056,12 +1257,32 @@ def parse() -> tuple[str, Inputs]:
     parser.add_argument("--config-manifest", type=Path, required=True)
     parser.add_argument("--config-manifest-sha256", required=True)
     parser.add_argument("--transaction-root", type=Path, required=True)
+    parser.add_argument("--generation-retirement-tool", type=Path, required=True)
+    parser.add_argument("--generation-retirement-tool-sha256", required=True)
+    parser.add_argument("--generation-retirement-intent", type=Path, required=True)
+    parser.add_argument("--generation-retirement-intent-sha256", required=True)
+    parser.add_argument("--generation-retirement-authorization", type=Path, required=True)
+    parser.add_argument("--generation-retirement-authorization-sha256", required=True)
+    parser.add_argument("--generation-retirement-operational-state", type=Path, required=True)
+    parser.add_argument("--generation-retirement-operational-state-sha256", required=True)
+    parser.add_argument("--generation-retirement-root-policy", type=Path, required=True)
+    parser.add_argument("--generation-retirement-root-policy-sha256", required=True)
+    parser.add_argument("--generation-retirement-receipt-root", type=Path, required=True)
+    parser.add_argument("--generation-retirement-review-output", type=Path, required=True)
+    parser.add_argument("--generation-retirement-deployment-lock", type=Path, required=True)
     args = parser.parse_args()
     components = tuple(args.components.split(","))
+    retirement = RetirementBinding(
+        args.generation_retirement_tool, args.generation_retirement_tool_sha256,
+        args.generation_retirement_intent, args.generation_retirement_intent_sha256,
+        args.generation_retirement_authorization, args.generation_retirement_authorization_sha256,
+        args.generation_retirement_operational_state, args.generation_retirement_operational_state_sha256,
+        args.generation_retirement_root_policy, args.generation_retirement_root_policy_sha256,
+        args.generation_retirement_receipt_root, args.generation_retirement_review_output,
+        args.generation_retirement_deployment_lock)
     return args.command, Inputs(args.release, args.target, args.control_plane,
                                 components, args.config_root, args.config_manifest,
-                                args.transaction_root,
-                                args.config_manifest_sha256)
+                                args.transaction_root, args.config_manifest_sha256, retirement)
 
 
 def main() -> int:
@@ -1075,8 +1296,11 @@ def main() -> int:
     except (Denied, OSError, subprocess.SubprocessError) as error:
         print(f"DEPLOY_DENY:{str(error)[:240]}", file=sys.stderr)
         return 2
-    print({"preflight": "PREFLIGHT PASS", "activate": "AWAITING_ACCEPTANCE",
-           "finalize": "DEPLOYED", "rollback": "ROLLED_BACK"}[command])
+    if command == "finalize":
+        print(driver.status())
+    else:
+        print({"preflight": "PREFLIGHT PASS", "activate": "AWAITING_ACCEPTANCE",
+               "rollback": "ROLLED_BACK"}[command])
     return 0
 
 

@@ -496,6 +496,36 @@
     "configurationRecord": "docs/saas/releases/CONVERTA_DEMO_META_APP_ID_2026-10-24_CONFIGURED.json",
     "lastMetaMutationScope": "SINGLE_TEMPLATE_MEDIA_SUBMISSION_ATTEMPT"
   },
+  "artifactGenerationLifecycle": {
+    "schemaVersion": 1,
+    "state": "MANDATORY_GENERATION_RETIREMENT_IMPLEMENTED",
+    "minimumFreeBytesBeforeBuild": 12884901888,
+    "retentionDebtBlocksBuild": true,
+    "maximumPendingCandidates": 1,
+    "terminalSuccess": "DEPLOYED_SANITIZED",
+    "terminalIncomplete": "DEPLOYED_RETENTION_INCOMPLETE",
+    "partialRetirementCanBeSanitized": false,
+    "apiFrontendFinalizeIntegrated": true,
+    "frontendOnlyFinalizeIntegrated": true,
+    "partialRetirementReconciliation": "AUTHENTICATED_PRIOR_INTENT_RECEIPT_JOURNAL_REMAINING_ONLY",
+    "canonicalRootAuthority": "config/deploy-artifact-roots.json",
+    "operationalObservationSchemaVersion": 2,
+    "legacy123baMigration": "HASH_BOUND_CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN",
+    "lastCompletedBatch": {
+      "id": "retention-recent-generations-qualification-20261026T213341Z-v3",
+      "state": "COMPLETED",
+      "commandsCompleted": 10,
+      "commandsAttempted": 10,
+      "recoveredBytes": 6942289920,
+      "finalFreeBytes": 13416599552,
+      "receiptSha256": "19ba46c4948e3ff1821b8b44e51fed1edf635b9b7ddd3421064dab7ee2250c74",
+      "commandLogSha256": "e8f593acb2801e88dbbfffb3a679b4775916491c3e2281e24a45ebf3f0e6c985",
+      "sampleASha256": "11f70b7c7b6d27f8a55bae36aa17b081ece70e8511f414da14b1f56d83661612",
+      "sampleBSha256": "94fda2c48e65e43de46d6cedc121d4b32f46339301306f452218bb8a013ea6a8",
+      "productionChanged": false,
+      "lockFreeAfterCompletion": true
+    }
+  },
   "updatedAtDate": "2026-10-26",
   "updatedAtUtcScope": "DOCUMENTATION_UPDATE_FROM_OWNER_RELAYED_DEPLOYMENT_REPORT"
 }

@@ -106,6 +106,24 @@ continua `NOT_PROVEN`.
 
 ## Capacidade e retenção
 
+O encerramento obrigatório por geração está implementado no produtor e na
+ferramenta versionada `scripts/generation-retirement.py`. Novo build exige 12 GiB
+livres, ausência de dívida e no máximo uma candidata ainda não instalada. O lote
+histórico de dez caminhos terminou 10/10, recuperou 6.942.289.920 bytes e deixou
+13.416.599.552 bytes livres; produção permaneceu inalterada e o lock ficou livre.
+Esses números são o recibo daquela execução, não uma medição fresca de capacidade.
+O finalize API + frontend exige a intenção condicional completa e encerra em
+`DEPLOYED_SANITIZED` ou `DEPLOYED_RETENTION_INCOMPLETE`. `SANITIZED` nunca decorre
+de retirada parcial. O frontend-only aplica a mesma finalização e não repete save,
+restart ou retirada ao retomar. Parcial só é reconciliado por intent/receipt/journal
+anteriores autenticados, com cadeia cumulativa em qualquer número de retomadas; nova
+autorização cobre apenas os remanescentes. As raízes
+vêm da política versionada `config/deploy-artifact-roots.json`, não do snapshot
+operacional. O produtor valida repo, output e raiz de releases contra essa política
+antes de criar a saída ou executar npm. A candidata legada `123ba` possui transição v1 determinística,
+vinculada ao hash da review preservada e limitada ao próprio contrato, sem nova
+auditoria global.
+
 A fotografia somente leitura de capacidade está em
 [VPS_CAPACITY_AUDIT_2026-10-24.md](VPS_CAPACITY_AUDIT_2026-10-24.md). Ela classifica
 candidatos para revisão, mas não autoriza remoção, arquivamento, retenção, alteração

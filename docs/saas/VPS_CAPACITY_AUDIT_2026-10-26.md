@@ -72,6 +72,10 @@ limite superior de possível contribuição, não uma causalidade demonstrada.
 
 ## Intenção de retenção — `NOT_AUTHORIZED`
 
+> Estado posterior: o lote v3 abaixo foi executado e concluído. Esta seção é a
+> fotografia histórica anterior à autorização e seus comandos não devem ser
+> repetidos.
+
 Ganho condicionado máximo do lote: **7.006.203.904 B**. Ganho seguro imediato:
 **0 B**. Antes de qualquer comando, o lote exige comparador autenticado, equivalência
 integral/contensão, inventário de ignorados nos worktrees, ausência de conteúdo único,
@@ -98,6 +102,17 @@ comando, registrar tentativa/exit code/estado restante; ao final, confirmar cami
 espaço/inodes, processos, dump, markers, health e todos os objetos preservados.
 Rollback de exclusão não existe: qualquer conteúdo único ou cobertura ambígua retira
 o caminho da intenção antes da autorização.
+
+## Encerramento do lote v3 — `COMPLETED`
+
+O relato final autenticado registra 10 comandos tentados, concluídos e verificados,
+sem retry, glob, força ou prune. Ganho observado: **6.942.289.920 bytes**; espaço
+livre final: **13.416.599.552 bytes**. Recibo SHA-256
+`19ba46c4948e3ff1821b8b44e51fed1edf635b9b7ddd3421064dab7ee2250c74`; log
+`e8f593acb2801e88dbbfffb3a679b4775916491c3e2281e24a45ebf3f0e6c985`;
+amostras `11f70b7c7b6d27f8a55bae36aa17b081ece70e8511f414da14b1f56d83661612`
+e `94fda2c48e65e43de46d6cedc121d4b32f46339301306f452218bb8a013ea6a8`.
+Produção permaneceu inalterada e o lock ficou livre, com seu arquivo preservado.
 
 Devem permanecer: releases vivas, worker, retornos imediatos e transitivos, candidata
 `123ba`, pacotes/manifests/índices, dump/markers, configurações, bancos, uploads,

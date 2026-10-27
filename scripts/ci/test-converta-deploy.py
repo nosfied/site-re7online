@@ -62,6 +62,7 @@ class FakeHost(deploy.Host):
         self.dump: Path | None = None
         self.external_calls = 0
         self.save_calls = 0
+        self.retirement_fail = False
         self.api_health_payload: dict[str, Any] = {"ok": True, "db": "ok"}
         self.api_health_content_type = "application/json"
         self.api_health_status = 200
@@ -73,6 +74,16 @@ class FakeHost(deploy.Host):
             return subprocess.CompletedProcess(command, 0, "", "")
         if command[-1:] == ["--version"]:
             return subprocess.CompletedProcess(command, 0, "6.0.14\n", "")
+        if len(command) > 3 and command[2] == "execute" and "--intent" in command:
+            self.events.append("generation:retired")
+            if self.retirement_fail:
+                return subprocess.CompletedProcess(command, 2, "", "GENERATION_RETIREMENT_DENY:fixture\n")
+            receipt_root = Path(command[command.index("--receipt-root") + 1])
+            receipt_root.mkdir(mode=0o700)
+            receipt = receipt_root / "execution-receipt.private.json"
+            receipt.write_text('{"state":"DEPLOYED_SANITIZED"}\n'); receipt.chmod(0o600)
+            return subprocess.CompletedProcess(command, 0,
+                '{"result":"DEPLOYED_SANITIZED","receiptSha256":"' + sha(receipt) + '"}\n', "")
         return subprocess.run(command, text=True, capture_output=True, timeout=timeout, check=False)
 
     def get(self, url: str, timeout: float = 10) -> int:
@@ -180,18 +191,58 @@ class DeployFixture(unittest.TestCase):
         self.config_manifest = self.config / "final-hash-manifest.private.json"
         self._write_config_manifest()
         self.config_manifest_sha = sha(self.config_manifest)
+        retirement_files = {}
+        for name in ("generation-retirement.py", "intent.private.json", "authorization.private.json",
+                     "operational.private.json", "root-policy.private.json"):
+            path = self.base / name; path.write_text(name + "\n"); path.chmod(0o600)
+            retirement_files[name] = path
+        self.retirement = deploy.RetirementBinding(
+            retirement_files["generation-retirement.py"], sha(retirement_files["generation-retirement.py"]),
+            retirement_files["intent.private.json"], sha(retirement_files["intent.private.json"]),
+            retirement_files["authorization.private.json"], sha(retirement_files["authorization.private.json"]),
+            retirement_files["operational.private.json"], sha(retirement_files["operational.private.json"]),
+            retirement_files["root-policy.private.json"], sha(retirement_files["root-policy.private.json"]),
+            self.base / "retirement-receipt", self.base / "generation-review.private.json", self.lock)
         self.host.rows = {
             "api": self._row("api", 11), "frontend": self._row("frontend", 12),
             "re7-whatsapp-web-worker": self._row("re7-whatsapp-web-worker", 13),
         }
+        operational = retirement_files["operational.private.json"]
+        put(operational, {
+            "schemaVersion": 2, "generationId": self.candidate, "releaseId": self.candidate,
+            "targetCommit": self.target, "gitRepository": str(ROOT),
+            "currentPaths": [str(path.resolve()) for path in self.stable.values()],
+            "pm2LivePaths": [], "pm2DumpPaths": [], "activeReleases": [self.rollback],
+            "rollbackReleases": [], "transitiveReturnReleases": [],
+            "candidateReleases": [self.candidate], "installedVerifiedReleases": [self.candidate],
+            "supersededCandidates": [], "controlPlaneArtifacts": [], "dependencies": [],
+            "deploymentState": {"state": "PENDING"}, "canonicalRoots": {},
+            "observations": {"currentLinks": [{"path": str(path), "target": str(path.resolve())}
+                                                for path in self.stable.values()],
+                             "pm2": {"path": str(self.pm2), "sha256": sha(self.pm2),
+                                     "fingerprintSha256": self.driver_fingerprint(self.host.rows.values())},
+                             "dump": {"path": str(self.dump), "sha256": sha(self.dump)},
+                             "releaseGraph": {"path": str(self.dump), "sha256": sha(self.dump)}}})
+        self.retirement = deploy.RetirementBinding(
+            retirement_files["generation-retirement.py"], sha(retirement_files["generation-retirement.py"]),
+            retirement_files["intent.private.json"], sha(retirement_files["intent.private.json"]),
+            retirement_files["authorization.private.json"], sha(retirement_files["authorization.private.json"]),
+            operational, sha(operational),
+            retirement_files["root-policy.private.json"], sha(retirement_files["root-policy.private.json"]),
+            self.base / "retirement-receipt",
+            self.base / "generation-review.private.json", self.lock)
         self.inputs = deploy.Inputs(self.candidate, self.target, self.control_plane,
                                     deploy.COMPONENTS, self.config, self.config_manifest, self.transaction,
-                                    self.config_manifest_sha)
+                                    self.config_manifest_sha, self.retirement)
         self.driver = FixtureDriver(self.inputs, host=self.host, repo=ROOT,
                                     releases=self.releases, stable=self.stable,
                                     lock=self.lock, dump=self.dump, pm2=self.pm2,
                                     clock=lambda: 1234567890.0)
         self.driver.failpoints = set()
+
+    @staticmethod
+    def driver_fingerprint(rows) -> str:
+        return deploy.Driver._retirement_pm2_fingerprint(list(rows))
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -217,7 +268,7 @@ class DeployFixture(unittest.TestCase):
         self.config_manifest_sha = sha(self.config_manifest)
         self.inputs = deploy.Inputs(self.candidate, self.target, self.control_plane,
                                     deploy.COMPONENTS, self.config, self.config_manifest,
-                                    self.transaction, self.config_manifest_sha)
+                                    self.transaction, self.config_manifest_sha, self.retirement)
         driver = FixtureDriver(self.inputs, host=self.host, repo=ROOT,
                                releases=self.releases, stable=self.stable, lock=self.lock,
                                dump=self.dump, pm2=self.pm2, clock=lambda: 1234567890.0)
@@ -483,7 +534,11 @@ class DriverTests(DeployFixture):
         self.assertTrue(any("/_next/static/" in event for event in self.host.events))
         self.acceptance(); self.driver.finalize()
         journal = self.driver._journal_read()
-        self.assertEqual(journal["state"], "DEPLOYED"); self.assertEqual(journal["saveCount"], 1)
+        self.assertEqual(journal["state"], "DEPLOYED_SANITIZED"); self.assertEqual(journal["saveCount"], 1)
+        self.assertEqual(self.host.events.count("generation:retired"), 1)
+        final_operational = self.transaction / "generation-operational.final.private.json"
+        self.assertEqual(read_json_fixture(final_operational)["deploymentState"], {"state": "DEPLOYED"})
+        self.assertEqual(journal["generationRetirement"]["operationalStateSha256"], sha(final_operational))
         self.assertEqual(self.host.events.count("pm2:save"), 1)
         marker = self.driver.release_root / "DEPLOYED"
         self.assertLess(self.host.events.index("dump:saved"), len(self.host.events))
@@ -498,6 +553,16 @@ class DriverTests(DeployFixture):
         self.assertEqual(readiness["api"]["socketOwnerRelation"], "DESCENDANT")
         self.assertEqual(readiness["frontend"]["socketOwnerRelation"], "DESCENDANT")
         self.assertEqual(self.host.events.count("pm2:save"), 0)
+
+    def test_api_frontend_deploy_records_retention_incomplete_without_rollback(self) -> None:
+        self.host.retirement_fail = True
+        self.driver.preflight(); self.driver.activate(); self.acceptance(); self.driver.finalize()
+        journal = self.driver._journal_read()
+        self.assertEqual(journal["state"], "DEPLOYED_RETENTION_INCOMPLETE")
+        self.assertEqual(journal["saveCount"], 1)
+        self.assertTrue((self.driver.release_root / "DEPLOYED").is_file())
+        self.assertFalse(self.lock.exists())
+        self.assertEqual(self.host.events.count("generation:retired"), 1)
 
     def test_api_timeout_rolls_back_integrally_without_save(self) -> None:
         original = {key: path.resolve() for key, path in self.stable.items()}
@@ -644,11 +709,12 @@ class DriverTests(DeployFixture):
         self.assertNotEqual(failed["state"], "DEPLOYED")
         self.driver.finalize()
         final = self.driver._journal_read()
-        self.assertEqual(final["state"], "DEPLOYED")
+        self.assertEqual(final["state"], "DEPLOYED_SANITIZED")
         self.assertEqual(self.host.save_calls, 1)
         self.assertFalse(self.lock.exists())
         self.assertTrue((self.driver.release_root / "DEPLOYED").is_file())
         self.assertEqual(final["finalDumpSha256"], sha(self.dump))
+        self.assertEqual(self.host.events.count("generation:retired"), 1)
 
     def test_finalize_resumes_before_save(self) -> None: self._finalize_fault("before_save")
     def test_finalize_resumes_immediately_after_save(self) -> None: self._finalize_fault("after_save")

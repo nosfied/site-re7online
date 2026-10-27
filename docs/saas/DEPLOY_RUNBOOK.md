@@ -35,6 +35,45 @@ e `db="ok"`. `/health` no domínio do frontend não comprova a API.
 
 ## Build once
 
+### Gate de dívida e encerramento da geração
+
+Antes de criar a saída, o produtor exige pelo menos 12 GiB livres, todos os
+lifecycles anteriores terminais e seus reviews sem `RETENTION_DEBT`,
+`RETIREMENT_READY` ou `QUARANTINED`. Uma candidata pendente já existente impede
+outro build. Reviews v1 `PRESERVE` são dívida; somente v1 `SANITIZED` permanece
+compatível. Override v2 precisa declarar razão, bytes, responsável e expiração
+UTC futura.
+
+Antes mesmo do lock de build, a política versionada autenticada deve provar
+`--repo` dentro de `build-worktrees`, `--output` estritamente dentro de
+`build-output` e `--installed-releases-root` idêntico a `releases`. Não ajustar as
+raízes pelo comando operacional; divergência, caminho externo ou symlink nega antes
+de criar output ou iniciar npm.
+
+O build publica `generation-artifacts.private.json`. Depois da verificação do
+pacote, execute `scripts/generation-retirement.py prepare` com o contrato,
+lifecycle e fotografia operacional autenticados. A intenção resultante e seu
+hash integram a autorização de ativação; o executor frontend-only autentica ambos
+antes de selecionar o symlink. A preparação contém somente metadados, comandos e
+hashes, nunca cópia de runtime.
+
+No fluxo API + frontend, o `preflight` de `scripts/converta-deploy.py` exige os
+bindings `--generation-retirement-*`. Após aceite, `pm2 save`, dump validado,
+marker `DEPLOYED` e health final, o próprio `finalize` executa uma única vez
+`generation-retirement.py execute`. Sucesso encerra em `DEPLOYED_SANITIZED`.
+Falha de retirada não reverte o deploy aprovado: encerra em
+`DEPLOYED_RETENTION_INCOMPLETE`, preserva parciais e bloqueia qualquer novo build
+até reconciliação. Os cinco comandos públicos do driver permanecem inalterados.
+Não usar retry, force, prune, glob ou caminhos alternativos.
+Retomadas sucessivas encadeiam cumulativamente os hashes dos intents, receipts e
+journals anteriores; cada nova autorização contém somente caminhos ainda pendentes.
+
+O fluxo frontend-only usa o mesmo executor release-bound nas fases `activate` e
+`finalize`. Depois do aceite, `finalize` revalida o trio, executa um único `pm2 save`,
+valida o dump, publica `DEPLOYED` e chama a retenção exatamente uma vez. Retomada usa
+as evidências duráveis: não repete save, restart nem comando de retirada. O estado
+terminal também é `DEPLOYED_SANITIZED` ou `DEPLOYED_RETENTION_INCOMPLETE`.
+
 Para uma ativação frontend-only, a ordem canônica é obrigatória: produzir uma
 única vez o artefato funcional; obter os hashes finais do pacote e o BUILD_ID;
 materializar, em uma alteração separada de control plane, o executor
@@ -62,7 +101,9 @@ python3 scripts/converta-release.py build \
   --repo "$PWD" --target "$TARGET" --release-id "$RELEASE" \
   --components api,frontend --output <saida-exclusiva> \
   --source-date-epoch "$EPOCH" \
-  --capacity-contract <capacity-contract.private.json>
+  --capacity-contract <capacity-contract.private.json> \
+  --root-policy config/deploy-artifact-roots.json \
+  --root-policy-sha256 <sha256-autenticado>
 python3 scripts/converta-release.py verify \
   --package <saida-exclusiva>/$RELEASE.tar.xz \
   --target "$TARGET" --release-id "$RELEASE" --components api,frontend
