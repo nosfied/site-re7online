@@ -34,6 +34,22 @@ e review `42ecdc22360b701157f36599e84af7e532bfb7a9970d4e6eafe667fac8461d73`.
 A release instalada, pacote, marker e dump foram preservados; locks ficaram livres.
 Espaço final observado: 13.813.510.144 bytes.
 
+## Aceite visual de Campanhas/Rascunho — 27/10/2026
+
+Relato manual do owner na interface produtiva da release 708f: todos os itens do
+roteiro dirigido passaram. Os campos Nome do rascunho e Modelo aprovado ficaram
+alinhados; a prévia substitui as instruções principais, as orientações permanecem
+recolhíveis e não houve overflow. Um novo rascunho permaneceu vinculado ao ID
+retornado, sem reutilizar visualmente a campanha anterior. As apresentações
+“Descartada” e “Cancelada” respeitaram o lifecycle persistido e o alerta de resultado
+incerto ficou separado. Nenhum envio ou agendamento integrou este aceite.
+
+Estado: **CAMPAIGN_DRAFT_AND_TERMINAL_PRESENTATION_ACCEPTED**. A correção está
+implantada na 708f e deixa de bloquear a homologação de agendamento. Não repetir
+build, deploy, save, IMAGE ou VIDEO para reproduzir essa prova. Próximo ato: definir
+template, destinatário controlado e horário futuro antes de autorizar um único
+agendamento.
+
 ## Continuidade canônica
 
 A rota vigente é API+frontend `fixed-current`: um build autenticado, preflight
