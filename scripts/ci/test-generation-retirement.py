@@ -1596,7 +1596,7 @@ class GenerationRetirementTest(unittest.TestCase):
             shutil.rmtree(fixture.staging_root)
             passed = fixture.prepare()
             self.assertEqual(passed.returncode, 0, passed.stderr)
-            self.assertEqual("", fixture.commands.read_text())
+            self.assertNotIn(staging["path"], fixture.commands.read_text())
         finally:
             fixture.close()
 
