@@ -20,6 +20,10 @@ TOOL = ROOT / "scripts/generation-retirement.py"
 SPEC = importlib.util.spec_from_file_location("generation_retirement", TOOL)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(MODULE)
+RELEASE_TOOL = ROOT / "scripts/converta-release.py"
+RELEASE_SPEC = importlib.util.spec_from_file_location("converta_release", RELEASE_TOOL)
+assert RELEASE_SPEC and RELEASE_SPEC.loader
+RELEASE_MODULE = importlib.util.module_from_spec(RELEASE_SPEC); RELEASE_SPEC.loader.exec_module(RELEASE_MODULE)
 
 
 def sha(path: Path) -> str:
@@ -42,7 +46,7 @@ class Fixture:
         self.temp = tempfile.TemporaryDirectory(prefix="generation-retirement-")
         self.root = Path(self.temp.name)
         self.output_root = self.root / "build-output"; self.output_root.mkdir(mode=0o755)
-        self.output = self.output_root / "generation"; self.output.mkdir()
+        self.output = self.output_root / "generation"; self.output.mkdir(mode=0o755)
         self.worktrees_root = self.root / "build-worktrees"; self.worktrees_root.mkdir(mode=0o755)
         self.releases_root = self.root / "releases"; self.releases_root.mkdir(mode=0o755)
         self.staging_root = self.root / "staging-root"; self.staging_root.mkdir(mode=0o755)
@@ -150,7 +154,7 @@ class Fixture:
                          "releaseGraph": {"path": str(self.graph), "sha256": sha(self.graph)}}})
         self.intent = self.evidence_root / "intent.private.json"
         self.commands = self.evidence_root / "commands.private.txt"
-        self.review = self.evidence_root / "generation-review.private.json"
+        self.review = self.output / "generation-review.private.json"
 
     def prepare(self, *extra: str):
         return invoke("prepare", "--contract", str(self.contract), "--contract-sha256", sha(self.contract),
@@ -201,6 +205,12 @@ class LegacyBootstrapFixture:
         self.temp = tempfile.TemporaryDirectory(prefix="legacy-generation-bootstrap-")
         self.root = Path(self.temp.name)
         self.repository = self.root / "repository"; self.repository.mkdir(mode=0o755)
+        subprocess.run(["git", "init", "-q"], cwd=self.repository, check=True)
+        subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=self.repository, check=True)
+        subprocess.run(["git", "config", "user.name", "Fixture"], cwd=self.repository, check=True)
+        (self.repository / "tracked").write_text("legacy\n")
+        subprocess.run(["git", "add", "."], cwd=self.repository, check=True)
+        subprocess.run(["git", "commit", "-qm", "legacy fixture"], cwd=self.repository, check=True)
         self.worktrees = self.root / "build-worktrees"; self.worktrees.mkdir(mode=0o755)
         self.outputs = self.root / "build-output"; self.outputs.mkdir(mode=0o755)
         self.releases = self.root / "releases"; self.releases.mkdir(mode=0o755)
@@ -208,13 +218,9 @@ class LegacyBootstrapFixture:
         self.evidence = self.root / "evidence"; self.evidence.mkdir(mode=0o750)
         self.release_id = "immutable-legacy-fixture"
         self.output = self.outputs / "legacy-producer"; self.output.mkdir(mode=0o700)
-        self.worktree = self.worktrees / "legacy-source"; self.worktree.mkdir(mode=0o755)
-        subprocess.run(["git", "init", "-q"], cwd=self.worktree, check=True)
-        subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=self.worktree, check=True)
-        subprocess.run(["git", "config", "user.name", "Fixture"], cwd=self.worktree, check=True)
-        (self.worktree / "tracked").write_text("legacy\n")
-        subprocess.run(["git", "add", "."], cwd=self.worktree, check=True)
-        subprocess.run(["git", "commit", "-qm", "legacy fixture"], cwd=self.worktree, check=True)
+        self.worktree = self.worktrees / "legacy-source"
+        subprocess.run(["git", "-C", str(self.repository), "worktree", "add", "--detach", str(self.worktree)],
+                       check=True, stdout=subprocess.DEVNULL)
         self.target = subprocess.check_output(["git", "-C", str(self.worktree), "rev-parse", "HEAD"],
                                               text=True).strip()
         self.release_root = self.output / self.release_id
@@ -230,6 +236,8 @@ class LegacyBootstrapFixture:
                                       "targetCommit": self.target, "state": "COMPLETE"})
         self.writer_lock = self.outputs / ".generation-build.lock"
         self.writer_lock.write_text(""); self.writer_lock.chmod(0o600)
+        self.deploy_lock = self.root / ".deployment-window.lock"
+        self.deploy_lock.write_text(""); self.deploy_lock.chmod(0o600)
         self.installed = self.releases / self.release_id
         self.contract = self.output / "generation-artifacts.private.json"
         self.bootstrap_review = self.output / "generation-review.private.json"
@@ -367,16 +375,15 @@ class GenerationRetirementTest(unittest.TestCase):
             retirement = fixture.evidence / "retirement"; retirement.mkdir(mode=0o700)
             intent = retirement / "intent.private.json"
             commands = retirement / "commands.private.txt"
-            review = retirement / "generation-review.private.json"
             result = invoke("prepare", "--contract", str(fixture.contract),
                             "--contract-sha256", sha(fixture.contract),
                             "--lifecycle", str(fixture.lifecycle), "--lifecycle-sha256", sha(fixture.lifecycle),
                             "--operational-state", str(fixture.operational),
                             "--operational-state-sha256", sha(fixture.operational),
                             "--root-policy", str(fixture.policy), "--root-policy-sha256", sha(fixture.policy),
-                            "--deployment-lock", str(fixture.writer_lock),
+                            "--deployment-lock", str(fixture.deploy_lock),
                             "--intent-output", str(intent), "--commands-output", str(commands),
-                            "--review-output", str(review), "--reviewer", "fixture-owner",
+                            "--review-output", str(fixture.bootstrap_review), "--reviewer", "fixture-owner",
                             "--reason", "sealed after authenticated legacy bootstrap")
             self.assertEqual(result.returncode, 0, result.stderr)
             sealed = json.loads(intent.read_text())
@@ -384,6 +391,28 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertFalse(sealed["authorizationGranted"])
             self.assertEqual({item["path"] for item in sealed["commands"]},
                              {str(fixture.worktree), str(fixture.api), str(fixture.frontend)})
+
+            authorization = fixture.evidence / "authorization.private.json"
+            private_json(authorization, {"schemaVersion": 1, "authorizationId": "legacy-once",
+                         "decision": "AUTHORIZE_ONCE", "intentSha256": sha(intent),
+                         "approvedPaths": [item["path"] for item in sealed["commands"]],
+                         "owner": "fixture-owner"})
+            execution_receipt = fixture.evidence / "retirement-execution"
+            executed = invoke("execute", "--intent", str(intent), "--intent-sha256", sha(intent),
+                               "--authorization", str(authorization),
+                               "--authorization-sha256", sha(authorization),
+                               "--operational-state", str(fixture.operational),
+                               "--operational-state-sha256", sha(fixture.operational),
+                               "--root-policy", str(fixture.policy),
+                               "--root-policy-sha256", sha(fixture.policy),
+                               "--deployment-lock", str(fixture.deploy_lock),
+                               "--receipt-root", str(execution_receipt),
+                               "--review-output", str(fixture.bootstrap_review))
+            self.assertEqual(executed.returncode, 0, executed.stderr)
+            self.assertEqual(json.loads(fixture.bootstrap_review.read_text())["state"], "SANITIZED")
+            accepted = RELEASE_MODULE.require_generation_reviews(fixture.outputs)
+            self.assertEqual(accepted[0]["generationId"], fixture.release_id)
+            self.assertEqual(accepted[0]["state"], "SANITIZED")
         finally:
             fixture.close()
 
@@ -414,7 +443,7 @@ class GenerationRetirementTest(unittest.TestCase):
             finally:
                 fixture.close()
 
-    def test_legacy_bootstrap_denies_installed_referenced_symlink_and_existing_outputs(self):
+    def test_legacy_bootstrap_denies_installed_referenced_symlink_and_divergent_outputs(self):
         fixture = LegacyBootstrapFixture()
         try:
             fixture.installed.mkdir()
@@ -445,22 +474,83 @@ class GenerationRetirementTest(unittest.TestCase):
         fixture = LegacyBootstrapFixture()
         try:
             fixture.contract.write_text("occupied\n")
-            with self.assertRaisesRegex(MODULE.Denied, "legacy_destination_exists"):
+            fixture.contract.chmod(0o600)
+            with self.assertRaisesRegex(MODULE.Denied, "legacy_contract_divergent"):
                 fixture.bootstrap()
         finally:
             fixture.close()
+
+    def test_legacy_bootstrap_resumes_exactly_after_contract_or_review_publication(self):
+        for failure_after in (1, 2):
+            fixture = LegacyBootstrapFixture()
+            try:
+                real_publish = MODULE.write_or_verify_exact
+                publications = 0
+
+                def fail_after_publication(path, value, predicate):
+                    nonlocal publications
+                    result = real_publish(path, value, predicate)
+                    publications += 1
+                    if publications == failure_after:
+                        raise MODULE.Denied(f"injected_after_{predicate}")
+                    return result
+
+                with patch.object(MODULE, "LEGACY_123BA_BINDING", fixture.descriptor_value), \
+                        patch.object(MODULE, "canonical_release_verifier", return_value=fixture.verifier), \
+                        patch.object(MODULE, "write_or_verify_exact", side_effect=fail_after_publication):
+                    with self.assertRaisesRegex(MODULE.Denied, "injected_after"):
+                        MODULE.bootstrap_legacy(fixture.arguments())
+                self.assertTrue(fixture.contract.is_file())
+                if failure_after == 1:
+                    self.assertFalse(fixture.bootstrap_review.exists())
+                else:
+                    self.assertTrue(fixture.bootstrap_review.is_file())
+                self.assertFalse(fixture.receipt.exists())
+                preserved = {path: (path.stat().st_ino, sha(path)) for path in
+                             (fixture.contract, fixture.bootstrap_review) if path.exists()}
+
+                fixture.bootstrap()
+                for path, identity in preserved.items():
+                    self.assertEqual((path.stat().st_ino, sha(path)), identity)
+                receipt = json.loads(fixture.receipt.read_text())
+                self.assertEqual(receipt["state"], "LEGACY_CONTRACT_MATERIALIZED")
+                self.assertFalse(receipt["authorizationGranted"])
+                self.assertFalse(receipt["executionPermitted"])
+                self.assertEqual(receipt["destructiveCommands"], 0)
+            finally:
+                fixture.close()
+
+    def test_write_or_verify_exact_denies_divergent_symlink_type_owner_and_mode(self):
+        expected = b"expected\n"
+        with tempfile.TemporaryDirectory(prefix="legacy-exact-publication-") as raw:
+            root = Path(raw)
+            for label in ("divergent", "symlink", "type", "owner", "mode"):
+                path = root / label
+                if label == "divergent":
+                    path.write_bytes(b"different\n"); path.chmod(0o600)
+                elif label == "symlink":
+                    target = root / "target"; target.write_bytes(expected); target.chmod(0o600)
+                    os.symlink(target, path)
+                elif label == "type":
+                    path.mkdir(mode=0o700)
+                else:
+                    path.write_bytes(expected); path.chmod(0o644 if label == "mode" else 0o600)
+                context = (patch.object(MODULE.os, "geteuid", return_value=os.geteuid() + 1)
+                           if label == "owner" else patch.object(MODULE.os, "geteuid", wraps=os.geteuid))
+                with context, self.assertRaises(MODULE.Denied):
+                    MODULE.write_or_verify_exact(path, expected, f"legacy_{label}")
 
     def test_legacy_bootstrap_denies_tree_drift_and_never_invokes_destructive_commands(self):
         fixture = LegacyBootstrapFixture()
         try:
             real_observation = MODULE._tree_observation
             calls = 0
-            def mutate_before_second_output(path, label):
+            def mutate_before_second_output(path, label, ignored=None):
                 nonlocal calls
                 calls += 1
                 if calls == 3:
                     (fixture.output / "late-file").write_text("late\n")
-                return real_observation(path, label)
+                return real_observation(path, label, ignored)
             with patch.object(MODULE, "LEGACY_123BA_BINDING", fixture.descriptor_value), \
                     patch.object(MODULE, "canonical_release_verifier", return_value=fixture.verifier), \
                     patch.object(MODULE, "_tree_observation", side_effect=mutate_before_second_output):
@@ -511,6 +601,38 @@ class GenerationRetirementTest(unittest.TestCase):
             result = fixture.prepare()
             self.assertEqual(result.returncode, 2)
             self.assertIn("evidence_destination_inside_artifact", result.stderr)
+        finally:
+            fixture.close()
+
+    def test_review_is_canonical_while_other_outputs_remain_private_evidence(self):
+        fixture = Fixture()
+        try:
+            wrong_review = fixture.evidence_root / "generation-review.private.json"
+            result = invoke("prepare", "--contract", str(fixture.contract),
+                            "--contract-sha256", sha(fixture.contract),
+                            "--lifecycle", str(fixture.lifecycle),
+                            "--lifecycle-sha256", sha(fixture.lifecycle),
+                            "--operational-state", str(fixture.operational),
+                            "--operational-state-sha256", sha(fixture.operational),
+                            "--root-policy", str(fixture.policy),
+                            "--root-policy-sha256", sha(fixture.policy),
+                            "--deployment-lock", str(fixture.deploy_lock),
+                            "--intent-output", str(fixture.intent),
+                            "--commands-output", str(fixture.commands),
+                            "--review-output", str(wrong_review),
+                            "--reviewer", "fixture-owner", "--reason", "wrong review")
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("generation_review_destination", result.stderr)
+            self.assertFalse(wrong_review.exists())
+            self.assertFalse(fixture.intent.exists())
+            self.assertFalse(fixture.commands.exists())
+
+            passed = fixture.prepare()
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+            self.assertEqual(Path(json.loads(fixture.intent.read_text())["reviewOutput"]), fixture.review)
+            self.assertTrue(fixture.review.is_file())
+            self.assertEqual(fixture.intent.parent, fixture.evidence_root)
+            self.assertEqual(fixture.commands.parent, fixture.evidence_root)
         finally:
             fixture.close()
 
@@ -804,7 +926,7 @@ class GenerationRetirementTest(unittest.TestCase):
             self.assertEqual(passed.returncode, 0, passed.stderr)
             self.assertEqual(json.loads(fixture.intent.read_text())["legacyMigration"]["reviewSha256"], legacy_sha)
             self.assertEqual((decoy / "unique").read_text(), "untouched")
-            self.assertTrue(any(fixture.evidence_root.glob(f"generation-review.private.json.previous.{legacy_sha}")))
+            self.assertTrue(any(fixture.output.glob(f"generation-review.private.json.previous.{legacy_sha}")))
         finally:
             fixture.close()
 

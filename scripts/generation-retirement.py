@@ -157,6 +157,17 @@ def write_exclusive(path: Path, value: bytes) -> None:
     fsync_dir(path.parent)
 
 
+def write_or_verify_exact(path: Path, value: bytes, predicate: str) -> bool:
+    """Publish once, or prove an earlier publication is byte-identical."""
+    if path.exists() or path.is_symlink():
+        existing, _ = stable_private(path)
+        if existing != value:
+            deny(f"{predicate}_divergent")
+        return False
+    write_exclusive(path, value)
+    return True
+
+
 def replace_private(path: Path, value: bytes) -> None:
     temporary = path.with_name(f".{path.name}.{os.getpid()}.partial")
     if temporary.exists() or temporary.is_symlink():
@@ -668,6 +679,33 @@ def evidence_destination(destination: Path, operational: dict[str, Any]) -> None
     deny(f"evidence_destination_root:{destination.name}")
 
 
+def canonical_review_destination(review: Path, contract: Path, lifecycle: Path,
+                                 policy: dict[str, Any]) -> None:
+    outputs_root = authenticate_policy_root(policy, "outputs")[0]
+    if (contract.name != "generation-artifacts.private.json" or
+            lifecycle.name != "generation-lifecycle.private.json" or
+            contract.parent != lifecycle.parent or
+            review != contract.parent / "generation-review.private.json"):
+        deny("generation_review_destination")
+    _strict_child(review, outputs_root, "generation_review_output_root")
+    if _path_has_symlink(review.parent, outputs_root):
+        deny("generation_review_unsafe_ancestor")
+    definition = policy["definitions"]["outputs"]
+    current = review.parent
+    while current != outputs_root:
+        try:
+            info = current.lstat()
+        except OSError:
+            deny("generation_review_unsafe_ancestor")
+        if (current.is_symlink() or not stat.S_ISDIR(info.st_mode) or
+                info.st_uid != definition["ownerUid"] or info.st_gid != definition["groupGid"] or
+                stat.S_IMODE(info.st_mode) & 0o022):
+            deny("generation_review_unsafe_ancestor")
+        current = current.parent
+    if review.exists() or review.is_symlink():
+        stable_private(review)
+
+
 def classify(artifact: dict[str, Any], contract: dict[str, Any], operational: dict[str, Any]) -> str:
     kind = artifact["class"]
     release = contract["releaseId"]
@@ -878,15 +916,53 @@ def _legacy_tree_root(path: Path, root: Path, policy: dict[str, Any], key: str) 
         deny(f"legacy_path_identity:{key}")
 
 
-def _tree_observation(path: Path, label: str) -> dict[str, Any]:
+def _legacy_structural_metrics(path: Path, ignored: set[Path]) -> dict[str, Any]:
+    root = path.lstat()
+    items = [path]
+    if stat.S_ISDIR(root.st_mode):
+        items.extend(path.rglob("*"))
+    normalized_ancestors = {parent for destination in ignored for parent in destination.parents
+                            if parent == path or path in parent.parents}
+    seen: set[tuple[int, int]] = set()
+    size = allocated = inodes = 0
+    structure = hashlib.sha256()
+    for item in sorted(items, key=lambda candidate: os.fsencode(str(candidate.relative_to(path.parent)))):
+        if item in ignored or any(destination in item.parents for destination in ignored):
+            continue
+        info = item.lstat()
+        identity = (info.st_dev, info.st_ino)
+        relative = "." if item == path else item.relative_to(path).as_posix()
+        kind = ("symlink" if stat.S_ISLNK(info.st_mode) else "directory" if stat.S_ISDIR(info.st_mode)
+                else "regular" if stat.S_ISREG(info.st_mode) else "other")
+        link = os.readlink(item) if kind == "symlink" else None
+        mutable_directory = item in normalized_ancestors and kind == "directory"
+        structure.update(canonical({"path": relative, "type": kind,
+                                    "mode": stat.S_IMODE(info.st_mode),
+                                    "size": None if mutable_directory else info.st_size,
+                                    "mtimeNs": None if mutable_directory else info.st_mtime_ns,
+                                    "link": link}))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        if not mutable_directory:
+            size += info.st_size
+            allocated += info.st_blocks * 512
+        inodes += 1
+    return {"sizeBytes": size, "allocatedBytes": allocated, "inodes": inodes,
+            "structuralSha256": structure.hexdigest()}
+
+
+def _tree_observation(path: Path, label: str, ignored: set[Path] | None = None) -> dict[str, Any]:
+    ignored = ignored or set()
     try:
         before = path.lstat()
-        metrics = structural_metrics(path)
+        metrics = _legacy_structural_metrics(path, ignored)
         after = path.lstat()
     except OSError:
         deny(f"legacy_tree_read:{label}")
-    identity = lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_size,
-                             item.st_mtime_ns, item.st_ctime_ns)
+    identity = ((lambda item: (item.st_dev, item.st_ino, item.st_mode)) if ignored else
+                (lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_size,
+                               item.st_mtime_ns, item.st_ctime_ns)))
     if identity(before) != identity(after):
         deny(f"legacy_tree_drift:{label}")
     return {"identity": {"device": after.st_dev, "inode": after.st_ino}, **metrics}
@@ -1010,23 +1086,21 @@ def bootstrap_legacy(args: argparse.Namespace) -> None:
     if installed.exists() or installed.is_symlink():
         deny("legacy_release_installed")
 
-    destinations = [Path(descriptor[key]) for key in ("contractOutput", "reviewOutput", "receiptOutput")]
-    if Path(descriptor["contractOutput"]) != output / "generation-artifacts.private.json" or \
-            Path(descriptor["reviewOutput"]) != output / "generation-review.private.json":
+    contract_output = Path(descriptor["contractOutput"])
+    review_output = Path(descriptor["reviewOutput"])
+    receipt_output = Path(descriptor["receiptOutput"])
+    if contract_output != output / "generation-artifacts.private.json" or \
+            review_output != output / "generation-review.private.json":
         deny("legacy_destination_binding")
-    for destination in destinations:
-        if destination.exists() or destination.is_symlink():
-            deny(f"legacy_destination_exists:{destination.name}")
-    evidence_destination(Path(descriptor["receiptOutput"]), operational)
+    canonical_review_destination(review_output, contract_output,
+                                 Path(descriptor["lifecycle"]["path"]), policy)
+    evidence_destination(receipt_output, operational)
 
     writer_lock = outputs_root / ".generation-build.lock"
     writer_fd = acquire_existing_lock(writer_lock)
     try:
         if installed.exists() or installed.is_symlink():
             deny("legacy_release_installed")
-        for destination in destinations:
-            if destination.exists() or destination.is_symlink():
-                deny(f"legacy_destination_exists:{destination.name}")
         lifecycle_raw, _ = stable_regular_hash(Path(descriptor["lifecycle"]["path"]),
                                                descriptor["lifecycle"]["sha256"], "legacy_lifecycle")
         lifecycle = object_json(lifecycle_raw, "legacy-lifecycle")
@@ -1050,7 +1124,8 @@ def bootstrap_legacy(args: argparse.Namespace) -> None:
         if head.returncode or head.stdout.strip() != descriptor["targetCommit"]:
             deny("legacy_worktree_head")
         fresh = capture_fresh_operational(operational)
-        observation_a = {"output": _tree_observation(output, "output"),
+        ignored_bootstrap_outputs = {contract_output, review_output}
+        observation_a = {"output": _tree_observation(output, "output", ignored_bootstrap_outputs),
                          "worktree": _tree_observation(worktree, "worktree")}
 
         release_root = output / descriptor["releaseId"]
@@ -1072,7 +1147,7 @@ def bootstrap_legacy(args: argparse.Namespace) -> None:
             _legacy_artifact(frontend, descriptor, "DERIVED_OUTPUT_RUNTIME", "RETIREMENT_READY",
                              {"indexSha256": descriptor["index"]["sha256"]}),
         ]
-        observation_b = {"output": _tree_observation(output, "output"),
+        observation_b = {"output": _tree_observation(output, "output", ignored_bootstrap_outputs),
                          "worktree": _tree_observation(worktree, "worktree")}
         if observation_a != observation_b:
             deny("legacy_tree_drift_between_samples")
@@ -1103,13 +1178,14 @@ def bootstrap_legacy(args: argparse.Namespace) -> None:
                    "verification": verification, "observations": [observation_a, observation_b],
                    "authorizationGranted": False, "executionPermitted": False,
                    "destructiveCommands": 0, "globalInventory": False}
-        write_exclusive(Path(descriptor["contractOutput"]), contract_raw)
-        write_exclusive(Path(descriptor["reviewOutput"]), review_raw)
-        write_exclusive(Path(descriptor["receiptOutput"]), canonical(receipt))
+        receipt_raw = canonical(receipt)
+        write_or_verify_exact(contract_output, contract_raw, "legacy_contract")
+        write_or_verify_exact(review_output, review_raw, "legacy_review")
+        write_or_verify_exact(receipt_output, receipt_raw, "legacy_receipt")
         print(canonical({"result": "LEGACY_CONTRACT_MATERIALIZED",
                          "contractSha256": receipt["contractSha256"],
                          "reviewSha256": receipt["reviewSha256"],
-                         "receiptSha256": digest_bytes(canonical(receipt)),
+                         "receiptSha256": digest_bytes(receipt_raw),
                          "authorizationGranted": False, "executionPermitted": False}).decode().strip())
     finally:
         os.close(writer_fd)
@@ -1126,6 +1202,7 @@ def prepare(args: argparse.Namespace) -> None:
     policy = validate_root_policy(policy_raw, args.root_policy_sha256)
     validate_contract(contract); validate_operational(operational, contract, policy)
     validate_artifact_roots(contract, operational, policy)
+    canonical_review_destination(args.review_output, args.contract, args.lifecycle, policy)
     reconciliation = authenticate_reconciliation(args, contract, args.root_policy_sha256)
     reconciled_paths = {item["path"] for item in reconciliation["completed"]}
     legacy_migration = None
@@ -1145,7 +1222,7 @@ def prepare(args: argparse.Namespace) -> None:
                                 "scope": "CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN"}
     elif args.legacy_review_sha256:
         deny("legacy_migration_review_missing")
-    for destination in (args.intent_output, args.commands_output, args.review_output):
+    for destination in (args.intent_output, args.commands_output):
         outside_artifacts(destination, contract["artifacts"])
         evidence_destination(destination, operational)
     if (lifecycle.get("generationId") != contract["generationId"] or
@@ -1187,6 +1264,7 @@ def prepare(args: argparse.Namespace) -> None:
             "contractSha256": args.contract_sha256, "lifecycleSha256": args.lifecycle_sha256,
             "operationalStateSha256": args.operational_state_sha256,
             "rootPolicySha256": args.root_policy_sha256,
+            "reviewOutput": str(args.review_output),
             "canonicalRoots": operational["canonicalRoots"],
             "controlPlaneArtifacts": operational["controlPlaneArtifacts"],
             "freshObservation": fresh,
@@ -1236,7 +1314,7 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
                 "authorizationGranted", "contractSha256", "lifecycleSha256",
                 "operationalStateSha256", "artifacts", "commands", "commandsSha256",
                 "executionContract", "canonicalRoots", "controlPlaneArtifacts", "freshObservation",
-                "rootPolicySha256", "reconciliation"}
+                "rootPolicySha256", "reviewOutput", "reconciliation"}
     required.add("legacyMigration")
     if (set(intent) != required or intent.get("schemaVersion") != 3 or
             intent.get("state") != "SEALED_FOR_EXPLICIT_AUTHORIZATION" or
@@ -1248,6 +1326,8 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
         deny("intent_canonical_roots")
     if intent.get("controlPlaneArtifacts") != operational.get("controlPlaneArtifacts"):
         deny("intent_control_plane")
+    if not Path(str(intent.get("reviewOutput", ""))).is_absolute():
+        deny("intent_review_output")
     execution = intent.get("executionContract")
     expected_execution = {"canonicalLock", "writerLock", "attemptBeforeCommand",
                           "stopOnFirstFailure", "automaticRetry", "force", "prune",
@@ -1314,6 +1394,17 @@ def execute(args: argparse.Namespace) -> None:
     if not isinstance(commands, list) or authorization.get("approvedPaths") != [item["path"] for item in commands]:
         deny("authorization_scope")
     validate_artifact_roots({"artifacts": intent["artifacts"]}, operational, policy)
+    lifecycle_artifacts = [item for item in intent["artifacts"]
+                           if Path(item["path"]).name == "generation-lifecycle.private.json"]
+    if len(lifecycle_artifacts) != 1:
+        deny("intent_lifecycle_artifact")
+    lifecycle_path = Path(lifecycle_artifacts[0]["path"])
+    contract_path = lifecycle_path.parent / "generation-artifacts.private.json"
+    stable_private(contract_path, intent["contractSha256"])
+    stable_private(lifecycle_path, intent["lifecycleSha256"])
+    canonical_review_destination(args.review_output, contract_path, lifecycle_path, policy)
+    if str(args.review_output) != intent["reviewOutput"]:
+        deny("intent_review_output")
     canonical_fd = acquire_or_authenticate_lock(args.deployment_lock, getattr(args, "deployment_lock_fd", None))
     writer_fd = acquire_existing_lock(Path(intent["executionContract"]["writerLock"]))
     attempted = completed = 0

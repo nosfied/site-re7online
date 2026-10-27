@@ -48,10 +48,19 @@ aceita exclusivamente o descriptor versionado
 writer lock ele autentica lifecycle/pacote/manifest/index, executa o verificador
 canônico do pacote, confirma HEAD, ausência de instalação e referências, e faz
 duas leituras estáveis somente do output e worktree literais. Materializa contrato,
-review v2 e recibo privados, sem autorização ou comando destrutivo. Qualquer outra
+review v2 e recibo privados, sem autorização ou comando destrutivo. Contrato,
+lifecycle e a única review canônica permanecem irmãos no output da geração;
+`prepare` e `execute` atualizam essa mesma review. Intent, comandos, receipts e
+journals permanecem na raiz privada de evidências. Qualquer outra
 release, target, caminho ou hash é `DENY`. Depois disso, e em etapa separada,
 `prepare` consome o contrato normalmente. Gerações posteriores já nascem com
 contrato e nunca usam esse bootstrap.
+
+A publicação do bootstrap é retomável sem sobrescrita: contrato e review são
+calculados deterministicamente e cada arquivo existente precisa ser regular,
+privado e byte-exatamente igual. O recibo é publicado por último. As duas leituras
+estruturais ignoram somente esses destinos autenticados, de modo que uma falha após
+contrato ou review pode ser retomada sem converter conteúdo divergente em sucesso.
 
 Uma retirada parcial nunca transforma ausência em sucesso por inferência. Uma nova
 preparação exige o intent, receipt e journal anteriores com SHA-256 externos; confere
