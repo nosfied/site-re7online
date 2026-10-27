@@ -1850,5 +1850,24 @@ class GenerationRetirementTest(unittest.TestCase):
             fixture.close()
 
 
+    def test_evidence_destination_requires_existing_private_parent(self):
+        with tempfile.TemporaryDirectory(prefix="retirement-evidence-parent-") as raw:
+            root = Path(raw) / "evidence"
+            root.mkdir(mode=0o700)
+            operational = {"canonicalRoots": {"evidence": [str(root)]}}
+            destination = root / "receipts" / "generation"
+
+            with self.assertRaisesRegex(MODULE.Denied, "evidence_destination_parent_missing"):
+                MODULE.evidence_destination(destination, operational)
+
+            destination.parent.mkdir(mode=0o700)
+            MODULE.evidence_destination(destination, operational)
+
+            destination.parent.chmod(0o750)
+            with self.assertRaisesRegex(MODULE.Denied, "evidence_destination_parent_identity"):
+                MODULE.evidence_destination(destination, operational)
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
