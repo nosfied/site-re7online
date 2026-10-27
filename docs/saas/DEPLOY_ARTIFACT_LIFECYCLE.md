@@ -56,6 +56,23 @@ release, target, caminho ou hash é `DENY`. Depois disso, e em etapa separada,
 `prepare` consome o contrato normalmente. Gerações posteriores já nascem com
 contrato e nunca usam esse bootstrap.
 
+`immutable-a959129e-vps-20261026T023100Z` é a única exceção conhecida no estado
+distinto `LEGACY_V1_PRESERVE_NO_CONTRACT`: lifecycle e review v1 `PRESERVE`
+existem e são autenticados, a release está instalada e ativa, mas o contrato não
+foi publicado. O subcomando fechado `bootstrap-legacy-a959-v1-preserve` aceita
+somente `config/legacy-generation-a959129e-v1-preserve.json`. Ele autentica os
+hashes da review, lifecycle, pacote, manifest, index e marker, além da igualdade
+entre pacote e release ativa verificados; materializa somente o contrato e o
+recibo de bootstrap. A review v1 não é substituída, renomeada ou regravada nessa
+fase. A migração ocorre depois pelo `prepare --legacy-review-sha256`, e a execução
+retira apenas worktree/runtimes derivados. A release instalada permanece
+`ACTIVE_DEPENDENCY`, fora dos comandos, durante bootstrap, prepare e execute.
+
+Portanto, `123ba` e `a959` não compartilham bootstrap: a primeira é
+`LEGACY_PRE_CONTRACT` sem review; a segunda já tem review v1, não pode fabricá-la
+e exige prova adicional da release ativa. Nenhuma geração futura pode usar essas
+exceções.
+
 A publicação do bootstrap é retomável sem sobrescrita: contrato e review são
 calculados deterministicamente e cada arquivo existente precisa ser regular,
 privado e byte-exatamente igual. O recibo é publicado por último. As duas leituras
@@ -111,7 +128,8 @@ Staging e outras raízes de retenção não utilizadas não integram esse gate p
 Uma review v1 `PRESERVE` verdadeira só pode ser migrada sem inventário global
 quando `prepare` recebe `--legacy-review-sha256` igual aos bytes preservados e
 generation/lifecycle coincidem. Esse caminho não se aplica à `123ba`, que não
-possuía contrato nem review.
+possuía contrato nem review. Para `a959`, ele só fica disponível após o bootstrap
+fechado materializar o contrato sem modificar a review original.
 
 Worktree só fica pronto depois de pacote verificado, control plane copiado e
 ausência de escritor. Output runtime só fica pronto depois da instalação

@@ -124,6 +124,11 @@ antes de criar a saída ou executar npm. A candidata `123ba` é a única geraç�
 `LEGACY_PRE_CONTRACT` conhecida: não possui review v1 nem contrato original. Sua
 regularização exige o descriptor fechado versionado, duas leituras estáveis apenas
 dos caminhos literais e o bootstrap sem autorização; não admite inventário global.
+Separadamente, `a959` é a única geração `LEGACY_V1_PRESERVE_NO_CONTRACT`: sua
+review v1 existente não pode ser fabricada nem substituída pelo bootstrap. O fluxo
+fechado autentica também a release instalada ativa, publica somente o contrato e
+mantém essa release fora de toda intenção destrutiva; a migração da review ocorre
+somente no `prepare --legacy-review-sha256` subsequente.
 
 A fotografia somente leitura de capacidade está em
 [VPS_CAPACITY_AUDIT_2026-10-24.md](VPS_CAPACITY_AUDIT_2026-10-24.md). Ela classifica

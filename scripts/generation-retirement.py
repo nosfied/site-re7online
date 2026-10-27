@@ -54,6 +54,42 @@ LEGACY_123BA_BINDING = {
     "reviewOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-review.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-123ba7bd-vps-20261026T200100Z-legacy-bootstrap/bootstrap-receipt.private.json",
 }
+LEGACY_A959_V1_PRESERVE_BINDING = {
+    "schemaVersion": 1,
+    "sourceState": "LEGACY_V1_PRESERVE_NO_CONTRACT",
+    "releaseId": "immutable-a959129e-vps-20261026T023100Z",
+    "targetCommit": "a959129e39a07c52881fb7f5cbf21a7f6f1a80ff",
+    "outputPath": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer",
+    "worktreePath": "/opt/re7online/build-worktrees/immutable-a959129e-vps-20261026T023100Z-source",
+    "installedReleasePath": "/opt/re7online/releases/immutable-a959129e-vps-20261026T023100Z",
+    "lifecycle": {
+        "path": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-lifecycle.private.json",
+        "sha256": "b585d6cab251b8578cf808a080fe3794c5debef7408929562408fbc9c1c2498a",
+    },
+    "review": {
+        "path": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-review.private.json",
+        "sha256": "6c550cdf53d8bffa55886e8a998638646cb869cc29e7615b65e3c4455134e98b",
+    },
+    "package": {
+        "path": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z.tar.xz",
+        "sha256": "dd3057637d90df996663d8a602067e971d2038b6d285d2fed203e59471c273b0",
+    },
+    "manifest": {
+        "path": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/manifest.json",
+        "sha256": "6b93078b51e6e1067e62b872885c65ff48ef74732f6a4bd4f28ca8500875820b",
+    },
+    "index": {
+        "path": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/index.sha256",
+        "sha256": "6ccb64900cf13a954b7885d57c450443022e3f59db404eb262513bc4f9a46570",
+    },
+    "deployedMarker": {
+        "path": "/opt/re7online/releases/immutable-a959129e-vps-20261026T023100Z/DEPLOYED",
+        "sha256": "9da2428b15f8eb8b307603556fffb0ef75536829109e4be282ce03caa19cdb80",
+    },
+    "canonicalVerifierSha256": "94cba588e811be47ef3908054070dec134137bf409dccb278bf5ae406cc56f1a",
+    "contractOutput": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-artifacts.private.json",
+    "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-a959129e-vps-20261026T023100Z-legacy-v1-bootstrap/bootstrap-receipt.private.json",
+}
 
 
 class Denied(RuntimeError):
@@ -902,6 +938,15 @@ def validate_legacy_descriptor(raw: bytes, expected_sha256: str) -> dict[str, An
     return descriptor
 
 
+def validate_a959_legacy_descriptor(raw: bytes, expected_sha256: str) -> dict[str, Any]:
+    if digest_bytes(raw) != expected_sha256:
+        deny("legacy_a959_descriptor_hash")
+    descriptor = object_json(raw, "legacy-a959-descriptor")
+    if descriptor != LEGACY_A959_V1_PRESERVE_BINDING:
+        deny("legacy_a959_descriptor_binding")
+    return descriptor
+
+
 def _legacy_tree_root(path: Path, root: Path, policy: dict[str, Any], key: str) -> None:
     _strict_child(path, root, f"legacy_path_outside_root:{key}")
     if _path_has_symlink(path, root):
@@ -987,6 +1032,20 @@ def _legacy_artifact(path: Path, descriptor: dict[str, Any], artifact_class: str
 
 
 def _run_legacy_package_verifier(descriptor: dict[str, Any]) -> dict[str, Any]:
+    return _run_legacy_verifier(descriptor, ["--package", descriptor["package"]["path"]],
+                                "legacy_package_verification")
+
+
+def _run_legacy_installed_verifier(descriptor: dict[str, Any]) -> dict[str, Any]:
+    return _run_legacy_verifier(
+        descriptor,
+        ["--release-root", descriptor["installedReleasePath"],
+         "--deployed-marker-sha256", descriptor["deployedMarker"]["sha256"]],
+        "legacy_installed_release_verification",
+    )
+
+
+def _run_legacy_verifier(descriptor: dict[str, Any], source: list[str], predicate: str) -> dict[str, Any]:
     verifier = canonical_release_verifier()
     try:
         before = verifier.lstat()
@@ -1008,8 +1067,7 @@ def _run_legacy_package_verifier(descriptor: dict[str, Any]) -> dict[str, Any]:
             digest_bytes(raw) != descriptor["canonicalVerifierSha256"]):
         os.close(fd)
         deny("legacy_verifier_identity")
-    command = [sys.executable, f"/proc/self/fd/{fd}", "verify",
-               "--package", descriptor["package"]["path"],
+    command = [sys.executable, f"/proc/self/fd/{fd}", "verify", *source,
                "--target", descriptor["targetCommit"],
                "--release-id", descriptor["releaseId"],
                "--components", "api,frontend"]
@@ -1018,21 +1076,21 @@ def _run_legacy_package_verifier(descriptor: dict[str, Any]) -> dict[str, Any]:
             result = subprocess.run(command, text=True, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, timeout=180, pass_fds=(fd,))
         except (OSError, subprocess.TimeoutExpired):
-            deny("legacy_package_verification")
+            deny(predicate)
     finally:
         os.close(fd)
     if result.returncode:
-        deny("legacy_package_verification")
+        deny(predicate)
     try:
         verified = json.loads(result.stdout)
     except json.JSONDecodeError:
-        deny("legacy_package_verification")
+        deny(predicate)
     if (not isinstance(verified, dict) or verified.get("result") != "RELEASE VERIFIED" or
             verified.get("releaseId") != descriptor["releaseId"] or
             verified.get("targetCommit") != descriptor["targetCommit"] or
             verified.get("manifestSha256") != descriptor["manifest"]["sha256"] or
             verified.get("indexSha256") != descriptor["index"]["sha256"]):
-        deny("legacy_package_verification_identity")
+        deny(f"{predicate}_identity")
     return {"stdoutSha256": digest_bytes(result.stdout.encode()),
             "stderrSha256": digest_bytes(result.stderr.encode()),
             "apiEntrySha256": verified.get("apiEntrySha256"),
@@ -1057,6 +1115,176 @@ def _legacy_reference_absence(descriptor: dict[str, Any], operational: dict[str,
            for item in operational["observations"]["currentLinks"]
            for field in ("path", "target")):
         deny("legacy_current_reference")
+
+
+def _legacy_a959_active_reference(descriptor: dict[str, Any], operational: dict[str, Any]) -> None:
+    release = descriptor["releaseId"]
+    installed = descriptor["installedReleasePath"]
+    if (release not in operational["activeReleases"] or
+            release not in operational["installedVerifiedReleases"] or
+            release in operational["supersededCandidates"]):
+        deny("legacy_a959_active_release_graph")
+    for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths"):
+        if not any(installed in value for value in operational[key]):
+            deny(f"legacy_a959_active_reference:{key}")
+    if not any(installed in str(item["target"])
+               for item in operational["observations"]["currentLinks"]):
+        deny("legacy_a959_current_reference")
+    derived = (descriptor["outputPath"], descriptor["worktreePath"])
+    for key in ("currentPaths", "pm2LivePaths", "pm2DumpPaths", "dependencies"):
+        if any(any(path in value for path in derived) for value in operational[key]):
+            deny("legacy_a959_derived_reference")
+
+
+def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
+    descriptor_raw, _ = stable_policy(args.descriptor, args.descriptor_sha256)
+    policy_raw, _ = stable_policy(args.root_policy, args.root_policy_sha256)
+    operational_raw, _ = stable_private(args.operational_state, args.operational_state_sha256)
+    descriptor = validate_a959_legacy_descriptor(descriptor_raw, args.descriptor_sha256)
+    policy = validate_root_policy(policy_raw, args.root_policy_sha256)
+    operational = object_json(operational_raw, "operational-state")
+    identity = {"generationId": descriptor["releaseId"], "releaseId": descriptor["releaseId"],
+                "targetCommit": descriptor["targetCommit"]}
+    validate_operational(operational, identity, policy)
+    _legacy_a959_active_reference(descriptor, operational)
+
+    outputs_root = authenticate_policy_root(policy, "outputs")[0]
+    worktrees_root = authenticate_policy_root(policy, "worktrees")[0]
+    releases_root = authenticate_policy_root(policy, "releases")[0]
+    authenticate_policy_root(policy, "evidence")
+    output = Path(descriptor["outputPath"])
+    worktree = Path(descriptor["worktreePath"])
+    installed = Path(descriptor["installedReleasePath"])
+    _legacy_tree_root(output, outputs_root, policy, "outputs")
+    _legacy_tree_root(worktree, worktrees_root, policy, "worktrees")
+    _legacy_tree_root(installed, releases_root, policy, "releases")
+
+    lifecycle_path = Path(descriptor["lifecycle"]["path"])
+    review_path = Path(descriptor["review"]["path"])
+    contract_output = Path(descriptor["contractOutput"])
+    receipt_output = Path(descriptor["receiptOutput"])
+    if (contract_output != output / "generation-artifacts.private.json" or
+            lifecycle_path != output / "generation-lifecycle.private.json" or
+            review_path != output / "generation-review.private.json"):
+        deny("legacy_a959_destination_binding")
+    canonical_review_destination(review_path, contract_output, lifecycle_path, policy)
+    evidence_destination(receipt_output, operational)
+
+    writer_lock = outputs_root / ".generation-build.lock"
+    writer_fd = acquire_existing_lock(writer_lock)
+    try:
+        lifecycle_raw, _ = stable_regular_hash(lifecycle_path, descriptor["lifecycle"]["sha256"],
+                                               "legacy_a959_lifecycle")
+        lifecycle = object_json(lifecycle_raw, "legacy-a959-lifecycle")
+        if (lifecycle.get("schemaVersion") != 1 or
+                lifecycle.get("generationId") != descriptor["releaseId"] or
+                lifecycle.get("targetCommit") != descriptor["targetCommit"] or
+                lifecycle.get("state") != "COMPLETE"):
+            deny("legacy_a959_lifecycle_identity")
+        review_raw, review_info = stable_private(review_path, descriptor["review"]["sha256"])
+        review = object_json(review_raw, "legacy-a959-review")
+        expected_review = {"schemaVersion", "generationId", "lifecycleSha256", "reviewer",
+                           "reason", "evidenceSha256", "decision"}
+        if (set(review) != expected_review or review.get("schemaVersion") != 1 or
+                review.get("generationId") != descriptor["releaseId"] or
+                review.get("lifecycleSha256") != descriptor["lifecycle"]["sha256"] or
+                review.get("decision") != "PRESERVE"):
+            deny("legacy_a959_review_identity")
+        for name in ("package", "manifest", "index", "deployedMarker"):
+            stable_regular_hash(Path(descriptor[name]["path"]), descriptor[name]["sha256"],
+                                f"legacy_a959_{name}")
+        package_verification = _run_legacy_package_verifier(descriptor)
+        installed_verification = _run_legacy_installed_verifier(descriptor)
+        comparable = ("apiEntrySha256", "buildId", "indexEntries")
+        if any(package_verification.get(field) != installed_verification.get(field)
+               for field in comparable):
+            deny("legacy_a959_package_installed_mismatch")
+        head = subprocess.run(["/usr/bin/git", "-C", str(worktree), "rev-parse", "HEAD"],
+                              text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              timeout=30, check=False)
+        if head.returncode or head.stdout.strip() != descriptor["targetCommit"]:
+            deny("legacy_a959_worktree_head")
+
+        fresh = capture_fresh_operational(operational)
+        ignored = {contract_output}
+        observation_a = {"output": _tree_observation(output, "a959-output", ignored),
+                         "worktree": _tree_observation(worktree, "a959-worktree"),
+                         "installed": _tree_observation(installed, "a959-installed")}
+        release_root = output / descriptor["releaseId"]
+        artifacts = [
+            _legacy_artifact(Path(descriptor["package"]["path"]), descriptor, "PACKAGE_PRESERVE",
+                             "ACTIVE_DEPENDENCY", {"sha256": descriptor["package"]["sha256"]}),
+            _legacy_artifact(Path(descriptor["manifest"]["path"]), descriptor, "PACKAGE_PRESERVE",
+                             "ACTIVE_DEPENDENCY", {"sha256": descriptor["manifest"]["sha256"]}),
+            _legacy_artifact(Path(descriptor["index"]["path"]), descriptor, "PACKAGE_PRESERVE",
+                             "ACTIVE_DEPENDENCY", {"sha256": descriptor["index"]["sha256"]}),
+            _legacy_artifact(lifecycle_path, descriptor, "EVIDENCE_PRESERVE", "ACTIVE_DEPENDENCY",
+                             {"sha256": descriptor["lifecycle"]["sha256"]}),
+            _legacy_artifact(installed, descriptor, "RELEASE_RUNTIME", "ACTIVE_DEPENDENCY",
+                             {"manifestSha256": descriptor["manifest"]["sha256"],
+                              "indexSha256": descriptor["index"]["sha256"],
+                              "operationalMarkerSha256": descriptor["deployedMarker"]["sha256"]}),
+            _legacy_artifact(worktree, descriptor, "DERIVED_WORKTREE", "RETIREMENT_READY",
+                             {"gitCommit": descriptor["targetCommit"]}),
+            _legacy_artifact(release_root / "api-runtime", descriptor, "DERIVED_OUTPUT_RUNTIME",
+                             "RETIREMENT_READY", {"indexSha256": descriptor["index"]["sha256"]}),
+            _legacy_artifact(release_root / "frontend-runtime", descriptor, "DERIVED_OUTPUT_RUNTIME",
+                             "RETIREMENT_READY", {"indexSha256": descriptor["index"]["sha256"]}),
+        ]
+        for artifact in artifacts:
+            if artifact["class"] in PRESERVE_CLASSES:
+                artifact["retirableOn"] = "NEVER_AUTOMATIC"
+                artifact["dependencies"] = ["legacy_a959_bootstrap_authenticated"]
+            elif artifact["class"] == "RELEASE_RUNTIME":
+                artifact["retirableOn"] = "NEVER_WHILE_OPERATIONALLY_REFERENCED"
+                artifact["dependencies"] = ["installed_release_verified", "active_release_preserved"]
+            else:
+                artifact["retirableOn"] = "LEGACY_V1_PRESERVE_CONTRACT_MATERIALIZED"
+                artifact["dependencies"] = ["package_verified", "installed_release_verified",
+                                              "active_release_excluded_from_retirement"]
+        observation_b = {"output": _tree_observation(output, "a959-output", ignored),
+                         "worktree": _tree_observation(worktree, "a959-worktree"),
+                         "installed": _tree_observation(installed, "a959-installed")}
+        if observation_a != observation_b:
+            deny("legacy_a959_tree_drift_between_samples")
+        if capture_fresh_operational(operational) != fresh:
+            deny("legacy_a959_operational_drift")
+        review_after, after_info = stable_private(review_path, descriptor["review"]["sha256"])
+        if (review_after != review_raw or
+                (review_info.st_dev, review_info.st_ino) != (after_info.st_dev, after_info.st_ino)):
+            deny("legacy_a959_review_changed")
+
+        contract = {"schemaVersion": 1, "generationId": descriptor["releaseId"],
+                    "releaseId": descriptor["releaseId"], "targetCommit": descriptor["targetCommit"],
+                    "state": "COMPLETE", "writerLockPath": str(writer_lock),
+                    "classes": sorted(PRESERVE_CLASSES | DERIVED_CLASSES | {"RELEASE_RUNTIME"}),
+                    "artifacts": artifacts, "privateDataPolicy": "PRIVATE_DATA_NEVER_RETIRE"}
+        validate_contract(contract)
+        contract_raw = canonical(contract)
+        receipt = {"schemaVersion": 1, "state": "LEGACY_CONTRACT_MATERIALIZED",
+                   "sourceState": "LEGACY_V1_PRESERVE_NO_CONTRACT",
+                   "scope": "CONTRACT_PATHS_ONLY_NO_GLOBAL_SCAN", "releaseId": descriptor["releaseId"],
+                   "targetCommit": descriptor["targetCommit"], "descriptorSha256": args.descriptor_sha256,
+                   "rootPolicySha256": args.root_policy_sha256,
+                   "operationalStateSha256": args.operational_state_sha256,
+                   "contractSha256": digest_bytes(contract_raw),
+                   "preservedReviewSha256": descriptor["review"]["sha256"],
+                   "packageVerification": package_verification,
+                   "installedVerification": installed_verification,
+                   "observations": [observation_a, observation_b], "authorizationGranted": False,
+                   "executionPermitted": False, "destructiveCommands": 0, "globalInventory": False}
+        receipt_raw = canonical(receipt)
+        write_or_verify_exact(contract_output, contract_raw, "legacy_a959_contract")
+        # The v1 review is authenticated input. Bootstrap never rewrites it.
+        stable_private(review_path, descriptor["review"]["sha256"])
+        write_or_verify_exact(receipt_output, receipt_raw, "legacy_a959_receipt")
+        print(canonical({"result": "LEGACY_CONTRACT_MATERIALIZED",
+                         "contractSha256": receipt["contractSha256"],
+                         "reviewSha256": receipt["preservedReviewSha256"],
+                         "receiptSha256": digest_bytes(receipt_raw), "authorizationGranted": False,
+                         "executionPermitted": False}).decode().strip())
+    finally:
+        os.close(writer_fd)
 
 
 def bootstrap_legacy(args: argparse.Namespace) -> None:
@@ -1529,6 +1757,14 @@ def parser() -> argparse.ArgumentParser:
     bootstrap_parser.add_argument("--reviewer", required=True)
     bootstrap_parser.add_argument("--reason", required=True)
     bootstrap_parser.set_defaults(handler=bootstrap_legacy)
+    a959_parser = commands.add_parser("bootstrap-legacy-a959-v1-preserve")
+    a959_parser.add_argument("--descriptor", type=Path, required=True)
+    a959_parser.add_argument("--descriptor-sha256", required=True)
+    a959_parser.add_argument("--root-policy", type=Path, required=True)
+    a959_parser.add_argument("--root-policy-sha256", required=True)
+    a959_parser.add_argument("--operational-state", type=Path, required=True)
+    a959_parser.add_argument("--operational-state-sha256", required=True)
+    a959_parser.set_defaults(handler=bootstrap_legacy_a959_v1_preserve)
     prepare_parser = commands.add_parser("prepare")
     for name in ("contract", "lifecycle", "operational-state"):
         prepare_parser.add_argument(f"--{name}", type=Path, required=True)

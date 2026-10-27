@@ -79,6 +79,20 @@ retomada, enquanto o recibo privado é sempre a última publicação.
 Não aplicar o bootstrap a outra geração; builds atuais já publicam contrato desde
 `BUILDING`.
 
+Há uma segunda exceção, também fechada e não generalizável:
+`immutable-a959129e-vps-20261026T023100Z` possui lifecycle e review v1
+`PRESERVE`, mas não possui contrato. Seu estado de origem é
+`LEGACY_V1_PRESERVE_NO_CONTRACT`. Somente o descriptor autenticado
+`config/legacy-generation-a959129e-v1-preserve.json` pode ser usado com
+`bootstrap-legacy-a959-v1-preserve`. Esse bootstrap autentica lifecycle, review,
+pacote, manifest, index, marker e a release instalada ativa; publica apenas o
+contrato e o recibo privado. A review v1 permanece byte-exatamente preservada.
+Depois, o `prepare` canônico deve receber `--legacy-review-sha256`; só ele migra a
+review, e o `execute` pode retirar exclusivamente worktree e runtimes derivados do
+output. A release instalada ativa é `RELEASE_RUNTIME/ACTIVE_DEPENDENCY` e nunca
+integra comando destrutivo. O bootstrap da `123ba` não serve para a `a959`, nem o
+da `a959` serve para qualquer terceira geração.
+
 No fluxo API + frontend, o `preflight` de `scripts/converta-deploy.py` exige os
 bindings `--generation-retirement-*`. Após aceite, `pm2 save`, dump validado,
 marker `DEPLOYED` e health final, o próprio `finalize` executa uma única vez
