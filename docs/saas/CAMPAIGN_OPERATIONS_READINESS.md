@@ -441,6 +441,21 @@ código precisa ser revisada, implantada e aceita antes da homologação de agen
 Ela não autoriza envio, descarte do rascunho, nova chamada Meta ou repetição das
 homologações IMAGE/VIDEO.
 
+## Aceite manual das correções de rascunho e apresentação — 27/10/2026
+
+O owner executou o roteiro na interface produtiva da release
+`immutable-708f018c-vps-20261027T152109Z` e relatou PASS integral. O layout dos
+campos ficou alinhado; prévia, orientações recolhíveis e responsividade passaram.
+O novo rascunho permaneceu selecionado pelo ID recém-criado, sem conteúdo da
+campanha anterior. Rascunho descartado e campanha cancelada exibiram seus estados
+terminais próprios, mantendo eventual incerteza em alerta separado.
+
+O aceite foi somente de interface/reconciliação: zero envio e zero agendamento.
+Consequentemente, o bloqueio anterior à homologação de agendamento está encerrado.
+Não repetir mídia, build, deploy ou a criação apenas para gerar a mesma prova. O
+próximo ato mutante continua dependente de escopo explícito: tenant, template,
+destinatário controlado, horário futuro, timezone e critérios de encerramento.
+
 ## Precedência entre lifecycle e observação operacional
 
 O estado terminal persistido da campanha é a situação canônica apresentada na lista,
