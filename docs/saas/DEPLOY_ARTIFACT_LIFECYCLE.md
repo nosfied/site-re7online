@@ -41,6 +41,30 @@ fechado `bootstrap-legacy`:
   `DEPLOYED_RETENTION_INCOMPLETE`, não desfaz o deploy aprovado e bloqueia o
   próximo build. Não há retry automático.
 
+### Contrato de conclusão sem dívida operacional
+
+Uma geração não termina em `DEPLOYED` isolado. Na mesma frente, deve alcançar
+`DEPLOYED_SANITIZED` ou registrar `DEPLOYED_RETENTION_INCOMPLETE` como bloqueio
+explícito. Antes de pedir autorização, o preflight reabre todos os insumos privados
+com os modos exigidos pelo consumidor e comprova que o pai físico do receipt existe
+como diretório `deploy:deploy 0700`, sem symlink, enquanto o receipt final não existe.
+Permissão do checkout não substitui permissão da cópia privada consumida.
+
+A execução da retirada preserva e sincroniza stdout, stderr e exit code integrais,
+além de seus hashes; somente o digest não é diagnóstico suficiente. Uma negativa
+nova só admite outra janela após regressão que reproduza o predicado nominal. Não se
+refaz build, save, ativação ou comando já comprovado. Enquanto a review não for
+terminal, o piso de 12 GiB e a proibição de segunda candidata impedem que novas
+gerações acumulem custo de disco e processamento.
+
+Na geração `immutable-708f018c-vps-20261027T152109Z`, a retirada autônoma V2
+concluiu os ordinais `8/9/10`: worktree e runtimes derivados de API/frontend foram
+removidos, a release instalada permaneceu ativa e a review terminou `SANITIZED`.
+Recibo `e839ee8bd051db5cc92bcd15c65b4b791a023b95bfbf5166d4c91d8a686c96dd`,
+journal `68faff9672cbf1102b1dc22e6c6b77fa30ca389292192b72a431f87d5d119f7b`
+e review `42ecdc22360b701157f36599e84af7e532bfb7a9970d4e6eafe667fac8461d73`
+fecharam a geração com 13.813.510.144 bytes livres. Não repetir essa retirada.
+
 `immutable-123ba7bd-vps-20261026T200100Z` é a única geração conhecida anterior
 ao contrato: `LEGACY_PRE_CONTRACT`, não uma review v1 `PRESERVE`. Seu bootstrap
 aceita exclusivamente o descriptor versionado
