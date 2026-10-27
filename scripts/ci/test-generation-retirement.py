@@ -1864,6 +1864,9 @@ class GenerationRetirementTest(unittest.TestCase):
             MODULE.evidence_destination(destination, operational)
 
             destination.parent.chmod(0o750)
+            MODULE.evidence_destination(destination, operational)
+
+            destination.parent.chmod(0o770)
             with self.assertRaisesRegex(MODULE.Denied, "evidence_destination_parent_identity"):
                 MODULE.evidence_destination(destination, operational)
 
