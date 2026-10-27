@@ -68,9 +68,12 @@ for marker in ("preflight", "activate", "finalize", "rollback", "status",
                "generation-retirement.py", "DEPLOYED_SANITIZED", "12 GiB"):
     require(marker in runbook, f"deploy runbook marker {marker}")
 for marker in ('choices=("preflight", "activate", "finalize", "rollback", "status")',
-               "pm2-definition-control.py", '"wait-readiness"', '"validate-pair"',
-               '"ACEITE TÉCNICO PASS"'):
+               "pm2-definition-control.py", '"wait-existing-readiness"',
+               '"--runtime-manifest"', '["restart", name]', '"ACEITE TÉCNICO PASS"'):
     require(marker in driver, f"minimal deploy driver marker {marker}")
+for forbidden in ('pm2_mutate(pm2, ["delete"', 'pm2_mutate(pm2, ["start"',
+                  '"--update-env"', '"validate-pair"'):
+    require(forbidden not in driver, f"fixed-current driver forbidden marker {forbidden}")
 for marker in ('add_parser("build")', 'add_parser("verify")', 'SOURCE_DATE_EPOCH',
                '"schemaVersion": 1', 'RELEASE VERIFIED',
                'generation-artifacts.private.json', 'MINIMUM_BUILD_FREE_BYTES',
@@ -104,7 +107,7 @@ require(state["canonicalTopology"] == {
     "promotionOrder": ["api", "frontend", "worker_when_impacted"],
     "frontendMode": "FORK_MODE_SINGLE_INSTANCE_DIRECT_NEXT",
     "smoke": "GET_ONLY",
-    "rollback": "RESTORE_SYMLINKS_AND_FULL_PM2_DEFINITIONS",
+    "rollback": "RESTORE_SYMLINKS_AND_RESTART_EXISTING_PM2_RECORDS",
 }, "canonical topology")
 require(state["historicalDeployV2"]["status"] ==
         "FROZEN_FUTURE_IMPROVEMENT_NOT_RELEASE_GATE", "Deploy V2 frozen")

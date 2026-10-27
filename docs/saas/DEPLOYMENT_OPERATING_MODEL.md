@@ -125,11 +125,12 @@ falho e, como comprovado na tentativa d436 de 26/10, pode descartar o relatório
 O contrato mínimo é relatório `--report` mais stdout/stderr privados e duráveis; a
 ausência de qualquer um em falha resulta em `READINESS_OBSERVABILITY_DEFECT`.
 
-O observador versionado pode ser usado sem duplicar sua lógica. O driver
-`scripts/converta-deploy.py` e suas duas tentativas encerradas em 24/10 permanecem
-como evidência histórica; não são a instrução vigente de seleção até requalificação.
-O fluxo comprovado usa os registros PM2 existentes, caminhos fixed-current e o
-procedimento curto descrito no runbook.
+O observador versionado pode ser usado sem duplicar sua lógica. As duas tentativas
+do driver encerradas em 24/10 permanecem como evidência histórica. O
+`scripts/converta-deploy.py` vigente foi alinhado ao procedimento comprovado: usa os
+registros PM2 existentes, caminhos fixed-current, restart sem `--update-env` e
+readiness versionado com relatório durável. Não executa `pm2 delete/start` nem exige
+bindings de definição para essa ativação.
 
 ## Definições PM2
 

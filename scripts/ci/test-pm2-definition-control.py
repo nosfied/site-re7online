@@ -837,6 +837,40 @@ class DefinitionControlTests(unittest.TestCase):
             with self.assertRaisesRegex(CONTROL.Denied, "existing_readiness_script_escape"):
                 CONTROL.command_wait_existing_readiness(args)
 
+    def test_existing_api_readiness_uses_entry_hash_without_build_id_or_binding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            release = root / "immutable-candidate/api-runtime"
+            stable = root / "current/api"
+            release.mkdir(parents=True)
+            args = argparse.Namespace(
+                component="api", process_name="re7-whatsapp-agent",
+                expected_cwd=stable, expected_script=stable / "dist/index.js",
+                expected_interpreter=Path("/usr/bin/node"),
+                release_id=release.parent.name, entry_sha256="b" * 64,
+                build_id=None, pm2=root / "pm2", stable_path=stable,
+                release_root=release, port=3001,
+                local_health="http://127.0.0.1:3001/health",
+                public_health="https://admin.example/agent-api/health",
+                deadline_seconds=30.0, poll_seconds=0.5, report=None,
+            )
+            observed = {}
+
+            def fake_wait(**kwargs):
+                observed.update(kwargs)
+                kwargs["event_log"].extend(
+                    [{"atMonotonic": 1}, {"atMonotonic": 2}, {"atMonotonic": 3}])
+                return {"result": "READINESS_PASS", "component": "api",
+                        "port": 3001, "stableSamples": 3}
+
+            with mock.patch.object(CONTROL, "wait_for_readiness", side_effect=fake_wait):
+                result = CONTROL.command_wait_existing_readiness(args)
+            self.assertEqual(result["component"], "api")
+            self.assertEqual(observed["release_identity"], {
+                "releaseId": "immutable-candidate", "apiEntrySha256": "b" * 64,
+            })
+            self.assertNotIn("frontendBuildId", observed["release_identity"])
+
 
     def test_sanitized_incident_fixture_contains_no_values(self):
         fixture = json.loads((ROOT / "scripts/ci/fixtures/pm2-definition-contamination.sanitized.json").read_text())

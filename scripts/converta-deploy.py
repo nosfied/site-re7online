@@ -22,7 +22,6 @@ from typing import Any, Callable
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
-PRIVATE_MODE = re.compile(r"^0[0-7]{3}$")
 STATES = {
     "PREFLIGHT_PASS", "ACTIVATING", "AWAITING_ACCEPTANCE", "FINALIZING",
     "DEPLOYED", "DEPLOYED_SANITIZED", "DEPLOYED_RETENTION_INCOMPLETE",
@@ -43,7 +42,12 @@ PUBLIC_HEALTH = {
     "api": "https://converta.re7online.com/agent-api/health",
     "frontend": "https://converta.re7online.com/app/login",
 }
-FRONTEND_GET_PATHS = ("/app/login", "/app/inbox", "/app/crm", "/app/templates", "/app/campaigns")
+FRONTEND_GET_PATHS = ("/app/login", "/app/inbox", "/app/crm")
+PROCESS_NAMES = {
+    "api": "re7-whatsapp-agent",
+    "frontend": "re7-admin-front",
+    "worker": "re7-whatsapp-web-worker",
+}
 LOCK = Path("/opt/re7online/backups/converta-persistent/deploy.lock")
 PM2_CANDIDATES = (
     Path.home() / ".npm-global/bin/pm2", Path.home() / ".local/bin/pm2",
@@ -166,6 +170,32 @@ def atomic_private(path: Path, value: dict[str, Any], *, exclusive: bool = False
         temp.unlink(missing_ok=True)
 
 
+def atomic_private_bytes(path: Path, raw: bytes, *, exclusive: bool = True) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    private_directory(path.parent)
+    if exclusive and (path.exists() or path.is_symlink()):
+        deny(f"destination_exists:{path.name}")
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temp = Path(temporary)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb", closefd=True) as stream:
+            written = stream.write(raw)
+            if written != len(raw):
+                deny(f"short_write:{path.name}")
+            stream.flush(); os.fsync(stream.fileno())
+        if exclusive and (path.exists() or path.is_symlink()):
+            deny(f"destination_exists:{path.name}")
+        os.replace(temp, path)
+        directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
 def atomic_symlink(link: Path, target: Path) -> None:
     temporary = link.with_name(f".{link.name}.deploy-{os.getpid()}")
     temporary.unlink(missing_ok=True)
@@ -250,20 +280,18 @@ class Inputs:
     target: str
     control_plane: str
     components: tuple[str, ...]
-    config_root: Path
-    config_manifest: Path
+    runtime_manifest: Path
     transaction_root: Path
-    config_manifest_sha256: str
+    runtime_manifest_sha256: str
     retirement: RetirementBinding | None = None
 
     def binding(self) -> dict[str, Any]:
         value = {
             "release": self.release, "target": self.target,
             "controlPlane": self.control_plane, "components": list(self.components),
-            "configRoot": str(self.config_root.resolve()),
-            "configManifest": str(self.config_manifest.resolve()),
+            "runtimeManifest": str(self.runtime_manifest.resolve()),
             "transactionRoot": str(self.transaction_root.resolve()),
-            "configManifestSha256": self.config_manifest_sha256,
+            "runtimeManifestSha256": self.runtime_manifest_sha256,
         }
         if self.retirement is not None:
             value["generationRetirement"] = self.retirement.binding()
@@ -327,6 +355,48 @@ class Host:
             deny("control_output_shape")
         return value
 
+    def control_evidence(self, root: Path, args: list[str], *, report: Path,
+                         stdout: Path, stderr: Path) -> dict[str, Any]:
+        timed_out = False
+        try:
+            result = self.run([sys.executable, str(root / "scripts/pm2-definition-control.py"),
+                               *args, "--report", str(report)], timeout=45)
+            stdout_raw = result.stdout.encode()
+            stderr_raw = result.stderr.encode()
+        except subprocess.TimeoutExpired as error:
+            timed_out = True
+            stdout_raw = error.stdout or b""
+            stderr_raw = error.stderr or b""
+            if isinstance(stdout_raw, str): stdout_raw = stdout_raw.encode()
+            if isinstance(stderr_raw, str): stderr_raw = stderr_raw.encode()
+        atomic_private_bytes(stdout, stdout_raw)
+        atomic_private_bytes(stderr, stderr_raw)
+        if not report.is_file() or report.is_symlink():
+            deny("READINESS_OBSERVABILITY_DEFECT")
+        raw, _ = stable_regular_bytes(report, required_mode=0o600)
+        value = json_object(raw, report.name)
+        if timed_out:
+            reason = value.get("reason")
+            deny(str(reason)[:240] if isinstance(reason, str) else "READINESS_OBSERVABILITY_DEFECT")
+        if result.returncode:
+            reason = value.get("reason")
+            deny(str(reason)[:240] if isinstance(reason, str) else "READINESS_OBSERVABILITY_DEFECT")
+        if value.get("result") != "READINESS_PASS":
+            deny("READINESS_OBSERVABILITY_DEFECT")
+        return value
+
+    def process_cwd(self, pid: int) -> Path:
+        try:
+            return Path(f"/proc/{pid}/cwd").resolve(strict=True)
+        except OSError:
+            deny(f"process_cwd:{pid}")
+
+    def process_exe(self, pid: int) -> Path:
+        try:
+            return Path(f"/proc/{pid}/exe").resolve(strict=True)
+        except OSError:
+            deny(f"process_exe:{pid}")
+
 
 class Driver:
     def __init__(self, inputs: Inputs, *, host: Host | None = None,
@@ -346,160 +416,69 @@ class Driver:
         self.journal = inputs.transaction_root / "transaction.v1.private.json"
         self.acceptance = inputs.transaction_root / "acceptance.private.txt"
         self.release_root = releases / inputs.release
-        self._config_paths: dict[str, dict[str, Any]] | None = None
-
-    def _definition_paths(self, component: str, role: str) -> dict[str, Path]:
-        if self._config_paths is None:
-            deny("config_not_authenticated")
-        return self._config_paths[component][role]["paths"]
 
     @staticmethod
     def _stable_identity(info: os.stat_result) -> tuple[int, ...]:
         return (info.st_dev, info.st_ino, info.st_uid, info.st_gid, info.st_mode,
                 info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
-    def _manifest(self) -> tuple[dict[str, Any], os.stat_result]:
-        path = self.inputs.config_manifest
-        if not SHA256.fullmatch(self.inputs.config_manifest_sha256):
-            deny("config_manifest_sha256_format")
-        if not path.is_absolute() or path.parent != self.inputs.config_root:
-            deny("config_manifest_path")
-        root_info = self.inputs.config_root.lstat()
+    def _authenticated_runtime_manifest(self) -> dict[str, Any]:
+        path = self.inputs.runtime_manifest
+        if not path.is_absolute() or not SHA256.fullmatch(self.inputs.runtime_manifest_sha256):
+            deny("runtime_manifest_binding")
         raw, info = stable_regular_bytes(path, required_mode=0o600)
-        if (info.st_uid, info.st_gid) != (root_info.st_uid, root_info.st_gid):
-            deny("config_manifest_owner")
-        if hashlib.sha256(raw).hexdigest() != self.inputs.config_manifest_sha256:
-            deny("config_manifest_sha256_mismatch")
-        return json_object(raw, path.name), info
-
-    def _declared_config(self, manifest: dict[str, Any], manifest_info: os.stat_result) -> tuple[
-            list[dict[str, Any]], dict[Path, tuple[bytes, os.stat_result, dict[str, Any]]]]:
-        if set(manifest) != {"schemaVersion", "controlPlaneSha", "files",
-                            "privateHashManifestSha256"}:
-            deny("config_manifest_schema")
-        if manifest.get("schemaVersion") != 2:
-            deny("config_manifest_schema_version")
-        if not isinstance(manifest.get("controlPlaneSha"), str) or not SHA40.fullmatch(
-                manifest["controlPlaneSha"]):
-            deny("config_manifest_control_plane")
-        if (not isinstance(manifest.get("privateHashManifestSha256"), str) or
-                not SHA256.fullmatch(manifest["privateHashManifestSha256"])):
-            deny("config_manifest_private_hash")
-        files = manifest.get("files")
-        if not isinstance(files, list):
-            deny("config_manifest_files")
-        root_info = self.inputs.config_root.lstat()
-        declared: list[dict[str, Any]] = []
-        loaded: dict[Path, tuple[bytes, os.stat_result, dict[str, Any]]] = {}
-        seen: set[str] = set()
-        for item in files:
-            if not isinstance(item, dict) or set(item) != {"mode", "name", "sha256", "size"}:
-                deny("config_manifest_entry")
-            name, expected, declared_mode, declared_size = (
-                item.get("name"), item.get("sha256"), item.get("mode"), item.get("size"))
-            if not isinstance(name, str) or not isinstance(expected, str) or not SHA256.fullmatch(expected):
-                deny("config_manifest_entry")
-            if not isinstance(declared_mode, str) or not PRIVATE_MODE.fullmatch(declared_mode):
-                deny("config_manifest_mode")
-            if (not isinstance(declared_size, int) or isinstance(declared_size, bool) or
-                    declared_size < 0):
-                deny("config_manifest_size")
-            relative = PurePosixPath(name)
-            if (relative.is_absolute() or not relative.parts or
-                    any(part in {"", ".", ".."} for part in relative.parts) or
-                    relative.as_posix() != name):
-                deny("config_manifest_relative_path")
-            if name in seen:
-                deny("config_manifest_duplicate_path")
-            seen.add(name)
-            path = self.inputs.config_root.joinpath(*relative.parts)
-            try:
-                resolved = path.resolve(strict=True)
-            except OSError:
-                deny(f"missing_private_file:{path.name}")
-            root_resolved = self.inputs.config_root.resolve(strict=True)
-            if root_resolved not in (resolved, *resolved.parents):
-                deny("config_path_escape")
-            raw, info = stable_regular_bytes(path, required_mode=0o600)
-            if (info.st_uid, info.st_gid) != (root_info.st_uid, root_info.st_gid):
-                deny(f"private_file_owner:{path.name}")
-            if stat.S_IMODE(info.st_mode) != int(declared_mode, 8):
-                deny(f"config_mode_mismatch:{path.name}")
-            if info.st_size != declared_size:
-                deny(f"config_size_mismatch:{path.name}")
-            if hashlib.sha256(raw).hexdigest() != expected:
-                deny(f"config_hash_mismatch:{path.name}")
-            value = json_object(raw, path.name)
-            declared.append({"path": path, "name": name, "sha256": expected, "value": value})
-            loaded[path] = (raw, info, value)
-        self._failpoint("config_files_read")
-        try:
-            current_manifest = self.inputs.config_manifest.stat()
-        except OSError:
-            deny("config_manifest_changed")
-        if self._stable_identity(current_manifest) != self._stable_identity(manifest_info):
-            deny("config_manifest_changed")
-        for path, (_, info, _) in loaded.items():
-            try:
-                current = path.stat()
-            except OSError:
-                deny(f"config_file_changed:{path.name}")
-            if self._stable_identity(current) != self._stable_identity(info):
-                deny(f"config_file_changed:{path.name}")
-        return declared, loaded
-
-    def _resolve_config_paths(self, declared: list[dict[str, Any]]) -> dict[str, Any]:
-        requests: dict[tuple[str, str], list[int]] = {}
-        sources: dict[tuple[str, str], list[int]] = {}
-        for index, item in enumerate(declared):
-            value = item["value"]
-            component, role = value.get("component"), value.get("role")
-            if component not in COMPONENTS or role not in {"candidate", "rollback"}:
-                continue
-            key = (component, role)
-            if (value.get("schemaVersion") == 2 and isinstance(value.get("environmentKeys"), list)
-                    and isinstance(value.get("scope"), str)):
-                requests.setdefault(key, []).append(index)
-            if (value.get("schemaVersion") == 1 and isinstance(value.get("definition"), dict)
-                    and isinstance(value.get("provenance"), dict)
-                    and isinstance(value.get("releaseIdentity"), dict)):
-                sources.setdefault(key, []).append(index)
-
-        result: dict[str, Any] = {component: {} for component in COMPONENTS}
-        used: set[int] = set()
+        if hashlib.sha256(raw).hexdigest() != self.inputs.runtime_manifest_sha256:
+            deny("runtime_manifest_sha256_mismatch")
+        value = json_object(raw, path.name)
+        expected_keys = {"schemaVersion", "mode", "controlPlaneSha", "pm2Version",
+                         "environmentAllowlistSha256", "processes", "rollbackReleases"}
+        if set(value) != expected_keys or value.get("schemaVersion") != 1:
+            deny("runtime_manifest_schema")
+        if (value.get("mode") != "fixed-current-existing-pm2" or
+                value.get("controlPlaneSha") != self.inputs.control_plane or
+                value.get("pm2Version") != "6.0.14"):
+            deny("runtime_manifest_identity")
+        allowlist = self.repo / "scripts/pm2-definition-env-allowlist.v1.json"
+        if digest(allowlist) != value.get("environmentAllowlistSha256"):
+            deny("runtime_manifest_allowlist")
+        if value.get("processes") != PROCESS_NAMES:
+            deny("runtime_manifest_processes")
+        rollbacks = value.get("rollbackReleases")
+        if not isinstance(rollbacks, dict) or set(rollbacks) != set(COMPONENTS):
+            deny("runtime_manifest_rollbacks")
         for component in COMPONENTS:
-            for role in ("candidate", "rollback"):
-                key = (component, role)
-                if len(requests.get(key, [])) != 1 or len(sources.get(key, [])) != 1:
-                    deny(f"config_artifact_identity:{component}:{role}")
-                request_index, source_index = requests[key][0], sources[key][0]
-                source = declared[source_index]["value"]
-                definition_index = request_index - 1
-                if (source_index != request_index + 1 or definition_index < 0 or
-                        declared[definition_index]["value"] != source["definition"] or
-                        not isinstance(declared[definition_index]["value"].get("apps"), list)):
-                    deny(f"config_artifact_group:{component}:{role}")
-                group = {request_index, source_index, definition_index}
-                if used & group:
-                    deny("config_artifact_reused")
-                used |= group
-                paths = {"request": declared[request_index]["path"],
-                         "source": declared[source_index]["path"],
-                         "definition": declared[definition_index]["path"]}
-                hashes = {kind: declared[index]["sha256"] for kind, index in (
-                    ("request", request_index), ("source", source_index),
-                    ("definition", definition_index))}
-                result[component][role] = {"paths": paths, "hashes": hashes}
-        return result
+            identity = rollbacks.get(component)
+            common = {"releaseId", "manifestSha256", "indexSha256", "entrySha256"}
+            expected = common | ({"buildId"} if component == "frontend" else set())
+            if (not isinstance(identity, dict) or set(identity) != expected or
+                    not isinstance(identity.get("releaseId"), str) or
+                    not identity["releaseId"] or
+                    not all(SHA256.fullmatch(str(identity.get(key, "")))
+                            for key in ("manifestSha256", "indexSha256", "entrySha256")) or
+                    (component == "frontend" and
+                     (not isinstance(identity.get("buildId"), str) or not identity["buildId"]))):
+                deny(f"runtime_manifest_rollback:{component}")
+        self._failpoint("runtime_manifest_read")
+        try:
+            current = path.stat()
+        except OSError:
+            deny("runtime_manifest_changed")
+        if self._stable_identity(current) != self._stable_identity(info):
+            deny("runtime_manifest_changed")
+        return value
 
-    def _authenticated_config(self) -> dict[str, Any]:
-        private_directory(self.inputs.config_root)
-        manifest, manifest_info = self._manifest()
-        self._failpoint("config_manifest_read")
-        declared, _ = self._declared_config(manifest, manifest_info)
-        result = self._resolve_config_paths(declared)
-        self._config_paths = result
-        return result
+    def _environment_keys(self, component: str) -> list[str]:
+        value = read_json(self.repo / "scripts/pm2-definition-env-allowlist.v1.json")
+        try:
+            roles = value["components"][component]
+        except (KeyError, TypeError):
+            deny(f"environment_allowlist:{component}")
+        if set(roles) != {"common", "candidate", "rollbackCompatibility"}:
+            deny(f"environment_allowlist:{component}")
+        keys = roles["common"] + roles["candidate"] + roles["rollbackCompatibility"]
+        if not all(isinstance(item, str) for item in keys) or len(keys) != len(set(keys)):
+            deny(f"environment_allowlist:{component}")
+        return sorted(keys)
 
     def _resolve_pm2(self) -> Path:
         if self.pm2 is not None:
@@ -592,7 +571,7 @@ class Driver:
                 deny(f"release_index_mismatch:{relative}")
         return {"sha256": hashlib.sha256(raw).hexdigest(), "entries": len(expected)}
 
-    def _release(self, config: dict[str, Any]) -> dict[str, Any]:
+    def _release(self) -> dict[str, Any]:
         if not SHA40.fullmatch(self.inputs.target):
             deny("target_format")
         if self.release_root.parent != self.releases or not self.release_root.is_dir():
@@ -621,43 +600,41 @@ class Driver:
             deny("release_index_identity")
         index = self._release_index(index_path, index_raw)
         for component in COMPONENTS:
-            source = read_json(config[component]["candidate"]["paths"]["source"])
-            identity = source.get("releaseIdentity", {})
-            if identity.get("releaseId") != self.inputs.release:
-                deny(f"release_identity:{component}")
-            if identity.get("releaseManifestSha256") != manifest_sha:
-                deny(f"release_manifest_identity:{component}")
             runtime = self.release_root / RUNTIME_DIR[component]
             if not runtime.is_dir():
                 deny(f"release_runtime_missing:{component}")
         return {"manifestSha256": manifest_sha, "indexSha256": index["sha256"],
                 "indexEntries": index["entries"]}
 
-    def _control_args(self, config: dict[str, Any], component: str, role: str) -> list[str]:
-        paths = self._definition_paths(component, role)
-        return [
-            "--request", str(paths["request"]), "--source-artifact", str(paths["source"]),
-            "--source-sha256", config[component][role]["hashes"]["source"],
-            "--definition", str(paths["definition"]),
-        ]
-
-    def _validate_config(self, config: dict[str, Any]) -> None:
-        for component in COMPONENTS:
-            for role in ("candidate", "rollback"):
-                self.host.control(self.repo, ["validate", *self._control_args(config, component, role)])
-            candidate = self._definition_paths(component, "candidate")
-            rollback = self._definition_paths(component, "rollback")
-            self.host.control(self.repo, [
-                "validate-pair",
-                "--candidate-request", str(candidate["request"]),
-                "--candidate-source-artifact", str(candidate["source"]),
-                "--candidate-source-sha256", config[component]["candidate"]["hashes"]["source"],
-                "--candidate-definition", str(candidate["definition"]),
-                "--rollback-request", str(rollback["request"]),
-                "--rollback-source-artifact", str(rollback["source"]),
-                "--rollback-source-sha256", config[component]["rollback"]["hashes"]["source"],
-                "--rollback-definition", str(rollback["definition"]),
-            ])
+    def _rollback_release(self, component: str, identity: dict[str, Any]) -> Path:
+        root = self.releases / identity["releaseId"]
+        runtime = root / RUNTIME_DIR[component]
+        manifest_path = root / "manifest.json"
+        index_path = root / "index.sha256"
+        manifest_raw, _ = stable_regular_bytes(manifest_path)
+        index_raw, _ = stable_regular_bytes(index_path)
+        if hashlib.sha256(manifest_raw).hexdigest() != identity["manifestSha256"]:
+            deny(f"rollback_manifest:{component}")
+        if hashlib.sha256(index_raw).hexdigest() != identity["indexSha256"]:
+            deny(f"rollback_index:{component}")
+        manifest = json_object(manifest_raw, manifest_path.name)
+        if manifest.get("indexSha256") != identity["indexSha256"]:
+            deny(f"rollback_manifest_index:{component}")
+        entry_relative = "dist/index.js" if component == "api" else "node_modules/next/dist/bin/next"
+        entry_raw, _ = stable_regular_bytes(runtime / entry_relative)
+        if hashlib.sha256(entry_raw).hexdigest() != identity["entrySha256"]:
+            deny(f"rollback_entry:{component}")
+        runtime_identity = manifest.get("runtimes", {}).get(component, {})
+        if component == "api":
+            declared = runtime_identity.get("entrySha256")
+            if declared is not None and declared != identity["entrySha256"]:
+                deny("rollback_manifest_entry:api")
+        else:
+            build_id = (runtime / ".next/BUILD_ID").read_text(encoding="utf-8").strip()
+            if (build_id != identity["buildId"] or
+                    runtime_identity.get("buildId") != identity["buildId"]):
+                deny("rollback_build_id:frontend")
+        return runtime
 
     def _row(self, rows: list[dict[str, Any]], name: str) -> dict[str, Any]:
         matches = [row for row in rows if row.get("name") == name]
@@ -677,24 +654,90 @@ class Driver:
         except (OSError, ValueError, IndexError):
             deny(f"process_ticks:{pid}")
 
-    def _identity(self, row: dict[str, Any]) -> dict[str, Any]:
-        env = row["pm2_env"]
+    @staticmethod
+    def _pm2_field(row: dict[str, Any], name: str) -> Any:
+        env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
+        aliases = {"cwd": "pm_cwd", "script": "pm_exec_path", "interpreter": "exec_interpreter"}
+        return row.get(name, env.get(name, env.get(aliases.get(name, ""))))
+
+    def _environment_sha256(self, row: dict[str, Any], component: str) -> str:
+        env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
+        projected = {key: env.get(key) for key in self._environment_keys(component)}
+        raw = json.dumps(projected, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+        return hashlib.sha256(raw).hexdigest()
+
+    def _process_snapshot(self, row: dict[str, Any], component: str,
+                          expected_runtime: Path | None = None) -> dict[str, Any]:
         pid = row["pid"]
+        cwd_lexical = self._pm2_field(row, "cwd")
+        script_lexical = self._pm2_field(row, "script")
+        interpreter = self._pm2_field(row, "interpreter")
+        if not all(isinstance(item, str) and Path(item).is_absolute()
+                   for item in (cwd_lexical, script_lexical, interpreter)):
+            deny(f"process_paths:{component}")
+        try:
+            cwd_physical = Path(cwd_lexical).resolve(strict=True)
+            script_physical = Path(script_lexical).resolve(strict=True)
+            interpreter_physical = Path(interpreter).resolve(strict=True)
+        except OSError:
+            deny(f"process_paths:{component}")
+        process_cwd = self.host.process_cwd(pid)
+        process_exe = self.host.process_exe(pid)
+        if expected_runtime is not None:
+            expected = expected_runtime.resolve(strict=True)
+            entry = "dist/index.js" if component == "api" else "node_modules/next/dist/bin/next"
+            if (cwd_physical != expected or process_cwd != expected or
+                    script_physical != (expected / entry).resolve(strict=True)):
+                deny(f"process_runtime:{component}")
+        if process_exe != interpreter_physical:
+            deny(f"process_interpreter:{component}")
         return {
             "name": row["name"], "pid": pid, "startTicks": self._ticks(pid),
-            "cwd": env.get("pm_cwd"), "script": env.get("pm_exec_path"),
-            "restartCount": env.get("restart_time", 0),
+            "restartCount": self._pm2_field(row, "restart_time") or 0,
+            "pmCwdLexical": cwd_lexical, "pmExecPathLexical": script_lexical,
+            "cwdPhysical": str(cwd_physical), "scriptPhysical": str(script_physical),
+            "processCwdPhysical": str(process_cwd), "interpreter": interpreter,
+            "interpreterPhysical": str(interpreter_physical), "processExe": str(process_exe),
+            "args": self._pm2_field(row, "args") or [],
+            "nodeArgs": self._pm2_field(row, "node_args") or [],
+            "execMode": self._pm2_field(row, "exec_mode"),
+            "instancesRaw": self._pm2_field(row, "instances"),
+            "namespace": self._pm2_field(row, "namespace"),
+            "logs": {"out": self._pm2_field(row, "out_file"),
+                     "error": self._pm2_field(row, "error_file"),
+                     "merge": self._pm2_field(row, "merge_logs")},
+            "environmentSha256": self._environment_sha256(row, component),
         }
 
-    def _worker(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
-        return self._identity(self._row(rows, "re7-whatsapp-web-worker"))
+    def _selection_snapshot(self, component: str) -> dict[str, str]:
+        link = self.stable[component]
+        if not link.is_symlink():
+            deny(f"stable_path_not_symlink:{component}")
+        try:
+            physical = link.resolve(strict=True)
+        except OSError:
+            deny(f"stable_path_unresolved:{component}")
+        if physical.parent.parent != self.releases.resolve(strict=True):
+            deny(f"stable_path_release_root:{component}")
+        if physical.name != RUNTIME_DIR[component]:
+            deny(f"stable_path_runtime:{component}")
+        return {"path": str(link), "target": os.readlink(link),
+                "physicalRuntime": str(physical), "releaseId": physical.parent.name}
 
-    def _process_name(self, component: str, role: str = "candidate") -> str:
-        definition = read_json(self._definition_paths(component, role)["definition"])
-        apps = definition.get("apps", [])
-        if len(apps) != 1 or not isinstance(apps[0].get("name"), str):
-            deny(f"definition_name:{component}:{role}")
-        return apps[0]["name"]
+    @staticmethod
+    def _configuration_projection(snapshot: dict[str, Any]) -> dict[str, Any]:
+        keys = ("name", "pmCwdLexical", "pmExecPathLexical", "interpreter",
+                "args", "nodeArgs", "execMode", "instancesRaw", "namespace",
+                "logs", "environmentSha256")
+        return {key: snapshot.get(key) for key in keys}
+
+    def _worker(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
+        return self._process_snapshot(self._row(rows, PROCESS_NAMES["worker"]), "worker")
+
+    def _process_name(self, component: str) -> str:
+        if component not in PROCESS_NAMES:
+            deny(f"process_component:{component}")
+        return PROCESS_NAMES[component]
 
     def _health(self, *, candidate_asset: bool = False) -> None:
         for url in (LOCAL_HEALTH["api"], PUBLIC_HEALTH["api"]):
@@ -908,18 +951,40 @@ class Driver:
         report["operationalStatePath"] = str(final_operational)
         return state, report
 
-    def _definition_app(self, component: str, role: str) -> dict[str, Any]:
-        value = read_json(self._definition_paths(component, role)["definition"])
-        apps = value.get("apps")
-        if not isinstance(apps, list) or len(apps) != 1 or not isinstance(apps[0], dict):
-            deny(f"definition_app:{component}:{role}")
-        return apps[0]
+    def _dump_environment_sha256(self, row: dict[str, Any], component: str) -> str:
+        return self._environment_sha256(row, component)
 
-    @staticmethod
-    def _dump_field(row: dict[str, Any], name: str) -> Any:
-        env = row.get("pm2_env") if isinstance(row.get("pm2_env"), dict) else {}
-        aliases = {"script": "pm_exec_path", "cwd": "pm_cwd", "interpreter": "exec_interpreter"}
-        return row.get(name, env.get(name, env.get(aliases.get(name, ""))))
+    def _dump_equivalent(self, row: dict[str, Any], live: dict[str, Any],
+                         component: str, process_count: int) -> None:
+        fields = {
+            "name": row.get("name"),
+            "pmCwdLexical": self._pm2_field(row, "cwd"),
+            "pmExecPathLexical": self._pm2_field(row, "script"),
+            "interpreter": self._pm2_field(row, "interpreter"),
+            "args": self._pm2_field(row, "args") or [],
+            "nodeArgs": self._pm2_field(row, "node_args") or [],
+            "execMode": self._pm2_field(row, "exec_mode"),
+            "instancesRaw": self._pm2_field(row, "instances"),
+            "namespace": self._pm2_field(row, "namespace"),
+            "logs": {"out": self._pm2_field(row, "out_file"),
+                     "error": self._pm2_field(row, "error_file"),
+                     "merge": self._pm2_field(row, "merge_logs")},
+            "environmentSha256": self._dump_environment_sha256(row, component),
+        }
+        raw_live = live.get("instancesRaw")
+        raw_dump = fields["instancesRaw"]
+        if raw_live == raw_dump:
+            pass
+        elif (raw_live == 1 and raw_dump is None and live.get("execMode") == "fork_mode"
+              and process_count == 1):
+            fields["instancesRaw"] = raw_live
+        else:
+            deny(f"final_dump_field:{component}:instances")
+        if fields != self._configuration_projection(live):
+            for key, value in fields.items():
+                if value != self._configuration_projection(live).get(key):
+                    deny(f"final_dump_field:{component}:{key}")
+            deny(f"final_dump_field:{component}:unknown")
 
     def _candidate_dump_identity(self, journal: dict[str, Any]) -> dict[str, Any]:
         identity = private_file_identity(self.dump)
@@ -929,24 +994,19 @@ class Driver:
             deny("final_dump_json")
         if not isinstance(rows, list):
             deny("final_dump_shape")
-        for component in COMPONENTS:
-            app = self._definition_app(component, "candidate")
-            matches = [row for row in rows if isinstance(row, dict) and row.get("name") == app.get("name")]
+        live_snapshots = dict(journal.get("candidate", {}).get("processes", {}))
+        live_snapshots["worker"] = journal.get("previous", {}).get("worker", {})
+        for component in (*COMPONENTS, "worker"):
+            live = live_snapshots.get(component)
+            if not isinstance(live, dict):
+                deny(f"final_dump_live:{component}")
+            matches = [row for row in rows if isinstance(row, dict)
+                       and row.get("name") == PROCESS_NAMES[component]]
             if len(matches) != 1:
                 deny(f"final_dump_process:{component}")
-            row = matches[0]
-            for field in ("script", "cwd", "interpreter", "exec_mode", "instances"):
-                if self._dump_field(row, field) != app.get(field):
-                    deny(f"final_dump_field:{component}:{field}")
-            if (self._dump_field(row, "args") or []) != (app.get("args") or []):
-                deny(f"final_dump_field:{component}:args")
-        worker = journal.get("previous", {}).get("worker", {})
-        matches = [row for row in rows if isinstance(row, dict) and row.get("name") == worker.get("name")]
-        if len(matches) != 1:
-            deny("final_dump_worker")
-        for field, expected in (("cwd", worker.get("cwd")), ("script", worker.get("script"))):
-            if self._dump_field(matches[0], field) != expected:
-                deny(f"final_dump_worker:{field}")
+            count = sum(1 for item in rows if isinstance(item, dict)
+                        and item.get("name") == PROCESS_NAMES[component])
+            self._dump_equivalent(matches[0], live, component, count)
         return identity
 
     def preflight(self) -> None:
@@ -966,14 +1026,27 @@ class Driver:
         else:
             self.inputs.transaction_root.mkdir(mode=0o700, parents=True)
         self._control_head()
-        config = self._authenticated_config()
-        release = self._release(config)
-        self._validate_config(config)
+        runtime_manifest = self._authenticated_runtime_manifest()
+        release = self._release()
         pm2 = self._resolve_pm2()
         rows = self.host.pm2_rows(pm2)
         worker = self._worker(rows)
+        processes: dict[str, Any] = {}
+        readiness: dict[str, Any] = {}
+        selections: dict[str, Any] = {}
         for component in COMPONENTS:
-            self._identity(self._row(rows, self._process_name(component, "rollback")))
+            selections[component] = self._selection_snapshot(component)
+            rollback_identity = runtime_manifest["rollbackReleases"][component]
+            expected = self._rollback_release(component, rollback_identity).resolve(strict=True)
+            if Path(selections[component]["physicalRuntime"]) != expected:
+                deny(f"preflight_rollback_runtime:{component}")
+            processes[component] = self._process_snapshot(
+                self._row(rows, self._process_name(component)), component, expected)
+            release_id = selections[component]["releaseId"]
+            if release_id != rollback_identity["releaseId"]:
+                deny(f"preflight_rollback_release:{component}")
+            readiness[component] = self._readiness(
+                component, release_id, expected, f"preflight-{component}")
         regular_private(self.dump)
         if shutil.disk_usage(self.inputs.transaction_root).free < 64 * 1024 * 1024:
             deny("insufficient_space")
@@ -981,6 +1054,9 @@ class Driver:
         journal = {
             "schemaVersion": 1, "state": "PREFLIGHT_PASS", "binding": self.inputs.binding(),
             "preflight": {"release": release, "worker": worker,
+                          "processes": processes, "selections": selections,
+                          "readiness": readiness,
+                          "runtimeManifestSha256": self.inputs.runtime_manifest_sha256,
                           "dump": private_file_identity(self.dump),
                           "pm2": str(pm2.resolve())},
             "saveCount": 0, "deployedMarkerCreated": False,
@@ -1020,41 +1096,89 @@ class Driver:
             stream.flush(); os.fsync(stream.fileno())
         if digest(self.lock) != journal.get("lockDigest"): deny("global_lock_recovery_identity")
 
-    def _readiness(self, component: str, role: str) -> dict[str, Any]:
-        config = self._authenticated_config()
-        source = read_json(self._definition_paths(component, role)["source"])
-        release_id = source.get("releaseIdentity", {}).get("releaseId")
-        if not isinstance(release_id, str):
-            deny(f"readiness_release:{component}:{role}")
-        release_root = self.releases / release_id / RUNTIME_DIR[component]
-        return self.host.control(self.repo, [
-            "wait-readiness", *self._control_args(config, component, role),
+    def _readiness(self, component: str, release_id: str, runtime: Path,
+                   evidence_name: str) -> dict[str, Any]:
+        entry_relative = "dist/index.js" if component == "api" else "node_modules/next/dist/bin/next"
+        entry = runtime / entry_relative
+        raw, _ = stable_regular_bytes(entry)
+        args = [
+            "wait-existing-readiness", "--component", component,
+            "--process-name", self._process_name(component),
+            "--expected-cwd", str(self.stable[component]),
+            "--expected-script", str(self.stable[component] / entry_relative),
+            "--expected-interpreter", str(self.host.process_exe(
+                self._row(self.host.pm2_rows(self._resolve_pm2()), self._process_name(component))["pid"])),
+            "--release-id", release_id, "--entry-sha256", hashlib.sha256(raw).hexdigest(),
             "--pm2", str(self._resolve_pm2()), "--stable-path", str(self.stable[component]),
-            "--release-root", str(release_root), "--port", str(PORT[component]),
+            "--release-root", str(runtime), "--port", str(PORT[component]),
             "--local-health", LOCAL_HEALTH[component], "--public-health", PUBLIC_HEALTH[component],
             "--deadline-seconds", "30", "--poll-seconds", "0.5",
-        ])
+        ]
+        if component == "frontend":
+            build_id = (runtime / ".next/BUILD_ID").read_text(encoding="utf-8").strip()
+            args.extend(("--build-id", build_id))
+        root = self.inputs.transaction_root
+        report = root / f"{evidence_name}.report.private.json"
+        stdout = root / f"{evidence_name}.stdout.private.txt"
+        stderr = root / f"{evidence_name}.stderr.private.txt"
+        existing = [path.exists() or path.is_symlink() for path in (report, stdout, stderr)]
+        if any(existing):
+            if not all(existing):
+                deny("READINESS_OBSERVABILITY_DEFECT")
+            regular_private(report); regular_private(stdout); regular_private(stderr)
+            value = read_json(report)
+            if value.get("result") != "READINESS_PASS":
+                deny(str(value.get("reason", "READINESS_OBSERVABILITY_DEFECT"))[:240])
+            return value
+        return self.host.control_evidence(
+            self.repo, args,
+            report=report, stdout=stdout, stderr=stderr)
 
-    def _select(self, component: str, role: str) -> dict[str, Any]:
+    def _restart_existing(self, component: str, before: dict[str, Any],
+                          release_id: str, runtime: Path, evidence_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
         pm2 = self._resolve_pm2()
-        name = self._process_name(component, role)
-        self.host.pm2_mutate(pm2, ["delete", name])
-        self.host.pm2_mutate(pm2, ["start", str(self._definition_paths(component, role)["definition"])])
-        return self._readiness(component, role)
+        name = self._process_name(component)
+        self.host.pm2_mutate(pm2, ["restart", name])
+        row = self._row(self.host.pm2_rows(pm2), name)
+        after = self._process_snapshot(row, component, runtime)
+        if self._configuration_projection(after) != self._configuration_projection(before):
+            deny(f"process_configuration_changed:{component}")
+        if after["restartCount"] != before["restartCount"] + 1:
+            deny(f"restart_count:{component}")
+        readiness = self._readiness(component, release_id, runtime, evidence_name)
+        for key in ("pid", "startTicks", "restartCount"):
+            if key in readiness and readiness[key] != after[key]:
+                deny(f"readiness_identity:{component}:{key}")
+        return after, readiness
 
     def activate(self) -> None:
         journal = self._journal_read()
         if journal["state"] != "PREFLIGHT_PASS":
             deny("activate_state")
-        self._control_head(); config = self._authenticated_config(); self._validate_config(config)
-        self._release(config)
+        self._control_head(); runtime_manifest = self._authenticated_runtime_manifest()
+        self._release()
         self._acquire_lock(journal)
         try:
             rows = self.host.pm2_rows(self._resolve_pm2())
+            processes = {}
+            for component in COMPONENTS:
+                selection = self._selection_snapshot(component)
+                if selection != journal.get("preflight", {}).get("selections", {}).get(component):
+                    deny(f"pre_activation_selection_drift:{component}")
+                current_runtime = Path(selection["physicalRuntime"])
+                snapshot = self._process_snapshot(
+                    self._row(rows, self._process_name(component)), component, current_runtime)
+                if snapshot != journal.get("preflight", {}).get("processes", {}).get(component):
+                    deny(f"pre_activation_process_drift:{component}")
+                processes[component] = snapshot
+            worker = self._worker(rows)
+            if worker != journal.get("preflight", {}).get("worker"):
+                deny("pre_activation_worker_drift")
             previous = {
                 "symlinks": {component: os.readlink(self.stable[component]) for component in COMPONENTS},
-                "worker": self._worker(rows),
-                "processes": {component: self._identity(self._row(rows, self._process_name(component, "rollback"))) for component in COMPONENTS},
+                "releases": {component: runtime_manifest["rollbackReleases"][component]["releaseId"]
+                             for component in COMPONENTS},
+                "worker": worker, "processes": processes,
                 "dump": private_file_identity(self.dump),
             }
             rollback_dump = self.inputs.transaction_root / "rollback.dump.pm2"
@@ -1071,19 +1195,28 @@ class Driver:
         self._journal_write(journal, "ACTIVATING")
         try:
             readiness: dict[str, Any] = {}
+            candidate_processes: dict[str, Any] = {}
             for component in COMPONENTS:
-                atomic_symlink(self.stable[component], self.release_root / RUNTIME_DIR[component])
-                readiness[component] = self._select(component, "candidate")
+                runtime = self.release_root / RUNTIME_DIR[component]
+                journal.setdefault("activationAttempted", []).append(component)
+                self._journal_write(journal, "ACTIVATING")
+                atomic_symlink(self.stable[component], runtime)
+                candidate_processes[component], readiness[component] = self._restart_existing(
+                    component, previous["processes"][component], self.inputs.release,
+                    runtime, f"activate-{component}")
+                journal.setdefault("activationProgress", []).append(component)
+                self._journal_write(journal, "ACTIVATING")
                 if component == "frontend":
                     build_id = (self.release_root / "frontend-runtime/.next/BUILD_ID").read_text().strip()
-                    source = read_json(self._definition_paths("frontend", "candidate")["source"])
-                    if build_id != source.get("releaseIdentity", {}).get("frontendBuildId"):
+                    manifest = read_json(self.release_root / "manifest.json")
+                    if build_id != manifest.get("runtimes", {}).get("frontend", {}).get("buildId"):
                         deny("frontend_build_id")
             self._health(candidate_asset=True)
             worker = self._worker(self.host.pm2_rows(self._resolve_pm2()))
             if worker != previous["worker"]:
                 deny("worker_changed")
-            journal["candidate"] = {"readiness": readiness, "worker": worker}
+            journal["candidate"] = {"readiness": readiness, "processes": candidate_processes,
+                                    "worker": worker}
             self._journal_write(journal, "AWAITING_ACCEPTANCE")
         except Exception:
             self._rollback_internal(journal)
@@ -1096,19 +1229,40 @@ class Driver:
         progress = journal.setdefault("rollback", {"restoredComponents": [], "lockReleaseStarted": False})
         self._journal_write(journal, "ROLLING_BACK")
         try:
-            for component in reversed(COMPONENTS):
+            attempted = journal.get("activationAttempted", [])
+            if not isinstance(attempted, list) or any(item not in COMPONENTS for item in attempted):
+                deny("rollback_activation_progress")
+            for component in reversed(attempted):
                 target = previous.get("symlinks", {}).get(component)
                 if not isinstance(target, str): deny(f"rollback_symlink_missing:{component}")
                 if component not in progress["restoredComponents"]:
+                    current = self._process_snapshot(
+                        self._row(self.host.pm2_rows(self._resolve_pm2()), self._process_name(component)),
+                        component, self.stable[component].resolve(strict=True))
                     atomic_symlink(self.stable[component], Path(target))
-                    self._select(component, "rollback")
+                    release_id = previous.get("releases", {}).get(component)
+                    if not isinstance(release_id, str):
+                        deny(f"rollback_release_missing:{component}")
+                    restored, readiness = self._restart_existing(
+                        component, current, release_id, Path(target).resolve(strict=True),
+                        f"rollback-{component}")
+                    progress.setdefault("processes", {})[component] = restored
+                    progress.setdefault("readiness", {})[component] = readiness
                     progress["restoredComponents"].append(component)
                     self._journal_write(journal, "ROLLING_BACK")
                     self._failpoint(f"rollback_after_{component}")
                 else:
                     if self.stable[component].resolve(strict=True) != Path(target).resolve(strict=True):
                         deny(f"rollback_symlink_drift:{component}")
-                    self._readiness(component, "rollback")
+                    release_id = previous.get("releases", {}).get(component)
+                    if not isinstance(release_id, str):
+                        deny(f"rollback_release_missing:{component}")
+                    current = self._process_snapshot(
+                        self._row(self.host.pm2_rows(self._resolve_pm2()), self._process_name(component)),
+                        component, Path(target).resolve(strict=True))
+                    recorded = progress.get("processes", {}).get(component)
+                    if current != recorded:
+                        deny(f"rollback_process_drift:{component}")
             self._health()
             worker = self._worker(self.host.pm2_rows(self._resolve_pm2()))
             if worker != previous.get("worker"): deny("rollback_worker_changed")
@@ -1138,7 +1292,7 @@ class Driver:
             except Denied:
                 deny("rollback_dump_drift")
             deny("rollback_after_candidate_dump")
-        self._control_head(); config = self._authenticated_config(); self._validate_config(config)
+        self._control_head(); self._authenticated_runtime_manifest()
         self._rollback_internal(journal)
 
     def finalize(self) -> None:
@@ -1153,23 +1307,29 @@ class Driver:
         if journal.get("saveCount") not in {0, 1}:
             deny("finalize_replay")
         try:
-            self._control_head(); config = self._authenticated_config(); self._validate_config(config)
-            self._release(config)
+            self._control_head(); self._authenticated_runtime_manifest()
+            self._release()
             final_readiness: dict[str, Any] = {}
             for component in COMPONENTS:
                 if self.stable[component].resolve(strict=True) != (self.release_root / RUNTIME_DIR[component]).resolve(strict=True):
                     deny(f"finalize_symlink:{component}")
-                final_readiness[component] = self._readiness(component, "candidate")
-                activated = journal.get("candidate", {}).get("readiness", {}).get(component, {})
-                for key in ("pid", "startTicks"):
-                    if final_readiness[component].get(key) != activated.get(key):
-                        deny(f"finalize_identity_changed:{component}:{key}")
+                current = self._process_snapshot(
+                    self._row(self.host.pm2_rows(self._resolve_pm2()), self._process_name(component)),
+                    component, self.release_root / RUNTIME_DIR[component])
+                activated = journal.get("candidate", {}).get("processes", {}).get(component, {})
+                if current != activated:
+                    deny(f"finalize_identity_changed:{component}")
+                final_readiness[component] = self._readiness(
+                    component, self.inputs.release, self.release_root / RUNTIME_DIR[component],
+                    f"finalize-{component}")
             self._health(candidate_asset=True)
             worker = self._worker(self.host.pm2_rows(self._resolve_pm2()))
             if worker != journal.get("previous", {}).get("worker"): deny("finalize_worker_changed")
             marker = self.release_root / "DEPLOYED"
             finalize = journal.setdefault("finalize", {})
-            if not finalize:
+            first_finalize = not finalize
+            finalize["readiness"] = final_readiness
+            if first_finalize:
                 if marker.exists(): deny("deployed_marker_exists")
                 finalize.update(preSaveDump=private_file_identity(self.dump),
                                 preparedAtUnix=int(self.clock()), lockReleaseStarted=False)
@@ -1236,7 +1396,7 @@ class Driver:
 
     def status(self) -> str:
         journal = self._journal_read()
-        self._authenticated_config()
+        self._authenticated_runtime_manifest()
         summary = {
             "state": journal["state"], "release": self.inputs.release,
             "target": self.inputs.target, "controlPlane": self.inputs.control_plane,
@@ -1253,9 +1413,8 @@ def parse() -> tuple[str, Inputs]:
     parser.add_argument("--target", required=True)
     parser.add_argument("--control-plane", required=True)
     parser.add_argument("--components", required=True)
-    parser.add_argument("--config-root", type=Path, required=True)
-    parser.add_argument("--config-manifest", type=Path, required=True)
-    parser.add_argument("--config-manifest-sha256", required=True)
+    parser.add_argument("--runtime-manifest", type=Path, required=True)
+    parser.add_argument("--runtime-manifest-sha256", required=True)
     parser.add_argument("--transaction-root", type=Path, required=True)
     parser.add_argument("--generation-retirement-tool", type=Path, required=True)
     parser.add_argument("--generation-retirement-tool-sha256", required=True)
@@ -1281,8 +1440,8 @@ def parse() -> tuple[str, Inputs]:
         args.generation_retirement_receipt_root, args.generation_retirement_review_output,
         args.generation_retirement_deployment_lock)
     return args.command, Inputs(args.release, args.target, args.control_plane,
-                                components, args.config_root, args.config_manifest,
-                                args.transaction_root, args.config_manifest_sha256, retirement)
+                                components, args.runtime_manifest, args.transaction_root,
+                                args.runtime_manifest_sha256, retirement)
 
 
 def main() -> int:

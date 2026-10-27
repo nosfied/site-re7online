@@ -113,8 +113,7 @@ da raiz privada, devolvida ao contrato como
 target/release ou overlay diferente. Não mover, indexar ou retirar `.data`; novas releases devem apontar dados mutáveis para persistência externa à release. O `prepare`
 reautentica a projeção sem `.data`: drift fora dela é `DENY`; mudança interna é permitida.
 
-No fluxo API + frontend, o `preflight` de `scripts/converta-deploy.py` exige os
-bindings `--generation-retirement-*`. Após aceite, `pm2 save`, dump validado,
+No fluxo API + frontend fixed-current, o `preflight` exige `--generation-retirement-*` e manifesto privado do runtime, sem bindings PM2/`validate-pair`. Após aceite, `pm2 save`, dump validado,
 marker `DEPLOYED` e health final, o próprio `finalize` executa uma única vez
 `generation-retirement.py execute`. Sucesso encerra em `DEPLOYED_SANITIZED`.
 Falha de retirada não reverte o deploy aprovado: encerra em
@@ -225,11 +224,11 @@ pacote autenticado, após diagnóstico/correção e autorização aplicável; n�
 
 Bindings privados são obrigatórios somente quando a janela cria, substitui ou
 executa uma definição PM2, ou altera ambiente/argumentos. Eles não são pré-requisito
-para ativação frontend-only que reinicia o registro PM2 existente sem
-`--update-env`. Nesse fluxo, o executor autentica pacote, release e control plane;
+para ativação API+frontend ou frontend-only que reinicia os registros PM2 existentes
+sem `--update-env`. Nesse fluxo, o executor autentica pacote, release e control plane;
 captura CWD/script lexicais e hash do ambiente permitido antes da troca; exige os
 mesmos valores depois do restart; e chama `wait-existing-readiness` com release,
-entrypoint e BUILD_ID autenticados. A introspecção serve apenas para provar
+entrypoint e, no frontend, BUILD_ID autenticados. A introspecção serve apenas para provar
 preservação e nunca para gerar configuração executável.
 
 `scripts/pm2-binding-materialize.py` e `validate-pair` ficam restritos ao primeiro
@@ -276,6 +275,8 @@ Para impacto API+frontend, seguir a sequência completa a seguir.
    e asset. Não acessar Modelos/Campanhas no smoke sem autorização Meta:
    suas leituras podem disparar sincronização de templates.
 7. Provar o worker byte-operacionalmente preservado e parar em aceite técnico.
+
+O driver implementa a sequência sem `pm2 delete/start` ou `--update-env`; manifesto e journal selam nomes, retornos, PM2/allowlist, identidades e hash do ambiente permitido.
 
 A ausência transitória do listener permite polling limitado; listener estrangeiro,
 PID instável, restart, identidade/hash/BUILD_ID divergente ou health inválido nega a

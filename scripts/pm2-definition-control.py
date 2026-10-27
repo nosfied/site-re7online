@@ -799,7 +799,8 @@ def command_wait_readiness(args: argparse.Namespace) -> dict[str, Any]:
 
 def command_wait_existing_readiness(args: argparse.Namespace) -> dict[str, Any]:
     """Observe an already-registered PM2 process without building executable configuration."""
-    if args.component != "frontend" or args.port != 3000:
+    expected_port = 3001 if args.component == "api" else 3000 if args.component == "frontend" else None
+    if expected_port is None or args.port != expected_port:
         deny("existing_readiness_component_contract")
     if args.expected_cwd != args.stable_path:
         deny("existing_readiness_stable_path_contract")
@@ -813,23 +814,27 @@ def command_wait_existing_readiness(args: argparse.Namespace) -> dict[str, Any]:
         deny("existing_readiness_release_id_contract")
     if not re.fullmatch(r"[0-9a-f]{64}", args.entry_sha256):
         deny("existing_readiness_entry_sha256")
-    if not args.build_id or "\n" in args.build_id or "\r" in args.build_id:
-        deny("existing_readiness_build_id")
+    if args.component == "frontend":
+        if not args.build_id or "\n" in args.build_id or "\r" in args.build_id:
+            deny("existing_readiness_build_id")
+    elif args.build_id is not None:
+        deny("existing_readiness_api_build_id")
     app = {
         "name": args.process_name,
         "cwd": str(args.expected_cwd),
         "script": str(args.expected_script),
         "interpreter": str(args.expected_interpreter),
     }
-    release_identity = {
-        "releaseId": args.release_id,
-        "frontendEntrySha256": args.entry_sha256,
-        "frontendBuildId": args.build_id,
-    }
+    release_identity = {"releaseId": args.release_id}
+    if args.component == "api":
+        release_identity["apiEntrySha256"] = args.entry_sha256
+    else:
+        release_identity.update(frontendEntrySha256=args.entry_sha256,
+                                frontendBuildId=args.build_id)
     events: list[dict[str, Any]] = []
     try:
         result = wait_for_readiness(
-            component="frontend", port=args.port, app=app,
+            component=args.component, port=args.port, app=app,
             release_identity=release_identity, pm2=args.pm2,
             stable_path=args.stable_path, release_root=args.release_root,
             local_health=args.local_health, public_health=args.public_health,
@@ -839,7 +844,7 @@ def command_wait_existing_readiness(args: argparse.Namespace) -> dict[str, Any]:
     except Denied as error:
         if args.report is not None:
             failure = {
-                "result": "READINESS_DENY", "component": "frontend", "port": args.port,
+                "result": "READINESS_DENY", "component": args.component, "port": args.port,
                 "reason": str(error), "sampleCount": len(events),
                 "startedMonotonic": events[0]["atMonotonic"] if events else None,
                 "finishedMonotonic": events[-1]["atMonotonic"] if events else None,
@@ -896,14 +901,14 @@ def parser() -> argparse.ArgumentParser:
     readiness.add_argument("--report", type=Path)
     readiness.set_defaults(function=command_wait_readiness)
     existing = commands.add_parser("wait-existing-readiness")
-    existing.add_argument("--component", choices=("frontend",), required=True)
+    existing.add_argument("--component", choices=("api", "frontend"), required=True)
     existing.add_argument("--process-name", required=True)
     existing.add_argument("--expected-cwd", type=Path, required=True)
     existing.add_argument("--expected-script", type=Path, required=True)
     existing.add_argument("--expected-interpreter", type=Path, required=True)
     existing.add_argument("--release-id", required=True)
     existing.add_argument("--entry-sha256", required=True)
-    existing.add_argument("--build-id", required=True)
+    existing.add_argument("--build-id")
     existing.add_argument("--pm2", type=Path, required=True)
     existing.add_argument("--stable-path", type=Path, required=True)
     existing.add_argument("--release-root", type=Path, required=True)

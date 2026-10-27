@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavioral tests for the minimal deploy coordinator; no production I/O."""
+"""Behavioral regression suite for the fixed-current API/frontend driver."""
 
 from __future__ import annotations
 
@@ -36,36 +36,39 @@ def put(path: Path, value: Any, mode: int = 0o600) -> None:
 
 def release_index(root: Path) -> dict[str, Any]:
     entries: list[dict[str, Any]] = []
-    for runtime in deploy.RUNTIME_DIR.values():
-        base = root / runtime
-        for path in [base, *sorted(base.rglob("*"))]:
+    for runtime_name in deploy.RUNTIME_DIR.values():
+        runtime = root / runtime_name
+        for path in (runtime, *sorted(runtime.rglob("*"))):
             info = path.lstat()
-            item: dict[str, Any] = {"path": path.relative_to(root).as_posix(),
-                                    "mode": stat.S_IMODE(info.st_mode)}
-            if path.is_symlink(): item.update(type="symlink", target=os.readlink(path))
-            elif path.is_dir(): item["type"] = "directory"
-            else: item.update(type="file", size=info.st_size, sha256=sha(path))
+            item: dict[str, Any] = {
+                "path": path.relative_to(root).as_posix(),
+                "mode": stat.S_IMODE(info.st_mode),
+            }
+            if path.is_symlink():
+                item.update(type="symlink", target=os.readlink(path))
+            elif path.is_dir():
+                item["type"] = "directory"
+            else:
+                item.update(type="file", size=info.st_size, sha256=sha(path))
             entries.append(item)
     return {"schemaVersion": 1, "scope": list(deploy.RUNTIME_DIR.values()), "entries": entries}
 
 
 class FakeHost(deploy.Host):
-    def __init__(self, control_plane: str):
+    def __init__(self, control_plane: str, node: Path):
         self.control_plane = control_plane
+        self.node = node.resolve()
         self.rows: dict[str, dict[str, Any]] = {}
+        self.process_cwds: dict[int, Path] = {}
         self.events: list[str] = []
-        self.wait_fail: str | None = None
-        self.wait_relation = "DIRECT"
-        self.wait_family = "IPv4"
-        self.wait_delay = 0.0
-        self.pid = 100
         self.dump: Path | None = None
-        self.external_calls = 0
+        self.next_pid = 100
+        self.wait_fail: str | None = None
+        self.wait_samples = 3
+        self.restart_drift: tuple[str, str] | None = None
+        self.worker_drift = False
         self.save_calls = 0
-        self.retirement_fail = False
-        self.api_health_payload: dict[str, Any] = {"ok": True, "db": "ok"}
-        self.api_health_content_type = "application/json"
-        self.api_health_status = 200
+        self.retirement_calls = 0
 
     def run(self, command: list[str], *, timeout: float = 40) -> subprocess.CompletedProcess[str]:
         if command[:4] == ["git", "-C", str(ROOT), "rev-parse"]:
@@ -75,70 +78,94 @@ class FakeHost(deploy.Host):
         if command[-1:] == ["--version"]:
             return subprocess.CompletedProcess(command, 0, "6.0.14\n", "")
         if len(command) > 3 and command[2] == "execute" and "--intent" in command:
-            self.events.append("generation:retired")
-            if self.retirement_fail:
-                return subprocess.CompletedProcess(command, 2, "", "GENERATION_RETIREMENT_DENY:fixture\n")
+            self.retirement_calls += 1
             receipt_root = Path(command[command.index("--receipt-root") + 1])
             receipt_root.mkdir(mode=0o700)
             receipt = receipt_root / "execution-receipt.private.json"
-            receipt.write_text('{"state":"DEPLOYED_SANITIZED"}\n'); receipt.chmod(0o600)
-            return subprocess.CompletedProcess(command, 0,
-                '{"result":"DEPLOYED_SANITIZED","receiptSha256":"' + sha(receipt) + '"}\n', "")
-        return subprocess.run(command, text=True, capture_output=True, timeout=timeout, check=False)
+            intent_sha = command[command.index("--intent-sha256") + 1]
+            put(receipt, {"state": "DEPLOYED_SANITIZED", "intentSha256": intent_sha})
+            return subprocess.CompletedProcess(command, 0, json.dumps({
+                "result": "DEPLOYED_SANITIZED", "receiptSha256": sha(receipt),
+            }) + "\n", "")
+        return subprocess.CompletedProcess(command, 0, "", "")
 
     def get(self, url: str, timeout: float = 10) -> int:
-        self.events.append("get:" + url)
-        if not (url.startswith("http://127.0.0.1:") or url.startswith("https://converta.re7online.com/")):
-            self.external_calls += 1
+        self.events.append("GET:" + url)
         return 200
 
     def api_health(self, url: str, timeout: float = 10) -> tuple[int, str, dict[str, Any]]:
-        self.events.append("api-health:" + url)
-        if not (url.startswith("http://127.0.0.1:") or url.startswith("https://converta.re7online.com/")):
-            self.external_calls += 1
-        return self.api_health_status, self.api_health_content_type, self.api_health_payload
+        self.events.append("HEALTH:" + url)
+        return 200, "application/json", {"ok": True, "db": "ok"}
 
     def pm2_rows(self, pm2: Path) -> list[dict[str, Any]]:
         return list(self.rows.values())
 
     def pm2_mutate(self, pm2: Path, args: list[str]) -> None:
-        self.events.append("pm2:" + ":".join(args[:2]))
-        if args[0] == "delete":
-            self.rows.pop(args[1], None)
-        elif args[0] == "start":
-            definition = json.loads(Path(args[1]).read_text())["apps"][0]
-            self.pid += 1
-            self.rows[definition["name"]] = {
-                "name": definition["name"], "pid": self.pid,
-                "pm2_env": {"status": "online", "pm_cwd": definition["cwd"],
-                            "pm_exec_path": definition["script"], "restart_time": 0,
-                            **definition},
-            }
-        elif args == ["save"]:
+        self.events.append("PM2:" + " ".join(args))
+        if args == ["save"]:
             assert self.dump is not None
             self.save_calls += 1
-            self.dump.write_text(json.dumps(list(self.rows.values()), sort_keys=True) + "\n")
-            self.dump.chmod(0o600)
-            self.events.append("dump:saved")
+            put(self.dump, list(self.rows.values()))
+            self.events.append("DUMP:SAVED")
+            return
+        if len(args) != 2 or args[0] != "restart" or "--update-env" in args:
+            raise AssertionError(f"unexpected PM2 mutation: {args}")
+        name = args[1]
+        row = self.rows[name]
+        old_pid = row["pid"]
+        self.next_pid += 1
+        row["pid"] = self.next_pid
+        row["pm2_env"]["restart_time"] += 1
+        self.process_cwds.pop(old_pid, None)
+        stable = Path(row["pm2_env"]["pm_cwd"])
+        self.process_cwds[self.next_pid] = stable.resolve()
+        if self.restart_drift and self.restart_drift[0] == name:
+            field = self.restart_drift[1]
+            if field == "env":
+                row["pm2_env"]["NODE_ENV"] = "drift"
+            elif field == "cwd":
+                row["pm2_env"]["pm_cwd"] = str(stable.parent)
+            elif field == "script":
+                row["pm2_env"]["pm_exec_path"] = str(stable / "unexpected.js")
+            else:
+                row["pm2_env"][field] = ["drift"]
+        if self.worker_drift:
+            worker = self.rows[deploy.PROCESS_NAMES["worker"]]
+            worker["pm2_env"]["restart_time"] += 1
 
-    def control(self, root: Path, args: list[str]) -> dict[str, Any]:
-        if args[0] != "wait-readiness":
-            return super().control(root, args)
-        request = Path(args[args.index("--request") + 1])
-        component = request.name.split("-", 1)[0]
-        role = "rollback" if "-rollback." in request.name else "candidate"
-        self.events.append(f"wait:{component}:{role}")
-        if self.wait_fail == component and role == "candidate":
-            raise deploy.Denied(f"READINESS_TIMEOUT:{component}:{deploy.PORT[component]}")
-        row = self.rows[component]
-        return {
-            "result": "READINESS_PASS", "component": component,
-            "pid": row["pid"], "startTicks": row["pid"] * 100,
-            "stableSamples": 3, "totalSamples": 3, "stabilityResets": 0,
-            "elapsedSeconds": self.wait_delay, "socketFamily": self.wait_family,
-            "socketOwnerRelation": self.wait_relation,
-            "healthStartedMonotonic": 5.0, "socketStableMonotonic": 4.0,
-        }
+    def process_cwd(self, pid: int) -> Path:
+        return self.process_cwds[pid]
+
+    def process_exe(self, pid: int) -> Path:
+        return self.node
+
+    def control_evidence(self, root: Path, args: list[str], *, report: Path,
+                         stdout: Path, stderr: Path) -> dict[str, Any]:
+        assert args[0] == "wait-existing-readiness"
+        component = args[args.index("--component") + 1]
+        release_id = args[args.index("--release-id") + 1]
+        phase = report.name.removesuffix(".report.private.json")
+        self.events.append(f"WAIT:{phase}:{component}:{release_id}")
+        row = self.rows[deploy.PROCESS_NAMES[component]]
+        samples = [{"ordinal": number + 1, "result": "stable"}
+                   for number in range(self.wait_samples)]
+        if self.wait_fail == component and phase.startswith("activate-"):
+            value = {"result": "READINESS_DENY", "component": component,
+                     "reason": f"READINESS_TIMEOUT:{component}:{deploy.PORT[component]}",
+                     "sampleCount": len(samples), "samples": samples}
+            put(report, value)
+            deploy.atomic_private_bytes(stdout, b"")
+            deploy.atomic_private_bytes(stderr, value["reason"].encode() + b"\n")
+            raise deploy.Denied(value["reason"])
+        value = {"result": "READINESS_PASS", "component": component,
+                 "pid": row["pid"], "startTicks": row["pid"] * 100,
+                 "restartCount": row["pm2_env"]["restart_time"],
+                 "stableSamples": 3, "sampleCount": len(samples), "samples": samples,
+                 "socketOwnerRelation": "DIRECT", "releaseId": release_id}
+        put(report, value)
+        deploy.atomic_private_bytes(stdout, (json.dumps(value) + "\n").encode())
+        deploy.atomic_private_bytes(stderr, b"")
+        return value
 
 
 class FixtureDriver(deploy.Driver):
@@ -155,190 +182,149 @@ class FixtureDriver(deploy.Driver):
 
 class DeployFixture(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp = tempfile.TemporaryDirectory()
-        self.base = Path(self.temp.name)
-        self.config = self.base / "config"
-        self.config.mkdir(mode=0o700)
-        self.transaction = self.base / "transaction"
+        self.temporary = tempfile.TemporaryDirectory()
+        self.base = Path(self.temporary.name)
         self.releases = self.base / "releases"
         self.current = self.base / "current"
         self.current.mkdir()
+        self.transaction = self.base / "transaction"
         self.candidate = "immutable-candidate"
         self.rollback = "immutable-rollback"
         self.target = "a" * 40
         self.control_plane = "b" * 40
+        self.node = self.base / "node"
+        self.node.write_text("node\n"); self.node.chmod(0o755)
         self.pm2 = self.base / "pm2"
-        self.pm2.write_text("fixture\n"); self.pm2.chmod(0o700)
+        self.pm2.write_text("pm2\n"); self.pm2.chmod(0o755)
         self.dump = self.base / "dump.pm2"
-        self.dump.write_text("[]\n"); self.dump.chmod(0o600)
         self.lock = self.base / "deploy.lock"
-        self.stable = {"api": self.current / "api", "frontend": self.current / "frontend"}
-        self.host = FakeHost(self.control_plane); self.host.dump = self.dump
+        self.stable = {component: self.current / component for component in deploy.COMPONENTS}
         self._release(self.rollback, "rollback-build", "c" * 40)
-        candidate_manifest_sha = self._release(self.candidate, "candidate-build", self.target)
+        self._release(self.candidate, "candidate-build", self.target)
         for component in deploy.COMPONENTS:
             os.symlink(self.releases / self.rollback / deploy.RUNTIME_DIR[component], self.stable[component])
-            self._bindings(component, candidate_manifest_sha)
-        for name in (
-            "api-stable-env.private.json",
-            "blocking-gates-revalidation.private.json",
-            "frontend-stable-env.private.json",
-            "future-command-plan.private.json",
-            "private-hash-manifest.json",
-            "sanitized-report.private.json",
-        ):
-            put(self.config / name, {"fixture": name})
-        self.config_manifest = self.config / "final-hash-manifest.private.json"
-        self._write_config_manifest()
-        self.config_manifest_sha = sha(self.config_manifest)
-        retirement_files = {}
-        for name in ("generation-retirement.py", "intent.private.json", "authorization.private.json",
-                     "operational.private.json", "root-policy.private.json"):
-            path = self.base / name; path.write_text(name + "\n"); path.chmod(0o600)
-            retirement_files[name] = path
-        self.retirement = deploy.RetirementBinding(
-            retirement_files["generation-retirement.py"], sha(retirement_files["generation-retirement.py"]),
-            retirement_files["intent.private.json"], sha(retirement_files["intent.private.json"]),
-            retirement_files["authorization.private.json"], sha(retirement_files["authorization.private.json"]),
-            retirement_files["operational.private.json"], sha(retirement_files["operational.private.json"]),
-            retirement_files["root-policy.private.json"], sha(retirement_files["root-policy.private.json"]),
-            self.base / "retirement-receipt", self.base / "generation-review.private.json", self.lock)
+        self.worker = self.base / "worker"
+        self.worker.mkdir()
+        (self.worker / "index.js").write_text("worker\n")
+        self.host = FakeHost(self.control_plane, self.node)
+        self.host.dump = self.dump
         self.host.rows = {
-            "api": self._row("api", 11), "frontend": self._row("frontend", 12),
-            "re7-whatsapp-web-worker": self._row("re7-whatsapp-web-worker", 13),
+            deploy.PROCESS_NAMES["api"]: self._row("api", 11),
+            deploy.PROCESS_NAMES["frontend"]: self._row("frontend", 12),
+            deploy.PROCESS_NAMES["worker"]: self._row("worker", 13),
         }
-        operational = retirement_files["operational.private.json"]
-        put(operational, {
-            "schemaVersion": 2, "generationId": self.candidate, "releaseId": self.candidate,
-            "targetCommit": self.target, "gitRepository": str(ROOT),
-            "currentPaths": [str(path.resolve()) for path in self.stable.values()],
-            "pm2LivePaths": [], "pm2DumpPaths": [], "activeReleases": [self.rollback],
-            "rollbackReleases": [], "transitiveReturnReleases": [],
-            "candidateReleases": [self.candidate], "installedVerifiedReleases": [self.candidate],
-            "supersededCandidates": [], "controlPlaneArtifacts": [], "dependencies": [],
-            "deploymentState": {"state": "PENDING"}, "canonicalRoots": {},
-            "observations": {"currentLinks": [{"path": str(path), "target": str(path.resolve())}
-                                                for path in self.stable.values()],
-                             "pm2": {"path": str(self.pm2), "sha256": sha(self.pm2),
-                                     "fingerprintSha256": self.driver_fingerprint(self.host.rows.values())},
-                             "dump": {"path": str(self.dump), "sha256": sha(self.dump)},
-                             "releaseGraph": {"path": str(self.dump), "sha256": sha(self.dump)}}})
+        self.host.process_cwds = {
+            row["pid"]: Path(row["pm2_env"]["pm_cwd"]).resolve()
+            for row in self.host.rows.values()
+        }
+        put(self.dump, list(self.host.rows.values()))
+        self.runtime_manifest = self.base / "runtime-manifest.private.json"
+        rollback_root = self.releases / self.rollback
+        rollback_common = {
+            "releaseId": self.rollback,
+            "manifestSha256": sha(rollback_root / "manifest.json"),
+            "indexSha256": sha(rollback_root / "index.sha256"),
+        }
+        put(self.runtime_manifest, {
+            "schemaVersion": 1,
+            "mode": "fixed-current-existing-pm2",
+            "controlPlaneSha": self.control_plane,
+            "pm2Version": "6.0.14",
+            "environmentAllowlistSha256": sha(ROOT / "scripts/pm2-definition-env-allowlist.v1.json"),
+            "processes": deploy.PROCESS_NAMES,
+            "rollbackReleases": {
+                "api": {**rollback_common,
+                        "entrySha256": sha(rollback_root / "api-runtime/dist/index.js")},
+                "frontend": {**rollback_common,
+                             "entrySha256": sha(rollback_root / "frontend-runtime/node_modules/next/dist/bin/next"),
+                             "buildId": "rollback-build"},
+            },
+        })
+        retirement_paths: dict[str, Path] = {}
+        for name in ("tool", "intent", "authorization", "operational", "policy"):
+            path = self.base / f"{name}.private.json"
+            put(path, {"name": name}, 0o644 if name == "policy" else 0o600)
+            retirement_paths[name] = path
+        put(retirement_paths["operational"], {
+            "observations": {
+                "currentLinks": [{"path": str(path), "target": str(path.resolve())}
+                                 for path in self.stable.values()],
+                "pm2": {"fingerprintSha256": FixtureDriver._retirement_pm2_fingerprint(
+                    list(self.host.rows.values()))},
+                "dump": {"path": str(self.dump), "sha256": sha(self.dump)},
+                "releaseGraph": {"path": str(self.dump), "sha256": sha(self.dump)},
+            },
+            "activeReleases": [self.rollback], "rollbackReleases": [],
+            "transitiveReturnReleases": [], "candidateReleases": [self.candidate],
+            "installedVerifiedReleases": [self.candidate], "supersededCandidates": [],
+        })
         self.retirement = deploy.RetirementBinding(
-            retirement_files["generation-retirement.py"], sha(retirement_files["generation-retirement.py"]),
-            retirement_files["intent.private.json"], sha(retirement_files["intent.private.json"]),
-            retirement_files["authorization.private.json"], sha(retirement_files["authorization.private.json"]),
-            operational, sha(operational),
-            retirement_files["root-policy.private.json"], sha(retirement_files["root-policy.private.json"]),
-            self.base / "retirement-receipt",
-            self.base / "generation-review.private.json", self.lock)
-        self.inputs = deploy.Inputs(self.candidate, self.target, self.control_plane,
-                                    deploy.COMPONENTS, self.config, self.config_manifest, self.transaction,
-                                    self.config_manifest_sha, self.retirement)
-        self.driver = FixtureDriver(self.inputs, host=self.host, repo=ROOT,
-                                    releases=self.releases, stable=self.stable,
-                                    lock=self.lock, dump=self.dump, pm2=self.pm2,
-                                    clock=lambda: 1234567890.0)
-        self.driver.failpoints = set()
-
-    @staticmethod
-    def driver_fingerprint(rows) -> str:
-        return deploy.Driver._retirement_pm2_fingerprint(list(rows))
+            retirement_paths["tool"], sha(retirement_paths["tool"]),
+            retirement_paths["intent"], sha(retirement_paths["intent"]),
+            retirement_paths["authorization"], sha(retirement_paths["authorization"]),
+            retirement_paths["operational"], sha(retirement_paths["operational"]),
+            retirement_paths["policy"], sha(retirement_paths["policy"]),
+            self.base / "retirement-receipt", self.base / "generation-review.private.json", self.lock,
+        )
+        self.inputs = deploy.Inputs(
+            self.candidate, self.target, self.control_plane, deploy.COMPONENTS,
+            self.runtime_manifest, self.transaction, sha(self.runtime_manifest), self.retirement,
+        )
+        self.driver = self._driver()
 
     def tearDown(self) -> None:
-        self.temp.cleanup()
+        self.temporary.cleanup()
 
-    def _write_config_manifest(self) -> None:
-        files = []
-        ordered_names = [item["name"] for item in read_json_fixture(
-            ROOT / "scripts/ci/fixtures/pm2-canonical-private-root.v1.sanitized.json"
-        )["manifestShape"]["files"]]
-        for name in ordered_names:
-            path = self.config / name
-            info = path.stat()
-            files.append({"mode": format(stat.S_IMODE(info.st_mode), "04o"),
-                          "name": path.name, "sha256": sha(path), "size": info.st_size})
-        put(self.config_manifest, {
-            "schemaVersion": 2,
-            "controlPlaneSha": self.control_plane,
-            "files": files,
-            "privateHashManifestSha256": "9" * 64,
-        })
-
-    def _new_driver(self) -> FixtureDriver:
-        self.config_manifest_sha = sha(self.config_manifest)
-        self.inputs = deploy.Inputs(self.candidate, self.target, self.control_plane,
-                                    deploy.COMPONENTS, self.config, self.config_manifest,
-                                    self.transaction, self.config_manifest_sha, self.retirement)
-        driver = FixtureDriver(self.inputs, host=self.host, repo=ROOT,
-                               releases=self.releases, stable=self.stable, lock=self.lock,
-                               dump=self.dump, pm2=self.pm2, clock=lambda: 1234567890.0)
+    def _driver(self) -> FixtureDriver:
+        driver = FixtureDriver(
+            self.inputs, host=self.host, repo=ROOT, releases=self.releases,
+            stable=self.stable, lock=self.lock, dump=self.dump, pm2=self.pm2,
+            clock=lambda: 1234567890.0,
+        )
         driver.failpoints = set()
         return driver
 
-    def _release(self, release: str, build_id: str, target: str) -> str:
+    def _release(self, release: str, build_id: str, target: str) -> None:
         root = self.releases / release
-        for component in deploy.COMPONENTS:
-            runtime = root / deploy.RUNTIME_DIR[component]
-            runtime.mkdir(parents=True)
-            (runtime / "dist").mkdir(exist_ok=True)
-            (runtime / "dist/index.js").write_text("api\n")
-            (runtime / "node_modules/next/dist/bin").mkdir(parents=True, exist_ok=True)
-            (runtime / "node_modules/next/dist/bin/next").write_text("next\n")
-            (runtime / ".next").mkdir(exist_ok=True)
-            (runtime / ".next/BUILD_ID").write_text(build_id + "\n")
-            (runtime / ".next/static/chunks").mkdir(parents=True, exist_ok=True)
-            (runtime / ".next/static/chunks/app.js").write_text("asset\n")
+        api = root / "api-runtime"
+        frontend = root / "frontend-runtime"
+        (api / "dist").mkdir(parents=True)
+        (api / "dist/index.js").write_text("api\n")
+        (frontend / "node_modules/next/dist/bin").mkdir(parents=True)
+        (frontend / "node_modules/next/dist/bin/next").write_text("next\n")
+        (frontend / ".next/static/chunks").mkdir(parents=True)
+        (frontend / ".next/BUILD_ID").write_text(build_id + "\n")
+        (frontend / ".next/static/chunks/app.js").write_text("asset\n")
         put(root / "index.sha256", release_index(root), 0o444)
-        put(root / "manifest.json", {"targetCommit": target, "components": ["api", "frontend"],
-                                     "indexSha256": sha(root / "index.sha256")}, 0o444)
-        return sha(root / "manifest.json")
+        put(root / "manifest.json", {
+            "targetCommit": target, "components": ["api", "frontend"],
+            "indexSha256": sha(root / "index.sha256"),
+            "runtimes": {
+                "api": {"entrySha256": sha(api / "dist/index.js")},
+                "frontend": {"buildId": build_id},
+            },
+        }, 0o444)
 
-    def _definition(self, component: str) -> dict[str, Any]:
-        cwd = self.stable[component]
-        script = cwd / ("dist/index.js" if component == "api" else "node_modules/next/dist/bin/next")
-        return {"apps": [{
-            "name": component, "script": str(script),
-            "args": [] if component == "api" else ["start", "-p", "3000"],
-            "cwd": str(cwd), "interpreter": "/usr/bin/node", "exec_mode": "fork_mode",
-            "instances": 1, "namespace": "converta", "autorestart": True,
-            "restart_delay": 0, "kill_timeout": 5000, "listen_timeout": 10000,
-            "wait_ready": False, "node_args": [], "merge_logs": True, "watch": False,
-            "out_file": str(self.base / f"{component}.out.log"),
-            "error_file": str(self.base / f"{component}.err.log"), "env": {},
-        }]}
-
-    def _bindings(self, component: str, candidate_manifest_sha: str) -> None:
-        definition = self._definition(component)
-        for role, release, manifest_sha, evidence in (
-            ("candidate", self.candidate, candidate_manifest_sha, "1" * 64),
-            ("rollback", self.rollback, "2" * 64, "3" * 64),
-        ):
-            source_kind = "canonical-private-config" if role == "candidate" else "authenticated-proven-definition"
-            authority = "new-release-config" if role == "candidate" else "proven-production-definition"
-            request = {"schemaVersion": 2, "scope": "production", "role": role,
-                       "component": component, "sourceKind": source_kind, "environmentKeys": []}
-            identity = {"releaseId": release, "releaseManifestSha256": manifest_sha,
-                        "componentTreeSha256": ("4" if role == "candidate" else "5") * 64}
-            if component == "api": identity["apiEntrySha256"] = "6" * 64
-            else:
-                identity["frontendBuildId"] = "candidate-build" if role == "candidate" else "rollback-build"
-                identity["frontendEntrySha256"] = "7" * 64
-            source = {"schemaVersion": 1, "role": role, "component": component,
-                      "sourceKind": source_kind, "provenance": {"authority": authority, "evidenceSha256": evidence},
-                      "releaseIdentity": identity, "definition": definition}
-            put(self.config / f"{component}-{role}.request.private.json", request)
-            put(self.config / f"{component}-{role}.source.private.json", source)
-            put(self.config / f"{component}-{role}.definition.private.json", definition)
-
-    def _row(self, name: str, pid: int) -> dict[str, Any]:
-        if name in self.stable:
-            definition = self._definition(name)["apps"][0]
-            cwd, script = definition["cwd"], definition["script"]
+    def _row(self, component: str, pid: int) -> dict[str, Any]:
+        if component == "worker":
+            name = deploy.PROCESS_NAMES[component]
+            cwd = self.worker
+            script = cwd / "index.js"
+            args: list[str] = []
         else:
-            cwd, script = str(self.base / "worker"), str(self.base / "worker/index.js")
-        env: dict[str, Any] = {"status": "online", "pm_cwd": cwd,
-                               "pm_exec_path": script, "restart_time": 0}
-        if name in self.stable: env.update(self._definition(name)["apps"][0])
+            name = deploy.PROCESS_NAMES[component]
+            cwd = self.stable[component]
+            relative = "dist/index.js" if component == "api" else "node_modules/next/dist/bin/next"
+            script = cwd / relative
+            args = [] if component == "api" else ["start", "-p", "3000"]
+        env = {
+            "status": "online", "pm_cwd": str(cwd), "pm_exec_path": str(script),
+            "exec_interpreter": str(self.node), "args": args, "node_args": [],
+            "exec_mode": "fork_mode", "instances": 1, "namespace": "converta",
+            "out_file": str(self.base / f"{component}.out.log"),
+            "error_file": str(self.base / f"{component}.err.log"),
+            "merge_logs": True, "restart_time": 0, "NODE_ENV": "production",
+        }
         return {"name": name, "pid": pid, "pm2_env": env}
 
     def acceptance(self) -> None:
@@ -347,429 +333,166 @@ class DeployFixture(unittest.TestCase):
 
 
 class DriverTests(DeployFixture):
-    def test_real_canonical_manifest_shape_and_definition_names_pass(self) -> None:
-        config = self.driver._authenticated_config()
-        self.assertEqual(self.config_manifest.name, "final-hash-manifest.private.json")
-        for component in deploy.COMPONENTS:
-            for role in ("candidate", "rollback"):
-                self.assertTrue(config[component][role]["paths"]["definition"].name.endswith(
-                    ".definition.private.json"))
-
-    def test_sanitized_fixture_matches_real_structural_contract(self) -> None:
-        fixture = read_json_fixture(ROOT / "scripts/ci/fixtures/pm2-canonical-private-root.v1.sanitized.json")
-        self.assertEqual(fixture["manifestName"], self.config_manifest.name)
-        self.assertEqual(fixture["manifestStructuralFingerprintSha256"],
-                         "6b68a5dc4be2c3a1a0ce1fbdf95c4246c8b38b169744adf90f20070980a04467")
-        shape = fixture["manifestShape"]
-        self.assertEqual(fixture["schemaVersion"], 2)
-        self.assertEqual(set(shape), {"schemaVersion", "controlPlaneSha", "files",
-                                     "privateHashManifestSha256"})
-        self.assertEqual(shape["schemaVersion"], 2)
-        self.assertIsInstance(shape["controlPlaneSha"], str)
-        self.assertRegex(shape["controlPlaneSha"], r"^[0-9a-f]{40}$")
-        self.assertIsInstance(shape["privateHashManifestSha256"], str)
-        self.assertRegex(shape["privateHashManifestSha256"], r"^[0-9a-f]{64}$")
-        self.assertEqual(len(shape["files"]), 18)
-        for item in shape["files"]:
-            self.assertEqual(set(item), {"mode", "name", "sha256", "size"})
-            self.assertRegex(item["mode"], r"^0[0-7]{3}$")
-            self.assertIsInstance(item["name"], str)
-            self.assertRegex(item["sha256"], r"^[0-9a-f]{64}$")
-            self.assertIsInstance(item["size"], int)
-            self.assertGreaterEqual(item["size"], 0)
-        observed = [item["name"] for item in read_json_fixture(self.config_manifest)["files"]]
-        expected = [item["name"] for item in shape["files"]]
-        self.assertEqual(observed, expected)
-        self.assertEqual(fixture["artifactGroupOrder"], ["definition", "request", "source"])
-
-    def test_manifest_schema_v2_rejects_root_field_removal_addition_and_types(self) -> None:
-        baseline = read_json_fixture(self.config_manifest)
-        for field in tuple(baseline):
-            with self.subTest(case="missing", field=field):
-                manifest = json.loads(json.dumps(baseline)); manifest.pop(field)
-                put(self.config_manifest, manifest)
-                with self.assertRaises(deploy.Denied):
-                    self._new_driver()._authenticated_config()
-        manifest = json.loads(json.dumps(baseline)); manifest["unknown"] = True
-        put(self.config_manifest, manifest)
-        with self.assertRaisesRegex(deploy.Denied, "config_manifest_schema"):
-            self._new_driver()._authenticated_config()
-        invalid_types = {
-            "schemaVersion": "2", "controlPlaneSha": 2, "files": {},
-            "privateHashManifestSha256": 2,
-        }
-        for field, value in invalid_types.items():
-            with self.subTest(case="type", field=field):
-                manifest = json.loads(json.dumps(baseline)); manifest[field] = value
-                put(self.config_manifest, manifest)
-                with self.assertRaises(deploy.Denied):
-                    self._new_driver()._authenticated_config()
-        manifest = json.loads(json.dumps(baseline)); manifest["schemaVersion"] = 1
-        put(self.config_manifest, manifest)
-        with self.assertRaisesRegex(deploy.Denied, "config_manifest_schema_version"):
-            self._new_driver()._authenticated_config()
-
-    def test_manifest_schema_v2_rejects_entry_field_removal_addition_and_types(self) -> None:
-        baseline = read_json_fixture(self.config_manifest)
-        for field in tuple(baseline["files"][0]):
-            with self.subTest(case="missing", field=field):
-                manifest = json.loads(json.dumps(baseline)); manifest["files"][0].pop(field)
-                put(self.config_manifest, manifest)
-                with self.assertRaisesRegex(deploy.Denied, "config_manifest_entry"):
-                    self._new_driver()._authenticated_config()
-        manifest = json.loads(json.dumps(baseline)); manifest["files"][0]["unknown"] = True
-        put(self.config_manifest, manifest)
-        with self.assertRaisesRegex(deploy.Denied, "config_manifest_entry"):
-            self._new_driver()._authenticated_config()
-        invalid_types = {"mode": 0o600, "name": 1, "sha256": 1, "size": "1"}
-        for field, value in invalid_types.items():
-            with self.subTest(case="type", field=field):
-                manifest = json.loads(json.dumps(baseline)); manifest["files"][0][field] = value
-                put(self.config_manifest, manifest)
-                with self.assertRaises(deploy.Denied):
-                    self._new_driver()._authenticated_config()
-
-    def test_manifest_schema_v2_rejects_duplicate_size_and_mode_drift(self) -> None:
-        baseline = read_json_fixture(self.config_manifest)
-        manifest = json.loads(json.dumps(baseline))
-        manifest["files"][1]["name"] = manifest["files"][0]["name"]
-        put(self.config_manifest, manifest)
-        with self.assertRaisesRegex(deploy.Denied, "config_manifest_duplicate_path"):
-            self._new_driver()._authenticated_config()
-        manifest = json.loads(json.dumps(baseline)); manifest["files"][0]["size"] += 1
-        put(self.config_manifest, manifest)
-        with self.assertRaisesRegex(deploy.Denied, "config_size_mismatch"):
-            self._new_driver()._authenticated_config()
-        for mode in ("600", "0999", 600):
-            with self.subTest(mode=mode):
-                manifest = json.loads(json.dumps(baseline)); manifest["files"][0]["mode"] = mode
-                put(self.config_manifest, manifest)
-                with self.assertRaisesRegex(deploy.Denied, "config_manifest_mode"):
-                    self._new_driver()._authenticated_config()
-        manifest = json.loads(json.dumps(baseline)); manifest["files"][0]["mode"] = "0640"
-        put(self.config_manifest, manifest)
-        with self.assertRaisesRegex(deploy.Denied, "config_mode_mismatch"):
-            self._new_driver()._authenticated_config()
-
-    def test_undeclared_legacy_fixed_name_does_not_replace_declared_artifact(self) -> None:
-        declared = self.config / "api-candidate.definition.private.json"
-        legacy = self.config / "api-candidate.pm2.private.json"
-        legacy.write_bytes(declared.read_bytes()); legacy.chmod(0o600); declared.unlink()
-        with self.assertRaisesRegex(deploy.Denied, "missing_private_file"):
-            self.driver._authenticated_config()
-
-    def test_declared_renames_pass_without_filename_inference(self) -> None:
-        manifest = read_json_fixture(self.config_manifest)
-        for offset, kind in enumerate(("definition", "request", "source")):
-            old = self.config / f"api-candidate.{kind}.private.json"
-            new = self.config / f"declared-a-{offset}.private.json"
-            old.rename(new)
-            item = next(value for value in manifest["files"] if value["name"] == old.name)
-            item["name"] = new.name; item["sha256"] = sha(new); item["size"] = new.stat().st_size
-        put(self.config_manifest, manifest)
-        config = self._new_driver()._authenticated_config()
-        self.assertEqual(config["api"]["candidate"]["paths"]["definition"].name,
-                         "declared-a-0.private.json")
-
-    def test_manifest_rejects_path_traversal_and_absolute_path(self) -> None:
-        for invalid in ("../outside.private.json", "/tmp/outside.private.json"):
-            with self.subTest(invalid=invalid):
-                manifest = read_json_fixture(self.config_manifest)
-                manifest["files"][0]["name"] = invalid
-                put(self.config_manifest, manifest)
-                with self.assertRaisesRegex(deploy.Denied, "config_manifest_relative_path"):
-                    self._new_driver()._authenticated_config()
-                self._write_config_manifest()
-
-    def test_declared_symlink_and_wrong_hash_are_denied(self) -> None:
-        definition = self.config / "api-candidate.definition.private.json"
-        target = self.config / "api-candidate.definition.target.private.json"
-        definition.rename(target); os.symlink(target.name, definition)
-        with self.assertRaisesRegex(deploy.Denied, "stable_file_open"):
-            self.driver._authenticated_config()
-        definition.unlink(); target.rename(definition)
-        manifest = read_json_fixture(self.config_manifest)
-        manifest["files"][0]["sha256"] = "0" * 64
-        put(self.config_manifest, manifest)
-        with self.assertRaisesRegex(deploy.Denied, "config_hash_mismatch"):
-            self._new_driver()._authenticated_config()
-
-    def test_role_or_component_drift_is_denied(self) -> None:
-        source = self.config / "api-candidate.source.private.json"
-        value = read_json_fixture(source); value["role"] = "rollback"; put(source, value)
-        manifest = read_json_fixture(self.config_manifest)
-        item = next(item for item in manifest["files"] if item["name"] == source.name)
-        item["sha256"] = sha(source); item["size"] = source.stat().st_size
-        put(self.config_manifest, manifest)
-        with self.assertRaisesRegex(deploy.Denied, "config_artifact_identity|config_artifact_group"):
-            self._new_driver()._authenticated_config()
-
-    def test_file_change_during_authenticated_read_is_denied(self) -> None:
-        driver = self.driver
-        source = self.config / "api-candidate.source.private.json"
-        original = driver._failpoint
-        def mutate(point: str) -> None:
-            if point == "config_files_read": source.write_text(source.read_text() + " ")
-            else: original(point)
-        driver._failpoint = mutate  # type: ignore[method-assign]
-        with self.assertRaisesRegex(deploy.Denied, "config_file_changed"):
-            driver._authenticated_config()
-
-    def test_manifest_change_during_authenticated_read_is_denied(self) -> None:
-        driver = self.driver
-        original = driver._failpoint
-        def mutate(point: str) -> None:
-            if point == "config_manifest_read":
-                self.config_manifest.write_text(self.config_manifest.read_text() + " ")
-            else: original(point)
-        driver._failpoint = mutate  # type: ignore[method-assign]
-        with self.assertRaisesRegex(deploy.Denied, "config_manifest_changed"):
-            driver._authenticated_config()
-
-    def test_happy_path_delayed_ipv6_direct_save_once_and_marker_after_dump(self) -> None:
-        self.host.wait_delay = 4.1; self.host.wait_family = "IPv6"; self.host.wait_relation = "DIRECT"
-        self.driver.preflight(); self.assertEqual(self.driver._journal_read()["state"], "PREFLIGHT_PASS")
-        self.driver.activate(); self.assertEqual(self.driver._journal_read()["state"], "AWAITING_ACCEPTANCE")
-        self.assertNotIn("pm2:save", self.host.events); self.assertFalse((self.driver.release_root / "DEPLOYED").exists())
-        self.assertTrue(any("/_next/static/" in event for event in self.host.events))
-        self.acceptance(); self.driver.finalize()
+    def test_preflight_without_bindings_passes_and_authenticates_existing_records(self) -> None:
+        self.driver.preflight()
         journal = self.driver._journal_read()
-        self.assertEqual(journal["state"], "DEPLOYED_SANITIZED"); self.assertEqual(journal["saveCount"], 1)
-        self.assertEqual(self.host.events.count("generation:retired"), 1)
-        final_operational = self.transaction / "generation-operational.final.private.json"
-        self.assertEqual(read_json_fixture(final_operational)["deploymentState"], {"state": "DEPLOYED"})
-        self.assertEqual(journal["generationRetirement"]["operationalStateSha256"], sha(final_operational))
-        self.assertEqual(self.host.events.count("pm2:save"), 1)
-        marker = self.driver.release_root / "DEPLOYED"
-        self.assertLess(self.host.events.index("dump:saved"), len(self.host.events))
-        self.assertTrue(marker.is_file())
-        self.assertEqual(json.loads(marker.read_text())["dumpSha256"], sha(self.dump))
-        self.assertFalse(self.lock.exists()); self.assertEqual(self.host.external_calls, 0)
+        self.assertEqual(journal["state"], "PREFLIGHT_PASS")
+        self.assertEqual(set(journal["preflight"]["processes"]), {"api", "frontend"})
+        self.assertNotIn("definition", self.runtime_manifest.read_text())
+        self.assertEqual(len([event for event in self.host.events if event.startswith("WAIT:preflight")]), 2)
 
-    def test_descendant_socket_contract_is_forwarded_without_early_save(self) -> None:
-        self.host.wait_relation = "DESCENDANT"
+    def test_activation_restarts_api_before_frontend_without_delete_start_or_update_env(self) -> None:
         self.driver.preflight(); self.driver.activate()
-        readiness = self.driver._journal_read()["candidate"]["readiness"]
-        self.assertEqual(readiness["api"]["socketOwnerRelation"], "DESCENDANT")
-        self.assertEqual(readiness["frontend"]["socketOwnerRelation"], "DESCENDANT")
-        self.assertEqual(self.host.events.count("pm2:save"), 0)
+        mutations = [event for event in self.host.events if event.startswith("PM2:")]
+        self.assertEqual(mutations, ["PM2:restart re7-whatsapp-agent",
+                                     "PM2:restart re7-admin-front"])
+        self.assertFalse(any(event.startswith(("PM2:delete ", "PM2:start "))
+                             or "--update-env" in event for event in mutations))
+        self.assertEqual(self.driver._journal_read()["state"], "AWAITING_ACCEPTANCE")
 
-    def test_api_frontend_deploy_records_retention_incomplete_without_rollback(self) -> None:
-        self.host.retirement_fail = True
-        self.driver.preflight(); self.driver.activate(); self.acceptance(); self.driver.finalize()
-        journal = self.driver._journal_read()
-        self.assertEqual(journal["state"], "DEPLOYED_RETENTION_INCOMPLETE")
-        self.assertEqual(journal["saveCount"], 1)
-        self.assertTrue((self.driver.release_root / "DEPLOYED").is_file())
-        self.assertFalse(self.lock.exists())
-        self.assertEqual(self.host.events.count("generation:retired"), 1)
+    def test_drift_of_args_environment_cwd_or_script_is_denied(self) -> None:
+        for field in ("args", "env", "cwd", "script"):
+            with self.subTest(field=field):
+                self.tearDown(); self.setUp()
+                self.host.restart_drift = (deploy.PROCESS_NAMES["api"], field)
+                self.driver.preflight()
+                with self.assertRaises(deploy.Denied):
+                    self.driver.activate()
+                self.assertEqual(self.host.save_calls, 0)
 
-    def test_api_timeout_rolls_back_integrally_without_save(self) -> None:
-        original = {key: path.resolve() for key, path in self.stable.items()}
-        self.host.wait_fail = "api"; self.driver.preflight()
-        with self.assertRaises(deploy.Denied): self.driver.activate()
-        self.assertEqual(self.driver._journal_read()["state"], "ROLLED_BACK")
-        self.assertEqual({key: path.resolve() for key, path in self.stable.items()}, original)
-        self.assertEqual(self.host.events.count("pm2:save"), 0)
+    def test_delayed_listener_passes_only_after_three_stable_samples(self) -> None:
+        self.host.wait_samples = 6
+        self.driver.preflight(); self.driver.activate()
+        report = json.loads((self.transaction / "activate-api.report.private.json").read_text())
+        self.assertEqual(report["stableSamples"], 3)
+        self.assertEqual(report["sampleCount"], 6)
 
-    def test_frontend_timeout_after_api_rolls_back_both_without_save(self) -> None:
-        original = {key: path.resolve() for key, path in self.stable.items()}
-        self.host.wait_fail = "frontend"; self.driver.preflight()
-        with self.assertRaises(deploy.Denied): self.driver.activate()
-        self.assertEqual({key: path.resolve() for key, path in self.stable.items()}, original)
-        self.assertIn("wait:api:candidate", self.host.events)
-        self.assertIn("wait:frontend:rollback", self.host.events)
-        self.assertEqual(self.host.events.count("pm2:save"), 0)
-
-    def test_worker_change_denies_and_fails_closed_without_save(self) -> None:
+    def test_api_failure_prevents_frontend_and_rolls_back_without_save(self) -> None:
+        self.host.wait_fail = "api"
         self.driver.preflight()
-        original_select = self.driver._select
-        def select(component: str, role: str):
-            result = original_select(component, role)
-            if component == "frontend" and role == "candidate": self.host.rows["re7-whatsapp-web-worker"]["pid"] += 1
-            return result
-        self.driver._select = select  # type: ignore[method-assign]
-        with self.assertRaises(deploy.Denied): self.driver.activate()
-        self.assertEqual(self.driver._journal_read()["state"], "FAILED")
-        self.assertEqual(self.host.events.count("pm2:save"), 0)
-
-    def test_finalize_replay_and_binding_drift_are_denied(self) -> None:
-        self.driver.preflight(); self.driver.activate(); self.acceptance(); self.driver.finalize()
-        with self.assertRaises(deploy.Denied): self.driver.finalize()
-        other = deploy.Inputs("other-release", self.target, self.control_plane, deploy.COMPONENTS,
-                              self.config, self.config_manifest, self.transaction,
-                              self.config_manifest_sha)
-        with self.assertRaises(deploy.Denied): FixtureDriver(other, host=self.host, repo=ROOT,
-            releases=self.releases, stable=self.stable, lock=self.lock, dump=self.dump, pm2=self.pm2).status()
-        self.assertEqual(self.host.events.count("pm2:save"), 1)
-
-    def test_finalize_denies_pid_change_without_save_or_marker(self) -> None:
-        self.driver.preflight(); self.driver.activate(); self.acceptance()
-        self.host.rows["api"]["pid"] += 1000
-        with self.assertRaisesRegex(deploy.Denied, "finalize_identity_changed:api:pid"):
-            self.driver.finalize()
-        self.assertEqual(self.host.events.count("pm2:save"), 0)
-        self.assertFalse((self.driver.release_root / "DEPLOYED").exists())
-
-    def test_finalize_requires_exact_private_acceptance(self) -> None:
-        self.driver.preflight(); self.driver.activate()
-        self.driver.acceptance.write_text("ACEITE TÉCNICO PENDENTE\n")
-        self.driver.acceptance.chmod(0o600)
-        with self.assertRaisesRegex(deploy.Denied, "technical_acceptance"):
-            self.driver.finalize()
-        self.assertEqual(self.host.events.count("pm2:save"), 0)
-        self.assertFalse((self.driver.release_root / "DEPLOYED").exists())
-
-    def test_preflight_does_not_request_candidate_asset(self) -> None:
-        self.driver.preflight()
-        self.assertFalse(any("/_next/static/" in event for event in self.host.events))
-
-    def test_public_api_health_uses_active_proxy_route_and_validates_json_contract(self) -> None:
-        self.assertEqual(deploy.PUBLIC_HEALTH["api"],
-                         "https://converta.re7online.com/agent-api/health")
-        self.driver._health()
-        self.assertIn("api-health:http://127.0.0.1:3001/health", self.host.events)
-        self.assertIn("api-health:https://converta.re7online.com/agent-api/health", self.host.events)
-        for invalid in ({"ok": True, "db": "down"}, {"ok": False, "db": "ok"}, {}):
-            self.host.api_health_payload = invalid
-            with self.assertRaisesRegex(deploy.Denied, "api_health_contract"):
-                self.driver._health()
-        self.host.api_health_payload = {"ok": True, "db": "ok"}
-        self.host.api_health_content_type = "text/html"
-        with self.assertRaisesRegex(deploy.Denied, "api_health_contract"):
-            self.driver._health()
-
-    def test_manual_rollback_restores_and_never_saves(self) -> None:
-        original = {key: path.resolve() for key, path in self.stable.items()}
-        self.driver.preflight(); self.driver.activate(); self.driver.rollback()
-        self.assertEqual({key: path.resolve() for key, path in self.stable.items()}, original)
-        self.assertEqual(self.driver._journal_read()["state"], "ROLLED_BACK")
-        self.assertEqual(self.host.events.count("pm2:save"), 0)
-
-    def test_pid_churn_is_delegated_to_versioned_readiness(self) -> None:
-        self.driver.preflight(); self.driver.activate()
-        waits = [event for event in self.host.events if event.startswith("wait:")]
-        self.assertEqual(waits, ["wait:api:candidate", "wait:frontend:candidate"])
-        control = (ROOT / "scripts/pm2-definition-control.py").read_text()
-        self.assertIn("resets += 1", control)
-        self.assertIn("READINESS_TIMEOUT:{component}:{port}", control)
-
-    def test_private_journal_no_environment_and_no_production_port_listener(self) -> None:
-        self.driver.preflight(); self.driver.activate()
-        text = self.driver.journal.read_text()
-        self.assertNotIn('"env"', text); self.assertNotIn("token", text.lower())
-        self.assertNotIn("cookie", text.lower()); self.assertEqual(self.host.external_calls, 0)
-        self.assertFalse(any(event.startswith("listen:") for event in self.host.events))
-        self.assertEqual(stat.S_IMODE(self.driver.journal.stat().st_mode), 0o600)
-
-    def test_external_manifest_digest_authenticates_config_and_binding(self) -> None:
-        self.driver.preflight()
-        source = self.config / "api-candidate.source.private.json"
-        source.write_text(source.read_text() + " ")
-        manifest = read_json_fixture(self.config_manifest)
-        item = next(item for item in manifest["files"] if item["name"] == source.name)
-        item["sha256"] = sha(source); item["size"] = source.stat().st_size
-        put(self.config_manifest, manifest)
-        with self.assertRaisesRegex(deploy.Denied, "config_manifest_sha256_mismatch"):
+        with self.assertRaisesRegex(deploy.Denied, "READINESS_TIMEOUT:api:3001"):
             self.driver.activate()
-        drift = deploy.Inputs(self.candidate, self.target, self.control_plane, deploy.COMPONENTS,
-                              self.config, self.config_manifest, self.transaction, "f" * 64)
-        with self.assertRaisesRegex(deploy.Denied, "transaction_binding"):
-            FixtureDriver(drift, host=self.host, repo=ROOT, releases=self.releases,
-                          stable=self.stable, lock=self.lock, dump=self.dump, pm2=self.pm2).status()
-
-    def test_release_index_denies_mutation_and_extra_entry(self) -> None:
-        target = self.driver.release_root / "api-runtime/dist/index.js"
-        target.write_text("changed\n")
-        with self.assertRaisesRegex(deploy.Denied, "release_index_mismatch"):
-            self.driver.preflight()
-
-    def test_release_index_denies_unindexed_entry(self) -> None:
-        (self.driver.release_root / "frontend-runtime/unexpected.txt").write_text("x")
-        with self.assertRaisesRegex(deploy.Denied, "release_index_inventory"):
-            self.driver.preflight()
-
-    def test_release_index_denies_mode_drift_and_symlink_escape(self) -> None:
-        target = self.driver.release_root / "api-runtime/dist/index.js"
-        target.chmod(0o755)
-        with self.assertRaisesRegex(deploy.Denied, "release_index_mismatch"):
-            self.driver.preflight()
-        target.unlink(); os.symlink(self.base / "outside", target)
-        (self.base / "outside").write_text("outside")
-        with self.assertRaisesRegex(deploy.Denied, "release_symlink_escape"):
-            self.driver.preflight()
-
-    def _finalize_fault(self, point: str) -> None:
-        self.driver.preflight(); self.driver.activate(); self.acceptance()
-        self.driver.failpoints.add(point)
-        with self.assertRaisesRegex(deploy.Denied, f"injected:{point}"):
-            self.driver.finalize()
-        failed = self.driver._journal_read()
-        self.assertEqual(failed["state"], "FAILED")
-        self.assertNotEqual(failed["state"], "DEPLOYED")
-        self.driver.finalize()
-        final = self.driver._journal_read()
-        self.assertEqual(final["state"], "DEPLOYED_SANITIZED")
-        self.assertEqual(self.host.save_calls, 1)
-        self.assertFalse(self.lock.exists())
-        self.assertTrue((self.driver.release_root / "DEPLOYED").is_file())
-        self.assertEqual(final["finalDumpSha256"], sha(self.dump))
-        self.assertEqual(self.host.events.count("generation:retired"), 1)
-
-    def test_finalize_resumes_before_save(self) -> None: self._finalize_fault("before_save")
-    def test_finalize_resumes_immediately_after_save(self) -> None: self._finalize_fault("after_save")
-    def test_finalize_resumes_during_dump_validation(self) -> None: self._finalize_fault("dump_validation")
-    def test_finalize_resumes_during_marker_rename(self) -> None: self._finalize_fault("marker_rename")
-    def test_finalize_resumes_during_lock_release(self) -> None: self._finalize_fault("lock_release")
-    def test_finalize_resumes_during_final_journal(self) -> None: self._finalize_fault("final_journal")
-
-    def _rollback_fault(self, component: str) -> None:
-        original = {key: path.resolve() for key, path in self.stable.items()}
-        self.driver.preflight(); self.driver.activate()
-        self.driver.failpoints.add(f"rollback_after_{component}")
-        with self.assertRaisesRegex(deploy.Denied, f"injected:rollback_after_{component}"):
-            self.driver.rollback()
-        failed = self.driver._journal_read()
-        self.assertEqual(failed["state"], "FAILED")
-        self.assertEqual(failed["recoveryAction"], "rollback")
-        self.assertTrue(self.lock.exists())
-        self.driver.rollback()
+        mutations = [event for event in self.host.events if event.startswith("PM2:")]
+        self.assertEqual(mutations, ["PM2:restart re7-whatsapp-agent",
+                                     "PM2:restart re7-whatsapp-agent"])
+        self.assertFalse(any("re7-admin-front" in event for event in mutations))
         self.assertEqual(self.driver._journal_read()["state"], "ROLLED_BACK")
-        self.assertEqual({key: path.resolve() for key, path in self.stable.items()}, original)
+
+    def test_frontend_failure_rolls_back_frontend_before_api(self) -> None:
+        self.host.wait_fail = "frontend"
+        self.driver.preflight()
+        with self.assertRaisesRegex(deploy.Denied, "READINESS_TIMEOUT:frontend:3000"):
+            self.driver.activate()
+        mutations = [event for event in self.host.events if event.startswith("PM2:")]
+        self.assertEqual(mutations[-2:], ["PM2:restart re7-admin-front",
+                                         "PM2:restart re7-whatsapp-agent"])
+        self.assertEqual(self.driver._journal_read()["state"], "ROLLED_BACK")
+
+    def test_worker_drift_is_denied_and_never_restarted_or_saved(self) -> None:
+        self.host.worker_drift = True
+        self.driver.preflight()
+        with self.assertRaises(deploy.Denied):
+            self.driver.activate()
+        self.assertFalse(any("re7-whatsapp-web-worker" in event for event in self.host.events))
         self.assertEqual(self.host.save_calls, 0)
+
+    def test_release_inventory_mutation_is_denied(self) -> None:
+        (self.driver.release_root / "api-runtime/dist/index.js").write_text("drift\n")
+        with self.assertRaisesRegex(deploy.Denied, "release_index_mismatch"):
+            self.driver.preflight()
+
+    def test_runtime_manifest_drift_is_denied(self) -> None:
+        value = json.loads(self.runtime_manifest.read_text())
+        value["processes"]["api"] = "other"
+        put(self.runtime_manifest, value)
+        self.inputs = deploy.Inputs(
+            self.candidate, self.target, self.control_plane, deploy.COMPONENTS,
+            self.runtime_manifest, self.transaction, sha(self.runtime_manifest), self.retirement,
+        )
+        with self.assertRaisesRegex(deploy.Denied, "runtime_manifest_processes"):
+            self._driver().preflight()
+
+    def test_rollback_manifest_index_entry_and_build_id_are_authenticated(self) -> None:
+        value = json.loads(self.runtime_manifest.read_text())
+        value["rollbackReleases"]["api"]["entrySha256"] = "f" * 64
+        put(self.runtime_manifest, value)
+        self.inputs = deploy.Inputs(
+            self.candidate, self.target, self.control_plane, deploy.COMPONENTS,
+            self.runtime_manifest, self.transaction, sha(self.runtime_manifest), self.retirement,
+        )
+        with self.assertRaisesRegex(deploy.Denied, "rollback_entry:api"):
+            self._driver().preflight()
+
+    def test_finalize_saves_once_validates_instances_equivalence_and_retires(self) -> None:
+        self.driver.preflight(); self.driver.activate(); self.acceptance()
+        self.driver.finalize()
+        journal = self.driver._journal_read()
+        self.assertEqual(journal["state"], "DEPLOYED_SANITIZED")
+        self.assertEqual(journal["saveCount"], 1)
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+        self.assertTrue((self.driver.release_root / "DEPLOYED").is_file())
         self.assertFalse(self.lock.exists())
 
-    def test_rollback_resumes_after_frontend(self) -> None: self._rollback_fault("frontend")
-    def test_rollback_resumes_after_api(self) -> None: self._rollback_fault("api")
+    def test_dump_instances_missing_is_only_equivalent_for_single_fork_process(self) -> None:
+        self.driver.preflight(); self.driver.activate(); self.acceptance()
+        original = self.host.pm2_mutate
+        def save_without_instances(pm2: Path, args: list[str]) -> None:
+            original(pm2, args)
+            if args == ["save"]:
+                rows = json.loads(self.dump.read_text())
+                for row in rows:
+                    row["pm2_env"].pop("instances", None)
+                put(self.dump, rows)
+        self.host.pm2_mutate = save_without_instances  # type: ignore[method-assign]
+        self.driver.finalize()
+        self.assertEqual(self.driver._journal_read()["saveCount"], 1)
 
-    def test_common_rollback_denied_after_candidate_dump_persisted(self) -> None:
+    def test_finalize_resume_never_repeats_save_or_retirement(self) -> None:
         self.driver.preflight(); self.driver.activate(); self.acceptance()
         self.driver.failpoints.add("after_save")
-        with self.assertRaises(deploy.Denied): self.driver.finalize()
-        with self.assertRaisesRegex(deploy.Denied, "rollback_failed_state_owner"):
-            self.driver.rollback()
-        self.assertEqual(self.host.save_calls, 1)
-
-    def test_rollback_detects_candidate_dump_even_without_save_checkpoint(self) -> None:
-        self.driver.preflight(); self.driver.activate()
-        self.host.pm2_mutate(self.pm2, ["save"])
-        with self.assertRaisesRegex(deploy.Denied, "rollback_after_candidate_dump"):
-            self.driver.rollback()
-        self.assertTrue(self.lock.exists())
-
-    def test_preexisting_marker_is_denied_before_save(self) -> None:
-        self.driver.preflight(); self.driver.activate(); self.acceptance()
-        (self.driver.release_root / "DEPLOYED").write_text("preexisting\n")
-        with self.assertRaisesRegex(deploy.Denied, "deployed_marker_exists"):
+        with self.assertRaisesRegex(deploy.Denied, "injected:after_save"):
             self.driver.finalize()
+        self.driver.finalize()
+        self.assertEqual(self.host.save_calls, 1)
+        self.assertEqual(self.host.retirement_calls, 1)
+
+    def test_rollback_resume_never_repeats_completed_restart(self) -> None:
+        self.driver.preflight(); self.driver.activate()
+        self.driver.failpoints.add("rollback_after_frontend")
+        with self.assertRaisesRegex(deploy.Denied, "injected:rollback_after_frontend"):
+            self.driver.rollback()
+        before = self.host.events.count("PM2:restart re7-admin-front")
+        self.driver.rollback()
+        self.assertEqual(self.host.events.count("PM2:restart re7-admin-front"), before)
         self.assertEqual(self.host.save_calls, 0)
-        self.assertEqual(self.driver._journal_read()["state"], "FAILED")
 
+    def test_readiness_evidence_is_private_and_sanitized(self) -> None:
+        self.driver.preflight(); self.driver.activate()
+        for path in self.transaction.glob("*.private.*"):
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        journal = self.driver.journal.read_text()
+        self.assertNotIn("DATABASE_URL", journal)
+        self.assertNotIn("token", journal.lower())
 
-def read_json_fixture(path: Path) -> dict[str, Any]:
-    value = json.loads(path.read_text())
-    assert isinstance(value, dict)
-    return value
+    def test_control_timeout_preserves_streams_and_denies_missing_report(self) -> None:
+        class TimeoutHost(deploy.Host):
+            def run(self, command: list[str], *, timeout: float = 40):
+                raise subprocess.TimeoutExpired(command, timeout, output=b"partial-out",
+                                                stderr=b"partial-error")
+
+        evidence = self.base / "timeout-evidence"
+        evidence.mkdir(mode=0o700)
+        report = evidence / "report.private.json"
+        stdout = evidence / "stdout.private.txt"
+        stderr = evidence / "stderr.private.txt"
+        with self.assertRaisesRegex(deploy.Denied, "READINESS_OBSERVABILITY_DEFECT"):
+            TimeoutHost().control_evidence(
+                ROOT, ["wait-existing-readiness"], report=report,
+                stdout=stdout, stderr=stderr)
+        self.assertEqual(stdout.read_bytes(), b"partial-out")
+        self.assertEqual(stderr.read_bytes(), b"partial-error")
+        self.assertFalse(report.exists())
 
 
 if __name__ == "__main__":
