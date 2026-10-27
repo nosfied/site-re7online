@@ -337,7 +337,8 @@ class LegacyA959V1PreserveFixture(LegacyBootstrapFixture):
         installed_frontend = self.installed / "frontend-runtime"; installed_frontend.mkdir()
         (installed_api / "index.js").write_text("api\n")
         (installed_frontend / "server.js").write_text("frontend\n")
-        self.private_data = installed_api / ".data"; self.private_data.mkdir()
+        self.private_data = installed_api / ".data"; self.private_data.mkdir(mode=0o755)
+        self.private_data.chmod(0o755)
         private_json(self.private_data / "state.json", {"fixture": "private-state"})
         self.marker = self.installed / "DEPLOYED"; self.marker.write_text("deployed\n"); self.marker.chmod(0o600)
         private_info = self.private_data.lstat()
@@ -556,6 +557,8 @@ class GenerationRetirementTest(unittest.TestCase):
                              if item["path"] == str(fixture.installed))
             self.assertEqual((installed["class"], installed["state"]),
                              ("RELEASE_RUNTIME", "ACTIVE_DEPENDENCY"))
+            self.assertRegex(installed["structuralSha256"], r"^[0-9a-f]{64}$")
+            self.assertGreater(installed["inodes"], 1)
             private_data = next(item for item in contract["artifacts"]
                                 if item["path"] == str(fixture.private_data))
             self.assertEqual((private_data["class"], private_data["state"],
@@ -603,6 +606,45 @@ class GenerationRetirementTest(unittest.TestCase):
                 with self.assertRaisesRegex(MODULE.Denied,
                                             "artifact_contract_a959_private_data_overlay"):
                     MODULE.validate_contract(contract)
+        finally:
+            fixture.close()
+
+    def test_a959_prepare_denies_immutable_file_drift_after_bootstrap(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.bootstrap_a959()
+            (fixture.installed / "api-runtime/index.js").write_text("changed immutable api\n")
+            retirement = fixture.evidence / "immutable-drift"; retirement.mkdir(mode=0o700)
+            with self.assertRaisesRegex(MODULE.Denied, "artifact_drift:"):
+                fixture.prepare_a959(retirement / "intent.private.json",
+                                     retirement / "commands.private.txt", sha(fixture.v1_review))
+        finally:
+            fixture.close()
+
+    def test_a959_prepare_denies_immutable_addition_after_bootstrap(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            fixture.bootstrap_a959()
+            (fixture.installed / "api-runtime/unindexed.js").write_text("new immutable entry\n")
+            retirement = fixture.evidence / "immutable-addition"; retirement.mkdir(mode=0o700)
+            with self.assertRaisesRegex(MODULE.Denied, "artifact_drift:"):
+                fixture.prepare_a959(retirement / "intent.private.json",
+                                     retirement / "commands.private.txt", sha(fixture.v1_review))
+        finally:
+            fixture.close()
+
+    def test_a959_prepare_allows_private_data_content_change_with_zero_commands(self):
+        fixture = LegacyA959V1PreserveFixture()
+        try:
+            original_review_sha = sha(fixture.v1_review)
+            fixture.bootstrap_a959()
+            private_json(fixture.private_data / "state.json", {"fixture": "updated-private-state"})
+            retirement = fixture.evidence / "private-data-change"; retirement.mkdir(mode=0o700)
+            prepared = fixture.prepare_a959(retirement / "intent.private.json",
+                                             retirement / "commands.private.txt",
+                                             original_review_sha)
+            self.assertIn('"commandCount":0', prepared)
+            self.assertEqual((retirement / "commands.private.txt").read_bytes(), b"")
         finally:
             fixture.close()
 

@@ -607,12 +607,15 @@ def validate_a959_private_data_overlay(release_root: Path) -> dict[str, Any]:
     overlay = release_root / A959_PRIVATE_DATA_OVERLAY
     try:
         release_resolved = release_root.resolve(strict=True)
+        release_info = release_root.lstat()
         before = overlay.lstat()
         resolved = overlay.resolve(strict=True)
     except OSError:
         deny("legacy_a959_private_data_overlay_missing")
     if (overlay.is_symlink() or not stat.S_ISDIR(before.st_mode) or
-            resolved != overlay or not inside(resolved, release_resolved)):
+            resolved != overlay or not inside(resolved, release_resolved) or
+            (before.st_uid, before.st_gid) != (release_info.st_uid, release_info.st_gid) or
+            stat.S_IMODE(before.st_mode) & 0o022):
         deny("legacy_a959_private_data_overlay_identity")
     entry_count = 1
     for path in sorted(overlay.rglob("*"), key=lambda item: item.as_posix()):

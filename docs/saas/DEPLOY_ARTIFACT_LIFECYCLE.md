@@ -81,11 +81,15 @@ permanece `ACTIVE_DEPENDENCY`, fora de qualquer comando.
 A release instalada `a959` contém ainda o overlay operacional literal
 `api-runtime/.data`, ausente do pacote e do índice imutável. Somente a combinação
 fechada release/target da `a959` pode verificá-lo separadamente: a raiz precisa ser
-diretório físico confinado, sua identidade é registrada e nenhum symlink é aceito.
+diretório físico confinado, com owner/group iguais aos da release, sem escrita por
+grupo/outros; sua identidade é registrada e nenhum symlink é aceito.
 As 34.351 entradas imutáveis continuam comparadas integralmente ao índice e qualquer
 adição fora do overlay é `DENY`. O contrato classifica a raiz como
 `PRIVATE_DATA_NEVER_RETIRE/ACTIVE_DEPENDENCY`; `prepare` e `execute` nunca geram
-comando para ela. A verificação do pacote não admite overlay ou exceção. Releases
+comando para ela. Entre bootstrap e `prepare`, a projeção estrutural da release é
+recalculada excluindo somente esse subtree; drift em qualquer entrada imutável é
+`DENY`, enquanto conteúdo mutável dentro de `.data` não invalida a projeção. A
+verificação do pacote não admite overlay ou exceção. Releases
 futuras devem manter todo dado mutável fora da árvore imutável instalada.
 
 Portanto, `123ba` e `a959` não compartilham bootstrap: a primeira é

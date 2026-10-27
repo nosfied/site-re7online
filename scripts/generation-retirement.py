@@ -59,7 +59,7 @@ LEGACY_123BA_BINDING = {
         "path": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/immutable-123ba7bd-vps-20261026T200100Z/index.sha256",
         "sha256": "a91323272cdcd3a91c207a18a953f11f93e346cf3bde1f976e3229829fa0e69b",
     },
-    "canonicalVerifierSha256": "78336d605301016a1eb5c07b2d603bf85ca6e3299519469fed8bef2f5fffd896",
+    "canonicalVerifierSha256": "fe74eb3b866e8ca266787898eb2a6c041f56cc675277a3e525ce6b3972679374",
     "contractOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-artifacts.private.json",
     "reviewOutput": "/opt/re7online/build-output/immutable-123ba7bd-vps-20261026T200100Z-producer/generation-review.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-123ba7bd-vps-20261026T200100Z-legacy-bootstrap/bootstrap-receipt.private.json",
@@ -125,7 +125,7 @@ LEGACY_A959_V1_PRESERVE_BINDING = {
             "5": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/immutable-a959129e-vps-20261026T023100Z/frontend-runtime",
         },
     },
-    "canonicalVerifierSha256": "78336d605301016a1eb5c07b2d603bf85ca6e3299519469fed8bef2f5fffd896",
+    "canonicalVerifierSha256": "fe74eb3b866e8ca266787898eb2a6c041f56cc675277a3e525ce6b3972679374",
     "contractOutput": "/opt/re7online/build-output/immutable-a959129e-vps-20261026T023100Z-producer/generation-artifacts.private.json",
     "receiptOutput": "/opt/re7online/backups/converta-persistent/preparations/immutable-a959129e-vps-20261026T023100Z-legacy-v1-bootstrap/bootstrap-receipt.private.json",
 }
@@ -736,7 +736,16 @@ def authenticate_artifact(artifact: dict[str, Any]) -> None:
     if expected is not None and (info.st_dev, info.st_ino) != (expected.get("device"), expected.get("inode")):
         deny(f"artifact_identity:{path}")
     if artifact.get("structuralSha256") is not None:
-        observed = structural_metrics(path)
+        a959_binding = LEGACY_A959_V1_PRESERVE_BINDING
+        is_a959_installed_runtime = (
+            artifact.get("releaseId") == a959_binding["releaseId"] and
+            artifact.get("targetCommit") == a959_binding["targetCommit"] and
+            artifact.get("class") == "RELEASE_RUNTIME" and
+            path == Path(a959_binding["installedReleasePath"])
+        )
+        observed = (_legacy_structural_metrics(
+            path, {Path(a959_binding["privateDataOverlay"]["path"])}
+        ) if is_a959_installed_runtime else structural_metrics(path))
         for field in ("sizeBytes", "allocatedBytes", "inodes", "structuralSha256"):
             if observed[field] != artifact.get(field):
                 deny(f"artifact_drift:{path}:{field}")
@@ -749,6 +758,25 @@ def authenticate_artifact(artifact: dict[str, Any]) -> None:
                 (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) !=
                 (digest.get("ownerUid"), digest.get("groupGid"), digest.get("mode"))):
             deny(f"artifact_private_data_identity:{path}")
+        release_root = Path(artifact["path"]).parents[1]
+        try:
+            release_info = release_root.lstat()
+            resolved_root = path.resolve(strict=True)
+        except OSError:
+            deny(f"artifact_private_data_identity:{path}")
+        if ((info.st_uid, info.st_gid) != (release_info.st_uid, release_info.st_gid) or
+                stat.S_IMODE(info.st_mode) & 0o022 or resolved_root != path):
+            deny(f"artifact_private_data_identity:{path}")
+        for item in path.rglob("*"):
+            try:
+                item_info = item.lstat()
+                item_resolved = item.resolve(strict=True)
+            except OSError:
+                deny(f"artifact_private_data_read:{path}")
+            if (stat.S_ISLNK(item_info.st_mode) or
+                    not (stat.S_ISDIR(item_info.st_mode) or stat.S_ISREG(item_info.st_mode)) or
+                    not (item_resolved == resolved_root or resolved_root in item_resolved.parents)):
+                deny(f"artifact_private_data_symlink:{path}")
     if stat.S_ISREG(info.st_mode) and isinstance(digest, dict) and digest.get("sha256"):
         if digest_bytes(path.read_bytes()) != digest["sha256"]:
             deny(f"artifact_hash:{path}")
@@ -1353,11 +1381,14 @@ def _a959_private_data_artifact(descriptor: dict[str, Any],
         deny("legacy_a959_private_data_verification")
     try:
         info = path.lstat()
+        installed_info = installed.lstat()
         resolved = path.resolve(strict=True)
     except OSError:
         deny("legacy_a959_private_data_identity")
     if (path.is_symlink() or not stat.S_ISDIR(info.st_mode) or resolved != path or
-            (info.st_dev, info.st_ino) != (identity["device"], identity["inode"])):
+            (info.st_dev, info.st_ino) != (identity["device"], identity["inode"]) or
+            (info.st_uid, info.st_gid) != (installed_info.st_uid, installed_info.st_gid) or
+            stat.S_IMODE(info.st_mode) & 0o022):
         deny("legacy_a959_private_data_identity")
     return {
         "path": str(path), "releaseId": descriptor["releaseId"],
@@ -1476,13 +1507,9 @@ def bootstrap_legacy_a959_v1_preserve(args: argparse.Namespace) -> None:
              "indexSha256": descriptor["index"]["sha256"],
              "operationalMarkerSha256": descriptor["deployedMarker"]["sha256"]},
         )
-        installed_info = installed.lstat()
-        installed_artifact.update(
-            sizeBytes=installed_info.st_size,
-            allocatedBytes=installed_info.st_blocks * 512,
-            inodes=1,
-            structuralSha256=None,
-        )
+        installed_artifact.update(**_legacy_structural_metrics(
+            installed, {private_data_path}
+        ))
         artifacts = [
             _legacy_artifact(Path(descriptor["package"]["path"]), descriptor, "PACKAGE_PRESERVE",
                              "ACTIVE_DEPENDENCY", {"sha256": descriptor["package"]["sha256"]}),

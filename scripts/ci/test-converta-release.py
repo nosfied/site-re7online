@@ -324,6 +324,7 @@ class ReleaseProducerTest(unittest.TestCase):
     def test_a959_installed_overlay_is_closed_and_does_not_relax_package_inventory(self) -> None:
         root, marker_sha = self.copy_a959_release("a959-overlay-valid")
         write(root / "api-runtime/.data/private/state.json", "fixture-private-state\n", 0o600)
+        (root / "api-runtime/.data").chmod(0o755)
         accepted = self.verify_a959_overlay(root, marker_sha)
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
         result = json.loads(accepted.stdout)
@@ -363,13 +364,20 @@ class ReleaseProducerTest(unittest.TestCase):
                            "legacy_a959_private_data_overlay_identity")
 
         escaped, marker_sha = self.copy_a959_release("a959-overlay-escape")
-        overlay = escaped / "api-runtime/.data"; overlay.mkdir()
+        overlay = escaped / "api-runtime/.data"; overlay.mkdir(mode=0o755); overlay.chmod(0o755)
         (overlay / "outside").symlink_to("/etc/passwd")
         self.assert_denied(self.verify_a959_overlay(escaped, marker_sha),
                            "legacy_a959_private_data_overlay_symlink")
 
+        writable, marker_sha = self.copy_a959_release("a959-overlay-writable")
+        writable_overlay = writable / "api-runtime/.data"; writable_overlay.mkdir(mode=0o775)
+        writable_overlay.chmod(0o775)
+        self.assert_denied(self.verify_a959_overlay(writable, marker_sha),
+                           "legacy_a959_private_data_overlay_identity")
+
         extra, marker_sha = self.copy_a959_release("a959-overlay-extra")
-        (extra / "api-runtime/.data").mkdir()
+        (extra / "api-runtime/.data").mkdir(mode=0o755)
+        (extra / "api-runtime/.data").chmod(0o755)
         write(extra / "api-runtime/unindexed.txt", "extra\n")
         self.assert_denied(self.verify_a959_overlay(extra, marker_sha), "release_index_inventory")
 
