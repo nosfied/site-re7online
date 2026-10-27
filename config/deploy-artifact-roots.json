@@ -6,6 +6,6 @@
     "outputs": {"path": "/opt/re7online/build-output", "ownerUid": 1000, "groupGid": 1000, "allowedModes": ["0700", "0755"]},
     "releases": {"path": "/opt/re7online/releases", "ownerUid": 1000, "groupGid": 1000, "allowedModes": ["0700", "0755"]},
     "staging": {"path": "/opt/re7online/staging", "ownerUid": 1000, "groupGid": 1000, "allowedModes": ["0700", "0755"]},
-    "evidence": [{"path": "/opt/re7online/backups/converta-persistent", "ownerUid": 1000, "groupGid": 1000, "allowedModes": ["0700"]}]
+    "evidence": [{"path": "/opt/re7online/backups/converta-persistent", "ownerUid": 1000, "groupGid": 1000, "allowedModes": ["0700", "0750"]}]
   }
 }

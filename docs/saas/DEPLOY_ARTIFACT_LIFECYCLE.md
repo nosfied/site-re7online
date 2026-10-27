@@ -68,11 +68,23 @@ descendente de `build-output`, pois lifecycle/review são preservados ao lado da
 geração e nunca integram um comando destrutivo. Mudança de `current`, fingerprint sanitizado do PM2, dump ou
 grafo entre preparação e execução também nega antes do primeiro `ATTEMPT`.
 
+O hash, o schema fechado e todas as declarações da política são sempre
+autenticados. Isso não implica exigir antecipadamente a existência física de uma
+raiz opcional que não participa da operação. `staging` é autenticada fisicamente
+somente se existir `DERIVED_STAGING` ainda não `SANITIZED` que possa originar um
+comando. Nesse caso a checagem ocorre antes do lock/comando e exige diretório real,
+sem symlink, owner/group/modo autorizados e ancestrais seguros. Staging ausente sem
+artefato destrutível, ou staging já `SANITIZED` e removido pelo produtor, é válido;
+não se cria a raiz histórica para passar no gate. A raiz de evidências participa
+sempre e aceita os modos canônicos `0700` e `0750`, ambos sem escrita por
+grupo/outros.
+
 O produtor recebe a mesma política autenticada: `--repo` deve ser descendente estrito
 de `build-worktrees`, `--output` descendente estrito de `build-output` e
 `--installed-releases-root` deve ser exatamente a raiz `releases`. Essas três
 fronteiras, seus owners, modos e ancestrais são conferidos antes de criar a saída, o
 lock de geração ou executar npm. Caminho externo, raiz redefinida ou symlink é `DENY`.
+Staging e outras raízes de retenção não utilizadas não integram esse gate pré-build.
 
 Uma review v1 `PRESERVE` conhecida, incluindo a candidata legada `123ba`, só pode
 ser migrada sem inventário global quando `prepare` recebe

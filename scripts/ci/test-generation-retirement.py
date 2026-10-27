@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
 import subprocess
 import sys
@@ -40,17 +41,17 @@ class Fixture:
                  release_id="immutable-fixture"):
         self.temp = tempfile.TemporaryDirectory(prefix="generation-retirement-")
         self.root = Path(self.temp.name)
-        self.output_root = self.root / "build-output"; self.output_root.mkdir()
+        self.output_root = self.root / "build-output"; self.output_root.mkdir(mode=0o755)
         self.output = self.output_root / "generation"; self.output.mkdir()
-        self.worktrees_root = self.root / "build-worktrees"; self.worktrees_root.mkdir()
-        self.releases_root = self.root / "releases"; self.releases_root.mkdir()
-        self.staging_root = self.root / "staging-root"; self.staging_root.mkdir()
-        self.evidence_root = self.root / "evidence"; self.evidence_root.mkdir()
+        self.worktrees_root = self.root / "build-worktrees"; self.worktrees_root.mkdir(mode=0o755)
+        self.releases_root = self.root / "releases"; self.releases_root.mkdir(mode=0o755)
+        self.staging_root = self.root / "staging-root"; self.staging_root.mkdir(mode=0o755)
+        self.evidence_root = self.root / "evidence"; self.evidence_root.mkdir(mode=0o750)
         self.release_id = release_id
         self.target = "a" * 40
         self.writer_lock = self.root / ".generation-build.lock"; self.writer_lock.write_text(""); self.writer_lock.chmod(0o600)
         self.deploy_lock = self.root / ".deployment-window.lock"; self.deploy_lock.write_text(""); self.deploy_lock.chmod(0o600)
-        self.repo = self.root / "repo"; self.repo.mkdir()
+        self.repo = self.root / "repo"; self.repo.mkdir(mode=0o755)
         subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
         subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=self.repo, check=True)
         subprocess.run(["git", "config", "user.name", "Fixture"], cwd=self.repo, check=True)
@@ -91,7 +92,8 @@ class Fixture:
         private_json(self.policy, {"schemaVersion": 1, "canonicalRoots": {
             "repository": policy_entry(self.repo), "worktrees": policy_entry(self.worktrees_root),
             "outputs": policy_entry(self.output_root), "releases": policy_entry(self.releases_root),
-            "staging": policy_entry(self.staging_root), "evidence": [policy_entry(self.evidence_root)]}})
+            "staging": policy_entry(self.staging_root), "evidence": [{
+                **policy_entry(self.evidence_root), "allowedModes": ["0700", "0750"]}]}})
 
         def artifact(path: Path, cls: str, state: str = "ACTIVE_DEPENDENCY") -> dict:
             info = path.lstat()
@@ -382,6 +384,115 @@ class GenerationRetirementTest(unittest.TestCase):
             result = fixture.prepare()
             self.assertEqual(result.returncode, 2)
             self.assertRegex(result.stderr, "canonical_roots_policy_mismatch|canonical_root:worktrees")
+        finally:
+            fixture.close()
+
+    def test_optional_staging_root_is_authenticated_only_for_pending_artifacts(self):
+        # No staging artifact participates in this operation: the fully
+        # authenticated policy may name an optional root that is absent.
+        fixture = Fixture()
+        try:
+            contract = json.loads(fixture.contract.read_text())
+            contract["artifacts"] = [item for item in contract["artifacts"]
+                                     if item["class"] != "DERIVED_STAGING"]
+            private_json(fixture.contract, contract)
+            shutil.rmtree(fixture.staging_root)
+            passed = fixture.prepare()
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+            self.assertNotIn(str(fixture.staging), fixture.commands.read_text())
+        finally:
+            fixture.close()
+
+        # A producer-confirmed, already removed staging artifact is terminal
+        # and likewise does not make its historical root physically required.
+        fixture = Fixture()
+        try:
+            contract = json.loads(fixture.contract.read_text())
+            staging = next(item for item in contract["artifacts"]
+                           if item["class"] == "DERIVED_STAGING")
+            staging["state"] = "SANITIZED"
+            staging["removedAtProducerCompletion"] = True
+            private_json(fixture.contract, contract)
+            shutil.rmtree(fixture.staging_root)
+            passed = fixture.prepare()
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+            self.assertNotIn(str(fixture.staging), fixture.commands.read_text())
+        finally:
+            fixture.close()
+
+        # A pending staging artifact is destructive scope. Its absent root is
+        # denied before lock acquisition and before commands are published.
+        fixture = Fixture()
+        try:
+            shutil.rmtree(fixture.staging_root)
+            with patch.object(MODULE, "acquire_existing_lock",
+                              side_effect=AssertionError("lock must not be acquired")) as acquire:
+                args = MODULE.parser().parse_args([
+                    "prepare", "--contract", str(fixture.contract),
+                    "--contract-sha256", sha(fixture.contract), "--lifecycle", str(fixture.lifecycle),
+                    "--lifecycle-sha256", sha(fixture.lifecycle), "--operational-state", str(fixture.operational),
+                    "--operational-state-sha256", sha(fixture.operational), "--root-policy", str(fixture.policy),
+                    "--root-policy-sha256", sha(fixture.policy), "--deployment-lock", str(fixture.deploy_lock),
+                    "--intent-output", str(fixture.intent), "--commands-output", str(fixture.commands),
+                    "--review-output", str(fixture.review), "--reviewer", "fixture-owner",
+                    "--reason", "fixture close",
+                ])
+                with self.assertRaisesRegex(MODULE.Denied, "root_policy_directory:staging"):
+                    MODULE.prepare(args)
+                acquire.assert_not_called()
+            self.assertFalse(fixture.commands.exists())
+        finally:
+            fixture.close()
+
+        # The same pending artifact remains valid when its authenticated root
+        # exists and has the declared identity.
+        fixture = Fixture()
+        try:
+            passed = fixture.prepare()
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+            self.assertIn(str(fixture.staging), fixture.commands.read_text())
+        finally:
+            fixture.close()
+
+    def test_pending_staging_denies_symlink_or_root_identity_drift(self):
+        fixture = Fixture()
+        try:
+            actual = fixture.root / "staging-actual"
+            fixture.staging_root.rename(actual)
+            os.symlink(actual, fixture.staging_root)
+            denied = fixture.prepare()
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("root_policy_directory:staging", denied.stderr)
+        finally:
+            fixture.close()
+
+        fixture = Fixture()
+        try:
+            fixture.staging_root.chmod(0o700)
+            denied = fixture.prepare()
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("root_policy_identity:staging", denied.stderr)
+        finally:
+            fixture.close()
+
+    def test_evidence_root_accepts_0750_but_denies_group_writable_mode(self):
+        fixture = Fixture()
+        try:
+            self.assertEqual(stat.S_IMODE(fixture.evidence_root.stat().st_mode), 0o750)
+            passed = fixture.prepare()
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+        finally:
+            fixture.close()
+
+        fixture = Fixture()
+        try:
+            fixture.evidence_root.chmod(0o770)
+            policy = json.loads(fixture.policy.read_text())
+            policy["canonicalRoots"]["evidence"][0]["allowedModes"] = ["0700", "0750", "0770"]
+            private_json(fixture.policy, policy)
+            denied = fixture.prepare()
+            self.assertEqual(denied.returncode, 2)
+            self.assertIn("root_policy_identity:evidence", denied.stderr)
         finally:
             fixture.close()
 

@@ -50,6 +50,14 @@ Antes mesmo do lock de build, a política versionada autenticada deve provar
 raízes pelo comando operacional; divergência, caminho externo ou symlink nega antes
 de criar output ou iniciar npm.
 
+Esse gate pré-build autentica integralmente o hash, schema e conteúdo da política,
+mas exige existência física somente das três raízes que participam do build:
+`build-worktrees`, `build-output` e `releases`. Raízes opcionais não são criadas
+para satisfazer a política. Em particular, a ausência de `/opt/re7online/staging`
+é válida enquanto não houver `DERIVED_STAGING` pendente capaz de originar comando.
+Um staging já `SANITIZED` e comprovadamente removido pelo produtor também não
+reativa essa exigência histórica.
+
 O build publica `generation-artifacts.private.json`. Depois da verificação do
 pacote, execute `scripts/generation-retirement.py prepare` com o contrato,
 lifecycle e fotografia operacional autenticados. A intenção resultante e seu
@@ -67,6 +75,13 @@ até reconciliação. Os cinco comandos públicos do driver permanecem inalterad
 Não usar retry, force, prune, glob ou caminhos alternativos.
 Retomadas sucessivas encadeiam cumulativamente os hashes dos intents, receipts e
 journals anteriores; cada nova autorização contém somente caminhos ainda pendentes.
+
+Na preparação ou execução da retenção, qualquer `DERIVED_STAGING` ainda pendente
+ativa a validação física sob demanda da raiz staging antes do lock e de qualquer
+comando: diretório real, sem symlink, identidade e modo autorizados e ancestrais
+seguros. Ausência ou identidade divergente é `DENY`. As raízes de evidência são
+sempre autenticadas porque recebem intenção/recibo; a raiz persistente canônica
+admite `deploy:deploy` em `0700` ou `0750`, nunca escrita por grupo/outros.
 
 O fluxo frontend-only usa o mesmo executor release-bound nas fases `activate` e
 `finalize`. Depois do aceite, `finalize` revalida o trio, executa um único `pm2 save`,
