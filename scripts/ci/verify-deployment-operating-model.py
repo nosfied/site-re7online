@@ -77,7 +77,9 @@ for marker in ("preflight", "activate", "finalize", "rollback", "status",
     require(marker in runbook, f"deploy runbook marker {marker}")
 for marker in ('choices=("preflight", "activate", "finalize", "rollback", "status")',
                "pm2-definition-control.py", '"wait-existing-readiness"',
-               '"--runtime-manifest"', '["restart", name]', '"ACEITE TÉCNICO PASS"'):
+               '"--runtime-manifest"', '["restart", name]', '"ACEITE TÉCNICO PASS"',
+               'SUPPORTED_COMPONENT_SETS = (("api",), COMPONENTS)',
+               'payload["components"] = ["api"]'):
     require(marker in driver, f"minimal deploy driver marker {marker}")
 for forbidden in ('pm2_mutate(pm2, ["delete"', 'pm2_mutate(pm2, ["start"',
                   '"--update-env"', '"validate-pair"'):

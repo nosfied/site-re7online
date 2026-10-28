@@ -28,6 +28,7 @@ STATES = {
     "ROLLING_BACK", "ROLLED_BACK", "FAILED",
 }
 COMPONENTS = ("api", "frontend")
+SUPPORTED_COMPONENT_SETS = (("api",), COMPONENTS)
 STABLE = {
     "api": Path("/opt/re7online/current/api"),
     "frontend": Path("/opt/re7online/current/frontend"),
@@ -762,7 +763,7 @@ class Driver:
         for path in FRONTEND_GET_PATHS:
             urls.extend((f"http://127.0.0.1:3000{path}", f"https://converta.re7online.com{path}"))
         if candidate_asset:
-            static_root = self.release_root / "frontend-runtime/.next/static"
+            static_root = self.stable["frontend"].resolve(strict=True) / ".next/static"
             assets = sorted(path for path in static_root.rglob("*")
                             if path.is_file() and not path.is_symlink())
             if not assets:
@@ -1041,9 +1042,39 @@ class Driver:
             self._dump_equivalent(matches[0], live, component, count)
         return identity
 
+    def _preserved_components(self) -> tuple[str, ...]:
+        return tuple(component for component in COMPONENTS
+                     if component not in self.inputs.components)
+
+    def _validate_preserved_components(
+            self, journal: dict[str, Any], evidence_prefix: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        previous = journal.get("previous", {})
+        processes: dict[str, Any] = {}
+        readiness: dict[str, Any] = {}
+        rows = self.host.pm2_rows(self._resolve_pm2())
+        for component in self._preserved_components():
+            expected_selection = journal.get("preflight", {}).get("selections", {}).get(component)
+            selection = self._selection_snapshot(component)
+            if selection != expected_selection:
+                deny(f"preserved_selection_changed:{component}")
+            runtime = Path(selection["physicalRuntime"])
+            snapshot = self._process_snapshot(
+                self._row(rows, self._process_name(component)), component, runtime)
+            if snapshot != previous.get("processes", {}).get(component):
+                deny(f"preserved_process_changed:{component}")
+            processes[component] = snapshot
+            readiness[component] = self._readiness(
+                component, selection["releaseId"], runtime,
+                f"{evidence_prefix}-{component}")
+            for key in ("pid", "startTicks", "restartCount"):
+                if (key in readiness[component] and
+                        readiness[component][key] != snapshot[key]):
+                    deny(f"preserved_readiness_identity:{component}:{key}")
+        return processes, readiness
+
     def preflight(self) -> None:
-        if self.inputs.components != COMPONENTS:
-            deny("components_must_be_api_frontend")
+        if self.inputs.components not in SUPPORTED_COMPONENT_SETS:
+            deny("components_must_be_api_or_api_frontend")
         if self.inputs.retirement is None:
             deny("generation_retirement_binding_required")
         if self.inputs.retirement.deployment_lock != self.lock:
@@ -1094,6 +1125,8 @@ class Driver:
             "saveCount": 0, "deployedMarkerCreated": False,
             "createdAtUnix": int(self.clock()), "updatedAtUnix": int(self.clock()),
         }
+        if self.inputs.components == ("api",):
+            journal["components"] = ["api"]
         atomic_private(self.journal, journal, exclusive=True)
 
     def _acquire_lock(self, journal: dict[str, Any]) -> None:
@@ -1228,7 +1261,7 @@ class Driver:
         try:
             readiness: dict[str, Any] = {}
             candidate_processes: dict[str, Any] = {}
-            for component in COMPONENTS:
+            for component in self.inputs.components:
                 runtime = self.release_root / RUNTIME_DIR[component]
                 journal.setdefault("activationAttempted", []).append(component)
                 self._journal_write(journal, "ACTIVATING")
@@ -1244,6 +1277,10 @@ class Driver:
                     if build_id != manifest.get("runtimes", {}).get("frontend", {}).get("buildId"):
                         deny("frontend_build_id")
             self._health(candidate_asset=True)
+            preserved_processes, preserved_readiness = self._validate_preserved_components(
+                journal, "activate-preserved")
+            candidate_processes.update(preserved_processes)
+            readiness.update(preserved_readiness)
             worker = self._worker(self.host.pm2_rows(self._resolve_pm2()))
             if worker != previous["worker"]:
                 deny("worker_changed")
@@ -1295,6 +1332,7 @@ class Driver:
                     recorded = progress.get("processes", {}).get(component)
                     if current != recorded:
                         deny(f"rollback_process_drift:{component}")
+            self._validate_preserved_components(journal, "rollback-preserved")
             self._health()
             worker = self._worker(self.host.pm2_rows(self._resolve_pm2()))
             if worker != previous.get("worker"): deny("rollback_worker_changed")
@@ -1343,16 +1381,23 @@ class Driver:
             self._release()
             final_readiness: dict[str, Any] = {}
             for component in COMPONENTS:
-                if self.stable[component].resolve(strict=True) != (self.release_root / RUNTIME_DIR[component]).resolve(strict=True):
+                selected = component in self.inputs.components
+                expected_runtime = ((self.release_root / RUNTIME_DIR[component]) if selected else
+                                    Path(journal.get("preflight", {}).get("selections", {})
+                                         .get(component, {}).get("physicalRuntime", "")))
+                if (not expected_runtime.is_absolute() or
+                        self.stable[component].resolve(strict=True) != expected_runtime.resolve(strict=True)):
                     deny(f"finalize_symlink:{component}")
                 current = self._process_snapshot(
                     self._row(self.host.pm2_rows(self._resolve_pm2()), self._process_name(component)),
-                    component, self.release_root / RUNTIME_DIR[component])
+                    component, expected_runtime)
                 activated = journal.get("candidate", {}).get("processes", {}).get(component, {})
                 if current != activated:
                     deny(f"finalize_identity_changed:{component}")
                 final_readiness[component] = self._readiness(
-                    component, self.inputs.release, self.release_root / RUNTIME_DIR[component],
+                    component, (self.inputs.release if selected else
+                                journal["preflight"]["selections"][component]["releaseId"]),
+                    expected_runtime,
                     f"finalize-{component}")
             self._health(candidate_asset=True)
             worker = self._worker(self.host.pm2_rows(self._resolve_pm2()))
@@ -1396,6 +1441,8 @@ class Driver:
             payload = {"target": self.inputs.target, "controlPlane": self.inputs.control_plane,
                        "release": self.inputs.release, "dumpSha256": final_dump["sha256"],
                        "accepted": "ACEITE TÉCNICO PASS", "deployedAtUnix": finalize["preparedAtUnix"]}
+            if self.inputs.components == ("api",):
+                payload["components"] = ["api"]
             if finalize.get("markerPayload") not in (None, payload): deny("deployed_marker_payload_drift")
             finalize["markerPayload"] = payload
             self._journal_write(journal, "FINALIZING")

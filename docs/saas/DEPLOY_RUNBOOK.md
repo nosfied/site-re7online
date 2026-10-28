@@ -113,7 +113,7 @@ da raiz privada, devolvida ao contrato como
 target/release ou overlay diferente. Não mover, indexar ou retirar `.data`; novas releases devem apontar dados mutáveis para persistência externa à release. O `prepare`
 reautentica a projeção sem `.data`: drift fora dela é `DENY`; mudança interna é permitida.
 
-No fluxo API + frontend fixed-current, o `preflight` exige `--generation-retirement-*` e manifesto privado do runtime, sem bindings PM2/`validate-pair`. Após aceite, `pm2 save`, dump validado,
+No fluxo fixed-current, o `preflight` aceita somente `--components api` ou `--components api,frontend` e exige `--generation-retirement-*` e manifesto privado do runtime, sem bindings PM2/`validate-pair`. O payload permanece API+frontend integralmente verificado; no modo API-only, frontend e worker são dependências preservadas. Após aceite, `pm2 save`, dump validado,
 marker `DEPLOYED` e health final, o próprio `finalize` executa uma única vez
 `generation-retirement.py execute`. Sucesso encerra em `DEPLOYED_SANITIZED`.
 Falha de retirada não reverte o deploy aprovado: encerra em
@@ -261,7 +261,7 @@ lock, verificação integral do pacote/release, capacidade, evidência durável,
 a regra de um único `pm2 save`. O deploy não altera a guarda de campanhas: seu estado
 e geração são lidos dinamicamente e preservados, salvo autorização operacional separada.
 
-Para impacto API+frontend, seguir a sequência completa a seguir.
+Para impacto API+frontend, seguir a sequência completa; para impacto API-only, executar somente os itens 1–3, comprovar frontend/worker inalterados e então os smokes GET-only do item 6.
 
 ## Ativação fixed-current
 
@@ -274,7 +274,7 @@ Para impacto API+frontend, seguir a sequência completa a seguir.
 6. Exigir três amostras estáveis, listener 3000, BUILD_ID, Login, Inbox, CRM
    e asset. Não acessar Modelos/Campanhas no smoke sem autorização Meta:
    suas leituras podem disparar sincronização de templates.
-7. Provar o worker byte-operacionalmente preservado e parar em aceite técnico.
+7. Provar os componentes fora do escopo byte-operacionalmente preservados e parar em aceite técnico.
 
 O driver implementa a sequência sem `pm2 delete/start` ou `--update-env`; manifesto e journal selam nomes, retornos, PM2/allowlist, identidades e hash do ambiente permitido.
 
@@ -294,10 +294,10 @@ já preservadas, sem repetir a ativação.
 
 Após `ACEITE TÉCNICO PASS`, revalidar o trio sem restart, executar `pm2 save`
 exatamente uma vez, conferir dump regular `0600` e hash, criar `DEPLOYED` somente
-depois do dump e liberar o lock.
+depois do dump e liberar o lock. O marker registra `components=["api"]` quando somente a API foi selecionada; o frontend continua fisicamente vinculado à release anterior.
 
-Antes do save, qualquer negativa restaura atomicamente frontend e API aos symlinks
-anteriores, reinicia os registros existentes sem atualização de ambiente e comprova
+Antes do save, qualquer negativa restaura em ordem inversa somente os componentes
+selecionados aos symlinks anteriores, reinicia seus registros existentes sem atualização de ambiente e comprova
 identidades, sockets, health e worker. Só então declarar `ROLLED_BACK`; zero save e
 zero retry. Depois do save, usar a evidência transacional para completar dump, marker,
 lock e journal sem segundo save. O registro durável da execução do save prevalece

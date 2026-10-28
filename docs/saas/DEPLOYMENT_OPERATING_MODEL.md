@@ -54,6 +54,12 @@ Quando uma transferência encerra o holder anterior, a única entrada permitida 
 continuar a finalização é `scripts/frontend-finalization-continuation.py`, com pedido
 privado autenticado. Wrappers inline ou improvisados são proibidos.
 
+O driver fixed-current aceita somente os escopos ordenados `api` e `api,frontend`.
+O pacote e o índice permanecem API+frontend em ambos. No escopo API-only, somente
+`current/api` é promovido e `re7-whatsapp-agent` reiniciado; frontend e worker são
+dependências preservadas, reautenticadas antes/depois, incluídas na validação do dump
+e nunca selecionadas ou reiniciadas. O marker registra os componentes selecionados.
+
 O encerramento é determinístico e limitado ao contrato daquela geração. Ele não
 refaz inventário global nem comparação entre todas as releases. Package,
 manifest, index, evidências, releases no grafo active/rollback/transitive-return e
@@ -65,9 +71,9 @@ qualquer `PRIVATE_DATA_NEVER_RETIRE` são invariavelmente preservados.
 2. Extrair em raiz nova e comprovar igualdade integral antes da seleção.
 3. Adquirir o lock global e capturar dump PM2 e definições completas de retorno em
    arquivos privados `0600`.
-4. Criar symlinks temporários e promovê-los por rename atômico. Reiniciar por nome
-   somente os registros PM2 existentes e autenticados, sem `--update-env`, preservando
-   sua configuração privada completa.
+4. Criar symlinks temporários e promovê-los por rename atômico somente para os
+   componentes do escopo. Reiniciar por nome somente os registros PM2 existentes e
+   autenticados, sem `--update-env`, preservando os demais e toda configuração privada.
 5. Selecionar primeiro a API. Exigir três amostras estáveis, identidade, CWD físico
    da release, entrypoint/hash, Node, socket 3001 e health local/público.
 6. Selecionar o frontend em `fork_mode`. Exigir três amostras estáveis, BUILD_ID,
