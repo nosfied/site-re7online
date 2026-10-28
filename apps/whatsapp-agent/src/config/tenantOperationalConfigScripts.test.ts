@@ -173,6 +173,100 @@ test("backfill denies a source tenant without Client before any write", async ()
   assert.equal(await prisma.client.count({ where: { clientKey: tenantKey } }), 0);
 });
 
+test("tenant-scoped retirement checks selected ready tenants without writing or inheriting outside debt", async () => {
+  const nonce = `${process.pid}-${Date.now()}`;
+  const selectedKeys = [
+    `retirement-cra-${nonce}`,
+    `retirement-justa-${nonce}`,
+    `retirement-tendencia-${nonce}`,
+  ];
+  const outsideKey = `retirement-outside-incomplete-${nonce}`;
+  assert.equal(await prisma.client.count({ where: { clientKey: { in: [...selectedKeys, outsideKey] } } }), 0);
+  for (const [index, clientKey] of selectedKeys.entries()) {
+    const client = await prisma.client.create({ data: { clientKey, name: `Retirement selected ${index}` } });
+    ids.push(client.id);
+    const phoneNumberId = `retirement-selected-${index}`;
+    await prisma.waPhoneNumber.create({ data: { clientId: client.id, phoneNumberId, display: `masked-${index}` } });
+    await prisma.channelAccount.create({
+      data: {
+        clientId: client.id,
+        channel: "whatsapp",
+        provider: "meta",
+        channelAccountId: phoneNumberId,
+        enabled: true,
+        runtimeEnabled: true,
+        inboundPersistenceEnabled: true,
+        outboundEnabled: true,
+        automationEnabled: true,
+        aiEnabled: false,
+        status: "connected",
+        tokenStatus: "configured",
+      },
+    });
+    await prisma.tenantOperationalConfig.create({
+      data: {
+        clientId: client.id,
+        config: {
+          baseConfig: {
+            allowlist: [],
+            handoffAttendantWaid: "",
+            defaultLanguage: "pt_BR",
+            disableAutoReply: false,
+          },
+          sentinel: { selected: clientKey, unchanged: true },
+        },
+      },
+    });
+  }
+  const outside = await prisma.client.create({
+    data: { clientKey: outsideKey, name: "Retirement outside incomplete" },
+  });
+  ids.push(outside.id);
+  await prisma.waPhoneNumber.create({
+    data: { clientId: outside.id, phoneNumberId: "retirement-outside-incomplete", display: "masked-outside" },
+  });
+
+  const before = await prisma.tenantOperationalConfig.findMany({
+    where: { clientId: { in: ids } },
+    orderBy: { clientId: "asc" },
+  });
+  const output = await runScript(root, "tenants-json-retirement-check.ts", [
+    "--tenant", selectedKeys[2],
+    "--tenant", selectedKeys[0],
+    "--tenant", selectedKeys[1],
+  ]);
+  const report = JSON.parse(output);
+  assert.equal(report.ok, true);
+  assert.deepEqual(report.selectedTenants, selectedKeys);
+  assert.deepEqual(report.tenants.map((tenant: { clientKey: string }) => tenant.clientKey), selectedKeys);
+  assert.equal(report.incompleteTenants.length, 0);
+  assert.equal(report.warnings.activeTenantsWithoutChannelAccounts.length, 0);
+  assert.equal(JSON.stringify(report).includes("retirement-selected-"), false, "phone identities must be omitted");
+  for (const tenant of report.tenants) {
+    for (const account of tenant.channelAccounts) {
+      assert.equal("channelAccountId" in account, false);
+      assert.equal("secretKinds" in account, false);
+    }
+  }
+  assert.deepEqual(await prisma.tenantOperationalConfig.findMany({
+    where: { clientId: { in: ids } },
+    orderBy: { clientId: "asc" },
+  }), before, "retirement check must not write PostgreSQL");
+
+  await assert.rejects(
+    runScript(root, "tenants-json-retirement-check.ts", ["--tenant", outsideKey]),
+    /synthetic script tenants-json-retirement-check\.ts failed \(1\)/
+  );
+  await assert.rejects(
+    runScript(root, "tenants-json-retirement-check.ts", []),
+    /synthetic script tenants-json-retirement-check\.ts failed \(1\)/
+  );
+  assert.deepEqual(await prisma.tenantOperationalConfig.findMany({
+    where: { clientId: { in: ids } },
+    orderBy: { clientId: "asc" },
+  }), before, "selected denial and global denial must remain read-only");
+});
+
 test("backfill dry-run denies missing phone mapping and ChannelAccount before any write", async () => {
   for (const missing of ["phone", "channel"] as const) {
     const suffix = `${missing}-${Date.now()}`;

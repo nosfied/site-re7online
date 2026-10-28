@@ -42,6 +42,8 @@ test("tenants.json retirement checks the complete active WhatsApp Meta DB contra
   assert.match(retirementCheck, /account\.channel === "whatsapp" && account\.provider === "meta"/);
   assert.match(retirementCheck, /isActiveTenantMetaContractIncomplete/);
   assert.match(retirementCheck, /runtime_critical/);
+  assert.match(retirementCheck, /blockingUsageCount: blocking\.length/);
+  assert.match(retirementCheck, /blocking\.length > 0/);
   assert.doesNotMatch(webhook, /loadTenantsJsonFallback|getTenants\(/);
 });
 

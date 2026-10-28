@@ -214,6 +214,13 @@ Sprint 67 introduces the retirement check:
 npm run tenants-json:retirement:check
 ```
 
+Recuperações tenant-scoped podem repetir `--tenant` para avaliar somente o lote
+autorizado, por exemplo CRA, Justa e Tendência. O filtro não reduz a varredura
+global de dependências `runtime_critical`/`onboarding` no código e não altera o
+comportamento do comando sem seletores. O check permanece estritamente somente
+leitura e seu relatório filtrado não publica identidades, aliases, secrets ou
+payloads privados.
+
 The command must be part of pre-release for any future tenant config migration. A clean DB-authoritative runtime requires:
 
 - database reachable;

@@ -87,8 +87,17 @@ A ordem obrigatória para uma futura intervenção produtiva é:
 7. materializar `TenantOperationalConfig` em uma única transação
    `SERIALIZABLE`, com locks de `Client` em ordem determinística e todos os
    tenants pré-validados antes da primeira escrita;
-8. executar `tenants-json:retirement:check` por tenant participante Meta;
+8. executar `tenants-json:retirement:check` com `--tenant` repetido para o lote
+   explicitamente recuperado; a seleção é ordenada, rejeita vazio, duplicata e
+   tenant inexistente, e limita readiness, dívidas e warnings ao lote;
 9. somente então produzir build e ativar após autorização explícita.
+
+Sem `--tenant`, o retirement check preserva o gate global integral. Com seleção,
+uma dívida de configuração de tenant fora do lote não torna o resultado falso,
+mas a varredura de usos `runtime_critical`/`onboarding` de `tenants.json` continua
+global: dependência estrutural no código bloqueia qualquer lote. O comando é
+somente leitura e o relatório tenant-scoped omite identidades telefônicas,
+aliases, secrets, tokens e payloads privados.
 
 Nenhuma flag operacional de `ChannelAccount` recebe default durante a migração.
 Os sete booleanos de runtime devem estar presentes na fonte autenticada. Um
