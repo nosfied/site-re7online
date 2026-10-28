@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { TenantConfig } from "../config/tenantConfig.js";
-import { buildChannelAccountMigrationPlan, sanitizedMigrationItem, type ChannelAccountPlanDocument, type ExistingMetaAccount } from "./channelAccountMigrationPlan.js";
+import { buildChannelAccountMigrationPlan, normalizeChannelAccountTenantSelection, sanitizedMigrationItem, type ChannelAccountPlanDocument, type ExistingMetaAccount } from "./channelAccountMigrationPlan.js";
 
 const sourceSha = "a".repeat(64);
 const flags = { enabled: true, automationEnabled: true, runtimeEnabled: true, inboundPersistenceEnabled: true, outboundEnabled: true, aiEnabled: false, handoffEnabled: true, status: "connected" as const, tokenStatus: "configured" as const };
@@ -24,3 +24,29 @@ test("alias colliding with another tenant is denied", () => { const value = setu
 test("global collision with account outside batch is denied", () => { const value = setup({ one: tenant("one", "p1") }); value.existingMetaAccounts.push({ clientId: "outside", clientKey: "outside", channelAccountId: "outside-primary", aliases: ["p1"] }); assert.throws(() => buildChannelAccountMigrationPlan(value), /CHANNEL_ACCOUNT_GLOBAL_IDENTITY_COLLISION/); });
 test("invalid status and tokenStatus are denied", () => { const status = setup({ meta: tenant("meta", "phone") }); (status.planDocument.tenants.meta.channelAccounts[0] as unknown as { status: string }).status = "raw"; assert.throws(() => buildChannelAccountMigrationPlan(status), /CHANNEL_ACCOUNT_STATUS_INVALID/); const token = setup({ meta: tenant("meta", "phone") }); (token.planDocument.tenants.meta.channelAccounts[0] as unknown as { tokenStatus: string }).tokenStatus = "raw"; assert.throws(() => buildChannelAccountMigrationPlan(token), /CHANNEL_ACCOUNT_TOKEN_STATUS_INVALID/); });
 test("sanitized report contains no full identity or secret", () => { const value = setup({ meta: tenant("meta", "phone-secret") }); value.planDocument.tenants.meta.channelAccounts[0].pageAccessToken = "top-secret"; const serialized = JSON.stringify(sanitizedMigrationItem(buildChannelAccountMigrationPlan(value).items[0], "would_create")); assert.equal(serialized.includes("phone-secret"), false); assert.equal(serialized.includes("top-secret"), false); });
+
+test("repeated tenant selection is sorted and selected Meta tenants do not require plans for omitted tenants", () => {
+  const value = setup({
+    "tendencia-modas": tenant("tendencia-modas", "phone-tendencia"),
+    "justa-advocacia": tenant("justa-advocacia", "phone-justa"),
+    "omitted-meta": tenant("omitted-meta", "phone-omitted"),
+  }, ["tendencia-modas", "justa-advocacia", "cra-pr"]);
+  value.planDocument.tenants["cra-pr"].provenance = "OWNER_AUTHORIZED_DB_IDENTITY";
+  const plan = buildChannelAccountMigrationPlan({
+    ...value,
+    selectedTenants: normalizeChannelAccountTenantSelection(["tendencia-modas", "cra-pr", "justa-advocacia"]),
+  });
+  assert.deepEqual(plan.items.map((item) => item.tenantKey), ["cra-pr", "justa-advocacia", "tendencia-modas"]);
+  assert.equal(plan.metaTenantCount, 3);
+  assert.equal(plan.items.some((item) => item.tenantKey === "omitted-meta"), false);
+  assert.throws(() => buildChannelAccountMigrationPlan(value), /CHANNEL_ACCOUNT_PLAN_INCOMPLETE:omitted-meta/);
+});
+
+test("tenant selection denies empty, duplicate, unknown and unauthorized CRA selectors", () => {
+  assert.throws(() => normalizeChannelAccountTenantSelection([]), /CHANNEL_ACCOUNT_TENANT_SELECTOR_EMPTY/);
+  assert.throws(() => normalizeChannelAccountTenantSelection(["justa-advocacia", "justa-advocacia"]), /CHANNEL_ACCOUNT_TENANT_SELECTOR_DUPLICATE:justa-advocacia/);
+  const value = setup({ "justa-advocacia": tenant("justa-advocacia", "phone-justa") });
+  assert.throws(() => buildChannelAccountMigrationPlan({ ...value, selectedTenants: ["unknown"] }), /CHANNEL_ACCOUNT_SOURCE_TENANT_MISSING:unknown/);
+  value.planDocument.tenants["cra-pr"] = { provenance: "HISTORICAL_SOURCE", channelAccounts: [account("cra-pr", "phone-cra")] };
+  assert.throws(() => buildChannelAccountMigrationPlan({ ...value, selectedTenants: ["cra-pr"] }), /CRA_CHANNEL_ACCOUNT_PROVENANCE_DENY:cra-pr/);
+});

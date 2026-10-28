@@ -77,10 +77,10 @@ A ordem obrigatória para uma futura intervenção produtiva é:
 1. auditar e autenticar a fonte externa;
 2. preparar e revisar um plano tenant-scoped explícito de `ChannelAccount`, em
    arquivo privado separado, vinculado pelo `sourceSha256` à fonte histórica;
-3. executar `channel-accounts:backfill --dry-run` com caminho absoluto e SHA-256 esperado;
+3. executar `channel-accounts:backfill --dry-run` com caminho absoluto e SHA-256 esperado; quando houver lote explícito, repetir `--tenant` para cada tenant, usando o mesmo conjunto no backfill real e no shadow compare;
 4. materializar `ChannelAccount` para todos os participantes Meta em uma única
    transação, com locks de `Client` em ordem determinística;
-5. executar `channel-accounts:shadow:compare` contra a mesma fonte autenticada;
+5. executar `channel-accounts:shadow:compare` contra a mesma fonte autenticada e exatamente o mesmo conjunto ordenado de `--tenant`; sem seletor, ambos continuam exigindo a fonte/plano integrais;
 6. executar `tenant-config:backfill --dry-run`;
 7. materializar `TenantOperationalConfig` em uma única transação atômica;
 8. executar `tenants-json:retirement:check` por tenant participante Meta;

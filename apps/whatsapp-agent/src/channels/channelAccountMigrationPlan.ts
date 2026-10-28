@@ -23,6 +23,31 @@ function ownBoolean(value: object, key: string) { return Object.prototype.hasOwn
 function identities(account: TenantChannelAccount) { return [account.channelAccountId, ...(account.externalAccountIds ?? [])]; }
 const identityHash = (value: string) => crypto.createHash("sha256").update(value, "utf8").digest("hex");
 
+export function normalizeChannelAccountTenantSelection(values: readonly string[]): string[] {
+  if (values.length === 0) throw new Error("CHANNEL_ACCOUNT_TENANT_SELECTOR_EMPTY");
+  const normalized = values.map((value) => value.trim());
+  if (normalized.some((value) => !value)) throw new Error("CHANNEL_ACCOUNT_TENANT_SELECTOR_EMPTY");
+  const duplicates = normalized.filter((value, index) => normalized.indexOf(value) !== index);
+  if (duplicates.length) throw new Error(`CHANNEL_ACCOUNT_TENANT_SELECTOR_DUPLICATE:${[...new Set(duplicates)].sort().join(",")}`);
+  return [...new Set(normalized)].sort();
+}
+
+export function channelAccountMigrationTenantKeys(params: {
+  tenants: Record<string, TenantConfig>;
+  planDocument: ChannelAccountPlanDocument;
+  selectedTenants?: readonly string[];
+}): string[] {
+  const selected = params.selectedTenants ? normalizeChannelAccountTenantSelection(params.selectedTenants) : undefined;
+  if (!selected) return [...new Set([...Object.keys(params.tenants), ...Object.keys(params.planDocument.tenants ?? {})])].sort();
+  for (const tenantKey of selected) {
+    if (params.tenants[tenantKey]) continue;
+    const planEntry = params.planDocument.tenants?.[tenantKey];
+    if (tenantKey === "cra-pr" && planEntry?.provenance === "OWNER_AUTHORIZED_DB_IDENTITY") continue;
+    deny(tenantKey === "cra-pr" ? "CRA_CHANNEL_ACCOUNT_PROVENANCE_DENY" : "CHANNEL_ACCOUNT_SOURCE_TENANT_MISSING", tenantKey);
+  }
+  return selected;
+}
+
 function validateGlobalIdentities(accounts: ExistingMetaAccount[], planned: Array<{ tenantKey: string; clientId: string; account: TenantChannelAccount }>) {
   const owners = new Map<string, Set<string>>();
   const add = (identity: string, owner: string) => { const set = owners.get(identity) ?? new Set<string>(); set.add(owner); owners.set(identity, set); };
@@ -40,14 +65,15 @@ export function buildChannelAccountMigrationPlan(params: {
   phoneNumbers: MigrationPhone[];
   metaConfigs: MigrationMetaConfig[];
   existingMetaAccounts: ExistingMetaAccount[];
-  selectedTenant?: string;
+  selectedTenants?: readonly string[];
 }): ChannelAccountMigrationPlan {
   if (params.planDocument.schemaVersion !== 1) throw new Error("CHANNEL_ACCOUNT_PLAN_SCHEMA_INVALID");
   if (params.planDocument.sourceSha256 !== params.expectedSourceSha256.toLowerCase()) throw new Error("CHANNEL_ACCOUNT_PLAN_SOURCE_SHA256_MISMATCH");
   if (!params.planDocument.tenants || typeof params.planDocument.tenants !== "object") throw new Error("CHANNEL_ACCOUNT_PLAN_TENANTS_INVALID");
-  const sourceEntries = Object.entries(params.tenants).filter(([key]) => !params.selectedTenant || key === params.selectedTenant).sort(([a], [b]) => a.localeCompare(b));
-  const plannedKeys = Object.keys(params.planDocument.tenants).filter((key) => !params.selectedTenant || key === params.selectedTenant).sort();
-  if (params.selectedTenant && !params.tenants[params.selectedTenant] && !params.planDocument.tenants[params.selectedTenant]) deny(params.selectedTenant === "cra-pr" ? "CRA_CHANNEL_ACCOUNT_SOURCE_UNRESOLVED" : "CHANNEL_ACCOUNT_SOURCE_TENANT_MISSING", params.selectedTenant);
+  const selectedKeys = channelAccountMigrationTenantKeys(params);
+  const selected = params.selectedTenants ? new Set(selectedKeys) : null;
+  const sourceEntries = Object.entries(params.tenants).filter(([key]) => !selected || selected.has(key)).sort(([a], [b]) => a.localeCompare(b));
+  const plannedKeys = Object.keys(params.planDocument.tenants).filter((key) => !selected || selected.has(key)).sort();
   for (const key of plannedKeys) if (!params.tenants[key] && !(key === "cra-pr" && params.planDocument.tenants[key].provenance === "OWNER_AUTHORIZED_DB_IDENTITY")) deny(key === "cra-pr" ? "CRA_CHANNEL_ACCOUNT_PROVENANCE_DENY" : "CHANNEL_ACCOUNT_PLAN_TENANT_NOT_IN_SOURCE", key);
 
   const clients = new Map(params.clients.map((item) => [item.clientKey, item]));
@@ -56,7 +82,7 @@ export function buildChannelAccountMigrationPlan(params: {
   const meta = new Map(params.metaConfigs.map((item) => [item.clientId, item.phoneNumberId]));
   const existingByClient = new Map<string, ExistingMetaAccount[]>();
   for (const account of params.existingMetaAccounts) existingByClient.set(account.clientId, [...(existingByClient.get(account.clientId) ?? []), account]);
-  const keys = [...new Set([...sourceEntries.map(([key]) => key), ...plannedKeys])].sort();
+  const keys = selectedKeys;
   const items: ChannelAccountMigrationItem[] = []; const webSessionOnlyTenants: string[] = []; const errors: string[] = [];
   for (const tenantKey of keys) try {
     const tenant = params.tenants[tenantKey]; const planEntry = params.planDocument.tenants[tenantKey]; const client = clients.get(tenantKey);
