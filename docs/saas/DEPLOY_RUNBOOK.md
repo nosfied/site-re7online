@@ -33,9 +33,9 @@ Nunca construir no runtime ativo, reconstruir durante ativação, importar ambie
 shell, derivar definição executável de introspecção, usar `--update-env`, executar
 `pm2 flush` ou repetir automaticamente uma tentativa negada.
 
-O health público da API é
+Antes de consumir uma tentativa, consultar exclusivamente o health público da API em
 `https://converta.re7online.com/agent-api/health`: exigir HTTP 200, JSON, `ok=true`
-e `db="ok"`. `/health` no domínio do frontend não comprova a API.
+e `db="ok"`. Host administrativo ou `/health` do frontend não comprova a API.
 
 ## Build once
 
@@ -76,10 +76,10 @@ teve review v1 `PRESERVE`. Autentique por SHA externo o descriptor versionado
 `generation-retirement.py bootstrap-legacy`. O comando observa somente output e
 worktree declarados, materializa contrato/review/recibo sem autorização e termina
 em `LEGACY_CONTRACT_MATERIALIZED`. Só uma etapa posterior executa `prepare`.
-O destino da review é sempre `<generation-output>/generation-review.private.json`,
-irmão do lifecycle e do contrato; bootstrap, prepare e execute usam o mesmo arquivo.
-Contrato/review idênticos já publicados são autenticados e reutilizados numa
-retomada, enquanto o recibo privado é sempre a última publicação.
+Antes de consumir uma tentativa, contrato, lifecycle e review devem ter o mesmo pai
+canônico `<generation-output>`; cópias privadas servem somente como evidência.
+Bootstrap, prepare e execute usam a review canônica; arquivos idênticos já publicados
+são reutilizados, enquanto o recibo privado é sempre a última publicação.
 Não aplicar o bootstrap a outra geração; builds atuais já publicam contrato desde
 `BUILDING`.
 

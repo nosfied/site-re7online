@@ -68,6 +68,29 @@ candidatas, o `prepare` inclui seu caminho literal sob a raiz canônica
 `remainingDerivedPaths` do recibo conserva o nome por compatibilidade, mas
 representa todos os caminhos retiráveis, inclusive `RELEASE_RUNTIME`.
 
+### Preflight de invocação antes de consumir autorização
+
+A tentativa só começa depois de validar, sem chamar `prepare`:
+
+1. health local e o endpoint público canônico
+   `https://converta.re7online.com/agent-api/health`, ambos HTTP 200 e JSON
+   `ok=true`/`db="ok"`; host administrativo e health do frontend não substituem
+   esse endpoint;
+2. igualdade literal entre os diretórios-pai de `--contract`, `--lifecycle` e
+   `--review-output`, todos no output canônico da geração; cópias privadas são
+   apenas evidência e nunca argumentos canônicos;
+3. modos, owner, tipo físico, ausência de symlink, hashes e raízes exigidos pelo
+   consumidor real;
+4. fotografia fresca de current, PM2 live/dump e grafos active, rollback, retorno
+   transitivo e candidatas;
+5. conjunto esperado de classes e caminhos da intenção. Uma release rejeitada fora
+   dos grafos exige `RELEASE_RUNTIME` literal; staging já `SANITIZED` não volta.
+
+Falha em qualquer item termina antes de `prepare` e não consome a tentativa
+destrutiva. Não se adapta argumento após a chamada nem se reutiliza intenção
+incompleta. Depois da retirada, receipt, journal, review, capacidade e ausência de
+cada caminho são registrados no estado canônico antes de iniciar outra geração.
+
 Na geração `immutable-708f018c-vps-20261027T152109Z`, a retirada autônoma V2
 concluiu os ordinais `8/9/10`: worktree e runtimes derivados de API/frontend foram
 removidos, a release instalada permaneceu ativa e a review terminou `SANITIZED`.
