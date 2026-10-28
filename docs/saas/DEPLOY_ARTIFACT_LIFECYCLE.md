@@ -302,6 +302,15 @@ parcelas, de forma conservadora. Repositório, saída e `filesystemPath` precisa
 estar no mesmo device. Reserva insuficiente resulta em `capacity_bytes` ou
 `capacity_inodes` antes da criação da saída e antes do primeiro `npm`.
 
+Somente a recuperação nominal `P00_TENANT_ISOLATION_RECOVERY` admite dispensar o
+piso estático de 12 GiB. O produtor exige `--p00-static-floor-override` e seu
+SHA-256 externo. O JSON privado `0600` tem schema fechado com `schemaVersion`,
+`targetCommit`, `releaseId`, `capacityContractSha256`, `reason`, `responsible`,
+`issuedAtUtc` e `expiresAtUtc`; a vigência máxima é seis horas. Symlink, campo
+extra, modo inseguro, hash/binding divergente ou expiração negam. O documento vira
+`EVIDENCE_PRESERVE` e integra o lifecycle. A exceção não muda `requiredBytes`,
+inodes ou checkpoints e não autoriza build ou ativação.
+
 Exemplo estrutural, com valores a serem medidos e revisados para cada geração:
 
 ```json

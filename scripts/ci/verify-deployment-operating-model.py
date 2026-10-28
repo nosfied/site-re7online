@@ -42,6 +42,7 @@ for marker in (
     "DEPLOY_RUNBOOK.md",
     "scripts/converta-deploy.py",
     "scripts/converta-release.py",
+    "P00_TENANT_ISOLATION_RECOVERY",
 ):
     require(marker in model, f"operating model marker {marker}")
 require("não utilizáveis" in model, "obsolete mechanisms")
@@ -71,7 +72,8 @@ require("scripts/frontend-finalization-continuation.py" in runbook and
         "runbook frontend continuation entry")
 for marker in ("preflight", "activate", "finalize", "rollback", "status",
                "PREFLIGHT PASS", "AWAITING_ACCEPTANCE", "DEPLOYED", "ROLLED_BACK",
-               "generation-retirement.py", "DEPLOYED_SANITIZED", "12 GiB"):
+               "generation-retirement.py", "DEPLOYED_SANITIZED", "12 GiB",
+               "privado P00"):
     require(marker in runbook, f"deploy runbook marker {marker}")
 for marker in ('choices=("preflight", "activate", "finalize", "rollback", "status")',
                "pm2-definition-control.py", '"wait-existing-readiness"',
@@ -83,7 +85,8 @@ for forbidden in ('pm2_mutate(pm2, ["delete"', 'pm2_mutate(pm2, ["start"',
 for marker in ('add_parser("build")', 'add_parser("verify")', 'SOURCE_DATE_EPOCH',
                '"schemaVersion": 1', 'RELEASE VERIFIED',
                'generation-artifacts.private.json', 'MINIMUM_BUILD_FREE_BYTES',
-               'repo_outside_canonical_build_worktrees'):
+               'repo_outside_canonical_build_worktrees',
+               '--p00-static-floor-override', 'P00_TENANT_ISOLATION_RECOVERY'):
     require(marker in producer, f"external release producer marker {marker}")
 control = (ROOT / "scripts/pm2-definition-control.py").read_text()
 for marker in (

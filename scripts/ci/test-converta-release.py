@@ -62,6 +62,25 @@ def capacity_contract(path: Path, filesystem: Path, target: str, release_id: str
     return path
 
 
+def p00_static_floor_override(path: Path, capacity: Path, target: str, release_id: str,
+                              *, issued: dt.datetime | None = None,
+                              expires: dt.datetime | None = None) -> tuple[Path, str]:
+    issued = issued or dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)
+    expires = expires or issued + dt.timedelta(hours=2)
+    value = {
+        "schemaVersion": 1,
+        "targetCommit": target,
+        "releaseId": release_id,
+        "capacityContractSha256": hashlib.sha256(capacity.read_bytes()).hexdigest(),
+        "reason": "P00_TENANT_ISOLATION_RECOVERY",
+        "responsible": "fixture-owner",
+        "issuedAtUtc": issued.isoformat().replace("+00:00", "Z"),
+        "expiresAtUtc": expires.isoformat().replace("+00:00", "Z"),
+    }
+    write(path, json.dumps(value, sort_keys=True) + "\n", 0o600)
+    return path, hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def fixture_repo(root: Path) -> tuple[Path, str, dict[str, str]]:
     worktrees = root / "build-worktrees"
     worktrees.mkdir()
@@ -627,6 +646,141 @@ class ReleaseProducerTest(unittest.TestCase):
                 MODULE.read_capacity_contract(
                     capacity, self.repo, self.base, self.target, release_id
                 )
+
+    def test_p00_override_waives_only_static_floor(self) -> None:
+        from types import SimpleNamespace
+        release_id = "immutable-p00-capacity-floor"
+        capacity = capacity_contract(
+            self.base / "p00-capacity-floor.private.json", self.base, self.target, release_id
+        )
+        current = dt.datetime(2026, 10, 28, 12, tzinfo=dt.timezone.utc)
+        override, override_sha = p00_static_floor_override(
+            self.base / "p00-static-floor-override.private.json", capacity,
+            self.target, release_id, issued=current - dt.timedelta(minutes=5),
+            expires=current + dt.timedelta(hours=1),
+        )
+        floor = self.production_minimum_build_free_bytes
+        sufficient = SimpleNamespace(f_bavail=floor - 1, f_frsize=1, f_favail=1_000_000)
+        with patch.object(MODULE, "MINIMUM_BUILD_FREE_BYTES", floor), \
+                patch.object(MODULE.os, "statvfs", return_value=sufficient):
+            result = MODULE.read_capacity_contract(
+                capacity, self.repo, self.base, self.target, release_id,
+                override, override_sha, current,
+            )
+        self.assertEqual(result["availableBytes"], floor - 1)
+        self.assertEqual(result["p00StaticFloorOverride"]["waivesOnly"],
+                         "MINIMUM_BUILD_FREE_BYTES")
+        self.assertEqual(result["p00StaticFloorOverride"]["sha256"], override_sha)
+
+        below_budget = SimpleNamespace(f_bavail=1, f_frsize=1, f_favail=1_000_000)
+        with patch.object(MODULE.os, "statvfs", return_value=below_budget), \
+                self.assertRaisesRegex(MODULE.Denied, "capacity_bytes"):
+            MODULE.read_capacity_contract(
+                capacity, self.repo, self.base, self.target, release_id,
+                override, override_sha, current,
+            )
+        low_inodes = SimpleNamespace(f_bavail=floor - 1, f_frsize=1, f_favail=1)
+        with patch.object(MODULE, "MINIMUM_BUILD_FREE_BYTES", floor), \
+                patch.object(MODULE.os, "statvfs", return_value=low_inodes), \
+                self.assertRaisesRegex(MODULE.Denied, "capacity_inodes"):
+            MODULE.read_capacity_contract(
+                capacity, self.repo, self.base, self.target, release_id,
+                override, override_sha, current,
+            )
+
+        checkpoint_usage = SimpleNamespace(f_bavail=1, f_frsize=1, f_favail=1_000_000)
+        with patch.object(MODULE.os, "statvfs", return_value=checkpoint_usage), \
+                self.assertRaisesRegex(MODULE.Denied, "capacity_checkpoint"):
+            MODULE.capacity_checkpoint(result, "after_override")
+
+    def test_p00_override_rejects_expiry_binding_identity_and_open_schema(self) -> None:
+        from types import SimpleNamespace
+        release_id = "immutable-p00-invalid"
+        capacity = capacity_contract(
+            self.base / "p00-invalid-capacity.private.json", self.base, self.target, release_id
+        )
+        current = dt.datetime(2026, 10, 28, 12, tzinfo=dt.timezone.utc)
+        floor = self.production_minimum_build_free_bytes
+        usage = SimpleNamespace(f_bavail=floor - 1, f_frsize=1, f_favail=1_000_000)
+
+        def denied(name: str, mutate, predicate: str, *, expected_sha: str | None = None,
+                   symlink: bool = False, mode: int = 0o600) -> None:
+            path, digest = p00_static_floor_override(
+                self.base / f"p00-{name}.private.json", capacity, self.target, release_id,
+                issued=current - dt.timedelta(minutes=5), expires=current + dt.timedelta(hours=1),
+            )
+            if mutate is not None:
+                value = json.loads(path.read_text())
+                mutate(value)
+                write(path, json.dumps(value, sort_keys=True) + "\n", mode)
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            elif mode != 0o600:
+                path.chmod(mode)
+            if symlink:
+                target = path.with_suffix(".target")
+                path.rename(target)
+                path.symlink_to(target)
+            with patch.object(MODULE, "MINIMUM_BUILD_FREE_BYTES", floor), \
+                    patch.object(MODULE.os, "statvfs", return_value=usage), \
+                    self.assertRaisesRegex(MODULE.Denied, predicate):
+                MODULE.read_capacity_contract(
+                    capacity, self.repo, self.base, self.target, release_id,
+                    path, expected_sha or digest, current,
+                )
+
+        denied("expired", lambda value: value.update(
+            issuedAtUtc="2026-10-28T10:00:00Z", expiresAtUtc="2026-10-28T11:00:00Z"
+        ), "p00_static_floor_override_time")
+        denied("target", lambda value: value.update(targetCommit="f" * 40),
+               "p00_static_floor_override_binding")
+        denied("release", lambda value: value.update(releaseId="immutable-other"),
+               "p00_static_floor_override_binding")
+        denied("capacity", lambda value: value.update(capacityContractSha256="f" * 64),
+               "p00_static_floor_override_binding")
+        denied("extra", lambda value: value.update(extra=True),
+               "p00_static_floor_override_schema")
+        denied("mode", None, "p00_static_floor_override_identity", mode=0o664)
+        denied("symlink", None, "not_regular", symlink=True)
+        denied("hash", None, "p00_static_floor_override_identity", expected_sha="f" * 64)
+
+    def test_p00_override_is_recorded_in_lifecycle_and_artifact_contract(self) -> None:
+        from types import SimpleNamespace
+        release_id = "immutable-p00-evidence"
+        output = self.outputs / "p00-evidence-output"
+        capacity = capacity_contract(
+            self.base / "p00-evidence-capacity.private.json", self.base, self.target, release_id
+        )
+        override, override_sha = p00_static_floor_override(
+            self.base / "p00-evidence-override.private.json", capacity, self.target, release_id
+        )
+        args = MODULE.parser().parse_args([
+            "build", "--repo", str(self.repo), "--target", self.target,
+            "--release-id", release_id, "--components", COMPONENTS,
+            "--output", str(output), "--installed-releases-root", str(self.releases),
+            "--source-date-epoch", EPOCH, "--capacity-contract", str(capacity),
+            "--p00-static-floor-override", str(override),
+            "--p00-static-floor-override-sha256", override_sha,
+            "--root-policy", str(self.root_policy),
+            "--root-policy-sha256", self.root_policy_sha,
+        ])
+        floor = self.production_minimum_build_free_bytes
+        usage = SimpleNamespace(f_bavail=floor - 1, f_frsize=1, f_favail=1_000_000)
+        try:
+            with patch.dict(os.environ, self.env, clear=True), \
+                    patch.object(MODULE, "MINIMUM_BUILD_FREE_BYTES", floor), \
+                    patch.object(MODULE.os, "statvfs", return_value=usage):
+                args.handler(args)
+            lifecycle = json.loads((output / "generation-lifecycle.private.json").read_text())
+            self.assertEqual(lifecycle["capacity"]["p00StaticFloorOverride"]["sha256"],
+                             override_sha)
+            contract = json.loads((output / "generation-artifacts.private.json").read_text())
+            evidence = [item for item in contract["artifacts"]
+                        if item["path"] == str(override)]
+            self.assertEqual(len(evidence), 1)
+            self.assertEqual(evidence[0]["class"], "EVIDENCE_PRESERVE")
+            self.assertEqual(evidence[0]["digest"], {"sha256": override_sha})
+        finally:
+            shutil.rmtree(output, ignore_errors=True)
 
     def test_failed_generation_is_closed_as_failed(self) -> None:
         release_id = "immutable-failed-generation"

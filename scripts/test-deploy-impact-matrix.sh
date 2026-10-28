@@ -103,7 +103,13 @@ run_historical_case() {
 }
 
 run_case "backend-only" "apps/whatsapp-agent/src/http/routes.ts" YES NO NO NO
+run_case "api-package" "apps/whatsapp-agent/package.json" YES NO NO NO
+run_case "api-lockfile" "apps/whatsapp-agent/package-lock.json" YES NO NO NO
+run_case "api-tsconfig" "apps/whatsapp-agent/tsconfig.json" YES NO NO NO
+run_case "api-tsconfig-variant" "apps/whatsapp-agent/tsconfig.build.json" YES NO NO NO
+run_case "api-ecosystem" "apps/whatsapp-agent/ecosystem.config.cjs" YES NO NO NO
 run_case "worker-only" "apps/whatsapp-web-worker/src/whatsappWebSessionWorker.ts" NO YES NO NO
+run_case "worker-package" "apps/whatsapp-web-worker/package.json" NO YES NO NO
 run_case "shared-backend-worker" "apps/whatsapp-agent/src/web-session/webSessionInbound.ts" YES YES NO NO
 run_case "frontend-only" "src/app/app/inbox/page.tsx" NO NO YES NO
 run_case "docs-only" "docs/saas/runbook-re7.md" NO NO NO NO
@@ -119,5 +125,6 @@ run_historical_case 13acec7e YES YES NO NO
 run_historical_case 12eb83db YES YES YES NO
 run_historical_case c8e552bd NO NO YES NO
 run_historical_case 53cd730c NO NO NO NO
+run_historical_case 0c0a307a832922443674234ad45a6958e392857a YES NO NO NO
 
 echo "deploy impact matrix tests passed"

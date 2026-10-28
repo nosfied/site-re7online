@@ -51,6 +51,12 @@ CAPACITY_BYTE_FIELDS = {
 }
 CAPACITY_INODE_FIELDS = {"peakInodes", "operationalReserveInodes"}
 MINIMUM_BUILD_FREE_BYTES = 12 * 1024 * 1024 * 1024
+P00_STATIC_FLOOR_OVERRIDE_REASON = "P00_TENANT_ISOLATION_RECOVERY"
+P00_STATIC_FLOOR_OVERRIDE_MAX_LIFETIME = dt.timedelta(hours=6)
+P00_STATIC_FLOOR_OVERRIDE_FIELDS = {
+    "schemaVersion", "targetCommit", "releaseId", "capacityContractSha256",
+    "reason", "responsible", "issuedAtUtc", "expiresAtUtc",
+}
 ARTIFACT_CLASSES = {
     "PACKAGE_PRESERVE", "EVIDENCE_PRESERVE", "RELEASE_RUNTIME",
     "DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_STAGING",
@@ -98,7 +104,10 @@ def stable_bytes(path: Path) -> tuple[bytes, os.stat_result]:
 
 
 def read_capacity_contract(path: Path, repo: Path, output_parent: Path,
-                           target: str, release_id: str) -> dict[str, Any]:
+                           target: str, release_id: str,
+                           p00_override_path: Path | None = None,
+                           p00_override_sha256: str | None = None,
+                           now: dt.datetime | None = None) -> dict[str, Any]:
     if not path.is_absolute():
         deny("capacity_contract_absolute")
     raw, info = stable_bytes(path)
@@ -135,6 +144,15 @@ def read_capacity_contract(path: Path, repo: Path, output_parent: Path,
     if (not filesystem.is_dir() or repo_info.st_dev != filesystem_info.st_dev or
             output_info.st_dev != filesystem_info.st_dev):
         deny("capacity_contract_filesystem")
+    capacity_sha256 = sha256_bytes(raw)
+    if (p00_override_path is None) != (p00_override_sha256 is None):
+        deny("p00_static_floor_override_pair")
+    override = None
+    if p00_override_path is not None and p00_override_sha256 is not None:
+        override = read_p00_static_floor_override(
+            p00_override_path, p00_override_sha256, target, release_id,
+            capacity_sha256, now,
+        )
     usage = os.statvfs(filesystem)
     free_bytes = usage.f_bavail * usage.f_frsize
     free_inodes = usage.f_favail
@@ -142,15 +160,15 @@ def read_capacity_contract(path: Path, repo: Path, output_parent: Path,
     required_inodes = sum(contract[field] for field in CAPACITY_INODE_FIELDS)
     if free_bytes < required_bytes:
         deny(f"capacity_bytes:available={free_bytes}:required={required_bytes}")
-    if free_bytes < MINIMUM_BUILD_FREE_BYTES:
+    if free_bytes < MINIMUM_BUILD_FREE_BYTES and override is None:
         deny(f"minimum_build_free_bytes:available={free_bytes}:required={MINIMUM_BUILD_FREE_BYTES}")
     if free_inodes < required_inodes:
         deny(f"capacity_inodes:available={free_inodes}:required={required_inodes}")
-    return {
+    result = {
         "budgets": {field: contract[field] for field in CAPACITY_BYTE_FIELDS | CAPACITY_INODE_FIELDS},
         "device": filesystem_info.st_dev,
         "contractId": contract["contractId"],
-        "contractSha256": sha256_bytes(raw),
+        "contractSha256": capacity_sha256,
         "filesystemPath": str(filesystem),
         "availableBytes": free_bytes,
         "availableInodes": free_inodes,
@@ -159,6 +177,9 @@ def read_capacity_contract(path: Path, repo: Path, output_parent: Path,
         "operationalReserveBytes": contract["operationalReserveBytes"],
         "operationalReserveInodes": contract["operationalReserveInodes"],
     }
+    if override is not None:
+        result["p00StaticFloorOverride"] = override
+    return result
 
 
 @contextmanager
@@ -189,6 +210,45 @@ def parse_utc(value: object, predicate: str) -> dt.datetime:
     if parsed.tzinfo is None or parsed.utcoffset() != dt.timedelta(0):
         deny(predicate)
     return parsed
+
+
+def read_p00_static_floor_override(path: Path, expected_sha256: str, target: str,
+                                   release_id: str, capacity_sha256: str,
+                                   now: dt.datetime | None = None) -> dict[str, Any]:
+    if not path.is_absolute() or not SHA256.fullmatch(expected_sha256):
+        deny("p00_static_floor_override_identity")
+    raw, info = stable_bytes(path)
+    if (info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600 or
+            sha256_bytes(raw) != expected_sha256):
+        deny("p00_static_floor_override_identity")
+    override = json_object(raw, "p00-static-floor-override")
+    if (set(override) != P00_STATIC_FLOOR_OVERRIDE_FIELDS or
+            override.get("schemaVersion") != 1):
+        deny("p00_static_floor_override_schema")
+    if (override.get("targetCommit") != target or
+            override.get("releaseId") != release_id or
+            override.get("capacityContractSha256") != capacity_sha256):
+        deny("p00_static_floor_override_binding")
+    if override.get("reason") != P00_STATIC_FLOOR_OVERRIDE_REASON:
+        deny("p00_static_floor_override_reason")
+    responsible = override.get("responsible")
+    if not isinstance(responsible, str) or not responsible.strip():
+        deny("p00_static_floor_override_responsible")
+    issued = parse_utc(override.get("issuedAtUtc"), "p00_static_floor_override_time")
+    expires = parse_utc(override.get("expiresAtUtc"), "p00_static_floor_override_time")
+    current = now or dt.datetime.now(dt.timezone.utc)
+    if (issued > current or expires <= current or expires <= issued or
+            expires - issued > P00_STATIC_FLOOR_OVERRIDE_MAX_LIFETIME):
+        deny("p00_static_floor_override_time")
+    return {
+        "path": str(path), "sha256": expected_sha256,
+        "capacityContractSha256": capacity_sha256,
+        "reason": P00_STATIC_FLOOR_OVERRIDE_REASON,
+        "responsible": responsible,
+        "issuedAtUtc": override["issuedAtUtc"],
+        "expiresAtUtc": override["expiresAtUtc"],
+        "waivesOnly": "MINIMUM_BUILD_FREE_BYTES",
+    }
 
 
 def require_generation_reviews(parent: Path, now: dt.datetime | None = None) -> list[dict[str, str]]:
@@ -357,6 +417,18 @@ def build_artifact_contract(args: argparse.Namespace, lifecycle_path: Path,
                        {"indexSha256": verified["indexSha256"]} if verified else None,
                        "CANDIDATE_PENDING_ACTIVATION" if package_verified else "ACTIVE_DEPENDENCY"),
     ]
+    if getattr(args, "p00_static_floor_override", None) is not None:
+        override_raw, override_info = stable_bytes(args.p00_static_floor_override)
+        if (override_info.st_uid != os.geteuid() or
+                stat.S_IMODE(override_info.st_mode) != 0o600 or
+                sha256_bytes(override_raw) != args.p00_static_floor_override_sha256):
+            deny("p00_static_floor_override_identity")
+        entries.append(artifact_entry(
+            args.p00_static_floor_override.resolve(strict=True), args.release_id, args.target,
+            "regular_file", "EVIDENCE_PRESERVE", "NEVER_AUTOMATIC",
+            ["p00_static_floor_authorization", "capacity_authorization"],
+            {"sha256": sha256_bytes(override_raw)},
+        ))
     if staging is not None:
         entries.append(staging)
     previous_initial: dict[str, Any] = {}
@@ -1076,7 +1148,8 @@ def build_in_generation_window(args: argparse.Namespace,
     if args.components != ",".join(COMPONENTS):
         deny("components")
     capacity = read_capacity_contract(
-        args.capacity_contract, repo, args.output.parent, args.target, args.release_id
+        args.capacity_contract, repo, args.output.parent, args.target, args.release_id,
+        args.p00_static_floor_override, args.p00_static_floor_override_sha256,
     )
     previous_reviews = require_generation_reviews(args.output.parent)
     args.output.mkdir(mode=0o700, parents=False)
@@ -1266,6 +1339,8 @@ def parser() -> argparse.ArgumentParser:
                               default=Path("/opt/re7online/releases"))
     build_parser.add_argument("--source-date-epoch", type=int, required=True)
     build_parser.add_argument("--capacity-contract", type=Path, required=True)
+    build_parser.add_argument("--p00-static-floor-override", type=Path)
+    build_parser.add_argument("--p00-static-floor-override-sha256")
     build_parser.add_argument("--root-policy", type=Path, required=True)
     build_parser.add_argument("--root-policy-sha256", required=True)
     build_parser.set_defaults(handler=build)
