@@ -59,6 +59,14 @@ duplicatas. `handoffAttendantWaid` aceita `""`; qualquer valor preenchido deve
 conter somente dígitos. Formatação com espaço, `+`, parênteses ou hífen é
 negada, nunca normalizada pelo backfill.
 
+O gate posterior `tenants-json:retirement:check` também aceita `--tenant`
+repetível. Com filtro, somente os tenants selecionados participam de readiness,
+`incompleteTenants`, warnings e do array `tenants`; o conjunto é ordenado e
+seletores vazios, duplicados ou inexistentes são negados. Dívida de outro tenant
+não bloqueia a recuperação selecionada. A busca por usos
+`runtime_critical`/`onboarding` permanece global e continua sendo bloqueio
+estrutural. Sem filtro, o gate global mantém o contrato anterior integral.
+
 ```json
 {
   "id": "re7online",

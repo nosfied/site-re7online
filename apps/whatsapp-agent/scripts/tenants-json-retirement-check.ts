@@ -8,6 +8,11 @@ import {
   classifyTenantMetaParticipation,
   isActiveTenantMetaContractIncomplete,
 } from "../src/config/tenantMetaParticipation.js";
+import {
+  parseTenantJsonRetirementOptions,
+  selectTenantJsonRetirementTenants,
+  tenantJsonRetirementReady,
+} from "../src/config/tenantJsonRetirementSelection.js";
 
 type UsageKind = "runtime_critical" | "admin" | "onboarding" | "fallback_legacy" | "seed_demo_test";
 
@@ -88,6 +93,7 @@ function collectUsages(root: string) {
 
 async function main() {
   loadEnv();
+  const options = parseTenantJsonRetirementOptions(process.argv.slice(2));
   const prisma = new PrismaClient();
   try {
     const root = path.resolve(process.cwd(), "src");
@@ -196,8 +202,11 @@ async function main() {
       seed_demo_test: 0,
     });
     const blocking = usages.filter((usage) => usage.kind === "runtime_critical" || usage.kind === "onboarding");
+    const scopedTenants = databaseReachable
+      ? selectTenantJsonRetirementTenants({ tenants, selectedTenants: options.tenants })
+      : [];
     const incompleteTenants = databaseReachable
-      ? tenants.filter((tenant) => isActiveTenantMetaContractIncomplete({
+      ? scopedTenants.filter((tenant) => isActiveTenantMetaContractIncomplete({
           status: tenant.status,
           participation: tenant.metaParticipation,
           hasOperationalConfig: tenant.operationalConfig,
@@ -205,14 +214,37 @@ async function main() {
         }))
       : [];
     const activeTenantsWithoutChannelAccounts = databaseReachable
-      ? tenants.filter((tenant) => tenant.status === "ACTIVE" && tenant.channelAccounts.length === 0)
+      ? scopedTenants.filter((tenant) => tenant.status === "ACTIVE" && tenant.channelAccounts.length === 0)
       : [];
+    const sanitizeTenant = (tenant: (typeof tenants)[number]) => ({
+      clientKey: tenant.clientKey,
+      status: tenant.status,
+      operationalConfig: tenant.operationalConfig,
+      operationalReadiness: tenant.operationalReadiness,
+      tenantMetaConfig: tenant.tenantMetaConfig,
+      waPhoneNumber: tenant.waPhoneNumber,
+      metaParticipation: tenant.metaParticipation,
+      channelAccounts: tenant.channelAccounts.map(({ channelAccountId: _channelAccountId, secretKinds, ...account }) => ({
+        ...account,
+        secretCount: secretKinds.length,
+      })),
+    });
+    const outputTenants = options.tenants ? scopedTenants.map(sanitizeTenant) : scopedTenants;
+    const outputIncompleteTenants = options.tenants ? incompleteTenants.map(sanitizeTenant) : incompleteTenants;
+    const outputActiveTenantsWithoutChannelAccounts = options.tenants
+      ? activeTenantsWithoutChannelAccounts.map(sanitizeTenant)
+      : activeTenantsWithoutChannelAccounts;
     console.log(JSON.stringify({
-      ok: databaseReachable && blocking.length === 0 && incompleteTenants.length === 0,
+      ok: tenantJsonRetirementReady({
+        databaseReachable,
+        blockingUsageCount: blocking.length,
+        incompleteTenantCount: incompleteTenants.length,
+      }),
       generatedAt: new Date().toISOString(),
+      ...(options.tenants ? { selectedTenants: options.tenants } : {}),
       database: {
         reachable: databaseReachable,
-        error: databaseError,
+        error: options.tenants && databaseError ? "database_unreachable" : databaseError,
       },
       env: {
         enableTenantsJsonFallback: process.env.ENABLE_TENANTS_JSON_FALLBACK === "true",
@@ -222,11 +254,11 @@ async function main() {
       },
       usageCounts,
       blockingUsages: blocking,
-      incompleteTenants,
+      incompleteTenants: outputIncompleteTenants,
       warnings: {
-        activeTenantsWithoutChannelAccounts,
+        activeTenantsWithoutChannelAccounts: outputActiveTenantsWithoutChannelAccounts,
       },
-      tenants,
+      tenants: outputTenants,
     }, null, 2));
     if (!databaseReachable || blocking.length > 0 || incompleteTenants.length > 0) process.exitCode = 1;
   } finally {

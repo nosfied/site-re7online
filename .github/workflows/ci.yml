@@ -108,6 +108,7 @@ jobs:
           node --import tsx --test
           src/config/authenticatedTenantJsonSource.test.ts
           src/config/tenantOperationalConfig.test.ts
+          src/config/tenantJsonRetirementSelection.test.ts
           src/whatsapp/tenantMetaRuntimeConfig.test.ts
           src/whatsapp/tenantMetaReactiveOutboundGate.test.ts
           src/whatsapp/tenantMetaRuntimeContract.test.ts

@@ -35,6 +35,7 @@
     "channel-accounts:backfill": "node --import tsx scripts/channel-accounts-backfill.ts",
     "channel-accounts:shadow:compare": "node --import tsx scripts/channel-accounts-shadow-compare.ts",
     "tenants-json:retirement:check": "node --import tsx scripts/tenants-json-retirement-check.ts",
+    "test:tenants-json-retirement-selection": "node --import tsx --test src/config/tenantJsonRetirementSelection.test.ts",
     "channel-latency:summary": "node --import tsx scripts/channel-latency-summary.ts",
     "channels:backfill": "node --import tsx scripts/channels-backfill.ts",
     "channels:backfill:dry-run": "node --import tsx scripts/channels-backfill-dry-run.ts",
