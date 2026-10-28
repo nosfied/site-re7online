@@ -4,9 +4,9 @@ Este documento permanece limitado a 340 linhas pelo validador obrigatório do jo
 `Repository contracts`; mudanças que excedam o teto devem extrair detalhes para a
 documentação operacional especializada, não ampliar silenciosamente o limite.
 
-Esta é a única instrução executável vigente para releases normais do Converta.
-Arquitetura e razões dos gates ficam no
-[modelo operacional](DEPLOYMENT_OPERATING_MODEL.md).
+Esta é a única instrução executável vigente para releases normais do Converta e aplica
+os [princípios fundamentais](WORKING_PRINCIPLES.md). Arquitetura e razões dos gates
+ficam no [modelo operacional](DEPLOYMENT_OPERATING_MODEL.md).
 
 As fases preservam a nomenclatura de estado `preflight`, `activate`, `finalize`,
 `rollback` e `status`; seus resultados nominais são `PREFLIGHT PASS`,
