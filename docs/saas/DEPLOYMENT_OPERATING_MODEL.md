@@ -249,6 +249,12 @@ vivos com `instances=1` equivalem à omissão somente no PM2 6.0.14 autenticado,
 `fork_mode` singleton e com os demais campos idênticos; worker ausente/nulo nos
 dois lados é comparado sem normalização.
 
+Para o ambiente permitido, o comparador PM2 6.0.14 decide por presença, não por
+truthiness: a chave existente no topo do registro prevalece, inclusive quando vale
+`false`, `0`, string vazia ou `null`; `pm2_env` é consultado somente quando a chave
+está ausente no topo. A regra vale igualmente para API, frontend e worker, não amplia
+o conjunto fechado de variáveis e mantém qualquer divergência real como `DENY`.
+
 A guarda de campanhas permanece aberta na geração 41, sem tarefas ou fault. IMAGE e
 VIDEO passaram em campanhas controladas; agendamento, multilote e aceites específicos
 permanecem frentes separadas. Fonte: relatório do Codex local encaminhado pelo owner;
