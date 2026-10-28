@@ -220,6 +220,16 @@ intenção condicionada permanece `NOT_AUTHORIZED`. PR #240 e a candidata `123ba
 foram superados pela correção de apresentação terminal e continuam preservados.
 A regularização contratual da geração foi concluída; não existe retirada pendente.
 
+## Regularização de release rejeitada ef3a — 28/10/2026
+
+A release `immutable-ef3a2128-vps-20261028T001820Z` foi rejeitada tecnicamente,
+teve rollback para 708f e está fora de current, PM2 live/dump e da cadeia de
+rollback. Seu contrato autenticado a classifica como
+`RELEASE_RUNTIME/RETIREMENT_READY`, mas o control plane anterior não materializava
+comando para essa classe. A correção versionada passa a incluir exclusivamente
+releases já fora de todos os grafos protegidos, com caminho literal, raiz canônica
+e revalidação sob locks. Nenhuma retirada da ef3a está autorizada por esta mudança.
+
 ## Rota operacional
 
 A única instrução executável vigente é o [runbook canônico](DEPLOY_RUNBOOK.md).
