@@ -27,6 +27,38 @@ atômica e shadow compare devem concluir nessa ordem. A presença de
 recebem conta Meta. `cra-pr` exige plano autenticado próprio com proveniência
 `OWNER_AUTHORIZED_DB_IDENTITY`.
 
+O backfill de `TenantOperationalConfig` aceita `--tenant` repetível para um lote
+fechado. Tendência e Justa continuam derivando todos os campos gerenciados da
+fonte histórica autenticada. O CRA pode participar do mesmo lote somente por
+plano privado separado, vinculado ao SHA da fonte, contendo exclusivamente:
+
+```json
+{
+  "schemaVersion": 1,
+  "sourceSha256": "<sha256-da-fonte>",
+  "tenants": {
+    "cra-pr": {
+      "provenance": "OWNER_AUTHORIZED_DB_IDENTITY",
+      "baseConfig": {
+        "allowlist": [],
+        "handoffAttendantWaid": "",
+        "defaultLanguage": "pt_BR",
+        "disableAutoReply": false
+      }
+    }
+  }
+}
+```
+
+Os valores reais permanecem privados. O plano não pode conter
+`aiAssistantConfig` nem outras políticas. Todos os demais blocos já existentes
+no PostgreSQL permanecem byte-semanticamente preservados.
+Os WAIDs do plano owner-authorized devem chegar canônicos. Cada item de
+`allowlist` é uma string não vazia somente de dígitos e a lista não admite
+duplicatas. `handoffAttendantWaid` aceita `""`; qualquer valor preenchido deve
+conter somente dígitos. Formatação com espaço, `+`, parênteses ou hífen é
+negada, nunca normalizada pelo backfill.
+
 ```json
 {
   "id": "re7online",

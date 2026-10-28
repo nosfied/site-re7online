@@ -160,6 +160,7 @@ jobs:
           npm run db:deploy
           node --import tsx --test src/channels/channelAccountMigrationPlan.test.ts
           node --import tsx --test src/channels/channelAccountMigrationScripts.test.ts
+          node --import tsx --test src/config/tenantOperationalConfigMigrationPlan.test.ts
           node --import tsx --test src/config/tenantOperationalConfigScripts.test.ts
       - name: Backend durable-operation and multi-tenant tests
         run: >-

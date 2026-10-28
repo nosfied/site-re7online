@@ -81,8 +81,12 @@ A ordem obrigatória para uma futura intervenção produtiva é:
 4. materializar `ChannelAccount` para todos os participantes Meta em uma única
    transação, com locks de `Client` em ordem determinística;
 5. executar `channel-accounts:shadow:compare` contra a mesma fonte autenticada e exatamente o mesmo conjunto ordenado de `--tenant`; sem seletor, ambos continuam exigindo a fonte/plano integrais;
-6. executar `tenant-config:backfill --dry-run`;
-7. materializar `TenantOperationalConfig` em uma única transação atômica;
+6. executar `tenant-config:backfill --dry-run`; um lote restrito repete
+   `--tenant`, usa seleção ordenada e pode combinar tenants da fonte com a
+   entrada privada owner-authorized exclusiva do `cra-pr`;
+7. materializar `TenantOperationalConfig` em uma única transação
+   `SERIALIZABLE`, com locks de `Client` em ordem determinística e todos os
+   tenants pré-validados antes da primeira escrita;
 8. executar `tenants-json:retirement:check` por tenant participante Meta;
 9. somente então produzir build e ativar após autorização explícita.
 
@@ -101,6 +105,19 @@ permanecem em `WaPhoneNumber`/`TenantMetaConfig`; gates de execução ficam em
 O backfill preserva blocos DB não relacionados, é idempotente e nega antes de
 escrever qualquer tenant sem `Client` ou com participação Meta incompleta ou
 ambígua. Tenants exclusivamente Web Session não precisam de conta Meta.
+Sem `--tenant`, o backfill funcional continua processando integralmente a fonte
+histórica. Com seleção explícita, tenants da fonte usam somente seus campos
+autenticados; `cra-pr`, que não pertence à fonte, só pode fornecer `baseConfig`
+com os quatro campos explícitos em plano separado `schemaVersion=1`, vinculado
+ao SHA da fonte e com `provenance=OWNER_AUTHORIZED_DB_IDENTITY`. Esse caminho não
+cria nem substitui AI, CRM statuses, templates, quota, follow-up ou qualquer
+outro bloco do CRA. Tenant externo arbitrário, seletor vazio/duplicado ou campo
+adicional no plano resulta em negativa antes da transação.
+Os WAIDs owner-authorized já devem estar em forma canônica: cada item da
+`allowlist` é uma string não vazia composta somente por dígitos, sem duplicatas;
+`handoffAttendantWaid` pode ser vazio, mas, quando preenchido, também contém
+somente dígitos. O backfill não remove espaços, `+`, parênteses ou hífens desse
+plano e nega valores formatados em vez de normalizá-los silenciosamente.
 O relatório é sanitizado e não publica números completos. Rollback para código
 antigo é estruturalmente seguro:
 campos JSON adicionais em `TenantOperationalConfig.config` são ignorados pelo
