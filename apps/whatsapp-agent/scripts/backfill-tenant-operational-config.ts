@@ -1,5 +1,4 @@
 #!/usr/bin/env tsx
-import { withLockedTenantOperationalConfig } from "../src/config/tenantOperationalConfigStore.js";
 import path from "node:path";
 import process from "node:process";
 import { isDeepStrictEqual } from "node:util";
@@ -8,7 +7,15 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import { normalizeQualificationSchema } from "../src/agent/qualification.js";
 import { env } from "../src/config/env.js";
 import { readAuthenticatedTenantJsonSource } from "../src/config/authenticatedTenantJsonSource.js";
+import { readAuthenticatedPrivateJsonSource } from "../src/config/authenticatedPrivateJsonSource.js";
 import { classifyTenantMetaParticipation } from "../src/config/tenantMetaParticipation.js";
+import {
+  normalizeTenantOperationalConfigSelection,
+  selectedTenantOperationalConfigKeys,
+  validateTenantOperationalConfigPlan,
+  type OwnerAuthorizedBaseConfig,
+  type TenantOperationalConfigPlanDocument,
+} from "../src/config/tenantOperationalConfigMigrationPlan.js";
 import {
   normalizeAiAssistantIntentCatalog,
   normalizeCrmBusinessStatuses,
@@ -18,10 +25,12 @@ import {
 
 type Options = {
   json: boolean;
-  tenant?: string;
+  tenants?: string[];
   dryRun: boolean;
   source: string;
   expectedSourceSha256: string;
+  plan?: string;
+  expectedPlanSha256?: string;
 };
 
 type BackfillItem = {
@@ -29,16 +38,17 @@ type BackfillItem = {
   clientId: string | null;
   action: "would_upsert" | "upserted" | "unchanged" | "skipped_missing_client";
   fieldsChanged: string[];
-  statusCount: number;
-  manualHandoffTemplate: string | null;
-  followUp: ReturnType<typeof normalizeFollowUp>;
-  handoffLeadNotification: ReturnType<typeof normalizeHandoffLeadNotification>;
-  mediaHandoffPolicy: ReturnType<typeof normalizeTenantMediaHandoffPolicy>;
-  planLimits: ReturnType<typeof normalizePlanLimits>;
-  automationFlags: ReturnType<typeof normalizeAutomationFlags>;
-  aiAssistantConfig: ReturnType<typeof summarizeAiAssistantConfig>;
-  aiIntentQualification: ReturnType<typeof summarizeAiIntentQualification>;
+  statusCount?: number;
+  manualHandoffTemplate?: string | null;
+  followUp?: ReturnType<typeof normalizeFollowUp>;
+  handoffLeadNotification?: ReturnType<typeof normalizeHandoffLeadNotification>;
+  mediaHandoffPolicy?: ReturnType<typeof normalizeTenantMediaHandoffPolicy>;
+  planLimits?: ReturnType<typeof normalizePlanLimits>;
+  automationFlags?: ReturnType<typeof normalizeAutomationFlags>;
+  aiAssistantConfig?: ReturnType<typeof summarizeAiAssistantConfig>;
+  aiIntentQualification?: ReturnType<typeof summarizeAiIntentQualification>;
   baseConfig: ReturnType<typeof summarizeBaseConfig>;
+  provenance: "HISTORICAL_SOURCE" | "OWNER_AUTHORIZED_DB_IDENTITY";
 };
 
 function parseArgs(argv: string[]): Options {
@@ -48,6 +58,7 @@ function parseArgs(argv: string[]): Options {
     source: "",
     expectedSourceSha256: "",
   };
+  const tenantValues: string[] = [];
   for (let index = 0; index < argv.length; index += 1) {
     const current = argv[index];
     const next = argv[index + 1];
@@ -61,7 +72,7 @@ function parseArgs(argv: string[]): Options {
       case "--tenant":
       case "--client-key":
         if (!next || next.startsWith("--")) throw new Error(`${current} exige um valor`);
-        options.tenant = next;
+        tenantValues.push(next);
         index += 1;
         break;
       case "--source":
@@ -76,12 +87,28 @@ function parseArgs(argv: string[]): Options {
         options.expectedSourceSha256 = next.toLowerCase();
         index += 1;
         break;
+      case "--plan":
+        if (!next || next.startsWith("--")) throw new Error("--plan exige um valor");
+        options.plan = next;
+        index += 1;
+        break;
+      case "--expected-plan-sha256":
+        if (!next || !/^[a-f0-9]{64}$/i.test(next)) {
+          throw new Error("--expected-plan-sha256 exige SHA-256 hexadecimal");
+        }
+        options.expectedPlanSha256 = next.toLowerCase();
+        index += 1;
+        break;
       default:
         throw new Error(`flag nao reconhecida: ${current}`);
     }
   }
   if (!path.isAbsolute(options.source)) throw new Error("source_must_be_absolute");
   if (!options.expectedSourceSha256) throw new Error("expected_source_sha256_required");
+  if (Boolean(options.plan) !== Boolean(options.expectedPlanSha256)) throw new Error("plan_and_expected_sha256_required_together");
+  if (options.plan && !path.isAbsolute(options.plan)) throw new Error("plan_must_be_absolute");
+  if (options.plan && tenantValues.length === 0) throw new Error("plan_requires_tenant_selection");
+  if (tenantValues.length > 0) options.tenants = normalizeTenantOperationalConfigSelection(tenantValues);
   return options;
 }
 
@@ -427,20 +454,39 @@ function mergedManagedConfig(current: unknown, values: ReturnType<typeof normali
   );
 }
 
+function mergedOwnerAuthorizedConfig(current: unknown, baseConfig: OwnerAuthorizedBaseConfig): Prisma.InputJsonValue {
+  const base = current && typeof current === "object" && !Array.isArray(current)
+    ? { ...(current as Record<string, unknown>) }
+    : {};
+  base.baseConfig = {
+    allowlist: [...baseConfig.allowlist],
+    handoffAttendantWaid: baseConfig.handoffAttendantWaid,
+    defaultLanguage: baseConfig.defaultLanguage,
+    disableAutoReply: baseConfig.disableAutoReply,
+  };
+  return base as Prisma.InputJsonValue;
+}
+
 function backfillItem(params: {
   tenantKey: string;
   clientId: string;
   current: unknown;
   next: unknown;
-  values: ReturnType<typeof normalizedManagedValues>;
+  values?: ReturnType<typeof normalizedManagedValues>;
+  baseConfig: ReturnType<typeof normalizeBaseConfig> | OwnerAuthorizedBaseConfig;
+  provenance: "HISTORICAL_SOURCE" | "OWNER_AUTHORIZED_DB_IDENTITY";
   dryRun: boolean;
 }): BackfillItem {
   const fieldsChanged = changedManagedFields(params.current, params.next);
-  return {
+  const item: BackfillItem = {
     tenantKey: params.tenantKey,
     clientId: params.clientId,
     action: fieldsChanged.length === 0 ? "unchanged" : params.dryRun ? "would_upsert" : "upserted",
     fieldsChanged,
+    baseConfig: summarizeBaseConfig(params.baseConfig),
+    provenance: params.provenance,
+  };
+  if (params.values) Object.assign(item, {
     statusCount: params.values.statuses.length,
     manualHandoffTemplate: params.values.manualHandoffTemplate,
     followUp: params.values.followUp,
@@ -450,8 +496,8 @@ function backfillItem(params: {
     automationFlags: params.values.automationFlags,
     aiAssistantConfig: summarizeAiAssistantConfig(params.values.aiAssistantConfig),
     aiIntentQualification: summarizeAiIntentQualification(params.values.aiIntentQualification),
-    baseConfig: summarizeBaseConfig(params.values.baseConfig),
-  };
+  });
+  return item;
 }
 
 async function main() {
@@ -459,142 +505,177 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const prisma = new PrismaClient();
   const startedAt = Date.now();
-  const items: BackfillItem[] = [];
   try {
     const tenants = await readAuthenticatedTenantJsonSource({
       source: options.source,
       expectedSha256: options.expectedSourceSha256,
     });
-    const entries = Object.entries(tenants).filter(([tenantKey]) => {
-      return options.tenant ? tenantKey === options.tenant : true;
-    });
-    const clientKeys = entries.map(([tenantKey]) => tenantKey);
-    const clients = await prisma.client.findMany({
-      where: { clientKey: { in: clientKeys } },
-      select: { id: true, clientKey: true, operationalConfig: { select: { config: true } } },
-    });
-    const clientsByKey = new Map(clients.map((client) => [client.clientKey, client]));
-    const missingClients = entries
-      .map(([tenantKey]) => tenantKey)
-      .filter((tenantKey) => !clientsByKey.has(tenantKey));
-    if (missingClients.length > 0) {
-      throw new Error(`source_tenant_missing_client:${missingClients.sort().join(",")}`);
-    }
-    const clientIds = clients.map((client) => client.id);
-    const [channelAccounts, phoneNumbers, metaConfigs] = await Promise.all([
-      prisma.channelAccount.findMany({
-        where: { clientId: { in: clientIds }, channel: "whatsapp", provider: "meta" },
-        select: {
-          clientId: true,
-          channelAccountId: true,
-          aliases: { select: { alias: true } },
-        },
-      }),
-      prisma.waPhoneNumber.findMany({
-        where: { clientId: { in: clientIds } },
-        select: { clientId: true, phoneNumberId: true },
-      }),
-      prisma.tenantMetaConfig.findMany({
-        where: { clientId: { in: clientIds } },
-        select: { clientId: true, phoneNumberId: true },
-      }),
-    ]);
-    const prepared = entries.map(([tenantKey, tenant]) => {
-      const client = clientsByKey.get(tenantKey)!;
-      const sourcePhoneNumberId = typeof tenant.metaPhoneNumberId === "string"
-        ? tenant.metaPhoneNumberId.trim()
-        : "";
-      const mappedPhoneIds = new Set([
-        ...phoneNumbers.filter((phone) => phone.clientId === client.id).map((phone) => phone.phoneNumberId),
-        ...metaConfigs.filter((config) => config.clientId === client.id).map((config) => config.phoneNumberId).filter(Boolean),
-      ]);
-      const clientMetaAccounts = channelAccounts.filter((account) => account.clientId === client.id);
-      const participation = classifyTenantMetaParticipation({
-        metaChannelAccount: clientMetaAccounts.length > 0,
-        waPhoneNumber: phoneNumbers.some((phone) => phone.clientId === client.id),
-        tenantMetaConfig: metaConfigs.some((config) => config.clientId === client.id),
+    let planDocument: TenantOperationalConfigPlanDocument | undefined;
+    if (options.plan && options.expectedPlanSha256) {
+      const rawPlan = await readAuthenticatedPrivateJsonSource<unknown>({
+        source: options.plan,
+        expectedSha256: options.expectedPlanSha256,
       });
-      if (sourcePhoneNumberId) {
-        if (!mappedPhoneIds.has(sourcePhoneNumberId)) {
-          throw new Error(`source_tenant_missing_phone_mapping:${tenantKey}`);
-        }
-        const hasExactChannelAccount = clientMetaAccounts.some((account) =>
-          account.channelAccountId === sourcePhoneNumberId ||
-          account.aliases.some((alias) => alias.alias === sourcePhoneNumberId)
-        );
-        if (!hasExactChannelAccount) {
-          throw new Error(`source_tenant_missing_channel_account:${tenantKey}`);
-        }
-      } else if (participation.participatesInMeta) {
-        throw new Error(`source_tenant_meta_identity_ambiguous:${tenantKey}`);
-      }
-      const values = normalizedManagedValues(tenant as Record<string, unknown>);
-      const next = mergedManagedConfig(client.operationalConfig?.config, values);
-      return { tenantKey, client, values, next };
-    }).sort((left, right) => left.client.id.localeCompare(right.client.id));
-
-    for (const entry of prepared) {
-      items.push(backfillItem({
-        tenantKey: entry.tenantKey,
-        clientId: entry.client.id,
-        current: entry.client.operationalConfig?.config,
-        next: entry.next,
-        values: entry.values,
-        dryRun: options.dryRun,
-      }));
+      planDocument = validateTenantOperationalConfigPlan({
+        document: rawPlan,
+        expectedSourceSha256: options.expectedSourceSha256,
+        sourceTenantKeys: Object.keys(tenants),
+      });
     }
+    const clientKeys = selectedTenantOperationalConfigKeys({
+      sourceTenantKeys: Object.keys(tenants),
+      plan: planDocument,
+      selectedTenants: options.tenants,
+    });
 
-    if (!options.dryRun) {
-      await prisma.$transaction(async (tx) => {
-        const lockedConfigs = new Map<string, unknown>();
-        for (const entry of prepared) {
-          const lockedClient = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-            SELECT id FROM "Client"
-            WHERE id = ${entry.client.id}::uuid
+    const items = await prisma.$transaction(async (tx) => {
+      const clients = await tx.client.findMany({
+        where: { clientKey: { in: clientKeys } },
+        select: { id: true, clientKey: true },
+      });
+      const clientsByKey = new Map(clients.map((client) => [client.clientKey, client]));
+      const missingClients = clientKeys.filter((tenantKey) => !clientsByKey.has(tenantKey));
+      if (missingClients.length > 0) throw new Error(`source_tenant_missing_client:${missingClients.sort().join(",")}`);
+      const clientsInLockOrder = [...clients].sort((left, right) => left.id.localeCompare(right.id));
+      if (!options.dryRun) {
+        for (const client of clientsInLockOrder) {
+          const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT id FROM "Client" WHERE id = ${client.id}::uuid FOR UPDATE
+          `);
+          if (locked.length !== 1) throw new Error(`source_tenant_client_changed:${client.clientKey}`);
+        }
+        for (const client of clientsInLockOrder) {
+          await tx.$queryRaw(Prisma.sql`
+            SELECT id FROM "TenantOperationalConfig"
+            WHERE "clientId" = ${client.id}::uuid
             FOR UPDATE
           `);
-          if (lockedClient.length !== 1) {
-            throw new Error(`source_tenant_client_changed:${entry.tenantKey}`);
-          }
         }
-        for (const entry of prepared) {
-          const current = await withLockedTenantOperationalConfig(tx, entry.client.id, async (lockedTx) => {
-            const current = await lockedTx.tenantOperationalConfig.findUnique({
-              where: { clientId: entry.client.id },
-              select: { config: true },
-            });
-            return current?.config ?? {};
-          }, { createIfMissing: false, onMissing: () => ({}) });
-          lockedConfigs.set(entry.client.id, current);
-        }
-        for (const entry of prepared) {
-          const current = lockedConfigs.get(entry.client.id) ?? {};
-          const next = mergedManagedConfig(current, entry.values);
-          const item = items.find((candidate) => candidate.clientId === entry.client.id)!;
-          item.fieldsChanged = changedManagedFields(current, next);
-          if (isDeepStrictEqual(current, next)) {
-            item.action = "unchanged";
-            continue;
+      }
+      const clientIds = clientsInLockOrder.map((client) => client.id);
+      const [operationalConfigs, channelAccounts, phoneNumbers, metaConfigs] = await Promise.all([
+        tx.tenantOperationalConfig.findMany({
+          where: { clientId: { in: clientIds } },
+          select: { clientId: true, config: true },
+        }),
+        tx.channelAccount.findMany({
+          where: { clientId: { in: clientIds }, channel: "whatsapp", provider: "meta" },
+          select: { clientId: true, channelAccountId: true, aiEnabled: true, aliases: { select: { alias: true } } },
+        }),
+        tx.waPhoneNumber.findMany({
+          where: { clientId: { in: clientIds } },
+          select: { clientId: true, phoneNumberId: true },
+        }),
+        tx.tenantMetaConfig.findMany({
+          where: { clientId: { in: clientIds } },
+          select: { clientId: true, phoneNumberId: true },
+        }),
+      ]);
+      const configsByClient = new Map(operationalConfigs.map((config) => [config.clientId, config.config]));
+      const prepared = clientKeys.map((tenantKey) => {
+        const client = clientsByKey.get(tenantKey)!;
+        const current = configsByClient.get(client.id) ?? {};
+        const tenant = tenants[tenantKey] as Record<string, unknown> | undefined;
+        const clientMetaAccounts = channelAccounts.filter((account) => account.clientId === client.id);
+        if (!tenant) {
+          const planEntry = planDocument?.tenants[tenantKey];
+          if (tenantKey !== "cra-pr" || !planEntry) throw new Error(`TENANT_OPERATIONAL_CONFIG_TENANT_UNKNOWN:${tenantKey}`);
+          if (clientMetaAccounts.length !== 1 || clientMetaAccounts[0].aiEnabled !== false) {
+            throw new Error(`CRA_OPERATIONAL_CONFIG_CHANNEL_ACCOUNT_AI_MISMATCH:${tenantKey}`);
           }
-          item.action = "upserted";
+          const accountIdentity = clientMetaAccounts[0].channelAccountId;
+          const hasWaIdentity = phoneNumbers.some((phone) => phone.clientId === client.id && phone.phoneNumberId === accountIdentity);
+          const hasMetaIdentity = metaConfigs.some((config) => config.clientId === client.id && config.phoneNumberId === accountIdentity);
+          if (!hasWaIdentity || !hasMetaIdentity) {
+            throw new Error(`CRA_OPERATIONAL_CONFIG_DB_IDENTITY_MISMATCH:${tenantKey}`);
+          }
+          const baseConfig = planEntry.baseConfig;
+          return {
+            tenantKey,
+            client,
+            current,
+            baseConfig,
+            provenance: "OWNER_AUTHORIZED_DB_IDENTITY" as const,
+            next: mergedOwnerAuthorizedConfig(current, baseConfig),
+          };
+        }
+        const sourcePhoneNumberId = typeof tenant.metaPhoneNumberId === "string" ? tenant.metaPhoneNumberId.trim() : "";
+        const mappedPhoneIds = new Set([
+          ...phoneNumbers.filter((phone) => phone.clientId === client.id).map((phone) => phone.phoneNumberId),
+          ...metaConfigs.filter((config) => config.clientId === client.id).map((config) => config.phoneNumberId).filter(Boolean),
+        ]);
+        const participation = classifyTenantMetaParticipation({
+          metaChannelAccount: clientMetaAccounts.length > 0,
+          waPhoneNumber: phoneNumbers.some((phone) => phone.clientId === client.id),
+          tenantMetaConfig: metaConfigs.some((config) => config.clientId === client.id),
+        });
+        if (sourcePhoneNumberId) {
+          if (!mappedPhoneIds.has(sourcePhoneNumberId)) throw new Error(`source_tenant_missing_phone_mapping:${tenantKey}`);
+          if (!clientMetaAccounts.some((account) => account.channelAccountId === sourcePhoneNumberId || account.aliases.some((alias) => alias.alias === sourcePhoneNumberId))) {
+            throw new Error(`source_tenant_missing_channel_account:${tenantKey}`);
+          }
+        } else if (participation.participatesInMeta) {
+          throw new Error(`source_tenant_meta_identity_ambiguous:${tenantKey}`);
+        }
+        const values = normalizedManagedValues(tenant);
+        return {
+          tenantKey,
+          client,
+          current,
+          values,
+          baseConfig: values.baseConfig,
+          provenance: "HISTORICAL_SOURCE" as const,
+          next: mergedManagedConfig(current, values),
+        };
+      }).sort((left, right) => left.client.id.localeCompare(right.client.id));
+
+      const transactionItems = prepared.map((entry) => backfillItem({
+        tenantKey: entry.tenantKey,
+        clientId: entry.client.id,
+        current: entry.current,
+        next: entry.next,
+        values: "values" in entry ? entry.values : undefined,
+        baseConfig: entry.baseConfig,
+        provenance: entry.provenance,
+        dryRun: options.dryRun,
+      }));
+      if (!options.dryRun) {
+        for (const entry of prepared) {
+          if (isDeepStrictEqual(entry.current, entry.next)) continue;
           await tx.tenantOperationalConfig.upsert({
             where: { clientId: entry.client.id },
-            update: { config: next, schemaVersion: 1 },
-            create: { clientId: entry.client.id, config: next, schemaVersion: 1 },
+            update: { config: entry.next, schemaVersion: 1 },
+            create: { clientId: entry.client.id, config: entry.next, schemaVersion: 1 },
           });
         }
-      });
-    }
+      }
+      return transactionItems;
+    }, {
+      ...(options.plan || (options.tenants?.length ?? 0) > 1
+        ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+        : {}),
+      maxWait: 10_000,
+      timeout: 30_000,
+    });
+
     const deltaCounts = Object.fromEntries(MANAGED_CONFIG_FIELDS.map((field) => [
       field,
       items.filter((item) => item.fieldsChanged.includes(field)).length,
     ]));
+    const reportItems = options.tenants
+      ? items
+      : items.map(({ provenance: _provenance, ...item }) => item);
     const report = {
       ok: true,
       dryRun: options.dryRun,
       source: options.source,
       sourceSha256: options.expectedSourceSha256,
-      tenant: options.tenant ?? null,
+      ...(options.tenants ? {
+        plan: options.plan ?? null,
+        planSha256: options.expectedPlanSha256 ?? null,
+        tenant: options.tenants.length === 1 ? options.tenants[0] : null,
+        selectedTenants: options.tenants,
+      } : { tenant: null }),
       durationMs: Date.now() - startedAt,
       processed: items.length,
       upserted: items.filter((item) => item.action === "upserted").length,
@@ -602,7 +683,7 @@ async function main() {
       unchanged: items.filter((item) => item.action === "unchanged").length,
       skippedMissingClient: items.filter((item) => item.action === "skipped_missing_client").length,
       deltaCounts,
-      items,
+      items: reportItems,
     };
     if (options.json) {
       console.log(JSON.stringify(report, null, 2));
@@ -611,26 +692,33 @@ async function main() {
         `tenant operational config backfill ok dryRun=${report.dryRun} processed=${report.processed} upserted=${report.upserted} skippedMissingClient=${report.skippedMissingClient}`
       );
       for (const item of items) {
-        console.log(
-          `- tenant=${item.tenantKey} action=${item.action} clientId=${item.clientId ?? "-"} ` +
-            `crmBusinessStatuses=${item.statusCount} manualHandoff=${item.manualHandoffTemplate ?? "-"} ` +
-            `followUpEnabled=${item.followUp.enabled} followUpDelayMinutes=${item.followUp.delayMinutes} ` +
-            `handoffLeadNotificationEnabled=${item.handoffLeadNotification.enabled} ` +
-            `handoffLeadNotificationRecipients=${item.handoffLeadNotification.recipients.length} ` +
-            `mediaHandoffPolicyEnabled=${item.mediaHandoffPolicy.enabled} ` +
-            `mediaHandoffPolicyBehavior=${item.mediaHandoffPolicy.behavior} ` +
-            `planName=${item.planLimits.planName ?? "-"} messagesLimit=${item.planLimits.messagesLimit ?? "-"} ` +
-            `quotaMonthlyConversations=${item.planLimits.quotaMonthlyConversations ?? "-"} ` +
-            `disableChatbot=${item.automationFlags.disableChatbot} ` +
-            `disableAiFallback=${item.automationFlags.disableAiFallback} ` +
-            `disableIntentClassifier=${item.automationFlags.disableIntentClassifier} ` +
-            `disableLegacyFlows=${item.automationFlags.disableLegacyFlows} ` +
-            `disableChatbotFlowEditing=${item.automationFlags.disableChatbotFlowEditing} ` +
-            `aiAssistantProfile=${item.aiAssistantConfig.aiAssistantProfile} ` +
-            `aiAssistantMaxReplies=${item.aiAssistantConfig.aiAssistantMaxReplies} ` +
-            `aiAssistantAllowedTopics=${item.aiAssistantConfig.allowedTopicsCount} ` +
-            `aiAssistantBlockedTerms=${item.aiAssistantConfig.blockedTermsCount}`
-        );
+        if (item.provenance === "OWNER_AUTHORIZED_DB_IDENTITY") {
+          console.log(
+            `- tenant=${item.tenantKey} action=${item.action} clientId=${item.clientId ?? "-"} ` +
+              `provenance=${item.provenance} fieldsChanged=${item.fieldsChanged.join(",") || "-"}`
+          );
+        } else {
+          console.log(
+            `- tenant=${item.tenantKey} action=${item.action} clientId=${item.clientId ?? "-"} ` +
+              `crmBusinessStatuses=${item.statusCount} manualHandoff=${item.manualHandoffTemplate ?? "-"} ` +
+              `followUpEnabled=${item.followUp!.enabled} followUpDelayMinutes=${item.followUp!.delayMinutes} ` +
+              `handoffLeadNotificationEnabled=${item.handoffLeadNotification!.enabled} ` +
+              `handoffLeadNotificationRecipients=${item.handoffLeadNotification!.recipients.length} ` +
+              `mediaHandoffPolicyEnabled=${item.mediaHandoffPolicy!.enabled} ` +
+              `mediaHandoffPolicyBehavior=${item.mediaHandoffPolicy!.behavior} ` +
+              `planName=${item.planLimits!.planName ?? "-"} messagesLimit=${item.planLimits!.messagesLimit ?? "-"} ` +
+              `quotaMonthlyConversations=${item.planLimits!.quotaMonthlyConversations ?? "-"} ` +
+              `disableChatbot=${item.automationFlags!.disableChatbot} ` +
+              `disableAiFallback=${item.automationFlags!.disableAiFallback} ` +
+              `disableIntentClassifier=${item.automationFlags!.disableIntentClassifier} ` +
+              `disableLegacyFlows=${item.automationFlags!.disableLegacyFlows} ` +
+              `disableChatbotFlowEditing=${item.automationFlags!.disableChatbotFlowEditing} ` +
+              `aiAssistantProfile=${item.aiAssistantConfig!.aiAssistantProfile} ` +
+              `aiAssistantMaxReplies=${item.aiAssistantConfig!.aiAssistantMaxReplies} ` +
+              `aiAssistantAllowedTopics=${item.aiAssistantConfig!.allowedTopicsCount} ` +
+              `aiAssistantBlockedTerms=${item.aiAssistantConfig!.blockedTermsCount}`
+          );
+        }
       }
     }
   } finally {

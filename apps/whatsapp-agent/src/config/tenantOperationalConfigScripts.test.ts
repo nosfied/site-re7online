@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -418,4 +418,186 @@ test("backfill is atomic when the second deterministically locked tenant fails",
       before.get(client.id)
     );
   }
+});
+
+test("selected Tendencia, Justa and owner-authorized CRA are one atomic batch", async () => {
+  const tenantKeys = ["tendencia-modas", "justa-advocacia", "cra-pr"] as const;
+  const created = await Promise.all(tenantKeys.map(async (tenantKey) => {
+    const client = await prisma.client.create({ data: { clientKey: tenantKey, name: `Synthetic ${tenantKey}` } });
+    ids.push(client.id);
+    const phoneNumberId = `selected-${tenantKey}-${process.pid}`;
+    await prisma.tenantOperationalConfig.create({
+      data: {
+        clientId: client.id,
+        config: {
+          sentinel: { tenantKey, values: [false, null, "preserve"] },
+          aiAssistantConfig: tenantKey === "cra-pr" ? { legacy: true, enabled: false } : { legacy: true },
+          unrelatedPolicy: { active: true },
+        },
+      },
+    });
+    await prisma.waPhoneNumber.create({ data: { clientId: client.id, phoneNumberId } });
+    await prisma.tenantMetaConfig.create({
+      data: { clientId: client.id, phoneNumberId, businessToken: `synthetic-${tenantKey}`, rawPayload: {} },
+    });
+    await prisma.channelAccount.create({
+      data: {
+        clientId: client.id,
+        channel: "whatsapp",
+        provider: "meta",
+        channelAccountId: phoneNumberId,
+        aiEnabled: tenantKey !== "cra-pr",
+      },
+    });
+    return { tenantKey, client, phoneNumberId };
+  }));
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "re7-config-selected-batch-"));
+  temporaryDirectories.push(cwd);
+  const source = path.join(cwd, "tenants.json");
+  const planPath = path.join(cwd, "tenant-operational-plan.private.json");
+  const sourceValue = Object.fromEntries(created.filter((entry) => entry.tenantKey !== "cra-pr").map((entry) => [
+    entry.tenantKey,
+    {
+      id: entry.tenantKey,
+      name: entry.tenantKey,
+      metaPhoneNumberId: entry.phoneNumberId,
+      allowlist: [],
+      handoffAttendantWaid: "",
+      defaultLanguage: "pt_BR",
+      disableAutoReply: false,
+      crmBusinessStatuses: [{ id: "novo", label: "Novo" }],
+      aiAssistantEnabled: true,
+      aiAssistantFallbackToHandoff: true,
+      aiBusinessContext: `Contexto ${entry.tenantKey}`,
+      aiAssistantSystemPrompt: `Prompt ${entry.tenantKey}`,
+    },
+  ]));
+  const sourceBytes = JSON.stringify(sourceValue);
+  const sourceSha256 = crypto.createHash("sha256").update(sourceBytes).digest("hex");
+  const planValue = {
+    schemaVersion: 1,
+    sourceSha256,
+    tenants: {
+      "cra-pr": {
+        provenance: "OWNER_AUTHORIZED_DB_IDENTITY",
+        baseConfig: {
+          allowlist: [],
+          handoffAttendantWaid: "",
+          defaultLanguage: "pt_BR",
+          disableAutoReply: true,
+        },
+      },
+    },
+  };
+  const planBytes = JSON.stringify(planValue);
+  const planSha256 = crypto.createHash("sha256").update(planBytes).digest("hex");
+  await Promise.all([
+    writeFile(source, sourceBytes, { mode: 0o600 }),
+    writeFile(planPath, planBytes, { mode: 0o600 }),
+  ]);
+  const args = [
+    "--source", source,
+    "--expected-source-sha256", sourceSha256,
+    "--plan", planPath,
+    "--expected-plan-sha256", planSha256,
+    "--tenant", "tendencia-modas",
+    "--tenant", "justa-advocacia",
+    "--tenant", "cra-pr",
+    "--json",
+  ];
+
+  const beforeDryRun = new Map(await Promise.all(created.map(async ({ client }) => [
+    client.id,
+    await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }),
+  ] as const)));
+  const dryReport = JSON.parse(await runScript(cwd, "backfill-tenant-operational-config.ts", [...args, "--dry-run"]));
+  assert.deepEqual(dryReport.selectedTenants, ["cra-pr", "justa-advocacia", "tendencia-modas"]);
+  assert.equal(dryReport.wouldUpsert, 3);
+  assert.equal(dryReport.items.find((item: { tenantKey: string }) => item.tenantKey === "cra-pr").provenance, "OWNER_AUTHORIZED_DB_IDENTITY");
+  for (const { client } of created) {
+    assert.deepEqual(await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }), beforeDryRun.get(client.id));
+  }
+  assert.equal(await readFile(source, "utf8"), sourceBytes);
+
+  const applyReport = JSON.parse(await runScript(cwd, "backfill-tenant-operational-config.ts", args));
+  assert.equal(applyReport.upserted, 3);
+  for (const { tenantKey, client } of created) {
+    const row = await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } });
+    const config = row.config as Record<string, unknown>;
+    assert.deepEqual(config.sentinel, { tenantKey, values: [false, null, "preserve"] });
+    assert.deepEqual(config.unrelatedPolicy, { active: true });
+    if (tenantKey === "cra-pr") {
+      assert.deepEqual(config.aiAssistantConfig, { legacy: true, enabled: false });
+      assert.equal((config.baseConfig as Record<string, unknown>).disableAutoReply, true);
+      assert.equal(config.crmBusinessStatuses, undefined);
+      assert.equal(config.templates, undefined);
+      assert.equal(config.followUp, undefined);
+    } else {
+      assert.equal(((config.aiAssistantConfig as Record<string, unknown>).aiAssistantEnabled), true);
+      assert(Array.isArray(config.crmBusinessStatuses));
+    }
+  }
+
+  const omittedReport = JSON.parse(await runScript(cwd, "backfill-tenant-operational-config.ts", [
+    "--source", source,
+    "--expected-source-sha256", sourceSha256,
+    "--plan", planPath,
+    "--expected-plan-sha256", planSha256,
+    "--tenant", "tendencia-modas",
+    "--dry-run",
+    "--json",
+  ]));
+  assert.deepEqual(omittedReport.selectedTenants, ["tendencia-modas"]);
+  assert.equal(omittedReport.processed, 1);
+
+  const changedSourceValue = structuredClone(sourceValue);
+  for (const tenant of Object.values(changedSourceValue)) tenant.disableAutoReply = true;
+  const changedSourceBytes = JSON.stringify(changedSourceValue);
+  const changedSourceSha256 = crypto.createHash("sha256").update(changedSourceBytes).digest("hex");
+  const changedPlanValue = structuredClone(planValue);
+  changedPlanValue.sourceSha256 = changedSourceSha256;
+  changedPlanValue.tenants["cra-pr"].baseConfig.disableAutoReply = false;
+  const changedPlanBytes = JSON.stringify(changedPlanValue);
+  const changedPlanSha256 = crypto.createHash("sha256").update(changedPlanBytes).digest("hex");
+  await Promise.all([
+    writeFile(source, changedSourceBytes, { mode: 0o600 }),
+    writeFile(planPath, changedPlanBytes, { mode: 0o600 }),
+  ]);
+  const beforeFailure = new Map(await Promise.all(created.map(async ({ client }) => [
+    client.id,
+    await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }),
+  ] as const)));
+  const thirdClientId = [...created].sort((left, right) => left.client.id.localeCompare(right.client.id))[2].client.id;
+  const functionName = `selected_batch_third_fail_${process.pid}_${Date.now()}`;
+  const triggerName = `${functionName}_trigger`;
+  await prisma.$executeRawUnsafe(`
+    CREATE FUNCTION "${functionName}"() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW."clientId" = '${thirdClientId}'::uuid THEN RAISE EXCEPTION 'synthetic_third_tenant_failure'; END IF;
+      RETURN NEW;
+    END $$
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TRIGGER "${triggerName}" BEFORE INSERT OR UPDATE ON "TenantOperationalConfig"
+    FOR EACH ROW EXECUTE FUNCTION "${functionName}"()
+  `);
+  try {
+    await assert.rejects(runScript(cwd, "backfill-tenant-operational-config.ts", [
+      "--source", source,
+      "--expected-source-sha256", changedSourceSha256,
+      "--plan", planPath,
+      "--expected-plan-sha256", changedPlanSha256,
+      "--tenant", "tendencia-modas",
+      "--tenant", "justa-advocacia",
+      "--tenant", "cra-pr",
+      "--json",
+    ]), /synthetic_third_tenant_failure/);
+  } finally {
+    await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS "${triggerName}" ON "TenantOperationalConfig"`);
+    await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS "${functionName}"()`);
+  }
+  for (const { client } of created) {
+    assert.deepEqual(await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }), beforeFailure.get(client.id));
+  }
+  assert.equal(await readFile(source, "utf8"), changedSourceBytes);
 });
