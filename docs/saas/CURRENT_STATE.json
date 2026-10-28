@@ -1,6 +1,6 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-10-28T01:46:44Z",
+  "updatedAtUtc": "2026-10-28T02:36:19.721Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
@@ -385,6 +385,40 @@
     "frontendRollback": {
       "releaseId": "immutable-f1602787-vps-20261026T174702Z",
       "authenticated": true
+    }
+  },
+  "generationRetirements": {
+    "immutable-ef3a2128-vps-20261028T001820Z": {
+      "state": "SANITIZED",
+      "controlPlaneMerge": "0369ad179226878ccbf506d597c382a24c5d8b1f",
+      "targetCommit": "ef3a212862c9a1fd2c46a420df7095327f3c9d7f",
+      "commandsAttempted": 4,
+      "commandsCompleted": 4,
+      "remainingPaths": 0,
+      "automaticRetry": false,
+      "removedClasses": [
+        "RELEASE_RUNTIME",
+        "DERIVED_WORKTREE",
+        "DERIVED_OUTPUT_RUNTIME",
+        "DERIVED_OUTPUT_RUNTIME"
+      ],
+      "receiptSha256": "9369b666359c9840e7546612843f0026c4fc9472a9edf68591370e52771ece30",
+      "journalSha256": "35bfedcffc58d01454251a8fcfd54b22906b2a23762fb5e1bde8807c14775dd4",
+      "reviewSha256": "e3f2533863eac885a35b7b5a8871098ccba6b0442d36f1d69ea228085980086a",
+      "authorizationSha256": "5895e30c5cf7321fb20c7524cf980cb5b1c2a0acb705f7ed5bbf6aa76b1cca31",
+      "executorSha256": "f8b025d6738b81b7beea6641429fd4420ba657fa8ccba2998ad28865f4533928",
+      "freedBytes": 2995449856,
+      "freedInodes": 106570,
+      "freeBytesAfter": 13597659136,
+      "productionPreserved": true,
+      "preservedArtifacts": [
+        "PACKAGE",
+        "MANIFEST",
+        "INDEX",
+        "ARTIFACT_CONTRACT",
+        "GENERATION_LIFECYCLE"
+      ],
+      "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT"
     }
   },
   "contactsListRecovery": {
