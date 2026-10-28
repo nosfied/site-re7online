@@ -1,6 +1,6 @@
 {
   "schemaVersion": 7,
-  "updatedAtUtc": "2026-10-27T23:09:10Z",
+  "updatedAtUtc": "2026-10-28T00:00:45Z",
   "canonicalBranch": "review/campaign-recovery-20260926",
   "activeDeploymentRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
   "activeOperationalRecord": "docs/saas/releases/FIXED_CURRENT_708F_2026-10-27_DEPLOYED_SANITIZED.json",
@@ -302,7 +302,7 @@
         "retry": false,
         "buildDeployRestartOrSaveExecuted": false
       },
-      "nextAcceptance": "SCHEDULING_CONTROLLED_SCOPE_THEN_MULTIBATCH_THEN_CLIENT_SPECIFIC_WITHOUT_REPEATING_MEDIA_OR_DEPLOYMENT",
+      "nextAcceptance": "DEPLOY_AND_ACCEPT_CAMPAIGN_AUDIENCE_SUMMARY_FIX_THEN_MULTIBATCH_THEN_CLIENT_SPECIFIC",
       "uiAcceptance": {
         "source": "OWNER_MANUAL_PRODUCTION_INTERFACE_REPORT",
         "reportedDate": "2026-10-27",
@@ -319,6 +319,51 @@
         "uncertaintyAlertSeparated": true,
         "sendsExecuted": 0,
         "schedulesExecuted": 0
+      },
+      "scheduledHomologation": {
+        "source": "OWNER_RELAYED_READ_ONLY_AUDIT",
+        "reportedDate": "2026-10-27",
+        "independentVpsMutationByDocumentationEditor": false,
+        "status": "EXECUTION_PASS_UI_PRESENTATION_GAP_CONFIRMED",
+        "campaignId": "660f0eca-e6a8-4e49-9186-a40225fabdd1",
+        "campaignName": "Campanha teste out.36",
+        "tenantKey": "demo-converta",
+        "selectionMode": "STATIC_RECIPIENTS",
+        "scheduledAtUtc": "2026-10-27T23:35:00Z",
+        "scheduledAtAmericaFortaleza": "2026-10-27T20:35:00-03:00",
+        "finalStatus": "completed",
+        "jobCount": 1,
+        "jobAttempt": 1,
+        "retry": false,
+        "recipientCount": 2,
+        "distinctRecipients": 2,
+        "outboundCount": 2,
+        "providerAcceptanceCount": 2,
+        "finalMetaStatus": "read",
+        "duplicateDetected": false,
+        "uncertainResults": 0,
+        "crmPersistenceConfirmed": true,
+        "claimableJobs": 0,
+        "activeLeases": 0,
+        "pendingPersistence": 0,
+        "guard": {
+          "open": true,
+          "generation": 41,
+          "tasks": 0,
+          "fault": null
+        },
+        "presentationContract": {
+          "scheduledAudienceSource": "draftReview.recipients",
+          "completedAudienceSource": "messagesMetaStatus",
+          "gap": "UI_708F_ONLY_RENDERED_DRAFT_RECIPIENTS",
+          "dataLoss": false,
+          "candidateState": "CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE"
+        },
+        "evidenceFileCount": 24,
+        "evidenceManifestSha256": "0b0079d064e343ba8727f11113aba600e1398896877d671e07a657446f8a39a8",
+        "collectorTeardownExitCode": 134,
+        "collectorTeardownScope": "AFTER_JSON_SERIALIZATION_NO_NEW_QUERY",
+        "snapshotIsolation": "READ_ONLY_REPEATABLE_READ"
       }
     },
     "topology": "UNIFIED_API_FRONTEND_FIXED_CURRENT_WORKER_PRESERVED",
@@ -498,7 +543,16 @@
       "deploymentTarget": "708f018cb853a06fd6f0f1d5d920b8b35d8fb06a",
       "manualAcceptanceDate": "2026-10-27"
     },
-    "acceptanceBoundary": "IMAGE_VIDEO_DRAFT_RECONCILIATION_AND_TERMINAL_PRESENTATION_PASS; SCHEDULING_MULTIBATCH_AND_CLIENT_SPECIFIC_ACCEPTANCE_REMAIN_SEPARATE"
+    "acceptanceBoundary": "IMAGE_VIDEO_DRAFT_RECONCILIATION_TERMINAL_PRESENTATION_AND_SCHEDULE_EXECUTION_PASS; SCHEDULED_COMPLETED_AUDIENCE_UI_FIX_PENDING_DEPLOY_ACCEPTANCE; MULTIBATCH_AND_CLIENT_SPECIFIC_ACCEPTANCE_REMAIN_SEPARATE",
+    "scheduledAudiencePresentation": {
+      "state": "CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE",
+      "scheduledSource": "draftReview.recipients",
+      "completedSource": "messagesMetaStatus",
+      "recipientCountAudited": 2,
+      "dataIntegrity": "PASS",
+      "uiPresentation": "FIX_PROPOSED_NOT_DEPLOYED",
+      "evidenceManifestSha256": "0b0079d064e343ba8727f11113aba600e1398896877d671e07a657446f8a39a8"
+    }
   },
   "tenantScopedMetaAppId": {
     "codeState": "TECHNICALLY_DEPLOYED",
