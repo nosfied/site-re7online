@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,9 +32,9 @@ function runScript(cwd: string, script: string, args: string[]) {
   let output = "";
   child.stdout.on("data", data => { output += data; });
   child.stderr.on("data", data => { output += data; });
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     child.once("error", reject);
-    child.once("exit", code => code === 0 ? resolve() : reject(new Error(`synthetic script ${script} failed (${code}): ${output}`)));
+    child.once("exit", code => code === 0 ? resolve(output) : reject(new Error(`synthetic script ${script} failed (${code}): ${output}`)));
   });
 }
 async function waitForBlockedProcess() {
@@ -52,6 +53,8 @@ test.after(async () => {
   await prisma.department.updateMany({ where: { clientId: { in: ids } }, data: { operationalQueueId: null } });
   await prisma.lead.deleteMany({ where: { tenantId: { in: ids } } });
   await prisma.template.deleteMany({ where: { clientId: { in: ids } } });
+  await prisma.waPhoneNumber.deleteMany({ where: { clientId: { in: ids } } });
+  await prisma.tenantMetaConfig.deleteMany({ where: { clientId: { in: ids } } });
   await prisma.client.deleteMany({ where: { id: { in: ids } } });
   await Promise.all([prisma.$disconnect(), observer.$disconnect()]);
   // Only temporary directories created by this test, containing synthetic files.
@@ -68,11 +71,33 @@ for (const item of cases) {
     assert.equal(await prisma.client.count({ where: { clientKey: item.key } }), 0, "reserved synthetic fixture must be absent");
     const client = await prisma.client.create({ data: { clientKey: item.key, name: "Synthetic script" } });
     ids.push(client.id);
+    if (item.script === "backfill-tenant-operational-config.ts") {
+      await prisma.waPhoneNumber.create({
+        data: { clientId: client.id, phoneNumberId: "synthetic", display: "synthetic" },
+      });
+      await prisma.channelAccount.create({
+        data: {
+          clientId: client.id,
+          channel: "whatsapp",
+          provider: "meta",
+          channelAccountId: "synthetic",
+          enabled: true,
+          runtimeEnabled: true,
+          inboundPersistenceEnabled: true,
+          status: "connected",
+        },
+      });
+    }
     await prisma.tenantOperationalConfig.create({ data: { clientId: client.id, config: { [flag]: true } } });
     const cwd = await mkdtemp(path.join(os.tmpdir(), "re7-config-scripts-"));
     temporaryDirectories.push(cwd);
     await mkdir(path.join(cwd, ".data"));
-    await writeFile(path.join(cwd, ".data/tenants.json"), JSON.stringify({ [item.key]: { id: item.key, name: "Synthetic", metaPhoneNumberId: "synthetic", allowlist: [], handoffAttendantWaid: "", defaultLanguage: "pt_BR" } }));
+    const tenantsPath = path.join(cwd, ".data/tenants.json");
+    const tenantsBytes = JSON.stringify({ [item.key]: { id: item.key, name: "Synthetic", metaPhoneNumberId: "synthetic", allowlist: [], handoffAttendantWaid: "", defaultLanguage: "pt_BR" } });
+    await writeFile(tenantsPath, tenantsBytes, { mode: 0o600 });
+    const sourceArgs = item.script === "backfill-tenant-operational-config.ts"
+      ? ["--source", tenantsPath, "--expected-source-sha256", crypto.createHash("sha256").update(tenantsBytes).digest("hex")]
+      : [];
     const entered = deferred(), release = deferred();
     const held = prisma.$transaction(tx => withLockedTenantOperationalConfig(tx, client.id, async locked => {
       await locked.tenantOperationalConfig.update({ where: { clientId: client.id }, data: { config: { [flag]: false, independent: { values: [null, false, "kept"] } } } });
@@ -80,7 +105,7 @@ for (const item of cases) {
       await release.promise;
     }), { timeout: 15000 });
     await entered.promise;
-    const script = runScript(cwd, item.script, item.apply);
+    const script = runScript(cwd, item.script, [...item.apply, ...sourceArgs]);
     // Attach a rejection handler immediately; finally still propagates its error.
     script.catch(() => undefined);
     try { await waitForBlockedProcess(); } finally { release.resolve(); await held; await script; }
@@ -89,7 +114,17 @@ for (const item of cases) {
     assert.equal(config[flag], false);
     assert.deepEqual(config.independent, { values: [null, false, "kept"] });
     const beforeCounts = await counts(client.id);
-    await runScript(cwd, item.script, item.dry);
+    if (item.script === "backfill-tenant-operational-config.ts") {
+      const repeatedOutput = await runScript(cwd, item.script, [...item.apply, ...sourceArgs]);
+      const report = JSON.parse(repeatedOutput);
+      assert.equal(report.source, tenantsPath);
+      assert.equal(report.sourceSha256, crypto.createHash("sha256").update(tenantsBytes).digest("hex"));
+      assert.equal(report.unchanged, 1);
+      assert(report.items[0].fieldsChanged.length === 0);
+      assert(Object.values(report.deltaCounts).every((count) => count === 0));
+      assert.deepEqual(await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }), after);
+    }
+    await runScript(cwd, item.script, [...item.dry, ...sourceArgs]);
     assert.deepEqual(await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }), after);
     assert.deepEqual(await counts(client.id), beforeCounts);
   });
@@ -108,4 +143,279 @@ test("create-only provisioning preserves config; concurrent empty upsert may rej
   await prisma.tenantOperationalConfig.upsert({ where: { clientId: client.id }, create: { clientId: client.id, config: {} }, update: {} });
   assert.deepEqual(await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }), before);
   assert.equal(await prisma.tenantOperationalConfig.count({ where: { clientId: client.id } }), 1);
+});
+
+test("backfill denies a source tenant without Client before any write", async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "re7-config-missing-client-"));
+  temporaryDirectories.push(cwd);
+  const source = path.join(cwd, "tenants.json");
+  const tenantKey = `missing-client-${Date.now()}`;
+  const bytes = JSON.stringify({
+    [tenantKey]: {
+      id: tenantKey,
+      name: "Synthetic missing client",
+      metaPhoneNumberId: "missing",
+      allowlist: [],
+      handoffAttendantWaid: "",
+      defaultLanguage: "pt_BR",
+    },
+  });
+  await writeFile(source, bytes, { mode: 0o600 });
+  const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+  await assert.rejects(
+    runScript(cwd, "backfill-tenant-operational-config.ts", [
+      "--source", source,
+      "--expected-source-sha256", sha256,
+      "--json",
+    ]),
+    /source_tenant_missing_client/
+  );
+  assert.equal(await prisma.client.count({ where: { clientKey: tenantKey } }), 0);
+});
+
+test("backfill dry-run denies missing phone mapping and ChannelAccount before any write", async () => {
+  for (const missing of ["phone", "channel"] as const) {
+    const suffix = `${missing}-${Date.now()}`;
+    const client = await prisma.client.create({
+      data: { clientKey: `backfill-missing-${suffix}`, name: "Synthetic preflight" },
+    });
+    ids.push(client.id);
+    await prisma.tenantOperationalConfig.create({
+      data: { clientId: client.id, config: { sentinel: { unchanged: true } } },
+    });
+    const phoneNumberId = `synthetic-${suffix}`;
+    if (missing !== "phone") {
+      await prisma.waPhoneNumber.create({ data: { clientId: client.id, phoneNumberId } });
+    }
+    if (missing !== "channel") {
+      await prisma.channelAccount.create({
+        data: {
+          clientId: client.id,
+          channel: "whatsapp",
+          provider: "meta",
+          channelAccountId: phoneNumberId,
+        },
+      });
+    }
+    const before = await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } });
+    const cwd = await mkdtemp(path.join(os.tmpdir(), `re7-config-missing-${missing}-`));
+    temporaryDirectories.push(cwd);
+    const source = path.join(cwd, "tenants.json");
+    const bytes = JSON.stringify({
+      [client.clientKey]: {
+        id: client.clientKey,
+        name: "Synthetic",
+        metaPhoneNumberId: phoneNumberId,
+        allowlist: [],
+        handoffAttendantWaid: "",
+        defaultLanguage: "pt_BR",
+      },
+    });
+    await writeFile(source, bytes, { mode: 0o600 });
+    await assert.rejects(
+      runScript(cwd, "backfill-tenant-operational-config.ts", [
+        "--source", source,
+        "--expected-source-sha256", crypto.createHash("sha256").update(bytes).digest("hex"),
+        "--dry-run",
+        "--json",
+      ]),
+      missing === "phone" ? /source_tenant_missing_phone_mapping/ : /source_tenant_missing_channel_account/
+    );
+    assert.deepEqual(
+      await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }),
+      before
+    );
+  }
+});
+
+test("backfill accepts an atomic mixed Meta plus Web Session-only batch", async () => {
+  const nonce = `${process.pid}-${Date.now()}`;
+  const metaClient = await prisma.client.create({
+    data: { clientKey: `backfill-meta-${nonce}`, name: "Synthetic Meta" },
+  });
+  const webClient = await prisma.client.create({
+    data: { clientKey: `backfill-web-${nonce}`, name: "Synthetic Web Session" },
+  });
+  ids.push(metaClient.id, webClient.id);
+  const metaPhoneNumberId = `mixed-meta-${nonce}`;
+  await Promise.all([
+    prisma.tenantOperationalConfig.create({ data: { clientId: metaClient.id, config: { sentinel: "meta" } } }),
+    prisma.tenantOperationalConfig.create({ data: { clientId: webClient.id, config: { sentinel: "web" } } }),
+    prisma.waPhoneNumber.create({ data: { clientId: metaClient.id, phoneNumberId: metaPhoneNumberId } }),
+    prisma.channelAccount.create({
+      data: {
+        clientId: metaClient.id,
+        channel: "whatsapp",
+        provider: "meta",
+        channelAccountId: metaPhoneNumberId,
+      },
+    }),
+    prisma.channelAccount.create({
+      data: {
+        clientId: webClient.id,
+        channel: "whatsapp",
+        provider: "web_session",
+        channelAccountId: `mixed-web-${nonce}`,
+      },
+    }),
+  ]);
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "re7-config-mixed-"));
+  temporaryDirectories.push(cwd);
+  const source = path.join(cwd, "tenants.json");
+  const bytes = JSON.stringify({
+    [metaClient.clientKey]: {
+      id: metaClient.clientKey,
+      name: "Synthetic Meta",
+      metaPhoneNumberId,
+      allowlist: [],
+      defaultLanguage: "pt_BR",
+    },
+    [webClient.clientKey]: {
+      id: webClient.clientKey,
+      name: "Synthetic Web Session",
+      allowlist: [],
+      defaultLanguage: "pt_BR",
+    },
+  });
+  await writeFile(source, bytes, { mode: 0o600 });
+  const output = await runScript(cwd, "backfill-tenant-operational-config.ts", [
+    "--source", source,
+    "--expected-source-sha256", crypto.createHash("sha256").update(bytes).digest("hex"),
+    "--json",
+  ]);
+  const report = JSON.parse(output);
+  assert.equal(report.items.length, 2);
+  assert.equal(await prisma.channelAccount.count({
+    where: { clientId: webClient.id, channel: "whatsapp", provider: "meta" },
+  }), 0);
+  for (const clientId of [metaClient.id, webClient.id]) {
+    const config = await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId } });
+    assert.equal(
+      ((config.config as Record<string, unknown>).baseConfig as Record<string, unknown>).defaultLanguage,
+      "pt_BR"
+    );
+  }
+});
+
+test("mixed batch with ambiguous Meta evidence leaves Meta and Web Session tenants unchanged", async () => {
+  const nonce = `${process.pid}-${Date.now()}`;
+  const metaClient = await prisma.client.create({
+    data: { clientKey: `backfill-ambiguous-meta-${nonce}`, name: "Synthetic Meta ambiguous" },
+  });
+  const webClient = await prisma.client.create({
+    data: { clientKey: `backfill-ambiguous-web-${nonce}`, name: "Synthetic Web Session" },
+  });
+  ids.push(metaClient.id, webClient.id);
+  const metaPhoneNumberId = `ambiguous-meta-${nonce}`;
+  await Promise.all([
+    prisma.tenantOperationalConfig.create({ data: { clientId: metaClient.id, config: { sentinel: ["meta", false] } } }),
+    prisma.tenantOperationalConfig.create({ data: { clientId: webClient.id, config: { sentinel: ["web", false] } } }),
+    prisma.waPhoneNumber.create({ data: { clientId: metaClient.id, phoneNumberId: metaPhoneNumberId } }),
+    prisma.channelAccount.create({
+      data: { clientId: metaClient.id, channel: "whatsapp", provider: "meta", channelAccountId: metaPhoneNumberId },
+    }),
+    prisma.channelAccount.create({
+      data: { clientId: webClient.id, channel: "whatsapp", provider: "web_session", channelAccountId: `ambiguous-web-${nonce}` },
+    }),
+  ]);
+  const before = new Map(await Promise.all([metaClient, webClient].map(async (client) => [
+    client.id,
+    await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }),
+  ] as const)));
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "re7-config-ambiguous-"));
+  temporaryDirectories.push(cwd);
+  const source = path.join(cwd, "tenants.json");
+  const bytes = JSON.stringify({
+    [metaClient.clientKey]: { id: metaClient.clientKey, name: "Meta without source identity", allowlist: [] },
+    [webClient.clientKey]: { id: webClient.clientKey, name: "Web Session", allowlist: [] },
+  });
+  await writeFile(source, bytes, { mode: 0o600 });
+  await assert.rejects(runScript(cwd, "backfill-tenant-operational-config.ts", [
+    "--source", source,
+    "--expected-source-sha256", crypto.createHash("sha256").update(bytes).digest("hex"),
+    "--json",
+  ]), /source_tenant_meta_identity_ambiguous/);
+  for (const client of [metaClient, webClient]) {
+    assert.deepEqual(
+      await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }),
+      before.get(client.id)
+    );
+  }
+});
+
+test("backfill is atomic when the second deterministically locked tenant fails", async () => {
+  const nonce = `${process.pid}-${Date.now()}`;
+  const created = await Promise.all(["a", "b"].map(async (label) => {
+    const client = await prisma.client.create({
+      data: { clientKey: `backfill-atomic-${label}-${nonce}`, name: `Synthetic ${label}` },
+    });
+    ids.push(client.id);
+    const phoneNumberId = `atomic-${label}-${nonce}`;
+    await prisma.tenantOperationalConfig.create({
+      data: { clientId: client.id, config: { sentinel: label, nested: [false, null, label] } },
+    });
+    await prisma.waPhoneNumber.create({ data: { clientId: client.id, phoneNumberId } });
+    await prisma.channelAccount.create({
+      data: { clientId: client.id, channel: "whatsapp", provider: "meta", channelAccountId: phoneNumberId },
+    });
+    return { client, phoneNumberId };
+  }));
+  const ordered = [...created].sort((left, right) => left.client.id.localeCompare(right.client.id));
+  const failingClientId = ordered[1].client.id;
+  const before = new Map(await Promise.all(created.map(async ({ client }) => [
+    client.id,
+    await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }),
+  ] as const)));
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "re7-config-atomic-"));
+  temporaryDirectories.push(cwd);
+  const source = path.join(cwd, "tenants.json");
+  const sourceValue = Object.fromEntries(created.map(({ client, phoneNumberId }, index) => [
+    client.clientKey,
+    {
+      id: client.clientKey,
+      name: `Synthetic atomic ${index}`,
+      metaPhoneNumberId: phoneNumberId,
+      allowlist: [`55849900000${index}`],
+      handoffAttendantWaid: "",
+      defaultLanguage: "pt_BR",
+      disableAutoReply: false,
+    },
+  ]));
+  const bytes = JSON.stringify(sourceValue);
+  await writeFile(source, bytes, { mode: 0o600 });
+  const functionName = `backfill_atomic_fail_${process.pid}_${Date.now()}`;
+  const triggerName = `${functionName}_trigger`;
+  await prisma.$executeRawUnsafe(`
+    CREATE FUNCTION "${functionName}"() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW."clientId" = '${failingClientId}'::uuid THEN
+        RAISE EXCEPTION 'synthetic_second_tenant_failure';
+      END IF;
+      RETURN NEW;
+    END $$
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TRIGGER "${triggerName}"
+    BEFORE INSERT OR UPDATE ON "TenantOperationalConfig"
+    FOR EACH ROW EXECUTE FUNCTION "${functionName}"()
+  `);
+  try {
+    await assert.rejects(
+      runScript(cwd, "backfill-tenant-operational-config.ts", [
+        "--source", source,
+        "--expected-source-sha256", crypto.createHash("sha256").update(bytes).digest("hex"),
+        "--json",
+      ]),
+      /synthetic_second_tenant_failure/
+    );
+  } finally {
+    await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS "${triggerName}" ON "TenantOperationalConfig"`);
+    await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS "${functionName}"()`);
+  }
+  for (const { client } of created) {
+    assert.deepEqual(
+      await prisma.tenantOperationalConfig.findUniqueOrThrow({ where: { clientId: client.id } }),
+      before.get(client.id)
+    );
+  }
 });

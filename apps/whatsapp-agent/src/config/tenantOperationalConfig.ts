@@ -18,6 +18,7 @@ import {
 } from "./tenantConfig.js";
 
 export type TenantOperationalConfigValue = {
+  baseConfig?: TenantBaseConfigSettings;
   crmBusinessStatuses?: CrmBusinessStatusConfig[];
   templates?: {
     manualHandoff?: string;
@@ -42,6 +43,18 @@ export type TenantOperationalConfigValue = {
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
+
+export type TenantBaseConfigSettings = {
+  allowlist: string[];
+  handoffAttendantWaid: string;
+  defaultLanguage: string;
+  disableAutoReply: boolean;
+};
+
+export type ResolvedTenantBaseConfigSettings = {
+  settings: TenantBaseConfigSettings;
+  source: TenantOperationalConfigSource;
+};
 
 export type ResolvedCrmBusinessStatuses = {
   statuses: CrmBusinessStatusConfig[];
@@ -228,6 +241,8 @@ export type ResolvedAutomationFlagsSettings = {
 export type AiAssistantProfile = "business" | "government" | "legal_previdenciario";
 
 export type AiAssistantConfigSettings = {
+  aiAssistantEnabled: boolean;
+  aiAssistantFallbackToHandoff: boolean;
   aiBusinessContext: string;
   aiAssistantSystemPrompt: string;
   aiAssistantGreetingMessage: string;
@@ -244,6 +259,7 @@ export type AiAssistantConfigSettings = {
 export type ResolvedAiAssistantConfigSettings = {
   settings: AiAssistantConfigSettings;
   source: TenantOperationalConfigSource;
+  runtimeReady: boolean;
 };
 
 export type AiIntentQualificationSettings = {
@@ -276,6 +292,36 @@ export type ResolvedInboxVisibilityPolicy = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeWaIdList(input: unknown) {
+  if (!Array.isArray(input)) return [];
+  return Array.from(new Set(input
+    .map((value) => typeof value === "string" ? value.replace(/\D/g, "") : "")
+    .filter(Boolean)));
+}
+
+export function normalizeTenantBaseConfigSettings(input: unknown): TenantBaseConfigSettings {
+  const record = isRecord(input) ? input : {};
+  const defaultLanguage = typeof record.defaultLanguage === "string"
+    ? record.defaultLanguage.trim()
+    : "";
+  return {
+    allowlist: normalizeWaIdList(record.allowlist),
+    handoffAttendantWaid: typeof record.handoffAttendantWaid === "string"
+      ? record.handoffAttendantWaid.replace(/\D/g, "")
+      : "",
+    defaultLanguage: /^[a-z]{2}_[A-Z]{2}$/.test(defaultLanguage)
+      ? defaultLanguage
+      : env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+    disableAutoReply: record.disableAutoReply === true,
+  };
+}
+
+function normalizeTenantBaseConfigSettingsFromTenant(
+  tenant?: Pick<TenantConfig, "allowlist" | "handoffAttendantWaid" | "defaultLanguage" | "disableAutoReply"> | null
+) {
+  return normalizeTenantBaseConfigSettings(tenant);
 }
 
 function normalizeManualHandoffTemplate(input: unknown) {
@@ -762,6 +808,8 @@ function normalizeAiAssistantTermList(input: unknown) {
 function normalizeAiAssistantConfigSettings(input: unknown): AiAssistantConfigSettings {
   const record = isRecord(input) ? input : {};
   return {
+    aiAssistantEnabled: record.aiAssistantEnabled === true,
+    aiAssistantFallbackToHandoff: record.aiAssistantFallbackToHandoff === true,
     aiBusinessContext: normalizeAiAssistantText(record.aiBusinessContext, 4000),
     aiAssistantSystemPrompt: normalizeAiAssistantText(record.aiAssistantSystemPrompt, 4000),
     aiAssistantGreetingMessage: normalizeAiAssistantText(record.aiAssistantGreetingMessage, 1000),
@@ -780,6 +828,8 @@ function normalizeAiAssistantConfigSettingsFromTenant(
   tenant?: Pick<
     TenantConfig,
     | "aiBusinessContext"
+    | "aiAssistantEnabled"
+    | "aiAssistantFallbackToHandoff"
     | "aiAssistantSystemPrompt"
     | "aiAssistantGreetingMessage"
     | "aiAssistantFallbackMessage"
@@ -793,6 +843,8 @@ function normalizeAiAssistantConfigSettingsFromTenant(
   > | null
 ): AiAssistantConfigSettings {
   return normalizeAiAssistantConfigSettings({
+    aiAssistantEnabled: tenant?.aiAssistantEnabled,
+    aiAssistantFallbackToHandoff: tenant?.aiAssistantFallbackToHandoff,
     aiBusinessContext: tenant?.aiBusinessContext,
     aiAssistantSystemPrompt: tenant?.aiAssistantSystemPrompt,
     aiAssistantGreetingMessage: tenant?.aiAssistantGreetingMessage,
@@ -829,6 +881,9 @@ function normalizeAiIntentQualificationSettingsFromTenant(
 function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   if (!isRecord(value)) return {};
   const config: TenantOperationalConfigValue = {};
+  if (Object.prototype.hasOwnProperty.call(value, "baseConfig")) {
+    config.baseConfig = normalizeTenantBaseConfigSettings(value.baseConfig);
+  }
   if (Object.prototype.hasOwnProperty.call(value, "crmBusinessStatuses")) {
     config.crmBusinessStatuses = normalizeCrmBusinessStatuses(value.crmBusinessStatuses);
   }
@@ -916,6 +971,49 @@ export function normalizeWebSessionAlertEmails(input: unknown): string[] {
     if (emails.length >= 20) break;
   }
   return emails;
+}
+
+export async function resolveTenantBaseConfigSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  tenant?: Pick<TenantConfig, "allowlist" | "handoffAttendantWaid" | "defaultLanguage" | "disableAutoReply"> | null;
+}): Promise<ResolvedTenantBaseConfigSettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const dbConfig = parseOperationalConfig(record?.config);
+  if (dbConfig.baseConfig) return { settings: dbConfig.baseConfig, source: "db" };
+  return {
+    settings: normalizeTenantBaseConfigSettingsFromTenant(params.tenant),
+    source: "json_fallback",
+  };
+}
+
+export async function saveTenantBaseConfigSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  settings: Partial<TenantBaseConfigSettings>;
+  tenant?: Pick<TenantConfig, "allowlist" | "handoffAttendantWaid" | "defaultLanguage" | "disableAutoReply"> | null;
+}) {
+  return withLockedTenantOperationalConfig(params.prisma, params.clientId, async (tx) => {
+    const existing = await tx.tenantOperationalConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: { config: true },
+    });
+    const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+    const current = parseOperationalConfig(existing?.config).baseConfig
+      ?? normalizeTenantBaseConfigSettingsFromTenant(params.tenant);
+    const settings = normalizeTenantBaseConfigSettings({ ...current, ...params.settings });
+    const config = { ...existingConfig, baseConfig: settings } as Prisma.InputJsonValue;
+    const record = await tx.tenantOperationalConfig.upsert({
+      where: { clientId: params.clientId },
+      update: { config, schemaVersion: 1 },
+      create: { clientId: params.clientId, config, schemaVersion: 1 },
+      select: { id: true, schemaVersion: true, updatedAt: true },
+    });
+    return { record, settings };
+  });
 }
 
 export async function resolveWebSessionAlertEmails(params: {
@@ -2051,6 +2149,8 @@ export async function resolveAiAssistantConfigSettings(params: {
   clientId: string;
   tenant?: Pick<
     TenantConfig,
+    | "aiAssistantEnabled"
+    | "aiAssistantFallbackToHandoff"
     | "aiBusinessContext"
     | "aiAssistantSystemPrompt"
     | "aiAssistantGreetingMessage"
@@ -2068,16 +2168,27 @@ export async function resolveAiAssistantConfigSettings(params: {
     where: { clientId: params.clientId },
     select: { config: true },
   });
+  const rawConfig = isRecord(record?.config) ? record.config : null;
+  const rawAiConfig = rawConfig && isRecord(rawConfig.aiAssistantConfig)
+    ? rawConfig.aiAssistantConfig
+    : null;
+  const runtimeReady = Boolean(
+    rawAiConfig &&
+    typeof rawAiConfig.aiAssistantEnabled === "boolean" &&
+    typeof rawAiConfig.aiAssistantFallbackToHandoff === "boolean"
+  );
   const dbConfig = parseOperationalConfig(record?.config);
   if (dbConfig.aiAssistantConfig) {
     return {
       settings: dbConfig.aiAssistantConfig,
       source: "db",
+      runtimeReady,
     };
   }
   return {
     settings: normalizeAiAssistantConfigSettingsFromTenant(params.tenant),
     source: "json_fallback",
+    runtimeReady: false,
   };
 }
 
@@ -2087,6 +2198,8 @@ export async function saveAiAssistantConfigSettings(params: {
   settings: Partial<AiAssistantConfigSettings>;
   tenant?: Pick<
     TenantConfig,
+    | "aiAssistantEnabled"
+    | "aiAssistantFallbackToHandoff"
     | "aiBusinessContext"
     | "aiAssistantSystemPrompt"
     | "aiAssistantGreetingMessage"

@@ -4,6 +4,10 @@ import path from "node:path";
 import process from "node:process";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
+import {
+  classifyTenantMetaParticipation,
+  isActiveTenantMetaContractIncomplete,
+} from "../src/config/tenantMetaParticipation.js";
 
 type UsageKind = "runtime_critical" | "admin" | "onboarding" | "fallback_legacy" | "seed_demo_test";
 
@@ -95,13 +99,18 @@ async function main() {
     let databaseReachable = true;
     let databaseError: string | null = null;
     let clients: Array<{ id: string; clientKey: string; status: string }> = [];
-    let operationalConfigs: Array<{ clientId: string }> = [];
+    let operationalConfigs: Array<{ clientId: string; config: unknown }> = [];
     let channelAccounts: Array<{
       clientId: string;
       channel: string;
       provider: string;
       channelAccountId: string;
       tokenStatus: string;
+      automationEnabled: boolean;
+      runtimeEnabled: boolean;
+      inboundPersistenceEnabled: boolean;
+      outboundEnabled: boolean;
+      aiEnabled: boolean;
       secrets: Array<{ secretKind: string; status: string }>;
       aliases: Array<{ alias: string }>;
     }> = [];
@@ -110,7 +119,7 @@ async function main() {
     try {
       [clients, operationalConfigs, channelAccounts, metaConfigs, phoneNumbers] = await Promise.all([
         prisma.client.findMany({ select: { id: true, clientKey: true, status: true } }),
-        prisma.tenantOperationalConfig.findMany({ select: { clientId: true } }),
+        prisma.tenantOperationalConfig.findMany({ select: { clientId: true, config: true } }),
         prisma.channelAccount.findMany({
           select: {
             clientId: true,
@@ -118,6 +127,11 @@ async function main() {
             provider: true,
             channelAccountId: true,
             tokenStatus: true,
+            automationEnabled: true,
+            runtimeEnabled: true,
+            inboundPersistenceEnabled: true,
+            outboundEnabled: true,
+            aiEnabled: true,
             secrets: { select: { secretKind: true, status: true } },
             aliases: { select: { alias: true } },
           },
@@ -129,7 +143,7 @@ async function main() {
       databaseReachable = false;
       databaseError = (error as Error).message;
     }
-    const operationalByClient = new Set(operationalConfigs.map((item) => item.clientId));
+    const operationalByClient = new Map(operationalConfigs.map((item) => [item.clientId, item.config]));
     const channelAccountsByClient = new Map<string, typeof channelAccounts>();
     for (const account of channelAccounts) {
       channelAccountsByClient.set(account.clientId, [...(channelAccountsByClient.get(account.clientId) ?? []), account]);
@@ -138,17 +152,34 @@ async function main() {
     const phonesByClient = new Set(phoneNumbers.map((item) => item.clientId));
     const tenants = clients.map((client) => {
       const accounts = channelAccountsByClient.get(client.id) ?? [];
+      const metaParticipation = classifyTenantMetaParticipation({
+        metaChannelAccount: accounts.some(
+          (account) => account.channel === "whatsapp" && account.provider === "meta"
+        ),
+        tenantMetaConfig: metaByClient.has(client.id),
+        waPhoneNumber: phonesByClient.has(client.id),
+      });
       return {
         clientKey: client.clientKey,
         status: client.status,
         operationalConfig: operationalByClient.has(client.id),
+        operationalReadiness: inspectOperationalConfig(
+          operationalByClient.get(client.id),
+          accounts.some((account) => account.channel === "whatsapp" && account.provider === "meta" && account.aiEnabled)
+        ),
         tenantMetaConfig: metaByClient.has(client.id),
         waPhoneNumber: phonesByClient.has(client.id),
+        metaParticipation,
         channelAccounts: accounts.map((account) => ({
           channel: account.channel,
           provider: account.provider,
           channelAccountId: account.channelAccountId,
           tokenStatus: account.tokenStatus,
+          automationEnabled: account.automationEnabled,
+          runtimeEnabled: account.runtimeEnabled,
+          inboundPersistenceEnabled: account.inboundPersistenceEnabled,
+          outboundEnabled: account.outboundEnabled,
+          aiEnabled: account.aiEnabled,
           aliasCount: account.aliases.length,
           secretKinds: account.secrets.map((secret) => `${secret.secretKind}:${secret.status}`),
         })),
@@ -166,9 +197,12 @@ async function main() {
     });
     const blocking = usages.filter((usage) => usage.kind === "runtime_critical" || usage.kind === "onboarding");
     const incompleteTenants = databaseReachable
-      ? tenants.filter(
-          (tenant) => tenant.status === "ACTIVE" && (!tenant.operationalConfig || (!tenant.waPhoneNumber && !tenant.tenantMetaConfig))
-        )
+      ? tenants.filter((tenant) => isActiveTenantMetaContractIncomplete({
+          status: tenant.status,
+          participation: tenant.metaParticipation,
+          hasOperationalConfig: tenant.operationalConfig,
+          operationalConfigReady: tenant.operationalReadiness.ready,
+        }))
       : [];
     const activeTenantsWithoutChannelAccounts = databaseReachable
       ? tenants.filter((tenant) => tenant.status === "ACTIVE" && tenant.channelAccounts.length === 0)
@@ -198,6 +232,29 @@ async function main() {
   } finally {
     await prisma.$disconnect();
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function inspectOperationalConfig(config: unknown, aiEnabled: boolean) {
+  const reasons: string[] = [];
+  if (!isRecord(config)) return { ready: false, reasons: ["operational_config_missing"] };
+  const base = isRecord(config.baseConfig) ? config.baseConfig : null;
+  if (!base) reasons.push("base_config_missing");
+  else {
+    if (!Array.isArray(base.allowlist) || base.allowlist.some((value) => typeof value !== "string")) reasons.push("base_allowlist_invalid");
+    if (typeof base.handoffAttendantWaid !== "string") reasons.push("base_handoff_invalid");
+    if (typeof base.defaultLanguage !== "string" || !base.defaultLanguage) reasons.push("base_language_invalid");
+    if (typeof base.disableAutoReply !== "boolean") reasons.push("base_disable_auto_reply_invalid");
+  }
+  const ai = isRecord(config.aiAssistantConfig) ? config.aiAssistantConfig : null;
+  if (aiEnabled && !ai) reasons.push("ai_config_missing");
+  if (aiEnabled && ai && (typeof ai.aiAssistantEnabled !== "boolean" || typeof ai.aiAssistantFallbackToHandoff !== "boolean")) {
+    reasons.push("ai_toggles_invalid");
+  }
+  return { ready: reasons.length === 0, reasons };
 }
 
 main().catch((error) => {

@@ -4,10 +4,13 @@ Status: current-state documentation based on code inspection. No migration is ex
 
 ## Current Configuration Sources
 
-The Converta configuration layer is split across Postgres and `.data/tenants.json`.
+The Converta configuration layer is DB-first for WhatsApp Meta and remains split
+only in compatibility areas documented below. See
+[WhatsApp Meta tenant runtime DB-first](WHATSAPP_META_TENANT_RUNTIME.md).
 
 - Postgres stores tenant identity, users, sessions, departments, campaigns, templates, flows, retention, SLA, Meta onboarding, operational data and migrated operational config.
-- `.data/tenants.json` still stores tenant technical channel configuration and core/bootstrap fallback fields.
+- `.data/tenants.json` still stores compatibility fields, but no longer authorizes
+  WhatsApp Meta reactive runtime.
 - `apps/whatsapp-agent/src/config/tenantConfig.ts` remains the canonical loader/writer for `tenants.json`.
 - `TenantOperationalConfig` is the DB-first holder for low-risk tenant operational settings migrated in phases.
 
@@ -26,6 +29,7 @@ flow count 1, and no artificial `cra-pr` JSON entry created.
 | Configuração | Fonte Atual | Fonte de Verdade | Equivalente DB | Plano Futuro |
 | --- | --- | --- | --- | --- |
 | Tenant key/name/status | DB + `tenants.json` fallback | DB for app auth/runtime identity and modern admin operations; JSON only compatibility fallback | `Client.clientKey`, `Client.name`, `Client.status` | Move remaining reads to DB-first and keep JSON fallback during transition |
+| WhatsApp Meta base runtime | DB | DB | `TenantOperationalConfig.config.baseConfig` (`allowlist`, `handoffAttendantWaid`, `defaultLanguage`, `disableAutoReply`) | Keep DB-only after authenticated backfill |
 | Business/government profile | DB | DB | `Client.profile` | Keep DB-first |
 | App feature flags | DB | DB | `Client.features` | Keep DB-first; consider shared defaults package |
 | WhatsApp phone mapping | DB + JSON fallback | DB for webhook resolution; JSON still used by bootstrap/fallback | `WaPhoneNumber.phoneNumberId`, `TenantMetaConfig.phoneNumberId` | Make `WaPhoneNumber` mandatory for all tenants |
@@ -36,7 +40,7 @@ flow count 1, and no artificial `cra-pr` JSON entry created.
 | Channel tokens | `tenants.json` / `TenantMetaConfig` depending channel + DB shadow | Split; non-WhatsApp runtime still JSON | partial: `TenantMetaConfig` for WhatsApp; `ChannelAccountSecret` for non-runtime shadow | Move non-WhatsApp runtime reads only after encrypted secret material is complete |
 | Chatbot flows | DB | DB | `ChatbotFlow` | Keep DB-first |
 | Chatbot/automation locks | DB-first with JSON fallback | `TenantOperationalConfig.config.automationFlags` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
-| AI assistant prompts/topics/profile | DB-first with JSON fallback | `TenantOperationalConfig.config.aiAssistantConfig` for prompts/topics/profile; JSON fallback during transition | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
+| AI assistant prompts/topics/profile/toggles | DB-first with JSON fallback outside the Meta readiness gate | `TenantOperationalConfig.config.aiAssistantConfig`, including `aiAssistantEnabled` and `aiAssistantFallbackToHandoff` | `TenantOperationalConfig` | WhatsApp Meta requires the DB block; retire fallback after tenant check |
 | AI assistant intent catalog | DB-first with JSON fallback | `TenantOperationalConfig.config.aiIntentQualification` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | AI qualification schema | DB-first with JSON fallback | `TenantOperationalConfig.config.aiIntentQualification` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Media handoff policy | DB-first with JSON fallback | `TenantOperationalConfig.config.mediaHandoffPolicy` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
@@ -86,6 +90,9 @@ flow count 1, and no artificial `cra-pr` JSON entry created.
 - Messenger token/account metadata
 - migrated operational config fallbacks for tenants not yet backfilled
 - Some onboarding/bootstrap fallback fields
+
+WhatsApp Meta tenant readiness, allowlist, language, handoff target and AI toggles
+are intentionally absent from this list.
 
 ## DB-First Areas
 
@@ -144,8 +151,8 @@ Write path:
 
 Backfill:
 
-- `npm run tenant-config:backfill -- --dry-run --json`
-- `npm run tenant-config:backfill -- --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --dry-run --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json`
 
 Do not use `TenantOperationalConfig` for tokens, channel accounts, OAuth data or raw provider payloads.
 
@@ -161,8 +168,8 @@ Read path:
 
 Write/backfill path:
 
-- `npm run tenant-config:backfill -- --dry-run --json`
-- `npm run tenant-config:backfill -- --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --dry-run --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
 
 ## Sprint 61 DB-First Rule
@@ -197,8 +204,8 @@ Write/backfill path:
 - Usage gate resolves `messagesLimit` and `planName` DB-first before outbound sends.
 - WhatsApp inbound quota blocking resolves `quotaMonthlyConversations`, `quotaBlockedReplyText` and `quotaExcludeWaIds` DB-first.
 - `/admin/tenants/summary` resolves quota limits/exclusions DB-first before calculating monthly usage.
-- `npm run tenant-config:backfill -- --dry-run --json`
-- `npm run tenant-config:backfill -- --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --dry-run --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
 
 The admin tenant read endpoint returns the effective DB-first `templates.manualHandoff` value for compatibility with existing runtime scripts.
@@ -235,8 +242,8 @@ Write/backfill path:
   for DB-backed tenants.
 - `/app/chatbot/settings` exposes the effective DB-first values but does not allow customer-facing edits to the main automation locks.
 - WhatsApp webhook runtime resolves these flags DB-first before deciding chatbot, legacy flow, intent classifier and AI fallback behavior.
-- `npm run tenant-config:backfill -- --dry-run --json`
-- `npm run tenant-config:backfill -- --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --dry-run --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
 
 This sprint does not migrate AI prompts, qualification schema, intent catalog, topics, blocked terms or business context.
@@ -277,8 +284,8 @@ Write/backfill path:
 - `/admin/tenants/:tenantKey` writes scoped assistant config fields to `TenantOperationalConfig` for compatibility with the internal console.
 - `/app/chatbot/settings` exposes the effective DB-first values but does not allow customer-facing edits to this block.
 - WhatsApp webhook runtime applies the effective DB-first assistant config before supervised AI fallback logic runs.
-- `npm run tenant-config:backfill -- --dry-run --json`
-- `npm run tenant-config:backfill -- --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --dry-run --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
 
 ## Sprint 64 DB-First Rule
@@ -308,8 +315,8 @@ Write/backfill path:
 - `/admin/tenants/:tenantKey` writes the same fields to `TenantOperationalConfig` for compatibility with the internal console.
 - `/app/chatbot/settings` exposes the effective DB-first values.
 - WhatsApp webhook runtime and passive channel dry-run apply the effective DB-first values before intent/qualification logic runs.
-- `npm run tenant-config:backfill -- --dry-run --json`
-- `npm run tenant-config:backfill -- --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --dry-run --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
 - Backfill reports only redacted counts for this block, not prompt-like content or tenant-specific qualification rules.
 
@@ -344,8 +351,8 @@ Write/backfill path:
 
 - `/admin/chatbot/settings` writes follow-up fields to `TenantOperationalConfig`.
 - `findEligibleFollowUps()` resolves follow-up settings DB-first before evaluating eligibility.
-- `npm run tenant-config:backfill -- --dry-run --json`
-- `npm run tenant-config:backfill -- --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --dry-run --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
 
 ## Sprint 59 DB-First Rule
@@ -381,8 +388,8 @@ Write/backfill path:
 - `/app/chatbot/settings` writes handoff notification settings to `TenantOperationalConfig`.
 - `/admin/chatbot/settings` writes handoff notification settings to `TenantOperationalConfig`.
 - WhatsApp webhook handoff notification runtime resolves settings DB-first before sending notifications.
-- `npm run tenant-config:backfill -- --dry-run --json`
-- `npm run tenant-config:backfill -- --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --dry-run --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
 
 ## Sprint 60 DB-First Rule
@@ -413,8 +420,8 @@ Write/backfill path:
 
 - `/admin/chatbot/settings` writes media handoff policy to `TenantOperationalConfig`.
 - WhatsApp webhook runtime resolves media handoff policy DB-first before media qualification, handoff summary and customer notice decisions.
-- `npm run tenant-config:backfill -- --dry-run --json`
-- `npm run tenant-config:backfill -- --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --dry-run --json`
+- `npm run tenant-config:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
 
 ## Sprint 67 Retirement Guardrails

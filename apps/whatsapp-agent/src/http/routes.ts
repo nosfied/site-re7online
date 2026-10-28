@@ -72,6 +72,7 @@ import {
   resolveWebSessionAlertEmails,
   normalizeServiceMessagePolicySettings,
   saveAiAssistantConfigSettings,
+  saveTenantBaseConfigSettings,
   saveAiIntentQualificationSettings,
   saveAgentSignatureSettings,
   saveChatbotCloseMessageSettings,
@@ -92,6 +93,7 @@ import {
   saveWebSessionAlertEmails,
   isWhatsappMediaAllowed,
   type AiAssistantConfigSettings,
+  type TenantBaseConfigSettings,
   type AiIntentQualificationSettings,
   type AgentSignatureSettings,
   type InboxVisibilityPolicy,
@@ -19577,6 +19579,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             return;
           }
           aiAssistantPatch.aiAssistantEnabled = data.aiAssistantEnabled;
+          aiAssistantConfigPatch.aiAssistantEnabled = data.aiAssistantEnabled;
+          aiAssistantConfigFieldsChanged.push("aiAssistantEnabled");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackToHandoff")) {
           if (typeof data.aiAssistantFallbackToHandoff !== "boolean") {
@@ -19584,6 +19588,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             return;
           }
           aiAssistantPatch.aiAssistantFallbackToHandoff = data.aiAssistantFallbackToHandoff;
+          aiAssistantConfigPatch.aiAssistantFallbackToHandoff = data.aiAssistantFallbackToHandoff;
+          aiAssistantConfigFieldsChanged.push("aiAssistantFallbackToHandoff");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantMaxReplies")) {
           if (
@@ -24369,6 +24375,12 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           disableIntentClassifier,
           disableLegacyFlows,
           disableChatbotFlowEditing,
+          allowlist,
+          handoffAttendantWaid,
+          defaultLanguage,
+          disableAutoReply,
+          aiAssistantEnabled,
+          aiAssistantFallbackToHandoff,
           aiBusinessContext,
           aiAssistantSystemPrompt,
           aiAssistantGreetingMessage,
@@ -24388,6 +24400,12 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         } = rawBody;
         const runtimeLimitFieldsChanged = [
           ...(Object.prototype.hasOwnProperty.call(rawBody, "maxActiveAppUsers") ? ["maxActiveAppUsers"] : []),
+        ];
+        const tenantBaseConfigFieldsChanged = [
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "allowlist") ? ["allowlist"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "handoffAttendantWaid") ? ["handoffAttendantWaid"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "defaultLanguage") ? ["defaultLanguage"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "disableAutoReply") ? ["disableAutoReply"] : []),
         ];
         const planLimitFieldsChanged = [
           ...(Object.prototype.hasOwnProperty.call(rawBody, "planName") ? ["planName"] : []),
@@ -24411,6 +24429,10 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             : []),
         ];
         const aiAssistantConfigFieldsChanged = [
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantEnabled") ? ["aiAssistantEnabled"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantFallbackToHandoff")
+            ? ["aiAssistantFallbackToHandoff"]
+            : []),
           ...(Object.prototype.hasOwnProperty.call(rawBody, "aiBusinessContext") ? ["aiBusinessContext"] : []),
           ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantSystemPrompt")
             ? ["aiAssistantSystemPrompt"]
@@ -24454,6 +24476,25 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
         ];
         for (const key of automationFlagFieldsChanged) {
           if (typeof rawBody[key] !== "boolean") {
+            json(res, 400, httpError("bad_request", `${key} must be boolean`));
+            return;
+          }
+        }
+        if (Object.prototype.hasOwnProperty.call(rawBody, "allowlist") &&
+            (!Array.isArray(allowlist) || allowlist.some((value) => typeof value !== "string"))) {
+          json(res, 400, httpError("bad_request", "allowlist must be an array of strings"));
+          return;
+        }
+        if (Object.prototype.hasOwnProperty.call(rawBody, "handoffAttendantWaid") && typeof handoffAttendantWaid !== "string") {
+          json(res, 400, httpError("bad_request", "handoffAttendantWaid must be string"));
+          return;
+        }
+        if (Object.prototype.hasOwnProperty.call(rawBody, "defaultLanguage") && typeof defaultLanguage !== "string") {
+          json(res, 400, httpError("bad_request", "defaultLanguage must be string"));
+          return;
+        }
+        for (const key of ["disableAutoReply", "aiAssistantEnabled", "aiAssistantFallbackToHandoff"]) {
+          if (Object.prototype.hasOwnProperty.call(rawBody, key) && typeof rawBody[key] !== "boolean") {
             json(res, 400, httpError("bad_request", `${key} must be boolean`));
             return;
           }
@@ -24564,10 +24605,21 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           json(res, 404, { error: "tenant_not_found" });
           return;
         }
+        const legacyCompatibilityPatch = legacyTenant ? {
+          ...tenantPatch,
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "allowlist") ? { allowlist } : {}),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "handoffAttendantWaid") ? { handoffAttendantWaid } : {}),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "defaultLanguage") ? { defaultLanguage } : {}),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "disableAutoReply") ? { disableAutoReply } : {}),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantEnabled") ? { aiAssistantEnabled } : {}),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantFallbackToHandoff")
+            ? { aiAssistantFallbackToHandoff }
+            : {}),
+        } : tenantPatch;
         const legacyPatchFieldsChanged = diffTenantFields(currentTenant, {
           ...currentTenant,
-          ...tenantPatch,
-          id: String((tenantPatch.id ?? tenantId)).trim() || tenantId,
+          ...legacyCompatibilityPatch,
+          id: String((legacyCompatibilityPatch.id ?? tenantId)).trim() || tenantId,
         });
         if (!legacyTenant && legacyPatchFieldsChanged.length > 0) {
           json(res, 409, httpError("legacy_tenant_config_missing", "Tenant does not have legacy tenant config for these fields", {
@@ -24575,8 +24627,8 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           }));
           return;
         }
-        const saved = legacyTenant && Object.keys(tenantPatch).length > 0
-          ? await saveTenantPatch(tenantId, tenantPatch)
+        const saved = legacyTenant && Object.keys(legacyCompatibilityPatch).length > 0
+          ? await saveTenantPatch(tenantId, legacyCompatibilityPatch)
           : {
               backupPath: "",
               fieldsChanged: [] as string[],
@@ -24591,6 +24643,28 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             });
             clientFieldsChanged.push("client.profile");
           }
+        }
+        let tenantBaseConfigSettings: TenantBaseConfigSettings | null = null;
+        if (client && tenantBaseConfigFieldsChanged.length > 0) {
+          tenantBaseConfigSettings = (await saveTenantBaseConfigSettings({
+            prisma,
+            clientId: client.id,
+            tenant: currentTenant,
+            settings: {
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "allowlist")
+                ? { allowlist: Array.isArray(allowlist) ? allowlist as string[] : [] }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "handoffAttendantWaid")
+                ? { handoffAttendantWaid: typeof handoffAttendantWaid === "string" ? handoffAttendantWaid : "" }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "defaultLanguage")
+                ? { defaultLanguage: typeof defaultLanguage === "string" ? defaultLanguage : "pt_BR" }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "disableAutoReply")
+                ? { disableAutoReply: disableAutoReply === true }
+                : {}),
+            },
+          })).settings;
         }
         let planLimitsSettings: PlanLimitsSettings | null = null;
         if (client && planLimitFieldsChanged.length > 0) {
@@ -24692,6 +24766,12 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
             clientId: client.id,
             tenant: currentTenant,
             settings: {
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantEnabled")
+                ? { aiAssistantEnabled: aiAssistantEnabled === true }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantFallbackToHandoff")
+                ? { aiAssistantFallbackToHandoff: aiAssistantFallbackToHandoff === true }
+                : {}),
               ...(Object.prototype.hasOwnProperty.call(rawBody, "aiBusinessContext")
                 ? { aiBusinessContext: typeof aiBusinessContext === "string" ? aiBusinessContext.trim() : "" }
                 : {}),
@@ -24802,6 +24882,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           fieldsChanged: [
             ...saved.fieldsChanged,
             ...clientFieldsChanged,
+            ...tenantBaseConfigFieldsChanged,
             ...runtimeLimitFieldsChanged,
             ...planLimitFieldsChanged,
             ...automationFlagFieldsChanged,
@@ -24819,6 +24900,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
           fieldsChanged: [
             ...saved.fieldsChanged,
             ...clientFieldsChanged,
+            ...tenantBaseConfigFieldsChanged,
             ...runtimeLimitFieldsChanged,
             ...planLimitFieldsChanged,
             ...automationFlagFieldsChanged,
@@ -24834,6 +24916,7 @@ async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: Ser
                     applyRuntimeLimitsToTenantView(
                       {
                         ...saved.tenant,
+                        ...(tenantBaseConfigSettings ?? {}),
                         channelAccounts: redactTenantChannelAccounts(getSavedTenantChannelAccounts(saved.tenant)),
                       },
                       runtimeLimitsSettings ?? { maxActiveAppUsers: null }
@@ -40077,6 +40160,8 @@ function normalizeAiAssistantConfigArray(input: unknown) {
 
 function aiAssistantConfigFromTenantView(tenant: Record<string, unknown>): AiAssistantConfigSettings {
   return {
+    aiAssistantEnabled: tenant.aiAssistantEnabled === true,
+    aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
     aiBusinessContext: normalizeAiAssistantConfigText(tenant.aiBusinessContext),
     aiAssistantSystemPrompt: normalizeAiAssistantConfigText(tenant.aiAssistantSystemPrompt),
     aiAssistantGreetingMessage: normalizeAiAssistantConfigText(tenant.aiAssistantGreetingMessage),

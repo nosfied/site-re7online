@@ -15,6 +15,11 @@ As classes são fechadas: `PACKAGE_PRESERVE` (tar.xz, manifest e index),
 hashes e recibos; nunca duplicam runtimes completos. Releases são preservadas
 enquanto integrarem os grafos active, rollback ou retorno transitivo.
 
+Dados mutáveis tenant-scoped são proibidos dentro de releases imutáveis. Em
+particular, `tenants.json`, estado operacional e fontes de backfill devem residir
+em armazenamento persistente autenticado fora de `releases`; trocar release não
+pode alterar a autoridade de configuração.
+
 Os estados de revisão v2 são `ACTIVE_DEPENDENCY`, `ROLLBACK_DEPENDENCY`,
 `CANDIDATE_PENDING_ACTIVATION`, `RETIREMENT_READY`, `SANITIZED`, `QUARANTINED`
 e `PRESERVE_OVERRIDE`. Review v1 `SANITIZED` continua válido; v1 `PRESERVE` é

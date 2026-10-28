@@ -88,20 +88,11 @@ import {
   resolveTemplateKey,
 } from "./templateCommand.js";
 import {
-  getDefaultTenant,
-  getTenantByClientKeyOrPhoneNumberId,
   isAiAssistantConfigured,
   normalizeTenantMediaHandoffPolicy,
+  type TenantConfig,
 } from "../config/tenantConfig.js";
 import {
-  applyAiAssistantConfigToTenant,
-  applyAiIntentQualificationToTenant,
-  resolveAiAssistantConfigSettings,
-  resolveAiIntentQualificationSettings,
-  resolveAutomationFlagsSettings,
-  resolveHandoffLeadNotificationSettings,
-  resolveMediaHandoffPolicy,
-  resolvePlanLimitsSettings,
   resolveWhatsappMediaPolicy,
   isWhatsappMediaAllowed,
   isWhatsappMediaKind,
@@ -115,6 +106,7 @@ import {
   shouldRetryWithFallback,
 } from "../services/outboundTemplateService.js";
 import { resolveTenantOutboundCredentials } from "./tenantCredentials.js";
+import { resolveWhatsappMetaTenantRuntimeConfig } from "./tenantMetaRuntimeConfig.js";
 import {
   buildMetaUsageEventPayload,
   recordMetaUsageLedgerEvent,
@@ -453,15 +445,38 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         requestId: meta?.requestId,
       });
 
-      let appliedTenantConfig = await getDefaultTenant();
+      let appliedTenantConfig: Partial<TenantConfig> = {};
       let hasResolvedTenantConfig = false;
-      let tenantAllowlist = (appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST)
+      let tenantConfigReadinessReasons: string[] = [];
+      let tenantMetaChannelEnabled = false;
+      let tenantMetaRuntimeEnabled = false;
+      let tenantMetaAutomationEnabled = false;
+      let tenantMetaOutboundEnabled = false;
+      let tenantMetaInboundPersistenceEnabled = false;
+      let tenantAutomaticHandoffEnabled = false;
+      let tenantReactiveAutomationEnabled = false;
+      let tenantAllowlist = (env.WHATSAPP_ALLOWLIST ?? [])
         .map((value: string) => normalizeWaId(value))
         .filter(Boolean);
       let tenantDefaultLanguage =
-        appliedTenantConfig?.defaultLanguage ||
         env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
         "pt_BR";
+
+      const isTenantReactiveOutboundReady = () =>
+        hasResolvedTenantConfig &&
+        tenantMetaChannelEnabled &&
+        tenantMetaRuntimeEnabled &&
+        tenantMetaAutomationEnabled &&
+        tenantMetaOutboundEnabled;
+
+      const tenantReactiveOutboundBlockReason = () => {
+        if (!hasResolvedTenantConfig) return "tenant_db_config_incomplete";
+        if (!tenantMetaChannelEnabled) return "tenant_channel_disabled";
+        if (!tenantMetaRuntimeEnabled) return "tenant_runtime_disabled";
+        if (!tenantMetaAutomationEnabled) return "tenant_reactive_automation_disabled";
+        if (!tenantMetaOutboundEnabled) return "tenant_reactive_outbound_disabled";
+        return null;
+      };
 
       const attemptTemplateFallback = async (params: {
     waId: string;
@@ -470,6 +485,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     messageId: string;
     reasonIfSkip?: string;
   }) => {
+    if (!isTenantReactiveOutboundReady()) {
+      const reason = tenantReactiveOutboundBlockReason() ?? "tenant_reactive_outbound_not_ready";
+      await persistOutboundBlockedSafe({
+        waId: params.waId,
+        messageId: params.messageId,
+        type: MessageType.TEMPLATE,
+        templateName: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
+        templateLang: env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+        reason,
+      });
+      return;
+    }
     if (!env.OUTBOUND_TEMPLATE_FALLBACK) {
       await persistOutboundBlockedSafe({
         waId: params.waId,
@@ -692,6 +719,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     guard?: { version: number; lastInboundAt?: string },
     messageId?: string
   ) => {
+    if (!isTenantReactiveOutboundReady()) return false;
     if (!guard) return true;
     const current = conversationVersionByWaId.get(waId);
     const matchesVersion = current?.version === guard.version;
@@ -900,6 +928,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     runtimeWriteToken?: ConversationState["runtimeWriteToken"];
     guard?: { version: number; lastInboundAt?: string };
   }) => {
+    if (!isTenantReactiveOutboundReady()) {
+      return {
+        ok: false,
+        errorBody: tenantReactiveOutboundBlockReason() ?? "tenant_reactive_outbound_not_ready",
+      };
+    }
     if (tenantClientId && tenantClientKey && !env.WHATSAPP_SANDBOX) {
       const transport = await resolveEffectiveWhatsappOutboundTransport({
         prisma,
@@ -971,6 +1005,31 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       }
     }
     return sendOutboundText(params);
+  };
+
+  const sendReactiveTemplateMessage = async (params: {
+    toE164: string;
+    waId: string;
+    messageId: string;
+    templateName: string;
+    templateLanguage: string;
+    guard?: { version: number; lastInboundAt?: string };
+  }) => {
+    if (!isTenantReactiveOutboundReady()) {
+      return {
+        ok: false,
+        errorBody: tenantReactiveOutboundBlockReason() ?? "tenant_reactive_outbound_not_ready",
+      };
+    }
+    if (!shouldSendOutbound(params.waId, params.guard, params.messageId)) {
+      return { ok: false, errorBody: "late_reply_dropped" };
+    }
+    return sendTemplateMessage(
+      params.toE164,
+      params.templateName,
+      params.templateLanguage,
+      (await resolveCurrentTenantCredentials()) ?? undefined
+    );
   };
 
   const typedPayload = payload as WhatsAppWebhookPayload;
@@ -1067,52 +1126,29 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         select: { status: true },
       }))?.status ?? null;
     logger.updateContext({ clientKey: tenantClientKey });
-    const resolvedTenantConfig = await getTenantByClientKeyOrPhoneNumberId(
-      tenantClientKey,
-      phoneNumberId
-    );
-    appliedTenantConfig = resolvedTenantConfig.tenant;
-    hasResolvedTenantConfig = resolvedTenantConfig.hasTenantConfig;
-    const resolvedAiAssistantConfig = await resolveAiAssistantConfigSettings({
+    const runtimeConfig = await resolveWhatsappMetaTenantRuntimeConfig({
       prisma,
       clientId: tenantClientId,
-      tenant: appliedTenantConfig,
+      clientKey: tenantClientKey,
+      phoneNumberId: phoneNumberId ?? "",
     });
-    appliedTenantConfig = applyAiAssistantConfigToTenant(
-      appliedTenantConfig,
-      resolvedAiAssistantConfig.settings
-    );
-    const resolvedAiIntentQualification = await resolveAiIntentQualificationSettings({
-      prisma,
-      clientId: tenantClientId,
-      tenant: appliedTenantConfig,
-    });
-    appliedTenantConfig = applyAiIntentQualificationToTenant(
-      appliedTenantConfig,
-      resolvedAiIntentQualification.settings
-    );
-    const resolvedHandoffLeadNotification = await resolveHandoffLeadNotificationSettings({
-      prisma,
-      clientId: tenantClientId,
-      tenant: appliedTenantConfig,
-    });
-    handoffLeadNotificationSettings = resolvedHandoffLeadNotification.settings;
-    const resolvedMediaHandoffPolicy = await resolveMediaHandoffPolicy({
-      prisma,
-      clientId: tenantClientId,
-      tenant: appliedTenantConfig,
-    });
-    mediaHandoffPolicy = resolvedMediaHandoffPolicy.policy;
-    planLimitsSettings = (await resolvePlanLimitsSettings({
-      prisma,
-      clientId: tenantClientId,
-      tenant: appliedTenantConfig,
-    })).settings;
-    automationFlags = (await resolveAutomationFlagsSettings({
-      prisma,
-      clientId: tenantClientId,
-      tenant: appliedTenantConfig,
-    })).settings;
+    appliedTenantConfig = runtimeConfig.tenant;
+    hasResolvedTenantConfig = runtimeConfig.readiness.ready;
+    tenantConfigReadinessReasons = runtimeConfig.readiness.reasons;
+    tenantMetaChannelEnabled = runtimeConfig.channel.enabled;
+    tenantMetaRuntimeEnabled = runtimeConfig.channel.runtimeEnabled;
+    tenantMetaAutomationEnabled = runtimeConfig.channel.automationEnabled;
+    tenantMetaOutboundEnabled = runtimeConfig.channel.outboundEnabled;
+    tenantMetaInboundPersistenceEnabled = runtimeConfig.channel.inboundPersistenceEnabled;
+    tenantAutomaticHandoffEnabled = runtimeConfig.channel.handoffEnabled;
+    tenantReactiveAutomationEnabled = runtimeConfig.channel.enabled &&
+      runtimeConfig.channel.runtimeEnabled && runtimeConfig.channel.automationEnabled;
+    appliedTenantConfig.aiAssistantEnabled = appliedTenantConfig.aiAssistantEnabled === true &&
+      runtimeConfig.channel.aiEnabled;
+    handoffLeadNotificationSettings = runtimeConfig.handoffLeadNotification;
+    mediaHandoffPolicy = runtimeConfig.mediaHandoffPolicy;
+    planLimitsSettings = runtimeConfig.planLimits;
+    automationFlags = runtimeConfig.automationFlags;
     tenantAllowlist = (
       appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST
     )
@@ -1421,6 +1457,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     !isAiAssistantConfigured(appliedTenantConfig) ||
     automationFlags.disableAiFallback === true;
   const isSupervisedAiHandoffEnabled = () =>
+    tenantAutomaticHandoffEnabled &&
     env.AI_ASSISTANT_ENABLED &&
     env.WHATSAPP_AI_ENABLED &&
     appliedTenantConfig?.aiAssistantEnabled === true &&
@@ -1431,7 +1468,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     inboundText: string | null | undefined,
   ) => {
     if (!tenantClientId) return null;
-    if (!hasResolvedTenantConfig) return null;
+    if (!hasResolvedTenantConfig || !tenantReactiveAutomationEnabled) return null;
     if (isChatbotDisabledForTenant()) return null;
     if (
       state.flow === "quote_site" ||
@@ -1577,6 +1614,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       guard?: { version: number; lastInboundAt?: string };
     }
   ) => {
+    if (!tenantAutomaticHandoffEnabled) {
+      logger.info({
+        event: "handoff.automatic.skipped",
+        reason: "tenant_handoff_disabled",
+        source: params.reason,
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(state.waId),
+        messageId: params.messageId,
+        requestId: meta?.requestId,
+      });
+      return state;
+    }
     state = await enrichQualificationFromInboundMedia(state, {
       receivedMedia: params.receivedMedia,
       messageId: params.messageId,
@@ -1779,6 +1829,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   }) => {
     try {
       if (!tenantClientId) return;
+      if (!tenantMetaInboundPersistenceEnabled) {
+        logger.info({
+          event: "inbound.persistence.skipped",
+          reason: "tenant_inbound_persistence_disabled",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          waId: maskNumber(params.waId),
+          messageId: params.messageId,
+          requestId: meta?.requestId,
+        });
+        return;
+      }
       const inserted = await persistInboundMessage({
         clientId: tenantClientId,
         phoneNumberId: phoneNumberId ?? undefined,
@@ -1890,6 +1952,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         requestId: meta?.requestId,
       });
     }
+  };
+
+  const saveIncomingMessageSafe = async (
+    record: Parameters<typeof storage.saveIncomingMessage>[0]
+  ) => {
+    if (!tenantMetaInboundPersistenceEnabled) return;
+    await storage.saveIncomingMessage(record);
   };
 
   const persistConversationSafe = async (state: {
@@ -2770,7 +2839,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   }) => {
     if (!params.receivedMedia) return params.nextState;
     if (params.replyAlreadyPlanned) return params.nextState;
-    if (!params.allowlistHit || !env.outboundEnabled || !hasResolvedTenantConfig) {
+    if (!params.allowlistHit || !env.outboundEnabled || !isTenantReactiveOutboundReady()) {
       return params.nextState;
     }
     if (!tenantClientId) return params.nextState;
@@ -3656,7 +3725,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           },
         });
 
-        await storage.saveIncomingMessage(
+        await saveIncomingMessageSafe(
           toStoredIncomingMessage(message, status, allowlistHit)
         );
 
@@ -3850,7 +3919,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.timestamp
       );
       await upsertConversationSafe(updatedMeta);
-      await storage.saveIncomingMessage(
+      await saveIncomingMessageSafe(
         toStoredIncomingMessage(message, status, allowlistHit)
       );
       if (env.outboundEnabled && !env.WHATSAPP_SANDBOX) {
@@ -3910,7 +3979,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.timestamp
         );
         await upsertConversationSafe(updatedMeta);
-        await storage.saveIncomingMessage(
+        await saveIncomingMessageSafe(
           toStoredIncomingMessage(message, status, allowlistHit)
         );
         continue;
@@ -3935,7 +4004,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.timestamp
         );
         await upsertConversationSafe(updatedMeta);
-        await storage.saveIncomingMessage(
+        await saveIncomingMessageSafe(
           toStoredIncomingMessage(message, status, allowlistHit)
         );
         continue;
@@ -3977,7 +4046,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.timestamp
         );
         await upsertConversationSafe(updatedMeta);
-        await storage.saveIncomingMessage(
+        await saveIncomingMessageSafe(
           toStoredIncomingMessage(message, status, allowlistHit)
         );
         continue;
@@ -4067,7 +4136,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.timestamp
       );
       await upsertConversationSafe(updatedMeta);
-      await storage.saveIncomingMessage(
+      await saveIncomingMessageSafe(
         toStoredIncomingMessage(message, status, allowlistHit)
       );
       continue;
@@ -4102,7 +4171,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           requestId: meta?.requestId,
         });
       }
-      await storage.saveIncomingMessage(
+      await saveIncomingMessageSafe(
         toStoredIncomingMessage(message, status, allowlistHit)
       );
       logger.info({
@@ -4166,7 +4235,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         lastOutboundAt: blockedState.lastOutboundAt ?? null,
         departmentId: blockedState.departmentId ?? null,
       });
-      await storage.saveIncomingMessage(
+      await saveIncomingMessageSafe(
         toStoredIncomingMessage(message, status, allowlistHit)
       );
       await persistInboundSafe({
@@ -4202,6 +4271,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     if (
       currentHandoffStatus === "pending" &&
+      tenantAutomaticHandoffEnabled &&
       shouldRunLegacyHandoffAutomation({
         disableLegacyFlows: automationFlags.disableLegacyFlows,
         supervisedAiHandoffEnabled,
@@ -4327,7 +4397,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         lastOutboundAt: updatedConversation.lastOutboundAt ?? null,
       });
 
-      await storage.saveIncomingMessage(
+      await saveIncomingMessageSafe(
         toStoredIncomingMessage(message, status, allowlistHit)
       );
       await persistInboundSafe({
@@ -4508,12 +4578,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
       const sendPromise =
         replyType === "template"
-          ? sendTemplateMessage(
-              toForReply,
-              decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
-              decision.templateLanguage ?? "pt_BR",
-              (await resolveCurrentTenantCredentials()) ?? undefined
-            )
+          ? sendReactiveTemplateMessage({
+              toE164: toForReply,
+              waId: normalizedFrom,
+              messageId: message.messageId,
+              templateName: decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
+              templateLanguage: decision.templateLanguage ?? "pt_BR",
+            })
           : sendPassiveOutboundText({
               runtimeWriteToken: updatedConversation.runtimeWriteToken,
               toE164: toForReply,
@@ -4667,6 +4738,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           }
         : undefined);
     if (
+      tenantAutomaticHandoffEnabled &&
       aiHandoffPrompt?.awaitingConfirmation === true &&
       updatedConversation.mode !== "HUMAN" &&
       updatedConversation.handoff.status === "none"
@@ -4683,7 +4755,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           lastOutboundAt: state.lastOutboundAt ?? null,
           departmentId: state.departmentId ?? null,
         });
-        await storage.saveIncomingMessage(
+        await saveIncomingMessageSafe(
           toStoredIncomingMessage(message, status, allowlistHit)
         );
         await persistInboundSafe({
@@ -5152,7 +5224,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     );
     const inboundIntent = detectIntent(message.text);
     const shouldRunLegacyHandoff = shouldRunLegacyHandoffAutomation({
-      disableLegacyFlows: automationFlags.disableLegacyFlows || hasUnavailableActiveChatbotRuntime,
+      disableLegacyFlows:
+        automationFlags.disableLegacyFlows ||
+        hasUnavailableActiveChatbotRuntime ||
+        !tenantAutomaticHandoffEnabled,
       supervisedAiHandoffEnabled,
       wasPending,
       hasConfigurableChatbotFlow,
@@ -5332,7 +5407,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         lastOutboundAt: updatedConversation.lastOutboundAt ?? null,
         departmentId: updatedConversation.departmentId ?? null,
       });
-      await storage.saveIncomingMessage(
+      await saveIncomingMessageSafe(
         toStoredIncomingMessage(message, status, allowlistHit)
       );
       await persistInboundSafe({
@@ -5721,8 +5796,31 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               state: chatbotResult.state,
               replyText: chatbotResult.replyText,
               flowId: chatbotFlow.id,
-              pendingHandoff: chatbotResult.pendingHandoff,
+              pendingHandoff: tenantAutomaticHandoffEnabled
+                ? chatbotResult.pendingHandoff
+                : undefined,
             };
+            if (chatbotResult.pendingHandoff && !tenantAutomaticHandoffEnabled) {
+              updatedConversation = chatbotProgressBeforeReply;
+              chatbotFlowResult = {
+                handled: true,
+                state: updatedConversation,
+                replyText: undefined,
+                flowId: chatbotFlow.id,
+                pendingHandoff: undefined,
+              };
+              logger.info({
+                event: "handoff.automatic.skipped",
+                reason: "tenant_handoff_disabled",
+                source: "chatbot_flow",
+                clientId: tenantClientId,
+                clientKey: tenantClientKey,
+                flowId: chatbotFlow.id,
+                waId: maskNumber(normalizedFrom),
+                messageId: message.messageId,
+                requestId: meta?.requestId,
+              });
+            }
             for (const event of chatbotResult.events ?? []) {
               logger.info({
                 ...event,
@@ -5783,7 +5881,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         }
       : handoffResult.handled
         ? { state: updatedConversation, handled: false as const, replyText: undefined }
-        : automationFlags.disableLegacyFlows || !hasResolvedTenantConfig
+        : automationFlags.disableLegacyFlows || !hasResolvedTenantConfig || !tenantReactiveAutomationEnabled
           ? { state: updatedConversation, handled: false as const, replyText: undefined }
         : await runFlowExecutor({
             tenantId: appliedTenantConfig?.id ?? "default",
@@ -5903,7 +6001,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       departmentId: updatedConversation.departmentId ?? null,
     });
 
-    await storage.saveIncomingMessage(
+    await saveIncomingMessageSafe(
       toStoredIncomingMessage(message, status, allowlistHit)
     );
 
@@ -5963,7 +6061,20 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       logger.info({
         event: "reply.skipped",
         waId: maskNumber(normalizedFrom),
-        reason: "tenant_config_missing",
+        reason: "tenant_db_config_incomplete",
+        readinessReasons: tenantConfigReadinessReasons,
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      continue;
+    }
+
+    if (!isTenantReactiveOutboundReady()) {
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: tenantReactiveOutboundBlockReason() ?? "tenant_reactive_outbound_not_ready",
         route: meta?.route,
         method: meta?.method,
         requestId: meta?.requestId,
@@ -6393,7 +6504,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let skipDemoReplies = false;
     let hasDemoSignal = false;
 
-    if (message.text && !automationFlags.disableLegacyFlows && hasResolvedTenantConfig) {
+    if (message.text && !automationFlags.disableLegacyFlows && hasResolvedTenantConfig && tenantReactiveAutomationEnabled) {
       const midDemoFlowResult = await runMidDemoFlowExecutor({
         tenantId: appliedTenantConfig?.id ?? "default",
         clientKey: tenantClientKey,
@@ -6502,7 +6613,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !demoHandled && message.text && updatedConversation.leadRequestedAt
         ? parseLeadFields(message.text)
         : {};
-    const postDemoFlowResult = automationFlags.disableLegacyFlows || !hasResolvedTenantConfig
+    const postDemoFlowResult = automationFlags.disableLegacyFlows || !hasResolvedTenantConfig || !tenantReactiveAutomationEnabled
       ? { handled: false as const }
       : await runPostDemoFlowExecutor({
           tenantId: appliedTenantConfig?.id ?? "default",
@@ -6675,7 +6786,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     const noAutomationReplyConfigured =
-      hasResolvedTenantConfig &&
+      hasResolvedTenantConfig && tenantReactiveAutomationEnabled &&
       !env.WHATSAPP_ECHO_ENABLED &&
       !demoReplyText &&
       !leadReplyText &&
@@ -8031,8 +8142,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               brain: agentBrain,
               text: message.text,
               tenant: {
-                name: appliedTenantConfig.name,
-                defaultLanguage: appliedTenantConfig.defaultLanguage,
+                name: appliedTenantConfig.name ?? tenantClientKey,
+                defaultLanguage: appliedTenantConfig.defaultLanguage ?? tenantDefaultLanguage,
                 aiBusinessContext,
                 aiAssistantSystemPrompt: appliedTenantConfig.aiAssistantSystemPrompt,
                 aiAssistantAllowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
@@ -8453,12 +8564,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const sendPromise =
       replyType === "template"
-        ? sendTemplateMessage(
-            toForReply,
-            decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
-            decision.templateLanguage ?? "pt_BR",
-            (await resolveCurrentTenantCredentials()) ?? undefined
-          )
+        ? sendReactiveTemplateMessage({
+            toE164: toForReply,
+            waId: normalizedFrom,
+            messageId: message.messageId,
+            templateName: decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
+            templateLanguage: decision.templateLanguage ?? "pt_BR",
+            guard: inboundGuard,
+          })
         : sendPassiveOutboundText({
             runtimeWriteToken: updatedConversation.runtimeWriteToken,
             toE164: toForReply,

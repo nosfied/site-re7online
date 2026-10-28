@@ -13,7 +13,11 @@ A escrita exige proveniência `embedded_signup`, comparação otimista e preserv
 payload. Repetir o mesmo valor é idempotente; substituir por valor divergente é
 conflito. A auditoria registra ator, proveniência e resultado sem o App ID completo.
 
-## Campos de tenant (tenants.json)
+## Campos de tenant (fonte legada de migração)
+
+Para WhatsApp Meta, estes campos são materializados em
+`TenantOperationalConfig.config.baseConfig`; o JSON abaixo não é autoridade de
+runtime e só pode ser consumido por backfill autenticado.
 
 ```json
 {

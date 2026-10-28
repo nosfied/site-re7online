@@ -103,6 +103,14 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run build
+      - name: WhatsApp Meta tenant runtime DB-first regressions
+        run: >-
+          node --import tsx --test
+          src/config/authenticatedTenantJsonSource.test.ts
+          src/config/tenantOperationalConfig.test.ts
+          src/whatsapp/tenantMetaRuntimeConfig.test.ts
+          src/whatsapp/tenantMetaReactiveOutboundGate.test.ts
+          src/whatsapp/tenantMetaRuntimeContract.test.ts
 
   csv-critical:
     name: CSV recovery and tenant isolation
@@ -139,6 +147,18 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run db:deploy
+      - name: Create isolated tenant operational config database
+        env:
+          PGPASSWORD: postgres
+        run: >-
+          psql -h 127.0.0.1 -p 55781 -U postgres -d retention_lab
+          -v ON_ERROR_STOP=1 -c 'CREATE DATABASE re7_config_persistence_ci'
+      - name: Tenant operational config backfill and retirement contracts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55781/re7_config_persistence_ci
+        run: |
+          npm run db:deploy
+          node --import tsx --test src/config/tenantOperationalConfigScripts.test.ts
       - name: Backend durable-operation and multi-tenant tests
         run: >-
           node --import tsx --test

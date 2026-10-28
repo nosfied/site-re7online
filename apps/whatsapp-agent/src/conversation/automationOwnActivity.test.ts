@@ -179,7 +179,8 @@ test("Meta/hybrid IA: real assistant, passive WEB sender and Postgres builder re
     const sendPassive=extract("  const sendPassiveOutboundText = async","  const typedPayload","sendPassiveOutboundText",{
       prisma,tenantClientId:f.client.id,tenantClientKey:f.client.clientKey,tenantClientStatus:"ACTIVE",env:{WHATSAPP_SANDBOX:false},
       resolveEffectiveWhatsappOutboundTransport:(await import("../crm/crmConversationStart.js")).resolveEffectiveWhatsappOutboundTransport,
-      getWebhookControllerTestHooks:()=>undefined,shouldSendOutbound:()=>true,createReactiveBotTextOutboundMessage,canonicalizeBrazilWaId:(s:string)=>s,
+      getWebhookControllerTestHooks:()=>undefined,shouldSendOutbound:()=>true,isTenantReactiveOutboundReady:()=>true,
+      tenantReactiveOutboundBlockReason:()=>null,createReactiveBotTextOutboundMessage,canonicalizeBrazilWaId:(s:string)=>s,
       loadPersistedRuntimeForInbound: async (waId:string) => {
         const runtime = await prisma.conversationRuntimeState.findUnique({where:{clientId_waId:{clientId:f.client.id,waId}}});
         return runtime ? { window: { isOpen: runtime.windowIsOpen, expiresAt: runtime.windowExpiresAt?.toISOString() } } : null;
