@@ -2,8 +2,9 @@
 
 **Status: CANÔNICO / API 708F + FRONTEND B96 DEPLOYED_SANITIZED EM 28/10/2026 / OPERAÇÕES DE CAMPANHA ABERTAS NA GERAÇÃO 41**
 
-Este documento define a arquitetura e os princípios vigentes. Os comandos executáveis
-estão somente no [runbook canônico](DEPLOY_RUNBOOK.md). O estado ativo está no
+Este documento deriva dos [princípios fundamentais de trabalho](WORKING_PRINCIPLES.md)
+e define sua aplicação à arquitetura de implantação. Os comandos executáveis estão
+somente no [runbook canônico](DEPLOY_RUNBOOK.md). O estado ativo está no
 [registro b96 implantado e sanitizado](releases/CAMPAIGN_AUDIENCE_PRESENTATION_FRONTEND_B96_2026-10-28_DEPLOYED_SANITIZED.json).
 Preparações e executores anteriores são evidência e não autorizam repetição.
 
