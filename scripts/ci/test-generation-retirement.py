@@ -1420,6 +1420,54 @@ class GenerationRetirementTest(unittest.TestCase):
         finally:
             fixture.close()
 
+    def test_inactive_release_runtime_is_literal_and_retired_once(self):
+        fixture = Fixture(active=False, rollback=False, candidate=False,
+                          installed=True, deployed=False)
+        try:
+            operational = json.loads(fixture.operational.read_text())
+            operational["currentPaths"] = []
+            operational["observations"]["currentLinks"] = []
+            operational["deploymentState"] = {"state": "SUPERSEDED"}
+            private_json(fixture.operational, operational)
+
+            result = fixture.prepare()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            intent = json.loads(fixture.intent.read_text())
+            release = next(item for item in intent["artifacts"]
+                           if item["class"] == "RELEASE_RUNTIME")
+            self.assertEqual(release["retentionState"], "RETIREMENT_READY")
+            release_command = next(item for item in intent["commands"]
+                                   if item["class"] == "RELEASE_RUNTIME")
+            self.assertEqual(release_command["path"], str(fixture.installed_release))
+            self.assertEqual(release_command["argv"],
+                             ["/usr/bin/rm", "-r", "--", str(fixture.installed_release)])
+            self.assertEqual(release_command["literal"],
+                             f"/usr/bin/rm -r -- {fixture.installed_release}")
+
+            authorization = fixture.authorize("retire-release-runtime-once")
+            executed, receipt_root = fixture.execute(authorization)
+            self.assertEqual(executed.returncode, 0, executed.stderr)
+            self.assertFalse(fixture.installed_release.exists())
+            receipt = json.loads((receipt_root / "execution-receipt.private.json").read_text())
+            self.assertEqual(receipt["state"], "SANITIZED")
+            self.assertIn(str(fixture.installed_release), receipt["removedPaths"])
+            self.assertEqual(receipt["remainingDerivedPaths"], [])
+        finally:
+            fixture.close()
+
+    def test_candidate_release_runtime_never_enters_authorization(self):
+        fixture = Fixture(candidate=True, installed=True, deployed=False)
+        try:
+            self.assertEqual(fixture.prepare().returncode, 0)
+            intent = json.loads(fixture.intent.read_text())
+            release = next(item for item in intent["artifacts"]
+                           if item["class"] == "RELEASE_RUNTIME")
+            self.assertEqual(release["retentionState"], "CANDIDATE_PENDING_ACTIVATION")
+            self.assertNotIn(str(fixture.installed_release),
+                             [item["path"] for item in intent["commands"]])
+        finally:
+            fixture.close()
+
     def test_candidate_output_waits_for_install_or_supersession(self):
         fixture = Fixture(candidate=True, installed=False, deployed=False)
         try:
