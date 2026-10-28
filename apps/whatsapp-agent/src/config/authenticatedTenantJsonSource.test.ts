@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { readAuthenticatedTenantJsonSource } from "./authenticatedTenantJsonSource.js";
+import { readAuthenticatedPrivateJsonSource } from "./authenticatedPrivateJsonSource.js";
 
 async function fixture() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "re7-tenant-source-"));
@@ -43,4 +44,16 @@ test("authenticated tenant source denies symlinks", async (t) => {
     readAuthenticatedTenantJsonSource({ source: link, expectedSha256: item.sha256 }),
     /source_not_regular/
   );
+});
+
+test("authenticated private plan uses the same stable regular private-file contract", async (t) => {
+  const item = await fixture();
+  t.after(() => rm(item.directory, { recursive: true, force: true }));
+  const parsed = await readAuthenticatedPrivateJsonSource<Record<string, unknown>>({ source: item.source, expectedSha256: item.sha256 });
+  assert.ok(parsed.tendencia);
+  const link = path.join(item.directory, "plan-link.json");
+  await symlink(item.source, link);
+  await assert.rejects(readAuthenticatedPrivateJsonSource({ source: link, expectedSha256: item.sha256 }), /source_not_regular/);
+  await chmod(item.source, 0o622);
+  await assert.rejects(readAuthenticatedPrivateJsonSource({ source: item.source, expectedSha256: item.sha256 }), /source_permissions_insecure/);
 });

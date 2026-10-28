@@ -4,312 +4,60 @@ import path from "node:path";
 import process from "node:process";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
-import { getTenants } from "../src/config/tenantConfig.js";
+import { readAuthenticatedTenantJsonSource } from "../src/config/authenticatedTenantJsonSource.js";
+import { readAuthenticatedPrivateJsonSource } from "../src/config/authenticatedPrivateJsonSource.js";
+import { buildChannelAccountMigrationPlan, type ChannelAccountPlanDocument } from "../src/channels/channelAccountMigrationPlan.js";
 import type { TenantChannelAccount } from "../src/channels/tenantChannelAccount.types.js";
 
-type Options = {
-  json: boolean;
-  tenant?: string;
-  includeMatches: boolean;
-};
-
-type CompareItem = {
-  tenantKey: string;
-  channel: string;
-  provider: string;
-  channelAccountId: string;
-  status: "matched" | "missing_db" | "missing_json" | "mismatched";
-  mismatches: string[];
-};
-
-type CompareReport = {
-  ok: boolean;
-  totals: {
-    tenants: number;
-    jsonAccounts: number;
-    dbAccounts: number;
-    matched: number;
-    missingDb: number;
-    missingJson: number;
-    mismatched: number;
-  };
-  items: CompareItem[];
-};
-
-type DbChannelAccount = Awaited<ReturnType<typeof loadDbAccounts>>[number];
-
+type Options = { source: string; expectedSourceSha256: string; plan: string; expectedPlanSha256: string; json: boolean; tenant?: string; includeMatches: boolean };
 function parseArgs(argv: string[]): Options {
-  const options: Options = {
-    json: false,
-    includeMatches: false,
-  };
-  for (let index = 0; index < argv.length; index += 1) {
-    const current = argv[index];
-    const next = argv[index + 1];
-    switch (current) {
-      case "--json":
-        options.json = true;
-        break;
-      case "--include-matches":
-        options.includeMatches = true;
-        break;
-      case "--tenant":
-      case "--client-key":
-        if (!next || next.startsWith("--")) throw new Error(`${current} exige um valor`);
-        options.tenant = next;
-        index += 1;
-        break;
-      default:
-        throw new Error(`flag nao reconhecida: ${current}`);
-    }
+  let source = ""; let expectedSourceSha256 = ""; let plan = ""; let expectedPlanSha256 = ""; const result = { json: false, includeMatches: false } as Options;
+  for (let i = 0; i < argv.length; i += 1) { const current = argv[i]; const next = argv[i + 1];
+    if (["--source", "--expected-source-sha256", "--plan", "--expected-plan-sha256", "--tenant", "--client-key"].includes(current)) { if (!next || next.startsWith("--")) throw new Error(`${current}_requires_value`); if (current === "--source") source = next; else if (current === "--expected-source-sha256") expectedSourceSha256 = next; else if (current === "--plan") plan = next; else if (current === "--expected-plan-sha256") expectedPlanSha256 = next; else result.tenant = next; i += 1; }
+    else if (current === "--json") result.json = true; else if (current === "--include-matches") result.includeMatches = true; else throw new Error(`unknown_flag:${current}`);
   }
-  return options;
+  if (!path.isAbsolute(source)) throw new Error("source_must_be_absolute");
+  if (!path.isAbsolute(plan)) throw new Error("plan_must_be_absolute");
+  if (!/^[a-f0-9]{64}$/i.test(expectedSourceSha256)) throw new Error("expected_source_sha256_required");
+  if (!/^[a-f0-9]{64}$/i.test(expectedPlanSha256)) throw new Error("expected_plan_sha256_required");
+  return { ...result, source, plan, expectedSourceSha256: expectedSourceSha256.toLowerCase(), expectedPlanSha256: expectedPlanSha256.toLowerCase() };
 }
-
-function loadEnv() {
-  const appDir = path.resolve(process.cwd(), "apps/whatsapp-agent");
-  const envPath = process.cwd().endsWith("apps/whatsapp-agent")
-    ? path.join(process.cwd(), ".env")
-    : path.join(appDir, ".env");
-  dotenv.config({ path: envPath });
-}
-
-function accountKey(account: {
-  tenantKey: string;
-  provider: string;
-  channel: string;
-  channelAccountId: string;
-}) {
-  return `${account.tenantKey}:${account.provider}:${account.channel}:${account.channelAccountId}`;
-}
-
-function sortedStrings(values: unknown) {
-  if (!Array.isArray(values)) return [];
-  return values.filter((value): value is string => typeof value === "string").sort();
-}
-
-function normalizeMetadata(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .filter(([, item]) => typeof item === "string")
-      .sort(([left], [right]) => left.localeCompare(right))
-  );
-}
-
-function stableJson(value: unknown) {
-  return JSON.stringify(value);
-}
-
-function secretHash(value: string) {
-  return crypto.createHash("sha256").update(value, "utf8").digest("hex");
-}
-
-function jsonSecrets(account: TenantChannelAccount) {
-  const output = new Map<string, string>();
-  if (account.pageAccessToken?.trim()) {
-    output.set("pageAccessToken", secretHash(account.pageAccessToken.trim()));
-  }
-  if (account.instagramBusinessAccessToken?.trim()) {
-    output.set("instagramBusinessAccessToken", secretHash(account.instagramBusinessAccessToken.trim()));
-  }
-  return output;
-}
-
-async function loadDbAccounts(prisma: PrismaClient, tenant?: string) {
-  return prisma.channelAccount.findMany({
-    where: tenant ? { client: { clientKey: tenant } } : {},
-    include: {
-      client: { select: { clientKey: true } },
-      aliases: { select: { alias: true, aliasType: true } },
-      secrets: { select: { secretKind: true, secretHash: true, secretCiphertext: true, status: true } },
-    },
-    orderBy: [{ channel: "asc" }, { provider: "asc" }, { channelAccountId: "asc" }],
-  });
-}
-
-function compareJsonToDb(jsonAccount: TenantChannelAccount, dbAccount: DbChannelAccount) {
-  const mismatches: string[] = [];
-  const boolFields: Array<keyof TenantChannelAccount> = [
-    "enabled",
-    "automationEnabled",
-    "runtimeEnabled",
-    "inboundPersistenceEnabled",
-    "outboundEnabled",
-    "aiEnabled",
-    "handoffEnabled",
-  ];
-
-  if ((jsonAccount.displayName ?? null) !== dbAccount.displayName) mismatches.push("displayName");
-  if ((jsonAccount.externalBusinessId || null) !== (dbAccount.externalBusinessId || null)) {
-    mismatches.push("externalBusinessId");
-  }
-  if ((jsonAccount.status ?? "pending") !== dbAccount.status) mismatches.push("status");
-  if ((jsonAccount.tokenStatus ?? "missing") !== dbAccount.tokenStatus) mismatches.push("tokenStatus");
-
-  for (const field of boolFields) {
-    if ((jsonAccount[field] === true) !== (dbAccount[field] === true)) mismatches.push(String(field));
-  }
-
-  const jsonAliases = sortedStrings(jsonAccount.externalAccountIds);
-  const dbAliases = dbAccount.aliases.map((alias) => alias.alias).sort();
-  if (stableJson(jsonAliases) !== stableJson(dbAliases)) mismatches.push("aliases");
-
-  if (stableJson(normalizeMetadata(jsonAccount.metadata)) !== stableJson(normalizeMetadata(dbAccount.metadata))) {
-    mismatches.push("metadata");
-  }
-
-  const jsonSecretHashes = jsonSecrets(jsonAccount);
-  const dbSecretsByKind = new Map(dbAccount.secrets.map((secret) => [secret.secretKind, secret]));
-  const secretKinds = Array.from(new Set([...jsonSecretHashes.keys(), ...dbSecretsByKind.keys()])).sort();
-  for (const kind of secretKinds) {
-    const jsonHash = jsonSecretHashes.get(kind);
-    const dbSecret = dbSecretsByKind.get(kind);
-    const dbPresent = dbSecret?.status === "configured" || Boolean(dbSecret?.secretHash);
-    if (Boolean(jsonHash) !== dbPresent) {
-      mismatches.push(`secretPresence:${kind}`);
-      continue;
-    }
-    if (jsonHash && dbSecret?.secretHash && jsonHash !== dbSecret.secretHash) {
-      mismatches.push(`secretHash:${kind}`);
-    }
-    if (jsonHash && !dbSecret?.secretCiphertext) {
-      mismatches.push(`secretCiphertextMissing:${kind}`);
-    }
-  }
-
-  return mismatches;
-}
+function stable(value: unknown): string { if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`; if (value && typeof value === "object") return `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${JSON.stringify(k)}:${stable(v)}`).join(",")}}`; return JSON.stringify(value); }
+const digest = (value: string) => crypto.createHash("sha256").update(value, "utf8").digest("hex");
+const secretHash = digest;
+function desired(account: TenantChannelAccount) { return { displayName: account.displayName ?? null, externalAccountIds: account.externalAccountIds ?? null, externalBusinessId: account.externalBusinessId ?? null, metadata: account.metadata ?? null, enabled: account.enabled, automationEnabled: account.automationEnabled, runtimeEnabled: account.runtimeEnabled, inboundPersistenceEnabled: account.inboundPersistenceEnabled, outboundEnabled: account.outboundEnabled, aiEnabled: account.aiEnabled, handoffEnabled: account.handoffEnabled, status: account.status, tokenStatus: account.tokenStatus }; }
 
 async function main() {
-  loadEnv();
-  const options = parseArgs(process.argv.slice(2));
-  const prisma = new PrismaClient();
+  const options = parseArgs(process.argv.slice(2)); const appDir = path.resolve(process.cwd(), "apps/whatsapp-agent"); dotenv.config({ path: process.cwd().endsWith("apps/whatsapp-agent") ? path.join(process.cwd(), ".env") : path.join(appDir, ".env") });
+  const tenants = await readAuthenticatedTenantJsonSource({ source: options.source, expectedSha256: options.expectedSourceSha256 });
+  const planDocument = await readAuthenticatedPrivateJsonSource<ChannelAccountPlanDocument>({ source: options.plan, expectedSha256: options.expectedPlanSha256 });
+  const keys = [...new Set([...Object.keys(tenants), ...Object.keys(planDocument.tenants ?? {})])].filter((key) => !options.tenant || key === options.tenant).sort(); const prisma = new PrismaClient();
   try {
-    const tenants = await getTenants();
-    const tenantEntries = Object.entries(tenants).filter(([tenantKey]) => !options.tenant || tenantKey === options.tenant);
-    if (options.tenant && tenantEntries.length === 0) {
-      throw new Error(`tenant nao encontrado em tenants.json: ${options.tenant}`);
-    }
-
-    const dbAccounts = await loadDbAccounts(prisma, options.tenant);
-    const dbByKey = new Map(
-      dbAccounts.map((account) => [
-        accountKey({
-          tenantKey: account.client.clientKey,
-          provider: account.provider,
-          channel: account.channel,
-          channelAccountId: account.channelAccountId,
-        }),
-        account,
-      ])
-    );
-
-    const jsonAccounts: TenantChannelAccount[] = tenantEntries.flatMap(([tenantKey, tenant]) =>
-      (tenant.channelAccounts ?? []).map((account) => ({ ...account, tenantKey }))
-    );
-    const jsonByKey = new Map(jsonAccounts.map((account) => [accountKey(account), account]));
-
-    const report: CompareReport = {
-      ok: true,
-      totals: {
-        tenants: tenantEntries.length,
-        jsonAccounts: jsonAccounts.length,
-        dbAccounts: dbAccounts.length,
-        matched: 0,
-        missingDb: 0,
-        missingJson: 0,
-        mismatched: 0,
-      },
-      items: [],
-    };
-
-    for (const jsonAccount of jsonAccounts) {
-      const key = accountKey(jsonAccount);
-      const dbAccount = dbByKey.get(key);
-      if (!dbAccount) {
-        report.ok = false;
-        report.totals.missingDb += 1;
-        report.items.push({
-          tenantKey: jsonAccount.tenantKey,
-          channel: jsonAccount.channel,
-          provider: jsonAccount.provider,
-          channelAccountId: jsonAccount.channelAccountId,
-          status: "missing_db",
-          mismatches: ["missing_db"],
-        });
-        continue;
+    const clients = await prisma.client.findMany({ where: { clientKey: { in: keys } }, select: { id: true, clientKey: true } }); const clientIds = clients.map((item) => item.id);
+    const [phones, metaConfigs, existing] = await Promise.all([
+      prisma.waPhoneNumber.findMany({ where: { clientId: { in: clientIds } }, select: { clientId: true, phoneNumberId: true } }),
+      prisma.tenantMetaConfig.findMany({ where: { clientId: { in: clientIds } }, select: { clientId: true, phoneNumberId: true } }),
+      prisma.channelAccount.findMany({ where: { channel: "whatsapp", provider: "meta" }, include: { aliases: true, secrets: true, client: { select: { clientKey: true } } } }),
+    ]);
+    const plan = buildChannelAccountMigrationPlan({ tenants, planDocument, expectedSourceSha256: options.expectedSourceSha256, clients, phoneNumbers: phones, metaConfigs, existingMetaAccounts: existing.map((row) => ({ clientId: row.clientId, clientKey: row.client.clientKey, channelAccountId: row.channelAccountId, aliases: row.aliases.map((alias) => alias.alias) })), selectedTenant: options.tenant });
+    const byKey = new Map(existing.map((row) => [`${row.clientId}:${row.channelAccountId}`, row])); const expectedKeys = new Set<string>(); const items: Array<Record<string, unknown>> = [];
+    for (const item of plan.items) {
+      const key = `${item.clientId}:${item.account.channelAccountId}`; expectedKeys.add(key); const row = byKey.get(key); const mismatches: string[] = [];
+      if (!row) mismatches.push("missing_db"); else {
+        const prior = Object.fromEntries(Object.keys(desired(item.account)).map((field) => [field, (row as unknown as Record<string, unknown>)[field]])); if (stable(desired(item.account)) !== stable(prior)) mismatches.push("account_fields");
+        const desiredAliases = [...(item.account.externalAccountIds ?? [])].sort(); const actualAliases = row.aliases.map((entry) => entry.alias).sort();
+        for (const alias of desiredAliases.filter((alias) => !actualAliases.includes(alias))) mismatches.push(`alias_missing:${digest(alias)}`);
+        for (const alias of actualAliases.filter((alias) => !desiredAliases.includes(alias))) mismatches.push(`alias_excess:${digest(alias)}`);
+        const desiredSecrets = new Map([["pageAccessToken", item.account.pageAccessToken], ["instagramBusinessAccessToken", item.account.instagramBusinessAccessToken]].filter((entry): entry is [string, string] => Boolean(entry[1]?.trim())).map(([kind, value]) => [kind, secretHash(value.trim())]));
+        const actualSecrets = new Map(row.secrets.map((entry) => [entry.secretKind, entry.secretHash ?? ""]));
+        for (const kind of new Set([...desiredSecrets.keys(), ...actualSecrets.keys()])) if (desiredSecrets.get(kind) !== actualSecrets.get(kind)) mismatches.push(`secret_divergence:${kind}`);
       }
-
-      const mismatches = compareJsonToDb(jsonAccount, dbAccount);
-      if (mismatches.length > 0) {
-        report.ok = false;
-        report.totals.mismatched += 1;
-        report.items.push({
-          tenantKey: jsonAccount.tenantKey,
-          channel: jsonAccount.channel,
-          provider: jsonAccount.provider,
-          channelAccountId: jsonAccount.channelAccountId,
-          status: "mismatched",
-          mismatches,
-        });
-      } else {
-        report.totals.matched += 1;
-        if (options.includeMatches) {
-          report.items.push({
-            tenantKey: jsonAccount.tenantKey,
-            channel: jsonAccount.channel,
-            provider: jsonAccount.provider,
-            channelAccountId: jsonAccount.channelAccountId,
-            status: "matched",
-            mismatches: [],
-          });
-        }
-      }
+      if (mismatches.length || options.includeMatches) items.push({ tenantKey: item.tenantKey, modality: item.modality, identitySha256: item.identitySha256, status: mismatches.length ? "DENY" : "MATCHED", mismatches: [...new Set(mismatches)].sort() });
     }
-
-    for (const dbAccount of dbAccounts) {
-      const key = accountKey({
-        tenantKey: dbAccount.client.clientKey,
-        provider: dbAccount.provider,
-        channel: dbAccount.channel,
-        channelAccountId: dbAccount.channelAccountId,
-      });
-      if (jsonByKey.has(key)) continue;
-      report.ok = false;
-      report.totals.missingJson += 1;
-      report.items.push({
-        tenantKey: dbAccount.client.clientKey,
-        channel: dbAccount.channel,
-        provider: dbAccount.provider,
-        channelAccountId: dbAccount.channelAccountId,
-        status: "missing_json",
-        mismatches: ["missing_json"],
-      });
-    }
-
-    if (options.json) {
-      console.log(JSON.stringify(report, null, 2));
-    } else {
-      console.log(
-        `channel account shadow compare ok=${report.ok} tenants=${report.totals.tenants} jsonAccounts=${report.totals.jsonAccounts} dbAccounts=${report.totals.dbAccounts} matched=${report.totals.matched} missingDb=${report.totals.missingDb} missingJson=${report.totals.missingJson} mismatched=${report.totals.mismatched}`
-      );
-      for (const item of report.items) {
-        console.log(
-          `${item.status} tenant=${item.tenantKey} channel=${item.channel} provider=${item.provider} account=${item.channelAccountId} mismatches=${item.mismatches.join(",") || "-"}`
-        );
-      }
-    }
-
-    if (!report.ok) {
-      process.exitCode = 1;
-    }
-  } finally {
-    await prisma.$disconnect();
-  }
+    const comparedClientIds = new Set(clientIds);
+    for (const row of existing) if (comparedClientIds.has(row.clientId) && !expectedKeys.has(`${row.clientId}:${row.channelAccountId}`)) items.push({ tenantKey: row.client.clientKey, modality: "WHATSAPP_META", identitySha256: digest(row.channelAccountId), status: "DENY", mismatches: ["missing_authenticated_source_plan"] });
+    const ok = !items.some((item) => item.status === "DENY"); const report = { ok, sourceSha256: options.expectedSourceSha256, planSha256: options.expectedPlanSha256, tenants: plan.sourceTenantCount, metaTenants: plan.metaTenantCount, webSessionOnlyTenants: plan.webSessionOnlyTenants, items };
+    console.log(options.json ? JSON.stringify(report, null, 2) : `CHANNEL_ACCOUNT_SHADOW_${ok ? "PASS" : "DENY"} tenants=${report.tenants} meta=${report.metaTenants}`); if (!ok) process.exitCode = 1;
+  } finally { await prisma.$disconnect(); }
 }
-
-main().catch((error) => {
-  console.error(`channel account shadow compare failed: ${(error as Error).message}`);
-  process.exitCode = 1;
-});
+main().catch((error) => { console.error(`CHANNEL_ACCOUNT_SHADOW_DENY:${(error as Error).message}`); process.exitCode = 1; });

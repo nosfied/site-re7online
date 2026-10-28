@@ -158,6 +158,8 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55781/re7_config_persistence_ci
         run: |
           npm run db:deploy
+          node --import tsx --test src/channels/channelAccountMigrationPlan.test.ts
+          node --import tsx --test src/channels/channelAccountMigrationScripts.test.ts
           node --import tsx --test src/config/tenantOperationalConfigScripts.test.ts
       - name: Backend durable-operation and multi-tenant tests
         run: >-

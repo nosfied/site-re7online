@@ -98,7 +98,9 @@ Current shape:
 
 Fields currently supported:
 
-- identity: `id`, `tenantKey`, `channel`, `provider`, `channelAccountId`
+- operational account reference: `id`, `tenantKey`, `channel`, `provider`,
+  `channelAccountId`. For WhatsApp Meta this is not the authority that resolves
+  the tenant's phone identity;
 - aliases: `externalAccountIds`, `externalBusinessId`, `metadata`
 - flags: `enabled`, `automationEnabled`, `runtimeEnabled`, `inboundPersistenceEnabled`, `outboundEnabled`, `aiEnabled`, `handoffEnabled`
 - status: `status`, `tokenStatus`
@@ -152,8 +154,9 @@ Normalization currently:
 
 WhatsApp:
 
-- primary runtime resolution is already DB-first through `WaPhoneNumber.phoneNumberId`;
-- credentials are DB-first through `TenantMetaConfig.businessToken` with env fallbacks;
+- runtime phone identity is DB-first exclusively through
+  `WaPhoneNumber.phoneNumberId`;
+- Meta credentials are DB-first through `TenantMetaConfig`;
 - `channelAccounts` can contain WhatsApp-like entries for demos/staging, but current production webhook resolution does not rely on this block the way Messenger/Instagram do.
 
 Messenger:
@@ -249,7 +252,9 @@ model ChannelAccountAlias {
 
 Rationale:
 
-- `ChannelAccount` keeps non-secret operational identity and flags.
+- `ChannelAccount` keeps the operational account reference and gates. For
+  WhatsApp Meta it is a prerequisite for operational authorization, not a
+  resolver of phone identity;
 - `ChannelAccountSecret` isolates secret material for encryption, redaction and rotation.
 - `ChannelAccountAlias` makes webhook resolution indexable and auditable.
 - JSON metadata remains acceptable for provider-specific IDs that are not used as high-volume lookup keys.
@@ -279,12 +284,12 @@ Runtime access:
 - outbound services should receive token only in memory;
 - logs from outbound services must keep current redaction behavior.
 
-Current Sprint 65B behavior:
+Current migration behavior:
 
 - `scripts/channel-accounts-backfill.ts` never prints token material.
-- If `CHANNEL_ACCOUNT_SECRET_KEY` is missing, token presence/hash is backfilled and reversible token material is reported as not encrypted.
 - Real backfill aborts by default when JSON contains token material and `CHANNEL_ACCOUNT_SECRET_KEY` is missing.
-- `--allow-hash-only-secrets` exists only for an explicit shadow-only run that records presence/hash without reversible token material.
+- a materializacao real com secrets exige `CHANNEL_ACCOUNT_SECRET_KEY`; o fluxo
+  nunca substitui ciphertext preservado por representacao somente hash.
 - A later runtime sprint must require encrypted material before DB-first outbound is enabled.
 
 ## Aliases And Meta IDs
@@ -306,7 +311,8 @@ Indexes needed:
 - unique account: `(clientId, channel, provider, channelAccountId)`;
 - lookup account: `(channel, provider, channelAccountId)`;
 - lookup alias: `(alias)` with join back to account;
-- collision prevention: an active alias must not resolve to multiple enabled accounts for the same `(channel, provider)`.
+- collision prevention: nenhuma identidade primaria ou alias pode resolver para
+  mais de um tenant, inclusive quando a conta conflitante está fora do lote.
 
 Collision policy:
 
@@ -319,13 +325,16 @@ Collision policy:
 
 Current:
 
-- WhatsApp: DB-first through `WaPhoneNumber`, with JSON fallback for legacy/bootstrap.
+- WhatsApp: DB-first through `WaPhoneNumber` for phone identity and
+  `TenantMetaConfig` for credentials, without JSON fallback.
 - Messenger: JSON-first through `TenantConfig.channelAccounts`.
 - Instagram: JSON-first through `TenantConfig.channelAccounts`, including alias matching.
 
 Target:
 
-- WhatsApp remains on `WaPhoneNumber` / `TenantMetaConfig`; do not force WhatsApp into `ChannelAccount` until there is a separate reason.
+- WhatsApp remains on `WaPhoneNumber` / `TenantMetaConfig` for identity and
+  credentials. `ChannelAccount` is required separately for tenant-scoped
+  operational gates and never replaces those authorities.
 - Messenger resolves DB-first from `ChannelAccount` and `ChannelAccountAlias`, fallback JSON.
 - Instagram resolves DB-first from `ChannelAccount` and `ChannelAccountAlias`, fallback JSON.
 - Fallback must preserve exact current behavior until shadow comparison is clean.
@@ -443,7 +452,8 @@ Do not attempt another Messenger DB-first flip until the collected profile shows
 ### Phase 4: JSON Removal
 
 - Stop writing `channelAccounts` to `tenants.json`.
-- Keep a read-only JSON fallback for one emergency release if feasible.
+- Messenger/Instagram may retain a read-only JSON fallback only while their
+  documented shadow migration requires it. WhatsApp Meta has no JSON fallback.
 - Remove JSON token material only after backup/rollback window is complete.
 
 ## Backfill Design
@@ -451,11 +461,10 @@ Do not attempt another Messenger DB-first flip until the collected profile shows
 Implemented Sprint 65B scripts:
 
 ```bash
-npm run channel-accounts:backfill -- --dry-run --json
-npm run channel-accounts:backfill -- --json
-npm run channel-accounts:backfill -- --json --allow-hash-only-secrets
-npm run channel-accounts:backfill -- --tenant re7online --dry-run --json
-npm run channel-accounts:shadow:compare -- --json
+npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --dry-run --json
+npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --json
+npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --tenant re7online --dry-run --json
+npm run channel-accounts:shadow:compare -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --plan /absolute/private/channel-account-plan.json --expected-plan-sha256 <plan-sha256> --json
 ```
 
 Requirements:
@@ -463,26 +472,49 @@ Requirements:
 - idempotent;
 - dry-run by default for pre-release;
 - filter by tenant;
-- do not modify `tenants.json`;
+- do not modify the authenticated historical source;
+- authenticate a separate private plan whose mandatory `sourceSha256` binds it
+  to exactly one historical source;
+- allow `cra-pr` only through a plan entry with
+  `provenance=OWNER_AUTHORIZED_DB_IDENTITY`;
 - preserve token status;
 - store secret hash for comparison;
 - store reversible secret material only in `ChannelAccountSecret.secretCiphertext` when `CHANNEL_ACCOUNT_SECRET_KEY` is configured;
-- abort real backfill with secrets when `CHANNEL_ACCOUNT_SECRET_KEY` is missing, unless `--allow-hash-only-secrets` is explicitly passed;
-- upsert aliases;
+- abort real backfill with secrets when `CHANNEL_ACCOUNT_SECRET_KEY` is missing;
+- aliases and secrets on an existing account must match exactly; missing or
+  excess values deny the migration and require an explicit owner decision;
 - upsert metadata;
 - report only redacted summaries.
+
+O plano privado usa `schemaVersion=1`, `sourceSha256` obrigatório e um mapa
+`tenants`. Cada entrada contém `provenance` e exatamente uma conta
+`whatsapp/meta` completa. `status` e `tokenStatus` usam os enums fechados do
+runtime. A autenticação do plano repete as mesmas provas da fonte: caminho
+absoluto, arquivo regular privado, `O_NOFOLLOW`, SHA-256 exato e identidade
+estável durante toda a leitura.
 
 Report shape:
 
 - tenant key;
 - channel;
 - provider;
-- primary id;
+- SHA-256 da identidade primaria, nunca o ID completo;
 - alias count;
 - secret kind count;
-- encrypted secret kind count;
-- unencrypted secret kind count;
-- action: `would_upsert`, `upserted`, `skipped_missing_client`.
+- provenance e contagens sanitizadas;
+- action: `would_create`, `would_update`, `created`, `updated` ou `unchanged`;
+  `Client` ausente nega o lote inteiro antes da primeira escrita.
+
+### Autoridades DB-first
+
+- `WaPhoneNumber` e `TenantMetaConfig`: identidade telefônica e credencial Meta;
+- `ChannelAccount`: gates tenant-scoped de runtime, automação, persistência,
+  outbound, AI e handoff;
+- `TenantOperationalConfig`: configuração funcional de chatbot, quota, AI e
+  comportamento do tenant.
+
+O plano de migração não desloca essas autoridades. Ele apenas materializa de
+forma auditável o estado de `ChannelAccount` antes do backfill funcional.
 
 ## Rollback
 
@@ -491,7 +523,8 @@ Rollback must be possible without data loss.
 Immediate rollback:
 
 - set env/feature flag `CHANNEL_ACCOUNTS_DB_READ=false` or equivalent;
-- runtime returns to JSON-first;
+- Messenger/Instagram may return to their documented JSON-first resolver while
+  those migrations remain active; WhatsApp Meta does not;
 - keep DB rows untouched;
 - keep encrypted tokens untouched;
 - do not delete backfilled rows during incident response.
@@ -503,12 +536,14 @@ Per-channel rollback:
 
 Per-tenant rollback:
 
-- force tenant to JSON-first while investigating.
+- for Messenger/Instagram only, force the tenant to the documented JSON-first
+  resolver while investigating. This option does not exist for WhatsApp Meta.
 
 Problematic account rollback:
 
 - set DB account `enabled=false` or `status=error`;
-- JSON fallback can still be used if feature flag allows.
+- Messenger/Instagram JSON fallback can still be used if their feature flag
+  allows it; WhatsApp Meta remains DB-first.
 
 Validation after rollback:
 
@@ -527,7 +562,8 @@ Validation after rollback:
 - inbound webhook resolves tenant through `WaPhoneNumber`;
 - outbound text works for a known conversation;
 - approved template send works;
-- tenant resolution ignores channel account migration changes;
+- phone identity resolution remains authoritative in `WaPhoneNumber`, while
+  `ChannelAccount` gates may independently allow or deny operational behavior;
 - `channels:shadow:compare` remains `ok=true`.
 
 ### Messenger
@@ -570,7 +606,8 @@ Sprint 65B may create model/migration only if the following are ready:
 
 - approved Prisma model names and relations;
 - agreed token encryption key source;
-- explicit feature flags for JSON-first, shadow and DB-first;
+- explicit feature flags for Messenger/Instagram JSON-first, shadow and
+  DB-first; WhatsApp Meta remains DB-first without JSON fallback;
 - backfill design accepted;
 - shadow diff taxonomy accepted;
 - rollback runbook accepted;

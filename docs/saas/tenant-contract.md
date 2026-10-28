@@ -19,6 +19,14 @@ Para WhatsApp Meta, estes campos são materializados em
 `TenantOperationalConfig.config.baseConfig`; o JSON abaixo não é autoridade de
 runtime e só pode ser consumido por backfill autenticado.
 
+Para WhatsApp Meta, `ChannelAccount` é pré-requisito de
+`TenantOperationalConfig`: fonte histórica autenticada e imutável, plano privado
+separado vinculado ao SHA da fonte, dry-run, transação
+atômica e shadow compare devem concluir nessa ordem. A presença de
+`metaPhoneNumberId` não autoriza inferir flags. Tenants Web Session-only não
+recebem conta Meta. `cra-pr` exige plano autenticado próprio com proveniência
+`OWNER_AUTHORIZED_DB_IDENTITY`.
+
 ```json
 {
   "id": "re7online",
