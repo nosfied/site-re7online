@@ -2511,8 +2511,9 @@ def execute(args: argparse.Namespace) -> None:
         # Recompute every retirable path in the generation contract. A successful
         # subset is retention-incomplete, never SANITIZED.
         remaining = []
+        authorized_paths = {item["path"] for item in commands}
         for artifact in intent["artifacts"]:
-            if artifact["class"] in RETIRABLE_CLASSES:
+            if artifact["path"] in authorized_paths:
                 path = Path(artifact["path"])
                 if path.exists() or path.is_symlink():
                     remaining.append(artifact["path"])
