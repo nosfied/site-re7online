@@ -308,6 +308,9 @@ exclusivamente o reconciliador/validador comprovadamente defeituoso é continua�
 mesma finalização, mediante autorização explícita, nunca retry da ativação e nunca
 motivo para novo `pm2 save`.
 
+Se o holder anterior encerrou após transferência, continuar só por `scripts/frontend-finalization-continuation.py`: lock existente sem `O_CREAT`/symlink, `deploy:deploy 0600`, flock herdável no FD 9 e `RE7_DEPLOYMENT_LOCK_HELD=1`.
+O pedido autentica transação/executor/aceite; wrappers inline, republicar aceite, `activate`/restart e segundo save com `saveCount=1` são proibidos.
+
 Validar os três registros por identidade e ambiente permitido, preservando os
 valores brutos. No PM2 6.0.14, campos/aliases e variáveis permitidas podem ficar no
 topo do registro ou em `pm2_env`; consultar ambos sem inventar outros defaults:
@@ -330,11 +333,8 @@ não declarar sucesso nem liberar exclusão por ausência de recibo. O handoff n
 expira por prazo nem encerra por token inválido/EOF. Liberar somente pelo protocolo
 privado após comprovar PID, start ticks e FD; nunca remover o arquivo do lock.
 
-Um GET não é garantia de ausência de efeito: o aceite autenticado de
-`/app/campaigns/availability` ocorre somente após readiness/health da API candidata.
+Um GET não garante ausência de efeito: `/app/campaigns/availability` ocorre somente após readiness/health da API candidata.
 Ele não chama Meta, mas a autenticação pode atualizar metadados de sessão. A API d7
 não continha essa rota. Modelos/Campanhas ficam no roteiro funcional separado.
 
-As tentativas de 24/10 com `scripts/converta-deploy.py` ficam preservadas como
-histórico e não devem ser repetidas. Preparações anteriores, Deploy V2,
-`deploy-normal-release.sh` e executores em `/tmp` não são rotas vigentes.
+Tentativas históricas são preservadas, não repetidas; preparações anteriores, Deploy V2, `deploy-normal-release.sh` e executores em `/tmp` não são rotas.

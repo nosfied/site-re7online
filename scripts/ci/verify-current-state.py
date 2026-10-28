@@ -26,7 +26,31 @@ require(state["activeOperationalRecord"] == state["activeDeploymentRecord"],
         "single active record")
 production = state["production"]
 
-if record.get("recordType") == "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
+if record.get("recordType") == "FRONTEND_ONLY_OPERATIONAL_CLOSURE":
+    require(record["schemaVersion"] == 1 and record["status"] == "DEPLOYED_SANITIZED",
+            "frontend closure schema")
+    require(production["targetCommit"] == record["release"]["target"] and
+            production["releaseId"] == record["release"]["id"] and
+            production["frontend"]["selectedReleaseId"] == record["release"]["id"] and
+            production["frontend"]["buildId"] == record["release"]["buildId"],
+            "frontend closure identity")
+    api_record_path = ROOT / state["activeApiDeploymentRecord"]
+    api_record = json.loads(api_record_path.read_text())
+    require(production["api"]["selectedReleaseId"] == api_record["release"]["id"] and
+            production["api"]["entrySha256"] == api_record["release"]["apiEntrypointSha256"],
+            "preserved API identity")
+    require(record["topology"]["apiPreserved"] is True and
+            record["topology"]["workerPreserved"] is True and
+            production["worker"]["preserved"] is True and
+            production["worker"]["changed"] is False,
+            "frontend closure preservation")
+    require(record["finalization"]["saveCount"] == 1 and
+            production["pm2"]["dumpSha256"] == record["finalization"]["dumpSha256"],
+            "frontend closure PM2 save")
+    require(record["retention"]["attempted"] ==
+            record["retention"]["completed"] == 3,
+            "frontend closure retirement")
+elif record.get("recordType") == "API_FRONTEND_FIXED_CURRENT_IMMUTABLE_RELEASE_DEPLOYMENT":
     require(record["schemaVersion"] == 1, "fixed-current record schema")
     require(record["status"] == "DEPLOYED_SANITIZED", "fixed-current terminal state")
     require(production["targetCommit"] == record["release"]["target"], "target")
@@ -125,7 +149,8 @@ require(contacts["state"] == "DEPLOYED_VERIFIED", "contacts state")
 require((ROOT / contacts["deploymentRecord"]).is_file(), "historical contacts record")
 media = state["templateCampaignMedia"]
 require(media["state"] == "TECHNICALLY_DEPLOYED", "media state")
-if record.get("recordType") == "FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT":
+if record.get("recordType") in ("FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT",
+                                 "FRONTEND_ONLY_OPERATIONAL_CLOSURE"):
     require(media["deploymentRecord"] == state["activeApiDeploymentRecord"] and
             media["frontendPresentationDeploymentRecord"] ==
             state["activeDeploymentRecord"],

@@ -52,6 +52,8 @@ jobs:
         run: python3 -m unittest -v scripts/ci/test-pm2-binding-materialize.py
       - name: Validate versioned frontend-only activation transaction
         run: python3 -m unittest -v scripts/ci/test-frontend-only-activation.py
+      - name: Validate canonical frontend finalization continuation
+        run: python3 -m unittest -v scripts/ci/test-frontend-finalization-continuation.py
       - name: Validate minimal deploy driver transaction
         run: python3 scripts/ci/test-converta-deploy.py
       - name: Validate deterministic external release producer

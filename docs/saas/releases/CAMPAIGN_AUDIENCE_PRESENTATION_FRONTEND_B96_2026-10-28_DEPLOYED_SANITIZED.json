@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "recordType": "FRONTEND_ONLY_OPERATIONAL_CLOSURE",
+  "status": "DEPLOYED_SANITIZED",
+  "evidenceProvenance": {
+    "source": "OWNER_RELAYED_LOCAL_CODEX_EXECUTION_REPORT",
+    "reportedDate": "2026-10-28",
+    "timezone": "America/Fortaleza",
+    "independentVpsInspectionByDocumentationEditor": false
+  },
+  "release": {
+    "id": "immutable-b96eb779-vps-20261028T025159Z",
+    "target": "b96eb779f4ce091a79cf67e97bcd25be255e1af3",
+    "path": "/opt/re7online/releases/immutable-b96eb779-vps-20261028T025159Z",
+    "buildId": "jRFzvE9WaHEtDCwGbV-EH"
+  },
+  "topology": {
+    "frontend": "immutable-b96eb779-vps-20261028T025159Z",
+    "api": "immutable-708f018c-vps-20261027T152109Z",
+    "worker": "immutable-e2e7f17a-20261022T005110Z",
+    "apiPreserved": true,
+    "workerPreserved": true
+  },
+  "acceptance": {
+    "technical": "PASS",
+    "visual": "PASS",
+    "scope": "CAMPAIGN_AUDIENCE_AND_TERMINAL_PRESENTATION_FULLY_ACCEPTED"
+  },
+  "finalization": {
+    "state": "DEPLOYED_SANITIZED",
+    "saveCount": 1,
+    "dumpSha256": "67c31a1fbd95178a27be2fb248ab3c039352f3ae16c612a780096b6294d2285f",
+    "saveIntentSha256": "177618f342e67bec22ca882cb8500f1d7c7ced55b0b9dc77329c53a38586d356",
+    "saveExecutionSha256": "b90c69b9e16609393c36254af8d84c0e82669adbbf4c49cc4d588f25d5e5597e",
+    "dumpValidationSha256": "6336e61b807a24e19126bc465615af8211ba55ce9cb7d20c2995a7d7a400ff12",
+    "journalSha256": "6392fc63f21074964c57dcc9140a1ac7ba47b46f43f987568bc40f99bc33b42a",
+    "receiptSha256": "44ef85e0607fd779f65b7611fb1ab2b5621129000ab0ea565b097e4a034321ee",
+    "markerSha256": "8b11c06a10407d0157c055d32ffb91df9e283154b8a23f346212683bdc4daf92"
+  },
+  "retention": {
+    "state": "SANITIZED",
+    "attempted": 3,
+    "completed": 3,
+    "receiptSha256": "ce071492975ff08fcb1930364d22e94bcb45695ccb21ee5d545e87153f2ad1cf",
+    "reviewSha256": "4f860b3a49ccfdafbfecfb04b1e2263ac8e7096037be81b8cfd5c8e8cdf6f356"
+  },
+  "capacity": {
+    "availableBytes": 12402286592,
+    "availableGiB": 11.55,
+    "minimumBuildBytes": 12884901888,
+    "minimumBuildGiB": 12,
+    "newBuildAllowed": false,
+    "readOnlyAuditsAndNoBuildAcceptanceAllowed": true
+  },
+  "effects": {
+    "metaCalls": 0,
+    "additionalRestartsDuringFinalization": 0,
+    "guardChanges": 0
+  }
+}

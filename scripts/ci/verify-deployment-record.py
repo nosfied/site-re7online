@@ -363,6 +363,66 @@ def verify_current_frontend_layout(record_path: Path, record: dict) -> None:
     print("DEPLOYMENT_RECORD_OK: frontend-only f160, split topology and finalization agree")
 
 
+def verify_frontend_operational_closure(record_path: Path, record: dict) -> None:
+    require(record.get("schemaVersion") == 1 and
+            record.get("recordType") == "FRONTEND_ONLY_OPERATIONAL_CLOSURE" and
+            record.get("status") == "DEPLOYED_SANITIZED",
+            "frontend closure identity")
+    require(not (walk_keys(record) & FORBIDDEN_KEYS),
+            "frontend closure sensitive keys")
+    release = record.get("release", {})
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", release.get("target", ""))) and
+            release.get("id") == "immutable-b96eb779-vps-20261028T025159Z" and
+            release.get("buildId") == "jRFzvE9WaHEtDCwGbV-EH",
+            "frontend closure release")
+    topology = record.get("topology", {})
+    require(topology.get("frontend") == release.get("id") and
+            topology.get("api") == "immutable-708f018c-vps-20261027T152109Z" and
+            topology.get("apiPreserved") is True and
+            topology.get("workerPreserved") is True,
+            "frontend closure topology")
+    require(record.get("acceptance") == {
+        "technical": "PASS", "visual": "PASS",
+        "scope": "CAMPAIGN_AUDIENCE_AND_TERMINAL_PRESENTATION_FULLY_ACCEPTED",
+    }, "frontend closure acceptance")
+    finalization = record.get("finalization", {})
+    require(finalization.get("state") == "DEPLOYED_SANITIZED" and
+            finalization.get("saveCount") == 1,
+            "frontend closure finalization")
+    for field in ("dumpSha256", "saveIntentSha256", "saveExecutionSha256",
+                  "dumpValidationSha256", "journalSha256", "receiptSha256",
+                  "markerSha256"):
+        require(bool(SHA256.fullmatch(finalization.get(field, ""))),
+                f"frontend closure {field}")
+    retirement = record.get("retention", {})
+    require(retirement.get("state") == "SANITIZED" and
+            retirement.get("attempted") == retirement.get("completed") == 3 and
+            bool(SHA256.fullmatch(retirement.get("receiptSha256", ""))) and
+            bool(SHA256.fullmatch(retirement.get("reviewSha256", ""))),
+            "frontend closure retention")
+    capacity = record.get("capacity", {})
+    require(capacity == {
+        "availableBytes": 12402286592, "availableGiB": 11.55,
+        "minimumBuildBytes": 12884901888, "minimumBuildGiB": 12,
+        "newBuildAllowed": False,
+        "readOnlyAuditsAndNoBuildAcceptanceAllowed": True,
+    }, "frontend closure capacity")
+    require(record.get("effects") == {
+        "metaCalls": 0, "additionalRestartsDuringFinalization": 0,
+        "guardChanges": 0,
+    }, "frontend closure effects")
+    state = read_json(ROOT / "docs/saas/CURRENT_STATE.json")
+    require(state.get("activeDeploymentRecord") ==
+            record_path.relative_to(ROOT).as_posix(), "frontend closure active record")
+    production = state.get("production", {})
+    require(production.get("releaseId") == release.get("id") and
+            production.get("targetCommit") == release.get("target") and
+            production.get("frontend", {}).get("buildId") == release.get("buildId") and
+            production.get("pm2", {}).get("dumpSha256") == finalization.get("dumpSha256"),
+            "frontend closure current state")
+    print("DEPLOYMENT_RECORD_OK: b96 frontend closure, save and retention agree")
+
+
 def verify_template_media_release(record_path: Path, record: dict) -> None:
     require(record.get("recordType") == "IMMUTABLE_RELEASE_DEPLOYMENT",
             "media immutable record type")
@@ -751,6 +811,11 @@ def main() -> None:
             record.get("recordType") ==
             "FRONTEND_ONLY_IMMUTABLE_RELEASE_DEPLOYMENT"):
         verify_current_frontend_layout(record_path, record)
+        return
+
+    if (record.get("schemaVersion") == 1 and
+            record.get("recordType") == "FRONTEND_ONLY_OPERATIONAL_CLOSURE"):
+        verify_frontend_operational_closure(record_path, record)
         return
 
     if record.get("schemaVersion") == 5:
