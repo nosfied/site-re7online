@@ -75,14 +75,22 @@ inconsistência deixa todos os tenants inalterados.
 A ordem obrigatória para uma futura intervenção produtiva é:
 
 1. auditar e autenticar a fonte externa;
-2. executar backfill em `--dry-run` com caminho absoluto e SHA-256 esperado;
-3. validar integralmente todos os Clients e deltas e, para os participantes
-   Meta, contas e mapeamentos de telefone antes da primeira escrita;
-4. executar todos os tenants selecionados em uma única transação PostgreSQL, com
-   locks em ordem determinística; qualquer falha reverte todos os tenants;
-5. executar `tenants-json:retirement:check` por tenant ativo;
-6. somente então produzir build;
-7. ativar após autorização explícita.
+2. preparar e revisar um plano tenant-scoped explícito de `ChannelAccount`;
+3. executar `channel-accounts:backfill --dry-run` com caminho absoluto e SHA-256 esperado;
+4. materializar `ChannelAccount` para todos os participantes Meta em uma única
+   transação, com locks de `Client` em ordem determinística;
+5. executar `channel-accounts:shadow:compare` contra a mesma fonte autenticada;
+6. executar `tenant-config:backfill --dry-run`;
+7. materializar `TenantOperationalConfig` em uma única transação atômica;
+8. executar `tenants-json:retirement:check` por tenant participante Meta;
+9. somente então produzir build e ativar após autorização explícita.
+
+Nenhuma flag operacional de `ChannelAccount` recebe default durante a migração.
+Os sete booleanos de runtime devem estar presentes na fonte autenticada. Um
+`metaPhoneNumberId` sem contrato completo resulta em
+`CHANNEL_ACCOUNT_PLAN_INCOMPLETE`. `cra-pr` não pertence à fonte histórica dos
+oito tenants e permanece `CRA_CHANNEL_ACCOUNT_SOURCE_UNRESOLVED` até existir um
+plano próprio autenticado; sua configuração nunca é fabricada por inferência.
 
 O backfill preserva blocos DB não relacionados, é idempotente e nega antes de
 escrever qualquer tenant sem `Client` ou com participação Meta incompleta ou

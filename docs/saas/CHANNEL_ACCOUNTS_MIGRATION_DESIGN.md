@@ -284,7 +284,8 @@ Current Sprint 65B behavior:
 - `scripts/channel-accounts-backfill.ts` never prints token material.
 - If `CHANNEL_ACCOUNT_SECRET_KEY` is missing, token presence/hash is backfilled and reversible token material is reported as not encrypted.
 - Real backfill aborts by default when JSON contains token material and `CHANNEL_ACCOUNT_SECRET_KEY` is missing.
-- `--allow-hash-only-secrets` exists only for an explicit shadow-only run that records presence/hash without reversible token material.
+- a materializacao real com secrets exige `CHANNEL_ACCOUNT_SECRET_KEY`; o fluxo
+  nunca substitui ciphertext preservado por representacao somente hash.
 - A later runtime sprint must require encrypted material before DB-first outbound is enabled.
 
 ## Aliases And Meta IDs
@@ -451,11 +452,10 @@ Do not attempt another Messenger DB-first flip until the collected profile shows
 Implemented Sprint 65B scripts:
 
 ```bash
-npm run channel-accounts:backfill -- --dry-run --json
-npm run channel-accounts:backfill -- --json
-npm run channel-accounts:backfill -- --json --allow-hash-only-secrets
-npm run channel-accounts:backfill -- --tenant re7online --dry-run --json
-npm run channel-accounts:shadow:compare -- --json
+npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --dry-run --json
+npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json
+npm run channel-accounts:backfill -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --tenant re7online --dry-run --json
+npm run channel-accounts:shadow:compare -- --source /absolute/private/tenants.json --expected-source-sha256 <sha256> --json
 ```
 
 Requirements:
@@ -467,7 +467,7 @@ Requirements:
 - preserve token status;
 - store secret hash for comparison;
 - store reversible secret material only in `ChannelAccountSecret.secretCiphertext` when `CHANNEL_ACCOUNT_SECRET_KEY` is configured;
-- abort real backfill with secrets when `CHANNEL_ACCOUNT_SECRET_KEY` is missing, unless `--allow-hash-only-secrets` is explicitly passed;
+- abort real backfill with secrets when `CHANNEL_ACCOUNT_SECRET_KEY` is missing;
 - upsert aliases;
 - upsert metadata;
 - report only redacted summaries.
@@ -482,7 +482,8 @@ Report shape:
 - secret kind count;
 - encrypted secret kind count;
 - unencrypted secret kind count;
-- action: `would_upsert`, `upserted`, `skipped_missing_client`.
+- action: `would_create`, `would_update`, `created`, `updated` ou `unchanged`;
+  `Client` ausente nega o lote inteiro antes da primeira escrita.
 
 ## Rollback
 
