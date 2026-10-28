@@ -113,6 +113,30 @@ anteriores são evidência, não autorização.
 Mudança operacional só está incorporada quando código, testes, runbook, estado
 canônico e registro estruturado concordam.
 
+## 6. Não quebrar o que já funciona; proteger a produção viva
+
+Produção é um sistema vivo com usuários, tenants, dados e integrações reais. Ela não é
+ambiente de experimentação, depuração improvisada ou validação destrutiva.
+
+- Preservar comportamentos comprovados fora do escopo da mudança, inclusive contratos,
+  compatibilidade, isolamento, processos, dados, integrações e caminhos de retorno.
+- Toda correção deve incluir regressões que protejam o comportamento anterior válido e
+  comprovem apenas a alteração intencional.
+- Mudanças incompatíveis exigem decisão explícita, migração, comunicação e retorno
+  próprios; não podem surgir como efeito colateral.
+- Antes da mutação produtiva, autenticar o estado inicial, delimitar o impacto, provar
+  o retorno e estabelecer health, identidade e critérios de aceite.
+- Em produção, executar a menor mutação autorizada, uma única vez, preservando os
+  componentes não impactados e sem ampliar o escopo durante a janela.
+- Negativa anterior à mutação mantém produção intacta. Falha posterior exige retorno
+  comprovado ou estado de recuperação explicitamente bloqueado; nunca sucesso presumido.
+- Leituras com possíveis efeitos colaterais não são tratadas como smoke inofensivo.
+- Releases ativas, retornos necessários, dados privados e evidências de recuperação não
+  podem ser retirados apenas para liberar capacidade.
+
+Nenhuma entrega é considerada correta se resolver a novidade quebrando um fluxo que já
+funcionava ou reduzindo a segurança da produção viva.
+
 ## Ordem obrigatória de decisão
 
 Toda nova frente segue esta ordem:
@@ -121,18 +145,19 @@ Toda nova frente segue esta ordem:
 2. **Inspecionar:** acessar código e estado reais disponíveis.
 3. **Reutilizar:** listar explicitamente provas e ativos que permanecem válidos.
 4. **Delimitar:** declarar tenant, escopo, impacto e fronteiras de autorização.
-5. **Escolher:** propor a menor ação suficiente.
-6. **Comprovar:** definir evidências e critérios de aceite antes da mutação.
-7. **Executar uma vez:** sem ampliação silenciosa ou retry automático.
-8. **Encerrar:** verificar resultado, retirar resíduos autorizados e documentar.
-9. **Não repetir:** marcar provas e homologações concluídas.
+5. **Preservar:** declarar o que já funciona e não pode regredir.
+6. **Escolher:** propor a menor ação suficiente.
+7. **Comprovar:** definir evidências e critérios de aceite antes da mutação.
+8. **Executar uma vez:** sem ampliação silenciosa ou retry automático.
+9. **Encerrar:** verificar resultado, retirar resíduos autorizados e documentar.
+10. **Não repetir:** marcar provas e homologações concluídas.
 
 ## Regra de precedência
 
 Se um procedimento produzir retrabalho evitável, repetição de prova válida, nova
-coleta sem necessidade, perda de isolamento multitenant, desperdício material ou
-dependência de contexto não documentado, o executor deve parar antes da próxima
-mutação.
+coleta sem necessidade, perda de isolamento multitenant, regressão de comportamento
+válido, risco não delimitado à produção viva, desperdício material ou dependência de
+contexto não documentado, o executor deve parar antes da próxima mutação.
 
 A continuação só ocorre depois de reconciliar o procedimento com estes princípios.
 Cumprir um gate local não justifica violar um princípio superior.
@@ -148,6 +173,8 @@ Cumprir um gate local não justifica violar um princípio superior.
 - Apresentar inferência como fato.
 - Usar auditoria como justificativa para reiniciar toda a investigação.
 - Transferir ao owner o custo de falhas previsíveis por preflight ou teste existente.
+- Usar produção viva como ambiente de ensaio ou alterar componentes fora do escopo.
+- Aceitar uma correção que regrida comportamento previamente funcional.
 
 ## Aplicação aos procedimentos especializados
 
@@ -165,4 +192,5 @@ Cumprir um gate local não justifica violar um princípio superior.
 
 > Respeitar o multitenancy; consultar o código e o estado reais; auditar antes de
 > agir para reutilizar o que já existe; evitar retrabalho, desperdício e repetição;
-> e documentar o resultado para que a próxima execução continue do ponto correto.
+> não quebrar o que funciona e proteger a produção viva; e documentar o resultado
+> para que a próxima execução continue do ponto correto.
