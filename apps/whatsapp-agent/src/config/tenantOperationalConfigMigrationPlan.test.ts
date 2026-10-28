@@ -4,10 +4,11 @@ import {
   normalizeTenantOperationalConfigSelection,
   selectedTenantOperationalConfigKeys,
   validateTenantOperationalConfigPlan,
+  type OwnerAuthorizedBaseConfig,
 } from "./tenantOperationalConfigMigrationPlan.js";
 
 const sourceSha256 = "a".repeat(64);
-const craBaseConfig = {
+const craBaseConfig: OwnerAuthorizedBaseConfig = {
   allowlist: [],
   handoffAttendantWaid: "",
   defaultLanguage: "pt_BR",
@@ -70,6 +71,32 @@ test("CRA provenance, required base fields and forbidden AI payload fail closed"
   const withAi = plan();
   Object.assign(withAi.tenants["cra-pr"], { aiAssistantConfig: { aiAssistantEnabled: false } });
   assert.throws(() => validateTenantOperationalConfigPlan({ document: withAi, expectedSourceSha256: sourceSha256, sourceTenantKeys: [] }), /PLAN_ENTRY_INVALID/);
+});
+
+test("owner-authorized CRA WAIDs must already be canonical", () => {
+  const validateBaseConfig = (baseConfig: typeof craBaseConfig) => validateTenantOperationalConfigPlan({
+    document: {
+      schemaVersion: 1,
+      sourceSha256,
+      tenants: {
+        "cra-pr": { provenance: "OWNER_AUTHORIZED_DB_IDENTITY", baseConfig },
+      },
+    },
+    expectedSourceSha256: sourceSha256,
+    sourceTenantKeys: [],
+  });
+
+  assert.throws(() => validateBaseConfig({ ...craBaseConfig, allowlist: ["+55 84 9999-0000"] }), /BASE_CONFIG_INVALID/);
+  assert.throws(() => validateBaseConfig({ ...craBaseConfig, allowlist: [""] }), /BASE_CONFIG_INVALID/);
+  assert.throws(() => validateBaseConfig({ ...craBaseConfig, allowlist: ["558499990000", "558499990000"] }), /BASE_CONFIG_INVALID/);
+  assert.doesNotThrow(() => validateBaseConfig({ ...craBaseConfig, allowlist: [] }));
+  assert.doesNotThrow(() => validateBaseConfig({ ...craBaseConfig, handoffAttendantWaid: "" }));
+  assert.throws(() => validateBaseConfig({ ...craBaseConfig, handoffAttendantWaid: "(84) 9999-0000" }), /BASE_CONFIG_INVALID/);
+  assert.doesNotThrow(() => validateBaseConfig({
+    ...craBaseConfig,
+    allowlist: ["558499990000", "558498880000"],
+    handoffAttendantWaid: "558497770000",
+  }));
 });
 
 test("arbitrary external tenant and omitted tenant are denied or excluded", () => {

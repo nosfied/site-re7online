@@ -67,10 +67,13 @@ export function validateTenantOperationalConfigPlan(params: {
       throw new Error(`CRA_OPERATIONAL_CONFIG_BASE_CONFIG_INVALID:${tenantKey}`);
     }
     const baseConfig = rawEntry.baseConfig;
-    if (!Array.isArray(baseConfig.allowlist) || baseConfig.allowlist.some((value) => typeof value !== "string")) {
+    if (!Array.isArray(baseConfig.allowlist) ||
+        baseConfig.allowlist.some((value) => typeof value !== "string" || !/^\d+$/.test(value)) ||
+        new Set(baseConfig.allowlist).size !== baseConfig.allowlist.length) {
       throw new Error(`CRA_OPERATIONAL_CONFIG_BASE_CONFIG_INVALID:${tenantKey}`);
     }
     if (typeof baseConfig.handoffAttendantWaid !== "string" ||
+        (baseConfig.handoffAttendantWaid !== "" && !/^\d+$/.test(baseConfig.handoffAttendantWaid)) ||
         typeof baseConfig.defaultLanguage !== "string" ||
         !/^[a-z]{2}_[A-Z]{2}$/.test(baseConfig.defaultLanguage) ||
         typeof baseConfig.disableAutoReply !== "boolean") {

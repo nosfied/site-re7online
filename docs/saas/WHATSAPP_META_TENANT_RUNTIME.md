@@ -113,6 +113,11 @@ ao SHA da fonte e com `provenance=OWNER_AUTHORIZED_DB_IDENTITY`. Esse caminho n�
 cria nem substitui AI, CRM statuses, templates, quota, follow-up ou qualquer
 outro bloco do CRA. Tenant externo arbitrário, seletor vazio/duplicado ou campo
 adicional no plano resulta em negativa antes da transação.
+Os WAIDs owner-authorized já devem estar em forma canônica: cada item da
+`allowlist` é uma string não vazia composta somente por dígitos, sem duplicatas;
+`handoffAttendantWaid` pode ser vazio, mas, quando preenchido, também contém
+somente dígitos. O backfill não remove espaços, `+`, parênteses ou hífens desse
+plano e nega valores formatados em vez de normalizá-los silenciosamente.
 O relatório é sanitizado e não publica números completos. Rollback para código
 antigo é estruturalmente seguro:
 campos JSON adicionais em `TenantOperationalConfig.config` são ignorados pelo

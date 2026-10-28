@@ -53,6 +53,11 @@ plano privado separado, vinculado ao SHA da fonte, contendo exclusivamente:
 Os valores reais permanecem privados. O plano não pode conter
 `aiAssistantConfig` nem outras políticas. Todos os demais blocos já existentes
 no PostgreSQL permanecem byte-semanticamente preservados.
+Os WAIDs do plano owner-authorized devem chegar canônicos. Cada item de
+`allowlist` é uma string não vazia somente de dígitos e a lista não admite
+duplicatas. `handoffAttendantWaid` aceita `""`; qualquer valor preenchido deve
+conter somente dígitos. Formatação com espaço, `+`, parênteses ou hífen é
+negada, nunca normalizada pelo backfill.
 
 ```json
 {
