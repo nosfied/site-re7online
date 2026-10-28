@@ -21,6 +21,7 @@ TERMINAL_DEPLOYMENT = {"DEPLOYED", "ROLLED_BACK", "SUPERSEDED"}
 PRESERVE_CLASSES = {"PACKAGE_PRESERVE", "EVIDENCE_PRESERVE", "PRIVATE_DATA_NEVER_RETIRE"}
 F160_CACHE_CLASS = "EPHEMERAL_RUNTIME_CACHE"
 DERIVED_CLASSES = {"DERIVED_WORKTREE", "DERIVED_OUTPUT_RUNTIME", "DERIVED_STAGING"}
+RETIRABLE_CLASSES = DERIVED_CLASSES | {"RELEASE_RUNTIME"}
 ARTIFACT_STATES = {"ACTIVE_DEPENDENCY", "ROLLBACK_DEPENDENCY", "CANDIDATE_PENDING_ACTIVATION",
                    "RETIREMENT_READY", "SANITIZED", "QUARANTINED", "PRESERVE_OVERRIDE"}
 ROOT_KEYS = {"repository", "worktrees", "outputs", "releases", "staging", "evidence"}
@@ -1089,7 +1090,7 @@ def validate_reconciliation(value: Any, artifacts: Any, *, require_absent: bool)
         artifact_entry = by_path.get(path)
         if (path in seen_paths or artifact_entry is None or binding not in links or
                 item.get("ordinal") != artifact_entry[0] or
-                artifact_entry[1].get("class") not in DERIVED_CLASSES or
+                artifact_entry[1].get("class") not in RETIRABLE_CLASSES or
                 item.get("observedIdentity") != artifact_entry[1].get("observedIdentity")):
             deny("reconciliation_completed_identity")
         if require_absent and (Path(path).exists() or Path(path).is_symlink()):
@@ -2262,12 +2263,16 @@ def prepare(args: argparse.Namespace) -> None:
                 deny("protected_release_missing")
             item = {**artifact, "retentionState": state}
             classified.append(item)
-            # The authorization scope is the complete set of derived artifacts.
-            # Eligibility is re-evaluated under both locks at execution time, so
-            # output/staging paths that become eligible only after DEPLOYED do not
-            # require an unauthenticated second intent.
-            if (artifact["class"] in DERIVED_CLASSES and artifact["path"] not in reconciled_paths and
-                    state != "SANITIZED"):
+            # Derived artifacts remain conditionally authorized because their
+            # eligibility is re-evaluated under both locks at execution time.
+            # An installed release is narrower: it enters the authorization only
+            # when prepare proves it is already outside every protected graph.
+            command_required = (
+                artifact["class"] in DERIVED_CLASSES and state != "SANITIZED"
+            ) or (
+                artifact["class"] == "RELEASE_RUNTIME" and state == "RETIREMENT_READY"
+            )
+            if command_required and artifact["path"] not in reconciled_paths:
                 command, text = command_for(artifact, operational)
                 original_ordinal = next(index for index, item in enumerate(contract["artifacts"], 1)
                                         if item["path"] == artifact["path"])
@@ -2374,11 +2379,14 @@ def validate_intent(intent: dict[str, Any], operational: dict[str, Any], policy_
             deny("intent_command")
         artifact = by_path.get(item["path"])
         if (not isinstance(item["ordinal"], int) or item["ordinal"] <= previous_ordinal or not artifact or
-                artifact.get("class") not in DERIVED_CLASSES or item["class"] != artifact["class"]):
+                artifact.get("class") not in RETIRABLE_CLASSES or item["class"] != artifact["class"]):
             deny("intent_command_scope")
         previous_ordinal = item["ordinal"]
         if item.get("eligibilityAtPrepare") != artifact.get("retentionState"):
             deny("intent_command_eligibility")
+        if (item["class"] == "RELEASE_RUNTIME" and
+                item.get("eligibilityAtPrepare") != "RETIREMENT_READY"):
+            deny("intent_release_runtime_not_retirement_ready")
         expected, literal = command_for(artifact, operational)
         if item["argv"] != expected or item["literal"] != literal:
             deny("intent_command_literal")
@@ -2500,11 +2508,12 @@ def execute(args: argparse.Namespace) -> None:
                       "evidenceSha256": digest_bytes(canonical(receipt))}
             replace_private(args.review_output, canonical(review))
             raise
-        # Recompute the complete generation contract. A successful subset is
-        # retention-incomplete, never SANITIZED.
+        # Recompute every retirable path in the generation contract. A successful
+        # subset is retention-incomplete, never SANITIZED.
         remaining = []
+        authorized_paths = {item["path"] for item in commands}
         for artifact in intent["artifacts"]:
-            if artifact["class"] in DERIVED_CLASSES:
+            if artifact["path"] in authorized_paths:
                 path = Path(artifact["path"])
                 if path.exists() or path.is_symlink():
                     remaining.append(artifact["path"])
