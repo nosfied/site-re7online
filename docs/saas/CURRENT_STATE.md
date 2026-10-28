@@ -220,15 +220,19 @@ intenção condicionada permanece `NOT_AUTHORIZED`. PR #240 e a candidata `123ba
 foram superados pela correção de apresentação terminal e continuam preservados.
 A regularização contratual da geração foi concluída; não existe retirada pendente.
 
-## Regularização de release rejeitada ef3a — 28/10/2026
+## Release rejeitada ef3a retirada — 28/10/2026
 
-A release `immutable-ef3a2128-vps-20261028T001820Z` foi rejeitada tecnicamente,
-teve rollback para 708f e está fora de current, PM2 live/dump e da cadeia de
-rollback. Seu contrato autenticado a classifica como
-`RELEASE_RUNTIME/RETIREMENT_READY`, mas o control plane anterior não materializava
-comando para essa classe. A correção versionada passa a incluir exclusivamente
-releases já fora de todos os grafos protegidos, com caminho literal, raiz canônica
-e revalidação sob locks. Nenhuma retirada da ef3a está autorizada por esta mudança.
+A geração `immutable-ef3a2128-vps-20261028T001820Z` terminou `SANITIZED`.
+Foram retirados exatamente quatro caminhos literais: release instalada, worktree e
+runtimes derivados de API/frontend; staging já estava `SANITIZED`. A execução
+concluiu 4/4 comandos, sem retry ou falha, recuperou 2.995.449.856 bytes e 106.570
+inodes e deixou 13.597.659.136 bytes livres. Recibo
+`9369b666359c9840e7546612843f0026c4fc9472a9edf68591370e52771ece30`,
+journal `35bfedcffc58d01454251a8fcfd54b22906b2a23762fb5e1bde8807c14775dd4`
+e review `e3f2533863eac885a35b7b5a8871098ccba6b0442d36f1d69ea228085980086a`.
+Pacote, manifesto, índice, contrato e lifecycle permanecem preservados. Produção
+continuou em 708f; worker, PM2, guarda e serviços não foram alterados. Não repetir
+a preparação nem a retirada da ef3a.
 
 ## Rota operacional
 
