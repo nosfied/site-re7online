@@ -441,6 +441,21 @@ código precisa ser revisada, implantada e aceita antes da homologação de agen
 Ela não autoriza envio, descarte do rascunho, nova chamada Meta ou repetição das
 homologações IMAGE/VIDEO.
 
+## Aceite manual das correções de rascunho e apresentação — 27/10/2026
+
+O owner executou o roteiro na interface produtiva da release
+`immutable-708f018c-vps-20261027T152109Z` e relatou PASS integral. O layout dos
+campos ficou alinhado; prévia, orientações recolhíveis e responsividade passaram.
+O novo rascunho permaneceu selecionado pelo ID recém-criado, sem conteúdo da
+campanha anterior. Rascunho descartado e campanha cancelada exibiram seus estados
+terminais próprios, mantendo eventual incerteza em alerta separado.
+
+O aceite foi somente de interface/reconciliação: zero envio e zero agendamento.
+Consequentemente, o bloqueio anterior à homologação de agendamento está encerrado.
+Não repetir mídia, build, deploy ou a criação apenas para gerar a mesma prova. O
+próximo ato mutante continua dependente de escopo explícito: tenant, template,
+destinatário controlado, horário futuro, timezone e critérios de encerramento.
+
 ## Precedência entre lifecycle e observação operacional
 
 O estado terminal persistido da campanha é a situação canônica apresentada na lista,
@@ -459,3 +474,41 @@ A candidata `immutable-123ba7bd-vps-20261026T200100Z` e o PR #240 ficaram
 superados pela correção desta precedência, mas permanecem preservados. Não instalar,
 mesclar, apagar ou reaproveitar seus bindings implicitamente.
 
+## Auditoria do agendamento estático e lacuna de audiência — 27/10/2026
+
+Auditoria somente leitura relatada pelo owner para a campanha `Campanha teste out.36`
+(`660f0eca-e6a8-4e49-9186-a40225fabdd1`) no tenant `demo-converta`.
+O agendamento estático para `2026-10-27T23:35:00Z` (20h35 em
+America/Fortaleza) foi executado uma vez e terminou `completed`: um job
+`campaign`, `attempt=1`, dois destinatários distintos, dois outbounds e duas
+aceitações do provider. Os dois resultados chegaram a `read`; CRM, contato, lead,
+conversa, runtime e `campaign.recipient.contact_bootstrap_ready` foram confirmados.
+Não houve terceiro destinatário, retry, duplicidade, resultado incerto, lease ativo,
+job reclamável, reconciliação ou persistência pendente. Guarda aberta na geração 41,
+tarefas zero e sem fault; health local e público após redirecionamento: PASS.
+
+O contrato da API é fase-dependente e íntegro: enquanto `scheduled`, a audiência
+pendente está em `draftReview.recipients`; depois de processada, os destinatários
+saem desse vetor e seus resultados ficam em `messagesMetaStatus`. A interface 708f
+consultava visualmente apenas o primeiro caminho no bloco de rascunho. Assim, uma
+campanha concluída aparentava audiência vazia mesmo contendo os dois resultados.
+
+Contrato obrigatório da correção:
+
+1. rascunho e agendada exibem a audiência de `draftReview.recipients`;
+2. campanha processada exibe destinatários deduplicados de `messagesMetaStatus`;
+3. nome, modelo, atualização e criação aparecem antes dos demais detalhes;
+4. nenhum status interno cru, como `completed`, pode chegar à interface;
+5. remover a explicação sobre serialização por tenant das telas de campanha;
+6. a correção de apresentação não dispara novo envio nem altera o contrato da API.
+
+Estado: **CODE_CANDIDATE_PENDING_DEPLOY_AND_ACCEPTANCE**. A execução agendada está
+homologada; somente a apresentação transversal da audiência depende de deploy e
+aceite visual. Não repetir a campanha para comprovar os mesmos dados. Depois desse
+aceite, seguir para multilote e homologações específicas de clientes.
+
+Evidências privadas: 24 arquivos, índice SHA-256
+`0b0079d064e343ba8727f11113aba600e1398896877d671e07a657446f8a39a8`.
+O coletor saiu com código 134 apenas no teardown posterior à serialização, sem nova
+consulta; o snapshot `READ ONLY / REPEATABLE READ` permanece válido no escopo
+registrado.

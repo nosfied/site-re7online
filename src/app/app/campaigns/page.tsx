@@ -667,7 +667,8 @@ function getCampaignQueueLabel(campaign: CampaignItem) {
   if (queue.status === "needs_review") return "Revisão operacional";
   if (queue.status === "paused") return "Fila pausada";
   if (queue.status === "failed") return "Fila com falha";
-  return null;
+  if (queue.status === "completed") return "Concluída";
+  return queue.status ? getCampaignStatusUxLabel(queue.status) : null;
 }
 
 function getCampaignQueueStatusLabel(status?: string | null, position?: number | null) {
@@ -1978,6 +1979,35 @@ export default function AppCampaignsPage() {
     () => selectedCampaign?.messagesMetaStatus ?? [],
     [selectedCampaign?.messagesMetaStatus]
   );
+  const campaignAudienceSummaryItems = useMemo(() => {
+    if (!selectedCampaign) return [];
+    if (selectedCampaign.status === "draft" || selectedCampaign.status === "scheduled") {
+      const status = selectedCampaign.status === "scheduled" ? "Agendado" : "Incluído no rascunho";
+      const statusClass = selectedCampaign.status === "scheduled"
+        ? getStatusClasses("scheduled")
+        : getStatusClasses("draft");
+      return (selectedCampaign.draftReview?.recipients ?? []).map((recipient, index) => ({
+        key: `${recipient.phoneDisplay ?? recipient.identifierDisplay}-${index}`,
+        name: recipient.identifierDisplay || "Sem nome atual",
+        reference: recipient.phoneDisplay || recipient.identifierDisplay || "Referência indisponível",
+        status,
+        statusClass,
+      }));
+    }
+    const seen = new Set<string>();
+    return campaignResultItems.flatMap((item, index) => {
+      const key = item.waId || item.phoneDisplay || item.leadId || String(index);
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [{
+        key,
+        name: item.contactName || "Sem nome atual",
+        reference: item.phoneDisplay || "Referência protegida",
+        status: getMetaStatusLabel(item.status),
+        statusClass: getMetaStatusClasses(item.status),
+      }];
+    });
+  }, [campaignResultItems, selectedCampaign]);
   const hasRealCampaignResultItems = useMemo(
     () => campaignResultItems.some((item) => hasCampaignResultEvidence(item, selectedCampaign?.status)),
     [campaignResultItems, selectedCampaign?.status]
@@ -4794,6 +4824,58 @@ export default function AppCampaignsPage() {
               ) : null}
               {selectedCampaign ? (
                 <>
+                  <div className="grid gap-2 rounded-md border border-white/10 bg-white/5 p-3 md:grid-cols-2">
+                    <p><span className="text-white/70">Nome:</span> {selectedCampaign.name || "(sem nome)"}</p>
+                    <p><span className="text-white/70">Modelo:</span> {selectedCampaign.templateName || "(sem modelo)"}</p>
+                    <p>
+                      <span className="text-white/70">Atualizada em:</span> {formatDateTime(selectedCampaign.updatedAt)}
+                    </p>
+                    <p>
+                      <span className="text-white/70">Criada em:</span> {formatDateTime(selectedCampaign.createdAt)}
+                    </p>
+                  </div>
+
+                  {campaignAudienceSummaryItems.length > 0 ? (
+                    <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold">
+                          {selectedCampaign.status === "draft"
+                            ? "Destinatários do rascunho"
+                            : selectedCampaign.status === "scheduled"
+                              ? "Destinatários agendados"
+                              : "Destinatários processados"}
+                        </h3>
+                        <span className="rounded-full border border-white/15 px-2 py-1 text-xs text-white/75">
+                          {campaignAudienceSummaryItems.length} destinatário(s)
+                        </span>
+                      </div>
+                      <div className="max-h-[300px] overflow-auto">
+                        <table className="w-full min-w-[560px] text-sm">
+                          <thead className="sticky top-0 bg-white/10 text-left backdrop-blur">
+                            <tr>
+                              <th className="px-3 py-2">Contato</th>
+                              <th className="px-3 py-2">Referência</th>
+                              <th className="px-3 py-2">Situação</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {campaignAudienceSummaryItems.map((recipient) => (
+                              <tr key={recipient.key} className="border-t border-white/10">
+                                <td className="px-3 py-2">{recipient.name}</td>
+                                <td className="px-3 py-2 font-mono text-xs text-white/75">{recipient.reference}</td>
+                                <td className="px-3 py-2">
+                                  <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${recipient.statusClass}`}>
+                                    {recipient.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
                       <p className="text-[11px] uppercase tracking-wide text-white/60">Total</p>
@@ -4848,12 +4930,9 @@ export default function AppCampaignsPage() {
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-sky-100">Fila sequencial do tenant</p>
-                          <p className="mt-1 text-xs text-sky-100/75">
-                            Este tenant executa somente uma campanha ou lote por vez. Outros tenants seguem independentes.
-                          </p>
                         </div>
                         <span className="rounded-full border border-sky-300/30 bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-100">
-                          {getCampaignQueueLabel(selectedCampaign) ?? selectedCampaign.executionQueue.status}
+                          {getCampaignQueueStatusLabel(selectedCampaign.executionQueue.status, selectedCampaign.executionQueue.position)}
                         </span>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-4">
@@ -5034,48 +5113,6 @@ export default function AppCampaignsPage() {
                           </button>
                         </div>
                       </div>
-                      {selectedCampaign.draftReview?.recipients?.length ? (
-                        <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-                              Destinatários do rascunho
-                            </p>
-                            <span className="rounded-full border border-sky-300/25 bg-sky-900/20 px-2 py-1 text-xs text-sky-100">
-                              Rascunho — envio ainda não iniciado
-                            </span>
-                          </div>
-                          <div className="max-h-[300px] overflow-auto">
-                            <table className="w-full min-w-[620px] text-sm">
-                              <thead className="sticky top-0 bg-white/10 text-left backdrop-blur">
-                                <tr>
-                                  <th className="px-3 py-2">Contato</th>
-                                  <th className="px-3 py-2">Referência</th>
-                                  <th className="px-3 py-2">Dados</th>
-                                  <th className="px-3 py-2">Situação</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {selectedCampaign.draftReview.recipients.map((recipient, index) => (
-                                  <tr key={`${recipient.identifierDisplay}-${index}`} className="border-t border-white/10">
-                                    <td className="px-3 py-2">{recipient.identifierDisplay || "Sem nome atual"}</td>
-                                    <td className="px-3 py-2 font-mono text-xs text-white/75">
-                                      {recipient.phoneDisplay || recipient.identifierDisplay}
-                                    </td>
-                                    <td className="px-3 py-2 text-xs text-white/65">
-                                      Dado do rascunho
-                                    </td>
-                                    <td className="px-3 py-2">
-                                      <span className="inline-flex rounded-full border border-sky-300/25 bg-sky-900/20 px-2 py-1 text-xs font-semibold text-sky-100">
-                                        Incluído no rascunho
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      ) : null}
                     </div>
                   ) : null}
 
@@ -5181,17 +5218,6 @@ export default function AppCampaignsPage() {
                     </div>
                   </div>
                   ) : null}
-
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <p><span className="text-white/70">Nome:</span> {selectedCampaign.name || "(sem nome)"}</p>
-                    <p><span className="text-white/70">Modelo:</span> {selectedCampaign.templateName || "(sem modelo)"}</p>
-                    <p>
-                      <span className="text-white/70">Atualizada em:</span> {formatDateTime(selectedCampaign.updatedAt)}
-                    </p>
-                    <p>
-                      <span className="text-white/70">Criada em:</span> {formatDateTime(selectedCampaign.createdAt)}
-                    </p>
-                  </div>
 
                   {hasRealCampaignResultItems ? (
                   <div className="rounded-md border border-white/10 bg-white/5">
